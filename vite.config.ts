@@ -797,42 +797,81 @@ function sayseeLocalBridge(): Plugin {
           });
         }
 
-        // [768차원 EmbeddingGemma 2 시맨틱 벡터 주연 + 온톨로지 가드레일 결합]
-        // 1) 검색어 토큰 중 실제 코퍼스/온톨로지에 존재하는 '팩트/지명 토큰(knownFactualTokens)'은 엄격한 AND 가드레일로 작동합니다.
-        //    (예: "청라" + "보트"는 둘 다 팩트 토큰이므로 교집합이 없으면 0장 반환, "불쇼"는 박물관 공연 배제)
-        // 2) 반면 태그 사전에 없는 자유로운 자연어·분위기·상황 표현(예: "트로피컬 바캉스", "낭만적인 황혼", "화려한 퍼포먼스")은
-        //    단순 키워드 매칭이 아닌 **768차원 EmbeddingGemma 2 벡터 유사도(vecSim)**가 직접 의미 공간을 탐색하여 결과를 찾아냅니다!
-        const knownTokenCount = queryTokens.filter((qt) =>
-          scored.some((s) => {
-            const m = map[s.name];
-            if (!m) return false;
-            const pSet = new Set((m.ontologyPrimaryTags ?? []).map((t) => t.toLowerCase()));
-            const cSet = new Set((m.ontologyCaptionTags ?? []).map((t) => t.toLowerCase()));
-            const full = `${m.primaryTag} ${m.locationKo ?? ''} ${(m.keywordsKo ?? []).join(' ')} ${m.captionKo}`.toLowerCase();
-            return pSet.has(qt.raw) || cSet.has(qt.raw) || (qt.raw.length >= 2 && full.includes(qt.raw));
-          })
-        ).length;
+        // [진짜 하이브리드 엔진: 768차원 EmbeddingGemma 2 시맨틱 벡터(주연) + 온톨로지 핵심 명사 가드레일(브레이크)]
+        // - 기획 철학: "나무 다리 위에서 산책하는 모습", "구명조끼 입고 신나게 물장구치는 아이들", "야외 테라스에서 밤거리 보며 한잔하는 분위기"처럼
+        //   맥락·행동·분위기가 섞인 문장 검색에서 동사/형용사/묘사어("입고", "신나게", "물장구치는", "한잔하는", "화려한", "퍼포먼스")가
+        //   태그 글자에 없다고 해서 결과를 탈락시키면 고정 태그 클라우드 검색과 다를 바가 없습니다.
+        // - 따라서:
+        //   1) 온톨로지 핵심 명사/지명(coreOntologyTokens: 예 "청라", "보트", "구명조끼", "아이", "불쇼", "맥주")만 필수 교집합(AND) 가드레일로 검증하고,
+        //   2) 나머지 모든 행동·분위기·맥락·감성 표현은 **768차원 EmbeddingGemma 2 벡터 유사도(vecSim)**가 의미 공간에서 직접 랭킹합니다!
+        const allPrimaryOntologyVocab = new Set<string>();
+        for (const m of Object.values(map)) {
+          for (const t of m.ontologyPrimaryTags ?? []) {
+            allPrimaryOntologyVocab.add(t.toLowerCase());
+          }
+        }
+
+        const coreGuardrailTokens = queryTokens.filter((qt) => allPrimaryOntologyVocab.has(qt.raw));
+        const requiredCoreCount = coreGuardrailTokens.length;
+
+        // 각 사진이 핵심 온톨로지 명사(가드레일)를 몇 개 만족하는지 계산
+        const scoredWithCore = scored.map((item) => {
+          const m = map[item.name];
+          const pSet = new Set((m?.ontologyPrimaryTags ?? []).map((t) => t.toLowerCase()));
+          const cSet = new Set((m?.ontologyCaptionTags ?? []).map((t) => t.toLowerCase()));
+          const tagTxt = `${m?.primaryTag ?? ''} ${m?.locationKo ?? ''} ${(m?.keywordsKo ?? []).join(' ')}`.toLowerCase();
+          const fullTxt = `${tagTxt} ${m?.captionKo ?? ''} ${m?.captionEn ?? ''}`.toLowerCase();
+          let corePrimaryHits = 0;
+          let coreAnyHits = 0;
+          for (const ct of coreGuardrailTokens) {
+            const safeTag = ct.blockRegex ? tagTxt.replace(ct.blockRegex, ' ') : tagTxt;
+            const safeFull = ct.blockRegex ? fullTxt.replace(ct.blockRegex, ' ') : fullTxt;
+            if (pSet.has(ct.raw) || (ct.raw.length >= 2 && safeTag.includes(ct.raw))) {
+              corePrimaryHits += 1;
+              coreAnyHits += 1;
+            } else if (cSet.has(ct.raw) || (ct.raw.length >= 2 && safeFull.includes(ct.raw))) {
+              coreAnyHits += 1;
+            }
+          }
+          return {
+            ...item,
+            corePrimaryHits,
+            coreAnyHits,
+          };
+        });
 
         const requiredGroupCount = queryTokens.length;
-        const strictTagMatches = scored.filter(
+        const strictTagMatches = scoredWithCore.filter(
           (x) => requiredGroupCount > 0 && x.tagMatchedGroupCount >= requiredGroupCount
         );
-        const strictAllMatches = scored.filter(
+        const strictAllMatches = scoredWithCore.filter(
           (x) => x.compoundHit || (requiredGroupCount > 0 && x.matchedGroupCount >= requiredGroupCount)
         );
 
         let finalMatches = strictTagMatches.length > 0 ? strictTagMatches : strictAllMatches;
 
-        // 태그에 글자가 직접 적혀 있지 않은 자유 자연어/시맨틱 검색어가 포함된 경우:
-        // 팩트 토큰(지명/사물) 가드레일은 모두 만족(matchedGroupCount >= knownTokenCount)하면서
-        // 768차원 EmbeddingGemma 2 벡터 유사도(vecSim) 상위 군집을 시맨틱 검색 결과로 반환합니다!
-        if (finalMatches.length === 0 && qVec && knownTokenCount < requiredGroupCount) {
-          const guardrailPassed = scored.filter((x) => x.matchedGroupCount >= knownTokenCount);
-          guardrailPassed.sort((a, b) => b.vecSim - a.vecSim);
-          const topVec = guardrailPassed[0]?.vecSim ?? 0;
-          if (topVec >= 0.68) {
-            const dynamicCutoff = Math.max(0.68, topVec - 0.032);
-            finalMatches = guardrailPassed.filter((x) => x.vecSim >= dynamicCutoff).slice(0, 24);
+        // 문장형/맥락형 검색이거나 태그 사전에 없는 자유 표현이 포함된 경우:
+        // 핵심 명사/지명 가드레일(coreGuardrailTokens)은 100% 만족하면서(예: "청라 보트"는 0장 유지!),
+        // 서술어·분위기·상황 맥락은 768차원 EmbeddingGemma 2 벡터(vecSim)로 의미 탐색 수행!
+        if (finalMatches.length === 0 && requiredCoreCount < requiredGroupCount) {
+          const corePrimaryPassed = scoredWithCore.filter(
+            (x) => requiredCoreCount > 0 && x.corePrimaryHits >= requiredCoreCount
+          );
+          const coreAnyPassed = scoredWithCore.filter(
+            (x) => requiredCoreCount === 0 || x.coreAnyHits >= requiredCoreCount
+          );
+          const candidates = corePrimaryPassed.length > 0 ? corePrimaryPassed : coreAnyPassed;
+
+          candidates.sort((a, b) => b.score - a.score);
+          if (requiredCoreCount > 0) {
+            finalMatches = candidates.slice(0, 36);
+          } else if (qVec) {
+            candidates.sort((a, b) => b.vecSim - a.vecSim);
+            const topVec = candidates[0]?.vecSim ?? 0;
+            if (topVec >= 0.68) {
+              const dynamicCutoff = Math.max(0.68, topVec - 0.032);
+              finalMatches = candidates.filter((x) => x.vecSim >= dynamicCutoff).slice(0, 24);
+            }
           }
         }
 
