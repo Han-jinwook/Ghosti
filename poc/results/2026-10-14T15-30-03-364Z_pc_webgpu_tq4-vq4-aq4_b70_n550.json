@@ -1,0 +1,6878 @@
+{
+  "label": "pc_webgpu_tq4-vq4-aq4_b70_n550",
+  "createdAt": "2026-10-14T15:04:52.831Z",
+  "model": "onnx-community/embeddinggemma-2-ONNX",
+  "env": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "platform": "Windows",
+    "mobile": false,
+    "hardwareConcurrency": 4,
+    "deviceMemoryGB": 32,
+    "secureContext": true,
+    "screen": "800x600@1x",
+    "webgpu": true,
+    "opfs": true,
+    "webSpeech": true,
+    "mediaRecorder": true,
+    "gpuVendor": "nvidia",
+    "gpuArchitecture": "pascal",
+    "gpuDevice": "",
+    "gpuDescription": "",
+    "shaderF16": false,
+    "maxStorageBufferBindingSize": 2147483644,
+    "maxBufferSize": 2147483648
+  },
+  "settings": {
+    "scenario": "pc-indexing",
+    "device": "webgpu",
+    "textDtype": "q4",
+    "visionDtype": "q4",
+    "audioDtype": "q4",
+    "budget": 70,
+    "batch": 1,
+    "maxPhotos": 600,
+    "dim": 768,
+    "cacheBackend": "opfs",
+    "voiceMode": "auto"
+  },
+  "source": {
+    "kind": "PC test_photos (LAN)",
+    "count": 550,
+    "bytes": 3230438906
+  },
+  "storage": {
+    "persistRequested": false,
+    "before": {
+      "persisted": false,
+      "usage": 727449220,
+      "quota": 11464867460,
+      "opfsBytes": 727444654,
+      "opfsFiles": 16
+    },
+    "after": {
+      "persisted": false,
+      "usage": 727449220,
+      "quota": 11464867460,
+      "opfsBytes": 727444654,
+      "opfsFiles": 16
+    }
+  },
+  "timings": {
+    "visionLoad": {
+      "label": "텍스트+비전",
+      "ms": 4291.39999999851,
+      "downloadedBytes": 0,
+      "cacheHitBytes": 310556503,
+      "cacheBackend": "opfs",
+      "cacheWriteMs": 0,
+      "fromCache": true
+    },
+    "warmupMs": 2890.6999999955297,
+    "indexTotalMs": 1465221.6999999955,
+    "perImageTotalMs": 2664.0394545454465,
+    "decodePerImage": {
+      "n": 550,
+      "mean": 614.113999999897,
+      "p50": 562,
+      "p95": 1172.2000000029802,
+      "min": 138.89999999850988,
+      "max": 8737.59999999404
+    },
+    "inferPerImage": {
+      "n": 550,
+      "mean": 2049.8187272728437,
+      "p50": 2021.5,
+      "p95": 2211.5,
+      "min": 1919.6000000014901,
+      "max": 2391.60000000149
+    },
+    "disposeMs": 23.799999997019768,
+    "searchLoad": {
+      "label": "텍스트+오디오",
+      "ms": 2684.7000000029802,
+      "downloadedBytes": 0,
+      "cacheHitBytes": 363846084,
+      "cacheBackend": "opfs",
+      "cacheWriteMs": 0,
+      "fromCache": true
+    },
+    "audioWarmupMs": 696.9000000059605,
+    "textWarmupMs": 96.79999999701977,
+    "endToEndMs": 1481046.200000003
+  },
+  "voiceDecision": {
+    "mode": "audio-direct",
+    "stage": "precheck",
+    "reason": "사전 판정 통과"
+  },
+  "result": {
+    "indexed": 550,
+    "failed": [],
+    "nanCount": 0,
+    "vectorBytes": 1689600
+  },
+  "jsHeap": {
+    "start": 17079251,
+    "afterVisionLoad": 329748348,
+    "afterIndexing": 180016432,
+    "afterDispose": 180073319,
+    "afterSearchLoad": 581565274
+  },
+  "savedAs": "results\\2026-10-14T15-29-35-681Z_pc_webgpu_tq4-vq4-aq4_b70_n550.json",
+  "textBench": {
+    "embedMs": {
+      "n": 28,
+      "mean": 55.621428571907536,
+      "p50": 51,
+      "p95": 75.29999999701977,
+      "min": 42.29999999701977,
+      "max": 86.39999999850988
+    },
+    "searchMs": {
+      "n": 28,
+      "mean": 5.200000000053218,
+      "p50": 4.399999998509884,
+      "p95": 8,
+      "min": 2.8000000044703484,
+      "max": 9.299999997019768
+    },
+    "count": 28
+  },
+  "audioBench": {
+    "note": "TTS 합성 음성(Windows Heami/Zira) 기준",
+    "summary": {
+      "raw": {
+        "all": {
+          "n": 28,
+          "exact1": 0.8928571428571429,
+          "concept1": 0.8928571428571429,
+          "cosToTextMean": 0.8312642857142857,
+          "overlap12Mean": 0.550595238095238,
+          "embedMs": {
+            "n": 28,
+            "mean": 407.4892857151904,
+            "p50": 421.40000000596046,
+            "p95": 524.5,
+            "min": 299.69999999552965,
+            "max": 533.6000000014901
+          },
+          "decodeMs": {
+            "n": 28,
+            "mean": 61.31785714227174,
+            "p50": 50.100000001490116,
+            "p95": 142.39999999850988,
+            "min": 26,
+            "max": 230.29999999701977
+          }
+        },
+        "ko": {
+          "n": 14,
+          "exact1": 0.7857142857142857,
+          "concept1": 0.7857142857142857,
+          "cosToTextMean": 0.7742142857142857,
+          "overlap12Mean": 0.3869047619047619,
+          "embedMs": {
+            "n": 14,
+            "mean": 408.650000001703,
+            "p50": 421.40000000596046,
+            "p95": 533.6000000014901,
+            "min": 316,
+            "max": 533.6000000014901
+          },
+          "decodeMs": {
+            "n": 14,
+            "mean": 76.07142857089639,
+            "p50": 54.600000001490116,
+            "p95": 230.29999999701977,
+            "min": 34.70000000298023,
+            "max": 230.29999999701977
+          }
+        },
+        "en": {
+          "n": 14,
+          "exact1": 1,
+          "concept1": 1,
+          "cosToTextMean": 0.888314285714286,
+          "overlap12Mean": 0.7142857142857142,
+          "embedMs": {
+            "n": 14,
+            "mean": 406.3285714286779,
+            "p50": 423.19999999552965,
+            "p95": 524.5,
+            "min": 299.69999999552965,
+            "max": 524.5
+          },
+          "decodeMs": {
+            "n": 14,
+            "mean": 46.564285713647095,
+            "p50": 49.899999998509884,
+            "p95": 70.29999999701977,
+            "min": 26,
+            "max": 70.29999999701977
+          }
+        }
+      },
+      "interleaved": {
+        "all": {
+          "n": 28,
+          "exact1": 0.8928571428571429,
+          "concept1": 0.8928571428571429,
+          "cosToTextMean": 0.891092857142857,
+          "overlap12Mean": 0.6279761904761906,
+          "embedMs": {
+            "n": 28,
+            "mean": 424.6357142858739,
+            "p50": 453.79999999701977,
+            "p95": 555.8000000044703,
+            "min": 309.40000000596046,
+            "max": 609
+          },
+          "decodeMs": {
+            "n": 28,
+            "mean": 85.83214285703642,
+            "p50": 57,
+            "p95": 360.79999999701977,
+            "min": 32.29999999701977,
+            "max": 523.1000000014901
+          }
+        },
+        "ko": {
+          "n": 14,
+          "exact1": 0.7857142857142857,
+          "concept1": 0.7857142857142857,
+          "cosToTextMean": 0.8164285714285714,
+          "overlap12Mean": 0.46428571428571425,
+          "embedMs": {
+            "n": 14,
+            "mean": 424.32857142814566,
+            "p50": 454.59999999403954,
+            "p95": 609,
+            "min": 340.8999999985099,
+            "max": 609
+          },
+          "decodeMs": {
+            "n": 14,
+            "mean": 111.74285714275071,
+            "p50": 61,
+            "p95": 523.1000000014901,
+            "min": 34.30000000447035,
+            "max": 523.1000000014901
+          }
+        },
+        "en": {
+          "n": 14,
+          "exact1": 1,
+          "concept1": 1,
+          "cosToTextMean": 0.9657571428571428,
+          "overlap12Mean": 0.7916666666666667,
+          "embedMs": {
+            "n": 14,
+            "mean": 424.9428571436022,
+            "p50": 453.79999999701977,
+            "p95": 555.8000000044703,
+            "min": 309.40000000596046,
+            "max": 555.8000000044703
+          },
+          "decodeMs": {
+            "n": 14,
+            "mean": 59.92142857132213,
+            "p50": 55.600000001490116,
+            "p95": 122.79999999701977,
+            "min": 32.29999999701977,
+            "max": 122.79999999701977
+          }
+        }
+      }
+    },
+    "variantErrors": {},
+    "rows": [
+      {
+        "variant": "raw",
+        "id": "beach_ko",
+        "lang": "ko",
+        "query": "바닷가에서 뛰노는 아이",
+        "audioSec": 2.54,
+        "decodeMs": 230.29999999701977,
+        "embedMs": 489.8999999985099,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.7467,
+        "nearestText": "beach_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.16666666666666666,
+        "top3": [
+          {
+            "name": "20260926_155341.jpg",
+            "score": 0.682
+          },
+          {
+            "name": "20240721_114907.jpg",
+            "score": 0.6802
+          },
+          {
+            "name": "20260926_131105.jpg",
+            "score": 0.6788
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "beach_en",
+        "lang": "en",
+        "query": "a child running on the beach",
+        "audioSec": 2.33,
+        "decodeMs": 49.899999998509884,
+        "embedMs": 432.20000000298023,
+        "searchMs": 1.3999999985098839,
+        "cosToText": 0.9221,
+        "nearestText": "beach_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.9166666666666666,
+        "top3": [
+          {
+            "name": "20240719_114240.jpg",
+            "score": 0.6917
+          },
+          {
+            "name": "20240721_181624.jpg",
+            "score": 0.6894
+          },
+          {
+            "name": "20240721_184540.jpg",
+            "score": 0.6846
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "cake_ko",
+        "lang": "ko",
+        "query": "생일 케이크와 촛불",
+        "audioSec": 2.48,
+        "decodeMs": 43.69999999552965,
+        "embedMs": 450.90000000596046,
+        "searchMs": 1.7999999970197678,
+        "cosToText": 0.6468,
+        "nearestText": "receipt_ko",
+        "exact1": false,
+        "concept1": false,
+        "overlap12": 0.25,
+        "top3": [
+          {
+            "name": "20260926_143646.jpg",
+            "score": 0.6683
+          },
+          {
+            "name": "20240719_105530.jpg",
+            "score": 0.6655
+          },
+          {
+            "name": "20260926_131244.jpg",
+            "score": 0.6636
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "cake_en",
+        "lang": "en",
+        "query": "birthday cake with candles",
+        "audioSec": 2.42,
+        "decodeMs": 36.29999999701977,
+        "embedMs": 463.20000000298023,
+        "searchMs": 1,
+        "cosToText": 0.8808,
+        "nearestText": "cake_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20240720_194911.jpg",
+            "score": 0.5933
+          },
+          {
+            "name": "20240720_191807.jpg",
+            "score": 0.5928
+          },
+          {
+            "name": "20240720_194644.jpg",
+            "score": 0.5869
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "dog_ko",
+        "lang": "ko",
+        "query": "강아지",
+        "audioSec": 1.51,
+        "decodeMs": 93.5,
+        "embedMs": 316,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.7517,
+        "nearestText": "dog_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.4166666666666667,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.6769
+          },
+          {
+            "name": "20240721_123138.jpg",
+            "score": 0.6752
+          },
+          {
+            "name": "20260815_131025.jpg",
+            "score": 0.6747
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "dog_en",
+        "lang": "en",
+        "query": "a dog",
+        "audioSec": 1.32,
+        "decodeMs": 59.30000000447035,
+        "embedMs": 299.69999999552965,
+        "searchMs": 1,
+        "cosToText": 0.8807,
+        "nearestText": "dog_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.75,
+        "top3": [
+          {
+            "name": "20260815_142557.jpg",
+            "score": 0.6254
+          },
+          {
+            "name": "20261004_153652.jpg",
+            "score": 0.6224
+          },
+          {
+            "name": "20260517_150328.jpg",
+            "score": 0.6144
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "food_ko",
+        "lang": "ko",
+        "query": "음식 사진",
+        "audioSec": 1.78,
+        "decodeMs": 54.600000001490116,
+        "embedMs": 347.5,
+        "searchMs": 1,
+        "cosToText": 0.8727,
+        "nearestText": "food_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20260916_180525.jpg",
+            "score": 0.7178
+          },
+          {
+            "name": "20240721_114754.jpg",
+            "score": 0.7177
+          },
+          {
+            "name": "20260925_173616.jpg",
+            "score": 0.7156
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "food_en",
+        "lang": "en",
+        "query": "food on a table",
+        "audioSec": 1.83,
+        "decodeMs": 37.899999998509884,
+        "embedMs": 345.80000000447035,
+        "searchMs": 1,
+        "cosToText": 0.8902,
+        "nearestText": "food_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.9166666666666666,
+        "top3": [
+          {
+            "name": "20240720_191820.jpg",
+            "score": 0.6852
+          },
+          {
+            "name": "20240720_194918.jpg",
+            "score": 0.6725
+          },
+          {
+            "name": "20260829_203811.jpg",
+            "score": 0.6706
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "group_ko",
+        "lang": "ko",
+        "query": "단체 사진",
+        "audioSec": 1.74,
+        "decodeMs": 54.399999998509884,
+        "embedMs": 324.5,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.849,
+        "nearestText": "group_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.3333333333333333,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.7108
+          },
+          {
+            "name": "20260926_131244.jpg",
+            "score": 0.7084
+          },
+          {
+            "name": "20240721_123138.jpg",
+            "score": 0.7069
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "group_en",
+        "lang": "en",
+        "query": "group photo of family",
+        "audioSec": 2.17,
+        "decodeMs": 70.29999999701977,
+        "embedMs": 417.8999999985099,
+        "searchMs": 0.8999999985098839,
+        "cosToText": 0.8899,
+        "nearestText": "group_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.6722
+          },
+          {
+            "name": "20260926_131244.jpg",
+            "score": 0.6714
+          },
+          {
+            "name": "1721636229340.jpg",
+            "score": 0.6627
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "night_ko",
+        "lang": "ko",
+        "query": "밤에 찍은 어두운 사진",
+        "audioSec": 2.54,
+        "decodeMs": 36.20000000298023,
+        "embedMs": 455.3999999985099,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.7585,
+        "nearestText": "food_ko",
+        "exact1": false,
+        "concept1": false,
+        "overlap12": 0.16666666666666666,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.7076
+          },
+          {
+            "name": "20240721_123138.jpg",
+            "score": 0.7056
+          },
+          {
+            "name": "20240721_184633.jpg",
+            "score": 0.7056
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "night_en",
+        "lang": "en",
+        "query": "dark photo taken at night",
+        "audioSec": 2.4,
+        "decodeMs": 50.100000001490116,
+        "embedMs": 423.19999999552965,
+        "searchMs": 1,
+        "cosToText": 0.8812,
+        "nearestText": "night_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.8333333333333334,
+        "top3": [
+          {
+            "name": "20260918_195307.jpg",
+            "score": 0.7003
+          },
+          {
+            "name": "20240720_213545.jpg",
+            "score": 0.685
+          },
+          {
+            "name": "20240720_211735.jpg",
+            "score": 0.6815
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "snow_ko",
+        "lang": "ko",
+        "query": "눈 오는 날",
+        "audioSec": 1.67,
+        "decodeMs": 118.60000000149012,
+        "embedMs": 319.80000000447035,
+        "searchMs": 1,
+        "cosToText": 0.7777,
+        "nearestText": "snow_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.4166666666666667,
+        "top3": [
+          {
+            "name": "20240721_113501.jpg",
+            "score": 0.6894
+          },
+          {
+            "name": "20260926_160211.jpg",
+            "score": 0.6838
+          },
+          {
+            "name": "20260926_160201.jpg",
+            "score": 0.6822
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "snow_en",
+        "lang": "en",
+        "query": "snowy day",
+        "audioSec": 1.55,
+        "decodeMs": 54.5,
+        "embedMs": 319.8999999985099,
+        "searchMs": 1,
+        "cosToText": 0.8508,
+        "nearestText": "snow_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.4166666666666667,
+        "top3": [
+          {
+            "name": "20260926_155341.jpg",
+            "score": 0.6608
+          },
+          {
+            "name": "20261004_153652.jpg",
+            "score": 0.6552
+          },
+          {
+            "name": "20260926_143635.jpg",
+            "score": 0.6537
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "car_ko",
+        "lang": "ko",
+        "query": "자동차 안에서",
+        "audioSec": 1.92,
+        "decodeMs": 142.39999999850988,
+        "embedMs": 409.8999999985099,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.8628,
+        "nearestText": "car_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20260815_131025.jpg",
+            "score": 0.6942
+          },
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6893
+          },
+          {
+            "name": "20260517_143955.jpg",
+            "score": 0.6802
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "car_en",
+        "lang": "en",
+        "query": "inside a car",
+        "audioSec": 1.7,
+        "decodeMs": 35.19999999552965,
+        "embedMs": 315.90000000596046,
+        "searchMs": 1,
+        "cosToText": 0.8711,
+        "nearestText": "car_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.75,
+        "top3": [
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6429
+          },
+          {
+            "name": "20260815_131025.jpg",
+            "score": 0.6385
+          },
+          {
+            "name": "20260811_121923.jpg",
+            "score": 0.6286
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "screenshot_ko",
+        "lang": "ko",
+        "query": "휴대폰 스크린샷",
+        "audioSec": 2.18,
+        "decodeMs": 64.79999999701977,
+        "embedMs": 415.40000000596046,
+        "searchMs": 1.2999999970197678,
+        "cosToText": 0.8108,
+        "nearestText": "screenshot_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5,
+        "top3": [
+          {
+            "name": "Screenshot_20261014_142508_One UI Home.jpg",
+            "score": 0.717
+          },
+          {
+            "name": "Screenshot_20261014_140717_One UI Home.jpg",
+            "score": 0.6946
+          },
+          {
+            "name": "Screenshot_20261014_110205_Messages.jpg",
+            "score": 0.6796
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "screenshot_en",
+        "lang": "en",
+        "query": "a screenshot of a phone screen",
+        "audioSec": 2.58,
+        "decodeMs": 59,
+        "embedMs": 524.5,
+        "searchMs": 1.3999999985098839,
+        "cosToText": 0.8958,
+        "nearestText": "screenshot_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.75,
+        "top3": [
+          {
+            "name": "Screenshot_20261014_142508_One UI Home.jpg",
+            "score": 0.6978
+          },
+          {
+            "name": "Screenshot_20261014_110205_Messages.jpg",
+            "score": 0.6646
+          },
+          {
+            "name": "Screenshot_20261014_140717_One UI Home.jpg",
+            "score": 0.6598
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "receipt_ko",
+        "lang": "ko",
+        "query": "영수증",
+        "audioSec": 1.59,
+        "decodeMs": 34.70000000298023,
+        "embedMs": 317.3999999985099,
+        "searchMs": 0.8999999985098839,
+        "cosToText": 0.7757,
+        "nearestText": "receipt_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.3333333333333333,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.6828
+          },
+          {
+            "name": "20260926_155400.jpg",
+            "score": 0.6717
+          },
+          {
+            "name": "20260926_155359.jpg",
+            "score": 0.6711
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "receipt_en",
+        "lang": "en",
+        "query": "a paper receipt",
+        "audioSec": 1.86,
+        "decodeMs": 45.100000001490116,
+        "embedMs": 345.29999999701977,
+        "searchMs": 1.2999999970197678,
+        "cosToText": 0.888,
+        "nearestText": "receipt_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.75,
+        "top3": [
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6139
+          },
+          {
+            "name": "20260827_115452.jpg",
+            "score": 0.6001
+          },
+          {
+            "name": "20260811_122521.jpg",
+            "score": 0.5977
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "blurry_ko",
+        "lang": "ko",
+        "query": "흔들리고 초점이 나간 사진",
+        "audioSec": 2.9,
+        "decodeMs": 41.80000000447035,
+        "embedMs": 533.6000000014901,
+        "searchMs": 1.0999999940395355,
+        "cosToText": 0.7764,
+        "nearestText": "blurry_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.4166666666666667,
+        "top3": [
+          {
+            "name": "20240721_184633.jpg",
+            "score": 0.7202
+          },
+          {
+            "name": "20260918_195307.jpg",
+            "score": 0.7058
+          },
+          {
+            "name": "20260926_155341.jpg",
+            "score": 0.6998
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "blurry_en",
+        "lang": "en",
+        "query": "blurry out of focus photo",
+        "audioSec": 2.31,
+        "decodeMs": 50,
+        "embedMs": 426.79999999701977,
+        "searchMs": 1,
+        "cosToText": 0.8723,
+        "nearestText": "blurry_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20260815_142625.jpg",
+            "score": 0.6751
+          },
+          {
+            "name": "20260818_121033.jpg",
+            "score": 0.6598
+          },
+          {
+            "name": "20260815_142557.jpg",
+            "score": 0.6567
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "document_ko",
+        "lang": "ko",
+        "query": "글씨가 많은 문서",
+        "audioSec": 2.24,
+        "decodeMs": 38.399999998509884,
+        "embedMs": 421.40000000596046,
+        "searchMs": 1,
+        "cosToText": 0.7769,
+        "nearestText": "document_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.4166666666666667,
+        "top3": [
+          {
+            "name": "20260831_102752.jpg",
+            "score": 0.6925
+          },
+          {
+            "name": "20260811_122521.jpg",
+            "score": 0.6841
+          },
+          {
+            "name": "20240721_123138.jpg",
+            "score": 0.6789
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "document_en",
+        "lang": "en",
+        "query": "a document with lots of text",
+        "audioSec": 2.59,
+        "decodeMs": 41.600000001490116,
+        "embedMs": 510.1000000014901,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.9029,
+        "nearestText": "document_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6517
+          },
+          {
+            "name": "Screenshot_20261014_142508_One UI Home.jpg",
+            "score": 0.6323
+          },
+          {
+            "name": "Screenshot_20261014_110205_Messages.jpg",
+            "score": 0.6205
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "spatial_ko",
+        "lang": "ko",
+        "query": "아이 왼쪽에 있는 강아지",
+        "audioSec": 2.5,
+        "decodeMs": 53.79999999701977,
+        "embedMs": 465.20000000298023,
+        "searchMs": 1.2000000029802322,
+        "cosToText": 0.7093,
+        "nearestText": "dog_ko",
+        "exact1": false,
+        "concept1": false,
+        "overlap12": 0.25,
+        "top3": [
+          {
+            "name": "20260926_155341.jpg",
+            "score": 0.6736
+          },
+          {
+            "name": "20260815_142709.jpg",
+            "score": 0.6731
+          },
+          {
+            "name": "20261004_154410.jpg",
+            "score": 0.67
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "spatial_en",
+        "lang": "en",
+        "query": "a dog to the left of a child",
+        "audioSec": 2.43,
+        "decodeMs": 36.69999999552965,
+        "embedMs": 455.6000000014901,
+        "searchMs": 0.8999999985098839,
+        "cosToText": 0.9173,
+        "nearestText": "spatial_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.75,
+        "top3": [
+          {
+            "name": "20260815_180342.jpg",
+            "score": 0.6271
+          },
+          {
+            "name": "20260926_160157.jpg",
+            "score": 0.6203
+          },
+          {
+            "name": "20260815_142557.jpg",
+            "score": 0.6171
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "object_ko",
+        "lang": "ko",
+        "query": "책상 위에 놓인 물건",
+        "audioSec": 2.45,
+        "decodeMs": 57.79999999701977,
+        "embedMs": 454.20000000298023,
+        "searchMs": 1.6000000014901161,
+        "cosToText": 0.724,
+        "nearestText": "object_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5,
+        "top3": [
+          {
+            "name": "20260926_143652.jpg",
+            "score": 0.7005
+          },
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.6975
+          },
+          {
+            "name": "20261004_154410.jpg",
+            "score": 0.6961
+          }
+        ]
+      },
+      {
+        "variant": "raw",
+        "id": "object_en",
+        "lang": "en",
+        "query": "objects on a desk",
+        "audioSec": 2.02,
+        "decodeMs": 26,
+        "embedMs": 408.5,
+        "searchMs": 1.6000000014901161,
+        "cosToText": 0.8933,
+        "nearestText": "object_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20260517_150328.jpg",
+            "score": 0.6755
+          },
+          {
+            "name": "20260824_123209.jpg",
+            "score": 0.6682
+          },
+          {
+            "name": "20260831_102752.jpg",
+            "score": 0.6532
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "beach_ko",
+        "lang": "ko",
+        "query": "바닷가에서 뛰노는 아이",
+        "audioSec": 2.54,
+        "decodeMs": 35.30000000447035,
+        "embedMs": 472,
+        "searchMs": 1,
+        "cosToText": 0.7849,
+        "nearestText": "beach_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.16666666666666666,
+        "top3": [
+          {
+            "name": "20240721_114907.jpg",
+            "score": 0.6797
+          },
+          {
+            "name": "20260926_131105.jpg",
+            "score": 0.6782
+          },
+          {
+            "name": "20240720_135204.jpg",
+            "score": 0.6777
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "beach_en",
+        "lang": "en",
+        "query": "a child running on the beach",
+        "audioSec": 2.33,
+        "decodeMs": 54.900000005960464,
+        "embedMs": 456.3999999985099,
+        "searchMs": 0.8999999985098839,
+        "cosToText": 0.9796,
+        "nearestText": "beach_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.8333333333333334,
+        "top3": [
+          {
+            "name": "20240721_181624.jpg",
+            "score": 0.7158
+          },
+          {
+            "name": "20240719_114240.jpg",
+            "score": 0.7114
+          },
+          {
+            "name": "20240721_184540.jpg",
+            "score": 0.7075
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "cake_ko",
+        "lang": "ko",
+        "query": "생일 케이크와 촛불",
+        "audioSec": 2.48,
+        "decodeMs": 56.29999999701977,
+        "embedMs": 459.1000000014901,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.6606,
+        "nearestText": "receipt_ko",
+        "exact1": false,
+        "concept1": false,
+        "overlap12": 0.3333333333333333,
+        "top3": [
+          {
+            "name": "20240720_135204.jpg",
+            "score": 0.6645
+          },
+          {
+            "name": "20240720_200818.jpg",
+            "score": 0.6612
+          },
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.6563
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "cake_en",
+        "lang": "en",
+        "query": "birthday cake with candles",
+        "audioSec": 2.42,
+        "decodeMs": 46.900000005960464,
+        "embedMs": 453.79999999701977,
+        "searchMs": 0.8999999985098839,
+        "cosToText": 0.9486,
+        "nearestText": "cake_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20240720_191807.jpg",
+            "score": 0.6095
+          },
+          {
+            "name": "20240720_194911.jpg",
+            "score": 0.6038
+          },
+          {
+            "name": "20240720_194644.jpg",
+            "score": 0.601
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "dog_ko",
+        "lang": "ko",
+        "query": "강아지",
+        "audioSec": 1.51,
+        "decodeMs": 360.79999999701977,
+        "embedMs": 340.8999999985099,
+        "searchMs": 1,
+        "cosToText": 0.7854,
+        "nearestText": "dog_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.686
+          },
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.6859
+          },
+          {
+            "name": "20240720_200818.jpg",
+            "score": 0.683
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "dog_en",
+        "lang": "en",
+        "query": "a dog",
+        "audioSec": 1.32,
+        "decodeMs": 38.79999999701977,
+        "embedMs": 309.40000000596046,
+        "searchMs": 1,
+        "cosToText": 0.9738,
+        "nearestText": "dog_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.8333333333333334,
+        "top3": [
+          {
+            "name": "20261004_153652.jpg",
+            "score": 0.6513
+          },
+          {
+            "name": "20260517_150328.jpg",
+            "score": 0.6453
+          },
+          {
+            "name": "20260815_142557.jpg",
+            "score": 0.6439
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "food_ko",
+        "lang": "ko",
+        "query": "음식 사진",
+        "audioSec": 1.78,
+        "decodeMs": 58,
+        "embedMs": 348.79999999701977,
+        "searchMs": 0.8999999985098839,
+        "cosToText": 0.939,
+        "nearestText": "food_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20260916_180525.jpg",
+            "score": 0.7262
+          },
+          {
+            "name": "20240720_200818.jpg",
+            "score": 0.7259
+          },
+          {
+            "name": "20240721_114754.jpg",
+            "score": 0.7219
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "food_en",
+        "lang": "en",
+        "query": "food on a table",
+        "audioSec": 1.83,
+        "decodeMs": 32.29999999701977,
+        "embedMs": 351.5,
+        "searchMs": 1,
+        "cosToText": 0.9778,
+        "nearestText": "food_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.9166666666666666,
+        "top3": [
+          {
+            "name": "20240720_191820.jpg",
+            "score": 0.6993
+          },
+          {
+            "name": "20260517_150328.jpg",
+            "score": 0.6962
+          },
+          {
+            "name": "20260916_180525.jpg",
+            "score": 0.6917
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "group_ko",
+        "lang": "ko",
+        "query": "단체 사진",
+        "audioSec": 1.74,
+        "decodeMs": 53.79999999701977,
+        "embedMs": 356,
+        "searchMs": 1,
+        "cosToText": 0.9135,
+        "nearestText": "group_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.4166666666666667,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.7124
+          },
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.7084
+          },
+          {
+            "name": "20260926_131244.jpg",
+            "score": 0.7032
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "group_en",
+        "lang": "en",
+        "query": "group photo of family",
+        "audioSec": 2.17,
+        "decodeMs": 73.70000000298023,
+        "embedMs": 454,
+        "searchMs": 1,
+        "cosToText": 0.9698,
+        "nearestText": "group_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.6707
+          },
+          {
+            "name": "20260926_131244.jpg",
+            "score": 0.6599
+          },
+          {
+            "name": "1721636229340.jpg",
+            "score": 0.6464
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "night_ko",
+        "lang": "ko",
+        "query": "밤에 찍은 어두운 사진",
+        "audioSec": 2.54,
+        "decodeMs": 52.79999999701977,
+        "embedMs": 462.40000000596046,
+        "searchMs": 1.0999999940395355,
+        "cosToText": 0.7991,
+        "nearestText": "food_ko",
+        "exact1": false,
+        "concept1": false,
+        "overlap12": 0.25,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.7151
+          },
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.7069
+          },
+          {
+            "name": "20240721_114304.jpg",
+            "score": 0.7047
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "night_en",
+        "lang": "en",
+        "query": "dark photo taken at night",
+        "audioSec": 2.4,
+        "decodeMs": 63.600000001490116,
+        "embedMs": 456.1000000014901,
+        "searchMs": 1,
+        "cosToText": 0.9764,
+        "nearestText": "night_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.9166666666666666,
+        "top3": [
+          {
+            "name": "20260918_195307.jpg",
+            "score": 0.7111
+          },
+          {
+            "name": "20240720_211735.jpg",
+            "score": 0.6934
+          },
+          {
+            "name": "20240720_213545.jpg",
+            "score": 0.6922
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "snow_ko",
+        "lang": "ko",
+        "query": "눈 오는 날",
+        "audioSec": 1.67,
+        "decodeMs": 63.600000001490116,
+        "embedMs": 346.79999999701977,
+        "searchMs": 1.5,
+        "cosToText": 0.8165,
+        "nearestText": "snow_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5,
+        "top3": [
+          {
+            "name": "20260926_160211.jpg",
+            "score": 0.6894
+          },
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.6892
+          },
+          {
+            "name": "20240721_113501.jpg",
+            "score": 0.6873
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "snow_en",
+        "lang": "en",
+        "query": "snowy day",
+        "audioSec": 1.55,
+        "decodeMs": 44.69999999552965,
+        "embedMs": 346.70000000298023,
+        "searchMs": 1,
+        "cosToText": 0.9501,
+        "nearestText": "snow_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20260926_155341.jpg",
+            "score": 0.6615
+          },
+          {
+            "name": "20240721_114052.jpg",
+            "score": 0.6569
+          },
+          {
+            "name": "20261004_153652.jpg",
+            "score": 0.652
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "car_ko",
+        "lang": "ko",
+        "query": "자동차 안에서",
+        "audioSec": 1.92,
+        "decodeMs": 61,
+        "embedMs": 355,
+        "searchMs": 1,
+        "cosToText": 0.9236,
+        "nearestText": "car_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20260815_131025.jpg",
+            "score": 0.6956
+          },
+          {
+            "name": "20260517_143955.jpg",
+            "score": 0.6889
+          },
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6854
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "car_en",
+        "lang": "en",
+        "query": "inside a car",
+        "audioSec": 1.7,
+        "decodeMs": 50.29999999701977,
+        "embedMs": 345.5,
+        "searchMs": 1,
+        "cosToText": 0.9704,
+        "nearestText": "car_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.8333333333333334,
+        "top3": [
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6544
+          },
+          {
+            "name": "20260815_131025.jpg",
+            "score": 0.6483
+          },
+          {
+            "name": "20240720_180506.jpg",
+            "score": 0.6308
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "screenshot_ko",
+        "lang": "ko",
+        "query": "휴대폰 스크린샷",
+        "audioSec": 2.18,
+        "decodeMs": 34.30000000447035,
+        "embedMs": 454.59999999403954,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.8299,
+        "nearestText": "screenshot_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5,
+        "top3": [
+          {
+            "name": "Screenshot_20261014_142508_One UI Home.jpg",
+            "score": 0.7212
+          },
+          {
+            "name": "Screenshot_20261014_140717_One UI Home.jpg",
+            "score": 0.6912
+          },
+          {
+            "name": "Screenshot_20261014_110205_Messages.jpg",
+            "score": 0.6836
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "screenshot_en",
+        "lang": "en",
+        "query": "a screenshot of a phone screen",
+        "audioSec": 2.58,
+        "decodeMs": 48.5,
+        "embedMs": 520.5,
+        "searchMs": 1,
+        "cosToText": 0.9717,
+        "nearestText": "screenshot_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.9166666666666666,
+        "top3": [
+          {
+            "name": "Screenshot_20261014_142508_One UI Home.jpg",
+            "score": 0.7277
+          },
+          {
+            "name": "Screenshot_20261014_140717_One UI Home.jpg",
+            "score": 0.6861
+          },
+          {
+            "name": "Screenshot_20261014_110205_Messages.jpg",
+            "score": 0.6799
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "receipt_ko",
+        "lang": "ko",
+        "query": "영수증",
+        "audioSec": 1.59,
+        "decodeMs": 86.29999999701977,
+        "embedMs": 341.1000000014901,
+        "searchMs": 1,
+        "cosToText": 0.8119,
+        "nearestText": "receipt_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.6753
+          },
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.6693
+          },
+          {
+            "name": "20261011_221613.jpg",
+            "score": 0.6564
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "receipt_en",
+        "lang": "en",
+        "query": "a paper receipt",
+        "audioSec": 1.86,
+        "decodeMs": 63.70000000298023,
+        "embedMs": 355.8999999985099,
+        "searchMs": 1.6000000014901161,
+        "cosToText": 0.9583,
+        "nearestText": "receipt_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.8333333333333334,
+        "top3": [
+          {
+            "name": "20261012_200232.jpg",
+            "score": 0.6316
+          },
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6305
+          },
+          {
+            "name": "20260811_122521.jpg",
+            "score": 0.6173
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "blurry_ko",
+        "lang": "ko",
+        "query": "흔들리고 초점이 나간 사진",
+        "audioSec": 2.9,
+        "decodeMs": 69.5,
+        "embedMs": 609,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.8286,
+        "nearestText": "blurry_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20240721_184633.jpg",
+            "score": 0.7144
+          },
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.699
+          },
+          {
+            "name": "20260918_195307.jpg",
+            "score": 0.6985
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "blurry_en",
+        "lang": "en",
+        "query": "blurry out of focus photo",
+        "audioSec": 2.31,
+        "decodeMs": 122.79999999701977,
+        "embedMs": 449.20000000298023,
+        "searchMs": 1,
+        "cosToText": 0.9348,
+        "nearestText": "blurry_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.6666666666666666,
+        "top3": [
+          {
+            "name": "20260815_142625.jpg",
+            "score": 0.6739
+          },
+          {
+            "name": "20240721_114052.jpg",
+            "score": 0.6529
+          },
+          {
+            "name": "20260815_142557.jpg",
+            "score": 0.6507
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "document_ko",
+        "lang": "ko",
+        "query": "글씨가 많은 문서",
+        "audioSec": 2.24,
+        "decodeMs": 45.100000001490116,
+        "embedMs": 444.8999999985099,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.8293,
+        "nearestText": "document_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20260831_102752.jpg",
+            "score": 0.6959
+          },
+          {
+            "name": "20260811_122521.jpg",
+            "score": 0.6888
+          },
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.683
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "document_en",
+        "lang": "en",
+        "query": "a document with lots of text",
+        "audioSec": 2.59,
+        "decodeMs": 57,
+        "embedMs": 555.8000000044703,
+        "searchMs": 1,
+        "cosToText": 0.9722,
+        "nearestText": "document_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.8333333333333334,
+        "top3": [
+          {
+            "name": "20260814_224330.jpg",
+            "score": 0.6873
+          },
+          {
+            "name": "Screenshot_20261014_142508_One UI Home.jpg",
+            "score": 0.6871
+          },
+          {
+            "name": "20261011_221613.jpg",
+            "score": 0.6607
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "spatial_ko",
+        "lang": "ko",
+        "query": "아이 왼쪽에 있는 강아지",
+        "audioSec": 2.5,
+        "decodeMs": 523.1000000014901,
+        "embedMs": 467.79999999701977,
+        "searchMs": 1.1000000014901161,
+        "cosToText": 0.7536,
+        "nearestText": "dog_ko",
+        "exact1": false,
+        "concept1": false,
+        "overlap12": 0.25,
+        "top3": [
+          {
+            "name": "20260815_142653.jpg",
+            "score": 0.6741
+          },
+          {
+            "name": "20240720_123011.jpg",
+            "score": 0.673
+          },
+          {
+            "name": "20240720_200818.jpg",
+            "score": 0.671
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "spatial_en",
+        "lang": "en",
+        "query": "a dog to the left of a child",
+        "audioSec": 2.43,
+        "decodeMs": 55.600000001490116,
+        "embedMs": 466.3999999985099,
+        "searchMs": 1,
+        "cosToText": 0.9684,
+        "nearestText": "spatial_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.75,
+        "top3": [
+          {
+            "name": "20260926_160157.jpg",
+            "score": 0.6405
+          },
+          {
+            "name": "20240719_112244.jpg",
+            "score": 0.6351
+          },
+          {
+            "name": "20260815_180342.jpg",
+            "score": 0.6336
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "object_ko",
+        "lang": "ko",
+        "query": "책상 위에 놓인 물건",
+        "audioSec": 2.45,
+        "decodeMs": 64.5,
+        "embedMs": 482.20000000298023,
+        "searchMs": 0.8999999985098839,
+        "cosToText": 0.7541,
+        "nearestText": "object_ko",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.5833333333333334,
+        "top3": [
+          {
+            "name": "20261002_103044.jpg",
+            "score": 0.6981
+          },
+          {
+            "name": "20260926_143652.jpg",
+            "score": 0.6968
+          },
+          {
+            "name": "20260926_131245.jpg",
+            "score": 0.693
+          }
+        ]
+      },
+      {
+        "variant": "interleaved",
+        "id": "object_en",
+        "lang": "en",
+        "query": "objects on a desk",
+        "audioSec": 2.02,
+        "decodeMs": 86.09999999403954,
+        "embedMs": 428,
+        "searchMs": 1,
+        "cosToText": 0.9687,
+        "nearestText": "object_en",
+        "exact1": true,
+        "concept1": true,
+        "overlap12": 0.8333333333333334,
+        "top3": [
+          {
+            "name": "20260517_150328.jpg",
+            "score": 0.7011
+          },
+          {
+            "name": "20260824_123209.jpg",
+            "score": 0.6759
+          },
+          {
+            "name": "20260831_102752.jpg",
+            "score": 0.6668
+          }
+        ]
+      }
+    ]
+  },
+  "voiceDecisionFinal": {
+    "mode": "audio-direct",
+    "stage": "precheck",
+    "reason": "사전 판정 통과"
+  },
+  "searches": [
+    {
+      "kind": "text",
+      "query": "바닷가에서 뛰노는 아이",
+      "presetId": "beach_ko",
+      "embedMs": 86.39999999850988,
+      "searchMs": 2.8000000044703484,
+      "top": [
+        {
+          "name": "20240721_184540.jpg",
+          "score": 0.7501
+        },
+        {
+          "name": "20240721_181624.jpg",
+          "score": 0.7367
+        },
+        {
+          "name": "20240719_181655.jpg",
+          "score": 0.7321
+        },
+        {
+          "name": "20240719_181612.jpg",
+          "score": 0.7311
+        },
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.728
+        },
+        {
+          "name": "20240719_181625.jpg",
+          "score": 0.7086
+        },
+        {
+          "name": "20240721_182557.jpg",
+          "score": 0.704
+        },
+        {
+          "name": "20260926_160211.jpg",
+          "score": 0.704
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.7011
+        },
+        {
+          "name": "20240719_182217.jpg",
+          "score": 0.6974
+        },
+        {
+          "name": "20240721_183406.jpg",
+          "score": 0.6974
+        },
+        {
+          "name": "20240721_181907.jpg",
+          "score": 0.6943
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a child running on the beach",
+      "presetId": "beach_en",
+      "embedMs": 53.900000005960464,
+      "searchMs": 6.5,
+      "top": [
+        {
+          "name": "20240721_181624.jpg",
+          "score": 0.7221
+        },
+        {
+          "name": "20240721_184540.jpg",
+          "score": 0.7203
+        },
+        {
+          "name": "20240719_114240.jpg",
+          "score": 0.7157
+        },
+        {
+          "name": "20240719_181655.jpg",
+          "score": 0.7064
+        },
+        {
+          "name": "20240719_181612.jpg",
+          "score": 0.7024
+        },
+        {
+          "name": "20240720_115030.jpg",
+          "score": 0.6938
+        },
+        {
+          "name": "20240719_182850.jpg",
+          "score": 0.6925
+        },
+        {
+          "name": "20240719_182118.jpg",
+          "score": 0.6923
+        },
+        {
+          "name": "20240719_182217.jpg",
+          "score": 0.69
+        },
+        {
+          "name": "20240719_182753.jpg",
+          "score": 0.6896
+        },
+        {
+          "name": "20240719_182324.jpg",
+          "score": 0.6891
+        },
+        {
+          "name": "20240720_140806.jpg",
+          "score": 0.6885
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "생일 케이크와 촛불",
+      "presetId": "cake_ko",
+      "embedMs": 74.59999999403954,
+      "searchMs": 4,
+      "top": [
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6478
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6467
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6467
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.6402
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.64
+        },
+        {
+          "name": "20240720_191807.jpg",
+          "score": 0.6399
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6363
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6323
+        },
+        {
+          "name": "20260926_160213.jpg",
+          "score": 0.6285
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6276
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6272
+        },
+        {
+          "name": "20260905_210449.jpg",
+          "score": 0.6265
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "birthday cake with candles",
+      "presetId": "cake_en",
+      "embedMs": 64.80000000447035,
+      "searchMs": 9.299999997019768,
+      "top": [
+        {
+          "name": "20240720_194644.jpg",
+          "score": 0.6212
+        },
+        {
+          "name": "20240720_191807.jpg",
+          "score": 0.6166
+        },
+        {
+          "name": "20240720_194658.jpg",
+          "score": 0.6136
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6131
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6127
+        },
+        {
+          "name": "20240720_194659.jpg",
+          "score": 0.6127
+        },
+        {
+          "name": "20240720_195541.jpg",
+          "score": 0.6125
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6117
+        },
+        {
+          "name": "20240720_194911.jpg",
+          "score": 0.6108
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6094
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.6092
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6082
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "강아지",
+      "presetId": "dog_ko",
+      "embedMs": 51,
+      "searchMs": 4,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6878
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6805
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6798
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6701
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6683
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.6675
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6664
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.665
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6642
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.662
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6619
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6615
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a dog",
+      "presetId": "dog_en",
+      "embedMs": 48.70000000298023,
+      "searchMs": 4.299999997019768,
+      "top": [
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.652
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6455
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6448
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6407
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.638
+        },
+        {
+          "name": "20240719_182717.jpg",
+          "score": 0.6263
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6258
+        },
+        {
+          "name": "20260815_142619.jpg",
+          "score": 0.6257
+        },
+        {
+          "name": "20240721_114146.jpg",
+          "score": 0.6251
+        },
+        {
+          "name": "20260824_123209.jpg",
+          "score": 0.6249
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6249
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6242
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "음식 사진",
+      "presetId": "food_ko",
+      "embedMs": 49.29999999701977,
+      "searchMs": 7.4000000059604645,
+      "top": [
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.7238
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.7174
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.7086
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6995
+        },
+        {
+          "name": "20260918_195320.jpg",
+          "score": 0.6992
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6917
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6902
+        },
+        {
+          "name": "20240720_131834.jpg",
+          "score": 0.6896
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.6882
+        },
+        {
+          "name": "20240720_195541.jpg",
+          "score": 0.683
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6816
+        },
+        {
+          "name": "20260926_143652.jpg",
+          "score": 0.6801
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "food on a table",
+      "presetId": "food_en",
+      "embedMs": 50.599999994039536,
+      "searchMs": 4.100000001490116,
+      "top": [
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.7105
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.7085
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.7051
+        },
+        {
+          "name": "20240720_131834.jpg",
+          "score": 0.6952
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6941
+        },
+        {
+          "name": "20260829_203811.jpg",
+          "score": 0.6937
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6917
+        },
+        {
+          "name": "20240720_195541.jpg",
+          "score": 0.6883
+        },
+        {
+          "name": "20240720_194918.jpg",
+          "score": 0.686
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.683
+        },
+        {
+          "name": "20240720_195550.jpg",
+          "score": 0.6809
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6769
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "단체 사진",
+      "presetId": "group_ko",
+      "embedMs": 51.30000000447035,
+      "searchMs": 4.299999997019768,
+      "top": [
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.723
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.7212
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.7114
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.7078
+        },
+        {
+          "name": "20240721_183406.jpg",
+          "score": 0.7069
+        },
+        {
+          "name": "1721636229340.jpg",
+          "score": 0.7058
+        },
+        {
+          "name": "20240721_182823.jpg",
+          "score": 0.7005
+        },
+        {
+          "name": "20240721_183355.jpg",
+          "score": 0.6999
+        },
+        {
+          "name": "20240721_182906.jpg",
+          "score": 0.6979
+        },
+        {
+          "name": "20260925_173603.jpg",
+          "score": 0.6954
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6948
+        },
+        {
+          "name": "20240721_183307.jpg",
+          "score": 0.6941
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "group photo of family",
+      "presetId": "group_en",
+      "embedMs": 54,
+      "searchMs": 5.5,
+      "top": [
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.7059
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6871
+        },
+        {
+          "name": "20260926_155358.jpg",
+          "score": 0.6617
+        },
+        {
+          "name": "20240721_150628.jpg",
+          "score": 0.6611
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6577
+        },
+        {
+          "name": "20240721_182823.jpg",
+          "score": 0.657
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.6556
+        },
+        {
+          "name": "20260926_155359.jpg",
+          "score": 0.6542
+        },
+        {
+          "name": "20260926_155400.jpg",
+          "score": 0.6528
+        },
+        {
+          "name": "1721636229340.jpg",
+          "score": 0.6517
+        },
+        {
+          "name": "20240721_150653.jpg",
+          "score": 0.6515
+        },
+        {
+          "name": "20240721_183540.jpg",
+          "score": 0.6502
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "밤에 찍은 어두운 사진",
+      "presetId": "night_ko",
+      "embedMs": 69.70000000298023,
+      "searchMs": 4.399999998509884,
+      "top": [
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.7296
+        },
+        {
+          "name": "20240720_213545.jpg",
+          "score": 0.7149
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.71
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.7085
+        },
+        {
+          "name": "20240720_211735.jpg",
+          "score": 0.7039
+        },
+        {
+          "name": "20260613_201134.jpg",
+          "score": 0.7036
+        },
+        {
+          "name": "20240720_213934.jpg",
+          "score": 0.7002
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6988
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.688
+        },
+        {
+          "name": "20260613_201138.jpg",
+          "score": 0.6843
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.6839
+        },
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.6827
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "dark photo taken at night",
+      "presetId": "night_en",
+      "embedMs": 75.29999999701977,
+      "searchMs": 4.200000002980232,
+      "top": [
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6969
+        },
+        {
+          "name": "20240720_211735.jpg",
+          "score": 0.682
+        },
+        {
+          "name": "20240720_213545.jpg",
+          "score": 0.6805
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6781
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6778
+        },
+        {
+          "name": "20240720_213934.jpg",
+          "score": 0.6728
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.6722
+        },
+        {
+          "name": "20240720_191807.jpg",
+          "score": 0.6706
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.6645
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6642
+        },
+        {
+          "name": "20240720_211415.jpg",
+          "score": 0.6616
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6594
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "눈 오는 날",
+      "presetId": "snow_ko",
+      "embedMs": 53.30000000447035,
+      "searchMs": 6.699999995529652,
+      "top": [
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.7018
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.7013
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6938
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6933
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6929
+        },
+        {
+          "name": "20260926_160211.jpg",
+          "score": 0.6918
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6875
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6869
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6855
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6843
+        },
+        {
+          "name": "20260926_160222.jpg",
+          "score": 0.6826
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6817
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "snowy day",
+      "presetId": "snow_en",
+      "embedMs": 50.100000001490116,
+      "searchMs": 4.399999998509884,
+      "top": [
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6634
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6632
+        },
+        {
+          "name": "20240718_181618.jpg",
+          "score": 0.6594
+        },
+        {
+          "name": "20240721_114052.jpg",
+          "score": 0.6563
+        },
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6556
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6548
+        },
+        {
+          "name": "20240721_114031.jpg",
+          "score": 0.6515
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6498
+        },
+        {
+          "name": "20240721_135315.jpg",
+          "score": 0.6498
+        },
+        {
+          "name": "20260926_115050.jpg",
+          "score": 0.6475
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6471
+        },
+        {
+          "name": "20260926_131157.jpg",
+          "score": 0.6458
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "자동차 안에서",
+      "presetId": "car_ko",
+      "embedMs": 49.399999998509884,
+      "searchMs": 4.200000002980232,
+      "top": [
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.7006
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6924
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.6883
+        },
+        {
+          "name": "20260926_131113.jpg",
+          "score": 0.6875
+        },
+        {
+          "name": "20260926_131114.jpg",
+          "score": 0.6851
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6851
+        },
+        {
+          "name": "20240720_182157.jpg",
+          "score": 0.6843
+        },
+        {
+          "name": "20240720_184711.jpg",
+          "score": 0.6842
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.679
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6747
+        },
+        {
+          "name": "20240720_184045.jpg",
+          "score": 0.6732
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.672
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "inside a car",
+      "presetId": "car_en",
+      "embedMs": 48.5,
+      "searchMs": 4.399999998509884,
+      "top": [
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.6533
+        },
+        {
+          "name": "20240720_180506.jpg",
+          "score": 0.6454
+        },
+        {
+          "name": "20240720_184711.jpg",
+          "score": 0.6415
+        },
+        {
+          "name": "20240720_182156.jpg",
+          "score": 0.6412
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6389
+        },
+        {
+          "name": "20240720_182145.jpg",
+          "score": 0.6375
+        },
+        {
+          "name": "20240720_182157.jpg",
+          "score": 0.6368
+        },
+        {
+          "name": "20240720_182147.jpg",
+          "score": 0.6366
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.6366
+        },
+        {
+          "name": "20240720_180456.jpg",
+          "score": 0.6365
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6347
+        },
+        {
+          "name": "20260926_131114.jpg",
+          "score": 0.6335
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "휴대폰 스크린샷",
+      "presetId": "screenshot_ko",
+      "embedMs": 58.100000001490116,
+      "searchMs": 4.5,
+      "top": [
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.7482
+        },
+        {
+          "name": "Screenshot_20261014_140717_One UI Home.jpg",
+          "score": 0.7218
+        },
+        {
+          "name": "20240720_183233.jpg",
+          "score": 0.6996
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6987
+        },
+        {
+          "name": "20261012_200230.jpg",
+          "score": 0.69
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6896
+        },
+        {
+          "name": "20260926_131136.jpg",
+          "score": 0.6888
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.687
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.681
+        },
+        {
+          "name": "20260926_131225.jpg",
+          "score": 0.6785
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.6784
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6769
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a screenshot of a phone screen",
+      "presetId": "screenshot_en",
+      "embedMs": 47.400000005960464,
+      "searchMs": 4.299999997019768,
+      "top": [
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.7503
+        },
+        {
+          "name": "Screenshot_20261014_140717_One UI Home.jpg",
+          "score": 0.7146
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6878
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.6723
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6713
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6698
+        },
+        {
+          "name": "20260517_143951.jpg",
+          "score": 0.6673
+        },
+        {
+          "name": "20260517_153905.jpg",
+          "score": 0.6659
+        },
+        {
+          "name": "20260926_131225.jpg",
+          "score": 0.6649
+        },
+        {
+          "name": "20260926_131136.jpg",
+          "score": 0.664
+        },
+        {
+          "name": "20240720_183233.jpg",
+          "score": 0.6631
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6611
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "영수증",
+      "presetId": "receipt_ko",
+      "embedMs": 52.899999998509884,
+      "searchMs": 7,
+      "top": [
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6825
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6656
+        },
+        {
+          "name": "Screenshot_20261014_140717_One UI Home.jpg",
+          "score": 0.6636
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6623
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6562
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6561
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6541
+        },
+        {
+          "name": "20240721_160242.jpg",
+          "score": 0.6518
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6516
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.65
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6491
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6488
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a paper receipt",
+      "presetId": "receipt_en",
+      "embedMs": 42.29999999701977,
+      "searchMs": 7.300000004470348,
+      "top": [
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.664
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6455
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6385
+        },
+        {
+          "name": "20240721_160242.jpg",
+          "score": 0.6368
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6308
+        },
+        {
+          "name": "20260827_115452.jpg",
+          "score": 0.6237
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6193
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6185
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6182
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6171
+        },
+        {
+          "name": "20240720_195550.jpg",
+          "score": 0.6126
+        },
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.6116
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "흔들리고 초점이 나간 사진",
+      "presetId": "blurry_ko",
+      "embedMs": 66.59999999403954,
+      "searchMs": 4.200000002980232,
+      "top": [
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6848
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6845
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6803
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6789
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6776
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.6768
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6715
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6704
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.6682
+        },
+        {
+          "name": "20260925_173603.jpg",
+          "score": 0.6668
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6664
+        },
+        {
+          "name": "20260926_160221.jpg",
+          "score": 0.666
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "blurry out of focus photo",
+      "presetId": "blurry_en",
+      "embedMs": 48.899999998509884,
+      "searchMs": 4.300000004470348,
+      "top": [
+        {
+          "name": "20260815_142625.jpg",
+          "score": 0.6581
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6572
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.651
+        },
+        {
+          "name": "20260818_121033.jpg",
+          "score": 0.6479
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6406
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6394
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6392
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6366
+        },
+        {
+          "name": "20260814_155340.jpg",
+          "score": 0.636
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.636
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6356
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6345
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "글씨가 많은 문서",
+      "presetId": "document_ko",
+      "embedMs": 48.20000000298023,
+      "searchMs": 4.700000002980232,
+      "top": [
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.7122
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.7101
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6924
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6884
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6818
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6682
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6625
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.662
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6612
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6608
+        },
+        {
+          "name": "20260925_173603.jpg",
+          "score": 0.6584
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.6576
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a document with lots of text",
+      "presetId": "document_en",
+      "embedMs": 48.600000001490116,
+      "searchMs": 8,
+      "top": [
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6982
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6929
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6849
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6814
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6749
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6706
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.658
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6531
+        },
+        {
+          "name": "20260905_215833.jpg",
+          "score": 0.6497
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6482
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.647
+        },
+        {
+          "name": "20261012_200230.jpg",
+          "score": 0.6462
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "아이 왼쪽에 있는 강아지",
+      "presetId": "spatial_ko",
+      "embedMs": 50.70000000298023,
+      "searchMs": 4.0999999940395355,
+      "top": [
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.665
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6553
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6548
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.6535
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6523
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6491
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6474
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6473
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.646
+        },
+        {
+          "name": "20260926_160211.jpg",
+          "score": 0.6459
+        },
+        {
+          "name": "20260925_173603.jpg",
+          "score": 0.6457
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6438
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a dog to the left of a child",
+      "presetId": "spatial_en",
+      "embedMs": 66.60000000149012,
+      "searchMs": 4.299999997019768,
+      "top": [
+        {
+          "name": "20260815_180342.jpg",
+          "score": 0.6494
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6488
+        },
+        {
+          "name": "20260815_142625.jpg",
+          "score": 0.6481
+        },
+        {
+          "name": "20240719_112244.jpg",
+          "score": 0.6467
+        },
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.6454
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6447
+        },
+        {
+          "name": "20240721_181624.jpg",
+          "score": 0.642
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6419
+        },
+        {
+          "name": "20260815_142552.jpg",
+          "score": 0.6379
+        },
+        {
+          "name": "20240719_182118.jpg",
+          "score": 0.6376
+        },
+        {
+          "name": "20260926_155345.jpg",
+          "score": 0.6363
+        },
+        {
+          "name": "20240720_123026(0).jpg",
+          "score": 0.6343
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "책상 위에 놓인 물건",
+      "presetId": "object_ko",
+      "embedMs": 50.70000000298023,
+      "searchMs": 6.299999997019768,
+      "top": [
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.7036
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6811
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6802
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6793
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6784
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6777
+        },
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.6754
+        },
+        {
+          "name": "20260925_173603.jpg",
+          "score": 0.6753
+        },
+        {
+          "name": "20260926_143652.jpg",
+          "score": 0.6744
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6742
+        },
+        {
+          "name": "20260926_131157.jpg",
+          "score": 0.6742
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6733
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "objects on a desk",
+      "presetId": "object_en",
+      "embedMs": 45.5,
+      "searchMs": 6.100000001490116,
+      "top": [
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.7072
+        },
+        {
+          "name": "20260824_123209.jpg",
+          "score": 0.6842
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6689
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6643
+        },
+        {
+          "name": "20261002_090514.jpg",
+          "score": 0.6593
+        },
+        {
+          "name": "20260827_115452.jpg",
+          "score": 0.6551
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6548
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.652
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6511
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6505
+        },
+        {
+          "name": "20260926_131157.jpg",
+          "score": 0.6492
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6473
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "바닷가에서 뛰노는 아이",
+      "presetId": "beach_ko",
+      "lang": "ko",
+      "embedMs": 489.8999999985099,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 230.29999999701977,
+      "audioSec": 2.54,
+      "top": [
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.682
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6802
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6788
+        },
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.6753
+        },
+        {
+          "name": "20240720_182157.jpg",
+          "score": 0.6753
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.675
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6746
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6742
+        },
+        {
+          "name": "20240720_182910.jpg",
+          "score": 0.6732
+        },
+        {
+          "name": "20240720_183138.jpg",
+          "score": 0.6727
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6719
+        },
+        {
+          "name": "20240720_184711.jpg",
+          "score": 0.6712
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "a child running on the beach",
+      "presetId": "beach_en",
+      "lang": "en",
+      "embedMs": 432.20000000298023,
+      "searchMs": 1.3999999985098839,
+      "decodeMs": 49.899999998509884,
+      "audioSec": 2.33,
+      "top": [
+        {
+          "name": "20240719_114240.jpg",
+          "score": 0.6917
+        },
+        {
+          "name": "20240721_181624.jpg",
+          "score": 0.6894
+        },
+        {
+          "name": "20240721_184540.jpg",
+          "score": 0.6846
+        },
+        {
+          "name": "20240719_181655.jpg",
+          "score": 0.682
+        },
+        {
+          "name": "20240720_115030.jpg",
+          "score": 0.6747
+        },
+        {
+          "name": "20240719_181612.jpg",
+          "score": 0.672
+        },
+        {
+          "name": "20240719_182850.jpg",
+          "score": 0.6713
+        },
+        {
+          "name": "20240719_182118.jpg",
+          "score": 0.6706
+        },
+        {
+          "name": "20240719_182900.jpg",
+          "score": 0.6691
+        },
+        {
+          "name": "20240719_182753.jpg",
+          "score": 0.667
+        },
+        {
+          "name": "20240720_140806.jpg",
+          "score": 0.6666
+        },
+        {
+          "name": "20240719_182217.jpg",
+          "score": 0.6647
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "생일 케이크와 촛불",
+      "presetId": "cake_ko",
+      "lang": "ko",
+      "embedMs": 450.90000000596046,
+      "searchMs": 1.7999999970197678,
+      "decodeMs": 43.69999999552965,
+      "audioSec": 2.48,
+      "top": [
+        {
+          "name": "20260926_143646.jpg",
+          "score": 0.6683
+        },
+        {
+          "name": "20240719_105530.jpg",
+          "score": 0.6655
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6636
+        },
+        {
+          "name": "20240721_160242.jpg",
+          "score": 0.6623
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6611
+        },
+        {
+          "name": "20260926_143652.jpg",
+          "score": 0.6608
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.66
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6591
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6591
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6586
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6584
+        },
+        {
+          "name": "20240719_105522.jpg",
+          "score": 0.657
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "birthday cake with candles",
+      "presetId": "cake_en",
+      "lang": "en",
+      "embedMs": 463.20000000298023,
+      "searchMs": 1,
+      "decodeMs": 36.29999999701977,
+      "audioSec": 2.42,
+      "top": [
+        {
+          "name": "20240720_194911.jpg",
+          "score": 0.5933
+        },
+        {
+          "name": "20240720_191807.jpg",
+          "score": 0.5928
+        },
+        {
+          "name": "20240720_194644.jpg",
+          "score": 0.5869
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.5765
+        },
+        {
+          "name": "20240720_194658.jpg",
+          "score": 0.5744
+        },
+        {
+          "name": "20240720_193858.jpg",
+          "score": 0.5726
+        },
+        {
+          "name": "20240720_193952.jpg",
+          "score": 0.5712
+        },
+        {
+          "name": "20240720_194004.jpg",
+          "score": 0.5712
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.571
+        },
+        {
+          "name": "20240720_194659.jpg",
+          "score": 0.5698
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.5692
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.5678
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "강아지",
+      "presetId": "dog_ko",
+      "lang": "ko",
+      "embedMs": 316,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 93.5,
+      "audioSec": 1.51,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6769
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6752
+        },
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.6747
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6746
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6736
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6727
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6717
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6706
+        },
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6688
+        },
+        {
+          "name": "20240721_182906.jpg",
+          "score": 0.6671
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.667
+        },
+        {
+          "name": "20240721_114345.jpg",
+          "score": 0.6664
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "a dog",
+      "presetId": "dog_en",
+      "lang": "en",
+      "embedMs": 299.69999999552965,
+      "searchMs": 1,
+      "decodeMs": 59.30000000447035,
+      "audioSec": 1.32,
+      "top": [
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6254
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6224
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6144
+        },
+        {
+          "name": "20260824_123209.jpg",
+          "score": 0.6119
+        },
+        {
+          "name": "20240719_182717.jpg",
+          "score": 0.6096
+        },
+        {
+          "name": "20240721_114146.jpg",
+          "score": 0.609
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.609
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6081
+        },
+        {
+          "name": "20260815_142619.jpg",
+          "score": 0.6069
+        },
+        {
+          "name": "20260818_121033.jpg",
+          "score": 0.6067
+        },
+        {
+          "name": "20260607_151804.jpg",
+          "score": 0.6052
+        },
+        {
+          "name": "20240720_134504.jpg",
+          "score": 0.6042
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "음식 사진",
+      "presetId": "food_ko",
+      "lang": "ko",
+      "embedMs": 347.5,
+      "searchMs": 1,
+      "decodeMs": 54.600000001490116,
+      "audioSec": 1.78,
+      "top": [
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.7178
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.7177
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.7156
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.7142
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.7105
+        },
+        {
+          "name": "20260918_195320.jpg",
+          "score": 0.7051
+        },
+        {
+          "name": "20260926_143652.jpg",
+          "score": 0.7025
+        },
+        {
+          "name": "20240721_114820.jpg",
+          "score": 0.7008
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.7008
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.699
+        },
+        {
+          "name": "20260607_151804.jpg",
+          "score": 0.6989
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6969
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "food on a table",
+      "presetId": "food_en",
+      "lang": "en",
+      "embedMs": 345.80000000447035,
+      "searchMs": 1,
+      "decodeMs": 37.899999998509884,
+      "audioSec": 1.83,
+      "top": [
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.6852
+        },
+        {
+          "name": "20240720_194918.jpg",
+          "score": 0.6725
+        },
+        {
+          "name": "20260829_203811.jpg",
+          "score": 0.6706
+        },
+        {
+          "name": "20240720_131834.jpg",
+          "score": 0.6697
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6692
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6663
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6646
+        },
+        {
+          "name": "20240720_195541.jpg",
+          "score": 0.6615
+        },
+        {
+          "name": "20240720_131421(0).jpg",
+          "score": 0.6583
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6545
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6529
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.6501
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "단체 사진",
+      "presetId": "group_ko",
+      "lang": "ko",
+      "embedMs": 324.5,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 54.399999998509884,
+      "audioSec": 1.74,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.7108
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.7084
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.7069
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.705
+        },
+        {
+          "name": "20240721_114820.jpg",
+          "score": 0.7035
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.7027
+        },
+        {
+          "name": "20260926_155358.jpg",
+          "score": 0.6999
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6991
+        },
+        {
+          "name": "20260926_131136.jpg",
+          "score": 0.699
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6982
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.6973
+        },
+        {
+          "name": "20240721_182545.jpg",
+          "score": 0.6971
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "group photo of family",
+      "presetId": "group_en",
+      "lang": "en",
+      "embedMs": 417.8999999985099,
+      "searchMs": 0.8999999985098839,
+      "decodeMs": 70.29999999701977,
+      "audioSec": 2.17,
+      "top": [
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6722
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6714
+        },
+        {
+          "name": "1721636229340.jpg",
+          "score": 0.6627
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.6578
+        },
+        {
+          "name": "20240721_182823.jpg",
+          "score": 0.6462
+        },
+        {
+          "name": "20240721_150628.jpg",
+          "score": 0.6424
+        },
+        {
+          "name": "20260926_155358.jpg",
+          "score": 0.6409
+        },
+        {
+          "name": "1721636229400.jpg",
+          "score": 0.6403
+        },
+        {
+          "name": "20240721_150653.jpg",
+          "score": 0.6391
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.6379
+        },
+        {
+          "name": "20240721_183307.jpg",
+          "score": 0.6362
+        },
+        {
+          "name": "20260525_193423.jpg",
+          "score": 0.6355
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "밤에 찍은 어두운 사진",
+      "presetId": "night_ko",
+      "lang": "ko",
+      "embedMs": 455.3999999985099,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 36.20000000298023,
+      "audioSec": 2.54,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.7076
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.7056
+        },
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.7056
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.7007
+        },
+        {
+          "name": "20240721_114304.jpg",
+          "score": 0.6999
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6998
+        },
+        {
+          "name": "20240721_114820.jpg",
+          "score": 0.6987
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6982
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6954
+        },
+        {
+          "name": "20240721_182906.jpg",
+          "score": 0.6951
+        },
+        {
+          "name": "20240721_114052.jpg",
+          "score": 0.6938
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6937
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "dark photo taken at night",
+      "presetId": "night_en",
+      "lang": "en",
+      "embedMs": 423.19999999552965,
+      "searchMs": 1,
+      "decodeMs": 50.100000001490116,
+      "audioSec": 2.4,
+      "top": [
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.7003
+        },
+        {
+          "name": "20240720_213545.jpg",
+          "score": 0.685
+        },
+        {
+          "name": "20240720_211735.jpg",
+          "score": 0.6815
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.6788
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6777
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6742
+        },
+        {
+          "name": "20240720_191807.jpg",
+          "score": 0.6698
+        },
+        {
+          "name": "20240720_213934.jpg",
+          "score": 0.6689
+        },
+        {
+          "name": "20240720_211415.jpg",
+          "score": 0.662
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.6619
+        },
+        {
+          "name": "20260829_214625.jpg",
+          "score": 0.6588
+        },
+        {
+          "name": "20260613_201134.jpg",
+          "score": 0.6556
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "눈 오는 날",
+      "presetId": "snow_ko",
+      "lang": "ko",
+      "embedMs": 319.80000000447035,
+      "searchMs": 1,
+      "decodeMs": 118.60000000149012,
+      "audioSec": 1.67,
+      "top": [
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6894
+        },
+        {
+          "name": "20260926_160211.jpg",
+          "score": 0.6838
+        },
+        {
+          "name": "20260926_160201.jpg",
+          "score": 0.6822
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6801
+        },
+        {
+          "name": "20260525_193249.jpg",
+          "score": 0.6799
+        },
+        {
+          "name": "20260926_155358.jpg",
+          "score": 0.679
+        },
+        {
+          "name": "20260926_143635.jpg",
+          "score": 0.6788
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6784
+        },
+        {
+          "name": "20260926_160222.jpg",
+          "score": 0.6783
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6781
+        },
+        {
+          "name": "20260926_155359.jpg",
+          "score": 0.6779
+        },
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6779
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "snowy day",
+      "presetId": "snow_en",
+      "lang": "en",
+      "embedMs": 319.8999999985099,
+      "searchMs": 1,
+      "decodeMs": 54.5,
+      "audioSec": 1.55,
+      "top": [
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6608
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6552
+        },
+        {
+          "name": "20260926_143635.jpg",
+          "score": 0.6537
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.653
+        },
+        {
+          "name": "20260926_160159.jpg",
+          "score": 0.6501
+        },
+        {
+          "name": "20260926_143646.jpg",
+          "score": 0.65
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6498
+        },
+        {
+          "name": "20240721_114052.jpg",
+          "score": 0.649
+        },
+        {
+          "name": "20240721_114345.jpg",
+          "score": 0.6483
+        },
+        {
+          "name": "20240721_113702.jpg",
+          "score": 0.6481
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6478
+        },
+        {
+          "name": "20240720_112428.jpg",
+          "score": 0.6467
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "자동차 안에서",
+      "presetId": "car_ko",
+      "lang": "ko",
+      "embedMs": 409.8999999985099,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 142.39999999850988,
+      "audioSec": 1.92,
+      "top": [
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.6942
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6893
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.6802
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6795
+        },
+        {
+          "name": "20260925_114132.jpg",
+          "score": 0.6758
+        },
+        {
+          "name": "20260926_131113.jpg",
+          "score": 0.6718
+        },
+        {
+          "name": "20240720_184711.jpg",
+          "score": 0.6685
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6682
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6674
+        },
+        {
+          "name": "20260926_131114.jpg",
+          "score": 0.6666
+        },
+        {
+          "name": "20260517_143951.jpg",
+          "score": 0.6666
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6663
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "inside a car",
+      "presetId": "car_en",
+      "lang": "en",
+      "embedMs": 315.90000000596046,
+      "searchMs": 1,
+      "decodeMs": 35.19999999552965,
+      "audioSec": 1.7,
+      "top": [
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6429
+        },
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.6385
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6286
+        },
+        {
+          "name": "20240720_182156.jpg",
+          "score": 0.6216
+        },
+        {
+          "name": "20240720_180506.jpg",
+          "score": 0.6206
+        },
+        {
+          "name": "20240720_182147.jpg",
+          "score": 0.6161
+        },
+        {
+          "name": "20240720_180456.jpg",
+          "score": 0.6153
+        },
+        {
+          "name": "20240720_184711.jpg",
+          "score": 0.6152
+        },
+        {
+          "name": "20240720_182145.jpg",
+          "score": 0.613
+        },
+        {
+          "name": "20240720_180530.jpg",
+          "score": 0.611
+        },
+        {
+          "name": "20260925_114132.jpg",
+          "score": 0.6094
+        },
+        {
+          "name": "GOPR2848.JPG",
+          "score": 0.6091
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "휴대폰 스크린샷",
+      "presetId": "screenshot_ko",
+      "lang": "ko",
+      "embedMs": 415.40000000596046,
+      "searchMs": 1.2999999970197678,
+      "decodeMs": 64.79999999701977,
+      "audioSec": 2.18,
+      "top": [
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.717
+        },
+        {
+          "name": "Screenshot_20261014_140717_One UI Home.jpg",
+          "score": 0.6946
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6796
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6792
+        },
+        {
+          "name": "20240720_183233.jpg",
+          "score": 0.6744
+        },
+        {
+          "name": "20261012_200230.jpg",
+          "score": 0.6704
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6703
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6698
+        },
+        {
+          "name": "20260613_201134.jpg",
+          "score": 0.6692
+        },
+        {
+          "name": "20260613_201138.jpg",
+          "score": 0.6648
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6638
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6633
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "a screenshot of a phone screen",
+      "presetId": "screenshot_en",
+      "lang": "en",
+      "embedMs": 524.5,
+      "searchMs": 1.3999999985098839,
+      "decodeMs": 59,
+      "audioSec": 2.58,
+      "top": [
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6978
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6646
+        },
+        {
+          "name": "Screenshot_20261014_140717_One UI Home.jpg",
+          "score": 0.6598
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6228
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6183
+        },
+        {
+          "name": "20260926_131136.jpg",
+          "score": 0.6136
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6118
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6115
+        },
+        {
+          "name": "20260517_143951.jpg",
+          "score": 0.6109
+        },
+        {
+          "name": "20260926_131225.jpg",
+          "score": 0.6092
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6082
+        },
+        {
+          "name": "20240720_183233.jpg",
+          "score": 0.6071
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "영수증",
+      "presetId": "receipt_ko",
+      "lang": "ko",
+      "embedMs": 317.3999999985099,
+      "searchMs": 0.8999999985098839,
+      "decodeMs": 34.70000000298023,
+      "audioSec": 1.59,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6828
+        },
+        {
+          "name": "20260926_155400.jpg",
+          "score": 0.6717
+        },
+        {
+          "name": "20260926_155359.jpg",
+          "score": 0.6711
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.671
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6697
+        },
+        {
+          "name": "20260926_155358.jpg",
+          "score": 0.6684
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6672
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6644
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6634
+        },
+        {
+          "name": "20240719_105530.jpg",
+          "score": 0.6621
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.662
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.6603
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "a paper receipt",
+      "presetId": "receipt_en",
+      "lang": "en",
+      "embedMs": 345.29999999701977,
+      "searchMs": 1.2999999970197678,
+      "decodeMs": 45.100000001490116,
+      "audioSec": 1.86,
+      "top": [
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6139
+        },
+        {
+          "name": "20260827_115452.jpg",
+          "score": 0.6001
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.5977
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.595
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.5868
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.5834
+        },
+        {
+          "name": "20240721_160242.jpg",
+          "score": 0.5826
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.5823
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.5808
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.5786
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.5755
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.5735
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "흔들리고 초점이 나간 사진",
+      "presetId": "blurry_ko",
+      "lang": "ko",
+      "embedMs": 533.6000000014901,
+      "searchMs": 1.0999999940395355,
+      "decodeMs": 41.80000000447035,
+      "audioSec": 2.9,
+      "top": [
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.7202
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.7058
+        },
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6998
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6994
+        },
+        {
+          "name": "20240721_182129.jpg",
+          "score": 0.6988
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6985
+        },
+        {
+          "name": "20240721_183355.jpg",
+          "score": 0.6959
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.6953
+        },
+        {
+          "name": "20260926_131113.jpg",
+          "score": 0.695
+        },
+        {
+          "name": "20240721_182433.jpg",
+          "score": 0.6946
+        },
+        {
+          "name": "20240721_184540.jpg",
+          "score": 0.6945
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6945
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "blurry out of focus photo",
+      "presetId": "blurry_en",
+      "lang": "en",
+      "embedMs": 426.79999999701977,
+      "searchMs": 1,
+      "decodeMs": 50,
+      "audioSec": 2.31,
+      "top": [
+        {
+          "name": "20260815_142625.jpg",
+          "score": 0.6751
+        },
+        {
+          "name": "20260818_121033.jpg",
+          "score": 0.6598
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6567
+        },
+        {
+          "name": "20240721_150628.jpg",
+          "score": 0.6535
+        },
+        {
+          "name": "20261002_090514.jpg",
+          "score": 0.6484
+        },
+        {
+          "name": "20240721_114052.jpg",
+          "score": 0.6479
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6475
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6474
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6445
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6432
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.642
+        },
+        {
+          "name": "20240719_125346.jpg",
+          "score": 0.6418
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "글씨가 많은 문서",
+      "presetId": "document_ko",
+      "lang": "ko",
+      "embedMs": 421.40000000596046,
+      "searchMs": 1,
+      "decodeMs": 38.399999998509884,
+      "audioSec": 2.24,
+      "top": [
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6925
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6841
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6789
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6772
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6764
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6705
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6693
+        },
+        {
+          "name": "20240721_182906.jpg",
+          "score": 0.6678
+        },
+        {
+          "name": "20240720_184045.jpg",
+          "score": 0.6627
+        },
+        {
+          "name": "20240720_182910.jpg",
+          "score": 0.6621
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6612
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6607
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "a document with lots of text",
+      "presetId": "document_en",
+      "lang": "en",
+      "embedMs": 510.1000000014901,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 41.600000001490116,
+      "audioSec": 2.59,
+      "top": [
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6517
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6323
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6205
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6198
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6096
+        },
+        {
+          "name": "20260827_115452.jpg",
+          "score": 0.6079
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6055
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6043
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6041
+        },
+        {
+          "name": "20260905_215833.jpg",
+          "score": 0.5982
+        },
+        {
+          "name": "20260824_123209.jpg",
+          "score": 0.5881
+        },
+        {
+          "name": "20260815_180440.jpg",
+          "score": 0.5874
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "아이 왼쪽에 있는 강아지",
+      "presetId": "spatial_ko",
+      "lang": "ko",
+      "embedMs": 465.20000000298023,
+      "searchMs": 1.2000000029802322,
+      "decodeMs": 53.79999999701977,
+      "audioSec": 2.5,
+      "top": [
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6736
+        },
+        {
+          "name": "20260815_142709.jpg",
+          "score": 0.6731
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.67
+        },
+        {
+          "name": "20260815_142653.jpg",
+          "score": 0.6699
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6694
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6658
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6648
+        },
+        {
+          "name": "20260815_172840.jpg",
+          "score": 0.6647
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6626
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6621
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6621
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.6611
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "a dog to the left of a child",
+      "presetId": "spatial_en",
+      "lang": "en",
+      "embedMs": 455.6000000014901,
+      "searchMs": 0.8999999985098839,
+      "decodeMs": 36.69999999552965,
+      "audioSec": 2.43,
+      "top": [
+        {
+          "name": "20260815_180342.jpg",
+          "score": 0.6271
+        },
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.6203
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6171
+        },
+        {
+          "name": "20240719_112244.jpg",
+          "score": 0.6131
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.609
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6087
+        },
+        {
+          "name": "20260815_142625.jpg",
+          "score": 0.6086
+        },
+        {
+          "name": "20260815_142552.jpg",
+          "score": 0.6076
+        },
+        {
+          "name": "20240719_182717.jpg",
+          "score": 0.6072
+        },
+        {
+          "name": "20260815_142620.jpg",
+          "score": 0.6071
+        },
+        {
+          "name": "20260815_142619.jpg",
+          "score": 0.6062
+        },
+        {
+          "name": "20240721_181624.jpg",
+          "score": 0.6058
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "책상 위에 놓인 물건",
+      "presetId": "object_ko",
+      "lang": "ko",
+      "embedMs": 454.20000000298023,
+      "searchMs": 1.6000000014901161,
+      "decodeMs": 57.79999999701977,
+      "audioSec": 2.45,
+      "top": [
+        {
+          "name": "20260926_143652.jpg",
+          "score": 0.7005
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6975
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6961
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6894
+        },
+        {
+          "name": "20260926_143646.jpg",
+          "score": 0.6893
+        },
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.6881
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.687
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6842
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6841
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6839
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6815
+        },
+        {
+          "name": "20240719_105530.jpg",
+          "score": 0.679
+        }
+      ]
+    },
+    {
+      "kind": "audio",
+      "query": "objects on a desk",
+      "presetId": "object_en",
+      "lang": "en",
+      "embedMs": 408.5,
+      "searchMs": 1.6000000014901161,
+      "decodeMs": 26,
+      "audioSec": 2.02,
+      "top": [
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6755
+        },
+        {
+          "name": "20260824_123209.jpg",
+          "score": 0.6682
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6532
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6394
+        },
+        {
+          "name": "20261002_090514.jpg",
+          "score": 0.6394
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6387
+        },
+        {
+          "name": "20240720_194911.jpg",
+          "score": 0.6379
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6366
+        },
+        {
+          "name": "20240720_194918.jpg",
+          "score": 0.6355
+        },
+        {
+          "name": "20260926_131157.jpg",
+          "score": 0.6338
+        },
+        {
+          "name": "20260818_121033.jpg",
+          "score": 0.6333
+        },
+        {
+          "name": "20240720_131338.jpg",
+          "score": 0.6333
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "바닷가에서 뛰노는 아이",
+      "presetId": "beach_ko",
+      "lang": "ko",
+      "embedMs": 472,
+      "searchMs": 1,
+      "decodeMs": 35.30000000447035,
+      "audioSec": 2.54,
+      "top": [
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6797
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6782
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6777
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6755
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6755
+        },
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6743
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6737
+        },
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.6732
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6729
+        },
+        {
+          "name": "20240721_182942.jpg",
+          "score": 0.6714
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6714
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6702
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "a child running on the beach",
+      "presetId": "beach_en",
+      "lang": "en",
+      "embedMs": 456.3999999985099,
+      "searchMs": 0.8999999985098839,
+      "decodeMs": 54.900000005960464,
+      "audioSec": 2.33,
+      "top": [
+        {
+          "name": "20240721_181624.jpg",
+          "score": 0.7158
+        },
+        {
+          "name": "20240719_114240.jpg",
+          "score": 0.7114
+        },
+        {
+          "name": "20240721_184540.jpg",
+          "score": 0.7075
+        },
+        {
+          "name": "20240719_181655.jpg",
+          "score": 0.6997
+        },
+        {
+          "name": "20240720_115030.jpg",
+          "score": 0.6944
+        },
+        {
+          "name": "20240719_181612.jpg",
+          "score": 0.6923
+        },
+        {
+          "name": "20240719_182118.jpg",
+          "score": 0.691
+        },
+        {
+          "name": "20240720_140806.jpg",
+          "score": 0.6886
+        },
+        {
+          "name": "20240719_182900.jpg",
+          "score": 0.6884
+        },
+        {
+          "name": "20240719_182850.jpg",
+          "score": 0.6861
+        },
+        {
+          "name": "20240719_182217.jpg",
+          "score": 0.6848
+        },
+        {
+          "name": "20240719_112244.jpg",
+          "score": 0.6835
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "생일 케이크와 촛불",
+      "presetId": "cake_ko",
+      "lang": "ko",
+      "embedMs": 459.1000000014901,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 56.29999999701977,
+      "audioSec": 2.48,
+      "top": [
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6645
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6612
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6563
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6562
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6551
+        },
+        {
+          "name": "20240719_105530.jpg",
+          "score": 0.6546
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6503
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6491
+        },
+        {
+          "name": "20260926_143646.jpg",
+          "score": 0.649
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6481
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6459
+        },
+        {
+          "name": "20260926_160211.jpg",
+          "score": 0.6453
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "birthday cake with candles",
+      "presetId": "cake_en",
+      "lang": "en",
+      "embedMs": 453.79999999701977,
+      "searchMs": 0.8999999985098839,
+      "decodeMs": 46.900000005960464,
+      "audioSec": 2.42,
+      "top": [
+        {
+          "name": "20240720_191807.jpg",
+          "score": 0.6095
+        },
+        {
+          "name": "20240720_194911.jpg",
+          "score": 0.6038
+        },
+        {
+          "name": "20240720_194644.jpg",
+          "score": 0.601
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.5913
+        },
+        {
+          "name": "20240720_194658.jpg",
+          "score": 0.59
+        },
+        {
+          "name": "20240720_194659.jpg",
+          "score": 0.5894
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.5889
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.5868
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.5849
+        },
+        {
+          "name": "20240720_193952.jpg",
+          "score": 0.5844
+        },
+        {
+          "name": "20240720_193858.jpg",
+          "score": 0.5841
+        },
+        {
+          "name": "20240720_194004.jpg",
+          "score": 0.5824
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "강아지",
+      "presetId": "dog_ko",
+      "lang": "ko",
+      "embedMs": 340.8999999985099,
+      "searchMs": 1,
+      "decodeMs": 360.79999999701977,
+      "audioSec": 1.51,
+      "top": [
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.686
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6859
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.683
+        },
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.6804
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6794
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6767
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6766
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6761
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6756
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6736
+        },
+        {
+          "name": "20260525_193301.jpg",
+          "score": 0.6733
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6698
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "a dog",
+      "presetId": "dog_en",
+      "lang": "en",
+      "embedMs": 309.40000000596046,
+      "searchMs": 1,
+      "decodeMs": 38.79999999701977,
+      "audioSec": 1.32,
+      "top": [
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6513
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6453
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6439
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6378
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6319
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6289
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6288
+        },
+        {
+          "name": "20260824_123209.jpg",
+          "score": 0.6273
+        },
+        {
+          "name": "20260607_151804.jpg",
+          "score": 0.6266
+        },
+        {
+          "name": "20240721_114146.jpg",
+          "score": 0.6258
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6246
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6239
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "음식 사진",
+      "presetId": "food_ko",
+      "lang": "ko",
+      "embedMs": 348.79999999701977,
+      "searchMs": 0.8999999985098839,
+      "decodeMs": 58,
+      "audioSec": 1.78,
+      "top": [
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.7262
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.7259
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.7219
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.7137
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.7133
+        },
+        {
+          "name": "20260918_195320.jpg",
+          "score": 0.713
+        },
+        {
+          "name": "20260926_160213.jpg",
+          "score": 0.7043
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.7041
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.7009
+        },
+        {
+          "name": "20260926_143652.jpg",
+          "score": 0.7
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.6991
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6984
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "food on a table",
+      "presetId": "food_en",
+      "lang": "en",
+      "embedMs": 351.5,
+      "searchMs": 1,
+      "decodeMs": 32.29999999701977,
+      "audioSec": 1.83,
+      "top": [
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.6993
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6962
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6917
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6873
+        },
+        {
+          "name": "20240720_131834.jpg",
+          "score": 0.6873
+        },
+        {
+          "name": "20260829_203811.jpg",
+          "score": 0.6852
+        },
+        {
+          "name": "20240720_194918.jpg",
+          "score": 0.685
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6798
+        },
+        {
+          "name": "20240720_195541.jpg",
+          "score": 0.6786
+        },
+        {
+          "name": "20240720_131421(0).jpg",
+          "score": 0.6709
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.6703
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.668
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "단체 사진",
+      "presetId": "group_ko",
+      "lang": "ko",
+      "embedMs": 356,
+      "searchMs": 1,
+      "decodeMs": 53.79999999701977,
+      "audioSec": 1.74,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.7124
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.7084
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.7032
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6962
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6952
+        },
+        {
+          "name": "20260925_173602.jpg",
+          "score": 0.6952
+        },
+        {
+          "name": "20240721_114820.jpg",
+          "score": 0.6939
+        },
+        {
+          "name": "20260926_131136.jpg",
+          "score": 0.6937
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6923
+        },
+        {
+          "name": "20240721_182823.jpg",
+          "score": 0.6913
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6886
+        },
+        {
+          "name": "20260926_160213.jpg",
+          "score": 0.6885
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "group photo of family",
+      "presetId": "group_en",
+      "lang": "en",
+      "embedMs": 454,
+      "searchMs": 1,
+      "decodeMs": 73.70000000298023,
+      "audioSec": 2.17,
+      "top": [
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6707
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6599
+        },
+        {
+          "name": "1721636229340.jpg",
+          "score": 0.6464
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.6414
+        },
+        {
+          "name": "20240721_182823.jpg",
+          "score": 0.6338
+        },
+        {
+          "name": "20240721_150628.jpg",
+          "score": 0.6288
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.6271
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6249
+        },
+        {
+          "name": "20260926_155358.jpg",
+          "score": 0.6246
+        },
+        {
+          "name": "1721636229400.jpg",
+          "score": 0.6235
+        },
+        {
+          "name": "20240721_183540.jpg",
+          "score": 0.6224
+        },
+        {
+          "name": "20240721_183307.jpg",
+          "score": 0.6222
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "밤에 찍은 어두운 사진",
+      "presetId": "night_ko",
+      "lang": "ko",
+      "embedMs": 462.40000000596046,
+      "searchMs": 1.0999999940395355,
+      "decodeMs": 52.79999999701977,
+      "audioSec": 2.54,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.7151
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.7069
+        },
+        {
+          "name": "20240721_114304.jpg",
+          "score": 0.7047
+        },
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.7039
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.7017
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.701
+        },
+        {
+          "name": "20240721_114052.jpg",
+          "score": 0.7005
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6993
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.698
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6969
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6968
+        },
+        {
+          "name": "20240721_114011.jpg",
+          "score": 0.6965
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "dark photo taken at night",
+      "presetId": "night_en",
+      "lang": "en",
+      "embedMs": 456.1000000014901,
+      "searchMs": 1,
+      "decodeMs": 63.600000001490116,
+      "audioSec": 2.4,
+      "top": [
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.7111
+        },
+        {
+          "name": "20240720_211735.jpg",
+          "score": 0.6934
+        },
+        {
+          "name": "20240720_213545.jpg",
+          "score": 0.6922
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6842
+        },
+        {
+          "name": "20260918_195244.jpg",
+          "score": 0.6801
+        },
+        {
+          "name": "20240720_211328.jpg",
+          "score": 0.6787
+        },
+        {
+          "name": "20240720_191807.jpg",
+          "score": 0.6787
+        },
+        {
+          "name": "20240720_213934.jpg",
+          "score": 0.6772
+        },
+        {
+          "name": "20240720_211415.jpg",
+          "score": 0.6685
+        },
+        {
+          "name": "20260905_210447.jpg",
+          "score": 0.6657
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6647
+        },
+        {
+          "name": "20260613_201134.jpg",
+          "score": 0.662
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "눈 오는 날",
+      "presetId": "snow_ko",
+      "lang": "ko",
+      "embedMs": 346.79999999701977,
+      "searchMs": 1.5,
+      "decodeMs": 63.600000001490116,
+      "audioSec": 1.67,
+      "top": [
+        {
+          "name": "20260926_160211.jpg",
+          "score": 0.6894
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6892
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6873
+        },
+        {
+          "name": "20260926_160213.jpg",
+          "score": 0.6856
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6851
+        },
+        {
+          "name": "20260926_160222.jpg",
+          "score": 0.6811
+        },
+        {
+          "name": "20260926_143635.jpg",
+          "score": 0.6795
+        },
+        {
+          "name": "20260926_160221.jpg",
+          "score": 0.6785
+        },
+        {
+          "name": "20260926_160201.jpg",
+          "score": 0.678
+        },
+        {
+          "name": "20260926_160209.jpg",
+          "score": 0.678
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6778
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6766
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "snowy day",
+      "presetId": "snow_en",
+      "lang": "en",
+      "embedMs": 346.70000000298023,
+      "searchMs": 1,
+      "decodeMs": 44.69999999552965,
+      "audioSec": 1.55,
+      "top": [
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6615
+        },
+        {
+          "name": "20240721_114052.jpg",
+          "score": 0.6569
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.652
+        },
+        {
+          "name": "20260926_160159.jpg",
+          "score": 0.6517
+        },
+        {
+          "name": "20240721_113501.jpg",
+          "score": 0.6514
+        },
+        {
+          "name": "20260926_143635.jpg",
+          "score": 0.6514
+        },
+        {
+          "name": "20240720_112428.jpg",
+          "score": 0.6501
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6486
+        },
+        {
+          "name": "20260926_131105.jpg",
+          "score": 0.6483
+        },
+        {
+          "name": "20240721_113815.jpg",
+          "score": 0.6481
+        },
+        {
+          "name": "20240721_135315.jpg",
+          "score": 0.6479
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6472
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "자동차 안에서",
+      "presetId": "car_ko",
+      "lang": "ko",
+      "embedMs": 355,
+      "searchMs": 1,
+      "decodeMs": 61,
+      "audioSec": 1.92,
+      "top": [
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.6956
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.6889
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6854
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6798
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6685
+        },
+        {
+          "name": "20260925_114132.jpg",
+          "score": 0.668
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6649
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6647
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6646
+        },
+        {
+          "name": "20260517_143951.jpg",
+          "score": 0.6631
+        },
+        {
+          "name": "20260926_131113.jpg",
+          "score": 0.6624
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.662
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "inside a car",
+      "presetId": "car_en",
+      "lang": "en",
+      "embedMs": 345.5,
+      "searchMs": 1,
+      "decodeMs": 50.29999999701977,
+      "audioSec": 1.7,
+      "top": [
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6544
+        },
+        {
+          "name": "20260815_131025.jpg",
+          "score": 0.6483
+        },
+        {
+          "name": "20240720_180506.jpg",
+          "score": 0.6308
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6289
+        },
+        {
+          "name": "20240720_182156.jpg",
+          "score": 0.6288
+        },
+        {
+          "name": "20240720_182147.jpg",
+          "score": 0.623
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.6229
+        },
+        {
+          "name": "20240720_180456.jpg",
+          "score": 0.6228
+        },
+        {
+          "name": "20260925_114132.jpg",
+          "score": 0.6215
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6205
+        },
+        {
+          "name": "20240720_182145.jpg",
+          "score": 0.6205
+        },
+        {
+          "name": "20240720_182157.jpg",
+          "score": 0.6202
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "휴대폰 스크린샷",
+      "presetId": "screenshot_ko",
+      "lang": "ko",
+      "embedMs": 454.59999999403954,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 34.30000000447035,
+      "audioSec": 2.18,
+      "top": [
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.7212
+        },
+        {
+          "name": "Screenshot_20261014_140717_One UI Home.jpg",
+          "score": 0.6912
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6836
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6748
+        },
+        {
+          "name": "20261012_200230.jpg",
+          "score": 0.6748
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6699
+        },
+        {
+          "name": "20260613_201134.jpg",
+          "score": 0.6655
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6615
+        },
+        {
+          "name": "20240719_105530.jpg",
+          "score": 0.6608
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6601
+        },
+        {
+          "name": "20240720_183233.jpg",
+          "score": 0.6601
+        },
+        {
+          "name": "20260613_201138.jpg",
+          "score": 0.6596
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "a screenshot of a phone screen",
+      "presetId": "screenshot_en",
+      "lang": "en",
+      "embedMs": 520.5,
+      "searchMs": 1,
+      "decodeMs": 48.5,
+      "audioSec": 2.58,
+      "top": [
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.7277
+        },
+        {
+          "name": "Screenshot_20261014_140717_One UI Home.jpg",
+          "score": 0.6861
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6799
+        },
+        {
+          "name": "20260517_143955.jpg",
+          "score": 0.643
+        },
+        {
+          "name": "20260517_143951.jpg",
+          "score": 0.6423
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6411
+        },
+        {
+          "name": "20260517_153905.jpg",
+          "score": 0.6405
+        },
+        {
+          "name": "20240720_183233.jpg",
+          "score": 0.6394
+        },
+        {
+          "name": "20260926_131136.jpg",
+          "score": 0.6388
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6378
+        },
+        {
+          "name": "20261012_200230.jpg",
+          "score": 0.6356
+        },
+        {
+          "name": "20260926_131225.jpg",
+          "score": 0.6342
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "영수증",
+      "presetId": "receipt_ko",
+      "lang": "ko",
+      "embedMs": 341.1000000014901,
+      "searchMs": 1,
+      "decodeMs": 86.29999999701977,
+      "audioSec": 1.59,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6753
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6693
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6564
+        },
+        {
+          "name": "20240721_114907.jpg",
+          "score": 0.6552
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.654
+        },
+        {
+          "name": "20260926_155400.jpg",
+          "score": 0.6537
+        },
+        {
+          "name": "20240720_135204.jpg",
+          "score": 0.6527
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6523
+        },
+        {
+          "name": "20260926_155358.jpg",
+          "score": 0.6518
+        },
+        {
+          "name": "20260926_155359.jpg",
+          "score": 0.651
+        },
+        {
+          "name": "20240719_105530.jpg",
+          "score": 0.65
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6468
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "a paper receipt",
+      "presetId": "receipt_en",
+      "lang": "en",
+      "embedMs": 355.8999999985099,
+      "searchMs": 1.6000000014901161,
+      "decodeMs": 63.70000000298023,
+      "audioSec": 1.86,
+      "top": [
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6316
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6305
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6173
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6172
+        },
+        {
+          "name": "20260827_115452.jpg",
+          "score": 0.6167
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6149
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6073
+        },
+        {
+          "name": "20240720_191820.jpg",
+          "score": 0.6047
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6032
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6014
+        },
+        {
+          "name": "20240720_195550.jpg",
+          "score": 0.5998
+        },
+        {
+          "name": "20240721_160242.jpg",
+          "score": 0.5983
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "흔들리고 초점이 나간 사진",
+      "presetId": "blurry_ko",
+      "lang": "ko",
+      "embedMs": 609,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 69.5,
+      "audioSec": 2.9,
+      "top": [
+        {
+          "name": "20240721_184633.jpg",
+          "score": 0.7144
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.699
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6985
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6957
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6945
+        },
+        {
+          "name": "20240721_114754.jpg",
+          "score": 0.692
+        },
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6918
+        },
+        {
+          "name": "20240720_123023.jpg",
+          "score": 0.6907
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6902
+        },
+        {
+          "name": "20240721_182129.jpg",
+          "score": 0.6894
+        },
+        {
+          "name": "20240721_183355.jpg",
+          "score": 0.6867
+        },
+        {
+          "name": "20260926_160221.jpg",
+          "score": 0.6866
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "blurry out of focus photo",
+      "presetId": "blurry_en",
+      "lang": "en",
+      "embedMs": 449.20000000298023,
+      "searchMs": 1,
+      "decodeMs": 122.79999999701977,
+      "audioSec": 2.31,
+      "top": [
+        {
+          "name": "20260815_142625.jpg",
+          "score": 0.6739
+        },
+        {
+          "name": "20240721_114052.jpg",
+          "score": 0.6529
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6507
+        },
+        {
+          "name": "20240721_150628.jpg",
+          "score": 0.6493
+        },
+        {
+          "name": "20260818_121033.jpg",
+          "score": 0.6472
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.6453
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6445
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6426
+        },
+        {
+          "name": "20260918_195307.jpg",
+          "score": 0.6418
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6417
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6407
+        },
+        {
+          "name": "20240721_150731.jpg",
+          "score": 0.6401
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "글씨가 많은 문서",
+      "presetId": "document_ko",
+      "lang": "ko",
+      "embedMs": 444.8999999985099,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 45.100000001490116,
+      "audioSec": 2.24,
+      "top": [
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6959
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6888
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.683
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6829
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6759
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6737
+        },
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6736
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6666
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6656
+        },
+        {
+          "name": "20240721_182906.jpg",
+          "score": 0.6652
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.662
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6619
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "a document with lots of text",
+      "presetId": "document_en",
+      "lang": "en",
+      "embedMs": 555.8000000044703,
+      "searchMs": 1,
+      "decodeMs": 57,
+      "audioSec": 2.59,
+      "top": [
+        {
+          "name": "20260814_224330.jpg",
+          "score": 0.6873
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6871
+        },
+        {
+          "name": "20261011_221613.jpg",
+          "score": 0.6607
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6576
+        },
+        {
+          "name": "Screenshot_20261014_110205_Messages.jpg",
+          "score": 0.6558
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6508
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6482
+        },
+        {
+          "name": "20260827_115452.jpg",
+          "score": 0.642
+        },
+        {
+          "name": "20260916_180525.jpg",
+          "score": 0.6324
+        },
+        {
+          "name": "20260905_215833.jpg",
+          "score": 0.6316
+        },
+        {
+          "name": "20260811_121923.jpg",
+          "score": 0.6297
+        },
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.6245
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "아이 왼쪽에 있는 강아지",
+      "presetId": "spatial_ko",
+      "lang": "ko",
+      "embedMs": 467.79999999701977,
+      "searchMs": 1.1000000014901161,
+      "decodeMs": 523.1000000014901,
+      "audioSec": 2.5,
+      "top": [
+        {
+          "name": "20260815_142653.jpg",
+          "score": 0.6741
+        },
+        {
+          "name": "20240720_123011.jpg",
+          "score": 0.673
+        },
+        {
+          "name": "20240720_200818.jpg",
+          "score": 0.671
+        },
+        {
+          "name": "20240720_123023.jpg",
+          "score": 0.6697
+        },
+        {
+          "name": "20260926_155341.jpg",
+          "score": 0.6686
+        },
+        {
+          "name": "20260815_142709.jpg",
+          "score": 0.6678
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.6676
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6672
+        },
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6671
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6642
+        },
+        {
+          "name": "20240720_211150.jpg",
+          "score": 0.6638
+        },
+        {
+          "name": "20240721_123138.jpg",
+          "score": 0.6635
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "a dog to the left of a child",
+      "presetId": "spatial_en",
+      "lang": "en",
+      "embedMs": 466.3999999985099,
+      "searchMs": 1,
+      "decodeMs": 55.600000001490116,
+      "audioSec": 2.43,
+      "top": [
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.6405
+        },
+        {
+          "name": "20240719_112244.jpg",
+          "score": 0.6351
+        },
+        {
+          "name": "20260815_180342.jpg",
+          "score": 0.6336
+        },
+        {
+          "name": "20260815_142557.jpg",
+          "score": 0.6312
+        },
+        {
+          "name": "20261004_153652.jpg",
+          "score": 0.6281
+        },
+        {
+          "name": "20260926_155339.jpg",
+          "score": 0.6269
+        },
+        {
+          "name": "20260815_142625.jpg",
+          "score": 0.6236
+        },
+        {
+          "name": "20240721_181624.jpg",
+          "score": 0.6227
+        },
+        {
+          "name": "20260926_160204.jpg",
+          "score": 0.6217
+        },
+        {
+          "name": "20260926_160211.jpg",
+          "score": 0.6211
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6208
+        },
+        {
+          "name": "20260815_142552.jpg",
+          "score": 0.6191
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "책상 위에 놓인 물건",
+      "presetId": "object_ko",
+      "lang": "ko",
+      "embedMs": 482.20000000298023,
+      "searchMs": 0.8999999985098839,
+      "decodeMs": 64.5,
+      "audioSec": 2.45,
+      "top": [
+        {
+          "name": "20261002_103044.jpg",
+          "score": 0.6981
+        },
+        {
+          "name": "20260926_143652.jpg",
+          "score": 0.6968
+        },
+        {
+          "name": "20260926_131245.jpg",
+          "score": 0.693
+        },
+        {
+          "name": "20261004_154410.jpg",
+          "score": 0.6924
+        },
+        {
+          "name": "20260926_160157.jpg",
+          "score": 0.6857
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6839
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6802
+        },
+        {
+          "name": "20240719_105530.jpg",
+          "score": 0.6797
+        },
+        {
+          "name": "20260926_131244.jpg",
+          "score": 0.6796
+        },
+        {
+          "name": "20260926_143646.jpg",
+          "score": 0.6791
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6769
+        },
+        {
+          "name": "Screenshot_20261014_142508_One UI Home.jpg",
+          "score": 0.6758
+        }
+      ]
+    },
+    {
+      "kind": "audio-interleaved",
+      "query": "objects on a desk",
+      "presetId": "object_en",
+      "lang": "en",
+      "embedMs": 428,
+      "searchMs": 1,
+      "decodeMs": 86.09999999403954,
+      "audioSec": 2.02,
+      "top": [
+        {
+          "name": "20260517_150328.jpg",
+          "score": 0.7011
+        },
+        {
+          "name": "20260824_123209.jpg",
+          "score": 0.6759
+        },
+        {
+          "name": "20260831_102752.jpg",
+          "score": 0.6668
+        },
+        {
+          "name": "20261012_200232.jpg",
+          "score": 0.6555
+        },
+        {
+          "name": "20261002_090514.jpg",
+          "score": 0.6479
+        },
+        {
+          "name": "20260925_173616.jpg",
+          "score": 0.6476
+        },
+        {
+          "name": "20260926_160145.jpg",
+          "score": 0.6459
+        },
+        {
+          "name": "20240720_194911.jpg",
+          "score": 0.6449
+        },
+        {
+          "name": "20260918_202454.jpg",
+          "score": 0.6448
+        },
+        {
+          "name": "20260811_122521.jpg",
+          "score": 0.6441
+        },
+        {
+          "name": "20260926_131157.jpg",
+          "score": 0.6436
+        },
+        {
+          "name": "20240720_194918.jpg",
+          "score": 0.6419
+        }
+      ]
+    }
+  ]
+}

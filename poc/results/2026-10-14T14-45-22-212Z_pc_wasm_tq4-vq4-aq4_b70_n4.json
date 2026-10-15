@@ -1,0 +1,59 @@
+{
+  "label": "pc_wasm_tq4-vq4-aq4_b70_n4",
+  "createdAt": "2026-10-14T14:45:17.927Z",
+  "model": "onnx-community/embeddinggemma-2-ONNX",
+  "env": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "platform": "Windows",
+    "mobile": false,
+    "hardwareConcurrency": 4,
+    "deviceMemoryGB": 32,
+    "secureContext": true,
+    "screen": "800x600@1x",
+    "webgpu": true,
+    "opfs": true,
+    "webSpeech": true,
+    "mediaRecorder": true,
+    "gpuVendor": "nvidia",
+    "gpuArchitecture": "pascal",
+    "gpuDevice": "",
+    "gpuDescription": "",
+    "shaderF16": false,
+    "maxStorageBufferBindingSize": 2147483644,
+    "maxBufferSize": 2147483648
+  },
+  "settings": {
+    "scenario": "pc-indexing",
+    "device": "wasm",
+    "textDtype": "q4",
+    "visionDtype": "q4",
+    "audioDtype": "q4",
+    "budget": 70,
+    "batch": 1,
+    "maxPhotos": 4,
+    "dim": 768,
+    "cacheBackend": "opfs",
+    "voiceMode": "auto"
+  },
+  "source": {
+    "kind": "PC test_photos (LAN)",
+    "count": 4,
+    "bytes": 22342600
+  },
+  "storage": {
+    "persistRequested": false,
+    "before": {
+      "persisted": false,
+      "usage": 727449220,
+      "quota": 11464867460,
+      "opfsBytes": 727444654,
+      "opfsFiles": 16
+    }
+  },
+  "error": "Error: Can't create a session. ERROR_CODE: 9, ERROR_MESSAGE: Could not find an implementation for GatherBlockQuantized(1) node with name 'node_embedding_Quant'\n    at V (https://localhost:5199/node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs?v=73d3457b:10:31024)\n    at tr (https://localhost:5199/node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs?v=73d3457b:11:22453)\n    at async gr.loadModel (https://localhost:5199/node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs?v=73d3457b:11:35400)\n    at async yr.createInferenceSessionHandler (https://localhost:5199/node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs?v=73d3457b:11:37124)\n    at async a.create (https://localhost:5199/node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs?v=73d3457b:6:19961)",
+  "jsHeap": {
+    "start": 17091785
+  },
+  "voiceDecisionFinal": null,
+  "searches": []
+}

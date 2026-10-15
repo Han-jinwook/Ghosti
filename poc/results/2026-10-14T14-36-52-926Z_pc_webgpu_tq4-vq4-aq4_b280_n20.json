@@ -1,0 +1,1744 @@
+{
+  "label": "pc_webgpu_tq4-vq4-aq4_b280_n20",
+  "createdAt": "2026-10-14T14:32:09.352Z",
+  "model": "onnx-community/embeddinggemma-2-ONNX",
+  "env": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "platform": "Windows",
+    "mobile": false,
+    "hardwareConcurrency": 4,
+    "deviceMemoryGB": 32,
+    "secureContext": true,
+    "screen": "800x600@1x",
+    "webgpu": true,
+    "opfs": true,
+    "webSpeech": true,
+    "mediaRecorder": true,
+    "gpuVendor": "nvidia",
+    "gpuArchitecture": "pascal",
+    "gpuDevice": "",
+    "gpuDescription": "",
+    "shaderF16": false,
+    "maxStorageBufferBindingSize": 2147483644,
+    "maxBufferSize": 2147483648
+  },
+  "settings": {
+    "scenario": "pc-indexing",
+    "device": "webgpu",
+    "textDtype": "q4",
+    "visionDtype": "q4",
+    "audioDtype": "q4",
+    "budget": 280,
+    "batch": 1,
+    "maxPhotos": 20,
+    "dim": 768,
+    "cacheBackend": "opfs",
+    "voiceMode": "auto"
+  },
+  "source": {
+    "kind": "PC test_photos (LAN)",
+    "count": 20,
+    "bytes": 95500169
+  },
+  "storage": {
+    "persistRequested": false,
+    "before": {
+      "persisted": false,
+      "usage": 342735446,
+      "quota": 11080153686,
+      "opfsBytes": 342731976,
+      "opfsFiles": 12
+    },
+    "after": {
+      "persisted": false,
+      "usage": 532057505,
+      "quota": 11269475745,
+      "opfsBytes": 532053487,
+      "opfsFiles": 14
+    }
+  },
+  "timings": {
+    "visionLoad": {
+      "label": "텍스트+비전",
+      "ms": 3720.2999999970198,
+      "downloadedBytes": 0,
+      "cacheHitBytes": 310556503,
+      "cacheBackend": "opfs",
+      "cacheWriteMs": 0,
+      "fromCache": true
+    },
+    "warmupMs": 23691.5,
+    "indexTotalMs": 232606,
+    "perImageTotalMs": 11630.3,
+    "decodePerImage": {
+      "n": 20,
+      "mean": 1298.710000000149,
+      "p50": 995.3000000044703,
+      "p95": 5775.70000000298,
+      "min": 655.3000000044703,
+      "max": 5775.70000000298
+    },
+    "inferPerImage": {
+      "n": 20,
+      "mean": 10331.119999999926,
+      "p50": 10317.20000000298,
+      "p95": 10741.10000000149,
+      "min": 10169.5,
+      "max": 10741.10000000149
+    },
+    "disposeMs": 20.700000002980232,
+    "searchLoad": {
+      "label": "텍스트+오디오",
+      "ms": 14101.5,
+      "downloadedBytes": 189321511,
+      "cacheHitBytes": 174524573,
+      "cacheBackend": "opfs",
+      "cacheWriteMs": 1458.1000000014901,
+      "fromCache": false
+    },
+    "audioWarmupMs": 1997,
+    "textWarmupMs": 214.10000000149012,
+    "endToEndMs": 281410.8999999985
+  },
+  "voiceDecision": {
+    "mode": "audio-direct",
+    "stage": "precheck",
+    "reason": "사전 판정 통과"
+  },
+  "result": {
+    "indexed": 20,
+    "failed": [],
+    "nanCount": 0,
+    "vectorBytes": 61440
+  },
+  "jsHeap": {
+    "start": 17069184,
+    "afterVisionLoad": 330549820,
+    "afterIndexing": 187157501,
+    "afterDispose": 187157501,
+    "afterSearchLoad": 543469308
+  },
+  "savedAs": "results\\2026-10-14T14-36-51-206Z_pc_webgpu_tq4-vq4-aq4_b280_n20.json",
+  "textBench": {
+    "embedMs": {
+      "n": 28,
+      "mean": 58.13571428587394,
+      "p50": 52.900000005960464,
+      "p95": 78.70000000298023,
+      "min": 49.30000000447035,
+      "max": 83.69999999552965
+    },
+    "searchMs": {
+      "n": 28,
+      "mean": 0.09642857126891613,
+      "p50": 0.09999999403953552,
+      "p95": 0.20000000298023224,
+      "min": 0,
+      "max": 1.1000000014901161
+    },
+    "count": 28
+  },
+  "voiceDecisionFinal": {
+    "mode": "audio-direct",
+    "stage": "precheck",
+    "reason": "사전 판정 통과"
+  },
+  "searches": [
+    {
+      "kind": "text",
+      "query": "바닷가에서 뛰노는 아이",
+      "presetId": "beach_ko",
+      "embedMs": 83.69999999552965,
+      "searchMs": 1.1000000014901161,
+      "top": [
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.6888
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.6883
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.6306
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.6199
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.6173
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.6094
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.6057
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.6057
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.6013
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5998
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5996
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5985
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a child running on the beach",
+      "presetId": "beach_en",
+      "embedMs": 61.70000000298023,
+      "searchMs": 0.19999999552965164,
+      "top": [
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.6556
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.6366
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.6184
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.6118
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.61
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.6068
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.601
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.592
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5895
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5885
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5877
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5876
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "생일 케이크와 촛불",
+      "presetId": "cake_ko",
+      "embedMs": 78.70000000298023,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5258
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5241
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5236
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5219
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.5212
+        },
+        {
+          "name": "1721441387998.jpg",
+          "score": 0.5211
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5193
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.519
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5187
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5086
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5065
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5032
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "birthday cake with candles",
+      "presetId": "cake_en",
+      "embedMs": 51.80000000447035,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.53
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5233
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5147
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5083
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5079
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5077
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5043
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5033
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5019
+        },
+        {
+          "name": "1721441387998.jpg",
+          "score": 0.5014
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.4991
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.4965
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "강아지",
+      "presetId": "dog_ko",
+      "embedMs": 53.099999994039536,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5587
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5571
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.556
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5527
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5525
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5493
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5488
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5485
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5479
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5474
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5473
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.545
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a dog",
+      "presetId": "dog_en",
+      "embedMs": 49.30000000447035,
+      "searchMs": 0.09999999403953552,
+      "top": [
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5456
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5438
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5437
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5436
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5398
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5397
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5395
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5382
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.534
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5339
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.532
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5316
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "음식 사진",
+      "presetId": "food_ko",
+      "embedMs": 49.600000001490116,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5692
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5631
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5614
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5609
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5599
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5588
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5583
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5581
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5576
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5575
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5567
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5556
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "food on a table",
+      "presetId": "food_en",
+      "embedMs": 52.69999999552965,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.551
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.551
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5479
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5442
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5435
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5403
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.537
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5356
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5329
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5309
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5307
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.527
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "단체 사진",
+      "presetId": "group_ko",
+      "embedMs": 51.600000001490116,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.6592
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.6516
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.6415
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.6072
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5861
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5857
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5833
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5821
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5819
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5813
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5802
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5801
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "group photo of family",
+      "presetId": "group_en",
+      "embedMs": 50.399999998509884,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.6382
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5994
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5983
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5823
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5678
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5616
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5606
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5598
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5585
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.549
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5483
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5478
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "밤에 찍은 어두운 사진",
+      "presetId": "night_ko",
+      "embedMs": 74.89999999850988,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5843
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.563
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5622
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5579
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.556
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.555
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5545
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5528
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5521
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5463
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.5396
+        },
+        {
+          "name": "1721441387998.jpg",
+          "score": 0.5346
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "dark photo taken at night",
+      "presetId": "night_en",
+      "embedMs": 71.29999999701977,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.591
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.548
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5447
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5432
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5425
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5421
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5403
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5361
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5313
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.5279
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5237
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5212
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "눈 오는 날",
+      "presetId": "snow_ko",
+      "embedMs": 52.5,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5551
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5547
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.554
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5515
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5509
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5498
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5474
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.546
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5448
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.544
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.5402
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5397
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "snowy day",
+      "presetId": "snow_en",
+      "embedMs": 50.79999999701977,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5626
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.557
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5558
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5538
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5521
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5503
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5498
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5486
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5429
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.54
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5396
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.5372
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "자동차 안에서",
+      "presetId": "car_ko",
+      "embedMs": 49.70000000298023,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5591
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5554
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5442
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5438
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5434
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.54
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5398
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5368
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5361
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5316
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5234
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5231
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "inside a car",
+      "presetId": "car_en",
+      "embedMs": 51.79999999701977,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5283
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5256
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5204
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5188
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5152
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5127
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5127
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5108
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5059
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5014
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5011
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.4973
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "휴대폰 스크린샷",
+      "presetId": "screenshot_ko",
+      "embedMs": 56.19999999552965,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5972
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.558
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5521
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5507
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5495
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5476
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5463
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.546
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5421
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5411
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5401
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5389
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a screenshot of a phone screen",
+      "presetId": "screenshot_en",
+      "embedMs": 54.80000000447035,
+      "searchMs": 0.09999999403953552,
+      "top": [
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5858
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5616
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5601
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5564
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5538
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5518
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5512
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5489
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5465
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5464
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5423
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5419
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "영수증",
+      "presetId": "receipt_ko",
+      "embedMs": 52.900000005960464,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5397
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5385
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.534
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5338
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5319
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.5296
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.529
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5269
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5264
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5255
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5253
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.525
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a paper receipt",
+      "presetId": "receipt_en",
+      "embedMs": 51.399999998509884,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5204
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5168
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5072
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5069
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.5065
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5062
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5041
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5038
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5036
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5033
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.503
+        },
+        {
+          "name": "1721441387998.jpg",
+          "score": 0.5016
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "흔들리고 초점이 나간 사진",
+      "presetId": "blurry_ko",
+      "embedMs": 77.5,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5657
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5646
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5621
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5599
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5568
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.556
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5548
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5537
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5534
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5527
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5499
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5491
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "blurry out of focus photo",
+      "presetId": "blurry_en",
+      "embedMs": 52.400000005960464,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5413
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.5384
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5371
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.536
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5287
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5278
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5277
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5262
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5261
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5254
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5245
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5245
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "글씨가 많은 문서",
+      "presetId": "document_ko",
+      "embedMs": 52.100000001490116,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5491
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5461
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5459
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5446
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5445
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5414
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5379
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5337
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.5327
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5319
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5311
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5234
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a document with lots of text",
+      "presetId": "document_en",
+      "embedMs": 50.399999998509884,
+      "searchMs": 0,
+      "top": [
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5565
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5536
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5518
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5503
+        },
+        {
+          "name": "1721441387936.jpg",
+          "score": 0.5495
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5486
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5482
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.548
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5476
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5463
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5451
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5439
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "아이 왼쪽에 있는 강아지",
+      "presetId": "spatial_ko",
+      "embedMs": 54.20000000298023,
+      "searchMs": 0.09999999403953552,
+      "top": [
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5482
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.548
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.544
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5414
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5398
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5387
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5376
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5375
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5351
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5339
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.532
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.532
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "a dog to the left of a child",
+      "presetId": "spatial_en",
+      "embedMs": 78.10000000149012,
+      "searchMs": 0.20000000298023224,
+      "top": [
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5739
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5667
+        },
+        {
+          "name": "1721441387545.jpg",
+          "score": 0.5654
+        },
+        {
+          "name": "1721441387633.jpg",
+          "score": 0.5612
+        },
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5593
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.556
+        },
+        {
+          "name": "1721441387794.jpg",
+          "score": 0.5558
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5555
+        },
+        {
+          "name": "1721441387867.jpg",
+          "score": 0.555
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5542
+        },
+        {
+          "name": "1721441388231.jpg",
+          "score": 0.5527
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5518
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "책상 위에 놓인 물건",
+      "presetId": "object_ko",
+      "embedMs": 54.29999999701977,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5459
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5325
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.5312
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5304
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5262
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5247
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5198
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5178
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5127
+        },
+        {
+          "name": "1721441387443.jpg",
+          "score": 0.509
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5089
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5071
+        }
+      ]
+    },
+    {
+      "kind": "text",
+      "query": "objects on a desk",
+      "presetId": "object_en",
+      "embedMs": 59.899999998509884,
+      "searchMs": 0.10000000149011612,
+      "top": [
+        {
+          "name": "1721441537189.jpg",
+          "score": 0.5697
+        },
+        {
+          "name": "1721441537021.jpg",
+          "score": 0.5543
+        },
+        {
+          "name": "1721441537102.jpg",
+          "score": 0.554
+        },
+        {
+          "name": "1721441388779.jpg",
+          "score": 0.5525
+        },
+        {
+          "name": "1721441388598.jpg",
+          "score": 0.5524
+        },
+        {
+          "name": "1721441536949.jpg",
+          "score": 0.5513
+        },
+        {
+          "name": "1721441536468.jpg",
+          "score": 0.5502
+        },
+        {
+          "name": "1721441536389.jpg",
+          "score": 0.5495
+        },
+        {
+          "name": "1721441536706.jpg",
+          "score": 0.5402
+        },
+        {
+          "name": "1721441387712.jpg",
+          "score": 0.54
+        },
+        {
+          "name": "1721441536851.jpg",
+          "score": 0.5319
+        },
+        {
+          "name": "1721441388373.jpg",
+          "score": 0.5307
+        }
+      ]
+    }
+  ]
+}

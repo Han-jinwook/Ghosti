@@ -1,0 +1,30 @@
+# Dependencies & build output
+node_modules/
+dist/
+.vite/
+
+# Environment variables & secrets (NEVER commit API keys)
+.env
+.env.*
+*.local
+
+# Personal test photos & quarantine vault (Privacy protection)
+test_photos/*.jpg
+test_photos/*.JPG
+test_photos/*.jpeg
+test_photos/*.png
+test_photos/*.webp
+test_photos/*.mp4
+test_photos/*.MP4
+test_photos_quarantine/
+
+# Large binaries & temporary caches
+poc/.chrome-profile/
+poc/node_modules/
+poc/cloudflared.exe
+poc/audio/*.wav
+poc/results/*_vectors.json
+poc/results/gemma2_*.json
+*.log
+.DS_Store
+Thumbs.db

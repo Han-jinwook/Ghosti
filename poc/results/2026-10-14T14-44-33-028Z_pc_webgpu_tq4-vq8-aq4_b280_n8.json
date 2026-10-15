@@ -1,0 +1,127 @@
+{
+  "label": "pc_webgpu_tq4-vq8-aq4_b280_n8",
+  "createdAt": "2026-10-14T14:41:54.552Z",
+  "model": "onnx-community/embeddinggemma-2-ONNX",
+  "env": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "platform": "Windows",
+    "mobile": false,
+    "hardwareConcurrency": 4,
+    "deviceMemoryGB": 32,
+    "secureContext": true,
+    "screen": "800x600@1x",
+    "webgpu": true,
+    "opfs": true,
+    "webSpeech": true,
+    "mediaRecorder": true,
+    "gpuVendor": "nvidia",
+    "gpuArchitecture": "pascal",
+    "gpuDevice": "",
+    "gpuDescription": "",
+    "shaderF16": false,
+    "maxStorageBufferBindingSize": 2147483644,
+    "maxBufferSize": 2147483648
+  },
+  "settings": {
+    "scenario": "pc-indexing",
+    "device": "webgpu",
+    "textDtype": "q4",
+    "visionDtype": "q8",
+    "audioDtype": "q4",
+    "budget": 280,
+    "batch": 1,
+    "maxPhotos": 8,
+    "dim": 768,
+    "cacheBackend": "opfs",
+    "voiceMode": "auto"
+  },
+  "source": {
+    "kind": "PC test_photos (LAN)",
+    "count": 8,
+    "bytes": 36101068
+  },
+  "storage": {
+    "persistRequested": false,
+    "before": {
+      "persisted": false,
+      "usage": 532057505,
+      "quota": 11269475745,
+      "opfsBytes": 532053487,
+      "opfsFiles": 14
+    },
+    "after": {
+      "persisted": false,
+      "usage": 727449220,
+      "quota": 11464867460,
+      "opfsBytes": 727444654,
+      "opfsFiles": 16
+    }
+  },
+  "timings": {
+    "visionLoad": {
+      "label": "텍스트+비전",
+      "ms": 29933.30000000447,
+      "downloadedBytes": 195391167,
+      "cacheHitBytes": 201439407,
+      "cacheBackend": "opfs",
+      "cacheWriteMs": 3042.89999999851,
+      "fromCache": false
+    },
+    "warmupMs": 21822.80000000447,
+    "indexTotalMs": 97535.5,
+    "perImageTotalMs": 12191.9375,
+    "decodePerImage": {
+      "n": 8,
+      "mean": 1775.5750000011176,
+      "p50": 1175.6000000014901,
+      "p95": 6912.29999999702,
+      "min": 770.1000000014901,
+      "max": 6912.29999999702
+    },
+    "inferPerImage": {
+      "n": 8,
+      "mean": 10416.150000000373,
+      "p50": 10389.30000000447,
+      "p95": 10583,
+      "min": 10266.5,
+      "max": 10583
+    },
+    "disposeMs": 28.19999999552965,
+    "searchLoad": {
+      "label": "텍스트+오디오",
+      "ms": 3472.89999999851,
+      "downloadedBytes": 0,
+      "cacheHitBytes": 363846084,
+      "cacheBackend": "opfs",
+      "cacheWriteMs": 0,
+      "fromCache": true
+    },
+    "audioWarmupMs": 701.8999999985099,
+    "textWarmupMs": 122,
+    "endToEndMs": 158400
+  },
+  "voiceDecision": {
+    "mode": "audio-direct",
+    "stage": "precheck",
+    "reason": "사전 판정 통과"
+  },
+  "result": {
+    "indexed": 8,
+    "failed": [],
+    "nanCount": 0,
+    "vectorBytes": 24576
+  },
+  "jsHeap": {
+    "start": 17073501,
+    "afterVisionLoad": 610819530,
+    "afterIndexing": 186844078,
+    "afterDispose": 186844078,
+    "afterSearchLoad": 591321359
+  },
+  "voiceDecisionFinal": {
+    "mode": "audio-direct",
+    "stage": "precheck",
+    "reason": "사전 판정 통과"
+  },
+  "searches": []
+}

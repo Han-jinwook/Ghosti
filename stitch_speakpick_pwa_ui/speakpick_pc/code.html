@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&family=Plus+Jakarta+Sans:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-bright":"#38393e","on-tertiary-fixed":"#001e30","surface-container-high":"#292a2f","error-container":"#93000a","primary":"#c3f5ff","inverse-on-surface":"#2f3036","error":"#ffb4ab","surface-container-lowest":"#0d0e13","on-primary-container":"#00626e","tertiary":"#deefff","outline-variant":"#3b494c","surface-container-low":"#1a1b20","inverse-primary":"#006875","on-surface":"#e3e1e9","secondary-container":"#5203d5","on-error":"#690005","on-tertiary":"#00344f","surface-tint":"#00daf3","outline":"#849396","surface-container":"#1e1f25","secondary-fixed-dim":"#cdbdff","primary-container":"#00e5ff","secondary":"#cdbdff","surface-container-highest":"#34343a","surface-variant":"#34343a","on-error-container":"#ffdad6","on-tertiary-container":"#005e8b","on-secondary-fixed":"#20005f","tertiary-fixed":"#cae6ff","background":"#121318","on-secondary-container":"#c0acff","on-surface-variant":"#bac9cc","on-primary-fixed-variant":"#004f58","on-secondary":"#370096","on-background":"#e3e1e9","primary-fixed-dim":"#00daf3","on-primary-fixed":"#001f24","tertiary-container":"#a4d6ff","primary-fixed":"#9cf0ff","on-primary":"#00363d","surface":"#121318","secondary-fixed":"#e8deff","inverse-surface":"#e3e1e9","on-secondary-fixed-variant":"#4f00d0","surface-dim":"#121318","tertiary-fixed-dim":"#8dcdff","on-tertiary-fixed-variant":"#004b70"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"margin-tablet":"2rem","gutter-sm":"0.75rem","gutter-lg":"1.5rem","gutter":"1rem","margin":"1.25rem","space-xl":"2.5rem","space-xs":"0.25rem","margin-mobile":"1rem","space-lg":"1.5rem","space-md":"1rem","space-sm":"0.5rem"},"fontFamily":{"label-md":["Inter"],"label-lg":["Plus Jakarta Sans"],"headline-lg":["Plus Jakarta Sans"],"headline-sm":["Plus Jakarta Sans"],"label-sm":["Inter"],"headline-xl":["Plus Jakarta Sans"],"label-mono":["JetBrains Mono"],"headline-xl-mobile":["Plus Jakarta Sans"],"body-md":["Inter"],"body-lg":["Inter"],"body-sm":["Inter"],"headline-md":["Plus Jakarta Sans"]},"fontSize":{"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.01em","fontWeight":"500"}],"label-lg":["14px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"headline-lg":["26px",{"lineHeight":"34px","letterSpacing":"-0.02em","fontWeight":"700"}],"headline-sm":["18px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"600"}],"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.02em","fontWeight":"600"}],"headline-xl":["36px",{"lineHeight":"44px","letterSpacing":"-0.03em","fontWeight":"800"}],"label-mono":["11px",{"lineHeight":"14px","letterSpacing":"-0.02em","fontWeight":"500"}],"headline-xl-mobile":["28px",{"lineHeight":"36px","letterSpacing":"-0.025em","fontWeight":"800"}],"body-md":["14px",{"lineHeight":"20px","letterSpacing":"-0.005em","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"400"}],"body-sm":["13px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"700"}]}}}}</script></head><body class="bg-background font-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen"><aside class="fixed left-0 top-0 h-screen w-[260px] bg-surface-container-low/90 backdrop-blur-2xl z-50 flex flex-col justify-between p-space-md shadow-[0_0_32px_rgba(0,0,0,0.5)]"><div class="flex flex-col gap-space-lg"><div class="flex flex-col gap-space-xs pt-space-xs"><div class="flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center shadow-[0_0_16px_rgba(0,229,255,0.35)]"><span class="material-symbols-outlined text-surface-container-lowest text-[22px]">graphic_eq</span></div><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight font-bold">스픽픽</span><span class="font-label-mono text-label-mono text-primary font-semibold tracking-wider -mt-1">SpeakPick PWA</span></div></div></div><div class="mt-space-xs inline-flex items-center gap-1.5 px-space-sm py-0.5 rounded-full bg-[#ffab00]/10 w-fit"><span class="material-symbols-outlined text-[#ffab00] text-[14px]">workspace_premium</span><span class="font-label-sm text-label-sm text-[#ffab00] font-bold tracking-tight">[PRO] 평생 라이선스</span></div></div><div class="px-1"><span class="font-label-mono text-label-mono text-outline uppercase tracking-widest">Main Console</span></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-container-high text-primary shadow-[0_0_16px_rgba(0,229,255,0.18)] font-bold"><a aria-current="page" class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl transition-all bg-surface-container-high text-primary shadow-[0_0_16px_rgba(0,229,255,0.18)] font-bold" data-path="dashboard" href="#"><span class="material-symbols-outlined text-[20px]">query_stats</span><span class="font-label-lg text-label-lg">대시보드</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="connected-folders" href="#"><span class="material-symbols-outlined text-[20px]">folder_managed</span><span class="font-label-lg text-label-lg truncate">연결된 폴더 관리</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="smart-trash" href="#"><span class="material-symbols-outlined text-[20px]">auto_delete</span><span class="font-label-lg text-label-lg">스마트 휴지통</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="mobile-sync" href="#"><span class="material-symbols-outlined text-[20px]">phonelink_setup</span><span class="font-label-lg text-label-lg">모바일 동기화</span></a></nav></div><div class="flex flex-col gap-space-sm pt-space-md"><div class="p-space-sm rounded-xl bg-surface-container-lowest/80 backdrop-blur-md flex flex-col gap-space-xs"><div class="flex items-center gap-2"><span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary-container shadow-[0_0_8px_#00e5ff]"></span></span><span class="font-label-mono text-label-mono text-primary font-semibold tracking-wide">Zero-Cloud Live</span></div><div class="flex flex-col gap-0.5 pl-4"><span class="font-label-sm text-label-sm text-on-surface font-medium">100% 오프라인 가동 중</span><span class="font-label-mono text-label-mono text-outline leading-tight">온디바이스 NPU/GPU 연산</span></div></div></div></aside><div class="pl-[260px] min-h-screen flex flex-col bg-background"><header class="fixed top-0 left-[260px] right-0 h-16 bg-surface-container-low/80 backdrop-blur-xl z-40 px-gutter-lg flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.35)]"><div class="flex items-center gap-space-md"><div class="flex items-center gap-2 px-space-md py-1.5 rounded-full bg-surface-container-high/60 backdrop-blur-md"><span class="material-symbols-outlined text-primary text-[18px]">memory</span><span class="font-label-mono text-label-mono text-on-surface font-medium">RTX 4070 Laptop GPU</span><span class="text-outline-variant font-label-mono text-label-mono">•</span><span class="font-label-mono text-label-mono text-primary font-bold">VRAM 8GB 활성</span></div><div class="hidden md:flex items-center gap-1.5 px-space-sm py-1.5 rounded-full bg-surface-container-high/40"><span class="material-symbols-outlined text-on-surface-variant text-[16px]">lock</span><span class="font-label-mono text-label-mono text-on-surface-variant">외부망 차단 격리 모드</span></div></div><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-md"><div class="hidden sm:flex items-center gap-1.5 px-space-sm py-1 rounded-md bg-surface-container-highest/40"><span class="font-label-mono text-label-mono text-primary font-semibold">1920x1080</span><span class="font-label-mono text-label-mono text-outline">DISPLAY</span></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div><div class="flex items-center gap-space-xs pl-space-sm"><button aria-label="Minimize" class="w-7 h-7 rounded-md bg-surface-container-high/60 hover:bg-surface-bright flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">minimize</span></button><button aria-label="Maximize" class="w-7 h-7 rounded-md bg-surface-container-high/60 hover:bg-surface-bright flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">crop_square</span></button><button aria-label="Close" class="w-7 h-7 rounded-md bg-surface-container-high/60 hover:bg-error-container hover:text-on-error-container flex items-center justify-center text-on-surface-variant transition-colors"><span class="material-symbols-outlined text-[16px]">close</span></button></div></div></header><main class="relative pt-16 bg-background flex-1 w-full"><div class="flex flex-col w-full px-gutter-lg pb-space-xl">
+<!-- Subtle Spatial Glow Backdrop (Contained) -->
+<div class="relative w-full">
+<div class="absolute -top-12 left-1/4 w-96 h-96 bg-primary-container/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+<div class="absolute top-48 right-10 w-80 h-80 bg-secondary-container/10 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+<!-- Main Workspace 2-Column Bento Grid Layout (68% / 32% Desktop Ratio) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg w-full max-w-[1720px] mx-auto pt-space-md">
+<!-- ========================================== -->
+<!-- CENTRAL MAIN WORKSPACE (Left 68% -> lg:col-span-8) -->
+<!-- ========================================== -->
+<section class="lg:col-span-8 flex flex-col gap-space-lg min-w-0">
+<!-- Top Header & Status Strip -->
+<div class="flex flex-col gap-space-sm bg-surface-container-low/70 backdrop-blur-xl p-space-lg rounded-xl shadow-lg relative overflow-hidden">
+<div class="flex flex-wrap items-center justify-between gap-space-md">
+<div class="flex flex-col gap-1 min-w-0">
+<div class="flex items-center gap-space-sm">
+<span class="inline-flex items-center justify-center w-2.5 h-2.5 rounded-full bg-primary-container shadow-[0_0_10px_#00e5ff]"></span>
+<span class="font-label-mono text-label-mono text-primary font-semibold tracking-widest uppercase">AIR-GAPPED LOCAL WORKSPACE</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight font-extrabold flex items-center gap-space-sm">
+                내 사진 아카이브 상태
+                <span class="font-label-mono text-label-sm font-medium px-2 py-0.5 rounded-full bg-surface-container-highest text-primary">v2.4.8-siglip</span>
+</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                로컬 NPU/GPU 온디바이스 실시간 벡터 인덱싱 통제실
+              </p>
+</div>
+<!-- Quick Action & Verification Chips -->
+<div class="flex flex-wrap items-center gap-space-xs">
+<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high/90 shadow-sm">
+<span class="material-symbols-outlined text-primary text-[16px]">hard_drive</span>
+<span class="font-label-md text-label-md text-on-surface">전체 볼륨 (NVMe C: / D: 드라이브)</span>
+</div>
+<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high/90 shadow-sm">
+<span class="material-symbols-outlined text-tertiary-fixed text-[16px]">update</span>
+<span class="font-label-md text-label-md text-on-surface">최신 동기화 2분 전</span>
+</div>
+<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container/15 text-primary shadow-[0_0_12px_rgba(0,229,255,0.2)]">
+<span class="material-symbols-outlined text-[16px]">shield_lock</span>
+<span class="font-label-md text-label-md font-semibold">Zero-Cloud 방화벽 활성화</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bento Widget 1: Statistics Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+<!-- Card A: 총 인덱싱된 사진 -->
+<div class="group relative flex flex-col justify-between p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-xl shadow-md hover:shadow-[0_8px_30px_rgba(0,229,255,0.12)] transition-all">
+<div class="flex items-start justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">총 인덱싱된 사진</span>
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">photo_library</span>
+</div>
+</div>
+<div class="my-space-md">
+<div class="flex items-baseline gap-2">
+<span class="font-headline-xl text-headline-xl text-on-surface font-extrabold tracking-tight">14,208</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">장</span>
+</div>
+<div class="flex items-center gap-1.5 mt-1 text-primary">
+<span class="material-symbols-outlined text-[15px]">add_circle</span>
+<span class="font-label-sm text-label-sm font-semibold">+142장 오늘 추가됨 (임베딩 100% 완료)</span>
+</div>
+</div>
+<!-- Mini Neon Cyan Inline Sparkline Graphic -->
+<div class="pt-2">
+<svg class="w-full h-9 text-primary-container" fill="none" viewbox="0 0 160 36">
+<path d="M0 28 L24 22 L48 25 L72 16 L96 19 L120 8 L144 11 L160 2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+<path d="M0 28 L24 22 L48 25 L72 16 L96 19 L120 8 L144 11 L160 2 V36 H0 Z" fill="currentColor" fill-opacity="0.12"></path>
+</svg>
+</div>
+</div>
+<!-- Card B: 생성된 검색팩 용량 -->
+<div class="group relative flex flex-col justify-between p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-xl shadow-md hover:shadow-[0_8px_30px_rgba(0,229,255,0.12)] transition-all">
+<div class="flex items-start justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">생성된 검색팩 용량</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container font-label-mono text-label-sm font-bold">
+                장당 13KB
+              </span>
+</div>
+<div class="my-space-md">
+<div class="flex items-baseline gap-2">
+<span class="font-headline-xl text-headline-xl text-on-surface font-extrabold tracking-tight">185</span>
+<span class="font-headline-sm text-headline-sm text-secondary font-bold">MB</span>
+</div>
+<div class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-highest mt-1">
+<span class="font-label-sm text-label-sm text-primary font-bold">초경량 패키지</span>
+<span class="text-outline-variant font-label-mono text-label-sm">•</span>
+<span class="font-label-mono text-label-sm text-on-surface-variant">모바일 로컬 보관 가능</span>
+</div>
+</div>
+<!-- Visual Compression Progress Bar Comparison -->
+<div class="flex flex-col gap-1.5 pt-1">
+<div class="flex justify-between font-label-mono text-label-sm text-outline">
+<span>원본 58.4 GB</span>
+<span class="text-primary font-bold">99.7% 압축</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary-container to-secondary rounded-full" style="width: 99.7%;"></div>
+</div>
+</div>
+</div>
+<!-- Card C: 평균 시맨틱 검색 속도 -->
+<div class="group relative flex flex-col justify-between p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-xl shadow-md hover:shadow-[0_8px_30px_rgba(0,229,255,0.12)] transition-all">
+<div class="flex items-start justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">평균 시맨틱 검색 속도</span>
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[18px]">bolt</span>
+</div>
+</div>
+<div class="my-space-md">
+<div class="flex items-baseline gap-2">
+<span class="font-headline-xl text-headline-xl text-on-surface font-extrabold tracking-tight">0.02</span>
+<span class="font-headline-sm text-headline-sm text-primary-fixed-dim font-bold">초 (20ms)</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">
+                순수 로컬 벡터 쿼리 (외부 API 무전송)
+              </p>
+</div>
+<!-- Dynamic Vector Index Latency Spark Visualization -->
+<div class="flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest/80 font-label-mono text-label-sm text-outline">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="text-on-surface">ANN IVFPQ 색인</span>
+</div>
+<span class="text-primary font-bold">Zero Latency</span>
+</div>
+</div>
+</div>
+<!-- Bento Widget 2: Drag & Drop Ingestion Zone -->
+<div class="relative group p-space-xl rounded-2xl bg-surface-container-low/50 backdrop-blur-2xl shadow-xl transition-all duration-300">
+<!-- Glassmorphic Dashed Glowing Box Overlay -->
+<div class="absolute inset-3 rounded-xl border-2 border-dashed border-primary-container/40 group-hover:border-primary-container/80 transition-colors pointer-events-none"></div>
+<div class="relative z-10 flex flex-col items-center text-center py-space-lg px-space-md">
+<!-- Pulsing Folder Icon Container -->
+<div class="relative flex items-center justify-center w-20 h-20 mb-space-md">
+<div class="absolute inset-0 rounded-full bg-primary-container/15 animate-ping opacity-75"></div>
+<div class="w-16 h-16 rounded-full bg-gradient-to-tr from-surface-container-highest to-surface-container flex items-center justify-center shadow-[0_0_24px_rgba(0,229,255,0.35)]">
+<span class="material-symbols-outlined text-primary-container text-[32px]">folder_copy</span>
+</div>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface font-bold tracking-tight mb-space-xs">
+              새로운 사진 폴더를 여기에 끌어다 놓으세요
+            </h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-xl mx-auto mb-space-lg">
+              클라우드(구글포토 / 네이버 MYBOX / iCloud) PC 동기화 폴더를 지정해두면 자동으로 백그라운드 스캔합니다.
+            </p>
+<!-- Quick Action Buttons -->
+<div class="flex flex-wrap items-center justify-center gap-space-md">
+<button class="flex items-center gap-2 px-space-lg py-space-sm rounded-full bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold shadow-[0_0_20px_rgba(0,229,255,0.4)] hover:shadow-[0_0_28px_rgba(0,229,255,0.6)] active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">folder_open</span>
+<span>폴더 직접 찾아보기</span>
+</button>
+<button class="flex items-center gap-2 px-space-lg py-space-sm rounded-full bg-surface-container-highest/80 hover:bg-surface-bright text-on-surface font-label-lg text-label-lg font-semibold shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-primary text-[20px]">cloud_sync</span>
+<span>구글 드라이브 폴더 자동 연결</span>
+</button>
+</div>
+<!-- Monospace Supported Formats Footer -->
+<div class="flex items-center gap-3 mt-space-lg font-label-mono text-label-mono text-outline">
+<span>지원 포맷: HEIC, RAW, DNG, JPG, PNG, WEBP</span>
+<span>•</span>
+<span class="text-primary">EXIF 메타데이터 자동 보존</span>
+</div>
+</div>
+</div>
+<!-- Bento Widget 3: Local GPU / NPU Operation Progress (Real-time Engine Monitor) -->
+<div class="flex flex-col gap-space-md p-space-lg rounded-xl bg-surface-container/80 backdrop-blur-xl shadow-lg relative overflow-hidden">
+<!-- Header and Active Tag -->
+<div class="flex flex-wrap items-center justify-between gap-space-sm pb-space-xs">
+<div class="flex items-center gap-space-sm">
+<div class="w-3 h-3 rounded-full bg-primary-container shadow-[0_0_12px_#00e5ff] animate-pulse"></div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-bold tracking-tight">
+                로컬 GPU 가동 상태 • 비전 모델 엔진
+              </h3>
+</div>
+<div class="flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container/20 text-on-secondary-container shadow-sm">
+<span class="material-symbols-outlined text-secondary text-[16px]">neurology</span>
+<span class="font-label-md text-label-md font-semibold">SigLIP 2 로컬 비전 엔진 가동 중</span>
+</div>
+</div>
+<!-- Current Task Status Box -->
+<div class="p-space-md rounded-lg bg-surface-container-lowest/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm min-w-0">
+<span class="material-symbols-outlined text-primary animate-spin text-[20px]">sync</span>
+<span class="font-label-md text-label-md text-on-surface truncate font-medium">
+                🔄 2025_제주도_가족여행_082.jpg 분석 및 벡터 추출 중...
+              </span>
+</div>
+<div class="flex items-center gap-2 font-label-mono text-label-mono text-primary font-bold self-end sm:self-auto shrink-0">
+<span>임베딩 배치 #42</span>
+<span class="text-outline-variant">•</span>
+<span>FP16 점유</span>
+</div>
+</div>
+<!-- System Telemetry Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md pt-space-xs">
+<!-- Metric 1: GPU 사용률 -->
+<div class="flex flex-col gap-space-xs p-space-md rounded-lg bg-surface-container-low/70">
+<div class="flex justify-between items-center text-outline">
+<span class="font-label-sm text-label-sm">GPU 사용률</span>
+<span class="font-label-mono text-label-sm text-primary font-bold">42°C</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">
+                NVIDIA RTX 4070 (68% 부하)
+              </span>
+<div class="w-full h-1.5 rounded-full bg-surface-container-highest mt-1 overflow-hidden">
+<div class="h-full bg-primary-container rounded-full" style="width: 68%;"></div>
+</div>
+</div>
+<!-- Metric 2: 처리 속도 -->
+<div class="flex flex-col gap-space-xs p-space-md rounded-lg bg-surface-container-low/70">
+<div class="flex justify-between items-center text-outline">
+<span class="font-label-sm text-label-sm">처리 속도</span>
+<span class="font-label-mono text-label-sm text-primary font-bold">74%</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">
+                초당 34장 딥러닝 연산 중
+              </span>
+<div class="flex items-center justify-between font-label-mono text-label-mono text-on-surface-variant mt-1">
+<span>진행: 222 / 300장</span>
+<span class="text-primary">약 2.3초 남음</span>
+</div>
+</div>
+<!-- Metric 3: VRAM 점유 -->
+<div class="flex flex-col gap-space-xs p-space-md rounded-lg bg-surface-container-low/70">
+<div class="flex justify-between items-center text-outline">
+<span class="font-label-sm text-label-sm">VRAM 점유율</span>
+<span class="font-label-mono text-label-sm text-secondary font-bold">경량 양자화</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">
+                1.4 GB / 8.0 GB 점유
+              </span>
+<div class="w-full h-1.5 rounded-full bg-surface-container-highest mt-1 overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 17.5%;"></div>
+</div>
+</div>
+</div>
+<!-- Visual Soundwave / Vector Wave Frequency Bar Graphic (SpeakPick Identity) -->
+<div class="pt-space-xs">
+<div class="flex items-center justify-between font-label-mono text-label-mono text-outline mb-1.5">
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-primary">graphic_eq</span>
+                ACOUSTIC & SEMANTIC LATENT VECTORS (512-DIM)
+              </span>
+<span class="text-primary font-bold">SYNCHRONIZED</span>
+</div>
+<div class="h-10 w-full bg-surface-container-lowest/80 rounded-lg p-2 flex items-center justify-between gap-1 overflow-hidden">
+<!-- Dynamically generated wave bars using Tailwind utility heights -->
+<div class="w-1 bg-primary/40 rounded-full h-2"></div>
+<div class="w-1 bg-primary/50 rounded-full h-4"></div>
+<div class="w-1 bg-primary/70 rounded-full h-6"></div>
+<div class="w-1 bg-primary-container rounded-full h-8 shadow-[0_0_8px_#00e5ff]"></div>
+<div class="w-1 bg-primary-container rounded-full h-5"></div>
+<div class="w-1 bg-secondary rounded-full h-3"></div>
+<div class="w-1 bg-secondary rounded-full h-7"></div>
+<div class="w-1 bg-primary-container rounded-full h-9 shadow-[0_0_8px_#00e5ff]"></div>
+<div class="w-1 bg-primary/80 rounded-full h-6"></div>
+<div class="w-1 bg-primary/40 rounded-full h-4"></div>
+<div class="w-1 bg-primary/30 rounded-full h-2"></div>
+<div class="w-1 bg-secondary/60 rounded-full h-5"></div>
+<div class="w-1 bg-secondary rounded-full h-8"></div>
+<div class="w-1 bg-primary-container rounded-full h-10 shadow-[0_0_8px_#00e5ff]"></div>
+<div class="w-1 bg-primary-container rounded-full h-7"></div>
+<div class="w-1 bg-primary/80 rounded-full h-4"></div>
+<div class="w-1 bg-primary/50 rounded-full h-3"></div>
+<div class="w-1 bg-primary/60 rounded-full h-6"></div>
+<div class="w-1 bg-primary-container rounded-full h-8 shadow-[0_0_8px_#00e5ff]"></div>
+<div class="w-1 bg-primary-container rounded-full h-5"></div>
+<div class="w-1 bg-secondary/80 rounded-full h-7"></div>
+<div class="w-1 bg-secondary rounded-full h-4"></div>
+<div class="w-1 bg-primary/60 rounded-full h-3"></div>
+<div class="w-1 bg-primary/40 rounded-full h-5"></div>
+<div class="w-1 bg-primary-container rounded-full h-9 shadow-[0_0_8px_#00e5ff]"></div>
+<div class="w-1 bg-primary-container rounded-full h-6"></div>
+<div class="w-1 bg-primary/70 rounded-full h-4"></div>
+<div class="w-1 bg-primary/40 rounded-full h-2"></div>
+<div class="w-1 bg-secondary rounded-full h-6"></div>
+<div class="w-1 bg-primary-container rounded-full h-8 shadow-[0_0_8px_#00e5ff]"></div>
+<div class="w-1 bg-primary/80 rounded-full h-5"></div>
+<div class="w-1 bg-primary/40 rounded-full h-3"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- RIGHT SIDE PANEL (Mobile Bridge & Action, 32% -> lg:col-span-4) -->
+<!-- ========================================== -->
+<aside class="lg:col-span-4 flex flex-col gap-space-lg min-w-0">
+<!-- Panel Wrapper Container -->
+<div class="flex flex-col gap-space-md p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-2xl shadow-xl">
+<!-- Header and Connectivity Badge -->
+<div class="flex flex-col gap-space-xs pb-space-xs">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold tracking-tight">
+                모바일 스픽픽 연결 상태
+              </h2>
+<span class="flex h-3 w-3 relative">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-primary-container shadow-[0_0_10px_#00e5ff]"></span>
+</span>
+</div>
+<!-- Connected Green Indicator Tag -->
+<div class="flex items-center gap-2 p-space-sm rounded-lg bg-surface-container-lowest/80 text-primary">
+<span class="material-symbols-outlined text-[18px]">cell_tower</span>
+<span class="font-label-md text-label-md font-semibold truncate">
+                모바일 기기와 실시간 동기화 완료 (방금 전)
+              </span>
+</div>
+<!-- Device Specs Box -->
+<div class="flex items-center justify-between px-space-sm py-1.5 rounded-md bg-surface-container-high/60 font-label-mono text-label-mono text-outline">
+<span class="text-on-surface font-semibold flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px]">smartphone</span>
+                iPhone 15 Pro (PWA)
+              </span>
+<span class="text-primary font-medium">로컬 WiFi P2P</span>
+</div>
+</div>
+<!-- Section: Mobile Search History / Signals -->
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center justify-between pt-space-xs">
+<span class="font-label-lg text-label-lg text-on-surface font-bold tracking-tight">
+                모바일에서 보낸 신호
+              </span>
+<span class="font-label-sm text-label-sm text-primary font-medium">
+                방금 밖에서 검색한 사진
+              </span>
+</div>
+<!-- Mobile Bookmark History Cards (3 cards) -->
+<div class="flex flex-col gap-space-sm">
+<!-- Card 1: Kid running on beach -->
+<div class="group relative flex flex-col p-space-sm rounded-xl bg-surface-container-low/90 hover:bg-surface-container-high transition-all shadow-md">
+<div class="flex gap-space-sm">
+<!-- Thumbnail Image Placeholder with detailed data-alt -->
+<div class="w-24 h-24 rounded-lg overflow-hidden shrink-0 relative bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A joyful young child with wind-blown hair running along the shoreline of Anmok beach East Sea at sunset, vivid cyan blue ocean waves rolling softly against golden sand, warm rim lighting contrasting with atmospheric obsidian deep tones, high-end candid memory photography, cinematic depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFmEul6ytuDmA2e4r0SgoTqEHCFdeUdtFZPXLjRQXTvJDX8BoZd2Ee2NqbsmPMwsl5kPuIg7qz_lR8m0zU_EYCVsrhF-QdcEnxqG1csnGvAJCYT239CdPz8Qc-QF45Amf4oVLN9KFjfwMKFeznb61gzXaKlnZGjarih-emLuCBmMJkc83WMab2VdN9ju3dZ6X9d8l9LH1Ss1v21gi10ap_6DrxZ4r_zlfUpSxNbHJQXOvAnwU_2lgZ"/>
+<div class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-surface-container-lowest/80 font-label-mono text-[10px] text-primary font-bold">
+                      98.2%
+                    </div>
+</div>
+<!-- Metadata and Action -->
+<div class="flex flex-col justify-between flex-1 min-w-0 py-0.5">
+<div class="flex flex-col gap-0.5">
+<div class="inline-flex items-center gap-1">
+<span class="px-2 py-0.5 rounded-full bg-primary-container/20 text-primary font-label-mono text-[10px] font-bold">
+                          음성 검색 일치
+                        </span>
+<span class="font-label-mono text-label-mono text-outline">오후 3:24</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-bold truncate mt-1">
+                        동해안 안목해변 모래놀이
+                      </span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">
+                        "작년 여름 바닷가에서 뛰어놀던 아기"
+                      </span>
+</div>
+<!-- Prominent Folder Action Button -->
+<button class="mt-2 flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-surface-container-highest hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md font-semibold transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[16px]">folder_open</span>
+<span>원본 폴더 열기</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Card 2: Family building Lego -->
+<div class="group relative flex flex-col p-space-sm rounded-xl bg-surface-container-low/90 hover:bg-surface-container-high transition-all shadow-md">
+<div class="flex gap-space-sm">
+<!-- Thumbnail Image Placeholder -->
+<div class="w-24 h-24 rounded-lg overflow-hidden shrink-0 relative bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A cozy, sunlit living room floor scene with colorful Lego toy blocks, hands of a parent and small child collaboratively building a miniature spaceship, soft focus background with dark wood textures, warm domestic lighting with cyan accent luminescence, intimate photojournalism style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDN2hWfojkSAt1mw04-tTB3PSerQ523qHXiitGQeZqdloNts5LJPPkOd_AlyNMqQzseOKtRBnx1bbe4rYbqLe6X6ljCbbQfFfiPbO7U3LR19ui1Lnt-ucG2frCvip8hqN3uzTa6uzGMxfFu_otpVYlYWtSFtwTBOCxAyIZMmVOvtY4V04r59PnhRNel9FJE5nrrOIuyDlrnq_SNXcnCcId8337lRkU2F-92En3MXicdOAg0BRwODF_0"/>
+<div class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-surface-container-lowest/80 font-label-mono text-[10px] text-primary font-bold">
+                      94.5%
+                    </div>
+</div>
+<!-- Metadata and Action -->
+<div class="flex flex-col justify-between flex-1 min-w-0 py-0.5">
+<div class="flex flex-col gap-0.5">
+<div class="inline-flex items-center gap-1">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-mono text-[10px] font-bold">
+                          키워드 검색
+                        </span>
+<span class="font-label-mono text-label-mono text-outline">오전 11:10</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-bold truncate mt-1">
+                        거실 매트 위 블록놀이
+                      </span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">
+                        "집에서 레고 장난감 성 쌓기"
+                      </span>
+</div>
+<!-- Prominent Folder Action Button -->
+<button class="mt-2 flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-surface-container-highest hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md font-semibold transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[16px]">folder_open</span>
+<span>원본 폴더 열기</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Card 3: Birthday Bubble Party -->
+<div class="group relative flex flex-col p-space-sm rounded-xl bg-surface-container-low/90 hover:bg-surface-container-high transition-all shadow-md">
+<div class="flex gap-space-sm">
+<!-- Thumbnail Image Placeholder -->
+<div class="w-24 h-24 rounded-lg overflow-hidden shrink-0 relative bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Joyful birthday party scene with iridescent translucent soap bubbles floating through the air, cheerful toddler laughing in a party hat, festive ambient lighting, glowing reflections of soft cyan and ultraviolet ribbons in the background, sharp details and crisp modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzw7akZVMu7Abz4ypCR67dZagBJm7Wk_QW7qTJ0CFrTa_6UYJh2pXw5hcPDR8CCkEwAhmZdyvFlyE-1I7ijRg3UL1gJDqrXOBsjEhvAxapf0_6ecSnF4xUHQPf_HidF9BXwsOqFnrIZMXDnJskK0f8eh7qB8d-BlsNjSpfPq4Fj6J3p5rMmY_C5pKTZwSQZfrYppo6jpsfLcu8xCU2a2H7yOGj_dXIVjNDIYV2kLYmlVZGemey4nRP"/>
+<div class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-surface-container-lowest/80 font-label-mono text-[10px] text-primary font-bold">
+                      89.4%
+                    </div>
+</div>
+<!-- Metadata and Action -->
+<div class="flex flex-col justify-between flex-1 min-w-0 py-0.5">
+<div class="flex flex-col gap-0.5">
+<div class="inline-flex items-center gap-1">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-mono text-[10px] font-bold">
+                          감성 인덱스
+                        </span>
+<span class="font-label-mono text-label-mono text-outline">어제</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-bold truncate mt-1">
+                        여름 홈 파티 모임
+                      </span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">
+                        "비눗방울 불고 케이크 불던 날"
+                      </span>
+</div>
+<!-- Prominent Folder Action Button -->
+<button class="mt-2 flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-surface-container-highest hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md font-semibold transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[16px]">folder_open</span>
+<span>원본 폴더 열기</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Action: Send Pack to Mobile -->
+<div class="pt-space-xs">
+<button class="w-full flex items-center justify-center gap-2 py-space-md px-space-md rounded-xl bg-gradient-to-r from-primary-container via-primary to-primary-fixed text-on-primary font-label-lg text-label-lg font-extrabold shadow-[0_0_24px_rgba(0,229,255,0.4)] hover:shadow-[0_0_36px_rgba(0,229,255,0.6)] active:scale-98 transition-all">
+<span class="material-symbols-outlined text-[20px]">send_to_mobile</span>
+<span>모바일로 최신 검색팩 전송 (185MB 즉시 푸시)</span>
+</button>
+<div class="flex justify-between items-center mt-2 font-label-mono text-[11px] text-outline px-1">
+<span>동일 WiFi 감지됨 (SpeakPick-Mesh)</span>
+<span class="text-primary">암호화 완료</span>
+</div>
+</div>
+</div>
+</aside>
+</div>
+<!-- ========================================== -->
+<!-- BOTTOM FLOATING TOAST / SMART TRASH BANNER -->
+<!-- High-Contrast Alert with Amber (#FFAB00) Glow -->
+<!-- ========================================== -->
+<div class="mt-space-lg w-full max-w-[1720px] mx-auto transition-all duration-300" id="smart-trash-toast">
+<div class="p-space-lg rounded-2xl bg-surface-container/90 backdrop-blur-2xl shadow-[0_0_36px_rgba(255,171,0,0.22)] relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-space-lg">
+<!-- Amber Glow Accent Bar -->
+<div class="absolute left-0 top-0 bottom-0 w-2 bg-[#ffab00] shadow-[0_0_16px_#ffab00]"></div>
+<div class="flex items-start md:items-center gap-space-md pl-2 min-w-0">
+<!-- Amber Pulsing Icon -->
+<div class="w-12 h-12 rounded-xl bg-[#ffab00]/15 flex items-center justify-center shrink-0 shadow-[0_0_16px_rgba(255,171,0,0.3)]">
+<span class="material-symbols-outlined text-[#ffab00] text-[28px]">cleaning_services</span>
+</div>
+<div class="flex flex-col gap-1 min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">
+                💡 스픽픽이 스크린샷과 흔들린 사진 340장을 발견했습니다! 구글 포토 용량을 다이어트 할까요?
+              </span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              로컬 AI가 흐릿한 초점 182장, 중복 캡처 158장을 안전하게 분류했습니다. 원본 삭제 전 검토가 가능합니다.
+            </p>
+</div>
+</div>
+<!-- Toast Action Buttons -->
+<div class="flex items-center gap-space-sm shrink-0 self-end md:self-auto pl-2 md:pl-0">
+<button class="px-space-lg py-2.5 rounded-full bg-surface-container-highest hover:bg-surface-bright text-on-surface font-label-lg text-label-lg font-semibold transition-colors" onclick="document.getElementById('smart-trash-toast').style.display='none'">
+            나중에 하기
+          </button>
+<button class="flex items-center gap-2 px-space-xl py-2.5 rounded-full bg-[#ffab00] hover:bg-[#ffb724] text-surface-container-lowest font-label-lg text-label-lg font-black shadow-[0_0_24px_rgba(255,171,0,0.5)] active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">auto_delete</span>
+<span>한 번에 정리하기</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Simple micro-interaction for desktop interactivity
+  document.addEventListener('DOMContentLoaded', () => {
+    // Pulse animation or interaction hooks
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        if(this.textContent.includes('원본 폴더 열기')) {
+          const original = this.innerHTML;
+          this.innerHTML = '<span class="material-symbols-outlined text-[16px]">check</span><span>폴더 창 호출됨</span>';
+          setTimeout(() => {
+            this.innerHTML = original;
+          }, 1800);
+        }
+      });
+    });
+  });
+</script></main></div></body></html>

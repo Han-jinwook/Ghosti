@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#121318" />
+    <title>SaySee PoC · EmbeddingGemma 2 벤치마크</title>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="logo">◉</span>
+        <div>
+          <h1>SaySee <small>세이씨</small> PoC</h1>
+          <p class="mono dim">EmbeddingGemma 2 · 텍스트 / 비전 / 오디오 실측</p>
+        </div>
+      </div>
+      <span class="badge mono" id="ctxBadge">—</span>
+    </header>
+
+    <main>
+      <!-- 1. 환경 -->
+      <section class="card">
+        <h2>① 기기 환경 · 음성 모드 판정</h2>
+        <div id="envBox" class="kv mono">확인 중…</div>
+      </section>
+
+      <!-- 2. 설정 -->
+      <section class="card">
+        <h2>② 측정 설정</h2>
+        <div class="grid">
+          <label>시나리오
+            <select id="scenario">
+              <option value="pc-indexing">PC 인덱싱</option>
+              <option value="mobile-onboarding">모바일 온보딩 (300장)</option>
+            </select>
+          </label>
+          <label>실행 장치
+            <select id="device">
+              <option value="webgpu">webgpu</option>
+              <option value="wasm">wasm (CPU)</option>
+            </select>
+          </label>
+          <label>텍스트 정밀도
+            <select id="textDtype">
+              <option value="q4" selected>q4 (175MB)</option>
+              <option value="q4f16">q4f16 (157MB)</option>
+              <option value="q8">q8 (314MB)</option>
+              <option value="fp16">fp16 (543MB)</option>
+            </select>
+          </label>
+          <label>비전 정밀도
+            <select id="visionDtype">
+              <option value="q4" selected>q4 (109MB)</option>
+              <option value="q4f16">q4f16 (98MB)</option>
+              <option value="q8">q8 (195MB)</option>
+              <option value="fp16">fp16 (336MB)</option>
+            </select>
+          </label>
+          <label>오디오 정밀도
+            <select id="audioDtype">
+              <option value="q4" selected>q4 (189MB)</option>
+              <option value="q4f16">q4f16 (171MB)</option>
+              <option value="q8">q8 (340MB)</option>
+              <option value="fp16">fp16 (587MB)</option>
+            </select>
+          </label>
+          <label>비전 토큰 예산
+            <select id="budget">
+              <option value="70">70 (빠름)</option>
+              <option value="140">140</option>
+              <option value="280" selected>280 (기본)</option>
+              <option value="560">560 (정밀)</option>
+            </select>
+          </label>
+          <label>배치 크기
+            <input id="batch" type="number" min="1" max="38" value="8" />
+          </label>
+          <label>최대 장수
+            <input id="maxPhotos" type="number" min="1" max="2000" value="300" />
+          </label>
+          <label>저장 차원 (MRL)
+            <select id="dim">
+              <option value="768" selected>768</option>
+              <option value="512">512</option>
+              <option value="256">256</option>
+              <option value="128">128</option>
+            </select>
+          </label>
+          <label>모델 캐시
+            <select id="cacheBackend">
+              <option value="opfs" selected>OPFS (영구)</option>
+              <option value="browser">Cache API (기본)</option>
+            </select>
+          </label>
+          <label>음성 모드
+            <select id="voiceMode">
+              <option value="auto" selected>자동 판정 (스마트 폴백)</option>
+              <option value="audio">오디오 직접 강제</option>
+              <option value="stt">STT 폴백 강제</option>
+            </select>
+          </label>
+        </div>
+        <div class="row wrap" style="margin-top: 10px">
+          <button class="btn" id="clearCacheBtn">🗑 모델 캐시 비우기 (콜드 측정용)</button>
+          <span id="cacheInfo" class="mono dim"></span>
+        </div>
+        <p class="hint">WebGPU는 배치당 총 토큰을 약 2,700 이하로 제한함(공식) → 예산 280이면 배치 최대 9장. 초과하면 자동으로 줄임.</p>
+      </section>
+
+      <!-- 3. 사진 선택 -->
+      <section class="card">
+        <h2>③ 테스트 사진</h2>
+        <div class="row wrap">
+          <label class="btn">📁 폴더 선택 (PC)
+            <input id="pickFolder" type="file" webkitdirectory multiple hidden />
+          </label>
+          <label class="btn">🖼️ 사진 선택 (폰 갤러리)
+            <input id="pickFiles" type="file" accept="image/*" multiple hidden />
+          </label>
+          <button class="btn" id="useServer">🖥️ PC의 test_photos 사용</button>
+        </div>
+        <p id="srcInfo" class="mono dim">선택된 사진 없음</p>
+      </section>
+
+      <!-- 4. 실행 -->
+      <section class="card">
+        <h2>④ 색인 실행</h2>
+        <div class="row wrap">
+          <button class="btn primary" id="runBtn" disabled>▶ 측정 시작</button>
+          <button class="btn" id="saveBtn" disabled>💾 리포트 저장 (PC)</button>
+          <button class="btn" id="dlBtn" disabled>⬇ JSON 다운로드</button>
+        </div>
+        <div class="progress"><div id="bar"></div></div>
+        <p id="stage" class="mono">대기</p>
+        <div id="statsBox" class="kv mono"></div>
+        <details>
+          <summary>로그</summary>
+          <pre id="log"></pre>
+        </details>
+      </section>
+
+      <!-- 5. 검색 -->
+      <section class="card">
+        <h2>⑤ 검색 품질 확인</h2>
+        <div class="row">
+          <input id="query" type="search" placeholder="예) 바닷가에서 뛰노는 아이" disabled />
+          <button class="btn primary" id="searchBtn" disabled>검색</button>
+        </div>
+        <div class="row wrap" style="margin-top: 8px">
+          <button class="btn" id="voiceBtn" disabled>🎙️ 말하고 찾기</button>
+          <span id="voiceModeInfo" class="mono dim"></span>
+        </div>
+        <div id="presets" class="chips"></div>
+        <div class="row wrap">
+          <button class="btn" id="benchBtn" disabled>⚡ 텍스트 질의 일괄 측정</button>
+          <button class="btn" id="audioBenchBtn" disabled>🔊 음성 직접 검색 일괄 측정 (TTS)</button>
+        </div>
+        <p id="searchInfo" class="mono dim"></p>
+        <div id="results" class="results"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
