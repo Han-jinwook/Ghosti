@@ -797,7 +797,22 @@ function sayseeLocalBridge(): Plugin {
           });
         }
 
-        // [단방향 상하위 계층 + 핵심 주제(Tag/Keyword) 우선 원칙]
+        // [768차원 EmbeddingGemma 2 시맨틱 벡터 주연 + 온톨로지 가드레일 결합]
+        // 1) 검색어 토큰 중 실제 코퍼스/온톨로지에 존재하는 '팩트/지명 토큰(knownFactualTokens)'은 엄격한 AND 가드레일로 작동합니다.
+        //    (예: "청라" + "보트"는 둘 다 팩트 토큰이므로 교집합이 없으면 0장 반환, "불쇼"는 박물관 공연 배제)
+        // 2) 반면 태그 사전에 없는 자유로운 자연어·분위기·상황 표현(예: "트로피컬 바캉스", "낭만적인 황혼", "화려한 퍼포먼스")은
+        //    단순 키워드 매칭이 아닌 **768차원 EmbeddingGemma 2 벡터 유사도(vecSim)**가 직접 의미 공간을 탐색하여 결과를 찾아냅니다!
+        const knownTokenCount = queryTokens.filter((qt) =>
+          scored.some((s) => {
+            const m = map[s.name];
+            if (!m) return false;
+            const pSet = new Set((m.ontologyPrimaryTags ?? []).map((t) => t.toLowerCase()));
+            const cSet = new Set((m.ontologyCaptionTags ?? []).map((t) => t.toLowerCase()));
+            const full = `${m.primaryTag} ${m.locationKo ?? ''} ${(m.keywordsKo ?? []).join(' ')} ${m.captionKo}`.toLowerCase();
+            return pSet.has(qt.raw) || cSet.has(qt.raw) || (qt.raw.length >= 2 && full.includes(qt.raw));
+          })
+        ).length;
+
         const requiredGroupCount = queryTokens.length;
         const strictTagMatches = scored.filter(
           (x) => requiredGroupCount > 0 && x.tagMatchedGroupCount >= requiredGroupCount
@@ -806,7 +821,21 @@ function sayseeLocalBridge(): Plugin {
           (x) => x.compoundHit || (requiredGroupCount > 0 && x.matchedGroupCount >= requiredGroupCount)
         );
 
-        const finalMatches = strictTagMatches.length > 0 ? strictTagMatches : strictAllMatches;
+        let finalMatches = strictTagMatches.length > 0 ? strictTagMatches : strictAllMatches;
+
+        // 태그에 글자가 직접 적혀 있지 않은 자유 자연어/시맨틱 검색어가 포함된 경우:
+        // 팩트 토큰(지명/사물) 가드레일은 모두 만족(matchedGroupCount >= knownTokenCount)하면서
+        // 768차원 EmbeddingGemma 2 벡터 유사도(vecSim) 상위 군집을 시맨틱 검색 결과로 반환합니다!
+        if (finalMatches.length === 0 && qVec && knownTokenCount < requiredGroupCount) {
+          const guardrailPassed = scored.filter((x) => x.matchedGroupCount >= knownTokenCount);
+          guardrailPassed.sort((a, b) => b.vecSim - a.vecSim);
+          const topVec = guardrailPassed[0]?.vecSim ?? 0;
+          if (topVec >= 0.68) {
+            const dynamicCutoff = Math.max(0.68, topVec - 0.032);
+            finalMatches = guardrailPassed.filter((x) => x.vecSim >= dynamicCutoff).slice(0, 24);
+          }
+        }
+
         finalMatches.sort((a, b) => b.score - a.score);
 
         const topResults = finalMatches.slice(0, 36).map((item, idx) => ({
