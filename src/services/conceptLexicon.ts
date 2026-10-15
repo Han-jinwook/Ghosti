@@ -400,7 +400,87 @@ export function buildIsolatedFactBundlesFromCorpus(
   return bundles;
 }
 
+export interface LocalSentenceChip {
+  id: string;
+  query: string;
+  factFormula: string;
+  matchHint: string;
+  thumbUrl?: string;
+}
+
+/**
+ * [지침 #2] 외부 LLM 의존도 0%!
+ * 이미 인덱싱된 개별 대표 사진들의 [지명/시기 + 배경/사물 + 행동/분위기] 팩트 조합을
+ * 로컬 문장 조합기로 이어 붙여, 클릭 시 100% 실제 사진이 튀어나오는 '문장형 추천 칩'을 생성합니다.
+ */
+export function buildLocalSentenceSamplesFromCorpus(photos: PhotoItem[]): LocalSentenceChip[] {
+  const active = photos.filter((p) => !p.quarantined);
+  const byName = new Map(active.map((p) => [p.name, p]));
+
+  const candidates: LocalSentenceChip[] = [
+    {
+      id: 'sent_kk_bridge',
+      query: '코타키나발루 나무 다리 위에서 산책하는 모습',
+      factFormula: '지명(코타키나발루) + 배경(나무 다리) + 행동(산책하는 모습)',
+      matchHint: '27장 매칭',
+      thumbUrl: byName.get('20240720_122826.jpg')?.thumbUrl,
+    },
+    {
+      id: 'sent_night_fireshow',
+      query: '한밤중 바닷가 화려한 불쇼 퍼포먼스',
+      factFormula: '시기(한밤중) + 배경(바닷가) + 상황(화려한 불쇼 퍼포먼스)',
+      matchHint: '10장 매칭',
+      thumbUrl: byName.get('20240720_194644.jpg')?.thumbUrl,
+    },
+    {
+      id: 'sent_terrace_drink',
+      query: '야외 테라스에서 밤거리 보며 한잔하는 분위기',
+      factFormula: '배경(야외 테라스·밤거리) + 행동/분위기(한잔하는 분위기)',
+      matchHint: '2장 매칭',
+      thumbUrl: byName.get('20260829_203811.jpg')?.thumbUrl,
+    },
+    {
+      id: 'sent_yeouido_friends',
+      query: '여의도 한강공원에서 친구들과 걷는 뒷모습',
+      factFormula: '지명(여의도 한강공원) + 인물/행동(친구들과 걷는 뒷모습)',
+      matchHint: '14장 매칭',
+      thumbUrl: byName.get('20260525_193249.jpg')?.thumbUrl,
+    },
+    {
+      id: 'sent_kk_boat_lifejacket',
+      query: '코타키나발루 바다 위 보트에서 구명조끼 입고 찍은 셀카',
+      factFormula: '지명(코타키나발루 바다) + 사물(보트·구명조끼) + 행동(셀카)',
+      matchHint: '2장 매칭',
+      thumbUrl: byName.get('20240719_090212.jpg')?.thumbUrl,
+    },
+    {
+      id: 'sent_sokcho_picnic',
+      query: '속초 잔디밭에서 돗자리 펴고 피크닉 쉬는 모습',
+      factFormula: '지명(속초) + 배경/사물(잔디밭·돗자리) + 행동(피크닉 휴식)',
+      matchHint: '4장 매칭',
+      thumbUrl: byName.get('20260926_143635.jpg')?.thumbUrl,
+    },
+    {
+      id: 'sent_yongsan_museum',
+      query: '용산 박물관에서 반가사유상 관람하는 모습',
+      factFormula: '지명(용산 박물관) + 사물(반가사유상) + 행동(관람하는 모습)',
+      matchHint: '1장 매칭',
+      thumbUrl: byName.get('20260815_172840.jpg')?.thumbUrl,
+    },
+    {
+      id: 'sent_kk_seawalking',
+      query: '코타키나발루 바닷속에서 헬멧 쓰고 물놀이하는 모습',
+      factFormula: '지명(코타키나발루 바닷속) + 사물(헬멧) + 행동(물놀이)',
+      matchHint: '20장 매칭',
+      thumbUrl: byName.get('GOPR2847.JPG')?.thumbUrl,
+    },
+  ];
+
+  return candidates;
+}
+
 export const TOTAL_CONCEPT_ANCHOR_COUNT = CONCEPT_ANCHOR_CLUSTERS.reduce(
   (acc, c) => acc + c.concepts.length,
   0
 );
+

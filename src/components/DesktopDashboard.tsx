@@ -1,27 +1,62 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
+import { SmartTrashView } from './SmartTrashView';
 
 const MOBILE_TUNNEL_URL = 'https://interpretation-configure-wanted-models.trycloudflare.com';
 
 export const DesktopDashboard: React.FC = () => {
   const {
+    desktopTab,
+    setDesktopTab,
     setLayout,
     photos,
     activeQuery,
     searchResults,
+    groupBurstsInSearch,
+    setGroupBurstsInSearch,
     setSelectedPhoto,
     toggleBookmark,
+    openLocalFolder,
+    setShowOnboarding,
   } = useSaySeeStore();
 
   const [showQr, setShowQr] = useState(false);
-  const activePhotos = photos.filter((p) => !p.quarantined);
+  const [autoBackupWifi, setAutoBackupWifi] = useState(true);
+  const [autoBackupCharging, setAutoBackupCharging] = useState(true);
+  const [autoSortTrashOnBackup, setAutoSortTrashOnBackup] = useState(true);
+
+  const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
+  const quarantinedPhotos = useMemo(() => photos.filter((p) => p.quarantined), [photos]);
+  const activeTrashCount = useMemo(
+    () => activePhotos.filter((p) => Boolean(p.trashCategory)).length,
+    [activePhotos]
+  );
+
+  // 지침 #3: 검색 결과에서 동일 연사(dHash/연속촬영) 그룹을 1장으로 겹쳐서 [❐ N장 연사] 배지로 묶기
+  const groupedResults = useMemo(() => {
+    if (!groupBurstsInSearch) {
+      return searchResults.map((item) => ({
+        representative: item,
+        burstPhotos: [item.photo],
+        burstCount: 1,
+      }));
+    }
+    return groupBurstSearchResults(searchResults);
+  }, [searchResults, groupBurstsInSearch]);
+
+  const collapsedBurstCount = searchResults.length - groupedResults.length;
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-on-surface">
-      {/* 심플하고 깔끔한 상단 헤더 */}
-      <header className="sticky top-0 h-16 bg-surface-container-low/90 backdrop-blur-xl z-40 px-6 md:px-10 flex items-center justify-between border-b border-outline-variant/20">
-        <div className="flex items-center gap-3">
+      {/* ─────────────── 상단 헤더: 로고 + 미니멀 3대 탭 + 우측 모바일/QR 연결 ─────────────── */}
+      <header className="sticky top-0 h-16 bg-surface-container-low/95 backdrop-blur-xl z-40 px-6 md:px-10 flex items-center justify-between border-b border-outline-variant/20 gap-4">
+        {/* 좌측 브랜드 로고 */}
+        <div
+          onClick={() => setDesktopTab('dashboard')}
+          className="flex items-center gap-3 cursor-pointer shrink-0"
+        >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center shadow-[0_0_16px_rgba(0,229,255,0.35)]">
             <span className="material-symbols-outlined text-surface-container-lowest text-[22px] font-bold">
               graphic_eq
@@ -31,29 +66,75 @@ export const DesktopDashboard: React.FC = () => {
             <span className="font-headline-sm text-[20px] text-on-surface tracking-tight font-extrabold">
               세이씨 (SaySee)
             </span>
-            <span className="font-body-sm text-[13px] text-on-surface-variant">
-              내 사진 {activePhotos.length}장 연결됨
+            <span className="hidden xl:inline font-body-sm text-[12px] text-on-surface-variant">
+              100% 로컬 AI · {activePhotos.length}장
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 relative">
+        {/* 중앙 미니멀 3대 네비게이션 탭 (지침 #3) */}
+        <nav className="flex items-center gap-1.5 p-1 rounded-full bg-surface-container-lowest/90 border border-outline-variant/30 shadow-inner">
+          <button
+            onClick={() => setDesktopTab('dashboard')}
+            className={`px-4 py-1.5 rounded-full font-label-md text-[13px] font-extrabold flex items-center gap-1.5 transition-all ${
+              desktopTab === 'dashboard'
+                ? 'bg-primary-container text-on-primary-container shadow-[0_0_14px_rgba(0,229,255,0.35)]'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60'
+            }`}
+          >
+            <span>🔍 AI 검색</span>
+          </button>
+
+          <button
+            onClick={() => setDesktopTab('trash')}
+            className={`px-4 py-1.5 rounded-full font-label-md text-[13px] font-extrabold flex items-center gap-1.5 transition-all ${
+              desktopTab === 'trash'
+                ? 'bg-primary-container text-on-primary-container shadow-[0_0_14px_rgba(0,229,255,0.35)]'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60'
+            }`}
+          >
+            <span>🧹 스마트 정리</span>
+            <span
+              className={`px-2 py-0.2 rounded-full text-[11px] font-black ${
+                desktopTab === 'trash'
+                  ? 'bg-surface-container-lowest/25 text-on-primary-container'
+                  : 'bg-error-container/80 text-on-error-container'
+              }`}
+            >
+              {activeTrashCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setDesktopTab('sync')}
+            className={`px-4 py-1.5 rounded-full font-label-md text-[13px] font-extrabold flex items-center gap-1.5 transition-all ${
+              desktopTab === 'sync'
+                ? 'bg-primary-container text-on-primary-container shadow-[0_0_14px_rgba(0,229,255,0.35)]'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60'
+            }`}
+          >
+            <span>⚙️ 내 기기 &amp; 백업</span>
+          </button>
+        </nav>
+
+        {/* 우측 유틸리티 버튼 */}
+        <div className="flex items-center gap-2 relative shrink-0">
           <button
             onClick={() => setShowQr((v) => !v)}
-            className="px-4 py-2 rounded-full bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5 shadow-[0_0_16px_rgba(0,229,255,0.3)] hover:opacity-95 transition-all"
+            className="px-3.5 py-2 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary-container font-label-md text-[12px] font-extrabold flex items-center gap-1.5 border border-primary-container/35 transition-all"
           >
-            <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
-            <span>휴대폰 QR코드 연결</span>
+            <span className="material-symbols-outlined text-[17px]">qr_code_2</span>
+            <span className="hidden sm:inline">휴대폰 QR 연결</span>
           </button>
 
           <button
             onClick={() => setLayout('mobile')}
-            className="px-4 py-2 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-md text-[13px] font-bold flex items-center gap-1.5 border border-outline-variant/30 transition-all"
+            className="px-3.5 py-2 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-md text-[12px] font-bold flex items-center gap-1.5 border border-outline-variant/30 transition-all"
           >
-            <span className="material-symbols-outlined text-primary-container text-[17px]">
+            <span className="material-symbols-outlined text-primary-container text-[16px]">
               smartphone
             </span>
-            <span>모바일 화면으로 보기</span>
+            <span className="hidden md:inline">모바일 뷰</span>
           </button>
 
           {showQr && (
@@ -94,84 +175,302 @@ export const DesktopDashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* 메인 본문: 상단 검색창 + 즉시 펼쳐지는 사진 결과 그리드 */}
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-10 py-6 flex flex-col gap-6">
-        {/* 1) 상단 검색창 영역 */}
-        <VoiceHeroStage />
+      {/* ─────────────── 메인 본문: 3대 탭 분기 ─────────────── */}
+      {desktopTab === 'dashboard' && (
+        <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-10 py-6 flex flex-col gap-6">
+          {/* 1) 상단 자연어 문장 검색창 + 리얼 문장 샘플 칩 */}
+          <VoiceHeroStage />
 
-        {/* 2) 사진 검색 결과 그리드 (스크롤 없이 한눈에 바로 노출) */}
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2.5">
-              <h2 className="font-headline-md text-[20px] text-on-surface font-extrabold">
-                “{activeQuery}” 검색 결과
-              </h2>
-              <span className="px-3 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-md text-[13px] font-bold">
-                {searchResults.length}장
-              </span>
+          {/* 2) 사진 검색 결과 그리드 (dHash 동일 연사 묶기 + 하단 15% 블랙 그라데이션) */}
+          <section className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="font-headline-md text-[20px] text-on-surface font-extrabold">
+                  “{activeQuery}” 검색 결과
+                </h2>
+                <span className="px-3 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-md text-[13px] font-bold">
+                  총 {searchResults.length}장
+                  {groupBurstsInSearch && collapsedBurstCount > 0
+                    ? ` (연사 묶음 ${groupedResults.length}컷 표시)`
+                    : ''}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setGroupBurstsInSearch(!groupBurstsInSearch)}
+                  className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] font-bold flex items-center gap-1.5 border transition-all ${
+                    groupBurstsInSearch
+                      ? 'bg-primary-container/15 border-primary-container/50 text-primary-container'
+                      : 'bg-surface-container-high border-outline-variant/30 text-on-surface-variant'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[15px]">burst_mode</span>
+                  <span>
+                    {groupBurstsInSearch ? '❐ 동일 연사 묶어보기 ON' : '연사 전체 펼쳐보기'}
+                  </span>
+                </button>
+                <span className="hidden sm:inline font-body-sm text-[12px] text-on-surface-variant">
+                  사진 클릭 시 상세 비교 및 원본 폴더 열기
+                </span>
+              </div>
             </div>
-            <span className="font-body-sm text-[13px] text-on-surface-variant">
-              사진을 클릭하면 크게 볼 수 있습니다
+
+            {groupedResults.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {groupedResults.map((group) => {
+                  const item = group.representative;
+                  const isBurst = group.burstCount >= 2;
+                  return (
+                    <article
+                      key={item.photo.id}
+                      onClick={() =>
+                        setSelectedPhoto(item.photo, isBurst ? group.burstPhotos : null)
+                      }
+                      className={`group relative rounded-2xl overflow-hidden bg-surface-container border transition-all hover:-translate-y-0.5 cursor-pointer flex flex-col ${
+                        isBurst
+                          ? 'border-primary-container/60 shadow-[0_6px_22px_rgba(0,229,255,0.16)]'
+                          : 'border-outline-variant/25 hover:border-primary-container/70 shadow-md'
+                      }`}
+                    >
+                      <div className="relative aspect-[4/5] w-full overflow-hidden bg-surface-container-highest">
+                        <img
+                          src={item.photo.thumbUrl}
+                          alt={item.photo.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+
+                        {/* 지침 #3: 동일 연사 그룹 [❐ N장 연사] 배지 */}
+                        {isBurst && (
+                          <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md border border-primary-container/70 text-primary-container font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-lg">
+                            <span>❐ {group.burstCount}장 연사</span>
+                          </div>
+                        )}
+
+                        {/* 즐겨찾기 버튼 */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleBookmark(item.photo.id);
+                          }}
+                          aria-label="즐겨찾기"
+                          className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-black/65 backdrop-blur-md flex items-center justify-center text-white hover:text-primary-container transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[17px]">
+                            {item.photo.bookmarked ? 'bookmark_added' : 'favorite'}
+                          </span>
+                        </button>
+
+                        {/* 지침 #3: 사진 하단 날짜/태그가 잘 보이도록 썸네일 하단 15%~20%에 은은한 블랙 그라데이션 */}
+                        <div className="absolute inset-x-0 bottom-0 h-[20%] min-h-[46px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between pointer-events-none">
+                          <span className="font-label-sm text-[12px] font-bold text-white drop-shadow">
+                            {item.photo.date.split(' ')[0]}
+                          </span>
+                          {item.photo.tags[0] && (
+                            <span className="font-label-sm text-[11px] font-extrabold text-[#70F5FF] truncate ml-2 drop-shadow">
+                              {item.photo.tags[0]}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-16 rounded-2xl bg-surface-container/40 border border-outline-variant/25 text-center flex flex-col items-center gap-2">
+                <span className="material-symbols-outlined text-outline text-[40px]">
+                  image_search
+                </span>
+                <p className="font-headline-sm text-[16px] text-on-surface font-bold">
+                  일치하는 사진을 찾지 못했습니다. 다른 문장이나 단어로 검색해 보세요.
+                </p>
+              </div>
+            )}
+          </section>
+        </main>
+      )}
+
+      {/* 탭 2: 🧹 스마트 정리 (클리어몬스터 Lite 화면) */}
+      {desktopTab === 'trash' && <SmartTrashView />}
+
+      {/* 탭 3: ⚙️ 내 기기 & 백업 (폴더 연결 및 P2P 모바일-PC 자동 백업 설정 화면) */}
+      {desktopTab === 'sync' && (
+        <main className="flex-1 w-full max-w-[1200px] mx-auto px-6 md:px-10 py-8 flex flex-col gap-6">
+          <div className="flex flex-col gap-1.5">
+            <span className="font-label-mono text-[11px] text-primary-container font-bold uppercase tracking-wider">
+              100% LOCAL ON-DEVICE STORAGE &amp; P2P SYNC
             </span>
+            <h1 className="font-headline-lg text-[26px] text-on-surface font-extrabold tracking-tight">
+              ⚙️ 내 기기 폴더 연결 &amp; P2P 모바일-PC 자동 백업
+            </h1>
+            <p className="font-body-sm text-[14px] text-on-surface-variant">
+              세이씨는 외부 클라우드나 유료 API 서버로 사진을 단 1바이트도 전송하지 않고, 내 PC와 스마트폰 하드웨어 안에서만 작동합니다.
+            </p>
           </div>
 
-          {searchResults.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {searchResults.map((item) => (
-                <article
-                  key={item.photo.id}
-                  onClick={() => setSelectedPhoto(item.photo)}
-                  className="group relative rounded-2xl overflow-hidden bg-surface-container border border-outline-variant/25 hover:border-primary-container/70 shadow-md flex flex-col cursor-pointer transition-all hover:-translate-y-0.5"
-                >
-                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-surface-container-highest">
-                    <img
-                      src={item.photo.thumbUrl}
-                      alt=""
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* 카드 1: 내 PC 로컬 사진 폴더 연결 상태 */}
+            <div className="p-6 rounded-3xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between gap-5 shadow-lg">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[12px] font-extrabold">
+                    ● 로컬 디스크 실시간 연결됨
+                  </span>
+                  <span className="font-label-mono text-[11px] text-on-surface-variant">
+                    OPFS + SQLite Vector Index
+                  </span>
+                </div>
 
-                    {/* 즐겨찾기 버튼 */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleBookmark(item.photo.id);
-                      }}
-                      aria-label="즐겨찾기"
-                      className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-surface-container-lowest/70 backdrop-blur-md flex items-center justify-center text-on-surface hover:text-primary transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">
-                        {item.photo.bookmarked ? 'bookmark_added' : 'favorite'}
-                      </span>
-                    </button>
+                <h2 className="font-headline-sm text-[19px] text-on-surface font-extrabold">
+                  📁 내 PC 사진 보관함 폴더
+                </h2>
 
-                    {/* 하단 심플 정보 (촬영일 & 태그만 깔끔하게 표시) */}
-                    <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-surface/90 via-surface/50 to-transparent flex items-center justify-between">
-                      <span className="font-label-sm text-[12px] font-bold text-on-surface">
-                        {item.photo.date.split(' ')[0]}
-                      </span>
-                      {item.photo.tags[0] && (
-                        <span className="font-label-sm text-[11px] font-semibold text-primary-container truncate ml-2">
-                          {item.photo.tags[0]}
-                        </span>
-                      )}
-                    </div>
+                <div className="p-3.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 font-label-mono text-[12px] text-primary-container break-all">
+                  D:\SaySee\test_photos
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5 pt-1">
+                  <div className="p-3 rounded-2xl bg-surface-container/70 border border-outline-variant/20 flex flex-col">
+                    <span className="font-body-sm text-[11px] text-on-surface-variant">전체 인덱싱</span>
+                    <span className="font-headline-sm text-[18px] text-on-surface font-extrabold">
+                      {photos.length}장
+                    </span>
                   </div>
-                </article>
-              ))}
+                  <div className="p-3 rounded-2xl bg-surface-container/70 border border-outline-variant/20 flex flex-col">
+                    <span className="font-body-sm text-[11px] text-on-surface-variant">보관함 활성</span>
+                    <span className="font-headline-sm text-[18px] text-primary-container font-extrabold">
+                      {activePhotos.length}장
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-surface-container/70 border border-outline-variant/20 flex flex-col">
+                    <span className="font-body-sm text-[11px] text-on-surface-variant">격리대기함</span>
+                    <span className="font-headline-sm text-[18px] text-error font-extrabold">
+                      {quarantinedPhotos.length}장
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-outline-variant/20">
+                <button
+                  onClick={() => void openLocalFolder('photos')}
+                  className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5 hover:opacity-95 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[18px]">folder_open</span>
+                  <span>원본 사진 폴더 열기</span>
+                </button>
+                <button
+                  onClick={() => void openLocalFolder('quarantine')}
+                  className="px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-md text-[13px] font-bold flex items-center gap-1.5 border border-outline-variant/30 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[18px]">folder_delete</span>
+                  <span>세이씨_정리대기함 열기</span>
+                </button>
+                <button
+                  onClick={() => setShowOnboarding(true)}
+                  className="px-3.5 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-primary font-label-sm text-[12px] font-bold flex items-center gap-1 border border-primary-container/30 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[16px]">memory</span>
+                  <span>인덱싱 모니터</span>
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="py-16 rounded-2xl bg-surface-container/40 border border-outline-variant/25 text-center flex flex-col items-center gap-2">
-              <span className="material-symbols-outlined text-outline text-[40px]">
-                image_search
-              </span>
-              <p className="font-headline-sm text-[16px] text-on-surface font-bold">
-                일치하는 사진을 찾지 못했습니다. 다른 검색어로 입력해 보세요.
-              </p>
+
+            {/* 카드 2: P2P 모바일-PC 자동 백업 설정 */}
+            <div className="p-6 rounded-3xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between gap-5 shadow-lg">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-3 py-1 rounded-full bg-primary-container/15 border border-primary-container/40 text-primary-container font-label-sm text-[12px] font-extrabold">
+                    📲 Wi-Fi Direct P2P 다이렉트 백업
+                  </span>
+                  <span className="font-label-mono text-[11px] text-on-surface-variant">
+                    클라우드 비용 0원
+                  </span>
+                </div>
+
+                <h2 className="font-headline-sm text-[19px] text-on-surface font-extrabold">
+                  휴대폰 사진 PC 자동 백업 &amp; 원격 검색
+                </h2>
+
+                <div className="flex flex-col gap-2.5 pt-1">
+                  <label className="p-3.5 rounded-2xl bg-surface-container/70 border border-outline-variant/25 flex items-center justify-between gap-3 cursor-pointer">
+                    <div className="flex flex-col">
+                      <span className="font-label-md text-[13px] text-on-surface font-bold">
+                        집/사무실 Wi-Fi 연결 시 새 사진 자동 백업
+                      </span>
+                      <span className="font-body-sm text-[12px] text-on-surface-variant">
+                        동일 공유기에 연결되면 휴대폰의 새 사진을 PC 폴더로 즉시 전송합니다.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={autoBackupWifi}
+                      onChange={(e) => setAutoBackupWifi(e.target.checked)}
+                      className="w-5 h-5 accent-[#00E5FF] rounded"
+                    />
+                  </label>
+
+                  <label className="p-3.5 rounded-2xl bg-surface-container/70 border border-outline-variant/25 flex items-center justify-between gap-3 cursor-pointer">
+                    <div className="flex flex-col">
+                      <span className="font-label-md text-[13px] text-on-surface font-bold">
+                        충전 중일 때만 768차원 AI 벡터 인덱싱 실행
+                      </span>
+                      <span className="font-body-sm text-[12px] text-on-surface-variant">
+                        배터리 소모를 막기 위해 충전기 연결 시에만 백그라운드 색인을 수행합니다.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={autoBackupCharging}
+                      onChange={(e) => setAutoBackupCharging(e.target.checked)}
+                      className="w-5 h-5 accent-[#00E5FF] rounded"
+                    />
+                  </label>
+
+                  <label className="p-3.5 rounded-2xl bg-surface-container/70 border border-outline-variant/25 flex items-center justify-between gap-3 cursor-pointer">
+                    <div className="flex flex-col">
+                      <span className="font-label-md text-[13px] text-on-surface font-bold">
+                        백업 완료 즉시 클리어몬스터 4대 쓰레기 자동 분류
+                      </span>
+                      <span className="font-body-sm text-[12px] text-on-surface-variant">
+                        연사·복사본, 영수증·주차장 메모, 스크린샷, 흔들린 사진을 자동으로 골라냅니다.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={autoSortTrashOnBackup}
+                      onChange={(e) => setAutoSortTrashOnBackup(e.target.checked)}
+                      className="w-5 h-5 accent-[#00E5FF] rounded"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/20">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
+                      MOBILE_TUNNEL_URL
+                    )}`}
+                    alt="QR"
+                    className="w-14 h-14 rounded-lg bg-white p-1 shrink-0"
+                  />
+                  <div className="flex flex-col">
+                    <span className="font-label-md text-[13px] text-primary-container font-bold">
+                      휴대폰 카메라로 스캔해 즉시 연결
+                    </span>
+                    <span className="font-body-sm text-[11px] text-on-surface-variant">
+                      별도 앱 설치 없이 모바일 브라우저에서 바로 음성 검색·정리가 가능합니다.
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-        </section>
-      </main>
+          </div>
+        </main>
+      )}
     </div>
   );
 };

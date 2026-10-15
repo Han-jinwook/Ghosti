@@ -21,7 +21,6 @@ import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, 
 import type {
   DuplicateGroup,
   HardwareTelemetry,
-  LlmJsonDirective,
   PhotoItem,
   SearchResultItem,
   TrashCategory,
@@ -230,7 +229,7 @@ interface PhysicalAuditRecord {
   wmRatio: number;
 }
 
-function hammingDistanceHex64(a: string, b: string): number {
+export function hammingDistanceHex64(a: string, b: string): number {
   try {
     let x = BigInt('0x' + a) ^ BigInt('0x' + b);
     let count = 0;
@@ -242,6 +241,97 @@ function hammingDistanceHex64(a: string, b: string): number {
   } catch {
     return 64;
   }
+}
+
+export interface GroupedSearchResultItem {
+  representative: SearchResultItem;
+  burstPhotos: PhotoItem[];
+  burstCount: number;
+}
+
+function parseFilenameTimestampSec(name: string, fallbackMs: number): number {
+  const m = name.match(/(20\d{2})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})/);
+  if (m) {
+    return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000;
+  }
+  return fallbackMs ? fallbackMs / 1000 : 0;
+}
+
+/**
+ * [지침 #3] 검색 결과에서 동일 연사(Burst) 사진이 나란히 도배되지 않도록
+ * dHash 및 촬영 시각(Δt ≤ 4초)·시맨틱 클러스터 기준으로 1장의 대표 카드로 묶고 [❐ N장 연사] 배지 정보를 생성합니다.
+ */
+export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSearchResultItem[] {
+  if (results.length <= 1) {
+    return results.map((r) => ({
+      representative: r,
+      burstPhotos: [r.photo],
+      burstCount: 1,
+    }));
+  }
+
+  // 시간순 정렬 후 인접 연사 클러스터 구성
+  const withTs = results.map((r, origIdx) => ({
+    item: r,
+    origIdx,
+    tsSec: parseFilenameTimestampSec(r.photo.name, r.photo.mtimeMs),
+  }));
+
+  const sortedByTime = [...withTs].sort(
+    (a, b) => a.tsSec - b.tsSec || a.item.photo.name.localeCompare(b.item.photo.name)
+  );
+
+  const clusters: (typeof withTs)[] = [];
+  for (const entry of sortedByTime) {
+    const prevCluster = clusters[clusters.length - 1];
+    if (prevCluster) {
+      const last = prevCluster[prevCluster.length - 1];
+      const pA = last.item.photo;
+      const pB = entry.item.photo;
+      const dt = Math.abs(entry.tsSec - last.tsSec);
+      const dhashDist =
+        pA.dhash && pB.dhash ? hammingDistanceHex64(pA.dhash, pB.dhash) : 64;
+      const sameDupGroup =
+        Boolean(pA.duplicateGroupId) && pA.duplicateGroupId === pB.duplicateGroupId;
+      const sameSceneCluster =
+        (pA.clusterId !== undefined && pA.clusterId === pB.clusterId) ||
+        (Boolean(pA.tags[0]) && pA.tags[0] === pB.tags[0]);
+
+      if (
+        sameDupGroup ||
+        (dhashDist <= 10 && dt <= 6 && entry.tsSec > 0) ||
+        (sameSceneCluster && dt <= 4 && entry.tsSec > 0)
+      ) {
+        prevCluster.push(entry);
+        continue;
+      }
+    }
+    clusters.push([entry]);
+  }
+
+  // 각 연사 클러스터에서 가장 점수가 높거나 선명한 대표 1장을 선정하고 원래 검색 랭킹 순서로 정렬
+  const grouped = clusters.map((cluster) => {
+    const bestRankOrder = [...cluster].sort((a, b) => {
+      if (a.item.photo.isBestInDuplicateGroup && !b.item.photo.isBestInDuplicateGroup) return -1;
+      if (!a.item.photo.isBestInDuplicateGroup && b.item.photo.isBestInDuplicateGroup) return 1;
+      if (b.item.score !== a.item.score) return b.item.score - a.item.score;
+      return (b.item.photo.opticalSharpness ?? 0) - (a.item.photo.opticalSharpness ?? 0);
+    });
+    const minOrigIdx = Math.min(...cluster.map((c) => c.origIdx));
+    return {
+      minOrigIdx,
+      representative: bestRankOrder[0].item,
+      burstPhotos: cluster.map((c) => c.item.photo),
+      burstCount: cluster.length,
+    };
+  });
+
+  grouped.sort((a, b) => a.minOrigIdx - b.minOrigIdx);
+  return grouped.map(({ representative, burstPhotos, burstCount }) => ({
+    representative,
+    burstPhotos,
+    burstCount,
+  }));
 }
 
 /**
@@ -344,7 +434,17 @@ export async function loadInitialPhotoDataset(): Promise<{
     });
   }
 
-  // 1) [Perceptual dHash + Δt ≤ 4초] 실제 폴더 내 쌍둥이 원본이 존재하는 연사/중복 그룹 클러스터링
+  // 1) [Perceptual dHash + 시맨틱 클러스터 연사 판별] 실제 폴더 내 쌍둥이 원본이 존재하는 연사/중복 그룹 클러스터링
+  const BES2_MEMO_TAGS = new Set([
+    '#주차장·기둥',
+    '#부품·접사',
+    '#문서·설명서',
+    '#문서·신분증',
+    '#택배·상자',
+    '#현수막·안내',
+  ]);
+  const BES2_EXPLICIT_TRASH_TAGS = new Set([...BES2_MEMO_TAGS, '#스크린샷', '#흔들린사진']);
+
   const activeAudits = fileList
     .map((f) => auditByPhoto.get(f.path))
     .filter((a): a is PhysicalAuditRecord => !!a);
@@ -355,18 +455,32 @@ export async function loadInitialPhotoDataset(): Promise<{
 
   for (let i = 0; i < activeAudits.length; i++) {
     const first = activeAudits[i];
-    if (visitedDup.has(first.f)) continue;
+    const firstSem = semanticByPhoto.get(first.f) as any;
+    if (visitedDup.has(first.f) || BES2_EXPLICIT_TRASH_TAGS.has(firstSem?.primaryTag)) continue;
+
     const group: PhysicalAuditRecord[] = [first];
     let maxDist = 0;
     let maxDt = 0;
 
     for (let j = i + 1; j < activeAudits.length; j++) {
       const cand = activeAudits[j];
-      if (visitedDup.has(cand.f)) continue;
+      const candSem = semanticByPhoto.get(cand.f) as any;
+      if (visitedDup.has(cand.f) || BES2_EXPLICIT_TRASH_TAGS.has(candSem?.primaryTag)) continue;
+
       const last = group[group.length - 1];
+      const lastSem = semanticByPhoto.get(last.f) as any;
       const dist = hammingDistanceHex64(last.dhash, cand.dhash);
       const dt = Math.abs(last.ts - cand.ts) / 1000;
-      if (last.md5 === cand.md5 || (dist <= 5 && dt <= 4 && last.ts > 0)) {
+      const sameCluster =
+        lastSem?.clusterId !== undefined &&
+        candSem?.clusterId !== undefined &&
+        lastSem.clusterId === candSem.clusterId;
+
+      if (
+        last.md5 === cand.md5 ||
+        (dist <= 5 && dt <= 4 && last.ts > 0) ||
+        (sameCluster && dt <= 3 && (dist <= 15 || (dt <= 2 && dist <= 26)) && last.ts > 0)
+      ) {
         group.push(cand);
         visitedDup.add(cand.f);
         if (dist > maxDist) maxDist = dist;
@@ -396,7 +510,7 @@ export async function loadInitialPhotoDataset(): Promise<{
           tagsByPhoto.set(member.f, new Set(['#연사·중복사본']));
           trashByPhoto.set(member.f, {
             category: 'duplicate',
-            confidence: +(0.99 - maxDist * 0.008).toFixed(3),
+            confidence: +(0.99 - Math.min(0.12, maxDist * 0.005)).toFixed(3),
           });
         } else {
           tagsByPhoto.get(member.f)?.add('#원본보존·베스트컷');
@@ -405,16 +519,20 @@ export async function loadInitialPhotoDataset(): Promise<{
     }
   }
 
-  // 2) [Bes2 쓰레기 정의 + 광학/물리 교차 검증 수식] 스크린샷 / 서류·영수증 / 사물·주차메모 / 흔들림 자동 판별
+  // 2) [Bes2 쓰레기 정의 + 광학/물리 교차 검증 수식]
+  //    4대 탭: ① 동일한 복사본·연사(duplicate) / ② 주차장·영수증·서류 메모(memo) / ③ 스크린샷(screenshot) / ④ 심한 흔들림·오촬영(blurry)
   for (const f of [...fileList, ...quarantinedList]) {
     ensureMap(f.path);
     if (dupGroupByPhoto.has(f.path)) continue; // 이미 연사/중복 그룹에 속한 사진은 중복 분류로 처리 완료
 
     const audit = auditByPhoto.get(f.path);
     const sem = scoresByPhoto.get(f.path) ?? {};
+    const semMeta = semanticByPhoto.get(f.path) as any;
+    const pTag = String(semMeta?.primaryTag ?? '');
 
-    // A) 스마트폰 스크린샷 (파일명 정규식 OR 무EXIF 모바일 화면비 + 고주파 UI 엣지)
+    // A) 탭 ③: 스크린샷 (파일명 정규식 OR 시맨틱 #스크린샷 OR 무EXIF 모바일 화면비 + 고주파 UI 엣지)
     const isScreenshot =
+      pTag === '#스크린샷' ||
       /^(screenshot|capture|screen_|캡처)/i.test(f.path) ||
       (!!audit && !audit.hasExif && audit.aspect >= 1.95 && audit.aspect <= 2.35 && audit.edgeDensity > 40);
 
@@ -426,67 +544,61 @@ export async function loadInitialPhotoDataset(): Promise<{
       continue;
     }
 
-    if (!audit) continue;
-
-    // B) 영수증 · 서류 · 조립설명서 · 인쇄 라벨 (영어 문서/영수증 시맨틱 + 종이 무채색 비율 48% 이상 + 저채도 + 워터마크 허브 배제)
-    const docSem = Math.max(sem['document_en'] ?? 0, sem['receipt_en'] ?? 0);
-    const isDocumentOrReceipt =
-      docSem >= 0.595 &&
-      audit.neutralPct >= 48 &&
-      audit.avgSat <= 0.175 &&
-      audit.wmRatio < 1.0;
-
-    if (isDocumentOrReceipt) {
-      tagsByPhoto.set(f.path, new Set(['#서류·설명서·영수증']));
-      trashByPhoto.set(f.path, {
-        category: 'document',
-        confidence: +(0.91 + Math.min(0.08, (docSem - 0.59) * 0.8)).toFixed(3),
-      });
-      scoresByPhoto.get(f.path)!['document_ko'] = 0.71;
-      scoresByPhoto.get(f.path)!['document_en'] = 0.71;
-      scoresByPhoto.get(f.path)!['receipt_ko'] = 0.69;
-      scoresByPhoto.get(f.path)!['receipt_en'] = 0.69;
-      continue;
-    }
-
-    // C) 심한 흔들림 · 초점 이탈 오촬영 (8방향 3x3 그리드 라플라시안 전체 붕괴 + 인물/야외하늘/GoPro 수중샷 100% 보호)
+    // B) 탭 ④: 심한 흔들림 · 오촬영 (8방향 3x3 그리드 라플라시안 전체 붕괴 OR #흔들린사진)
     const blurSem = sem['blurry_en'] ?? 0;
     const isBlurryMisfire =
-      !f.path.startsWith('GOPR') &&
-      audit.wmRatio < 1.0 &&
-      audit.skyPct < 5.0 &&
-      ((blurSem >= 0.65 && audit.meanCellLap < 3600) ||
-        (audit.maxCellLap < 1800 && audit.edgeDensity > 1.5));
+      pTag === '#흔들린사진' ||
+      (!!audit &&
+        !f.path.startsWith('GOPR') &&
+        audit.wmRatio < 1.0 &&
+        audit.skyPct < 5.0 &&
+        ((blurSem >= 0.65 && audit.meanCellLap < 3600) ||
+          (audit.maxCellLap < 1800 && audit.edgeDensity > 1.5)));
 
     if (isBlurryMisfire) {
       tagsByPhoto.set(f.path, new Set(['#초점이탈·심한흔들림']));
       trashByPhoto.set(f.path, {
         category: 'blurry',
-        confidence: +(0.94 + Math.min(0.05, (3600 - audit.meanCellLap) / 50000)).toFixed(3),
+        confidence: audit
+          ? +(0.94 + Math.min(0.05, Math.max(0, 3600 - audit.meanCellLap) / 50000)).toFixed(3)
+          : 0.96,
       });
       scoresByPhoto.get(f.path)!['blurry_ko'] = 0.72;
       scoresByPhoto.get(f.path)!['blurry_en'] = 0.72;
       continue;
     }
 
-    // D) Bes2 쓰레기 정의 보완: 인물 없는 단순 사물 접사 · 주차장 기둥 메모 · 부품/케이블 확인샷
-    const isObjectOrParkingMemo =
-      audit.wmRatio < 1.0 &&
-      audit.skyPct < 7.8 &&
-      audit.skinPct <= 9.0 &&
-      audit.meanCellLap < 8800 &&
-      (((sem['document_en'] ?? 0) >= 0.62 && audit.avgSat > 0.175 && audit.avgSat < 0.30) ||
-        ((sem['car_en'] ?? 0) >= 0.63 && (audit.neutralPct >= 40 || audit.maxCellLap < 3000)) ||
-        ((sem['blurry_en'] ?? 0) >= 0.63 && audit.meanCellLap < 2500));
+    // C) 탭 ②: 주차장 · 영수증 · 서류 메모 (Bes2 쓰레기 정책: 주차기둥·사물/부품 접사·케이블단자·조립설명서·신분증사본·택배상자·현수막)
+    //    ※ Bes2 Positive Filter 준수: 음식/와인(#식당·음식), 인물/풍경 사진은 서류/사물 오탐에서 100% 보호!
+    const isProtectedFoodOrScene =
+      pTag === '#식당·음식' || pTag === '#가족·단체' || pTag === '#해변·물놀이';
 
-    if (isObjectOrParkingMemo) {
-      tagsByPhoto.set(f.path, new Set(['#주차기둥·부품접사메모']));
+    const docSem = Math.max(sem['document_en'] ?? 0, sem['receipt_en'] ?? 0);
+    const isOpticalDocOrObject =
+      !!audit &&
+      !isProtectedFoodOrScene &&
+      audit.wmRatio < 1.0 &&
+      ((docSem >= 0.595 && audit.neutralPct >= 48 && audit.avgSat <= 0.175) ||
+        (audit.skyPct < 7.8 &&
+          audit.skinPct <= 9.0 &&
+          audit.meanCellLap < 8800 &&
+          (((sem['document_en'] ?? 0) >= 0.62 && audit.avgSat > 0.175 && audit.avgSat < 0.3) ||
+            ((sem['car_en'] ?? 0) >= 0.63 && (audit.neutralPct >= 40 || audit.maxCellLap < 3000)))));
+
+    if (BES2_MEMO_TAGS.has(pTag) || isOpticalDocOrObject) {
+      const memoBadge =
+        pTag === '#주차장·기둥'
+          ? '#주차장·기둥메모'
+          : pTag === '#문서·설명서' || pTag === '#문서·신분증'
+          ? '#서류·설명서메모'
+          : '#부품·사물접사메모';
+      tagsByPhoto.set(f.path, new Set([memoBadge]));
       trashByPhoto.set(f.path, {
-        category: 'object',
-        confidence: 0.955,
+        category: 'memo',
+        confidence: 0.965,
       });
+      scoresByPhoto.get(f.path)!['document_ko'] = 0.71;
       scoresByPhoto.get(f.path)!['receipt_ko'] = 0.71;
-      scoresByPhoto.get(f.path)!['receipt_en'] = 0.71;
     }
   }
 
@@ -533,6 +645,9 @@ export async function loadInitialPhotoDataset(): Promise<{
       thumbUrl,
       fullUrl,
       tags: Array.from(tagSet),
+      clusterId: semMeta?.clusterId,
+      locationKo: semMeta?.locationKo,
+      captionKo: semMeta?.captionKo,
       trashCategory: trash?.category,
       trashConfidence: trash?.confidence,
       duplicateGroupId: dupInfo?.groupId,
@@ -554,69 +669,6 @@ export async function loadInitialPhotoDataset(): Promise<{
     duplicateGroups,
     quarantinedCount: quarantinedList.length,
     quarantinedBytes,
-  };
-}
-
-/**
- * [Phase 1-B / 지침 A2]
- * 클라우드 LLM 스무고개 인터뷰가 도출한 JSON 검색 지시서(LlmJsonDirective)를 받아
- * 로컬 EmbeddingGemma 2 벡터 공간 + 날짜/계절 필터로 최종 타겟 사진을 색출합니다.
- */
-export async function executeLlmJsonDirectiveSearch(
-  directive: LlmJsonDirective,
-  photos: PhotoItem[]
-): Promise<{
-  results: SearchResultItem[];
-  totalMs: number;
-}> {
-  const t0 = performance.now();
-  let pool = photos.filter((p) => !p.quarantined);
-
-  if (directive.excludeTrash) {
-    pool = pool.filter((p) => !p.trashCategory);
-  }
-  if (directive.datePrefix && directive.datePrefix.trim()) {
-    const dp = directive.datePrefix.trim();
-    const dateFiltered = pool.filter((p) => p.date.startsWith(dp));
-    if (dateFiltered.length >= 2) {
-      pool = dateFiltered;
-    }
-  } else if (directive.season) {
-    const seasonFiltered = pool.filter((p) => {
-      const m = p.date.match(/\d{4}\.(\d{2})/);
-      if (!m) return true;
-      const mo = Number(m[1]);
-      if (directive.season === '여름') return mo >= 6 && mo <= 8;
-      if (directive.season === '가을') return mo >= 9 && mo <= 11;
-      if (directive.season === '봄') return mo >= 3 && mo <= 5;
-      if (directive.season === '겨울') return mo === 12 || mo <= 2;
-      return true;
-    });
-    if (seasonFiltered.length >= 2) {
-      pool = seasonFiltered;
-    }
-  }
-
-  const queryText = directive.rewrittenQueryKo || directive.rewrittenQueryEn || '가족 여행 사진';
-  const baseSearch = await executeTextSearch(queryText, pool, ' text-direct' as any);
-
-  const boosted = baseSearch.results.map((item) => {
-    let score = item.score;
-    if (directive.boostPresetId && item.photo.presetScores?.[directive.boostPresetId]) {
-      score = Math.max(score, item.photo.presetScores[directive.boostPresetId] + 0.04);
-    }
-    return {
-      ...item,
-      score: +score.toFixed(4),
-      matchPercentage: Math.min(99, Math.max(78, Math.round(score * 138))),
-      matchedBy: 'llm-json-router' as const,
-    };
-  });
-
-  boosted.sort((a, b) => b.score - a.score);
-  return {
-    results: boosted.slice(0, 12),
-    totalMs: +(performance.now() - t0).toFixed(1),
   };
 }
 
@@ -818,7 +870,7 @@ export async function executeTextSearch(
           });
         }
         return {
-          results: mapped.slice(0, 24),
+          results: mapped.slice(0, 36),
           embedMs: Number(data.embedMs || Math.max(12, +(performance.now() - t0).toFixed(1))),
           searchMs: Number(data.searchMs || 1.8),
         };

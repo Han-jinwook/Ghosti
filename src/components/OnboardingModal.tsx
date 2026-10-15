@@ -47,9 +47,7 @@ export const OnboardingModal: React.FC = () => {
     runTextQuery,
     conceptLexiconCount,
     onboardingAhaItems,
-    onboardingAhaLoading,
-    onboardingAhaModel,
-    fetchOnboardingAhaWithGemini,
+    cycleSentenceChips,
     applyAhaRecommendation,
   } = useSaySeeStore();
 
@@ -225,10 +223,10 @@ export const OnboardingModal: React.FC = () => {
               </span>
             </div>
             <h2 className="font-headline-lg text-headline-lg text-on-surface font-extrabold tracking-tight mt-1">
-              첫 {total}장 딥러닝 시각 벡터 색인 &amp; 역방향 사전 매칭
+              첫 {total}장 딥러닝 시각 벡터 색인 &amp; 로컬 문장 추천
             </h2>
             <p className="font-body-sm text-body-sm text-on-surface-variant">
-              {conceptLexiconCount}개 일상·사물·풍경 개념 사전으로 역방향 스캔한 뒤, 사진별 고립 프롬프트로 Gemini가 맞춤 첫 검색어를 빚어냅니다.
+              외부 API 없이 내 사진 속 [지명/시기 + 배경/사물 + 행동/분위기] 팩트를 로컬 문장 조합기로 이어 붙여 리얼 문장 샘플을 생성합니다.
             </p>
           </div>
           <button
@@ -332,26 +330,23 @@ export const OnboardingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* ─────────────── [지침 A1] 640+ 역방향 사전 매칭 + 실제 Gemini 고립 프롬프트 추천 문장 (Aha-Moment) ─────────────── */}
+        {/* ─────────────── 100% 로컬 사진 팩트 조합 리얼 문장 샘플 ─────────────── */}
         <div className="p-4 rounded-2xl bg-surface-container-low/95 border border-primary-container/35 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary font-label-mono text-[10px] font-black">
-                PHASE 1-A • GEMINI 고립 프롬프트
+                100% LOCAL FACT COMBINER
               </span>
               <span className="font-headline-sm text-[14px] text-on-surface font-extrabold">
-                내 사진첩 팩트 기반 맛깔스러운 첫 검색 추천 ({onboardingAhaModel})
+                내 사진첩 실제 팩트 기반 리얼 문장 샘플
               </span>
             </div>
             <button
-              disabled={onboardingAhaLoading}
-              onClick={() => void fetchOnboardingAhaWithGemini()}
-              className="px-2.5 py-1 rounded-lg bg-surface-container-highest hover:bg-surface-bright text-primary font-label-mono text-[11px] font-bold flex items-center gap-1 transition-all disabled:opacity-50"
+              onClick={() => cycleSentenceChips()}
+              className="px-2.5 py-1 rounded-lg bg-surface-container-highest hover:bg-surface-bright text-primary font-label-mono text-[11px] font-bold flex items-center gap-1 transition-all"
             >
-              <span className="material-symbols-outlined text-[14px]">
-                {onboardingAhaLoading ? 'sync' : 'auto_awesome'}
-              </span>
-              <span>{onboardingAhaLoading ? 'Gemini 생성 중...' : 'Gemini 문장 새로고침'}</span>
+              <span className="material-symbols-outlined text-[14px]">refresh</span>
+              <span>다른 문장 샘플 보기</span>
             </button>
           </div>
 

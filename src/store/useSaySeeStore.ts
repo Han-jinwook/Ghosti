@@ -1,16 +1,13 @@
 import { create } from 'zustand';
 import type {
-  DailyCoinLedgerEntry,
   DuplicateGroup,
   HardwareTelemetry,
-  LlmJsonDirective,
   MerlinAuthState,
   OnboardingAhaItem,
   PhotoItem,
   SearchResultItem,
   SyncMode,
   SyncState,
-  TikiTakaMessage,
   TrashCategory,
   VoiceRoutingTrace,
 } from '../types/saysee';
@@ -19,25 +16,25 @@ import {
   OnboardingProgressUpdate,
   PRESET_QUERIES,
   detectHardwareTelemetry,
-  executeLlmJsonDirectiveSearch,
   executeTextSearch,
   executeZeroSttVoiceSearch,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
 } from '../services/aiEngine';
 import {
+  LocalSentenceChip,
   TOTAL_CONCEPT_ANCHOR_COUNT,
-  buildIsolatedFactBundlesFromCorpus,
+  buildLocalSentenceSamplesFromCorpus,
 } from '../services/conceptLexicon';
 import { loadMerlinAuth, toggleMerlinTier } from '../services/merlinAuth';
 import { loadSyncState, saveSyncPrefs } from '../services/syncEngine';
 
 export type ViewportLayout = 'mobile' | 'desktop';
-export type MobileTab = 'search' | 'albums' | 'trash' | 'settings';
-export type DesktopTab = 'dashboard' | 'folders' | 'trash' | 'sync';
+export type MobileTab = 'search' | 'trash' | 'settings';
+export type DesktopTab = 'dashboard' | 'trash' | 'sync';
 
 interface SaySeeStore {
-  // 레이아웃 & 네비게이션
+  // 레이아웃 & 미니멀 3대 탭 네비게이션 (🔍 AI 검색 | 🧹 스마트 정리 | ⚙️ 내 기기 & 백업)
   layout: ViewportLayout;
   mobileTab: MobileTab;
   desktopTab: DesktopTab;
@@ -52,12 +49,12 @@ interface SaySeeStore {
   initializing: boolean;
   initApp: () => Promise<void>;
 
-  // [지침 A1] 640+ 역방향 사전 매칭 + 실제 Gemini API 고립 프롬프트 추천 문장
+  // 100% 로컬 팩트 기반 문장형 추천 칩 (외부 LLM 의존도 0%)
   conceptLexiconCount: number;
+  sentenceChips: LocalSentenceChip[];
+  sentenceChipPage: number;
+  cycleSentenceChips: () => void;
   onboardingAhaItems: OnboardingAhaItem[];
-  onboardingAhaLoading: boolean;
-  onboardingAhaModel: string;
-  fetchOnboardingAhaWithGemini: () => Promise<void>;
   applyAhaRecommendation: (item: OnboardingAhaItem) => Promise<void>;
 
   // 온보딩 13분 UX 방어 모달 상태 (지침 #1)
@@ -72,10 +69,11 @@ interface SaySeeStore {
   startOnboardingIndexing: () => Promise<void>;
   cancelOnboardingIndexing: () => void;
 
-  // 음성 & 자연어 검색 상태 (지침 #2: Zero-STT + 조용한 STT 폴백)
+  // 음성 & 자연어 문장 검색 상태 + 검색 결과 연사 묶기 ([❐ N장 연사])
   activeQuery: string;
   matchedTags: string[];
   searchResults: SearchResultItem[];
+  groupBurstsInSearch: boolean;
   isListening: boolean;
   isSlimCapsule: boolean;
   liveWaveBands: number[];
@@ -83,6 +81,7 @@ interface SaySeeStore {
   voiceThreshold: number;
   lastVoiceTrace: VoiceRoutingTrace | null;
   voiceTraceHistory: VoiceRoutingTrace[];
+  setGroupBurstsInSearch: (group: boolean) => void;
   setIsSlimCapsule: (slim: boolean) => void;
   setVoiceThreshold: (t: number) => void;
   runTextQuery: (q: string) => Promise<void>;
@@ -90,30 +89,12 @@ interface SaySeeStore {
   runPresetVoiceQuery: (presetId: string, forceFallbackDemo?: boolean) => Promise<void>;
   toggleBookmark: (photoId: string) => void;
 
-  // [지침 A2] 지능적 LLM 라우팅 (스무고개 인터뷰 & 하이패스형 일일 합산 과금)
-  tikiTakaFeatureFlagUnlocked: boolean; // 신규 유저 1개월 숙련 후 해금 Feature Flag
-  tikiTakaEnabled: boolean; // [프로필/설정] 내 'AI 티키타카(스무고개) 토글' ON/OFF
-  tikiTakaOpen: boolean;
-  tikiTakaTurn: number;
-  tikiTakaLoading: boolean;
-  tikiTakaMessages: TikiTakaMessage[];
-  tikiTakaQuickReplies: string[];
-  lastJsonDirective: LlmJsonDirective | null;
-  unbilledCoins: number; // 대화 중 팝업 없이 백그라운드 누적되는 코인
-  unbilledCalls: number;
-  dailyCoinLedger: DailyCoinLedgerEntry[]; // 일일 마감 시 단 1건으로 합산 정산된 내역
-  setTikiTakaFeatureFlagUnlocked: (unlocked: boolean) => void;
-  setTikiTakaEnabled: (enabled: boolean) => void;
-  setTikiTakaOpen: (open: boolean) => void;
-  startTikiTakaSession: (initialQuery?: string) => Promise<void>;
-  sendTikiTakaReply: (replyText: string) => Promise<void>;
-  settleDailyCoinsNow: () => void;
-
-  // 사진 상세 모달 & 2차 연관 꼬리물기 탐색 (3.2절)
+  // 사진 상세 모달 & 연사 묶음 상세 탐색
   selectedPhoto: PhotoItem | null;
-  setSelectedPhoto: (photo: PhotoItem | null) => void;
+  selectedBurstGroup: PhotoItem[] | null;
+  setSelectedPhoto: (photo: PhotoItem | null, burstGroup?: PhotoItem[] | null) => void;
 
-  // [지침 A3] 클리어몬스터 Lite & PC 바둑판(Grid) Pick UI & [세이씨_정리대기함]
+  // 클리어몬스터 Lite 4대 탭 & PC 바둑판(Grid) Pick UI & [세이씨_정리대기함]
   selectedTrashIds: Set<string>;
   activeTrashCategoryFilter: TrashCategory | 'all';
   quarantineMoving: boolean;
@@ -126,6 +107,10 @@ interface SaySeeStore {
     groupId: string,
     keepPhotoId: string,
     quarantineRestImmediately?: boolean
+  ) => Promise<void>;
+  pickBestInBurstPhotos: (
+    burstPhotos: PhotoItem[],
+    keepPhotoId: string
   ) => Promise<void>;
   moveSelectedToQuarantine: () => Promise<void>;
   moveAllTrashToQuarantine: () => Promise<void>;
@@ -162,24 +147,23 @@ const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   modelStatusText: 'EmbeddingGemma 2 (Vision q4 • Budget 70) 온디바이스 768차원 벡터 추출 중',
 };
 
-const INITIAL_DAILY_LEDGER: DailyCoinLedgerEntry[] = [
-  {
-    id: 'ledger-prev-1',
-    dateKey: '2026.10.14',
-    settledAt: '어제 23:59 일일 마감 정산',
-    totalCalls: 4,
-    totalCoinsDeducted: 12,
-    summaryTitle: 'AI 티키타카(스무고개) 심층 라우팅 4회 일괄 합산 정산 (-12 코인)',
-  },
-];
-
 export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   layout: typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'desktop' : 'mobile',
   mobileTab: 'search',
   desktopTab: 'dashboard',
   setLayout: (layout) => set({ layout }),
-  setMobileTab: (mobileTab) => set({ mobileTab }),
-  setDesktopTab: (desktopTab) => set({ desktopTab }),
+  setMobileTab: (mobileTab) =>
+    set({
+      mobileTab,
+      desktopTab:
+        mobileTab === 'search' ? 'dashboard' : mobileTab === 'trash' ? 'trash' : 'sync',
+    }),
+  setDesktopTab: (desktopTab) =>
+    set({
+      desktopTab,
+      mobileTab:
+        desktopTab === 'dashboard' ? 'search' : desktopTab === 'trash' ? 'trash' : 'settings',
+    }),
 
   photos: [],
   duplicateGroups: [],
@@ -187,9 +171,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   initializing: false,
 
   conceptLexiconCount: TOTAL_CONCEPT_ANCHOR_COUNT,
+  sentenceChips: [],
+  sentenceChipPage: 0,
   onboardingAhaItems: [],
-  onboardingAhaLoading: false,
-  onboardingAhaModel: 'models/gemini-3.8-flash',
+
+  cycleSentenceChips: () => {
+    set((state) => ({
+      sentenceChipPage: state.sentenceChipPage === 0 ? 1 : 0,
+    }));
+  },
 
   initApp: async () => {
     if (get().initialized || get().initializing) return;
@@ -203,12 +193,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
 
-    // 초기 기본 검색 결과 ("바닷가에서 뛰노는 아이") 세팅
-    const initialVoice = await executeZeroSttVoiceSearch({
-      presetId: 'beach_ko',
-      photos: dataset.photos,
-      threshold: 0.665,
-    });
+    const localChips = buildLocalSentenceSamplesFromCorpus(dataset.photos);
+    const localAhaItems: OnboardingAhaItem[] = localChips.slice(0, 4).map((chip) => ({
+      photoId: chip.id,
+      thumbUrl: chip.thumbUrl || '/__photos/file?p=20240720_122826.jpg&thumb=1',
+      dateFact: chip.matchHint,
+      domainTitle: chip.factFormula,
+      sentence: chip.query,
+      shortChip: chip.factFormula.split('+')[0].trim(),
+      targetSearchQuery: chip.query,
+    }));
+
+    // 초기 기본 검색 결과 ("코타키나발루 나무 다리 위에서 산책하는 모습") 세팅
+    const initialQuery = '코타키나발루 나무 다리 위에서 산책하는 모습';
+    const initialSearch = await executeTextSearch(initialQuery, dataset.photos, 'text-direct');
 
     // 쓰레기 사진 기본 선택 세팅 (원본 1장으로 보호된 사진은 trashCategory가 없으므로 제외됨)
     const trashIds = new Set<string>(
@@ -218,60 +216,19 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({
       photos: dataset.photos,
       duplicateGroups: dataset.duplicateGroups,
-      telemetry,
+      telemetry: telemetry
+        ? { ...telemetry, lastQueryMs: +(initialSearch.embedMs + initialSearch.searchMs).toFixed(1) }
+        : null,
       syncState,
-      activeQuery: '바닷가에서 뛰노는 아이',
-      matchedTags: ['#해변·파도', '#청색의류', '#달리기'],
-      searchResults: initialVoice.results,
-      lastVoiceTrace: initialVoice.trace,
-      voiceTraceHistory: [initialVoice.trace],
+      sentenceChips: localChips,
+      onboardingAhaItems: localAhaItems,
+      activeQuery: initialQuery,
+      matchedTags: ['#나무다리·공원', '#코타키나발루', '#산책'],
+      searchResults: initialSearch.results,
       selectedTrashIds: trashIds,
       initialized: true,
       initializing: false,
     });
-  },
-
-  // ─────────────── [지침 A1] 640+ 역방향 사전 매칭 + 실제 Gemini 고립 프롬프트 문장 생성 ───────────────
-  fetchOnboardingAhaWithGemini: async () => {
-    const { photos, onboardingAhaLoading } = get();
-    if (onboardingAhaLoading || photos.length === 0) return;
-
-    const bundles = buildIsolatedFactBundlesFromCorpus(photos);
-    if (bundles.length === 0) return;
-
-    set({ onboardingAhaLoading: true });
-    try {
-      const res = await fetch('/__llm/onboarding-aha', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bundles }),
-      });
-      const data = await res.json();
-      if (Array.isArray(data?.items) && data.items.length > 0) {
-        const items: OnboardingAhaItem[] = data.items.map((it: any, idx: number) => {
-          const b = bundles.find((x) => x.photoId === it.photoId) || bundles[idx] || bundles[0];
-          return {
-            photoId: b.photoId,
-            thumbUrl: b.thumbUrl,
-            dateFact: b.dateFact,
-            domainTitle: b.domainTitle,
-            sentence: String(it.sentence || ''),
-            shortChip: String(it.shortChip || b.domainTitle),
-            targetSearchQuery: b.targetSearchQuery,
-            generatedByModel: String(data.model || 'models/gemini-3.8-flash'),
-          };
-        });
-        set({
-          onboardingAhaItems: items,
-          onboardingAhaModel: String(data.model || 'models/gemini-3.8-flash'),
-          onboardingAhaLoading: false,
-        });
-        return;
-      }
-    } catch {
-      /* ignore network fallback */
-    }
-    set({ onboardingAhaLoading: false });
   },
 
   applyAhaRecommendation: async (item: OnboardingAhaItem) => {
@@ -314,10 +271,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({ onboardingRunning: false });
   },
 
-  // ─────────────── Zero-STT 음성 검색 & 백그라운드 STT 폴백 (지침 #2) ───────────────
-  activeQuery: '바닷가에서 뛰노는 아이',
-  matchedTags: ['#해변·파도', '#청색의류', '#달리기'],
+  // ─────────────── Zero-STT 음성 검색 & 자연어 문장 검색 ───────────────
+  activeQuery: '코타키나발루 나무 다리 위에서 산책하는 모습',
+  matchedTags: ['#나무다리·공원', '#코타키나발루', '#산책'],
   searchResults: [],
+  groupBurstsInSearch: true,
   isListening: false,
   isSlimCapsule: false,
   liveWaveBands: Array.from({ length: 16 }, (_, i) => 0.2 + (i % 3) * 0.15),
@@ -326,6 +284,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   lastVoiceTrace: null,
   voiceTraceHistory: [],
 
+  setGroupBurstsInSearch: (groupBurstsInSearch) => set({ groupBurstsInSearch }),
   setIsSlimCapsule: (isSlimCapsule) => set({ isSlimCapsule }),
   setVoiceThreshold: (voiceThreshold) => set({ voiceThreshold }),
 
@@ -442,226 +401,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     }));
   },
 
-  // ─────────────── [지침 A2] 지능적 LLM 라우팅 (스무고개 인터뷰 & 하이패스형 일일 합산 과금) ───────────────
-  tikiTakaFeatureFlagUnlocked: false,
-  tikiTakaEnabled: false,
-  tikiTakaOpen: false,
-  tikiTakaTurn: 0,
-  tikiTakaLoading: false,
-  tikiTakaMessages: [],
-  tikiTakaQuickReplies: [],
-  lastJsonDirective: null,
-  unbilledCoins: 0,
-  unbilledCalls: 0,
-  dailyCoinLedger: INITIAL_DAILY_LEDGER,
-
-  setTikiTakaFeatureFlagUnlocked: (tikiTakaFeatureFlagUnlocked) =>
-    set({
-      tikiTakaFeatureFlagUnlocked,
-      tikiTakaOpen: tikiTakaFeatureFlagUnlocked ? get().tikiTakaOpen : false,
-    }),
-
-  setTikiTakaEnabled: (tikiTakaEnabled) =>
-    set({
-      tikiTakaEnabled,
-      tikiTakaOpen: tikiTakaEnabled ? get().tikiTakaOpen : false,
-    }),
-
-  setTikiTakaOpen: (tikiTakaOpen) => set({ tikiTakaOpen }),
-
-  startTikiTakaSession: async (initialQuery?: string) => {
-    const { activeQuery, tikiTakaFeatureFlagUnlocked, tikiTakaEnabled } = get();
-    if (!tikiTakaFeatureFlagUnlocked || !tikiTakaEnabled) return;
-
-    const seedQuery = (initialQuery || activeQuery || '그때 찍었던 가족 휴가 사진').trim();
-    const nowTime = new Date().toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
-    const userFirstMsg: TikiTakaMessage = {
-      role: 'user',
-      text: seedQuery,
-      stepLabel: '초기 검색어',
-      timestamp: nowTime,
-    };
-
-    set({
-      tikiTakaOpen: true,
-      tikiTakaTurn: 1,
-      tikiTakaLoading: true,
-      tikiTakaMessages: [userFirstMsg],
-      tikiTakaQuickReplies: [],
-      lastJsonDirective: null,
-    });
-
-    try {
-      const res = await fetch('/__llm/tiki-taka', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initialQuery: seedQuery,
-          turn: 1,
-          history: [{ role: 'user', text: seedQuery }],
-        }),
-      });
-      const data = await res.json();
-
-      const assistantMsg: TikiTakaMessage = {
-        role: 'assistant',
-        text: String(
-          data.assistantReply ||
-            '어느 계절이나 시간대에 찍으셨던 사진인지 기억나시나요? (예: 작년 여름 낮, 가을 주말 오후)'
-        ),
-        stepLabel: '1단계 · 시간대/계절 좁히기',
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-      };
-
-      // [하이패스 과금 원칙] 대화 중에는 코인 차감 알림/팝업을 절대 띄우지 않고 백그라운드 누적만 수행
-      set((state) => ({
-        tikiTakaLoading: false,
-        tikiTakaMessages: [...state.tikiTakaMessages, assistantMsg],
-        tikiTakaQuickReplies: Array.isArray(data.quickReplies)
-          ? data.quickReplies
-          : ['작년 여름 휴가 낮 시간', '가을 주말 공원 나들이', '식당에서 저녁 식사할 때'],
-        unbilledCoins: state.unbilledCoins + 3,
-        unbilledCalls: state.unbilledCalls + 1,
-      }));
-    } catch {
-      set({ tikiTakaLoading: false });
-    }
-  },
-
-  sendTikiTakaReply: async (replyText: string) => {
-    const trimmed = replyText.trim();
-    if (!trimmed || get().tikiTakaLoading) return;
-
-    const { tikiTakaTurn, tikiTakaMessages, activeQuery, photos, telemetry } = get();
-    const nextTurn = tikiTakaTurn + 1;
-    const nowTime = new Date().toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
-    const userMsg: TikiTakaMessage = {
-      role: 'user',
-      text: trimmed,
-      stepLabel: `${tikiTakaTurn}단계 응답`,
-      timestamp: nowTime,
-    };
-
-    const nextHistory = [...tikiTakaMessages, userMsg];
-    set({
-      tikiTakaTurn: nextTurn,
-      tikiTakaLoading: true,
-      tikiTakaMessages: nextHistory,
-      tikiTakaQuickReplies: [],
-    });
-
-    try {
-      const res = await fetch('/__llm/tiki-taka', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initialQuery: activeQuery,
-          turn: nextTurn,
-          history: nextHistory.map((m) => ({ role: m.role, text: m.text })),
-        }),
-      });
-      const data = await res.json();
-
-      const assistantMsg: TikiTakaMessage = {
-        role: 'assistant',
-        text: String(data.assistantReply || '조건을 바탕으로 로컬 Gemma 2 벡터 엔진에 정밀 검색을 지시합니다.'),
-        stepLabel:
-          data.status === 'complete'
-            ? '최종 JSON 지시서 발급 완료'
-            : `${nextTurn}단계 · 장소/상황 구체화`,
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-      };
-
-      // 최종 JSON 지시서가 반환된 경우 즉시 로컬 EmbeddingGemma 2 실행!
-      if (data.status === 'complete' && data.jsonDirective) {
-        const directive: LlmJsonDirective = {
-          rewrittenQueryKo: String(data.jsonDirective.rewrittenQueryKo || activeQuery),
-          rewrittenQueryEn: String(data.jsonDirective.rewrittenQueryEn || ''),
-          datePrefix: String(data.jsonDirective.datePrefix || ''),
-          season: String(data.jsonDirective.season || ''),
-          boostPresetId: String(data.jsonDirective.boostPresetId || ''),
-          excludeTrash: Boolean(data.jsonDirective.excludeTrash ?? true),
-        };
-
-        const { results, totalMs } = await executeLlmJsonDirectiveSearch(
-          directive,
-          photos
-        );
-        const topTags = Array.from(
-          new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))
-        ).slice(0, 3);
-
-        // [하이패스 과금] 검색 중 팝업 없이 백그라운드 누적만 수행
-        set((state) => ({
-          tikiTakaLoading: false,
-          tikiTakaMessages: [...state.tikiTakaMessages, assistantMsg],
-          tikiTakaQuickReplies: [],
-          lastJsonDirective: directive,
-          activeQuery: directive.rewrittenQueryKo,
-          matchedTags: topTags.length ? topTags : ['#LLM라우팅', '#Gemma2정밀매칭'],
-          searchResults: results,
-          telemetry: telemetry
-            ? { ...telemetry, lastQueryMs: +totalMs.toFixed(1) }
-            : null,
-          unbilledCoins: state.unbilledCoins + 3,
-          unbilledCalls: state.unbilledCalls + 1,
-        }));
-        return;
-      }
-
-      set((state) => ({
-        tikiTakaLoading: false,
-        tikiTakaMessages: [...state.tikiTakaMessages, assistantMsg],
-        tikiTakaQuickReplies: Array.isArray(data.quickReplies) ? data.quickReplies : [],
-        unbilledCoins: state.unbilledCoins + 3,
-        unbilledCalls: state.unbilledCalls + 1,
-      }));
-    } catch {
-      set({ tikiTakaLoading: false });
-    }
-  },
-
-  settleDailyCoinsNow: () => {
-    const { unbilledCoins, unbilledCalls, dailyCoinLedger } = get();
-    if (unbilledCalls === 0 || unbilledCoins === 0) return;
-
-    const now = new Date();
-    const dateKey = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(
-      now.getDate()
-    ).padStart(2, '0')}`;
-    const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-
-    const entry: DailyCoinLedgerEntry = {
-      id: `ledger-${Date.now()}`,
-      dateKey,
-      settledAt: `오늘 ${timeStr} 일일 합산 정산 완료`,
-      totalCalls: unbilledCalls,
-      totalCoinsDeducted: unbilledCoins,
-      summaryTitle: `AI 티키타카(스무고개) 라우팅 ${unbilledCalls}회 일일 합산 정산 (-${unbilledCoins} 코인)`,
-    };
-
-    set({
-      unbilledCoins: 0,
-      unbilledCalls: 0,
-      dailyCoinLedger: [entry, ...dailyCoinLedger],
-    });
-  },
-
-  // ─────────────── 사진 상세 & 2차 연관 꼬리물기 탐색 ───────────────
+  // ─────────────── 사진 상세 & 연사 묶음 탐색 ───────────────
   selectedPhoto: null,
-  setSelectedPhoto: (selectedPhoto) => set({ selectedPhoto }),
+  selectedBurstGroup: null,
+  setSelectedPhoto: (selectedPhoto, selectedBurstGroup = null) =>
+    set({
+      selectedPhoto,
+      selectedBurstGroup: selectedPhoto
+        ? selectedBurstGroup ?? get().selectedBurstGroup
+        : null,
+    }),
 
-  // ─────────────── [지침 A3] 클리어몬스터 Lite & PC 바둑판 Pick UI & [세이씨_정리대기함] ───────────────
+  // ─────────────── 클리어몬스터 Lite 4대 탭 & PC 바둑판(Grid) Pick UI & [세이씨_정리대기함] ───────────────
   selectedTrashIds: new Set<string>(),
-  activeTrashCategoryFilter: 'all',
+  activeTrashCategoryFilter: 'duplicate',
   quarantineMoving: false,
   lastQuarantineToast: null,
 
@@ -679,12 +432,19 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   selectAllTrashInFilter: () => {
     const { photos, activeTrashCategoryFilter } = get();
     const matching = photos
-      .filter(
-        (p) =>
-          p.trashCategory &&
-          !p.quarantined &&
-          (activeTrashCategoryFilter === 'all' || p.trashCategory === activeTrashCategoryFilter)
-      )
+      .filter((p) => {
+        if (!p.trashCategory || p.quarantined) return false;
+        if (activeTrashCategoryFilter === 'all') return true;
+        if (activeTrashCategoryFilter === 'memo') {
+          return (
+            p.trashCategory === 'memo' ||
+            p.trashCategory === 'object' ||
+            p.trashCategory === 'document' ||
+            p.trashCategory === 'receipt'
+          );
+        }
+        return p.trashCategory === activeTrashCategoryFilter;
+      })
       .map((p) => p.id);
     set({ selectedTrashIds: new Set(matching) });
   },
@@ -692,7 +452,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   clearTrashSelection: () => set({ selectedTrashIds: new Set() }),
 
   /**
-   * [지침 A3: PC 바둑판(Grid) Pick UI]
+   * [PC 바둑판(Grid) Pick UI]
    * 중복/연사 클러스터에서 유저가 가장 잘 나온 사진 1장을 클릭(Pick)하면:
    * 1) 클릭한 사진 1장을 [원본 1장 안전하게 보존됨](isBestInDuplicateGroup: true, trashCategory: undefined)으로 승격
    * 2) 나머지 쌍둥이 사본들은 duplicate(정리 대상)로 지정
@@ -722,7 +482,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           isBestInDuplicateGroup: true,
           trashCategory: undefined,
           trashConfidence: undefined,
-          tags: ['#원본보존(Best)', ...p.tags.filter((t) => !t.includes('연사') && !t.includes('사본') && !t.includes('원본보존'))].slice(0, 3),
+          tags: [
+            '#원본보존(Best)',
+            ...p.tags.filter((t) => !t.includes('연사') && !t.includes('사본') && !t.includes('원본보존')),
+          ].slice(0, 3),
         };
       }
       return {
@@ -730,7 +493,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         isBestInDuplicateGroup: false,
         trashCategory: 'duplicate' as TrashCategory,
         trashConfidence: 0.99,
-        tags: ['#연사·중복사본', '#원본1장보존됨', ...p.tags.filter((t) => !t.includes('원본보존'))].slice(0, 3),
+        tags: [
+          '#연사·중복사본',
+          '#원본1장보존됨',
+          ...p.tags.filter((t) => !t.includes('원본보존')),
+        ].slice(0, 3),
       };
     });
 
@@ -764,18 +531,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
               ? {
                   ...p,
                   quarantined: true,
-                  thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
+                  thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`,
                   fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
                 }
               : p
           );
+          const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
           const cleanedSelected = new Set(state.selectedTrashIds);
           movedSet.forEach((id) => cleanedSelected.delete(id));
           return {
             photos: afterMovePhotos,
+            searchResults: afterSearch,
             selectedTrashIds: cleanedSelected,
             quarantineMoving: false,
-            lastQuarantineToast: `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 중복·연사 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
+            lastQuarantineToast: `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
           };
         });
       } catch {
@@ -785,6 +554,49 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       set({
         lastQuarantineToast: `🛡️ 선택한 사진을 [보존할 원본 1장]으로 변경했습니다. (나머지 ${redundantIds.length}장이 정리 대상으로 전환됨)`,
       });
+    }
+  },
+
+  pickBestInBurstPhotos: async (burstPhotos: PhotoItem[], keepPhotoId: string) => {
+    const redundantIds = burstPhotos.map((p) => p.id).filter((id) => id !== keepPhotoId);
+    if (redundantIds.length === 0) return;
+
+    set({ quarantineMoving: true });
+    try {
+      const res = await fetch('/__quarantine/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: redundantIds }),
+      });
+      const json = await res.json();
+      const movedSet = new Set<string>(json.moved ?? redundantIds);
+
+      set((state) => {
+        const afterMovePhotos = state.photos.map((p) =>
+          movedSet.has(p.id)
+            ? {
+                ...p,
+                quarantined: true,
+                thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`,
+                fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
+              }
+            : p
+        );
+        const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
+        const cleanedSelected = new Set(state.selectedTrashIds);
+        movedSet.forEach((id) => cleanedSelected.delete(id));
+        return {
+          photos: afterMovePhotos,
+          searchResults: afterSearch,
+          selectedTrashIds: cleanedSelected,
+          selectedPhoto: null,
+          selectedBurstGroup: null,
+          quarantineMoving: false,
+          lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
+        };
+      });
+    } catch {
+      set({ quarantineMoving: false });
     }
   },
 
@@ -808,7 +620,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           ? {
               ...p,
               quarantined: true,
-              thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
+              thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`,
               fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
             }
           : p
@@ -819,12 +631,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         if (!movedSet.has(id)) nextTrashIds.add(id);
       });
 
-      set({
+      set((state) => ({
         photos: updatedPhotos,
+        searchResults: state.searchResults.filter((r) => !movedSet.has(r.photo.id)),
         selectedTrashIds: nextTrashIds,
         quarantineMoving: false,
         lastQuarantineToast: `✅ ${movedSet.size}장의 사진이 [세이씨_정리대기함] 폴더로 안전하게 격리(이동)되었습니다.`,
-      });
+      }));
     } catch {
       set({ quarantineMoving: false });
     }
@@ -857,7 +670,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
             ? {
                 ...p,
                 quarantined: false,
-                thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}`,
+                thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1`,
                 fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}`,
               }
             : p
@@ -890,7 +703,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
 
   dismissQuarantineToast: () => set({ lastQuarantineToast: null }),
 
-  // ─────────────── 멀린 토큰 & 동기화 ───────────────
+  // ─────────────── 기기 텔레메트리 & P2P 백업/동기화 ───────────────
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(550, 3230438906),
@@ -924,8 +737,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       },
       lastQuarantineToast:
         state.syncState.mode === 'p2p-wifi'
-          ? '📡 로컬 WiFi P2P (SaySee-Mesh) 무서버 암호화 동기화가 완료되었습니다.'
-          : '☁️ Supabase 경량 썸네일/벡터 동기화가 완료되었습니다.',
+          ? '📡 로컬 WiFi P2P (SaySee-Mesh) 무서버 암호화 백업·동기화가 완료되었습니다.'
+          : '☁️ 경량 썸네일/벡터 동기화가 완료되었습니다.',
     }));
   },
 }));

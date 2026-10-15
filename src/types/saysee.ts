@@ -1,9 +1,10 @@
 export type TrashCategory =
   | 'duplicate'
+  | 'memo'
   | 'screenshot'
+  | 'blurry'
   | 'document'
   | 'object'
-  | 'blurry'
   | 'receipt';
 
 export interface DuplicateGroup {
@@ -28,8 +29,14 @@ export interface PhotoItem {
   fullUrl: string;
   /** 768차원 정규화 벡터 (실시간 WebGPU 색인 시 저장) */
   vec?: Float32Array;
-  /** 시맨틱 태그 (예: #해변·파도, #가족모임, #스크린샷) */
+  /** 시맨틱 태그 (예: #해변·물놀이, #나무다리·공원, #스크린샷) */
   tags: string[];
+  /** 시맨틱 클러스터 ID (동일 장면 연사 판별용) */
+  clusterId?: number;
+  /** EXIF GPS 기반 한국어 지명 */
+  locationKo?: string;
+  /** 로컬 시맨틱 캡션 (로컬 문장 조합기 팩트 원천) */
+  captionKo?: string;
   /** 스마트 다이어트 쓰레기 사진 분류 (해당 시) */
   trashCategory?: TrashCategory;
   /** 쓰레기 분류 신뢰도 (0.85 ~ 0.99) */
@@ -57,41 +64,10 @@ export interface OnboardingAhaItem {
   thumbUrl: string;
   dateFact: string;
   domainTitle: string;
-  /** 실제 Gemini API가 사진별 고립 프롬프트로 빚어낸 맛깔스러운 추천 문장 */
+  /** 로컬 팩트 조합기가 사진별 팩트([지명/시기 + 배경/사물 + 행동/분위기])로 조합한 추천 문장 */
   sentence: string;
   shortChip: string;
   targetSearchQuery: string;
-  generatedByModel: string;
-}
-
-export interface LlmJsonDirective {
-  rewrittenQueryKo: string;
-  rewrittenQueryEn: string;
-  datePrefix: string;
-  season: string;
-  boostPresetId: string;
-  excludeTrash: boolean;
-}
-
-export interface TikiTakaMessage {
-  role: 'assistant' | 'user';
-  text: string;
-  stepLabel?: string;
-  timestamp: string;
-}
-
-/**
- * [지침 A2] 하이패스형 일일 합산 코인 정산 내역
- * - 대화/검색 도중에는 팝업으로 맥을 끊지 않고 조용히 누적했다가
- *   일일 마감(또는 세션 종료 정산) 시 단 1건의 합산 로그로 깔끔하게 기록합니다.
- */
-export interface DailyCoinLedgerEntry {
-  id: string;
-  dateKey: string;
-  settledAt: string;
-  totalCalls: number;
-  totalCoinsDeducted: number;
-  summaryTitle: string;
 }
 
 export interface SearchResultItem {
@@ -102,8 +78,7 @@ export interface SearchResultItem {
     | 'audio-direct'
     | 'stt-fallback-silent'
     | 'text-direct'
-    | 'visual-similarity'
-    | 'llm-json-router';
+    | 'visual-similarity';
 }
 
 export interface VoiceRoutingTrace {

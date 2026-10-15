@@ -6,10 +6,12 @@ type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
 export const PhotoDetailModal: React.FC = () => {
   const {
     selectedPhoto,
+    selectedBurstGroup,
     setSelectedPhoto,
     photos,
     toggleBookmark,
     openLocalFolder,
+    pickBestInBurstPhotos,
   } = useSaySeeStore();
 
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
@@ -53,6 +55,8 @@ export const PhotoDetailModal: React.FC = () => {
   if (!selectedPhoto) return null;
 
   const dayString = selectedPhoto.date.split(' ')[0];
+  const activeBurstPhotos = (selectedBurstGroup ?? []).filter((p) => !p.quarantined);
+  const hasBurstGroup = activeBurstPhotos.length >= 2;
 
   return (
     <div
@@ -61,7 +65,7 @@ export const PhotoDetailModal: React.FC = () => {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl rounded-3xl glass-l2 p-5 md:p-7 border border-primary-container/30 shadow-[0_0_60px_rgba(0,0,0,0.75)] flex flex-col gap-5"
+        className="w-full max-w-4xl rounded-3xl glass-l2 p-5 md:p-7 border border-primary-container/30 shadow-[0_0_60px_rgba(0,0,0,0.75)] flex flex-col gap-5 my-auto"
       >
         {/* Top Bar */}
         <div className="flex items-center justify-between gap-3">
@@ -70,9 +74,16 @@ export const PhotoDetailModal: React.FC = () => {
               auto_awesome
             </span>
             <div className="min-w-0">
-              <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold truncate">
-                {selectedPhoto.name}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold truncate">
+                  {selectedPhoto.name}
+                </h3>
+                {hasBurstGroup && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 border border-primary-container/50 text-primary-container font-label-sm text-[11px] font-extrabold shrink-0">
+                    ❐ {activeBurstPhotos.length}장 연사 묶음
+                  </span>
+                )}
+              </div>
               <p className="font-label-mono text-[11px] text-on-surface-variant">
                 촬영일: {selectedPhoto.date} • {(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB •
                 768차원 시각 임베딩 일치
@@ -107,6 +118,62 @@ export const PhotoDetailModal: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* 연사 묶음일 경우 상단 비교 & 즉시 Pick 바둑판 영역 */}
+        {hasBurstGroup && (
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-primary-container/40 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+                  ✓ 원본 1장 안전하게 보존됨
+                </span>
+                <span className="font-label-md text-[13px] text-on-surface font-bold">
+                  함께 묶인 연사 {activeBurstPhotos.length}장 비교 — 마음에 드는 1장을 골라보세요
+                </span>
+              </div>
+
+              <button
+                onClick={() => {
+                  void pickBestInBurstPhotos(activeBurstPhotos, selectedPhoto.id);
+                  setSelectedPhoto(selectedPhoto, null);
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-primary-container text-on-primary-container font-label-sm text-[12px] font-extrabold flex items-center gap-1 shadow-[0_0_14px_rgba(0,229,255,0.35)] hover:opacity-95 transition-all"
+              >
+                <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                <span>
+                  현재 사진 1장만 남기고 나머지 {activeBurstPhotos.length - 1}장 정리대기함 격리 (Pick)
+                </span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+              {activeBurstPhotos.map((bp, idx) => {
+                const isCurrent = bp.id === selectedPhoto.id;
+                return (
+                  <div
+                    key={bp.id}
+                    onClick={() => setSelectedPhoto(bp, activeBurstPhotos)}
+                    className={`relative rounded-xl overflow-hidden aspect-[4/3] cursor-pointer border-2 transition-all ${
+                      isCurrent
+                        ? 'border-primary-container ring-2 ring-primary-container/40 scale-[1.02]'
+                        : 'border-outline-variant/30 opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={bp.thumbUrl} alt={bp.name} className="w-full h-full object-cover" />
+                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[10px] font-bold text-white">
+                      #{idx + 1}
+                    </div>
+                    {isCurrent && (
+                      <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-primary-container text-on-primary-container text-[10px] font-extrabold">
+                        선택됨
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Main Photo Preview + Tags */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
