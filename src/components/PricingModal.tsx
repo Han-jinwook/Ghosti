@@ -408,7 +408,7 @@ export const LocalDocPreviewModal: React.FC = () => {
 
         <div className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2">
           <span className="font-label-mono text-[11px] text-primary-container font-bold">
-            🔍 온디바이스 텍스트/OCR 색인 본문 미리보기
+            🔍 자체 로컬 서버 휘발성 텍스트/OCR 색인 본문 미리보기 (하드디스크 저장 0건 • 0.1초 즉시 파기)
           </span>
           <p className="font-body-md text-[14px] text-on-surface leading-relaxed">
             {selectedDocModal.extractedText}
@@ -446,3 +446,106 @@ export const LocalDocPreviewModal: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * [체험판 타겟 ②] 동영상 장면 검색 결과 상세 & 핵심 프레임/원본 동영상 재생 모달
+ */
+export const VideoScenePreviewModal: React.FC = () => {
+  const { selectedVideoModal, setSelectedVideoModal, openLocalFolder } = useSaySeeStore();
+  if (!selectedVideoModal) return null;
+
+  return (
+    <div
+      onClick={() => setSelectedVideoModal(null)}
+      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-3xl rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-6 md:p-7 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-4 my-auto"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
+                🎬 동영상 장면 AI 포착 ({selectedVideoModal.matchedTimestamp})
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[11px] font-bold">
+                {selectedVideoModal.resolution} • 재생시간 {selectedVideoModal.durationText}
+              </span>
+              <span className="font-label-mono text-[11px] text-on-surface-variant">
+                • 📍 {selectedVideoModal.locationKo}
+              </span>
+            </div>
+            <h3 className="font-headline-sm text-[19px] text-white font-extrabold mt-1">
+              {selectedVideoModal.title}
+            </h3>
+            <p className="font-label-mono text-[11.5px] text-on-surface-variant">
+              원본 파일: {selectedVideoModal.videoFileName} • 촬영일시: {selectedVideoModal.date} • 용량:{' '}
+              {selectedVideoModal.sizeMB} MB
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSelectedVideoModal(null)}
+            className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface shrink-0"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        {/* 동영상 플레이어 (실제 test_photos 내 MP4 스트리밍 + 포착된 핵심 프레임 포스터) */}
+        <div className="relative rounded-2xl overflow-hidden bg-black border border-primary-container/40 aspect-video flex items-center justify-center">
+          <video
+            src={selectedVideoModal.videoUrl}
+            poster={selectedVideoModal.thumbUrl}
+            controls
+            playsInline
+            className="w-full h-full object-contain"
+          />
+          <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/80 border border-primary-container/60 text-primary-container font-label-mono text-[11px] font-extrabold pointer-events-none">
+            🎯 AI 포착 구간: {selectedVideoModal.matchedTimestamp}
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2">
+          <span className="font-label-mono text-[11px] text-primary-container font-bold">
+            🔒 무거운 동영상 원본 미전송 • 초경량 핵심 프레임만 로컬 GPU 서버에서 0.1초 휘발 연산된 장면 설명
+          </span>
+          <p className="font-body-md text-[14px] text-on-surface leading-relaxed">
+            {selectedVideoModal.sceneDescription}
+          </p>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {selectedVideoModal.keywords.map((kw) => (
+              <span
+                key={kw}
+                className="px-2.5 py-0.5 rounded-full bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-bold"
+              >
+                #{kw}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+          <button
+            type="button"
+            onClick={() => void openLocalFolder('photos')}
+            className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[18px]">folder_open</span>
+            <span>원본 동영상 폴더(test_photos) 열기</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedVideoModal(null)}
+            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+

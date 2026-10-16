@@ -101,7 +101,7 @@ export const AmberDietBanner: React.FC<{ onNavigateToTrash?: () => void }> = ({
           <div className="flex flex-col gap-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-[#FFAB00] text-surface-container-lowest font-label-mono text-[10px] font-extrabold uppercase">
-                CLEARMONSTER LITE • ZERO-CLOUD DIET
+                CLEARMONSTER LITE • 기기 자체 dHash 초고속 진단
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
                 🛡️ 연사·중복 {duplicateGroups.length}개 클러스터 [원본 1장 안전하게 보존됨]

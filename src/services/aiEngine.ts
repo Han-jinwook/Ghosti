@@ -25,45 +25,49 @@ import type {
   PhotoItem,
   SearchResultItem,
   TrashCategory,
+  VideoSceneItem,
   VoiceRoutingTrace,
 } from '../types/saysee';
 
+/**
+ * [체험판 타겟 ①] 최신 서류/문서 20건 역추적 (다운로드·바탕화면 문서 파일 12건 + 사진첩 문서/영수증/신분증 이미지 8장 = 총 20건)
+ */
 export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [
   {
     id: 'doc_ins_2026',
     fileName: '삼성화재_다이렉트_자동차보험증권_2026.pdf',
     ext: 'PDF',
-    title: '삼성화재 애니카 다이렉트 자동차보험증권 (2026-2027)',
-    categoryBadge: '🛡️ 보험 증권 · 계약서',
+    title: '삼성화재 자동차 보험 증권 및 특약 내역서 (2026-2027)',
+    categoryBadge: '🛡️ 보험 증권 · 특약',
     extractedText:
-      '피보험자: 한진욱 | 담보내역: 대인배상II 무제한, 대물배상 10억원, 자동차상해, 무보험차상해, 긴급출동 특약 포함. 보험기간: 2026.05.01 ~ 2027.05.01',
-    keywords: ['보험', '보험증권', '자동차보험', '삼성화재', '증권', '계약서', '특약', '담보'],
+      '피보험자: 한진욱 | 담보내역: 삼성화재 자동차 보험 증권 및 특약 (대인배상II 무제한, 대물배상 10억원, 자동차상해, 무보험차상해, 긴급출동 특약 포함). 보험기간: 2026.05.01 ~ 2027.05.01',
+    keywords: ['삼성화재', '자동차', '보험', '보험증권', '증권', '특약', '계약서', '담보'],
     date: '2026.05.01',
     sizeKB: 1420,
-    deviceSource: 'PC 로컬 폴더',
+    deviceSource: 'PC 바탕화면',
   },
   {
     id: 'doc_manual_chair',
     fileName: '이케아_원목의자_수납장_조립설명서_매뉴얼.pdf',
     ext: 'PDF',
-    title: '원목 의자 및 거실 수납장 단계별 조립 설명서 (Assembly Manual)',
-    categoryBadge: '📑 조립 설명서 · 매뉴얼',
+    title: '원목 의자 단계별 조립 설명서 도면 및 거실 수납장 매뉴얼',
+    categoryBadge: '📑 조립 설명서 · 도면',
     extractedText:
-      '부품 목록: 육각렌치(M6 볼트 12개), 철제 다리 프레임, 좌판 브라켓, 원목 상판 조립 도면 및 단계별 조립 설명서 주의사항 안내.',
-    keywords: ['조립', '설명서', '조립설명서', '매뉴얼', '의자', '수납장', '부품', '도면', '가이드'],
+      '부품 목록: 원목 의자 단계별 조립 설명서 도면, 육각렌치(M6 볼트 12개), 철제 다리 프레임, 좌판 브라켓, 원목 상판 조립 순서 및 주의사항 안내.',
+    keywords: ['원목', '의자', '단계별', '조립', '설명서', '도면', '조립설명서', '매뉴얼', '수납장', '부품'],
     date: '2026.08.14',
     sizeKB: 3850,
-    deviceSource: 'PC 로컬 폴더',
+    deviceSource: 'PC 바탕화면',
   },
   {
     id: 'doc_receipt_kk',
     fileName: '코타키나발루_수트라하버_리조트_결제영수증_바우처.pdf',
     ext: 'PDF',
-    title: '코타키나발루 수트라하버 마젤란 리조트 숙박 바우처 및 카드 결제 영수증',
-    categoryBadge: '🧾 영수증 · 숙박 바우처',
+    title: '수트라하버 리조트 숙박 결제 영수증 및 체크인 바우처',
+    categoryBadge: '🧾 숙박 결제 영수증',
     extractedText:
-      '결제일자: 2024.07.11 | 포함내역: 오션뷰 객실 4박, 조식 뷔페, 마무틱섬/사피섬 보트 투어 카드 결제 영수증 및 체크인 바우처 전표.',
-    keywords: ['영수증', '결제', '바우처', '전표', '코타키나발루', '수트라하버', '리조트', '숙박', '카드'],
+      '결제일자: 2024.07.11 | 포함내역: 코타키나발루 수트라하버 리조트 숙박 결제 영수증 (오션뷰 객실 4박, 조식 뷔페, 마무틱섬 보트 투어 카드 결제 전표).',
+    keywords: ['수트라하버', '리조트', '숙박', '결제', '영수증', '바우처', '전표', '코타키나발루', '카드'],
     date: '2024.07.11',
     sizeKB: 890,
     deviceSource: '스마트폰 다운로드',
@@ -79,7 +83,7 @@ export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [
     keywords: ['계약서', '임대차', '주택임대차', '확정일자', '청라', '전입신고', '신분증', '사본', '서류'],
     date: '2026.03.15',
     sizeKB: 2640,
-    deviceSource: 'PC 로컬 폴더',
+    deviceSource: 'PC 바탕화면',
   },
   {
     id: 'doc_receipt_med',
@@ -105,9 +109,291 @@ export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [
     keywords: ['심사', '네이버페이', 'NHNKCP', '가맹점', '사업자등록증', '계약서', '서류', '문자', '결제'],
     date: '2026.10.14',
     sizeKB: 48,
-    deviceSource: 'PC 로컬 폴더',
+    deviceSource: 'PC 바탕화면',
+  },
+  {
+    id: 'doc_flight_eticket',
+    fileName: '진에어_코타키나발루_왕복항공권_E티켓_영수증.pdf',
+    ext: 'PDF',
+    title: '인천↔코타키나발루 왕복 항공권 E-티켓 확인증 및 운임 영수증',
+    categoryBadge: '✈️ 항공권 E-티켓 · 영수증',
+    extractedText:
+      '출발일: 2024.07.18 | 편명: LJ061 인천(ICN) ➔ 코타키나발루(BKI) | 승객 성명 및 전자항공권(E-Ticket) 결제 영수증 내역.',
+    keywords: ['항공권', '티켓', '코타키나발루', '영수증', '결제', '바우처', '여권'],
+    date: '2024.07.15',
+    sizeKB: 640,
+    deviceSource: '스마트폰 다운로드',
+  },
+  {
+    id: 'doc_tax_cert',
+    fileName: '홈택스_부가가치세_과세표준증명원_2026.pdf',
+    ext: 'PDF',
+    title: '국세청 홈택스 부가가치세 과세표준증명원 및 납세증명서',
+    categoryBadge: '🏛️ 국세청 공문서 · 증명서',
+    extractedText:
+      '발급기관: 국세청 홈택스 | 용도: 금융기관 및 PG 가맹점 심사 제출용 부가가치세 과세표준증명원 원본 PDF.',
+    keywords: ['국세청', '홈택스', '증명서', '세금', '공문서', '심사', '서류'],
+    date: '2026.10.10',
+    sizeKB: 520,
+    deviceSource: 'PC 바탕화면',
+  },
+  {
+    id: 'doc_health_checkup',
+    fileName: '국민건강보험_종합건강검진_결과통보서_2026.pdf',
+    ext: 'PDF',
+    title: '2026년 국민건강보험 종합건강검진 결과통보서 및 대사증후군 소견서',
+    categoryBadge: '🩺 건강검진 결과표',
+    extractedText:
+      '검진일자: 2026.09.04 | 혈액검사, 흉부방사선, 혈압·콜레스테롤 수치 및 전문의 종합 판정 소견서 PDF.',
+    keywords: ['건강검진', '병원', '검진', '결과표', '보험', '진료비', '서류'],
+    date: '2026.09.12',
+    sizeKB: 1840,
+    deviceSource: '스마트폰 다운로드',
+  },
+  {
+    id: 'doc_appliance_warranty',
+    fileName: 'LG전자_식기세척기_설치확인서_무상보증서_매뉴얼.pdf',
+    ext: 'PDF',
+    title: '주방 빌트인 식기세척기 설치 확인서 및 부품 무상보증 사용 설명서',
+    categoryBadge: '📑 가전 설명서 · 보증서',
+    extractedText:
+      '모델명: DFB22S | 모터 10년 무상보증서, 급수·배수 호스 연결 도면 및 세제 투입구 단계별 사용 설명서.',
+    keywords: ['설명서', '매뉴얼', '보증서', '가전', '도면', '설치', '조립'],
+    date: '2026.06.22',
+    sizeKB: 4120,
+    deviceSource: '스마트폰 다운로드',
+  },
+  {
+    id: 'doc_telecom_contract',
+    fileName: 'SKT_가족결합할인_약정계약서_요금명세서.docx',
+    ext: 'DOCX',
+    title: '온가족플랜 결합할인 가입 신청서 및 월 통신비 세금계산서 내역',
+    categoryBadge: '📋 통신 약정 계약서',
+    extractedText:
+      '결합회선: 모바일 3회선 + 기가인터넷 | 선택약정 25% 할인 및 가족결합 특약 요금 명세서.',
+    keywords: ['계약서', '통신비', '명세서', '영수증', '특약', '할인'],
+    date: '2026.07.03',
+    sizeKB: 310,
+    deviceSource: 'PC 바탕화면',
+  },
+  {
+    id: 'doc_car_maintenance',
+    fileName: '블루핸즈_엔진오일_브레이크패드_정비명세서_영수증.pdf',
+    ext: 'PDF',
+    title: '자동차 정기점검 및 합성 엔진오일·브레이크 패드 교환 정비명세서 영수증',
+    categoryBadge: '🧾 차량 정비 영수증',
+    extractedText:
+      '정비일자: 2026.08.28 | 주행거리: 48,210km | 합성 엔진오일 세트, 에어컨 필터, 브레이크 패드 교체 비용 결제 영수증.',
+    keywords: ['자동차', '정비', '영수증', '명세서', '결제', '보험', '수리'],
+    date: '2026.08.28',
+    sizeKB: 760,
+    deviceSource: '스마트폰 다운로드',
   },
 ];
+
+/**
+ * [체험판 타겟 ②] 최신 동영상 10개 역추적 (핵심 프레임 초경량 썸네일 추출 ➔ 로컬 GPU 서버 Gemma 2 장면 색인)
+ */
+export const VIDEO_SCENE_ITEMS: VideoSceneItem[] = [
+  {
+    id: 'vid_01_fireshow',
+    videoFileName: '20240720_134808.mp4',
+    title: '한밤중 바닷가에서 불꽃 돌리는 불쇼 영상',
+    keyframePhotoId: '20240720_194644.jpg',
+    thumbUrl: '/__photos/file?p=20240720_194644.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240720_134808.mp4',
+    date: '2024.07.20 19:46',
+    durationText: '01:12',
+    matchedTimestamp: '00:18 프레임 포착',
+    locationKo: '말레이시아 코타키나발루',
+    sceneDescription:
+      '어두운 한밤중 해변 모래사장에서 공연자들이 횃불을 들고 불꽃을 크게 돌리며 화려한 야간 불쇼 퍼포먼스를 펼치는 장면',
+    keywords: ['한밤중', '바닷가', '불꽃', '돌리는', '불쇼', '영상', '밤', '해변', '공연', '퍼포먼스', '코타키나발루'],
+    resolution: '4K UHD 60fps',
+    sizeMB: 38.1,
+  },
+  {
+    id: 'vid_02_snorkeling',
+    videoFileName: 'GX012812.MP4',
+    title: '구명조끼 입고 에메랄드빛 바다에서 스노클링하는 영상',
+    keyframePhotoId: '20240719_110624.jpg',
+    thumbUrl: '/__photos/file?p=20240719_110624.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=GX012812.MP4',
+    date: '2024.07.19 11:06',
+    durationText: '01:45',
+    matchedTimestamp: '00:24 프레임 포착',
+    locationKo: '말레이시아 코타키나발루 사피섬',
+    sceneDescription:
+      '구명조끼와 화려한 수영복을 입고 맑은 에메랄드빛 열대 바다와 섬 해변에서 스노클링 및 물놀이를 즐기는 장면',
+    keywords: ['구명조끼', '입고', '에메랄드빛', '바다', '스노클링', '스노클링하는', '영상', '물놀이', '수영', '섬'],
+    resolution: 'GoPro 5.3K',
+    sizeMB: 154.6,
+  },
+  {
+    id: 'vid_03_speedboat',
+    videoFileName: '20240719_105412.mp4',
+    title: '보트 위에서 바다 가르며 달리는 장면',
+    keyframePhotoId: '20240719_090212.jpg',
+    thumbUrl: '/__photos/file?p=20240719_090212.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240719_105412.mp4',
+    date: '2024.07.19 09:02',
+    durationText: '00:42',
+    matchedTimestamp: '00:09 프레임 포착',
+    locationKo: '말레이시아 코타키나발루 해상',
+    sceneDescription:
+      '선글라스와 구명조끼를 착용한 남녀가 고속 보트 위에서 하얀 물보라를 일으키며 푸른 바다를 시원하게 가르며 달리는 장면',
+    keywords: ['보트', '위에서', '바다', '가르며', '달리는', '장면', '영상', '구명조끼', '선글라스', '요트'],
+    resolution: 'FHD 60fps',
+    sizeMB: 19.1,
+  },
+  {
+    id: 'vid_04_seawalking',
+    videoFileName: 'GX012811.MP4',
+    title: '바닷속에서 수중 헬멧 쓰고 물고기들과 씨워킹하는 영상',
+    keyframePhotoId: 'GOPR2847.JPG',
+    thumbUrl: '/__photos/file?p=GOPR2847.JPG&thumb=1',
+    videoUrl: '/__photos/file?p=GX012811.MP4',
+    date: '2024.07.19 11:39',
+    durationText: '01:38',
+    matchedTimestamp: '00:31 프레임 포착',
+    locationKo: '말레이시아 코타키나발루 수중',
+    sceneDescription:
+      '에메랄드빛 바닷속에서 잠수 헬멧과 래시가드를 착용하고 카메라를 향해 브이 포즈를 취하는 수중 스노클링·씨워킹 영상',
+    keywords: ['바닷속', '수중', '헬멧', '스노클링', '씨워킹', '에메랄드빛', '바다', '물놀이', '고프로', '영상'],
+    resolution: 'GoPro 4K',
+    sizeMB: 139.8,
+  },
+  {
+    id: 'vid_05_parasailing',
+    videoFileName: '20240719_105604.mp4',
+    title: '푸른 바다 위 하늘에서 낙하산 패러세일링 활공 영상',
+    keyframePhotoId: '20240719_105518.jpg',
+    thumbUrl: '/__photos/file?p=20240719_105518.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240719_105604.mp4',
+    date: '2024.07.19 10:56',
+    durationText: '00:54',
+    matchedTimestamp: '00:15 프레임 포착',
+    locationKo: '말레이시아 코타키나발루 해상',
+    sceneDescription:
+      '청명한 하늘 아래 바다 위에서 알록달록한 낙하산에 매달려 공중 패러세일링을 즐기는 두 사람의 역동적인 영상',
+    keywords: ['패러세일링', '낙하산', '바다', '하늘', '보트', '물놀이', '영상'],
+    resolution: 'FHD 60fps',
+    sizeMB: 18.8,
+  },
+  {
+    id: 'vid_06_bridge_walk',
+    videoFileName: '20240719_105706.mp4',
+    title: '코타키나발루 나무 다리 위에서 산책하는 영상',
+    keyframePhotoId: '20240720_122826.jpg',
+    thumbUrl: '/__photos/file?p=20240720_122826.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240719_105706.mp4',
+    date: '2024.07.20 12:28',
+    durationText: '01:05',
+    matchedTimestamp: '00:12 프레임 포착',
+    locationKo: '말레이시아 코타키나발루 선착장',
+    sceneDescription:
+      '에메랄드빛 바다 위에 길게 뻗은 나무 데크 다리 위를 걸으며 산책하는 여름 휴가 스냅 영상',
+    keywords: ['코타키나발루', '나무', '다리', '나무다리', '산책', '산책하는', '바다', '선착장', '영상'],
+    resolution: '4K UHD',
+    sizeMB: 36.2,
+  },
+  {
+    id: 'vid_07_resort_pool',
+    videoFileName: '20240719_105444.mp4',
+    title: '수트라하버 리조트 야외 수영장 인공 폭포 물놀이 영상',
+    keyframePhotoId: '20240720_135635.jpg',
+    thumbUrl: '/__photos/file?p=20240720_135635.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240719_105444.mp4',
+    date: '2024.07.20 13:56',
+    durationText: '00:48',
+    matchedTimestamp: '00:21 프레임 포착',
+    locationKo: '말레이시아 코타키나발루 수트라하버',
+    sceneDescription:
+      '야자수와 리조트 건물이 둘러싼 넓은 야외 수영장의 인공 폭포 앞에서 시원하게 물놀이를 즐기는 장면',
+    keywords: ['리조트', '수영장', '물놀이', '폭포', '야자수', '수트라하버', '영상'],
+    resolution: 'FHD 60fps',
+    sizeMB: 19.5,
+  },
+  {
+    id: 'vid_08_island_boat',
+    videoFileName: '20240719_105428.mp4',
+    title: '보트 타고 에메랄드빛 열대 섬 해안으로 들어가는 영상',
+    keyframePhotoId: '20240719_100316.jpg',
+    thumbUrl: '/__photos/file?p=20240719_100316.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240719_105428.mp4',
+    date: '2024.07.19 10:03',
+    durationText: '00:39',
+    matchedTimestamp: '00:11 프레임 포착',
+    locationKo: '말레이시아 코타키나발루 마무틱섬',
+    sceneDescription:
+      '에메랄드빛 바다 위 보트에 앉아 푸른 숲이 우거진 섬 해안 풍경을 감상하며 이동하는 장면',
+    keywords: ['보트', '에메랄드빛', '바다', '섬', '래시가드', '투어', '달리는', '영상'],
+    resolution: 'FHD 60fps',
+    sizeMB: 18.9,
+  },
+  {
+    id: 'vid_09_cheongna_night',
+    videoFileName: '20260918_202442.mp4',
+    title: '청라 호수공원 야간 목재 데크 산책 및 밤거리 모임 영상',
+    keyframePhotoId: '20260918_195244.jpg',
+    thumbUrl: '/__photos/file?p=20260918_195244.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20260918_202442.mp4',
+    date: '2026.09.18 20:24',
+    durationText: '00:26',
+    matchedTimestamp: '00:07 프레임 포착',
+    locationKo: '인천 서구 청라국제도시',
+    sceneDescription:
+      '야간 도심 공원의 조명이 켜진 목재 데크 산책로에서 손가락 하트 포즈를 취하고 밤거리 식당에서 담소를 나누는 장면',
+    keywords: ['청라', '야간', '밤', '밤거리', '공원', '산책', '데크', '식당', '영상'],
+    resolution: 'FHD 30fps',
+    sizeMB: 8.7,
+  },
+  {
+    id: 'vid_10_yeouido_walk',
+    videoFileName: '20260811_122325.mp4',
+    title: '여의도 한강공원 산책로에서 친구들과 함께 걷는 영상',
+    keyframePhotoId: '20260525_193249.jpg',
+    thumbUrl: '/__photos/file?p=20260525_193249.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20260811_122325.mp4',
+    date: '2026.08.11 12:23',
+    durationText: '01:15',
+    matchedTimestamp: '00:19 프레임 포착',
+    locationKo: '서울 영등포구 여의도 한강공원',
+    sceneDescription:
+      '저녁 노을이 비치는 여의도 한강공원 산책로를 따라 친구들과 나란히 걸어가는 뒷모습을 담은 일상 영상',
+    keywords: ['여의도', '한강공원', '한강', '친구들', '산책', '걷는', '뒷모습', '영상'],
+    resolution: '4K UHD',
+    sizeMB: 240.7,
+  },
+];
+
+export function searchVideoSceneItems(query: string): VideoSceneItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return VIDEO_SCENE_ITEMS;
+  const rawTokens = q
+    .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+    .split(/\s+/)
+    .filter(
+      (t) =>
+        t.length >= 1 &&
+        !['찾아줘', '보여줘', '영상', '동영상', '장면', '모습', '에서', '위에서', '입고'].includes(t)
+    );
+
+  if (rawTokens.length === 0) return VIDEO_SCENE_ITEMS;
+
+  const scored = VIDEO_SCENE_ITEMS.map((vid) => {
+    const corpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
+    let hits = 0;
+    for (const tk of rawTokens) {
+      if (corpus.includes(tk)) hits += 2;
+      else if (tk.length >= 2 && corpus.includes(tk.slice(0, 2))) hits += 1;
+    }
+    return { vid, hits };
+  }).filter((item) => item.hits > 0);
+
+  scored.sort((a, b) => b.hits - a.hits);
+  return scored.map((s) => s.vid);
+}
 
 export function searchLocalDocumentFiles(query: string): LocalDocumentFile[] {
   const q = query.trim().toLowerCase();
@@ -115,7 +401,7 @@ export function searchLocalDocumentFiles(query: string): LocalDocumentFile[] {
   const rawTokens = q
     .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
     .split(/\s+/)
-    .filter((t) => t.length >= 1 && !['찾아줘', '보여줘', '사진', '문서', '파일', '서류함'].includes(t));
+    .filter((t) => t.length >= 1 && !['찾아줘', '보여줘', '사진', '문서', '파일', '서류함', '및'].includes(t));
 
   if (rawTokens.length === 0) return LOCAL_DOCUMENT_FILES;
 

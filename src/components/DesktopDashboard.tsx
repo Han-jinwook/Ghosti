@@ -16,6 +16,8 @@ export const DesktopDashboard: React.FC = () => {
     searchSpace,
     matchedLocalDocs,
     setSelectedDocModal,
+    matchedVideoScenes,
+    setSelectedVideoModal,
     activeQuery,
     searchResults,
     groupBurstsInSearch,
@@ -77,7 +79,7 @@ export const DesktopDashboard: React.FC = () => {
               세이씨 (SaySee)
             </span>
             <span className="hidden xl:inline font-body-sm text-[12px] text-on-surface-variant">
-              100% 로컬 디지털 주치의 · {activePhotos.length}장
+              디지털 주치의 · 무저장 휘발성 AI 파이프라인
             </span>
           </div>
         </div>
@@ -192,14 +194,98 @@ export const DesktopDashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* ─────────────── 탭 1: 🔍 파워 검색 ([🖼️ 전체/갤러리] vs [📁 스마트 서류함]) ─────────────── */}
+      {/* ─────────────── 탭 1: 🔍 파워 검색 ([🎬 동영상 장면] vs [📁 스마트 서류함] vs [🖼️ 전체/갤러리]) ─────────────── */}
       {desktopTab === 'dashboard' && (
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-10 py-6 flex flex-col gap-6">
-          {/* 1) 상단 공간 스위처 + 자연어 문장 검색창 + 리얼 문장 샘플 칩 */}
+          {/* 1) 상단 보안 배지 + 체험 완료 브리핑 보드 + 공간 스위처 + 자연어 문장 검색창 */}
           <VoiceHeroStage />
 
-          {/* 2-A) [📁 스마트 서류함] 모드일 때: 로컬 PDF/TXT/DOCX 문서 + 촬영 서류 사진 통합 뷰 */}
-          {searchSpace === 'vault' ? (
+          {/* 2-0) [🎬 동영상 장면 검색] 모드일 때: 핵심 프레임 색인 동영상 카드 + 연관 프레임 스틸컷 */}
+          {searchSpace === 'video' ? (
+            <section className="flex flex-col gap-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-[12px] font-black">
+                    🎬 동영상 속 특정 장면 AI 포착
+                  </span>
+                  <h2 className="font-headline-md text-[20px] text-on-surface font-extrabold">
+                    “{activeQuery}” 동영상 장면 검색 결과
+                  </h2>
+                  <span className="px-3 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-md text-[13px] font-bold">
+                    동영상 {matchedVideoScenes.length}개 포착 (클릭 시 해당 장면 및 원본 MP4 재생)
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => void openLocalFolder('photos')}
+                  className="px-3.5 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary-container font-label-sm text-[12px] font-extrabold border border-primary-container/40 flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">folder_open</span>
+                  <span>원본 동영상 폴더(test_photos) 열기</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {matchedVideoScenes.map((vid) => (
+                  <article
+                    key={vid.id}
+                    onClick={() => setSelectedVideoModal(vid)}
+                    className="group rounded-2xl overflow-hidden bg-surface-container-low hover:bg-surface-container border-2 border-primary-container/45 hover:border-primary-container shadow-[0_6px_28px_rgba(0,229,255,0.16)] flex flex-col cursor-pointer transition-all hover:-translate-y-0.5"
+                  >
+                    <div className="relative aspect-video w-full overflow-hidden bg-black">
+                      <img
+                        src={vid.thumbUrl}
+                        alt={vid.title}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      {/* 중앙 재생 아이콘 오버레이 */}
+                      <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                        <div className="w-13 h-13 rounded-full bg-primary-container/90 text-on-primary-container flex items-center justify-center shadow-[0_0_24px_rgba(0,229,255,0.65)] group-hover:scale-110 transition-transform">
+                          <span className="material-symbols-outlined text-[30px]">play_arrow</span>
+                        </div>
+                      </div>
+
+                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/85 backdrop-blur-md border border-primary-container/70 text-primary-container font-label-mono text-[11px] font-extrabold">
+                        🎯 {vid.matchedTimestamp}
+                      </div>
+
+                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 text-white font-label-mono text-[11px] font-bold">
+                        ⏱️ {vid.durationText} • {vid.resolution}
+                      </div>
+
+                      <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/65 to-transparent flex items-center justify-between">
+                        <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
+                          📍 {vid.locationKo}
+                        </span>
+                        <span className="font-label-mono text-[11px] text-white/85">
+                          {vid.videoFileName} ({vid.sizeMB}MB)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 flex flex-col gap-2 flex-1 justify-between">
+                      <div className="flex flex-col gap-1">
+                        <h3 className="font-headline-sm text-[15.5px] text-white font-extrabold group-hover:text-primary-container transition-colors">
+                          🎬 {vid.title}
+                        </h3>
+                        <p className="font-body-sm text-[12.5px] text-on-surface-variant line-clamp-2 leading-relaxed">
+                          {vid.sceneDescription}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20 font-label-mono text-[11px] text-on-surface-variant">
+                        <span>📅 {vid.date}</span>
+                        <span className="text-primary-container font-bold">
+                          장면 프레임 &amp; 동영상 재생 →
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : searchSpace === 'vault' ? (
             <section className="flex flex-col gap-6">
               <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                 <div className="flex flex-wrap items-center gap-2.5">
@@ -454,7 +540,7 @@ export const DesktopDashboard: React.FC = () => {
                 ☁️❌ 클라우드 월정액 해방! 폰↔PC 완전 일치화 센터
               </span>
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
-                외부 서버 전송 0 Byte • 100% 프라이빗 싱크
+                🔒 무거운 원본 파일 미전송 / AI 분석 서버 하드디스크 저장 0건 (RAM 연산 후 0.1초 내 즉시 자동 파기)
               </span>
             </div>
 

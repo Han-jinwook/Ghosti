@@ -7,8 +7,33 @@ export type TrashCategory =
   | 'object'
   | 'receipt';
 
-/** [스펙 1] 파워 검색 상단 공간 이원화 필터: [🖼️ 전체/갤러리] vs [📁 스마트 서류함] */
-export type SearchSpaceMode = 'gallery' | 'vault';
+/** [스펙 1 & 체험판 타겟팅] 파워 검색 상단 공간 필터: [🎬 동영상 장면] vs [📁 스마트 서류함] vs [🖼️ 전체/갤러리] */
+export type SearchSpaceMode = 'video' | 'vault' | 'gallery';
+
+/** [체험판 보안 스펙 1] 스캔 전 유저가 직접 체크하여 허용하는 기본 3대 안전 검진 구역 */
+export interface TrialScanPermissions {
+  gallery: boolean;
+  downloads: boolean;
+  desktop: boolean;
+}
+
+/** [체험판 타겟 2] 로컬 서버 Gemma 2로 핵심 프레임을 추출·색인한 최신 동영상 10개 장면 데이터 */
+export interface VideoSceneItem {
+  id: string;
+  videoFileName: string;
+  title: string;
+  keyframePhotoId: string;
+  thumbUrl: string;
+  videoUrl: string;
+  date: string;
+  durationText: string;
+  matchedTimestamp: string;
+  locationKo: string;
+  sceneDescription: string;
+  keywords: string[];
+  resolution: string;
+  sizeMB: number;
+}
 
 /** [스펙 1] 로컬 폴더(PC/폰) 내 PDF, TXT, DOCX 등 텍스트 추출 문서 자산 */
 export interface LocalDocumentFile {
@@ -21,7 +46,7 @@ export interface LocalDocumentFile {
   keywords: string[];
   date: string;
   sizeKB: number;
-  deviceSource: 'PC 로컬 폴더' | '스마트폰 다운로드';
+  deviceSource: 'PC 바탕화면' | '스마트폰 다운로드' | 'PC 로컬 폴더';
 }
 
 /** [스펙 2] 3중 타임머신 안전망: 즉시 되돌리기(Undo) 배치 스냅샷 */

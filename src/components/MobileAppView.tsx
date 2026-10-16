@@ -14,6 +14,8 @@ export const MobileAppView: React.FC = () => {
     searchSpace,
     matchedLocalDocs,
     setSelectedDocModal,
+    matchedVideoScenes,
+    setSelectedVideoModal,
     activeQuery,
     searchResults,
     groupBurstsInSearch,
@@ -92,14 +94,63 @@ export const MobileAppView: React.FC = () => {
         </div>
       </header>
 
-      {/* 탭 1: 🔍 파워 검색 ([🖼️ 전체/갤러리] vs [📁 스마트 서류함]) */}
+      {/* 탭 1: 🔍 파워 검색 ([🎬 동영상 장면] vs [📁 스마트 서류함] vs [🖼️ 전체/갤러리]) */}
       {mobileTab === 'search' && (
         <main className="flex-1 w-full px-4 pt-4 pb-8 flex flex-col gap-5">
-          {/* 1) 공간 스위처 & 음성 마이크 & 자연어 문장 검색창 */}
+          {/* 1) 보안 배지 & 체험 완료 브리핑 보드 & 검색창 */}
           <VoiceHeroStage />
 
-          {/* 2-A) [📁 스마트 서류함] 통합 검색 뷰 */}
-          {searchSpace === 'vault' ? (
+          {/* 2-0) [🎬 동영상 장면 검색] 뷰 */}
+          {searchSpace === 'video' ? (
+            <section className="flex flex-col gap-3">
+              <div className="flex items-center justify-between px-0.5">
+                <span className="font-headline-sm text-[15px] text-on-surface font-extrabold">
+                  🎬 동영상 장면 포착 결과 ({matchedVideoScenes.length}개)
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {matchedVideoScenes.map((vid) => (
+                  <article
+                    key={vid.id}
+                    onClick={() => setSelectedVideoModal(vid)}
+                    className="rounded-2xl overflow-hidden bg-surface-container-low border border-primary-container/50 flex flex-col cursor-pointer"
+                  >
+                    <div className="relative aspect-video w-full bg-black">
+                      <img
+                        src={vid.thumbUrl}
+                        alt={vid.title}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                        <div className="w-11 h-11 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[24px]">play_arrow</span>
+                        </div>
+                      </div>
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[10px] font-extrabold">
+                        🎯 {vid.matchedTimestamp}
+                      </div>
+                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white font-label-mono text-[10px] font-bold">
+                        ⏱️ {vid.durationText}
+                      </div>
+                    </div>
+                    <div className="p-3.5 flex flex-col gap-1">
+                      <h4 className="font-headline-sm text-[14px] text-white font-extrabold">
+                        🎬 {vid.title}
+                      </h4>
+                      <p className="font-body-sm text-[12px] text-on-surface-variant line-clamp-2">
+                        {vid.sceneDescription}
+                      </p>
+                      <span className="font-label-mono text-[10.5px] text-primary-container pt-1">
+                        📍 {vid.locationKo} • {vid.videoFileName}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : searchSpace === 'vault' ? (
             <section className="flex flex-col gap-4">
               <div className="flex items-center justify-between px-0.5">
                 <span className="font-headline-sm text-[15px] text-on-surface font-extrabold">

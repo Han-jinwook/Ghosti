@@ -13,7 +13,9 @@ import type {
   SyncMode,
   SyncState,
   TrashCategory,
+  TrialScanPermissions,
   UndoQuarantineBatch,
+  VideoSceneItem,
   VoiceRoutingTrace,
 } from '../types/saysee';
 import {
@@ -21,12 +23,14 @@ import {
   LOCAL_DOCUMENT_FILES,
   OnboardingProgressUpdate,
   PRESET_QUERIES,
+  VIDEO_SCENE_ITEMS,
   detectHardwareTelemetry,
   executeTextSearch,
   executeZeroSttVoiceSearch,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
   searchLocalDocumentFiles,
+  searchVideoSceneItems,
 } from '../services/aiEngine';
 import {
   LocalSentenceChip,
@@ -49,13 +53,20 @@ interface SaySeeStore {
   setMobileTab: (tab: MobileTab) => void;
   setDesktopTab: (tab: DesktopTab) => void;
 
-  // [스펙 1] 파워 검색 공간 이원화 ([🖼️ 전체/갤러리] vs [📁 스마트 서류함])
+  // [스펙 1 & 체험판 타겟팅] 파워 검색 공간 3-Track 필터 ([🎬 동영상 장면 10개] | [📁 스마트 서류함 20건] | [🖼️ 전체/갤러리])
   searchSpace: SearchSpaceMode;
   localDocuments: LocalDocumentFile[];
   matchedLocalDocs: LocalDocumentFile[];
   selectedDocModal: LocalDocumentFile | null;
+  videoSceneItems: VideoSceneItem[];
+  matchedVideoScenes: VideoSceneItem[];
+  selectedVideoModal: VideoSceneItem | null;
+  trialScanPermissions: TrialScanPermissions;
   setSearchSpace: (space: SearchSpaceMode) => void;
   setSelectedDocModal: (doc: LocalDocumentFile | null) => void;
+  setSelectedVideoModal: (vid: VideoSceneItem | null) => void;
+  setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
+  runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
 
   // 데이터셋 & 인덱싱 상태
   photos: PhotoItem[];
@@ -72,7 +83,7 @@ interface SaySeeStore {
   onboardingAhaItems: OnboardingAhaItem[];
   applyAhaRecommendation: (item: OnboardingAhaItem) => Promise<void>;
 
-  // 온보딩 13분 UX 방어 모달 상태
+  // 체험판 1분 고속 스캔 (청소 진단 + 최신 서류 20건 + 최신 동영상 10개) 모달 상태
   showOnboarding: boolean;
   onboardingRunning: boolean;
   onboardingUseRealGpu: boolean;
@@ -157,18 +168,18 @@ let cancelOnboardingFlag = false;
 const voiceSession = new HybridVoiceSession();
 
 const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
-  phase: 'indexing',
-  done: 222,
-  total: 300,
-  remaining: 78,
-  percent: 74.0,
-  elapsedSec: 590,
-  etaSec: 207,
-  perImageSec: 2.66,
-  currentPhotoName: '20260926_155341.jpg',
-  currentPhotoThumb: '/__photos/file?p=20260926_155341.jpg',
+  phase: 'completed',
+  done: 30,
+  total: 30,
+  remaining: 0,
+  percent: 100.0,
+  elapsedSec: 18,
+  etaSec: 0,
+  perImageSec: 0.6,
+  currentPhotoName: '최신 서류 20건 + 동영상 10개 핵심 프레임 색인 완료 (RAM 즉시 파기)',
+  currentPhotoThumb: '/__photos/file?p=20240720_194644.jpg&thumb=1',
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
-  modelStatusText: 'EmbeddingGemma 2 (Vision q4 • Budget 70) 온디바이스 768차원 벡터 추출 중',
+  modelStatusText: '자체 로컬 GPU 서버 Gemma 2 휘발성 연산 완료 (하드디스크 저장 0건 • 0.1초 즉시 파기)',
 };
 
 export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
@@ -189,16 +200,39 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         desktopTab === 'dashboard' ? 'search' : desktopTab === 'trash' ? 'trash' : 'settings',
     }),
 
-  // [스펙 1] 갤러리 vs 스마트 서류함 공간 이원화
-  searchSpace: 'gallery',
+  // [스펙 1 & 체험판 타겟팅] 동영상 장면(10개) vs 스마트 서류함(20건) vs 전체/갤러리
+  searchSpace: 'video',
   localDocuments: LOCAL_DOCUMENT_FILES,
   matchedLocalDocs: LOCAL_DOCUMENT_FILES,
   selectedDocModal: null,
+  videoSceneItems: VIDEO_SCENE_ITEMS,
+  matchedVideoScenes: VIDEO_SCENE_ITEMS,
+  selectedVideoModal: null,
+  trialScanPermissions: {
+    gallery: true,
+    downloads: true,
+    desktop: true,
+  },
   setSelectedDocModal: (selectedDocModal) => set({ selectedDocModal }),
+  setSelectedVideoModal: (selectedVideoModal) => set({ selectedVideoModal }),
+  setTrialScanPermission: (folder, allowed) =>
+    set((state) => ({
+      trialScanPermissions: {
+        ...state.trialScanPermissions,
+        [folder]: allowed,
+      },
+    })),
 
   setSearchSpace: (searchSpace) => {
     const { photos } = get();
-    if (searchSpace === 'vault') {
+    if (searchSpace === 'video') {
+      set({
+        searchSpace: 'video',
+        activeQuery: '최신 동영상 10개 핵심 장면 전체 (불쇼 · 스노클링 · 스피드보트 · 수중 촬영)',
+        matchedTags: ['#동영상장면검색', '#핵심프레임포착', '#삼성갤러리불가'],
+        matchedVideoScenes: VIDEO_SCENE_ITEMS,
+      });
+    } else if (searchSpace === 'vault') {
       const vaultPhotos = photos
         .filter((p) => !p.quarantined && p.isVaultDocument)
         .map((photo) => ({
@@ -209,7 +243,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         }));
       set({
         searchSpace: 'vault',
-        activeQuery: '전체 서류 및 문서 자산 (조립 설명서 · 신분증 · 보험 증권 · 영수증)',
+        activeQuery: '최근 서류 20건 통합 (PDF·문서 12건 + 촬영 영수증·설명서·신분증 8장)',
         matchedTags: ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색'],
         searchResults: vaultPhotos,
         matchedLocalDocs: LOCAL_DOCUMENT_FILES,
@@ -218,6 +252,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       set({ searchSpace: 'gallery' });
       void get().runTextQuery('코타키나발루 나무 다리 위에서 산책하는 모습');
     }
+  },
+
+  runBriefingHintChip: async (target, query) => {
+    set({ searchSpace: target === 'doc' ? 'vault' : 'video' });
+    await get().runTextQuery(query);
   },
 
   photos: [],
@@ -259,9 +298,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       targetSearchQuery: chip.query,
     }));
 
-    // 초기 기본 검색 결과 ("코타키나발루 나무 다리 위에서 산책하는 모습") 세팅
-    const initialQuery = '코타키나발루 나무 다리 위에서 산책하는 모습';
+    // 초기 기본 검색 결과 세팅
+    const initialQuery = '한밤중 바닷가에서 불꽃 돌리는 불쇼 영상';
     const initialSearch = await executeTextSearch(initialQuery, dataset.photos, 'text-direct');
+    const initialVideoMatches = searchVideoSceneItems(initialQuery);
 
     // 쓰레기 사진 기본 선택 세팅 (원본 1장으로 보호된 사진 및 스마트 서류함 자산은 제외됨)
     const trashIds = new Set<string>(
@@ -277,9 +317,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       syncState,
       sentenceChips: localChips,
       onboardingAhaItems: localAhaItems,
+      searchSpace: 'video',
       activeQuery: initialQuery,
-      matchedTags: ['#나무다리·공원', '#코타키나발루', '#산책'],
+      matchedTags: ['#동영상장면검색', '#불쇼영상', '#코타키나발루'],
       searchResults: initialSearch.results,
+      matchedVideoScenes: initialVideoMatches.length > 0 ? initialVideoMatches : VIDEO_SCENE_ITEMS,
       selectedTrashIds: trashIds,
       initialized: true,
       initializing: false,
@@ -291,11 +333,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     await get().runTextQuery(item.targetSearchQuery);
   },
 
-  // ─────────────── 온보딩 13분 UX 방어 ───────────────
+  // ─────────────── 체험판 1분 고속 스캔 (청소 진단 + 최신 서류 20건 + 최신 동영상 10개) ───────────────
   showOnboarding: false,
   onboardingRunning: false,
   onboardingUseRealGpu: false,
-  onboardingTargetCount: 300,
+  onboardingTargetCount: 30,
   onboardingProgress: INITIAL_ONBOARDING_PROGRESS,
 
   setShowOnboarding: (showOnboarding) => set({ showOnboarding }),
@@ -326,9 +368,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({ onboardingRunning: false });
   },
 
-  // ─────────────── 파워 검색 (갤러리 + 스마트 서류함 통합) ───────────────
-  activeQuery: '코타키나발루 나무 다리 위에서 산책하는 모습',
-  matchedTags: ['#나무다리·공원', '#코타키나발루', '#산책'],
+  // ─────────────── 파워 검색 (동영상 장면 10개 + 스마트 서류함 20건 + 갤러리 통합) ───────────────
+  activeQuery: '한밤중 바닷가에서 불꽃 돌리는 불쇼 영상',
+  matchedTags: ['#동영상장면검색', '#불쇼영상', '#코타키나발루'],
   searchResults: [],
   groupBurstsInSearch: true,
   isListening: false,
@@ -348,27 +390,42 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     if (!query) return;
     const { photos, telemetry, searchSpace } = get();
 
-    // 로컬 PDF/TXT/DOCX 문서 매칭
+    // 로컬 PDF/TXT/DOCX 문서 매칭 (12건) 및 동영상 핵심 프레임 매칭 (10개)
     const docMatches = searchLocalDocumentFiles(query);
+    const videoMatches = searchVideoSceneItems(query);
 
-    // [스펙 1] 스마트 서류함 모드일 때는 서류 사진 + 로컬 PDF/문서 통합 매칭
+    // [체험판 타겟 ②] 동영상 장면 검색 모드일 때: 동영상 장면 + 해당 장면 연관 프레임 사진 동시 매칭
+    if (searchSpace === 'video') {
+      const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
+      set({
+        activeQuery: query,
+        matchedTags: ['#동영상장면검색', '#핵심프레임포착', '#0.04초매칭'],
+        matchedVideoScenes: videoMatches.length > 0 ? videoMatches : VIDEO_SCENE_ITEMS,
+        searchResults: results,
+        matchedLocalDocs: docMatches,
+        telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
+      });
+      return;
+    }
+
+    // [체험판 타겟 ① / 스펙 1] 스마트 서류함 모드일 때는 서류 사진(8장) + 로컬 PDF/문서(12건) = 20건 통합 매칭
     if (searchSpace === 'vault') {
       const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
       const vaultCandidates = photos.filter((p) => !p.quarantined && p.isVaultDocument);
       const qLower = query.toLowerCase();
       const keywordMatchedVault = vaultCandidates.filter((p) => {
         const text = `${p.name} ${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
-        if (qLower.includes('조립') || qLower.includes('설명서') || qLower.includes('매뉴얼')) {
+        if (qLower.includes('조립') || qLower.includes('설명서') || qLower.includes('매뉴얼') || qLower.includes('의자') || qLower.includes('도면')) {
           return p.tags.includes('#문서·설명서') || text.includes('설명서');
         }
         if (qLower.includes('신분증') || qLower.includes('여권') || qLower.includes('계약서')) {
           return p.tags.includes('#문서·신분증') || text.includes('여권');
         }
-        if (qLower.includes('영수증') || qLower.includes('전표') || qLower.includes('바우처') || qLower.includes('결제')) {
+        if (qLower.includes('영수증') || qLower.includes('전표') || qLower.includes('바우처') || qLower.includes('결제') || qLower.includes('수트라하버') || qLower.includes('숙박')) {
           return p.name.includes('Messages') || p.tags.includes('#현수막·안내') || text.includes('심사');
         }
-        if (qLower.includes('보험') || qLower.includes('증권')) {
-          return p.tags.includes('#문서·신분증');
+        if (qLower.includes('보험') || qLower.includes('증권') || qLower.includes('삼성화재') || qLower.includes('특약')) {
+          return p.tags.includes('#문서·신분증') || p.name.includes('Messages');
         }
         return query.split(/\s+/).some((tk) => tk.length >= 2 && text.includes(tk));
       });
@@ -393,6 +450,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         matchedTags: ['#스마트서류함', '#사진+PDF통합검색'],
         searchResults: Array.from(mergedMap.values()),
         matchedLocalDocs: docMatches,
+        matchedVideoScenes: videoMatches,
         telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
       });
       return;
@@ -406,6 +464,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       matchedTags: topTags.length ? topTags : ['#시맨틱매칭', '#로컬벡터'],
       searchResults: results,
       matchedLocalDocs: docMatches,
+      matchedVideoScenes: videoMatches,
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
     });
   },

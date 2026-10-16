@@ -4,7 +4,11 @@ import { DesktopDashboard } from './components/DesktopDashboard';
 import { MobileAppView } from './components/MobileAppView';
 import { OnboardingModal } from './components/OnboardingModal';
 import { PhotoDetailModal } from './components/PhotoDetailModal';
-import { LocalDocPreviewModal, PricingModal } from './components/PricingModal';
+import {
+  LocalDocPreviewModal,
+  PricingModal,
+  VideoScenePreviewModal,
+} from './components/PricingModal';
 
 export const App: React.FC = () => {
   const {
@@ -31,7 +35,7 @@ export const App: React.FC = () => {
     <>
       {layout === 'desktop' ? <DesktopDashboard /> : <MobileAppView />}
 
-      {/* 온보딩 13분 UX 방어 3D 파형/벡터 변환 모달 */}
+      {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 */}
       <OnboardingModal />
 
       {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
@@ -42,6 +46,9 @@ export const App: React.FC = () => {
 
       {/* [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달 */}
       <LocalDocPreviewModal />
+
+      {/* [체험판 타겟 ②] 동영상 장면 검색 상세 & 원본 MP4 재생 모달 */}
+      <VideoScenePreviewModal />
 
       {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}
       {lastUndoBatch && (
