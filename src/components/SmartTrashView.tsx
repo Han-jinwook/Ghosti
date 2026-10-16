@@ -25,10 +25,11 @@ const TRASH_TABS: {
   {
     key: 'memo',
     stepNum: '②',
-    title: '주차장 · 영수증 · 서류 메모',
-    shortBadge: '주차·서류·사물메모',
-    cleanTag: '#주차·부품·서류메모',
-    subtitle: 'Bes2 쓰레기 정의 이식: 주차장 기둥(K13) · 케이블/부품 사물 접사 · 조립 설명서 · 신분증/문서 사본',
+    title: '주차장 · 영수증 · 일회성 메모',
+    shortBadge: '주차·사물·일회성메모',
+    cleanTag: '#주차·부품·일회성메모',
+    subtitle:
+      '주차장 기둥(K13) · 케이블/부품 사물 접사 · 단기 택배/현수막 메모 (※ 신분증·조립설명서는 [📁 스마트 서류함]에 영구 보호됨)',
     icon: 'description',
     badgeColor: 'text-[#FFAB00] bg-[#FFAB00]/15 border-[#FFAB00]/35',
   },
@@ -120,7 +121,7 @@ export const AmberDietBanner: React.FC<{ onNavigateToTrash?: () => void }> = ({
 
             <p className="font-body-sm text-body-sm text-on-surface-variant">
               {activeTrash.length > 0
-                ? `① 동일한 복사본·연사 ${dupCount}장(원본 1장씩 완벽 보존), ② 주차장·영수증·서류·사물접사 ${memoCount}장, ③ 스크린샷 ${screenshotCount}장, ④ 심한 흔들림·오촬영 ${blurryCount}장을 선별했습니다.`
+                ? `① 동일한 복사본·연사 ${dupCount}장(원본 1장씩 완벽 보존), ② 주차장·사물·일회성 메모 ${memoCount}장, ③ 스크린샷 ${screenshotCount}장, ④ 심한 흔들림·오촬영 ${blurryCount}장을 선별했습니다.`
                 : `윈도우 탐색기에서 [세이씨_정리대기함] 폴더를 열어 확인한 뒤 비우거나 언제든 복원할 수 있습니다.`}
             </p>
           </div>
@@ -132,7 +133,7 @@ export const AmberDietBanner: React.FC<{ onNavigateToTrash?: () => void }> = ({
               onClick={onNavigateToTrash}
               className="px-4 py-2.5 rounded-full bg-surface-container-highest hover:bg-surface-bright text-on-surface font-label-lg text-label-lg font-semibold transition-colors border border-outline-variant/40"
             >
-              스마트 정리 열기
+              주치의 정리 열기
             </button>
           )}
 
@@ -177,12 +178,31 @@ export const SmartTrashView: React.FC = () => {
     openLocalFolder,
     quarantineMoving,
     setSelectedPhoto,
+    lastUndoBatch,
+    undoLastQuarantine,
+    dismissUndoBatch,
+    freeTrialUsed,
+    activePricingPlan,
+    setShowProModal,
+    setDesktopTab,
+    setSearchSpace,
   } = useSaySeeStore();
 
   const [gridColumns, setGridColumns] = useState<3 | 4>(4);
 
   const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
   const quarantinedPhotos = photos.filter((p) => p.quarantined);
+  const totalTrashBytes = activeTrash.reduce((a, p) => a + p.size, 0);
+
+  const dupCount = activeTrash.filter((p) => matchesTrashTab(p, 'duplicate')).length;
+  const memoCount = activeTrash.filter((p) => matchesTrashTab(p, 'memo')).length;
+  const screenshotCount = activeTrash.filter((p) => matchesTrashTab(p, 'screenshot')).length;
+  const blurryCount = activeTrash.filter((p) => matchesTrashTab(p, 'blurry')).length;
+  const memoAndScreenCount = memoCount + screenshotCount;
+
+  // 처치 완료 시 예상 반응 속도 향상률(%) 계산 (낭비 항목 대비 가속 지표)
+  const expectedSpeedBoostPct = Math.max(14, Math.min(38, Math.round(12 + activeTrash.length * 0.72)));
+  const currentHealthScore = Math.max(68, 98 - activeTrash.length);
 
   const currentTab =
     activeTrashCategoryFilter === 'object' ||
@@ -211,56 +231,174 @@ export const SmartTrashView: React.FC = () => {
     (currentTab === 'duplicate' || currentTab === 'all') && activeDuplicateGroups.length > 0;
 
   return (
-    <div className="flex flex-col gap-6 w-full pb-12">
-      {/* 상단 요약 헤더 */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-surface-container-low/90 backdrop-blur-xl border border-[#FFAB00]/30 shadow-lg">
-        <div className="flex flex-col gap-1.5">
+    <div className="w-full max-w-[1440px] mx-auto px-4 md:px-10 py-6 flex flex-col gap-6 pb-24">
+      {/* ─────────────── [스펙 2 핵심] 🩺 주치의 종합 진단 리포트 배너 (정리 탭 최상단) & 3중 안전망 안심 문구 ─────────────── */}
+      <div className="p-6 md:p-7 rounded-3xl bg-gradient-to-br from-surface-container-low via-surface-container to-[#0d252e] border border-[#00E5FF]/40 shadow-[0_0_40px_rgba(0,229,255,0.14)] flex flex-col gap-5">
+        {/* 상단 배지 & 30일 안전 격리 / 블랙박스 보호 안심 문구 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-outline-variant/25">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-sm text-[12px] font-black shadow-[0_0_16px_rgba(16,185,129,0.2)]">
-              <span className="material-symbols-outlined text-[16px]">verified_user</span>
+            <span className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-[12px] font-black flex items-center gap-1 shadow-[0_0_16px_rgba(0,229,255,0.35)]">
+              <span>🩺 디지털 주치의 무료 종합 진단서</span>
+            </span>
+            <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-sm text-[12px] font-black flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px]">verified_user</span>
               <span>원본 1장 안전하게 보존됨</span>
+            </span>
+            {activePricingPlan === 'free_trial' && (
+              <button
+                type="button"
+                onClick={() => setShowProModal(true)}
+                className="px-3 py-1 rounded-full bg-[#FFAB00]/20 hover:bg-[#FFAB00]/30 border border-[#FFAB00]/50 text-[#FFAB00] font-label-sm text-[11.5px] font-extrabold transition-all"
+              >
+                {freeTrialUsed
+                  ? '⚡ 무료 1묶음 체험 완료 • 990원 24시간 자유 패스 열기 →'
+                  : '🎁 입문 무료 혜택: 전체 정밀 진단서 + 연사 바둑판 Pick 1묶음 무료 체험 가능!'}
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSearchSpace('vault');
+              setDesktopTab('dashboard');
+            }}
+            className="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-[#FFAB00] font-label-sm text-[11.5px] font-bold border border-[#FFAB00]/35 flex items-center gap-1.5"
+          >
+            <span>📁 신분증·조립설명서는 [스마트 서류함]에 안전 분리됨 →</span>
+          </button>
+        </div>
+
+        {/* 주치의 종합 진단 메인 문구 & 시각적 속도 향상 게이지 */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          <div className="lg:col-span-8 flex flex-col gap-2.5">
+            <h1 className="font-headline-lg text-[19px] md:text-[23px] text-white font-extrabold leading-snug tracking-tight">
+              {activeTrash.length > 0 ? (
+                <>
+                  🩺 진단 결과: 중복·연사(파일명 다른 카톡 사본 포함){' '}
+                  <span className="text-emerald-300 underline">{dupCount}장</span>, 흔들린 사진{' '}
+                  <span className="text-secondary underline">{blurryCount}장</span>, 일회성 메모·캡처{' '}
+                  <span className="text-[#FFAB00] underline">{memoAndScreenCount}장</span> (총{' '}
+                  <span className="text-[#FFAB00]">{fmtMB(totalTrashBytes)}</span> 낭비 중)
+                  <br />
+                  <span className="text-primary-container">
+                    ➔ 처치 완료 시 기기 탐색 및 인덱싱 반응 속도 약 +{expectedSpeedBoostPct}% 향상 예상!
+                  </span>
+                </>
+              ) : (
+                <span className="text-emerald-300">
+                  ✨ 주치의 처치 완료! 모든 중복·흔들림·일회성 메모({quarantinedPhotos.length}장)가 격리되어 탐색 반응 속도가 최적(98점) 상태입니다.
+                </span>
+              )}
+            </h1>
+
+            {/* 🛡️ 3중 안전망 안심 명시 문구 */}
+            <div className="p-3.5 rounded-2xl bg-black/45 border border-emerald-400/35 flex items-start sm:items-center gap-2.5">
+              <span className="material-symbols-outlined text-emerald-400 text-[20px] shrink-0">
+                shield_lock
+              </span>
+              <p className="font-body-sm text-[12.5px] md:text-[13px] text-emerald-200 font-semibold leading-relaxed">
+                🛡️ <strong>3중 타임머신 안전망:</strong> 모든 정리 파일은 영구 삭제되지 않고{' '}
+                <code className="text-[#FFAB00] font-bold">[세이씨_정리대기함]</code>에서{' '}
+                <strong>30일간 안전하게 보호</strong>되며, 실수 시 하단{' '}
+                <strong>[↩️ 1초 즉시 되돌리기(Undo)]</strong>가 가능하고 PC 연결 시{' '}
+                <strong>원본 블랙박스 보관</strong>이 가능합니다.
+              </p>
             </div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FFAB00]/15 border border-[#FFAB00]/30 w-fit">
-              <span className="w-2 h-2 rounded-full bg-[#FFAB00]" />
-              <span className="font-label-mono text-[11px] text-[#FFAB00] font-bold uppercase">
-                CLEARMONSTER LITE • Bes2 쓰레기 기준 적용
+          </div>
+
+          {/* 우측 시각적 게이지 & 일괄 처치 액션 */}
+          <div className="lg:col-span-4 p-4 rounded-2xl bg-surface-container-lowest/90 border border-primary-container/30 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="font-label-sm text-[12px] text-on-surface-variant font-bold">
+                기기 탐색·인덱싱 반응 속도 게이지
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-mono text-[12px] font-black">
+                {activeTrash.length > 0 ? `+${expectedSpeedBoostPct}% 향상 예상` : '최적 가속 완료'}
+              </span>
+            </div>
+
+            {/* 시각적 2단 속도 향상 게이지 바 */}
+            <div className="w-full h-4 rounded-full bg-surface-container-high overflow-hidden flex p-0.5 border border-outline-variant/30">
+              <div
+                style={{ width: `${currentHealthScore}%` }}
+                className="h-full rounded-l-full bg-gradient-to-r from-secondary-container to-primary-container transition-all duration-500"
+              />
+              {activeTrash.length > 0 && (
+                <div
+                  style={{ width: `${100 - currentHealthScore}%` }}
+                  className="h-full rounded-r-full bg-gradient-to-r from-[#FFAB00] to-emerald-400 animate-pulse"
+                />
+              )}
+            </div>
+
+            <div className="flex items-center justify-between font-label-mono text-[11px] text-on-surface-variant">
+              <span>현재 상태: {currentHealthScore}점</span>
+              <span className="text-emerald-300 font-bold">처치 후: 98점 (쾌적)</span>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => void openLocalFolder('quarantine')}
+                className="px-3 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface border border-outline-variant/40 font-label-sm text-[12px] font-bold flex items-center gap-1 shrink-0"
+              >
+                <span className="material-symbols-outlined text-[#FFAB00] text-[16px]">
+                  folder_special
+                </span>
+                <span>대기함 열기</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={activeTrash.length === 0 || quarantineMoving}
+                onClick={() => void moveAllTrashToQuarantine()}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-[#FFAB00] hover:bg-[#FFB724] text-surface-container-lowest font-label-md text-[13px] font-black shadow-[0_0_20px_rgba(255,171,0,0.45)] flex items-center justify-center gap-1.5 transition-all disabled:opacity-40"
+              >
+                <span className="material-symbols-outlined text-[18px]">bolt</span>
+                <span>원본 남기고 {activeTrash.length}장 일괄 처치</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─────────────── [스펙 2 핵심] 🛡️ 3중 타임머신 안전망: 즉시 되돌리기(Undo) 플로팅/인라인 바 ─────────────── */}
+      {lastUndoBatch && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072b35] to-surface-container-high border-2 border-emerald-400 shadow-[0_0_32px_rgba(16,185,129,0.35)] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0">
+              <span className="material-symbols-outlined text-[22px]">history</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-headline-sm text-[15px] text-white font-extrabold">
+                🛡️ [3중 타임머신 안전망 작동 중] 방금 정리한 {lastUndoBatch.count}장 ({fmtMB(lastUndoBatch.savedBytes)})이 정리대기함으로 안전 격리되었습니다.
+              </span>
+              <span className="font-body-sm text-[12px] text-emerald-200">
+                실수로 눌렀더라도 걱정하지 마세요! 오른쪽 버튼을 누르면 1초 만에 원래 갤러리 위치로 즉시 되돌아갑니다.
               </span>
             </div>
           </div>
 
-          <h1 className="font-headline-lg text-[22px] md:text-[24px] text-on-surface font-extrabold tracking-tight mt-0.5">
-            🧹 스마트 정리 ({activeTrash.length}장) • [세이씨_정리대기함]
-          </h1>
-          <p className="font-body-sm text-[13.5px] text-on-surface-variant">
-            ① 동일한 복사본·연사는 가장 잘 나온 <strong>[원본 1장]을 안전하게 보존</strong>하고 나머지 사본만 격리하며,
-            ② 주차장·영수증·서류·사물 접사, ③ 스크린샷, ④ 심한 흔들림·오촬영을 전용 폴더(
-            <code className="text-[#FFAB00] font-label-mono">세이씨_정리대기함</code>)로 분리합니다.
-          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void undoLastQuarantine()}
+              className="px-4 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-surface-container-lowest font-label-md text-[13px] font-black shadow-[0_0_20px_rgba(16,185,129,0.5)] flex items-center gap-1.5 transition-all"
+            >
+              <span>↩️ 방금 정리한 항목 원래대로 되돌리기 (Undo)</span>
+            </button>
+            <button
+              type="button"
+              onClick={dismissUndoBatch}
+              className="p-2 rounded-lg text-on-surface-variant hover:text-white"
+              title="닫기"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => void openLocalFolder('quarantine')}
-            className="px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface border border-outline-variant/40 font-label-md text-[13px] font-semibold flex items-center gap-2 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[#FFAB00] text-[18px]">
-              folder_special
-            </span>
-            <span>정리대기함 폴더 열기</span>
-          </button>
-
-          <button
-            disabled={activeTrash.length === 0 || quarantineMoving}
-            onClick={() => void moveAllTrashToQuarantine()}
-            className="px-5 py-2.5 rounded-xl bg-[#FFAB00] hover:bg-[#FFB724] text-surface-container-lowest font-label-lg text-[14px] font-extrabold shadow-[0_0_24px_rgba(255,171,0,0.45)] flex items-center gap-2 transition-all disabled:opacity-40"
-          >
-            <span className="material-symbols-outlined text-[20px]">drive_file_move</span>
-            <span>
-              원본 남기고 추천 {activeTrash.length}장 일괄 격리
-            </span>
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* ─────────────── [지침 #4] 스마트 정리 4대 탭 네비게이션 카드 ─────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">

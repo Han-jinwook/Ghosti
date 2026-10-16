@@ -4,6 +4,7 @@ import { DesktopDashboard } from './components/DesktopDashboard';
 import { MobileAppView } from './components/MobileAppView';
 import { OnboardingModal } from './components/OnboardingModal';
 import { PhotoDetailModal } from './components/PhotoDetailModal';
+import { LocalDocPreviewModal, PricingModal } from './components/PricingModal';
 
 export const App: React.FC = () => {
   const {
@@ -11,6 +12,9 @@ export const App: React.FC = () => {
     initApp,
     lastQuarantineToast,
     dismissQuarantineToast,
+    lastUndoBatch,
+    undoLastQuarantine,
+    dismissUndoBatch,
   } = useSaySeeStore();
 
   useEffect(() => {
@@ -19,7 +23,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (!lastQuarantineToast) return;
-    const t = window.setTimeout(() => dismissQuarantineToast(), 4000);
+    const t = window.setTimeout(() => dismissQuarantineToast(), 4500);
     return () => clearTimeout(t);
   }, [lastQuarantineToast, dismissQuarantineToast]);
 
@@ -27,19 +31,61 @@ export const App: React.FC = () => {
     <>
       {layout === 'desktop' ? <DesktopDashboard /> : <MobileAppView />}
 
-      {/* 지침 #1: 온보딩 13분 UX 방어 3D 파형/벡터 변환 모달 */}
+      {/* 온보딩 13분 UX 방어 3D 파형/벡터 변환 모달 */}
       <OnboardingModal />
 
-      {/* 3.2절: 사진 상세 & 2차 연관 꼬리물기 탐색 모달 */}
+      {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
       <PhotoDetailModal />
+
+      {/* [스펙 4] 카페 런칭용 심플 과금 퍼널 & 선착순 기간 뻥튀기 모달 */}
+      <PricingModal />
+
+      {/* [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달 */}
+      <LocalDocPreviewModal />
+
+      {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}
+      {lastUndoBatch && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-2xl px-5 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072b35]/95 to-surface-container-highest/95 backdrop-blur-2xl border-2 border-emerald-400 text-white shadow-[0_0_40px_rgba(16,185,129,0.45)] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="material-symbols-outlined text-emerald-300 text-[22px] shrink-0">
+              history
+            </span>
+            <span className="font-label-md text-[13px] md:text-[13.5px] font-bold truncate">
+              🛡️ 방금 정리한 {lastUndoBatch.count}장이 [세이씨_정리대기함]으로 안전 격리되었습니다.
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => void undoLastQuarantine()}
+              className="px-4 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-surface-container-lowest font-label-sm text-[12.5px] font-black shadow-md transition-all"
+            >
+              ↩️ 방금 정리한 항목 원래대로 되돌리기 (Undo)
+            </button>
+            <button
+              type="button"
+              onClick={dismissUndoBatch}
+              className="text-white/70 hover:text-white p-1"
+              title="닫기"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 글로벌 액션 피드백 토스트 */}
       {lastQuarantineToast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-full bg-surface-container-highest/95 backdrop-blur-xl border border-primary-container/40 text-on-surface font-label-md text-label-md font-bold shadow-[0_0_32px_rgba(0,229,255,0.3)] flex items-center gap-2">
-          <span>{lastQuarantineToast}</span>
+        <div
+          className={`fixed ${
+            lastUndoBatch ? 'bottom-24' : 'bottom-16'
+          } left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-full bg-surface-container-highest/95 backdrop-blur-xl border border-primary-container/40 text-on-surface font-label-md text-label-md font-bold shadow-[0_0_32px_rgba(0,229,255,0.3)] flex items-center gap-2 max-w-[92vw]`}
+        >
+          <span className="truncate">{lastQuarantineToast}</span>
           <button
             onClick={dismissQuarantineToast}
-            className="text-on-surface-variant hover:text-on-surface"
+            className="text-on-surface-variant hover:text-on-surface shrink-0"
           >
             <span className="material-symbols-outlined text-[16px]">close</span>
           </button>

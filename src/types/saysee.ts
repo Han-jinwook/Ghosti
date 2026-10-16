@@ -7,6 +7,44 @@ export type TrashCategory =
   | 'object'
   | 'receipt';
 
+/** [스펙 1] 파워 검색 상단 공간 이원화 필터: [🖼️ 전체/갤러리] vs [📁 스마트 서류함] */
+export type SearchSpaceMode = 'gallery' | 'vault';
+
+/** [스펙 1] 로컬 폴더(PC/폰) 내 PDF, TXT, DOCX 등 텍스트 추출 문서 자산 */
+export interface LocalDocumentFile {
+  id: string;
+  fileName: string;
+  ext: 'PDF' | 'TXT' | 'DOCX';
+  title: string;
+  categoryBadge: string;
+  extractedText: string;
+  keywords: string[];
+  date: string;
+  sizeKB: number;
+  deviceSource: 'PC 로컬 폴더' | '스마트폰 다운로드';
+}
+
+/** [스펙 2] 3중 타임머신 안전망: 즉시 되돌리기(Undo) 배치 스냅샷 */
+export interface UndoQuarantineBatch {
+  fileNames: string[];
+  actionLabel: string;
+  count: number;
+  savedBytes: number;
+  timestamp: number;
+}
+
+/** [스펙 3] 클라우드 대체 프라이빗 싱크 2-Track 모드 */
+export type PrivateSyncStrategy = 'mirror' | 'shadow';
+
+/** [스펙 4] 카페 런칭용 심플 과금 퍼널 플랜 ID */
+export type PricingPlanId =
+  | 'free_trial'
+  | 'pass_24h_990'
+  | 'single_mobile_1900'
+  | 'single_bundle_3800'
+  | 'sub_mobile_1100'
+  | 'sub_bundle_2900';
+
 export interface DuplicateGroup {
   groupId: string;
   /** 그룹 내에서 가장 선명하거나(maxCellLap 최고점) 유저가 직접 클릭(Pick)한 보존 원본 1장 ID */
@@ -37,6 +75,10 @@ export interface PhotoItem {
   locationKo?: string;
   /** 로컬 시맨틱 캡션 (로컬 문장 조합기 팩트 원천) */
   captionKo?: string;
+  /** [스펙 1] 지울 쓰레기가 아니라 [📁 스마트 서류함]으로 격상된 핵심 정보 자산(설명서·신분증·계약서·영수증 등) 여부 */
+  isVaultDocument?: boolean;
+  /** [스펙 1] 스마트 서류함 분류 라벨 (예: '조립 설명서·매뉴얼', '신분증·여권 사본', '결제·심사 문자 캡처') */
+  vaultCategoryLabel?: string;
   /** 스마트 다이어트 쓰레기 사진 분류 (해당 시) */
   trashCategory?: TrashCategory;
   /** 쓰레기 분류 신뢰도 (0.85 ~ 0.99) */
@@ -138,7 +180,10 @@ export type SyncMode = 'supabase' | 'p2p-wifi';
 
 export interface SyncState {
   mode: SyncMode;
+  /** [스펙 3] 프라이빗 싱크 2-Track 전략: 'mirror'(100% 원본 미러링) vs 'shadow'(13KB 초경량 섀도우 캐시) */
+  privateSyncStrategy: PrivateSyncStrategy;
   wifiOnly: boolean;
+  chargingOnly: boolean;
   connectedPeer: string;
   lastSyncedAt: string;
   packSizeMB: number;

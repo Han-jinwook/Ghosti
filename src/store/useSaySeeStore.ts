@@ -2,17 +2,23 @@ import { create } from 'zustand';
 import type {
   DuplicateGroup,
   HardwareTelemetry,
+  LocalDocumentFile,
   MerlinAuthState,
   OnboardingAhaItem,
   PhotoItem,
+  PricingPlanId,
+  PrivateSyncStrategy,
   SearchResultItem,
+  SearchSpaceMode,
   SyncMode,
   SyncState,
   TrashCategory,
+  UndoQuarantineBatch,
   VoiceRoutingTrace,
 } from '../types/saysee';
 import {
   HybridVoiceSession,
+  LOCAL_DOCUMENT_FILES,
   OnboardingProgressUpdate,
   PRESET_QUERIES,
   detectHardwareTelemetry,
@@ -20,6 +26,7 @@ import {
   executeZeroSttVoiceSearch,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
+  searchLocalDocumentFiles,
 } from '../services/aiEngine';
 import {
   LocalSentenceChip,
@@ -34,13 +41,21 @@ export type MobileTab = 'search' | 'trash' | 'settings';
 export type DesktopTab = 'dashboard' | 'trash' | 'sync';
 
 interface SaySeeStore {
-  // 레이아웃 & 미니멀 3대 탭 네비게이션 (🔍 AI 검색 | 🧹 스마트 정리 | ⚙️ 내 기기 & 백업)
+  // 레이아웃 & 미니멀 3대 탭 네비게이션 (🔍 파워 검색 | 🧹 주치의 정리 | ⚙️ 내 기기 & 백업)
   layout: ViewportLayout;
   mobileTab: MobileTab;
   desktopTab: DesktopTab;
   setLayout: (layout: ViewportLayout) => void;
   setMobileTab: (tab: MobileTab) => void;
   setDesktopTab: (tab: DesktopTab) => void;
+
+  // [스펙 1] 파워 검색 공간 이원화 ([🖼️ 전체/갤러리] vs [📁 스마트 서류함])
+  searchSpace: SearchSpaceMode;
+  localDocuments: LocalDocumentFile[];
+  matchedLocalDocs: LocalDocumentFile[];
+  selectedDocModal: LocalDocumentFile | null;
+  setSearchSpace: (space: SearchSpaceMode) => void;
+  setSelectedDocModal: (doc: LocalDocumentFile | null) => void;
 
   // 데이터셋 & 인덱싱 상태
   photos: PhotoItem[];
@@ -57,7 +72,7 @@ interface SaySeeStore {
   onboardingAhaItems: OnboardingAhaItem[];
   applyAhaRecommendation: (item: OnboardingAhaItem) => Promise<void>;
 
-  // 온보딩 13분 UX 방어 모달 상태 (지침 #1)
+  // 온보딩 13분 UX 방어 모달 상태
   showOnboarding: boolean;
   onboardingRunning: boolean;
   onboardingUseRealGpu: boolean;
@@ -94,11 +109,12 @@ interface SaySeeStore {
   selectedBurstGroup: PhotoItem[] | null;
   setSelectedPhoto: (photo: PhotoItem | null, burstGroup?: PhotoItem[] | null) => void;
 
-  // 클리어몬스터 Lite 4대 탭 & PC 바둑판(Grid) Pick UI & [세이씨_정리대기함]
+  // [스펙 2] 주치의 정리 4대 탭 & 바둑판 Pick UI & 3중 타임머신 안전망 (Undo)
   selectedTrashIds: Set<string>;
   activeTrashCategoryFilter: TrashCategory | 'all';
   quarantineMoving: boolean;
   lastQuarantineToast: string | null;
+  lastUndoBatch: UndoQuarantineBatch | null;
   setActiveTrashCategoryFilter: (cat: TrashCategory | 'all') => void;
   toggleTrashSelection: (id: string) => void;
   selectAllTrashInFilter: () => void;
@@ -115,17 +131,25 @@ interface SaySeeStore {
   moveSelectedToQuarantine: () => Promise<void>;
   moveAllTrashToQuarantine: () => Promise<void>;
   restoreFromQuarantine: (names: string[]) => Promise<void>;
-  openLocalFolder: (target: 'quarantine' | 'photos') => Promise<void>;
+  undoLastQuarantine: () => Promise<void>;
+  dismissUndoBatch: () => void;
+  openLocalFolder: (target: 'quarantine' | 'photos' | 'docs') => Promise<void>;
   dismissQuarantineToast: () => void;
 
-  // 하드웨어 텔레메트리, 멀린 토큰, 동기화
+  // [스펙 3 & 4] 프라이빗 싱크 2대 모드 & 카페 런칭 심플 과금 퍼널 + 선착순 10년권 카운트다운
   telemetry: HardwareTelemetry | null;
   merlinAuth: MerlinAuthState;
   syncState: SyncState;
   showProModal: boolean;
+  freeTrialUsed: boolean;
+  activePricingPlan: PricingPlanId;
+  foundingMemberRemainingSeats: number;
   setShowProModal: (show: boolean) => void;
+  activatePricingPlan: (planId: PricingPlanId) => void;
   switchMerlinTier: () => void;
   updateSyncSettings: (mode: SyncMode, wifiOnly: boolean) => void;
+  setPrivateSyncStrategy: (strategy: PrivateSyncStrategy) => void;
+  setChargingOnlySync: (chargingOnly: boolean) => void;
   triggerSyncNow: () => Promise<void>;
 }
 
@@ -164,6 +188,37 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       mobileTab:
         desktopTab === 'dashboard' ? 'search' : desktopTab === 'trash' ? 'trash' : 'settings',
     }),
+
+  // [스펙 1] 갤러리 vs 스마트 서류함 공간 이원화
+  searchSpace: 'gallery',
+  localDocuments: LOCAL_DOCUMENT_FILES,
+  matchedLocalDocs: LOCAL_DOCUMENT_FILES,
+  selectedDocModal: null,
+  setSelectedDocModal: (selectedDocModal) => set({ selectedDocModal }),
+
+  setSearchSpace: (searchSpace) => {
+    const { photos } = get();
+    if (searchSpace === 'vault') {
+      const vaultPhotos = photos
+        .filter((p) => !p.quarantined && p.isVaultDocument)
+        .map((photo) => ({
+          photo,
+          score: 0.96,
+          matchPercentage: 98,
+          matchedBy: 'text-direct' as const,
+        }));
+      set({
+        searchSpace: 'vault',
+        activeQuery: '전체 서류 및 문서 자산 (조립 설명서 · 신분증 · 보험 증권 · 영수증)',
+        matchedTags: ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색'],
+        searchResults: vaultPhotos,
+        matchedLocalDocs: LOCAL_DOCUMENT_FILES,
+      });
+    } else {
+      set({ searchSpace: 'gallery' });
+      void get().runTextQuery('코타키나발루 나무 다리 위에서 산책하는 모습');
+    }
+  },
 
   photos: [],
   duplicateGroups: [],
@@ -208,7 +263,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     const initialQuery = '코타키나발루 나무 다리 위에서 산책하는 모습';
     const initialSearch = await executeTextSearch(initialQuery, dataset.photos, 'text-direct');
 
-    // 쓰레기 사진 기본 선택 세팅 (원본 1장으로 보호된 사진은 trashCategory가 없으므로 제외됨)
+    // 쓰레기 사진 기본 선택 세팅 (원본 1장으로 보호된 사진 및 스마트 서류함 자산은 제외됨)
     const trashIds = new Set<string>(
       dataset.photos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
     );
@@ -236,7 +291,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     await get().runTextQuery(item.targetSearchQuery);
   },
 
-  // ─────────────── 온보딩 13분 UX 방어 (지침 #1) ───────────────
+  // ─────────────── 온보딩 13분 UX 방어 ───────────────
   showOnboarding: false,
   onboardingRunning: false,
   onboardingUseRealGpu: false,
@@ -271,7 +326,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({ onboardingRunning: false });
   },
 
-  // ─────────────── Zero-STT 음성 검색 & 자연어 문장 검색 ───────────────
+  // ─────────────── 파워 검색 (갤러리 + 스마트 서류함 통합) ───────────────
   activeQuery: '코타키나발루 나무 다리 위에서 산책하는 모습',
   matchedTags: ['#나무다리·공원', '#코타키나발루', '#산책'],
   searchResults: [],
@@ -291,7 +346,58 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   runTextQuery: async (q: string) => {
     const query = q.trim();
     if (!query) return;
-    const { photos, telemetry } = get();
+    const { photos, telemetry, searchSpace } = get();
+
+    // 로컬 PDF/TXT/DOCX 문서 매칭
+    const docMatches = searchLocalDocumentFiles(query);
+
+    // [스펙 1] 스마트 서류함 모드일 때는 서류 사진 + 로컬 PDF/문서 통합 매칭
+    if (searchSpace === 'vault') {
+      const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
+      const vaultCandidates = photos.filter((p) => !p.quarantined && p.isVaultDocument);
+      const qLower = query.toLowerCase();
+      const keywordMatchedVault = vaultCandidates.filter((p) => {
+        const text = `${p.name} ${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
+        if (qLower.includes('조립') || qLower.includes('설명서') || qLower.includes('매뉴얼')) {
+          return p.tags.includes('#문서·설명서') || text.includes('설명서');
+        }
+        if (qLower.includes('신분증') || qLower.includes('여권') || qLower.includes('계약서')) {
+          return p.tags.includes('#문서·신분증') || text.includes('여권');
+        }
+        if (qLower.includes('영수증') || qLower.includes('전표') || qLower.includes('바우처') || qLower.includes('결제')) {
+          return p.name.includes('Messages') || p.tags.includes('#현수막·안내') || text.includes('심사');
+        }
+        if (qLower.includes('보험') || qLower.includes('증권')) {
+          return p.tags.includes('#문서·신분증');
+        }
+        return query.split(/\s+/).some((tk) => tk.length >= 2 && text.includes(tk));
+      });
+
+      const mergedMap = new Map<string, SearchResultItem>();
+      for (const vp of keywordMatchedVault) {
+        mergedMap.set(vp.id, {
+          photo: vp,
+          score: 0.97,
+          matchPercentage: 98,
+          matchedBy: 'text-direct',
+        });
+      }
+      for (const r of results) {
+        if (r.photo.isVaultDocument && !mergedMap.has(r.photo.id)) {
+          mergedMap.set(r.photo.id, r);
+        }
+      }
+
+      set({
+        activeQuery: query,
+        matchedTags: ['#스마트서류함', '#사진+PDF통합검색'],
+        searchResults: Array.from(mergedMap.values()),
+        matchedLocalDocs: docMatches,
+        telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
+      });
+      return;
+    }
+
     const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
     const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
 
@@ -299,6 +405,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       activeQuery: query,
       matchedTags: topTags.length ? topTags : ['#시맨틱매칭', '#로컬벡터'],
       searchResults: results,
+      matchedLocalDocs: docMatches,
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
     });
   },
@@ -347,6 +454,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         activeQuery: trace.resolvedQuery,
         matchedTags: topTags.length ? topTags : ['#오디오벡터', '#온디바이스'],
         searchResults: results,
+        matchedLocalDocs: searchLocalDocumentFiles(trace.resolvedQuery),
         lastVoiceTrace: trace,
         voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
         isSlimCapsule: true,
@@ -412,11 +520,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         : null,
     }),
 
-  // ─────────────── 클리어몬스터 Lite 4대 탭 & PC 바둑판(Grid) Pick UI & [세이씨_정리대기함] ───────────────
+  // ─────────────── [스펙 2] 주치의 정리 4대 탭 & 바둑판 Pick & 3중 타임머신 안전망 (Undo) ───────────────
   selectedTrashIds: new Set<string>(),
   activeTrashCategoryFilter: 'duplicate',
   quarantineMoving: false,
   lastQuarantineToast: null,
+  lastUndoBatch: null,
 
   setActiveTrashCategoryFilter: (activeTrashCategoryFilter) => set({ activeTrashCategoryFilter }),
 
@@ -451,13 +560,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
 
   clearTrashSelection: () => set({ selectedTrashIds: new Set() }),
 
-  /**
-   * [PC 바둑판(Grid) Pick UI]
-   * 중복/연사 클러스터에서 유저가 가장 잘 나온 사진 1장을 클릭(Pick)하면:
-   * 1) 클릭한 사진 1장을 [원본 1장 안전하게 보존됨](isBestInDuplicateGroup: true, trashCategory: undefined)으로 승격
-   * 2) 나머지 쌍둥이 사본들은 duplicate(정리 대상)로 지정
-   * 3) quarantineRestImmediately === true이면 나머지 사본들을 즉시 [세이씨_정리대기함]으로 이동 격리!
-   */
   pickBestInDuplicateGroup: async (
     groupId: string,
     keepPhotoId: string,
@@ -523,7 +625,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           body: JSON.stringify({ files: redundantIds }),
         });
         const json = await res.json();
-        const movedSet = new Set<string>(json.moved ?? redundantIds);
+        const movedList: string[] = json.moved ?? redundantIds;
+        const movedSet = new Set<string>(movedList);
+        const savedBytes = photos
+          .filter((p) => movedSet.has(p.id))
+          .reduce((acc, p) => acc + p.size, 0);
 
         set((state) => {
           const afterMovePhotos = state.photos.map((p) =>
@@ -539,12 +645,24 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
           const cleanedSelected = new Set(state.selectedTrashIds);
           movedSet.forEach((id) => cleanedSelected.delete(id));
+          const wasFreeTrialFirstUse = !state.freeTrialUsed && state.activePricingPlan === 'free_trial';
+
           return {
             photos: afterMovePhotos,
             searchResults: afterSearch,
             selectedTrashIds: cleanedSelected,
             quarantineMoving: false,
-            lastQuarantineToast: `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
+            freeTrialUsed: true,
+            lastUndoBatch: {
+              fileNames: Array.from(movedSet),
+              actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
+              count: movedSet.size,
+              savedBytes,
+              timestamp: Date.now(),
+            },
+            lastQuarantineToast: wasFreeTrialFirstUse
+              ? `🎁 [입문 무료 체험 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
+              : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
           };
         });
       } catch {
@@ -569,7 +687,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         body: JSON.stringify({ files: redundantIds }),
       });
       const json = await res.json();
-      const movedSet = new Set<string>(json.moved ?? redundantIds);
+      const movedList: string[] = json.moved ?? redundantIds;
+      const movedSet = new Set<string>(movedList);
+      const savedBytes = burstPhotos
+        .filter((p) => movedSet.has(p.id))
+        .reduce((acc, p) => acc + p.size, 0);
 
       set((state) => {
         const afterMovePhotos = state.photos.map((p) =>
@@ -592,6 +714,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           selectedPhoto: null,
           selectedBurstGroup: null,
           quarantineMoving: false,
+          freeTrialUsed: true,
+          lastUndoBatch: {
+            fileNames: Array.from(movedSet),
+            actionLabel: '검색 결과 연사 베스트 컷 Pick',
+            count: movedSet.size,
+            savedBytes,
+            timestamp: Date.now(),
+          },
           lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
         };
       });
@@ -613,7 +743,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         body: JSON.stringify({ files: targetNames }),
       });
       const json = await res.json();
-      const movedSet = new Set<string>(json.moved ?? targetNames);
+      const movedList: string[] = json.moved ?? targetNames;
+      const movedSet = new Set<string>(movedList);
+      const savedBytes = photos
+        .filter((p) => movedSet.has(p.id))
+        .reduce((acc, p) => acc + p.size, 0);
 
       const updatedPhotos = photos.map((p) =>
         movedSet.has(p.id)
@@ -636,7 +770,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         searchResults: state.searchResults.filter((r) => !movedSet.has(r.photo.id)),
         selectedTrashIds: nextTrashIds,
         quarantineMoving: false,
-        lastQuarantineToast: `✅ ${movedSet.size}장의 사진이 [세이씨_정리대기함] 폴더로 안전하게 격리(이동)되었습니다.`,
+        freeTrialUsed: true,
+        lastUndoBatch: {
+          fileNames: Array.from(movedSet),
+          actionLabel: '주치의 추천 항목 일괄 정리',
+          count: movedSet.size,
+          savedBytes,
+          timestamp: Date.now(),
+        },
+        lastQuarantineToast: `✅ ${movedSet.size}장의 사진이 [세이씨_정리대기함]으로 30일 안전 격리되었습니다.`,
       }));
     } catch {
       set({ quarantineMoving: false });
@@ -676,14 +818,27 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
             : p
         ),
         quarantineMoving: false,
-        lastQuarantineToast: `♻️ ${restoredSet.size}장의 사진이 원본 폴더(test_photos)로 복원되었습니다.`,
+        lastQuarantineToast: `♻️ ${restoredSet.size}장의 사진이 원본 폴더(test_photos)로 즉시 원복되었습니다.`,
       }));
     } catch {
       set({ quarantineMoving: false });
     }
   },
 
-  openLocalFolder: async (target: 'quarantine' | 'photos') => {
+  undoLastQuarantine: async () => {
+    const { lastUndoBatch } = get();
+    if (!lastUndoBatch || lastUndoBatch.fileNames.length === 0) return;
+    const names = lastUndoBatch.fileNames;
+    set({ lastUndoBatch: null });
+    await get().restoreFromQuarantine(names);
+    set({
+      lastQuarantineToast: `↩️ [타임머신 1초 Undo 완료] 방금 정리했던 ${names.length}장을 원래 갤러리 위치로 완벽히 되돌렸습니다!`,
+    });
+  },
+
+  dismissUndoBatch: () => set({ lastUndoBatch: null }),
+
+  openLocalFolder: async (target: 'quarantine' | 'photos' | 'docs') => {
     try {
       await fetch('/__quarantine/open-folder', {
         method: 'POST',
@@ -694,6 +849,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         lastQuarantineToast:
           target === 'quarantine'
             ? '📂 윈도우 탐색기에서 [세이씨_정리대기함] 폴더를 열었습니다.'
+            : target === 'docs'
+            ? '📂 윈도우 탐색기에서 [로컬 스마트 서류함 (test_docs)] 폴더를 열었습니다.'
             : '📂 윈도우 탐색기에서 원본 사진 폴더를 열었습니다.',
       });
     } catch {
@@ -703,25 +860,87 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
 
   dismissQuarantineToast: () => set({ lastQuarantineToast: null }),
 
-  // ─────────────── 기기 텔레메트리 & P2P 백업/동기화 ───────────────
+  // ─────────────── [스펙 3 & 4] 프라이빗 싱크 2대 모드 & 카페 런칭 심플 과금 퍼널 ───────────────
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(550, 3230438906),
   showProModal: false,
+  freeTrialUsed: false,
+  activePricingPlan: 'free_trial',
+  foundingMemberRemainingSeats: 78,
+
   setShowProModal: (showProModal) => set({ showProModal }),
+
+  activatePricingPlan: (planId: PricingPlanId) => {
+    set((state) => {
+      const isAnnualFounding = planId === 'sub_mobile_1100' || planId === 'sub_bundle_2900';
+      const nextSeats =
+        isAnnualFounding && state.foundingMemberRemainingSeats > 1
+          ? state.foundingMemberRemainingSeats - 1
+          : state.foundingMemberRemainingSeats;
+
+      const labelMap: Record<PricingPlanId, string> = {
+        free_trial: '입문 무료 체험 (정밀 진단 + 1묶음 무료 정리)',
+        pass_24h_990: '⚡ 24시간 자유 해결 패스 (990원 무제한)',
+        single_mobile_1900: '📱 모바일 단독 1회 완치 대청소권 (1,900원)',
+        single_bundle_3800: '💻📱 PC+모바일 양쪽 대청소 & 최초 1회 일치화권 (3,800원)',
+        sub_mobile_1100: '👑 모바일 정기 주치의 멤버십 (창립 멤버 10년권 자동 승격 완료!)',
+        sub_bundle_2900: '👑 PC+모바일 통합 주치의 멤버십 (창립 멤버 10년권 자동 승격 완료!)',
+      };
+
+      return {
+        activePricingPlan: planId,
+        foundingMemberRemainingSeats: nextSeats,
+        showProModal: false,
+        merlinAuth: {
+          ...state.merlinAuth,
+          tier: planId === 'free_trial' ? 'FREE' : 'PRO_LIFETIME',
+        },
+        lastQuarantineToast: `🎉 [${labelMap[planId]}] 적용이 완료되었습니다! 모든 주치의 기능을 제한 없이 이용하실 수 있습니다.`,
+      };
+    });
+  },
 
   switchMerlinTier: () => {
     set((state) => ({ merlinAuth: toggleMerlinTier(state.merlinAuth) }));
   },
 
   updateSyncSettings: (mode: SyncMode, wifiOnly: boolean) => {
-    saveSyncPrefs(mode, wifiOnly);
+    const { syncState } = get();
+    saveSyncPrefs(mode, wifiOnly, syncState.privateSyncStrategy, syncState.chargingOnly);
     set((state) => ({
       syncState: {
         ...state.syncState,
         mode,
         wifiOnly,
         lastSyncedAt: '방금 전',
+      },
+    }));
+  },
+
+  setPrivateSyncStrategy: (privateSyncStrategy: PrivateSyncStrategy) => {
+    const { syncState } = get();
+    saveSyncPrefs(syncState.mode, syncState.wifiOnly, privateSyncStrategy, syncState.chargingOnly);
+    set((state) => ({
+      syncState: {
+        ...state.syncState,
+        privateSyncStrategy,
+        lastSyncedAt: '방금 전 (모드 전환됨)',
+      },
+      lastQuarantineToast:
+        privateSyncStrategy === 'shadow'
+          ? '👻 [초경량 섀도우 캐시 모드] 활성화: 원본은 PC로 이관하고 폰에는 장당 13KB 썸네일+벡터만 남겨 용량을 99.4% 절약합니다!'
+          : '🔄 [100% 원본 미러링 모드] 활성화: 폰과 PC 양쪽에 동일한 무손실 원본 파일을 유지하여 상호 백업 보험을 구축합니다!',
+    }));
+  },
+
+  setChargingOnlySync: (chargingOnly: boolean) => {
+    const { syncState } = get();
+    saveSyncPrefs(syncState.mode, syncState.wifiOnly, syncState.privateSyncStrategy, chargingOnly);
+    set((state) => ({
+      syncState: {
+        ...state.syncState,
+        chargingOnly,
       },
     }));
   },
@@ -733,12 +952,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       syncState: {
         ...state.syncState,
         syncing: false,
-        lastSyncedAt: '방금 전 (동기화 완료)',
+        lastSyncedAt: '방금 전 (폰↔PC 일치화 완료)',
       },
       lastQuarantineToast:
-        state.syncState.mode === 'p2p-wifi'
-          ? '📡 로컬 WiFi P2P (SaySee-Mesh) 무서버 암호화 백업·동기화가 완료되었습니다.'
-          : '☁️ 경량 썸네일/벡터 동기화가 완료되었습니다.',
+        state.syncState.privateSyncStrategy === 'shadow'
+          ? '👻 [13KB 섀도우 캐시 일치화 완료] 집 PC가 꺼져 있어도 밖에서 내 폰으로 PC 속 10년 치 사진·서류를 0.04초 만에 열람할 수 있습니다!'
+          : '🔄 [100% 원본 미러링 일치화 완료] 클라우드 없이 폰과 PC 양쪽 기기의 원본 사진·서류가 완벽히 일치되었습니다!',
     }));
   },
 }));

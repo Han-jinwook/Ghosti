@@ -1042,7 +1042,13 @@ function sayseeLocalBridge(): Plugin {
         }
         try {
           const body = await readJsonBody(req);
-          const target = body?.target === 'photos' ? PHOTO_DIR : QUARANTINE_DIR;
+          const DOCS_DIR = path.resolve(__dirname, 'test_docs');
+          const target =
+            body?.target === 'photos'
+              ? PHOTO_DIR
+              : body?.target === 'docs'
+              ? DOCS_DIR
+              : QUARANTINE_DIR;
           fs.mkdirSync(target, { recursive: true });
           exec(`explorer.exe "${target}"`);
           res.setHeader('Content-Type', 'application/json; charset=utf-8');

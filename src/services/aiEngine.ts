@@ -21,11 +21,116 @@ import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, 
 import type {
   DuplicateGroup,
   HardwareTelemetry,
+  LocalDocumentFile,
   PhotoItem,
   SearchResultItem,
   TrashCategory,
   VoiceRoutingTrace,
 } from '../types/saysee';
+
+export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [
+  {
+    id: 'doc_ins_2026',
+    fileName: '삼성화재_다이렉트_자동차보험증권_2026.pdf',
+    ext: 'PDF',
+    title: '삼성화재 애니카 다이렉트 자동차보험증권 (2026-2027)',
+    categoryBadge: '🛡️ 보험 증권 · 계약서',
+    extractedText:
+      '피보험자: 한진욱 | 담보내역: 대인배상II 무제한, 대물배상 10억원, 자동차상해, 무보험차상해, 긴급출동 특약 포함. 보험기간: 2026.05.01 ~ 2027.05.01',
+    keywords: ['보험', '보험증권', '자동차보험', '삼성화재', '증권', '계약서', '특약', '담보'],
+    date: '2026.05.01',
+    sizeKB: 1420,
+    deviceSource: 'PC 로컬 폴더',
+  },
+  {
+    id: 'doc_manual_chair',
+    fileName: '이케아_원목의자_수납장_조립설명서_매뉴얼.pdf',
+    ext: 'PDF',
+    title: '원목 의자 및 거실 수납장 단계별 조립 설명서 (Assembly Manual)',
+    categoryBadge: '📑 조립 설명서 · 매뉴얼',
+    extractedText:
+      '부품 목록: 육각렌치(M6 볼트 12개), 철제 다리 프레임, 좌판 브라켓, 원목 상판 조립 도면 및 단계별 조립 설명서 주의사항 안내.',
+    keywords: ['조립', '설명서', '조립설명서', '매뉴얼', '의자', '수납장', '부품', '도면', '가이드'],
+    date: '2026.08.14',
+    sizeKB: 3850,
+    deviceSource: 'PC 로컬 폴더',
+  },
+  {
+    id: 'doc_receipt_kk',
+    fileName: '코타키나발루_수트라하버_리조트_결제영수증_바우처.pdf',
+    ext: 'PDF',
+    title: '코타키나발루 수트라하버 마젤란 리조트 숙박 바우처 및 카드 결제 영수증',
+    categoryBadge: '🧾 영수증 · 숙박 바우처',
+    extractedText:
+      '결제일자: 2024.07.11 | 포함내역: 오션뷰 객실 4박, 조식 뷔페, 마무틱섬/사피섬 보트 투어 카드 결제 영수증 및 체크인 바우처 전표.',
+    keywords: ['영수증', '결제', '바우처', '전표', '코타키나발루', '수트라하버', '리조트', '숙박', '카드'],
+    date: '2024.07.11',
+    sizeKB: 890,
+    deviceSource: '스마트폰 다운로드',
+  },
+  {
+    id: 'doc_contract_lease',
+    fileName: '주택임대차_표준계약서_확정일자_사본.pdf',
+    ext: 'PDF',
+    title: '주택임대차 표준계약서 및 전입신고 확정일자 부여 현황 사본',
+    categoryBadge: '📋 부동산 계약서 · 공문서',
+    extractedText:
+      '소재지: 인천광역시 서구 청라동 | 계약종류: 주택임대차 표준계약서 원본 스캔, 확정일자 필증, 임대인·임차인 신분증 확인 사본.',
+    keywords: ['계약서', '임대차', '주택임대차', '확정일자', '청라', '전입신고', '신분증', '사본', '서류'],
+    date: '2026.03.15',
+    sizeKB: 2640,
+    deviceSource: 'PC 로컬 폴더',
+  },
+  {
+    id: 'doc_receipt_med',
+    fileName: '실손의료비_보험금_청구영수증_진료비세부내역서.pdf',
+    ext: 'PDF',
+    title: '실손의료비 보험금 청구서 및 병원 진료비·약국 조제비 영수증',
+    categoryBadge: '🧾 병원 영수증 · 보험 청구',
+    extractedText:
+      '발급일자: 2026.09.18 | 서류구분: 실손 보험 증권 특약 청구용 외래 진료비 계산서 영수증, 세부내역서 및 약국 처방전 사본.',
+    keywords: ['보험', '보험증권', '실손', '영수증', '진료비', '병원', '약국', '청구서', '처방전'],
+    date: '2026.09.18',
+    sizeKB: 1120,
+    deviceSource: '스마트폰 다운로드',
+  },
+  {
+    id: 'doc_pg_review',
+    fileName: 'NHNKCP_네이버페이_전자결제_가맹점_심사서류.txt',
+    ext: 'TXT',
+    title: 'NHN KCP 전자결제(PG) 및 네이버페이 가맹점 심사 보완 안내문',
+    categoryBadge: '📄 비즈니스 심사 · 증빙 서류',
+    extractedText:
+      '세이씨(SaySee) 요금제 결제 연동을 위한 사업자등록증, 통신판매업 신고증, 이용약관, 서비스 제공기간 및 환불정책 표기 가이드라인.',
+    keywords: ['심사', '네이버페이', 'NHNKCP', '가맹점', '사업자등록증', '계약서', '서류', '문자', '결제'],
+    date: '2026.10.14',
+    sizeKB: 48,
+    deviceSource: 'PC 로컬 폴더',
+  },
+];
+
+export function searchLocalDocumentFiles(query: string): LocalDocumentFile[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return LOCAL_DOCUMENT_FILES;
+  const rawTokens = q
+    .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 1 && !['찾아줘', '보여줘', '사진', '문서', '파일', '서류함'].includes(t));
+
+  if (rawTokens.length === 0) return LOCAL_DOCUMENT_FILES;
+
+  const scored = LOCAL_DOCUMENT_FILES.map((doc) => {
+    const corpus = `${doc.fileName} ${doc.title} ${doc.categoryBadge} ${doc.extractedText} ${doc.keywords.join(' ')}`.toLowerCase();
+    let hits = 0;
+    for (const tk of rawTokens) {
+      if (corpus.includes(tk)) hits += 1;
+    }
+    return { doc, hits };
+  }).filter((item) => item.hits > 0);
+
+  scored.sort((a, b) => b.hits - a.hits);
+  return scored.map((s) => s.doc);
+}
 
 const MODEL_ID = 'onnx-community/embeddinggemma-2-ONNX';
 const QUERY_PREFIX = 'task: search result | query: ';
@@ -434,16 +539,23 @@ export async function loadInitialPhotoDataset(): Promise<{
     });
   }
 
-  // 1) [Perceptual dHash + 시맨틱 클러스터 연사 판별] 실제 폴더 내 쌍둥이 원본이 존재하는 연사/중복 그룹 클러스터링
+  // 1) [스펙 1: 서류(문서)의 재정의]
+  //    #문서·설명서, #문서·신분증은 버릴 쓰레기가 아니라 [📁 스마트 서류함] 핵심 정보 자산으로 격상!
+  //    단기 일회성 메모(#주차장·기둥, #부품·접사, #택배·상자, #현수막·안내)만 스마트 정리 후보로 제안합니다.
+  const VAULT_CORE_DOC_TAGS = new Set(['#문서·설명서', '#문서·신분증']);
   const BES2_MEMO_TAGS = new Set([
     '#주차장·기둥',
     '#부품·접사',
-    '#문서·설명서',
-    '#문서·신분증',
     '#택배·상자',
     '#현수막·안내',
   ]);
-  const BES2_EXPLICIT_TRASH_TAGS = new Set([...BES2_MEMO_TAGS, '#스크린샷', '#흔들린사진']);
+  const BES2_EXPLICIT_TRASH_TAGS = new Set([
+    ...BES2_MEMO_TAGS,
+    ...VAULT_CORE_DOC_TAGS,
+    '#스크린샷',
+    '#흔들린사진',
+  ]);
+  const vaultDocByPhoto = new Map<string, string>();
 
   const activeAudits = fileList
     .map((f) => auditByPhoto.get(f.path))
@@ -519,16 +631,41 @@ export async function loadInitialPhotoDataset(): Promise<{
     }
   }
 
-  // 2) [Bes2 쓰레기 정의 + 광학/물리 교차 검증 수식]
-  //    4대 탭: ① 동일한 복사본·연사(duplicate) / ② 주차장·영수증·서류 메모(memo) / ③ 스크린샷(screenshot) / ④ 심한 흔들림·오촬영(blurry)
+  // 2) [스마트 서류함 정보 자산 vs 클리어몬스터 4대 쓰레기 정밀 분리]
   for (const f of [...fileList, ...quarantinedList]) {
     ensureMap(f.path);
+    const semMeta = semanticByPhoto.get(f.path) as any;
+    const pTag = String(semMeta?.primaryTag ?? '');
+
+    // [스펙 1 핵심] #문서·설명서, #문서·신분증은 쓰레기가 아니라 [📁 스마트 서류함] 영구 정보 자산으로 격상!
+    if (pTag === '#문서·설명서') {
+      vaultDocByPhoto.set(f.path, '📑 조립 설명서 · 매뉴얼 (촬영 서류)');
+      tagsByPhoto.set(f.path, new Set(['#문서·설명서', '#스마트서류함']));
+      scoresByPhoto.get(f.path)!['document_ko'] = 0.85;
+      continue;
+    }
+    if (pTag === '#문서·신분증') {
+      vaultDocByPhoto.set(f.path, '🪪 신분증 · 여권 사본 (촬영 서류)');
+      tagsByPhoto.set(f.path, new Set(['#문서·신분증', '#스마트서류함']));
+      scoresByPhoto.get(f.path)!['document_ko'] = 0.85;
+      continue;
+    }
+
+    // 기관 심사 반려 문자 캡처, 현수막 안내, 주차기둥, 택배상자 등도 [📁 스마트 서류함]에서 함께 조회 가능하도록 등록
+    if (f.path.includes('Messages')) {
+      vaultDocByPhoto.set(f.path, '💬 결제·심사 안내 문자 캡처');
+    } else if (pTag === '#현수막·안내') {
+      vaultDocByPhoto.set(f.path, '📋 행사 · 공고 안내문 촬영본');
+    } else if (pTag === '#주차장·기둥') {
+      vaultDocByPhoto.set(f.path, '🅿️ 일회성 주차 위치 메모 (K13)');
+    } else if (pTag === '#택배·상자') {
+      vaultDocByPhoto.set(f.path, '📦 택배 · 부품 박스 기록');
+    }
+
     if (dupGroupByPhoto.has(f.path)) continue; // 이미 연사/중복 그룹에 속한 사진은 중복 분류로 처리 완료
 
     const audit = auditByPhoto.get(f.path);
     const sem = scoresByPhoto.get(f.path) ?? {};
-    const semMeta = semanticByPhoto.get(f.path) as any;
-    const pTag = String(semMeta?.primaryTag ?? '');
 
     // A) 탭 ③: 스크린샷 (파일명 정규식 OR 시맨틱 #스크린샷 OR 무EXIF 모바일 화면비 + 고주파 UI 엣지)
     const isScreenshot =
@@ -568,8 +705,8 @@ export async function loadInitialPhotoDataset(): Promise<{
       continue;
     }
 
-    // C) 탭 ②: 주차장 · 영수증 · 서류 메모 (Bes2 쓰레기 정책: 주차기둥·사물/부품 접사·케이블단자·조립설명서·신분증사본·택배상자·현수막)
-    //    ※ Bes2 Positive Filter 준수: 음식/와인(#식당·음식), 인물/풍경 사진은 서류/사물 오탐에서 100% 보호!
+    // C) 탭 ②: 단기 일회성 주차장 · 영수증 · 사물 접사 메모 (Bes2 쓰레기 정책: 주차기둥·사물/부품 접사·케이블단자·택배상자·현수막)
+    //    ※ Bes2 Positive Filter 준수: 음식/와인(#식당·음식), 인물/풍경 사진, 그리고 #문서·설명서/#문서·신분증 자산은 100% 보호!
     const isProtectedFoodOrScene =
       pTag === '#식당·음식' || pTag === '#가족·단체' || pTag === '#해변·물놀이';
 
@@ -589,8 +726,8 @@ export async function loadInitialPhotoDataset(): Promise<{
       const memoBadge =
         pTag === '#주차장·기둥'
           ? '#주차장·기둥메모'
-          : pTag === '#문서·설명서' || pTag === '#문서·신분증'
-          ? '#서류·설명서메모'
+          : pTag === '#택배·상자' || pTag === '#현수막·안내'
+          ? '#일회성·현수막·택배메모'
           : '#부품·사물접사메모';
       tagsByPhoto.set(f.path, new Set([memoBadge]));
       trashByPhoto.set(f.path, {
@@ -632,6 +769,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     const trash = trashByPhoto.get(f.path);
     const dupInfo = dupGroupByPhoto.get(f.path);
     const audit = auditByPhoto.get(f.path);
+    const vaultLabel = vaultDocByPhoto.get(f.path);
     const locParam = isQuarantined ? '&loc=quarantine' : '';
     const fullUrl = `/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`;
     const thumbUrl = `${fullUrl}&thumb=1`;
@@ -648,6 +786,8 @@ export async function loadInitialPhotoDataset(): Promise<{
       clusterId: semMeta?.clusterId,
       locationKo: semMeta?.locationKo,
       captionKo: semMeta?.captionKo,
+      isVaultDocument: Boolean(vaultLabel),
+      vaultCategoryLabel: vaultLabel,
       trashCategory: trash?.category,
       trashConfidence: trash?.confidence,
       duplicateGroupId: dupInfo?.groupId,
