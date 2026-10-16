@@ -121,29 +121,29 @@ export const VoiceHeroStage: React.FC = () => {
 
   return (
     <section className="w-full flex flex-col gap-4">
-      {/* ─────────────── [1. 보안 안심 UI 교정] 무저장 휘발성 보안 배지 & 검진 구역 허용 표시 ─────────────── */}
+      {/* ─────────────── [2. 체험판 온보딩 & 보안 안심 UI] 원클릭 자동 연결(Zero-Code Pairing) + 무저장 휘발성 보안 배지 ─────────────── */}
       <div className="w-full p-3.5 md:px-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-[#072a34]/95 to-surface-container-high border border-emerald-400/50 shadow-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-2.5">
         <div className="flex items-start sm:items-center gap-2.5 min-w-0">
           <span className="material-symbols-outlined text-emerald-300 text-[20px] shrink-0">
             shield_lock
           </span>
           <span className="font-label-md text-[12px] md:text-[13px] text-white font-extrabold leading-snug">
-            🔒 안심 보안 파이프라인 가동 중: 무거운 원본 파일 미전송 / AI 분석 서버 하드디스크 저장 0건 (RAM 연산 후 0.1초 내 즉시 자동 파기)
+            [🔒 안심 보안 파이프라인 가동 중: 무거운 원본 파일 미전송 / AI 분석 서버 하드디스크 저장 0건 (RAM 연산 후 0.1초 내 즉시 자동 소각)]
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <span className="px-2.5 py-1 rounded-lg bg-black/45 border border-outline-variant/35 font-label-mono text-[11px] text-emerald-300 font-bold">
-            검진 허용 구역: {trialScanPermissions.gallery ? '☑️ 사진첩 ' : ''}
+            검진 허용: {trialScanPermissions.gallery ? '☑️ 사진첩 ' : ''}
             {trialScanPermissions.downloads ? '☑️ 다운로드 ' : ''}
             {trialScanPermissions.desktop ? '☑️ 바탕화면' : ''}
           </span>
           <button
             type="button"
             onClick={() => setShowOnboarding(true)}
-            className="px-3 py-1 rounded-lg bg-surface-container-highest hover:bg-surface-bright text-primary-container font-label-sm text-[11.5px] font-bold border border-primary-container/35 transition-all"
+            className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-on-primary-container font-label-sm text-[11.5px] font-black shadow-[0_0_14px_rgba(0,229,255,0.35)] transition-all"
           >
-            ⚙️ 검진 구역 설정 · 스캔 상세
+            🚀 무료 검진 &amp; 파워검색 체험하기
           </button>
         </div>
       </div>

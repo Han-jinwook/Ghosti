@@ -251,7 +251,7 @@ export const SmartTrashView: React.FC = () => {
                 className="px-3 py-1 rounded-full bg-[#FFAB00]/20 hover:bg-[#FFAB00]/30 border border-[#FFAB00]/50 text-[#FFAB00] font-label-sm text-[11.5px] font-extrabold transition-all"
               >
                 {freeTrialUsed
-                  ? '⚡ 무료 1묶음 체험 완료 • 990원 24시간 자유 패스 열기 →'
+                  ? '⚡ 무료 1묶음 체험 완료 • 1,900원 단품 / 10년 특전 열기 →'
                   : '🎁 입문 무료 혜택: 전체 정밀 진단서 + 연사 바둑판 Pick 1묶음 무료 체험 가능!'}
               </button>
             )}

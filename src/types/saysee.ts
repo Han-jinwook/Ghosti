@@ -61,10 +61,10 @@ export interface UndoQuarantineBatch {
 /** [스펙 3] 클라우드 대체 프라이빗 싱크 2-Track 모드 */
 export type PrivateSyncStrategy = 'mirror' | 'shadow';
 
-/** [스펙 4] 카페 런칭용 심플 과금 퍼널 플랜 ID */
+/** [스펙 4] 카페 런칭용 3단 심플 과금 퍼널 플랜 ID (990원 패스 폐기 -> 무료 체험 / 1회 단품(1,000원 맛보기 포함) / 정기 주치의 멤버십) */
 export type PricingPlanId =
   | 'free_trial'
-  | 'pass_24h_990'
+  | 'single_taste_1000'
   | 'single_mobile_1900'
   | 'single_bundle_3800'
   | 'sub_mobile_1100'

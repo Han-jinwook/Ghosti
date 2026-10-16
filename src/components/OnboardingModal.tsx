@@ -141,25 +141,25 @@ export const OnboardingModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[100] bg-surface/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-y-auto">
       <div className="relative w-full max-w-4xl rounded-3xl glass-l2 p-6 md:p-8 shadow-[0_0_64px_rgba(0,229,255,0.22)] flex flex-col gap-5 border border-primary-container/35 my-auto">
-        {/* 1) 상단 헤더 & 닫기 버튼 */}
+        {/* 1) 상단 헤더 & 원클릭 자동 연결(Zero-Code Pairing) 배지 */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-mono text-[11px] font-black">
-                ZERO-RETENTION VOLATILE RAM PIPELINE
+              <span className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
+                🔗 ZERO-CODE PAIRING • URL/로컬호스트 세션 토큰 자동 연결됨
               </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#FFAB00]/20 border border-[#FFAB00]/40 text-[#FFAB00] font-label-mono text-[11px] font-bold">
-                1분 이내 초고속 체험 스캔 (동영상 10개 + 서류 20건 + 중복 진단)
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-mono text-[11px] font-bold">
+                6자리 코드 수동 입력 폐기 • 300장 수동 선택 불필요
               </span>
             </div>
-            <h2 className="font-headline-lg text-[22px] md:text-[25px] text-on-surface font-extrabold tracking-tight">
-              🛡️ 검진 구역 직접 허용 &amp; 무저장 휘발성 고속 인덱싱
+            <h2 className="font-headline-lg text-[21px] md:text-[24px] text-on-surface font-extrabold tracking-tight">
+              🚀 초대 링크 원클릭 체험판 온보딩 &amp; 검진 구역 직접 허용
             </h2>
             <p className="font-body-sm text-[13px] text-on-surface-variant leading-relaxed">
-              무거운 Gemma 2 모델을 내 기기에 설치하거나 일반 사진 수백 장을 스캔하느라 시간을 허비하지 않습니다. 삼성 갤러리가 절대 못 하는{' '}
-              <strong className="text-primary-container">‘동영상 장면 검색(10개)’</strong>,{' '}
-              <strong className="text-[#FFAB00]">‘서류 통합 검색(20건)’</strong>,{' '}
-              <strong className="text-emerald-300">‘기기 자체 중복·연사 진단’</strong>만 1분 이내에 끝냅니다.
+              초대 링크 접속 시 URL/로컬호스트 세션 토큰으로 자동 페어링됩니다. 일반 사진 수백 장을 스캔하느라 시간을 쓰지 않고, 삼성 갤러리가 죽어도 못 하는{' '}
+              <strong className="text-emerald-300">‘중복·연사 청소 진단’</strong> +{' '}
+              <strong className="text-[#FFAB00]">‘최신 서류 20건’</strong> +{' '}
+              <strong className="text-primary-container">‘최신 동영상 10개’</strong>만 1분 이내에 정밀 분석합니다.
             </p>
           </div>
           <button
@@ -170,12 +170,12 @@ export const OnboardingModal: React.FC = () => {
             }}
             className="px-3.5 py-2 rounded-full bg-surface-container-highest/80 hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-sm text-[12px] font-bold flex items-center gap-1 transition-colors shrink-0"
           >
-            <span>검색 화면으로</span>
+            <span>브리핑 보드로</span>
             <span className="material-symbols-outlined text-[16px]">close</span>
           </button>
         </div>
 
-        {/* 2) [보안 안심 UI 교정 #1] 스캔 전 [검진 구역 직접 허용] 3대 안전 폴더 체크박스 */}
+        {/* 2) [체험판 온보딩] 스캔 전 [검진 구역 직접 허용] 3대 안전 폴더 체크박스 + [🚀 무료 검진 & 파워검색 체험하기] 원클릭 실행 */}
         <div className="p-4 rounded-2xl bg-surface-container/90 border border-outline-variant/35 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-headline-sm text-[14.5px] text-on-surface font-extrabold flex items-center gap-1.5">
@@ -184,9 +184,13 @@ export const OnboardingModal: React.FC = () => {
               </span>
               <span>스캔 전 [검진 구역 직접 허용] — 기본 3대 안전 폴더만 체크된 상태로 시작합니다</span>
             </span>
-            <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
-              ✓ 허용하지 않은 개인 폴더는 에이전트가 절대 접근하지 않습니다
-            </span>
+            <button
+              type="button"
+              onClick={() => void startOnboardingIndexing()}
+              className="px-4 py-1.5 rounded-full bg-gradient-to-r from-primary-container to-[#00E5FF] text-on-primary-container font-label-md text-[12.5px] font-black shadow-[0_0_20px_rgba(0,229,255,0.4)] hover:brightness-105 transition-all"
+            >
+              🚀 무료 검진 &amp; 파워검색 체험하기 (원클릭 자동 실행)
+            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -219,7 +223,7 @@ export const OnboardingModal: React.FC = () => {
                   ☑️ 다운로드 폴더
                 </span>
                 <span className="font-body-sm text-[11px] text-on-surface-variant">
-                  영수증·바우처·청구서·건강검진 PDF 문서 추출
+                  영수증·바우처·청구서·건강검진 PDF 문서 역추적
                 </span>
               </div>
             </label>
@@ -236,7 +240,7 @@ export const OnboardingModal: React.FC = () => {
                   ☑️ 바탕화면 폴더
                 </span>
                 <span className="font-body-sm text-[11px] text-on-surface-variant">
-                  보험증권·계약서·조립설명서 PDF/DOCX/TXT 추출
+                  보험증권·계약서·조립설명서 PDF/DOCX/TXT 역추적
                 </span>
               </div>
             </label>
@@ -249,7 +253,7 @@ export const OnboardingModal: React.FC = () => {
             shield_lock
           </span>
           <p className="font-label-md text-[12.5px] md:text-[13.5px] text-white font-extrabold leading-snug">
-            🔒 안심 보안 파이프라인 가동 중: 무거운 원본 파일 미전송 / AI 분석 서버 하드디스크 저장 0건 (RAM 연산 후 0.1초 내 즉시 자동 파기)
+            [🔒 안심 보안 파이프라인 가동 중: 무거운 원본 파일 미전송 / AI 분석 서버 하드디스크 저장 0건 (RAM 연산 후 0.1초 내 즉시 자동 소각)]
           </p>
         </div>
 
@@ -324,7 +328,7 @@ export const OnboardingModal: React.FC = () => {
             </div>
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="font-label-mono text-[10.5px] text-primary-container font-bold">
-                경량 썸네일/텍스트 ➔ 자체 로컬 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 파기 ({percent.toFixed(0)}%)
+                경량 썸네일/텍스트 ➔ 자체 로컬 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 자동 소각 ({percent.toFixed(0)}%)
               </span>
               <span className="font-label-md text-[12.5px] text-on-surface font-bold truncate">
                 {currentPhotoName}

@@ -135,7 +135,7 @@ export const DesktopDashboard: React.FC = () => {
             onClick={() => setShowProModal(true)}
             className="px-3.5 py-2 rounded-full bg-gradient-to-r from-[#FFAB00] to-[#FFD740] text-surface-container-lowest font-label-md text-[12px] font-black flex items-center gap-1 shadow-[0_0_16px_rgba(255,171,0,0.35)] hover:brightness-105 transition-all"
           >
-            <span>👑 990원 패스 / 요금제</span>
+            <span>👑 3단 심플 요금제 / 10년 특전</span>
           </button>
 
           <button
@@ -540,7 +540,7 @@ export const DesktopDashboard: React.FC = () => {
                 ☁️❌ 클라우드 월정액 해방! 폰↔PC 완전 일치화 센터
               </span>
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
-                🔒 무거운 원본 파일 미전송 / AI 분석 서버 하드디스크 저장 0건 (RAM 연산 후 0.1초 내 즉시 자동 파기)
+                🔒 무거운 원본 파일 미전송 / AI 분석 서버 하드디스크 저장 0건 (RAM 연산 후 0.1초 내 즉시 자동 소각)
               </span>
             </div>
 

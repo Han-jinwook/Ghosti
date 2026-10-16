@@ -79,7 +79,7 @@ export const MobileAppView: React.FC = () => {
               onClick={() => setShowProModal(true)}
               className="px-2.5 py-1.5 rounded-full bg-[#FFAB00] text-surface-container-lowest font-label-sm text-[11px] font-black"
             >
-              👑 990원 패스
+              👑 요금제 · 10년 특전
             </button>
             <button
               onClick={() => setLayout('desktop')}

@@ -176,10 +176,10 @@ const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   elapsedSec: 18,
   etaSec: 0,
   perImageSec: 0.6,
-  currentPhotoName: '최신 서류 20건 + 동영상 10개 핵심 프레임 색인 완료 (RAM 즉시 파기)',
+  currentPhotoName: '최신 서류 20건 + 동영상 10개 핵심 프레임 색인 완료 (RAM 즉시 자동 소각)',
   currentPhotoThumb: '/__photos/file?p=20240720_194644.jpg&thumb=1',
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
-  modelStatusText: '자체 로컬 GPU 서버 Gemma 2 휘발성 연산 완료 (하드디스크 저장 0건 • 0.1초 즉시 파기)',
+  modelStatusText: '자체 로컬 GPU 서버 Gemma 2 휘발성 연산 완료 (하드디스크 저장 0건 • 0.1초 내 즉시 자동 소각)',
 };
 
 export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
@@ -940,7 +940,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
 
       const labelMap: Record<PricingPlanId, string> = {
         free_trial: '입문 무료 체험 (정밀 진단 + 1묶음 무료 정리)',
-        pass_24h_990: '⚡ 24시간 자유 해결 패스 (990원 무제한)',
+        single_taste_1000: '💡 1,000원 부분 맛보기 대청소권 (마음에 들면 차액 +900원/+2,800원으로 1회 완치 승격 가능)',
         single_mobile_1900: '📱 모바일 단독 1회 완치 대청소권 (1,900원)',
         single_bundle_3800: '💻📱 PC+모바일 양쪽 대청소 & 최초 1회 일치화권 (3,800원)',
         sub_mobile_1100: '👑 모바일 정기 주치의 멤버십 (창립 멤버 10년권 자동 승격 완료!)',
