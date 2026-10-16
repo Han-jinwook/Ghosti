@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { PricingPlanId } from '../types/saysee';
 
@@ -459,11 +459,50 @@ export const LocalDocPreviewModal: React.FC = () => {
 };
 
 /**
- * [체험판 타겟 ②] 동영상 장면 검색 결과 상세 & 핵심 프레임/원본 동영상 재생 모달
+ * [체험판 타겟 ②] 동영상 3개 전 구간(Full-Timeline) 해부 & 타임라인 점프 재생 모달
  */
 export const VideoScenePreviewModal: React.FC = () => {
   const { selectedVideoModal, setSelectedVideoModal, openLocalFolder } = useSaySeeStore();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!selectedVideoModal) return;
+    const vidEl = videoRef.current;
+    if (!vidEl) return;
+
+    const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
+    const applySeek = () => {
+      try {
+        vidEl.currentTime = targetSec;
+        void vidEl.play().catch(() => {
+          // 자동재생 정책 제한 시 일시정지 상태로 해당 초(Sec) 프레임 표시
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    if (vidEl.readyState >= 1) {
+      applySeek();
+    } else {
+      vidEl.addEventListener('loadedmetadata', applySeek, { once: true });
+      return () => vidEl.removeEventListener('loadedmetadata', applySeek);
+    }
+  }, [selectedVideoModal?.id, selectedVideoModal?.matchedSeekSec]);
+
   if (!selectedVideoModal) return null;
+
+  const handleJumpToSecond = (sec: number) => {
+    setSelectedVideoModal(selectedVideoModal, sec);
+    if (videoRef.current) {
+      try {
+        videoRef.current.currentTime = sec;
+        void videoRef.current.play().catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   return (
     <div
@@ -472,22 +511,22 @@ export const VideoScenePreviewModal: React.FC = () => {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-3xl rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-6 md:p-7 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-4 my-auto"
+        className="w-full max-w-4xl rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-5 md:p-7 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-4 my-auto"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
-                🎬 동영상 장면 AI 포착 ({selectedVideoModal.matchedTimestamp})
+                🎬 타임라인 점프 포착 ({selectedVideoModal.matchedTimestamp})
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[11px] font-bold">
-                {selectedVideoModal.resolution} • 재생시간 {selectedVideoModal.durationText}
+                {selectedVideoModal.resolution} • 전체 길이 {selectedVideoModal.durationText} (총 {selectedVideoModal.timelineFrames.length}개 구간 해부)
               </span>
               <span className="font-label-mono text-[11px] text-on-surface-variant">
                 • 📍 {selectedVideoModal.locationKo}
               </span>
             </div>
-            <h3 className="font-headline-sm text-[19px] text-white font-extrabold mt-1">
+            <h3 className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold mt-1">
               {selectedVideoModal.title}
             </h3>
             <p className="font-label-mono text-[11.5px] text-on-surface-variant">
@@ -505,36 +544,78 @@ export const VideoScenePreviewModal: React.FC = () => {
           </button>
         </div>
 
-        {/* 동영상 플레이어 (실제 test_photos 내 MP4 스트리밍 + 포착된 핵심 프레임 포스터) */}
+        {/* 동영상 플레이어 (실제 test_photos 내 MP4 Byte-Range 스트리밍 + 포착된 초(Sec)로 즉시 점프 재생) */}
         <div className="relative rounded-2xl overflow-hidden bg-black border border-primary-container/40 aspect-video flex items-center justify-center">
           <video
+            ref={videoRef}
             src={selectedVideoModal.videoUrl}
             poster={selectedVideoModal.thumbUrl}
             controls
             playsInline
             className="w-full h-full object-contain"
           />
-          <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/80 border border-primary-container/60 text-primary-container font-label-mono text-[11px] font-extrabold pointer-events-none">
-            🎯 AI 포착 구간: {selectedVideoModal.matchedTimestamp}
+          <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">
+            {selectedVideoModal.matchedTimestamp} 즉시 점프 재생 중
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2">
-          <span className="font-label-mono text-[11px] text-primary-container font-bold">
-            🔒 무거운 동영상 원본 미전송 • 초경량 핵심 프레임만 로컬 GPU 서버에서 RAM 연산 후 0.1초 내 즉시 자동 소각
+        {/* 현재 포착된 구간 상세 설명 */}
+        <div className="p-3.5 rounded-2xl bg-primary-container/10 border border-primary-container/45 flex flex-col gap-1">
+          <span className="font-label-mono text-[11px] text-primary-container font-black">
+            🎯 현재 포착된 타임라인 프레임 해설:
           </span>
-          <p className="font-body-md text-[14px] text-on-surface leading-relaxed">
-            {selectedVideoModal.sceneDescription}
+          <p className="font-body-md text-[13.5px] text-white font-bold leading-relaxed">
+            {selectedVideoModal.matchedFrameCaption}
           </p>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {selectedVideoModal.keywords.map((kw) => (
-              <span
-                key={kw}
-                className="px-2.5 py-0.5 rounded-full bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-bold"
-              >
-                #{kw}
-              </span>
-            ))}
+        </div>
+
+        {/* 전 구간(Full-Timeline) 1~3초 단위 완전 해부 인터랙티브 타임라인 */}
+        <div className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/35 flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-headline-sm text-[13px] text-emerald-300 font-extrabold">
+              ⚡ 00:00 ~ {selectedVideoModal.durationText} 전 구간(Full-Timeline) 1~3초 단위 해부 내역 — 클릭 시 해당 초로 즉시 점프합니다:
+            </span>
+            <span className="font-label-mono text-[10.5px] text-on-surface-variant">
+              총 {selectedVideoModal.timelineFrames.length}개 구간 색인됨
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+            {selectedVideoModal.timelineFrames.map((frame) => {
+              const isSelectedFrame = selectedVideoModal.matchedSeekSec === frame.timeSec;
+              return (
+                <button
+                  key={frame.timeSec}
+                  type="button"
+                  onClick={() => handleJumpToSecond(frame.timeSec)}
+                  className={`p-2.5 rounded-xl text-left transition-all border flex flex-col gap-1 ${
+                    isSelectedFrame
+                      ? 'bg-primary-container/20 border-primary-container shadow-[0_0_16px_rgba(0,229,255,0.28)]'
+                      : 'bg-surface-container/90 hover:bg-surface-bright border-outline-variant/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`px-2 py-0.5 rounded font-label-mono text-[11px] font-black ${
+                        isSelectedFrame
+                          ? 'bg-primary-container text-on-primary-container'
+                          : 'bg-black/60 text-primary-container'
+                      }`}
+                    >
+                      ▶ {frame.timestampText} ({frame.phaseLabel})
+                    </span>
+                    {isSelectedFrame && (
+                      <span className="font-label-mono text-[10px] text-emerald-300 font-black">
+                        🎯 현재 포착 구간
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-body-sm text-[11.5px] text-on-surface leading-snug line-clamp-2">
+                    {frame.sceneCaption}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </div>
 

@@ -192,206 +192,430 @@ export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [
 ];
 
 /**
- * [체험판 타겟 ②] 최신 동영상 10개 역추적 (핵심 프레임 초경량 썸네일 추출 ➔ 로컬 GPU 서버 Gemma 2 장면 색인)
+ * [동영상 체험 혁신] 10개 수박 겉핥기 폐기 ➔ 최신 동영상 딱 3개 선정 후 00:00부터 끝까지 전 구간(Full-Timeline) 완전 해부!
+ * - 유저가 영상 속 스쳐 지나가는 어떤 사물·의상·배경·행동을 자유 검색하더라도 정확한 타임스탬프(currentTime) 구간을 포착하여 즉시 점프 재생합니다.
  */
 export const VIDEO_SCENE_ITEMS: VideoSceneItem[] = [
   {
-    id: 'vid_01_fireshow',
-    videoFileName: '20240720_134808.mp4',
-    title: '한밤중 바닷가에서 불꽃 돌리는 불쇼 영상',
-    keyframePhotoId: '20240720_194644.jpg',
-    thumbUrl: '/__photos/file?p=20240720_194644.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20240720_134808.mp4',
-    date: '2024.07.20 19:46',
-    durationText: '01:12',
-    matchedTimestamp: '00:18 프레임 포착',
-    locationKo: '말레이시아 코타키나발루',
-    sceneDescription:
-      '어두운 한밤중 해변 모래사장에서 공연자들이 횃불을 들고 불꽃을 크게 돌리며 화려한 야간 불쇼 퍼포먼스를 펼치는 장면',
-    keywords: ['한밤중', '바닷가', '불꽃', '돌리는', '불쇼', '영상', '밤', '해변', '공연', '퍼포먼스', '코타키나발루'],
-    resolution: '4K UHD 60fps',
-    sizeMB: 38.1,
-  },
-  {
-    id: 'vid_02_snorkeling',
-    videoFileName: 'GX012812.MP4',
-    title: '구명조끼 입고 에메랄드빛 바다에서 스노클링하는 영상',
-    keyframePhotoId: '20240719_110624.jpg',
-    thumbUrl: '/__photos/file?p=20240719_110624.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=GX012812.MP4',
-    date: '2024.07.19 11:06',
-    durationText: '01:45',
-    matchedTimestamp: '00:24 프레임 포착',
-    locationKo: '말레이시아 코타키나발루 사피섬',
-    sceneDescription:
-      '구명조끼와 화려한 수영복을 입고 맑은 에메랄드빛 열대 바다와 섬 해변에서 스노클링 및 물놀이를 즐기는 장면',
-    keywords: ['구명조끼', '입고', '에메랄드빛', '바다', '스노클링', '스노클링하는', '영상', '물놀이', '수영', '섬'],
-    resolution: 'GoPro 5.3K',
-    sizeMB: 154.6,
-  },
-  {
-    id: 'vid_03_speedboat',
-    videoFileName: '20240719_105412.mp4',
-    title: '보트 위에서 바다 가르며 달리는 장면',
-    keyframePhotoId: '20240719_090212.jpg',
-    thumbUrl: '/__photos/file?p=20240719_090212.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20240719_105412.mp4',
-    date: '2024.07.19 09:02',
-    durationText: '00:42',
-    matchedTimestamp: '00:09 프레임 포착',
-    locationKo: '말레이시아 코타키나발루 해상',
-    sceneDescription:
-      '선글라스와 구명조끼를 착용한 남녀가 고속 보트 위에서 하얀 물보라를 일으키며 푸른 바다를 시원하게 가르며 달리는 장면',
-    keywords: ['보트', '위에서', '바다', '가르며', '달리는', '장면', '영상', '구명조끼', '선글라스', '요트'],
-    resolution: 'FHD 60fps',
-    sizeMB: 19.1,
-  },
-  {
-    id: 'vid_04_seawalking',
-    videoFileName: 'GX012811.MP4',
-    title: '바닷속에서 수중 헬멧 쓰고 물고기들과 씨워킹하는 영상',
-    keyframePhotoId: 'GOPR2847.JPG',
-    thumbUrl: '/__photos/file?p=GOPR2847.JPG&thumb=1',
-    videoUrl: '/__photos/file?p=GX012811.MP4',
-    date: '2024.07.19 11:39',
-    durationText: '01:38',
-    matchedTimestamp: '00:31 프레임 포착',
-    locationKo: '말레이시아 코타키나발루 수중',
-    sceneDescription:
-      '에메랄드빛 바닷속에서 잠수 헬멧과 래시가드를 착용하고 카메라를 향해 브이 포즈를 취하는 수중 스노클링·씨워킹 영상',
-    keywords: ['바닷속', '수중', '헬멧', '스노클링', '씨워킹', '에메랄드빛', '바다', '물놀이', '고프로', '영상'],
-    resolution: 'GoPro 4K',
-    sizeMB: 139.8,
-  },
-  {
-    id: 'vid_05_parasailing',
-    videoFileName: '20240719_105604.mp4',
-    title: '푸른 바다 위 하늘에서 낙하산 패러세일링 활공 영상',
+    id: 'vid_01_parasailing_full',
+    videoFileName: '20240719_105706.mp4',
+    title: '코타키나발루 바다 위 무지개 낙하산 패러세일링 활공 및 보트 갑판 착지 영상',
     keyframePhotoId: '20240719_105518.jpg',
     thumbUrl: '/__photos/file?p=20240719_105518.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20240719_105604.mp4',
-    date: '2024.07.19 10:56',
-    durationText: '00:54',
-    matchedTimestamp: '00:15 프레임 포착',
+    videoUrl: '/__photos/file?p=20240719_105706.mp4',
+    date: '2024.07.19 10:57',
+    durationText: '00:21',
+    durationSec: 21,
+    matchedSeekSec: 18,
+    matchedTimestamp: '🎯 00:18 구간 포착',
+    matchedFrameCaption:
+      '구명조끼를 입은 남녀 두 사람이 무지개 낙하산을 타고 내려와 보트 뒷갑판 위로 다리를 앞으로 쭉 뻗으며 활짝 웃는 착지 직전 클라이맥스 장면',
     locationKo: '말레이시아 코타키나발루 해상',
     sceneDescription:
-      '청명한 하늘 아래 바다 위에서 알록달록한 낙하산에 매달려 공중 패러세일링을 즐기는 두 사람의 역동적인 영상',
-    keywords: ['패러세일링', '낙하산', '바다', '하늘', '보트', '물놀이', '영상'],
-    resolution: 'FHD 60fps',
-    sizeMB: 18.8,
-  },
-  {
-    id: 'vid_06_bridge_walk',
-    videoFileName: '20240719_105706.mp4',
-    title: '코타키나발루 나무 다리 위에서 산책하는 영상',
-    keyframePhotoId: '20240720_122826.jpg',
-    thumbUrl: '/__photos/file?p=20240720_122826.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20240719_105706.mp4',
-    date: '2024.07.20 12:28',
-    durationText: '01:05',
-    matchedTimestamp: '00:12 프레임 포착',
-    locationKo: '말레이시아 코타키나발루 선착장',
-    sceneDescription:
-      '에메랄드빛 바다 위에 길게 뻗은 나무 데크 다리 위를 걸으며 산책하는 여름 휴가 스냅 영상',
-    keywords: ['코타키나발루', '나무', '다리', '나무다리', '산책', '산책하는', '바다', '선착장', '영상'],
-    resolution: '4K UHD',
+      '00:00부터 00:20까지 1~3초 단위로 전 구간 완전 해부됨: ① 00:00 바다 물보라·보트 철제 난간·무지개 낙하산 상공 활공 ➔ ② 00:06 하늘 태양 역광 플레어 진입 ➔ ③ 00:11 윈치 로프 견인 하강 ➔ ④ 00:18 다리 뻗으며 보트 갑판 착지 ➔ ⑤ 00:20 굵은 밧줄 매듭 옆 갑판 바닥 안착 완료',
+    keywords: [
+      '패러세일링',
+      '낙하산',
+      '무지개',
+      '구명조끼',
+      '보트',
+      '갑판',
+      '착지',
+      '바다',
+      '물보라',
+      '난간',
+      '태양',
+      '햇빛',
+      '로프',
+      '밧줄',
+      '매듭',
+      '다리',
+      '하늘',
+      '섬',
+      '코타키나발루',
+    ],
+    resolution: 'FHD 60fps (전 구간 7개 프레임 해부)',
     sizeMB: 36.2,
+    timelineFrames: [
+      {
+        frameId: 'v1_f00',
+        timeSec: 0,
+        timestampText: '00:00',
+        phaseLabel: '초반 상공 활공',
+        sceneCaption:
+          '하얀 물보라를 일으키며 달리는 모터보트 우측 철제 난간 너머로 알록달록한 무지개 낙하산(패러세일링)이 푸른 바다 위 높은 하늘에 떠 있는 초반 장면',
+        keywords: ['초반', '물보라', '모터보트', '철제', '난간', '무지개', '낙하산', '패러세일링', '하늘', '바다', '가르며', '달리는'],
+        tags: ['#패러세일링', '#보트난간', '#바다물보라'],
+      },
+      {
+        frameId: 'v1_f03',
+        timeSec: 3,
+        timestampText: '00:03',
+        phaseLabel: '초반 해상 견인',
+        sceneCaption:
+          '보트에서 길게 뻗은 하얀 견인 줄(로프)에 매달려 초록빛 열대 섬 능선을 배경으로 두 사람이 하늘을 날아가는 장면',
+        keywords: ['견인', '줄', '로프', '섬', '능선', '매달려', '날아가는', '하늘', '낙하산'],
+        tags: ['#견인로프', '#열대섬배경', '#공중활공'],
+      },
+      {
+        frameId: 'v1_f06',
+        timeSec: 6,
+        timestampText: '00:06',
+        phaseLabel: '태양 역광 진입',
+        sceneCaption:
+          '하늘 우측 상단에 눈부신 태양(햇빛 플레어)이 프레임에 들어오며 무지개빛 낙하산 아래 구명조끼를 입은 두 사람이 서서히 하강을 시작하는 장면',
+        keywords: ['태양', '햇빛', '플레어', '역광', '해', '상단', '구명조끼', '하강', '낙하산'],
+        tags: ['#태양플레어', '#햇빛역광', '#하강시작'],
+      },
+      {
+        frameId: 'v1_f11',
+        timeSec: 11,
+        timestampText: '00:11',
+        phaseLabel: '중간 로프 하강',
+        sceneCaption:
+          '윈치 로프가 감기면서 구명조끼와 반바지·래시가드를 입은 남녀 두 사람의 전신이 보트 뒷갑판 쪽으로 점점 가까워지는 중간 하강 장면',
+        keywords: ['윈치', '로프', '전신', '남녀', '반바지', '래시가드', '가까워지는', '내려오는', '하강'],
+        tags: ['#중간하강', '#윈치로프', '#구명조끼'],
+      },
+      {
+        frameId: 'v1_f15',
+        timeSec: 15,
+        timestampText: '00:15',
+        phaseLabel: '보트 갑판 접근',
+        sceneCaption:
+          '멀리 수평선 너머 키나발루산 실루엣이 보이고, 두 사람이 보트 갑판 바로 앞까지 내려와 착지를 준비하는 장면',
+        keywords: ['수평선', '키나발루산', '산', '실루엣', '갑판', '접근', '준비'],
+        tags: ['#보트접근', '#키나발루산', '#착지준비'],
+      },
+      {
+        frameId: 'v1_f18',
+        timeSec: 18,
+        timestampText: '00:18',
+        phaseLabel: '클라이맥스 착지 직전',
+        sceneCaption:
+          '빨간색 구명조끼를 입은 남녀 두 사람이 보트 뒷갑판 위로 맨발 다리를 앞으로 쭉 뻗으며 활짝 웃는 착지 직전 클라이맥스 장면',
+        keywords: ['빨간색', '구명조끼', '입고', '보트', '갑판', '착지', '다리', '맨발', '뻗으며', '웃는', '클라이맥스'],
+        tags: ['#보트갑판착지', '#다리뻗기', '#클라이맥스'],
+      },
+      {
+        frameId: 'v1_f20',
+        timeSec: 20,
+        timestampText: '00:20',
+        phaseLabel: '후반 갑판 안착 완료',
+        sceneCaption:
+          '보트 왼쪽의 굵은 밧줄 매듭 옆 회색 갑판 바닥에 두 사람이 나란히 안전하게 앉아 착지를 마치고 미소 짓는 후반 마무리 장면',
+        keywords: ['밧줄', '매듭', '바닥', '앉아', '안착', '완료', '마무리', '미소', '보트', '착지'],
+        tags: ['#착지완료', '#밧줄매듭', '#갑판안착'],
+      },
+    ],
   },
   {
-    id: 'vid_07_resort_pool',
-    videoFileName: '20240719_105444.mp4',
-    title: '수트라하버 리조트 야외 수영장 인공 폭포 물놀이 영상',
-    keyframePhotoId: '20240720_135635.jpg',
-    thumbUrl: '/__photos/file?p=20240720_135635.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20240719_105444.mp4',
-    date: '2024.07.20 13:56',
-    durationText: '00:48',
-    matchedTimestamp: '00:21 프레임 포착',
-    locationKo: '말레이시아 코타키나발루 수트라하버',
+    id: 'vid_02_resort_couple_full',
+    videoFileName: '20240720_134808.mp4',
+    title: '수트라하버 리조트 야자수 데크 소파 브이 포즈 & 핑크 래시가드·하트 목걸이 클로즈업 영상',
+    keyframePhotoId: '20240720_134414.jpg',
+    thumbUrl: '/__photos/file?p=20240720_134414.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240720_134808.mp4',
+    date: '2024.07.20 13:48',
+    durationText: '00:19',
+    durationSec: 19,
+    matchedSeekSec: 4,
+    matchedTimestamp: '🎯 00:04 구간 포착',
+    matchedFrameCaption:
+      '야자수와 붉은 지붕 리조트 수영장 데크의 라탄 소파에 핫핑크 래시가드 여성과 밀짚모자·선글라스 남성이 나란히 앉아 손가락 브이(V) 포즈를 취하는 장면',
+    locationKo: '말레이시아 코타키나발루 수트라하버 리조트',
     sceneDescription:
-      '야자수와 리조트 건물이 둘러싼 넓은 야외 수영장의 인공 폭포 앞에서 시원하게 물놀이를 즐기는 장면',
-    keywords: ['리조트', '수영장', '물놀이', '폭포', '야자수', '수트라하버', '영상'],
-    resolution: 'FHD 60fps',
-    sizeMB: 19.5,
+      '00:00부터 00:18까지 1~2초 단위로 전 구간 완전 해부됨: ① 00:00 밀짚모자·선글라스·흰색 민소매 남성 소파 착석 ➔ ② 00:02 핫핑크 래시가드 여성 걸어가는 뒷모습 ➔ ③ 00:04 나란히 앉아 손가락 브이(V) 포즈 ➔ ④ 00:08 "동영상이다!" 말하며 카메라로 다가옴 ➔ ⑤ 00:13 얼굴 셀카 클로즈업 ➔ ⑥ 00:17 은색 하트 펜던트 목걸이 & 지퍼 클로즈업',
+    keywords: [
+      '리조트',
+      '수트라하버',
+      '야자수',
+      '수영장',
+      '데크',
+      '소파',
+      '밀짚모자',
+      '모자',
+      '선글라스',
+      '민소매',
+      '슬리퍼',
+      '핑크',
+      '핫핑크',
+      '분홍',
+      '래시가드',
+      '브이',
+      '포즈',
+      '다가오는',
+      '클로즈업',
+      '하트',
+      '목걸이',
+      '지퍼',
+    ],
+    resolution: 'FHD 30fps (전 구간 7개 프레임 해부)',
+    sizeMB: 38.1,
+    timelineFrames: [
+      {
+        frameId: 'v2_f00',
+        timeSec: 0,
+        timestampText: '00:00',
+        phaseLabel: '초반 리조트 소파 착석',
+        sceneCaption:
+          '붉은 지붕 리조트 건물과 야자수, 초록 파라솔 수영장을 배경으로 밀짚모자(벙거지 모자)와 선글라스, 흰색 민소매, 꽃무늬 반바지, 슬리퍼 차림의 남성이 야외 라탄 소파에 앉아 있는 초반 장면',
+        keywords: ['초반', '붉은', '지붕', '리조트', '야자수', '파라솔', '수영장', '밀짚모자', '모자', '선글라스', '흰색', '민소매', '꽃무늬', '반바지', '슬리퍼', '소파', '남성'],
+        tags: ['#밀짚모자선글라스', '#리조트소파', '#흰색민소매'],
+      },
+      {
+        frameId: 'v2_f02',
+        timeSec: 2,
+        timestampText: '00:02',
+        phaseLabel: '초반 소파로 걸어감',
+        sceneCaption:
+          '머리를 묶고 핫핑크(분홍색) 긴팔 래시가드와 검은색 반바지, 슬리퍼를 신은 여성이 소파 쪽으로 걸어가는 뒷모습 장면',
+        keywords: ['핫핑크', '핑크', '분홍', '분홍색', '래시가드', '검은색', '반바지', '걸어가는', '뒷모습', '머리'],
+        tags: ['#핑크래시가드', '#걸어가는뒷모습', '#야외데크'],
+      },
+      {
+        frameId: 'v2_f04',
+        timeSec: 4,
+        timestampText: '00:04',
+        phaseLabel: '클라이맥스 커플 브이(V) 포즈',
+        sceneCaption:
+          '핫핑크 래시가드 여성이 라탄 소파의 밀짚모자 남성 옆에 나란히 앉아 오른손으로 손가락 브이(V) 포즈를 취하며 두 사람이 함께 환하게 웃는 장면',
+        keywords: ['소파', '나란히', '앉아', '손가락', '브이', '포즈', '커플', '부부', '웃는', '미소', '야자수', '리조트'],
+        tags: ['#커플브이포즈', '#야자수리조트', '#라탄소파'],
+      },
+      {
+        frameId: 'v2_f08',
+        timeSec: 8,
+        timestampText: '00:08',
+        phaseLabel: '중간 "동영상이다!" 반응',
+        sceneCaption:
+          '사진 타이머 숫자가 안 나오자 여성이 소파에서 일어나 "왜 숫자가 안 나와? 동영상이다!"라고 말하며 카메라 쪽으로 걸어 나오는 장면',
+        keywords: ['타이머', '숫자', '동영상이다', '일어나', '걸어오는', '다가오는', '말하며', '반응'],
+        tags: ['#동영상인지반응', '#카메라접근', '#일어나는장면'],
+      },
+      {
+        frameId: 'v2_f10',
+        timeSec: 10,
+        timestampText: '00:10',
+        phaseLabel: '카메라 화면 터치',
+        sceneCaption:
+          '여성이 카메라 바로 앞까지 다가와 왼손을 뻗어 스마트폰 화면을 터치하며 확인하는 장면',
+        keywords: ['왼손', '손', '뻗어', '터치', '화면', '확인', '카메라', '다가오는'],
+        tags: ['#카메라터치', '#손뻗는장면', '#화면확인'],
+      },
+      {
+        frameId: 'v2_f13',
+        timeSec: 13,
+        timestampText: '00:13',
+        phaseLabel: '후반 얼굴 셀카 클로즈업',
+        sceneCaption:
+          '파란 하늘과 야자수 아래 여성이 카메라 렌즈를 가까이 들여다보며 입술을 내밀고 귀여운 표정을 짓는 얼굴 클로즈업 장면',
+        keywords: ['얼굴', '셀카', '클로즈업', '입술', '표정', '가까이', '여성'],
+        tags: ['#얼굴클로즈업', '#셀카표정', '#야자수하늘'],
+      },
+      {
+        frameId: 'v2_f17',
+        timeSec: 17,
+        timestampText: '00:17',
+        phaseLabel: '후반 하트 목걸이 클로즈업',
+        sceneCaption:
+          '여성의 목에 걸린 은색 하트 펜던트 목걸이와 핫핑크 래시가드 앞지퍼 디테일이 화면 가득 선명하게 잡히는 마무리 클로즈업 장면',
+        keywords: ['은색', '하트', '펜던트', '목걸이', '하트목걸이', '지퍼', '래시가드', '디테일', '클로즈업', '마무리'],
+        tags: ['#하트목걸이', '#은색목걸이', '#래시가드지퍼'],
+      },
+    ],
   },
   {
-    id: 'vid_08_island_boat',
-    videoFileName: '20240719_105428.mp4',
-    title: '보트 타고 에메랄드빛 열대 섬 해안으로 들어가는 영상',
-    keyframePhotoId: '20240719_100316.jpg',
-    thumbUrl: '/__photos/file?p=20240719_100316.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20240719_105428.mp4',
-    date: '2024.07.19 10:03',
-    durationText: '00:39',
-    matchedTimestamp: '00:11 프레임 포착',
-    locationKo: '말레이시아 코타키나발루 마무틱섬',
+    id: 'vid_03_airplane_sunrise_full',
+    videoFileName: '20240722_052422.mp4',
+    title: '새벽 비행기 기내 창문 너머 구름 위 황금빛 일출 & 스마트폰 카메라 촬영 영상',
+    keyframePhotoId: '20240722_042446.jpg',
+    thumbUrl: '/__photos/file?p=20240722_042446.jpg&thumb=1',
+    videoUrl: '/__photos/file?p=20240722_052422.mp4',
+    date: '2024.07.22 05:24',
+    durationText: '00:09',
+    durationSec: 9,
+    matchedSeekSec: 7,
+    matchedTimestamp: '🎯 00:07 구간 포착',
+    matchedFrameCaption:
+      '새벽 비행기 둥근 창문 너머 구름 바다 위로 떠오르는 황금빛 일출 태양을 스마트폰 카메라 화면에 담아 촬영하는 장면',
+    locationKo: '코타키나발루 ➔ 인천 귀국 항공편 기내 상공',
     sceneDescription:
-      '에메랄드빛 바다 위 보트에 앉아 푸른 숲이 우거진 섬 해안 풍경을 감상하며 이동하는 장면',
-    keywords: ['보트', '에메랄드빛', '바다', '섬', '래시가드', '투어', '달리는', '영상'],
-    resolution: 'FHD 60fps',
-    sizeMB: 18.9,
-  },
-  {
-    id: 'vid_09_cheongna_night',
-    videoFileName: '20260918_202442.mp4',
-    title: '청라 호수공원 야간 목재 데크 산책 및 밤거리 모임 영상',
-    keyframePhotoId: '20260918_195244.jpg',
-    thumbUrl: '/__photos/file?p=20260918_195244.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20260918_202442.mp4',
-    date: '2026.09.18 20:24',
-    durationText: '00:26',
-    matchedTimestamp: '00:07 프레임 포착',
-    locationKo: '인천 서구 청라국제도시',
-    sceneDescription:
-      '야간 도심 공원의 조명이 켜진 목재 데크 산책로에서 손가락 하트 포즈를 취하고 밤거리 식당에서 담소를 나누는 장면',
-    keywords: ['청라', '야간', '밤', '밤거리', '공원', '산책', '데크', '식당', '영상'],
-    resolution: 'FHD 30fps',
-    sizeMB: 8.7,
-  },
-  {
-    id: 'vid_10_yeouido_walk',
-    videoFileName: '20260811_122325.mp4',
-    title: '여의도 한강공원 산책로에서 친구들과 함께 걷는 영상',
-    keyframePhotoId: '20260525_193249.jpg',
-    thumbUrl: '/__photos/file?p=20260525_193249.jpg&thumb=1',
-    videoUrl: '/__photos/file?p=20260811_122325.mp4',
-    date: '2026.08.11 12:23',
-    durationText: '01:15',
-    matchedTimestamp: '00:19 프레임 포착',
-    locationKo: '서울 영등포구 여의도 한강공원',
-    sceneDescription:
-      '저녁 노을이 비치는 여의도 한강공원 산책로를 따라 친구들과 나란히 걸어가는 뒷모습을 담은 일상 영상',
-    keywords: ['여의도', '한강공원', '한강', '친구들', '산책', '걷는', '뒷모습', '영상'],
-    resolution: '4K UHD',
-    sizeMB: 240.7,
+      '00:00부터 00:08까지 1초 단위로 전 구간 완전 해부됨: ① 00:00 새벽 비행기 기내 좌석과 창문 밖 구름 위 일출 ➔ ② 00:02 창가 아래 스마트폰 홈 화면 앱 아이콘 노출 ➔ ③ 00:04 구름 바다(운해) 위 강렬한 황금빛 태양 클로즈업 ➔ ④ 00:07 스마트폰 카메라 앱을 켜고 기내 창문 일출을 촬영하는 장면',
+    keywords: [
+      '비행기',
+      '항공기',
+      '기내',
+      '창문',
+      '창가',
+      '구름',
+      '운해',
+      '일출',
+      '해돋이',
+      '태양',
+      '노을',
+      '황금빛',
+      '새벽',
+      '스마트폰',
+      '핸드폰',
+      '휴대폰',
+      '아이콘',
+      '카메라',
+      '촬영',
+      '찍는',
+    ],
+    resolution: 'FHD 30fps (전 구간 6개 프레임 해부)',
+    sizeMB: 16.0,
+    timelineFrames: [
+      {
+        frameId: 'v3_f00',
+        timeSec: 0,
+        timestampText: '00:00',
+        phaseLabel: '초반 비행기 기내 창가',
+        sceneCaption:
+          '어두운 새벽 비행기 기내 좌석 시트 옆 둥근 창문 너머로 끝없이 펼쳐진 구름 바다 위로 붉고 노란 일출 태양이 떠오르는 초반 장면',
+        keywords: ['초반', '새벽', '비행기', '기내', '좌석', '시트', '둥근', '창문', '창가', '구름', '일출'],
+        tags: ['#비행기창문', '#기내좌석', '#새벽일출'],
+      },
+      {
+        frameId: 'v3_f02',
+        timeSec: 2,
+        timestampText: '00:02',
+        phaseLabel: '스마트폰 앱 아이콘 화면',
+        sceneCaption:
+          '비행기 창문 바로 아래 손에 들고 있는 스마트폰 화면에 초록색·보라색·노란색 앱 아이콘들이 격자로 켜져 있는 장면',
+        keywords: ['스마트폰', '핸드폰', '휴대폰', '화면', '앱', '아이콘', '어플', '손', '들고'],
+        tags: ['#스마트폰아이콘', '#앱화면', '#창가핸드폰'],
+      },
+      {
+        frameId: 'v3_f04',
+        timeSec: 4,
+        timestampText: '00:04',
+        phaseLabel: '구름 바다 위 황금빛 태양',
+        sceneCaption:
+          '스마트폰을 살짝 내리고 비행기 창문 가득 눈부신 황금빛·주황빛 일출 태양과 솜털 같은 구름층(운해)을 정면으로 비추는 장면',
+        keywords: ['황금빛', '주황빛', '태양', '햇살', '구름', '구름층', '운해', '일출', '해돋이', '노을', '창문'],
+        tags: ['#구름위태양', '#황금빛운해', '#창밖일출'],
+      },
+      {
+        frameId: 'v3_f06',
+        timeSec: 6,
+        timestampText: '00:06',
+        phaseLabel: '스마트폰 카메라 모드 전환',
+        sceneCaption:
+          '일출을 찍기 위해 스마트폰 카메라 앱을 실행하여 창문 앞으로 다시 들어 올리는 준비 장면',
+        keywords: ['카메라', '실행', '모드', '들어올리는', '준비', '스마트폰', '핸드폰'],
+        tags: ['#카메라앱실행', '#촬영준비', '#기내창가'],
+      },
+      {
+        frameId: 'v3_f07',
+        timeSec: 7,
+        timestampText: '00:07',
+        phaseLabel: '클라이맥스 스마트폰 일출 촬영',
+        sceneCaption:
+          '스마트폰 카메라 뷰파인더 화면 속에 비행기 창문 밖 구름 위 황금빛 일출과 셔터 버튼을 담아 촬영하는 클라이맥스 장면',
+        keywords: ['스마트폰', '핸드폰', '카메라', '뷰파인더', '셔터', '버튼', '비행기', '창문', '구름', '일출', '촬영', '찍는', '클라이맥스'],
+        tags: ['#스마트폰일출촬영', '#뷰파인더포착', '#클라이맥스'],
+      },
+      {
+        frameId: 'v3_f08',
+        timeSec: 8,
+        timestampText: '00:08',
+        phaseLabel: '후반 새벽 여명 수평선',
+        sceneCaption:
+          '주황빛 일출 여명과 푸른 새벽 성층권 하늘의 수평선이 비행기 창문과 스마트폰 화면에 동시에 담기는 후반 마무리 장면',
+        keywords: ['여명', '성층권', '하늘', '수평선', '마무리', '비행기', '일출', '스마트폰'],
+        tags: ['#새벽여명', '#하늘수평선', '#기내촬영마무리'],
+      },
+    ],
   },
 ];
 
+export const TOTAL_DISSECTED_VIDEO_FRAMES = VIDEO_SCENE_ITEMS.reduce(
+  (acc, v) => acc + v.timelineFrames.length,
+  0
+);
+
+/**
+ * [동영상 전 구간(Full-Timeline) 정밀 검색]
+ * - 유저가 동영상 3개 안에 스쳐 지나가는 어떤 사물·의상·배경·행동을 입력하더라도
+ *   전 구간 타임라인 프레임(timelineFrames)을 개별 스코어링하여 정확히 포착된 초(matchedSeekSec)와 캡션을 반환합니다.
+ */
 export function searchVideoSceneItems(query: string): VideoSceneItem[] {
   const q = query.trim().toLowerCase();
   if (!q) return VIDEO_SCENE_ITEMS;
+
+  const STOP_WORDS = new Set([
+    '찾아줘',
+    '보여줘',
+    '영상',
+    '동영상',
+    '장면',
+    '모습',
+    '에서',
+    '위에서',
+    '입고',
+    '있는',
+    '하는',
+    '찍은',
+    '나오는',
+  ]);
+
   const rawTokens = q
     .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
     .split(/\s+/)
-    .filter(
-      (t) =>
-        t.length >= 1 &&
-        !['찾아줘', '보여줘', '영상', '동영상', '장면', '모습', '에서', '위에서', '입고'].includes(t)
-    );
+    .map((t) => t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
+    .filter((t) => t.length >= 1 && !STOP_WORDS.has(t));
 
   if (rawTokens.length === 0) return VIDEO_SCENE_ITEMS;
 
-  const scored = VIDEO_SCENE_ITEMS.map((vid) => {
-    const corpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
-    let hits = 0;
-    for (const tk of rawTokens) {
-      if (corpus.includes(tk)) hits += 2;
-      else if (tk.length >= 2 && corpus.includes(tk.slice(0, 2))) hits += 1;
-    }
-    return { vid, hits };
-  }).filter((item) => item.hits > 0);
+  const scored: { vid: VideoSceneItem; totalScore: number }[] = [];
 
-  scored.sort((a, b) => b.hits - a.hits);
+  for (const vid of VIDEO_SCENE_ITEMS) {
+    const videoLevelCorpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
+    let videoBaseHits = 0;
+    for (const tk of rawTokens) {
+      if (videoLevelCorpus.includes(tk)) videoBaseHits += 2;
+      else if (tk.length >= 2 && videoLevelCorpus.includes(tk.slice(0, 2))) videoBaseHits += 1;
+    }
+
+    // 각 동영상 내부의 전 구간 타임라인 프레임(timelineFrames)을 1초 단위로 정밀 대조
+    let bestFrame = vid.timelineFrames[0];
+    let bestFrameScore = -1;
+
+    for (const frame of vid.timelineFrames) {
+      const frameCorpus = `${frame.timestampText} ${frame.phaseLabel} ${frame.sceneCaption} ${frame.keywords.join(' ')} ${frame.tags.join(' ')}`.toLowerCase();
+      let frameHits = 0;
+      for (const tk of rawTokens) {
+        if (frame.keywords.some((k) => k.toLowerCase().includes(tk))) {
+          frameHits += 5;
+        } else if (frameCorpus.includes(tk)) {
+          frameHits += 3;
+        } else if (tk.length >= 2 && frameCorpus.includes(tk.slice(0, 2))) {
+          frameHits += 1;
+        }
+      }
+      if (frameHits > bestFrameScore) {
+        bestFrameScore = frameHits;
+        bestFrame = frame;
+      }
+    }
+
+    const totalScore = videoBaseHits + Math.max(0, bestFrameScore);
+    if (totalScore > 0) {
+      scored.push({
+        vid: {
+          ...vid,
+          matchedSeekSec: bestFrame.timeSec,
+          matchedTimestamp: `🎯 ${bestFrame.timestampText} 구간 포착`,
+          matchedFrameCaption: bestFrame.sceneCaption,
+        },
+        totalScore,
+      });
+    }
+  }
+
+  scored.sort((a, b) => b.totalScore - a.totalScore);
   return scored.map((s) => s.vid);
 }
 

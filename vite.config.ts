@@ -465,6 +465,38 @@ function sayseeLocalBridge(): Plugin {
           return;
         }
 
+        const extLower = path.extname(full).toLowerCase();
+        const isVideoFile = extLower === '.mp4' || extLower === '.mov' || extLower === '.webm';
+        if (isVideoFile && !isThumb) {
+          const stat = fs.statSync(full);
+          const fileSize = stat.size;
+          const mimeType = MIME[extLower] ?? 'video/mp4';
+          const range = req.headers.range;
+          if (range) {
+            const parts = range.replace(/bytes=/, '').split('-');
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunkSize = end - start + 1;
+            res.writeHead(206, {
+              'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+              'Accept-Ranges': 'bytes',
+              'Content-Length': chunkSize,
+              'Content-Type': mimeType,
+              'Cache-Control': 'public, max-age=3600',
+            });
+            fs.createReadStream(full, { start, end }).pipe(res);
+          } else {
+            res.writeHead(200, {
+              'Content-Length': fileSize,
+              'Accept-Ranges': 'bytes',
+              'Content-Type': mimeType,
+              'Cache-Control': 'public, max-age=3600',
+            });
+            fs.createReadStream(full).pipe(res);
+          }
+          return;
+        }
+
         try {
           if (isThumb) {
             const cached = thumbCache.get(full);

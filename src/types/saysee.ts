@@ -10,6 +10,9 @@ export type TrashCategory =
 /** [스펙 1 & 체험판 타겟팅] 파워 검색 상단 공간 필터: [🎬 동영상 장면] vs [📁 스마트 서류함] vs [🖼️ 전체/갤러리] */
 export type SearchSpaceMode = 'video' | 'vault' | 'gallery';
 
+/** [온보딩 프레임 대전환] Track A: 내 PC 직접 구동(권장) + QR 모바일 연결 vs Track B: 모바일 단독 시 초고속 GPU 서버 무료 대여 */
+export type OnboardingTrackMode = 'pc_local' | 'cloud_rental';
+
 /** [체험판 보안 스펙 1] 스캔 전 유저가 직접 체크하여 허용하는 기본 3대 안전 검진 구역 */
 export interface TrialScanPermissions {
   gallery: boolean;
@@ -17,7 +20,18 @@ export interface TrialScanPermissions {
   desktop: boolean;
 }
 
-/** [체험판 타겟 2] 로컬 서버 Gemma 2로 핵심 프레임을 추출·색인한 최신 동영상 10개 장면 데이터 */
+/** [동영상 전 구간(Full-Timeline) 완전 해부] 00:00부터 끝까지 1~2초 간격의 시간대별 프레임 인덱스 */
+export interface VideoTimelineFrame {
+  frameId: string;
+  timeSec: number;
+  timestampText: string;
+  phaseLabel: string;
+  sceneCaption: string;
+  keywords: string[];
+  tags: string[];
+}
+
+/** [동영상 체험 혁신] 최신 동영상 3개 선정 후 00:00부터 끝까지 전 구간(Full-Timeline) 완전 해부 데이터 */
 export interface VideoSceneItem {
   id: string;
   videoFileName: string;
@@ -27,12 +41,16 @@ export interface VideoSceneItem {
   videoUrl: string;
   date: string;
   durationText: string;
+  durationSec: number;
+  matchedSeekSec: number;
   matchedTimestamp: string;
+  matchedFrameCaption: string;
   locationKo: string;
   sceneDescription: string;
   keywords: string[];
   resolution: string;
   sizeMB: number;
+  timelineFrames: VideoTimelineFrame[];
 }
 
 /** [스펙 1] 로컬 폴더(PC/폰) 내 PDF, TXT, DOCX 등 텍스트 추출 문서 자산 */

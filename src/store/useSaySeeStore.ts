@@ -5,6 +5,7 @@ import type {
   LocalDocumentFile,
   MerlinAuthState,
   OnboardingAhaItem,
+  OnboardingTrackMode,
   PhotoItem,
   PricingPlanId,
   PrivateSyncStrategy,
@@ -53,7 +54,7 @@ interface SaySeeStore {
   setMobileTab: (tab: MobileTab) => void;
   setDesktopTab: (tab: DesktopTab) => void;
 
-  // [스펙 1 & 체험판 타겟팅] 파워 검색 공간 3-Track 필터 ([🎬 동영상 장면 10개] | [📁 스마트 서류함 20건] | [🖼️ 전체/갤러리])
+  // [스펙 1 & 체험판 타겟팅] 파워 검색 공간 3-Track 필터 ([🎬 동영상 3개 전 구간 해부] | [📁 스마트 서류함 20건] | [🖼️ 전체/갤러리])
   searchSpace: SearchSpaceMode;
   localDocuments: LocalDocumentFile[];
   matchedLocalDocs: LocalDocumentFile[];
@@ -64,7 +65,7 @@ interface SaySeeStore {
   trialScanPermissions: TrialScanPermissions;
   setSearchSpace: (space: SearchSpaceMode) => void;
   setSelectedDocModal: (doc: LocalDocumentFile | null) => void;
-  setSelectedVideoModal: (vid: VideoSceneItem | null) => void;
+  setSelectedVideoModal: (vid: VideoSceneItem | null, seekSec?: number) => void;
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
 
@@ -83,15 +84,19 @@ interface SaySeeStore {
   onboardingAhaItems: OnboardingAhaItem[];
   applyAhaRecommendation: (item: OnboardingAhaItem) => Promise<void>;
 
-  // 체험판 1분 고속 스캔 (청소 진단 + 최신 서류 20건 + 최신 동영상 10개) 모달 상태
+  // 체험판 1분 고속 스캔 (Track A: 내 PC 직접 구동 + QR 페어링 vs Track B: 클라우드 GPU 서버 무료 대여)
   showOnboarding: boolean;
   onboardingRunning: boolean;
   onboardingUseRealGpu: boolean;
   onboardingTargetCount: number;
+  onboardingTrackMode: OnboardingTrackMode;
+  pcAgentPairedMobile: boolean;
   onboardingProgress: OnboardingProgressUpdate;
   setShowOnboarding: (show: boolean) => void;
   setOnboardingUseRealGpu: (real: boolean) => void;
   setOnboardingTargetCount: (count: number) => void;
+  setOnboardingTrackMode: (mode: OnboardingTrackMode) => void;
+  setPcAgentPairedMobile: (paired: boolean) => void;
   startOnboardingIndexing: () => Promise<void>;
   cancelOnboardingIndexing: () => void;
 
@@ -169,17 +174,17 @@ const voiceSession = new HybridVoiceSession();
 
 const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   phase: 'completed',
-  done: 30,
-  total: 30,
+  done: 23,
+  total: 23,
   remaining: 0,
   percent: 100.0,
-  elapsedSec: 18,
+  elapsedSec: 16,
   etaSec: 0,
-  perImageSec: 0.6,
-  currentPhotoName: '최신 서류 20건 + 동영상 10개 핵심 프레임 색인 완료 (RAM 즉시 자동 소각)',
-  currentPhotoThumb: '/__photos/file?p=20240720_194644.jpg&thumb=1',
+  perImageSec: 0.7,
+  currentPhotoName: '최신 서류 20건 + 동영상 3개 전 구간(20개 타임라인 프레임) 완전 해부 완료',
+  currentPhotoThumb: '/__photos/file?p=20240719_105704.jpg&thumb=1',
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
-  modelStatusText: '자체 로컬 GPU 서버 Gemma 2 휘발성 연산 완료 (하드디스크 저장 0건 • 0.1초 내 즉시 자동 소각)',
+  modelStatusText: '내 PC 직접 구동(SaySee_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
 };
 
 export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
@@ -200,7 +205,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         desktopTab === 'dashboard' ? 'search' : desktopTab === 'trash' ? 'trash' : 'settings',
     }),
 
-  // [스펙 1 & 체험판 타겟팅] 동영상 장면(10개) vs 스마트 서류함(20건) vs 전체/갤러리
+  // [스펙 1 & 체험판 타겟팅] 동영상 3개 전 구간 해부 vs 스마트 서류함(20건) vs 전체/갤러리
   searchSpace: 'video',
   localDocuments: LOCAL_DOCUMENT_FILES,
   matchedLocalDocs: LOCAL_DOCUMENT_FILES,
@@ -214,7 +219,29 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     desktop: true,
   },
   setSelectedDocModal: (selectedDocModal) => set({ selectedDocModal }),
-  setSelectedVideoModal: (selectedVideoModal) => set({ selectedVideoModal }),
+  setSelectedVideoModal: (selectedVideoModal, seekSec) => {
+    if (!selectedVideoModal) {
+      set({ selectedVideoModal: null });
+      return;
+    }
+    if (seekSec !== undefined) {
+      const matchedFrame = selectedVideoModal.timelineFrames.find((f) => f.timeSec === seekSec);
+      set({
+        selectedVideoModal: {
+          ...selectedVideoModal,
+          matchedSeekSec: seekSec,
+          matchedTimestamp: matchedFrame
+            ? `🎯 ${matchedFrame.timestampText} 구간 포착`
+            : selectedVideoModal.matchedTimestamp,
+          matchedFrameCaption: matchedFrame
+            ? `[${matchedFrame.timestampText} · ${matchedFrame.phaseLabel}] ${matchedFrame.sceneCaption}`
+            : selectedVideoModal.matchedFrameCaption,
+        },
+      });
+      return;
+    }
+    set({ selectedVideoModal });
+  },
   setTrialScanPermission: (folder, allowed) =>
     set((state) => ({
       trialScanPermissions: {
@@ -228,8 +255,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     if (searchSpace === 'video') {
       set({
         searchSpace: 'video',
-        activeQuery: '최신 동영상 10개 핵심 장면 전체 (불쇼 · 스노클링 · 스피드보트 · 수중 촬영)',
-        matchedTags: ['#동영상장면검색', '#핵심프레임포착', '#삼성갤러리불가'],
+        activeQuery: '최신 동영상 3개 전 구간(00:00~끝, 총 20개 타임라인 구간) 1초 단위 완전 해부',
+        matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#삼성갤러리불가'],
         matchedVideoScenes: VIDEO_SCENE_ITEMS,
       });
     } else if (searchSpace === 'vault') {
@@ -298,8 +325,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       targetSearchQuery: chip.query,
     }));
 
-    // 초기 기본 검색 결과 세팅
-    const initialQuery = '한밤중 바닷가에서 불꽃 돌리는 불쇼 영상';
+    // 초기 기본 검색 결과 세팅 (최신 동영상 3개 전 구간 완전 해부)
+    const initialQuery = '구명조끼 입고 무지개 낙하산 패러세일링 후 보트 갑판 착지';
     const initialSearch = await executeTextSearch(initialQuery, dataset.photos, 'text-direct');
     const initialVideoMatches = searchVideoSceneItems(initialQuery);
 
@@ -319,7 +346,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       onboardingAhaItems: localAhaItems,
       searchSpace: 'video',
       activeQuery: initialQuery,
-      matchedTags: ['#동영상장면검색', '#불쇼영상', '#코타키나발루'],
+      matchedTags: ['#동영상전구간해부', '#🎯00:18구간포착', '#패러세일링착지'],
       searchResults: initialSearch.results,
       matchedVideoScenes: initialVideoMatches.length > 0 ? initialVideoMatches : VIDEO_SCENE_ITEMS,
       selectedTrashIds: trashIds,
@@ -333,16 +360,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     await get().runTextQuery(item.targetSearchQuery);
   },
 
-  // ─────────────── 체험판 1분 고속 스캔 (청소 진단 + 최신 서류 20건 + 최신 동영상 10개) ───────────────
+  // ─────────────── 체험판 1분 고속 스캔 (Track A: 내 PC 직접 구동 + QR 페어링 vs Track B: 클라우드 GPU 서버 무료 대여) ───────────────
   showOnboarding: false,
   onboardingRunning: false,
   onboardingUseRealGpu: false,
-  onboardingTargetCount: 30,
+  onboardingTargetCount: 23,
+  onboardingTrackMode: typeof window !== 'undefined' && window.innerWidth < 1024 ? 'cloud_rental' : 'pc_local',
+  pcAgentPairedMobile: true,
   onboardingProgress: INITIAL_ONBOARDING_PROGRESS,
 
   setShowOnboarding: (showOnboarding) => set({ showOnboarding }),
   setOnboardingUseRealGpu: (onboardingUseRealGpu) => set({ onboardingUseRealGpu }),
   setOnboardingTargetCount: (onboardingTargetCount) => set({ onboardingTargetCount }),
+  setOnboardingTrackMode: (onboardingTrackMode) => set({ onboardingTrackMode }),
+  setPcAgentPairedMobile: (pcAgentPairedMobile) => set({ pcAgentPairedMobile }),
 
   startOnboardingIndexing: async () => {
     const { photos, onboardingTargetCount, onboardingUseRealGpu, onboardingRunning } = get();
@@ -368,9 +399,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({ onboardingRunning: false });
   },
 
-  // ─────────────── 파워 검색 (동영상 장면 10개 + 스마트 서류함 20건 + 갤러리 통합) ───────────────
-  activeQuery: '한밤중 바닷가에서 불꽃 돌리는 불쇼 영상',
-  matchedTags: ['#동영상장면검색', '#불쇼영상', '#코타키나발루'],
+  // ─────────────── 파워 검색 (동영상 3개 전 구간 해부 + 스마트 서류함 20건 + 갤러리 통합) ───────────────
+  activeQuery: '구명조끼 입고 무지개 낙하산 패러세일링 후 보트 갑판 착지',
+  matchedTags: ['#동영상전구간해부', '#🎯00:18구간포착', '#패러세일링착지'],
   searchResults: [],
   groupBurstsInSearch: true,
   isListening: false,
@@ -390,16 +421,21 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     if (!query) return;
     const { photos, telemetry, searchSpace } = get();
 
-    // 로컬 PDF/TXT/DOCX 문서 매칭 (12건) 및 동영상 핵심 프레임 매칭 (10개)
+    // 로컬 PDF/TXT/DOCX 문서 매칭 (12건) 및 동영상 3개 전 구간 타임라인 프레임 매칭 (20개 구간)
     const docMatches = searchLocalDocumentFiles(query);
     const videoMatches = searchVideoSceneItems(query);
 
-    // [체험판 타겟 ②] 동영상 장면 검색 모드일 때: 동영상 장면 + 해당 장면 연관 프레임 사진 동시 매칭
+    // [체험판 타겟 ②] 동영상 장면 검색 모드일 때: 동영상 3개 전 구간 매칭 + 해당 장면 연관 프레임 사진 동시 매칭
     if (searchSpace === 'video') {
       const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
+      const topVideo = videoMatches[0];
       set({
         activeQuery: query,
-        matchedTags: ['#동영상장면검색', '#핵심프레임포착', '#0.04초매칭'],
+        matchedTags: [
+          '#동영상전구간해부',
+          topVideo ? `#${topVideo.matchedTimestamp.replace(/\s+/g, '')}` : '#타임라인점프',
+          '#0.04초매칭',
+        ],
         matchedVideoScenes: videoMatches.length > 0 ? videoMatches : VIDEO_SCENE_ITEMS,
         searchResults: results,
         matchedLocalDocs: docMatches,

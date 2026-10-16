@@ -100,12 +100,12 @@ export const MobileAppView: React.FC = () => {
           {/* 1) 보안 배지 & 체험 완료 브리핑 보드 & 검색창 */}
           <VoiceHeroStage />
 
-          {/* 2-0) [🎬 동영상 장면 검색] 뷰 */}
+          {/* 2-0) [🎬 동영상 3개 전 구간 해부] 뷰 */}
           {searchSpace === 'video' ? (
             <section className="flex flex-col gap-3">
               <div className="flex items-center justify-between px-0.5">
                 <span className="font-headline-sm text-[15px] text-on-surface font-extrabold">
-                  🎬 동영상 장면 포착 결과 ({matchedVideoScenes.length}개)
+                  🎬 동영상 3개 전 구간 포착 결과 ({matchedVideoScenes.length}개)
                 </span>
               </div>
 
@@ -113,7 +113,7 @@ export const MobileAppView: React.FC = () => {
                 {matchedVideoScenes.map((vid) => (
                   <article
                     key={vid.id}
-                    onClick={() => setSelectedVideoModal(vid)}
+                    onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
                     className="rounded-2xl overflow-hidden bg-surface-container-low border border-primary-container/50 flex flex-col cursor-pointer"
                   >
                     <div className="relative aspect-video w-full bg-black">
@@ -128,22 +128,44 @@ export const MobileAppView: React.FC = () => {
                           <span className="material-symbols-outlined text-[24px]">play_arrow</span>
                         </div>
                       </div>
-                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[10px] font-extrabold">
-                        🎯 {vid.matchedTimestamp}
+                      <div className="absolute top-2 left-2 px-2.5 py-0.5 rounded bg-black/90 border border-primary-container text-primary-container font-label-mono text-[10.5px] font-black">
+                        {vid.matchedTimestamp}
                       </div>
-                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white font-label-mono text-[10px] font-bold">
-                        ⏱️ {vid.durationText}
+                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/80 text-emerald-300 font-label-mono text-[10px] font-bold">
+                        ⏱️ 00:00~{vid.durationText} ({vid.timelineFrames.length}구간)
                       </div>
                     </div>
-                    <div className="p-3.5 flex flex-col gap-1">
+                    <div className="p-3.5 flex flex-col gap-2">
                       <h4 className="font-headline-sm text-[14px] text-white font-extrabold">
                         🎬 {vid.title}
                       </h4>
-                      <p className="font-body-sm text-[12px] text-on-surface-variant line-clamp-2">
-                        {vid.sceneDescription}
+                      <p className="font-body-sm text-[11.5px] text-white/90 bg-primary-container/10 border border-primary-container/30 rounded-lg p-2">
+                        {vid.matchedFrameCaption}
                       </p>
-                      <span className="font-label-mono text-[10.5px] text-primary-container pt-1">
-                        📍 {vid.locationKo} • {vid.videoFileName}
+                      <div className="flex flex-wrap items-center gap-1">
+                        {vid.timelineFrames.map((frame) => {
+                          const isMatched = vid.matchedSeekSec === frame.timeSec;
+                          return (
+                            <button
+                              key={frame.timeSec}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedVideoModal(vid, frame.timeSec);
+                              }}
+                              className={`px-2 py-0.5 rounded font-label-mono text-[10px] font-bold ${
+                                isMatched
+                                  ? 'bg-primary-container text-on-primary-container'
+                                  : 'bg-surface-container-highest text-on-surface-variant'
+                              }`}
+                            >
+                              {frame.timestampText}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="font-label-mono text-[10.5px] text-primary-container pt-0.5">
+                        📍 {vid.locationKo} • ▶ {vid.matchedTimestamp} 즉시 점프 재생
                       </span>
                     </div>
                   </article>

@@ -157,10 +157,10 @@ export const DesktopDashboard: React.FC = () => {
           </button>
 
           {showQr && (
-            <div className="absolute right-0 top-14 w-80 rounded-2xl bg-surface-container-highest border border-primary-container/50 p-5 shadow-2xl flex flex-col items-center gap-3 z-50">
+            <div className="absolute right-0 top-14 w-84 rounded-2xl bg-surface-container-highest border-2 border-primary-container/60 p-5 shadow-2xl flex flex-col items-center gap-3 z-50">
               <div className="w-full flex items-center justify-between">
-                <span className="font-headline-sm text-[15px] font-extrabold text-primary-container">
-                  📱 휴대폰 카메라로 스캔하세요
+                <span className="font-headline-sm text-[14.5px] font-extrabold text-primary-container">
+                  📱 실시간 QR 코드 모바일 동시 페어링
                 </span>
                 <button
                   onClick={() => setShowQr(false)}
@@ -169,7 +169,7 @@ export const DesktopDashboard: React.FC = () => {
                   <span className="material-symbols-outlined text-[18px]">close</span>
                 </button>
               </div>
-              <div className="p-3 bg-white rounded-xl">
+              <div className="p-3 bg-white rounded-xl shadow-[0_0_24px_rgba(0,229,255,0.3)]">
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
                     MOBILE_TUNNEL_URL
@@ -178,8 +178,9 @@ export const DesktopDashboard: React.FC = () => {
                   className="w-44 h-44"
                 />
               </div>
-              <p className="font-body-sm text-[12px] text-on-surface-variant text-center leading-relaxed">
-                와이파이/LTE 상관없이 인증서 경고 없이 바로 열리고 마이크 음성 검색이 작동합니다.
+              <p className="font-body-sm text-[12px] text-white font-semibold text-center leading-relaxed">
+                “스마트폰 카메라로 이 QR을 스캔해 <strong className="text-primary-container">1MB 앱</strong>을 실행하면, 번거로운 로그인이나 6자리 코드 입력 없이{' '}
+                <strong className="text-emerald-300">내 폰과 PC가 그 자리에서 하나로 연결</strong>됩니다!”
               </p>
               <a
                 href={MOBILE_TUNNEL_URL}
@@ -194,25 +195,25 @@ export const DesktopDashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* ─────────────── 탭 1: 🔍 파워 검색 ([🎬 동영상 장면] vs [📁 스마트 서류함] vs [🖼️ 전체/갤러리]) ─────────────── */}
+      {/* ─────────────── 탭 1: 🔍 파워 검색 ([🎬 동영상 3개 전 구간 해부] vs [📁 스마트 서류함] vs [🖼️ 전체/갤러리]) ─────────────── */}
       {desktopTab === 'dashboard' && (
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-10 py-6 flex flex-col gap-6">
           {/* 1) 상단 보안 배지 + 체험 완료 브리핑 보드 + 공간 스위처 + 자연어 문장 검색창 */}
           <VoiceHeroStage />
 
-          {/* 2-0) [🎬 동영상 장면 검색] 모드일 때: 핵심 프레임 색인 동영상 카드 + 연관 프레임 스틸컷 */}
+          {/* 2-0) [🎬 동영상 장면 검색] 모드일 때: 전 구간(00:00~끝) 완전 해부 동영상 3개 + 타임라인 점프 재생 */}
           {searchSpace === 'video' ? (
             <section className="flex flex-col gap-6">
               <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <span className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-[12px] font-black">
-                    🎬 동영상 속 특정 장면 AI 포착
+                    🎬 동영상 3개 전 구간(Full-Timeline) 해부 포착
                   </span>
                   <h2 className="font-headline-md text-[20px] text-on-surface font-extrabold">
-                    “{activeQuery}” 동영상 장면 검색 결과
+                    “{activeQuery}” 타임라인 구간 검색 결과
                   </h2>
                   <span className="px-3 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-md text-[13px] font-bold">
-                    동영상 {matchedVideoScenes.length}개 포착 (클릭 시 해당 장면 및 원본 MP4 재생)
+                    동영상 {matchedVideoScenes.length}개 매칭 (클릭 시 포착된 초(Sec)로 즉시 점프 재생)
                   </span>
                 </div>
 
@@ -229,7 +230,7 @@ export const DesktopDashboard: React.FC = () => {
                 {matchedVideoScenes.map((vid) => (
                   <article
                     key={vid.id}
-                    onClick={() => setSelectedVideoModal(vid)}
+                    onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
                     className="group rounded-2xl overflow-hidden bg-surface-container-low hover:bg-surface-container border-2 border-primary-container/45 hover:border-primary-container shadow-[0_6px_28px_rgba(0,229,255,0.16)] flex flex-col cursor-pointer transition-all hover:-translate-y-0.5"
                   >
                     <div className="relative aspect-video w-full overflow-hidden bg-black">
@@ -246,12 +247,12 @@ export const DesktopDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/85 backdrop-blur-md border border-primary-container/70 text-primary-container font-label-mono text-[11px] font-extrabold">
-                        🎯 {vid.matchedTimestamp}
+                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/90 backdrop-blur-md border border-primary-container text-primary-container font-label-mono text-[11.5px] font-black shadow-lg">
+                        {vid.matchedTimestamp}
                       </div>
 
-                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 text-white font-label-mono text-[11px] font-bold">
-                        ⏱️ {vid.durationText} • {vid.resolution}
+                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 text-emerald-300 font-label-mono text-[10.5px] font-bold">
+                        ⏱️ 00:00~{vid.durationText} ({vid.timelineFrames.length}구간 해부)
                       </div>
 
                       <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/65 to-transparent flex items-center justify-between">
@@ -264,20 +265,52 @@ export const DesktopDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="p-4 flex flex-col gap-2 flex-1 justify-between">
-                      <div className="flex flex-col gap-1">
+                    <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
+                      <div className="flex flex-col gap-1.5">
                         <h3 className="font-headline-sm text-[15.5px] text-white font-extrabold group-hover:text-primary-container transition-colors">
                           🎬 {vid.title}
                         </h3>
-                        <p className="font-body-sm text-[12.5px] text-on-surface-variant line-clamp-2 leading-relaxed">
-                          {vid.sceneDescription}
-                        </p>
+
+                        {/* 포착된 타임라인 프레임 해설 */}
+                        <div className="p-2.5 rounded-xl bg-primary-container/10 border border-primary-container/35">
+                          <p className="font-body-sm text-[12px] text-white font-semibold leading-snug line-clamp-2">
+                            {vid.matchedFrameCaption}
+                          </p>
+                        </div>
+
+                        {/* 전 구간 타임라인 점프 버튼 바 */}
+                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                          <span className="font-label-mono text-[10px] text-on-surface-variant mr-0.5">
+                            구간 점프:
+                          </span>
+                          {vid.timelineFrames.map((frame) => {
+                            const isMatched = vid.matchedSeekSec === frame.timeSec;
+                            return (
+                              <button
+                                key={frame.timeSec}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedVideoModal(vid, frame.timeSec);
+                                }}
+                                title={`${frame.timestampText} (${frame.phaseLabel}): ${frame.sceneCaption}`}
+                                className={`px-2 py-0.5 rounded-md font-label-mono text-[10px] font-black transition-all ${
+                                  isMatched
+                                    ? 'bg-primary-container text-on-primary-container shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                                    : 'bg-surface-container-highest hover:bg-surface-bright text-on-surface-variant hover:text-white'
+                                }`}
+                              >
+                                {frame.timestampText}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20 font-label-mono text-[11px] text-on-surface-variant">
                         <span>📅 {vid.date}</span>
                         <span className="text-primary-container font-bold">
-                          장면 프레임 &amp; 동영상 재생 →
+                          ▶ {vid.matchedTimestamp} 즉시 점프 재생 →
                         </span>
                       </div>
                     </div>
