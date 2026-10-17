@@ -1189,6 +1189,19 @@ function sayseeLocalBridge(): Plugin {
             return;
           }
 
+          const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
+            튜브: /(유튜브|자외선|램프|uv-b)/gi,
+            아이: /아이(콘|폰|패드|디어|템|돌|스|라인|언)/gi,
+            다리: /(기다리|사다리|책상다리|식탁다리)/gi,
+            모자: /모자이크/gi,
+            고기: /물고기/gi,
+            불: /(불안|불편|불가|불구|불빛)/gi,
+          };
+          const sanitizeForToken = (text: string, tok: string): string => {
+            const rx = BLOCK_SUBSTRING_MAP[tok];
+            return rx ? text.replace(rx, ' ') : text;
+          };
+
           const qVec = await embedQueryVector768(q);
 
           const scored: {
@@ -1214,9 +1227,10 @@ function sayseeLocalBridge(): Plugin {
 
               let fLex = 0;
               for (const tk of rawTokens) {
-                if (frameKws.some((k) => k.includes(tk))) {
+                const safeFrameCorpus = sanitizeForToken(frameCorpus, tk);
+                if (frameKws.some((k) => sanitizeForToken(k, tk).includes(tk))) {
                   fLex += 6;
-                } else if (frameCorpus.includes(tk)) {
+                } else if (safeFrameCorpus.includes(tk)) {
                   fLex += 4;
                 }
               }
@@ -1243,7 +1257,8 @@ function sayseeLocalBridge(): Plugin {
             let matchedTokenCount = 0;
             let videoBaseHits = 0;
             for (const tk of rawTokens) {
-              if (fullCorpus.includes(tk)) {
+              const safeFullCorpus = sanitizeForToken(fullCorpus, tk);
+              if (safeFullCorpus.includes(tk)) {
                 matchedTokenCount += 1;
                 videoBaseHits += 3;
               }
@@ -1252,10 +1267,7 @@ function sayseeLocalBridge(): Plugin {
             const requiredTokenMatches =
               rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.6));
 
-            if (
-              (bestFrameLexical > 0 && matchedTokenCount >= requiredTokenMatches) ||
-              (matchedTokenCount === 0 && bestFrameVecSim >= 0.72)
-            ) {
+            if (bestFrameLexical > 0 && matchedTokenCount >= requiredTokenMatches) {
               const totalScore = videoBaseHits + bestFrameLexical + matchedTokenCount * 5 + bestFrameVecSim * 6;
               scored.push({
                 vid: {
@@ -1349,6 +1361,7 @@ function sayseeLocalBridge(): Plugin {
           const kws = `${title} ${extractedText}`
             .replace(/[()[\]{}|:.,/~➔•]/g, ' ')
             .split(/\s+/)
+            .map((w) => w.trim().replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|들의|들|의|을|를|은|는|에|와|과|도|다)$/, ''))
             .filter((w) => w.length >= 2)
             .slice(0, 20);
           const vec = (await embedQueryVector768(`${title} ${extractedText}`)) ?? [];
@@ -1437,13 +1450,31 @@ function sayseeLocalBridge(): Plugin {
             return;
           }
 
+          const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
+            튜브: /(유튜브|자외선|램프|uv-b)/gi,
+            아이: /아이(콘|폰|패드|디어|템|돌|스|라인|언)/gi,
+            다리: /(기다리|사다리|책상다리|식탁다리)/gi,
+            모자: /모자이크/gi,
+            고기: /물고기/gi,
+            불: /(불안|불편|불가|불구|불빛)/gi,
+          };
+
+          const requiredHits =
+            rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.6));
+
           const qVec = await embedQueryVector768(q);
           const scored = docs
             .map((doc) => {
               const corpus = `${doc.fileName} ${doc.title} ${doc.categoryBadge} ${doc.extractedText} ${(doc.keywords ?? []).join(' ')}`.toLowerCase();
               let hits = 0;
               for (const tk of rawTokens) {
-                if (corpus.includes(tk)) hits += 1;
+                const rx = BLOCK_SUBSTRING_MAP[tk];
+                const safeCorpus = rx ? corpus.replace(rx, ' ') : corpus;
+                const noSpaceCorpus = safeCorpus.replace(/\s+/g, '');
+                const noSpaceTk = tk.replace(/\s+/g, '');
+                if (safeCorpus.includes(tk) || (noSpaceTk.length >= 2 && noSpaceCorpus.includes(noSpaceTk))) {
+                  hits += 1;
+                }
               }
               let vecSim = 0.6;
               if (qVec && Array.isArray(doc.vec) && doc.vec.length === qVec.length) {
@@ -1455,15 +1486,15 @@ function sayseeLocalBridge(): Plugin {
                 doc,
                 hits,
                 vecSim,
-                totalScore: hits * 4 + vecSim * 5,
+                totalScore: hits * 6 + vecSim * 4,
               };
             })
-            .filter((item) => item.hits > 0 || item.vecSim >= 0.72);
+            .filter((item) => item.hits >= requiredHits);
 
           scored.sort((a, b) => b.totalScore - a.totalScore);
           const filtered =
             scored.length > 1
-              ? scored.filter((s) => s.totalScore >= scored[0].totalScore * 0.55).map((s) => s.doc)
+              ? scored.filter((s) => s.totalScore >= scored[0].totalScore * 0.65).map((s) => s.doc)
               : scored.map((s) => s.doc);
 
           res.end(JSON.stringify({ ok: true, documents: stripDocVecs(filtered) }));

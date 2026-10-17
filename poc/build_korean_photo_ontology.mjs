@@ -534,8 +534,8 @@ const ONTOLOGY_TREE = [
   {
     id: 'geo.incheon_cheongna',
     category: 'location',
-    triggers: ['청라', '청라국제도시', '청라호수공원'],
-    equivalents: ['청라', '청라국제도시', '청라호수공원'],
+    triggers: ['청라', '청라동', '청라국제도시'],
+    equivalents: ['청라', '청라동', '청라국제도시'],
     parents: ['청라', '서구', '인천', '인천시', '수도권'],
   },
   {

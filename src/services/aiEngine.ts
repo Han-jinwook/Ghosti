@@ -145,6 +145,19 @@ export function searchVideoSceneItems(
 
   if (rawTokens.length === 0) return sourceVideos;
 
+  const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
+    튜브: /(유튜브|자외선|램프|uv-b)/gi,
+    아이: /아이(콘|폰|패드|디어|템|돌|스|라인|언)/gi,
+    다리: /(기다리|사다리|책상다리|식탁다리)/gi,
+    모자: /모자이크/gi,
+    고기: /물고기/gi,
+    불: /(불안|불편|불가|불구|불빛)/gi,
+  };
+  const sanitizeForToken = (text: string, tok: string): string => {
+    const rx = BLOCK_SUBSTRING_MAP[tok];
+    return rx ? text.replace(rx, ' ') : text;
+  };
+
   const scored: {
     vid: VideoSceneItem;
     totalScore: number;
@@ -160,9 +173,12 @@ export function searchVideoSceneItems(
       const frameCorpus = `${frame.timestampText} ${frame.phaseLabel} ${frame.sceneCaption} ${frame.keywords.join(' ')} ${frame.tags.join(' ')}`.toLowerCase();
       let frameHits = 0;
       for (const tk of rawTokens) {
-        if (frame.keywords.some((k) => k.toLowerCase().includes(tk))) {
+        const safeFrameCorpus = sanitizeForToken(frameCorpus, tk);
+        if (
+          frame.keywords.some((k) => sanitizeForToken(k.toLowerCase(), tk).includes(tk))
+        ) {
           frameHits += 6;
-        } else if (frameCorpus.includes(tk)) {
+        } else if (safeFrameCorpus.includes(tk)) {
           frameHits += 4;
         }
       }
@@ -177,7 +193,8 @@ export function searchVideoSceneItems(
     let matchedTokenCount = 0;
     let videoBaseHits = 0;
     for (const tk of rawTokens) {
-      if (fullVideoAndFrameCorpus.includes(tk)) {
+      const safeFullCorpus = sanitizeForToken(fullVideoAndFrameCorpus, tk);
+      if (safeFullCorpus.includes(tk)) {
         matchedTokenCount += 1;
         videoBaseHits += 3;
       }
@@ -218,20 +235,39 @@ export function searchLocalDocumentFiles(
   const rawTokens = q
     .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
     .split(/\s+/)
-    .filter((t) => t.length >= 1 && !['찾아줘', '보여줘', '사진', '문서', '파일', '서류함', '및'].includes(t));
+    .map((t) => t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
+    .filter((t) => t.length >= 1 && !['찾아줘', '보여줘', '사진', '문서', '파일', '서류함', '및', '사본'].includes(t));
 
   if (rawTokens.length === 0) return sourceDocs;
+
+  const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
+    튜브: /(유튜브|자외선|램프|uv-b)/gi,
+    아이: /아이(콘|폰|패드|디어|템|돌|스|라인|언)/gi,
+    다리: /(기다리|사다리|책상다리|식탁다리)/gi,
+    모자: /모자이크/gi,
+    고기: /물고기/gi,
+    불: /(불안|불편|불가|불구|불빛)/gi,
+  };
+
+  const requiredHits =
+    rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.6));
 
   const scored = sourceDocs
     .map((doc) => {
       const corpus = `${doc.fileName} ${doc.title} ${doc.categoryBadge} ${doc.extractedText} ${doc.keywords.join(' ')}`.toLowerCase();
       let hits = 0;
       for (const tk of rawTokens) {
-        if (corpus.includes(tk)) hits += 1;
+        const rx = BLOCK_SUBSTRING_MAP[tk];
+        const safeCorpus = rx ? corpus.replace(rx, ' ') : corpus;
+        const noSpaceCorpus = safeCorpus.replace(/\s+/g, '');
+        const noSpaceTk = tk.replace(/\s+/g, '');
+        if (safeCorpus.includes(tk) || (noSpaceTk.length >= 2 && noSpaceCorpus.includes(noSpaceTk))) {
+          hits += 1;
+        }
       }
       return { doc, hits };
     })
-    .filter((item) => item.hits > 0);
+    .filter((item) => item.hits >= requiredHits);
 
   scored.sort((a, b) => b.hits - a.hits);
   return scored.map((s) => s.doc);

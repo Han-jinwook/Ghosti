@@ -1,6 +1,6 @@
 {
   "version": "2.2.0-wordnet-openimages-ko",
-  "updatedAt": "2026-10-17T03:33:42.147Z",
+  "updatedAt": "2026-10-17T05:33:23.390Z",
   "description": "Open Multilingual WordNet (OMW-ko) + Google Open Images V7 Hierarchy + 한국인 갤러리 상·하위 개념 족보 트리",
   "nodeCount": 71,
   "totalVocabularyCount": 699,
@@ -1880,13 +1880,13 @@
       "category": "location",
       "triggers": [
         "청라",
-        "청라국제도시",
-        "청라호수공원"
+        "청라동",
+        "청라국제도시"
       ],
       "equivalents": [
         "청라",
-        "청라국제도시",
-        "청라호수공원"
+        "청라동",
+        "청라국제도시"
       ],
       "parents": [
         "청라",

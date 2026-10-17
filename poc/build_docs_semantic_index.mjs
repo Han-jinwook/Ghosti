@@ -70,14 +70,14 @@ export function classifyDocumentCategory(text) {
   if (/보험|특약|담보|피보험자/.test(t) && /진료|병원|약국|처방|실손/.test(t)) {
     return '🧾 병원 영수증 · 보험 청구';
   }
-  if (/보험증권|자동차보험|대인배상|대물배상|특약/.test(t)) {
+  if (/임대차|확정일자|전입신고|계약서|약정/.test(t)) {
+    return '📋 계약서 · 약정 서류';
+  }
+  if (/보험증권|자동차보험|화재보험|대인배상|대물배상/.test(t)) {
     return '🛡️ 보험 증권 · 특약';
   }
   if (/조립|설명서|매뉴얼|도면|브라켓|볼트|호스|설치/.test(t)) {
     return '📑 조립 설명서 · 매뉴얼';
-  }
-  if (/임대차|확정일자|전입신고|계약서|약정/.test(t)) {
-    return '📋 계약서 · 약정 서류';
   }
   if (/항공권|티켓|e-ticket|편명|출발일/.test(t)) {
     return '✈️ 항공권 E-티켓 · 바우처';
@@ -98,41 +98,18 @@ export function classifyDocumentCategory(text) {
 }
 
 /**
- * 본문 및 파일명에서 의미 있는 명사/키워드 토큰을 자동 추출
+ * 본문 및 파일명에서 실제로 존재하는 명사/키워드 토큰만 정직하게 추출 (외부 온톨로지 환각 주입 0%)
  */
-export function extractDocumentKeywords(fileName, title, bodyText, ontologyNodes) {
+export function extractDocumentKeywords(fileName, title, bodyText) {
   const baseName = path.basename(fileName, path.extname(fileName)).replace(/[_-]+/g, ' ');
   const combined = `${baseName} ${title} ${bodyText}`
     .replace(/[()[\]{}|:.,/~➔•]/g, ' ')
     .split(/\s+/)
-    .map((w) => w.trim().replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|들의|들|의|을|를|은|는|에|와|과|도)$/, ''))
+    .map((w) => w.trim().replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|들의|들|의|을|를|은|는|에|와|과|도|다)$/, ''))
     .filter((w) => w.length >= 2 && !STOP_TOKENS.has(w) && !/^\d+$/.test(w));
 
-  const kwSet = new Set(combined);
-
-  // 한국어 온톨로지 트리 연동 (상위 개념어 자동 확장)
-  const lowerCorpus = `${baseName} ${title} ${bodyText}`.toLowerCase();
-  for (const node of ontologyNodes) {
-    let hit = false;
-    for (const trig of node.triggers || []) {
-      const t = trig.toLowerCase();
-      if (t.length >= 2 && lowerCorpus.includes(t)) {
-        kwSet.add(t);
-        hit = true;
-      }
-    }
-    if (hit) {
-      for (const eq of node.equivalents || []) kwSet.add(eq.toLowerCase());
-      for (const p of node.parents || []) kwSet.add(p.toLowerCase());
-    }
-  }
-
-  return Array.from(kwSet).slice(0, 24);
+  return Array.from(new Set(combined)).slice(0, 24);
 }
-
-const ontologyNodes = fs.existsSync(ONTOLOGY_PATH)
-  ? JSON.parse(fs.readFileSync(ONTOLOGY_PATH, 'utf-8')).nodes || []
-  : [];
 
 const docFiles = fs
   .readdirSync(DOCS_DIR)
@@ -170,7 +147,7 @@ const parsedDocs = docFiles.map((fileName, idx) => {
   const docDate = dateMatch ? dateMatch[1] : fallbackDate;
 
   const categoryBadge = classifyDocumentCategory(`${title} ${extractedText}`);
-  const keywords = extractDocumentKeywords(fileName, title, extractedText, ontologyNodes);
+  const keywords = extractDocumentKeywords(fileName, title, extractedText);
 
   return {
     id: `doc_${idx + 1}_${path.basename(fileName, extLower).slice(0, 12)}`,

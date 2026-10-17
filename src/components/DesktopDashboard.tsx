@@ -183,12 +183,12 @@ export const DesktopDashboard: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {matchedVideoScenes.length < 3 && (
+                    {matchedVideoScenes.length < videoSceneItems.length && (
                       <button
                         onClick={() => setSearchSpace('video')}
                         className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-primary-container font-label-sm text-[12px] font-bold border border-white/10"
                       >
-                        🔄 동영상 3개 전체 보기
+                        🔄 동영상 {videoSceneItems.length}개 전체 보기
                       </button>
                     )}
                     <button
@@ -210,14 +210,14 @@ export const DesktopDashboard: React.FC = () => {
                       “{activeQuery}” 조건과 일치하는 동영상 타임라인 구간이 없습니다 (0건)
                     </h3>
                     <p className="font-body-sm text-[12.5px] text-zinc-400 max-w-lg">
-                      검색어 팩트와 무관한 동영상을 억지로 끼워 넣지 않습니다. 아래 버튼을 눌러 해부된 동영상 3개 전체 구간을 확인해 보세요.
+                      검색어 팩트와 무관한 동영상을 억지로 끼워 넣지 않습니다. 아래 버튼을 눌러 해부된 동영상 {videoSceneItems.length}개 전체 구간을 확인해 보세요.
                     </p>
                     <button
                       type="button"
                       onClick={() => setSearchSpace('video')}
                       className="mt-1 px-4 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
                     >
-                      🎬 동영상 3개 전 구간 전체 보기
+                      🎬 동영상 {videoSceneItems.length}개 전 구간 전체 보기
                     </button>
                   </div>
                 ) : (
