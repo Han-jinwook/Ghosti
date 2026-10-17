@@ -4,7 +4,12 @@ import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
-import { LoungeView } from './LoungeView';
+import {
+  LoungeCustomSettingsHeader,
+  LoungeFeedContextBanner,
+  LoungeIndexingWaitingRoom,
+  LoungeView,
+} from './LoungeView';
 
 const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
@@ -24,26 +29,26 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   personal: [
     { id: 'trial', label: '✨ 무료체험' },
     { id: 'search', label: '🔍 파워 검색' },
-    { id: 'trash', label: '🧹 주치의 정리', showTrashCount: true },
-    { id: 'settings', label: '🛠️ 설정도우미' },
+    { id: 'trash', label: '🧹 클리어', showTrashCount: true },
+    { id: 'settings', label: '🛠️ 설정도우미 ⚡Pro' },
   ],
   family: [
     { id: 'trial', label: '✨ 무료체험' },
-    { id: 'search', label: '🔍 가족 통합 검색' },
-    { id: 'trash', label: '🧹 가족 앨범·정리', showTrashCount: true },
-    { id: 'settings', label: '🛠️ 설정도우미' },
+    { id: 'search', label: '🏠 우리집·본가·처가 피드' },
+    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
+    { id: 'settings', label: '👑 가족 초대 & 서버도우미' },
   ],
   club: [
     { id: 'trial', label: '✨ 무료체험' },
-    { id: 'search', label: '🔍 모임 통합 검색' },
-    { id: 'trash', label: '🧹 클럽 앨범·정리', showTrashCount: true },
-    { id: 'settings', label: '🛠️ 설정도우미' },
+    { id: 'search', label: '📸 모임 피드 & 원본 소환' },
+    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
+    { id: 'settings', label: '👥 클럽 관리 & 서버도우미' },
   ],
   student: [
     { id: 'trial', label: '✨ 무료체험' },
-    { id: 'search', label: '🔍 우리반·동아리 검색' },
-    { id: 'trash', label: '🧹 추억 앨범·정리', showTrashCount: true },
-    { id: 'settings', label: '🛠️ 설정도우미' },
+    { id: 'search', label: '⚡ 타임캡슐 피드 & 씬 검색' },
+    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
+    { id: 'settings', label: '🎮 게이밍 PC & 학생인증' },
   ],
 };
 
@@ -199,9 +204,11 @@ export const MobileAppView: React.FC = () => {
       {/* 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) */}
       {mobileTab === 'trial' && <LoungeView />}
 
-      {/* 서브메뉴 2번: 🔍 파워 검색 */}
+      {/* 서브메뉴 2번: 메인 피드 & 파워 검색 */}
       {mobileTab === 'search' && (
         <main className="flex-1 w-full px-3.5 pt-3.5 pb-8 flex flex-col gap-4">
+          <LoungeFeedContextBanner />
+
           {/* 1층: 검색창 + 3대 카테고리 탭 + 1줄 추천 칩 / 2층: 접이식 브리핑 아코디언 */}
           <VoiceHeroStage />
 
@@ -465,16 +472,22 @@ export const MobileAppView: React.FC = () => {
         </main>
       )}
 
-      {/* 탭 2: 🧹 주치의 정리 */}
+      {/* 서브메뉴 3번: 개인은 [🧹 클리어], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] */}
       {mobileTab === 'trash' && (
         <div className="flex-1 w-full">
-          <SmartTrashView />
+          {activeLoungeType === 'personal' ? (
+            <SmartTrashView />
+          ) : (
+            <LoungeIndexingWaitingRoom />
+          )}
         </div>
       )}
 
-      {/* 서브메뉴 4번: 🛠️ 설정도우미 (⚡ 24시간 GPU 클라우드 서버 도우미 & 프라이빗 싱크) */}
+      {/* 서브메뉴 4번: 설정 / 업그레이드 / 초대 / 인증 & 24시간 GPU 클라우드 서버 도우미 */}
       {mobileTab === 'settings' && (
         <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
+          <LoungeCustomSettingsHeader />
+
           {/* ⚡ 24시간 GPU 클라우드 서버 도우미 */}
           <div className="p-4 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
@@ -637,58 +650,34 @@ export const MobileAppView: React.FC = () => {
         </main>
       )}
 
-      {/* 모바일 하단 서브메뉴 바: 1번 자리 [✨ 무료체험(Auto-Hide)] | 🔍 파워 검색 | 🧹 주치의 정리 | 🛠️ 설정도우미 */}
+      {/* 모바일 하단 서브메뉴 바: 선택된 라운지 전용 서브메뉴 연동 */}
       <nav className="fixed bottom-0 inset-x-0 max-w-xl mx-auto h-15 bg-[#09090B]/95 backdrop-blur-xl border-t border-white/10 z-50 px-2 flex items-center justify-around">
-        {activePricingPlan === 'free_trial' && (
-          <button
-            onClick={() => setMobileTab('trial')}
-            className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
-              mobileTab === 'trial'
-                ? 'text-primary-container font-bold'
-                : 'text-zinc-400'
-            }`}
-          >
-            <span className="text-[12px]">✨ 무료체험</span>
-          </button>
-        )}
-
-        <button
-          onClick={() => setMobileTab('search')}
-          className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
-            mobileTab === 'search'
-              ? 'text-primary-container font-bold'
-              : 'text-zinc-400'
-          }`}
-        >
-          <span className="text-[12px]">🔍 파워 검색</span>
-        </button>
-
-        <button
-          onClick={() => setMobileTab('trash')}
-          className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
-            mobileTab === 'trash'
-              ? 'text-primary-container font-bold'
-              : 'text-zinc-400'
-          }`}
-        >
-          <div className="flex items-center gap-1">
-            <span className="text-[12px]">🧹 주치의 정리</span>
-            <span className="px-1.5 py-0.2 rounded-md bg-zinc-800 border border-white/10 text-zinc-300 text-[10px] font-mono font-bold">
-              {activeTrashCount}
-            </span>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setMobileTab('settings')}
-          className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
-            mobileTab === 'settings'
-              ? 'text-primary-container font-bold'
-              : 'text-zinc-400'
-          }`}
-        >
-          <span className="text-[12px]">🛠️ 설정도우미</span>
-        </button>
+        {currentSubmenus.map((sub) => {
+          if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
+            return null;
+          }
+          const isSubActive = mobileTab === sub.id;
+          return (
+            <button
+              key={sub.id}
+              onClick={() => setMobileTab(sub.id)}
+              className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+                isSubActive
+                  ? 'text-primary-container font-bold'
+                  : 'text-zinc-400'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] truncate max-w-[96px]">{sub.label}</span>
+                {sub.showTrashCount && (
+                  <span className="px-1.5 py-0.2 rounded-md bg-zinc-800 border border-white/10 text-zinc-300 text-[9.5px] font-mono font-bold">
+                    {activeTrashCount}
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

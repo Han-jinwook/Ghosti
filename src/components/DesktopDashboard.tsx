@@ -4,7 +4,12 @@ import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
-import { LoungeView } from './LoungeView';
+import {
+  LoungeCustomSettingsHeader,
+  LoungeFeedContextBanner,
+  LoungeIndexingWaitingRoom,
+  LoungeView,
+} from './LoungeView';
 
 const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
@@ -24,26 +29,26 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   personal: [
     { id: 'trial', label: '✨ 무료체험' },
     { id: 'dashboard', label: '🔍 파워 검색' },
-    { id: 'trash', label: '🧹 주치의 정리', showTrashCount: true },
-    { id: 'sync', label: '🛠️ 설정도우미' },
+    { id: 'trash', label: '🧹 클리어', showTrashCount: true },
+    { id: 'sync', label: '🛠️ 설정도우미 ⚡Pro' },
   ],
   family: [
     { id: 'trial', label: '✨ 무료체험' },
-    { id: 'dashboard', label: '🔍 가족 통합 검색' },
-    { id: 'trash', label: '🧹 가족 앨범·정리', showTrashCount: true },
-    { id: 'sync', label: '🛠️ 설정도우미' },
+    { id: 'dashboard', label: '🏠 우리집·본가·처가 피드' },
+    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
+    { id: 'sync', label: '👑 가족 초대 & 서버도우미' },
   ],
   club: [
     { id: 'trial', label: '✨ 무료체험' },
-    { id: 'dashboard', label: '🔍 모임 통합 검색' },
-    { id: 'trash', label: '🧹 클럽 앨범·정리', showTrashCount: true },
-    { id: 'sync', label: '🛠️ 설정도우미' },
+    { id: 'dashboard', label: '📸 모임 피드 & 원본 소환' },
+    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
+    { id: 'sync', label: '👥 클럽 관리 & 서버도우미' },
   ],
   student: [
     { id: 'trial', label: '✨ 무료체험' },
-    { id: 'dashboard', label: '🔍 우리반·동아리 검색' },
-    { id: 'trash', label: '🧹 추억 앨범·정리', showTrashCount: true },
-    { id: 'sync', label: '🛠️ 설정도우미' },
+    { id: 'dashboard', label: '⚡ 타임캡슐 피드 & 씬 검색' },
+    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
+    { id: 'sync', label: '🎮 게이밍 PC & 학생인증' },
   ],
 };
 
@@ -221,9 +226,12 @@ export const DesktopDashboard: React.FC = () => {
       {/* ─────────────── 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) ─────────────── */}
       {desktopTab === 'trial' && <LoungeView />}
 
-      {/* ─────────────── 서브메뉴 2번: 🔍 파워 검색 ─────────────── */}
+      {/* ─────────────── 서브메뉴 2번: 메인 피드 & 파워 검색 ─────────────── */}
       {desktopTab === 'dashboard' && (
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-5 md:px-8 py-5 flex flex-col gap-5">
+          {/* 라운지별 전용 상단 컨트롤 바 (패밀리 서브룸 전환 / 클럽 5MB 원본 소환 / 10대 학생 타임캡슐 리포트) */}
+          <LoungeFeedContextBanner />
+
           {/* 1층: 통합 검색창 + 3대 카테고리 탭 + 1줄 추천 칩 / 2층: 접이식 브리핑 보드 아코디언 */}
           <VoiceHeroStage />
 
@@ -600,12 +608,20 @@ export const DesktopDashboard: React.FC = () => {
         </main>
       )}
 
-      {/* ─────────────── 탭 2: 🧹 주치의 정리 ─────────────── */}
-      {desktopTab === 'trash' && <SmartTrashView />}
+      {/* ─────────────── 서브메뉴 3번: 개인은 [🧹 클리어], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] ─────────────── */}
+      {desktopTab === 'trash' &&
+        (activeLoungeType === 'personal' ? (
+          <SmartTrashView />
+        ) : (
+          <LoungeIndexingWaitingRoom />
+        ))}
 
-      {/* ─────────────── 서브메뉴 4번: 🛠️ 설정도우미 (⚡ 24시간 GPU 클라우드 서버 도우미 & 프라이빗 싱크) ─────────────── */}
+      {/* ─────────────── 서브메뉴 4번: 라운지별 설정 / 업그레이드 / 초대 / 인증 & 24시간 GPU 클라우드 서버 도우미 ─────────────── */}
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1280px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-5">
+          {/* 라운지별 전용 상단 설정 섹션 (⚡Pro 업그레이드 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
+          <LoungeCustomSettingsHeader />
+
           {/* [필수 반영] 🛠️ 설정도우미 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 카드 */}
           <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
