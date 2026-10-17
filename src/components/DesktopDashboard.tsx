@@ -15,6 +15,7 @@ export const DesktopDashboard: React.FC = () => {
     setSearchSpace,
     matchedLocalDocs,
     setSelectedDocModal,
+    videoSceneItems,
     matchedVideoScenes,
     setSelectedVideoModal,
     onboardingTrackMode,
