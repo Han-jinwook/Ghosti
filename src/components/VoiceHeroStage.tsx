@@ -7,8 +7,13 @@ export const VoiceHeroStage: React.FC = () => {
     layout,
     photos,
     searchSpace,
+    hasExecutedUserSearch,
     setSearchSpace,
+    resetSearchSpaceToAll,
     localDocuments,
+    matchedLocalDocs,
+    matchedVaultPhotos,
+    searchResults,
     videoSceneItems,
     matchedVideoScenes,
     activeQuery,
@@ -42,6 +47,7 @@ export const VoiceHeroStage: React.FC = () => {
     [activePhotos]
   );
   const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
+  const matchedTotalDocsCount = matchedLocalDocs.length + matchedVaultPhotos.length;
   const totalDissectedSegments = useMemo(
     () => videoSceneItems.reduce((acc, v) => acc + v.timelineFrames.length, 0),
     [videoSceneItems]
@@ -115,8 +121,8 @@ export const VoiceHeroStage: React.FC = () => {
     if (searchSpace === 'video') {
       const ex = dynamicMicroObjectChips.slice(0, 2).map((c) => `"${c.query}"`).join(', ');
       return ex
-        ? `동영상 구간 속 사물·행동 검색 (예: ${ex})`
-        : '동영상 속 장면이나 사물을 검색해 보세요';
+        ? `동영상·사진·문서 통합 검색 (예: ${ex})`
+        : '동영상·사진·문서 속 장면이나 인물 이름을 검색해 보세요';
     }
     const ex = sentenceChips.slice(0, 2).map((s) => `"${s.query}"`).join(', ');
     return ex
@@ -248,85 +254,113 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         )}
 
-        {/* 1-B. 3대 카테고리 스위칭 탭 (무채색 다크그레이 베이스 + 선택된 탭에만 단일 민트 포인트) */}
-        <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-0.5">
+        {/* 1-B. 3대 카테고리 스위칭 탭: 1번 [🎬 동영상] (첫 검색 기본 오픈) | 2번 [🖼️ 사진] | 3번 [📁 문서] — 검색 시 3개 탭 모두 (동영상 N) (사진 M) (문서 K) 배지 동시 표시! */}
+        <div className="flex flex-wrap items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-0.5">
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => {
-                setTextInput('');
-                setSearchSpace('gallery');
-              }}
-              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
-                searchSpace === 'gallery'
-                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
-              }`}
-            >
-              <span>🖼️ 전체 갤러리</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
-                  searchSpace === 'gallery' ? 'bg-black/20 text-zinc-950 font-black' : 'text-zinc-400'
-                }`}
-              >
-                {activePhotos.length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTextInput('');
-                setSearchSpace('vault');
-              }}
-              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
-                searchSpace === 'vault'
-                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
-              }`}
-            >
-              <span>📁 스마트 서류함</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
-                  searchSpace === 'vault' ? 'bg-black/20 text-zinc-950 font-black' : 'text-zinc-400'
-                }`}
-              >
-                {totalIndexedDocs}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTextInput('');
-                setSearchSpace('video');
-              }}
+              onClick={() => setSearchSpace('video')}
               className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
                 searchSpace === 'video'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
               }`}
             >
-              <span>🎬 동영상 해부</span>
+              <span>🎬 동영상</span>
               <span
                 className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
-                  searchSpace === 'video' ? 'bg-black/20 text-zinc-950 font-black' : 'text-zinc-400'
+                  searchSpace === 'video'
+                    ? 'bg-black/20 text-zinc-950 font-black'
+                    : hasExecutedUserSearch && matchedVideoScenes.length > 0
+                    ? 'bg-primary-container/20 text-primary-container font-bold'
+                    : 'text-zinc-400'
                 }`}
               >
-                {videoSceneItems.length}개·{totalDissectedSegments}구간
+                {hasExecutedUserSearch
+                  ? `(${matchedVideoScenes.length})`
+                  : `${videoSceneItems.length}개·${totalDissectedSegments}구간`}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSearchSpace('gallery')}
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+                searchSpace === 'gallery'
+                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>🖼️ 사진</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
+                  searchSpace === 'gallery'
+                    ? 'bg-black/20 text-zinc-950 font-black'
+                    : hasExecutedUserSearch && searchResults.length > 0
+                    ? 'bg-primary-container/20 text-primary-container font-bold'
+                    : 'text-zinc-400'
+                }`}
+              >
+                {hasExecutedUserSearch ? `(${searchResults.length})` : activePhotos.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSearchSpace('vault')}
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+                searchSpace === 'vault'
+                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>📁 문서</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
+                  searchSpace === 'vault'
+                    ? 'bg-black/20 text-zinc-950 font-black'
+                    : hasExecutedUserSearch && matchedTotalDocsCount > 0
+                    ? 'bg-primary-container/20 text-primary-container font-bold'
+                    : 'text-zinc-400'
+                }`}
+              >
+                {hasExecutedUserSearch ? `(${matchedTotalDocsCount})` : totalIndexedDocs}
               </span>
             </button>
           </div>
 
-          {searchSpace === 'vault' && !isMobile && (
-            <button
-              type="button"
-              onClick={() => void openLocalFolder('docs')}
-              className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10 shrink-0"
-            >
-              📂 로컬 서류폴더 열기
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {hasExecutedUserSearch && (
+              <div className="flex items-center gap-2">
+                <span className="hidden md:inline font-label-mono text-[11.5px] text-zinc-300">
+                  🎯 <strong className="text-white">“{activeQuery}”</strong> 매칭:{' '}
+                  <span className="text-primary-container font-bold">
+                    (동영상 {matchedVideoScenes.length}) (사진 {searchResults.length}) (문서 {matchedTotalDocsCount})
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTextInput('');
+                    resetSearchSpaceToAll(searchSpace);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white font-label-sm text-[11px]"
+                >
+                  ✕ 검색 해제
+                </button>
+              </div>
+            )}
+
+            {searchSpace === 'vault' && !isMobile && (
+              <button
+                type="button"
+                onClick={() => void openLocalFolder('docs')}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10 shrink-0"
+              >
+                📂 로컬 서류폴더 열기
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 1-C. 선택한 탭에 맞는 추천 검색어 칩 1줄 가로 스크롤 (주절주절 긴 설명 없이 깔끔하게 1줄!) */}

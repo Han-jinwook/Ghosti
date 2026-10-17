@@ -64,16 +64,20 @@ interface SaySeeStore {
   setMobileTab: (tab: MobileTab) => void;
   setDesktopTab: (tab: DesktopTab) => void;
 
-  // [스펙 1 & 체험판 타겟팅] 파워 검색 공간 3-Track 필터 ([🎬 동영상 해부] | [📁 스마트 서류함] | [🖼️ 전체/갤러리])
+  // [스펙 1 & 체험판 타겟팅] 파워 검색 공간 3-Track 필터 ([🎬 동영상] | [🖼️ 사진] | [📁 문서])
   searchSpace: SearchSpaceMode;
+  hasExecutedUserSearch: boolean;
+  hasUserSelectedSearchTab: boolean;
   localDocuments: LocalDocumentFile[];
   matchedLocalDocs: LocalDocumentFile[];
+  matchedVaultPhotos: SearchResultItem[];
   selectedDocModal: LocalDocumentFile | null;
   videoSceneItems: VideoSceneItem[];
   matchedVideoScenes: VideoSceneItem[];
   selectedVideoModal: VideoSceneItem | null;
   trialScanPermissions: TrialScanPermissions;
   setSearchSpace: (space: SearchSpaceMode) => void;
+  resetSearchSpaceToAll: (space: SearchSpaceMode) => void;
   setSelectedDocModal: (doc: LocalDocumentFile | null) => void;
   setSelectedVideoModal: (vid: VideoSceneItem | null, seekSec?: number) => void;
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
@@ -254,9 +258,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           : 'settings',
     }),
 
-  searchSpace: 'gallery',
+  searchSpace: 'video',
+  hasExecutedUserSearch: false,
+  hasUserSelectedSearchTab: false,
   localDocuments: LOCAL_DOCUMENT_FILES,
   matchedLocalDocs: LOCAL_DOCUMENT_FILES,
+  matchedVaultPhotos: [],
   selectedDocModal: null,
   videoSceneItems: VIDEO_SCENE_ITEMS,
   matchedVideoScenes: VIDEO_SCENE_ITEMS,
@@ -299,11 +306,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     })),
 
   setSearchSpace: (searchSpace) => {
-    const { photos, videoSceneItems, localDocuments, sentenceChips } = get();
+    const { hasExecutedUserSearch, photos, videoSceneItems, localDocuments } = get();
+    // 이미 검색을 실행한 상태라면 검색어와 3개 탭의 매칭 결과(배지 숫자 및 목록)를 그대로 유지한 채 선택한 탭만 즉시 열어줌
+    if (hasExecutedUserSearch) {
+      set({
+        searchSpace,
+        hasUserSelectedSearchTab: true,
+      });
+      return;
+    }
+
+    // 아직 첫 검색 전인 상태에서 탭을 눌러 둘러보는 경우
     if (searchSpace === 'video') {
       const totalFrames = videoSceneItems.reduce((a, v) => a + v.timelineFrames.length, 0);
       set({
         searchSpace: 'video',
+        hasUserSelectedSearchTab: true,
         activeQuery: `동영상 ${videoSceneItems.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
         matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
         matchedVideoScenes: videoSceneItems,
@@ -319,20 +337,75 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         }));
       set({
         searchSpace: 'vault',
+        hasUserSelectedSearchTab: true,
         activeQuery: `최근 서류 ${localDocuments.length + vaultPhotos.length}건 통합 (로컬 문서 ${localDocuments.length}건 + 촬영 서류 ${vaultPhotos.length}장)`,
         matchedTags: ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색'],
-        searchResults: vaultPhotos,
+        matchedVaultPhotos: vaultPhotos,
         matchedLocalDocs: localDocuments,
       });
     } else {
-      set({ searchSpace: 'gallery' });
-      const firstChipQuery = sentenceChips[0]?.query || '바다 풍경 모습';
-      void get().runTextQuery(firstChipQuery);
+      const galleryPhotos = photos
+        .filter((p) => !p.quarantined)
+        .slice(0, 60)
+        .map((photo) => ({
+          photo,
+          score: 0.95,
+          matchPercentage: 97,
+          matchedBy: 'text-direct' as const,
+        }));
+      set({
+        searchSpace: 'gallery',
+        hasUserSelectedSearchTab: true,
+        activeQuery: `전체 갤러리 사진 (${photos.filter((p) => !p.quarantined).length}장)`,
+        matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
+        searchResults: galleryPhotos,
+      });
     }
   },
 
+  resetSearchSpaceToAll: (searchSpace) => {
+    const { photos, videoSceneItems, localDocuments } = get();
+    const vaultPhotos = photos
+      .filter((p) => !p.quarantined && p.isVaultDocument)
+      .map((photo) => ({
+        photo,
+        score: 0.96,
+        matchPercentage: 98,
+        matchedBy: 'text-direct' as const,
+      }));
+    const galleryPhotos = photos
+      .filter((p) => !p.quarantined)
+      .slice(0, 60)
+      .map((photo) => ({
+        photo,
+        score: 0.95,
+        matchPercentage: 97,
+        matchedBy: 'text-direct' as const,
+      }));
+    const totalFrames = videoSceneItems.reduce((a, v) => a + v.timelineFrames.length, 0);
+
+    set({
+      searchSpace,
+      hasExecutedUserSearch: false,
+      hasUserSelectedSearchTab: true,
+      activeQuery:
+        searchSpace === 'video'
+          ? `동영상 ${videoSceneItems.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
+          : searchSpace === 'vault'
+          ? `최근 서류 ${localDocuments.length + vaultPhotos.length}건 통합 (로컬 문서 ${localDocuments.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
+          : `전체 갤러리 사진 (${photos.filter((p) => !p.quarantined).length}장)`,
+      matchedVideoScenes: videoSceneItems,
+      matchedLocalDocs: localDocuments,
+      matchedVaultPhotos: vaultPhotos,
+      searchResults: galleryPhotos,
+    });
+  },
+
   runBriefingHintChip: async (target, query) => {
-    set({ searchSpace: target === 'doc' ? 'vault' : 'video' });
+    set({
+      searchSpace: target === 'doc' ? 'vault' : 'video',
+      hasUserSelectedSearchTab: true,
+    });
     await get().runTextQuery(query);
     if (target === 'video') {
       const matched = get().matchedVideoScenes;
@@ -510,11 +583,31 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       enrichedPhotos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
     );
 
+    const initialVaultPhotos = enrichedPhotos
+      .filter((p) => !p.quarantined && p.isVaultDocument)
+      .map((photo) => ({
+        photo,
+        score: 0.96,
+        matchPercentage: 98,
+        matchedBy: 'text-direct' as const,
+      }));
+    const initialGalleryPhotos = enrichedPhotos
+      .filter((p) => !p.quarantined)
+      .slice(0, 60)
+      .map((photo) => ({
+        photo,
+        score: 0.95,
+        matchPercentage: 97,
+        matchedBy: 'text-direct' as const,
+      }));
+    const totalFrames = indexedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
+
     set({
       photos: enrichedPhotos,
       duplicateGroups: dataset.duplicateGroups,
       localDocuments: indexedDocs,
       matchedLocalDocs: indexedDocs,
+      matchedVaultPhotos: initialVaultPhotos,
       videoSceneItems: indexedVideos,
       matchedVideoScenes: indexedVideos,
       faceClusters: faceData.clusters,
@@ -527,10 +620,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       syncState,
       sentenceChips: localChips,
       onboardingAhaItems: localAhaItems,
-      searchSpace: 'gallery',
-      activeQuery: '',
-      matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
-      searchResults: [],
+      searchSpace: 'video',
+      hasExecutedUserSearch: false,
+      hasUserSelectedSearchTab: false,
+      activeQuery: `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
+      matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
+      searchResults: initialGalleryPhotos,
       selectedTrashIds: trashIds,
       initialized: true,
       initializing: false,
@@ -599,81 +694,67 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   runTextQuery: async (q: string) => {
     const query = q.trim();
     if (!query) return;
-    const { photos, telemetry, searchSpace, localDocuments, videoSceneItems } = get();
+    const {
+      photos,
+      telemetry,
+      searchSpace,
+      hasUserSelectedSearchTab,
+      localDocuments,
+      videoSceneItems,
+    } = get();
 
-    // 백엔드 768차원 EmbeddingGemma 2 벡터 + 온톨로지 검색 API 병렬 호출
-    const [docMatches, videoMatches] = await Promise.all([
+    // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출하여 3개 탭 배지 숫자를 한 번에 계산!
+    const [docMatches, videoMatches, photoSearchOut] = await Promise.all([
       searchLocalDocumentFilesAsync(query, localDocuments),
       searchVideoSceneItemsAsync(query, videoSceneItems),
+      executeTextSearch(query, photos, 'text-direct'),
     ]);
 
-    if (searchSpace === 'video') {
-      const topVideo = videoMatches[0];
-      set({
-        activeQuery: query,
-        matchedTags: [
-          '#동영상전구간해부',
-          topVideo ? `#${topVideo.matchedTimestamp.replace(/\s+/g, '')}` : '#매칭0건',
-          '#768차원벡터매칭',
-        ],
-        matchedVideoScenes: videoMatches,
-        matchedLocalDocs: docMatches,
-        telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
-      });
-      return;
+    const { results, embedMs, searchMs } = photoSearchOut;
+
+    // 촬영 서류(isVaultDocument) 매칭 계산
+    const vaultMap = new Map<string, SearchResultItem>();
+    for (const r of results) {
+      if (r.photo.isVaultDocument) {
+        vaultMap.set(r.photo.id, r);
+      }
     }
+    const rawTokens = query
+      .toLowerCase()
+      .split(/\s+/)
+      .map((t) => t.replace(/(에서|으로|이랑|하고|있는|하는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
+      .filter((t) => t.length >= 2 && !['서류', '문서', '파일', '사본', '사진', '및'].includes(t));
 
-    if (searchSpace === 'vault') {
-      // 하드코딩 분기 0%: 실제 768차원 하이브리드 검색 엔진(executeTextSearch) 및 실제 인덱싱된 서류 메타데이터로만 매칭
-      const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
-      const vaultMap = new Map<string, SearchResultItem>();
-
-      for (const r of results) {
-        if (r.photo.isVaultDocument) {
-          vaultMap.set(r.photo.id, r);
+    if (rawTokens.length > 0) {
+      for (const p of photos) {
+        if (p.quarantined || !p.isVaultDocument || vaultMap.has(p.id)) continue;
+        const corpus = `${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
+        if (rawTokens.some((tk) => corpus.includes(tk))) {
+          vaultMap.set(p.id, {
+            photo: p,
+            score: 0.91,
+            matchPercentage: 95,
+            matchedBy: 'text-direct',
+          });
         }
       }
-
-      // 서류 사진의 실제 캡션/태그에 검색어 토큰이 직접 포함된 항목 보강
-      const rawTokens = query
-        .toLowerCase()
-        .split(/\s+/)
-        .map((t) => t.replace(/(에서|으로|이랑|하고|있는|하는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
-        .filter((t) => t.length >= 2 && !['서류', '문서', '파일', '사본', '사진', '및'].includes(t));
-
-      if (rawTokens.length > 0) {
-        for (const p of photos) {
-          if (p.quarantined || !p.isVaultDocument || vaultMap.has(p.id)) continue;
-          const corpus = `${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
-          if (rawTokens.some((tk) => corpus.includes(tk))) {
-            vaultMap.set(p.id, {
-              photo: p,
-              score: 0.91,
-              matchPercentage: 95,
-              matchedBy: 'text-direct',
-            });
-          }
-        }
-      }
-
-      set({
-        activeQuery: query,
-        matchedTags: ['#스마트서류함', '#사진+PDF통합검색'],
-        searchResults: Array.from(vaultMap.values()),
-        matchedLocalDocs: docMatches,
-        matchedVideoScenes: videoMatches,
-        telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
-      });
-      return;
     }
+    const vaultPhotoMatches = Array.from(vaultMap.values());
 
-    const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
+    // [규칙 1 & 2]
+    // 1) 처음 검색을 하면(유저가 탭을 직접 선택한 적 없을 때): 기본 '동영상(video)' 탭을 열어 임팩트 어필
+    // 2) 유저가 특정 탭을 선택한 뒤 다시 검색을 하면: 마지막으로 선택된 탭(searchSpace)이 디폴트로 열림
+    const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'video';
+
     const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
 
     set({
+      searchSpace: targetSpace,
+      hasExecutedUserSearch: true,
       activeQuery: query,
-      matchedTags: topTags.length ? topTags : ['#시맨틱매칭', '#로컬벡터'],
+      matchedTags: topTags.length ? topTags : ['#3트랙통합검색', '#768차원벡터매칭'],
       searchResults: results,
+      matchedVaultPhotos: vaultPhotoMatches,
       matchedLocalDocs: docMatches,
       matchedVideoScenes: videoMatches,
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
@@ -681,7 +762,16 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   },
 
   toggleMicRecording: async () => {
-    const { isListening, photos, voiceThreshold, telemetry, localDocuments } = get();
+    const {
+      isListening,
+      photos,
+      voiceThreshold,
+      telemetry,
+      localDocuments,
+      videoSceneItems,
+      searchSpace,
+      hasUserSelectedSearchTab,
+    } = get();
     if (!isListening) {
       try {
         set({ isListening: true, isSlimCapsule: false, interimSttPreview: '' });
@@ -718,14 +808,23 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         return;
       }
 
+      const [docMatches, videoMatches] = await Promise.all([
+        searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments),
+        searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems),
+      ]);
+      const vaultPhotoMatches = results.filter((r) => r.photo.isVaultDocument);
+      const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'video';
       const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
-      const docMatches = await searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments);
 
       set((state) => ({
+        searchSpace: targetSpace,
+        hasExecutedUserSearch: true,
         activeQuery: trace.resolvedQuery,
         matchedTags: topTags.length ? topTags : ['#오디오벡터', '#온디바이스'],
         searchResults: results,
+        matchedVaultPhotos: vaultPhotoMatches,
         matchedLocalDocs: docMatches,
+        matchedVideoScenes: videoMatches,
         lastVoiceTrace: trace,
         voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
         isSlimCapsule: true,
@@ -735,7 +834,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   },
 
   runPresetVoiceQuery: async (presetId: string, forceFallbackDemo = false) => {
-    const { photos, voiceThreshold, telemetry } = get();
+    const {
+      photos,
+      voiceThreshold,
+      telemetry,
+      localDocuments,
+      videoSceneItems,
+      searchSpace,
+      hasUserSelectedSearchTab,
+    } = get();
     const def = PRESET_QUERIES.find((p) => p.id === presetId);
 
     if (def?.wavFile) {
@@ -755,12 +862,23 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       forceSimulateLowAudioConfidence: forceFallbackDemo,
     });
 
+    const [docMatches, videoMatches] = await Promise.all([
+      searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments),
+      searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems),
+    ]);
+    const vaultPhotoMatches = results.filter((r) => r.photo.isVaultDocument);
+    const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'video';
     const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
 
     set((state) => ({
+      searchSpace: targetSpace,
+      hasExecutedUserSearch: true,
       activeQuery: trace.resolvedQuery,
       matchedTags: topTags.length ? topTags : [def?.categoryTag || '#오디오매칭'],
       searchResults: results,
+      matchedVaultPhotos: vaultPhotoMatches,
+      matchedLocalDocs: docMatches,
+      matchedVideoScenes: videoMatches,
       lastVoiceTrace: trace,
       voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
       telemetry: telemetry ? { ...telemetry, lastQueryMs: trace.totalMs } : null,

@@ -1,25 +1,67 @@
 import React, { useMemo } from 'react';
-import { useSaySeeStore } from '../store/useSaySeeStore';
-import type { GpuHelperTierId } from '../types/saysee';
+import { useSaySeeStore, type MobileTab } from '../store/useSaySeeStore';
+import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
-import { FoundingMemberFomoBar } from './PricingModal';
 import { LoungeView } from './LoungeView';
+
+const MAIN_LOUNGE_MENUS: Array<{
+  id: LoungeType;
+  icon: string;
+  label: string;
+}> = [
+  { id: 'personal', icon: '👤', label: '개인 라운지' },
+  { id: 'family', icon: '👨‍👩‍👧‍👦', label: '패밀리 라운지' },
+  { id: 'club', icon: '⛳', label: '클럽 라운지' },
+  { id: 'student', icon: '🎒', label: '10대 학생 라운지' },
+];
+
+const MOBILE_LOUNGE_SUBMENUS: Record<
+  LoungeType,
+  Array<{ id: MobileTab; label: string; showTrashCount?: boolean }>
+> = {
+  personal: [
+    { id: 'trial', label: '✨ 무료체험' },
+    { id: 'search', label: '🔍 파워 검색' },
+    { id: 'trash', label: '🧹 주치의 정리', showTrashCount: true },
+    { id: 'settings', label: '🛠️ 설정도우미' },
+  ],
+  family: [
+    { id: 'trial', label: '✨ 무료체험' },
+    { id: 'search', label: '🔍 가족 통합 검색' },
+    { id: 'trash', label: '🧹 가족 앨범·정리', showTrashCount: true },
+    { id: 'settings', label: '🛠️ 설정도우미' },
+  ],
+  club: [
+    { id: 'trial', label: '✨ 무료체험' },
+    { id: 'search', label: '🔍 모임 통합 검색' },
+    { id: 'trash', label: '🧹 클럽 앨범·정리', showTrashCount: true },
+    { id: 'settings', label: '🛠️ 설정도우미' },
+  ],
+  student: [
+    { id: 'trial', label: '✨ 무료체험' },
+    { id: 'search', label: '🔍 우리반·동아리 검색' },
+    { id: 'trash', label: '🧹 추억 앨범·정리', showTrashCount: true },
+    { id: 'settings', label: '🛠️ 설정도우미' },
+  ],
+};
 
 export const MobileAppView: React.FC = () => {
   const {
     mobileTab,
     setMobileTab,
-    setLayout,
+    activeLoungeType,
+    setActiveLoungeType,
     photos,
     searchSpace,
     setSearchSpace,
+    resetSearchSpaceToAll,
     matchedLocalDocs,
+    matchedVaultPhotos,
     setSelectedDocModal,
     matchedVideoScenes,
     setSelectedVideoModal,
-    onboardingTrackMode,
     activeQuery,
     searchResults,
     groupBurstsInSearch,
@@ -28,7 +70,6 @@ export const MobileAppView: React.FC = () => {
     toggleBookmark,
     openLocalFolder,
     setShowOnboarding,
-    setShowProModal,
     activePricingPlan,
     gpuHelper24hActive,
     gpuHelperActiveTier,
@@ -57,67 +98,101 @@ export const MobileAppView: React.FC = () => {
     return groupBurstSearchResults(searchResults);
   }, [searchResults, groupBurstsInSearch, searchSpace]);
 
+  const currentSubmenus = MOBILE_LOUNGE_SUBMENUS[activeLoungeType] || MOBILE_LOUNGE_SUBMENUS.personal;
+
   return (
     <div className="bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen max-w-xl mx-auto relative shadow-2xl border-x border-white/10 pb-20">
-      {/* 최상단 4대 라운지 스위처 바 */}
-      <FoundingMemberFomoBar />
-
-      {/* 심플하고 차분한 상단 헤더 + 서브 타이틀 + [🟢 내 PC 안전 가동 중] 신호등 캡슐 */}
+      {/* 상단 2단 통합 헤더: 로고+슬로건 / 엔진 가동중 / 4대 메인메뉴 / 하단 서브메뉴 */}
       <header className="sticky top-0 inset-x-0 z-50 bg-[#09090B]/95 backdrop-blur-xl pt-safe border-b border-white/10">
-        <div className="h-14 px-3.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              onClick={() => setMobileTab('search')}
-              className="flex items-center gap-1.5 cursor-pointer shrink-0"
-            >
-              <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-white/15 flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary-container text-[16px] font-bold">
-                  graphic_eq
-                </span>
+        <div className="px-3.5 py-2 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                onClick={() => setMobileTab('search')}
+                className="flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-white/15 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-primary-container text-[16px] font-bold">
+                    graphic_eq
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-headline-sm text-[15px] text-white tracking-tight font-extrabold leading-none">
+                    세이씨 <span className="text-zinc-400 font-normal text-[11px]">SaySee</span>
+                  </span>
+                  <span className="text-[9.5px] text-zinc-400 leading-tight mt-0.5 truncate">
+                    🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="font-headline-sm text-[15px] text-white tracking-tight font-extrabold leading-none">
-                  세이씨
+
+              <button
+                type="button"
+                onClick={() => setShowOnboarding(true)}
+                className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 text-zinc-100 font-label-sm text-[10.5px] font-bold flex items-center gap-1.5 shrink-0"
+              >
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400 shadow-[0_0_6px_#34d399]" />
                 </span>
-                <span className="text-[9.5px] text-zinc-400 leading-tight mt-0.5 truncate max-w-[155px]">
-                  🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
-                </span>
-              </div>
+                <span>{gpuHelper24hActive ? '⚡ GPU 가동중' : '엔진 가동중'}</span>
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowOnboarding(true)}
-              className="px-2 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[10.5px] font-medium flex items-center gap-1 truncate"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span className="truncate">
-                {gpuHelper24hActive
-                  ? '⚡ 24h GPU 가동'
-                  : onboardingTrackMode === 'pc_local'
-                  ? '내 PC 안전 가동'
-                  : '클라우드 엔진'}
-              </span>
-            </button>
+            {/* 우상단은 향후 프로필과 코인 알림 자리 */}
+            <div className="flex items-center gap-1.5 shrink-0" aria-label="프로필 및 알림 영역" />
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => setShowProModal(true)}
-              className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold"
-            >
-              💎 요금제
-            </button>
-            <button
-              onClick={() => setLayout('desktop')}
-              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[11px] font-medium flex items-center gap-1 border border-white/10"
-            >
-              <span className="material-symbols-outlined text-zinc-400 text-[14px]">
-                desktop_windows
-              </span>
-              <span>PC 뷰</span>
-            </button>
-          </div>
+          {/* 메인메뉴 4개 (라운지 선택 문구 삭제) */}
+          <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            {MAIN_LOUNGE_MENUS.map((menu) => {
+              const active = activeLoungeType === menu.id;
+              return (
+                <button
+                  key={menu.id}
+                  type="button"
+                  onClick={() => setActiveLoungeType(menu.id)}
+                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11px] font-bold flex items-center gap-1 transition-all shrink-0 ${
+                    active
+                      ? 'bg-primary-container text-zinc-950 font-extrabold'
+                      : 'bg-zinc-900 text-zinc-300 border border-white/10'
+                  }`}
+                >
+                  <span>{menu.icon}</span>
+                  <span>{menu.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* 선택된 메인메뉴(라운지)의 서브메뉴 바 */}
+        <div className="px-3.5 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {currentSubmenus.map((sub) => {
+            if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
+              return null;
+            }
+            const isSubActive = mobileTab === sub.id;
+            return (
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => setMobileTab(sub.id)}
+                className={`px-2.5 py-1 rounded-lg font-label-sm text-[11px] font-bold flex items-center gap-1 transition-all shrink-0 ${
+                  isSubActive
+                    ? 'bg-primary-container/20 border border-primary-container/50 text-primary-container font-extrabold'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span>{sub.label}</span>
+                {sub.showTrashCount && (
+                  <span className="px-1 py-0.2 rounded bg-zinc-800 text-zinc-300 text-[9.5px] font-mono">
+                    {activeTrashCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </header>
 
@@ -140,7 +215,7 @@ export const MobileAppView: React.FC = () => {
                   </span>
                   {matchedVideoScenes.length < 3 && (
                     <button
-                      onClick={() => setSearchSpace('video')}
+                      onClick={() => resetSearchSpaceToAll('video')}
                       className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold"
                     >
                       🔄 3개 전체 보기
@@ -230,7 +305,7 @@ export const MobileAppView: React.FC = () => {
               <section className="flex flex-col gap-3.5">
                 <div className="flex items-center justify-between px-0.5">
                   <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                    📁 스마트 서류함 (문서 {matchedLocalDocs.length}건 · 사진 {searchResults.length}장)
+                    📁 스마트 서류함 (문서 {matchedLocalDocs.length}건 · 사진 {matchedVaultPhotos.length}장)
                   </span>
                 </div>
 
@@ -262,9 +337,9 @@ export const MobileAppView: React.FC = () => {
                   </div>
                 )}
 
-                {searchResults.length > 0 && (
+                {matchedVaultPhotos.length > 0 && (
                   <div className="grid grid-cols-2 gap-2.5 w-full">
-                    {searchResults.map((item) => (
+                    {matchedVaultPhotos.map((item) => (
                       <article
                         key={item.photo.id}
                         onClick={() => setSelectedPhoto(item.photo, null)}
