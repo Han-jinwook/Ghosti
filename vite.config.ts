@@ -672,27 +672,62 @@ function sayseeLocalBridge(): Plugin {
         const activeTokens = hardTokens.length > 0 ? hardTokens : softTokens;
         const compoundQuery = activeTokens.join('');
 
-        // 2) [정석 아키텍처] 검색 시점(Query-time) 수동 정규식 사전 제로!
-        //    - 인덱싱 시점에 src/data/koreanPhotoOntology.json (WordNet + Open Images 시각 개념 족보 트리)을 통해
-        //      각 사진의 구체 개념 + 1:1 동의어 + 상위 부모 개념(Is-A Hypernyms)이
-        //      이미 meta.ontologyPrimaryTags 및 meta.ontologyCaptionTags에 자동 상속되어 저장되어 있습니다.
-        //    - 따라서 검색 시에는 정규식 확장 없이 입력 토큰 그대로 온톨로지 태그셋 교집합 + 768차원 Gemma 2 벡터 유사도만 계산합니다.
-        const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
-          튜브: /(유튜브|자외선|램프|uv-b)/gi,
-          아이: /아이(콘|폰|패드|디어|템|돌|스|라인)/gi,
-          다리: /(기다리|사다리|책상다리|식탁다리)/gi,
-          모자: /모자이크/gi,
-          고기: /물고기/gi,
-          불: /(불안|불편|불가|불구|불빛)/gi,
+        // 2) [정석 아키텍처] 수동 차단 사전(BLOCK_SUBSTRING_MAP) 제로!
+        //    - 한국어 어절(Eojeol) 분리 ➔ 조사/어미 제거 ➔ 어간(Stem) 추출 및 2+2 복합명사 경계 법칙(extractKoStems / matchKoTokenInStems)으로
+        //      어느 유저의 사진·동영상·문서에서든 '아이'↔'아이콘/아이폰', '산'↔'낙하산/우산', '배'↔'배경/택배', '다리'↔'기다리/사다리' 같은
+        //      단순 글자 포함(substring) 오탐을 원천 차단합니다.
+        const KEEP_STEM_WORDS = new Set([
+          '아이', '어린이', '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
+        ]);
+        const KO_PARTICLE_RX =
+          /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
+        const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트)$/;
+
+        const extractKoStems = (text: string): string[] => {
+          const eojeols = text
+            .toLowerCase()
+            .replace(/[^가-힣a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter(Boolean);
+          const stems = new Set<string>();
+          for (const raw of eojeols) {
+            if (KEEP_STEM_WORDS.has(raw)) {
+              stems.add(raw);
+              continue;
+            }
+            const next = raw.replace(KO_PARTICLE_RX, '');
+            stems.add(next && next.length >= 1 ? next : raw);
+          }
+          return Array.from(stems);
+        };
+
+        const matchKoTokenInStems = (token: string, stems: string[], rawText?: string): boolean => {
+          const tk = token.toLowerCase().trim();
+          for (const st of stems) {
+            if (st === tk) return true;
+            if (tk.length === 1) continue;
+            if (tk.length === 2) {
+              if (st.startsWith(tk)) {
+                const rem = st.slice(tk.length);
+                if (rem.length >= 2 && !LOAN_TAILS.test(rem)) return true;
+              }
+              if (st.endsWith(tk)) {
+                const rem = st.slice(0, st.length - tk.length);
+                if (rem.length >= 2) return true;
+              }
+              continue;
+            }
+            if (st.includes(tk)) return true;
+          }
+          if (tk.length >= 3 && rawText) {
+            const noSpace = rawText.toLowerCase().replace(/\s+/g, '');
+            if (noSpace.includes(tk.replace(/\s+/g, ''))) return true;
+          }
+          return false;
         };
 
         const queryTokens = activeTokens.map((tok) => ({
           raw: tok.toLowerCase(),
-          blockRegex: BLOCK_SUBSTRING_MAP[tok] ?? null,
-          singleCharRegex:
-            tok.length === 1
-              ? new RegExp(`(^|[\\s,#·/(\\[])(${tok})(들|이|가|을|를|은|는|에|의|로|과|와|도)?($|[\\s,#·/)\\]])`)
-              : null,
         }));
 
         // 3) 실제 768차원 EmbeddingGemma 2 텍스트 쿼리 임베딩 추출 (캐시 지원)
@@ -721,42 +756,40 @@ function sayseeLocalBridge(): Plugin {
           const tagAndKwText = `${meta.primaryTag} ${locText} ${meta.keywordsKo.join(' ')}`.toLowerCase();
           const searchableText = `${tagAndKwText} ${meta.captionKo} ${meta.captionEn}`.toLowerCase();
 
+          const tagStems = extractKoStems(tagAndKwText);
+          const searchStems = extractKoStems(searchableText);
+
           let lexicalScore = 0;
           let matchedGroupCount = 0;
           let tagMatchedGroupCount = 0;
           let compoundHit = false;
 
           // 복합어(예: "나무 다리" -> "나무다리")가 온톨로지 태그 또는 원문에 하나의 단어로 존재하는 경우 (2단어 이상 결합 시에만 작동)
-          if (activeTokens.length >= 2 && compoundQuery.length >= 2 && (primaryOntoSet.has(compoundQuery) || tagAndKwText.includes(compoundQuery))) {
+          if (
+            activeTokens.length >= 2 &&
+            compoundQuery.length >= 2 &&
+            (primaryOntoSet.has(compoundQuery) || matchKoTokenInStems(compoundQuery, tagStems, tagAndKwText))
+          ) {
             lexicalScore += 0.55;
             compoundHit = true;
-          } else if (activeTokens.length >= 2 && compoundQuery.length >= 2 && (captionOntoSet.has(compoundQuery) || searchableText.includes(compoundQuery))) {
+          } else if (
+            activeTokens.length >= 2 &&
+            compoundQuery.length >= 2 &&
+            (captionOntoSet.has(compoundQuery) || matchKoTokenInStems(compoundQuery, searchStems, searchableText))
+          ) {
             lexicalScore += 0.35;
             compoundHit = true;
           }
 
-          // 각 검색어 토큰별로 사전 인덱싱된 온톨로지 태그셋(ontologyPrimaryTags / ontologyCaptionTags) 및 원문 대조
+          // 각 검색어 토큰별로 사전 인덱싱된 온톨로지 태그셋(ontologyPrimaryTags / ontologyCaptionTags) 및 형태소 어간(Stem) 대조
           for (const qt of queryTokens) {
             let groupMatchedInTag = false;
             let groupMatchedInCaption = false;
 
-            const safeTagText = qt.blockRegex ? tagAndKwText.replace(qt.blockRegex, ' ') : tagAndKwText;
-            const safeSearchText = qt.blockRegex ? searchableText.replace(qt.blockRegex, ' ') : searchableText;
-
-            if (primaryOntoSet.has(qt.raw)) {
+            if (primaryOntoSet.has(qt.raw) || matchKoTokenInStems(qt.raw, tagStems, tagAndKwText)) {
               groupMatchedInTag = true;
-            } else if (qt.raw.length >= 2 && safeTagText.includes(qt.raw)) {
-              groupMatchedInTag = true;
-            } else if (captionOntoSet.has(qt.raw)) {
+            } else if (captionOntoSet.has(qt.raw) || matchKoTokenInStems(qt.raw, searchStems, searchableText)) {
               groupMatchedInCaption = true;
-            } else if (qt.raw.length >= 2 && safeSearchText.includes(qt.raw)) {
-              groupMatchedInCaption = true;
-            } else if (qt.singleCharRegex) {
-              if (qt.singleCharRegex.test(safeTagText)) {
-                groupMatchedInTag = true;
-              } else if (qt.singleCharRegex.test(safeSearchText)) {
-                groupMatchedInCaption = true;
-              }
             }
 
             if (groupMatchedInTag) {
@@ -799,13 +832,6 @@ function sayseeLocalBridge(): Plugin {
           });
         }
 
-        // [진짜 하이브리드 엔진: 768차원 EmbeddingGemma 2 시맨틱 벡터(주연) + 온톨로지 핵심 명사 가드레일(브레이크)]
-        // - 기획 철학: "나무 다리 위에서 산책하는 모습", "구명조끼 입고 신나게 물장구치는 아이들", "야외 테라스에서 밤거리 보며 한잔하는 분위기"처럼
-        //   맥락·행동·분위기가 섞인 문장 검색에서 동사/형용사/묘사어("입고", "신나게", "물장구치는", "한잔하는", "화려한", "퍼포먼스")가
-        //   태그 글자에 없다고 해서 결과를 탈락시키면 고정 태그 클라우드 검색과 다를 바가 없습니다.
-        // - 따라서:
-        //   1) 온톨로지 핵심 명사/지명(coreOntologyTokens: 예 "청라", "보트", "구명조끼", "아이", "불쇼", "맥주")만 필수 교집합(AND) 가드레일로 검증하고,
-        //   2) 나머지 모든 행동·분위기·맥락·감성 표현은 **768차원 EmbeddingGemma 2 벡터 유사도(vecSim)**가 의미 공간에서 직접 랭킹합니다!
         const allPrimaryOntologyVocab = new Set<string>();
         for (const m of Object.values(map)) {
           for (const t of m.ontologyPrimaryTags ?? []) {
@@ -823,15 +849,15 @@ function sayseeLocalBridge(): Plugin {
           const cSet = new Set((m?.ontologyCaptionTags ?? []).map((t) => t.toLowerCase()));
           const tagTxt = `${m?.primaryTag ?? ''} ${m?.locationKo ?? ''} ${(m?.keywordsKo ?? []).join(' ')}`.toLowerCase();
           const fullTxt = `${tagTxt} ${m?.captionKo ?? ''} ${m?.captionEn ?? ''}`.toLowerCase();
+          const tagStems = extractKoStems(tagTxt);
+          const fullStems = extractKoStems(fullTxt);
           let corePrimaryHits = 0;
           let coreAnyHits = 0;
           for (const ct of coreGuardrailTokens) {
-            const safeTag = ct.blockRegex ? tagTxt.replace(ct.blockRegex, ' ') : tagTxt;
-            const safeFull = ct.blockRegex ? fullTxt.replace(ct.blockRegex, ' ') : fullTxt;
-            if (pSet.has(ct.raw) || (ct.raw.length >= 2 && safeTag.includes(ct.raw))) {
+            if (pSet.has(ct.raw) || matchKoTokenInStems(ct.raw, tagStems, tagTxt)) {
               corePrimaryHits += 1;
               coreAnyHits += 1;
-            } else if (cSet.has(ct.raw) || (ct.raw.length >= 2 && safeFull.includes(ct.raw))) {
+            } else if (cSet.has(ct.raw) || matchKoTokenInStems(ct.raw, fullStems, fullTxt)) {
               coreAnyHits += 1;
             }
           }
@@ -870,8 +896,8 @@ function sayseeLocalBridge(): Plugin {
           } else if (qVec) {
             candidates.sort((a, b) => b.vecSim - a.vecSim);
             const topVec = candidates[0]?.vecSim ?? 0;
-            if (topVec >= 0.68) {
-              const dynamicCutoff = Math.max(0.68, topVec - 0.032);
+            if (topVec >= 0.71) {
+              const dynamicCutoff = Math.max(0.71, topVec - 0.032);
               finalMatches = candidates.filter((x) => x.vecSim >= dynamicCutoff).slice(0, 24);
             }
           }
@@ -1189,17 +1215,54 @@ function sayseeLocalBridge(): Plugin {
             return;
           }
 
-          const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
-            튜브: /(유튜브|자외선|램프|uv-b)/gi,
-            아이: /아이(콘|폰|패드|디어|템|돌|스|라인|언)/gi,
-            다리: /(기다리|사다리|책상다리|식탁다리)/gi,
-            모자: /모자이크/gi,
-            고기: /물고기/gi,
-            불: /(불안|불편|불가|불구|불빛)/gi,
+          const KEEP_STEM_WORDS = new Set([
+            '아이', '어린이', '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
+          ]);
+          const KO_PARTICLE_RX =
+            /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
+          const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트)$/;
+
+          const extractKoStems = (text: string): string[] => {
+            const eojeols = text
+              .toLowerCase()
+              .replace(/[^가-힣a-z0-9\s]/g, ' ')
+              .split(/\s+/)
+              .filter(Boolean);
+            const stems = new Set<string>();
+            for (const raw of eojeols) {
+              if (KEEP_STEM_WORDS.has(raw)) {
+                stems.add(raw);
+                continue;
+              }
+              const next = raw.replace(KO_PARTICLE_RX, '');
+              stems.add(next && next.length >= 1 ? next : raw);
+            }
+            return Array.from(stems);
           };
-          const sanitizeForToken = (text: string, tok: string): string => {
-            const rx = BLOCK_SUBSTRING_MAP[tok];
-            return rx ? text.replace(rx, ' ') : text;
+
+          const matchKoTokenInStems = (token: string, stems: string[], rawText?: string): boolean => {
+            const tk = token.toLowerCase().trim();
+            for (const st of stems) {
+              if (st === tk) return true;
+              if (tk.length === 1) continue;
+              if (tk.length === 2) {
+                if (st.startsWith(tk)) {
+                  const rem = st.slice(tk.length);
+                  if (rem.length >= 2 && !LOAN_TAILS.test(rem)) return true;
+                }
+                if (st.endsWith(tk)) {
+                  const rem = st.slice(0, st.length - tk.length);
+                  if (rem.length >= 2) return true;
+                }
+                continue;
+              }
+              if (st.includes(tk)) return true;
+            }
+            if (tk.length >= 3 && rawText) {
+              const noSpace = rawText.toLowerCase().replace(/\s+/g, '');
+              if (noSpace.includes(tk.replace(/\s+/g, ''))) return true;
+            }
+            return false;
           };
 
           const qVec = await embedQueryVector768(q);
@@ -1224,13 +1287,13 @@ function sayseeLocalBridge(): Plugin {
                 k.toLowerCase()
               );
               const frameCorpus = `${frame.timestampText ?? ''} ${frame.phaseLabel ?? ''} ${frame.sceneCaption ?? ''} ${frame.captionEn ?? ''} ${frameKws.join(' ')} ${(frame.tags ?? []).join(' ')}`.toLowerCase();
+              const frameStems = extractKoStems(frameCorpus);
 
               let fLex = 0;
               for (const tk of rawTokens) {
-                const safeFrameCorpus = sanitizeForToken(frameCorpus, tk);
-                if (frameKws.some((k) => sanitizeForToken(k, tk).includes(tk))) {
+                if (frameKws.some((k) => matchKoTokenInStems(tk, [k], k))) {
                   fLex += 6;
-                } else if (safeFrameCorpus.includes(tk)) {
+                } else if (matchKoTokenInStems(tk, frameStems, frameCorpus)) {
                   fLex += 4;
                 }
               }
@@ -1254,11 +1317,11 @@ function sayseeLocalBridge(): Plugin {
             if (!bestFrame) continue;
 
             const fullCorpus = `${videoCorpus} ${bestFrame.sceneCaption ?? ''} ${(bestFrame.keywords ?? []).join(' ')} ${(bestFrame.ontologyKeywords ?? []).join(' ')}`.toLowerCase();
+            const fullStems = extractKoStems(fullCorpus);
             let matchedTokenCount = 0;
             let videoBaseHits = 0;
             for (const tk of rawTokens) {
-              const safeFullCorpus = sanitizeForToken(fullCorpus, tk);
-              if (safeFullCorpus.includes(tk)) {
+              if (matchKoTokenInStems(tk, fullStems, fullCorpus)) {
                 matchedTokenCount += 1;
                 videoBaseHits += 3;
               }
@@ -1450,13 +1513,54 @@ function sayseeLocalBridge(): Plugin {
             return;
           }
 
-          const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
-            튜브: /(유튜브|자외선|램프|uv-b)/gi,
-            아이: /아이(콘|폰|패드|디어|템|돌|스|라인|언)/gi,
-            다리: /(기다리|사다리|책상다리|식탁다리)/gi,
-            모자: /모자이크/gi,
-            고기: /물고기/gi,
-            불: /(불안|불편|불가|불구|불빛)/gi,
+          const KEEP_STEM_WORDS = new Set([
+            '아이', '어린이', '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
+          ]);
+          const KO_PARTICLE_RX =
+            /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
+          const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트)$/;
+
+          const extractKoStems = (text: string): string[] => {
+            const eojeols = text
+              .toLowerCase()
+              .replace(/[^가-힣a-z0-9\s]/g, ' ')
+              .split(/\s+/)
+              .filter(Boolean);
+            const stems = new Set<string>();
+            for (const raw of eojeols) {
+              if (KEEP_STEM_WORDS.has(raw)) {
+                stems.add(raw);
+                continue;
+              }
+              const next = raw.replace(KO_PARTICLE_RX, '');
+              stems.add(next && next.length >= 1 ? next : raw);
+            }
+            return Array.from(stems);
+          };
+
+          const matchKoTokenInStems = (token: string, stems: string[], rawText?: string): boolean => {
+            const tk = token.toLowerCase().trim();
+            for (const st of stems) {
+              if (st === tk) return true;
+              if (tk.length === 1) continue;
+              if (tk.length === 2) {
+                if (st.startsWith(tk)) {
+                  const rem = st.slice(tk.length);
+                  if (rem.length >= 2 && !LOAN_TAILS.test(rem)) return true;
+                }
+                if (st.endsWith(tk)) {
+                  const rem = st.slice(0, st.length - tk.length);
+                  if (rem.length >= 2) return true;
+                }
+                continue;
+              }
+              if (st.includes(tk)) return true;
+            }
+            if (tk.length >= 3 && rawText) {
+              const noSpace = rawText.toLowerCase().replace(/\s+/g, '');
+              if (noSpace.includes(tk.replace(/\s+/g, ''))) return true;
+            }
+            return false;
           };
 
           const requiredHits =
@@ -1466,13 +1570,10 @@ function sayseeLocalBridge(): Plugin {
           const scored = docs
             .map((doc) => {
               const corpus = `${doc.fileName} ${doc.title} ${doc.categoryBadge} ${doc.extractedText} ${(doc.keywords ?? []).join(' ')}`.toLowerCase();
+              const docStems = extractKoStems(corpus);
               let hits = 0;
               for (const tk of rawTokens) {
-                const rx = BLOCK_SUBSTRING_MAP[tk];
-                const safeCorpus = rx ? corpus.replace(rx, ' ') : corpus;
-                const noSpaceCorpus = safeCorpus.replace(/\s+/g, '');
-                const noSpaceTk = tk.replace(/\s+/g, '');
-                if (safeCorpus.includes(tk) || (noSpaceTk.length >= 2 && noSpaceCorpus.includes(noSpaceTk))) {
+                if (matchKoTokenInStems(tk, docStems, corpus)) {
                   hits += 1;
                 }
               }

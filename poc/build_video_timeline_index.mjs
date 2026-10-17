@@ -289,18 +289,65 @@ const ontologyNodes = fs.existsSync(ONTOLOGY_PATH)
   ? JSON.parse(fs.readFileSync(ONTOLOGY_PATH, 'utf-8')).nodes || []
   : [];
 
+const KEEP_STEM_WORDS = new Set([
+  '아이', '어린이', '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
+]);
+const KO_PARTICLE_RX =
+  /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
+const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트)$/;
+
+function extractKoStems(text) {
+  const eojeols = String(text || '')
+    .toLowerCase()
+    .replace(/[^가-힣a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const stems = new Set();
+  for (const raw of eojeols) {
+    if (KEEP_STEM_WORDS.has(raw)) {
+      stems.add(raw);
+      continue;
+    }
+    const next = raw.replace(KO_PARTICLE_RX, '');
+    stems.add(next && next.length >= 1 ? next : raw);
+  }
+  return Array.from(stems);
+}
+
+function matchKoTokenInStems(token, stems, rawText) {
+  const tk = String(token || '').toLowerCase().trim();
+  if (!tk) return false;
+  for (const st of stems) {
+    if (st === tk) return true;
+    if (tk.length === 1) continue;
+    if (tk.length === 2) {
+      if (st.startsWith(tk)) {
+        const rem = st.slice(tk.length);
+        if (rem.length >= 2 && !LOAN_TAILS.test(rem)) return true;
+      }
+      if (st.endsWith(tk)) {
+        const rem = st.slice(0, st.length - tk.length);
+        if (rem.length >= 2) return true;
+      }
+      continue;
+    }
+    if (st.includes(tk)) return true;
+  }
+  if (tk.length >= 3 && rawText) {
+    const noSpace = String(rawText).toLowerCase().replace(/\s+/g, '');
+    if (noSpace.includes(tk.replace(/\s+/g, ''))) return true;
+  }
+  return false;
+}
+
 function expandOntologyTerms(textAndKeywords) {
-  const lower = textAndKeywords.toLowerCase();
+  const stems = extractKoStems(textAndKeywords);
   const expanded = new Set();
   for (const node of ontologyNodes) {
-    let safe = lower;
-    if (Array.isArray(node.blockWords)) {
-      for (const bw of node.blockWords) safe = safe.split(bw.toLowerCase()).join(' ');
-    }
     let hit = false;
     for (const trig of node.triggers || []) {
       const t = trig.toLowerCase();
-      if (t.length >= 2 && safe.includes(t)) {
+      if (t.length >= 2 && matchKoTokenInStems(t, stems, textAndKeywords)) {
         expanded.add(t);
         hit = true;
       }
