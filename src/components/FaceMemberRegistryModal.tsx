@@ -187,9 +187,9 @@ export const FaceMemberInlineBar: React.FC<{
       </div>
 
       {isExpanded && (
-        <div className="p-4 flex flex-col gap-3.5 bg-zinc-950/50">
-          {/* 가로 스크롤 얼굴 아바타 카드 리스트 */}
-          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+        <div className="p-3.5 md:p-4 flex flex-col gap-3.5 bg-zinc-950/50">
+          {/* 5명이 한눈에 잘리지 않고 모두 들어오는 반응형 5열 그리드 (모바일은 1~2열, PC는 5열) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
             {visibleClusters.map((cluster) => {
               const activeChip = cluster.relationshipTag || cluster.suggestedChip;
               const currentDraft = draftNames[cluster.clusterId] ?? '';
@@ -198,47 +198,50 @@ export const FaceMemberInlineBar: React.FC<{
               return (
                 <div
                   key={cluster.clusterId}
-                  className={`min-w-[250px] max-w-[270px] rounded-xl p-3 bg-zinc-900/90 border transition-all flex flex-col gap-2.5 shrink-0 relative ${
+                  className={`w-full min-w-0 rounded-xl p-3 bg-zinc-900/90 border transition-all flex flex-col justify-between gap-2.5 relative ${
                     isRegistered ? 'border-primary-container/50' : 'border-white/10'
                   }`}
                 >
-                  {/* 우측 상단 [✕ 행인 제외] 버튼 */}
-                  <button
-                    type="button"
-                    onClick={() => void excludeFaceCluster(cluster.clusterId)}
-                    title="무관한 행인 얼굴 1초 제외"
-                    className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-zinc-950/90 hover:bg-red-950/60 border border-white/10 hover:border-red-400/40 text-zinc-400 hover:text-red-300 font-label-sm text-[10.5px] font-medium transition-colors"
-                  >
-                    ✕ 행인 제외
-                  </button>
+                  {/* 상단 배지 + 우측 [✕ 행인 제외] 버튼 (겹침/잘림 원천 차단) */}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-[10px] font-bold shrink-0">
+                        {cluster.representativeYear}년 대표컷
+                      </span>
+                      {isRegistered && (
+                        <span className="px-1.5 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[10px] font-bold shrink-0">
+                          실명개통
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void excludeFaceCluster(cluster.clusterId)}
+                      title="무관한 행인 얼굴 1초 제외"
+                      className="px-1.5 py-0.5 rounded bg-zinc-950/90 hover:bg-red-950/60 border border-white/10 hover:border-red-400/40 text-zinc-400 hover:text-red-300 font-label-sm text-[10px] font-medium transition-colors shrink-0"
+                    >
+                      ✕ 행인 제외
+                    </button>
+                  </div>
 
                   {/* 동그란 실제 크롭 아바타 + 당해 연도 베스트 컷 메타데이터 */}
-                  <div className="flex items-center gap-3 pr-14">
-                    <AutonomousCanvasFaceAvatar cluster={cluster} sizeClass="w-14 h-14" />
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-[10px] font-bold">
-                          {cluster.representativeYear}년 대표컷
-                        </span>
-                        {isRegistered && (
-                          <span className="px-1.5 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[10px] font-bold">
-                            실명개통됨
-                          </span>
-                        )}
-                      </div>
-                      <p className="font-label-sm text-[12px] text-white font-bold truncate mt-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <AutonomousCanvasFaceAvatar cluster={cluster} sizeClass="w-12 h-12" />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <p className="font-label-sm text-[12px] text-white font-bold truncate">
                         {cluster.registeredName
                           ? `${cluster.registeredName} (${activeChip})`
                           : cluster.appearanceLabelKo}
                       </p>
-                      <p className="font-body-sm text-[11px] text-zinc-400 truncate">
+                      <p className="font-body-sm text-[11px] text-zinc-400 truncate mt-0.5">
                         사진 {cluster.matchedPhotoCount}장 · 영상 {cluster.matchedVideoSegmentCount}구간
                       </p>
                     </div>
                   </div>
 
-                  {/* 빠른 이름 입력창 */}
-                  <div className="flex items-center gap-1.5">
+                  {/* 빠른 이름 입력창 (min-w-0 적용으로 우측 [등록] 버튼 잘림 완벽 해결) */}
+                  <div className="flex items-center gap-1.5 w-full min-w-0">
                     <input
                       type="text"
                       value={currentDraft}
@@ -248,14 +251,19 @@ export const FaceMemberInlineBar: React.FC<{
                           [cluster.clusterId]: e.target.value,
                         }))
                       }
+                      onBlur={() => {
+                        if (currentDraft.trim() && currentDraft.trim() !== cluster.registeredName) {
+                          void handleSaveMember(cluster);
+                        }
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           void handleSaveMember(cluster);
                         }
                       }}
-                      placeholder="이름 입력 (예: 진욱, 은숙, 천우)"
-                      className="flex-1 h-8 px-2.5 rounded-lg bg-zinc-950 border border-white/10 focus:border-primary-container outline-none font-body-sm text-[12px] text-white placeholder:text-zinc-500"
+                      placeholder="이름 입력 (예: 지우, 은숙)"
+                      className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-950 border border-white/10 focus:border-primary-container outline-none font-body-sm text-[12px] text-white placeholder:text-zinc-500"
                     />
                     <button
                       type="button"
@@ -285,7 +293,7 @@ export const FaceMemberInlineBar: React.FC<{
                             }));
                             void handleSaveMember(cluster, defaultName, chip);
                           }}
-                          className={`px-2 py-0.5 rounded-md font-label-sm text-[10.5px] transition-all border ${
+                          className={`px-1.5 py-0.5 rounded font-label-sm text-[10px] transition-all border ${
                             selected
                               ? 'bg-zinc-800 text-primary-container border-primary-container/50 font-bold'
                               : 'bg-zinc-950/70 text-zinc-400 border-white/5 hover:text-zinc-200'
@@ -533,11 +541,11 @@ export const FaceMemberRegistryModal: React.FC = () => {
                     </div>
 
                     {/* 이름 & 호칭 즉시 수정 */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                       <input
                         type="text"
                         defaultValue={c.registeredName}
-                        placeholder="이름 입력 (예: 진욱, 은숙, 천우)"
+                        placeholder="이름 입력 (예: 지우, 은숙, 진욱)"
                         onBlur={(e) =>
                           void registerFaceMember(c.clusterId, e.target.value, activeChip)
                         }
@@ -550,10 +558,10 @@ export const FaceMemberRegistryModal: React.FC = () => {
                             );
                           }
                         }}
-                        className="flex-1 h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-primary-container text-white font-body-sm text-[12px] outline-none"
+                        className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-primary-container text-white font-body-sm text-[12px] outline-none"
                       />
                       <div className="flex gap-1 flex-wrap">
-                        {RELATIONSHIP_CHIPS.slice(0, 4).map((chip) => (
+                        {RELATIONSHIP_CHIPS.map((chip) => (
                           <button
                             key={chip}
                             type="button"
