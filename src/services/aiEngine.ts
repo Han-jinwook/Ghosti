@@ -537,14 +537,16 @@ export const TOTAL_DISSECTED_VIDEO_FRAMES = VIDEO_SCENE_ITEMS.reduce(
 );
 
 /**
- * [동영상 전 구간(Full-Timeline) 정밀 검색]
- * - 유저가 동영상 3개 안에 스쳐 지나가는 어떤 사물·의상·배경·행동을 입력하더라도
- *   전 구간 타임라인 프레임(timelineFrames)을 개별 스코어링하여 정확히 포착된 초(matchedSeekSec)와 캡션을 반환합니다.
+ * [동영상 전 구간(Full-Timeline) 정밀 검색 — Strict Fact/Keyword Guardrail 적용]
+ * - 사진 하이브리드 검색과 동일한 '엄격한 팩트/키워드 브레이크(Strict Filtering & Minimum Score Threshold)' 적용
+ * - 검색어(하트, 목걸이 등)와 실제 매칭되지 않는 무관한 동영상(점수 미달 fallback 결과)은 과감히 탈락시켜,
+ *   정확히 매칭된 동영상만 단독으로 깔끔하게 노출합니다.
  */
 export function searchVideoSceneItems(query: string): VideoSceneItem[] {
   const q = query.trim().toLowerCase();
-  if (!q) return VIDEO_SCENE_ITEMS;
+  if (!q || q.includes('최신 동영상 3개 전 구간')) return VIDEO_SCENE_ITEMS;
 
+  // 카메라 샷/동작 수식어 및 일반 불용어 (단독 매칭으로 무관한 영상이 딸려 나오는 현상 원천 차단)
   const STOP_WORDS = new Set([
     '찾아줘',
     '보여줘',
@@ -552,47 +554,98 @@ export function searchVideoSceneItems(query: string): VideoSceneItem[] {
     '동영상',
     '장면',
     '모습',
+    '클로즈업',
+    '포즈',
+    '취하다가',
+    '취하는',
+    '말하며',
+    '다가오는',
+    '다가옴',
     '에서',
     '위에서',
+    '아래',
+    '너머',
+    '앞에서',
+    '옆에서',
     '입고',
     '있는',
     '하는',
     '찍은',
+    '찍는',
+    '촬영',
+    '화면',
     '나오는',
+    '고화질',
+    '전구간',
+    '구간',
+    '타임라인',
+    '해부',
+    '후',
+    '및',
+  ]);
+
+  const KEEP_VIDEO_NOUNS = new Set([
+    '목걸이',
+    '귀걸이',
+    '바닷가',
+    '창가',
+    '물가',
+    '비행기',
+    '항공기',
+    '브이',
+    '손가락',
+    '구명조끼',
+    '무지개',
+    '보트',
+    '소파',
+    '래시가드',
+    '밀짚모자',
+    '선글라스',
+    '반바지',
+    '민소매',
+    '아이콘',
+    '스마트폰',
+    '패러세일링',
+    '낙하산',
+    '키나발루',
+    '야자수',
+    '일출',
+    '운해',
   ]);
 
   const rawTokens = q
     .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
     .split(/\s+/)
-    .map((t) => t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
+    .map((t) => {
+      if (KEEP_VIDEO_NOUNS.has(t)) return t;
+      return t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '');
+    })
     .filter((t) => t.length >= 1 && !STOP_WORDS.has(t));
 
   if (rawTokens.length === 0) return VIDEO_SCENE_ITEMS;
 
-  const scored: { vid: VideoSceneItem; totalScore: number }[] = [];
+  const scored: {
+    vid: VideoSceneItem;
+    totalScore: number;
+    matchedTokenCount: number;
+    bestFrameHits: number;
+  }[] = [];
 
   for (const vid of VIDEO_SCENE_ITEMS) {
     const videoLevelCorpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
-    let videoBaseHits = 0;
-    for (const tk of rawTokens) {
-      if (videoLevelCorpus.includes(tk)) videoBaseHits += 2;
-      else if (tk.length >= 2 && videoLevelCorpus.includes(tk.slice(0, 2))) videoBaseHits += 1;
-    }
 
     // 각 동영상 내부의 전 구간 타임라인 프레임(timelineFrames)을 1초 단위로 정밀 대조
     let bestFrame = vid.timelineFrames[0];
-    let bestFrameScore = -1;
+    let bestFrameScore = 0;
 
     for (const frame of vid.timelineFrames) {
       const frameCorpus = `${frame.timestampText} ${frame.phaseLabel} ${frame.sceneCaption} ${frame.keywords.join(' ')} ${frame.tags.join(' ')}`.toLowerCase();
       let frameHits = 0;
       for (const tk of rawTokens) {
         if (frame.keywords.some((k) => k.toLowerCase().includes(tk))) {
-          frameHits += 5;
+          frameHits += 6;
         } else if (frameCorpus.includes(tk)) {
-          frameHits += 3;
-        } else if (tk.length >= 2 && frameCorpus.includes(tk.slice(0, 2))) {
-          frameHits += 1;
+          frameHits += 4;
         }
       }
       if (frameHits > bestFrameScore) {
@@ -601,8 +654,25 @@ export function searchVideoSceneItems(query: string): VideoSceneItem[] {
       }
     }
 
-    const totalScore = videoBaseHits + Math.max(0, bestFrameScore);
-    if (totalScore > 0) {
+    // 비디오 전체(타이틀+키워드+최적 프레임)에서 매칭된 고유 핵심 토큰 수 계산
+    const fullVideoAndFrameCorpus = `${videoLevelCorpus} ${bestFrame.sceneCaption} ${bestFrame.keywords.join(' ')}`.toLowerCase();
+    let matchedTokenCount = 0;
+    let videoBaseHits = 0;
+    for (const tk of rawTokens) {
+      if (fullVideoAndFrameCorpus.includes(tk)) {
+        matchedTokenCount += 1;
+        videoBaseHits += 3;
+      }
+    }
+
+    // [엄격한 팩트 브레이크(Strict Filtering)]:
+    // 1) 최소 1개 이상의 타임라인 프레임에서 직접 매칭(bestFrameScore > 0)되어야 함
+    // 2) 검색어 핵심 명사가 2개 이상일 때 최소 60% 이상의 핵심 명사가 해당 영상에 실제로 존재해야 함
+    const requiredTokenMatches =
+      rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.6));
+
+    if (bestFrameScore > 0 && matchedTokenCount >= requiredTokenMatches) {
+      const totalScore = videoBaseHits + bestFrameScore + matchedTokenCount * 5;
       scored.push({
         vid: {
           ...vid,
@@ -611,11 +681,20 @@ export function searchVideoSceneItems(query: string): VideoSceneItem[] {
           matchedFrameCaption: bestFrame.sceneCaption,
         },
         totalScore,
+        matchedTokenCount,
+        bestFrameHits: bestFrameScore,
       });
     }
   }
 
   scored.sort((a, b) => b.totalScore - a.totalScore);
+
+  // [Minimum Score Threshold]: 1순위 매칭 영상 대비 점수가 현저히 낮은(55% 미만) 무관 영상은 철저히 배제
+  if (scored.length > 1) {
+    const topScore = scored[0].totalScore;
+    return scored.filter((s) => s.totalScore >= topScore * 0.55).map((s) => s.vid);
+  }
+
   return scored.map((s) => s.vid);
 }
 

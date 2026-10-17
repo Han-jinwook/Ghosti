@@ -14,6 +14,7 @@ export const DesktopDashboard: React.FC = () => {
     setLayout,
     photos,
     searchSpace,
+    setSearchSpace,
     matchedLocalDocs,
     setSelectedDocModal,
     matchedVideoScenes,
@@ -202,6 +203,7 @@ export const DesktopDashboard: React.FC = () => {
           <VoiceHeroStage />
 
           {/* 2-0) [🎬 동영상 장면 검색] 모드일 때: 전 구간(00:00~끝) 완전 해부 동영상 3개 + 타임라인 점프 재생 */}
+          <div id="saysee-search-results" className="scroll-mt-20">
           {searchSpace === 'video' ? (
             <section className="flex flex-col gap-6">
               <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -217,106 +219,148 @@ export const DesktopDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <button
-                  onClick={() => void openLocalFolder('photos')}
-                  className="px-3.5 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary-container font-label-sm text-[12px] font-extrabold border border-primary-container/40 flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-[16px]">folder_open</span>
-                  <span>원본 동영상 폴더(test_photos) 열기</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {matchedVideoScenes.map((vid) => (
-                  <article
-                    key={vid.id}
-                    onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
-                    className="group rounded-2xl overflow-hidden bg-surface-container-low hover:bg-surface-container border-2 border-primary-container/45 hover:border-primary-container shadow-[0_6px_28px_rgba(0,229,255,0.16)] flex flex-col cursor-pointer transition-all hover:-translate-y-0.5"
+                <div className="flex items-center gap-2">
+                  {matchedVideoScenes.length < 3 && (
+                    <button
+                      onClick={() => setSearchSpace('video')}
+                      className="px-3.5 py-1.5 rounded-full bg-primary-container/20 hover:bg-primary-container/30 text-primary-container font-label-sm text-[12px] font-extrabold border border-primary-container/50"
+                    >
+                      🔄 동영상 3개 전체 다시 보기
+                    </button>
+                  )}
+                  <button
+                    onClick={() => void openLocalFolder('photos')}
+                    className="px-3.5 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary-container font-label-sm text-[12px] font-extrabold border border-primary-container/40 flex items-center gap-1.5"
                   >
-                    <div className="relative aspect-video w-full overflow-hidden bg-black">
-                      <img
-                        src={vid.thumbUrl}
-                        alt={vid.title}
-                        loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      {/* 중앙 재생 아이콘 오버레이 */}
-                      <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                        <div className="w-13 h-13 rounded-full bg-primary-container/90 text-on-primary-container flex items-center justify-center shadow-[0_0_24px_rgba(0,229,255,0.65)] group-hover:scale-110 transition-transform">
-                          <span className="material-symbols-outlined text-[30px]">play_arrow</span>
-                        </div>
-                      </div>
-
-                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/90 backdrop-blur-md border border-primary-container text-primary-container font-label-mono text-[11.5px] font-black shadow-lg">
-                        {vid.matchedTimestamp}
-                      </div>
-
-                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 text-emerald-300 font-label-mono text-[10.5px] font-bold">
-                        ⏱️ 00:00~{vid.durationText} ({vid.timelineFrames.length}구간 해부)
-                      </div>
-
-                      <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/65 to-transparent flex items-center justify-between">
-                        <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
-                          📍 {vid.locationKo}
-                        </span>
-                        <span className="font-label-mono text-[11px] text-white/85">
-                          {vid.videoFileName} ({vid.sizeMB}MB)
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
-                      <div className="flex flex-col gap-1.5">
-                        <h3 className="font-headline-sm text-[15.5px] text-white font-extrabold group-hover:text-primary-container transition-colors">
-                          🎬 {vid.title}
-                        </h3>
-
-                        {/* 포착된 타임라인 프레임 해설 */}
-                        <div className="p-2.5 rounded-xl bg-primary-container/10 border border-primary-container/35">
-                          <p className="font-body-sm text-[12px] text-white font-semibold leading-snug line-clamp-2">
-                            {vid.matchedFrameCaption}
-                          </p>
-                        </div>
-
-                        {/* 전 구간 타임라인 점프 버튼 바 */}
-                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                          <span className="font-label-mono text-[10px] text-on-surface-variant mr-0.5">
-                            구간 점프:
-                          </span>
-                          {vid.timelineFrames.map((frame) => {
-                            const isMatched = vid.matchedSeekSec === frame.timeSec;
-                            return (
-                              <button
-                                key={frame.timeSec}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedVideoModal(vid, frame.timeSec);
-                                }}
-                                title={`${frame.timestampText} (${frame.phaseLabel}): ${frame.sceneCaption}`}
-                                className={`px-2 py-0.5 rounded-md font-label-mono text-[10px] font-black transition-all ${
-                                  isMatched
-                                    ? 'bg-primary-container text-on-primary-container shadow-[0_0_10px_rgba(0,229,255,0.4)]'
-                                    : 'bg-surface-container-highest hover:bg-surface-bright text-on-surface-variant hover:text-white'
-                                }`}
-                              >
-                                {frame.timestampText}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20 font-label-mono text-[11px] text-on-surface-variant">
-                        <span>📅 {vid.date}</span>
-                        <span className="text-primary-container font-bold">
-                          ▶ {vid.matchedTimestamp} 즉시 점프 재생 →
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                    <span className="material-symbols-outlined text-[16px]">folder_open</span>
+                    <span>원본 동영상 폴더(test_photos) 열기</span>
+                  </button>
+                </div>
               </div>
+
+              {matchedVideoScenes.length === 0 ? (
+                <div className="p-10 rounded-3xl bg-surface-container-low border border-outline-variant/30 flex flex-col items-center justify-center text-center gap-3">
+                  <span className="material-symbols-outlined text-primary-container text-[36px]">
+                    videocam_off
+                  </span>
+                  <h3 className="font-headline-sm text-[17px] text-white font-extrabold">
+                    “{activeQuery}” 조건과 일치하는 동영상 타임라인 구간이 없습니다 (0건)
+                  </h3>
+                  <p className="font-body-sm text-[13px] text-on-surface-variant max-w-xl">
+                    세이씨는 검색어 팩트와 무관한 동영상을 억지로 끼워 넣지 않습니다. 아래 버튼을 눌러 해부된 동영상 3개 전체 구간을 다시 확인해 보세요.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSearchSpace('video')}
+                    className="mt-1 px-4 py-2 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-black"
+                  >
+                    🎬 해부된 동영상 3개 전 구간 전체 보기
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {matchedVideoScenes.map((vid) => (
+                    <article
+                      key={vid.id}
+                      onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
+                      className="group rounded-2xl overflow-hidden bg-surface-container-low hover:bg-surface-container border-2 border-primary-container/45 hover:border-primary-container shadow-[0_6px_28px_rgba(0,229,255,0.16)] flex flex-col cursor-pointer transition-all hover:-translate-y-0.5"
+                    >
+                      <div className="relative aspect-video w-full overflow-hidden bg-black">
+                        {/* 포착된 타임스탬프(matchedSeekSec)의 실제 화면 프레임을 바로 미리보기로 표시 */}
+                        <video
+                          key={`${vid.id}-${vid.matchedSeekSec}`}
+                          src={`${vid.videoUrl}#t=${vid.matchedSeekSec}`}
+                          poster={vid.thumbUrl}
+                          preload="metadata"
+                          muted
+                          playsInline
+                          onLoadedMetadata={(e) => {
+                            try {
+                              e.currentTarget.currentTime = vid.matchedSeekSec;
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                          className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
+                        />
+                        {/* 중앙 재생 아이콘 오버레이 */}
+                        <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                          <div className="w-13 h-13 rounded-full bg-primary-container/90 text-on-primary-container flex items-center justify-center shadow-[0_0_24px_rgba(0,229,255,0.65)] group-hover:scale-110 transition-transform">
+                            <span className="material-symbols-outlined text-[30px]">play_arrow</span>
+                          </div>
+                        </div>
+
+                        <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/90 backdrop-blur-md border border-primary-container text-primary-container font-label-mono text-[11.5px] font-black shadow-lg">
+                          {vid.matchedTimestamp}
+                        </div>
+
+                        <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 text-emerald-300 font-label-mono text-[10.5px] font-bold">
+                          ⏱️ 00:00~{vid.durationText} ({vid.timelineFrames.length}구간 해부)
+                        </div>
+
+                        <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/65 to-transparent flex items-center justify-between">
+                          <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
+                            📍 {vid.locationKo}
+                          </span>
+                          <span className="font-label-mono text-[11px] text-white/85">
+                            {vid.videoFileName} ({vid.sizeMB}MB)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
+                        <div className="flex flex-col gap-1.5">
+                          <h3 className="font-headline-sm text-[15.5px] text-white font-extrabold group-hover:text-primary-container transition-colors">
+                            🎬 {vid.title}
+                          </h3>
+
+                          {/* 포착된 타임라인 프레임 해설 */}
+                          <div className="p-2.5 rounded-xl bg-primary-container/10 border border-primary-container/35">
+                            <p className="font-body-sm text-[12px] text-white font-semibold leading-snug line-clamp-2">
+                              {vid.matchedFrameCaption}
+                            </p>
+                          </div>
+
+                          {/* 전 구간 타임라인 점프 버튼 바 */}
+                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                            <span className="font-label-mono text-[10px] text-on-surface-variant mr-0.5">
+                              구간 점프:
+                            </span>
+                            {vid.timelineFrames.map((frame) => {
+                              const isMatched = vid.matchedSeekSec === frame.timeSec;
+                              return (
+                                <button
+                                  key={frame.timeSec}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVideoModal(vid, frame.timeSec);
+                                  }}
+                                  title={`${frame.timestampText} (${frame.phaseLabel}): ${frame.sceneCaption}`}
+                                  className={`px-2 py-0.5 rounded-md font-label-mono text-[10px] font-black transition-all ${
+                                    isMatched
+                                      ? 'bg-primary-container text-on-primary-container shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                                      : 'bg-surface-container-highest hover:bg-surface-bright text-on-surface-variant hover:text-white'
+                                  }`}
+                                >
+                                  {frame.timestampText}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20 font-label-mono text-[11px] text-on-surface-variant">
+                          <span>📅 {vid.date}</span>
+                          <span className="text-primary-container font-bold">
+                            ▶ {vid.matchedTimestamp} 즉시 점프 재생 →
+                          </span>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
           ) : searchSpace === 'vault' ? (
             <section className="flex flex-col gap-6">
@@ -557,6 +601,7 @@ export const DesktopDashboard: React.FC = () => {
               )}
             </section>
           )}
+          </div>
         </main>
       )}
 

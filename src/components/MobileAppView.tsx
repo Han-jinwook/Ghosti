@@ -117,11 +117,21 @@ export const MobileAppView: React.FC = () => {
                     className="rounded-2xl overflow-hidden bg-surface-container-low border border-primary-container/50 flex flex-col cursor-pointer"
                   >
                     <div className="relative aspect-video w-full bg-black">
-                      <img
-                        src={vid.thumbUrl}
-                        alt={vid.title}
-                        loading="lazy"
-                        className="w-full h-full object-cover"
+                      <video
+                        key={`${vid.id}-${vid.matchedSeekSec}`}
+                        src={`${vid.videoUrl}#t=${vid.matchedSeekSec}`}
+                        poster={vid.thumbUrl}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        onLoadedMetadata={(e) => {
+                          try {
+                            e.currentTarget.currentTime = vid.matchedSeekSec;
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                        className="w-full h-full object-cover pointer-events-none"
                       />
                       <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
                         <div className="w-11 h-11 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">

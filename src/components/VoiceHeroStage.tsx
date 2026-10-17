@@ -38,12 +38,12 @@ const BRIEFING_VIDEO_HINTS = [
 ];
 
 const FREE_SEARCH_MICRO_OBJECT_CHIPS = [
-  { label: '💎 하트 목걸이 (00:17)', query: '하트 목걸이 클로즈업' },
-  { label: '👒 밀짚모자 선글라스 (00:00)', query: '밀짚모자 선글라스 꽃무늬 반바지' },
-  { label: '✌️ 손가락 브이 포즈 (00:04)', query: '소파에 나란히 앉아 손가락 브이 포즈' },
-  { label: '🗣️ 동영상이다! 다가옴 (00:08)', query: '동영상이다 말하며 카메라로 다가오는 장면' },
-  { label: '🪢 보트 밧줄 매듭 (00:20)', query: '보트 갑판 굵은 밧줄 매듭' },
-  { label: '📱 스마트폰 앱 아이콘 (00:02)', query: '창가 아래 스마트폰 홈 화면 앱 아이콘' },
+  { label: '💎 하트 목걸이 (00:17)', query: '하트 목걸이 클로즈업', videoId: 'vid_full_02', seekSec: 17 },
+  { label: '👒 밀짚모자 선글라스 (00:00)', query: '밀짚모자 선글라스 꽃무늬 반바지', videoId: 'vid_full_02', seekSec: 0 },
+  { label: '✌️ 손가락 브이 포즈 (00:04)', query: '소파에 나란히 앉아 손가락 브이 포즈', videoId: 'vid_full_02', seekSec: 4 },
+  { label: '🗣️ 동영상이다! 다가옴 (00:08)', query: '동영상이다 말하며 카메라로 다가오는 장면', videoId: 'vid_full_02', seekSec: 8 },
+  { label: '🪢 보트 밧줄 매듭 (00:20)', query: '보트 갑판 굵은 밧줄 매듭', videoId: 'vid_full_01', seekSec: 20 },
+  { label: '📱 스마트폰 앱 아이콘 (00:02)', query: '창가 아래 스마트폰 홈 화면 앱 아이콘', videoId: 'vid_full_03', seekSec: 2 },
 ];
 
 const FALLBACK_SENTENCE_CHIPS = [
@@ -73,6 +73,7 @@ export const VoiceHeroStage: React.FC = () => {
     setSearchSpace,
     localDocuments,
     videoSceneItems,
+    matchedVideoScenes,
     trialScanPermissions,
     onboardingTrackMode,
     setOnboardingTrackMode,
@@ -112,11 +113,19 @@ export const VoiceHeroStage: React.FC = () => {
     [videoSceneItems]
   );
 
-  const handleTextSubmit = (e: React.FormEvent) => {
+  const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const q = textInput.trim();
     if (!q) return;
-    void runTextQuery(q);
+    await runTextQuery(q);
+    if (typeof document !== 'undefined') {
+      window.setTimeout(() => {
+        document.getElementById('saysee-search-results')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 60);
+    }
   };
 
   const handleBriefingChipClick = (target: 'doc' | 'video', query: string) => {
@@ -136,16 +145,19 @@ export const VoiceHeroStage: React.FC = () => {
       ? sentenceChips.slice(sentenceChipPage * 4, sentenceChipPage * 4 + 4)
       : FALLBACK_SENTENCE_CHIPS;
 
+  const topMatchedVideo = matchedVideoScenes[0];
+
   return (
     <section className="w-full flex flex-col gap-4">
       {/* ─────────────── [1. 온보딩 프레임 대전환] Track A (내 PC 직접 구동 권장 + QR 모바일 연결) vs Track B (모바일 단독 시 클라우드 GPU 서버 무료 대여) ─────────────── */}
-      <div className="w-full p-3.5 md:px-5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072a34]/95 to-surface-container-high border border-emerald-400/55 shadow-md flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 min-w-0">
-          <div className="flex items-center gap-1.5 shrink-0">
+      <div className="w-full p-4 md:px-5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072a34]/95 to-surface-container-high border border-emerald-400/55 shadow-md flex flex-col gap-2.5">
+        {/* 1단: 좌측 트랙 선택 버튼 + 우측 QR 모바일 동시 페어링 & 검진 허용 배지 */}
+        <div className="w-full flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setOnboardingTrackMode('pc_local')}
-              className={`px-3 py-1 rounded-xl font-label-sm text-[11.5px] font-black transition-all flex items-center gap-1 border ${
+              className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-black transition-all flex items-center gap-1.5 border ${
                 onboardingTrackMode === 'pc_local'
                   ? 'bg-emerald-400 text-surface-container-lowest border-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.4)]'
                   : 'bg-black/40 text-emerald-300 border-emerald-400/35 hover:border-emerald-400'
@@ -156,7 +168,7 @@ export const VoiceHeroStage: React.FC = () => {
             <button
               type="button"
               onClick={() => setOnboardingTrackMode('cloud_rental')}
-              className={`px-3 py-1 rounded-xl font-label-sm text-[11.5px] font-black transition-all flex items-center gap-1 border ${
+              className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-black transition-all flex items-center gap-1.5 border ${
                 onboardingTrackMode === 'cloud_rental'
                   ? 'bg-primary-container text-on-primary-container border-primary-container shadow-[0_0_14px_rgba(0,229,255,0.4)]'
                   : 'bg-black/40 text-primary-container border-primary-container/35 hover:border-primary-container'
@@ -166,36 +178,42 @@ export const VoiceHeroStage: React.FC = () => {
             </button>
           </div>
 
-          <span className="font-label-md text-[12px] md:text-[12.5px] text-white font-bold leading-snug">
-            {onboardingTrackMode === 'pc_local'
-              ? '🔒 MS EV 인증 SaySee_PC_Agent.exe 가동 중: 파일이 외부로 단 1바이트도 나가지 않고 100% 내 PC 내부에서만 분석됩니다.'
-              : '⚡ 스마트폰 발열·배터리 보호를 위해 세이씨 초고속 GPU 서버 무료 대여 중 (무거운 원본 미전송 · 서버 RAM 0.1초 연산 후 즉시 자동 소각)'}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowOnboarding(true)}
+              className="px-3 py-1.5 rounded-xl bg-black/55 hover:bg-black/75 border border-emerald-400/55 text-emerald-300 font-label-mono text-[11.5px] font-extrabold flex items-center gap-1.5 transition-all shrink-0"
+            >
+              <span className="material-symbols-outlined text-[15px]">qr_code_2</span>
+              <span>
+                📱 QR 모바일 동시 페어링 {pcAgentPairedMobile ? '(연결됨)' : '(스캔하기)'}
+              </span>
+            </button>
+            <span className="px-2.5 py-1.5 rounded-xl bg-black/45 border border-outline-variant/35 font-label-mono text-[11px] text-on-surface-variant font-bold hidden md:inline-flex items-center shrink-0">
+              검진 허용: {trialScanPermissions.gallery ? '☑️사진첩 ' : ''}
+              {trialScanPermissions.downloads ? '☑️다운로드 ' : ''}
+              {trialScanPermissions.desktop ? '☑️바탕화면' : ''}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowOnboarding(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-on-primary-container font-label-sm text-[11.5px] font-black shadow-[0_0_14px_rgba(0,229,255,0.35)] transition-all shrink-0"
+            >
+              🚀 내 PC 안심 체험 &amp; QR 연결 모달
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowOnboarding(true)}
-            className="px-3 py-1.5 rounded-xl bg-black/50 hover:bg-black/70 border border-emerald-400/50 text-emerald-300 font-label-mono text-[11px] font-extrabold flex items-center gap-1.5 transition-all"
-          >
-            <span className="material-symbols-outlined text-[15px]">qr_code_2</span>
-            <span>
-              📱 QR 모바일 동시 페어링 {pcAgentPairedMobile ? '(연결됨)' : '(스캔하기)'}
-            </span>
-          </button>
-          <span className="px-2.5 py-1 rounded-lg bg-black/45 border border-outline-variant/35 font-label-mono text-[11px] text-on-surface-variant font-bold hidden sm:inline">
-            검진 허용: {trialScanPermissions.gallery ? '☑️사진첩 ' : ''}
-            {trialScanPermissions.downloads ? '☑️다운로드 ' : ''}
-            {trialScanPermissions.desktop ? '☑️바탕화면' : ''}
+        {/* 2단: 전체 너비(w-full) 1줄 보안 안심 상태 안내 바 (배지 겹침 및 줄바꿈 깨짐 원천 차단) */}
+        <div className="w-full px-3.5 py-2 rounded-xl bg-black/40 border border-emerald-400/30 flex items-center justify-between gap-3">
+          <span className="font-label-md text-[12px] md:text-[13px] text-white font-bold leading-snug">
+            {onboardingTrackMode === 'pc_local'
+              ? '🔒 MS EV 인증 SaySee_PC_Agent.exe 가동 중: 파일이 외부로 단 1바이트도 나가지 않고 100% 내 PC 내부에서만 안전하게 분석됩니다.'
+              : '⚡ 스마트폰 발열·배터리 보호를 위해 세이씨 초고속 GPU 서버 무료 대여 중 (무거운 원본 미전송 · 서버 RAM에서 0.1초 연산 후 즉시 자동 소각)'}
           </span>
-          <button
-            type="button"
-            onClick={() => setShowOnboarding(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-on-primary-container font-label-sm text-[11.5px] font-black shadow-[0_0_14px_rgba(0,229,255,0.35)] transition-all"
-          >
-            🚀 내 PC 안심 체험 &amp; QR 연결 모달
-          </button>
+          <span className="hidden lg:inline-block font-label-mono text-[11px] text-emerald-300 font-bold shrink-0">
+            {onboardingTrackMode === 'pc_local' ? '외부 전송 0 Byte • 100% 로컬 구동' : '하드디스크 저장 0건 • Zero-Retention'}
+          </span>
         </div>
       </div>
 
@@ -258,65 +276,122 @@ export const VoiceHeroStage: React.FC = () => {
             </span>
           </div>
 
-          {/* 해부된 동영상 3개 썸네일 카드 */}
+          {/* 해부된 동영상 3개 썸네일 카드 (포착된 matchedSeekSec 시점의 실제 비디오 프레임 미리보기 지원) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-            {videoSceneItems.map((vid, idx) => (
-              <div
-                key={vid.id}
-                onClick={() => {
-                  setSearchSpace('video');
-                  setSelectedVideoModal(vid, vid.matchedSeekSec);
-                }}
-                className="group p-2.5 rounded-xl bg-surface-container-high/90 hover:bg-surface-bright border border-primary-container/35 hover:border-primary-container flex items-center gap-3 cursor-pointer transition-all"
-              >
-                <div className="relative w-20 h-14 rounded-lg overflow-hidden bg-black shrink-0 border border-primary-container/40">
-                  <img
-                    src={vid.thumbUrl}
-                    alt={vid.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
-                  <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/85 text-white font-label-mono text-[9.5px] font-bold">
-                    {vid.durationText}
-                  </span>
-                  <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-primary-container text-on-primary-container font-label-mono text-[9px] font-black">
-                    영상 #{idx + 1}
-                  </span>
-                </div>
-                <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="font-label-mono text-[10px] text-emerald-300 font-black">
-                      00:00~{vid.durationText} ({vid.timelineFrames.length}구간 해부)
-                    </span>
-                    <span className="font-label-mono text-[9.5px] text-primary-container font-bold">
-                      ▶ 구간 재생
-                    </span>
+            {videoSceneItems.map((baseVid, idx) => {
+              const liveVid = matchedVideoScenes.find((m) => m.id === baseVid.id) ?? baseVid;
+              const isTopMatched = searchSpace === 'video' && topMatchedVideo?.id === baseVid.id;
+              return (
+                <div
+                  key={baseVid.id}
+                  onClick={() => {
+                    setSearchSpace('video');
+                    setSelectedVideoModal(liveVid, liveVid.matchedSeekSec);
+                  }}
+                  className={`group p-3 rounded-xl flex flex-col gap-2 cursor-pointer transition-all border-2 ${
+                    isTopMatched
+                      ? 'bg-primary-container/15 border-[#FFD740] shadow-[0_0_24px_rgba(255,215,64,0.3)]'
+                      : 'bg-surface-container-high/90 hover:bg-surface-bright border-primary-container/35 hover:border-primary-container'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-24 h-16 rounded-lg overflow-hidden bg-black shrink-0 border border-primary-container/50">
+                      <video
+                        key={`${liveVid.id}-${liveVid.matchedSeekSec}`}
+                        src={`${liveVid.videoUrl}#t=${liveVid.matchedSeekSec}`}
+                        poster={liveVid.thumbUrl}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        onLoadedMetadata={(e) => {
+                          try {
+                            e.currentTarget.currentTime = liveVid.matchedSeekSec;
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                        className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform"
+                      />
+                      <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/85 text-white font-label-mono text-[9.5px] font-bold">
+                        {liveVid.durationText}
+                      </span>
+                      <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-primary-container text-on-primary-container font-label-mono text-[9px] font-black">
+                        영상 #{idx + 1}
+                      </span>
+                    </div>
+                    <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-label-mono text-[10px] text-emerald-300 font-black">
+                          00:00~{liveVid.durationText} ({liveVid.timelineFrames.length}구간 해부)
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary-container font-label-mono text-[9.5px] font-black shrink-0">
+                          ▶ {liveVid.matchedTimestamp} 재생
+                        </span>
+                      </div>
+                      <span className="font-label-md text-[12px] text-white font-extrabold truncate">
+                        {liveVid.title}
+                      </span>
+                      <span className="font-body-sm text-[10.5px] text-[#FFD740] font-bold truncate">
+                        {liveVid.matchedFrameCaption}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-label-md text-[12px] text-white font-extrabold truncate">
-                    {vid.title}
-                  </span>
-                  <span className="font-body-sm text-[10.5px] text-on-surface-variant truncate">
-                    {vid.timelineFrames.map((f) => f.timestampText).join(' · ')}
-                  </span>
+
+                  {/* 클릭 즉시 해당 초(Sec)로 점프하는 타임라인 버튼들 */}
+                  <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-outline-variant/25">
+                    <span className="font-label-mono text-[9.5px] text-on-surface-variant mr-0.5">
+                      초(Sec) 점프:
+                    </span>
+                    {liveVid.timelineFrames.map((f) => {
+                      const isCurrentSec = liveVid.matchedSeekSec === f.timeSec;
+                      return (
+                        <button
+                          key={f.timeSec}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSearchSpace('video');
+                            setSelectedVideoModal(liveVid, f.timeSec);
+                          }}
+                          title={`${f.timestampText} (${f.phaseLabel}): ${f.sceneCaption}`}
+                          className={`px-1.5 py-0.5 rounded font-label-mono text-[9.5px] font-black transition-all ${
+                            isCurrentSec
+                              ? 'bg-[#FFD740] text-black shadow-[0_0_10px_rgba(255,215,64,0.5)]'
+                              : 'bg-black/60 hover:bg-primary-container text-white/85 hover:text-on-primary-container'
+                          }`}
+                        >
+                          {f.timestampText}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* 영상 3개 속 스쳐 지나가는 사물/행동 자유 검색 테스트 칩 */}
+          {/* 영상 3개 속 스쳐 지나가는 사물/행동 자유 검색 테스트 칩 (클릭 시 즉시 해당 초(Sec) 동영상 재생 모달 오픈!) */}
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             <span className="font-label-mono text-[11px] text-[#FFD740] font-extrabold mr-1">
-              🔍 스쳐 지나가는 사물·행동 즉시 포착 시험:
+              🔍 스쳐 지나가는 사물·행동 즉시 포착 시험 (클릭 시 해당 초(Sec) 즉시 점프 재생):
             </span>
-            {FREE_SEARCH_MICRO_OBJECT_CHIPS.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => handleBriefingChipClick('video', item.query)}
-                className="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-primary-container hover:text-on-primary-container border border-primary-container/40 text-white font-label-sm text-[11px] font-bold transition-all"
-              >
-                {item.label}
-              </button>
-            ))}
+            {FREE_SEARCH_MICRO_OBJECT_CHIPS.map((item) => {
+              const isSelectedChip = activeQuery === item.query;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => handleBriefingChipClick('video', item.query)}
+                  className={`px-3 py-1.5 rounded-lg border font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
+                    isSelectedChip
+                      ? 'bg-[#FFD740] text-black border-[#FFD740] shadow-[0_0_16px_rgba(255,215,64,0.55)] scale-[1.02]'
+                      : 'bg-surface-container hover:bg-primary-container hover:text-on-primary-container border-primary-container/50 text-white'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
