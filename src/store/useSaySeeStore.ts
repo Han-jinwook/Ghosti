@@ -1,9 +1,13 @@
 import { create } from 'zustand';
 import type {
+  ClubSizeTier,
   DuplicateGroup,
   FaceMemberCluster,
+  FamilyRoomId,
+  GpuHelperTierId,
   HardwareTelemetry,
   LocalDocumentFile,
+  LoungeType,
   MerlinAuthState,
   OnboardingAhaItem,
   OnboardingTrackMode,
@@ -48,11 +52,11 @@ import { loadMerlinAuth, toggleMerlinTier } from '../services/merlinAuth';
 import { loadSyncState, saveSyncPrefs } from '../services/syncEngine';
 
 export type ViewportLayout = 'mobile' | 'desktop';
-export type MobileTab = 'search' | 'trash' | 'settings';
-export type DesktopTab = 'dashboard' | 'trash' | 'sync';
+export type MobileTab = 'trial' | 'search' | 'trash' | 'settings';
+export type DesktopTab = 'trial' | 'dashboard' | 'trash' | 'sync';
 
 interface SaySeeStore {
-  // 레이아웃 & 미니멀 3대 탭 네비게이션 (🔍 파워 검색 | 🧹 주치의 정리 | ⚙️ 내 기기 & 백업)
+  // 레이아웃 & 서브메뉴 ([✨ 무료체험(Auto-Hide)] | 🔍 파워 검색 | 🧹 주치의 정리 | 🛠️ 설정도우미)
   layout: ViewportLayout;
   mobileTab: MobileTab;
   desktopTab: DesktopTab;
@@ -173,15 +177,27 @@ interface SaySeeStore {
   openLocalFolder: (target: 'quarantine' | 'photos' | 'docs') => Promise<void>;
   dismissQuarantineToast: () => void;
 
-  // [스펙 3 & 4] 프라이빗 싱크 2대 모드 & 카페 런칭 심플 과금 퍼널 + 선착순 10년권 카운트다운
+  // [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 스펙]
   telemetry: HardwareTelemetry | null;
   merlinAuth: MerlinAuthState;
   syncState: SyncState;
   showProModal: boolean;
   freeTrialUsed: boolean;
   activePricingPlan: PricingPlanId;
-  foundingMemberRemainingSeats: number;
+  activeLoungeType: LoungeType;
+  activeFamilyRoom: FamilyRoomId;
+  clubSizeTier: ClubSizeTier;
+  studentOcrVerified: boolean;
+  gpuHelper24hActive: boolean;
+  gpuHelperActiveTier: GpuHelperTierId;
+  gpuHelperRemainingHours: number;
   setShowProModal: (show: boolean) => void;
+  setActiveLoungeType: (lounge: LoungeType) => void;
+  setActiveFamilyRoom: (room: FamilyRoomId) => void;
+  setClubSizeTier: (tier: ClubSizeTier) => void;
+  verifyStudentOcr: () => void;
+  activateGpuHelper24h: (tier: GpuHelperTierId) => void;
+  deactivateGpuHelper24h: () => void;
   activatePricingPlan: (planId: PricingPlanId) => void;
   switchMerlinTier: () => void;
   updateSyncSettings: (mode: SyncMode, wifiOnly: boolean) => void;
@@ -217,13 +233,25 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({
       mobileTab,
       desktopTab:
-        mobileTab === 'search' ? 'dashboard' : mobileTab === 'trash' ? 'trash' : 'sync',
+        mobileTab === 'trial'
+          ? 'trial'
+          : mobileTab === 'search'
+          ? 'dashboard'
+          : mobileTab === 'trash'
+          ? 'trash'
+          : 'sync',
     }),
   setDesktopTab: (desktopTab) =>
     set({
       desktopTab,
       mobileTab:
-        desktopTab === 'dashboard' ? 'search' : desktopTab === 'trash' ? 'trash' : 'settings',
+        desktopTab === 'trial'
+          ? 'trial'
+          : desktopTab === 'dashboard'
+          ? 'search'
+          : desktopTab === 'trash'
+          ? 'trash'
+          : 'settings',
     }),
 
   searchSpace: 'video',
@@ -1108,43 +1136,131 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
 
   dismissQuarantineToast: () => set({ lastQuarantineToast: null }),
 
-  // ─────────────── [스펙 3 & 4] 프라이빗 싱크 2대 모드 & 카페 런칭 심플 과금 퍼널 ───────────────
+  // ─────────────── [4대 라운지 & 24시간 GPU 클라우드 서버 도우미] ───────────────
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(550, 3230438906),
   showProModal: false,
   freeTrialUsed: false,
   activePricingPlan: 'free_trial',
-  foundingMemberRemainingSeats: 78,
+  activeLoungeType: 'family',
+  activeFamilyRoom: '우리집',
+  clubSizeTier: 'small',
+  studentOcrVerified: false,
+  gpuHelper24hActive: false,
+  gpuHelperActiveTier: 'standard_1000',
+  gpuHelperRemainingHours: 24,
 
   setShowProModal: (showProModal) => set({ showProModal }),
 
+  setActiveLoungeType: (activeLoungeType) =>
+    set((state) => ({
+      activeLoungeType,
+      gpuHelperActiveTier:
+        activeLoungeType === 'club'
+          ? state.clubSizeTier === 'large'
+            ? 'club_large_3000'
+            : state.clubSizeTier === 'medium'
+            ? 'club_medium_2000'
+            : 'club_small_1000'
+          : 'standard_1000',
+    })),
+
+  setActiveFamilyRoom: (activeFamilyRoom) =>
+    set({
+      activeFamilyRoom,
+      lastQuarantineToast: `🏠 패밀리 라운지 [${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
+    }),
+
+  setClubSizeTier: (clubSizeTier) =>
+    set({
+      clubSizeTier,
+      gpuHelperActiveTier:
+        clubSizeTier === 'large'
+          ? 'club_large_3000'
+          : clubSizeTier === 'medium'
+          ? 'club_medium_2000'
+          : 'club_small_1000',
+    }),
+
+  verifyStudentOcr: () =>
+    set({
+      studentOcrVerified: true,
+      lastQuarantineToast:
+        '🎒 [학생증 로컬 OCR 0.1초 인증 완료] 외부 서버 전송 0 Byte • 10대 학생 라운지 단일가(월 900원 / 연 9,000원) 자격이 즉시 확인되었습니다!',
+    }),
+
+  activateGpuHelper24h: (tier) => {
+    const tierLabelMap: Record<GpuHelperTierId, string> = {
+      standard_1000: '개인 / 패밀리 / 10대 학생 라운지 (24시간 1,000원)',
+      club_small_1000: '소형 클럽 ~20명 (24시간 1,000원)',
+      club_medium_2000: '중형 클럽 ~100명 (24시간 2,000원)',
+      club_large_3000: '대형 클럽 무제한 (24시간 3,000원)',
+    };
+    set({
+      gpuHelper24hActive: true,
+      gpuHelperActiveTier: tier,
+      gpuHelperRemainingHours: 24,
+      onboardingTrackMode: 'cloud_rental',
+      lastQuarantineToast: `⚡ [24시간 GPU 클라우드 서버 도우미 가동 시작] ${tierLabelMap[tier]} • 멤버 사진·영상 Gemma 2 인덱싱 및 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본 이관 후 클라우드에서 100% 자동 소각됩니다.`,
+    });
+  },
+
+  deactivateGpuHelper24h: () =>
+    set({
+      gpuHelper24hActive: false,
+      onboardingTrackMode: 'pc_local',
+      lastQuarantineToast:
+        '🟢 [내 PC 직접 구동 모드로 복귀] 클라우드 임시 캐시를 100% 자동 소각하고 내 PC 엔진으로 전환했습니다.',
+    }),
+
   activatePricingPlan: (planId: PricingPlanId) => {
     set((state) => {
-      const isAnnualFounding = planId === 'sub_mobile_1100' || planId === 'sub_bundle_2900';
-      const nextSeats =
-        isAnnualFounding && state.foundingMemberRemainingSeats > 1
-          ? state.foundingMemberRemainingSeats - 1
-          : state.foundingMemberRemainingSeats;
-
       const labelMap: Record<PricingPlanId, string> = {
-        free_trial: '입문 무료 체험 (정밀 진단 + 1묶음 무료 정리)',
-        single_taste_1000: '💡 1,000원 부분 맛보기 대청소권 (마음에 들면 차액 +900원/+2,800원으로 1회 완치 승격 가능)',
-        single_mobile_1900: '📱 모바일 단독 1회 완치 대청소권 (1,900원)',
-        single_bundle_3800: '💻📱 PC+모바일 양쪽 대청소 & 최초 1회 일치화권 (3,800원)',
-        sub_mobile_1100: '👑 모바일 정기 주치의 멤버십 (창립 멤버 10년권 자동 승격 완료!)',
-        sub_bundle_2900: '👑 PC+모바일 통합 주치의 멤버십 (창립 멤버 10년권 자동 승격 완료!)',
+        free_trial: '✨ 무료체험 모드 (서브메뉴 [✨ 무료체험] 탭 활성화)',
+        personal_single_2900: '👤 개인 라운지 • 단품 클리어 (2,900원)',
+        personal_sub_3900: '👤 개인 라운지 • 정기 구독 (월 3,900원)',
+        personal_year_35000: '👤 개인 라운지 • 연간 정기 구독 (연 35,000원)',
+        family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
+        family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',
+        family_three_8900: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합권 (월 8,900원 • 우리집+본가+처가 3방 분리)',
+        family_three_year_89000: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합 연간권 (연 89,000원 • 3방 분리)',
+        club_small_4900: '⛳ 클럽 라운지 • 소형 클럽 20명 기준 (월 4,900원 • 방 1개)',
+        club_small_year_49000: '⛳ 클럽 라운지 • 소형 클럽 연간권 (연 49,000원 • 방 1개)',
+        club_medium_7900: '⛳ 클럽 라운지 • 중형 클럽 100명 기준 (월 7,900원 • 방 1개)',
+        club_medium_year_79000: '⛳ 클럽 라운지 • 중형 클럽 연간권 (연 79,000원 • 방 1개)',
+        club_large_14900: '⛳ 클럽 라운지 • 대형 클럽 인원 제한 없음 (월 14,900원 • 방 1개)',
+        club_large_year_149000: '⛳ 클럽 라운지 • 대형 클럽 연간권 (연 149,000원 • 방 1개)',
+        student_sub_900: '🎒 10대 학생 라운지 • 인원 무제한 단일가 (월 900원)',
+        student_year_9000: '🎒 10대 학생 라운지 • 인원 무제한 연간 단일가 (연 9,000원)',
       };
+
+      const nextLoungeType: LoungeType = planId.startsWith('personal_')
+        ? 'personal'
+        : planId.startsWith('family_')
+        ? 'family'
+        : planId.startsWith('club_')
+        ? 'club'
+        : planId.startsWith('student_')
+        ? 'student'
+        : state.activeLoungeType;
+
+      const isPaidSubscription = planId !== 'free_trial';
 
       return {
         activePricingPlan: planId,
-        foundingMemberRemainingSeats: nextSeats,
+        activeLoungeType: nextLoungeType,
         showProModal: false,
+        // 정식 구독 활성화 시 서브메뉴 1번 자리 [✨ 무료체험] 탭은 자동으로 숨김(Auto-Hide) 처리되므로 파워 검색 탭으로 이동
+        desktopTab: isPaidSubscription && state.desktopTab === 'trial' ? 'dashboard' : state.desktopTab,
+        mobileTab: isPaidSubscription && state.mobileTab === 'trial' ? 'search' : state.mobileTab,
         merlinAuth: {
           ...state.merlinAuth,
           tier: planId === 'free_trial' ? 'FREE' : 'PRO_LIFETIME',
         },
-        lastQuarantineToast: `🎉 [${labelMap[planId]}] 적용이 완료되었습니다! 모든 주치의 기능을 제한 없이 이용하실 수 있습니다.`,
+        lastQuarantineToast: isPaidSubscription
+          ? `🎉 [${labelMap[planId]}] 마스터 결제가 완료되었습니다! (초대 멤버 전원 무료 • [✨ 무료체험] 탭 자동 숨김 처리됨)`
+          : `✨ [무료체험 모드]로 전환되어 상단 서브메뉴 1번 자리에 [✨ 무료체험] 탭이 다시 표시됩니다.`,
       };
     });
   },

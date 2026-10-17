@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import type { GpuHelperTierId } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
 import { FoundingMemberFomoBar } from './PricingModal';
+import { LoungeView } from './LoungeView';
 
 export const MobileAppView: React.FC = () => {
   const {
@@ -27,6 +29,11 @@ export const MobileAppView: React.FC = () => {
     openLocalFolder,
     setShowOnboarding,
     setShowProModal,
+    activePricingPlan,
+    gpuHelper24hActive,
+    gpuHelperActiveTier,
+    activateGpuHelper24h,
+    deactivateGpuHelper24h,
     syncState,
     setPrivateSyncStrategy,
     triggerSyncNow,
@@ -52,36 +59,44 @@ export const MobileAppView: React.FC = () => {
 
   return (
     <div className="bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen max-w-xl mx-auto relative shadow-2xl border-x border-white/10 pb-20">
-      {/* 최상단 창립 멤버 선착순 특전 미니멀 바 */}
+      {/* 최상단 4대 라운지 스위처 바 */}
       <FoundingMemberFomoBar />
 
-      {/* 심플하고 차분한 상단 헤더 + [🟢 내 PC 안전 가동 중] 신호등 캡슐 */}
+      {/* 심플하고 차분한 상단 헤더 + 서브 타이틀 + [🟢 내 PC 안전 가동 중] 신호등 캡슐 */}
       <header className="sticky top-0 inset-x-0 z-50 bg-[#09090B]/95 backdrop-blur-xl pt-safe border-b border-white/10">
         <div className="h-14 px-3.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div
               onClick={() => setMobileTab('search')}
-              className="flex items-center gap-2 cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-white/15 flex items-center justify-center">
                 <span className="material-symbols-outlined text-primary-container text-[16px] font-bold">
                   graphic_eq
                 </span>
               </div>
-              <span className="font-headline-sm text-[16px] text-white tracking-tight font-extrabold">
-                세이씨
-              </span>
+              <div className="flex flex-col">
+                <span className="font-headline-sm text-[15px] text-white tracking-tight font-extrabold leading-none">
+                  세이씨
+                </span>
+                <span className="text-[9.5px] text-zinc-400 leading-tight mt-0.5 truncate max-w-[155px]">
+                  🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
+                </span>
+              </div>
             </div>
 
-            {/* [처방 1] 본 화면 초록색 온보딩 박스를 대체하는 신호등 상태 캡슐 1개 (클릭 시 보안/QR 모달 오픈) */}
             <button
               type="button"
               onClick={() => setShowOnboarding(true)}
-              className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11px] font-medium flex items-center gap-1.5 truncate"
+              className="px-2 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[10.5px] font-medium flex items-center gap-1 truncate"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
               <span className="truncate">
-                {onboardingTrackMode === 'pc_local' ? '내 PC 안전 가동 중' : '클라우드 엔진 가동'}
+                {gpuHelper24hActive
+                  ? '⚡ 24h GPU 가동'
+                  : onboardingTrackMode === 'pc_local'
+                  ? '내 PC 안전 가동'
+                  : '클라우드 엔진'}
               </span>
             </button>
           </div>
@@ -89,9 +104,9 @@ export const MobileAppView: React.FC = () => {
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setShowProModal(true)}
-              className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-amber-400 font-label-sm text-[11px] font-bold"
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold"
             >
-              👑 요금제
+              💎 요금제
             </button>
             <button
               onClick={() => setLayout('desktop')}
@@ -106,7 +121,10 @@ export const MobileAppView: React.FC = () => {
         </div>
       </header>
 
-      {/* 탭 1: 🔍 파워 검색 */}
+      {/* 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) */}
+      {mobileTab === 'trial' && <LoungeView />}
+
+      {/* 서브메뉴 2번: 🔍 파워 검색 */}
       {mobileTab === 'search' && (
         <main className="flex-1 w-full px-3.5 pt-3.5 pb-8 flex flex-col gap-4">
           {/* 1층: 검색창 + 3대 카테고리 탭 + 1줄 추천 칩 / 2층: 접이식 브리핑 아코디언 */}
@@ -379,9 +397,80 @@ export const MobileAppView: React.FC = () => {
         </div>
       )}
 
-      {/* 탭 3: ⚙️ 내 기기 & 백업 */}
+      {/* 서브메뉴 4번: 🛠️ 설정도우미 (⚡ 24시간 GPU 클라우드 서버 도우미 & 프라이빗 싱크) */}
       {mobileTab === 'settings' && (
         <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
+          {/* ⚡ 24시간 GPU 클라우드 서버 도우미 */}
+          <div className="p-4 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                🛠️ 설정도우미 핵심 기능
+              </span>
+              {gpuHelper24hActive && (
+                <button
+                  type="button"
+                  onClick={deactivateGpuHelper24h}
+                  className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15 text-zinc-300 font-label-sm text-[10.5px]"
+                >
+                  내 PC 모드로 복귀
+                </button>
+              )}
+            </div>
+            <h3 className="font-headline-sm text-[15.5px] text-white font-bold">
+              ⚡ 24시간 GPU 클라우드 서버 도우미
+            </h3>
+            <p className="font-body-sm text-[11.5px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-3 rounded-xl border border-white/10">
+              내 PC가 꺼져 있을 때 단돈 1,000원(중·대형 클럽 2,000~3,000원)으로 24시간 동안 초고속 GPU 클라우드 도우미를 즉시 가동합니다. 멤버들이 올린 사진·영상의 Gemma 2 인덱싱과 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본을 내 PC로 안전하게 이관한 뒤 클라우드에서는 100% 자동 소각됩니다.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  {
+                    id: 'standard_1000' as GpuHelperTierId,
+                    label: '개인·패밀리·10대 학생',
+                    price: '24시간 1,000원',
+                  },
+                  {
+                    id: 'club_small_1000' as GpuHelperTierId,
+                    label: '소형 클럽 (~20명)',
+                    price: '24시간 1,000원',
+                  },
+                  {
+                    id: 'club_medium_2000' as GpuHelperTierId,
+                    label: '중형 클럽 (~100명)',
+                    price: '24시간 2,000원',
+                  },
+                  {
+                    id: 'club_large_3000' as GpuHelperTierId,
+                    label: '대형 클럽 (무제한)',
+                    price: '24시간 3,000원',
+                  },
+                ]
+              ).map((item) => {
+                const active = gpuHelper24hActive && gpuHelperActiveTier === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => activateGpuHelper24h(item.id)}
+                    className={`p-2.5 rounded-xl text-left flex flex-col gap-0.5 border ${
+                      active
+                        ? 'bg-zinc-900 border-primary-container'
+                        : 'bg-zinc-950 border-white/10'
+                    }`}
+                  >
+                    <span className="font-label-sm text-[11px] text-zinc-200 font-bold">
+                      {item.label}
+                    </span>
+                    <span className="font-headline-sm text-[13.5px] text-primary-container font-black">
+                      {item.price}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-2">
             <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-semibold w-fit">
               🔋 배터리 · OS 제재 방어 원칙
@@ -473,8 +562,21 @@ export const MobileAppView: React.FC = () => {
         </main>
       )}
 
-      {/* 모바일 하단 미니멀 3대 탭 바 */}
-      <nav className="fixed bottom-0 inset-x-0 max-w-xl mx-auto h-15 bg-[#09090B]/95 backdrop-blur-xl border-t border-white/10 z-50 px-3 flex items-center justify-around">
+      {/* 모바일 하단 서브메뉴 바: 1번 자리 [✨ 무료체험(Auto-Hide)] | 🔍 파워 검색 | 🧹 주치의 정리 | 🛠️ 설정도우미 */}
+      <nav className="fixed bottom-0 inset-x-0 max-w-xl mx-auto h-15 bg-[#09090B]/95 backdrop-blur-xl border-t border-white/10 z-50 px-2 flex items-center justify-around">
+        {activePricingPlan === 'free_trial' && (
+          <button
+            onClick={() => setMobileTab('trial')}
+            className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+              mobileTab === 'trial'
+                ? 'text-primary-container font-bold'
+                : 'text-zinc-400'
+            }`}
+          >
+            <span className="text-[12px]">✨ 무료체험</span>
+          </button>
+        )}
+
         <button
           onClick={() => setMobileTab('search')}
           className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
@@ -483,7 +585,7 @@ export const MobileAppView: React.FC = () => {
               : 'text-zinc-400'
           }`}
         >
-          <span className="text-[12.5px]">🔍 파워 검색</span>
+          <span className="text-[12px]">🔍 파워 검색</span>
         </button>
 
         <button
@@ -495,7 +597,7 @@ export const MobileAppView: React.FC = () => {
           }`}
         >
           <div className="flex items-center gap-1">
-            <span className="text-[12.5px]">🧹 주치의 정리</span>
+            <span className="text-[12px]">🧹 주치의 정리</span>
             <span className="px-1.5 py-0.2 rounded-md bg-zinc-800 border border-white/10 text-zinc-300 text-[10px] font-mono font-bold">
               {activeTrashCount}
             </span>
@@ -510,7 +612,7 @@ export const MobileAppView: React.FC = () => {
               : 'text-zinc-400'
           }`}
         >
-          <span className="text-[12.5px]">⚙️ 내 기기 &amp; 백업</span>
+          <span className="text-[12px]">🛠️ 설정도우미</span>
         </button>
       </nav>
     </div>

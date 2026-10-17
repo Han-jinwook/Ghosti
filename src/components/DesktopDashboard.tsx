@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import type { GpuHelperTierId } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
 import { FoundingMemberFomoBar } from './PricingModal';
+import { LoungeView } from './LoungeView';
 
 export const DesktopDashboard: React.FC = () => {
   const {
@@ -29,6 +31,11 @@ export const DesktopDashboard: React.FC = () => {
     openLocalFolder,
     setShowOnboarding,
     setShowProModal,
+    activePricingPlan,
+    gpuHelper24hActive,
+    gpuHelperActiveTier,
+    activateGpuHelper24h,
+    deactivateGpuHelper24h,
     syncState,
     setPrivateSyncStrategy,
     updateSyncSettings,
@@ -59,28 +66,33 @@ export const DesktopDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* ─────────────── 최상단 창립 멤버 선착순 특전 미니멀 바 ─────────────── */}
+      {/* ─────────────── 최상단 4대 라운지 스위처 바 (특판 문구 0%) ─────────────── */}
       <FoundingMemberFomoBar />
 
-      {/* ─────────────── 상단 헤더: 로고 + [🟢 내 PC 엔진 안전 가동 중] 캡슐 + 중앙 3대 탭 + 우측 유틸리티 ─────────────── */}
+      {/* ─────────────── 상단 헤더: 로고 + 서브 타이틀 + [🟢 내 PC 엔진 안전 가동 중] 캡슐 + 중앙 서브메뉴 + 우측 유틸리티 ─────────────── */}
       <header className="sticky top-0 h-15 bg-[#09090B]/95 backdrop-blur-xl z-40 px-5 md:px-8 flex items-center justify-between border-b border-white/10 gap-3">
-        {/* 좌측 브랜드 로고 + [🟢 신호등 보안/연결 상태 캡슐 1개] */}
-        <div className="flex items-center gap-3 min-w-0">
+        {/* 좌측 브랜드 로고 + 서브 타이틀 + [🟢 신호등 보안/연결 상태 캡슐 1개] */}
+        <div className="flex items-center gap-2.5 min-w-0">
           <div
             onClick={() => setDesktopTab('dashboard')}
-            className="flex items-center gap-2.5 cursor-pointer shrink-0"
+            className="flex items-center gap-2 cursor-pointer shrink-0"
           >
             <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/15 flex items-center justify-center">
               <span className="material-symbols-outlined text-primary-container text-[19px] font-bold">
                 graphic_eq
               </span>
             </div>
-            <span className="font-headline-sm text-[18px] text-white tracking-tight font-extrabold">
-              세이씨 <span className="hidden sm:inline text-zinc-400 font-normal text-[14px]">SaySee</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-headline-sm text-[18px] text-white tracking-tight font-extrabold">
+                세이씨 <span className="hidden sm:inline text-zinc-400 font-normal text-[13.5px]">SaySee</span>
+              </span>
+              <span className="hidden xl:inline-flex px-2.5 py-0.5 rounded-md bg-zinc-900/90 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
+                🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
+              </span>
+            </div>
           </div>
 
-          {/* [처방 1] 본 화면 상단의 거대한 초록색 온보딩 박스를 대체하는 단 하나의 세련된 신호등 캡슐 (클릭 시 보안/QR 모달 오픈) */}
+          {/* 본 화면 상단 신호등 상태 캡슐 (클릭 시 보안/QR 모달 오픈) */}
           <button
             type="button"
             onClick={() => setShowOnboarding(true)}
@@ -89,15 +101,30 @@ export const DesktopDashboard: React.FC = () => {
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
             <span className="truncate">
-              {onboardingTrackMode === 'pc_local'
+              {gpuHelper24hActive
+                ? '⚡ 24시간 GPU 클라우드 도우미 가동 중'
+                : onboardingTrackMode === 'pc_local'
                 ? `내 PC 엔진 안전 가동 중 ${pcAgentPairedMobile ? '(폰 연결됨)' : '• QR 연결'}`
                 : '초고속 클라우드 엔진 가동 중 • 보안 안내'}
             </span>
           </button>
         </div>
 
-        {/* 중앙 미니멀 3대 네비게이션 탭 */}
-        <nav className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/90 border border-white/10">
+        {/* 중앙 서브메뉴: 1번 자리 [✨ 무료체험] (정식 구독 활성화 시 Auto-Hide) | 🔍 파워 검색 | 🧹 주치의 정리 | 🛠️ 설정도우미 */}
+        <nav className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/90 border border-white/10 shrink-0">
+          {activePricingPlan === 'free_trial' && (
+            <button
+              onClick={() => setDesktopTab('trial')}
+              className={`px-3.5 py-1.5 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all ${
+                desktopTab === 'trial'
+                  ? 'bg-primary-container text-zinc-950 font-extrabold'
+                  : 'text-primary-container hover:text-white hover:bg-zinc-800/70'
+              }`}
+            >
+              <span>✨ 무료체험</span>
+            </button>
+          )}
+
           <button
             onClick={() => setDesktopTab('dashboard')}
             className={`px-3.5 py-1.5 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all ${
@@ -137,18 +164,17 @@ export const DesktopDashboard: React.FC = () => {
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800/70'
             }`}
           >
-            <span>⚙️ 내 기기 &amp; 백업</span>
+            <span>🛠️ 설정도우미</span>
           </button>
         </nav>
 
-        {/* 우측 유틸리티 버튼 (절제된 다크 버튼 + 앰버 텍스트 포인트) */}
+        {/* 우측 유틸리티 버튼 */}
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowProModal(true)}
-            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-amber-400 font-label-sm text-[12px] font-bold flex items-center gap-1 transition-all"
+            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[12px] font-bold flex items-center gap-1 transition-all"
           >
-            <span>👑 요금제</span>
-            <span className="hidden lg:inline">· 10년 특전</span>
+            <span>💎 요금제 안내</span>
           </button>
 
           <button
@@ -163,7 +189,10 @@ export const DesktopDashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* ─────────────── 탭 1: 🔍 파워 검색 ─────────────── */}
+      {/* ─────────────── 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) ─────────────── */}
+      {desktopTab === 'trial' && <LoungeView />}
+
+      {/* ─────────────── 서브메뉴 2번: 🔍 파워 검색 ─────────────── */}
       {desktopTab === 'dashboard' && (
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-5 md:px-8 py-5 flex flex-col gap-5">
           {/* 1층: 통합 검색창 + 3대 카테고리 탭 + 1줄 추천 칩 / 2층: 접이식 브리핑 보드 아코디언 */}
@@ -545,9 +574,124 @@ export const DesktopDashboard: React.FC = () => {
       {/* ─────────────── 탭 2: 🧹 주치의 정리 ─────────────── */}
       {desktopTab === 'trash' && <SmartTrashView />}
 
-      {/* ─────────────── 탭 3: ⚙️ 내 기기 & 백업 (클라우드 대체 프라이빗 싱크) ─────────────── */}
+      {/* ─────────────── 서브메뉴 4번: 🛠️ 설정도우미 (⚡ 24시간 GPU 클라우드 서버 도우미 & 프라이빗 싱크) ─────────────── */}
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1280px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-5">
+          {/* [필수 반영] 🛠️ 설정도우미 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 카드 */}
+          <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                  🛠️ 설정도우미 핵심 기능
+                </span>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
+                  방장 PC가 꺼져 있거나 고장 났을 때 스마트폰에서 원터치 가동
+                </span>
+              </div>
+              {gpuHelper24hActive ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
+                    🟢 현재 24시간 GPU 클라우드 도우미 가동 중
+                  </span>
+                  <button
+                    type="button"
+                    onClick={deactivateGpuHelper24h}
+                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-semibold"
+                  >
+                    내 PC 모드로 복귀 (클라우드 즉시 소각)
+                  </button>
+                </div>
+              ) : (
+                <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-400 font-label-mono text-[11px]">
+                  현재 상태: 내 PC 직접 구동 모드 (대기 중)
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h1 className="font-headline-md text-[21px] md:text-[23px] text-white font-bold tracking-tight">
+                ⚡ 24시간 GPU 클라우드 서버 도우미 (일 1,000원 / 클럽 규모별 1,000 · 2,000 · 3,000원)
+              </h1>
+              <p className="font-body-sm text-[13px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-4 rounded-xl border border-white/10">
+                내 PC가 꺼져 있을 때 단돈 1,000원(중·대형 클럽 2,000~3,000원)으로 24시간 동안 초고속 GPU 클라우드 도우미를 즉시 가동합니다. 멤버들이 올린 사진·영상의 Gemma 2 인덱싱과 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본을 내 PC로 안전하게 이관한 뒤 클라우드에서는 100% 자동 소각됩니다.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {(
+                [
+                  {
+                    id: 'standard_1000' as GpuHelperTierId,
+                    badge: '개인 / 패밀리 / 10대 학생',
+                    title: '개인 · 패밀리 · 10대 학생 라운지',
+                    price: '24시간 당 1,000원',
+                    sub: '방장 PC OFF 시 24시간 실시간 인덱싱·배포 대행',
+                  },
+                  {
+                    id: 'club_small_1000' as GpuHelperTierId,
+                    badge: '클럽 라운지 (소형)',
+                    title: '소형 클럽 (~20명)',
+                    price: '24시간 당 1,000원',
+                    sub: '20명 기준 모임 사진·영상 24시간 대행',
+                  },
+                  {
+                    id: 'club_medium_2000' as GpuHelperTierId,
+                    badge: '클럽 라운지 (중형)',
+                    title: '중형 클럽 (~100명)',
+                    price: '24시간 당 2,000원',
+                    sub: '100명 기준 모임 사진·영상 24시간 대행',
+                  },
+                  {
+                    id: 'club_large_3000' as GpuHelperTierId,
+                    badge: '클럽 라운지 (대형)',
+                    title: '대형 클럽 (무제한)',
+                    price: '24시간 당 3,000원',
+                    sub: '인원 무제한 대형 클럽 24시간 대행',
+                  },
+                ]
+              ).map((item) => {
+                const active = gpuHelper24hActive && gpuHelperActiveTier === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    className={`p-4 rounded-xl flex flex-col justify-between gap-3 border transition-all ${
+                      active
+                        ? 'bg-zinc-900 border-primary-container shadow-[0_0_20px_rgba(32,247,219,0.14)]'
+                        : 'bg-zinc-950/80 border-white/10'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="font-label-mono text-[10.5px] text-zinc-400">
+                        {item.badge}
+                      </span>
+                      <span className="font-headline-sm text-[15px] text-white font-bold">
+                        {item.title}
+                      </span>
+                      <span className="font-headline-sm text-[18px] text-primary-container font-black mt-0.5">
+                        {item.price}
+                      </span>
+                      <p className="font-body-sm text-[11.5px] text-zinc-400 mt-0.5">
+                        {item.sub}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => activateGpuHelper24h(item.id)}
+                      className={`w-full py-2 rounded-lg font-label-sm text-[12px] font-extrabold transition-all ${
+                        active
+                          ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
+                          : 'bg-primary-container text-zinc-950 hover:opacity-95'
+                      }`}
+                    >
+                      {active ? '✓ 현재 24시간 가동 중' : '⚡ 원터치 24시간 가동'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
@@ -558,9 +702,9 @@ export const DesktopDashboard: React.FC = () => {
               </span>
             </div>
 
-            <h1 className="font-headline-md text-[22px] text-white font-bold tracking-tight">
+            <h2 className="font-headline-md text-[20px] text-white font-bold tracking-tight">
               ⚙️ 클라우드 대체 ‘프라이빗 싱크’ 2-Track 전략 선택
-            </h1>
+            </h2>
 
             <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-white/10 flex items-center gap-3">
               <span className="material-symbols-outlined text-zinc-400 text-[20px] shrink-0">

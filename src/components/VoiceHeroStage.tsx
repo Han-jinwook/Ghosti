@@ -634,20 +634,20 @@ export const VoiceHeroStage: React.FC = () => {
               </div>
             </div>
 
-            {/* 2-C. 차분하고 세련된 다크 카드 형태의 전체 연결 & 요금제 안내 (형광 노란 그라데이션 제거) */}
+            {/* 2-C. 차분하고 세련된 다크 카드 형태의 전체 연결 & 4대 라운지 요금제 안내 */}
             <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-[16px] shrink-0">🚀</span>
+                <span className="text-[16px] shrink-0">🔒</span>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 font-medium truncate">
-                  내 폰과 PC의 나머지 10년 치 모든 사진·동영상·서류를 전부 연결하고 깨끗이 정리하시겠습니까?
+                  마스터 1인 결제로 가족·모임 전원 무료! 4대 라운지 요금제와 24시간 GPU 서버 도우미를 확인해 보세요.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowProModal(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-amber-400 font-label-sm text-[12px] font-bold shrink-0 transition-colors self-start sm:self-auto"
+                className="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-primary-container font-label-sm text-[12px] font-bold shrink-0 transition-colors self-start sm:self-auto"
               >
-                1,900원 단품 / 월 1,100원 (10년 특전) 열기 →
+                💎 4대 라운지 요금제 · 24시간 도우미 안내 →
               </button>
             </div>
           </div>

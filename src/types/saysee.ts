@@ -136,14 +136,40 @@ export interface UndoQuarantineBatch {
 /** [스펙 3] 클라우드 대체 프라이빗 싱크 2-Track 모드 */
 export type PrivateSyncStrategy = 'mirror' | 'shadow';
 
-/** [스펙 4] 카페 런칭용 3단 심플 과금 퍼널 플랜 ID (990원 패스 폐기 -> 무료 체험 / 1회 단품(1,000원 맛보기 포함) / 정기 주치의 멤버십) */
+/** [4대 라운지 스펙] 라운지 카테고리: 개인 | 패밀리 | 클럽 | 10대 학생 */
+export type LoungeType = 'personal' | 'family' | 'club' | 'student';
+
+/** [패밀리 라운지 양가 통합권] 3개 방 분리 ID */
+export type FamilyRoomId = '우리집' | '본가(친가)' | '처가(친정)';
+
+/** [클럽 라운지 규모] 소형(20명 기준) | 중형(100명 기준) | 대형(인원 제한 없음) */
+export type ClubSizeTier = 'small' | 'medium' | 'large';
+
+/** [⚡ 24시간 GPU 클라우드 서버 도우미] 대여 티어 */
+export type GpuHelperTierId =
+  | 'standard_1000'
+  | 'club_small_1000'
+  | 'club_medium_2000'
+  | 'club_large_3000';
+
+/** [4대 라운지 초심플 기본 요금제] 마스터 1인 결제 ➔ 멤버 전원 무료 (특판 문구 제외 순수 요금 구조) */
 export type PricingPlanId =
   | 'free_trial'
-  | 'single_taste_1000'
-  | 'single_mobile_1900'
-  | 'single_bundle_3800'
-  | 'sub_mobile_1100'
-  | 'sub_bundle_2900';
+  | 'personal_single_2900'
+  | 'personal_sub_3900'
+  | 'personal_year_35000'
+  | 'family_home_5900'
+  | 'family_home_year_59000'
+  | 'family_three_8900'
+  | 'family_three_year_89000'
+  | 'club_small_4900'
+  | 'club_small_year_49000'
+  | 'club_medium_7900'
+  | 'club_medium_year_79000'
+  | 'club_large_14900'
+  | 'club_large_year_149000'
+  | 'student_sub_900'
+  | 'student_year_9000';
 
 export interface DuplicateGroup {
   groupId: string;
