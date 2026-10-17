@@ -25,29 +25,27 @@ export const FoundingMemberFomoBar: React.FC = () => {
   return (
     <div
       onClick={() => setShowProModal(true)}
-      className="w-full bg-gradient-to-r from-[#2b0b12] via-[#3d1308] to-[#112432] border-b border-[#FFAB00]/40 px-4 py-2 cursor-pointer hover:brightness-110 transition-all z-40"
+      className="w-full bg-zinc-950/95 border-b border-white/10 px-4 py-1.5 cursor-pointer hover:bg-zinc-900/90 transition-colors z-40"
     >
-      <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <span className="px-2.5 py-0.5 rounded-full bg-[#FF3D00] text-white font-label-mono text-[10px] font-black uppercase tracking-wider animate-pulse shrink-0">
-            FOUNDING MEMBER FOMO
+      <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-amber-400 font-label-mono text-[10px] font-bold tracking-wider shrink-0">
+            FOUNDING MEMBER
           </span>
-          <p className="font-headline-sm text-[12px] md:text-[13.5px] text-white font-extrabold truncate">
-            🔥 창립 멤버 특전: 1년 요금 결제 시 ➔ 최초 100명{' '}
-            <span className="text-[#FFD740] underline">‘평생권’</span> / ~500명{' '}
-            <span className="text-[#00E5FF] underline">‘10년권’</span> / ~1,000명{' '}
-            <span className="text-emerald-300">‘5년권’</span> 자동 승격!{' '}
-            <span className="text-[#FFAB00] font-black">
-              (현재 10년 특전 잔여: {foundingMemberRemainingSeats}석)
+          <p className="font-body-sm text-[12px] md:text-[12.5px] text-zinc-300 font-medium truncate">
+            창립 멤버 특전: 1년 결제 시 최초 100명 <span className="text-amber-400 font-bold">평생권</span> · ~500명{' '}
+            <span className="text-white font-semibold">10년권</span> 자동 승격{' '}
+            <span className="text-amber-400/90 font-semibold">
+              (10년 특전 잔여 {foundingMemberRemainingSeats}석)
             </span>
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="hidden sm:inline-flex px-2.5 py-0.5 rounded-full bg-black/50 border border-outline-variant/40 text-[11px] font-bold text-primary-container">
-            현재 상태: {PLAN_LABELS[activePricingPlan]}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <span className="hidden md:inline-flex text-[11px] text-zinc-400 font-medium">
+            {PLAN_LABELS[activePricingPlan]}
             {activePricingPlan === 'free_trial' &&
-              (freeTrialUsed ? ' (1묶음 무료체험 완료)' : ' (1묶음 무료체험 가능)')}
+              (freeTrialUsed ? ' · 무료체험 완료' : ' · 무료체험 가능')}
           </span>
           <button
             type="button"
@@ -55,9 +53,9 @@ export const FoundingMemberFomoBar: React.FC = () => {
               e.stopPropagation();
               setShowProModal(true);
             }}
-            className="px-3 py-1 rounded-full bg-[#FFAB00] hover:bg-[#FFC400] text-surface-container-lowest font-label-sm text-[11.5px] font-black shadow-[0_0_14px_rgba(255,171,0,0.45)] transition-all"
+            className="px-2.5 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 border border-white/10 text-amber-400 font-label-sm text-[11px] font-bold transition-all"
           >
-            1,900원 단품 / 10년 특전 보기 →
+            요금제 · 10년 특전 보기 →
           </button>
         </div>
       </div>

@@ -4,18 +4,27 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 const BRIEFING_DOC_HINTS = [
   {
     id: 'hint_doc_insurance',
+    label: '📄 삼성화재 자동차 보험 증권 및 특약',
     query: '삼성화재 자동차 보험 증권 및 특약',
     meta: 'PDF 문서 • 2026.05.01 (PC 바탕화면)',
   },
   {
     id: 'hint_doc_manual',
+    label: '📄 원목 의자 단계별 조립 설명서 도면',
     query: '원목 의자 단계별 조립 설명서 도면',
     meta: 'PDF + 촬영 도면 • 2026.08.14 (PC 바탕화면·사진첩)',
   },
   {
     id: 'hint_doc_receipt',
+    label: '📄 수트라하버 리조트 숙박 결제 영수증',
     query: '수트라하버 리조트 숙박 결제 영수증',
     meta: 'PDF 영수증 • 2024.07.11 (스마트폰 다운로드)',
+  },
+  {
+    id: 'hint_doc_passport',
+    label: '🛂 여권 및 항공권 이티켓 사본',
+    query: '여권 신분증 항공권 예약 확인서',
+    meta: '촬영 서류 + PDF • 갤러리·다운로드',
   },
 ];
 
@@ -23,17 +32,17 @@ const BRIEFING_VIDEO_HINTS = [
   {
     id: 'hint_vid_parasailing',
     query: '구명조끼 입고 무지개 낙하산 패러세일링 후 보트 갑판 착지',
-    meta: '🎯 00:18 구간 포착 • 20240719_105706.mp4 (전 구간 7프레임 해부)',
+    meta: '🎯 00:18 구간 포착 • 20240719_105706.mp4 (7구간 해부)',
   },
   {
     id: 'hint_vid_resort_couple',
     query: '야자수 리조트 소파에서 손가락 브이 포즈 취하다가 하트 목걸이 클로즈업',
-    meta: '🎯 00:17 구간 포착 • 20240720_134808.mp4 (전 구간 7프레임 해부)',
+    meta: '🎯 00:17 구간 포착 • 20240720_134808.mp4 (7구간 해부)',
   },
   {
     id: 'hint_vid_airplane_sunrise',
     query: '새벽 비행기 창문 너머 구름 위 일출을 스마트폰 카메라로 찍는 장면',
-    meta: '🎯 00:07 구간 포착 • 20240722_052422.mp4 (전 구간 6프레임 해부)',
+    meta: '🎯 00:07 구간 포착 • 20240722_052422.mp4 (6구간 해부)',
   },
 ];
 
@@ -74,10 +83,6 @@ export const VoiceHeroStage: React.FC = () => {
     localDocuments,
     videoSceneItems,
     matchedVideoScenes,
-    trialScanPermissions,
-    onboardingTrackMode,
-    setOnboardingTrackMode,
-    pcAgentPairedMobile,
     activeQuery,
     isListening,
     liveWaveBands,
@@ -90,13 +95,14 @@ export const VoiceHeroStage: React.FC = () => {
     runBriefingHintChip,
     setSelectedVideoModal,
     openLocalFolder,
-    setShowOnboarding,
     setShowProModal,
     setDesktopTab,
     setMobileTab,
   } = useSaySeeStore();
 
   const [textInput, setTextInput] = useState('');
+  // 2층 브리핑 보드 아코디언: 기본은 깔끔하게 접힌(Collapsed) 상태, 검색 실행 시에도 자동 접힘(Auto-Collapse)
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false);
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
   const activeTrashCount = useMemo(
@@ -107,17 +113,13 @@ export const VoiceHeroStage: React.FC = () => {
     () => activePhotos.filter((p) => p.isVaultDocument).length,
     [activePhotos]
   );
-  const totalIndexedDocs = localDocuments.length + vaultPhotoCount; // 12 + 8 = 20건
+  const totalIndexedDocs = localDocuments.length + vaultPhotoCount; // 20건
   const totalDissectedSegments = useMemo(
     () => videoSceneItems.reduce((acc, v) => acc + v.timelineFrames.length, 0),
     [videoSceneItems]
   );
 
-  const handleTextSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = textInput.trim();
-    if (!q) return;
-    await runTextQuery(q);
+  const scrollToResults = () => {
     if (typeof document !== 'undefined') {
       window.setTimeout(() => {
         document.getElementById('saysee-search-results')?.scrollIntoView({
@@ -128,15 +130,27 @@ export const VoiceHeroStage: React.FC = () => {
     }
   };
 
+  const handleTextSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = textInput.trim();
+    if (!q) return;
+    setIsBriefingOpen(false); // 검색 시 브리핑 아코디언 자동 접힘 (Auto-Collapse)
+    await runTextQuery(q);
+    scrollToResults();
+  };
+
   const handleBriefingChipClick = (target: 'doc' | 'video', query: string) => {
     setTextInput(query);
+    setIsBriefingOpen(false); // 칩 클릭 시 브리핑 아코디언 자동 접힘 (Auto-Collapse)
     void runBriefingHintChip(target, query);
   };
 
   const handleGalleryChipClick = (query: string) => {
     setTextInput(query);
+    setIsBriefingOpen(false); // 칩 클릭 시 브리핑 아코디언 자동 접힘 (Auto-Collapse)
     setSearchSpace('gallery');
     void runTextQuery(query);
+    scrollToResults();
   };
 
   const isMobile = layout === 'mobile';
@@ -148,522 +162,13 @@ export const VoiceHeroStage: React.FC = () => {
   const topMatchedVideo = matchedVideoScenes[0];
 
   return (
-    <section className="w-full flex flex-col gap-4">
-      {/* ─────────────── [1. 온보딩 프레임 대전환] Track A (내 PC 직접 구동 권장 + QR 모바일 연결) vs Track B (모바일 단독 시 클라우드 GPU 서버 무료 대여) ─────────────── */}
-      <div className="w-full p-4 md:px-5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072a34]/95 to-surface-container-high border border-emerald-400/55 shadow-md flex flex-col gap-2.5">
-        {/* 1단: 좌측 트랙 선택 버튼 + 우측 QR 모바일 동시 페어링 & 검진 허용 배지 */}
-        <div className="w-full flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setOnboardingTrackMode('pc_local')}
-              className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-black transition-all flex items-center gap-1.5 border ${
-                onboardingTrackMode === 'pc_local'
-                  ? 'bg-emerald-400 text-surface-container-lowest border-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.4)]'
-                  : 'bg-black/40 text-emerald-300 border-emerald-400/35 hover:border-emerald-400'
-              }`}
-            >
-              <span>💻 내 PC 직접 구동 (권장 · 외부 전송 0%)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setOnboardingTrackMode('cloud_rental')}
-              className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-black transition-all flex items-center gap-1.5 border ${
-                onboardingTrackMode === 'cloud_rental'
-                  ? 'bg-primary-container text-on-primary-container border-primary-container shadow-[0_0_14px_rgba(0,229,255,0.4)]'
-                  : 'bg-black/40 text-primary-container border-primary-container/35 hover:border-primary-container'
-              }`}
-            >
-              <span>📱 모바일 단독: GPU 서버 무료 대여</span>
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowOnboarding(true)}
-              className="px-3 py-1.5 rounded-xl bg-black/55 hover:bg-black/75 border border-emerald-400/55 text-emerald-300 font-label-mono text-[11.5px] font-extrabold flex items-center gap-1.5 transition-all shrink-0"
-            >
-              <span className="material-symbols-outlined text-[15px]">qr_code_2</span>
-              <span>
-                📱 QR 모바일 동시 페어링 {pcAgentPairedMobile ? '(연결됨)' : '(스캔하기)'}
-              </span>
-            </button>
-            <span className="px-2.5 py-1.5 rounded-xl bg-black/45 border border-outline-variant/35 font-label-mono text-[11px] text-on-surface-variant font-bold hidden md:inline-flex items-center shrink-0">
-              검진 허용: {trialScanPermissions.gallery ? '☑️사진첩 ' : ''}
-              {trialScanPermissions.downloads ? '☑️다운로드 ' : ''}
-              {trialScanPermissions.desktop ? '☑️바탕화면' : ''}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowOnboarding(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-on-primary-container font-label-sm text-[11.5px] font-black shadow-[0_0_14px_rgba(0,229,255,0.35)] transition-all shrink-0"
-            >
-              🚀 내 PC 안심 체험 &amp; QR 연결 모달
-            </button>
-          </div>
-        </div>
-
-        {/* 2단: 전체 너비(w-full) 1줄 보안 안심 상태 안내 바 (배지 겹침 및 줄바꿈 깨짐 원천 차단) */}
-        <div className="w-full px-3.5 py-2 rounded-xl bg-black/40 border border-emerald-400/30 flex items-center justify-between gap-3">
-          <span className="font-label-md text-[12px] md:text-[13px] text-white font-bold leading-snug">
-            {onboardingTrackMode === 'pc_local'
-              ? '🔒 MS EV 인증 SaySee_PC_Agent.exe 가동 중: 파일이 외부로 단 1바이트도 나가지 않고 100% 내 PC 내부에서만 안전하게 분석됩니다.'
-              : '⚡ 스마트폰 발열·배터리 보호를 위해 세이씨 초고속 GPU 서버 무료 대여 중 (무거운 원본 미전송 · 서버 RAM에서 0.1초 연산 후 즉시 자동 소각)'}
-          </span>
-          <span className="hidden lg:inline-block font-label-mono text-[11px] text-emerald-300 font-bold shrink-0">
-            {onboardingTrackMode === 'pc_local' ? '외부 전송 0 Byte • 100% 로컬 구동' : '하드디스크 저장 0건 • Zero-Retention'}
-          </span>
-        </div>
-      </div>
-
-      {/* ─────────────── [2. 체험 완료 브리핑 보드] 동영상 3개 전 구간(Full-Timeline) 완전 해부 + 서류 20건 ─────────────── */}
-      <div className="w-full rounded-3xl bg-gradient-to-br from-[#071f29] via-surface-container-low to-[#1c1607] border-2 border-primary-container/45 p-5 md:p-6 shadow-[0_0_40px_rgba(0,229,255,0.14)] flex flex-col gap-4">
-        {/* 브리핑 헤더 & 분석 날짜 범위 */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-outline-variant/25">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary-container font-label-mono text-[10.5px] font-black uppercase">
-                FREE TRIAL BRIEFING BOARD
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-black/50 border border-outline-variant/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-                📅 역추적 분석 구간: 2024.07.11 ~ 2026.10.14 (1분 이내 초고속 색인 완료)
-              </span>
-            </div>
-            <h2 className="font-headline-md text-[17px] md:text-[20px] text-white font-extrabold tracking-tight mt-0.5">
-              🎉 무료 체험 분석 완료! (
-              <button
-                type="button"
-                onClick={() => {
-                  if (isMobile) setMobileTab('trash');
-                  else setDesktopTab('trash');
-                }}
-                className="text-emerald-300 underline hover:opacity-90"
-              >
-                🧹 정리 대상 중복/연사 {activeTrashCount}장 발견
-              </button>{' '}
-              | <span className="text-[#FFAB00]">📄 최근 서류 {totalIndexedDocs}건</span> 및{' '}
-              <span className="text-primary-container">
-                🎬 최신 동영상 {videoSceneItems.length}개 전 구간({totalDissectedSegments}개 프레임)
-              </span>{' '}
-              완전 해부 완료)
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (isMobile) setMobileTab('trash');
-              else setDesktopTab('trash');
-            }}
-            className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-300 font-label-sm text-[12px] font-extrabold shrink-0 self-start lg:self-auto"
-          >
-            🧹 중복·연사 {activeTrashCount}장 진단서 바로 보기 →
-          </button>
-        </div>
-
-        {/* [핵심 지시사항 2] 해부된 최신 동영상 3개 썸네일 프리뷰 & 자유 검색 선언 배너 */}
-        <div className="p-4 rounded-2xl bg-black/55 border-2 border-primary-container/55 flex flex-col gap-3 shadow-[0_0_24px_rgba(0,229,255,0.12)]">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-            <p className="font-headline-sm text-[13.5px] md:text-[14.5px] text-white font-extrabold leading-relaxed">
-              🎬 최근 동영상 3개를 처음부터 끝까지 <span className="text-primary-container">1초 단위로 완벽 해부(총 {totalDissectedSegments}개 구간)</span>했습니다! 아래 추천 힌트뿐만 아니라,{' '}
-              <span className="text-[#FFD740] underline decoration-[#FFD740]/60">
-                이 영상 3개 안에 스쳐 지나가는 어떤 사물이나 행동이든 검색창에 자유롭게 입력해서 시험해 보세요!
-              </span>
-            </p>
-            <span className="px-2.5 py-1 rounded-full bg-primary-container/20 border border-primary-container/50 text-primary-container font-label-mono text-[10.5px] font-black shrink-0 self-start md:self-auto">
-              00:00 ~ 끝 전 구간 색인 • 타임라인 점프 재생 지원
-            </span>
-          </div>
-
-          {/* 해부된 동영상 3개 썸네일 카드 (포착된 matchedSeekSec 시점의 실제 비디오 프레임 미리보기 지원) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-            {videoSceneItems.map((baseVid, idx) => {
-              const liveVid = matchedVideoScenes.find((m) => m.id === baseVid.id) ?? baseVid;
-              const isTopMatched = searchSpace === 'video' && topMatchedVideo?.id === baseVid.id;
-              return (
-                <div
-                  key={baseVid.id}
-                  onClick={() => {
-                    setSearchSpace('video');
-                    setSelectedVideoModal(liveVid, liveVid.matchedSeekSec);
-                  }}
-                  className={`group p-3 rounded-xl flex flex-col gap-2 cursor-pointer transition-all border-2 ${
-                    isTopMatched
-                      ? 'bg-primary-container/15 border-[#FFD740] shadow-[0_0_24px_rgba(255,215,64,0.3)]'
-                      : 'bg-surface-container-high/90 hover:bg-surface-bright border-primary-container/35 hover:border-primary-container'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative w-24 h-16 rounded-lg overflow-hidden bg-black shrink-0 border border-primary-container/50">
-                      <video
-                        key={`${liveVid.id}-${liveVid.matchedSeekSec}`}
-                        src={`${liveVid.videoUrl}#t=${liveVid.matchedSeekSec}`}
-                        poster={liveVid.thumbUrl}
-                        preload="metadata"
-                        muted
-                        playsInline
-                        onLoadedMetadata={(e) => {
-                          try {
-                            e.currentTarget.currentTime = liveVid.matchedSeekSec;
-                          } catch {
-                            // ignore
-                          }
-                        }}
-                        className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform"
-                      />
-                      <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/85 text-white font-label-mono text-[9.5px] font-bold">
-                        {liveVid.durationText}
-                      </span>
-                      <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-primary-container text-on-primary-container font-label-mono text-[9px] font-black">
-                        영상 #{idx + 1}
-                      </span>
-                    </div>
-                    <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-label-mono text-[10px] text-emerald-300 font-black">
-                          00:00~{liveVid.durationText} ({liveVid.timelineFrames.length}구간 해부)
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary-container font-label-mono text-[9.5px] font-black shrink-0">
-                          ▶ {liveVid.matchedTimestamp} 재생
-                        </span>
-                      </div>
-                      <span className="font-label-md text-[12px] text-white font-extrabold truncate">
-                        {liveVid.title}
-                      </span>
-                      <span className="font-body-sm text-[10.5px] text-[#FFD740] font-bold truncate">
-                        {liveVid.matchedFrameCaption}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 클릭 즉시 해당 초(Sec)로 점프하는 타임라인 버튼들 */}
-                  <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-outline-variant/25">
-                    <span className="font-label-mono text-[9.5px] text-on-surface-variant mr-0.5">
-                      초(Sec) 점프:
-                    </span>
-                    {liveVid.timelineFrames.map((f) => {
-                      const isCurrentSec = liveVid.matchedSeekSec === f.timeSec;
-                      return (
-                        <button
-                          key={f.timeSec}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSearchSpace('video');
-                            setSelectedVideoModal(liveVid, f.timeSec);
-                          }}
-                          title={`${f.timestampText} (${f.phaseLabel}): ${f.sceneCaption}`}
-                          className={`px-1.5 py-0.5 rounded font-label-mono text-[9.5px] font-black transition-all ${
-                            isCurrentSec
-                              ? 'bg-[#FFD740] text-black shadow-[0_0_10px_rgba(255,215,64,0.5)]'
-                              : 'bg-black/60 hover:bg-primary-container text-white/85 hover:text-on-primary-container'
-                          }`}
-                        >
-                          {f.timestampText}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 영상 3개 속 스쳐 지나가는 사물/행동 자유 검색 테스트 칩 (클릭 시 즉시 해당 초(Sec) 동영상 재생 모달 오픈!) */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            <span className="font-label-mono text-[11px] text-[#FFD740] font-extrabold mr-1">
-              🔍 스쳐 지나가는 사물·행동 즉시 포착 시험 (클릭 시 해당 초(Sec) 즉시 점프 재생):
-            </span>
-            {FREE_SEARCH_MICRO_OBJECT_CHIPS.map((item) => {
-              const isSelectedChip = activeQuery === item.query;
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => handleBriefingChipClick('video', item.query)}
-                  className={`px-3 py-1.5 rounded-lg border font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
-                    isSelectedChip
-                      ? 'bg-[#FFD740] text-black border-[#FFD740] shadow-[0_0_16px_rgba(255,215,64,0.55)] scale-[1.02]'
-                      : 'bg-surface-container hover:bg-primary-container hover:text-on-primary-container border-primary-container/50 text-white'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 좌우 2열: 📄 [서류 내용 힌트 칩] (3개) & 🎬 [동영상 장면 힌트 칩] (3개) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* 좌측: 📄 [서류 내용 힌트 칩] */}
-          <div className="p-4 rounded-2xl bg-black/40 border border-[#FFAB00]/45 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-headline-sm text-[14px] text-[#FFAB00] font-extrabold flex items-center gap-1.5">
-                <span>📄 [서류 내용 힌트 칩]</span>
-                <span className="text-[11px] text-on-surface-variant font-normal">
-                  (최근 서류 {totalIndexedDocs}건 중 추출)
-                </span>
-              </span>
-              <span className="px-2 py-0.5 rounded bg-[#FFAB00]/20 text-[#FFAB00] font-label-mono text-[10px] font-bold">
-                PDF + 영수증 + 설명서
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {BRIEFING_DOC_HINTS.map((chip) => {
-                const isActive = searchSpace === 'vault' && activeQuery === chip.query;
-                return (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() => handleBriefingChipClick('doc', chip.query)}
-                    className={`px-3.5 py-2.5 rounded-xl text-left transition-all flex items-center justify-between gap-2 border ${
-                      isActive
-                        ? 'bg-[#FFAB00] text-surface-container-lowest font-black border-[#FFAB00] shadow-[0_0_16px_rgba(255,171,0,0.4)]'
-                        : 'bg-surface-container-high/90 hover:bg-surface-bright text-white border-[#FFAB00]/35 hover:border-[#FFAB00]'
-                    }`}
-                  >
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[13px] md:text-[13.5px] font-extrabold truncate">
-                        📄 “{chip.query}”
-                      </span>
-                      <span
-                        className={`text-[11px] truncate ${
-                          isActive ? 'text-surface-container-lowest/80' : 'text-on-surface-variant'
-                        }`}
-                      >
-                        {chip.meta}
-                      </span>
-                    </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-full font-label-mono text-[10px] shrink-0 ${
-                        isActive
-                          ? 'bg-black/20 text-surface-container-lowest font-black'
-                          : 'bg-[#FFAB00]/20 text-[#FFAB00] font-bold'
-                      }`}
-                    >
-                      0.04초 검색 →
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 우측: 🎬 [동영상 3개 전 구간 해부 힌트 칩] */}
-          <div className="p-4 rounded-2xl bg-black/40 border border-primary-container/50 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-headline-sm text-[14px] text-primary-container font-extrabold flex items-center gap-1.5">
-                <span>🎬 [동영상 3개 전 구간 힌트 칩]</span>
-                <span className="text-[11px] text-on-surface-variant font-normal">
-                  (총 {totalDissectedSegments}개 타임라인 구간 중 포착)
-                </span>
-              </span>
-              <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-mono text-[10px] font-bold">
-                🎯 해당 초(Sec) 점프 재생
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {BRIEFING_VIDEO_HINTS.map((chip) => {
-                const isActive = searchSpace === 'video' && activeQuery === chip.query;
-                return (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() => handleBriefingChipClick('video', chip.query)}
-                    className={`px-3.5 py-2.5 rounded-xl text-left transition-all flex items-center justify-between gap-2 border ${
-                      isActive
-                        ? 'bg-primary-container text-on-primary-container font-black border-primary-container shadow-[0_0_16px_rgba(0,229,255,0.4)]'
-                        : 'bg-surface-container-high/90 hover:bg-surface-bright text-white border-primary-container/35 hover:border-primary-container'
-                    }`}
-                  >
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[13px] md:text-[13.5px] font-extrabold truncate">
-                        🎬 “{chip.query}”
-                      </span>
-                      <span
-                        className={`text-[11px] truncate ${
-                          isActive ? 'text-on-primary-container/80' : 'text-on-surface-variant'
-                        }`}
-                      >
-                        {chip.meta}
-                      </span>
-                    </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-full font-label-mono text-[10px] shrink-0 ${
-                        isActive
-                          ? 'bg-black/20 text-on-primary-container font-black'
-                          : 'bg-primary-container/20 text-primary-container font-bold'
-                      }`}
-                    >
-                      구간 포착 →
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* 브리핑 보드 바로 아래: 전환(Conversion) 유도 버튼 */}
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => setShowProModal(true)}
-            className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#FFAB00] via-[#FFC400] to-[#00E5FF] text-surface-container-lowest font-headline-sm text-[13.5px] md:text-[15px] font-black shadow-[0_0_28px_rgba(255,171,0,0.35)] hover:brightness-105 active:scale-[0.99] transition-all flex flex-wrap items-center justify-center gap-2"
-          >
-            <span>🚀 내 폰과 PC의 나머지 10년 치 모든 사진·동영상·서류를 전부 연결하고 깨끗이 청소하시겠습니까?</span>
-            <span className="px-2.5 py-0.5 rounded-full bg-black/80 text-[#FFD740] text-[11.5px] font-extrabold">
-              1,900원 단품 / 월 1,100원 (선착순 10년권) 열기 →
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* ─────────────── 검색 공간 3-Track 스위칭 필터 & 통합 문장 검색창 ─────────────── */}
-      <div className="w-full rounded-3xl bg-surface-container/85 backdrop-blur-2xl border border-outline-variant/30 p-5 md:p-6 shadow-xl flex flex-col gap-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-outline-variant/25">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setTextInput('');
-                setSearchSpace('video');
-              }}
-              className={`px-4 py-2.5 rounded-2xl font-label-lg text-[13px] md:text-[13.5px] font-extrabold flex items-center gap-2 transition-all border ${
-                searchSpace === 'video'
-                  ? 'bg-primary-container text-on-primary-container border-primary-container shadow-[0_0_20px_rgba(0,229,255,0.35)]'
-                  : 'bg-surface-container-lowest/80 hover:bg-surface-container-high text-on-surface border-primary-container/35'
-              }`}
-            >
-              <span>🎬 동영상 3개 전 구간 검색</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
-                  searchSpace === 'video'
-                    ? 'bg-black/25 text-on-primary-container'
-                    : 'bg-primary-container/20 text-primary-container'
-                }`}
-              >
-                {videoSceneItems.length}개 영상 · {totalDissectedSegments}구간
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTextInput('');
-                setSearchSpace('vault');
-              }}
-              className={`px-4 py-2.5 rounded-2xl font-label-lg text-[13px] md:text-[13.5px] font-extrabold flex items-center gap-2 transition-all border ${
-                searchSpace === 'vault'
-                  ? 'bg-[#FFAB00] text-surface-container-lowest border-[#FFAB00] shadow-[0_0_24px_rgba(255,171,0,0.45)]'
-                  : 'bg-surface-container-lowest/80 hover:bg-surface-container-high text-on-surface border-[#FFAB00]/40'
-              }`}
-            >
-              <span>📁 스마트 서류함</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
-                  searchSpace === 'vault'
-                    ? 'bg-black/25 text-surface-container-lowest'
-                    : 'bg-[#FFAB00]/20 text-[#FFAB00]'
-                }`}
-              >
-                최근 {totalIndexedDocs}건 (PDF {localDocuments.length} + 서류사진 {vaultPhotoCount})
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTextInput('');
-                setSearchSpace('gallery');
-              }}
-              className={`px-4 py-2.5 rounded-2xl font-label-lg text-[13px] md:text-[13.5px] font-extrabold flex items-center gap-2 transition-all border ${
-                searchSpace === 'gallery'
-                  ? 'bg-emerald-400 text-surface-container-lowest border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.35)]'
-                  : 'bg-surface-container-lowest/80 hover:bg-surface-container-high text-on-surface-variant border-outline-variant/30'
-              }`}
-            >
-              <span>🖼️ 전체 갤러리 통합</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
-                  searchSpace === 'gallery'
-                    ? 'bg-black/25 text-surface-container-lowest'
-                    : 'bg-surface-container-high text-on-surface-variant'
-                }`}
-              >
-                {activePhotos.length}장
-              </span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {searchSpace === 'vault' && (
-              <button
-                type="button"
-                onClick={() => void openLocalFolder('docs')}
-                className="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-[#FFAB00] font-label-sm text-[11.5px] font-bold border border-[#FFAB00]/35 shrink-0"
-              >
-                📂 PDF 서류폴더 열기
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* 모바일 화면이거나 음성 녹음 중일 때: 중앙 마이크 영역 */}
-        {(isMobile || isListening) && (
-          <div className="flex flex-col items-center justify-center gap-2.5 py-1">
-            <button
-              type="button"
-              onClick={() => void toggleMicRecording()}
-              aria-label="음성으로 찾기"
-              className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-[0_0_32px_rgba(0,229,255,0.45)] ${
-                isListening
-                  ? 'bg-primary-container text-on-primary-container scale-105 ring-4 ring-primary-container/50'
-                  : 'bg-gradient-to-tr from-secondary-container via-[#00626e] to-primary-container text-primary-container hover:scale-105 active:scale-95'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[30px]">
-                {isListening ? 'stop_circle' : 'mic'}
-              </span>
-            </button>
-
-            {isListening ? (
-              <div className="flex flex-col items-center gap-1.5">
-                <div className="flex items-center gap-1 h-7">
-                  {liveWaveBands.slice(0, 12).map((amp, i) => (
-                    <span
-                      key={i}
-                      style={{ height: `${Math.max(6, Math.round(amp * 28))}px` }}
-                      className="w-1.5 rounded-full bg-primary-container transition-all duration-100"
-                    />
-                  ))}
-                </div>
-                <p className="font-headline-sm text-[14px] text-primary-container font-bold">
-                  {interimSttPreview
-                    ? `“${interimSttPreview}”`
-                    : '말씀해 주세요... (말씀이 끝나면 자동으로 즉시 검색됩니다)'}
-                </p>
-              </div>
-            ) : (
-              <p className="font-body-sm text-[12px] text-on-surface-variant text-center">
-                마이크를 누르고 동영상 3개 속 스쳐 지나가는 사물·행동이나 서류 내용을 말씀해 보세요
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* PC & 모바일 공통: 자연어 문장형 통합 검색창 */}
-        <form onSubmit={handleTextSubmit} className="w-full flex items-center gap-2.5">
+    <section className="w-full flex flex-col gap-3">
+      {/* ─────────────── [1층: 최상단 주인공] 통합 검색창 + 3대 카테고리 스위칭 탭 + 탭 맞춤형 1줄 추천 칩 ─────────────── */}
+      <div className="w-full rounded-2xl bg-[#18181B] border border-white/10 p-4 md:p-5 shadow-lg flex flex-col gap-3.5">
+        {/* 1-A. 자연어 문장형 통합 검색창 (최상단 배치) */}
+        <form onSubmit={handleTextSubmit} className="w-full flex items-center gap-2">
           <div className="relative flex-1 flex items-center">
-            <span
-              className={`material-symbols-outlined text-[22px] absolute left-4 pointer-events-none ${
-                searchSpace === 'vault' ? 'text-[#FFAB00]' : 'text-primary-container'
-              }`}
-            >
+            <span className="material-symbols-outlined text-[20px] absolute left-4 pointer-events-none text-zinc-400">
               {searchSpace === 'vault'
                 ? 'folder_managed'
                 : searchSpace === 'video'
@@ -676,87 +181,464 @@ export const VoiceHeroStage: React.FC = () => {
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={
                 searchSpace === 'vault'
-                  ? '서류·영수증·계약서 내용을 입력해 보세요 (예: "삼성화재 자동차 보험 증권 및 특약", "원목 의자 조립 설명서")'
+                  ? '서류·영수증·계약서 검색 (예: "삼성화재 자동차 보험 증권", "원목 의자 조립 설명서")'
                   : searchSpace === 'video'
-                  ? '해부된 영상 3개 속 어떤 사물·행동이든 입력해 보세요 (예: "하트 목걸이", "밀짚모자 선글라스", "구름 위 일출 스마트폰 촬영")'
-                  : '기억나는 장면을 문장으로 편하게 말해 보세요 (예: "나무 다리 위에서 산책하는 모습", "밤거리 보며 한잔하는 분위기")'
+                  ? '동영상 3개 속 사물·행동 검색 (예: "하트 목걸이 클로즈업", "밀짚모자 선글라스", "보트 밧줄 매듭")'
+                  : '기억나는 장면을 문장으로 검색해 보세요 (예: "나무 다리 위에서 산책하는 모습", "밤거리 보며 한잔하는 분위기")'
               }
-              className={`w-full h-14 pl-12 pr-28 rounded-2xl bg-surface-container-lowest/95 border outline-none font-body-md text-[14px] md:text-[15px] text-on-surface placeholder:text-outline transition-all ${
-                searchSpace === 'vault'
-                  ? 'border-[#FFAB00]/50 focus:border-[#FFAB00] focus:shadow-[0_0_20px_rgba(255,171,0,0.25)]'
-                  : 'border-outline-variant/50 focus:border-primary-container focus:shadow-[0_0_20px_rgba(0,229,255,0.25)]'
-              }`}
+              className="w-full h-12 md:h-13 pl-11 pr-24 rounded-xl bg-zinc-950/90 border border-white/10 focus:border-primary-container outline-none font-body-md text-[13.5px] md:text-[14.5px] text-white placeholder:text-zinc-500 transition-colors"
             />
             {textInput && (
               <button
                 type="button"
                 onClick={() => setTextInput('')}
-                className="absolute right-24 text-on-surface-variant hover:text-on-surface p-1"
+                className="absolute right-20 text-zinc-400 hover:text-white p-1"
                 title="지우기"
               >
-                <span className="material-symbols-outlined text-[18px]">close</span>
+                <span className="material-symbols-outlined text-[17px]">close</span>
               </button>
             )}
             <button
               type="submit"
-              className={`absolute right-2 h-10 px-5 rounded-xl font-label-lg text-[14px] font-extrabold shadow-sm transition-all ${
-                searchSpace === 'vault'
-                  ? 'bg-[#FFAB00] hover:bg-[#FFC400] text-surface-container-lowest'
-                  : 'bg-primary-container hover:opacity-95 text-on-primary-container'
-              }`}
+              className="absolute right-1.5 h-9 md:h-10 px-4 rounded-lg bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold transition-all"
             >
               검색
             </button>
           </div>
 
-          {!isMobile && (
-            <button
-              type="button"
-              onClick={() => void toggleMicRecording()}
-              title="음성으로 검색"
-              className={`h-14 px-4 rounded-2xl border flex items-center gap-2 font-label-lg text-[14px] font-bold shrink-0 transition-all ${
-                isListening
-                  ? 'bg-primary-container text-on-primary-container border-primary-container shadow-[0_0_20px_rgba(0,229,255,0.4)]'
-                  : 'bg-surface-container-high hover:bg-surface-bright text-on-surface border-outline-variant/40'
+          <button
+            type="button"
+            onClick={() => void toggleMicRecording()}
+            title="음성으로 검색"
+            className={`h-12 md:h-13 px-3.5 rounded-xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 transition-all ${
+              isListening
+                ? 'bg-primary-container text-zinc-950 border-primary-container'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/10'
+            }`}
+          >
+            <span
+              className={`material-symbols-outlined text-[20px] ${
+                isListening ? 'text-zinc-950' : 'text-primary-container'
               }`}
             >
-              <span className="material-symbols-outlined text-primary-container text-[22px]">
-                {isListening ? 'stop_circle' : 'mic'}
-              </span>
-              <span className="hidden sm:inline">{isListening ? '듣는 중...' : '음성 검색'}</span>
-            </button>
-          )}
+              {isListening ? 'stop_circle' : 'mic'}
+            </span>
+            <span className="hidden sm:inline">{isListening ? '듣는 중...' : '음성'}</span>
+          </button>
         </form>
 
-        {/* 전체 갤러리 모드일 때 추가 노출: 내 사진 팩트 조합 문장 샘플 */}
-        {searchSpace === 'gallery' && (
-          <div className="flex flex-col gap-2 pt-0.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-label-sm text-[12px] text-on-surface-variant font-semibold">
-                ✨ 내 사진첩 팩트 조합 문장 샘플:
+        {/* 음성 인식 중일 때만 슬림하게 열리는 파형 피드백 */}
+        {isListening && (
+          <div className="px-3.5 py-2 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-0.5 h-4 shrink-0">
+                {liveWaveBands.slice(0, 8).map((amp, i) => (
+                  <span
+                    key={i}
+                    style={{ height: `${Math.max(4, Math.round(amp * 16))}px` }}
+                    className="w-1 rounded-full bg-primary-container transition-all duration-100"
+                  />
+                ))}
+              </div>
+              <span className="font-label-md text-[12.5px] text-primary-container font-bold truncate">
+                {interimSttPreview
+                  ? `“${interimSttPreview}”`
+                  : '말씀해 주세요... (말씀이 끝나면 즉시 검색됩니다)'}
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* 1-B. 3대 카테고리 스위칭 탭 (무채색 다크그레이 베이스 + 선택된 탭에만 단일 민트 포인트) */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setTextInput('');
+                setSearchSpace('gallery');
+              }}
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+                searchSpace === 'gallery'
+                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>🖼️ 전체 갤러리</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
+                  searchSpace === 'gallery' ? 'bg-black/20 text-zinc-950 font-black' : 'text-zinc-400'
+                }`}
+              >
+                {activePhotos.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTextInput('');
+                setSearchSpace('vault');
+              }}
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+                searchSpace === 'vault'
+                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>📁 스마트 서류함</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
+                  searchSpace === 'vault' ? 'bg-black/20 text-zinc-950 font-black' : 'text-zinc-400'
+                }`}
+              >
+                {totalIndexedDocs}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTextInput('');
+                setSearchSpace('video');
+              }}
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+                searchSpace === 'video'
+                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>🎬 동영상 해부</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono ${
+                  searchSpace === 'video' ? 'bg-black/20 text-zinc-950 font-black' : 'text-zinc-400'
+                }`}
+              >
+                {videoSceneItems.length}개·{totalDissectedSegments}구간
+              </span>
+            </button>
+          </div>
+
+          {searchSpace === 'vault' && !isMobile && (
+            <button
+              type="button"
+              onClick={() => void openLocalFolder('docs')}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10 shrink-0"
+            >
+              📂 로컬 서류폴더 열기
+            </button>
+          )}
+        </div>
+
+        {/* 1-C. 선택한 탭에 맞는 추천 검색어 칩 1줄 가로 스크롤 (주절주절 긴 설명 없이 깔끔하게 1줄!) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+          <span className="font-label-mono text-[11px] text-zinc-400 font-semibold shrink-0 mr-1">
+            추천 힌트:
+          </span>
+
+          {searchSpace === 'video' &&
+            FREE_SEARCH_MICRO_OBJECT_CHIPS.map((item) => {
+              const isSelectedChip = activeQuery === item.query;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => handleBriefingChipClick('video', item.query)}
+                  className={`px-3 py-1.5 rounded-lg border font-label-sm text-[12px] font-medium transition-all shrink-0 cursor-pointer ${
+                    isSelectedChip
+                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                      : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border-white/10'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+
+          {searchSpace === 'vault' &&
+            BRIEFING_DOC_HINTS.map((chip) => {
+              const isSelectedChip = activeQuery === chip.query;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => handleBriefingChipClick('doc', chip.query)}
+                  className={`px-3 py-1.5 rounded-lg border font-label-sm text-[12px] font-medium transition-all shrink-0 cursor-pointer ${
+                    isSelectedChip
+                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                      : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border-white/10'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+
+          {searchSpace === 'gallery' && (
+            <>
+              {activeSentencePool.map((chip) => {
+                const isSelectedChip = activeQuery === chip.query;
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => handleGalleryChipClick(chip.query)}
+                    className={`px-3 py-1.5 rounded-lg border font-label-sm text-[12px] font-medium transition-all shrink-0 cursor-pointer ${
+                      isSelectedChip
+                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                        : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border-white/10'
+                    }`}
+                  >
+                    ✨ {chip.query}
+                  </button>
+                );
+              })}
               {sentenceChips.length > 4 && (
                 <button
                   type="button"
                   onClick={cycleSentenceChips}
-                  className="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-bright text-primary font-label-sm text-[11px] font-bold flex items-center gap-1 border border-outline-variant/30 transition-all"
+                  className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 font-label-sm text-[11.5px] font-medium flex items-center gap-1 border border-white/10 shrink-0"
                 >
                   <span className="material-symbols-outlined text-[14px]">autorenew</span>
-                  <span>다른 문장 샘플</span>
+                  <span>다른 문장</span>
                 </button>
               )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ─────────────── [2층: 접고 펴는 스마트 가이드 바 (Collapsible Accordion)] ─────────────── */}
+      <div className="w-full rounded-2xl bg-zinc-900/70 border border-white/10 overflow-hidden transition-all">
+        {/* 접힌 상태에서도 항상 보이는 깔끔한 1줄 요약 바 */}
+        <div className="w-full px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setIsBriefingOpen((prev) => !prev)}
+            className="flex items-center gap-2 text-left min-w-0 flex-1 cursor-pointer group"
+          >
+            <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-primary-container font-label-mono text-[10.5px] font-bold shrink-0">
+              ✨ 무료 체험 준비 완료
+            </span>
+            <span className="font-body-sm text-[12.5px] md:text-[13px] text-zinc-300 font-medium truncate">
+              서류 <strong className="text-white">{totalIndexedDocs}건</strong> · 동영상{' '}
+              <strong className="text-white">{videoSceneItems.length}개({totalDissectedSegments}구간)</strong> 해부됨 · 중복/연사{' '}
+              <strong className="text-white">{activeTrashCount}장</strong> 진단 완료
+            </span>
+          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (isMobile) setMobileTab('trash');
+                else setDesktopTab('trash');
+              }}
+              className="hidden sm:inline-flex px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white font-label-sm text-[11.5px] font-medium transition-colors"
+            >
+              🧹 중복·연사 {activeTrashCount}장 정리 →
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsBriefingOpen((prev) => !prev)}
+              className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-200 font-label-sm text-[11.5px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>
+                💡 무료 체험 분석 리포트 &amp; 테스트 가이드 {isBriefingOpen ? '접기 ▴' : '펼쳐보기 ▾'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* 펼쳐졌을 때만 나타나는 상세 브리핑 패널 (검색 실행 시 자동으로 스르륵 접힘) */}
+        {isBriefingOpen && (
+          <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-4 bg-zinc-950/60">
+            {/* 2-A. 해부된 동영상 3개 가로 스와이프 카드덱 (Horizontal Snap Carousel) */}
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-body-sm text-[12.5px] text-zinc-300 font-medium">
+                  🎬 최근 동영상 3개를 처음부터 끝까지 1초 단위로 해부(총 {totalDissectedSegments}개 구간)했습니다. 카드를 좌우로 넘기거나 초(Sec) 버튼을 눌러 즉시 점프 재생해 보세요.
+                </p>
+                <span className="font-label-mono text-[11px] text-zinc-400">
+                  역추적 구간: 2024.07.11 ~ 2026.10.14
+                </span>
+              </div>
+
+              {/* 모바일/컴팩트에서는 좌우 스와이프(Carousel), 와이드 데스크톱에서는 3열 */}
+              <div className="flex md:grid md:grid-cols-3 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
+                {videoSceneItems.map((baseVid, idx) => {
+                  const liveVid = matchedVideoScenes.find((m) => m.id === baseVid.id) ?? baseVid;
+                  const isTopMatched = searchSpace === 'video' && topMatchedVideo?.id === baseVid.id;
+                  return (
+                    <div
+                      key={baseVid.id}
+                      onClick={() => {
+                        setSearchSpace('video');
+                        setSelectedVideoModal(liveVid, liveVid.matchedSeekSec);
+                      }}
+                      className={`min-w-[85%] sm:min-w-[320px] md:min-w-0 snap-center group p-3 rounded-xl flex flex-col gap-2.5 cursor-pointer transition-all border ${
+                        isTopMatched
+                          ? 'bg-zinc-900 border-primary-container'
+                          : 'bg-zinc-900/70 hover:bg-zinc-900 border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-24 h-16 rounded-lg overflow-hidden bg-black shrink-0 border border-white/10">
+                          <video
+                            key={`${liveVid.id}-${liveVid.matchedSeekSec}`}
+                            src={`${liveVid.videoUrl}#t=${liveVid.matchedSeekSec}`}
+                            poster={liveVid.thumbUrl}
+                            preload="metadata"
+                            muted
+                            playsInline
+                            onLoadedMetadata={(e) => {
+                              try {
+                                e.currentTarget.currentTime = liveVid.matchedSeekSec;
+                              } catch {
+                                // ignore
+                              }
+                            }}
+                            className="w-full h-full object-cover pointer-events-none"
+                          />
+                          <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/80 text-white font-label-mono text-[9.5px] font-bold">
+                            {liveVid.durationText}
+                          </span>
+                          <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-zinc-900/90 text-zinc-200 font-label-mono text-[9px] font-bold border border-white/10">
+                            #{idx + 1}
+                          </span>
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-label-mono text-[10px] text-zinc-400">
+                              00:00~{liveVid.durationText} ({liveVid.timelineFrames.length}구간)
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-primary-container font-label-mono text-[9.5px] font-bold shrink-0">
+                              ▶ {liveVid.matchedTimestamp}
+                            </span>
+                          </div>
+                          <span className="font-label-md text-[12.5px] text-white font-bold truncate">
+                            {liveVid.title}
+                          </span>
+                          <span className="font-body-sm text-[11px] text-zinc-400 truncate">
+                            {liveVid.matchedFrameCaption}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 초(Sec) 점프 버튼 */}
+                      <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-white/10">
+                        <span className="font-label-mono text-[9.5px] text-zinc-500 mr-0.5">
+                          초 점프:
+                        </span>
+                        {liveVid.timelineFrames.map((f) => {
+                          const isCurrentSec = liveVid.matchedSeekSec === f.timeSec;
+                          return (
+                            <button
+                              key={f.timeSec}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchSpace('video');
+                                setSelectedVideoModal(liveVid, f.timeSec);
+                              }}
+                              title={`${f.timestampText} (${f.phaseLabel}): ${f.sceneCaption}`}
+                              className={`px-1.5 py-0.5 rounded font-label-mono text-[9.5px] font-bold transition-all ${
+                                isCurrentSec
+                                  ? 'bg-primary-container text-zinc-950 font-black'
+                                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                              }`}
+                            >
+                              {f.timestampText}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {activeSentencePool.map((chip) => (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => handleGalleryChipClick(chip.query)}
-                  className="px-3.5 py-2 rounded-xl bg-surface-container-high/80 hover:bg-surface-bright text-left font-label-md text-[13px] text-on-surface font-bold border border-outline-variant/30 truncate"
-                >
-                  ✨ “{chip.query}”
-                </button>
-              ))}
+
+            {/* 2-B. 서류 힌트 3개 & 동영상 문장 힌트 3개 (가로 스와이프 지원 차분한 다크 카드) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/10 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-label-md text-[12.5px] text-zinc-200 font-bold">
+                    📄 서류 내용 힌트 ({totalIndexedDocs}건 중 추출)
+                  </span>
+                  <span className="font-label-mono text-[10px] text-zinc-400">
+                    PDF + 촬영 영수증·설명서
+                  </span>
+                </div>
+                <div className="flex lg:flex-col gap-2 overflow-x-auto snap-x snap-mandatory no-scrollbar">
+                  {BRIEFING_DOC_HINTS.slice(0, 3).map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() => handleBriefingChipClick('doc', chip.query)}
+                      className="min-w-[260px] lg:min-w-0 snap-center px-3 py-2 rounded-lg bg-zinc-950/70 hover:bg-zinc-800/80 border border-white/10 text-left flex items-center justify-between gap-2 transition-colors"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[12.5px] text-zinc-100 font-semibold truncate">
+                          “{chip.query}”
+                        </span>
+                        <span className="text-[11px] text-zinc-400 truncate">{chip.meta}</span>
+                      </div>
+                      <span className="text-[11px] text-primary-container font-mono shrink-0">
+                        검색 →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/10 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-label-md text-[12.5px] text-zinc-200 font-bold">
+                    🎬 동영상 3개 전 구간 문장 힌트 ({totalDissectedSegments}개 구간)
+                  </span>
+                  <span className="font-label-mono text-[10px] text-zinc-400">
+                    해당 초(Sec) 즉시 점프
+                  </span>
+                </div>
+                <div className="flex lg:flex-col gap-2 overflow-x-auto snap-x snap-mandatory no-scrollbar">
+                  {BRIEFING_VIDEO_HINTS.map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() => handleBriefingChipClick('video', chip.query)}
+                      className="min-w-[260px] lg:min-w-0 snap-center px-3 py-2 rounded-lg bg-zinc-950/70 hover:bg-zinc-800/80 border border-white/10 text-left flex items-center justify-between gap-2 transition-colors"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[12.5px] text-zinc-100 font-semibold truncate">
+                          “{chip.query}”
+                        </span>
+                        <span className="text-[11px] text-zinc-400 truncate">{chip.meta}</span>
+                      </div>
+                      <span className="text-[11px] text-primary-container font-mono shrink-0">
+                        재생 →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 2-C. 차분하고 세련된 다크 카드 형태의 전체 연결 & 요금제 안내 (형광 노란 그라데이션 제거) */}
+            <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-[16px] shrink-0">🚀</span>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 font-medium truncate">
+                  내 폰과 PC의 나머지 10년 치 모든 사진·동영상·서류를 전부 연결하고 깨끗이 정리하시겠습니까?
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProModal(true)}
+                className="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-amber-400 font-label-sm text-[12px] font-bold shrink-0 transition-colors self-start sm:self-auto"
+              >
+                1,900원 단품 / 월 1,100원 (10년 특전) 열기 →
+              </button>
             </div>
           </div>
         )}
