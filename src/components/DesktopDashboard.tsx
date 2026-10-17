@@ -109,50 +109,52 @@ export const DesktopDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* ─────────────── 상단 2단 통합 헤더: 1단(로고+슬로건 / 엔진 가동중 / 메인메뉴 4개 / 우상단 프로필·코인·알림 슬롯) + 2단(라운지별 서브메뉴) ─────────────── */}
+      {/* ─────────────── 상단 2단 통합 헤더: 1단(로고+슬로건 / 엔진 가동중 / 우측 이격된 메인메뉴 4개 / 우상단 프로필·코인·알림 슬롯) + 2단(메인메뉴 바로 아래 서브메뉴) ─────────────── */}
       <header className="sticky top-0 bg-[#09090B]/95 backdrop-blur-xl z-40 border-b border-white/10">
-        {/* 1단: 로고(아래 슬로건) + [🟢 엔진 가동중] + 메인메뉴 4개 + 우상단 빈 슬롯(향후 프로필·코인·알림 자리) */}
+        {/* 1단: 로고(아래 슬로건) + [🟢 엔진 가동중] ─── (넉넉한 간격) ─── 메인메뉴 4개 + 우상단 빈 슬롯(향후 프로필·코인·알림 자리) */}
         <div className="px-5 md:px-8 py-2.5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-wrap">
-            {/* 좌측 브랜드 로고 + 바로 아래 슬로건 */}
-            <div
-              onClick={() => setDesktopTab('dashboard')}
-              className="flex items-center gap-2.5 cursor-pointer shrink-0"
-            >
-              <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-white/15 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-primary-container text-[20px] font-bold">
-                  graphic_eq
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-baseline gap-1.5 leading-none">
-                  <span className="font-headline-sm text-[18px] text-white tracking-tight font-extrabold">
-                    세이씨
+          <div className="flex items-center min-w-0 flex-wrap gap-y-2">
+            {/* 좌측 브랜드 로고(아래 슬로건) + [🟢 엔진 가동중] */}
+            <div className="flex items-center gap-3.5 shrink-0">
+              <div
+                onClick={() => setDesktopTab('dashboard')}
+                className="flex items-center gap-2.5 cursor-pointer shrink-0"
+              >
+                <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-white/15 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary-container text-[20px] font-bold">
+                    graphic_eq
                   </span>
-                  <span className="text-zinc-400 font-normal text-[12.5px]">SaySee</span>
                 </div>
-                <span className="text-zinc-400 font-label-sm text-[11px] font-medium mt-1 leading-none">
-                  🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
-                </span>
+                <div className="flex flex-col">
+                  <div className="flex items-baseline gap-1.5 leading-none">
+                    <span className="font-headline-sm text-[18px] text-white tracking-tight font-extrabold">
+                      세이씨
+                    </span>
+                    <span className="text-zinc-400 font-normal text-[12.5px]">SaySee</span>
+                  </div>
+                  <span className="text-zinc-400 font-label-sm text-[11px] font-medium mt-1 leading-none">
+                    🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
+                  </span>
+                </div>
               </div>
+
+              {/* [🟢 엔진 가동중] 반짝반짝 녹색 표시등 캡슐 */}
+              <button
+                type="button"
+                onClick={() => setShowOnboarding(true)}
+                title="클릭하여 엔진 보안 상세 안내 · 검진 폴더 설정 · 모바일 QR 페어링 열기"
+                className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 hover:border-emerald-400/50 text-zinc-100 font-label-sm text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0"
+              >
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+                </span>
+                <span>{gpuHelper24hActive ? '⚡ GPU 가동중' : '엔진 가동중'}</span>
+              </button>
             </div>
 
-            {/* [🟢 엔진 가동중] 반짝반짝 녹색 표시등 캡슐 */}
-            <button
-              type="button"
-              onClick={() => setShowOnboarding(true)}
-              title="클릭하여 엔진 보안 상세 안내 · 검진 폴더 설정 · 모바일 QR 페어링 열기"
-              className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 hover:border-emerald-400/50 text-zinc-100 font-label-sm text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0"
-            >
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-              </span>
-              <span>{gpuHelper24hActive ? '⚡ GPU 가동중' : '엔진 가동중'}</span>
-            </button>
-
-            {/* 그 우측으로 메인메뉴 4개 (라운지 선택 문구 삭제) */}
-            <nav className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
+            {/* 엔진 가동중과 넉넉한 거리를 두고 우측으로 배치한 메인메뉴 4개 */}
+            <nav className="ml-6 sm:ml-10 md:ml-16 lg:ml-24 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
               {MAIN_LOUNGE_MENUS.map((menu) => {
                 const active = activeLoungeType === menu.id;
                 return (
@@ -178,8 +180,8 @@ export const DesktopDashboard: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0" aria-label="프로필 및 알림 영역" />
         </div>
 
-        {/* 2단: 선택된 메인메뉴(라운지)에 따른 하단 서브메뉴 바 */}
-        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        {/* 2단: 메인메뉴 4개 바로 아래 라인에 맞춰 정렬된 라운지별 서브메뉴 바 */}
+        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[410px] lg:pl-[442px]">
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
               return null;
