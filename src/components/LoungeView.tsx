@@ -761,7 +761,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1.5"
               >
                 <img
-                  src={c.avatarDataUrl || c.representativePhotoUrl}
+                  src={c.avatarUrl || c.representativePhoto.thumbUrl}
                   alt={c.registeredName}
                   className="w-4 h-4 rounded-full object-cover"
                 />
