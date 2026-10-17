@@ -637,9 +637,9 @@ export const LoungeView: React.FC = () => {
 
         {/* 실제 Canvas 얼굴 크롭 & 인터랙티브 이름 등록 인라인 바 */}
         <FaceMemberInlineBar
-          onRunRealNameQuery={(query, targetSpace) => {
+          onRunRealNameQuery={(query) => {
             setDesktopTab('dashboard');
-            setSearchSpace(targetSpace);
+            setSearchSpace('gallery');
             void runTextQuery(query);
           }}
         />

@@ -254,7 +254,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           : 'settings',
     }),
 
-  searchSpace: 'video',
+  searchSpace: 'gallery',
   localDocuments: LOCAL_DOCUMENT_FILES,
   matchedLocalDocs: LOCAL_DOCUMENT_FILES,
   selectedDocModal: null,
@@ -358,12 +358,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   registerFaceMember: async (clusterId, registeredName, relationshipTag) => {
     const cleanName = registeredName.trim();
     const prevClusters = get().faceClusters;
+    const prevTarget = prevClusters.find((c) => c.clusterId === clusterId);
+    const oldNameTag = prevTarget?.registeredName ? `#${prevTarget.registeredName.trim()}` : '';
     const nextClusters = prevClusters.map((c) =>
       c.clusterId === clusterId
         ? {
             ...c,
             registeredName: cleanName,
-            relationshipTag: relationshipTag !== undefined ? relationshipTag : c.relationshipTag,
+            relationshipTag: relationshipTag !== undefined ? relationshipTag : '',
           }
         : c
     );
@@ -371,19 +373,16 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     const targetCluster = nextClusters.find((c) => c.clusterId === clusterId);
     const matchedPhotoSet = new Set(targetCluster?.matchedPhotoFiles ?? []);
     const tagToAdd = cleanName ? `#${cleanName}` : '';
-    const relTagToAdd =
-      targetCluster?.relationshipTag && targetCluster.relationshipTag.startsWith('#')
-        ? targetCluster.relationshipTag
-        : '';
 
     const updatedPhotos = get().photos.map((p) => {
       if (!matchedPhotoSet.has(p.name)) return p;
-      const tags = new Set(p.tags);
-      if (tagToAdd) tags.add(tagToAdd);
-      if (relTagToAdd) tags.add(relTagToAdd);
+      const filteredTags = p.tags.filter((t) => t !== oldNameTag);
+      if (tagToAdd && !filteredTags.includes(tagToAdd)) {
+        filteredTags.push(tagToAdd);
+      }
       return {
         ...p,
-        tags: Array.from(tags),
+        tags: filteredTags,
       };
     });
 
@@ -393,7 +392,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       action: 'update',
       clusterId,
       registeredName: cleanName,
-      relationshipTag,
+      relationshipTag: relationshipTag ?? '',
     });
     if (serverUpdated) {
       set({ faceClusters: serverUpdated });
@@ -473,17 +472,16 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
 
-    // 이미 등록된 얼굴 멤버 이름이 있다면 로컬 사진 태그에도 동기화
+    // 이미 등록된 얼굴 멤버 실명이 있다면 로컬 사진 태그 뒤쪽에 동기화 (장면 대표 태그 p.tags[0] 보존)
     const memberTagsByPhoto = new Map<string, string[]>();
     for (const fc of faceData.clusters) {
       if (fc.excludedAsPasserby) continue;
-      const tags: string[] = [];
-      if (fc.registeredName) tags.push(`#${fc.registeredName}`);
-      if (fc.relationshipTag) tags.push(fc.relationshipTag);
-      if (tags.length === 0) continue;
+      const cleanName = (fc.registeredName || '').trim();
+      if (!cleanName) continue;
+      const tag = `#${cleanName}`;
       for (const fName of fc.matchedPhotoFiles ?? []) {
         const prev = memberTagsByPhoto.get(fName) ?? [];
-        memberTagsByPhoto.set(fName, Array.from(new Set([...prev, ...tags])));
+        memberTagsByPhoto.set(fName, Array.from(new Set([...prev, tag])));
       }
     }
 
@@ -492,7 +490,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       if (!extraTags || extraTags.length === 0) return p;
       return {
         ...p,
-        tags: Array.from(new Set([...extraTags, ...p.tags])),
+        tags: Array.from(new Set([...p.tags, ...extraTags])),
       };
     });
 
@@ -507,9 +505,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       shortChip: chip.factFormula.split('+')[0].trim(),
       targetSearchQuery: chip.query,
     }));
-
-    const totalFrames = indexedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
-    const initialQuery = `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`;
 
     const trashIds = new Set<string>(
       enrichedPhotos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
@@ -526,15 +521,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       latestCorpusYear: faceData.latestCorpusYear,
       onboardingProgress: {
         ...INITIAL_ONBOARDING_PROGRESS,
-        currentPhotoThumb: indexedVideos[0]?.thumbUrl || fallbackThumb,
+        currentPhotoThumb: fallbackThumb,
       },
       telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
       syncState,
       sentenceChips: localChips,
       onboardingAhaItems: localAhaItems,
-      searchSpace: 'video',
-      activeQuery: initialQuery,
-      matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
+      searchSpace: 'gallery',
+      activeQuery: '',
+      matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
       searchResults: [],
       selectedTrashIds: trashIds,
       initialized: true,

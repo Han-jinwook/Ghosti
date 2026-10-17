@@ -74,13 +74,25 @@ export interface FaceVideoSegmentMatch {
   thumbUrl: string;
 }
 
-/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 당해 연도 베스트 1장 인물 클러스터 */
+/** [라운지 마스터 스펙] 연도별(2026년 ➔ 2024년 등) 차곡차곡 누적되는 인물 베스트 컷 1장 */
+export interface YearlyFaceBestCut {
+  year: number;
+  representativePhoto: string;
+  representativeDate: string;
+  frontalScore: number;
+  opticalSharpness: number;
+  avatarUrl: string;
+  cropUrl: string;
+  boundingBox: [number, number, number, number];
+}
+
+/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 당해 연도 베스트 1장 + 과거 연도 누적 클러스터 */
 export interface FaceMemberCluster {
   clusterId: string;
   personKey: string;
-  /** 방장이 직접 입력한 실명/별명 (예: 진욱, 은숙, 천우, 김총무) */
+  /** 방장이 직접 입력한 실명/별명 (예: 은숙, 멀린, 치우, 천우, 지우) */
   registeredName: string;
-  /** 방장이 원터치로 선택한 관계 칩 (#나(방장), #아내, #남편, #자녀, #부모님, #친구) */
+  /** 방장이 선택한 관계 칩 (레거시 호환) */
   relationshipTag: string;
   suggestedChip: string;
   roleHintKo: string;
@@ -95,10 +107,12 @@ export interface FaceMemberCluster {
   opticalSharpness: number;
   /** 실제 이미지 얼굴 영역에서 자동 크롭된 아바타 이미지 URL */
   avatarUrl: string;
-  /** 실시간 좌표 크롭 URL (/ __faces/crop?file=...&box=ymin,xmin,ymax,xmax) */
+  /** 실시간 좌표 크롭 URL (/__faces/crop?file=...&box=ymin,xmin,ymax,xmax) */
   cropUrl: string;
   /** 정규화된 얼굴 Bounding Box [ymin, xmin, ymax, xmax] (0..1000) */
   boundingBox: [number, number, number, number];
+  /** 당해 연도(최신순)부터 과거 연도 사진 검색 시 뒤쪽에 차곡차곡 쌓이는 연도별 베스트 컷 스택 */
+  yearlyBestCuts?: YearlyFaceBestCut[];
   detectedSampleCount: number;
   matchedPhotoCount: number;
   matchedPhotoFiles: string[];

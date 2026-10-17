@@ -1,29 +1,32 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import type { FaceMemberCluster, FaceRelationshipChip } from '../types/saysee';
-
-const RELATIONSHIP_CHIPS: FaceRelationshipChip[] = [
-  '#나(방장)',
-  '#아내',
-  '#남편',
-  '#자녀',
-  '#부모님',
-  '#친구',
-];
+import type { FaceMemberCluster, YearlyFaceBestCut } from '../types/saysee';
 
 /**
  * 실제 원본 이미지에서 검출된 얼굴 Bounding Box [ymin, xmin, ymax, xmax] (0..1000) 좌표를
  * 브라우저 HTML5 <canvas>로 직접 오려내어 원형 아바타로 렌더링하는 자율 캔버스 크롭 컴포넌트
  */
 export const AutonomousCanvasFaceAvatar: React.FC<{
-  cluster: FaceMemberCluster;
+  photoFile: string;
+  boundingBox: [number, number, number, number];
+  fallbackAvatarUrl: string;
+  altText: string;
+  isHighlighted?: boolean;
   sizeClass?: string;
-}> = ({ cluster, sizeClass = 'w-16 h-16' }) => {
+}> = ({
+  photoFile,
+  boundingBox,
+  fallbackAvatarUrl,
+  altText,
+  isHighlighted = false,
+  sizeClass = 'w-12 h-12',
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setCanvasReady(false);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -34,7 +37,7 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
 
       const imgW = img.naturalWidth || 1000;
       const imgH = img.naturalHeight || 1000;
-      const [ymin, xmin, ymax, xmax] = cluster.boundingBox ?? [200, 200, 600, 600];
+      const [ymin, xmin, ymax, xmax] = boundingBox ?? [200, 200, 600, 600];
 
       const faceTop = (ymin / 1000) * imgH;
       const faceLeft = (xmin / 1000) * imgW;
@@ -55,26 +58,21 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 180, 180);
       setCanvasReady(true);
     };
-    img.src = `/__photos/file?p=${encodeURIComponent(cluster.representativePhoto)}`;
+    img.src = `/__photos/file?p=${encodeURIComponent(photoFile)}`;
     return () => {
       cancelled = true;
     };
-  }, [cluster.representativePhoto, cluster.boundingBox]);
+  }, [photoFile, boundingBox]);
 
   return (
     <div
       className={`relative ${sizeClass} rounded-full overflow-hidden bg-zinc-900 border-2 ${
-        cluster.registeredName
+        isHighlighted
           ? 'border-primary-container shadow-[0_0_12px_rgba(32,247,219,0.28)]'
           : 'border-white/20'
       } shrink-0`}
     >
-      {/* 서버 sharp 크롭 아바타 즉시 표시 + Canvas 실시간 픽셀 크롭 완료 시 오버레이 */}
-      <img
-        src={cluster.avatarUrl || cluster.cropUrl}
-        alt={cluster.registeredName || cluster.appearanceLabelKo}
-        className="w-full h-full object-cover"
-      />
+      <img src={fallbackAvatarUrl} alt={altText} className="w-full h-full object-cover" />
       <canvas
         ref={canvasRef}
         className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
@@ -85,12 +83,31 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
   );
 };
 
+function getClusterYearlyCuts(cluster: FaceMemberCluster): YearlyFaceBestCut[] {
+  if (Array.isArray(cluster.yearlyBestCuts) && cluster.yearlyBestCuts.length > 0) {
+    return cluster.yearlyBestCuts;
+  }
+  return [
+    {
+      year: cluster.representativeYear,
+      representativePhoto: cluster.representativePhoto,
+      representativeDate: cluster.representativeDate,
+      frontalScore: cluster.frontalScore,
+      opticalSharpness: cluster.opticalSharpness,
+      avatarUrl: cluster.avatarUrl,
+      cropUrl: cluster.cropUrl,
+      boundingBox: cluster.boundingBox,
+    },
+  ];
+}
+
 /**
- * [Step 1 인라인 바] 파워 검색 상단에 배치되어 방장이 1초 만에 얼굴에 이름을 붙이고
- * 즉시 "[이름] 선글라스", "[이름] 바다", "[이름] 하트 목걸이(동영상)" 실명 검색을 체험하는 컴포넌트
+ * [Step 1 인라인 바] 전체 갤러리(사진) 모드에서 방장이 얼굴에 실명을 붙이고
+ * 당해 연도(2026년) 베스트 컷 뒤쪽에 과거 연도(2024년 등) 베스트 컷이 차곡차곡 쌓이는 아바타 스택을 확인하며
+ * 즉시 "[이름] 나무 다리", "[이름] 선글라스" 실명 사진 검색을 체험하는 컴포넌트
  */
 export const FaceMemberInlineBar: React.FC<{
-  onRunRealNameQuery: (query: string, targetSpace: 'gallery' | 'video') => void;
+  onRunRealNameQuery: (query: string) => void;
 }> = ({ onRunRealNameQuery }) => {
   const {
     faceClusters,
@@ -103,6 +120,7 @@ export const FaceMemberInlineBar: React.FC<{
 
   const [isExpanded, setIsExpanded] = useState(true);
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
+  const [selectedYearMap, setSelectedYearMap] = useState<Record<string, number>>({});
   const [justSavedId, setJustSavedId] = useState<string | null>(null);
 
   const visibleClusters = useMemo(
@@ -125,10 +143,9 @@ export const FaceMemberInlineBar: React.FC<{
 
   if (faceClusters.length === 0) return null;
 
-  const handleSaveMember = async (cluster: FaceMemberCluster, nextName?: string, nextChip?: string) => {
+  const handleSaveMember = async (cluster: FaceMemberCluster, nextName?: string) => {
     const finalName = (nextName !== undefined ? nextName : draftNames[cluster.clusterId] ?? '').trim();
-    const finalChip = nextChip !== undefined ? nextChip : cluster.relationshipTag || cluster.suggestedChip;
-    await registerFaceMember(cluster.clusterId, finalName, finalChip);
+    await registerFaceMember(cluster.clusterId, finalName, '');
     setJustSavedId(cluster.clusterId);
     window.setTimeout(() => {
       setJustSavedId((prev) => (prev === cluster.clusterId ? null : prev));
@@ -145,10 +162,10 @@ export const FaceMemberInlineBar: React.FC<{
           className="flex items-center gap-2.5 text-left min-w-0 flex-1"
         >
           <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold shrink-0">
-            자율 얼굴 검출 · {latestCorpusYear}년 베스트 컷
+            자율 얼굴 검출 · 연도별 베스트 누적
           </span>
           <span className="font-label-md text-[12.5px] md:text-[13px] text-zinc-100 font-bold truncate">
-            🎯 사진에서 {visibleClusters.length}명의 얼굴을 자동 추출했습니다 (당해 연도 베스트 컷 기준). 이름을 등록해 라운지 멤버로 추가할까요?
+            🎯 사진에서 {visibleClusters.length}명의 얼굴을 자동 추출했습니다 ({latestCorpusYear}년 대표컷 + 과거 연도 베스트 컷 자동 누적). 이름을 등록해 볼까요?
           </span>
         </button>
 
@@ -167,7 +184,7 @@ export const FaceMemberInlineBar: React.FC<{
             onClick={() => setShowFaceRegistryModal(true)}
             className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold flex items-center gap-1"
           >
-            <span>👥 라운지 초대 &amp; 얼굴 레이더 시드</span>
+            <span>👥 연도별 히스토리 &amp; 초대 레이더 시드</span>
           </button>
           <button
             type="button"
@@ -188,12 +205,16 @@ export const FaceMemberInlineBar: React.FC<{
 
       {isExpanded && (
         <div className="p-3.5 md:p-4 flex flex-col gap-3.5 bg-zinc-950/50">
-          {/* 5명이 한눈에 잘리지 않고 모두 들어오는 반응형 5열 그리드 (모바일은 1~2열, PC는 5열) */}
+          {/* 5명이 한눈에 잘리지 않고 모두 들어오는 반응형 5열 그리드 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
             {visibleClusters.map((cluster) => {
-              const activeChip = cluster.relationshipTag || cluster.suggestedChip;
               const currentDraft = draftNames[cluster.clusterId] ?? '';
               const isRegistered = Boolean(cluster.registeredName.trim());
+              const yearlyCuts = getClusterYearlyCuts(cluster);
+              const activeYear = selectedYearMap[cluster.clusterId] ?? yearlyCuts[0].year;
+              const activeCut =
+                yearlyCuts.find((c) => c.year === activeYear) ?? yearlyCuts[0];
+              const stackedBehindCuts = yearlyCuts.filter((c) => c.year !== activeCut.year);
 
               return (
                 <div
@@ -202,17 +223,32 @@ export const FaceMemberInlineBar: React.FC<{
                     isRegistered ? 'border-primary-container/50' : 'border-white/10'
                   }`}
                 >
-                  {/* 상단 배지 + 우측 [✕ 행인 제외] 버튼 (겹침/잘림 원천 차단) */}
-                  <div className="flex items-center justify-between gap-1.5">
-                    <div className="flex items-center gap-1 min-w-0">
-                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-[10px] font-bold shrink-0">
-                        {cluster.representativeYear}년 대표컷
-                      </span>
-                      {isRegistered && (
-                        <span className="px-1.5 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[10px] font-bold shrink-0">
-                          실명개통
-                        </span>
-                      )}
+                  {/* 상단 연도 스택 탭 + 우측 [✕ 행인 제외] 버튼 */}
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                      {yearlyCuts.map((yc) => {
+                        const isSelectedYear = yc.year === activeCut.year;
+                        return (
+                          <button
+                            key={yc.year}
+                            type="button"
+                            onClick={() =>
+                              setSelectedYearMap((prev) => ({
+                                ...prev,
+                                [cluster.clusterId]: yc.year,
+                              }))
+                            }
+                            title={`${yc.year}년 베스트 컷 (${yc.representativeDate}) 보기`}
+                            className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold transition-all shrink-0 ${
+                              isSelectedYear
+                                ? 'bg-primary-container text-zinc-950 font-extrabold'
+                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/10'
+                            }`}
+                          >
+                            {yc.year}년
+                          </button>
+                        );
+                      })}
                     </div>
 
                     <button
@@ -221,26 +257,76 @@ export const FaceMemberInlineBar: React.FC<{
                       title="무관한 행인 얼굴 1초 제외"
                       className="px-1.5 py-0.5 rounded bg-zinc-950/90 hover:bg-red-950/60 border border-white/10 hover:border-red-400/40 text-zinc-400 hover:text-red-300 font-label-sm text-[10px] font-medium transition-colors shrink-0"
                     >
-                      ✕ 행인 제외
+                      ✕ 제외
                     </button>
                   </div>
 
-                  {/* 동그란 실제 크롭 아바타 + 당해 연도 베스트 컷 메타데이터 */}
+                  {/* 차곡차곡 쌓인 연도별 베스트 컷 아바타 스택 + 인물 요약 */}
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <AutonomousCanvasFaceAvatar cluster={cluster} sizeClass="w-12 h-12" />
+                    <div className="relative flex items-center shrink-0">
+                      {/* 전면(현재 선택 연도) 베스트 컷 아바타 */}
+                      <div className="relative z-20">
+                        <AutonomousCanvasFaceAvatar
+                          photoFile={activeCut.representativePhoto}
+                          boundingBox={activeCut.boundingBox}
+                          fallbackAvatarUrl={activeCut.avatarUrl || activeCut.cropUrl}
+                          altText={cluster.registeredName || cluster.appearanceLabelKo}
+                          isHighlighted={isRegistered}
+                          sizeClass="w-12 h-12"
+                        />
+                      </div>
+
+                      {/* 뒤쪽에 차곡차곡 쌓인 다른 연도(예: 2024년) 베스트 컷 아바타 */}
+                      {stackedBehindCuts.map((behindCut, sIdx) => (
+                        <button
+                          key={behindCut.year}
+                          type="button"
+                          onClick={() =>
+                            setSelectedYearMap((prev) => ({
+                              ...prev,
+                              [cluster.clusterId]: behindCut.year,
+                            }))
+                          }
+                          title={`클릭하여 ${behindCut.year}년 베스트 컷(${behindCut.representativeDate})으로 전환`}
+                          style={{ zIndex: 15 - sIdx }}
+                          className="relative -ml-3.5 opacity-80 hover:opacity-100 hover:scale-105 transition-all cursor-pointer group"
+                        >
+                          <AutonomousCanvasFaceAvatar
+                            photoFile={behindCut.representativePhoto}
+                            boundingBox={behindCut.boundingBox}
+                            fallbackAvatarUrl={behindCut.avatarUrl || behindCut.cropUrl}
+                            altText={`${behindCut.year}년 베스트 컷`}
+                            isHighlighted={false}
+                            sizeClass="w-9 h-9"
+                          />
+                          <span className="absolute -bottom-1 right-0 px-1 py-0.2 rounded bg-zinc-950/95 border border-white/20 text-zinc-200 font-mono text-[8.5px] font-bold">
+                            &apos;{String(behindCut.year).slice(-2)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
                     <div className="flex flex-col min-w-0 flex-1">
-                      <p className="font-label-sm text-[12px] text-white font-bold truncate">
-                        {cluster.registeredName
-                          ? `${cluster.registeredName} (${activeChip})`
-                          : cluster.appearanceLabelKo}
-                      </p>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <p className="font-label-sm text-[12.5px] text-white font-bold truncate">
+                          {cluster.registeredName ? cluster.registeredName : cluster.appearanceLabelKo}
+                        </p>
+                        {isRegistered && (
+                          <span className="px-1 py-0.2 rounded bg-primary-container/15 text-primary-container font-label-sm text-[9.5px] font-bold shrink-0">
+                            등록됨
+                          </span>
+                        )}
+                      </div>
                       <p className="font-body-sm text-[11px] text-zinc-400 truncate mt-0.5">
-                        사진 {cluster.matchedPhotoCount}장 · 영상 {cluster.matchedVideoSegmentCount}구간
+                        사진 {cluster.matchedPhotoCount}장 · {yearlyCuts.length}개 연도 베스트 누적
+                      </p>
+                      <p className="font-mono text-[10px] text-zinc-500 truncate">
+                        {activeCut.representativeDate} 대표컷
                       </p>
                     </div>
                   </div>
 
-                  {/* 빠른 이름 입력창 (min-w-0 적용으로 우측 [등록] 버튼 잘림 완벽 해결) */}
+                  {/* 깔끔한 실명 입력창 + [등록] 버튼 (별도 호칭 카테고리 태그 제거) */}
                   <div className="flex items-center gap-1.5 w-full min-w-0">
                     <input
                       type="text"
@@ -252,7 +338,7 @@ export const FaceMemberInlineBar: React.FC<{
                         }))
                       }
                       onBlur={() => {
-                        if (currentDraft.trim() && currentDraft.trim() !== cluster.registeredName) {
+                        if (currentDraft.trim() !== cluster.registeredName) {
                           void handleSaveMember(cluster);
                         }
                       }}
@@ -262,7 +348,7 @@ export const FaceMemberInlineBar: React.FC<{
                           void handleSaveMember(cluster);
                         }
                       }}
-                      placeholder="이름 입력 (예: 지우, 은숙)"
+                      placeholder="이름 입력 (예: 은숙, 멀린, 지우)"
                       className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-950 border border-white/10 focus:border-primary-container outline-none font-body-sm text-[12px] text-white placeholder:text-zinc-500"
                     />
                     <button
@@ -273,82 +359,48 @@ export const FaceMemberInlineBar: React.FC<{
                       {justSavedId === cluster.clusterId ? '완료!' : '등록'}
                     </button>
                   </div>
-
-                  {/* 원터치 호칭 칩 (#나(방장), #아내, #남편, #자녀, #부모님, #친구) */}
-                  <div className="flex flex-wrap gap-1">
-                    {RELATIONSHIP_CHIPS.map((chip) => {
-                      const selected = activeChip === chip;
-                      return (
-                        <button
-                          key={chip}
-                          type="button"
-                          onClick={() => {
-                            const defaultName =
-                              currentDraft.trim() ||
-                              cluster.registeredName ||
-                              chip.replace(/^#|\(.*\)/g, '');
-                            setDraftNames((prev) => ({
-                              ...prev,
-                              [cluster.clusterId]: defaultName,
-                            }));
-                            void handleSaveMember(cluster, defaultName, chip);
-                          }}
-                          className={`px-1.5 py-0.5 rounded font-label-sm text-[10px] transition-all border ${
-                            selected
-                              ? 'bg-zinc-800 text-primary-container border-primary-container/50 font-bold'
-                              : 'bg-zinc-950/70 text-zinc-400 border-white/5 hover:text-zinc-200'
-                          }`}
-                        >
-                          {chip}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
               );
             })}
           </div>
 
-          {/* 등록 즉시 활성화되는 실명 자연어 검색 (사진 + 동영상 초 단위 점프) 원터치 체험 바 */}
+          {/* 등록 즉시 활성화되는 실명 + 장면 자연어 사진 검색 원터치 체험 바 */}
           {registeredClusters.length > 0 && (
             <div className="px-3.5 py-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                  ⚡ 실명 자연어 검색 개통 완료 (0.04초 매칭):
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-label-sm text-[11.5px] text-primary-container font-bold mr-1">
+                  ⚡ 등록 실명 + 장면 즉시 검색 (0.04초):
                 </span>
                 {registeredClusters.map((rc) => {
                   const name = rc.registeredName.trim();
-                  const isFemale = /여성|아내|여자/.test(`${rc.roleHintKo} ${rc.relationshipTag}`);
-                  const isChild = /소년|아이|자녀/.test(`${rc.roleHintKo} ${rc.relationshipTag}`);
-                  const photoQuery1 = isChild ? `${name} 박물관` : `${name} 선글라스`;
-                  const photoQuery2 = `${name} 바다`;
-                  const videoQuery = isFemale ? `${name} 하트 목걸이` : `${name} 보트`;
+                  const pKey = `${rc.personKey} ${rc.roleHintKo}`.toLowerCase();
+                  const isAdultMale = pKey.includes('adult_male') || /성인 남성/.test(pKey);
+                  const isAdultFemale = pKey.includes('adult_female') || /성인 여성/.test(pKey);
+                  const isGlassesYouth = pKey.includes('glasses') || /안경/.test(rc.appearanceLabelKo);
+                  const isYoungBoy = pKey.includes('child_son');
+
+                  const queries = isAdultMale
+                    ? [`${name} 나무 다리`, `${name} 바다`]
+                    : isAdultFemale
+                    ? [`${name} 나무 다리`, `${name} 선글라스`]
+                    : isGlassesYouth
+                    ? [`${name} 박물관`, `${name} 식당`]
+                    : isYoungBoy
+                    ? [`${name} 물놀이`, `${name} 해변`]
+                    : [`${name}`];
 
                   return (
                     <React.Fragment key={rc.clusterId}>
-                      <button
-                        type="button"
-                        onClick={() => onRunRealNameQuery(photoQuery1, 'gallery')}
-                        className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[11.5px] flex items-center gap-1"
-                      >
-                        <span>🖼️ “{photoQuery1}”</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onRunRealNameQuery(photoQuery2, 'gallery')}
-                        className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[11.5px] flex items-center gap-1"
-                      >
-                        <span>🖼️ “{photoQuery2}”</span>
-                      </button>
-                      {rc.matchedVideoSegmentCount > 0 && (
+                      {queries.map((qText) => (
                         <button
+                          key={qText}
                           type="button"
-                          onClick={() => onRunRealNameQuery(videoQuery, 'video')}
-                          className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold flex items-center gap-1"
+                          onClick={() => onRunRealNameQuery(qText)}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[11.5px] flex items-center gap-1 transition-colors"
                         >
-                          <span>🎬 “{videoQuery}” (동영상 구간 점프)</span>
+                          <span>🖼️ “{qText}”</span>
                         </button>
-                      )}
+                      ))}
                     </React.Fragment>
                   );
                 })}
@@ -363,8 +415,8 @@ export const FaceMemberInlineBar: React.FC<{
 
 /**
  * [라운지 마스터 모달 (Step 1 ~ Step 3)]
- * - Step 1: 자율 얼굴 검출(Bounding Box 시각화) & 당해 연도 대표 1장 크롭 + 대표 사진 직접 선택 실시간 검출
- * - Step 2: 실명 자연어 검색(사진 + 동영상 타임라인 초 단위 포착) 즉시 연동 테스트
+ * - Step 1: 자율 얼굴 검출 & 연도별(2026년 ➔ 2024년 등) 베스트 컷 차곡차곡 누적 스택
+ * - Step 2: 실명 + 장면 자연어 사진 검색 즉시 연동 테스트
  * - Step 3: 초대받은 친구 폰 합류 시 '방장 등록 얼굴 임베딩 시드(Seed) + 촬영 날짜' 기준 레이더 스캔 매칭
  */
 export const FaceMemberRegistryModal: React.FC = () => {
@@ -381,11 +433,10 @@ export const FaceMemberRegistryModal: React.FC = () => {
     detectingLiveFaces,
     setSearchSpace,
     runTextQuery,
-    setSelectedVideoModal,
-    videoSceneItems,
   } = useSaySeeStore();
 
   const [selectedSamplePhoto, setSelectedSamplePhoto] = useState<string>('');
+  const [selectedYearMap, setSelectedYearMap] = useState<Record<string, number>>({});
   const [radarSimulating, setRadarSimulating] = useState(false);
   const [radarComplete, setRadarComplete] = useState(true);
 
@@ -394,12 +445,9 @@ export const FaceMemberRegistryModal: React.FC = () => {
     [faceClusters]
   );
 
-  const currentYearSamplePhotos = useMemo(
-    () =>
-      photos
-        .filter((p) => !p.quarantined && p.name.startsWith(String(latestCorpusYear)))
-        .slice(0, 12),
-    [photos, latestCorpusYear]
+  const samplePhotos = useMemo(
+    () => photos.filter((p) => !p.quarantined).slice(0, 20),
+    [photos]
   );
 
   if (!showFaceRegistryModal) return null;
@@ -409,18 +457,10 @@ export const FaceMemberRegistryModal: React.FC = () => {
     await detectFacesFromPhotoFile(selectedSamplePhoto);
   };
 
-  const handleTriggerRealNameSearch = async (query: string, space: 'gallery' | 'video') => {
+  const handleTriggerRealNameSearch = async (query: string) => {
     setShowFaceRegistryModal(false);
-    setSearchSpace(space);
+    setSearchSpace('gallery');
     await runTextQuery(query);
-  };
-
-  const handleJumpToMemberVideoSegment = (videoId: string, seekSec: number) => {
-    const found = videoSceneItems.find((v) => v.id === videoId);
-    if (found) {
-      setShowFaceRegistryModal(false);
-      setSelectedVideoModal(found, seekSec);
-    }
   };
 
   const handleSimulateFriendRadar = () => {
@@ -443,11 +483,11 @@ export const FaceMemberRegistryModal: React.FC = () => {
                 라운지 마스터 Step 1~3
               </span>
               <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-extrabold">
-                자율 얼굴 검출(Face Crop) · 당해 연도 대표 멤버 등록 &amp; 초대 레이더 시드
+                자율 얼굴 검출(Face Crop) · 연도별 베스트 컷 누적 스택 &amp; 초대 레이더 시드
               </h2>
             </div>
             <p className="font-body-sm text-[12px] text-zinc-400">
-              실제 이미지의 얼굴 Bounding Box 좌표를 자동 검출하여 {latestCorpusYear}년 최선명 정면 1장을 동그란 아바타로 오려내고, 실명 검색과 친구 초대 레이더 시드에 실시간 연동합니다.
+              {latestCorpusYear}년 당해 연도 베스트 컷을 대표로 표시하고, 과거 사진(2024년 등) 검색 시 동일 인물의 연도별 베스트 컷을 뒤쪽에 차곡차곡 쌓아 나갑니다.
             </p>
           </div>
 
@@ -462,27 +502,26 @@ export const FaceMemberRegistryModal: React.FC = () => {
 
         {/* 모달 본문 */}
         <div className="p-6 overflow-y-auto flex flex-col gap-6">
-          {/* Step 1: 당해 연도 대표 얼굴 1장 자동 추출 & 실시간 사진 선택 검출 */}
+          {/* Step 1: 연도별 대표 얼굴 베스트 컷 스택 & 실시간 사진 선택 검출 */}
           <section className="rounded-xl bg-zinc-900/70 border border-white/10 p-4 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="font-label-md text-[14px] text-white font-bold">
-                  Step 1. 자율 얼굴 검출 &amp; {latestCorpusYear}년(당해 연도) 베스트 얼굴 1장 크롭
+                  Step 1. 연도별 베스트 컷 차곡차곡 누적 ({latestCorpusYear}년 ➔ 2024년)
                 </h3>
                 <p className="font-body-sm text-[12px] text-zinc-400">
-                  동일 인물이 여러 장에 찍힌 경우 촬영 연도(최신순) · 정면 비율 · 광학 선명도가 가장 높은 단 1장의 Bounding Box만 원형 아바타로 추출합니다.
+                  동일 인물이 다른 연도 사진에서 발견될 때마다 해당 연도의 가장 선명한 정면 1장을 뒤쪽에 차곡차곡 쌓아 연도별 얼굴 변화를 한눈에 보존합니다.
                 </p>
               </div>
 
-              {/* 방장이 직접 갤러리 사진을 골라 실시간 얼굴 검출을 추가 실행할 수 있는 컨트롤 */}
               <div className="flex items-center gap-2">
                 <select
                   value={selectedSamplePhoto}
                   onChange={(e) => setSelectedSamplePhoto(e.target.value)}
                   className="h-9 px-3 rounded-lg bg-zinc-950 border border-white/10 text-zinc-200 font-body-sm text-[12px] outline-none"
                 >
-                  <option value="">대표 사진 추가 선택 ({latestCorpusYear}년 촬영본)...</option>
-                  {currentYearSamplePhotos.map((p) => (
+                  <option value="">사진 추가 선택 (연도별 베스트 누적)...</option>
+                  {samplePhotos.map((p) => (
                     <option key={p.id} value={p.name}>
                       {p.name} ({p.date})
                     </option>
@@ -499,34 +538,55 @@ export const FaceMemberRegistryModal: React.FC = () => {
               </div>
             </div>
 
-            {/* 검출된 각 인물 클러스터 상세 카드 (원본 Bounding Box 좌표 & 동영상 타임라인 매칭 구간 표시) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
               {visibleClusters.map((c) => {
-                const activeChip = c.relationshipTag || c.suggestedChip;
+                const yearlyCuts = getClusterYearlyCuts(c);
+                const activeYear = selectedYearMap[c.clusterId] ?? yearlyCuts[0].year;
+                const activeCut =
+                  yearlyCuts.find((yc) => yc.year === activeYear) ?? yearlyCuts[0];
+
                 return (
                   <div
                     key={c.clusterId}
                     className="rounded-xl p-3.5 bg-zinc-950/90 border border-white/10 flex flex-col gap-3"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <AutonomousCanvasFaceAvatar cluster={c} sizeClass="w-16 h-16" />
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-primary-container font-mono text-[10.5px] font-bold">
-                              {c.representativeYear}년 베스트 · 정면 {Math.round(c.frontalScore * 100)}%
-                            </span>
-                            <span className="font-mono text-[10.5px] text-zinc-500">
-                              Box [{c.boundingBox.join(', ')}]
-                            </span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <AutonomousCanvasFaceAvatar
+                          photoFile={activeCut.representativePhoto}
+                          boundingBox={activeCut.boundingBox}
+                          fallbackAvatarUrl={activeCut.avatarUrl || activeCut.cropUrl}
+                          altText={c.registeredName || c.appearanceLabelKo}
+                          isHighlighted={Boolean(c.registeredName)}
+                          sizeClass="w-16 h-16"
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {yearlyCuts.map((yc) => (
+                              <button
+                                key={yc.year}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedYearMap((prev) => ({
+                                    ...prev,
+                                    [c.clusterId]: yc.year,
+                                  }))
+                                }
+                                className={`px-2 py-0.5 rounded font-mono text-[10.5px] font-bold transition-all ${
+                                  yc.year === activeCut.year
+                                    ? 'bg-primary-container text-zinc-950 font-extrabold'
+                                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                                }`}
+                              >
+                                {yc.year}년 베스트
+                              </button>
+                            ))}
                           </div>
-                          <span className="font-label-md text-[13.5px] text-white font-bold mt-1">
-                            {c.registeredName
-                              ? `${c.registeredName} (${activeChip})`
-                              : `${c.appearanceLabelKo} (미등록)`}
+                          <span className="font-label-md text-[14px] text-white font-bold mt-1 truncate">
+                            {c.registeredName || `${c.appearanceLabelKo} (미등록)`}
                           </span>
-                          <span className="font-body-sm text-[11.5px] text-zinc-400">
-                            원본: {c.representativePhoto} · 매칭 사진 {c.matchedPhotoCount}장 · 영상 {c.matchedVideoSegmentCount}구간
+                          <span className="font-body-sm text-[11.5px] text-zinc-400 truncate">
+                            {activeCut.year}년 원본: {activeCut.representativePhoto} · 매칭 사진 {c.matchedPhotoCount}장
                           </span>
                         </div>
                       </div>
@@ -540,73 +600,27 @@ export const FaceMemberRegistryModal: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* 이름 & 호칭 즉시 수정 */}
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+                    {/* 이름 즉시 수정 (별도 호칭 칩 없음) */}
+                    <div className="flex items-center gap-2 min-w-0">
                       <input
                         type="text"
                         defaultValue={c.registeredName}
-                        placeholder="이름 입력 (예: 지우, 은숙, 진욱)"
+                        placeholder="이름 입력 (예: 은숙, 멀린, 치우, 천우, 지우)"
                         onBlur={(e) =>
-                          void registerFaceMember(c.clusterId, e.target.value, activeChip)
+                          void registerFaceMember(c.clusterId, e.target.value, '')
                         }
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             void registerFaceMember(
                               c.clusterId,
                               (e.target as HTMLInputElement).value,
-                              activeChip
+                              ''
                             );
                           }
                         }}
                         className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-primary-container text-white font-body-sm text-[12px] outline-none"
                       />
-                      <div className="flex gap-1 flex-wrap">
-                        {RELATIONSHIP_CHIPS.map((chip) => (
-                          <button
-                            key={chip}
-                            type="button"
-                            onClick={() =>
-                              void registerFaceMember(
-                                c.clusterId,
-                                c.registeredName || chip.replace(/^#|\(.*\)/g, ''),
-                                chip
-                              )
-                            }
-                            className={`px-2 py-1 rounded font-label-sm text-[10.5px] border ${
-                              activeChip === chip
-                                ? 'bg-primary-container text-zinc-950 border-primary-container font-bold'
-                                : 'bg-zinc-900 text-zinc-400 border-white/10'
-                            }`}
-                          >
-                            {chip}
-                          </button>
-                        ))}
-                      </div>
                     </div>
-
-                    {/* 해당 인물이 등장하는 동영상 타임라인 초(Sec) 구간 바로가기 */}
-                    {c.matchedVideoSegments.length > 0 && (
-                      <div className="pt-2 border-t border-white/5 flex flex-col gap-1.5">
-                        <span className="font-label-sm text-[11px] text-zinc-400">
-                          🎬 이 얼굴이 포착된 동영상 타임라인 구간 ({c.matchedVideoSegments.length}곳):
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {c.matchedVideoSegments.slice(0, 3).map((seg) => (
-                            <button
-                              key={`${seg.videoId}_${seg.timeSec}`}
-                              type="button"
-                              onClick={() => handleJumpToMemberVideoSegment(seg.videoId, seg.timeSec)}
-                              className="px-2 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11px] flex items-center gap-1"
-                            >
-                              <span className="text-primary-container font-bold">
-                                🎯 {seg.timestampText}
-                              </span>
-                              <span className="truncate max-w-[140px]">{seg.phaseLabel}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -659,25 +673,12 @@ export const FaceMemberRegistryModal: React.FC = () => {
                         type="button"
                         onClick={() =>
                           void handleTriggerRealNameSearch(
-                            `${c.registeredName || c.relationshipTag.replace(/^#|\(.*\)/g, '') || '선글라스'} 바다`,
-                            'gallery'
+                            `${c.registeredName || '선글라스'} 나무 다리`
                           )
                         }
                         className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11px]"
                       >
-                        🔍 사진 매칭 보기
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void handleTriggerRealNameSearch(
-                            `${c.registeredName || c.relationshipTag.replace(/^#|\(.*\)/g, '') || '하트'} 목걸이`,
-                            'video'
-                          )
-                        }
-                        className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-primary-container/30 text-primary-container font-label-sm text-[11px] font-bold"
-                      >
-                        🎬 영상 매칭 보기
+                        🔍 “{c.registeredName || '멤버'} 나무 다리” 검색
                       </button>
                     </div>
                   </div>

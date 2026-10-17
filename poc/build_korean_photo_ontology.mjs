@@ -310,9 +310,23 @@ const ONTOLOGY_TREE = [
   {
     id: 'place.wooden_bridge',
     category: 'place',
-    triggers: ['나무다리', '구름다리', '출렁다리', '목교', '데크', '산책데크', '나무데크', '나무선착장', 'boardwalk', 'bridge'],
-    equivalents: ['나무다리', '구름다리', '데크', '다리', 'bridge', 'boardwalk'],
+    triggers: ['나무다리', '목조다리', '목재다리', '구름다리', '출렁다리', '목교', '나무데크다리', 'bridge'],
+    equivalents: ['나무다리', '목조다리', '목재다리', '다리', 'bridge'],
     parents: ['다리', '나무다리', '길', '산책로', '산책', '공원', '나무'],
+  },
+  {
+    id: 'place.stone_bridge',
+    category: 'place',
+    triggers: ['돌다리', '징검다리'],
+    equivalents: ['돌다리', '징검다리'],
+    parents: ['다리', '길', '산책로', '산책', '하천'],
+  },
+  {
+    id: 'place.wooden_deck_pier',
+    category: 'place',
+    triggers: ['데크', '산책데크', '나무데크', '목재데크', '데크길', '선착장', '나무선착장', '목재선착장', 'boardwalk', 'pier'],
+    equivalents: ['데크', '나무데크', '목재데크', '선착장', 'boardwalk'],
+    parents: ['데크', '선착장', '길', '산책로', '산책'],
   },
   {
     id: 'place.swimming_pool',
