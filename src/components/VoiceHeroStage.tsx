@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 
 export const VoiceHeroStage: React.FC = () => {
   const {
@@ -405,6 +406,17 @@ export const VoiceHeroStage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ─────────────── [라운지 마스터 Step 1 인라인 바] 자율 얼굴 검출(당해 연도 베스트 1장 크롭) & 인터랙티브 실명 등록 ─────────────── */}
+      <FaceMemberInlineBar
+        onRunRealNameQuery={(query, targetSpace) => {
+          setTextInput(query);
+          setIsBriefingOpen(false);
+          setSearchSpace(targetSpace);
+          void runTextQuery(query);
+          scrollToResults();
+        }}
+      />
 
       {/* ─────────────── [2층: 접고 펴는 스마트 가이드 바 (Collapsible Accordion)] ─────────────── */}
       <div className="w-full rounded-2xl bg-zinc-900/70 border border-white/10 overflow-hidden transition-all">

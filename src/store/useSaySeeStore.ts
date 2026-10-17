@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   DuplicateGroup,
+  FaceMemberCluster,
   HardwareTelemetry,
   LocalDocumentFile,
   MerlinAuthState,
@@ -26,14 +27,17 @@ import {
   PRESET_QUERIES,
   VIDEO_SCENE_ITEMS,
   detectHardwareTelemetry,
+  detectLiveFacesFromPhoto,
   executeTextSearch,
   executeZeroSttVoiceSearch,
+  fetchAutonomousFaceClusters,
   fetchIndexedDocuments,
   fetchIndexedVideos,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
   searchLocalDocumentFilesAsync,
   searchVideoSceneItemsAsync,
+  updateFaceClusterRegistry,
 } from '../services/aiEngine';
 import {
   LocalSentenceChip,
@@ -70,6 +74,21 @@ interface SaySeeStore {
   setSelectedVideoModal: (vid: VideoSceneItem | null, seekSec?: number) => void;
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
+
+  // [라운지 마스터 스펙] 자율 얼굴 추출(Face Crop) & 당해 연도 베스트 1장 멤버 등록 & 실명 검색 연동
+  faceClusters: FaceMemberCluster[];
+  latestCorpusYear: number;
+  showFaceRegistryModal: boolean;
+  detectingLiveFaces: boolean;
+  setShowFaceRegistryModal: (show: boolean) => void;
+  registerFaceMember: (
+    clusterId: string,
+    registeredName: string,
+    relationshipTag?: string
+  ) => Promise<void>;
+  excludeFaceCluster: (clusterId: string) => Promise<void>;
+  restoreExcludedFaceClusters: () => Promise<void>;
+  detectFacesFromPhotoFile: (fileName: string) => Promise<number>;
 
   // 데이터셋 & 인덱싱 상태
   photos: PhotoItem[];
@@ -302,6 +321,99 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     }
   },
 
+  faceClusters: [],
+  latestCorpusYear: 2026,
+  showFaceRegistryModal: false,
+  detectingLiveFaces: false,
+  setShowFaceRegistryModal: (showFaceRegistryModal) => set({ showFaceRegistryModal }),
+
+  registerFaceMember: async (clusterId, registeredName, relationshipTag) => {
+    const cleanName = registeredName.trim();
+    const prevClusters = get().faceClusters;
+    const nextClusters = prevClusters.map((c) =>
+      c.clusterId === clusterId
+        ? {
+            ...c,
+            registeredName: cleanName,
+            relationshipTag: relationshipTag !== undefined ? relationshipTag : c.relationshipTag,
+          }
+        : c
+    );
+
+    const targetCluster = nextClusters.find((c) => c.clusterId === clusterId);
+    const matchedPhotoSet = new Set(targetCluster?.matchedPhotoFiles ?? []);
+    const tagToAdd = cleanName ? `#${cleanName}` : '';
+    const relTagToAdd =
+      targetCluster?.relationshipTag && targetCluster.relationshipTag.startsWith('#')
+        ? targetCluster.relationshipTag
+        : '';
+
+    const updatedPhotos = get().photos.map((p) => {
+      if (!matchedPhotoSet.has(p.name)) return p;
+      const tags = new Set(p.tags);
+      if (tagToAdd) tags.add(tagToAdd);
+      if (relTagToAdd) tags.add(relTagToAdd);
+      return {
+        ...p,
+        tags: Array.from(tags),
+      };
+    });
+
+    set({ faceClusters: nextClusters, photos: updatedPhotos });
+
+    const serverUpdated = await updateFaceClusterRegistry({
+      action: 'update',
+      clusterId,
+      registeredName: cleanName,
+      relationshipTag,
+    });
+    if (serverUpdated) {
+      set({ faceClusters: serverUpdated });
+    }
+  },
+
+  excludeFaceCluster: async (clusterId) => {
+    set((state) => ({
+      faceClusters: state.faceClusters.map((c) =>
+        c.clusterId === clusterId ? { ...c, excludedAsPasserby: true } : c
+      ),
+    }));
+    const serverUpdated = await updateFaceClusterRegistry({
+      action: 'update',
+      clusterId,
+      excludedAsPasserby: true,
+    });
+    if (serverUpdated) {
+      set({ faceClusters: serverUpdated });
+    }
+  },
+
+  restoreExcludedFaceClusters: async () => {
+    set((state) => ({
+      faceClusters: state.faceClusters.map((c) => ({ ...c, excludedAsPasserby: false })),
+    }));
+    const serverUpdated = await updateFaceClusterRegistry({
+      action: 'restore_excluded',
+    });
+    if (serverUpdated) {
+      set({ faceClusters: serverUpdated });
+    }
+  },
+
+  detectFacesFromPhotoFile: async (fileName) => {
+    set({ detectingLiveFaces: true });
+    try {
+      const res = await detectLiveFacesFromPhoto(fileName);
+      if (res && Array.isArray(res.clusters)) {
+        set({ faceClusters: res.clusters });
+        return res.detectedCount;
+      }
+      return 0;
+    } finally {
+      set({ detectingLiveFaces: false });
+    }
+  },
+
   photos: [],
   duplicateGroups: [],
   initialized: false,
@@ -322,18 +434,42 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     if (get().initialized || get().initializing) return;
     set({ initializing: true });
 
-    const [dataset, telemetry, indexedDocs, indexedVideos] = await Promise.all([
+    const [dataset, telemetry, indexedDocs, indexedVideos, faceData] = await Promise.all([
       loadInitialPhotoDataset(),
       detectHardwareTelemetry(),
       fetchIndexedDocuments(),
       fetchIndexedVideos(),
+      fetchAutonomousFaceClusters(),
     ]);
 
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
 
-    const localChips = buildLocalSentenceSamplesFromCorpus(dataset.photos);
-    const fallbackThumb = dataset.photos[0]?.thumbUrl || '';
+    // 이미 등록된 얼굴 멤버 이름이 있다면 로컬 사진 태그에도 동기화
+    const memberTagsByPhoto = new Map<string, string[]>();
+    for (const fc of faceData.clusters) {
+      if (fc.excludedAsPasserby) continue;
+      const tags: string[] = [];
+      if (fc.registeredName) tags.push(`#${fc.registeredName}`);
+      if (fc.relationshipTag) tags.push(fc.relationshipTag);
+      if (tags.length === 0) continue;
+      for (const fName of fc.matchedPhotoFiles ?? []) {
+        const prev = memberTagsByPhoto.get(fName) ?? [];
+        memberTagsByPhoto.set(fName, Array.from(new Set([...prev, ...tags])));
+      }
+    }
+
+    const enrichedPhotos = dataset.photos.map((p) => {
+      const extraTags = memberTagsByPhoto.get(p.name);
+      if (!extraTags || extraTags.length === 0) return p;
+      return {
+        ...p,
+        tags: Array.from(new Set([...extraTags, ...p.tags])),
+      };
+    });
+
+    const localChips = buildLocalSentenceSamplesFromCorpus(enrichedPhotos);
+    const fallbackThumb = enrichedPhotos[0]?.thumbUrl || '';
     const localAhaItems: OnboardingAhaItem[] = localChips.slice(0, 4).map((chip) => ({
       photoId: chip.id,
       thumbUrl: chip.thumbUrl || fallbackThumb,
@@ -348,16 +484,18 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     const initialQuery = `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`;
 
     const trashIds = new Set<string>(
-      dataset.photos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
+      enrichedPhotos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
     );
 
     set({
-      photos: dataset.photos,
+      photos: enrichedPhotos,
       duplicateGroups: dataset.duplicateGroups,
       localDocuments: indexedDocs,
       matchedLocalDocs: indexedDocs,
       videoSceneItems: indexedVideos,
       matchedVideoScenes: indexedVideos,
+      faceClusters: faceData.clusters,
+      latestCorpusYear: faceData.latestCorpusYear,
       onboardingProgress: {
         ...INITIAL_ONBOARDING_PROGRESS,
         currentPhotoThumb: indexedVideos[0]?.thumbUrl || fallbackThumb,

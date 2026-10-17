@@ -53,6 +53,63 @@ export interface VideoSceneItem {
   timelineFrames: VideoTimelineFrame[];
 }
 
+/** [라운지 마스터 스펙] 원터치 관계 호칭 칩 */
+export type FaceRelationshipChip =
+  | '#나(방장)'
+  | '#아내'
+  | '#남편'
+  | '#자녀'
+  | '#부모님'
+  | '#친구';
+
+/** [라운지 마스터 스펙] 인물 클러스터와 매칭된 동영상 타임라인 구간 */
+export interface FaceVideoSegmentMatch {
+  videoId: string;
+  videoFileName: string;
+  videoTitle: string;
+  timeSec: number;
+  timestampText: string;
+  phaseLabel: string;
+  sceneCaption: string;
+  thumbUrl: string;
+}
+
+/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 당해 연도 베스트 1장 인물 클러스터 */
+export interface FaceMemberCluster {
+  clusterId: string;
+  personKey: string;
+  /** 방장이 직접 입력한 실명/별명 (예: 진욱, 은숙, 천우, 김총무) */
+  registeredName: string;
+  /** 방장이 원터치로 선택한 관계 칩 (#나(방장), #아내, #남편, #자녀, #부모님, #친구) */
+  relationshipTag: string;
+  suggestedChip: string;
+  roleHintKo: string;
+  appearanceLabelKo: string;
+  isPasserbyCandidate: boolean;
+  /** [✕ 행인 제외] 버튼으로 제외 처리되었는지 여부 */
+  excludedAsPasserby: boolean;
+  representativePhoto: string;
+  representativeYear: number;
+  representativeDate: string;
+  frontalScore: number;
+  opticalSharpness: number;
+  /** 실제 이미지 얼굴 영역에서 자동 크롭된 아바타 이미지 URL */
+  avatarUrl: string;
+  /** 실시간 좌표 크롭 URL (/ __faces/crop?file=...&box=ymin,xmin,ymax,xmax) */
+  cropUrl: string;
+  /** 정규화된 얼굴 Bounding Box [ymin, xmin, ymax, xmax] (0..1000) */
+  boundingBox: [number, number, number, number];
+  detectedSampleCount: number;
+  matchedPhotoCount: number;
+  matchedPhotoFiles: string[];
+  matchedVideoSegmentCount: number;
+  matchedVideoSegments: FaceVideoSegmentMatch[];
+  /** Step 2~3 초대받은 친구 폰 레이더 스캔 기준 촬영 날짜 목록 */
+  seedDates: string[];
+  /** Step 2~3 초대받은 친구 폰 레이더 스캔 기준 768차원 임베딩 시드(Seed) 요약 */
+  seedVecPreview?: number[];
+}
+
 /** [스펙 1] 로컬 폴더(PC/폰) 내 PDF, TXT, DOCX 등 텍스트 추출 문서 자산 */
 export interface LocalDocumentFile {
   id: string;

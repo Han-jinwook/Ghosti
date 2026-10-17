@@ -9,6 +9,7 @@ import {
   PricingModal,
   VideoScenePreviewModal,
 } from './components/PricingModal';
+import { FaceMemberRegistryModal } from './components/FaceMemberRegistryModal';
 
 export const App: React.FC = () => {
   const {
@@ -49,6 +50,9 @@ export const App: React.FC = () => {
 
       {/* [체험판 타겟 ②] 동영상 장면 검색 상세 & 원본 MP4 재생 모달 */}
       <VideoScenePreviewModal />
+
+      {/* [라운지 마스터 스펙] 자율 얼굴 추출(Face Crop) & 당해 연도 대표 멤버 등록 & 초대 레이더 시드 모달 */}
+      <FaceMemberRegistryModal />
 
       {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}
       {lastUndoBatch && (

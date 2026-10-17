@@ -626,11 +626,63 @@ function sayseeLocalBridge(): Plugin {
         res.end(JSON.stringify({ ok: true, count: Object.keys(light).length, items: light, photos: light }));
       });
 
-      // [핵심] 550장 전체 실시간 768차원 EmbeddingGemma 2 + 시맨틱 + EXIF GPS 지명 하이브리드 검색 엔진
+      const FACE_CLUSTERS_FILE = path.resolve(POC_RESULTS_DIR, 'face_clusters_index.json');
+      const FACE_CROPS_DIR = path.resolve(POC_RESULTS_DIR, 'face_crops');
+
+      const loadFaceClustersData = (): { latestCorpusYear: number; clusters: any[] } => {
+        if (!fs.existsSync(FACE_CLUSTERS_FILE)) {
+          return { latestCorpusYear: 2026, clusters: [] };
+        }
+        try {
+          const parsed = JSON.parse(fs.readFileSync(FACE_CLUSTERS_FILE, 'utf-8'));
+          return {
+            latestCorpusYear: Number(parsed.latestCorpusYear) || 2026,
+            clusters: Array.isArray(parsed.clusters) ? parsed.clusters : [],
+          };
+        } catch {
+          return { latestCorpusYear: 2026, clusters: [] };
+        }
+      };
+
+      const extractMemberTokens = (cluster: any): string[] => {
+        if (!cluster || cluster.excludedAsPasserby) return [];
+        const tokens = new Set<string>();
+        const name = String(cluster.registeredName ?? '').trim().toLowerCase();
+        if (name) {
+          tokens.add(name);
+          for (const part of name.split(/\s+/)) {
+            if (part.trim()) tokens.add(part.trim());
+          }
+        }
+        const rel = String(cluster.relationshipTag ?? '').trim().toLowerCase();
+        if (rel) {
+          tokens.add(rel.replace(/^#/, ''));
+          for (const part of rel.replace(/^#/, '').split(/[()\s/·]+/)) {
+            if (part.trim()) tokens.add(part.trim());
+          }
+        }
+        return Array.from(tokens);
+      };
+
+      // [핵심] 550장 전체 실시간 768차원 EmbeddingGemma 2 + 시맨틱 + EXIF GPS 지명 + 등록 얼굴 실명 하이브리드 검색 엔진
       const runHybridCorpusSearch = async (rawQuery: string) => {
         const t0 = performance.now();
         const q = rawQuery.trim();
         const map = getSemanticIndexMap();
+        const { clusters: faceClusters } = loadFaceClustersData();
+
+        // 사진별로 바인딩된 등록 멤버 실명·관계 호칭 토큰 맵 구성 (실시간 반영)
+        const photoMemberTokensMap = new Map<string, string[]>();
+        const representativePhotoSet = new Set<string>();
+        for (const fc of faceClusters) {
+          const mTokens = extractMemberTokens(fc);
+          if (mTokens.length === 0) continue;
+          if (fc.representativePhoto) representativePhotoSet.add(fc.representativePhoto);
+          for (const fName of fc.matchedPhotoFiles ?? []) {
+            const prev = photoMemberTokensMap.get(fName) ?? [];
+            photoMemberTokensMap.set(fName, Array.from(new Set([...prev, ...mTokens])));
+          }
+        }
 
         // 1) 불용어 및 수식어(Soft word) 분리, 핵심 검색 토큰(Hard concept token) 추출
         const SOFT_WORDS = new Set([
@@ -649,6 +701,9 @@ function sayseeLocalBridge(): Plugin {
           '바닷가', '창가', '길가', '물가', '휴가', '아이', '어린이', '고양이', '멍멍이', '물놀이', '나들이',
           '목걸이', '귀걸이', '종로', '을지로', '다리', '나무다리', '구름다리', '선풍기', '비행기', '세탁기',
         ]);
+        for (const fc of faceClusters) {
+          for (const tk of extractMemberTokens(fc)) KEEP_NOUNS.add(tk);
+        }
 
         const stripKoParticle = (w: string): string => {
           if (KEEP_NOUNS.has(w) || SOFT_WORDS.has(w)) return w;
@@ -656,7 +711,7 @@ function sayseeLocalBridge(): Plugin {
           if (m2 !== w && m2.length >= 2) return m2;
           if (KEEP_NOUNS.has(m2) || SOFT_WORDS.has(m2)) return m2;
           if (w.length >= 3) {
-            const m1 = w.replace(/(들|의|을|를|은|는|에|와|과|도)$/, '');
+            const m1 = w.replace(/(들|의|을|를|은|는|이|가|에|와|과|도)$/, '');
             if (m1.length >= 2) return m1;
           }
           return w;
@@ -679,6 +734,9 @@ function sayseeLocalBridge(): Plugin {
         const KEEP_STEM_WORDS = new Set([
           '아이', '어린이', '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
         ]);
+        for (const fc of faceClusters) {
+          for (const tk of extractMemberTokens(fc)) KEEP_STEM_WORDS.add(tk);
+        }
         const KO_PARTICLE_RX =
           /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
         const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트)$/;
@@ -749,11 +807,15 @@ function sayseeLocalBridge(): Plugin {
         }[] = [];
 
         for (const [file, meta] of Object.entries(map)) {
-          const primaryOntoSet = new Set((meta.ontologyPrimaryTags ?? []).map((t) => t.toLowerCase()));
+          const memberTokens = photoMemberTokensMap.get(file) ?? [];
+          const primaryOntoSet = new Set([
+            ...(meta.ontologyPrimaryTags ?? []).map((t) => t.toLowerCase()),
+            ...memberTokens,
+          ]);
           const captionOntoSet = new Set((meta.ontologyCaptionTags ?? []).map((t) => t.toLowerCase()));
 
           const locText = `${meta.locationTag ?? ''} ${meta.locationKo ?? ''} ${(meta.locationKeywords ?? []).join(' ')}`;
-          const tagAndKwText = `${meta.primaryTag} ${locText} ${meta.keywordsKo.join(' ')}`.toLowerCase();
+          const tagAndKwText = `${meta.primaryTag} ${locText} ${meta.keywordsKo.join(' ')} ${memberTokens.join(' ')}`.toLowerCase();
           const searchableText = `${tagAndKwText} ${meta.captionKo} ${meta.captionEn}`.toLowerCase();
 
           const tagStems = extractKoStems(tagAndKwText);
@@ -763,6 +825,7 @@ function sayseeLocalBridge(): Plugin {
           let matchedGroupCount = 0;
           let tagMatchedGroupCount = 0;
           let compoundHit = false;
+          let memberHit = false;
 
           // 복합어(예: "나무 다리" -> "나무다리")가 온톨로지 태그 또는 원문에 하나의 단어로 존재하는 경우 (2단어 이상 결합 시에만 작동)
           if (
@@ -786,7 +849,10 @@ function sayseeLocalBridge(): Plugin {
             let groupMatchedInTag = false;
             let groupMatchedInCaption = false;
 
-            if (primaryOntoSet.has(qt.raw) || matchKoTokenInStems(qt.raw, tagStems, tagAndKwText)) {
+            if (memberTokens.includes(qt.raw)) {
+              groupMatchedInTag = true;
+              memberHit = true;
+            } else if (primaryOntoSet.has(qt.raw) || matchKoTokenInStems(qt.raw, tagStems, tagAndKwText)) {
               groupMatchedInTag = true;
             } else if (captionOntoSet.has(qt.raw) || matchKoTokenInStems(qt.raw, searchStems, searchableText)) {
               groupMatchedInCaption = true;
@@ -800,6 +866,11 @@ function sayseeLocalBridge(): Plugin {
               matchedGroupCount += 1;
               lexicalScore += 0.18;
             }
+          }
+
+          if (memberHit) {
+            if (representativePhotoSet.has(file)) lexicalScore += 0.18;
+            else if (file.startsWith('2026')) lexicalScore += 0.08;
           }
 
           // 부가 수식어(Soft tokens: "뛰노는", "맛있는" 등)가 캡션에 있으면 소폭 가점
@@ -838,6 +909,11 @@ function sayseeLocalBridge(): Plugin {
             allPrimaryOntologyVocab.add(t.toLowerCase());
           }
         }
+        for (const fc of faceClusters) {
+          for (const tk of extractMemberTokens(fc)) {
+            allPrimaryOntologyVocab.add(tk);
+          }
+        }
 
         const coreGuardrailTokens = queryTokens.filter((qt) => allPrimaryOntologyVocab.has(qt.raw));
         const requiredCoreCount = coreGuardrailTokens.length;
@@ -845,9 +921,13 @@ function sayseeLocalBridge(): Plugin {
         // 각 사진이 핵심 온톨로지 명사(가드레일)를 몇 개 만족하는지 계산
         const scoredWithCore = scored.map((item) => {
           const m = map[item.name];
-          const pSet = new Set((m?.ontologyPrimaryTags ?? []).map((t) => t.toLowerCase()));
+          const memberTokens = photoMemberTokensMap.get(item.name) ?? [];
+          const pSet = new Set([
+            ...(m?.ontologyPrimaryTags ?? []).map((t) => t.toLowerCase()),
+            ...memberTokens,
+          ]);
           const cSet = new Set((m?.ontologyCaptionTags ?? []).map((t) => t.toLowerCase()));
-          const tagTxt = `${m?.primaryTag ?? ''} ${m?.locationKo ?? ''} ${(m?.keywordsKo ?? []).join(' ')}`.toLowerCase();
+          const tagTxt = `${m?.primaryTag ?? ''} ${m?.locationKo ?? ''} ${(m?.keywordsKo ?? []).join(' ')} ${memberTokens.join(' ')}`.toLowerCase();
           const fullTxt = `${tagTxt} ${m?.captionKo ?? ''} ${m?.captionEn ?? ''}`.toLowerCase();
           const tagStems = extractKoStems(tagTxt);
           const fullStems = extractKoStems(fullTxt);
@@ -1188,6 +1268,22 @@ function sayseeLocalBridge(): Plugin {
             return;
           }
 
+          const { clusters: faceClusters } = loadFaceClustersData();
+          // (videoId, timeSec) 프레임별 등록 멤버 실명·호칭 토큰 맵 구성
+          const videoFrameMemberTokens = new Map<string, string[]>();
+          const videoAnyMemberTokens = new Map<string, string[]>();
+          for (const fc of faceClusters) {
+            const mTokens = extractMemberTokens(fc);
+            if (mTokens.length === 0) continue;
+            for (const seg of fc.matchedVideoSegments ?? []) {
+              const key = `${seg.videoId}_${seg.timeSec}`;
+              const prev = videoFrameMemberTokens.get(key) ?? [];
+              videoFrameMemberTokens.set(key, Array.from(new Set([...prev, ...mTokens])));
+              const vPrev = videoAnyMemberTokens.get(seg.videoId) ?? [];
+              videoAnyMemberTokens.set(seg.videoId, Array.from(new Set([...vPrev, ...mTokens])));
+            }
+          }
+
           const STOP_WORDS = new Set([
             '찾아줘', '보여줘', '영상', '동영상', '장면', '모습', '클로즈업', '초근접촬영', '포즈',
             '취하다가', '취하는', '말하며', '다가오는', '다가옴', '에서', '위에서', '아래', '너머',
@@ -1199,6 +1295,9 @@ function sayseeLocalBridge(): Plugin {
             '구명조끼', '무지개', '보트', '소파', '래시가드', '밀짚모자', '선글라스', '반바지',
             '민소매', '아이콘', '스마트폰', '패러세일링', '패러세일', '낙하산', '키나발루', '야자수', '일출',
           ]);
+          for (const fc of faceClusters) {
+            for (const tk of extractMemberTokens(fc)) KEEP_NOUNS.add(tk);
+          }
 
           const rawTokens = q
             .toLowerCase()
@@ -1206,7 +1305,7 @@ function sayseeLocalBridge(): Plugin {
             .split(/\s+/)
             .map((t) => {
               if (KEEP_NOUNS.has(t)) return t;
-              return t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '');
+              return t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|이|가|에|와|과|도)$/, '');
             })
             .filter((t) => t.length >= 1 && !STOP_WORDS.has(t));
 
@@ -1218,6 +1317,9 @@ function sayseeLocalBridge(): Plugin {
           const KEEP_STEM_WORDS = new Set([
             '아이', '어린이', '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
           ]);
+          for (const fc of faceClusters) {
+            for (const tk of extractMemberTokens(fc)) KEEP_STEM_WORDS.add(tk);
+          }
           const KO_PARTICLE_RX =
             /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
           const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트)$/;
@@ -1276,22 +1378,28 @@ function sayseeLocalBridge(): Plugin {
           }[] = [];
 
           for (const vid of rawVideos) {
-            const videoCorpus = `${vid.title ?? ''} ${vid.locationKo ?? ''} ${vid.sceneDescription ?? ''} ${(vid.keywords ?? []).join(' ')}`.toLowerCase();
+            const vMemberTokens = videoAnyMemberTokens.get(vid.id) ?? [];
+            const videoCorpus = `${vid.title ?? ''} ${vid.locationKo ?? ''} ${vid.sceneDescription ?? ''} ${(vid.keywords ?? []).join(' ')} ${vMemberTokens.join(' ')}`.toLowerCase();
             let bestFrame = vid.timelineFrames?.[0];
             let bestFrameCombined = -1;
             let bestFrameLexical = 0;
             let bestFrameVecSim = 0.6;
 
             for (const frame of vid.timelineFrames ?? []) {
-              const frameKws = [...(frame.keywords ?? []), ...(frame.ontologyKeywords ?? [])].map((k: string) =>
-                k.toLowerCase()
-              );
+              const fMemberTokens = videoFrameMemberTokens.get(`${vid.id}_${frame.timeSec}`) ?? [];
+              const frameKws = [
+                ...(frame.keywords ?? []),
+                ...(frame.ontologyKeywords ?? []),
+                ...fMemberTokens,
+              ].map((k: string) => k.toLowerCase());
               const frameCorpus = `${frame.timestampText ?? ''} ${frame.phaseLabel ?? ''} ${frame.sceneCaption ?? ''} ${frame.captionEn ?? ''} ${frameKws.join(' ')} ${(frame.tags ?? []).join(' ')}`.toLowerCase();
               const frameStems = extractKoStems(frameCorpus);
 
               let fLex = 0;
               for (const tk of rawTokens) {
-                if (frameKws.some((k) => matchKoTokenInStems(tk, [k], k))) {
+                if (fMemberTokens.includes(tk)) {
+                  fLex += 7;
+                } else if (frameKws.some((k) => matchKoTokenInStems(tk, [k], k))) {
                   fLex += 6;
                 } else if (matchKoTokenInStems(tk, frameStems, frameCorpus)) {
                   fLex += 4;
@@ -1316,12 +1424,13 @@ function sayseeLocalBridge(): Plugin {
 
             if (!bestFrame) continue;
 
-            const fullCorpus = `${videoCorpus} ${bestFrame.sceneCaption ?? ''} ${(bestFrame.keywords ?? []).join(' ')} ${(bestFrame.ontologyKeywords ?? []).join(' ')}`.toLowerCase();
+            const bestFrameMemberTokens = videoFrameMemberTokens.get(`${vid.id}_${bestFrame.timeSec}`) ?? [];
+            const fullCorpus = `${videoCorpus} ${bestFrame.sceneCaption ?? ''} ${(bestFrame.keywords ?? []).join(' ')} ${(bestFrame.ontologyKeywords ?? []).join(' ')} ${bestFrameMemberTokens.join(' ')}`.toLowerCase();
             const fullStems = extractKoStems(fullCorpus);
             let matchedTokenCount = 0;
             let videoBaseHits = 0;
             for (const tk of rawTokens) {
-              if (matchKoTokenInStems(tk, fullStems, fullCorpus)) {
+              if (bestFrameMemberTokens.includes(tk) || vMemberTokens.includes(tk) || matchKoTokenInStems(tk, fullStems, fullCorpus)) {
                 matchedTokenCount += 1;
                 videoBaseHits += 3;
               }
@@ -1601,6 +1710,279 @@ function sayseeLocalBridge(): Plugin {
           res.end(JSON.stringify({ ok: true, documents: stripDocVecs(filtered) }));
         } catch (e) {
           res.end(JSON.stringify({ ok: false, error: String(e), documents: [] }));
+        }
+      });
+
+      // ──────────────────────────────────────────────────────────────────────────
+      // [자율 엔진 ③] 라운지 마스터 '자율 얼굴 추출(Face Crop) & 당해 연도 대표 얼굴 멤버 등록 및 실명 검색' API
+      // ──────────────────────────────────────────────────────────────────────────
+      const stripFaceClusterVecs = (clusters: any[]) =>
+        clusters.map((c) => {
+          const { seedVec, ...rest } = c;
+          return {
+            ...rest,
+            seedVecPreview: Array.isArray(seedVec) ? seedVec.slice(0, 8) : [],
+          };
+        });
+
+      server.middlewares.use('/__faces/index', (_req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const data = loadFaceClustersData();
+        res.end(
+          JSON.stringify({
+            ok: true,
+            latestCorpusYear: data.latestCorpusYear,
+            clusterCount: data.clusters.length,
+            clusters: stripFaceClusterVecs(data.clusters),
+          })
+        );
+      });
+
+      server.middlewares.use('/__faces/avatar', (req, res) => {
+        const u = new URL(req.url ?? '', 'http://local');
+        const f = path.basename(u.searchParams.get('f') ?? '');
+        const full = path.resolve(FACE_CROPS_DIR, f);
+        if (!f || !full.startsWith(FACE_CROPS_DIR + path.sep) || !fs.existsSync(full)) {
+          res.statusCode = 404;
+          res.end('not found');
+          return;
+        }
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        fs.createReadStream(full).pipe(res);
+      });
+
+      // 실제 이미지 픽셀에서 Bounding Box [ymin, xmin, ymax, xmax] (0..1000) 영역을 실시간 크롭하여 반환
+      server.middlewares.use('/__faces/crop', async (req, res) => {
+        try {
+          const u = new URL(req.url ?? '', 'http://local');
+          const file = path.basename(u.searchParams.get('file') ?? '');
+          const boxParam = u.searchParams.get('box') ?? '200,200,600,600';
+          const p1 = path.resolve(PHOTO_DIR, file);
+          const p2 = path.resolve(QUARANTINE_DIR, file);
+          const full = fs.existsSync(p1) ? p1 : p2;
+          if (!file || !fs.existsSync(full)) {
+            res.statusCode = 404;
+            res.end('not found');
+            return;
+          }
+          const [ymin, xmin, ymax, xmax] = boxParam
+            .split(',')
+            .map((v) => Math.max(0, Math.min(1000, Number(v) || 0)));
+          const rotatedBuf = await sharp(full).rotate().toBuffer();
+          const meta = await sharp(rotatedBuf).metadata();
+          const imgW = meta.width ?? 1000;
+          const imgH = meta.height ?? 1000;
+
+          const faceTop = (ymin / 1000) * imgH;
+          const faceLeft = (xmin / 1000) * imgW;
+          const faceH = Math.max(32, ((ymax - ymin) / 1000) * imgH);
+          const faceW = Math.max(32, ((xmax - xmin) / 1000) * imgW);
+          const cx = faceLeft + faceW / 2;
+          const cy = faceTop + faceH / 2;
+          const side = Math.min(Math.min(imgW, imgH), Math.max(faceW, faceH) * 1.48);
+
+          const left = Math.max(0, Math.min(imgW - side, Math.round(cx - side / 2)));
+          const top = Math.max(0, Math.min(imgH - side, Math.round(cy - side / 2)));
+          const width = Math.max(16, Math.min(imgW - left, Math.round(side)));
+          const height = Math.max(16, Math.min(imgH - top, Math.round(side)));
+
+          const cropped = await sharp(rotatedBuf)
+            .extract({ left, top, width, height })
+            .resize(240, 240, { fit: 'cover' })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+
+          res.setHeader('Content-Type', 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.end(cropped);
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(String(e));
+        }
+      });
+
+      // 방장이 인터랙티브하게 이름·호칭을 등록하거나 [✕ 행인 제외] 클릭 시 실시간 저장 및 검색 엔진 즉시 연동
+      server.middlewares.use('/__faces/register', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        try {
+          const body = await readJsonBody(req);
+          const data = loadFaceClustersData();
+          const action = String(body?.action ?? 'update');
+
+          if (action === 'restore_excluded') {
+            for (const c of data.clusters) {
+              c.excludedAsPasserby = false;
+            }
+          } else {
+            const clusterId = String(body?.clusterId ?? '').trim();
+            const target = data.clusters.find((c) => c.clusterId === clusterId);
+            if (target) {
+              if (typeof body?.registeredName === 'string') {
+                target.registeredName = body.registeredName.trim();
+              }
+              if (typeof body?.relationshipTag === 'string') {
+                target.relationshipTag = body.relationshipTag.trim();
+              }
+              if (typeof body?.excludedAsPasserby === 'boolean') {
+                target.excludedAsPasserby = body.excludedAsPasserby;
+              }
+            }
+          }
+
+          fs.mkdirSync(path.dirname(FACE_CLUSTERS_FILE), { recursive: true });
+          fs.writeFileSync(
+            FACE_CLUSTERS_FILE,
+            JSON.stringify(
+              {
+                createdAt: new Date().toISOString(),
+                latestCorpusYear: data.latestCorpusYear,
+                clusterCount: data.clusters.length,
+                clusters: data.clusters,
+              },
+              null,
+              2
+            ),
+            'utf-8'
+          );
+
+          res.end(
+            JSON.stringify({
+              ok: true,
+              latestCorpusYear: data.latestCorpusYear,
+              clusters: stripFaceClusterVecs(data.clusters),
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
+
+      // 방장이 특정 사진을 직접 선택하여 실시간 얼굴 검출 & 크롭을 요청할 때 작동하는 엔드포인트
+      server.middlewares.use('/__faces/detect', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        try {
+          const body = await readJsonBody(req);
+          const fileName = path.basename(String(body?.fileName ?? '').trim());
+          const full = path.resolve(PHOTO_DIR, fileName);
+          const apiKey = resolveLocalGeminiApiKey();
+          if (!fileName || !fs.existsSync(full) || !apiKey) {
+            res.end(JSON.stringify({ ok: false, error: '유효한 사진 파일이 아닙니다.' }));
+            return;
+          }
+
+          const rotated = await sharp(full)
+            .rotate()
+            .resize({ width: 768, height: 768, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 86 })
+            .toBuffer();
+
+          const gRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: `이 이미지(${fileName})에서 사람의 얼굴(머리~턱) 영역 좌표를 모두 검출하여 아래 JSON 스키마로 출력하세요:
+{"faces": [{"roleHintKo": "성인 남성|성인 여성|소년/소녀|동석자", "suggestedChip": "#나(방장)|#아내|#남편|#자녀|#친구", "appearanceLabelKo": "얼굴/복장 짧은 특징", "frontalScore": 0.95, "box_2d": [ymin, xmin, ymax, xmax]}]}`,
+                      },
+                      {
+                        inlineData: {
+                          mimeType: 'image/jpeg',
+                          data: rotated.toString('base64'),
+                        },
+                      },
+                    ],
+                  },
+                ],
+                generationConfig: {
+                  temperature: 0.1,
+                  responseMimeType: 'application/json',
+                },
+              }),
+            }
+          );
+
+          const json: any = await gRes.json();
+          const txt = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+          const parsed = JSON.parse(txt);
+          const faces = Array.isArray(parsed?.faces) ? parsed.faces : [];
+
+          const data = loadFaceClustersData();
+          const yearMatch = fileName.match(/(20\d{2})/);
+          const year = yearMatch ? Number(yearMatch[1]) : data.latestCorpusYear;
+
+          for (const f of faces) {
+            if (!Array.isArray(f.box_2d) || f.box_2d.length !== 4) continue;
+            const newId = `face_live_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            const box = f.box_2d.map((v: any) => Math.max(0, Math.min(1000, Number(v) || 0)));
+            const cropUrl = `/__faces/crop?file=${encodeURIComponent(fileName)}&box=${box.join(',')}`;
+            data.clusters.unshift({
+              clusterId: newId,
+              personKey: newId,
+              registeredName: '',
+              relationshipTag: '',
+              suggestedChip: f.suggestedChip || '#친구',
+              roleHintKo: f.roleHintKo || '검출 인물',
+              appearanceLabelKo: f.appearanceLabelKo || `${fileName} 검출 얼굴`,
+              isPasserbyCandidate: false,
+              excludedAsPasserby: false,
+              representativePhoto: fileName,
+              representativeYear: year,
+              representativeDate: `${year}년 촬영`,
+              frontalScore: Number(f.frontalScore) || 0.95,
+              opticalSharpness: 25000,
+              avatarUrl: cropUrl,
+              cropUrl,
+              boundingBox: box,
+              detectedSampleCount: 1,
+              matchedPhotoCount: 1,
+              matchedPhotoFiles: [fileName],
+              matchedVideoSegmentCount: 0,
+              matchedVideoSegments: [],
+              seedDates: [`${year}년 촬영`],
+              seedVec: [],
+            });
+          }
+
+          fs.writeFileSync(
+            FACE_CLUSTERS_FILE,
+            JSON.stringify(
+              {
+                createdAt: new Date().toISOString(),
+                latestCorpusYear: data.latestCorpusYear,
+                clusterCount: data.clusters.length,
+                clusters: data.clusters,
+              },
+              null,
+              2
+            ),
+            'utf-8'
+          );
+
+          res.end(
+            JSON.stringify({
+              ok: true,
+              detectedCount: faces.length,
+              clusters: stripFaceClusterVecs(data.clusters),
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
         }
       });
     },

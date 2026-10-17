@@ -20,6 +20,7 @@ import {
 import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, storageInfo } from './opfsCache';
 import type {
   DuplicateGroup,
+  FaceMemberCluster,
   HardwareTelemetry,
   LocalDocumentFile,
   PhotoItem,
@@ -57,6 +58,67 @@ export async function fetchIndexedVideos(): Promise<VideoSceneItem[]> {
     return Array.isArray(json.videos) ? json.videos : [];
   } catch {
     return [];
+  }
+}
+
+export async function fetchAutonomousFaceClusters(): Promise<{
+  latestCorpusYear: number;
+  clusters: FaceMemberCluster[];
+}> {
+  try {
+    const res = await fetch('/__faces/index');
+    if (!res.ok) return { latestCorpusYear: 2026, clusters: [] };
+    const json = await res.json();
+    return {
+      latestCorpusYear: Number(json.latestCorpusYear) || 2026,
+      clusters: Array.isArray(json.clusters) ? json.clusters : [],
+    };
+  } catch {
+    return { latestCorpusYear: 2026, clusters: [] };
+  }
+}
+
+export async function updateFaceClusterRegistry(payload: {
+  action?: 'update' | 'restore_excluded';
+  clusterId?: string;
+  registeredName?: string;
+  relationshipTag?: string;
+  excludedAsPasserby?: boolean;
+}): Promise<FaceMemberCluster[] | null> {
+  try {
+    const res = await fetch('/__faces/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.ok && Array.isArray(json.clusters) ? json.clusters : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function detectLiveFacesFromPhoto(
+  fileName: string
+): Promise<{ detectedCount: number; clusters: FaceMemberCluster[] } | null> {
+  try {
+    const res = await fetch('/__faces/detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok && Array.isArray(json.clusters)) {
+      return {
+        detectedCount: Number(json.detectedCount) || 0,
+        clusters: json.clusters,
+      };
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
