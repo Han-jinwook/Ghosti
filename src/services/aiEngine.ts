@@ -993,8 +993,8 @@ export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSea
 
       if (
         sameDupGroup ||
-        (dhashDist <= 10 && dt <= 6 && entry.tsSec > 0) ||
-        (sameSceneCluster && dt <= 4 && entry.tsSec > 0)
+        (dhashDist <= 8 && dt <= 5 && entry.tsSec > 0) ||
+        (sameSceneCluster && dhashDist <= 12 && dt <= 3 && entry.tsSec > 0)
       ) {
         prevCluster.push(entry);
         continue;
@@ -1154,6 +1154,14 @@ export async function loadInitialPhotoDataset(): Promise<{
   const duplicateGroups: DuplicateGroup[] = [];
   const dupGroupByPhoto = new Map<string, { groupId: string; isBest: boolean }>();
 
+  // [규칙 ②] Best 컷 선정 가중치: 단순히 배경 나뭇잎 밝기(maxCellLap)만 보지 않고,
+  // 함께 찍힌 인물(얼굴·피부 면적 skinPct)이 온전히 나온 사진(커플/단체컷) + 피사체 전체 선명도(meanCellLap)를 최우선 가산
+  const computeBestCutScore = (a: PhysicalAuditRecord): number => {
+    const hasPeople = a.skinPct >= 5.0;
+    const peopleCoverageBonus = hasPeople ? a.skinPct * 1400 : 0;
+    return peopleCoverageBonus + a.meanCellLap * 1.5 + a.maxCellLap * 0.35;
+  };
+
   for (let i = 0; i < activeAudits.length; i++) {
     const first = activeAudits[i];
     const firstSem = semanticByPhoto.get(first.f) as any;
@@ -1171,16 +1179,21 @@ export async function loadInitialPhotoDataset(): Promise<{
       const last = group[group.length - 1];
       const lastSem = semanticByPhoto.get(last.f) as any;
       const dist = hammingDistanceHex64(last.dhash, cand.dhash);
+      const distFromFirst = hammingDistanceHex64(first.dhash, cand.dhash);
       const dt = Math.abs(last.ts - cand.ts) / 1000;
+      const skinDiff = Math.abs(last.skinPct - cand.skinPct);
       const sameCluster =
         lastSem?.clusterId !== undefined &&
         candSem?.clusterId !== undefined &&
         lastSem.clusterId === candSem.clusterId;
 
+      // [규칙 ①] 인물 수·구도 일치 원칙:
+      // dHash 거리 임계치(<= 12) 및 인물 피부 면적 차이(skinDiff <= 5.5%)를 엄격히 제한하여
+      // 독사진(1인 셀카)과 커플 사진(2인 셀카)이 절대 같은 연사 묶음으로 섞이지 않도록 분리
       if (
         last.md5 === cand.md5 ||
-        (dist <= 5 && dt <= 4 && last.ts > 0) ||
-        (sameCluster && dt <= 3 && (dist <= 15 || (dt <= 2 && dist <= 26)) && last.ts > 0)
+        (dist <= 5 && dt <= 4 && skinDiff <= 5.0 && last.ts > 0) ||
+        (sameCluster && dt <= 3 && dist <= 12 && distFromFirst <= 14 && skinDiff <= 5.5 && last.ts > 0)
       ) {
         group.push(cand);
         visitedDup.add(cand.f);
@@ -1191,9 +1204,11 @@ export async function loadInitialPhotoDataset(): Promise<{
 
     if (group.length >= 2) {
       visitedDup.add(first.f);
-      // 8방향 3x3 그리드 라플라시안 선명도(maxCellLap)가 가장 높은 1장을 기본 보존 원본(Best 1)으로 자동 지정
-      const sortedBySharpness = [...group].sort((a, b) => b.maxCellLap - a.maxCellLap);
-      const bestPhotoId = sortedBySharpness[0].f;
+      // 인물(커플/단체) 온전성 + 피사체 평균 선명도 복합 점수(computeBestCutScore)로 최우선 Best 보존 컷 선정
+      const sortedByBestQuality = [...group].sort(
+        (a, b) => computeBestCutScore(b) - computeBestCutScore(a)
+      );
+      const bestPhotoId = sortedByBestQuality[0].f;
       const groupId = `dup_${group[0].f.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
       duplicateGroups.push({
