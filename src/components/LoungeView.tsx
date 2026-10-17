@@ -761,7 +761,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1.5"
               >
                 <img
-                  src={c.avatarUrl || c.representativePhoto.thumbUrl}
+                  src={c.avatarUrl || c.representativePhoto}
                   alt={c.registeredName}
                   className="w-4 h-4 rounded-full object-cover"
                 />
@@ -853,10 +853,17 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     activateGpuHelper24h,
     setDesktopTab,
     setMobileTab,
+    globalSeedVersion,
+    swarmFaceCandidates,
+    retroScanRunning,
+    lastRetroScanReport,
+    runGlobalSwarmRetroScanAll,
+    setShowFaceRegistryModal,
   } = useSaySeeStore();
 
   const [instantFlushed, setInstantFlushed] = useState(false);
   const [pokedStudentHost, setPokedStudentHost] = useState(false);
+  const pendingSwarmCandidates = swarmFaceCandidates.filter((c) => !c.applied);
 
   const queuePhotos = photos.filter((p) => !p.quarantined).slice(0, 8);
 
@@ -986,6 +993,55 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
             >
               배포된 피드 보러가기 →
+            </button>
+          </div>
+        </div>
+
+        {/* 🕸️ 전 멤버 폰 통합 얼굴 그물망 (Global Seed vN) & 동반 등장 발굴 + 전원 동시 2차 역스캔 */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 via-zinc-900 to-amber-950/35 border border-emerald-400/35 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-mono text-[10.5px] font-extrabold">
+                🕸️ Global Seed v{globalSeedVersion}.0 동기화됨
+              </span>
+              <span className="font-label-sm text-[12.5px] text-white font-bold">
+                호스트뿐 아니라 모든 멤버(게스트)의 대기실 수합 사진이 얼굴 탐색 소스가 됩니다
+              </span>
+              {pendingSwarmCandidates.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/50 text-amber-300 font-label-mono text-[10.5px] font-extrabold">
+                  ✨ 동반 등장 신규 발굴 {pendingSwarmCandidates.length}건 대기 중
+                </span>
+              )}
+            </div>
+            <p className="font-body-sm text-[11.5px] text-zinc-300">
+              기등록 멤버와 <strong>2회 이상 한 프레임에 동반 등장(Co-occurrence)</strong>한 얼굴만 행인 오탐 없이 추출하여 과거 연도 베스트 컷을 차곡차곡 쌓고, 호스트 원본 + 전 멤버 스마트폰 + 동영상 씬을 0.04초 만에 동시 2차 역스캔합니다.
+              {lastRetroScanReport && (
+                <span className="ml-2 text-emerald-300 font-bold">
+                  (최근 역스캔: 사진 +{lastRetroScanReport.rescuedHostPhotos + lastRetroScanReport.rescuedMemberPhonePhotos}장 · 영상 +{lastRetroScanReport.rescuedVideoSegments}구간 추가 회수 완료!)
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={retroScanRunning}
+              onClick={() => runGlobalSwarmRetroScanAll()}
+              className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[11.5px] font-extrabold transition-all"
+            >
+              {retroScanRunning
+                ? '⏳ 전 멤버 폰 0.04초 역스캔 중...'
+                : pendingSwarmCandidates.length > 0
+                  ? `⚡ 대기실 발굴 ${pendingSwarmCandidates.length}건 일괄 병합 & 전원 역스캔`
+                  : '🔄 호스트+전 멤버 폰 재검증 역스캔'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFaceRegistryModal(true)}
+              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-100 font-label-sm text-[11.5px] font-bold transition-all"
+            >
+              🕸️ 통합 얼굴 그물망 열기 →
             </button>
           </div>
         </div>

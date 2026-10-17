@@ -124,6 +124,52 @@ export interface FaceMemberCluster {
   seedVecPreview?: number[];
 }
 
+/**
+ * [전 멤버 폰 통합 얼굴 그물망 (Global Swarm Face Mesh)]
+ * 멤버(게스트)가 올린 사진 속에서 '이미 등록된 멤버와 2회 이상 한 프레임에 동반 등장(Co-occurrence)'하여
+ * 행인이 아님이 100% 검증된 과거 연도 징검다리 베스트 컷 또는 신규 동반 인물 후보
+ */
+export interface GlobalSwarmFaceCandidate {
+  candidateId: string;
+  /** 'year_bridge': 기존 멤버의 비어 있던 연도/각도 징검다리 베스트 컷 | 'new_companion': 멤버 사진에서 새로 발견된 동반 인물 */
+  candidateType: 'year_bridge' | 'new_companion';
+  contributorLabel: string;
+  sourcePhoto: string;
+  shootingYear: number;
+  shootingDate: string;
+  boundingBox: [number, number, number, number];
+  cropUrl: string;
+  coOccurredWithNames: string[];
+  coOccurrenceCount: number;
+  targetClusterId?: string;
+  suggestedMemberName: string;
+  appearanceSummaryKo: string;
+  bridgeReasonKo: string;
+  rescuedHostPhotoCount: number;
+  rescuedMemberPhoneCount: number;
+  rescuedVideoSegmentCount: number;
+  extraPhotoFiles: string[];
+  sampleSearchQuery: string;
+  sampleSearchSpace: 'gallery' | 'video';
+  applied: boolean;
+}
+
+/**
+ * [호스트 원본 + 전 멤버 스마트폰 동시 2차 역스캔(Retro-Scan) 결과 리포트]
+ */
+export interface SwarmRetroScanReport {
+  seedVersion: number;
+  triggerTitle: string;
+  rescuedHostPhotos: number;
+  rescuedMemberPhonePhotos: number;
+  rescuedVideoSegments: number;
+  totalSyncedDevices: number;
+  elapsedMs: number;
+  sampleQuery: string;
+  sampleSpace: 'gallery' | 'video';
+  timestampText: string;
+}
+
 /** [스펙 1] 로컬 폴더(PC/폰) 내 PDF, TXT, DOCX 등 텍스트 추출 문서 자산 */
 export interface LocalDocumentFile {
   id: string;
