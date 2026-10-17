@@ -1,79 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 
-const BRIEFING_DOC_HINTS = [
-  {
-    id: 'hint_doc_insurance',
-    label: '📄 삼성화재 자동차 보험 증권 및 특약',
-    query: '삼성화재 자동차 보험 증권 및 특약',
-    meta: 'PDF 문서 • 2026.05.01 (PC 바탕화면)',
-  },
-  {
-    id: 'hint_doc_manual',
-    label: '📄 원목 의자 단계별 조립 설명서 도면',
-    query: '원목 의자 단계별 조립 설명서 도면',
-    meta: 'PDF + 촬영 도면 • 2026.08.14 (PC 바탕화면·사진첩)',
-  },
-  {
-    id: 'hint_doc_receipt',
-    label: '📄 수트라하버 리조트 숙박 결제 영수증',
-    query: '수트라하버 리조트 숙박 결제 영수증',
-    meta: 'PDF 영수증 • 2024.07.11 (스마트폰 다운로드)',
-  },
-  {
-    id: 'hint_doc_passport',
-    label: '🛂 여권 및 항공권 이티켓 사본',
-    query: '여권 신분증 항공권 예약 확인서',
-    meta: '촬영 서류 + PDF • 갤러리·다운로드',
-  },
-];
-
-const BRIEFING_VIDEO_HINTS = [
-  {
-    id: 'hint_vid_parasailing',
-    query: '구명조끼 입고 무지개 낙하산 패러세일링 후 보트 갑판 착지',
-    meta: '🎯 00:18 구간 포착 • 20240719_105706.mp4 (7구간 해부)',
-  },
-  {
-    id: 'hint_vid_resort_couple',
-    query: '야자수 리조트 소파에서 손가락 브이 포즈 취하다가 하트 목걸이 클로즈업',
-    meta: '🎯 00:17 구간 포착 • 20240720_134808.mp4 (7구간 해부)',
-  },
-  {
-    id: 'hint_vid_airplane_sunrise',
-    query: '새벽 비행기 창문 너머 구름 위 일출을 스마트폰 카메라로 찍는 장면',
-    meta: '🎯 00:07 구간 포착 • 20240722_052422.mp4 (6구간 해부)',
-  },
-];
-
-const FREE_SEARCH_MICRO_OBJECT_CHIPS = [
-  { label: '💎 하트 목걸이 (00:17)', query: '하트 목걸이 클로즈업', videoId: 'vid_full_02', seekSec: 17 },
-  { label: '👒 밀짚모자 선글라스 (00:00)', query: '밀짚모자 선글라스 꽃무늬 반바지', videoId: 'vid_full_02', seekSec: 0 },
-  { label: '✌️ 손가락 브이 포즈 (00:04)', query: '소파에 나란히 앉아 손가락 브이 포즈', videoId: 'vid_full_02', seekSec: 4 },
-  { label: '🗣️ 동영상이다! 다가옴 (00:08)', query: '동영상이다 말하며 카메라로 다가오는 장면', videoId: 'vid_full_02', seekSec: 8 },
-  { label: '🪢 보트 밧줄 매듭 (00:20)', query: '보트 갑판 굵은 밧줄 매듭', videoId: 'vid_full_01', seekSec: 20 },
-  { label: '📱 스마트폰 앱 아이콘 (00:02)', query: '창가 아래 스마트폰 홈 화면 앱 아이콘', videoId: 'vid_full_03', seekSec: 2 },
-];
-
-const FALLBACK_SENTENCE_CHIPS = [
-  {
-    id: 'sent_kk_bridge',
-    query: '코타키나발루 나무 다리 위에서 산책하는 모습',
-  },
-  {
-    id: 'sent_night_fireshow',
-    query: '한밤중 바닷가 화려한 불쇼 퍼포먼스',
-  },
-  {
-    id: 'sent_terrace_drink',
-    query: '야외 테라스에서 밤거리 보며 한잔하는 분위기',
-  },
-  {
-    id: 'sent_yeouido_friends',
-    query: '여의도 한강공원에서 친구들과 걷는 뒷모습',
-  },
-];
-
 export const VoiceHeroStage: React.FC = () => {
   const {
     layout,
@@ -113,11 +40,88 @@ export const VoiceHeroStage: React.FC = () => {
     () => activePhotos.filter((p) => p.isVaultDocument).length,
     [activePhotos]
   );
-  const totalIndexedDocs = localDocuments.length + vaultPhotoCount; // 20건
+  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
   const totalDissectedSegments = useMemo(
     () => videoSceneItems.reduce((acc, v) => acc + v.timelineFrames.length, 0),
     [videoSceneItems]
   );
+
+  // 100% 엔진 색인 데이터 기반 동적 서류 힌트 생성
+  const dynamicDocHints = useMemo(() => {
+    return localDocuments.slice(0, 4).map((doc) => ({
+      id: `hint_doc_${doc.id}`,
+      label: `📄 ${doc.title}`,
+      query: doc.title,
+      meta: `${doc.ext} 문서 • ${doc.date} (${doc.deviceSource})`,
+    }));
+  }, [localDocuments]);
+
+  // 100% 엔진 색인 데이터 기반 동적 동영상 문장 힌트 생성
+  const dynamicVideoHints = useMemo(() => {
+    return videoSceneItems.slice(0, 4).map((vid) => {
+      const highlightFrame =
+        vid.timelineFrames.find((f) => f.timeSec === vid.matchedSeekSec) ??
+        vid.timelineFrames[Math.floor(vid.timelineFrames.length / 2)] ??
+        vid.timelineFrames[0];
+      const queryText = highlightFrame
+        ? highlightFrame.keywords.slice(0, 4).join(' ')
+        : vid.title;
+      const timestampText = highlightFrame?.timestampText ?? vid.matchedTimestamp;
+      return {
+        id: `hint_vid_${vid.id}`,
+        query: queryText,
+        meta: `🎯 ${timestampText} 구간 포착 • ${vid.videoFileName} (${vid.timelineFrames.length}구간 해부)`,
+      };
+    });
+  }, [videoSceneItems]);
+
+  // 100% 엔진 색인 데이터 기반 동영상 초(Sec) 단위 사물·장면 칩 생성
+  const dynamicMicroObjectChips = useMemo(() => {
+    const chips: Array<{ label: string; query: string; videoId: string; seekSec: number }> = [];
+    const seenQueries = new Set<string>();
+    for (const vid of videoSceneItems) {
+      const candidateFrames = [
+        vid.timelineFrames.find((f) => f.timeSec === vid.matchedSeekSec),
+        ...vid.timelineFrames,
+      ].filter((f): f is NonNullable<typeof f> => Boolean(f));
+
+      let pickedForVid = 0;
+      for (const frame of candidateFrames) {
+        const kwPair = frame.keywords.slice(0, 2).join(' ').trim();
+        if (!kwPair || seenQueries.has(kwPair)) continue;
+        seenQueries.add(kwPair);
+        chips.push({
+          label: `🎯 ${kwPair} (${frame.timestampText})`,
+          query: frame.keywords.slice(0, 3).join(' ').trim() || kwPair,
+          videoId: vid.id,
+          seekSec: frame.timeSec,
+        });
+        pickedForVid += 1;
+        if (pickedForVid >= 2 || chips.length >= 6) break;
+      }
+      if (chips.length >= 6) break;
+    }
+    return chips;
+  }, [videoSceneItems]);
+
+  const searchPlaceholder = useMemo(() => {
+    if (searchSpace === 'vault') {
+      const ex = dynamicDocHints.slice(0, 2).map((d) => `"${d.query}"`).join(', ');
+      return ex
+        ? `서류·영수증·계약서 검색 (예: ${ex})`
+        : '서류·영수증·계약서 본문 키워드를 입력해 보세요';
+    }
+    if (searchSpace === 'video') {
+      const ex = dynamicMicroObjectChips.slice(0, 2).map((c) => `"${c.query}"`).join(', ');
+      return ex
+        ? `동영상 구간 속 사물·행동 검색 (예: ${ex})`
+        : '동영상 속 장면이나 사물을 검색해 보세요';
+    }
+    const ex = sentenceChips.slice(0, 2).map((s) => `"${s.query}"`).join(', ');
+    return ex
+      ? `기억나는 장면을 문장으로 검색해 보세요 (예: ${ex})`
+      : '기억나는 장면을 문장으로 검색해 보세요';
+  }, [searchSpace, dynamicDocHints, dynamicMicroObjectChips, sentenceChips]);
 
   const scrollToResults = () => {
     if (typeof document !== 'undefined') {
@@ -154,10 +158,10 @@ export const VoiceHeroStage: React.FC = () => {
   };
 
   const isMobile = layout === 'mobile';
-  const activeSentencePool =
-    sentenceChips.length >= 4
-      ? sentenceChips.slice(sentenceChipPage * 4, sentenceChipPage * 4 + 4)
-      : FALLBACK_SENTENCE_CHIPS;
+  const activeSentencePool = useMemo(
+    () => sentenceChips.slice(sentenceChipPage * 4, sentenceChipPage * 4 + 4),
+    [sentenceChips, sentenceChipPage]
+  );
 
   const topMatchedVideo = matchedVideoScenes[0];
 
@@ -179,13 +183,7 @@ export const VoiceHeroStage: React.FC = () => {
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder={
-                searchSpace === 'vault'
-                  ? '서류·영수증·계약서 검색 (예: "삼성화재 자동차 보험 증권", "원목 의자 조립 설명서")'
-                  : searchSpace === 'video'
-                  ? '동영상 3개 속 사물·행동 검색 (예: "하트 목걸이 클로즈업", "밀짚모자 선글라스", "보트 밧줄 매듭")'
-                  : '기억나는 장면을 문장으로 검색해 보세요 (예: "나무 다리 위에서 산책하는 모습", "밤거리 보며 한잔하는 분위기")'
-              }
+              placeholder={searchPlaceholder}
               className="w-full h-12 md:h-13 pl-11 pr-24 rounded-xl bg-zinc-950/90 border border-white/10 focus:border-primary-container outline-none font-body-md text-[13.5px] md:text-[14.5px] text-white placeholder:text-zinc-500 transition-colors"
             />
             {textInput && (
@@ -337,7 +335,7 @@ export const VoiceHeroStage: React.FC = () => {
           </span>
 
           {searchSpace === 'video' &&
-            FREE_SEARCH_MICRO_OBJECT_CHIPS.map((item) => {
+            dynamicMicroObjectChips.map((item) => {
               const isSelectedChip = activeQuery === item.query;
               return (
                 <button
@@ -356,7 +354,7 @@ export const VoiceHeroStage: React.FC = () => {
             })}
 
           {searchSpace === 'vault' &&
-            BRIEFING_DOC_HINTS.map((chip) => {
+            dynamicDocHints.map((chip) => {
               const isSelectedChip = activeQuery === chip.query;
               return (
                 <button
@@ -453,19 +451,19 @@ export const VoiceHeroStage: React.FC = () => {
         {/* 펼쳐졌을 때만 나타나는 상세 브리핑 패널 (검색 실행 시 자동으로 스르륵 접힘) */}
         {isBriefingOpen && (
           <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-4 bg-zinc-950/60">
-            {/* 2-A. 해부된 동영상 3개 가로 스와이프 카드덱 (Horizontal Snap Carousel) */}
+            {/* 2-A. 해부된 동영상 가로 스와이프 카드덱 (Horizontal Snap Carousel) */}
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-body-sm text-[12.5px] text-zinc-300 font-medium">
-                  🎬 최근 동영상 3개를 처음부터 끝까지 1초 단위로 해부(총 {totalDissectedSegments}개 구간)했습니다. 카드를 좌우로 넘기거나 초(Sec) 버튼을 눌러 즉시 점프 재생해 보세요.
+                  🎬 최근 동영상 {videoSceneItems.length}개를 처음부터 끝까지 정밀 해부(총 {totalDissectedSegments}개 구간)했습니다. 카드를 좌우로 넘기거나 초(Sec) 버튼을 눌러 즉시 점프 재생해 보세요.
                 </p>
                 <span className="font-label-mono text-[11px] text-zinc-400">
-                  역추적 구간: 2024.07.11 ~ 2026.10.14
+                  자동 타임라인 색인 ({videoSceneItems.length}개 영상)
                 </span>
               </div>
 
-              {/* 모바일/컴팩트에서는 좌우 스와이프(Carousel), 와이드 데스크톱에서는 3열 */}
-              <div className="flex md:grid md:grid-cols-3 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
+              {/* 모바일/컴팩트에서는 좌우 스와이프(Carousel), 와이드 데스크톱에서는 다열 */}
+              <div className="flex md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
                 {videoSceneItems.map((baseVid, idx) => {
                   const liveVid = matchedVideoScenes.find((m) => m.id === baseVid.id) ?? baseVid;
                   const isTopMatched = searchSpace === 'video' && topMatchedVideo?.id === baseVid.id;
@@ -559,7 +557,7 @@ export const VoiceHeroStage: React.FC = () => {
               </div>
             </div>
 
-            {/* 2-B. 서류 힌트 3개 & 동영상 문장 힌트 3개 (가로 스와이프 지원 차분한 다크 카드) */}
+            {/* 2-B. 서류 힌트 & 동영상 문장 힌트 (가로 스와이프 지원 차분한 다크 카드) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/10 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
@@ -567,11 +565,11 @@ export const VoiceHeroStage: React.FC = () => {
                     📄 서류 내용 힌트 ({totalIndexedDocs}건 중 추출)
                   </span>
                   <span className="font-label-mono text-[10px] text-zinc-400">
-                    PDF + 촬영 영수증·설명서
+                    로컬 문서 + 촬영 영수증·설명서
                   </span>
                 </div>
                 <div className="flex lg:flex-col gap-2 overflow-x-auto snap-x snap-mandatory no-scrollbar">
-                  {BRIEFING_DOC_HINTS.slice(0, 3).map((chip) => (
+                  {dynamicDocHints.slice(0, 3).map((chip) => (
                     <button
                       key={chip.id}
                       type="button"
@@ -595,14 +593,14 @@ export const VoiceHeroStage: React.FC = () => {
               <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/10 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="font-label-md text-[12.5px] text-zinc-200 font-bold">
-                    🎬 동영상 3개 전 구간 문장 힌트 ({totalDissectedSegments}개 구간)
+                    🎬 동영상 {videoSceneItems.length}개 전 구간 문장 힌트 ({totalDissectedSegments}개 구간)
                   </span>
                   <span className="font-label-mono text-[10px] text-zinc-400">
                     해당 초(Sec) 즉시 점프
                   </span>
                 </div>
                 <div className="flex lg:flex-col gap-2 overflow-x-auto snap-x snap-mandatory no-scrollbar">
-                  {BRIEFING_VIDEO_HINTS.map((chip) => (
+                  {dynamicVideoHints.slice(0, 3).map((chip) => (
                     <button
                       key={chip.id}
                       type="button"

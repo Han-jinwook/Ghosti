@@ -1,6 +1,6 @@
 {
   "version": "2.2.0-wordnet-openimages-ko",
-  "updatedAt": "2026-10-15T15:40:47.765Z",
+  "updatedAt": "2026-10-17T03:33:42.147Z",
   "description": "Open Multilingual WordNet (OMW-ko) + Google Open Images V7 Hierarchy + 한국인 갤러리 상·하위 개념 족보 트리",
   "nodeCount": 71,
   "totalVocabularyCount": 699,

@@ -1,17 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-
-const TRIAL_DOC_HINT_CHIPS = [
-  '삼성화재 자동차 보험 증권 및 특약',
-  '원목 의자 단계별 조립 설명서 도면',
-  '수트라하버 리조트 숙박 결제 영수증',
-];
-
-const TRIAL_VIDEO_HINT_CHIPS = [
-  '구명조끼 입고 무지개 낙하산 패러세일링 후 보트 갑판 착지',
-  '야자수 리조트 소파에서 손가락 브이 포즈 취하다가 하트 목걸이 클로즈업',
-  '새벽 비행기 창문 너머 구름 위 일출을 스마트폰 카메라로 찍는 장면',
-];
 
 /**
  * 실시간 QR 코드 SVG (내 PC 에이전트 ↔ 스마트폰 1MB 앱 Zero-Code 동시 페어링용)
@@ -86,11 +74,35 @@ export const OnboardingModal: React.FC = () => {
 
   const activeTrashCount = photos.filter((p) => !p.quarantined && Boolean(p.trashCategory)).length;
   const vaultPhotoCount = photos.filter((p) => !p.quarantined && p.isVaultDocument).length;
-  const totalIndexedDocs = localDocuments.length + vaultPhotoCount; // 12 + 8 = 20건
+  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
   const totalDissectedTimelineSegments = videoSceneItems.reduce(
     (acc, v) => acc + v.timelineFrames.length,
     0
   );
+
+  const dynamicTrialDocHints = useMemo(
+    () => localDocuments.slice(0, 3).map((d) => d.title),
+    [localDocuments]
+  );
+
+  const dynamicTrialVideoHints = useMemo(
+    () =>
+      videoSceneItems.slice(0, 3).map((v) => {
+        const highlightFrame =
+          v.timelineFrames.find((f) => f.timeSec === v.matchedSeekSec) ??
+          v.timelineFrames[Math.floor(v.timelineFrames.length / 2)] ??
+          v.timelineFrames[0];
+        return highlightFrame ? highlightFrame.keywords.slice(0, 4).join(' ') : v.title;
+      }),
+    [videoSceneItems]
+  );
+
+  const dynamicVideoBreakdownSummary = useMemo(() => {
+    const parts = videoSceneItems.map(
+      (v) => `${v.videoFileName} ${v.timelineFrames.length}구간`
+    );
+    return `최신 서류 ${totalIndexedDocs}건 + 동영상 ${videoSceneItems.length}개(${parts.join(' · ')} = 총 ${totalDissectedTimelineSegments}구간) 해부 완료`;
+  }, [totalIndexedDocs, videoSceneItems, totalDissectedTimelineSegments]);
 
   // 네온 블루(#00E5FF) 3D 파형 / 768차원 벡터 변환 실시간 캔버스 애니메이션
   useEffect(() => {
@@ -446,14 +458,14 @@ export const OnboardingModal: React.FC = () => {
             </p>
           </div>
 
-          {/* 타겟 2: 최신 서류/문서 20건 역추적 */}
+          {/* 타겟 2: 최신 서류/문서 역추적 */}
           <div className="p-3.5 rounded-2xl bg-surface-container-low border border-[#FFAB00]/45 flex flex-col justify-between gap-2">
             <div className="flex items-center justify-between">
               <span className="px-2.5 py-0.5 rounded-full bg-[#FFAB00]/20 text-[#FFAB00] font-label-mono text-[10px] font-black">
                 Gemma 2 정밀 인덱싱 ①
               </span>
               <span className="font-label-mono text-[11px] text-[#FFAB00] font-bold">
-                20 / 20건 완료
+                {totalIndexedDocs} / {totalIndexedDocs}건 완료
               </span>
             </div>
             <h3 className="font-headline-sm text-[14.5px] text-white font-extrabold">
@@ -465,27 +477,27 @@ export const OnboardingModal: React.FC = () => {
             </p>
           </div>
 
-          {/* 타겟 3: 최신 동영상 딱 3개 선정 후 00:00부터 끝까지 전 구간(Full-Timeline) 완전 해부 */}
+          {/* 타겟 3: 최신 동영상 00:00부터 끝까지 전 구간(Full-Timeline) 완전 해부 */}
           <div className="p-3.5 rounded-2xl bg-surface-container-low border-2 border-primary-container/60 flex flex-col justify-between gap-2 shadow-[0_0_20px_rgba(0,229,255,0.12)]">
             <div className="flex items-center justify-between">
               <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-mono text-[10px] font-black">
                 Full-Timeline 완전 해부 ②
               </span>
               <span className="font-label-mono text-[11px] text-primary-container font-bold">
-                3개 영상 · 총 {totalDissectedTimelineSegments}구간 완료
+                {videoSceneItems.length}개 영상 · 총 {totalDissectedTimelineSegments}구간 완료
               </span>
             </div>
             <h3 className="font-headline-sm text-[14.5px] text-white font-extrabold">
               🎬 최신 동영상 {videoSceneItems.length}개 전 구간(00:00~끝) 해부
             </h3>
             <p className="font-body-sm text-[11.5px] text-on-surface-variant leading-relaxed">
-              10개 수박 겉핥기 대신 최신 동영상 <strong className="text-primary-container">딱 3개</strong>를 선정해 처음(00:00)부터 끝까지{' '}
-              <strong className="text-emerald-300">1~3초 단위로 촘촘하게 총 {totalDissectedTimelineSegments}개 구간</strong>을 100% 완전 해부했습니다!
+              수박 겉핥기 대신 최신 동영상 <strong className="text-primary-container">{videoSceneItems.length}개</strong>를 선정해 처음(00:00)부터 끝까지{' '}
+              <strong className="text-emerald-300">2~3초 단위로 촘촘하게 총 {totalDissectedTimelineSegments}개 구간</strong>을 100% 완전 해부했습니다!
             </p>
           </div>
         </div>
 
-        {/* 5) 실시간 벡터 변환 비주얼라이저 + 해부된 동영상 3개 미니 요약 */}
+        {/* 5) 실시간 벡터 변환 비주얼라이저 + 해부된 동영상 미니 요약 */}
         <div className="relative rounded-2xl bg-surface-container-lowest/90 border border-primary-container/25 overflow-hidden h-32 flex items-center justify-center shadow-inner">
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
@@ -506,8 +518,8 @@ export const OnboardingModal: React.FC = () => {
               <span className="font-label-md text-[12px] text-on-surface font-bold truncate">
                 {currentPhotoName}
               </span>
-              <span className="font-label-mono text-[10px] text-emerald-300">
-                최신 서류 20건 + 동영상 3개(패러세일링 7구간 · 야자수 리조트 7구간 · 기내 일출 6구간 = 총 20구간) 해부 완료
+              <span className="font-label-mono text-[10px] text-emerald-300 truncate">
+                {dynamicVideoBreakdownSummary}
               </span>
             </div>
           </div>
@@ -516,14 +528,14 @@ export const OnboardingModal: React.FC = () => {
         {/* 6) 모달 내부에서 바로 눌러보는 서류 & 동영상 전 구간 힌트 칩 */}
         <div className="p-3.5 rounded-2xl bg-surface-container-low/95 border border-outline-variant/30 flex flex-col gap-2">
           <span className="font-headline-sm text-[13px] text-white font-extrabold">
-            👇 아래 추천 힌트를 클릭하거나, 브리핑 보드에서 영상 3개 속 어떤 사물·행동이든 자유 검색해 보세요:
+            👇 아래 추천 힌트를 클릭하거나, 브리핑 보드에서 영상 속 어떤 사물·행동이든 자유 검색해 보세요:
           </span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <span className="font-label-sm text-[11px] text-[#FFAB00] font-extrabold">
-                📄 [서류 내용 힌트 칩] (최근 서류 20건 중 추출)
+                📄 [서류 내용 힌트 칩] (최근 서류 {totalIndexedDocs}건 중 추출)
               </span>
-              {TRIAL_DOC_HINT_CHIPS.map((q) => (
+              {dynamicTrialDocHints.map((q) => (
                 <button
                   key={q}
                   type="button"
@@ -541,9 +553,9 @@ export const OnboardingModal: React.FC = () => {
 
             <div className="flex flex-col gap-1">
               <span className="font-label-sm text-[11px] text-primary-container font-extrabold">
-                🎬 [동영상 3개 전 구간 해부 힌트 칩] (클릭 시 해당 초(Sec) 구간 포착)
+                🎬 [동영상 {videoSceneItems.length}개 전 구간 해부 힌트 칩] (클릭 시 해당 초(Sec) 구간 포착)
               </span>
-              {TRIAL_VIDEO_HINT_CHIPS.map((q) => (
+              {dynamicTrialVideoHints.map((q) => (
                 <button
                   key={q}
                   type="button"

@@ -28,10 +28,12 @@ import {
   detectHardwareTelemetry,
   executeTextSearch,
   executeZeroSttVoiceSearch,
+  fetchIndexedDocuments,
+  fetchIndexedVideos,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
-  searchLocalDocumentFiles,
-  searchVideoSceneItems,
+  searchLocalDocumentFilesAsync,
+  searchVideoSceneItemsAsync,
 } from '../services/aiEngine';
 import {
   LocalSentenceChip,
@@ -54,7 +56,7 @@ interface SaySeeStore {
   setMobileTab: (tab: MobileTab) => void;
   setDesktopTab: (tab: DesktopTab) => void;
 
-  // [스펙 1 & 체험판 타겟팅] 파워 검색 공간 3-Track 필터 ([🎬 동영상 3개 전 구간 해부] | [📁 스마트 서류함 20건] | [🖼️ 전체/갤러리])
+  // [스펙 1 & 체험판 타겟팅] 파워 검색 공간 3-Track 필터 ([🎬 동영상 해부] | [📁 스마트 서류함] | [🖼️ 전체/갤러리])
   searchSpace: SearchSpaceMode;
   localDocuments: LocalDocumentFile[];
   matchedLocalDocs: LocalDocumentFile[];
@@ -174,15 +176,15 @@ const voiceSession = new HybridVoiceSession();
 
 const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   phase: 'completed',
-  done: 23,
-  total: 23,
+  done: 24,
+  total: 24,
   remaining: 0,
   percent: 100.0,
   elapsedSec: 16,
   etaSec: 0,
   perImageSec: 0.7,
-  currentPhotoName: '최신 서류 20건 + 동영상 3개 전 구간(20개 타임라인 프레임) 완전 해부 완료',
-  currentPhotoThumb: '/__photos/file?p=20240719_105704.jpg&thumb=1',
+  currentPhotoName: '로컬 서류함 및 동영상 전 구간 타임라인 프레임 자율 색인 완료',
+  currentPhotoThumb: '',
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
   modelStatusText: '내 PC 직접 구동(SaySee_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
 };
@@ -205,7 +207,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         desktopTab === 'dashboard' ? 'search' : desktopTab === 'trash' ? 'trash' : 'settings',
     }),
 
-  // [스펙 1 & 체험판 타겟팅] 동영상 3개 전 구간 해부 vs 스마트 서류함(20건) vs 전체/갤러리
   searchSpace: 'video',
   localDocuments: LOCAL_DOCUMENT_FILES,
   matchedLocalDocs: LOCAL_DOCUMENT_FILES,
@@ -251,13 +252,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     })),
 
   setSearchSpace: (searchSpace) => {
-    const { photos } = get();
+    const { photos, videoSceneItems, localDocuments, sentenceChips } = get();
     if (searchSpace === 'video') {
+      const totalFrames = videoSceneItems.reduce((a, v) => a + v.timelineFrames.length, 0);
       set({
         searchSpace: 'video',
-        activeQuery: '최신 동영상 3개 전 구간(00:00~끝, 총 20개 타임라인 구간) 1초 단위 완전 해부',
-        matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#삼성갤러리불가'],
-        matchedVideoScenes: VIDEO_SCENE_ITEMS,
+        activeQuery: `동영상 ${videoSceneItems.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
+        matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
+        matchedVideoScenes: videoSceneItems,
       });
     } else if (searchSpace === 'vault') {
       const vaultPhotos = photos
@@ -270,14 +272,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         }));
       set({
         searchSpace: 'vault',
-        activeQuery: '최근 서류 20건 통합 (PDF·문서 12건 + 촬영 영수증·설명서·신분증 8장)',
+        activeQuery: `최근 서류 ${localDocuments.length + vaultPhotos.length}건 통합 (로컬 문서 ${localDocuments.length}건 + 촬영 서류 ${vaultPhotos.length}장)`,
         matchedTags: ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색'],
         searchResults: vaultPhotos,
-        matchedLocalDocs: LOCAL_DOCUMENT_FILES,
+        matchedLocalDocs: localDocuments,
       });
     } else {
       set({ searchSpace: 'gallery' });
-      void get().runTextQuery('코타키나발루 나무 다리 위에서 산책하는 모습');
+      const firstChipQuery = sentenceChips[0]?.query || '바다 풍경 모습';
+      void get().runTextQuery(firstChipQuery);
     }
   },
 
@@ -319,18 +322,21 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     if (get().initialized || get().initializing) return;
     set({ initializing: true });
 
-    const [dataset, telemetry] = await Promise.all([
+    const [dataset, telemetry, indexedDocs, indexedVideos] = await Promise.all([
       loadInitialPhotoDataset(),
       detectHardwareTelemetry(),
+      fetchIndexedDocuments(),
+      fetchIndexedVideos(),
     ]);
 
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
 
     const localChips = buildLocalSentenceSamplesFromCorpus(dataset.photos);
+    const fallbackThumb = dataset.photos[0]?.thumbUrl || '';
     const localAhaItems: OnboardingAhaItem[] = localChips.slice(0, 4).map((chip) => ({
       photoId: chip.id,
-      thumbUrl: chip.thumbUrl || '/__photos/file?p=20240720_122826.jpg&thumb=1',
+      thumbUrl: chip.thumbUrl || fallbackThumb,
       dateFact: chip.matchHint,
       domainTitle: chip.factFormula,
       sentence: chip.query,
@@ -338,10 +344,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       targetSearchQuery: chip.query,
     }));
 
-    // 초기 기본 검색 결과 세팅 (최신 동영상 3개 전 구간 완전 해부 전체 보기)
-    const initialQuery = '최신 동영상 3개 전 구간(00:00~끝, 총 20개 타임라인 구간) 1초 단위 완전 해부';
+    const totalFrames = indexedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
+    const initialQuery = `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`;
 
-    // 쓰레기 사진 기본 선택 세팅 (원본 1장으로 보호된 사진 및 스마트 서류함 자산은 제외됨)
     const trashIds = new Set<string>(
       dataset.photos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
     );
@@ -349,15 +354,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({
       photos: dataset.photos,
       duplicateGroups: dataset.duplicateGroups,
+      localDocuments: indexedDocs,
+      matchedLocalDocs: indexedDocs,
+      videoSceneItems: indexedVideos,
+      matchedVideoScenes: indexedVideos,
+      onboardingProgress: {
+        ...INITIAL_ONBOARDING_PROGRESS,
+        currentPhotoThumb: indexedVideos[0]?.thumbUrl || fallbackThumb,
+      },
       telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
       syncState,
       sentenceChips: localChips,
       onboardingAhaItems: localAhaItems,
       searchSpace: 'video',
       activeQuery: initialQuery,
-      matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#삼성갤러리불가'],
+      matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
       searchResults: [],
-      matchedVideoScenes: VIDEO_SCENE_ITEMS,
       selectedTrashIds: trashIds,
       initialized: true,
       initializing: false,
@@ -369,11 +381,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     await get().runTextQuery(item.targetSearchQuery);
   },
 
-  // ─────────────── 체험판 1분 고속 스캔 (Track A: 내 PC 직접 구동 + QR 페어링 vs Track B: 클라우드 GPU 서버 무료 대여) ───────────────
   showOnboarding: false,
   onboardingRunning: false,
   onboardingUseRealGpu: false,
-  onboardingTargetCount: 23,
+  onboardingTargetCount: 24,
   onboardingTrackMode: typeof window !== 'undefined' && window.innerWidth < 1024 ? 'cloud_rental' : 'pc_local',
   pcAgentPairedMobile: true,
   onboardingProgress: INITIAL_ONBOARDING_PROGRESS,
@@ -408,9 +419,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({ onboardingRunning: false });
   },
 
-  // ─────────────── 파워 검색 (동영상 3개 전 구간 해부 + 스마트 서류함 20건 + 갤러리 통합) ───────────────
-  activeQuery: '최신 동영상 3개 전 구간(00:00~끝, 총 20개 타임라인 구간) 1초 단위 완전 해부',
-  matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#삼성갤러리불가'],
+  activeQuery: '동영상 전 구간 타임라인 자동 해부',
+  matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
   searchResults: [],
   groupBurstsInSearch: true,
   isListening: false,
@@ -428,13 +438,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   runTextQuery: async (q: string) => {
     const query = q.trim();
     if (!query) return;
-    const { photos, telemetry, searchSpace } = get();
+    const { photos, telemetry, searchSpace, localDocuments, videoSceneItems } = get();
 
-    // 로컬 PDF/TXT/DOCX 문서 매칭 (12건) 및 동영상 3개 전 구간 타임라인 프레임 매칭 (20개 구간) — 0.01초 즉시 완료
-    const docMatches = searchLocalDocumentFiles(query);
-    const videoMatches = searchVideoSceneItems(query);
+    // 백엔드 768차원 EmbeddingGemma 2 벡터 + 온톨로지 검색 API 병렬 호출
+    const [docMatches, videoMatches] = await Promise.all([
+      searchLocalDocumentFilesAsync(query, localDocuments),
+      searchVideoSceneItemsAsync(query, videoSceneItems),
+    ]);
 
-    // [체험판 타겟 ②] 동영상 장면 검색 모드일 때: 무관한 영상 억지 노출 없이 정확히 매칭된 동영상만 단독 노출
     if (searchSpace === 'video') {
       const topVideo = videoMatches[0];
       set({
@@ -442,7 +453,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         matchedTags: [
           '#동영상전구간해부',
           topVideo ? `#${topVideo.matchedTimestamp.replace(/\s+/g, '')}` : '#매칭0건',
-          '#0.04초매칭',
+          '#768차원벡터매칭',
         ],
         matchedVideoScenes: videoMatches,
         matchedLocalDocs: docMatches,
@@ -451,55 +462,45 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       return;
     }
 
-    // [체험판 타겟 ① / 스펙 1] 스마트 서류함 모드일 때는 서류 사진(8장) + 로컬 PDF/문서(12건) = 20건 즉시 매칭
     if (searchSpace === 'vault') {
-      const vaultCandidates = photos.filter((p) => !p.quarantined && p.isVaultDocument);
-      const qLower = query.toLowerCase();
-      const keywordMatchedVault = vaultCandidates.filter((p) => {
-        const text = `${p.name} ${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
-        if (qLower.includes('조립') || qLower.includes('설명서') || qLower.includes('매뉴얼') || qLower.includes('의자') || qLower.includes('도면')) {
-          return p.tags.includes('#문서·설명서') || text.includes('설명서');
-        }
-        if (qLower.includes('신분증') || qLower.includes('여권') || qLower.includes('계약서')) {
-          return p.tags.includes('#문서·신분증') || text.includes('여권');
-        }
-        if (qLower.includes('영수증') || qLower.includes('전표') || qLower.includes('바우처') || qLower.includes('결제') || qLower.includes('수트라하버') || qLower.includes('숙박')) {
-          return p.name.includes('Messages') || p.tags.includes('#현수막·안내') || text.includes('심사');
-        }
-        if (qLower.includes('보험') || qLower.includes('증권') || qLower.includes('삼성화재') || qLower.includes('특약')) {
-          return p.tags.includes('#문서·신분증') || p.name.includes('Messages');
-        }
-        return query.split(/\s+/).some((tk) => tk.length >= 2 && text.includes(tk));
-      });
+      // 하드코딩 분기 0%: 실제 768차원 하이브리드 검색 엔진(executeTextSearch) 및 실제 인덱싱된 서류 메타데이터로만 매칭
+      const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
+      const vaultMap = new Map<string, SearchResultItem>();
 
-      const mergedMap = new Map<string, SearchResultItem>();
-      for (const vp of keywordMatchedVault) {
-        mergedMap.set(vp.id, {
-          photo: vp,
-          score: 0.97,
-          matchPercentage: 98,
-          matchedBy: 'text-direct',
-        });
+      for (const r of results) {
+        if (r.photo.isVaultDocument) {
+          vaultMap.set(r.photo.id, r);
+        }
       }
 
-      // 먼저 즉시 UI 업데이트 후 백그라운드에서 추가 벡터 매칭 보강
+      // 서류 사진의 실제 캡션/태그에 검색어 토큰이 직접 포함된 항목 보강
+      const rawTokens = query
+        .toLowerCase()
+        .split(/\s+/)
+        .map((t) => t.replace(/(에서|으로|이랑|하고|있는|하는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
+        .filter((t) => t.length >= 2 && !['서류', '문서', '파일', '사본', '사진', '및'].includes(t));
+
+      if (rawTokens.length > 0) {
+        for (const p of photos) {
+          if (p.quarantined || !p.isVaultDocument || vaultMap.has(p.id)) continue;
+          const corpus = `${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
+          if (rawTokens.some((tk) => corpus.includes(tk))) {
+            vaultMap.set(p.id, {
+              photo: p,
+              score: 0.91,
+              matchPercentage: 95,
+              matchedBy: 'text-direct',
+            });
+          }
+        }
+      }
+
       set({
         activeQuery: query,
         matchedTags: ['#스마트서류함', '#사진+PDF통합검색'],
-        searchResults: Array.from(mergedMap.values()),
+        searchResults: Array.from(vaultMap.values()),
         matchedLocalDocs: docMatches,
         matchedVideoScenes: videoMatches,
-        telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.5 } : null,
-      });
-
-      const { results, embedMs, searchMs } = await executeTextSearch(query, photos, 'text-direct');
-      for (const r of results) {
-        if (r.photo.isVaultDocument && !mergedMap.has(r.photo.id)) {
-          mergedMap.set(r.photo.id, r);
-        }
-      }
-      set({
-        searchResults: Array.from(mergedMap.values()),
         telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
       });
       return;
@@ -519,7 +520,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   },
 
   toggleMicRecording: async () => {
-    const { isListening, photos, voiceThreshold, telemetry } = get();
+    const { isListening, photos, voiceThreshold, telemetry, localDocuments } = get();
     if (!isListening) {
       try {
         set({ isListening: true, isSlimCapsule: false, interimSttPreview: '' });
@@ -557,12 +558,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       }
 
       const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
+      const docMatches = await searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments);
 
       set((state) => ({
         activeQuery: trace.resolvedQuery,
         matchedTags: topTags.length ? topTags : ['#오디오벡터', '#온디바이스'],
         searchResults: results,
-        matchedLocalDocs: searchLocalDocumentFiles(trace.resolvedQuery),
+        matchedLocalDocs: docMatches,
         lastVoiceTrace: trace,
         voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
         isSlimCapsule: true,

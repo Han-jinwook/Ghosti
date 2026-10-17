@@ -409,74 +409,84 @@ export interface LocalSentenceChip {
 }
 
 /**
- * [지침 #2] 외부 LLM 의존도 0%!
- * 이미 인덱싱된 개별 대표 사진들의 [지명/시기 + 배경/사물 + 행동/분위기] 팩트 조합을
- * 로컬 문장 조합기로 이어 붙여, 클릭 시 100% 실제 사진이 튀어나오는 '문장형 추천 칩'을 생성합니다.
+ * [100% 자율 코퍼스 기반 문장형 추천 칩 생성기]
+ * - 하드코딩된 파일명이나 고정 문장 배열 0%!
+ * - 실제 인덱싱된 사진들(photos)의 시맨틱 클러스터(clusterId), EXIF GPS 지명(locationKo),
+ *   비전 키워드 태그(tags) 및 캡션(captionKo)을 실시간 스캔하여
+ *   서로 다른 장소·테마의 대표 클러스터 8개에서 자연어 검색 칩을 동적으로 합성합니다.
  */
 export function buildLocalSentenceSamplesFromCorpus(photos: PhotoItem[]): LocalSentenceChip[] {
-  const active = photos.filter((p) => !p.quarantined);
-  const byName = new Map(active.map((p) => [p.name, p]));
+  const active = photos.filter((p) => !p.quarantined && !p.trashCategory && p.captionKo);
+  if (active.length === 0) return [];
 
-  const candidates: LocalSentenceChip[] = [
-    {
-      id: 'sent_kk_bridge',
-      query: '코타키나발루 나무 다리 위에서 산책하는 모습',
-      factFormula: '지명(코타키나발루) + 배경(나무 다리) + 행동(산책하는 모습)',
-      matchHint: '27장 매칭',
-      thumbUrl: byName.get('20240720_122826.jpg')?.thumbUrl,
-    },
-    {
-      id: 'sent_night_fireshow',
-      query: '한밤중 바닷가 화려한 불쇼 퍼포먼스',
-      factFormula: '시기(한밤중) + 배경(바닷가) + 상황(화려한 불쇼 퍼포먼스)',
-      matchHint: '10장 매칭',
-      thumbUrl: byName.get('20240720_194644.jpg')?.thumbUrl,
-    },
-    {
-      id: 'sent_terrace_drink',
-      query: '야외 테라스에서 밤거리 보며 한잔하는 분위기',
-      factFormula: '배경(야외 테라스·밤거리) + 행동/분위기(한잔하는 분위기)',
-      matchHint: '2장 매칭',
-      thumbUrl: byName.get('20260829_203811.jpg')?.thumbUrl,
-    },
-    {
-      id: 'sent_yeouido_friends',
-      query: '여의도 한강공원에서 친구들과 걷는 뒷모습',
-      factFormula: '지명(여의도 한강공원) + 인물/행동(친구들과 걷는 뒷모습)',
-      matchHint: '14장 매칭',
-      thumbUrl: byName.get('20260525_193249.jpg')?.thumbUrl,
-    },
-    {
-      id: 'sent_kk_boat_lifejacket',
-      query: '코타키나발루 바다 위 보트에서 구명조끼 입고 찍은 셀카',
-      factFormula: '지명(코타키나발루 바다) + 사물(보트·구명조끼) + 행동(셀카)',
-      matchHint: '2장 매칭',
-      thumbUrl: byName.get('20240719_090212.jpg')?.thumbUrl,
-    },
-    {
-      id: 'sent_sokcho_picnic',
-      query: '속초 잔디밭에서 돗자리 펴고 피크닉 쉬는 모습',
-      factFormula: '지명(속초) + 배경/사물(잔디밭·돗자리) + 행동(피크닉 휴식)',
-      matchHint: '4장 매칭',
-      thumbUrl: byName.get('20260926_143635.jpg')?.thumbUrl,
-    },
-    {
-      id: 'sent_yongsan_museum',
-      query: '용산 박물관에서 반가사유상 관람하는 모습',
-      factFormula: '지명(용산 박물관) + 사물(반가사유상) + 행동(관람하는 모습)',
-      matchHint: '1장 매칭',
-      thumbUrl: byName.get('20260815_172840.jpg')?.thumbUrl,
-    },
-    {
-      id: 'sent_kk_seawalking',
-      query: '코타키나발루 바닷속에서 헬멧 쓰고 물놀이하는 모습',
-      factFormula: '지명(코타키나발루 바닷속) + 사물(헬멧) + 행동(물놀이)',
-      matchHint: '20장 매칭',
-      thumbUrl: byName.get('GOPR2847.JPG')?.thumbUrl,
-    },
-  ];
+  // 1) 시맨틱 클러스터(clusterId) 단위로 그룹화
+  const clusterMap = new Map<number | string, PhotoItem[]>();
+  for (const p of active) {
+    const key = p.clusterId !== undefined ? p.clusterId : p.tags[0] || p.id;
+    const list = clusterMap.get(key) ?? [];
+    list.push(p);
+    clusterMap.set(key, list);
+  }
 
-  return candidates;
+  // 클러스터 내 가장 선명한 대표 사진 선정
+  const clusterEntries = Array.from(clusterMap.entries())
+    .map(([key, members]) => {
+      const sorted = [...members].sort((a, b) => (b.opticalSharpness ?? 0) - (a.opticalSharpness ?? 0));
+      const rep = sorted[0];
+      return {
+        key: String(key),
+        rep,
+        count: members.length,
+        primaryTag: rep.tags[0] || '#추억',
+        locationKo: rep.locationKo || '',
+      };
+    })
+    .filter((c) => c.rep.tags.length >= 2)
+    .sort((a, b) => b.count - a.count);
+
+  // 2) 장소(locationKo)와 대표 태그(primaryTag)가 겹치지 않도록 다양성 우선 샘플링 (최대 8개)
+  const picked: typeof clusterEntries = [];
+  const usedCombo = new Set<string>();
+
+  for (const c of clusterEntries) {
+    const combo = `${c.locationKo}|${c.primaryTag}`;
+    if (usedCombo.has(combo)) continue;
+    usedCombo.add(combo);
+    picked.push(c);
+    if (picked.length >= 8) break;
+  }
+
+  for (const c of clusterEntries) {
+    if (picked.length >= 8) break;
+    if (!picked.includes(c)) picked.push(c);
+  }
+
+  // 3) 각 클러스터의 실제 EXIF 지명 + 비전 키워드 태그로 자연스러운 검색 문장 합성
+  return picked.map((c, idx) => {
+    const rep = c.rep;
+    const rawTags = rep.tags
+      .map((t) => t.replace(/^#/, '').trim())
+      .filter((t) => t && !t.includes('·') && !t.includes('원본') && !t.includes('연사'));
+
+    // 지명에서 가장 핵심적인 지역명 1어절 추출 (예: "말레이시아 코타키나발루" -> "코타키나발루")
+    const locParts = (rep.locationKo || '')
+      .replace(/[·/]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 2 && !['말레이시아', '대한민국', '특별시', '광역시', '경기도', '강원도'].includes(w));
+    const shortLoc = locParts[locParts.length - 1] || locParts[0] || '';
+
+    const kws = rawTags.filter((t) => t !== shortLoc && !locParts.includes(t)).slice(0, 2);
+    const queryParts = [shortLoc, ...kws].filter(Boolean);
+    const query = queryParts.length > 0 ? `${queryParts.join(' ')} 모습` : rep.captionKo?.slice(0, 22) || '추억 사진';
+
+    return {
+      id: `dyn_sent_${idx}_${c.key}`,
+      query,
+      factFormula: `${shortLoc ? `지명(${shortLoc}) + ` : ''}시각키워드(${kws.join('·') || c.primaryTag})`,
+      matchHint: `${c.count}장 클러스터`,
+      thumbUrl: rep.thumbUrl,
+    };
+  });
 }
 
 export const TOTAL_CONCEPT_ANCHOR_COUNT = CONCEPT_ANCHOR_CLUSTERS.reduce(

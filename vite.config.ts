@@ -678,12 +678,12 @@ function sayseeLocalBridge(): Plugin {
         //      이미 meta.ontologyPrimaryTags 및 meta.ontologyCaptionTags에 자동 상속되어 저장되어 있습니다.
         //    - 따라서 검색 시에는 정규식 확장 없이 입력 토큰 그대로 온톨로지 태그셋 교집합 + 768차원 Gemma 2 벡터 유사도만 계산합니다.
         const BLOCK_SUBSTRING_MAP: Record<string, RegExp> = {
-          튜브: /(유튜브|자외선|램프|uv-b)/,
-          아이: /아이(콘|폰|패드|디어|템|돌|스|라인)/,
-          다리: /(기다리|사다리|책상다리|식탁다리)/,
-          모자: /모자이크/,
-          고기: /물고기/,
-          불: /(불안|불편|불가|불구|불빛)/,
+          튜브: /(유튜브|자외선|램프|uv-b)/gi,
+          아이: /아이(콘|폰|패드|디어|템|돌|스|라인)/gi,
+          다리: /(기다리|사다리|책상다리|식탁다리)/gi,
+          모자: /모자이크/gi,
+          고기: /물고기/gi,
+          불: /(불안|불편|불가|불구|불빛)/gi,
         };
 
         const queryTokens = activeTokens.map((tok) => ({
@@ -726,11 +726,11 @@ function sayseeLocalBridge(): Plugin {
           let tagMatchedGroupCount = 0;
           let compoundHit = false;
 
-          // 복합어(예: "나무 다리" -> "나무다리")가 온톨로지 태그 또는 원문에 하나의 단어로 존재하는 경우
-          if (compoundQuery.length >= 2 && (primaryOntoSet.has(compoundQuery) || tagAndKwText.includes(compoundQuery))) {
+          // 복합어(예: "나무 다리" -> "나무다리")가 온톨로지 태그 또는 원문에 하나의 단어로 존재하는 경우 (2단어 이상 결합 시에만 작동)
+          if (activeTokens.length >= 2 && compoundQuery.length >= 2 && (primaryOntoSet.has(compoundQuery) || tagAndKwText.includes(compoundQuery))) {
             lexicalScore += 0.55;
             compoundHit = true;
-          } else if (compoundQuery.length >= 2 && (captionOntoSet.has(compoundQuery) || searchableText.includes(compoundQuery))) {
+          } else if (activeTokens.length >= 2 && compoundQuery.length >= 2 && (captionOntoSet.has(compoundQuery) || searchableText.includes(compoundQuery))) {
             lexicalScore += 0.35;
             compoundHit = true;
           }
@@ -1074,7 +1074,7 @@ function sayseeLocalBridge(): Plugin {
         }
         try {
           const body = await readJsonBody(req);
-          const DOCS_DIR = path.resolve(__dirname, 'test_docs');
+          const DOCS_DIR = path.resolve(ROOT, 'test_docs');
           const target =
             body?.target === 'photos'
               ? PHOTO_DIR
@@ -1088,6 +1088,387 @@ function sayseeLocalBridge(): Plugin {
         } catch (e) {
           res.statusCode = 400;
           res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
+
+      // ──────────────────────────────────────────────────────────────────────────
+      // [자율 엔진 ①] 동영상 전 구간(Full-Timeline) 해부 인덱스 & 768차원 벡터 검색 API
+      // ──────────────────────────────────────────────────────────────────────────
+      const VIDEO_INDEX_FILE = path.resolve(POC_RESULTS_DIR, 'video_timeline_index.json');
+      const VIDEO_FRAMES_DIR = path.resolve(POC_RESULTS_DIR, 'video_frames');
+
+      const loadVideoIndexList = (): any[] => {
+        if (!fs.existsSync(VIDEO_INDEX_FILE)) return [];
+        try {
+          const parsed = JSON.parse(fs.readFileSync(VIDEO_INDEX_FILE, 'utf-8'));
+          return Array.isArray(parsed.videos) ? parsed.videos : [];
+        } catch {
+          return [];
+        }
+      };
+
+      const stripVideoVecs = (videos: any[]) =>
+        videos.map((v) => {
+          const { vec: _vVec, ...vRest } = v;
+          return {
+            ...vRest,
+            timelineFrames: (v.timelineFrames ?? []).map((f: any) => {
+              const { vec: _fVec, ...fRest } = f;
+              return fRest;
+            }),
+          };
+        });
+
+      server.middlewares.use('/__videos/index', (_req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const videos = stripVideoVecs(loadVideoIndexList());
+        res.end(
+          JSON.stringify({
+            ok: true,
+            videoCount: videos.length,
+            totalFrames: videos.reduce((a, v) => a + (v.timelineFrames?.length ?? 0), 0),
+            videos,
+          })
+        );
+      });
+
+      server.middlewares.use('/__videos/frame', (req, res) => {
+        const u = new URL(req.url ?? '', 'http://local');
+        const f = path.basename(u.searchParams.get('f') ?? '');
+        const full = path.resolve(VIDEO_FRAMES_DIR, f);
+        if (!f || !full.startsWith(VIDEO_FRAMES_DIR + path.sep) || !fs.existsSync(full)) {
+          res.statusCode = 404;
+          res.end('not found');
+          return;
+        }
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        fs.createReadStream(full).pipe(res);
+      });
+
+      server.middlewares.use('/__videos/search', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        try {
+          const body = await readJsonBody(req);
+          const q = String(body?.query ?? '').trim();
+          const rawVideos = loadVideoIndexList();
+          if (!q || q.includes('전 구간')) {
+            res.end(JSON.stringify({ ok: true, videos: stripVideoVecs(rawVideos) }));
+            return;
+          }
+
+          const STOP_WORDS = new Set([
+            '찾아줘', '보여줘', '영상', '동영상', '장면', '모습', '클로즈업', '초근접촬영', '포즈',
+            '취하다가', '취하는', '말하며', '다가오는', '다가옴', '에서', '위에서', '아래', '너머',
+            '앞에서', '옆에서', '입고', '있는', '하는', '찍은', '찍는', '촬영', '화면', '나오는',
+            '고화질', '전구간', '구간', '타임라인', '해부', '후', '및', '우측', '좌측',
+          ]);
+          const KEEP_NOUNS = new Set([
+            '목걸이', '귀걸이', '바닷가', '창가', '물가', '비행기', '항공기', '브이', '손가락',
+            '구명조끼', '무지개', '보트', '소파', '래시가드', '밀짚모자', '선글라스', '반바지',
+            '민소매', '아이콘', '스마트폰', '패러세일링', '패러세일', '낙하산', '키나발루', '야자수', '일출',
+          ]);
+
+          const rawTokens = q
+            .toLowerCase()
+            .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+            .split(/\s+/)
+            .map((t) => {
+              if (KEEP_NOUNS.has(t)) return t;
+              return t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '');
+            })
+            .filter((t) => t.length >= 1 && !STOP_WORDS.has(t));
+
+          if (rawTokens.length === 0) {
+            res.end(JSON.stringify({ ok: true, videos: stripVideoVecs(rawVideos) }));
+            return;
+          }
+
+          const qVec = await embedQueryVector768(q);
+
+          const scored: {
+            vid: any;
+            totalScore: number;
+            matchedTokenCount: number;
+            bestFrameLexical: number;
+            bestFrameVecSim: number;
+          }[] = [];
+
+          for (const vid of rawVideos) {
+            const videoCorpus = `${vid.title ?? ''} ${vid.locationKo ?? ''} ${vid.sceneDescription ?? ''} ${(vid.keywords ?? []).join(' ')}`.toLowerCase();
+            let bestFrame = vid.timelineFrames?.[0];
+            let bestFrameCombined = -1;
+            let bestFrameLexical = 0;
+            let bestFrameVecSim = 0.6;
+
+            for (const frame of vid.timelineFrames ?? []) {
+              const frameKws = [...(frame.keywords ?? []), ...(frame.ontologyKeywords ?? [])].map((k: string) =>
+                k.toLowerCase()
+              );
+              const frameCorpus = `${frame.timestampText ?? ''} ${frame.phaseLabel ?? ''} ${frame.sceneCaption ?? ''} ${frame.captionEn ?? ''} ${frameKws.join(' ')} ${(frame.tags ?? []).join(' ')}`.toLowerCase();
+
+              let fLex = 0;
+              for (const tk of rawTokens) {
+                if (frameKws.some((k) => k.includes(tk))) {
+                  fLex += 6;
+                } else if (frameCorpus.includes(tk)) {
+                  fLex += 4;
+                }
+              }
+
+              let fVecSim = 0.6;
+              if (qVec && Array.isArray(frame.vec) && frame.vec.length === qVec.length) {
+                let dot = 0;
+                for (let i = 0; i < qVec.length; i++) dot += qVec[i] * frame.vec[i];
+                fVecSim = dot;
+              }
+
+              const combined = fLex + fVecSim * 5;
+              if (combined > bestFrameCombined) {
+                bestFrameCombined = combined;
+                bestFrameLexical = fLex;
+                bestFrameVecSim = fVecSim;
+                bestFrame = frame;
+              }
+            }
+
+            if (!bestFrame) continue;
+
+            const fullCorpus = `${videoCorpus} ${bestFrame.sceneCaption ?? ''} ${(bestFrame.keywords ?? []).join(' ')} ${(bestFrame.ontologyKeywords ?? []).join(' ')}`.toLowerCase();
+            let matchedTokenCount = 0;
+            let videoBaseHits = 0;
+            for (const tk of rawTokens) {
+              if (fullCorpus.includes(tk)) {
+                matchedTokenCount += 1;
+                videoBaseHits += 3;
+              }
+            }
+
+            const requiredTokenMatches =
+              rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.6));
+
+            if (
+              (bestFrameLexical > 0 && matchedTokenCount >= requiredTokenMatches) ||
+              (matchedTokenCount === 0 && bestFrameVecSim >= 0.72)
+            ) {
+              const totalScore = videoBaseHits + bestFrameLexical + matchedTokenCount * 5 + bestFrameVecSim * 6;
+              scored.push({
+                vid: {
+                  ...vid,
+                  matchedSeekSec: bestFrame.timeSec,
+                  matchedTimestamp: `🎯 ${bestFrame.timestampText} 구간 포착`,
+                  matchedFrameCaption: bestFrame.sceneCaption,
+                },
+                totalScore,
+                matchedTokenCount,
+                bestFrameLexical,
+                bestFrameVecSim,
+              });
+            }
+          }
+
+          scored.sort((a, b) => b.totalScore - a.totalScore);
+          const filtered =
+            scored.length > 1
+              ? scored.filter((s) => s.totalScore >= scored[0].totalScore * 0.58).map((s) => s.vid)
+              : scored.map((s) => s.vid);
+
+          res.end(JSON.stringify({ ok: true, videos: stripVideoVecs(filtered) }));
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e), videos: [] }));
+        }
+      });
+
+      // ──────────────────────────────────────────────────────────────────────────
+      // [자율 엔진 ②] 로컬 스마트 서류함(test_docs) 실시간 파서 & 768차원 벡터 검색 API
+      // ──────────────────────────────────────────────────────────────────────────
+      const DOCS_DIR = path.resolve(ROOT, 'test_docs');
+      const DOCS_INDEX_FILE = path.resolve(POC_RESULTS_DIR, 'docs_semantic_index.json');
+      const SUPPORTED_DOC_EXT = new Set(['.pdf', '.txt', '.md', '.docx', '.csv', '.json', '.html']);
+
+      const loadLocalDocsWithAutoSync = async (): Promise<any[]> => {
+        fs.mkdirSync(DOCS_DIR, { recursive: true });
+        let cachedDocs: any[] = [];
+        if (fs.existsSync(DOCS_INDEX_FILE)) {
+          try {
+            const parsed = JSON.parse(fs.readFileSync(DOCS_INDEX_FILE, 'utf-8'));
+            cachedDocs = Array.isArray(parsed.documents) ? parsed.documents : [];
+          } catch {
+            cachedDocs = [];
+          }
+        }
+        const byFileName = new Map<string, any>();
+        for (const d of cachedDocs) byFileName.set(d.fileName, d);
+
+        const diskFiles = fs
+          .readdirSync(DOCS_DIR)
+          .filter((f) => SUPPORTED_DOC_EXT.has(path.extname(f).toLowerCase()))
+          .sort((a, b) => a.localeCompare(b, 'ko'));
+
+        let changed = false;
+        const activeDocs: any[] = [];
+        for (let idx = 0; idx < diskFiles.length; idx++) {
+          const fileName = diskFiles[idx];
+          const existing = byFileName.get(fileName);
+          if (existing) {
+            activeDocs.push(existing);
+            continue;
+          }
+          // 신규 문서 파일이 디스크에 추가된 경우 즉시 바이트 파싱 및 768차원 임베딩 수행
+          const fullPath = path.join(DOCS_DIR, fileName);
+          const stat = fs.statSync(fullPath);
+          const buf = fs.readFileSync(fullPath);
+          const extLower = path.extname(fileName).toLowerCase();
+          const extUpper = extLower.replace(/^\./, '').toUpperCase();
+          const rawUtf8 = buf
+            .toString('utf-8')
+            .replace(/<[^>]+>/g, ' ')
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l && !l.startsWith('%PDF') && !l.startsWith('% ['))
+            .join('\n');
+
+          let title = path.basename(fileName, extLower).replace(/_/g, ' ');
+          const bodyLines: string[] = [];
+          for (const line of rawUtf8.split(/\r?\n/)) {
+            const mTitle = line.match(/^(?:문서제목|제목|Title)\s*:\s*(.+)$/i);
+            if (mTitle?.[1]) title = mTitle[1].trim();
+            else bodyLines.push(line.replace(/^내용\s*:\s*/, ''));
+          }
+          const extractedText = bodyLines.join(' | ') || rawUtf8;
+          const dateMatch = rawUtf8.match(/(20\d{2}\.\d{2}\.\d{2})/);
+          const d = new Date(stat.mtimeMs);
+          const docDate = dateMatch
+            ? dateMatch[1]
+            : `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+          const kws = `${title} ${extractedText}`
+            .replace(/[()[\]{}|:.,/~➔•]/g, ' ')
+            .split(/\s+/)
+            .filter((w) => w.length >= 2)
+            .slice(0, 20);
+          const vec = (await embedQueryVector768(`${title} ${extractedText}`)) ?? [];
+
+          const newDoc = {
+            id: `doc_${idx + 1}_${path.basename(fileName, extLower).slice(0, 12)}`,
+            fileName,
+            ext: extUpper === 'DOCX' ? 'DOCX' : extUpper === 'TXT' ? 'TXT' : 'PDF',
+            title,
+            categoryBadge: '📄 로컬 문서 · 서류',
+            extractedText,
+            keywords: Array.from(new Set(kws)),
+            date: docDate,
+            sizeKB: Math.max(1, Math.round(stat.size / 1024)),
+            deviceSource: '로컬 서류함 (test_docs)',
+            vec,
+          };
+          activeDocs.push(newDoc);
+          changed = true;
+        }
+
+        if (changed || activeDocs.length !== cachedDocs.length) {
+          fs.writeFileSync(
+            DOCS_INDEX_FILE,
+            JSON.stringify({ createdAt: new Date().toISOString(), docCount: activeDocs.length, documents: activeDocs }, null, 2),
+            'utf-8'
+          );
+        }
+        return activeDocs;
+      };
+
+      const stripDocVecs = (docs: any[]) =>
+        docs.map((d) => {
+          const { vec: _vec, ...rest } = d;
+          return rest;
+        });
+
+      server.middlewares.use('/__docs/list', async (_req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        try {
+          const docs = await loadLocalDocsWithAutoSync();
+          res.end(JSON.stringify({ ok: true, count: docs.length, documents: stripDocVecs(docs) }));
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e), documents: [] }));
+        }
+      });
+
+      server.middlewares.use('/__docs/file', (req, res) => {
+        const u = new URL(req.url ?? '', 'http://local');
+        const f = path.basename(u.searchParams.get('f') ?? '');
+        const full = path.resolve(DOCS_DIR, f);
+        if (!f || !full.startsWith(DOCS_DIR + path.sep) || !fs.existsSync(full)) {
+          res.statusCode = 404;
+          res.end('not found');
+          return;
+        }
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        fs.createReadStream(full).pipe(res);
+      });
+
+      server.middlewares.use('/__docs/search', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        try {
+          const body = await readJsonBody(req);
+          const q = String(body?.query ?? '').trim();
+          const docs = await loadLocalDocsWithAutoSync();
+          if (!q || q.includes('최근 서류')) {
+            res.end(JSON.stringify({ ok: true, documents: stripDocVecs(docs) }));
+            return;
+          }
+
+          const rawTokens = q
+            .toLowerCase()
+            .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+            .split(/\s+/)
+            .map((t) => t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
+            .filter((t) => t.length >= 1 && !['찾아줘', '보여줘', '사진', '문서', '파일', '서류함', '및', '사본'].includes(t));
+
+          if (rawTokens.length === 0) {
+            res.end(JSON.stringify({ ok: true, documents: stripDocVecs(docs) }));
+            return;
+          }
+
+          const qVec = await embedQueryVector768(q);
+          const scored = docs
+            .map((doc) => {
+              const corpus = `${doc.fileName} ${doc.title} ${doc.categoryBadge} ${doc.extractedText} ${(doc.keywords ?? []).join(' ')}`.toLowerCase();
+              let hits = 0;
+              for (const tk of rawTokens) {
+                if (corpus.includes(tk)) hits += 1;
+              }
+              let vecSim = 0.6;
+              if (qVec && Array.isArray(doc.vec) && doc.vec.length === qVec.length) {
+                let dot = 0;
+                for (let i = 0; i < qVec.length; i++) dot += qVec[i] * doc.vec[i];
+                vecSim = dot;
+              }
+              return {
+                doc,
+                hits,
+                vecSim,
+                totalScore: hits * 4 + vecSim * 5,
+              };
+            })
+            .filter((item) => item.hits > 0 || item.vecSim >= 0.72);
+
+          scored.sort((a, b) => b.totalScore - a.totalScore);
+          const filtered =
+            scored.length > 1
+              ? scored.filter((s) => s.totalScore >= scored[0].totalScore * 0.55).map((s) => s.doc)
+              : scored.map((s) => s.doc);
+
+          res.end(JSON.stringify({ ok: true, documents: stripDocVecs(filtered) }));
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e), documents: [] }));
         }
       });
     },
