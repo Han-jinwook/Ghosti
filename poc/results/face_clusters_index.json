@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-17T08:43:15.254Z",
+  "createdAt": "2026-10-17T09:00:29.454Z",
   "latestCorpusYear": 2026,
   "clusterCount": 5,
   "clusters": [
@@ -1295,15 +1295,15 @@
           "year": 2024,
           "representativePhoto": "20240720_184614.jpg",
           "representativeDate": "2024.07.20",
-          "frontalScore": 0.95,
+          "frontalScore": 0.96,
           "opticalSharpness": 29065,
           "avatarUrl": "/__faces/avatar?f=face_member_3_2024_20240720_184614.jpg",
-          "cropUrl": "/__faces/crop?file=20240720_184614.jpg&box=390,483,807,785",
+          "cropUrl": "/__faces/crop?file=20240720_184614.jpg&box=393,470,806,795",
           "boundingBox": [
-            390,
-            483,
-            807,
-            785
+            393,
+            470,
+            806,
+            795
           ]
         }
       ]
@@ -2482,15 +2482,15 @@
           "year": 2024,
           "representativePhoto": "20240720_141136.jpg",
           "representativeDate": "2024.07.20",
-          "frontalScore": 0.96,
+          "frontalScore": 0.98,
           "opticalSharpness": 33816,
           "avatarUrl": "/__faces/avatar?f=face_member_5_2024_20240720_141136.jpg",
-          "cropUrl": "/__faces/crop?file=20240720_141136.jpg&box=217,238,882,563",
+          "cropUrl": "/__faces/crop?file=20240720_141136.jpg&box=221,236,878,569",
           "boundingBox": [
-            217,
-            238,
-            882,
-            563
+            221,
+            236,
+            878,
+            569
           ]
         }
       ]
@@ -2560,29 +2560,8 @@
         "20260926_131245.jpg",
         "20260926_160201.jpg"
       ],
-      "matchedVideoSegmentCount": 2,
-      "matchedVideoSegments": [
-        {
-          "videoId": "vid_20240720_134808",
-          "videoFileName": "20240720_134808.mp4",
-          "videoTitle": "코타키나발루 리조트 야외 테라스에서 카메라를 설치하고 기념 촬영하는 남녀",
-          "timeSec": 6,
-          "timestampText": "00:06",
-          "phaseLabel": "동반 착석 포즈",
-          "sceneCaption": "소파에 남성과 나란히 앉은 여성이 정면 카메라를 바라보며 한 손을 들어 인사하듯 포즈를 취합니다.",
-          "thumbUrl": "/__videos/frame?f=20240720_134808_t06.jpg"
-        },
-        {
-          "videoId": "vid_20240722_052422",
-          "videoFileName": "20240722_052422.mp4",
-          "videoTitle": "비행기 창밖으로 펼쳐진 일출 풍경과 이를 스마트폰으로 촬영하는 모습",
-          "timeSec": 2,
-          "timestampText": "00:02",
-          "phaseLabel": "스마트폰 화면",
-          "sceneCaption": "일출 빛이 비치는 비행기 창문 앞으로 앱 아이콘들이 정렬된 스마트폰 화면을 손으로 들어 올립니다.",
-          "thumbUrl": "/__videos/frame?f=20240722_052422_t02.jpg"
-        }
-      ],
+      "matchedVideoSegmentCount": 0,
+      "matchedVideoSegments": [],
       "seedDates": [
         "2026.09.26",
         "2026.09.25",
@@ -3449,29 +3428,8 @@
         "20260926_160221.jpg",
         "20260926_160222.jpg"
       ],
-      "matchedVideoSegmentCount": 2,
-      "matchedVideoSegments": [
-        {
-          "videoId": "vid_20240720_134808",
-          "videoFileName": "20240720_134808.mp4",
-          "videoTitle": "코타키나발루 리조트 야외 테라스에서 카메라를 설치하고 기념 촬영하는 남녀",
-          "timeSec": 6,
-          "timestampText": "00:06",
-          "phaseLabel": "동반 착석 포즈",
-          "sceneCaption": "소파에 남성과 나란히 앉은 여성이 정면 카메라를 바라보며 한 손을 들어 인사하듯 포즈를 취합니다.",
-          "thumbUrl": "/__videos/frame?f=20240720_134808_t06.jpg"
-        },
-        {
-          "videoId": "vid_20240722_052422",
-          "videoFileName": "20240722_052422.mp4",
-          "videoTitle": "비행기 창밖으로 펼쳐진 일출 풍경과 이를 스마트폰으로 촬영하는 모습",
-          "timeSec": 2,
-          "timestampText": "00:02",
-          "phaseLabel": "스마트폰 화면",
-          "sceneCaption": "일출 빛이 비치는 비행기 창문 앞으로 앱 아이콘들이 정렬된 스마트폰 화면을 손으로 들어 올립니다.",
-          "thumbUrl": "/__videos/frame?f=20240722_052422_t02.jpg"
-        }
-      ],
+      "matchedVideoSegmentCount": 0,
+      "matchedVideoSegments": [],
       "seedDates": [
         "2026.09.26",
         "2026.09.25",
@@ -4270,14 +4228,14 @@
           "year": 2024,
           "representativePhoto": "20240720_184614.jpg",
           "representativeDate": "2024.07.20",
-          "frontalScore": 0.72,
+          "frontalScore": 0.7,
           "opticalSharpness": 29065,
           "avatarUrl": "/__faces/avatar?f=face_member_2_2024_20240720_184614.jpg",
-          "cropUrl": "/__faces/crop?file=20240720_184614.jpg&box=421,902,613,1000",
+          "cropUrl": "/__faces/crop?file=20240720_184614.jpg&box=418,900,614,1000",
           "boundingBox": [
-            421,
-            902,
-            613,
+            418,
+            900,
+            614,
             1000
           ]
         }
@@ -4394,29 +4352,8 @@
         "20261002_090514.jpg",
         "20261002_103044.jpg"
       ],
-      "matchedVideoSegmentCount": 2,
-      "matchedVideoSegments": [
-        {
-          "videoId": "vid_20240720_134808",
-          "videoFileName": "20240720_134808.mp4",
-          "videoTitle": "코타키나발루 리조트 야외 테라스에서 카메라를 설치하고 기념 촬영하는 남녀",
-          "timeSec": 6,
-          "timestampText": "00:06",
-          "phaseLabel": "동반 착석 포즈",
-          "sceneCaption": "소파에 남성과 나란히 앉은 여성이 정면 카메라를 바라보며 한 손을 들어 인사하듯 포즈를 취합니다.",
-          "thumbUrl": "/__videos/frame?f=20240720_134808_t06.jpg"
-        },
-        {
-          "videoId": "vid_20240722_052422",
-          "videoFileName": "20240722_052422.mp4",
-          "videoTitle": "비행기 창밖으로 펼쳐진 일출 풍경과 이를 스마트폰으로 촬영하는 모습",
-          "timeSec": 2,
-          "timestampText": "00:02",
-          "phaseLabel": "스마트폰 화면",
-          "sceneCaption": "일출 빛이 비치는 비행기 창문 앞으로 앱 아이콘들이 정렬된 스마트폰 화면을 손으로 들어 올립니다.",
-          "thumbUrl": "/__videos/frame?f=20240722_052422_t02.jpg"
-        }
-      ],
+      "matchedVideoSegmentCount": 0,
+      "matchedVideoSegments": [],
       "seedDates": [
         "2026.10.02",
         "2026.09.26",

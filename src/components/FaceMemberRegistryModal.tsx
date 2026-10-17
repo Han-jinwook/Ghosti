@@ -107,7 +107,7 @@ function getClusterYearlyCuts(cluster: FaceMemberCluster): YearlyFaceBestCut[] {
  * 즉시 "[이름] 나무 다리", "[이름] 선글라스" 실명 사진 검색을 체험하는 컴포넌트
  */
 export const FaceMemberInlineBar: React.FC<{
-  onRunRealNameQuery: (query: string) => void;
+  onRunRealNameQuery: (query: string, targetSpace?: 'gallery' | 'video') => void;
 }> = ({ onRunRealNameQuery }) => {
   const {
     faceClusters,
@@ -162,10 +162,10 @@ export const FaceMemberInlineBar: React.FC<{
           className="flex items-center gap-2.5 text-left min-w-0 flex-1"
         >
           <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold shrink-0">
-            자율 얼굴 검출 · 연도별 베스트 누적
+            사진 · 동영상 통합 얼굴 인식
           </span>
           <span className="font-label-md text-[12.5px] md:text-[13px] text-zinc-100 font-bold truncate">
-            🎯 사진에서 {visibleClusters.length}명의 얼굴을 자동 추출했습니다 ({latestCorpusYear}년 대표컷 + 과거 연도 베스트 컷 자동 누적). 이름을 등록해 볼까요?
+            🎯 {visibleClusters.length}명의 얼굴을 자동 추출했습니다 ({latestCorpusYear}년 대표컷 + 과거 연도 베스트 컷 누적 · 동영상 구간 자동 연동)
           </span>
         </button>
 
@@ -318,10 +318,13 @@ export const FaceMemberInlineBar: React.FC<{
                         )}
                       </div>
                       <p className="font-body-sm text-[11px] text-zinc-400 truncate mt-0.5">
-                        사진 {cluster.matchedPhotoCount}장 · {yearlyCuts.length}개 연도 베스트 누적
+                        사진 {cluster.matchedPhotoCount}장
+                        {cluster.matchedVideoSegmentCount > 0
+                          ? ` · 영상 ${cluster.matchedVideoSegmentCount}구간`
+                          : ''}
                       </p>
                       <p className="font-mono text-[10px] text-zinc-500 truncate">
-                        {activeCut.representativeDate} 대표컷
+                        {activeCut.representativeDate} 대표컷 ({yearlyCuts.length}개 연도)
                       </p>
                     </div>
                   </div>
@@ -364,12 +367,12 @@ export const FaceMemberInlineBar: React.FC<{
             })}
           </div>
 
-          {/* 등록 즉시 활성화되는 실명 + 장면 자연어 사진 검색 원터치 체험 바 */}
+          {/* 등록 즉시 활성화되는 실명 + 장면 자연어 사진 & 동영상 구간 점프 원터치 체험 바 */}
           {registeredClusters.length > 0 && (
             <div className="px-3.5 py-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-label-sm text-[11.5px] text-primary-container font-bold mr-1">
-                  ⚡ 등록 실명 + 장면 즉시 검색 (0.04초):
+                  ⚡ 실명 사진 검색 &amp; 동영상 구간 점프 (0.04초):
                 </span>
                 {registeredClusters.map((rc) => {
                   const name = rc.registeredName.trim();
@@ -379,28 +382,45 @@ export const FaceMemberInlineBar: React.FC<{
                   const isGlassesYouth = pKey.includes('glasses') || /안경/.test(rc.appearanceLabelKo);
                   const isYoungBoy = pKey.includes('child_son');
 
-                  const queries = isAdultMale
+                  const photoQueries = isAdultMale
                     ? [`${name} 나무 다리`, `${name} 바다`]
                     : isAdultFemale
                     ? [`${name} 나무 다리`, `${name} 선글라스`]
                     : isGlassesYouth
-                    ? [`${name} 박물관`, `${name} 식당`]
+                    ? [`${name} 박물관`]
                     : isYoungBoy
-                    ? [`${name} 물놀이`, `${name} 해변`]
+                    ? [`${name} 물놀이`]
                     : [`${name}`];
+
+                  const videoQuery = isAdultMale
+                    ? `${name} 패러세일링`
+                    : isAdultFemale
+                    ? `${name} 테라스`
+                    : '';
 
                   return (
                     <React.Fragment key={rc.clusterId}>
-                      {queries.map((qText) => (
+                      {photoQueries.map((qText) => (
                         <button
                           key={qText}
                           type="button"
-                          onClick={() => onRunRealNameQuery(qText)}
+                          onClick={() => onRunRealNameQuery(qText, 'gallery')}
                           className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[11.5px] flex items-center gap-1 transition-colors"
                         >
                           <span>🖼️ “{qText}”</span>
                         </button>
                       ))}
+                      {rc.matchedVideoSegmentCount > 0 && videoQuery && (
+                        <button
+                          type="button"
+                          onClick={() => onRunRealNameQuery(videoQuery, 'video')}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-primary-container/30 text-primary-container font-label-sm text-[11.5px] flex items-center gap-1 transition-colors"
+                        >
+                          <span>
+                            🎬 “{videoQuery}” (영상 {rc.matchedVideoSegments[0]?.timestampText ?? '00:00'} 구간)
+                          </span>
+                        </button>
+                      )}
                     </React.Fragment>
                   );
                 })}

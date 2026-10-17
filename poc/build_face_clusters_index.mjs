@@ -261,14 +261,14 @@ function matchCorpusAndVideosForPersonCluster(personKey) {
   const matchedVideoSegments = [];
   for (const vid of videoData) {
     for (const frame of vid.timelineFrames || []) {
-      const fTxt = `${frame.sceneCaption || ''} ${(frame.keywords || []).join(' ')} ${(frame.ontologyKeywords || []).join(' ')}`;
+      const fRaw = `${frame.sceneCaption || ''} ${(frame.keywords || []).join(' ')}`;
       let fHit = false;
       if (isAdultMale) {
-        fHit = /남성|남자|남편|부부|커플|두 사람/.test(fTxt);
+        fHit = /남성|남자|남편|부부|커플|두 사람/.test(fRaw);
       } else if (isAdultFemale) {
-        fHit = /여성|여자|아내|부부|커플|두 사람|목걸이|밀짚모자/.test(fTxt);
+        fHit = /여성|여자|아내|부부|커플|두 사람|목걸이|밀짚모자/.test(fRaw);
       } else {
-        fHit = /소년|소녀|아이|어린이|가족|일행/.test(fTxt);
+        fHit = /(?:^|[^가-힣])(?:소년|소녀|아들|딸|어린이|학생|아이들)(?:[^가-힣]|$)/.test(fRaw);
       }
       if (fHit) {
         matchedVideoSegments.push({

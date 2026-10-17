@@ -407,13 +407,13 @@ export const VoiceHeroStage: React.FC = () => {
         </div>
       </div>
 
-      {/* ─────────────── [라운지 마스터 Step 1 인라인 바] 사진(전체 갤러리) 모드에서만 작동하는 자율 얼굴 검출 & 인터랙티브 실명 등록 ─────────────── */}
-      {searchSpace === 'gallery' && (
+      {/* ─────────────── [라운지 마스터 Step 1 인라인 바] 사진(전체 갤러리) 및 동영상 장면 모드에서 작동하는 자율 얼굴 검출 & 인터랙티브 실명 등록 ─────────────── */}
+      {(searchSpace === 'gallery' || searchSpace === 'video') && (
         <FaceMemberInlineBar
-          onRunRealNameQuery={(query) => {
+          onRunRealNameQuery={(query, targetSpace = 'gallery') => {
             setTextInput(query);
             setIsBriefingOpen(false);
-            setSearchSpace('gallery');
+            setSearchSpace(targetSpace);
             void runTextQuery(query);
             scrollToResults();
           }}
