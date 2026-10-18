@@ -116,12 +116,12 @@ export const DesktopDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* ─────────────── 상단 2단 통합 헤더: 1단(로고+슬로건 / 엔진 가동중 / 우측 이격된 메인메뉴 4개 / 우상단 [☀️ 밝은 화면 / 🌙 어두운 화면] 토글) + 2단(메인메뉴 바로 아래 서브메뉴) ─────────────── */}
+      {/* ─────────────── 상단 2단 통합 헤더: 1단(로고+슬로건 / 우측 메인메뉴 4개 / 우상단 달·해 아이콘) + 2단(메인메뉴 바로 아래 서브메뉴) ─────────────── */}
       <header className="sticky top-0 bg-[#09090B]/95 backdrop-blur-xl z-40 border-b border-white/10">
-        {/* 1단: 로고(아래 슬로건) + [🟢 엔진 가동중] ─── (넉넉한 간격) ─── 메인메뉴 4개 + 우상단 테마 토글 */}
+        {/* 1단: 로고(아래 슬로건) ─── (넉넉한 간격) ─── 메인메뉴 4개 + 우상단 테마 토글 */}
         <div className="px-5 md:px-8 py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center min-w-0 flex-wrap gap-y-2">
-            {/* 좌측 브랜드 로고(아래 슬로건) + [🟢 엔진 가동중] */}
+            {/* 좌측 브랜드 로고(아래 슬로건) */}
             <div className="flex items-center gap-3.5 shrink-0">
               <div
                 onClick={() => setDesktopTab('dashboard')}
@@ -144,24 +144,10 @@ export const DesktopDashboard: React.FC = () => {
                   </span>
                 </div>
               </div>
-
-              {/* [🟢 엔진 가동중] 반짝반짝 녹색 표시등 캡슐 */}
-              <button
-                type="button"
-                onClick={() => setShowOnboarding(true)}
-                title="클릭하여 엔진 보안 상세 안내 · 검진 폴더 설정 · 모바일 QR 페어링 열기"
-                className="px-3.5 py-2 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 hover:border-emerald-400/50 text-zinc-100 font-label-sm text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 whitespace-nowrap"
-              >
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-                </span>
-                <span>{gpuHelper24hActive ? '⚡ GPU 가동중' : '엔진 가동중'}</span>
-              </button>
             </div>
 
-            {/* 엔진 가동중과 넉넉한 거리를 두고 우측으로 배치한 메인메뉴 4개 */}
-            <nav className="ml-4 sm:ml-8 md:ml-12 lg:ml-16 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
+            {/* 로고와 넉넉한 거리를 두고 배치한 메인메뉴 4개 */}
+            <nav className="ml-6 sm:ml-10 md:ml-14 lg:ml-16 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
               {MAIN_LOUNGE_MENUS.map((menu) => {
                 const active = activeLoungeType === menu.id;
                 return (
@@ -225,7 +211,7 @@ export const DesktopDashboard: React.FC = () => {
         </div>
 
         {/* 2단: 메인메뉴 4개 바로 아래 라인에 맞춰 정렬된 라운지별 서브메뉴 바 */}
-        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[390px] lg:pl-[410px]">
+        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[316px] lg:pl-[324px]">
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
               return null;
