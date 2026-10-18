@@ -221,7 +221,23 @@ export const PricingModal: React.FC = () => {
     isStoreAppMode,
   } = useSaySeeStore();
 
+  const [trojanCouponCopied, setTrojanCouponCopied] = useState(false);
+
   if (!showProModal) return null;
+
+  const handleCopyTrojanBrag = async () => {
+    const bragCopy =
+      '내가 클럽 평생권 끊어서 가족방 쿠폰 3장 받았는데, 선착순으로 줄 테니 쓸 사람?';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(bragCopy);
+      }
+    } catch {
+      // ignore clipboard fallback
+    }
+    setTrojanCouponCopied(true);
+    window.setTimeout(() => setTrojanCouponCopied(false), 2600);
+  };
 
   // [스토어 1차 심사용 모바일 클린 모드(isStoreAppMode === true)]:
   // 인앱결제(IAP) 수수료 및 외부 결제 유도 금지 규정(Anti-steering) 원천 방어를 위해
@@ -347,6 +363,39 @@ export const PricingModal: React.FC = () => {
 
         {/* 모바일 접속자 편의: 검색 없이 내 이메일/카톡으로 PC 마스터 접속 주소 보내기 */}
         <PcMasterQuickSendPanel compact />
+
+        {/* [치트키 2] 홈쇼핑식 '실시간 잔여 수량' 카운터 노출 (시각적 FOMO) */}
+        <div
+          data-keep-dark="true"
+          className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/90 via-red-950/85 to-zinc-950 border border-rose-500/50 shadow-[0_0_24px_rgba(244,63,94,0.18)] flex flex-col gap-2.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white font-label-sm text-[11px] font-black animate-pulse">
+                LIVE 마감 임박
+              </span>
+              <span className="font-headline-sm text-[15px] md:text-[16.5px] text-white font-black">
+                🔥 1차 평생권 100명 중 87개 소진 <span className="text-amber-300">(잔여 13석)</span>
+              </span>
+            </div>
+            <span className="font-label-mono text-[11.5px] text-rose-200 font-bold">
+              소진율 87% · 13석 마감 시 정상 구독가로 자동 전환됩니다
+            </span>
+          </div>
+
+          <div className="w-full h-3 rounded-full bg-black/60 border border-white/10 overflow-hidden p-0.5">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-rose-500 via-orange-500 to-amber-400 transition-all duration-500"
+              style={{ width: '87%' }}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-200 pt-0.5">
+            <span>
+              🏅 <strong>연간권·평생권 VIP 3대 특권:</strong> ① 라운지 상단 <strong>[총무 명예의 전당 헌정 배지]</strong> 영구 각인 · ② 변천사 쇼츠 <strong>[모임 전용 맞춤형 워터마크]</strong> 권한 · ③ 클럽 장기권 결제 시 <strong>[가족 라운지 1년 무료 초대권 3장]</strong> 사은품 지급
+            </span>
+          </div>
+        </div>
 
         {/* 1. 4대 라운지 초심플 기본 요금제 (마스터 1인 결제 ➔ 멤버 전원 무료) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -498,15 +547,22 @@ export const PricingModal: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <div className="px-3 py-2 rounded-xl bg-zinc-950/90 border border-primary-container/30 text-[11.5px] text-zinc-300">
+                🎬 <strong>연간권 특권:</strong> 변천사 쇼츠 영상 우측 하단 워터마크를 <code>[SaySee]</code> 로고 대신 <strong>[사랑하는 우리가족]</strong> 등 가족 전용 타이틀로 커스텀 가능!
+              </div>
             </div>
           </div>
 
           {/* ③ ⛳ 클럽 라운지 (소 / 중 / 대 3단계 — 방 1개 기준) */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11.5px] font-bold">
                   3. 동호회·모임 • 소 / 중 / 대 3단계 (방 1개 기준)
+                </span>
+                <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-400/40 text-amber-300 font-label-sm text-[10.5px] font-extrabold">
+                  🏅 총무 명예의 전당 배지 + 🎁 가족방 1년 쿠폰 3장 증정
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
@@ -608,7 +664,32 @@ export const PricingModal: React.FC = () => {
                 </div>
               </div>
 
-              <p className="font-body-sm text-[11.5px] text-zinc-400 pt-1">
+              {/* [치트키 3 & 4] 클럽 장기권 결제 시 가족 라운지 1년 무료 초대권 3장 증정 + 맞춤형 쇼츠 워터마크 특권 */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/35 flex flex-col gap-2">
+                <div className="flex flex-col gap-1 text-[11.5px] text-amber-200">
+                  <span>
+                    🎁 <strong>[트로이 목마 VIP 사은품]</strong> 클럽 연간권·평생권 결제 시 총무님께 <strong>[패밀리 라운지 1년 무료 초대권 3장]</strong>을 즉시 드립니다!
+                  </span>
+                  <span className="text-zinc-300">
+                    🎬 <strong>[모임 전용 워터마크 특권]</strong> 자동 생성 쇼츠 우측 하단에 <code>[SaySee]</code> 대신 <strong>[제주여고 89회 공식 갤러리]</strong> 등 모임 전용 로고 각인!
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyTrojanBrag()}
+                  className={`w-full py-1.5 px-3 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all ${
+                    trojanCouponCopied
+                      ? 'bg-emerald-400 text-zinc-950'
+                      : 'bg-amber-400 hover:bg-amber-300 text-zinc-950'
+                  }`}
+                >
+                  {trojanCouponCopied
+                    ? '✓ 단톡방 생색 문구 복사됨! ("내가 클럽 평생권 끊어서 가족방 쿠폰 3장 받았는데...")'
+                    : '💌 단톡방 생색 카피 복사: "내가 클럽 평생권 끊어서 가족방 쿠폰 3장 받았는데, 선착순 쓸 사람?"'}
+                </button>
+              </div>
+
+              <p className="font-body-sm text-[11.5px] text-zinc-400 pt-0.5">
                 ※ 안내 규칙: 각 클럽권은 방 1개 기준이며, 소모임/파트별 방 분리를 원할 경우 소형 클럽 등을 별도 추가 구매.
               </p>
             </div>

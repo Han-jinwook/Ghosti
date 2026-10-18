@@ -82,15 +82,19 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
     findMySchoolDaysPhotosFast,
     analogYearProposals,
     approveAllAnalogYearProposals,
+    isStoreAppMode,
+    setShowProModal,
   } = useSaySeeStore();
 
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [trojanBragCopied, setTrojanBragCopied] = useState(false);
   const [editingBannerKeyword, setEditingBannerKeyword] = useState(false);
   const [keywordDraft, setKeywordDraft] = useState(`${alumniSchoolName} ${alumniGradYear}`);
 
   const cohortShort = String(alumniGradCohortNumber).padStart(2, '0');
   const bannerTitle = `${alumniSchoolName} ${cohortShort}회 동창회`;
   const inviteHookCopy = `네가 몰랐던 ${cohortShort}년 수학여행 네 사진 다 찾았다`;
+  const trojanBragCopy = `내가 클럽 평생권 끊어서 가족방 쿠폰 3장 받았는데, 선착순으로 줄 테니 쓸 사람?`;
 
   const pendingProposals = analogYearProposals.filter((p) => !p.approvedByHost);
 
@@ -104,6 +108,18 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
     }
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2600);
+  };
+
+  const handleCopyTrojanBrag = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(trojanBragCopy);
+      }
+    } catch {
+      // ignore clipboard fallback
+    }
+    setTrojanBragCopied(true);
+    setTimeout(() => setTrojanBragCopied(false), 2600);
   };
 
   const handleApplyBannerKeyword = (e: React.FormEvent) => {
@@ -207,6 +223,49 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
             </span>
           </button>
         </div>
+      </div>
+
+      {/* 1-2. [치트키 1·2·3] 총무 명예의 전당 헌정 배지 + 실시간 잔여 수량 게이지 + 가족방 1년 쿠폰 3장 생색내기 */}
+      <div className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-zinc-950 to-zinc-950 border border-amber-400/40 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-black whitespace-nowrap">
+            🏅 명예의 전당
+          </span>
+          <span className="font-label-md text-[12.5px] md:text-[13px] text-amber-200 font-extrabold">
+            {isStoreAppMode
+              ? '🏅 본 라운지는 김철수 총무님의 마스터 후원으로 회원 전원 영구 무료 운영됩니다.'
+              : '🏅 본 라운지는 김철수 총무님의 [평생권] 후원으로 영구 무료 운영됩니다.'}
+          </span>
+        </div>
+
+        {!isStoreAppMode && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowProModal(true)}
+              className="px-3 py-1.5 rounded-lg bg-rose-950/90 hover:bg-rose-900/90 border border-rose-500/50 text-rose-200 font-label-sm text-[11.5px] font-extrabold flex items-center gap-2 whitespace-nowrap"
+            >
+              <span>🔥 1차 평생권 100명 중 87개 소진 (잔여 13석)</span>
+              <span className="w-14 h-2 rounded-full bg-black/60 overflow-hidden inline-flex">
+                <span className="h-full bg-gradient-to-r from-rose-500 to-amber-400" style={{ width: '87%' }} />
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleCopyTrojanBrag()}
+              className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold whitespace-nowrap transition-all ${
+                trojanBragCopied
+                  ? 'bg-emerald-400 text-zinc-950'
+                  : 'bg-zinc-900 hover:bg-zinc-800 border border-amber-400/45 text-amber-300'
+              }`}
+            >
+              {trojanBragCopied
+                ? '✓ 가족방 무료 쿠폰 3장 생색 문구 복사됨!'
+                : '🎁 사은품 [가족 라운지 1년 무료권 3장] 단톡방에 뿌리기'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 2. 필수 액션 버튼 바 (크기·여백 통일 & 모바일 줄바꿈 깨짐 방지 whitespace-nowrap) */}
@@ -2561,6 +2620,10 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   } = useSaySeeStore();
 
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [trojanBragCopied, setTrojanBragCopied] = useState(false);
+  const [familyShortsWatermark, setFamilyShortsWatermark] = useState('사랑하는 우리가족');
+  const [clubShortsWatermark, setClubShortsWatermark] = useState('제주여고 89회 공식 갤러리');
+  const [shortsExportToast, setShortsExportToast] = useState<string | null>(null);
   const [gamingPcAutoSyncAfterSchool, setGamingPcAutoSyncAfterSchool] = useState(true);
   const [familyMembers, setFamilyMembers] = useState([
     { id: 'm1', name: '진욱 (방장·마스터)', room: '우리집', role: 'HOST' },
@@ -2570,7 +2633,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     { id: 'm5', name: '본가 어머님', room: '본가(친가)', role: 'MEMBER' },
   ]);
   const [clubMembers, setClubMembers] = useState([
-    { id: 'c1', name: '김총무 (방장·마스터)', badge: '총무', role: 'HOST' },
+    { id: 'c1', name: '김철수 총무 (방장·마스터)', badge: '총무', role: 'HOST' },
     { id: 'c2', name: '박회장', badge: '정회원', role: 'MEMBER' },
     { id: 'c3', name: '이프로', badge: '정회원', role: 'MEMBER' },
     { id: 'c4', name: '최회원', badge: '신입회원', role: 'MEMBER' },
@@ -2579,6 +2642,27 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const copyInviteLink = () => {
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2500);
+  };
+
+  const handleCopyTrojanCoupon = async () => {
+    const text =
+      '내가 클럽 평생권 끊어서 가족방 쿠폰 3장 받았는데, 선착순으로 줄 테니 쓸 사람?';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      }
+    } catch {
+      // ignore clipboard fallback
+    }
+    setTrojanBragCopied(true);
+    setTimeout(() => setTrojanBragCopied(false), 2600);
+  };
+
+  const triggerShortsWatermarkPreview = (label: string) => {
+    setShortsExportToast(
+      `🎬 변천사 쇼츠 우측 하단 워터마크가 [SaySee] 대신 [${label}]로 적용되어 카톡·인스타 공유용 MP4에 각인되었습니다!`
+    );
+    setTimeout(() => setShortsExportToast(null), 3200);
   };
 
   if (activeLoungeType === 'personal') {
@@ -2756,8 +2840,52 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* [치트키 4] 자동화 숏폼 '가족 맞춤형 워터마크' 권한 */}
+        <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/35 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-sm text-[10.5px] font-extrabold">
+                🎬 자동화 변천사 숏폼 · 맞춤형 워터마크
+              </span>
+              <span className="font-mono text-[11px] text-amber-300 font-bold">
+                현재 우측 하단 각인: [{familyShortsWatermark}]
+              </span>
+            </div>
+            <p className="font-body-sm text-[12px] text-zinc-300">
+              기본 <code>[SaySee]</code> 로고 대신 <strong>[{familyShortsWatermark}]</strong> 워터마크를 박아 카톡·인스타로 공유하면 다른 가족 모임의 연쇄 유입이 일어납니다.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <input
+              type="text"
+              value={familyShortsWatermark}
+              onChange={(e) => setFamilyShortsWatermark(e.target.value)}
+              placeholder="예: 사랑하는 우리가족"
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold w-44"
+            />
+            <button
+              type="button"
+              onClick={() => triggerShortsWatermarkWatermarkPreview(familyShortsWatermark)}
+              className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap"
+            >
+              🎬 워터마크 적용 &amp; 쇼츠 미리보기
+            </button>
+          </div>
+        </div>
+
+        {shortsExportToast && (
+          <div className="px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-200 font-label-sm text-[12px] font-bold">
+            {shortsExportToast}
+          </div>
+        )}
       </div>
     );
+  }
+
+  function triggerShortsWatermarkWatermarkPreview(label: string) {
+    triggerShortsWatermarkPreview(label);
   }
 
   if (activeLoungeType === 'club') {
@@ -2827,6 +2955,63 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               </span>
             </div>
           ))}
+        </div>
+
+        {/* [치트키 3 & 4] 모임용 맞춤형 쇼츠 워터마크 커스텀 + 트로이 목마 가족방 무료 쿠폰 3장 */}
+        <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/40 flex flex-col gap-3">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
+                  🎬 모임용 맞춤형 쇼츠 워터마크 특권
+                </span>
+                <span className="font-mono text-[11.5px] text-amber-300 font-bold">
+                  우측 하단 각인: [{clubShortsWatermark}]
+                </span>
+              </div>
+              <p className="font-body-sm text-[12px] text-zinc-300">
+                자동 렌더링 변천사 쇼츠 우측 하단에 <code>[SaySee]</code> 대신 <strong>[{clubShortsWatermark}]</strong>를 박아 카톡·인스타로 공유하면 타 동창회·모임의 꼬리물기 유입이 일어납니다.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <input
+                type="text"
+                value={clubShortsWatermark}
+                onChange={(e) => setClubShortsWatermark(e.target.value)}
+                placeholder="예: 제주여고 89회 공식 갤러리"
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold w-52"
+              />
+              <button
+                type="button"
+                onClick={() => triggerShortsWatermarkPreview(clubShortsWatermark)}
+                className="px-3.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap"
+              >
+                🎬 워터마크 적용 &amp; 쇼츠 각인
+              </button>
+              {!isStoreAppMode && (
+                <button
+                  type="button"
+                  onClick={() => void handleCopyTrojanCoupon()}
+                  className={`px-3.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold whitespace-nowrap ${
+                    trojanBragCopied
+                      ? 'bg-emerald-400 text-zinc-950'
+                      : 'bg-zinc-900 hover:bg-zinc-800 border border-amber-400/45 text-amber-300'
+                  }`}
+                >
+                  {trojanBragCopied
+                    ? '✓ 가족방 무료권 3장 문구 복사됨!'
+                    : '🎁 사은품 [가족방 1년 무료권 3장] 단톡방 생색'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {shortsExportToast && (
+            <div className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-200 font-label-sm text-[11.5px] font-bold">
+              {shortsExportToast}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
