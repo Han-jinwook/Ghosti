@@ -263,6 +263,7 @@ export function getActivePersonaForCluster(
   roomKey: keyof RoomPersonaMap;
   activeRoomKey: keyof RoomPersonaMap;
   roomLabelKo: string;
+  isRoomCreator: boolean;
 } {
   const baseName = (cluster.registeredName || '').trim();
   const roomKey: keyof RoomPersonaMap =
@@ -275,6 +276,19 @@ export function getActivePersonaForCluster(
     club: '클럽 라운지',
     student: '10대 학생 라운지',
   };
+  const isRoomCreator = cluster.clusterId === 'face_member_5';
+  // 아직 미등록된 신규 인물(baseName === '')은 등록 전까지 빈 문자열 유지
+  if (!baseName) {
+    return {
+      displayPersona: '',
+      activePersona: '',
+      baseName: '',
+      roomKey,
+      activeRoomKey: roomKey,
+      roomLabelKo: roomLabelMap[roomKey],
+      isRoomCreator,
+    };
+  }
   const mappedPersona = cluster.roomPersonas?.[roomKey]?.trim();
   const activePersona = mappedPersona || baseName;
   return {
@@ -284,6 +298,7 @@ export function getActivePersonaForCluster(
     roomKey,
     activeRoomKey: roomKey,
     roomLabelKo: roomLabelMap[roomKey],
+    isRoomCreator,
   };
 }
 
@@ -842,32 +857,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   },
   swarmFaceCandidates: [
     {
-      candidateId: 'swarm_cand_chiwoo_bridge',
-      candidateType: 'year_bridge',
-      contributorLabel: '👵 본가 할머니 폰 (패스 업로드분)',
-      sourcePhoto: '20260926_160221.jpg',
-      shootingYear: 2024,
-      shootingDate: '2024.09.26',
-      conditionBadgeKo: '2024년 야외·측면',
-      conditionShortKo: '측면·야외',
-      boundingBox: [475, 598, 558, 650],
-      cropUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
-      coOccurredWithNames: ['지우', '천우'],
-      coOccurrenceCount: 4,
-      targetClusterId: 'face_member_1',
-      suggestedMemberName: '치우',
-      appearanceSummaryKo: '캠핑의자에 앉아 미소 짓는 안경 쓴 청년 (야외 측면 베스트 컷)',
-      bridgeReasonKo: '할머니가 [그냥 사진만 올리기]로 패스한 사진 속에서 AI가 검출하여 호스트 뒷정리 대기열로 자동 보존됨',
-      rescuedHostPhotoCount: 9,
-      rescuedMemberPhoneCount: 14,
-      rescuedVideoSegmentCount: 2,
-      extraPhotoFiles: ['20260926_160221.jpg', '20260815_142553.jpg', '20240720_111346.jpg'],
-      sampleSearchQuery: '치우 박물관',
-      sampleSearchSpace: 'gallery',
-      passedToHostQueue: true,
-      applied: false,
-    },
-    {
       candidateId: 'swarm_cand_merlin_sunglasses',
       candidateType: 'year_bridge',
       contributorLabel: '📱 아내(은숙) 아이폰 방금 업로드',
@@ -917,6 +906,32 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       sampleSearchQuery: '은숙 테라스',
       sampleSearchSpace: 'video',
       passedToHostQueue: false,
+      applied: false,
+    },
+    {
+      candidateId: 'swarm_cand_chiwoo_bridge',
+      candidateType: 'year_bridge',
+      contributorLabel: '👵 본가 할머니 폰 (패스 업로드분)',
+      sourcePhoto: '20260926_160221.jpg',
+      shootingYear: 2024,
+      shootingDate: '2024.09.26',
+      conditionBadgeKo: '2024년 야외·측면',
+      conditionShortKo: '측면·야외',
+      boundingBox: [475, 598, 558, 650],
+      cropUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
+      coOccurredWithNames: ['지우', '천우'],
+      coOccurrenceCount: 4,
+      targetClusterId: 'face_member_1',
+      suggestedMemberName: '치우',
+      appearanceSummaryKo: '캠핑의자에 앉아 미소 짓는 안경 쓴 청년 (야외 측면 베스트 컷)',
+      bridgeReasonKo: '할머니가 [그냥 사진만 올리기]로 패스한 사진 속에서 AI가 검출하여 👑 방장 뒷정리 대기열로 자동 보존됨',
+      rescuedHostPhotoCount: 9,
+      rescuedMemberPhoneCount: 14,
+      rescuedVideoSegmentCount: 2,
+      extraPhotoFiles: ['20260926_160221.jpg', '20260815_142553.jpg', '20240720_111346.jpg'],
+      sampleSearchQuery: '치우 박물관',
+      sampleSearchSpace: 'gallery',
+      passedToHostQueue: true,
       applied: false,
     },
   ],
@@ -1285,9 +1300,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   },
 
   /**
-   * [2단계: 노약자·디지털 약자 배려 — 고민 없는 [그냥 넘어가기 (Pass)] & 호스트 뒷정리 대기열 보존]
+   * [2단계: 노약자·디지털 약자 배려 — 고민 없는 [그냥 넘어가기 (Pass)] & 👑 방장 뒷정리 대기열 보존]
    * 멤버가 얼굴 등록을 하지 않고 패스를 눌러도 사진은 정상 업로드되며,
-   * AI가 찾은 미등록/누락 연도 얼굴 후보는 버리지 않고 호스트 전용 '뒷정리 대기열(Host Cleanup Queue)'로 자동 이관!
+   * AI가 찾은 미등록/누락 연도 얼굴 후보는 버리지 않고 방장 전용 '뒷정리 대기열'로 자동 이관!
    */
   passSwarmFaceCandidateToHostQueue: (candidateId) => {
     set((state) => ({
@@ -1298,7 +1313,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
               passedToHostQueue: true,
               contributorLabel: c.contributorLabel.includes('패스')
                 ? c.contributorLabel
-                : `${c.contributorLabel} (멤버 패스 ➔ 호스트 대기열 이관)`,
+                : `${c.contributorLabel} (멤버 패스 ➔ 👑 방장 대기열 이관)`,
             }
           : c
       ),
@@ -1315,19 +1330,23 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
               passedToHostQueue: true,
               contributorLabel: c.contributorLabel.includes('패스')
                 ? c.contributorLabel
-                : `${c.contributorLabel} (멤버 패스 ➔ 호스트 대기열 이관)`,
+                : `${c.contributorLabel} (멤버 패스 ➔ 👑 방장 대기열 이관)`,
             }
       ),
     }));
   },
 
   /**
-   * [3단계: 호스트(방장)의 권한과 뒷정리 — 누락 연도·조건 총점검 & [누락분 일괄 등록] 원터치 마감]
+   * [3단계: 👑 방장의 권한과 뒷정리 — 누락 연도·조건 총점검 & [누락분 일괄 등록] 원터치 마감]
    */
   runGlobalSwarmRetroScanAll: async () => {
-    const { swarmFaceCandidates } = get();
+    const { swarmFaceCandidates, faceClusters } = get();
     const unapplied = swarmFaceCandidates.filter((c) => !c.applied);
-    if (unapplied.length === 0) {
+    const unregisteredCompanions = faceClusters.filter(
+      (c) => !c.excludedAsPasserby && !c.registeredName.trim()
+    );
+
+    if (unapplied.length === 0 && unregisteredCompanions.length === 0) {
       set({ retroScanRunning: true });
       await new Promise((r) => window.setTimeout(r, 240));
       const nextSeedVer = get().globalSeedVersion + 1;
@@ -1336,7 +1355,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         globalSeedVersion: nextSeedVer,
         lastRetroScanReport: {
           seedVersion: nextSeedVer,
-          triggerTitle: '호스트 뒷정리 총점검 완료 ➔ 전 멤버(5대 기기) 다년도·다각도 시드 100% 동기화',
+          triggerTitle: '👑 방장 뒷정리 총점검 완료 ➔ 전 멤버(5대 기기) 다년도·다각도 시드 100% 동기화',
           rescuedHostPhotos: 38,
           rescuedMemberPhonePhotos: 60,
           rescuedVideoSegments: 10,
@@ -1352,6 +1371,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
 
     for (const cand of unapplied) {
       await get().applySwarmFaceCandidate(cand.candidateId);
+    }
+    for (const comp of unregisteredCompanions) {
+      await get().registerFaceMember(comp.clusterId, '처남(민수)', '');
     }
   },
 

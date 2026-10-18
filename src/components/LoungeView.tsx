@@ -628,78 +628,88 @@ export const LoungeView: React.FC = () => {
         </section>
       )}
 
-      {/* 3. 자율 얼굴 검출 크롭 & 당해 연도 대표 얼굴 멤버 등록 + 초대 레이더 시드 맛보기 */}
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <div className="flex items-center gap-2">
-            <span className="font-headline-sm text-[16px] text-white font-bold">
-              👤 Step 1. 자율 얼굴 검출 크롭 &amp; 당해 연도 대표 얼굴 멤버 등록 (실명·별명 검색 즉시 연동)
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowFaceRegistryModal(true)}
-            className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
-          >
-            전체 인물 관리 &amp; 사진 추가 검출 모달 열기 →
-          </button>
-        </div>
-
-        <FaceMemberInlineBar
-          onRunRealNameQuery={(query) => {
-            goToMainFeed();
-            void runTextQuery(query);
-          }}
-        />
-
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="font-label-md text-[12.5px] text-white font-bold">
-              📡 Step 2~3. 카톡 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ 시드(Seed) 맛보기
-            </span>
-            <p className="font-body-sm text-[12px] text-zinc-400">
-              방장이 등록한 얼굴 아바타({namedClusters.length}명 등록됨 / 전체 {activeClusters.length}명)의 768차원 특징량과 촬영 날짜를 기준으로 멤버 폰에서 함께 찍힌 사진만 3초 만에 자동 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+      {/* 3. 패밀리 / 클럽 / 10대 학생 라운지에서만 노출 (👤 개인 라운지에서는 100% 완전 비노출!) */}
+      {activeLoungeType !== 'personal' && (
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-2">
+              <span className="font-headline-sm text-[16px] text-white font-bold">
+                👑 Step 1. 세이씨 여권 자동 장착 &amp; 방장 누락분 1장씩 확인
+              </span>
+            </div>
             <button
               type="button"
-              onClick={() => {
-                setRadarSimulated(true);
-                setDesktopTab('trash');
-                setMobileTab('trash');
-              }}
-              className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
+              onClick={() => setShowFaceRegistryModal(true)}
+              className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
             >
-              {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
+              🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
             </button>
-            {namedClusters.map((c) => (
+          </div>
+
+          <FaceMemberInlineBar
+            onRunRealNameQuery={(query) => {
+              goToMainFeed();
+              void runTextQuery(query);
+            }}
+          />
+
+          <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="font-label-md text-[12.5px] text-white font-bold">
+                📡 Step 2~3. 카톡 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ 시드(Seed) 맛보기
+              </span>
+              <p className="font-body-sm text-[12px] text-zinc-400">
+                👑 방장이 등록한 얼굴 아바타({namedClusters.length}명 등록됨 / 전체 {activeClusters.length}명)의 768차원 특징량과 촬영 날짜를 기준으로 멤버 폰에서 함께 찍힌 사진만 3초 만에 자동 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                key={c.clusterId}
                 type="button"
                 onClick={() => {
-                  goToMainFeed();
-                  void runTextQuery(`${c.registeredName} 나무 다리`);
+                  setRadarSimulated(true);
+                  setDesktopTab('trash');
+                  setMobileTab('trash');
                 }}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold"
+                className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
               >
-                🔍 “{c.registeredName} 나무 다리” 검색 →
+                {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
               </button>
-            ))}
+              {namedClusters.map((c) => {
+                const { activePersona, isRoomCreator } = getActivePersonaForCluster(
+                  c,
+                  activeLoungeType,
+                  activeFamilyRoom
+                );
+                const labelName = activePersona || c.registeredName;
+                return (
+                  <button
+                    key={c.clusterId}
+                    type="button"
+                    onClick={() => {
+                      goToMainFeed();
+                      void runTextQuery(`${labelName} 나무 다리`);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold"
+                  >
+                    🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </main>
   );
 };
 
 /**
  * 2번 서브메뉴(메인 피드 & 검색) 상단에 라운지 성격별로 표시되는 전용 컨트롤 바
- * - 개인 라운지: null (기본 파워 검색)
- * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 가족 실명 빠른 검색 칩
- * - 클럽 라운지: 13KB 캐시 초고속 열람 & [📥 5MB 무손실 원본 P2P 1초 소환] 컨트롤 바
- * - 10대 학생 라운지: 낮(학교/학원) 로컬 캐시 0.04초 구간 점프 + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
+ * - 개인 라운지: null (얼굴/여권 바 완전 비노출, 기본 파워 검색 바로 시작)
+ * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 방별 별명 알약([👑 멀린], [👑 둘째사위], [은숙] 등) 0.04초 검색 통합 바
+ * - 클럽 라운지: 13KB 캐시 초고속 열람 & 클럽 별명 알약([👑 멀린프로] 등) + [📥 5MB 무손실 원본 P2P 1초 소환] 컨트롤 바
+ * - 10대 학생 라운지: 낮(학교/학원) 로컬 캐시 0.04초 구간 점프 + 학생방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
  */
 export const LoungeFeedContextBanner: React.FC = () => {
   const {
@@ -709,6 +719,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     faceClusters,
     runTextQuery,
     photos,
+    setShowFaceRegistryModal,
   } = useSaySeeStore();
 
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
@@ -721,6 +732,52 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return null;
   }
 
+  const renderMemberPersonaPills = (labelText: string) => {
+    if (namedClusters.length === 0) return null;
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="font-label-sm text-[11px] text-zinc-400 mr-0.5">{labelText}</span>
+        {namedClusters.map((c) => {
+          const { activePersona, isRoomCreator } = getActivePersonaForCluster(
+            c,
+            activeLoungeType,
+            activeFamilyRoom
+          );
+          const displayPersona = activePersona || c.registeredName;
+          const queryTarget =
+            activeFamilyRoom === '처가(친정)' && isRoomCreator
+              ? `${displayPersona} 선글라스`
+              : `${displayPersona} 나무 다리`;
+          return (
+            <button
+              key={c.clusterId}
+              type="button"
+              onClick={() => void runTextQuery(queryTarget)}
+              title={`클릭 시 "${queryTarget}" 0.04초 검색`}
+              className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[11.5px] font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <img
+                src={c.avatarUrl || c.representativePhoto}
+                alt={displayPersona}
+                className="w-4 h-4 rounded-full object-cover"
+              />
+              <span>
+                {isRoomCreator ? `👑 ${displayPersona}` : displayPersona}
+              </span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setShowFaceRegistryModal(true)}
+          className="px-2.5 py-1 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-bold ml-0.5"
+        >
+          🛂 여권 관리
+        </button>
+      </div>
+    );
+  };
+
   if (activeLoungeType === 'family') {
     return (
       <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
@@ -730,7 +787,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
             🛂 세이씨 여권 자동 연동됨
           </span>
           <span className="font-headline-sm text-[14px] text-white font-bold mr-1">
-            🏠 패밀리 서브 룸 전환:
+            🏠 패밀리 서브 룸:
           </span>
           {FAMILY_ROOMS.map((room) => {
             const active = activeFamilyRoom === room;
@@ -749,80 +806,42 @@ export const LoungeFeedContextBanner: React.FC = () => {
               </button>
             );
           })}
-          <span className="font-body-sm text-[11.5px] text-zinc-400 ml-1">
-            현재 <strong className="text-primary-container">[{activeFamilyRoom}]</strong> 방 전용 별명(Room Persona) &amp; 여권 시드 무질문 0.1초 장착됨
-          </span>
         </div>
 
-        {namedClusters.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-label-sm text-[11px] text-zinc-400 mr-1">
-              [{activeFamilyRoom}] 방 별명 0.04초 검색:
-            </span>
-            {namedClusters.map((c) => {
-              const { activePersona, baseName } = getActivePersonaForCluster(
-                c,
-                activeLoungeType,
-                activeFamilyRoom
-              );
-              const queryTarget =
-                activeFamilyRoom === '처가(친정)' && c.clusterId === 'face_member_5'
-                  ? `${activePersona} 선글라스`
-                  : `${activePersona} 나무 다리`;
-              return (
-                <button
-                  key={c.clusterId}
-                  type="button"
-                  onClick={() => void runTextQuery(queryTarget)}
-                  title={`만국공통 세이씨 여권(${c.passportEmail || baseName}) 시드 공유 · 현재 방 호칭: ${activePersona}`}
-                  className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1.5"
-                >
-                  <img
-                    src={c.avatarUrl || c.representativePhoto}
-                    alt={activePersona}
-                    className="w-4 h-4 rounded-full object-cover"
-                  />
-                  <span>{activePersona}</span>
-                  {activePersona !== baseName && (
-                    <span className="text-[9.5px] text-zinc-400 font-mono">({baseName})</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {renderMemberPersonaPills(`[${activeFamilyRoom}] 별명 0.04초 검색:`)}
       </div>
     );
   }
 
   if (activeLoungeType === 'club') {
     return (
-      <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-            🛂 세이씨 여권 자동 연동됨
-          </span>
-          <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-mono text-[11.5px] font-bold">
-            ⚡ 13KB 섀도우 캐시 초고속 열람 중 (데이터 소모 99.4% 절감)
-          </span>
-          <span className="font-body-sm text-[12px] text-zinc-300">
-            질문 없이 이메일 여권 시드가 0.1초 자동 장착되며, 모임 전용 닉네임(예: 멀린프로)으로 0.04초 검색 후 소장 컷만 5MB 원본 소환합니다.
-          </span>
+      <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+              🛂 세이씨 여권 자동 연동됨
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-mono text-[11.5px] font-bold">
+              ⚡ 13KB 섀도우 캐시 초고속 열람 중 (데이터 소모 99.4% 절감)
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setP2pOriginalSummoned((v) => !v)}
+            className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-extrabold transition-all border ${
+              p2pOriginalSummoned
+                ? 'bg-primary-container text-zinc-950 border-primary-container'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
+            }`}
+          >
+            {p2pOriginalSummoned
+              ? '✓ 5MB 무손실 원본 P2P 1초 소환 완료 (현재 결과 전체 원본 적용)'
+              : '📥 현재 검색 결과 5MB 무손실 원본 P2P 1초 소환'}
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setP2pOriginalSummoned((v) => !v)}
-          className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-extrabold transition-all border ${
-            p2pOriginalSummoned
-              ? 'bg-primary-container text-zinc-950 border-primary-container'
-              : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
-          }`}
-        >
-          {p2pOriginalSummoned
-            ? '✓ 5MB 무손실 원본 P2P 1초 소환 완료 (현재 결과 전체 원본 적용)'
-            : '📥 현재 검색 결과 5MB 무손실 원본 P2P 1초 소환'}
-        </button>
+        {renderMemberPersonaPills('모임 별명 0.04초 검색:')}
       </div>
     );
   }
@@ -837,7 +856,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               🎉 매월 1일 폰 용량 클리어 리포트
             </span>
             <span className="font-body-sm text-[12.5px] text-zinc-100 font-medium">
-              이번 달 우리반·동아리 원본 사진 {photos.length}장 &amp; 4K 축제 영상이 방장 게이밍 PC로 안전 이관되어{' '}
+              이번 달 우리반·동아리 원본 사진 {photos.length}장 &amp; 4K 축제 영상이 👑 방장 게이밍 PC로 안전 이관되어{' '}
               <strong className="text-emerald-300">내 폰 여유 공간 +14.2GB</strong>가 확보되었습니다!
             </span>
           </div>
@@ -851,18 +870,16 @@ export const LoungeFeedContextBanner: React.FC = () => {
         </div>
       )}
 
-      <div className="p-3.5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-2">
+      <div className="p-3.5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-            🛂 세이씨 여권 자동 연동됨 (지우짱 ➔ 우리집·처가방 지우 여권 실시간 진화)
+            🛂 세이씨 여권 자동 연동됨
           </span>
           <span className="font-label-sm text-[12px] text-primary-container font-bold">
-            ⚡ 타임캡슐 로컬 캐시 모드: 낮(학교·학원)에 방장 게이밍 PC가 꺼져 있어도 내 골인 장면·축제 영상을 0.04초 만에 초(Sec) 단위로 즉시 재생합니다.
+            ⚡ 타임캡슐 로컬 캐시 모드 (낮에 👑 방장 PC가 꺼져 있어도 0.04초 즉시 재생)
           </span>
         </div>
-        <span className="font-label-mono text-[11px] text-zinc-400">
-          하교 후 방장 PC 자동 동기화 예약됨
-        </span>
+        {renderMemberPersonaPills('학생방 별명 0.04초 검색:')}
       </div>
     </div>
   );
@@ -1030,7 +1047,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         </div>
 
-        {/* 🎯 [3단 집단지성 프로토콜] ① 일반 멤버 원터치 [등록] 힌트 ➔ ② 노약자 고민 없는 [그냥 사진만 올리기 / 패스] ➔ ③ 호스트 뒷정리 대기열 */}
+        {/* 🎯 [3단 집단지성 프로토콜] ① 일반 멤버 원터치 [등록] 힌트 ➔ ② 노약자 고민 없는 [그냥 사진만 올리기 / 패스] ➔ ③ 👑 방장 뒷정리 대기열 */}
         <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -1038,7 +1055,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 3단 집단지성 프로토콜 · Global Seed v{globalSeedVersion}
               </span>
               <span className="font-label-sm text-[12.5px] text-white font-bold">
-                ① 멤버는 원터치 [등록] ➔ ② 할머니는 고민 없이 [그냥 넘어가기(Pass)] ➔ ③ 빠진 건 호스트가 [누락분 일괄 등록]
+                ① 멤버는 원터치 [⭕ 맞아요! 등록] ➔ ② 할머니는 고민 없이 [그냥 넘어가기(Pass)] ➔ ③ 빠진 건 👑 방장이 [누락분 일괄 등록]
               </span>
             </div>
 
@@ -1049,7 +1066,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   onClick={() => passAllSwarmCandidatesToHostQueue()}
                   className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-bold"
                 >
-                  👵 노약자 모드: 그냥 사진만 올리기 / 패스 (호스트 대기열 이관)
+                  👵 노약자 모드: 그냥 사진만 올리기 / 패스 (👑 방장 대기열 이관)
                 </button>
               )}
               {hostCleanupQueue.length > 0 && (
@@ -1061,7 +1078,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 >
                   {retroScanRunning
                     ? '0.04초 역스캔 중...'
-                    : `👑 호스트 뒷정리: 누락분 ${hostCleanupQueue.length}건 일괄 등록`}
+                    : `👑 방장 누락분 뒷정리: ${hostCleanupQueue.length}건 일괄 등록`}
                 </button>
               )}
               <button
@@ -1069,7 +1086,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 onClick={() => setShowFaceRegistryModal(true)}
                 className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
               >
-                총점검 센터 →
+                👑 방장 총점검 센터 →
               </button>
             </div>
           </div>
@@ -1086,7 +1103,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                     <img
                       src={cand.cropUrl}
                       alt={cand.suggestedMemberName}
-                      className="w-11 h-11 rounded-full object-cover border-2 border-primary-container shrink-0"
+                      className="w-12 h-12 rounded-xl object-cover border-2 border-primary-container shrink-0"
                     />
                     <div className="flex flex-col min-w-0">
                       <span className="font-mono text-[10px] text-zinc-400">
@@ -1105,7 +1122,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                       onClick={() => void applySwarmFaceCandidate(cand.candidateId)}
                       className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
                     >
-                      등록
+                      ⭕ 맞아요! 등록
                     </button>
                     <button
                       type="button"
@@ -1122,7 +1139,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             <div className="px-3 py-2 rounded-lg bg-zinc-900/80 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300">
               <span>
                 {hostCleanupQueue.length > 0
-                  ? `👵 할머니·멤버가 패스한 사진 속 누락 연도/각도 얼굴 후보 ${hostCleanupQueue.length}건이 호스트(방장) 뒷정리 대기열에 안전하게 보존되어 있습니다.`
+                  ? `👵 할머니·멤버가 패스한 사진 속 누락 연도/각도 얼굴 후보 ${hostCleanupQueue.length}건이 👑 방장 뒷정리 대기열에 안전하게 보존되어 있습니다.`
                   : '✓ 할머니가 그냥 올린 사진 속 얼굴까지 전 멤버 다년도·다각도 시드에 100% 흡수 및 0.04초 역스캔 완결되었습니다!'}
               </span>
               {lastRetroScanReport && (

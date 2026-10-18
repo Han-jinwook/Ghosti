@@ -5,6 +5,7 @@ import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 export const VoiceHeroStage: React.FC = () => {
   const {
     layout,
+    activeLoungeType,
     photos,
     searchSpace,
     hasExecutedUserSearch,
@@ -441,8 +442,8 @@ export const VoiceHeroStage: React.FC = () => {
         </div>
       </div>
 
-      {/* ─────────────── [라운지 마스터 Step 1 인라인 바] 사진(전체 갤러리) 및 동영상 장면 모드에서 작동하는 자율 얼굴 검출 & 인터랙티브 실명 등록 ─────────────── */}
-      {(searchSpace === 'gallery' || searchSpace === 'video') && (
+      {/* ─────────────── [라운지 마스터 단일 확인 카드] 개인 라운지에서는 100% 숨김 · 패밀리/클럽/학생 라운지에서 확인 대기 건이 있을 때만 1장씩 노출 후 Auto-Hide ─────────────── */}
+      {activeLoungeType !== 'personal' && (searchSpace === 'gallery' || searchSpace === 'video') && (
         <FaceMemberInlineBar
           onRunRealNameQuery={(query, targetSpace = 'gallery') => {
             setTextInput(query);
