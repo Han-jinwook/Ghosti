@@ -92,11 +92,54 @@ export interface YearlyFaceBestCut {
   sourceDeviceKo?: string;
 }
 
-/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 다년도·다각도 자동 결합 멀티-시드 클러스터 */
+/**
+ * [인물별 독립 타임라인 바구니 & 미래 연도(Forward Bucket) 자동 확장]
+ * - 바구니 기준 연도(anchorCreationYear)는 방(Room)이 아닌 '해당 인물의 시드가 최초 생성된 연도(예: 2026년 또는 2029년)'에 귀속!
+ * - 성인 10년 주기(예: 2026~2017, 미래 2027~2036) / 미성년 5년 주기(예: 2026~2022, 미래 2027~2031)
+ */
+export interface PersonTimelineBucketInfo {
+  /** 해당 인물의 시드가 최초 생성된 방 개설 연도 (월 제외 연도 기준, 예: 2026 또는 2029) */
+  anchorCreationYear: number;
+  /** 성인 10년 바구니 vs 미성년 5년 바구니 */
+  bucketSpanYears: 10 | 5;
+  ageCategoryLabel: '성인 10년 주기' | '미성년 5년 주기';
+  /** 기본 과거 방향 바구니 범위 (예: '2026~2017' 또는 '2026~2022' 또는 '2029~2020') */
+  primaryBucketRange: string;
+  /** 기준 연도 이후(예: 2027년~) 신작 사진 유입 시 위로 자동 확장된 미래 바구니 (예: '2027~2036' 또는 '2027~2031') */
+  forwardBucketRange?: string;
+  /** 미래 바구니 활성화 여부 */
+  forwardBucketActive: boolean;
+  /** 5대 스타일 슬롯(정면·선명 / 측면·미소 / 야외·노을 / 선글라스·역광 / 야간·실내) 중 채워진 슬롯 목록 */
+  filledStyleSlots: string[];
+}
+
+/**
+ * [방별 독립 별명(Persona) 매핑]
+ * 시드(768차원 벡터 + 연도 바구니)는 이메일 기반 '세이씨 여권'으로 100% 공유하되,
+ * 화면 표시 및 자연어 검색에 쓰이는 호칭/별명만 각 방(우리집 / 처가 / 본가 / 클럽 / 학생)에 맞게 독립 매핑!
+ */
+export interface RoomPersonaMap {
+  personal?: string;
+  '우리집'?: string;
+  '본가(친가)'?: string;
+  '처가(친정)'?: string;
+  club?: string;
+  student?: string;
+}
+
+/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 만국공통 세이씨 여권(SaySee Face Passport) 클러스터 */
 export interface FaceMemberCluster {
   clusterId: string;
   personKey: string;
-  /** 방장이 직접 입력한 실명/별명 (예: 은숙, 멀린, 치우, 천우, 지우) */
+  /** 이메일(Email ID) 기반 만국공통 세이씨 여권 계정 (예: merlin@saysee.ai, jiwoo@saysee.ai) */
+  passportEmail?: string;
+  /** 인물별 독립 타임라인 바구니 (기준 연도 귀속 + 미래 바구니 자동 확장 + 5대 스타일 슬롯) */
+  timelineBucket?: PersonTimelineBucketInfo;
+  /** 방별 독립 별명(Persona) 매핑 (예: 우리집='멀린', 처가(친정)='둘째사위', 학생방='지우짱') */
+  roomPersonas?: RoomPersonaMap;
+  /** 크로스-라운지 자율 진화 이력 (타 라운지에서 3중 족쇄·무언 교체로 진화해 전파된 내역) */
+  crossLoungeEvolutionNote?: string;
+  /** 방장이 직접 입력한 기본 실명/별명 (예: 은숙, 멀린, 치우, 천우, 지우) */
   registeredName: string;
   /** 방장이 선택한 관계 칩 (레거시 호환) */
   relationshipTag: string;

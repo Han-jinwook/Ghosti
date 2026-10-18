@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useSaySeeStore } from '../store/useSaySeeStore';
+import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeStore';
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../types/saysee';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 
@@ -725,7 +725,11 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return (
       <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-headline-sm text-[14.5px] text-white font-bold mr-1">
+          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            🛂 세이씨 여권 자동 연동됨
+          </span>
+          <span className="font-headline-sm text-[14px] text-white font-bold mr-1">
             🏠 패밀리 서브 룸 전환:
           </span>
           {FAMILY_ROOMS.map((room) => {
@@ -746,28 +750,45 @@ export const LoungeFeedContextBanner: React.FC = () => {
             );
           })}
           <span className="font-body-sm text-[11.5px] text-zinc-400 ml-1">
-            현재 <strong className="text-primary-container">[{activeFamilyRoom}]</strong> 독립 암호화 피드 열람 중 (사생활 혼선 0%)
+            현재 <strong className="text-primary-container">[{activeFamilyRoom}]</strong> 방 전용 별명(Room Persona) &amp; 여권 시드 무질문 0.1초 장착됨
           </span>
         </div>
 
         {namedClusters.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-label-sm text-[11px] text-zinc-400 mr-1">가족 실명 피드:</span>
-            {namedClusters.map((c) => (
-              <button
-                key={c.clusterId}
-                type="button"
-                onClick={() => void runTextQuery(`${c.registeredName} 나무 다리`)}
-                className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1.5"
-              >
-                <img
-                  src={c.avatarUrl || c.representativePhoto}
-                  alt={c.registeredName}
-                  className="w-4 h-4 rounded-full object-cover"
-                />
-                <span>{c.registeredName}</span>
-              </button>
-            ))}
+            <span className="font-label-sm text-[11px] text-zinc-400 mr-1">
+              [{activeFamilyRoom}] 방 별명 0.04초 검색:
+            </span>
+            {namedClusters.map((c) => {
+              const { activePersona, baseName } = getActivePersonaForCluster(
+                c,
+                activeLoungeType,
+                activeFamilyRoom
+              );
+              const queryTarget =
+                activeFamilyRoom === '처가(친정)' && c.clusterId === 'face_member_5'
+                  ? `${activePersona} 선글라스`
+                  : `${activePersona} 나무 다리`;
+              return (
+                <button
+                  key={c.clusterId}
+                  type="button"
+                  onClick={() => void runTextQuery(queryTarget)}
+                  title={`만국공통 세이씨 여권(${c.passportEmail || baseName}) 시드 공유 · 현재 방 호칭: ${activePersona}`}
+                  className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1.5"
+                >
+                  <img
+                    src={c.avatarUrl || c.representativePhoto}
+                    alt={activePersona}
+                    className="w-4 h-4 rounded-full object-cover"
+                  />
+                  <span>{activePersona}</span>
+                  {activePersona !== baseName && (
+                    <span className="text-[9.5px] text-zinc-400 font-mono">({baseName})</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -778,11 +799,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return (
       <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11.5px] font-bold">
+          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+            🛂 세이씨 여권 자동 연동됨
+          </span>
+          <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-mono text-[11.5px] font-bold">
             ⚡ 13KB 섀도우 캐시 초고속 열람 중 (데이터 소모 99.4% 절감)
           </span>
           <span className="font-body-sm text-[12px] text-zinc-300">
-            평소에는 13KB 경량 캐시로 0.04초 만에 모임 피드를 검색하고, 소장할 인생샷만 무손실 원본(5MB)으로 P2P 1초 소환합니다.
+            질문 없이 이메일 여권 시드가 0.1초 자동 장착되며, 모임 전용 닉네임(예: 멀린프로)으로 0.04초 검색 후 소장 컷만 5MB 원본 소환합니다.
           </span>
         </div>
 
@@ -828,9 +852,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
       )}
 
       <div className="p-3.5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-2">
-        <span className="font-label-sm text-[12px] text-primary-container font-bold">
-          ⚡ 타임캡슐 로컬 캐시 모드: 낮(학교·학원)에 방장 게이밍 PC가 꺼져 있어도 내 골인 장면·축제 영상을 0.04초 만에 초(Sec) 단위로 즉시 재생합니다.
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+            🛂 세이씨 여권 자동 연동됨 (지우짱 ➔ 우리집·처가방 지우 여권 실시간 진화)
+          </span>
+          <span className="font-label-sm text-[12px] text-primary-container font-bold">
+            ⚡ 타임캡슐 로컬 캐시 모드: 낮(학교·학원)에 방장 게이밍 PC가 꺼져 있어도 내 골인 장면·축제 영상을 0.04초 만에 초(Sec) 단위로 즉시 재생합니다.
+          </span>
+        </div>
         <span className="font-label-mono text-[11px] text-zinc-400">
           하교 후 방장 PC 자동 동기화 예약됨
         </span>

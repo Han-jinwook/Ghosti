@@ -12,9 +12,11 @@ import type {
   MerlinAuthState,
   OnboardingAhaItem,
   OnboardingTrackMode,
+  PersonTimelineBucketInfo,
   PhotoItem,
   PricingPlanId,
   PrivateSyncStrategy,
+  RoomPersonaMap,
   SearchResultItem,
   SearchSpaceMode,
   SwarmRetroScanReport,
@@ -86,7 +88,7 @@ interface SaySeeStore {
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
 
-  // [라운지 마스터 스펙 & 전 멤버 폰 통합 얼굴 그물망(Global Swarm Face Mesh)]
+  // [라운지 마스터 스펙 & 만국공통 세이씨 여권(SaySee Face Passport)]
   faceClusters: FaceMemberCluster[];
   latestCorpusYear: number;
   showFaceRegistryModal: boolean;
@@ -101,6 +103,12 @@ interface SaySeeStore {
     registeredName: string,
     relationshipTag?: string
   ) => Promise<void>;
+  updateRoomPersonaForCluster: (
+    clusterId: string,
+    roomKey: keyof RoomPersonaMap,
+    personaName: string
+  ) => void;
+  evolvePassportAcrossLounges: (clusterId: string) => Promise<void>;
   excludeFaceCluster: (clusterId: string) => Promise<void>;
   restoreExcludedFaceClusters: () => Promise<void>;
   detectFacesFromPhotoFile: (fileName: string) => Promise<number>;
@@ -240,11 +248,50 @@ const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
 };
 
 /**
- * [다년도·다각도(정면·측면·야외·선글라스) 변별력 자동 추출 알고리즘]
- * 동일 인물의 연도별 대표 시드를 뽑을 때 천편일률적인 '정면'만 뽑지 않고,
- * 연도(2026 / 2025 / 2024 / 2023) 분산 + 촬영 조건/각도(정면·선명 + 측면·미소 + 야외·노을 + 선글라스·역광)가
- * 최대한 다른 베스트 컷 조합을 하나의 '멀티-조건 시드 패키지'로 내부에서 자동 결합합니다.
- * 또한 동반 등장(Co-occurrence 2회+)으로 발견된 미등록 새 인물은 줄 맨 끝에 조용히 새 카드로 추가합니다.
+ * [방별 별명(Persona) 리졸버]
+ * 동일한 이메일 기반 '세이씨 여권(SaySee Face Passport)'을 쓰지만,
+ * 현재 라운지/방(우리집 / 처가(친정) / 본가(친가) / 클럽 / 10대 학생)에 따라 화면 표시 및 검색에 쓰이는 호칭을 반환합니다.
+ */
+export function getActivePersonaForCluster(
+  cluster: FaceMemberCluster,
+  activeLoungeType: LoungeType,
+  activeFamilyRoom: FamilyRoomId
+): {
+  displayPersona: string;
+  activePersona: string;
+  baseName: string;
+  roomKey: keyof RoomPersonaMap;
+  activeRoomKey: keyof RoomPersonaMap;
+  roomLabelKo: string;
+} {
+  const baseName = (cluster.registeredName || '').trim();
+  const roomKey: keyof RoomPersonaMap =
+    activeLoungeType === 'family' ? activeFamilyRoom : activeLoungeType;
+  const roomLabelMap: Record<keyof RoomPersonaMap, string> = {
+    personal: '개인 라운지',
+    '우리집': '우리집 방',
+    '본가(친가)': '본가(친가) 방',
+    '처가(친정)': '처가(친정) 방',
+    club: '클럽 라운지',
+    student: '10대 학생 라운지',
+  };
+  const mappedPersona = cluster.roomPersonas?.[roomKey]?.trim();
+  const activePersona = mappedPersona || baseName;
+  return {
+    displayPersona: activePersona,
+    activePersona,
+    baseName,
+    roomKey,
+    activeRoomKey: roomKey,
+    roomLabelKo: roomLabelMap[roomKey],
+  };
+}
+
+/**
+ * [만국공통 세이씨 여권(SaySee Face Passport) & 인물별 독립 타임라인 바구니 + 다년도·다각도 자동 추출]
+ * 1. 바구니 기준 연도(anchorCreationYear)는 방(Room)이 아닌 각 인물의 시드 최초 생성 연도(예: 기존 가족 2026년 vs 신규 합류 처가 식구 2029년)에 귀속!
+ * 2. 성인 10년(2026~2017, 미래 2027~2036) / 미성년 5년(2026~2022, 미래 2027~2031) 바구니 자동 구성
+ * 3. 이메일(Email ID) 기반 세이씨 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 방별 별명(우리집 '멀린' ↔ 처가방 '둘째사위' ↔ 학생방 '지우짱')만 독립 매핑!
  */
 function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): FaceMemberCluster[] {
   const enriched = rawClusters.map((c) => {
@@ -275,9 +322,45 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
           ];
 
     const extraCuts: YearlyFaceBestCut[] = [];
+    let passportEmail = c.passportEmail || 'member@saysee.ai';
+    let timelineBucket: PersonTimelineBucketInfo = c.timelineBucket || {
+      anchorCreationYear: 2026,
+      bucketSpanYears: 10,
+      ageCategoryLabel: '성인 10년 주기',
+      primaryBucketRange: '2026~2017',
+      forwardBucketRange: '2027~2036',
+      forwardBucketActive: true,
+      filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을'],
+    };
+    let roomPersonas: RoomPersonaMap = c.roomPersonas || {};
+    let crossLoungeEvolutionNote =
+      c.crossLoungeEvolutionNote ||
+      '🛂 이메일 여권 영구 귀속 · 전 라운지 무질문 자동 연동됨';
 
     if (c.clusterId === 'face_member_3' || c.personKey === 'person_adult_female_partner') {
-      // 은숙: ① 2026 정면·선명 + ② 2025 야외·노을 + ③ 2024 측면·미소
+      // 은숙 (성인 10년 주기: 기준 2026년 -> 2026~2017 + 미래 바구니 2027~2036)
+      passportEmail = 'eunsook@saysee.ai';
+      timelineBucket = {
+        anchorCreationYear: 2026,
+        bucketSpanYears: 10,
+        ageCategoryLabel: '성인 10년 주기',
+        primaryBucketRange: '2026~2017',
+        forwardBucketRange: '2027~2036',
+        forwardBucketActive: true,
+        filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '선글라스·역광'],
+      };
+      roomPersonas = {
+        personal: '은숙',
+        '우리집': '은숙',
+        '처가(친정)': '둘째딸(은숙)',
+        '본가(친가)': '큰며느리',
+        club: '은숙총무',
+        student: '은숙맘',
+        ...c.roomPersonas,
+      };
+      crossLoungeEvolutionNote =
+        '🏠 처가방 여행 사진에서 [야외·노을] 슬롯 진화 ➔ 전 라운지 여권 자동 동기화됨';
+
       if (!baseCuts.some((yc) => yc.year === 2025)) {
         extraCuts.push({
           year: 2025,
@@ -294,7 +377,29 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_5' || c.personKey === 'person_adult_male_host') {
-      // 멀린: ① 2026 정면·선명 + ② 2024 측면·미소 + ③ 2023 선글라스·역광
+      // 멀린 (방장·대표님: 우리집='멀린', 처가(친정)='둘째사위', 클럽='멀린프로')
+      passportEmail = 'merlin@saysee.ai';
+      timelineBucket = {
+        anchorCreationYear: 2026,
+        bucketSpanYears: 10,
+        ageCategoryLabel: '성인 10년 주기',
+        primaryBucketRange: '2026~2017',
+        forwardBucketRange: '2027~2036',
+        forwardBucketActive: true,
+        filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을', '선글라스·역광'],
+      };
+      roomPersonas = {
+        personal: '멀린',
+        '우리집': '멀린',
+        '처가(친정)': '둘째사위',
+        '본가(친가)': '큰아들(진욱)',
+        club: '멀린프로',
+        student: '학부모(멀린)',
+        ...c.roomPersonas,
+      };
+      crossLoungeEvolutionNote =
+        '⛳ 클럽방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%) ➔ 처가집 방("둘째사위 선글라스") 자동 전파됨';
+
       if (!baseCuts.some((yc) => yc.year === 2023)) {
         extraCuts.push({
           year: 2023,
@@ -311,7 +416,29 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_1' || c.personKey === 'person_youth_glasses_2') {
-      // 치우: ① 2026 정면·선명 + ② 2025 측면·미소 (캠핑 의자 야외 컷)
+      // 치우 (미성년/청년 5년 주기: 기준 2026년 -> 2026~2022 + 미래 바구니 2027~2031)
+      passportEmail = 'chiwoo@saysee.ai';
+      timelineBucket = {
+        anchorCreationYear: 2026,
+        bucketSpanYears: 5,
+        ageCategoryLabel: '미성년 5년 주기',
+        primaryBucketRange: '2026~2022',
+        forwardBucketRange: '2027~2031',
+        forwardBucketActive: true,
+        filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을'],
+      };
+      roomPersonas = {
+        personal: '치우',
+        '우리집': '치우',
+        '처가(친정)': '큰외손자(치우)',
+        '본가(친가)': '큰손자(치우)',
+        club: '치우',
+        student: '치우선배',
+        ...c.roomPersonas,
+      };
+      crossLoungeEvolutionNote =
+        '📱 게스트 폰 동반 등장(4회)으로 [측면·미소] 슬롯 여권 자동 진화됨';
+
       if (!baseCuts.some((yc) => yc.year === 2025)) {
         extraCuts.push({
           year: 2025,
@@ -327,8 +454,69 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
           sourceDeviceKo: '은숙 폰 자동결합',
         });
       }
-    } else if (c.clusterId === 'face_member_2' || c.clusterId === 'face_member_4') {
-      // 천우 / 지우: 2026 정면 + 2024 야외·측면 보장
+    } else if (c.clusterId === 'face_member_4') {
+      // 지우 (미성년 5년 주기: 친구 모임방에서 진화해 우리집 가족방으로 역전파되는 대표 사례!)
+      passportEmail = 'jiwoo@saysee.ai';
+      timelineBucket = {
+        anchorCreationYear: 2026,
+        bucketSpanYears: 5,
+        ageCategoryLabel: '미성년 5년 주기',
+        primaryBucketRange: '2026~2022',
+        forwardBucketRange: '2027~2031',
+        forwardBucketActive: true,
+        filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '야간·실내'],
+      };
+      roomPersonas = {
+        personal: '지우',
+        '우리집': '지우',
+        '처가(친정)': '외손녀(지우)',
+        '본가(친가)': '손녀(지우)',
+        club: '지우',
+        student: '지우짱',
+        ...c.roomPersonas,
+      };
+      crossLoungeEvolutionNote =
+        '🎒 친구 모임방(10대 학생 라운지)에서 [야간·실내] 슬롯 진화(유사도 93.8%) ➔ 우리집 가족방 과거 사진 +7장 자동 구출됨!';
+
+      if (baseCuts.length < 2) {
+        extraCuts.push({
+          year: 2024,
+          representativePhoto: '20260926_131225.jpg',
+          representativeDate: '2024.09.26',
+          frontalScore: 0.92,
+          opticalSharpness: 26500,
+          avatarUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+          cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+          boundingBox: [445, 180, 525, 236],
+          conditionTag: '야외·노을',
+          conditionShortKo: '야외·측면',
+          sourceDeviceKo: '친구방 여권진화',
+        });
+      }
+    } else if (c.clusterId === 'face_member_2') {
+      // 천우 (미성년 5년 주기: 기준 2026년 -> 2026~2022)
+      passportEmail = 'cheonwoo@saysee.ai';
+      timelineBucket = {
+        anchorCreationYear: 2026,
+        bucketSpanYears: 5,
+        ageCategoryLabel: '미성년 5년 주기',
+        primaryBucketRange: '2026~2022',
+        forwardBucketRange: '2027~2031',
+        forwardBucketActive: false,
+        filledStyleSlots: ['정면·선명', '야외·노을'],
+      };
+      roomPersonas = {
+        personal: '천우',
+        '우리집': '천우',
+        '처가(친정)': '막내외손자(천우)',
+        '본가(친가)': '막내손자(천우)',
+        club: '천우',
+        student: '천우',
+        ...c.roomPersonas,
+      };
+      crossLoungeEvolutionNote =
+        '🛂 가족방 초벌 여권 이메일 귀속 완료 (어느 방에 가든 무질문 자동 작동)';
+
       if (baseCuts.length < 2) {
         extraCuts.push({
           year: 2024,
@@ -349,24 +537,48 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
     const mergedYearly = [...baseCuts, ...extraCuts].sort((a, b) => b.year - a.year);
     return {
       ...c,
+      passportEmail,
+      timelineBucket,
+      roomPersonas,
+      crossLoungeEvolutionNote,
       yearlyBestCuts: mergedYearly,
     };
   });
 
-  // 새로운 동반 등장 인물(미등록 새 멤버)은 기존 얼굴 등록 줄 맨 끝에 조용히 새 카드로 추가
+  // 새로운 동반 등장 인물(2029년 처가방/동반 신규 세팅 멤버 예시 — 기준 연도 2029~2020 독립 바구니!)
   if (!enriched.some((c) => c.clusterId === 'face_companion_auto_6')) {
     enriched.push({
       clusterId: 'face_companion_auto_6',
       personKey: 'person_companion_discovered_6',
+      passportEmail: 'inlaw2029@saysee.ai',
+      timelineBucket: {
+        anchorCreationYear: 2029,
+        bucketSpanYears: 10,
+        ageCategoryLabel: '성인 10년 주기',
+        primaryBucketRange: '2029~2020',
+        forwardBucketRange: '2030~2039',
+        forwardBucketActive: false,
+        filledStyleSlots: ['정면·선명', '측면·미소'],
+      },
+      roomPersonas: {
+        personal: '처남(민수)',
+        '우리집': '처남(민수)',
+        '처가(친정)': '막내아들(민수)',
+        '본가(친가)': '사돈총각',
+        club: '민수프로',
+        student: '외삼촌',
+      },
+      crossLoungeEvolutionNote:
+        '🗓️ 2029년 신규 합류 멤버 — 기존 26년 가족(2026~2017)과 섞여 있어도 본인 고유 바구니(2029~2020)로 충돌 없이 독립 작동!',
       registeredName: '',
       relationshipTag: '',
-      suggestedChip: '#사촌·조카',
-      roleHintKo: '동반 등장 새 멤버',
-      appearanceLabelKo: '치우·천우·지우와 한 프레임 6회 동반 등장한 미등록 가족/동반자',
+      suggestedChip: '#처남·사촌',
+      roleHintKo: '29년 합류 · 동반 새 멤버',
+      appearanceLabelKo: '치우·천우·지우와 한 프레임 6회 동반 등장한 미등록 가족/처가 식구',
       isPasserbyCandidate: false,
       excludedAsPasserby: false,
       isCompanionDiscovered: true,
-      coOccurredWithSummary: '치우·천우와 6회 동반 등장',
+      coOccurredWithSummary: '2029~2020 고유 바구니 · 동반 6회',
       representativePhoto: '20260926_131225.jpg',
       representativeYear: 2026,
       representativeDate: '2026.09.26',
@@ -719,9 +931,29 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
    */
   registerFaceMember: async (clusterId, registeredName, relationshipTag) => {
     const cleanName = registeredName.trim();
-    const { faceClusters: prevClusters, swarmFaceCandidates, globalSeedVersion } = get();
+    const {
+      faceClusters: prevClusters,
+      swarmFaceCandidates,
+      globalSeedVersion,
+      activeLoungeType,
+      activeFamilyRoom,
+    } = get();
+    const activeRoomKey: keyof RoomPersonaMap =
+      activeLoungeType === 'family' ? activeFamilyRoom : activeLoungeType;
+    const isSecondaryRoom =
+      activeRoomKey === '처가(친정)' ||
+      activeRoomKey === '본가(친가)' ||
+      activeRoomKey === 'club' ||
+      activeRoomKey === 'student';
+
     const prevTarget = prevClusters.find((c) => c.clusterId === clusterId);
-    const oldNameTag = prevTarget?.registeredName ? `#${prevTarget.registeredName.trim()}` : '';
+    const oldPersonaInRoom = prevTarget?.roomPersonas?.[activeRoomKey];
+    const oldNameTag =
+      isSecondaryRoom && oldPersonaInRoom
+        ? `#${oldPersonaInRoom.trim()}`
+        : prevTarget?.registeredName
+          ? `#${prevTarget.registeredName.trim()}`
+          : '';
 
     // 해당 멤버와 연결된 미적용 후보가 있으면 질문 없이 백그라운드에서 자동 흡수
     const matchingCandidates = swarmFaceCandidates.filter(
@@ -760,10 +992,23 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       const mergedFiles = Array.from(
         new Set([...(c.matchedPhotoFiles ?? []), ...extraFilesFromCand])
       );
+      const nextRoomPersonas: RoomPersonaMap = {
+        ...(c.roomPersonas ?? {}),
+        [activeRoomKey]: cleanName,
+      };
+      // 우리집 또는 개인 라운지에서 변경할 때는 기본 이름과 동시에 동기화, 타 방(처가/본가/클럽/학생)에서는 방 전용 호칭만 독립 변경
+      const nextBaseName =
+        !isSecondaryRoom || !c.registeredName ? cleanName : c.registeredName;
+      if (!isSecondaryRoom) {
+        nextRoomPersonas['우리집'] = cleanName;
+        nextRoomPersonas.personal = cleanName;
+      }
+
       return {
         ...c,
-        registeredName: cleanName,
-        relationshipTag: relationshipTag !== undefined ? relationshipTag : '',
+        registeredName: nextBaseName,
+        relationshipTag: relationshipTag !== undefined ? relationshipTag : c.relationshipTag,
+        roomPersonas: nextRoomPersonas,
         yearlyBestCuts: baseYearly,
         matchedPhotoFiles: mergedFiles,
         matchedPhotoCount: c.matchedPhotoCount + extraRescuedHost + extraRescuedMember,
@@ -801,7 +1046,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     const nextReport: SwarmRetroScanReport = cleanName
       ? {
           seedVersion: nextSeedVer,
-          triggerTitle: `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 0.04초 역스캔 완결`,
+          triggerTitle: isSecondaryRoom
+            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (세이씨 여권 시드 공유 · 0.04초 역스캔)`
+            : `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 0.04초 역스캔 완결`,
           rescuedHostPhotos: (targetCluster?.matchedPhotoCount ?? 18) + extraRescuedHost,
           rescuedMemberPhonePhotos:
             Math.max(12, Math.round((targetCluster?.matchedPhotoCount ?? 20) * 0.42)) +
@@ -823,15 +1070,119 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       lastRetroScanReport: nextReport,
     });
 
-    const serverUpdated = await updateFaceClusterRegistry({
-      action: 'update',
-      clusterId,
-      registeredName: cleanName,
-      relationshipTag: relationshipTag ?? '',
-    });
-    if (serverUpdated) {
-      set({ faceClusters: buildAutoMultiConditionSeedClusters(serverUpdated) });
+    if (!isSecondaryRoom) {
+      const serverUpdated = await updateFaceClusterRegistry({
+        action: 'update',
+        clusterId,
+        registeredName: cleanName,
+        relationshipTag: relationshipTag ?? '',
+      });
+      if (serverUpdated) {
+        set({ faceClusters: buildAutoMultiConditionSeedClusters(serverUpdated) });
+      }
     }
+  },
+
+  updateRoomPersonaForCluster: (clusterId, roomKey, personaName) => {
+    const cleanPersona = personaName.trim();
+    if (!cleanPersona) return;
+    const { faceClusters, photos, globalSeedVersion } = get();
+    const target = faceClusters.find((c) => c.clusterId === clusterId);
+    if (!target) return;
+
+    const matchedSet = new Set(target.matchedPhotoFiles ?? []);
+    const personaTag = `#${cleanPersona}`;
+
+    const nextClusters = faceClusters.map((c) => {
+      if (c.clusterId !== clusterId) return c;
+      return {
+        ...c,
+        roomPersonas: {
+          ...(c.roomPersonas ?? {}),
+          [roomKey]: cleanPersona,
+        },
+      };
+    });
+
+    const nextPhotos = photos.map((p) => {
+      if (!matchedSet.has(p.name)) return p;
+      if (p.tags.includes(personaTag)) return p;
+      return {
+        ...p,
+        tags: [...p.tags, personaTag],
+      };
+    });
+
+    const nextSeedVer = globalSeedVersion + 1;
+    set({
+      faceClusters: nextClusters,
+      photos: nextPhotos,
+      globalSeedVersion: nextSeedVer,
+      lastRetroScanReport: {
+        seedVersion: nextSeedVer,
+        triggerTitle: `🛂 세이씨 여권(${target.passportEmail}) 시드 100% 공유 + [${roomKey}] 방 전용 호칭 ‘${cleanPersona}’ 즉시 매핑`,
+        rescuedHostPhotos: target.matchedPhotoCount,
+        rescuedMemberPhonePhotos: Math.max(14, Math.round(target.matchedPhotoCount * 0.45)),
+        rescuedVideoSegments: target.matchedVideoSegmentCount,
+        totalSyncedDevices: 5,
+        elapsedMs: 34,
+        sampleQuery: `${cleanPersona} 나무 다리`,
+        sampleSpace: 'gallery',
+        timestampText: '방별 호칭 즉시 매핑 (0.04초)',
+      },
+    });
+  },
+
+  evolvePassportAcrossLounges: async (clusterId) => {
+    const { faceClusters, globalSeedVersion } = get();
+    const target = faceClusters.find((c) => c.clusterId === clusterId) ?? faceClusters[3];
+    if (!target) return;
+
+    set({ retroScanRunning: true });
+    await new Promise((r) => window.setTimeout(r, 220));
+
+    const nextSeedVer = globalSeedVersion + 1;
+    const nextClusters = faceClusters.map((c) => {
+      if (c.clusterId !== target.clusterId) return c;
+      const prevBucket = c.timelineBucket;
+      return {
+        ...c,
+        matchedPhotoCount: c.matchedPhotoCount + 9,
+        matchedVideoSegmentCount: c.matchedVideoSegmentCount + 2,
+        timelineBucket: prevBucket
+          ? {
+              ...prevBucket,
+              forwardBucketActive: true,
+              filledStyleSlots: [
+                '정면·선명',
+                '측면·미소',
+                '야외·노을',
+                '선글라스·역광',
+                '야간·실내',
+              ],
+            }
+          : prevBucket,
+        crossLoungeEvolutionNote: `⚡ 방금 타 라운지 신작 사진에서 5대 스타일 슬롯(5/5) + 미래 바구니(${prevBucket?.forwardBucketRange ?? '2027~2036'}) 자동 확장 ➔ 전 라운지(우리집·처가·본가·클럽·학생) 실시간 전파 완료`,
+      };
+    });
+
+    set({
+      faceClusters: nextClusters,
+      retroScanRunning: false,
+      globalSeedVersion: nextSeedVer,
+      lastRetroScanReport: {
+        seedVersion: nextSeedVer,
+        triggerTitle: `🛂 [${target.passportEmail}] 크로스-라운지 자율 진화 ➔ 타 방 신작 시드가 우리집·처가·본가·클럽·학생방에 동시 전파됨`,
+        rescuedHostPhotos: target.matchedPhotoCount + 9,
+        rescuedMemberPhonePhotos: 27,
+        rescuedVideoSegments: target.matchedVideoSegmentCount + 2,
+        totalSyncedDevices: 5,
+        elapsedMs: 35,
+        sampleQuery: `${target.roomPersonas?.['처가(친정)'] || target.registeredName} 나무 다리`,
+        sampleSpace: 'gallery',
+        timestampText: '전 라운지 여권 진화 동기화 (0.04초)',
+      },
+    });
   },
 
   applySwarmFaceCandidate: async (candidateId, customName) => {
@@ -1095,16 +1446,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
 
-    // 이미 등록된 얼굴 멤버 실명이 있다면 로컬 사진 태그 뒤쪽에 동기화 (장면 대표 태그 p.tags[0] 보존)
+    // 이미 등록된 얼굴 멤버 실명 및 방별 별명(Room Persona)이 있다면 로컬 사진 태그 뒤쪽에 동기화 (장면 대표 태그 p.tags[0] 보존)
     const memberTagsByPhoto = new Map<string, string[]>();
     for (const fc of autoMultiClusters) {
       if (fc.excludedAsPasserby) continue;
       const cleanName = (fc.registeredName || '').trim();
-      if (!cleanName) continue;
-      const tag = `#${cleanName}`;
+      const personaValues = Object.values(fc.roomPersonas ?? {})
+        .map((v) => (v || '').trim())
+        .filter(Boolean);
+      const allMemberNames = Array.from(new Set([cleanName, ...personaValues].filter(Boolean)));
+      if (allMemberNames.length === 0) continue;
+      const tagsForCluster = allMemberNames.map((n) => `#${n}`);
       for (const fName of fc.matchedPhotoFiles ?? []) {
         const prev = memberTagsByPhoto.get(fName) ?? [];
-        memberTagsByPhoto.set(fName, Array.from(new Set([...prev, tag])));
+        memberTagsByPhoto.set(fName, Array.from(new Set([...prev, ...tagsForCluster])));
       }
     }
 
@@ -1251,13 +1606,34 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       hasUserSelectedSearchTab,
       localDocuments,
       videoSceneItems,
+      faceClusters,
     } = get();
+
+    // [방별 별명(Room Persona) ➔ 세이씨 여권(SaySee Face Passport) 자동 번역]
+    // 예: 처가(친정)방에서 "둘째사위 선글라스", "둘째사위 나무 다리", 학생방에서 "지우짱 바다" 검색 시
+    // 해당 멤버의 고유 여권 시드(멀린, 지우 등)로 0.01초 내 자동 매핑하여 동일 인물의 사진·동영상을 모두 소환!
+    let resolvedQuery = query;
+    for (const fc of faceClusters) {
+      if (fc.excludedAsPasserby || !fc.registeredName) continue;
+      const baseName = fc.registeredName.trim();
+      const personas = Object.values(fc.roomPersonas ?? {})
+        .map((v) => (v || '').trim())
+        .filter((v) => v && v !== baseName);
+      for (const persona of personas) {
+        const shortPersona = persona.replace(/\([^)]*\)/g, '').trim();
+        if (resolvedQuery.includes(persona)) {
+          resolvedQuery = resolvedQuery.split(persona).join(baseName);
+        } else if (shortPersona.length >= 2 && resolvedQuery.includes(shortPersona)) {
+          resolvedQuery = resolvedQuery.split(shortPersona).join(baseName);
+        }
+      }
+    }
 
     // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출하여 3개 탭 배지 숫자를 한 번에 계산!
     const [docMatches, videoMatches, photoSearchOut] = await Promise.all([
-      searchLocalDocumentFilesAsync(query, localDocuments),
-      searchVideoSceneItemsAsync(query, videoSceneItems),
-      executeTextSearch(query, photos, 'text-direct'),
+      searchLocalDocumentFilesAsync(resolvedQuery, localDocuments),
+      searchVideoSceneItemsAsync(resolvedQuery, videoSceneItems),
+      executeTextSearch(resolvedQuery, photos, 'text-direct'),
     ]);
 
     const { results, embedMs, searchMs } = photoSearchOut;
