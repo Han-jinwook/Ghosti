@@ -130,7 +130,7 @@ export const MobileAppView: React.FC = () => {
                     세이씨 <span className="text-zinc-400 font-normal text-[11px]">SaySee</span>
                   </span>
                   <span className="text-[9.5px] text-zinc-400 leading-tight mt-0.5 truncate">
-                    🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
+                    🔒 No-클라우드 시크릿 라운지
                   </span>
                 </div>
               </div>

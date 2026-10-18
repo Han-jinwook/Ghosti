@@ -124,7 +124,7 @@ export const DesktopDashboard: React.FC = () => {
         <div className="px-5 md:px-8 py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center min-w-0 flex-wrap gap-y-2">
             {/* 좌측 브랜드 로고(아래 슬로건) */}
-            <div className="flex items-center gap-3.5 shrink-0">
+            <div className="flex items-center gap-3.5 shrink-0 md:w-[210px]">
               <div
                 onClick={() => setDesktopTab('dashboard')}
                 className="flex items-center gap-2.5 cursor-pointer shrink-0"
@@ -142,14 +142,14 @@ export const DesktopDashboard: React.FC = () => {
                     <span className="text-zinc-400 font-normal text-[12.5px]">SaySee</span>
                   </div>
                   <span className="text-zinc-400 font-label-sm text-[11px] font-medium mt-1 leading-none whitespace-nowrap">
-                    🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
+                    🔒 No-클라우드 시크릿 라운지
                   </span>
                 </div>
               </div>
             </div>
 
             {/* 로고와 넉넉한 거리를 두고 배치한 메인메뉴 4개 */}
-            <nav className="ml-6 sm:ml-10 md:ml-14 lg:ml-16 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
+            <nav className="ml-6 sm:ml-8 md:ml-8 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
               {MAIN_LOUNGE_MENUS.map((menu) => {
                 const active = activeLoungeType === menu.id;
                 const isLoungeSub = Boolean(subscribedLounges[menu.id]);
@@ -219,7 +219,7 @@ export const DesktopDashboard: React.FC = () => {
         </div>
 
         {/* 2단: 메인메뉴 4개 바로 아래 라인에 맞춰 정렬된 라운지별 서브메뉴 바 (구독 여부는 라운지별로 독립 적용) */}
-        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[316px] lg:pl-[324px]">
+        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[274px]">
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
               return null;
