@@ -274,7 +274,7 @@ export function getActivePersonaForCluster(
     '본가(친가)': '본가(친가) 방',
     '처가(친정)': '처가(친정) 방',
     club: '클럽 라운지',
-    student: '10대 학생 라운지',
+    student: '스쿨 라운지',
   };
   const isRoomCreator = cluster.clusterId === 'face_member_5';
   // 아직 미등록된 신규 인물(baseName === '')은 등록 전까지 빈 문자열 유지
@@ -491,7 +491,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
-        '🎒 친구 모임방(10대 학생 라운지)에서 [야간·실내] 슬롯 진화(유사도 93.8%) ➔ 우리집 가족방 과거 사진 +7장 자동 구출됨!';
+        '🎒 친구 모임방(스쿨 라운지)에서 [야간·실내] 슬롯 진화(유사도 93.8%) ➔ 우리집 가족방 과거 사진 +7장 자동 구출됨!';
 
       if (baseCuts.length < 2) {
         extraCuts.push({
@@ -1177,7 +1177,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
               ],
             }
           : prevBucket,
-        crossLoungeEvolutionNote: `⚡ 방금 타 라운지 신작 사진에서 5대 스타일 슬롯(5/5) + 미래 바구니(${prevBucket?.forwardBucketRange ?? '2027~2036'}) 자동 확장 ➔ 전 라운지(우리집·처가·본가·클럽·학생) 실시간 전파 완료`,
+        crossLoungeEvolutionNote: `⚡ 방금 타 라운지 신작 사진에서 5대 스타일 슬롯(5/5) + 미래 바구니(${prevBucket?.forwardBucketRange ?? '2027~2036'}) 자동 확장 ➔ 전 라운지(우리집·처가·본가·클럽·스쿨) 실시간 전파 완료`,
       };
     });
 
@@ -1187,7 +1187,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `🛂 [${target.passportEmail}] 크로스-라운지 자율 진화 ➔ 타 방 신작 시드가 우리집·처가·본가·클럽·학생방에 동시 전파됨`,
+        triggerTitle: `🛂 [${target.passportEmail}] 크로스-라운지 자율 진화 ➔ 타 방 신작 시드가 우리집·처가·본가·클럽·스쿨방에 동시 전파됨`,
         rescuedHostPhotos: target.matchedPhotoCount + 9,
         rescuedMemberPhonePhotos: 27,
         rescuedVideoSegments: target.matchedVideoSegmentCount + 2,
@@ -2248,12 +2248,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     set({
       studentOcrVerified: true,
       lastQuarantineToast:
-        '🎒 [학생증 로컬 OCR 0.1초 인증 완료] 외부 서버 전송 0 Byte • 10대 학생 라운지 단일가(월 900원 / 연 9,000원) 자격이 즉시 확인되었습니다!',
+        '🎒 [학생증 로컬 OCR 0.1초 인증 완료] 외부 서버 전송 0 Byte • 🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원) 자격이 즉시 확인되었습니다!',
     }),
 
   activateGpuHelper24h: (tier) => {
     const tierLabelMap: Record<GpuHelperTierId, string> = {
-      standard_1000: '개인 / 패밀리 / 10대 학생 라운지 (24시간 1,000원)',
+      standard_1000: '개인 / 패밀리 / 스쿨 라운지 (24시간 1,000원)',
       club_small_1000: '소형 클럽 ~20명 (24시간 1,000원)',
       club_medium_2000: '중형 클럽 ~100명 (24시간 2,000원)',
       club_large_3000: '대형 클럽 무제한 (24시간 3,000원)',
@@ -2292,8 +2292,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
         club_medium_year_79000: '⛳ 클럽 라운지 • 중형 클럽 연간권 (연 79,000원 • 방 1개)',
         club_large_14900: '⛳ 클럽 라운지 • 대형 클럽 인원 제한 없음 (월 14,900원 • 방 1개)',
         club_large_year_149000: '⛳ 클럽 라운지 • 대형 클럽 연간권 (연 149,000원 • 방 1개)',
-        student_sub_900: '🎒 10대 학생 라운지 • 인원 무제한 단일가 (월 900원)',
-        student_year_9000: '🎒 10대 학생 라운지 • 인원 무제한 연간 단일가 (연 9,000원)',
+        student_sub_900: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)',
+        student_year_9000: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 연 9,000원)',
       };
 
       const nextLoungeType: LoungeType = planId.startsWith('personal_')

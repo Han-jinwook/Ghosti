@@ -18,8 +18,8 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
   club_medium_year_79000: '⛳ 클럽 라운지 • 중형 클럽 100명 (연 79,000원)',
   club_large_14900: '⛳ 클럽 라운지 • 대형 클럽 무제한 (월 14,900원)',
   club_large_year_149000: '⛳ 클럽 라운지 • 대형 클럽 무제한 (연 149,000원)',
-  student_sub_900: '🎒 10대 학생 라운지 • 단일가 (월 900원)',
-  student_year_9000: '🎒 10대 학생 라운지 • 연간 단일가 (연 9,000원)',
+  student_sub_900: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)',
+  student_year_9000: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 연 9,000원)',
 };
 
 /**
@@ -57,7 +57,7 @@ export const PricingModal: React.FC = () => {
   }> = [
     {
       id: 'standard_1000',
-      title: '개인 / 패밀리 / 10대 학생 라운지',
+      title: '개인 / 패밀리 / 스쿨 라운지',
       targetDesc: '방장 PC OFF 시 24시간 대행',
       priceText: '24시간 당 1,000원',
     },
@@ -396,19 +396,19 @@ export const PricingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* ④ 🎒 10대 학생 라운지 (구분·인원 제한 없이 단일가 끝!) */}
+          {/* ④ 🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원) */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                  4. 구분·인원 제한 없이 단일가 끝!
+                  4. 초·중·고 반/동아리 특가 • 인원 무제한 단일가!
                 </span>
                 <span className="font-label-mono text-[11px] text-zinc-400">
                   학생증 로컬 OCR 0.1초 인증
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                🎒 10대 학생 라운지
+                🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-900 border border-primary-container/40 flex flex-col justify-between gap-3">
@@ -422,7 +422,7 @@ export const PricingModal: React.FC = () => {
                     </span>
                   </div>
                   <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                    인원수 상관없이 라운지 1개 개설 시 무조건 월 900원 (연 9,000원) 단일 요금 (학생증 로컬 OCR 0.1초 인증).
+                    초·중·고 반/동아리 인원수 상관없이 라운지 1개 개설 시 무조건 월 900원 (연 9,000원) 단일 요금 (학생증 로컬 OCR 0.1초 인증).
                   </p>
                 </div>
 

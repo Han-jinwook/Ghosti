@@ -34,8 +34,8 @@ const LOUNGE_TABS: Array<{
   {
     id: 'student',
     icon: '🎒',
-    label: '10대 학생 라운지',
-    shortPrice: '인원 무제한 단일가 월 900원 (연 9,000원)',
+    label: '스쿨 라운지',
+    shortPrice: '초·중·고 반/동아리 특가 월 900원 (연 9,000원)',
     desc: '친구 얼굴 크롭 & 별명 등록 ➔ 레이더 10장 수합 ➔ 방장 게이밍 PC 콕 찌르기',
   },
 ];
@@ -55,8 +55,8 @@ const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   club_medium_year_79000: '⛳ 중형 클럽 연간 (연 79,000원)',
   club_large_14900: '⛳ 대형 클럽 무제한 (월 14,900원)',
   club_large_year_149000: '⛳ 대형 클럽 연간 (연 149,000원)',
-  student_sub_900: '🎒 10대 학생 단일가 (월 900원)',
-  student_year_9000: '🎒 10대 학생 연간 단일가 (연 9,000원)',
+  student_sub_900: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)',
+  student_year_9000: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 연 9,000원)',
 };
 
 export const LoungeModeSwitcherBar: React.FC = () => null;
@@ -166,7 +166,7 @@ export const LoungeView: React.FC = () => {
               {activeLoungeType === 'club' &&
                 '⛳ 클럽 라운지 무료체험 — 모임 단체컷 얼굴 추출 & 참석자 폰 사진 레이더 수합'}
               {activeLoungeType === 'student' &&
-                '🎒 10대 학생 라운지 무료체험 — 친구 얼굴 별명 등록 & 게이밍 PC 콕 찌르기 바이럴'}
+                '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원) — 친구 얼굴 별명 등록 & 게이밍 PC 콕 찌르기'}
             </h1>
           </div>
 
@@ -546,10 +546,10 @@ export const LoungeView: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                🎒 10대 학생 라운지 — 친구 얼굴 별명 등록 ➔ 레이더 10장 수합 ➔ 게이밍 PC 콕 찌르기
+                🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)
               </h2>
               <p className="font-body-sm text-[12.5px] text-zinc-400 mt-0.5">
-                학급·동아리·수련회·체육대회 인원수 상관없이 라운지 1개 개설 시 무조건{' '}
+                초·중·고 학급·동아리·수련회·체육대회 인원수 상관없이 라운지 1개 개설 시 무조건{' '}
                 <strong className="text-white">월 900원 (연 9,000원)</strong> 단일 요금! 무료체험 10장 수합 한도 도달 시 방장에게 게이밍 PC 설치 알림을 보낼 수 있습니다.
               </p>
             </div>
@@ -572,7 +572,7 @@ export const LoungeView: React.FC = () => {
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  인원 무제한 단일가
+                  초·중·고 반/동아리 특가 월 900원
                 </span>
                 <span
                   className={`px-2.5 py-0.5 rounded font-label-mono text-[11px] font-bold border ${
@@ -879,14 +879,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
             ⚡ 타임캡슐 로컬 캐시 모드 (낮에 👑 방장 PC가 꺼져 있어도 0.04초 즉시 재생)
           </span>
         </div>
-        {renderMemberPersonaPills('학생방 별명 0.04초 검색:')}
+        {renderMemberPersonaPills('스쿨방 별명 0.04초 검색:')}
       </div>
     </div>
   );
 };
 
 /**
- * 3번 서브메뉴 `[⏳ AI 인덱싱 대기실]` (패밀리 / 클럽 / 10대 학생 라운지 전용)
+ * 3번 서브메뉴 `[⏳ AI 인덱싱 대기실]` (패밀리 / 클럽 / 스쿨 라운지 전용)
  * - 수동 검사가 아니라 AI 인덱싱(Gemma 2 768d 벡터 + 13KB 캐시 변환) 시간 벌기용 안심 버퍼 뷰!
  */
 export const LoungeIndexingWaitingRoom: React.FC = () => {
@@ -944,7 +944,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       senderLabels: ['김총무 갤럭시 S24', '박회장 아이폰 16 Pro', '이프로 갤럭시', '최회원 아이폰'],
     },
     student: {
-      badge: '⏳ 10대 학생 AI 인덱싱 대기실 (인생샷·축제 영상 수합 버퍼)',
+      badge: '⏳ 스쿨 라운지 AI 인덱싱 대기실 (인생샷·축제 영상 수합 버퍼)',
       title: '친구들이 보낸 인생샷과 골인 영상이 방장 게이밍 PC가 켜질 때 자동 색인·압축 배포됩니다',
       subtitle:
         '학교·학원에 있는 낮 시간 동안 친구들이 찍어 올린 사진·영상을 안전하게 모아 두었다가, 하교 후 방장의 집 게이밍 PC가 켜지는 즉시 초고속 Gemma 2 인덱싱을 거쳐 전 멤버 타임캡슐 피드로 쏴주는 대기 버퍼입니다.',
@@ -1476,16 +1476,16 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     );
   }
 
-  // student ('🎒 10대 학생 라운지')
+  // student ('🎒 스쿨 라운지')
   return (
     <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-            🎮 게이밍 PC 집중 동기화 &amp; 학생증 로컬 OCR 0.1초 인증 (단일가 월 900원)
+            🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)
           </span>
           <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-            하교 후 방장 게이밍 PC 자동 인덱싱 &amp; 인원 무제한 월 900원 학생인증
+            하교 후 방장 게이밍 PC 자동 인덱싱 &amp; 초·중·고 반/동아리 인원 무제한 월 900원 학생인증
           </h2>
           <p className="font-body-sm text-[12.5px] text-zinc-300">
             낮에 학교·학원에서 찍은 우리반 사진·영상은 대기실에 모아두었다가, 하교 후 방장 집 게이밍 PC가 켜지면 그래픽카드(GPU) 파워로 1초 만에 색인·압축 배포합니다.

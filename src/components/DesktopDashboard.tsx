@@ -19,7 +19,7 @@ const MAIN_LOUNGE_MENUS: Array<{
   { id: 'personal', icon: '👤', label: '개인 라운지' },
   { id: 'family', icon: '👨‍👩‍👧‍👦', label: '패밀리 라운지' },
   { id: 'club', icon: '⛳', label: '클럽 라운지' },
-  { id: 'student', icon: '🎒', label: '10대 학생 라운지' },
+  { id: 'student', icon: '🎒', label: '스쿨 라운지' },
 ];
 
 const LOUNGE_SUBMENU_CONFIG: Record<
@@ -667,8 +667,8 @@ export const DesktopDashboard: React.FC = () => {
                 [
                   {
                     id: 'standard_1000' as GpuHelperTierId,
-                    badge: '개인 / 패밀리 / 10대 학생',
-                    title: '개인 · 패밀리 · 10대 학생 라운지',
+                    badge: '개인 / 패밀리 / 스쿨',
+                    title: '개인 · 패밀리 · 스쿨 라운지',
                     price: '24시간 당 1,000원',
                     sub: '방장 PC OFF 시 24시간 실시간 인덱싱·배포 대행',
                   },

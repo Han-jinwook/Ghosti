@@ -19,7 +19,7 @@ const MAIN_LOUNGE_MENUS: Array<{
   { id: 'personal', icon: '👤', label: '개인 라운지' },
   { id: 'family', icon: '👨‍👩‍👧‍👦', label: '패밀리 라운지' },
   { id: 'club', icon: '⛳', label: '클럽 라운지' },
-  { id: 'student', icon: '🎒', label: '10대 학생 라운지' },
+  { id: 'student', icon: '🎒', label: '스쿨 라운지' },
 ];
 
 const MOBILE_LOUNGE_SUBMENUS: Record<
@@ -515,7 +515,7 @@ export const MobileAppView: React.FC = () => {
                 [
                   {
                     id: 'standard_1000' as GpuHelperTierId,
-                    label: '개인·패밀리·10대 학생',
+                    label: '개인·패밀리·스쿨',
                     price: '24시간 1,000원',
                   },
                   {

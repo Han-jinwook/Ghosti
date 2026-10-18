@@ -114,7 +114,7 @@ const ROOM_PERSONA_KEYS: Array<{
   { key: '처가(친정)', label: '🏡 처가(친정)', shortLabel: '처가방' },
   { key: '본가(친가)', label: '🏛️ 본가(친가)', shortLabel: '본가방' },
   { key: 'club', label: '⛳ 클럽방', shortLabel: '클럽방' },
-  { key: 'student', label: '🎒 10대 학생방', shortLabel: '학생방' },
+  { key: 'student', label: '🎒 스쿨방', shortLabel: '스쿨방' },
 ];
 
 type PendingSingleCardItem =
@@ -501,7 +501,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                   </h3>
                 </div>
                 <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
-                  시드(768차원 벡터 + 연도 바구니)는 100% 공유하되 방마다 호칭만 독립 매핑됩니다. 타 라운지(학생방·클럽방)에서 진화한 시드는 모든 방에 즉시 전파됩니다.
+                  시드(768차원 벡터 + 연도 바구니)는 100% 공유하되 방마다 호칭만 독립 매핑됩니다. 타 라운지(스쿨방·클럽방)에서 진화한 시드는 모든 방에 즉시 전파됩니다.
                 </p>
               </div>
 
@@ -513,7 +513,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
               >
                 {retroScanRunning
                   ? '⏳ 여권 진화 전파 중...'
-                  : '⚡ 크로스-라운지 진화 실증 (학생방 지우 신작 ➔ 우리집·처가·본가 동시 전파)'}
+                  : '⚡ 크로스-라운지 진화 실증 (스쿨방 지우 신작 ➔ 우리집·처가·본가 동시 전파)'}
               </button>
             </div>
 
