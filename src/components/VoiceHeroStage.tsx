@@ -206,7 +206,7 @@ export const VoiceHeroStage: React.FC = () => {
             )}
             <button
               type="submit"
-              className="absolute right-1.5 h-9 md:h-10 px-4 rounded-lg bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold transition-all"
+              className="absolute right-1.5 h-9 md:h-10 px-4 rounded-lg bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold transition-all whitespace-nowrap"
             >
               검색
             </button>
@@ -216,7 +216,7 @@ export const VoiceHeroStage: React.FC = () => {
             type="button"
             onClick={() => void toggleMicRecording()}
             title="음성으로 검색"
-            className={`h-12 md:h-13 px-3.5 rounded-xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 transition-all ${
+            className={`h-12 md:h-13 px-3.5 rounded-xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 whitespace-nowrap transition-all ${
               isListening
                 ? 'bg-primary-container text-zinc-950 border-primary-container'
                 : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/10'
@@ -261,7 +261,7 @@ export const VoiceHeroStage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSearchSpace('video')}
-              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap ${
                 searchSpace === 'video'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
@@ -286,7 +286,7 @@ export const VoiceHeroStage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSearchSpace('gallery')}
-              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap ${
                 searchSpace === 'gallery'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
@@ -309,7 +309,7 @@ export const VoiceHeroStage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSearchSpace('vault')}
-              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 ${
+              className={`px-3.5 py-2 rounded-xl font-label-md text-[12.5px] md:text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap ${
                 searchSpace === 'vault'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
@@ -345,7 +345,7 @@ export const VoiceHeroStage: React.FC = () => {
                     setTextInput('');
                     resetSearchSpaceToAll(searchSpace);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white font-label-sm text-[11px]"
+                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white font-label-sm text-[11.5px] whitespace-nowrap"
                 >
                   ✕ 검색 해제
                 </button>
@@ -356,7 +356,7 @@ export const VoiceHeroStage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void openLocalFolder('docs')}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10 shrink-0"
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10 shrink-0 whitespace-nowrap"
               >
                 📂 로컬 서류폴더 열기
               </button>

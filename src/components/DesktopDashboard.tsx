@@ -88,6 +88,8 @@ export const DesktopDashboard: React.FC = () => {
     updateSyncSettings,
     setChargingOnlySync,
     triggerSyncNow,
+    themeMode,
+    toggleThemeMode,
   } = useSaySeeStore();
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
@@ -114,9 +116,9 @@ export const DesktopDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* ─────────────── 상단 2단 통합 헤더: 1단(로고+슬로건 / 엔진 가동중 / 우측 이격된 메인메뉴 4개 / 우상단 프로필·코인·알림 슬롯) + 2단(메인메뉴 바로 아래 서브메뉴) ─────────────── */}
+      {/* ─────────────── 상단 2단 통합 헤더: 1단(로고+슬로건 / 엔진 가동중 / 우측 이격된 메인메뉴 4개 / 우상단 [☀️ 밝은 화면 / 🌙 어두운 화면] 토글) + 2단(메인메뉴 바로 아래 서브메뉴) ─────────────── */}
       <header className="sticky top-0 bg-[#09090B]/95 backdrop-blur-xl z-40 border-b border-white/10">
-        {/* 1단: 로고(아래 슬로건) + [🟢 엔진 가동중] ─── (넉넉한 간격) ─── 메인메뉴 4개 + 우상단 빈 슬롯(향후 프로필·코인·알림 자리) */}
+        {/* 1단: 로고(아래 슬로건) + [🟢 엔진 가동중] ─── (넉넉한 간격) ─── 메인메뉴 4개 + 우상단 테마 토글 */}
         <div className="px-5 md:px-8 py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center min-w-0 flex-wrap gap-y-2">
             {/* 좌측 브랜드 로고(아래 슬로건) + [🟢 엔진 가동중] */}
@@ -132,12 +134,12 @@ export const DesktopDashboard: React.FC = () => {
                 </div>
                 <div className="flex flex-col">
                   <div className="flex items-baseline gap-1.5 leading-none">
-                    <span className="font-headline-sm text-[18px] text-white tracking-tight font-extrabold">
+                    <span className="font-headline-sm text-[18px] text-white tracking-tight font-extrabold whitespace-nowrap">
                       세이씨
                     </span>
                     <span className="text-zinc-400 font-normal text-[12.5px]">SaySee</span>
                   </div>
-                  <span className="text-zinc-400 font-label-sm text-[11px] font-medium mt-1 leading-none">
+                  <span className="text-zinc-400 font-label-sm text-[11px] font-medium mt-1 leading-none whitespace-nowrap">
                     🔒 나·가족·모임만의 No-클라우드 시크릿 라운지
                   </span>
                 </div>
@@ -148,7 +150,7 @@ export const DesktopDashboard: React.FC = () => {
                 type="button"
                 onClick={() => setShowOnboarding(true)}
                 title="클릭하여 엔진 보안 상세 안내 · 검진 폴더 설정 · 모바일 QR 페어링 열기"
-                className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 hover:border-emerald-400/50 text-zinc-100 font-label-sm text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0"
+                className="px-3.5 py-2 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 hover:border-emerald-400/50 text-zinc-100 font-label-sm text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 whitespace-nowrap"
               >
                 <span className="relative flex h-2.5 w-2.5 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
@@ -159,7 +161,7 @@ export const DesktopDashboard: React.FC = () => {
             </div>
 
             {/* 엔진 가동중과 넉넉한 거리를 두고 우측으로 배치한 메인메뉴 4개 */}
-            <nav className="ml-6 sm:ml-10 md:ml-16 lg:ml-24 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
+            <nav className="ml-4 sm:ml-8 md:ml-12 lg:ml-16 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
               {MAIN_LOUNGE_MENUS.map((menu) => {
                 const active = activeLoungeType === menu.id;
                 return (
@@ -167,7 +169,7 @@ export const DesktopDashboard: React.FC = () => {
                     key={menu.id}
                     type="button"
                     onClick={() => setActiveLoungeType(menu.id)}
-                    className={`px-3.5 py-1.5 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+                    className={`px-3.5 py-2 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap ${
                       active
                         ? 'bg-primary-container text-zinc-950 font-extrabold shadow-[0_0_14px_rgba(32,247,219,0.2)]'
                         : 'text-zinc-300 hover:text-white hover:bg-zinc-800/80'
@@ -181,12 +183,27 @@ export const DesktopDashboard: React.FC = () => {
             </nav>
           </div>
 
-          {/* 우측 상단: 향후 프로필 · 코인 · 알림이 들어갈 자리 (요금표/무료체험중/모바일뷰 제거) */}
-          <div className="flex items-center gap-2 shrink-0" aria-label="프로필 및 알림 영역" />
+          {/* 우측 상단: [☀️ 밝은 화면 / 🌙 어두운 화면] 토글 버튼 (기본값: 따뜻한 아이보리 밝은 화면 고정) */}
+          <div className="flex items-center gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
+            <button
+              type="button"
+              onClick={toggleThemeMode}
+              title="따뜻한 아이보리 밝은 화면(기본값) ↔ 야간용 어두운 화면 전환"
+              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 font-label-sm text-[12px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              <span className={themeMode === 'light' ? 'text-amber-500 font-extrabold' : 'text-zinc-400'}>
+                ☀️ 밝은 화면
+              </span>
+              <span className="text-zinc-400">/</span>
+              <span className={themeMode === 'dark' ? 'text-primary-container font-extrabold' : 'text-zinc-400'}>
+                🌙 어두운 화면
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* 2단: 메인메뉴 4개 바로 아래 라인에 맞춰 정렬된 라운지별 서브메뉴 바 */}
-        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[410px] lg:pl-[442px]">
+        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[390px] lg:pl-[410px]">
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
               return null;
@@ -197,7 +214,7 @@ export const DesktopDashboard: React.FC = () => {
                 key={sub.id}
                 type="button"
                 onClick={() => setDesktopTab(sub.id)}
-                className={`px-3.5 py-1.5 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+                className={`px-3.5 py-2 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap ${
                   isSubActive
                     ? 'bg-primary-container/20 border border-primary-container/50 text-primary-container font-extrabold'
                     : sub.id === 'trial'

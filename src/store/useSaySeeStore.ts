@@ -63,9 +63,25 @@ import { loadSyncState, saveSyncPrefs } from '../services/syncEngine';
 export type ViewportLayout = 'mobile' | 'desktop';
 export type MobileTab = 'trial' | 'search' | 'trash' | 'settings';
 export type DesktopTab = 'trial' | 'dashboard' | 'trash' | 'sync';
+export type ThemeMode = 'light' | 'dark';
+
+function applyHtmlThemeClass(mode: ThemeMode): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (mode === 'light') {
+    root.classList.remove('dark');
+    root.classList.add('theme-warm-light');
+  } else {
+    root.classList.remove('theme-warm-light');
+    root.classList.add('dark');
+  }
+}
 
 interface SaySeeStore {
-  // 레이아웃 & 서브메뉴 ([✨ 무료체험(Auto-Hide)] | 🔍 파워 검색 | 🧹 주치의 정리 | 🛠️ 설정도우미)
+  // 레이아웃 & 테마 (Warm Light Theme '#F8F7F4' 기본값 고정 + 우상단 ☀️/🌙 토글 지원)
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  toggleThemeMode: () => void;
   layout: ViewportLayout;
   mobileTab: MobileTab;
   desktopTab: DesktopTab;
@@ -789,7 +805,19 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
   return enriched;
 }
 
-export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
+export const useSaySeeStore = create<SaySeeStore>((set, get) => {
+  applyHtmlThemeClass('light');
+  return {
+  themeMode: 'light',
+  setThemeMode: (themeMode) => {
+    applyHtmlThemeClass(themeMode);
+    set({ themeMode });
+  },
+  toggleThemeMode: () => {
+    const next: ThemeMode = get().themeMode === 'light' ? 'dark' : 'light';
+    applyHtmlThemeClass(next);
+    set({ themeMode: next });
+  },
   layout: typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'desktop' : 'mobile',
   mobileTab: 'search',
   desktopTab: 'dashboard',
@@ -3250,4 +3278,5 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 0.04초 찾기 완료] 세이씨 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 0.04초 만에 모두 찾았습니다!`,
     });
   },
-}));
+  };
+});

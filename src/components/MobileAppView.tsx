@@ -83,6 +83,8 @@ export const MobileAppView: React.FC = () => {
     syncState,
     setPrivateSyncStrategy,
     triggerSyncNow,
+    themeMode,
+    toggleThemeMode,
   } = useSaySeeStore();
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
@@ -122,7 +124,7 @@ export const MobileAppView: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-headline-sm text-[15px] text-white tracking-tight font-extrabold leading-none">
+                  <span className="font-headline-sm text-[15px] text-white tracking-tight font-extrabold leading-none whitespace-nowrap">
                     세이씨 <span className="text-zinc-400 font-normal text-[11px]">SaySee</span>
                   </span>
                   <span className="text-[9.5px] text-zinc-400 leading-tight mt-0.5 truncate">
@@ -134,7 +136,7 @@ export const MobileAppView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowOnboarding(true)}
-                className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 text-zinc-100 font-label-sm text-[10.5px] font-bold flex items-center gap-1.5 shrink-0"
+                className="px-2.5 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 text-zinc-100 font-label-sm text-[10.5px] font-bold flex items-center gap-1.5 shrink-0 whitespace-nowrap"
               >
                 <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
@@ -144,11 +146,20 @@ export const MobileAppView: React.FC = () => {
               </button>
             </div>
 
-            {/* 우상단은 향후 프로필과 코인 알림 자리 */}
-            <div className="flex items-center gap-1.5 shrink-0" aria-label="프로필 및 알림 영역" />
+            {/* 우상단: [☀️ 밝은 화면 / 🌙 어두운 화면] 토글 버튼 */}
+            <div className="flex items-center gap-1.5 shrink-0" aria-label="화면 테마 영역">
+              <button
+                type="button"
+                onClick={toggleThemeMode}
+                title="밝은 화면(기본값) ↔ 어두운 화면 전환"
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 font-label-sm text-[10.5px] font-bold flex items-center gap-1 shrink-0 whitespace-nowrap"
+              >
+                <span>{themeMode === 'light' ? '☀️ 밝은 화면' : '🌙 어두운 화면'}</span>
+              </button>
+            </div>
           </div>
 
-          {/* 메인메뉴 4개 (라운지 선택 문구 삭제) */}
+          {/* 메인메뉴 4개 */}
           <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             {MAIN_LOUNGE_MENUS.map((menu) => {
               const active = activeLoungeType === menu.id;
@@ -157,7 +168,7 @@ export const MobileAppView: React.FC = () => {
                   key={menu.id}
                   type="button"
                   onClick={() => setActiveLoungeType(menu.id)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11px] font-bold flex items-center gap-1 transition-all shrink-0 ${
+                  className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold flex items-center gap-1 transition-all shrink-0 whitespace-nowrap ${
                     active
                       ? 'bg-primary-container text-zinc-950 font-extrabold'
                       : 'bg-zinc-900 text-zinc-300 border border-white/10'
@@ -183,7 +194,7 @@ export const MobileAppView: React.FC = () => {
                 key={sub.id}
                 type="button"
                 onClick={() => setMobileTab(sub.id)}
-                className={`px-2.5 py-1 rounded-lg font-label-sm text-[11px] font-bold flex items-center gap-1 transition-all shrink-0 ${
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold flex items-center gap-1 transition-all shrink-0 whitespace-nowrap ${
                   isSubActive
                     ? 'bg-primary-container/20 border border-primary-container/50 text-primary-container font-extrabold'
                     : 'text-zinc-400 hover:text-white'
