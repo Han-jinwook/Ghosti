@@ -102,16 +102,20 @@ function getClusterYearlyCuts(cluster: FaceMemberCluster): YearlyFaceBestCut[] {
 }
 
 /**
- * [Step 1 인라인 바] 전체 갤러리(사진) 모드에서 방장이 얼굴에 실명을 붙이고
- * 당해 연도(2026년) 베스트 컷 뒤쪽에 과거 연도(2024년 등) 베스트 컷이 차곡차곡 쌓이는 아바타 스택을 확인하며
- * 즉시 "[이름] 나무 다리", "[이름] 선글라스" 실명 사진 검색을 체험하는 컴포넌트
+ * [Step 1 인라인 바] 전체 갤러리(사진) 상단 얼굴 등록 바
+ * 1. 다년도·다각도(정면 + 측면·미소 + 야외·노을 + 선글라스) 최대 변별력 시드 패키지를 알고리즘이 자동 결합하여
+ *    메인 동그란 아바타 옆에 2~3개의 미니 서브 아바타 스택 배지(Avatar Stack Badge)로 조용히 표시합니다.
+ * 2. 피로도를 유발하는 수동 병합 알림이나 별도 역스캔 버튼 없이, 오직 이름을 입력(또는 칩 선택)하고
+ *    [등록] 버튼 딱 한 번만 누르면 시드 확정 + Global Seed 갱신 + 전 멤버 0.04초 역스캔이 100% 전자동 완결됩니다.
+ * 3. 새로운 동반 등장 인물(미등록 새 멤버)은 줄 맨 끝에 조용히 새 카드로 추가되어 똑같이 이름 적고 [등록]만 누르면 됩니다.
+ * 4. 할머니 등 노약자·바쁜 멤버가 [그냥 넘어가기 (Pass)]를 눌러 호스트 뒷정리 대기열(Host Cleanup Queue)로 넘어온
+ *    누락 연도/각도 컷은 하단 한 줄에서 호스트가 [누락분 일괄 등록] 원터치로 깔끔하게 마감합니다.
  */
 export const FaceMemberInlineBar: React.FC<{
   onRunRealNameQuery: (query: string, targetSpace?: 'gallery' | 'video') => void;
 }> = ({ onRunRealNameQuery }) => {
   const {
     faceClusters,
-    latestCorpusYear,
     globalSeedVersion,
     retroScanRunning,
     lastRetroScanReport,
@@ -125,9 +129,7 @@ export const FaceMemberInlineBar: React.FC<{
   } = useSaySeeStore();
 
   const [isExpanded, setIsExpanded] = useState(true);
-  const [showSwarmMesh, setShowSwarmMesh] = useState(true);
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
-  const [companionCustomNames, setCompanionCustomNames] = useState<Record<string, string>>({});
   const [selectedYearMap, setSelectedYearMap] = useState<Record<string, number>>({});
   const [justSavedId, setJustSavedId] = useState<string | null>(null);
 
@@ -140,8 +142,10 @@ export const FaceMemberInlineBar: React.FC<{
     () => visibleClusters.filter((c) => c.registeredName.trim().length > 0),
     [visibleClusters]
   );
-  const pendingSwarmCount = useMemo(
-    () => swarmFaceCandidates.filter((c) => !c.applied).length,
+
+  // 호스트(방장) 전용 뒷정리 대기열: 노약자(할머니)·바쁜 멤버가 [패스]했거나 아직 시드에 흡수되지 않은 누락 연도/각도 후보
+  const hostCleanupQueue = useMemo(
+    () => swarmFaceCandidates.filter((c) => !c.applied),
     [swarmFaceCandidates]
   );
 
@@ -157,6 +161,9 @@ export const FaceMemberInlineBar: React.FC<{
 
   const handleSaveMember = async (cluster: FaceMemberCluster, nextName?: string) => {
     const finalName = (nextName !== undefined ? nextName : draftNames[cluster.clusterId] ?? '').trim();
+    if (nextName !== undefined) {
+      setDraftNames((prev) => ({ ...prev, [cluster.clusterId]: finalName }));
+    }
     await registerFaceMember(cluster.clusterId, finalName, '');
     setJustSavedId(cluster.clusterId);
     window.setTimeout(() => {
@@ -166,7 +173,7 @@ export const FaceMemberInlineBar: React.FC<{
 
   return (
     <div className="w-full rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
-      {/* 상단 요약 헤더 */}
+      {/* 상단 요약 헤더 (피로도를 유발하는 수동 병합 버튼 제거, 자동 멀티시드 상태만 깔끔하게 표시) */}
       <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-white/5">
         <button
           type="button"
@@ -174,14 +181,14 @@ export const FaceMemberInlineBar: React.FC<{
           className="flex items-center gap-2 text-left min-w-0 flex-1 flex-wrap"
         >
           <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold shrink-0">
-            사진 · 동영상 통합 얼굴 그물망
+            다년도·다각도 자동 시드
           </span>
           <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-mono text-[10.5px] font-extrabold shrink-0 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Global Seed v{globalSeedVersion} · 전원 동시 적용 중
+            Global Seed v{globalSeedVersion} 자동 동기화
           </span>
           <span className="font-label-md text-[12.5px] md:text-[13px] text-zinc-100 font-bold truncate">
-            🎯 {visibleClusters.length}명 등록 · 호스트 원본 + 전 멤버 폰 동반 얼굴 발굴 &amp; 0.04초 역스캔 연동
+            정면·측면·야외·선글라스 연도별 베스트 컷이 자동 결합됨 — 이름 적고 [등록] 한 번이면 전 멤버 0.04초 역스캔 완결!
           </span>
         </button>
 
@@ -197,29 +204,15 @@ export const FaceMemberInlineBar: React.FC<{
           )}
           <button
             type="button"
-            onClick={() => {
-              setIsExpanded(true);
-              setShowSwarmMesh((prev) => !prev);
-            }}
-            className={`px-2.5 py-1 rounded-lg border font-label-sm text-[11.5px] font-bold flex items-center gap-1 transition-all ${
-              showSwarmMesh
-                ? 'bg-primary-container/15 border-primary-container/40 text-primary-container'
-                : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-300'
-            }`}
-          >
-            <span>🕸️ 멤버 사진 동반 발굴 &amp; 전원 역스캔</span>
-            {pendingSwarmCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-primary-container text-zinc-950 font-mono text-[10px] font-extrabold">
-                +{pendingSwarmCount}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
             onClick={() => setShowFaceRegistryModal(true)}
             className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold flex items-center gap-1"
           >
-            <span>👥 전체 시드 관리</span>
+            <span>👥 3단 집단지성 &amp; 호스트 총점검</span>
+            {hostCleanupQueue.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-zinc-950 font-mono text-[10px] font-extrabold">
+                {hostCleanupQueue.length}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -239,9 +232,9 @@ export const FaceMemberInlineBar: React.FC<{
       </div>
 
       {isExpanded && (
-        <div className="p-3.5 md:p-4 flex flex-col gap-3.5 bg-zinc-950/50">
-          {/* 5명이 한눈에 잘리지 않고 모두 들어오는 반응형 5열 그리드 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        <div className="p-3.5 md:p-4 flex flex-col gap-3 bg-zinc-950/50">
+          {/* 기본 멤버 + 맨 끝에 조용히 추가된 동반 등장 새 멤버 카드 그리드 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {visibleClusters.map((cluster) => {
               const currentDraft = draftNames[cluster.clusterId] ?? '';
               const isRegistered = Boolean(cluster.registeredName.trim());
@@ -251,55 +244,54 @@ export const FaceMemberInlineBar: React.FC<{
                 yearlyCuts.find((c) => c.year === activeYear) ?? yearlyCuts[0];
               const stackedBehindCuts = yearlyCuts.filter((c) => c.year !== activeCut.year);
 
+              const quickRoleChips = cluster.isCompanionDiscovered
+                ? ['사촌', '조카', '할머니', '친구']
+                : ['#아내', '#나(방장)', '#아들', '#딸'];
+
               return (
                 <div
                   key={cluster.clusterId}
                   className={`w-full min-w-0 rounded-xl p-3 bg-zinc-900/90 border transition-all flex flex-col justify-between gap-2.5 relative ${
-                    isRegistered ? 'border-primary-container/50' : 'border-white/10'
+                    isRegistered
+                      ? 'border-primary-container/50'
+                      : cluster.isCompanionDiscovered
+                      ? 'border-amber-400/45 bg-gradient-to-b from-amber-950/20 to-zinc-900/90'
+                      : 'border-white/10'
                   }`}
                 >
-                  {/* 상단 연도 스택 탭 + 우측 [✕ 행인 제외] 버튼 */}
+                  {/* 상단: AI가 자동 묶어둔 연도·조건 배지 + 우측 [✕ 제외] */}
                   <div className="flex items-center justify-between gap-1">
                     <div className="flex items-center gap-1 min-w-0 flex-wrap">
-                      {yearlyCuts.map((yc) => {
-                        const isSelectedYear = yc.year === activeCut.year;
-                        return (
-                          <button
-                            key={yc.year}
-                            type="button"
-                            onClick={() =>
-                              setSelectedYearMap((prev) => ({
-                                ...prev,
-                                [cluster.clusterId]: yc.year,
-                              }))
-                            }
-                            title={`${yc.year}년 베스트 컷 (${yc.representativeDate}) 보기`}
-                            className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold transition-all shrink-0 ${
-                              isSelectedYear
-                                ? 'bg-primary-container text-zinc-950 font-extrabold'
-                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/10'
-                            }`}
-                          >
-                            {yc.year}년
-                          </button>
-                        );
-                      })}
+                      {cluster.isCompanionDiscovered && !isRegistered ? (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-400/20 border border-amber-400/40 text-amber-300 font-label-sm text-[9.5px] font-extrabold">
+                          ✨ 동반 등장 새 인물
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-950 border border-white/10 text-emerald-300 font-mono text-[9.5px] font-bold truncate">
+                          {yearlyCuts
+                            .map(
+                              (yc) =>
+                                `'${String(yc.year).slice(-2)}${yc.conditionShortKo ? `·${yc.conditionShortKo}` : ''}`
+                            )
+                            .join(' + ')}
+                        </span>
+                      )}
                     </div>
 
                     <button
                       type="button"
                       onClick={() => void excludeFaceCluster(cluster.clusterId)}
                       title="무관한 행인 얼굴 1초 제외"
-                      className="px-1.5 py-0.5 rounded bg-zinc-950/90 hover:bg-red-950/60 border border-white/10 hover:border-red-400/40 text-zinc-400 hover:text-red-300 font-label-sm text-[10px] font-medium transition-colors shrink-0"
+                      className="px-1.5 py-0.5 rounded bg-zinc-950/90 hover:bg-red-950/60 border border-white/10 hover:border-red-400/40 text-zinc-400 hover:text-red-300 font-label-sm text-[9.5px] font-medium transition-colors shrink-0"
                     >
-                      ✕ 제외
+                      ✕
                     </button>
                   </div>
 
-                  {/* 차곡차곡 쌓인 연도별 베스트 컷 아바타 스택 + 인물 요약 */}
+                  {/* 메인 동그란 아바타 + 옆에 겹쳐진 다년도·다각도 미니 서브 아바타 스택 배지 (Avatar Stack Badge) */}
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="relative flex items-center shrink-0">
-                      {/* 전면(현재 선택 연도) 베스트 컷 아바타 */}
+                      {/* 메인(당해 연도 정면) 아바타 */}
                       <div className="relative z-20">
                         <AutonomousCanvasFaceAvatar
                           photoFile={activeCut.representativePhoto}
@@ -309,9 +301,12 @@ export const FaceMemberInlineBar: React.FC<{
                           isHighlighted={isRegistered}
                           sizeClass="w-12 h-12"
                         />
+                        <span className="absolute -bottom-1 left-0 px-1 py-0.1 rounded bg-primary-container text-zinc-950 font-mono text-[8px] font-extrabold shadow">
+                          &apos;{String(activeCut.year).slice(-2)} {activeCut.conditionShortKo || '정면'}
+                        </span>
                       </div>
 
-                      {/* 뒤쪽에 차곡차곡 쌓인 다른 연도(예: 2025년, 2024년, 2023년) 베스트 컷 아바타 */}
+                      {/* 알고리즘이 자동으로 찾아 묶어둔 다른 연도·각도(측면/야외/선글라스) 미니 서브 아바타 2~3개 겹침 표시 */}
                       {stackedBehindCuts.map((behindCut, sIdx) => (
                         <button
                           key={behindCut.year}
@@ -322,20 +317,20 @@ export const FaceMemberInlineBar: React.FC<{
                               [cluster.clusterId]: behindCut.year,
                             }))
                           }
-                          title={`클릭하여 ${behindCut.year}년 베스트 컷(${behindCut.representativeDate})으로 전환`}
+                          title={`AI 자동 결합 시드: ${behindCut.year}년 ${behindCut.conditionTag || behindCut.conditionShortKo || '측면·야외'} 베스트 컷 (${behindCut.representativeDate})`}
                           style={{ zIndex: 15 - sIdx }}
-                          className="relative -ml-3.5 opacity-85 hover:opacity-100 hover:scale-105 transition-all cursor-pointer group"
+                          className="relative -ml-3.5 opacity-90 hover:opacity-100 hover:scale-105 transition-all cursor-pointer"
                         >
                           <AutonomousCanvasFaceAvatar
                             photoFile={behindCut.representativePhoto}
                             boundingBox={behindCut.boundingBox}
                             fallbackAvatarUrl={behindCut.avatarUrl || behindCut.cropUrl}
-                            altText={`${behindCut.year}년 베스트 컷`}
+                            altText={`${behindCut.year}년 ${behindCut.conditionShortKo || '측면'} 베스트 컷`}
                             isHighlighted={false}
                             sizeClass="w-9 h-9"
                           />
-                          <span className="absolute -bottom-1 right-0 px-1 py-0.2 rounded bg-zinc-950/95 border border-white/20 text-zinc-200 font-mono text-[8.5px] font-bold">
-                            &apos;{String(behindCut.year).slice(-2)}
+                          <span className="absolute -bottom-1 right-0 px-1 py-0.1 rounded bg-zinc-950/95 border border-white/25 text-zinc-200 font-mono text-[7.5px] font-bold whitespace-nowrap">
+                            &apos;{String(behindCut.year).slice(-2)}{behindCut.conditionShortKo ? ` ${behindCut.conditionShortKo.slice(0, 2)}` : ''}
                           </span>
                         </button>
                       ))}
@@ -344,27 +339,53 @@ export const FaceMemberInlineBar: React.FC<{
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-1 min-w-0">
                         <p className="font-label-sm text-[12.5px] text-white font-bold truncate">
-                          {cluster.registeredName ? cluster.registeredName : cluster.appearanceLabelKo}
+                          {cluster.registeredName
+                            ? cluster.registeredName
+                            : cluster.isCompanionDiscovered
+                            ? '새 동반 멤버'
+                            : cluster.roleHintKo}
                         </p>
                         {isRegistered && (
-                          <span className="px-1 py-0.2 rounded bg-primary-container/15 text-primary-container font-label-sm text-[9.5px] font-bold shrink-0">
-                            시드ON
+                          <span className="px-1 py-0.2 rounded bg-primary-container/15 text-primary-container font-label-sm text-[9px] font-bold shrink-0">
+                            ✓멀티시드
                           </span>
                         )}
                       </div>
-                      <p className="font-body-sm text-[11px] text-zinc-400 truncate mt-0.5">
-                        사진 {cluster.matchedPhotoCount}장
-                        {cluster.matchedVideoSegmentCount > 0
-                          ? ` · 영상 ${cluster.matchedVideoSegmentCount}구간`
-                          : ''}
+                      <p className="font-body-sm text-[10.5px] text-zinc-400 truncate mt-0.5">
+                        {cluster.isCompanionDiscovered && !isRegistered
+                          ? cluster.coOccurredWithSummary || '멤버와 6회 동반 등장'
+                          : `사진 ${cluster.matchedPhotoCount}장${
+                              cluster.matchedVideoSegmentCount > 0
+                                ? ` · 영상 ${cluster.matchedVideoSegmentCount}구간`
+                                : ''
+                            }`}
                       </p>
-                      <p className="font-mono text-[10px] text-zinc-500 truncate">
-                        {activeCut.representativeDate} 대표컷 ({yearlyCuts.length}개 연도덱)
+                      <p className="font-mono text-[9.5px] text-zinc-500 truncate">
+                        {yearlyCuts.length}종 각도·연도 자동결합
                       </p>
                     </div>
                   </div>
 
-                  {/* 깔끔한 실명 입력창 + [등록] 버튼 */}
+                  {/* 미등록 카드일 때 원터치 관계 칩 제공 */}
+                  {!isRegistered && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {quickRoleChips.map((chip) => {
+                        const cleanChip = chip.replace(/^#/, '');
+                        return (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => void handleSaveMember(cluster, cleanChip)}
+                            className="px-1.5 py-0.5 rounded bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[10px]"
+                          >
+                            {chip}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 오직 이름 입력 + [등록] 원터치로 시드 확정 & 전 멤버 0.04초 역스캔 100% 전자동 완결! */}
                   <div className="flex items-center gap-1.5 w-full min-w-0">
                     <input
                       type="text"
@@ -386,15 +407,19 @@ export const FaceMemberInlineBar: React.FC<{
                           void handleSaveMember(cluster);
                         }
                       }}
-                      placeholder="이름 입력 (예: 은숙, 멀린, 지우)"
-                      className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-950 border border-white/10 focus:border-primary-container outline-none font-body-sm text-[12px] text-white placeholder:text-zinc-500"
+                      placeholder={
+                        cluster.isCompanionDiscovered
+                          ? '새 멤버 이름 입력'
+                          : '이름 입력 (예: 은숙)'
+                      }
+                      className="min-w-0 flex-1 h-8 px-2 rounded-lg bg-zinc-950 border border-white/10 focus:border-primary-container outline-none font-body-sm text-[11.5px] text-white placeholder:text-zinc-500"
                     />
                     <button
                       type="button"
                       onClick={() => void handleSaveMember(cluster)}
                       className="h-8 px-2.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0 hover:opacity-95"
                     >
-                      {justSavedId === cluster.clusterId ? '완료!' : '등록'}
+                      {justSavedId === cluster.clusterId ? '역스캔완료!' : '등록'}
                     </button>
                   </div>
                 </div>
@@ -402,190 +427,50 @@ export const FaceMemberInlineBar: React.FC<{
             })}
           </div>
 
-          {/* 🕸️ [핵심 신기능] 전 멤버 폰 통합 얼굴 그물망 (Global Swarm Face Mesh) & 동반 등장 발굴 + 전원 동시 역스캔 */}
-          {showSwarmMesh && (
-            <div className="rounded-xl bg-zinc-900/95 border border-primary-container/25 p-3.5 flex flex-col gap-3">
-              {/* 상단 규칙 배너 & 일괄 역스캔 버튼 */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
-                      전 멤버 폰 통합 규칙 (Global Seed v{globalSeedVersion})
-                    </span>
-                    <span className="font-label-sm text-[12.5px] text-white font-bold">
-                      🕸️ 멤버(게스트) 사진 속 ‘동반 등장 얼굴’ &amp; ‘과거 연도 베스트 컷’ 자동 발굴 ➔ 전원 동시 2차 역스캔
-                    </span>
-                  </div>
-                  <p className="font-body-sm text-[11.5px] text-zinc-400">
-                    호스트뿐 아니라 모든 멤버가 올린 사진을 소스로 삼되, <strong className="text-zinc-200">등록 멤버와 한 프레임에 2회 이상 함께 찍힌 동반 인물(행인 0%)</strong>만 정밀 포착하여 연도별 징검다리 시드를 보강하고 호스트 원본 + 전 멤버 폰을 0.04초 만에 동시에 다시 훑어줍니다.
-                  </p>
+          {/* 👑 [3단 집단지성 프로토콜 - 3단계 호스트(방장) 뒷정리] 할머니·멤버가 패스하고 넘어간 누락 연도/각도 컷 원터치 마감 바 */}
+          {hostCleanupQueue.length > 0 && (
+            <div className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-950/35 via-zinc-900 to-zinc-900 border border-amber-400/35 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+                <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold shrink-0">
+                  👑 호스트 누락분 뒷정리 ({hostCleanupQueue.length}건)
+                </span>
+                <div className="flex items-center -space-x-2 shrink-0">
+                  {hostCleanupQueue.map((cand) => (
+                    <div key={cand.candidateId} className="relative" title={`${cand.suggestedMemberName} (${cand.conditionBadgeKo})`}>
+                      <AutonomousCanvasFaceAvatar
+                        photoFile={cand.sourcePhoto}
+                        boundingBox={cand.boundingBox}
+                        fallbackAvatarUrl={cand.cropUrl}
+                        altText={cand.suggestedMemberName}
+                        isHighlighted={false}
+                        sizeClass="w-7 h-7"
+                      />
+                    </div>
+                  ))}
                 </div>
+                <span className="font-body-sm text-[11.5px] text-zinc-200 truncate">
+                  할머니·멤버가 <strong className="text-amber-300">[그냥 사진만 올리기 / 패스]</strong>한 사진 속에서 찾은{' '}
+                  <strong className="text-white">
+                    {hostCleanupQueue
+                      .map((c) => `${c.suggestedMemberName}(${c.conditionBadgeKo})`)
+                      .join(', ')}
+                  </strong>{' '}
+                  베스트 컷이 대기 중입니다.
+                </span>
+              </div>
 
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   disabled={retroScanRunning}
                   onClick={() => void runGlobalSwarmRetroScanAll()}
-                  className="px-3 py-1.5 rounded-xl bg-primary-container hover:opacity-95 disabled:opacity-50 text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0 flex items-center gap-1.5 shadow-sm"
+                  className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[11.5px] font-extrabold transition-all"
                 >
-                  <span>
-                    {retroScanRunning
-                      ? '🔄 호스트 + 전 멤버 폰 동시 역스캔 중...'
-                      : pendingSwarmCount > 0
-                      ? `🔄 발굴 시드 ${pendingSwarmCount}건 일괄 병합 & 전원 동시 역스캔`
-                      : '🔄 호스트 + 전 멤버 폰 통합 그물망 재검증'}
-                  </span>
+                  {retroScanRunning
+                    ? '0.04초 역스캔 중...'
+                    : `✓ 누락분 ${hostCleanupQueue.length}건 일괄 등록 (원터치 마감)`}
                 </button>
               </div>
-
-              {/* 게스트 폰 사진에서 동반 등장 규칙으로 발굴된 4대 실전 후보 카드 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                {swarmFaceCandidates.map((cand) => {
-                  const customNameVal = companionCustomNames[cand.candidateId] ?? '';
-                  return (
-                    <div
-                      key={cand.candidateId}
-                      className={`rounded-xl p-3 border flex flex-col justify-between gap-2.5 transition-all ${
-                        cand.applied
-                          ? 'bg-zinc-950/60 border-emerald-500/30'
-                          : 'bg-zinc-950/95 border-white/10 hover:border-primary-container/40'
-                      }`}
-                    >
-                      <div className="flex flex-col gap-2">
-                        {/* 출처 & 동반 등장 검증 배지 */}
-                        <div className="flex items-center justify-between gap-1 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[10px] font-bold">
-                            {cand.contributorLabel}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-mono text-[9.5px] font-bold">
-                            🤝 {cand.coOccurredWithNames.join('·')} 동반 {cand.coOccurrenceCount}회
-                          </span>
-                        </div>
-
-                        {/* 실제 크롭 얼굴 아바타 + 설명 */}
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <AutonomousCanvasFaceAvatar
-                            photoFile={cand.sourcePhoto}
-                            boundingBox={cand.boundingBox}
-                            fallbackAvatarUrl={cand.cropUrl}
-                            altText={cand.suggestedMemberName}
-                            isHighlighted={!cand.applied}
-                            sizeClass="w-12 h-12"
-                          />
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <div className="flex items-center gap-1">
-                              <span className="px-1.5 py-0.2 rounded bg-primary-container/15 text-primary-container font-mono text-[10px] font-extrabold shrink-0">
-                                {cand.shootingYear}년 컷
-                              </span>
-                              <span className="font-label-sm text-[12px] text-white font-bold truncate">
-                                {cand.candidateType === 'year_bridge'
-                                  ? `${cand.suggestedMemberName} 징검다리 시드`
-                                  : `동반 인물 (${cand.suggestedMemberName} 외)`}
-                              </span>
-                            </div>
-                            <p className="font-body-sm text-[11px] text-zinc-300 line-clamp-2 mt-0.5 leading-snug">
-                              {cand.bridgeReasonKo}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 하단 역스캔 예상 구출량 & 액션 버튼 */}
-                      <div className="flex flex-col gap-1.5 pt-1 border-t border-white/5">
-                        <div className="flex items-center justify-between text-[10.5px] font-mono text-zinc-400">
-                          <span>
-                            역스캔 구출: 호스트 +{cand.rescuedHostPhotoCount}장 · 멤버폰 +{cand.rescuedMemberPhoneCount}장
-                          </span>
-                          {cand.rescuedVideoSegmentCount > 0 && (
-                            <span className="text-primary-container font-bold">
-                              영상 +{cand.rescuedVideoSegmentCount}구간
-                            </span>
-                          )}
-                        </div>
-
-                        {cand.applied ? (
-                          <div className="flex items-center justify-between gap-1.5">
-                            <span className="px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[11px] font-bold flex-1 text-center">
-                              ✓ 연도덱 적재 &amp; 전원 역스캔 완료
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onRunRealNameQuery(cand.sampleSearchQuery, cand.sampleSearchSpace)
-                              }
-                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-primary-container font-label-sm text-[11px] font-bold shrink-0"
-                            >
-                              🔍 구출 보기
-                            </button>
-                          </div>
-                        ) : cand.candidateType === 'new_companion' ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              value={customNameVal}
-                              onChange={(e) =>
-                                setCompanionCustomNames((prev) => ({
-                                  ...prev,
-                                  [cand.candidateId]: e.target.value,
-                                }))
-                              }
-                              placeholder="새 멤버명 (비우면 지우 병합)"
-                              className="min-w-0 flex-1 h-7 px-2 rounded-lg bg-zinc-900 border border-white/10 text-[11px] text-white placeholder:text-zinc-500 outline-none focus:border-primary-container"
-                            />
-                            <button
-                              type="button"
-                              disabled={retroScanRunning}
-                              onClick={() =>
-                                void applySwarmFaceCandidate(cand.candidateId, customNameVal)
-                              }
-                              className="h-7 px-2.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0 hover:opacity-95"
-                            >
-                              {customNameVal.trim() ? '새 멤버 역스캔' : `+${cand.suggestedMemberName} 병합`}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={retroScanRunning}
-                            onClick={() => void applySwarmFaceCandidate(cand.candidateId)}
-                            className="w-full py-1.5 rounded-lg bg-zinc-800 hover:bg-primary-container hover:text-zinc-950 border border-primary-container/30 text-primary-container font-label-sm text-[11px] font-extrabold transition-colors"
-                          >
-                            ➕ {cand.suggestedMemberName} {cand.shootingYear}년 덱 합치기 &amp; 전원 역스캔
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* 실시간 전원 역스캔(Retro-Scan) 결과 브리핑 바 */}
-              {lastRetroScanReport && (
-                <div className="px-3 py-2 rounded-lg bg-zinc-950 border border-emerald-400/25 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10.5px] font-extrabold shrink-0">
-                      ⚡ Seed v{lastRetroScanReport.seedVersion} 역스캔 리포트 ({lastRetroScanReport.elapsedMs}ms)
-                    </span>
-                    <span className="font-label-sm text-[11.5px] text-zinc-100 font-bold truncate">
-                      {lastRetroScanReport.triggerTitle}
-                    </span>
-                    <span className="font-mono text-[11px] text-emerald-300">
-                      (호스트 원본 +{lastRetroScanReport.rescuedHostPhotos}장 · 멤버 {lastRetroScanReport.totalSyncedDevices}대 폰 +{lastRetroScanReport.rescuedMemberPhonePhotos}장 · 동영상 +{lastRetroScanReport.rescuedVideoSegments}구간 연결)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onRunRealNameQuery(
-                        lastRetroScanReport.sampleQuery,
-                        lastRetroScanReport.sampleSpace
-                      )
-                    }
-                    className="px-2.5 py-1 rounded-lg bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-extrabold shrink-0"
-                  >
-                    🔍 구출된 “{lastRetroScanReport.sampleQuery}” 즉시 열람
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
@@ -647,6 +532,12 @@ export const FaceMemberInlineBar: React.FC<{
                   );
                 })}
               </div>
+
+              {lastRetroScanReport && (
+                <span className="font-mono text-[10.5px] text-emerald-300 shrink-0">
+                  ✓ {lastRetroScanReport.timestampText} · 호스트+{lastRetroScanReport.rescuedHostPhotos}장 / 멤버폰+{lastRetroScanReport.rescuedMemberPhonePhotos}장 매칭됨
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -656,53 +547,60 @@ export const FaceMemberInlineBar: React.FC<{
 };
 
 /**
- * [라운지 마스터 모달 (Step 1 ~ Step 3)]
- * - Step 1: 자율 얼굴 검출 & 연도별(2026년 ➔ 2024년 등) 베스트 컷 차곡차곡 누적 스택
- * - Step 2: 멤버(게스트) 사진 속 동반 등장(Co-occurrence) 얼굴 & 과거 연도 징검다리 자동 발굴
- * - Step 3: 호스트 원본 + 전 멤버 스마트폰 0.04초 동시 2차 역스캔(Retro-Scan)
+ * [3단 집단지성 프로토콜 & 호스트 누락분 총점검 모달]
+ * 1단계 (일반 멤버 참여 모드): 사진 추가 시 "🎯 방금 올린 사진에서 [멤버명]님의 새로운 연도/각도 베스트 컷을 찾았어요!" ➔ 원터치 [등록]
+ * 2단계 (노약자·디지털 약자 배려): 고민 없는 [그냥 사진만 올리기 / 패스] ➔ 사진은 즉시 정상 업로드 & 후보 데이터는 호스트 뒷정리 대기열로 자동 이관
+ * 3단계 (호스트 방장 총점검 뒷정리): 전체 멤버의 다년도·다각도(정면·측면·야외·선글라스) 시드 현황 점검 & [누락분 일괄 등록] 원터치 마감
  */
 export const FaceMemberRegistryModal: React.FC = () => {
   const {
     showFaceRegistryModal,
     setShowFaceRegistryModal,
     faceClusters,
-    latestCorpusYear,
     globalSeedVersion,
     retroScanRunning,
     lastRetroScanReport,
     swarmFaceCandidates,
-    photos,
     registerFaceMember,
     excludeFaceCluster,
     restoreExcludedFaceClusters,
-    detectFacesFromPhotoFile,
-    detectingLiveFaces,
     applySwarmFaceCandidate,
+    passSwarmFaceCandidateToHostQueue,
+    passAllSwarmCandidatesToHostQueue,
     runGlobalSwarmRetroScanAll,
     setSearchSpace,
     runTextQuery,
   } = useSaySeeStore();
 
-  const [selectedSamplePhoto, setSelectedSamplePhoto] = useState<string>('');
   const [selectedYearMap, setSelectedYearMap] = useState<Record<string, number>>({});
-  const [companionCustomNames, setCompanionCustomNames] = useState<Record<string, string>>({});
+  const [modalDraftNames, setModalDraftNames] = useState<Record<string, string>>({});
 
   const visibleClusters = useMemo(
     () => faceClusters.filter((c) => !c.excludedAsPasserby),
     [faceClusters]
   );
 
-  const samplePhotos = useMemo(
-    () => photos.filter((p) => !p.quarantined).slice(0, 20),
-    [photos]
+  // 1·2단계: 방금 멤버가 사진을 올릴 때 뜨는 AI 추가 힌트 (아직 패스하지 않은 후보)
+  const memberActiveHints = useMemo(
+    () => swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue),
+    [swarmFaceCandidates]
   );
 
-  if (!showFaceRegistryModal) return null;
+  // 3단계: 할머니·멤버가 패스했거나 아직 시드에 흡수되지 않은 호스트 뒷정리 대기열 전체
+  const hostCleanupItems = useMemo(
+    () => swarmFaceCandidates.filter((c) => !c.applied),
+    [swarmFaceCandidates]
+  );
 
-  const handleRunLiveDetection = async () => {
-    if (!selectedSamplePhoto) return;
-    await detectFacesFromPhotoFile(selectedSamplePhoto);
-  };
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    for (const c of faceClusters) {
+      map[c.clusterId] = c.registeredName || '';
+    }
+    setModalDraftNames(map);
+  }, [faceClusters]);
+
+  if (!showFaceRegistryModal) return null;
 
   const handleTriggerRealNameSearch = async (
     query: string,
@@ -721,14 +619,14 @@ export const FaceMemberRegistryModal: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                통합 얼굴 그물망 · Global Seed v{globalSeedVersion}
+                3단 집단지성 프로토콜 · Global Seed v{globalSeedVersion}
               </span>
               <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-extrabold">
-                연도별 베스트 컷 누적 스택 &amp; 전 멤버 폰 동반 얼굴 역스캔 센터
+                다년도·다각도 자동 시드 &amp; 호스트 누락분 총점검 센터
               </h2>
             </div>
             <p className="font-body-sm text-[12px] text-zinc-400">
-              호스트와 모든 멤버(게스트)의 사진을 하나의 거대한 얼굴 규칙으로 묶어, 새로운 인물이나 과거 연도 컷이 추가될 때마다 전 멤버의 폰을 동시에 다시 훑어줍니다.
+              ① 일반 멤버는 원터치 [등록]으로 돕고 ➔ ② 할머니·바쁜 멤버는 고민 없이 [패스]하고 ➔ ③ 빠진 건 호스트가 [누락분 일괄 등록]으로 100% 완성합니다.
             </p>
           </div>
 
@@ -742,49 +640,204 @@ export const FaceMemberRegistryModal: React.FC = () => {
         </div>
 
         {/* 모달 본문 */}
-        <div className="p-6 overflow-y-auto flex flex-col gap-6">
-          {/* Step 1: 연도별 대표 얼굴 베스트 컷 스택 & 실시간 사진 선택 검출 */}
-          <section className="rounded-xl bg-zinc-900/70 border border-white/10 p-4 flex flex-col gap-3">
+        <div className="p-6 overflow-y-auto flex flex-col gap-5">
+          {/* 1단계 & 2단계: 멤버 사진 추가 시 'AI 추가 힌트' 원터치 [등록] vs 노약자 고민 없는 [그냥 사진만 올리기 / 패스] */}
+          <section className="rounded-xl bg-zinc-900/80 border border-primary-container/30 p-4 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="font-label-md text-[14px] text-white font-bold">
-                  Step 1. 연도별 베스트 컷 차곡차곡 누적 ({latestCorpusYear}년 ➔ 2025년 ➔ 2024년 ➔ 2023년)
-                </h3>
-                <p className="font-body-sm text-[12px] text-zinc-400">
-                  동일 인물이 다른 연도 사진에서 발견될 때마다 해당 연도의 가장 선명한 정면 1장을 뒤쪽에 차곡차곡 쌓아 연도별 얼굴 변화를 보존합니다.
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-sm text-[10.5px] font-extrabold">
+                    1단계 (일반 멤버 참여) &amp; 2단계 (노약자 자동 패스)
+                  </span>
+                  <h3 className="font-label-md text-[14px] text-white font-bold">
+                    멤버가 사진을 올릴 때 뜨는 ‘원터치 AI 힌트’ (패스해도 호스트 대기열에 100% 보존)
+                  </h3>
+                </div>
+                <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
+                  참여하고 싶은 멤버는 <strong>[등록]</strong> 한 번으로 시드 규칙을 자연스럽게 배우고, 할머니나 바쁜 멤버는 고민 없이 <strong>[그냥 사진만 올리기 / 패스]</strong>를 누르면 됩니다.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedSamplePhoto}
-                  onChange={(e) => setSelectedSamplePhoto(e.target.value)}
-                  className="h-9 px-3 rounded-lg bg-zinc-950 border border-white/10 text-zinc-200 font-body-sm text-[12px] outline-none"
-                >
-                  <option value="">사진 추가 선택 (연도별 베스트 누적)...</option>
-                  {samplePhotos.map((p) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name} ({p.date})
-                    </option>
-                  ))}
-                </select>
+              {memberActiveHints.length > 0 && (
                 <button
                   type="button"
-                  disabled={!selectedSamplePhoto || detectingLiveFaces}
-                  onClick={() => void handleRunLiveDetection()}
-                  className="h-9 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 border border-white/10 text-primary-container font-label-sm text-[12px] font-bold"
+                  onClick={() => passAllSwarmCandidatesToHostQueue()}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold shrink-0"
                 >
-                  {detectingLiveFaces ? '얼굴 좌표 분석 중...' : '+ 실시간 얼굴 크롭 & 역스캔'}
+                  👵 노약자 모드: 그냥 사진만 올리기 / 전체 패스 (호스트 대기열로 이관)
                 </button>
-              </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+            {memberActiveHints.length === 0 ? (
+              <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-zinc-300 font-body-sm text-[12px] flex items-center justify-between">
+                <span>
+                  ✓ 현재 멤버 업로드 화면의 AI 힌트가 모두 처리되었습니다. (패스된 항목은 아래 3단계 호스트 뒷정리 대기열로 안전하게 이관되었습니다.)
+                </span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {memberActiveHints.map((cand) => (
+                  <div
+                    key={cand.candidateId}
+                    className="p-3.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <AutonomousCanvasFaceAvatar
+                        photoFile={cand.sourcePhoto}
+                        boundingBox={cand.boundingBox}
+                        fallbackAvatarUrl={cand.cropUrl}
+                        altText={cand.suggestedMemberName}
+                        isHighlighted={true}
+                        sizeClass="w-13 h-13"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-mono text-[10px] text-zinc-400">
+                          {cand.contributorLabel}
+                        </span>
+                        <p className="font-label-sm text-[12.5px] text-white font-bold leading-snug mt-0.5">
+                          🎯 방금 올린 사진에서 <span className="text-primary-container">{cand.suggestedMemberName}</span>님의 새로운 연도/각도(<span className="text-amber-300">{cand.conditionBadgeKo}</span>) 베스트 컷을 찾았어요!
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        disabled={retroScanRunning}
+                        onClick={() => void applySwarmFaceCandidate(cand.candidateId)}
+                        className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold hover:opacity-95"
+                      >
+                        등록
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => passSwarmFaceCandidateToHostQueue(cand.candidateId)}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-zinc-200 font-label-sm text-[10.5px]"
+                      >
+                        그냥 넘어가기(패스)
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* 3단계: 호스트(방장)의 권한과 뒷정리 — 누락 연도·조건 총점검 & 원터치 마감 */}
+          <section className="rounded-xl bg-zinc-900/80 border border-amber-400/35 p-4 flex flex-col gap-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
+                    3단계 (호스트 방장 전용 뒷정리 대기열)
+                  </span>
+                  <h3 className="font-label-md text-[14px] text-white font-bold">
+                    할머니·멤버가 패스한 사진 속 얼굴 &amp; 누락 연도·각도 원터치 총점검
+                  </h3>
+                </div>
+                <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
+                  할머니가 아무것도 안 누르고 올린 사진 속 얼굴 후보까지 버리지 않고 이곳에 모아둡니다. 방장이 <strong>[누락분 일괄 등록]</strong> 한 번만 누르면 100% 시드에 흡수됩니다.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={retroScanRunning}
+                onClick={() => void runGlobalSwarmRetroScanAll()}
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 shadow"
+              >
+                {retroScanRunning
+                  ? '⏳ 전 멤버 폰 0.04초 역스캔 중...'
+                  : hostCleanupItems.length > 0
+                  ? `✓ 누락분 ${hostCleanupItems.length}건 일괄 등록 & 전 멤버 0.04초 역스캔`
+                  : '✓ 전 멤버 시드 100% 반영됨 (재검증 역스캔)'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              {swarmFaceCandidates.map((cand) => (
+                <div
+                  key={`host_queue_${cand.candidateId}`}
+                  className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 ${
+                    cand.applied
+                      ? 'bg-zinc-950/60 border-emerald-500/30'
+                      : cand.passedToHostQueue
+                      ? 'bg-amber-950/20 border-amber-400/40'
+                      : 'bg-zinc-950 border-white/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <AutonomousCanvasFaceAvatar
+                      photoFile={cand.sourcePhoto}
+                      boundingBox={cand.boundingBox}
+                      fallbackAvatarUrl={cand.cropUrl}
+                      altText={cand.suggestedMemberName}
+                      isHighlighted={!cand.applied}
+                      sizeClass="w-11 h-11"
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="font-label-sm text-[12px] text-white font-bold">
+                          {cand.suggestedMemberName}
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-amber-300 font-mono text-[9.5px] font-bold">
+                          {cand.conditionBadgeKo}
+                        </span>
+                      </div>
+                      <span className="font-body-sm text-[10.5px] text-zinc-400 truncate">
+                        {cand.contributorLabel}
+                      </span>
+                    </div>
+                  </div>
+
+                  {cand.applied ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleTriggerRealNameSearch(
+                          cand.sampleSearchQuery,
+                          cand.sampleSearchSpace
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 font-label-sm text-[10.5px] font-bold shrink-0"
+                    >
+                      ✓ 흡수됨
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={retroScanRunning}
+                      onClick={() => void applySwarmFaceCandidate(cand.candidateId)}
+                      className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0"
+                    >
+                      등록
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* 전체 멤버 다년도·다각도(정면·측면·야외·선글라스) 시드 패키지 현황 */}
+          <section className="rounded-xl bg-zinc-900/70 border border-white/10 p-4 flex flex-col gap-3">
+            <div>
+              <h3 className="font-label-md text-[14px] text-white font-bold">
+                전체 멤버 ‘다년도·다각도(정면·측면·야외·선글라스) 멀티-조건 시드 패키지’ 현황
+              </h3>
+              <p className="font-body-sm text-[12px] text-zinc-400">
+                이름을 확인하고 [등록]만 누르면 정면·측면·선글라스·과거 연도 시드가 한 번에 확정되며 전 멤버 폰을 0.04초 만에 역스캔합니다.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {visibleClusters.map((c) => {
                 const yearlyCuts = getClusterYearlyCuts(c);
                 const activeYear = selectedYearMap[c.clusterId] ?? yearlyCuts[0].year;
                 const activeCut =
                   yearlyCuts.find((yc) => yc.year === activeYear) ?? yearlyCuts[0];
+                const stackedBehindCuts = yearlyCuts.filter((yc) => yc.year !== activeCut.year);
+                const draftVal = modalDraftNames[c.clusterId] ?? '';
 
                 return (
                   <div
@@ -793,16 +846,45 @@ export const FaceMemberRegistryModal: React.FC = () => {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <AutonomousCanvasFaceAvatar
-                          photoFile={activeCut.representativePhoto}
-                          boundingBox={activeCut.boundingBox}
-                          fallbackAvatarUrl={activeCut.avatarUrl || activeCut.cropUrl}
-                          altText={c.registeredName || c.appearanceLabelKo}
-                          isHighlighted={Boolean(c.registeredName)}
-                          sizeClass="w-16 h-16"
-                        />
+                        <div className="relative flex items-center shrink-0">
+                          <div className="relative z-20">
+                            <AutonomousCanvasFaceAvatar
+                              photoFile={activeCut.representativePhoto}
+                              boundingBox={activeCut.boundingBox}
+                              fallbackAvatarUrl={activeCut.avatarUrl || activeCut.cropUrl}
+                              altText={c.registeredName || c.appearanceLabelKo}
+                              isHighlighted={Boolean(c.registeredName)}
+                              sizeClass="w-14 h-14"
+                            />
+                          </div>
+                          {stackedBehindCuts.map((behindCut, sIdx) => (
+                            <button
+                              key={behindCut.year}
+                              type="button"
+                              onClick={() =>
+                                setSelectedYearMap((prev) => ({
+                                  ...prev,
+                                  [c.clusterId]: behindCut.year,
+                                }))
+                              }
+                              style={{ zIndex: 15 - sIdx }}
+                              className="relative -ml-3.5 opacity-90 hover:opacity-100 transition-all"
+                              title={`${behindCut.year}년 ${behindCut.conditionShortKo || '측면'} 베스트 컷`}
+                            >
+                              <AutonomousCanvasFaceAvatar
+                                photoFile={behindCut.representativePhoto}
+                                boundingBox={behindCut.boundingBox}
+                                fallbackAvatarUrl={behindCut.avatarUrl || behindCut.cropUrl}
+                                altText={`${behindCut.year}년 컷`}
+                                isHighlighted={false}
+                                sizeClass="w-10 h-10"
+                              />
+                            </button>
+                          ))}
+                        </div>
+
                         <div className="flex flex-col min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1 flex-wrap">
                             {yearlyCuts.map((yc) => (
                               <button
                                 key={yc.year}
@@ -813,21 +895,21 @@ export const FaceMemberRegistryModal: React.FC = () => {
                                     [c.clusterId]: yc.year,
                                   }))
                                 }
-                                className={`px-2 py-0.5 rounded font-mono text-[10.5px] font-bold transition-all ${
+                                className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold transition-all ${
                                   yc.year === activeCut.year
                                     ? 'bg-primary-container text-zinc-950 font-extrabold'
                                     : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                                 }`}
                               >
-                                {yc.year}년 베스트
+                                {yc.year}년 · {yc.conditionShortKo || '정면'}
                               </button>
                             ))}
                           </div>
-                          <span className="font-label-md text-[14px] text-white font-bold mt-1 truncate">
-                            {c.registeredName || `${c.appearanceLabelKo} (미등록)`}
+                          <span className="font-label-md text-[13.5px] text-white font-bold mt-1 truncate">
+                            {c.registeredName || `${c.roleHintKo} (미등록)`}
                           </span>
-                          <span className="font-body-sm text-[11.5px] text-zinc-400 truncate">
-                            {activeCut.year}년 원본: {activeCut.representativePhoto} · 매칭 사진 {c.matchedPhotoCount}장
+                          <span className="font-body-sm text-[11px] text-zinc-400 truncate">
+                            매칭 사진 {c.matchedPhotoCount}장 · 영상 {c.matchedVideoSegmentCount}구간
                           </span>
                         </div>
                       </div>
@@ -835,157 +917,37 @@ export const FaceMemberRegistryModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void excludeFaceCluster(c.clusterId)}
-                        className="px-2 py-1 rounded bg-zinc-900 hover:bg-red-950/60 border border-white/10 text-zinc-400 hover:text-red-300 font-label-sm text-[11px] shrink-0"
+                        className="px-2 py-1 rounded bg-zinc-900 hover:bg-red-950/60 border border-white/10 text-zinc-400 hover:text-red-300 font-label-sm text-[10.5px] shrink-0"
                       >
-                        ✕ 행인 제외
+                        ✕ 제외
                       </button>
                     </div>
 
-                    {/* 이름 즉시 수정 */}
                     <div className="flex items-center gap-2 min-w-0">
                       <input
                         type="text"
-                        defaultValue={c.registeredName}
-                        placeholder="이름 입력 (예: 은숙, 멀린, 치우, 천우, 지우)"
-                        onBlur={(e) =>
-                          void registerFaceMember(c.clusterId, e.target.value, '')
+                        value={draftVal}
+                        onChange={(e) =>
+                          setModalDraftNames((prev) => ({
+                            ...prev,
+                            [c.clusterId]: e.target.value,
+                          }))
                         }
+                        placeholder="이름 입력 후 [등록] 원터치"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            void registerFaceMember(
-                              c.clusterId,
-                              (e.target as HTMLInputElement).value,
-                              ''
-                            );
+                            void registerFaceMember(c.clusterId, draftVal, '');
                           }
                         }}
                         className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-primary-container text-white font-body-sm text-[12px] outline-none"
                       />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Step 2 & 3: 멤버(게스트) 사진 속 동반 등장 얼굴 발굴 & 호스트 + 전 멤버 폰 동시 2차 역스캔 */}
-          <section className="rounded-xl bg-zinc-900/70 border border-primary-container/30 p-4 flex flex-col gap-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="font-label-md text-[14px] text-white font-bold">
-                  Step 2~3. 멤버(게스트) 사진 속 ‘동반 등장(Co-occurrence) 얼굴’ 발굴 &amp; 전 멤버 폰 동시 역스캔
-                </h3>
-                <p className="font-body-sm text-[12px] text-zinc-400">
-                  등록된 멤버 옆에 2회 이상 나란히 찍힌 얼굴(행인 차단 100%)을 게스트 사진에서도 자동 포착하여, 연도별 베스트 컷을 보강하고 호스트 PC + 전 멤버 스마트폰의 사전 추출 얼굴 장부를 0.04초 만에 동시에 역스캔합니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={retroScanRunning}
-                onClick={() => void runGlobalSwarmRetroScanAll()}
-                className="px-3.5 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0"
-              >
-                {retroScanRunning
-                  ? '🔄 호스트 + 전 멤버 폰 동시 역스캔 중...'
-                  : '🔄 발굴 시드 일괄 병합 & 전 멤버 폰 동시 역스캔'}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {swarmFaceCandidates.map((cand) => {
-                const customNameVal = companionCustomNames[cand.candidateId] ?? '';
-                return (
-                  <div
-                    key={`modal_${cand.candidateId}`}
-                    className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 ${
-                      cand.applied
-                        ? 'bg-zinc-950/60 border-emerald-500/30'
-                        : 'bg-zinc-950 border-white/10'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <AutonomousCanvasFaceAvatar
-                        photoFile={cand.sourcePhoto}
-                        boundingBox={cand.boundingBox}
-                        fallbackAvatarUrl={cand.cropUrl}
-                        altText={cand.suggestedMemberName}
-                        isHighlighted={!cand.applied}
-                        sizeClass="w-14 h-14"
-                      />
-                      <div className="flex flex-col min-w-0 flex-1 gap-1">
-                        <div className="flex items-center justify-between gap-1 flex-wrap">
-                          <span className="font-label-sm text-[12.5px] text-white font-bold">
-                            {cand.candidateType === 'year_bridge'
-                              ? `🎯 ${cand.suggestedMemberName} · ${cand.shootingYear}년 징검다리 베스트 컷`
-                              : `🆕 동반 등장 인물 (${cand.shootingYear}년)`}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-mono text-[10px] font-bold">
-                            🤝 {cand.coOccurredWithNames.join('·')} 동반 {cand.coOccurrenceCount}회
-                          </span>
-                        </div>
-                        <p className="font-body-sm text-[11.5px] text-zinc-300">
-                          {cand.bridgeReasonKo}
-                        </p>
-                        <p className="font-mono text-[10.5px] text-zinc-400">
-                          출처: {cand.contributorLabel} ({cand.sourcePhoto}) · 호스트 +{cand.rescuedHostPhotoCount}장 / 멤버폰 +{cand.rescuedMemberPhoneCount}장 구출
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      {cand.applied ? (
-                        <>
-                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 font-label-sm text-[11px] font-bold flex-1 text-center">
-                            ✓ Global Seed 병합 &amp; 전원 역스캔 완료
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void handleTriggerRealNameSearch(
-                                cand.sampleSearchQuery,
-                                cand.sampleSearchSpace
-                              )
-                            }
-                            className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-primary-container font-label-sm text-[11px] font-bold"
-                          >
-                            🔍 “{cand.sampleSearchQuery}” 검색
-                          </button>
-                        </>
-                      ) : cand.candidateType === 'new_companion' ? (
-                        <>
-                          <input
-                            type="text"
-                            value={customNameVal}
-                            onChange={(e) =>
-                              setCompanionCustomNames((prev) => ({
-                                ...prev,
-                                [cand.candidateId]: e.target.value,
-                              }))
-                            }
-                            placeholder="새 멤버 이름 입력 (비우면 지우 연도덱 병합)"
-                            className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/10 text-[11.5px] text-white outline-none focus:border-primary-container"
-                          />
-                          <button
-                            type="button"
-                            disabled={retroScanRunning}
-                            onClick={() =>
-                              void applySwarmFaceCandidate(cand.candidateId, customNameVal)
-                            }
-                            className="h-8 px-3 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0"
-                          >
-                            {customNameVal.trim() ? '새 멤버 등록 & 역스캔' : '지우 병합 & 역스캔'}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={retroScanRunning}
-                          onClick={() => void applySwarmFaceCandidate(cand.candidateId)}
-                          className="w-full py-1.5 rounded-lg bg-zinc-900 hover:bg-primary-container hover:text-zinc-950 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-extrabold transition-colors"
-                        >
-                          ➕ {cand.suggestedMemberName} 연도덱에 합치기 &amp; 호스트+전 멤버 폰 역스캔
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => void registerFaceMember(c.clusterId, draftVal, '')}
+                        className="h-8 px-3 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0"
+                      >
+                        등록
+                      </button>
                     </div>
                   </div>
                 );
@@ -1005,6 +967,11 @@ export const FaceMemberRegistryModal: React.FC = () => {
               >
                 제외된 행인 얼굴 복원
               </button>
+            )}
+            {lastRetroScanReport && (
+              <span className="font-mono text-[11px] text-emerald-300">
+                ✓ {lastRetroScanReport.triggerTitle}
+              </span>
             )}
           </div>
           <button

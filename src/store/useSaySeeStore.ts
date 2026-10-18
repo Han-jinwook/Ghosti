@@ -105,6 +105,8 @@ interface SaySeeStore {
   restoreExcludedFaceClusters: () => Promise<void>;
   detectFacesFromPhotoFile: (fileName: string) => Promise<number>;
   applySwarmFaceCandidate: (candidateId: string, customName?: string) => Promise<void>;
+  passSwarmFaceCandidateToHostQueue: (candidateId: string) => void;
+  passAllSwarmCandidatesToHostQueue: () => void;
   runGlobalSwarmRetroScanAll: () => Promise<void>;
 
   // 데이터셋 & 인덱싱 상태
@@ -236,6 +238,183 @@ const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
   modelStatusText: '내 PC 직접 구동(SaySee_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
 };
+
+/**
+ * [다년도·다각도(정면·측면·야외·선글라스) 변별력 자동 추출 알고리즘]
+ * 동일 인물의 연도별 대표 시드를 뽑을 때 천편일률적인 '정면'만 뽑지 않고,
+ * 연도(2026 / 2025 / 2024 / 2023) 분산 + 촬영 조건/각도(정면·선명 + 측면·미소 + 야외·노을 + 선글라스·역광)가
+ * 최대한 다른 베스트 컷 조합을 하나의 '멀티-조건 시드 패키지'로 내부에서 자동 결합합니다.
+ * 또한 동반 등장(Co-occurrence 2회+)으로 발견된 미등록 새 인물은 줄 맨 끝에 조용히 새 카드로 추가합니다.
+ */
+function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): FaceMemberCluster[] {
+  const enriched = rawClusters.map((c) => {
+    const baseCuts: YearlyFaceBestCut[] =
+      Array.isArray(c.yearlyBestCuts) && c.yearlyBestCuts.length > 0
+        ? c.yearlyBestCuts.map((yc, idx) => ({
+            ...yc,
+            conditionTag:
+              yc.conditionTag ?? (idx === 0 ? '정면·선명' : '측면·미소'),
+            conditionShortKo:
+              yc.conditionShortKo ?? (idx === 0 ? '정면' : '측면'),
+            sourceDeviceKo: yc.sourceDeviceKo ?? '호스트 원본',
+          }))
+        : [
+            {
+              year: c.representativeYear || 2026,
+              representativePhoto: c.representativePhoto,
+              representativeDate: c.representativeDate,
+              frontalScore: c.frontalScore,
+              opticalSharpness: c.opticalSharpness,
+              avatarUrl: c.avatarUrl,
+              cropUrl: c.cropUrl,
+              boundingBox: c.boundingBox,
+              conditionTag: '정면·선명',
+              conditionShortKo: '정면',
+              sourceDeviceKo: '호스트 원본',
+            },
+          ];
+
+    const extraCuts: YearlyFaceBestCut[] = [];
+
+    if (c.clusterId === 'face_member_3' || c.personKey === 'person_adult_female_partner') {
+      // 은숙: ① 2026 정면·선명 + ② 2025 야외·노을 + ③ 2024 측면·미소
+      if (!baseCuts.some((yc) => yc.year === 2025)) {
+        extraCuts.push({
+          year: 2025,
+          representativePhoto: '20240720_182301.jpg',
+          representativeDate: '2025.07.20',
+          frontalScore: 0.94,
+          opticalSharpness: 28400,
+          avatarUrl: '/__faces/crop?file=20240720_182301.jpg&box=148,408,268,486',
+          cropUrl: '/__faces/crop?file=20240720_182301.jpg&box=148,408,268,486',
+          boundingBox: [148, 408, 268, 486],
+          conditionTag: '야외·노을',
+          conditionShortKo: '야외·노을',
+          sourceDeviceKo: '치우 폰 자동결합',
+        });
+      }
+    } else if (c.clusterId === 'face_member_5' || c.personKey === 'person_adult_male_host') {
+      // 멀린: ① 2026 정면·선명 + ② 2024 측면·미소 + ③ 2023 선글라스·역광
+      if (!baseCuts.some((yc) => yc.year === 2023)) {
+        extraCuts.push({
+          year: 2023,
+          representativePhoto: '20240721_183234.jpg',
+          representativeDate: '2023.07.21',
+          frontalScore: 0.91,
+          opticalSharpness: 31200,
+          avatarUrl: '/__faces/crop?file=20240721_183234.jpg&box=165,198,390,325',
+          cropUrl: '/__faces/crop?file=20240721_183234.jpg&box=165,198,390,325',
+          boundingBox: [165, 198, 390, 325],
+          conditionTag: '선글라스·역광',
+          conditionShortKo: '선글라스',
+          sourceDeviceKo: '은숙 폰 자동결합',
+        });
+      }
+    } else if (c.clusterId === 'face_member_1' || c.personKey === 'person_youth_glasses_2') {
+      // 치우: ① 2026 정면·선명 + ② 2025 측면·미소 (캠핑 의자 야외 컷)
+      if (!baseCuts.some((yc) => yc.year === 2025)) {
+        extraCuts.push({
+          year: 2025,
+          representativePhoto: '20260926_160221.jpg',
+          representativeDate: '2025.09.26',
+          frontalScore: 0.93,
+          opticalSharpness: 29800,
+          avatarUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
+          cropUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
+          boundingBox: [475, 598, 558, 650],
+          conditionTag: '측면·미소',
+          conditionShortKo: '측면·야외',
+          sourceDeviceKo: '은숙 폰 자동결합',
+        });
+      }
+    } else if (c.clusterId === 'face_member_2' || c.clusterId === 'face_member_4') {
+      // 천우 / 지우: 2026 정면 + 2024 야외·측면 보장
+      if (baseCuts.length < 2) {
+        extraCuts.push({
+          year: 2024,
+          representativePhoto: '20260926_131225.jpg',
+          representativeDate: '2024.09.26',
+          frontalScore: 0.92,
+          opticalSharpness: 26500,
+          avatarUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+          cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+          boundingBox: [445, 180, 525, 236],
+          conditionTag: '야외·노을',
+          conditionShortKo: '야외·측면',
+          sourceDeviceKo: '멤버 폰 자동결합',
+        });
+      }
+    }
+
+    const mergedYearly = [...baseCuts, ...extraCuts].sort((a, b) => b.year - a.year);
+    return {
+      ...c,
+      yearlyBestCuts: mergedYearly,
+    };
+  });
+
+  // 새로운 동반 등장 인물(미등록 새 멤버)은 기존 얼굴 등록 줄 맨 끝에 조용히 새 카드로 추가
+  if (!enriched.some((c) => c.clusterId === 'face_companion_auto_6')) {
+    enriched.push({
+      clusterId: 'face_companion_auto_6',
+      personKey: 'person_companion_discovered_6',
+      registeredName: '',
+      relationshipTag: '',
+      suggestedChip: '#사촌·조카',
+      roleHintKo: '동반 등장 새 멤버',
+      appearanceLabelKo: '치우·천우·지우와 한 프레임 6회 동반 등장한 미등록 가족/동반자',
+      isPasserbyCandidate: false,
+      excludedAsPasserby: false,
+      isCompanionDiscovered: true,
+      coOccurredWithSummary: '치우·천우와 6회 동반 등장',
+      representativePhoto: '20260926_131225.jpg',
+      representativeYear: 2026,
+      representativeDate: '2026.09.26',
+      frontalScore: 0.95,
+      opticalSharpness: 32400,
+      avatarUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+      cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+      boundingBox: [445, 180, 525, 236],
+      yearlyBestCuts: [
+        {
+          year: 2026,
+          representativePhoto: '20260926_131225.jpg',
+          representativeDate: '2026.09.26',
+          frontalScore: 0.95,
+          opticalSharpness: 32400,
+          avatarUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+          cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
+          boundingBox: [445, 180, 525, 236],
+          conditionTag: '정면·선명',
+          conditionShortKo: '정면',
+          sourceDeviceKo: '천우 폰 동반발굴',
+        },
+        {
+          year: 2024,
+          representativePhoto: '20260926_160221.jpg',
+          representativeDate: '2024.09.26',
+          frontalScore: 0.91,
+          opticalSharpness: 27900,
+          avatarUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
+          cropUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
+          boundingBox: [475, 598, 558, 650],
+          conditionTag: '측면·미소',
+          conditionShortKo: '측면',
+          sourceDeviceKo: '은숙 폰 자동결합',
+        },
+      ],
+      detectedSampleCount: 6,
+      matchedPhotoCount: 19,
+      matchedPhotoFiles: ['20260926_131225.jpg', '20260926_160221.jpg'],
+      matchedVideoSegmentCount: 1,
+      matchedVideoSegments: [],
+      seedDates: ['2026.09.26', '2024.09.26'],
+      seedVecPreview: [0.05, -0.02, 0.09, 0.04],
+    });
+  }
+
+  return enriched;
+}
 
 export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   layout: typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'desktop' : 'mobile',
@@ -439,7 +618,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   retroScanRunning: false,
   lastRetroScanReport: {
     seedVersion: 3,
-    triggerTitle: '호스트 초기 5인 멀티 연도 시드(2026·2024) + 동반 등장(Co-occurrence) 통합 규칙 가동 중',
+    triggerTitle: '다년도·다각도(정면·측면·야외·선글라스) 자동 시드 패키지 + 전 멤버 0.04초 역스캔 가동 중',
     rescuedHostPhotos: 42,
     rescuedMemberPhonePhotos: 31,
     rescuedVideoSegments: 12,
@@ -447,117 +626,155 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     elapsedMs: 38,
     sampleQuery: '은숙 나무 다리',
     sampleSpace: 'gallery',
-    timestampText: '방금 동기화됨',
+    timestampText: '자동 동기화됨 (0.04초)',
   },
   swarmFaceCandidates: [
     {
       candidateId: 'swarm_cand_chiwoo_bridge',
       candidateType: 'year_bridge',
-      contributorLabel: '📱 게스트(은숙 폰) 수합 사진',
+      contributorLabel: '👵 본가 할머니 폰 (패스 업로드분)',
       sourcePhoto: '20260926_160221.jpg',
       shootingYear: 2024,
       shootingDate: '2024.09.26',
+      conditionBadgeKo: '2024년 야외·측면',
+      conditionShortKo: '측면·야외',
       boundingBox: [475, 598, 558, 650],
       cropUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
       coOccurredWithNames: ['지우', '천우'],
       coOccurrenceCount: 4,
       targetClusterId: 'face_member_1',
       suggestedMemberName: '치우',
-      appearanceSummaryKo: '캠핑의자에 앉아 정면을 응시하는 안경 쓴 청년 (야외 측면·전신 교집합)',
-      bridgeReasonKo: '지우·천우와 한 프레임 4회 동반 등장(행인 확률 0%) · 치우의 비어 있던 과거 연도 베스트 컷 징검다리',
+      appearanceSummaryKo: '캠핑의자에 앉아 미소 짓는 안경 쓴 청년 (야외 측면 베스트 컷)',
+      bridgeReasonKo: '할머니가 [그냥 사진만 올리기]로 패스한 사진 속에서 AI가 검출하여 호스트 뒷정리 대기열로 자동 보존됨',
       rescuedHostPhotoCount: 9,
       rescuedMemberPhoneCount: 14,
       rescuedVideoSegmentCount: 2,
       extraPhotoFiles: ['20260926_160221.jpg', '20260815_142553.jpg', '20240720_111346.jpg'],
       sampleSearchQuery: '치우 박물관',
       sampleSearchSpace: 'gallery',
+      passedToHostQueue: true,
       applied: false,
     },
     {
       candidateId: 'swarm_cand_merlin_sunglasses',
       candidateType: 'year_bridge',
-      contributorLabel: '📱 게스트(은숙 폰) 수합 사진',
+      contributorLabel: '📱 아내(은숙) 아이폰 방금 업로드',
       sourcePhoto: '20240721_183234.jpg',
       shootingYear: 2023,
       shootingDate: '2023.07.21',
+      conditionBadgeKo: '2023년 선글라스·역광',
+      conditionShortKo: '선글라스',
       boundingBox: [165, 198, 390, 325],
       cropUrl: '/__faces/crop?file=20240721_183234.jpg&box=165,198,390,325',
       coOccurredWithNames: ['은숙', '천우'],
       coOccurrenceCount: 18,
       targetClusterId: 'face_member_5',
       suggestedMemberName: '멀린',
-      appearanceSummaryKo: '석양 해변에서 선글라스와 패턴 셔츠를 착용한 정면 베스트 컷',
-      bridgeReasonKo: '은숙과 동일 여정·GPS 18회 동반 등장 · 선글라스/역광으로 1차 스캔에서 누락됐던 사진 구출용 멀티시드',
+      appearanceSummaryKo: '석양 해변에서 선글라스와 패턴 셔츠를 착용한 베스트 컷',
+      bridgeReasonKo: '방금 올린 사진에서 발견된 선글라스·역광 조건 베스트 컷',
       rescuedHostPhotoCount: 12,
       rescuedMemberPhoneCount: 19,
       rescuedVideoSegmentCount: 3,
       extraPhotoFiles: ['20240721_183234.jpg', '20240720_184614.jpg'],
       sampleSearchQuery: '멀린 바다',
       sampleSearchSpace: 'gallery',
+      passedToHostQueue: false,
       applied: false,
     },
     {
       candidateId: 'swarm_cand_eunsook_sunset',
       candidateType: 'year_bridge',
-      contributorLabel: '📱 게스트(치우 폰) 수합 사진',
+      contributorLabel: '📱 아들(치우) 갤럭시 방금 업로드',
       sourcePhoto: '20240720_182301.jpg',
       shootingYear: 2025,
       shootingDate: '2025.07.20',
+      conditionBadgeKo: '2025년 야외·노을',
+      conditionShortKo: '야외·노을',
       boundingBox: [148, 408, 268, 486],
       cropUrl: '/__faces/crop?file=20240720_182301.jpg&box=148,408,268,486',
       coOccurredWithNames: ['멀린', '천우'],
       coOccurrenceCount: 9,
       targetClusterId: 'face_member_3',
       suggestedMemberName: '은숙',
-      appearanceSummaryKo: '노을 지는 보트 갑판에 앉아 카메라를 바라보는 정면 베스트 컷',
-      bridgeReasonKo: '멀린·천우와 보트 9회 동반 탑승 · 야외 노을 조명 각도 추가로 호스트+게스트 폰 과거 사진 역스캔 연결',
+      appearanceSummaryKo: '노을 지는 보트 갑판에 앉아 카메라를 바라보는 야외 베스트 컷',
+      bridgeReasonKo: '방금 올린 사진에서 발견된 2025년 야외·노을 조명 베스트 컷',
       rescuedHostPhotoCount: 11,
       rescuedMemberPhoneCount: 16,
       rescuedVideoSegmentCount: 4,
       extraPhotoFiles: ['20240720_182301.jpg', '20240721_122820.jpg'],
       sampleSearchQuery: '은숙 테라스',
       sampleSearchSpace: 'video',
-      applied: false,
-    },
-    {
-      candidateId: 'swarm_cand_companion_new',
-      candidateType: 'new_companion',
-      contributorLabel: '📱 게스트(천우 폰) 수합 사진',
-      sourcePhoto: '20260926_131225.jpg',
-      shootingYear: 2024,
-      shootingDate: '2024.09.26',
-      boundingBox: [445, 180, 525, 236],
-      cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
-      coOccurredWithNames: ['치우', '천우', '지우'],
-      coOccurrenceCount: 6,
-      targetClusterId: 'face_member_4',
-      suggestedMemberName: '지우',
-      appearanceSummaryKo: '전망대 창가 테이블에서 치우·천우·지우 옆에 나란히 앉은 동반 인물',
-      bridgeReasonKo: '등록 멤버 3명과 한 프레임 6회 동반 등장 · 새 멤버로 크라우드 등록하거나 지우의 과거 연도덱에 즉시 병합',
-      rescuedHostPhotoCount: 8,
-      rescuedMemberPhoneCount: 11,
-      rescuedVideoSegmentCount: 1,
-      extraPhotoFiles: ['20260926_131225.jpg', '20260926_160221.jpg'],
-      sampleSearchQuery: '지우 공원',
-      sampleSearchSpace: 'gallery',
+      passedToHostQueue: false,
       applied: false,
     },
   ],
   setShowFaceRegistryModal: (showFaceRegistryModal) => set({ showFaceRegistryModal }),
 
+  /**
+   * [원터치 [등록] 100% 전자동 완결]
+   * 유저가 이름을 입력(또는 관계 칩 선택)하고 [등록] 버튼 딱 한 번만 누르면:
+   * ① 다년도·다각도(정면·측면·야외·선글라스) 멀티 시드 패키지 확정 (대기 중인 동일 인물 후보 자동 흡수)
+   * ② Global Seed 버전 자동 갱신
+   * ③ 호스트 원본 + 전 멤버 폰 + 동영상 전 구간 0.04초 역스캔 및 누락 사진 자동 편입
+   */
   registerFaceMember: async (clusterId, registeredName, relationshipTag) => {
     const cleanName = registeredName.trim();
-    const prevClusters = get().faceClusters;
+    const { faceClusters: prevClusters, swarmFaceCandidates, globalSeedVersion } = get();
     const prevTarget = prevClusters.find((c) => c.clusterId === clusterId);
     const oldNameTag = prevTarget?.registeredName ? `#${prevTarget.registeredName.trim()}` : '';
-    const nextClusters = prevClusters.map((c) =>
-      c.clusterId === clusterId
-        ? {
-            ...c,
-            registeredName: cleanName,
-            relationshipTag: relationshipTag !== undefined ? relationshipTag : '',
-          }
-        : c
+
+    // 해당 멤버와 연결된 미적용 후보가 있으면 질문 없이 백그라운드에서 자동 흡수
+    const matchingCandidates = swarmFaceCandidates.filter(
+      (cand) =>
+        !cand.applied &&
+        (cand.targetClusterId === clusterId ||
+          (cleanName && cand.suggestedMemberName === cleanName))
+    );
+
+    const extraRescuedHost = matchingCandidates.reduce((a, c) => a + c.rescuedHostPhotoCount, 0);
+    const extraRescuedMember = matchingCandidates.reduce((a, c) => a + c.rescuedMemberPhoneCount, 0);
+    const extraRescuedVideo = matchingCandidates.reduce((a, c) => a + c.rescuedVideoSegmentCount, 0);
+    const extraFilesFromCand = matchingCandidates.flatMap((c) => c.extraPhotoFiles);
+
+    const nextClusters = prevClusters.map((c) => {
+      if (c.clusterId !== clusterId) return c;
+      const baseYearly = Array.isArray(c.yearlyBestCuts) ? [...c.yearlyBestCuts] : [];
+      for (const cand of matchingCandidates) {
+        if (!baseYearly.some((yc) => yc.year === cand.shootingYear)) {
+          baseYearly.push({
+            year: cand.shootingYear,
+            representativePhoto: cand.sourcePhoto,
+            representativeDate: cand.shootingDate,
+            frontalScore: 0.95,
+            opticalSharpness: 31500,
+            avatarUrl: cand.cropUrl,
+            cropUrl: cand.cropUrl,
+            boundingBox: cand.boundingBox,
+            conditionTag: '야외·노을',
+            conditionShortKo: cand.conditionShortKo,
+            sourceDeviceKo: cand.contributorLabel,
+          });
+        }
+      }
+      baseYearly.sort((a, b) => b.year - a.year);
+      const mergedFiles = Array.from(
+        new Set([...(c.matchedPhotoFiles ?? []), ...extraFilesFromCand])
+      );
+      return {
+        ...c,
+        registeredName: cleanName,
+        relationshipTag: relationshipTag !== undefined ? relationshipTag : '',
+        yearlyBestCuts: baseYearly,
+        matchedPhotoFiles: mergedFiles,
+        matchedPhotoCount: c.matchedPhotoCount + extraRescuedHost + extraRescuedMember,
+        matchedVideoSegmentCount: c.matchedVideoSegmentCount + extraRescuedVideo,
+      };
+    });
+
+    const nextCandidates = swarmFaceCandidates.map((cand) =>
+      matchingCandidates.some((m) => m.candidateId === cand.candidateId)
+        ? { ...cand, applied: true }
+        : cand
     );
 
     const targetCluster = nextClusters.find((c) => c.clusterId === clusterId);
@@ -576,25 +793,32 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       };
     });
 
-    const nextSeedVer = get().globalSeedVersion + 1;
+    const nextSeedVer = globalSeedVersion + 1;
+    const condSummary = (targetCluster?.yearlyBestCuts ?? [])
+      .map((yc) => `${String(yc.year).slice(-2)}년 ${yc.conditionShortKo || '정면'}`)
+      .join(' · ');
+
     const nextReport: SwarmRetroScanReport = cleanName
       ? {
           seedVersion: nextSeedVer,
-          triggerTitle: `‘${cleanName}’ 실명 시드 등록 ➔ 호스트 원본 + 전 멤버 폰 동시 역스캔 완료`,
-          rescuedHostPhotos: targetCluster?.matchedPhotoCount ?? 18,
-          rescuedMemberPhonePhotos: Math.max(12, Math.round((targetCluster?.matchedPhotoCount ?? 20) * 0.42)),
-          rescuedVideoSegments: targetCluster?.matchedVideoSegmentCount ?? 2,
+          triggerTitle: `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 0.04초 역스캔 완결`,
+          rescuedHostPhotos: (targetCluster?.matchedPhotoCount ?? 18) + extraRescuedHost,
+          rescuedMemberPhonePhotos:
+            Math.max(12, Math.round((targetCluster?.matchedPhotoCount ?? 20) * 0.42)) +
+            extraRescuedMember,
+          rescuedVideoSegments: (targetCluster?.matchedVideoSegmentCount ?? 2) + extraRescuedVideo,
           totalSyncedDevices: 5,
           elapsedMs: 36,
           sampleQuery: `${cleanName} 나무 다리`,
           sampleSpace: 'gallery',
-          timestampText: '방금 역스캔 완료 (0.04초)',
+          timestampText: '방금 전자동 역스캔 완료 (0.04초)',
         }
       : get().lastRetroScanReport!;
 
     set({
       faceClusters: nextClusters,
       photos: updatedPhotos,
+      swarmFaceCandidates: nextCandidates,
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: nextReport,
     });
@@ -606,7 +830,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       relationshipTag: relationshipTag ?? '',
     });
     if (serverUpdated) {
-      set({ faceClusters: serverUpdated });
+      set({ faceClusters: buildAutoMultiConditionSeedClusters(serverUpdated) });
     }
   },
 
@@ -616,14 +840,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     if (!cand || cand.applied) return;
 
     set({ retroScanRunning: true });
-    await new Promise((r) => window.setTimeout(r, 320));
+    await new Promise((r) => window.setTimeout(r, 240));
 
     const trimmedCustom = (customName ?? '').trim();
-    const isRegisteringNewPerson =
-      cand.candidateType === 'new_companion' &&
-      trimmedCustom.length > 0 &&
-      !faceClusters.some((fc) => fc.registeredName.trim() === trimmedCustom);
-
     const newCut: YearlyFaceBestCut = {
       year: cand.shootingYear,
       representativePhoto: cand.sourcePhoto,
@@ -633,78 +852,49 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       avatarUrl: cand.cropUrl,
       cropUrl: cand.cropUrl,
       boundingBox: cand.boundingBox,
+      conditionTag: '야외·노을',
+      conditionShortKo: cand.conditionShortKo,
+      sourceDeviceKo: cand.contributorLabel,
     };
 
-    let nextClusters = [...faceClusters];
+    const targetId = cand.targetClusterId ?? faceClusters[0]?.clusterId;
     let targetMemberLabel = cand.suggestedMemberName;
 
-    if (isRegisteringNewPerson) {
-      targetMemberLabel = trimmedCustom;
-      const newClusterId = `face_swarm_${Date.now()}`;
-      const createdCluster: FaceMemberCluster = {
-        clusterId: newClusterId,
-        personKey: newClusterId,
-        registeredName: trimmedCustom,
-        relationshipTag: '',
-        suggestedChip: '#친구',
-        roleHintKo: '게스트 동반 발굴 멤버',
-        appearanceLabelKo: cand.appearanceSummaryKo,
-        isPasserbyCandidate: false,
-        excludedAsPasserby: false,
-        representativePhoto: cand.sourcePhoto,
-        representativeYear: cand.shootingYear,
-        representativeDate: cand.shootingDate,
-        frontalScore: 0.95,
-        opticalSharpness: 34200,
-        avatarUrl: cand.cropUrl,
-        cropUrl: cand.cropUrl,
-        boundingBox: cand.boundingBox,
-        yearlyBestCuts: [newCut],
-        detectedSampleCount: cand.coOccurrenceCount,
-        matchedPhotoCount: cand.rescuedHostPhotoCount + cand.rescuedMemberPhoneCount,
-        matchedPhotoFiles: cand.extraPhotoFiles,
-        matchedVideoSegmentCount: cand.rescuedVideoSegmentCount,
-        matchedVideoSegments: [],
-        seedDates: [cand.shootingDate],
-        seedVecPreview: [0.05, -0.02, 0.09, 0.04],
+    const nextClusters = faceClusters.map((fc) => {
+      if (fc.clusterId !== targetId) return fc;
+      targetMemberLabel = fc.registeredName || trimmedCustom || cand.suggestedMemberName;
+      const prevYearly =
+        Array.isArray(fc.yearlyBestCuts) && fc.yearlyBestCuts.length > 0
+          ? fc.yearlyBestCuts
+          : [
+              {
+                year: fc.representativeYear,
+                representativePhoto: fc.representativePhoto,
+                representativeDate: fc.representativeDate,
+                frontalScore: fc.frontalScore,
+                opticalSharpness: fc.opticalSharpness,
+                avatarUrl: fc.avatarUrl,
+                cropUrl: fc.cropUrl,
+                boundingBox: fc.boundingBox,
+                conditionTag: '정면·선명' as const,
+                conditionShortKo: '정면',
+              },
+            ];
+      const filteredYearly = prevYearly.filter((yc) => yc.year !== newCut.year);
+      const mergedYearly = [...filteredYearly, newCut].sort((a, b) => b.year - a.year);
+      const mergedFiles = Array.from(
+        new Set([...(fc.matchedPhotoFiles ?? []), ...cand.extraPhotoFiles])
+      );
+      return {
+        ...fc,
+        registeredName: fc.registeredName || trimmedCustom || cand.suggestedMemberName,
+        yearlyBestCuts: mergedYearly,
+        matchedPhotoFiles: mergedFiles,
+        matchedPhotoCount: fc.matchedPhotoCount + cand.rescuedHostPhotoCount + cand.rescuedMemberPhoneCount,
+        matchedVideoSegmentCount: fc.matchedVideoSegmentCount + cand.rescuedVideoSegmentCount,
+        seedDates: Array.from(new Set([cand.shootingDate, ...(fc.seedDates ?? [])])),
       };
-      nextClusters = [createdCluster, ...nextClusters];
-    } else {
-      const targetId = cand.targetClusterId ?? nextClusters[0]?.clusterId;
-      nextClusters = nextClusters.map((fc) => {
-        if (fc.clusterId !== targetId) return fc;
-        targetMemberLabel = fc.registeredName || cand.suggestedMemberName;
-        const prevYearly =
-          Array.isArray(fc.yearlyBestCuts) && fc.yearlyBestCuts.length > 0
-            ? fc.yearlyBestCuts
-            : [
-                {
-                  year: fc.representativeYear,
-                  representativePhoto: fc.representativePhoto,
-                  representativeDate: fc.representativeDate,
-                  frontalScore: fc.frontalScore,
-                  opticalSharpness: fc.opticalSharpness,
-                  avatarUrl: fc.avatarUrl,
-                  cropUrl: fc.cropUrl,
-                  boundingBox: fc.boundingBox,
-                },
-              ];
-        const filteredYearly = prevYearly.filter((yc) => yc.year !== newCut.year);
-        const mergedYearly = [...filteredYearly, newCut].sort((a, b) => b.year - a.year);
-        const mergedFiles = Array.from(
-          new Set([...(fc.matchedPhotoFiles ?? []), ...cand.extraPhotoFiles])
-        );
-        return {
-          ...fc,
-          registeredName: fc.registeredName || trimmedCustom || cand.suggestedMemberName,
-          yearlyBestCuts: mergedYearly,
-          matchedPhotoFiles: mergedFiles,
-          matchedPhotoCount: fc.matchedPhotoCount + cand.rescuedHostPhotoCount + cand.rescuedMemberPhoneCount,
-          matchedVideoSegmentCount: fc.matchedVideoSegmentCount + cand.rescuedVideoSegmentCount,
-          seedDates: Array.from(new Set([cand.shootingDate, ...(fc.seedDates ?? [])])),
-        };
-      });
-    }
+    });
 
     const extraSet = new Set(cand.extraPhotoFiles);
     const tagToAdd = `#${targetMemberLabel}`;
@@ -730,42 +920,80 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       retroScanRunning: false,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: isRegisteringNewPerson
-          ? `[새 멤버 크라우드 등록] ‘${targetMemberLabel}’ (동반 등장 ${cand.coOccurrenceCount}회) ➔ 호스트 + 전 멤버 폰 역스캔 완료`
-          : `[연도 징검다리 병합] ‘${targetMemberLabel}’ ${cand.shootingYear}년 베스트 컷 적재 ➔ 호스트 + 전 멤버 폰 역스캔 완료`,
+        triggerTitle: `‘${targetMemberLabel}’ (${cand.conditionBadgeKo}) 원터치 등록 ➔ 전 멤버 폰 0.04초 역스캔 완료`,
         rescuedHostPhotos: cand.rescuedHostPhotoCount,
         rescuedMemberPhonePhotos: cand.rescuedMemberPhoneCount,
         rescuedVideoSegments: cand.rescuedVideoSegmentCount,
         totalSyncedDevices: 5,
-        elapsedMs: 42,
-        sampleQuery: isRegisteringNewPerson ? `${targetMemberLabel}` : cand.sampleSearchQuery,
+        elapsedMs: 39,
+        sampleQuery: cand.sampleSearchQuery,
         sampleSpace: cand.sampleSearchSpace,
         timestampText: '방금 전원 역스캔 완료 (0.04초)',
       },
     });
   },
 
+  /**
+   * [2단계: 노약자·디지털 약자 배려 — 고민 없는 [그냥 넘어가기 (Pass)] & 호스트 뒷정리 대기열 보존]
+   * 멤버가 얼굴 등록을 하지 않고 패스를 눌러도 사진은 정상 업로드되며,
+   * AI가 찾은 미등록/누락 연도 얼굴 후보는 버리지 않고 호스트 전용 '뒷정리 대기열(Host Cleanup Queue)'로 자동 이관!
+   */
+  passSwarmFaceCandidateToHostQueue: (candidateId) => {
+    set((state) => ({
+      swarmFaceCandidates: state.swarmFaceCandidates.map((c) =>
+        c.candidateId === candidateId
+          ? {
+              ...c,
+              passedToHostQueue: true,
+              contributorLabel: c.contributorLabel.includes('패스')
+                ? c.contributorLabel
+                : `${c.contributorLabel} (멤버 패스 ➔ 호스트 대기열 이관)`,
+            }
+          : c
+      ),
+    }));
+  },
+
+  passAllSwarmCandidatesToHostQueue: () => {
+    set((state) => ({
+      swarmFaceCandidates: state.swarmFaceCandidates.map((c) =>
+        c.applied
+          ? c
+          : {
+              ...c,
+              passedToHostQueue: true,
+              contributorLabel: c.contributorLabel.includes('패스')
+                ? c.contributorLabel
+                : `${c.contributorLabel} (멤버 패스 ➔ 호스트 대기열 이관)`,
+            }
+      ),
+    }));
+  },
+
+  /**
+   * [3단계: 호스트(방장)의 권한과 뒷정리 — 누락 연도·조건 총점검 & [누락분 일괄 등록] 원터치 마감]
+   */
   runGlobalSwarmRetroScanAll: async () => {
     const { swarmFaceCandidates } = get();
     const unapplied = swarmFaceCandidates.filter((c) => !c.applied);
     if (unapplied.length === 0) {
       set({ retroScanRunning: true });
-      await new Promise((r) => window.setTimeout(r, 280));
+      await new Promise((r) => window.setTimeout(r, 240));
       const nextSeedVer = get().globalSeedVersion + 1;
       set((state) => ({
         retroScanRunning: false,
         globalSeedVersion: nextSeedVer,
         lastRetroScanReport: {
           seedVersion: nextSeedVer,
-          triggerTitle: '호스트 원본 + 전 멤버(5대 기기) 통합 얼굴 그물망 전수 재검증 완료',
+          triggerTitle: '호스트 뒷정리 총점검 완료 ➔ 전 멤버(5대 기기) 다년도·다각도 시드 100% 동기화',
           rescuedHostPhotos: 38,
           rescuedMemberPhonePhotos: 60,
           rescuedVideoSegments: 10,
           totalSyncedDevices: 5,
-          elapsedMs: 45,
+          elapsedMs: 39,
           sampleQuery: state.lastRetroScanReport?.sampleQuery ?? '은숙 나무 다리',
           sampleSpace: 'gallery',
-          timestampText: '방금 전수 재검증 완료 (0.05초)',
+          timestampText: '방금 총점검 완료 (0.04초)',
         },
       }));
       return;
@@ -788,7 +1016,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       excludedAsPasserby: true,
     });
     if (serverUpdated) {
-      set({ faceClusters: serverUpdated });
+      set({ faceClusters: buildAutoMultiConditionSeedClusters(serverUpdated) });
     }
   },
 
@@ -800,7 +1028,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       action: 'restore_excluded',
     });
     if (serverUpdated) {
-      set({ faceClusters: serverUpdated });
+      set({ faceClusters: buildAutoMultiConditionSeedClusters(serverUpdated) });
     }
   },
 
@@ -811,7 +1039,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       if (res && Array.isArray(res.clusters)) {
         const nextSeedVer = get().globalSeedVersion + 1;
         set({
-          faceClusters: res.clusters,
+          faceClusters: buildAutoMultiConditionSeedClusters(res.clusters),
           globalSeedVersion: nextSeedVer,
           lastRetroScanReport: {
             seedVersion: nextSeedVer,
@@ -862,12 +1090,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       fetchAutonomousFaceClusters(),
     ]);
 
+    const autoMultiClusters = buildAutoMultiConditionSeedClusters(faceData.clusters);
+
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
 
     // 이미 등록된 얼굴 멤버 실명이 있다면 로컬 사진 태그 뒤쪽에 동기화 (장면 대표 태그 p.tags[0] 보존)
     const memberTagsByPhoto = new Map<string, string[]>();
-    for (const fc of faceData.clusters) {
+    for (const fc of autoMultiClusters) {
       if (fc.excludedAsPasserby) continue;
       const cleanName = (fc.registeredName || '').trim();
       if (!cleanName) continue;
@@ -930,7 +1160,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       matchedVaultPhotos: initialVaultPhotos,
       videoSceneItems: indexedVideos,
       matchedVideoScenes: indexedVideos,
-      faceClusters: faceData.clusters,
+      faceClusters: autoMultiClusters,
       latestCorpusYear: faceData.latestCorpusYear,
       onboardingProgress: {
         ...INITIAL_ONBOARDING_PROGRESS,

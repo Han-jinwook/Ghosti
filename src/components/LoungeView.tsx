@@ -857,13 +857,17 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     swarmFaceCandidates,
     retroScanRunning,
     lastRetroScanReport,
+    applySwarmFaceCandidate,
+    passSwarmFaceCandidateToHostQueue,
+    passAllSwarmCandidatesToHostQueue,
     runGlobalSwarmRetroScanAll,
     setShowFaceRegistryModal,
   } = useSaySeeStore();
 
   const [instantFlushed, setInstantFlushed] = useState(false);
   const [pokedStudentHost, setPokedStudentHost] = useState(false);
-  const pendingSwarmCandidates = swarmFaceCandidates.filter((c) => !c.applied);
+  const memberActiveHints = swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue);
+  const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
 
   const queuePhotos = photos.filter((p) => !p.quarantined).slice(0, 8);
 
@@ -997,53 +1001,108 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         </div>
 
-        {/* 🕸️ 전 멤버 폰 통합 얼굴 그물망 (Global Seed vN) & 동반 등장 발굴 + 전원 동시 2차 역스캔 */}
-        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 via-zinc-900 to-amber-950/35 border border-emerald-400/35 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
+        {/* 🎯 [3단 집단지성 프로토콜] ① 일반 멤버 원터치 [등록] 힌트 ➔ ② 노약자 고민 없는 [그냥 사진만 올리기 / 패스] ➔ ③ 호스트 뒷정리 대기열 */}
+        <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-mono text-[10.5px] font-extrabold">
-                🕸️ Global Seed v{globalSeedVersion}.0 동기화됨
+              <span className="px-2 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-mono text-[10.5px] font-extrabold">
+                3단 집단지성 프로토콜 · Global Seed v{globalSeedVersion}
               </span>
               <span className="font-label-sm text-[12.5px] text-white font-bold">
-                호스트뿐 아니라 모든 멤버(게스트)의 대기실 수합 사진이 얼굴 탐색 소스가 됩니다
+                ① 멤버는 원터치 [등록] ➔ ② 할머니는 고민 없이 [그냥 넘어가기(Pass)] ➔ ③ 빠진 건 호스트가 [누락분 일괄 등록]
               </span>
-              {pendingSwarmCandidates.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/50 text-amber-300 font-label-mono text-[10.5px] font-extrabold">
-                  ✨ 동반 등장 신규 발굴 {pendingSwarmCandidates.length}건 대기 중
+            </div>
+
+            <div className="flex items-center gap-2">
+              {memberActiveHints.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => passAllSwarmCandidatesToHostQueue()}
+                  className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-bold"
+                >
+                  👵 노약자 모드: 그냥 사진만 올리기 / 패스 (호스트 대기열 이관)
+                </button>
+              )}
+              {hostCleanupQueue.length > 0 && (
+                <button
+                  type="button"
+                  disabled={retroScanRunning}
+                  onClick={() => void runGlobalSwarmRetroScanAll()}
+                  className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[11px] font-extrabold"
+                >
+                  {retroScanRunning
+                    ? '0.04초 역스캔 중...'
+                    : `👑 호스트 뒷정리: 누락분 ${hostCleanupQueue.length}건 일괄 등록`}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowFaceRegistryModal(true)}
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
+              >
+                총점검 센터 →
+              </button>
+            </div>
+          </div>
+
+          {/* 1단계 & 2단계: 방금 올린 사진 속 새로운 연도/각도 힌트 카드 */}
+          {memberActiveHints.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {memberActiveHints.map((cand) => (
+                <div
+                  key={cand.candidateId}
+                  className="p-3 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <img
+                      src={cand.cropUrl}
+                      alt={cand.suggestedMemberName}
+                      className="w-11 h-11 rounded-full object-cover border-2 border-primary-container shrink-0"
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-mono text-[10px] text-zinc-400">
+                        {cand.contributorLabel}
+                      </span>
+                      <p className="font-label-sm text-[12px] text-white font-bold leading-snug">
+                        🎯 방금 올린 사진에서 <span className="text-primary-container">{cand.suggestedMemberName}</span>님의 새로운 연도/각도(<span className="text-amber-300">{cand.conditionBadgeKo}</span>) 베스트 컷을 찾았어요!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      disabled={retroScanRunning}
+                      onClick={() => void applySwarmFaceCandidate(cand.candidateId)}
+                      className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
+                    >
+                      등록
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => passSwarmFaceCandidateToHostQueue(cand.candidateId)}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-zinc-200 font-label-sm text-[11px]"
+                    >
+                      패스
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-3 py-2 rounded-lg bg-zinc-900/80 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300">
+              <span>
+                {hostCleanupQueue.length > 0
+                  ? `👵 할머니·멤버가 패스한 사진 속 누락 연도/각도 얼굴 후보 ${hostCleanupQueue.length}건이 호스트(방장) 뒷정리 대기열에 안전하게 보존되어 있습니다.`
+                  : '✓ 할머니가 그냥 올린 사진 속 얼굴까지 전 멤버 다년도·다각도 시드에 100% 흡수 및 0.04초 역스캔 완결되었습니다!'}
+              </span>
+              {lastRetroScanReport && (
+                <span className="text-emerald-300 font-mono text-[11px] font-bold">
+                  ({lastRetroScanReport.timestampText} · 사진 +{lastRetroScanReport.rescuedHostPhotos + lastRetroScanReport.rescuedMemberPhonePhotos}장 매칭)
                 </span>
               )}
             </div>
-            <p className="font-body-sm text-[11.5px] text-zinc-300">
-              기등록 멤버와 <strong>2회 이상 한 프레임에 동반 등장(Co-occurrence)</strong>한 얼굴만 행인 오탐 없이 추출하여 과거 연도 베스트 컷을 차곡차곡 쌓고, 호스트 원본 + 전 멤버 스마트폰 + 동영상 씬을 0.04초 만에 동시 2차 역스캔합니다.
-              {lastRetroScanReport && (
-                <span className="ml-2 text-emerald-300 font-bold">
-                  (최근 역스캔: 사진 +{lastRetroScanReport.rescuedHostPhotos + lastRetroScanReport.rescuedMemberPhonePhotos}장 · 영상 +{lastRetroScanReport.rescuedVideoSegments}구간 추가 회수 완료!)
-                </span>
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={retroScanRunning}
-              onClick={() => runGlobalSwarmRetroScanAll()}
-              className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[11.5px] font-extrabold transition-all"
-            >
-              {retroScanRunning
-                ? '⏳ 전 멤버 폰 0.04초 역스캔 중...'
-                : pendingSwarmCandidates.length > 0
-                  ? `⚡ 대기실 발굴 ${pendingSwarmCandidates.length}건 일괄 병합 & 전원 역스캔`
-                  : '🔄 호스트+전 멤버 폰 재검증 역스캔'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowFaceRegistryModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-100 font-label-sm text-[11.5px] font-bold transition-all"
-            >
-              🕸️ 통합 얼굴 그물망 열기 →
-            </button>
-          </div>
+          )}
         </div>
       </section>
 

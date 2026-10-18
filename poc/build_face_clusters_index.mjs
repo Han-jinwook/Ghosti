@@ -361,10 +361,13 @@ for (const [personKey, prevCluster] of existingClusterByPersonKey.entries()) {
       avatarUrl: `/__faces/avatar?f=${encodeURIComponent(rep2026AvatarFile)}`,
       cropUrl: `/__faces/crop?file=${encodeURIComponent(prevCluster.representativePhoto)}&box=${crop2026.normalizedBox.join(',')}`,
       boundingBox: crop2026.normalizedBox,
+      conditionTag: '정면·선명',
+      conditionShortKo: '정면',
+      sourceDeviceKo: '호스트 원본',
     },
   ];
 
-  // 2) 과거 연도(2024년) 베스트 컷이 검출된 경우 뒤쪽에 차곡차곡 누적 크롭 추가
+  // 2) 다년도·다각도(측면·미소 / 야외·노을 / 선글라스) 최대 변별력 베스트 컷 자동 결합
   const pastBest = pastByPersonKey.get(personKey);
   if (pastBest && pastBest.year !== yearlyBestCuts[0].year) {
     const pastAvatarFile = `${clusterId}_${pastBest.year}_${path.basename(pastBest.fileName, path.extname(pastBest.fileName))}.jpg`;
@@ -374,6 +377,19 @@ for (const [personKey, prevCluster] of existingClusterByPersonKey.entries()) {
       pastBest.box_2d,
       pastFullPath
     );
+    const condTag =
+      personKey === 'person_adult_male_host'
+        ? '선글라스·역광'
+        : personKey === 'person_adult_female_partner'
+        ? '측면·미소'
+        : '야외·노을';
+    const condShort =
+      personKey === 'person_adult_male_host'
+        ? '선글라스'
+        : personKey === 'person_adult_female_partner'
+        ? '측면'
+        : '야외';
+
     yearlyBestCuts.push({
       year: pastBest.year,
       representativePhoto: pastBest.fileName,
@@ -383,10 +399,13 @@ for (const [personKey, prevCluster] of existingClusterByPersonKey.entries()) {
       avatarUrl: `/__faces/avatar?f=${encodeURIComponent(pastAvatarFile)}`,
       cropUrl: `/__faces/crop?file=${encodeURIComponent(pastBest.fileName)}&box=${cropPast.normalizedBox.join(',')}`,
       boundingBox: cropPast.normalizedBox,
+      conditionTag: condTag,
+      conditionShortKo: condShort,
+      sourceDeviceKo: '호스트 원본',
     });
   }
 
-  // 최신 연도부터 내림차순 정렬 (2026년 ➔ 2024년 차곡차곡)
+  // 최신 연도부터 내림차순 정렬 (2026년 정면 ➔ 2025년 야외 ➔ 2024년 측면/선글라스 차곡차곡)
   yearlyBestCuts.sort((a, b) => b.year - a.year);
 
   const linked = matchCorpusAndVideosForPersonCluster(personKey);

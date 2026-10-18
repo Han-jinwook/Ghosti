@@ -74,7 +74,7 @@ export interface FaceVideoSegmentMatch {
   thumbUrl: string;
 }
 
-/** [라운지 마스터 스펙] 연도별(2026년 ➔ 2024년 등) 차곡차곡 누적되는 인물 베스트 컷 1장 */
+/** [라운지 마스터 스펙] 다년도(2026 ➔ 2025 ➔ 2024 ➔ 2023) + 다각도·다조건(정면·측면·야외·선글라스) 자동 선별 베스트 컷 */
 export interface YearlyFaceBestCut {
   year: number;
   representativePhoto: string;
@@ -84,9 +84,15 @@ export interface YearlyFaceBestCut {
   avatarUrl: string;
   cropUrl: string;
   boundingBox: [number, number, number, number];
+  /** 다각도·다조건 최대 변별력 태그 (정면·선명 / 측면·미소 / 야외·노을 / 선글라스·역광 / 야간·실내) */
+  conditionTag?: '정면·선명' | '측면·미소' | '야외·노을' | '선글라스·역광' | '야간·실내';
+  /** 미니 서브 아바타 스택 배지용 짧은 라벨 (예: '정면', '측면', '야외', '선글라스') */
+  conditionShortKo?: string;
+  /** 출처 기기 라벨 (예: '호스트 원본', '은숙 폰', '할머니 폰') */
+  sourceDeviceKo?: string;
 }
 
-/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 당해 연도 베스트 1장 + 과거 연도 누적 클러스터 */
+/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 다년도·다각도 자동 결합 멀티-시드 클러스터 */
 export interface FaceMemberCluster {
   clusterId: string;
   personKey: string;
@@ -100,6 +106,10 @@ export interface FaceMemberCluster {
   isPasserbyCandidate: boolean;
   /** [✕ 행인 제외] 버튼으로 제외 처리되었는지 여부 */
   excludedAsPasserby: boolean;
+  /** 멤버 사진 속 동반 등장(Co-occurrence 2회+)으로 새로 발견되어 줄 맨 끝에 조용히 추가된 미등록 새 인물 여부 */
+  isCompanionDiscovered?: boolean;
+  /** 동반 등장 요약 설명 (예: '치우·천우와 6회 동반 등장') */
+  coOccurredWithSummary?: string;
   representativePhoto: string;
   representativeYear: number;
   representativeDate: string;
@@ -111,7 +121,7 @@ export interface FaceMemberCluster {
   cropUrl: string;
   /** 정규화된 얼굴 Bounding Box [ymin, xmin, ymax, xmax] (0..1000) */
   boundingBox: [number, number, number, number];
-  /** 당해 연도(최신순)부터 과거 연도 사진 검색 시 뒤쪽에 차곡차곡 쌓이는 연도별 베스트 컷 스택 */
+  /** 당해 연도 정면 + 타 연도 측면·야외·선글라스 베스트 컷이 알고리즘에 의해 자동 결합된 멀티-조건 시드 패키지 */
   yearlyBestCuts?: YearlyFaceBestCut[];
   detectedSampleCount: number;
   matchedPhotoCount: number;
@@ -125,18 +135,20 @@ export interface FaceMemberCluster {
 }
 
 /**
- * [전 멤버 폰 통합 얼굴 그물망 (Global Swarm Face Mesh)]
- * 멤버(게스트)가 올린 사진 속에서 '이미 등록된 멤버와 2회 이상 한 프레임에 동반 등장(Co-occurrence)'하여
- * 행인이 아님이 100% 검증된 과거 연도 징검다리 베스트 컷 또는 신규 동반 인물 후보
+ * [3단 집단지성 프로토콜 (멤버 원터치 힌트 ➔ 노약자 자동 패스(Skip) ➔ 호스트 뒷정리 대기열)]
+ * 멤버가 사진을 올릴 때 AI가 발견한 새로운 연도/각도(측면·야외·선글라스) 베스트 컷 후보
  */
 export interface GlobalSwarmFaceCandidate {
   candidateId: string;
-  /** 'year_bridge': 기존 멤버의 비어 있던 연도/각도 징검다리 베스트 컷 | 'new_companion': 멤버 사진에서 새로 발견된 동반 인물 */
+  /** 'year_bridge': 기존 멤버의 새로운 연도/각도 베스트 컷 | 'new_companion': 멤버 사진에서 새로 발견된 동반 인물 */
   candidateType: 'year_bridge' | 'new_companion';
   contributorLabel: string;
   sourcePhoto: string;
   shootingYear: number;
   shootingDate: string;
+  /** 다각도·다조건 배지 (예: '2024년 야외·측면', '2023년 선글라스·역광', '2025년 야외·노을') */
+  conditionBadgeKo: string;
+  conditionShortKo: string;
   boundingBox: [number, number, number, number];
   cropUrl: string;
   coOccurredWithNames: string[];
@@ -151,6 +163,8 @@ export interface GlobalSwarmFaceCandidate {
   extraPhotoFiles: string[];
   sampleSearchQuery: string;
   sampleSearchSpace: 'gallery' | 'video';
+  /** 멤버가 [그냥 사진만 올리기 / 패스]를 눌러 호스트(방장) 전용 뒷정리 대기열(Host Cleanup Queue)로 이관되었는지 여부 */
+  passedToHostQueue: boolean;
   applied: boolean;
 }
 
