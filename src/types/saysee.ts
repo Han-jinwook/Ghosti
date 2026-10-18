@@ -461,8 +461,11 @@ export interface MerlinAuthState {
   tier: 'FREE' | 'PRO_LIFETIME';
   userId: string;
   email: string;
+  coinBalance: number;
   maxFreePhotos: number;
   hubUrl: string;
+  pcMasterUrl: string;
+  studioUrl: string;
 }
 
 export type SyncMode = 'supabase' | 'p2p-wifi';

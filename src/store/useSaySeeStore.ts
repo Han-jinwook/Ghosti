@@ -220,7 +220,7 @@ interface SaySeeStore {
   openLocalFolder: (target: 'quarantine' | 'photos' | 'docs') => Promise<void>;
   dismissQuarantineToast: () => void;
 
-  // [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 스펙]
+  // [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 스펙 + 1차 출시용 모바일 스토어 클린 모드(isStoreAppMode)]
   telemetry: HardwareTelemetry | null;
   merlinAuth: MerlinAuthState;
   syncState: SyncState;
@@ -235,6 +235,17 @@ interface SaySeeStore {
   gpuHelper24hActive: boolean;
   gpuHelperActiveTier: GpuHelperTierId;
   gpuHelperRemainingHours: number;
+  /** 스토어 1차 심사용 모바일 클린 모드 (인앱결제 수수료 방어 & 순수 무료 라운지 뷰어 모드) */
+  isStoreAppMode: boolean;
+  /** 추후 AI 설정 몬스터 정식 개통 시 스토어 재심사 없이 git push만으로 코인 잔액 UI를 켤 수 있는 플래그 (기본값 false) */
+  enableMobileCoinDisplay: boolean;
+  /** 앱 내 코인 잔액 표시 여부 (기본값 false: !isStoreAppMode ? enableMobileCoinDisplay : enableMobileCoinDisplay) */
+  showCoinBalanceInApp: boolean;
+  lastSentPcLinkChannel: 'email' | 'kakao' | null;
+  setIsStoreAppMode: (isStoreAppMode: boolean) => void;
+  setEnableMobileCoinDisplay: (enable: boolean) => void;
+  sendPcMasterUrlToEmail: () => Promise<void>;
+  sharePcMasterUrlToKakao: () => Promise<void>;
   setShowProModal: (show: boolean) => void;
   setActiveLoungeType: (lounge: LoungeType) => void;
   setActiveFamilyRoom: (room: FamilyRoomId) => void;
@@ -2533,7 +2544,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   dismissQuarantineToast: () => set({ lastQuarantineToast: null }),
 
-  // ─────────────── [4대 라운지 & 24시간 GPU 클라우드 서버 도우미] ───────────────
+  // ─────────────── [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 + 1차 출시용 모바일 클린 모드] ───────────────
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(550, 3230438906),
@@ -2553,6 +2564,73 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   gpuHelper24hActive: false,
   gpuHelperActiveTier: 'standard_1000',
   gpuHelperRemainingHours: 24,
+  isStoreAppMode:
+    typeof window !== 'undefined' &&
+    (Boolean(
+      (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+    ) ||
+      new URLSearchParams(window.location.search).get('storeApp') === '1'),
+  enableMobileCoinDisplay: false,
+  showCoinBalanceInApp: false,
+  lastSentPcLinkChannel: null,
+
+  setIsStoreAppMode: (isStoreAppMode) =>
+    set((state) => ({
+      isStoreAppMode,
+      showCoinBalanceInApp: isStoreAppMode ? state.enableMobileCoinDisplay : state.enableMobileCoinDisplay,
+      lastQuarantineToast: isStoreAppMode
+        ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: 요금표·코인 잔액을 100% 숨기고 PC 마스터 주소 전송 모드로 전환했습니다.'
+        : '💻 [PC 마스터 웹 모드(isStoreAppMode=false)]로 전환되었습니다.',
+    })),
+
+  setEnableMobileCoinDisplay: (enableMobileCoinDisplay) =>
+    set({
+      enableMobileCoinDisplay,
+      showCoinBalanceInApp: enableMobileCoinDisplay,
+      lastQuarantineToast: enableMobileCoinDisplay
+        ? '🪙 [코인 잔액 표시(enableMobileCoinDisplay=true)] 활성화: 상단 헤더에 멀린허브 코인 잔액이 표시됩니다.'
+        : '🔒 [코인 잔액 완전 비노출(showCoinBalanceInApp=false)] 기본값 적용 완료.',
+    }),
+
+  sendPcMasterUrlToEmail: async () => {
+    const { merlinAuth } = get();
+    const targetEmail = merlinAuth.email || 'beakes@sundreamer.app';
+    const pcMasterUrl = merlinAuth.pcMasterUrl || 'https://saysee.sundreamer.app';
+    const hubUrl = merlinAuth.hubUrl || 'https://os.sundreamer.app';
+    set({
+      lastSentPcLinkChannel: 'email',
+      lastQuarantineToast: `📩 [${targetEmail}] 메일로 세이씨 PC 마스터(${pcMasterUrl}) 및 멀린허브(${hubUrl}) 접속 주소를 발송했습니다! PC에서 메일을 열어 클릭 한 번으로 바로 시작하세요.`,
+    });
+  },
+
+  sharePcMasterUrlToKakao: async () => {
+    const { merlinAuth } = get();
+    const pcMasterUrl = merlinAuth.pcMasterUrl || 'https://saysee.sundreamer.app';
+    const hubUrl = merlinAuth.hubUrl || 'https://os.sundreamer.app';
+    const shareText = `[세이씨 SaySee PC 마스터 바로가기]\n검색할 필요 없이 PC에서 아래 링크를 클릭해 바로 마스터 세팅을 이어가세요!\n• 세이씨 PC 마스터: ${pcMasterUrl}\n• 썬드리머 멀린허브: ${hubUrl}`;
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+      }
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator
+          .share({
+            title: '세이씨(SaySee) PC 마스터 접속 주소',
+            text: shareText,
+            url: pcMasterUrl,
+          })
+          .catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+
+    set({
+      lastSentPcLinkChannel: 'kakao',
+      lastQuarantineToast: `💬 카카오톡으로 보낼 PC 버전 주소(${pcMasterUrl})가 준비·복사되었습니다! PC 카톡에서 클릭 한 번으로 세이씨 PC 마스터 및 멀린허브에 바로 진입하세요.`,
+    });
+  },
 
   setShowProModal: (showProModal) => set({ showProModal }),
 

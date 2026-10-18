@@ -13,9 +13,12 @@ export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
   token: 'merlin_jwt_mock_pro_9900_saysee_v1',
   tier: 'PRO_LIFETIME',
   userId: 'merlin-user-01',
-  email: 'founder@merlinhub.ai',
+  email: 'beakes@sundreamer.app',
+  coinBalance: 5200,
   maxFreePhotos: 300,
-  hubUrl: 'https://merlinhub.ai/checkout?app=saysee&plan=lifetime_9900',
+  hubUrl: 'https://os.sundreamer.app',
+  pcMasterUrl: 'https://saysee.sundreamer.app',
+  studioUrl: 'https://studio.sundreamer.app',
 };
 
 export function loadMerlinAuth(): MerlinAuthState {

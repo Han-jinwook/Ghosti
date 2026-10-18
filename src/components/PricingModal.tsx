@@ -30,7 +30,78 @@ export const FoundingMemberFomoBar: React.FC = () => {
 };
 
 /**
+ * 모바일 유저가 PC 마스터 세팅이 필요한 기능을 눌렀을 때,
+ * PC에서 일일이 검색하지 않고 클릭 한 번으로 진입할 수 있도록
+ * [📩 내 이메일로 PC 마스터 접속 주소 보내기] 및 [💬 카톡으로 PC 버전 주소 보내두기]를 제공하는 공통 패널
+ */
+export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
+  const {
+    merlinAuth,
+    sendPcMasterUrlToEmail,
+    sharePcMasterUrlToKakao,
+    lastSentPcLinkChannel,
+  } = useSaySeeStore();
+
+  return (
+    <div
+      className={`rounded-2xl bg-[#18181B] border border-primary-container/45 flex flex-col gap-3 ${
+        compact ? 'p-4' : 'p-5 md:p-6'
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+            💻 PC 마스터 1초 바로가기
+          </span>
+          <span className="font-headline-sm text-[15px] md:text-[16.5px] text-white font-extrabold">
+            PC에서 검색할 필요 없이, 내 이메일·카톡으로 시작 주소를 보내두세요!
+          </span>
+        </div>
+        <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px]">
+          🛂 여권 이메일: <strong className="text-primary-container">{merlinAuth.email}</strong>
+        </span>
+      </div>
+
+      <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+        아래 버튼을 누르면 로그인된 세이씨 여권 이메일(또는 카카오톡)로{' '}
+        <strong className="text-white">세이씨 PC 마스터({merlinAuth.pcMasterUrl})</strong> 및{' '}
+        <strong className="text-primary-container">멀린 패밀리 허브({merlinAuth.hubUrl})</strong> 접속 주소가 즉시 전송됩니다. PC 앞에 앉아 링크만 클릭하면 바로 마스터 환경으로 연결됩니다.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+        <button
+          type="button"
+          onClick={() => void sendPcMasterUrlToEmail()}
+          className="px-4 py-3 rounded-xl bg-primary-container hover:bg-primary-container/90 text-zinc-950 font-label-md text-[13px] font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-[0.98]"
+        >
+          <span>📩 내 이메일로 PC 마스터 접속 주소 보내기</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void sharePcMasterUrlToKakao()}
+          className="px-4 py-3 rounded-xl bg-[#FEE500] hover:bg-[#FDD800] text-[#191919] font-label-md text-[13px] font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-[0.98]"
+        >
+          <span>💬 카톡으로 PC 버전 주소 보내두기</span>
+        </button>
+      </div>
+
+      {lastSentPcLinkChannel && (
+        <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 font-body-sm text-[12px] flex items-center justify-between gap-2">
+          <span>
+            {lastSentPcLinkChannel === 'email'
+              ? `✓ [${merlinAuth.email}] 메일로 세이씨 PC 마스터(${merlinAuth.pcMasterUrl}) 및 멀린허브 바로가기 주소가 발송되었습니다!`
+              : `✓ 카카오톡 공유용 PC 마스터 주소(${merlinAuth.pcMasterUrl})가 준비·복사되었습니다! PC 카톡에서 클릭 한 번으로 바로 진입하세요.`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
  * [4대 라운지 초심플 기본 요금제 + ⚡ 24시간 GPU 클라우드 서버 도우미] 모달
+ * - isStoreAppMode === true 일 때는 요금표를 100% 숨기고 '내 이메일/카톡으로 PC 마스터 접속 주소 보내기' 전용 클린 모달로 작동
  */
 export const PricingModal: React.FC = () => {
   const {
@@ -44,9 +115,50 @@ export const PricingModal: React.FC = () => {
     gpuHelperActiveTier,
     activateGpuHelper24h,
     setDesktopTab,
+    isStoreAppMode,
   } = useSaySeeStore();
 
   if (!showProModal) return null;
+
+  // [스토어 1차 심사용 모바일 클린 모드(isStoreAppMode === true)]:
+  // 인앱결제(IAP) 수수료 및 리젝(Guideline 3.1.1) 원천 방어를 위해 요금표 노출 없이 PC 마스터 주소 전송 모달만 깔끔하게 노출
+  if (isStoreAppMode) {
+    return (
+      <div
+        onClick={() => setShowProModal(false)}
+        className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-2xl rounded-3xl bg-[#121215] border border-white/15 p-6 md:p-8 shadow-2xl flex flex-col gap-5 my-auto"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+            <div className="flex flex-col gap-1.5">
+              <span className="px-3 py-1 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold w-fit">
+                📱 모바일 라운지 뷰어 ➔ 💻 PC 마스터 연동 안내
+              </span>
+              <h2 className="font-headline-lg text-[20px] md:text-[23px] text-white font-black tracking-tight mt-1">
+                PC 마스터 세팅은 내 PC에서 클릭 한 번으로 이어가세요
+              </h2>
+              <p className="font-body-sm text-[12.5px] text-zinc-400">
+                대용량 원본 사진·영상의 로컬 AI 인덱싱과 마스터 라운지 관리 설정은 PC 웹 환경에서 지원됩니다.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowProModal(false)}
+              className="w-9 h-9 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 flex items-center justify-center text-zinc-200 shrink-0 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
+
+          <PcMasterQuickSendPanel />
+        </div>
+      </div>
+    );
+  }
 
   const GPU_HELPER_TIERS: Array<{
     id: GpuHelperTierId;
@@ -128,6 +240,9 @@ export const PricingModal: React.FC = () => {
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
+
+        {/* 모바일 접속자 편의: 검색 없이 내 이메일/카톡으로 PC 마스터 접속 주소 보내기 */}
+        <PcMasterQuickSendPanel compact />
 
         {/* 1. 4대 라운지 초심플 기본 요금제 (마스터 1인 결제 ➔ 멤버 전원 무료) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

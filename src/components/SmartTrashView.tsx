@@ -89,6 +89,7 @@ export const SmartTrashView: React.FC = () => {
     setDesktopTab,
     setMobileTab,
     setSearchSpace,
+    isStoreAppMode,
   } = useSaySeeStore();
 
   const [gridColumns, setGridColumns] = useState<3 | 4>(3);
@@ -104,7 +105,7 @@ export const SmartTrashView: React.FC = () => {
   });
   const [doctorChatInput, setDoctorChatInput] = useState('');
   const [doctorChatReply, setDoctorChatReply] = useState<string>(
-    '💬 AI 주치의 컨설턴트: "고클린처럼 기계적으로 지우지 않습니다. 종합건강검진 결과를 보시고 궁금한 항목을 물어보시면, 왜 전기를 먹는지·별도로 모아놓으면 왜 안전한지 친절히 설명해 드립니다. 최종 결정은 항목마다 직접 선택해 주세요."'
+    '💬 AI 주치의 컨설턴트: "기계적으로 일괄 삭제하지 않습니다. 종합건강검진 결과를 보시고 궁금한 항목을 물어보시면, 왜 용량을 차지하는지·별도로 모아놓으면 왜 안전한지 친절히 설명해 드립니다. 최종 결정은 항목마다 직접 선택해 주세요."'
   );
 
   const handleAskDoctor = (e: React.FormEvent) => {
@@ -115,13 +116,17 @@ export const SmartTrashView: React.FC = () => {
       setDoctorChatReply(
         `💬 AI 주치의 답변 ("${q}"): PC 바탕화면에 작업 문서와 바로가기(.lnk), 중복 사본이 뒤섞여 있으면 탐색기 부하가 커집니다. Chrome 등 핵심 아이콘만 남기고 나머지는 [D:\\_바탕화면_정리자료_아카이브]로 안전하게 모아두시길 권합니다.`
       );
-    } else if (q.includes('어르신') || q.includes('아이콘') || q.includes('앱')) {
+    } else if (q.includes('어르신') || q.includes('아이콘') || q.includes('앱') || q.includes('앨범')) {
       setDoctorChatReply(
-        `💬 AI 주치의 답변 ("${q}"): 6개월 이상 안 쓴 앱 42개는 지우지 않고 [별도 보관함]으로 모아두거나 [안전 동결]하면 배터리를 아낄 수 있습니다. 자주 쓰시는 카톡·유튜브·단골 카페는 어르신용 큰 아이콘으로 첫 화면에 배치해 드릴까요?`
+        isStoreAppMode
+          ? `💬 AI 주치의 답변 ("${q}"): 어르신들이 자주 찾으시는 손주·가족 앨범과 중요 문서는 큰 카드 레이아웃으로 첫 화면에 모아드리고, 중복 사본·스크린샷은 [30일 정리 대기함]으로 안전하게 분리해 드릴까요?`
+          : `💬 AI 주치의 답변 ("${q}"): 6개월 이상 안 쓴 앱 42개는 지우지 않고 [별도 보관함]으로 모아두거나 [안전 동결]하면 배터리를 아낄 수 있습니다. 자주 쓰시는 카톡·유튜브·단골 카페는 어르신용 큰 아이콘으로 첫 화면에 배치해 드릴까요?`
       );
     } else {
       setDoctorChatReply(
-        `💬 AI 주치의 답변 ("${q}"): 현재 백그라운드에서 은행·관공서 보안모듈(MagicLine, AnySign 등)이 전기와 CPU·메모리(약 420MB)를 상시 점유 중입니다. 은행 접속 시에만 켜지도록 안전 동결하시면 체감 속도가 확 올라갑니다.`
+        isStoreAppMode
+          ? `💬 AI 주치의 답변 ("${q}"): 고화질 원본 영상·사진 사본을 내 PC 마스터 볼트로 안전하게 이관하고 폰에는 13KB 섀도우 캐시만 남기면 스마트폰 저장공간이 넉넉해지고 1초 검색이 유지됩니다.`
+          : `💬 AI 주치의 답변 ("${q}"): 현재 백그라운드에서 은행·관공서 보안모듈(MagicLine, AnySign 등)이 전기와 CPU·메모리(약 420MB)를 상시 점유 중입니다. 은행 접속 시에만 켜지도록 안전 동결하시면 체감 속도가 확 올라갑니다.`
       );
     }
     setDoctorChatInput('');
@@ -185,16 +190,20 @@ export const SmartTrashView: React.FC = () => {
           </span>
         </div>
 
-        {/* 3대 종합검진 & 유저 직접 결정 카드 (모바일 바탕화면·미사용 앱 / PC 바탕화면 중복·바로가기 / 전기·CPU·메모리 쾌적화) */}
+        {/* 3대 종합검진 & 유저 직접 결정 카드 (모바일 스토어 앱 모드에서는 iOS Guideline 2.5.2 방어를 위해 미디어/앨범/PC 볼트 연동 표현으로 자동 전환) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-          {/* ① 모바일 바탕화면 & 미사용 앱·어르신 큰 아이콘 */}
+          {/* ① 모바일 바탕화면·앨범 분류 & 어르신 큰 카드/아이콘 */}
           <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
             <div className="flex flex-col gap-1.5">
               <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                📱 모바일 바탕화면 &amp; 미사용 앱 분류
+                {isStoreAppMode
+                  ? '📱 모바일 갤러리·메모 캡처 분류 & 어르신 큰 화면'
+                  : '📱 모바일 바탕화면 & 미사용 앱 분류'}
               </span>
               <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                쓰레기 아이콘으로 넘치는 바탕화면과 6개월 이상 안 쓴 앱(42개)·불필요한 웹 링크를 구분했습니다. 어르신용 <strong>큰 아이콘(3×4)</strong> 배치 또는 <strong>별도 보관함 모아놓기</strong> 중 선택하세요.
+                {isStoreAppMode
+                  ? '갤러리에 뒤섞인 일회성 영수증·스크린샷·중복 사본을 자동 분류했습니다. 어르신용 큰 카드(3×4) 배치 또는 별도 정리 보관함 모아놓기 중 선택하세요.'
+                  : '쓰레기 아이콘으로 넘치는 바탕화면과 6개월 이상 안 쓴 앱(42개)·불필요한 웹 링크를 구분했습니다. 어르신용 큰 아이콘(3×4) 배치 또는 별도 보관함 모아놓기 중 선택하세요.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
@@ -207,7 +216,11 @@ export const SmartTrashView: React.FC = () => {
                     : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
                 }`}
               >
-                {decisions.mobileHome === 'separate_folder' ? '✓ 미사용 앱 별도 모아놓기 선택됨' : '📦 미사용 앱 별도 모아놓기'}
+                {decisions.mobileHome === 'separate_folder'
+                  ? '✓ 별도 보관함 모아놓기 선택됨'
+                  : isStoreAppMode
+                  ? '📦 일회성 캡처 별도 모아놓기'
+                  : '📦 미사용 앱 별도 모아놓기'}
               </button>
               <button
                 type="button"
@@ -259,14 +272,18 @@ export const SmartTrashView: React.FC = () => {
             </div>
           </div>
 
-          {/* ③ 전기 먹는 이슈 제거로 CPU·메모리 쾌적화 & 속도 향상 */}
+          {/* ③ PC 원본 이관 13KB 섀도우 다이어트 / 전기 먹는 상주 이슈 제거 */}
           <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
             <div className="flex flex-col gap-1.5">
               <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                ⚡ 전기 먹는 상주 이슈 제거 (CPU·메모리 속도 향상)
+                {isStoreAppMode
+                  ? '⚡ 대용량 원본 PC 안전 이관 & 13KB 섀도우 다이어트'
+                  : '⚡ 전기 먹는 상주 이슈 제거 (CPU·메모리 속도 향상)'}
               </span>
               <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                은행·관공서 상주 보안모듈(MagicLine, AnySign 등)과 백그라운드 캐시가 전기와 메모리(420MB)를 상시 소모 중입니다. 안전 동결로 속도를 높이시겠습니까?
+                {isStoreAppMode
+                  ? '스마트폰 용량을 가장 많이 차지하는 4K 영상과 중복 원본을 내 PC 마스터 볼트로 안전 이관하고, 폰에는 13KB 초경량 섀도우 캐시만 남겨 저장공간을 확보할까요?'
+                  : '은행·관공서 상주 보안모듈(MagicLine, AnySign 등)과 백그라운드 캐시가 전기와 메모리(420MB)를 상시 소모 중입니다. 안전 동결로 속도를 높이시겠습니까?'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
@@ -279,7 +296,13 @@ export const SmartTrashView: React.FC = () => {
                     : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
                 }`}
               >
-                {decisions.powerDrain === 'freeze_remove' ? '✓ 유령 모듈 안전 동결 선택됨' : '⚡ 상주 모듈 동결 & 속도 향상'}
+                {decisions.powerDrain === 'freeze_remove'
+                  ? isStoreAppMode
+                    ? '✓ PC 원본 이관·13KB 다이어트 선택됨'
+                    : '✓ 유령 모듈 안전 동결 선택됨'
+                  : isStoreAppMode
+                  ? '⚡ PC 원본 이관 & 용량 확보'
+                  : '⚡ 상주 모듈 동결 & 속도 향상'}
               </button>
               <button
                 type="button"

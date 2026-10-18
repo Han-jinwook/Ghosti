@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeStore';
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../types/saysee';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
+import { PcMasterQuickSendPanel } from './PricingModal';
 
 const LOUNGE_TABS: Array<{
   id: LoungeType;
@@ -308,6 +309,7 @@ export const LoungeView: React.FC = () => {
     setShowFaceRegistryModal,
     restoreFromQuarantine,
     openLocalFolder,
+    isStoreAppMode,
   } = useSaySeeStore();
 
   const [studentPokedHost, setStudentPokedHost] = useState(false);
@@ -450,7 +452,7 @@ export const LoungeView: React.FC = () => {
                     AI 투시검색 몬스터
                   </span>
                   <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    월 1,900원 (연 19,000원)
+                    {isStoreAppMode ? '1초 로컬 투시검색' : '월 1,900원 (연 19,000원)'}
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
@@ -464,11 +466,19 @@ export const LoungeView: React.FC = () => {
                     AI 클린 몬스터
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    기기 1대당 1,900원
+                    {isStoreAppMode ? 'AI 미디어 주치의 진단' : '기기 1대당 1,900원'}
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 종합검진하고, <strong>LLM 대화형 상담 가이드</strong>로 각 항목을 유저가 직접 결정합니다.
+                  {isStoreAppMode ? (
+                    <>
+                      내 사진첩 <strong>중복·유사 사진, 영수증·스크린샷·일회성 사물 메모</strong>를 AI 주치의가 정밀 진단하고, <strong>대화형 상담 가이드</strong>를 통해 30일 안전 대기함 격리 및 PC 마스터 연동 정리를 유저가 직접 결정합니다.
+                    </>
+                  ) : (
+                    <>
+                      모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 종합검진하고, <strong>LLM 대화형 상담 가이드</strong>로 각 항목을 유저가 직접 결정합니다.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -589,7 +599,7 @@ export const LoungeView: React.FC = () => {
                       영상 {trialSampleVideos}개 정밀 해부 완료
                     </div>
                     <p className="font-body-sm text-[12px] text-zinc-400">
-                      나머지 {totalDeviceVideos - trialSampleVideos}개 영상은 정기구독 시 전 구간 자동 해부됩니다.
+                      나머지 {totalDeviceVideos - trialSampleVideos}개 영상은 PC 마스터 연결 시 전 구간 자동 해부됩니다.
                     </p>
                     <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
                       해부된 영상 장면 검색해보기 →
@@ -722,7 +732,7 @@ export const LoungeView: React.FC = () => {
                   {trialSafetyStep === 'restored' && (
                     <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[12.5px] text-emerald-300 flex items-center justify-between gap-2">
                       <span>
-                        ✅ <strong>[원복 검증 완료!]</strong> 정리 대기함에 있던 파일들이 0.5초 만에 원래 폴더 위치로 100% 되돌아왔습니다. 실수로 지워질 걱정 없이 안심하고 정리하세요!
+                        ✅ <strong>[원복 검증 완료!]</strong> 정리 대기함에 있던 파일들이 0.5초 만에 원래 폴더로 100% 되돌아왔습니다. 실수로 지워질 걱정 없이 안심하고 정리하세요!
                       </span>
                       <button
                         type="button"
@@ -746,69 +756,75 @@ export const LoungeView: React.FC = () => {
               </div>
             )}
 
-            {/* 개인 라운지 요금제: AI 클린 몬스터(기기 1대당 1,900원) vs AI 투시검색 몬스터(월 1,900원 / 연 19,000원 초기 100명 한정 평생권 프로모션) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
-              <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                    AI 클린 몬스터 — 디지털 종합건강검진 &amp; 대화형 컨설팅
-                  </span>
-                  <div className="font-headline-md text-[24px] text-white font-black">
-                    기기 1대당 1,900원
-                  </div>
-                  <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                    모바일·PC 바탕화면 정리(미사용 앱 구분/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거로 CPU·메모리 속도 향상. AI 주치의와 대화하며 항목별로 유저가 직접 결정하고 언제든 0.5초 원복됩니다.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('personal_single_2900')}
-                  className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold transition-colors whitespace-nowrap"
-                >
-                  AI 클린 몬스터 (기기 1대당 1,900원)
-                </button>
+            {/* 개인 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
+            {isStoreAppMode ? (
+              <div className="pt-3 border-t border-white/10">
+                <PcMasterQuickSendPanel />
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
+                <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
+                      AI 클린 몬스터 — 디지털 종합건강검진 &amp; 대화형 컨설팅
+                    </span>
+                    <div className="font-headline-md text-[24px] text-white font-black">
+                      기기 1대당 1,900원
+                    </div>
+                    <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+                      모바일·PC 바탕화면 정리(미사용 앱 구분/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거로 CPU·메모리 속도 향상. AI 주치의와 대화하며 항목별로 유저가 직접 결정하고 언제든 0.5초 원복됩니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => activatePricingPlan('personal_single_2900')}
+                    className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold transition-colors whitespace-nowrap"
+                  >
+                    AI 클린 몬스터 (기기 1대당 1,900원)
+                  </button>
+                </div>
 
-              <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                      AI 투시검색 몬스터 + 월 1회 AI 클린 몬스터 무료 왕진
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold whitespace-nowrap">
-                      초기 100명 한정 연 19,000원 평생권 프로모션
-                    </span>
+                <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
+                        AI 투시검색 몬스터 + 월 1회 AI 클린 몬스터 무료 왕진
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold whitespace-nowrap">
+                        초기 100명 한정 연 19,000원 평생권 프로모션
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-headline-md text-[24px] text-white font-black">
+                        월 1,900원
+                      </span>
+                      <span className="font-label-mono text-[13px] text-primary-container font-bold">
+                        (연 19,000원)
+                      </span>
+                    </div>
+                    <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                      전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) <strong>1초 투시검색</strong> + 중복 사진 최고화질 원본 보존 &amp; 연사 1장 선택 부가서비스 + <strong>초기 100명 한정 연 19,000원 평생권 프로모션!</strong>
+                    </p>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-headline-md text-[24px] text-white font-black">
-                      월 1,900원
-                    </span>
-                    <span className="font-label-mono text-[13px] text-primary-container font-bold">
-                      (연 19,000원)
-                    </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('personal_sub_3900')}
+                      className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
+                    >
+                      월 1,900원 시작
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('personal_year_35000')}
+                      className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
+                    >
+                      연 19,000원 (100명 평생권)
+                    </button>
                   </div>
-                  <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                    전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) <strong>1초 투시검색</strong> + 중복 사진 최고화질 원본 보존 &amp; 연사 1장 선택 부가서비스 + <strong>초기 100명 한정 연 19,000원 평생권 프로모션!</strong>
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('personal_sub_3900')}
-                    className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
-                  >
-                    월 1,900원 시작
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('personal_year_35000')}
-                    className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
-                  >
-                    연 19,000원 (100명 평생권)
-                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </section>
         </>
       )}
@@ -1033,78 +1049,84 @@ export const LoungeView: React.FC = () => {
               </div>
             )}
 
-            {/* 패밀리 라운지 요금제 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
-              <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <span className="font-label-sm text-[11.5px] text-zinc-300 font-bold">
-                    🏠 우리집 단독 — 우리집 전용 시크릿 라운지 (방 1개)
-                  </span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-headline-md text-[24px] text-white font-black">
-                      월 5,900원
-                    </span>
-                    <span className="font-label-mono text-[13px] text-zinc-300 font-bold">
-                      (연 59,000원)
-                    </span>
-                  </div>
-                  <p className="font-body-sm text-[12px] text-zinc-400">
-                    부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 1초 실명 검색
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('family_home_5900')}
-                    className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold"
-                  >
-                    월 5,900원 시작
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('family_home_year_59000')}
-                    className="py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
-                  >
-                    연 59,000원 시작
-                  </button>
-                </div>
+            {/* 패밀리 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
+            {isStoreAppMode ? (
+              <div className="pt-3 border-t border-white/10">
+                <PcMasterQuickSendPanel />
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
+                <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-label-sm text-[11.5px] text-zinc-300 font-bold">
+                      🏠 우리집 단독 — 우리집 전용 시크릿 라운지 (방 1개)
+                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-headline-md text-[24px] text-white font-black">
+                        월 5,900원
+                      </span>
+                      <span className="font-label-mono text-[13px] text-zinc-300 font-bold">
+                        (연 59,000원)
+                      </span>
+                    </div>
+                    <p className="font-body-sm text-[12px] text-zinc-400">
+                      부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 1초 실명 검색
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('family_home_5900')}
+                      className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold"
+                    >
+                      월 5,900원 시작
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('family_home_year_59000')}
+                      className="py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
+                    >
+                      연 59,000원 시작
+                    </button>
+                  </div>
+                </div>
 
-              <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                    👨‍👩‍👧‍👦 양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
-                  </span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-headline-md text-[24px] text-white font-black">
-                      월 8,900원
+                <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
+                      👨‍👩‍👧‍👦 양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
                     </span>
-                    <span className="font-label-mono text-[13px] text-primary-container font-bold">
-                      (연 89,000원)
-                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-headline-md text-[24px] text-white font-black">
+                        월 8,900원
+                      </span>
+                      <span className="font-label-mono text-[13px] text-primary-container font-bold">
+                        (연 89,000원)
+                      </span>
+                    </div>
+                    <p className="font-body-sm text-[12px] text-zinc-300">
+                      사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 손주·가족 사진을 원하는 방에만 자동 배포합니다.
+                    </p>
                   </div>
-                  <p className="font-body-sm text-[12px] text-zinc-300">
-                    사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 손주·가족 사진을 원하는 방에만 자동 배포합니다.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('family_three_8900')}
-                    className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
-                  >
-                    양가 3방 월 8,900원
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('family_three_year_89000')}
-                    className="py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-md text-[12.5px] font-bold"
-                  >
-                    연 89,000원 시작
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('family_three_8900')}
+                      className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
+                    >
+                      양가 3방 월 8,900원
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('family_three_year_89000')}
+                      className="py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-md text-[12.5px] font-bold"
+                    >
+                      연 89,000원 시작
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </section>
         </>
       )}
@@ -1116,10 +1138,10 @@ export const LoungeView: React.FC = () => {
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                ⛳ 클럽 라운지 — 4050 동창회 · 골프 · 산악회 (총무 1인 결제 ➔ 전 회원 무료)
+                ⛳ 클럽 라운지 — 4050 동창회 · 골프 · 산악회 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(총무 1인 결제 ➔ 전 회원 무료)'}
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                동창회·모임 총무(👑 방장) 1인 결제로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 열람</strong>과 <strong>5MB 무손실 원본 1초 소환</strong>을 누립니다.
+                동창회·모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 열람</strong>과 <strong>5MB 무손실 원본 1초 소환</strong>을 누립니다.
               </p>
             </div>
 
@@ -1158,7 +1180,7 @@ export const LoungeView: React.FC = () => {
                     ⚡ 13KB 초경량 열람 &amp; 5MB 원본 소환
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    총무 1인 결제 ➔ 회원 무료
+                    전 회원 무료 열람
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
@@ -1311,68 +1333,74 @@ export const LoungeView: React.FC = () => {
               </div>
             )}
 
-            {/* 클럽 라운지 인원별 3단계 요금제 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-white/10">
-              {CLUB_TIERS.map((tier) => {
-                const isSelected = clubSizeTier === tier.id;
-                return (
-                  <div
-                    key={tier.id}
-                    onClick={() => setClubSizeTier(tier.id)}
-                    className={`p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between gap-3 border ${
-                      isSelected
-                        ? 'bg-zinc-900 border-primary-container'
-                        : 'bg-zinc-950/80 border-white/10 hover:bg-zinc-900/60'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-headline-sm text-[15px] text-white font-bold">
-                          {tier.title}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-mono text-[10.5px]">
-                          {tier.capacity}
+            {/* 클럽 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
+            {isStoreAppMode ? (
+              <div className="pt-3 border-t border-white/10">
+                <PcMasterQuickSendPanel />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-white/10">
+                {CLUB_TIERS.map((tier) => {
+                  const isSelected = clubSizeTier === tier.id;
+                  return (
+                    <div
+                      key={tier.id}
+                      onClick={() => setClubSizeTier(tier.id)}
+                      className={`p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between gap-3 border ${
+                        isSelected
+                          ? 'bg-zinc-900 border-primary-container'
+                          : 'bg-zinc-950/80 border-white/10 hover:bg-zinc-900/60'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-headline-sm text-[15px] text-white font-bold">
+                            {tier.title}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-mono text-[10.5px]">
+                            {tier.capacity}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="font-headline-md text-[22px] text-white font-black">
+                            {tier.monthly}
+                          </span>
+                          <span className="font-label-mono text-[12px] text-primary-container font-bold">
+                            ({tier.yearly})
+                          </span>
+                        </div>
+                        <span className="font-label-mono text-[11px] text-zinc-400">
+                          ⚡ {tier.gpuDaily}
                         </span>
                       </div>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <span className="font-headline-md text-[22px] text-white font-black">
-                          {tier.monthly}
-                        </span>
-                        <span className="font-label-mono text-[12px] text-primary-container font-bold">
-                          ({tier.yearly})
-                        </span>
-                      </div>
-                      <span className="font-label-mono text-[11px] text-zinc-400">
-                        ⚡ {tier.gpuDaily}
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-white/10">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          activatePricingPlan(tier.monthlyPlanId);
-                        }}
-                        className="py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
-                      >
-                        {tier.monthly}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          activatePricingPlan(tier.yearlyPlanId);
-                        }}
-                        className="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold"
-                      >
-                        {tier.yearly}
-                      </button>
+                      <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-white/10">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            activatePricingPlan(tier.monthlyPlanId);
+                          }}
+                          className="py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
+                        >
+                          {tier.monthly}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            activatePricingPlan(tier.yearlyPlanId);
+                          }}
+                          className="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold"
+                        >
+                          {tier.yearly}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         </>
       )}
@@ -1384,10 +1412,18 @@ export const LoungeView: React.FC = () => {
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                🎒 스쿨 라운지 — 초·중·고 학급 · 동아리 · 체육대회 (월 900원 단일 특가)
+                🎒 스쿨 라운지 — 초·중·고 학급 · 동아리 · 체육대회 {isStoreAppMode ? '(우리 반 전원 무료 타임캡슐)' : '(월 900원 단일 특가)'}
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                학생증 로컬 0.1초 인증만으로 학급·동아리 인원수 상관없이 <strong>월 900원(연 9,000원)</strong>! 반 친구들 전원이 무료로 수련회·축제 사진을 1초 만에 찾습니다.
+                {isStoreAppMode ? (
+                  <>
+                    학생증 로컬 0.1초 인증과 방장 집 게이밍 PC 연동만으로 반 친구들 전원이 무료로 수련회·체육대회·축제 사진을 1초 만에 찾습니다.
+                  </>
+                ) : (
+                  <>
+                    학생증 로컬 0.1초 인증만으로 학급·동아리 인원수 상관없이 <strong>월 900원(연 9,000원)</strong>! 반 친구들 전원이 무료로 수련회·축제 사진을 1초 만에 찾습니다.
+                  </>
+                )}
               </p>
             </div>
 
@@ -1402,7 +1438,7 @@ export const LoungeView: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  학생증 사진 1장을 내 기기 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정 없이 학생 할인을 즉시 적용합니다.
+                  학생증 사진 1장을 내 기기 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정 없이 학생 전용 라운지를 즉시 인증합니다.
                 </p>
               </div>
 
@@ -1423,14 +1459,16 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🪙 인원 무제한 월 900원 단일 특가
+                    {isStoreAppMode ? '🎮 방장 게이밍 PC 연동 부스트' : '🪙 인원 무제한 월 900원 단일 특가'}
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
                     방장 PC 콕 찌르기
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 무료체험 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.
+                  {isStoreAppMode
+                    ? '30명 학급이든 100명 동아리든 인원 제한 없이 연결! 무료체험 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'
+                    : '30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 무료체험 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'}
                 </p>
               </div>
             </div>
@@ -1594,64 +1632,70 @@ export const LoungeView: React.FC = () => {
               </div>
             )}
 
-            {/* 스쿨 라운지 요금제 */}
-            <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                    초·중·고 반/동아리 특가 월 900원
-                  </span>
-                  <span
-                    className={`px-2.5 py-0.5 rounded font-label-mono text-[11px] font-bold border ${
-                      studentOcrVerified
-                        ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
-                        : 'bg-zinc-950 border-white/10 text-zinc-300'
-                    }`}
-                  >
-                    {studentOcrVerified
-                      ? '✓ 학생증 로컬 OCR 0.1초 인증 완료 (외부 전송 0 Byte)'
-                      : '🔒 학생증 로컬 OCR 0.1초 인증 대기'}
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="font-headline-md text-[26px] text-white font-black">
-                    월 900원
-                  </span>
-                  <span className="font-label-mono text-[14px] text-primary-container font-bold">
-                    (연 9,000원 · 인원 제한 없음)
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12px] text-zinc-300">
-                  학생증 사진 1장을 로컬 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정이 없습니다.
-                </p>
+            {/* 스쿨 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
+            {isStoreAppMode ? (
+              <div className="pt-3 border-t border-white/10">
+                <PcMasterQuickSendPanel />
               </div>
+            ) : (
+              <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                      초·중·고 반/동아리 특가 월 900원
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded font-label-mono text-[11px] font-bold border ${
+                        studentOcrVerified
+                          ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
+                          : 'bg-zinc-950 border-white/10 text-zinc-300'
+                      }`}
+                    >
+                      {studentOcrVerified
+                        ? '✓ 학생증 로컬 OCR 0.1초 인증 완료 (외부 전송 0 Byte)'
+                        : '🔒 학생증 로컬 OCR 0.1초 인증 대기'}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="font-headline-md text-[26px] text-white font-black">
+                      월 900원
+                    </span>
+                    <span className="font-label-mono text-[14px] text-primary-container font-bold">
+                      (연 9,000원 · 인원 제한 없음)
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12px] text-zinc-300">
+                    학생증 사진 1장을 로컬 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정이 없습니다.
+                  </p>
+                </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {!studentOcrVerified && (
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {!studentOcrVerified && (
+                    <button
+                      type="button"
+                      onClick={verifyStudentOcr}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-md text-[12.5px] font-bold"
+                    >
+                      🪪 학생증 로컬 OCR 0.1초 인증
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={verifyStudentOcr}
-                    className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-md text-[12.5px] font-bold"
+                    onClick={() => activatePricingPlan('student_sub_900')}
+                    className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
                   >
-                    🪪 학생증 로컬 OCR 0.1초 인증
+                    월 900원 개설
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('student_sub_900')}
-                  className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
-                >
-                  월 900원 개설
-                </button>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('student_year_9000')}
-                  className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
-                >
-                  연 9,000원 개설
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => activatePricingPlan('student_year_9000')}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
+                  >
+                    연 9,000원 개설
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </section>
         </>
       )}
@@ -1870,6 +1914,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     applyStickChipToAllPendingAnalogPhotos,
     submitAnalogYearProposal,
     approveAllAnalogYearProposals,
+    isStoreAppMode,
+    setShowProModal,
   } = useSaySeeStore();
 
   const [instantFlushed, setInstantFlushed] = useState(false);
@@ -2035,14 +2081,20 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             {!gpuHelper24hActive && (
               <button
                 type="button"
-                onClick={() =>
-                  activateGpuHelper24h(
-                    activeLoungeType === 'club' ? 'club_small_1000' : 'standard_1000'
-                  )
-                }
+                onClick={() => {
+                  if (isStoreAppMode) {
+                    setShowProModal(true);
+                  } else {
+                    activateGpuHelper24h(
+                      activeLoungeType === 'club' ? 'club_small_1000' : 'standard_1000'
+                    );
+                  }
+                }}
                 className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-bold"
               >
-                ⚡ 방장 PC가 꺼져 있나요? 1일 1,000원 GPU 서버 도우미 즉시 가동
+                {isStoreAppMode
+                  ? '💻 방장 PC 마스터 접속 주소 내 이메일/카톡으로 받기'
+                  : '⚡ 방장 PC가 꺼져 있나요? 1일 1,000원 GPU 서버 도우미 즉시 가동'}
               </button>
             )}
             <button
@@ -2504,6 +2556,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     verifyStudentOcr,
     activePricingPlan,
     activatePricingPlan,
+    isStoreAppMode,
+    setShowProModal,
   } = useSaySeeStore();
 
   const [inviteCopied, setInviteCopied] = useState(false);
@@ -2535,43 +2589,61 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
               AI 설정 몬스터
             </span>
-            <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px]">
-              현재 플랜: {PLAN_BADGE_LABELS[activePricingPlan]}
-            </span>
-            <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-              초기 100명 한정 연 19,000원 평생권 프로모션
-            </span>
+            {!isStoreAppMode && (
+              <>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px]">
+                  현재 플랜: {PLAN_BADGE_LABELS[activePricingPlan]}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                  초기 100명 한정 연 19,000원 평생권 프로모션
+                </span>
+              </>
+            )}
           </div>
           <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-            내 PC↔폰 13KB 섀도우 자동 싱크 &amp; 상시 AI 색인 업그레이드
+            내 PC↔폰 13KB 섀도우 자동 싱크 &amp; 상시 AI 색인 관리
           </h2>
           <p className="font-body-sm text-[12.5px] text-zinc-300">
-            종합건강검진·대화형 청소는 <strong>AI 클린 몬스터(기기 1대당 1,900원)</strong>로, 상시 스마트폰↔PC 13KB 섀도우 캐시 자동 동기화 및 1초 검색은 <strong>AI 투시검색 몬스터 월 1,900원(연 19,000원 · 초기 100명 한정 평생권)</strong>으로 즉시 개통됩니다.
+            {isStoreAppMode
+              ? '모바일 앱에서는 내 PC 마스터와 연결된 사진·문서·영상 13KB 섀도우 캐시를 1초 만에 검색·열람합니다. PC 마스터 세팅이 필요하면 아래 버튼으로 내 이메일이나 카톡에 시작 주소를 보내두세요.'
+              : '종합건강검진·대화형 청소는 AI 클린 몬스터(기기 1대당 1,900원)로, 상시 스마트폰↔PC 13KB 섀도우 캐시 자동 동기화 및 1초 검색은 AI 투시검색 몬스터 월 1,900원(연 19,000원 · 초기 100명 한정 평생권)으로 즉시 개통됩니다.'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => activatePricingPlan('personal_single_2900')}
-            className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
-          >
-            AI 클린 몬스터 1,900원
-          </button>
-          <button
-            type="button"
-            onClick={() => activatePricingPlan('personal_sub_3900')}
-            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold"
-          >
-            AI 투시검색 월 1,900원
-          </button>
-          <button
-            type="button"
-            onClick={() => activatePricingPlan('personal_year_35000')}
-            className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
-          >
-            연 19,000원 (100명 평생권)
-          </button>
+          {isStoreAppMode ? (
+            <button
+              type="button"
+              onClick={() => setShowProModal(true)}
+              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold"
+            >
+              📩 내 이메일/카톡으로 PC 마스터 주소 보내기
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => activatePricingPlan('personal_single_2900')}
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
+              >
+                AI 클린 몬스터 1,900원
+              </button>
+              <button
+                type="button"
+                onClick={() => activatePricingPlan('personal_sub_3900')}
+                className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold"
+              >
+                AI 투시검색 월 1,900원
+              </button>
+              <button
+                type="button"
+                onClick={() => activatePricingPlan('personal_year_35000')}
+                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
+              >
+                연 19,000원 (100명 평생권)
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -2584,7 +2656,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-              👑 가족 초대 &amp; 양가 통합권 관리 (마스터 1인 결제 ➔ 가족 전원 무료)
+              {isStoreAppMode
+                ? '👑 가족 초대 & 양가 방 분리 관리 (가족 전원 100% 무료 열람)'
+                : '👑 가족 초대 & 양가 통합권 관리 (마스터 1인 결제 ➔ 가족 전원 무료)'}
             </span>
             <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
               가족 무수락 카톡 초대 링크/QR &amp; 방장 즉시 강퇴권 관리
@@ -2602,20 +2676,32 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             >
               {inviteCopied ? '✓ 카톡 무수락 초대 링크 복사됨!' : '💬 가족 무수락 카톡 초대 링크·QR 발급'}
             </button>
-            <button
-              type="button"
-              onClick={() => activatePricingPlan('family_home_5900')}
-              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
-            >
-              🏠 우리집 단독 월 5,900원
-            </button>
-            <button
-              type="button"
-              onClick={() => activatePricingPlan('family_three_8900')}
-              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-sm text-[12px] font-bold"
-            >
-              👨‍👩‍👧‍👦 양가 통합권(3방) 월 8,900원
-            </button>
+            {isStoreAppMode ? (
+              <button
+                type="button"
+                onClick={() => setShowProModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
+              >
+                📩 PC 마스터 주소 보내기
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => activatePricingPlan('family_home_5900')}
+                  className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
+                >
+                  🏠 우리집 단독 월 5,900원
+                </button>
+                <button
+                  type="button"
+                  onClick={() => activatePricingPlan('family_three_8900')}
+                  className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-sm text-[12px] font-bold"
+                >
+                  👨‍👩‍👧‍👦 양가 통합권(3방) 월 8,900원
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -2686,30 +2772,45 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               소(20명) · 중(100명) · 대(무제한) 클럽 설정 및 참석자 관리
             </h2>
             <p className="font-body-sm text-[12.5px] text-zinc-400">
-              각 클럽권은 방 1개 기준이며, 소모임/파트별 방 분리를 원할 경우 소형 클럽 등을 별도 추가 구매할 수 있습니다.
+              {isStoreAppMode
+                ? '초대받은 클럽 회원은 모바일 앱에서 100% 무료로 모임 사진을 찾고 감상합니다. 방 개설 및 마스터 서버 연동은 PC 마스터에서 관리합니다.'
+                : '각 클럽권은 방 1개 기준이며, 소모임/파트별 방 분리를 원할 경우 소형 클럽 등을 별도 추가 구매할 수 있습니다.'}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={copyInviteLink}
-            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
-          >
-            {inviteCopied ? '✓ 클럽 회원 초대 링크 복사됨!' : '⛳ 클럽 무수락 초대 링크·QR 발급'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={copyInviteLink}
+              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
+            >
+              {inviteCopied ? '✓ 클럽 회원 초대 링크 복사됨!' : '⛳ 클럽 무수락 초대 링크·QR 발급'}
+            </button>
+            {isStoreAppMode && (
+              <button
+                type="button"
+                onClick={() => setShowProModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
+              >
+                📩 PC 마스터 주소 보내기
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[
-            { id: 'small' as ClubSizeTier, label: '소형 클럽 (20명 기준)', price: '월 4,900원 (연 49,000원)', plan: 'club_small_4900' as PricingPlanId },
-            { id: 'medium' as ClubSizeTier, label: '중형 클럽 (100명 기준)', price: '월 7,900원 (연 79,000원)', plan: 'club_medium_7900' as PricingPlanId },
-            { id: 'large' as ClubSizeTier, label: '대형 클럽 (무제한)', price: '월 14,900원 (연 149,000원)', plan: 'club_large_14900' as PricingPlanId },
+            { id: 'small' as ClubSizeTier, label: '소형 클럽 (20명 기준)', price: isStoreAppMode ? '20명 이하 모임 방' : '월 4,900원 (연 49,000원)', plan: 'club_small_4900' as PricingPlanId },
+            { id: 'medium' as ClubSizeTier, label: '중형 클럽 (100명 기준)', price: isStoreAppMode ? '100명 이하 동창·산악회' : '월 7,900원 (연 79,000원)', plan: 'club_medium_7900' as PricingPlanId },
+            { id: 'large' as ClubSizeTier, label: '대형 클럽 (무제한)', price: isStoreAppMode ? '인원 무제한 총동창회' : '월 14,900원 (연 149,000원)', plan: 'club_large_14900' as PricingPlanId },
           ].map((t) => (
             <div
               key={t.id}
               onClick={() => {
                 setClubSizeTier(t.id);
-                activatePricingPlan(t.plan);
+                if (!isStoreAppMode) {
+                  activatePricingPlan(t.plan);
+                }
               }}
               className={`p-3.5 rounded-xl border cursor-pointer flex items-center justify-between ${
                 clubSizeTier === t.id
@@ -2763,10 +2864,14 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-            🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)
+            {isStoreAppMode
+              ? '🎒 스쿨 라운지 (초·중·고 우리반·동아리 100% 무료 합류)'
+              : '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)'}
           </span>
           <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-            하교 후 방장 게이밍 PC 자동 인덱싱 &amp; 초·중·고 반/동아리 인원 무제한 월 900원 학생인증
+            {isStoreAppMode
+              ? '하교 후 방장 게이밍 PC 자동 인덱싱 & 학생증 로컬 OCR 0.1초 인증'
+              : '하교 후 방장 게이밍 PC 자동 인덱싱 & 초·중·고 반/동아리 인원 무제한 월 900원 학생인증'}
           </h2>
           <p className="font-body-sm text-[12.5px] text-zinc-300">
             낮에 학교·학원에서 찍은 우리반 사진·영상은 대기실에 모아두었다가, 하교 후 방장 집 게이밍 PC가 켜지면 그래픽카드(GPU) 파워로 1초 만에 색인·압축 배포합니다.
@@ -2787,13 +2892,23 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               ? '✓ 학생증 로컬 OCR 0.1초 인증됨'
               : '🪪 학생증 로컬 OCR 0.1초 인증하기'}
           </button>
-          <button
-            type="button"
-            onClick={() => activatePricingPlan('student_sub_900')}
-            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
-          >
-            🎒 월 900원 (연 9,000원) 개통
-          </button>
+          {isStoreAppMode ? (
+            <button
+              type="button"
+              onClick={() => setShowProModal(true)}
+              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
+            >
+              📩 PC 마스터 주소 보내기
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => activatePricingPlan('student_sub_900')}
+              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
+            >
+              🎒 월 900원 (연 9,000원) 개통
+            </button>
+          )}
         </div>
       </div>
 

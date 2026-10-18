@@ -10,6 +10,7 @@ import {
   LoungeIndexingWaitingRoom,
   LoungeView,
 } from './LoungeView';
+import { PcMasterQuickSendPanel } from './PricingModal';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -164,6 +165,13 @@ export const DesktopDashboard: React.FC = () => {
     triggerSyncNow,
     themeMode,
     toggleThemeMode,
+    merlinAuth,
+    isStoreAppMode,
+    enableMobileCoinDisplay,
+    showCoinBalanceInApp,
+    setIsStoreAppMode,
+    setEnableMobileCoinDisplay,
+    setShowProModal,
   } = useSaySeeStore();
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
@@ -293,8 +301,22 @@ export const DesktopDashboard: React.FC = () => {
             </nav>
           </div>
 
-          {/* 우측 상단: 심플 아이콘 테마 토글 (밝은 화면일 때 달 아이콘 / 어두운 화면일 때 해 아이콘) */}
+          {/* 우측 상단: 코인 잔액(1차 출시 시 showCoinBalanceInApp=false 기본 완전 비노출 · enableMobileCoinDisplay 플래그 연동) + 심플 아이콘 테마 토글 */}
           <div className="flex items-center gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
+            {showCoinBalanceInApp && (!isStoreAppMode || enableMobileCoinDisplay) && (
+              <button
+                type="button"
+                onClick={() => setShowProModal(true)}
+                title="멀린 패밀리 허브 코인 지갑"
+                className={`px-3 py-1.5 rounded-full font-label-mono text-[11.5px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  themeMode === 'light'
+                    ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                    : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
+                }`}
+              >
+                <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()} 코인</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={toggleThemeMode}
@@ -783,6 +805,57 @@ export const DesktopDashboard: React.FC = () => {
           {/* 라운지별 전용 상단 설정 섹션 (AI 설정 몬스터 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
           <LoungeCustomSettingsHeader />
 
+          {/* 📩 모바일 ➔ PC 마스터 원클릭 주소 전송 패널 (내 이메일 / 카톡으로 PC 시작 주소 보내기) */}
+          <PcMasterQuickSendPanel />
+
+          {/* 🛡️ 스토어 1차 심사 통과용 클린 모드(isStoreAppMode) & 코인 잔액 노출 플래그(enableMobileCoinDisplay) 제어 바 */}
+          <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+                  스토어 1차 출시 정책 (넷플릭스 방식)
+                </span>
+                <span className="font-label-mono text-[11px] text-zinc-400">
+                  isStoreAppMode={String(isStoreAppMode)} · showCoinBalanceInApp={String(showCoinBalanceInApp)}
+                </span>
+              </div>
+              <h3 className="font-headline-sm text-[15.5px] text-white font-bold">
+                모바일 스토어 클린 모드 &amp; 상단 코인 잔액 노출 토글 (AI 설정 몬스터 정식 개통 전 기본 OFF)
+              </h3>
+              <p className="font-body-sm text-[12px] text-zinc-400">
+                1차 스토어 심사 시 요금표·결제창과 상단 코인 잔액을 100% 숨겨 순수 무료 라운지 뷰어로 무마찰 통과하며, 추후 서버 배포(<code>git push</code>)만으로 코인 잔액 UI를 즉시 켤 수 있습니다.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsStoreAppMode(!isStoreAppMode)}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold border transition-all cursor-pointer ${
+                  isStoreAppMode
+                    ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/15'
+                }`}
+              >
+                {isStoreAppMode ? '📱 현재: 스토어 심사 클린 모드 ON' : '💻 현재: PC 웹 마스터 모드 (클릭 시 스토어 모드 미리보기)'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEnableMobileCoinDisplay(!enableMobileCoinDisplay)}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold border transition-all cursor-pointer ${
+                  enableMobileCoinDisplay
+                    ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-white/15'
+                }`}
+              >
+                {enableMobileCoinDisplay
+                  ? '🪙 코인 잔액 표시: ON (enableMobileCoinDisplay=true)'
+                  : '🔒 코인 잔액 완전 숨김: OFF (1차 출시 기본값)'}
+              </button>
+            </div>
+          </div>
+
           {/* 정식 스토어 및 공인 설치 가이드 (편법 배제 · 안드로이드 / iOS / Windows PC 정공법) */}
           <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -835,126 +908,128 @@ export const DesktopDashboard: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  Microsoft 공식 EV 코드사이닝 인증서가 서명된 정식 설치파일(<code>SaySee_Setup.exe</code>)로 보안 경고 없이 안전하게 구동됩니다.
+                  Microsoft 공식 코드사이닝 인증서가 서명된 정식 설치파일(<code>SaySee_Setup.exe</code>)로 보안 경고 없이 안전하게 구동됩니다.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* [필수 반영] AI 설정 몬스터 내 '24시간 GPU 클라우드 서버 도우미' 초특가 요금 카드 */}
-          <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                  AI 설정 몬스터 핵심 기능
-                </span>
-                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
-                  방장 PC가 꺼져 있거나 고장 났을 때 스마트폰에서 원터치 가동
-                </span>
-              </div>
-              {gpuHelper24hActive ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-                    🟢 현재 24시간 GPU 클라우드 도우미 가동 중
+          {/* [필수 반영] AI 설정 몬스터 내 '24시간 GPU 클라우드 서버 도우미' 카드 (isStoreAppMode 시 가격 비노출) */}
+          {!isStoreAppMode && (
+            <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                    AI 설정 몬스터 핵심 기능
                   </span>
-                  <button
-                    type="button"
-                    onClick={deactivateGpuHelper24h}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-semibold"
-                  >
-                    내 PC 모드로 복귀 (클라우드 즉시 소각)
-                  </button>
+                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
+                    방장 PC가 꺼져 있거나 고장 났을 때 스마트폰에서 원터치 가동
+                  </span>
                 </div>
-              ) : (
-                <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-400 font-label-mono text-[11px]">
-                  현재 상태: 내 PC 직접 구동 모드 (대기 중)
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <h1 className="font-headline-md text-[21px] md:text-[23px] text-white font-bold tracking-tight">
-                ⚡ 24시간 GPU 클라우드 서버 도우미 (일 1,000원 / 클럽 규모별 1,000 · 2,000 · 3,000원)
-              </h1>
-              <p className="font-body-sm text-[13px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-4 rounded-xl border border-white/10">
-                내 PC가 꺼져 있을 때 단돈 1,000원(중·대형 클럽 2,000~3,000원)으로 24시간 동안 초고속 GPU 클라우드 도우미를 즉시 가동합니다. 멤버들이 올린 사진·영상의 Gemma 2 인덱싱과 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본을 내 PC로 안전하게 이관한 뒤 클라우드에서는 100% 자동 소각됩니다.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {(
-                [
-                  {
-                    id: 'standard_1000' as GpuHelperTierId,
-                    badge: '개인 / 패밀리 / 스쿨',
-                    title: '개인 · 패밀리 · 스쿨 라운지',
-                    price: '24시간 당 1,000원',
-                    sub: '방장 PC OFF 시 24시간 실시간 인덱싱·배포 대행',
-                  },
-                  {
-                    id: 'club_small_1000' as GpuHelperTierId,
-                    badge: '클럽 라운지 (소형)',
-                    title: '소형 클럽 (~20명)',
-                    price: '24시간 당 1,000원',
-                    sub: '20명 기준 모임 사진·영상 24시간 대행',
-                  },
-                  {
-                    id: 'club_medium_2000' as GpuHelperTierId,
-                    badge: '클럽 라운지 (중형)',
-                    title: '중형 클럽 (~100명)',
-                    price: '24시간 당 2,000원',
-                    sub: '100명 기준 모임 사진·영상 24시간 대행',
-                  },
-                  {
-                    id: 'club_large_3000' as GpuHelperTierId,
-                    badge: '클럽 라운지 (대형)',
-                    title: '대형 클럽 (무제한)',
-                    price: '24시간 당 3,000원',
-                    sub: '인원 무제한 대형 클럽 24시간 대행',
-                  },
-                ]
-              ).map((item) => {
-                const active = gpuHelper24hActive && gpuHelperActiveTier === item.id;
-                return (
-                  <div
-                    key={item.id}
-                    className={`p-4 rounded-xl flex flex-col justify-between gap-3 border transition-all ${
-                      active
-                        ? 'bg-zinc-900 border-primary-container shadow-[0_0_20px_rgba(32,247,219,0.14)]'
-                        : 'bg-zinc-950/80 border-white/10'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <span className="font-label-mono text-[10.5px] text-zinc-400">
-                        {item.badge}
-                      </span>
-                      <span className="font-headline-sm text-[15px] text-white font-bold">
-                        {item.title}
-                      </span>
-                      <span className="font-headline-sm text-[18px] text-primary-container font-black mt-0.5">
-                        {item.price}
-                      </span>
-                      <p className="font-body-sm text-[11.5px] text-zinc-400 mt-0.5">
-                        {item.sub}
-                      </p>
-                    </div>
-
+                {gpuHelper24hActive ? (
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
+                      🟢 현재 24시간 GPU 클라우드 도우미 가동 중
+                    </span>
                     <button
                       type="button"
-                      onClick={() => activateGpuHelper24h(item.id)}
-                      className={`w-full py-2 rounded-lg font-label-sm text-[12px] font-extrabold transition-all ${
-                        active
-                          ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
-                          : 'bg-primary-container text-zinc-950 hover:opacity-95'
-                      }`}
+                      onClick={deactivateGpuHelper24h}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-semibold"
                     >
-                      {active ? '✓ 현재 24시간 가동 중' : '⚡ 원터치 24시간 가동'}
+                      내 PC 모드로 복귀 (클라우드 즉시 소각)
                     </button>
                   </div>
-                );
-              })}
+                ) : (
+                  <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-400 font-label-mono text-[11px]">
+                    현재 상태: 내 PC 직접 구동 모드 (대기 중)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <h1 className="font-headline-md text-[21px] md:text-[23px] text-white font-bold tracking-tight">
+                  ⚡ 24시간 GPU 클라우드 서버 도우미 (일 1,000원 / 클럽 규모별 1,000 · 2,000 · 3,000원)
+                </h1>
+                <p className="font-body-sm text-[13px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-4 rounded-xl border border-white/10">
+                  내 PC가 꺼져 있을 때 단돈 1,000원(중·대형 클럽 2,000~3,000원)으로 24시간 동안 초고속 GPU 클라우드 도우미를 즉시 가동합니다. 멤버들이 올린 사진·영상의 Gemma 2 인덱싱과 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본을 내 PC로 안전하게 이관한 뒤 클라우드에서는 100% 자동 소각됩니다.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {(
+                  [
+                    {
+                      id: 'standard_1000' as GpuHelperTierId,
+                      badge: '개인 / 패밀리 / 스쿨',
+                      title: '개인 · 패밀리 · 스쿨 라운지',
+                      price: '24시간 당 1,000원',
+                      sub: '방장 PC OFF 시 24시간 실시간 인덱싱·배포 대행',
+                    },
+                    {
+                      id: 'club_small_1000' as GpuHelperTierId,
+                      badge: '클럽 라운지 (소형)',
+                      title: '소형 클럽 (~20명)',
+                      price: '24시간 당 1,000원',
+                      sub: '20명 기준 모임 사진·영상 24시간 대행',
+                    },
+                    {
+                      id: 'club_medium_2000' as GpuHelperTierId,
+                      badge: '클럽 라운지 (중형)',
+                      title: '중형 클럽 (~100명)',
+                      price: '24시간 당 2,000원',
+                      sub: '100명 기준 모임 사진·영상 24시간 대행',
+                    },
+                    {
+                      id: 'club_large_3000' as GpuHelperTierId,
+                      badge: '클럽 라운지 (대형)',
+                      title: '대형 클럽 (무제한)',
+                      price: '24시간 당 3,000원',
+                      sub: '인원 무제한 대형 클럽 24시간 대행',
+                    },
+                  ]
+                ).map((item) => {
+                  const active = gpuHelper24hActive && gpuHelperActiveTier === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-xl flex flex-col justify-between gap-3 border transition-all ${
+                        active
+                          ? 'bg-zinc-900 border-primary-container shadow-[0_0_20px_rgba(32,247,219,0.14)]'
+                          : 'bg-zinc-950/80 border-white/10'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="font-label-mono text-[10.5px] text-zinc-400">
+                          {item.badge}
+                        </span>
+                        <span className="font-headline-sm text-[15px] text-white font-bold">
+                          {item.title}
+                        </span>
+                        <span className="font-headline-sm text-[18px] text-primary-container font-black mt-0.5">
+                          {item.price}
+                        </span>
+                        <p className="font-body-sm text-[11.5px] text-zinc-400 mt-0.5">
+                          {item.sub}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => activateGpuHelper24h(item.id)}
+                        className={`w-full py-2 rounded-lg font-label-sm text-[12px] font-extrabold transition-all ${
+                          active
+                            ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
+                            : 'bg-primary-container text-zinc-950 hover:opacity-95'
+                        }`}
+                      >
+                        {active ? '✓ 현재 24시간 가동 중' : '⚡ 원터치 24시간 가동'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
