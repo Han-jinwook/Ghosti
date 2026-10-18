@@ -1,7 +1,7 @@
 /**
  * 클라우드 대체 프라이빗 싱크 엔진 (스펙 3 확정 반영)
  * - 모드 A (mirror): 100% 원본 미러링 모드 (폰↔PC 양쪽 원본 파일 1:1 상호 백업 보험)
- * - 모드 B (shadow): 13KB 초경량 섀도우 캐시 모드 (무거운 원본은 PC로 이관, 폰에는 장당 13KB WebP 썸네일 + 768d 벡터만 남겨 PC가 꺼져도 0.04초 만에 원격 투시 검색)
+ * - 모드 B (shadow): 13KB 초경량 섀도우 캐시 모드 (무거운 원본은 PC로 이관, 폰에는 장당 13KB WebP 썸네일 + 768d 벡터만 남겨 PC가 꺼져도 1초 만에 원격 투시 검색)
  * - 배터리/OS 방어 원칙: [집 Wi-Fi 연결 + 충전 중]이거나 [지금 일치시키기] 버튼을 누를 때만 작동
  */
 import type { PrivateSyncStrategy, SyncMode, SyncState } from '../types/saysee';

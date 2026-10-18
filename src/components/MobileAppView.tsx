@@ -101,9 +101,9 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
 > = {
   personal: [
     { id: 'trial', label: '무료체험' },
-    { id: 'search', label: '파워 검색' },
-    { id: 'trash', label: '클리어', showTrashCount: true },
-    { id: 'settings', label: '설정도우미 Pro' },
+    { id: 'search', label: 'AI 투시검색 몬스터' },
+    { id: 'trash', label: 'AI 클린 몬스터', showTrashCount: true },
+    { id: 'settings', label: 'AI 설정 몬스터' },
   ],
   family: [
     { id: 'trial', label: '무료체험' },
@@ -644,16 +644,37 @@ export const MobileAppView: React.FC = () => {
         </div>
       )}
 
-      {/* 서브메뉴 4번: 설정 / 업그레이드 / 초대 / 인증 & 24시간 GPU 클라우드 서버 도우미 */}
+      {/* 서브메뉴 4번: AI 설정 몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 */}
       {mobileTab === 'settings' && (
         <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
           <LoungeCustomSettingsHeader />
+
+          {/* 정식 스토어 및 공인 설치 가이드 (편법 배제) */}
+          <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-2.5">
+            <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold w-fit">
+              스토어 정공법 · 공인 설치 가이드
+            </span>
+            <div className="flex flex-col gap-2 text-[12px]">
+              <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
+                <span className="text-white font-bold">Android</span>
+                <span className="text-emerald-300 font-bold">Google Play / 공식 APK</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
+                <span className="text-white font-bold">iOS (아이폰)</span>
+                <span className="text-primary-container font-bold">App Store / 공식 TestFlight</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
+                <span className="text-white font-bold">Windows PC</span>
+                <span className="text-amber-300 font-bold">MS 공식 인증서 서명 설치파일</span>
+              </div>
+            </div>
+          </div>
 
           {/* ⚡ 24시간 GPU 클라우드 서버 도우미 */}
           <div className="p-4 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                🛠️ 설정도우미 핵심 기능
+                AI 설정 몬스터 핵심 기능
               </span>
               {gpuHelper24hActive && (
                 <button
@@ -725,7 +746,7 @@ export const MobileAppView: React.FC = () => {
               🔋 배터리 · OS 제재 방어 원칙
             </span>
             <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-              세이씨 모바일 에이전트(1MB APK)는 배터리를 소모하는 상시 통신을 하지 않으며,{' '}
+              세이씨 정식 모바일 앱(Google Play / App Store)은 배터리를 소모하는 상시 통신을 하지 않으며,{' '}
               <strong className="text-white">[집 Wi-Fi 연결 + 충전 중]</strong>이거나{' '}
               <strong className="text-primary-container">[지금 일치시키기]</strong> 버튼을 누를 때만 작동합니다.
             </p>
@@ -775,7 +796,7 @@ export const MobileAppView: React.FC = () => {
               />
             </div>
             <p className="font-body-sm text-[12px] text-zinc-400">
-              무거운 원본은 집 PC로 이관하고 폰에는 장당 13KB WebP 썸네일+768d 벡터만 남김 (단 {syncState.packSizeMB}MB). 집 PC 전원이 꺼져도 밖에서 0.04초 만에 100% 검색·열람 가능!
+              무거운 원본은 집 PC로 이관하고 폰에는 장당 13KB WebP 썸네일+768d 벡터만 남김 (단 {syncState.packSizeMB}MB). 집 PC 전원이 꺼져도 밖에서 1초 만에 100% 검색·열람 가능!
             </p>
           </div>
 

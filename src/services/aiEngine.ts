@@ -1339,7 +1339,7 @@ export async function executeZeroSttVoiceSearch(params: {
   const activePhotos = params.photos.filter((p) => !p.quarantined);
   const photoMap = new Map(activePhotos.map((p) => [p.name, p]));
 
-  // 1) 실제 마이크로 녹음한 음성 검색: 브라우저 STT가 이미 텍스트를 잡았다면 무거운 오디오 Base64 업로드 생략 (0.04초 즉시 응답)
+  // 1) 실제 마이크로 녹음한 음성 검색: 브라우저 STT가 이미 텍스트를 잡았다면 무거운 오디오 Base64 업로드 생략 (1초 만에 즉시 응답)
   const existingStt = (params.backgroundSttTranscript || '').trim();
   if (params.audioBlob && !params.presetId && !existingStt) {
     try {

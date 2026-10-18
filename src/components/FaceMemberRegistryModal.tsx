@@ -205,7 +205,7 @@ export const FaceMemberInlineBar: React.FC<{
       isRoomCreatorTarget: isCreator,
       subText: `${cand.contributorLabel} · 등록 시 전 멤버 폰 사진 ${
         cand.rescuedHostPhotoCount + cand.rescuedMemberPhoneCount
-      }장 0.04초 자동 매칭`,
+      }장 1초 만에 자동 매칭`,
     });
   }
 
@@ -609,7 +609,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* 방별 별명(Room Persona) 독립 매핑 칩 (클릭 시 해당 방 별명으로 즉시 0.04초 검색 실행) */}
+                    {/* 방별 별명(Room Persona) 독립 매핑 칩 (클릭 시 해당 방 별명으로 즉시 1초 검색 실행) */}
                     {c.roomPersonas && (
                       <div className="p-2 rounded-lg bg-zinc-900/90 border border-white/5 flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">
@@ -630,7 +630,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                                 key={rk.key}
                                 type="button"
                                 onClick={() => void handleTriggerRealNameSearch(sampleQ, 'gallery')}
-                                title={`[${rk.label}] 방에서 "${sampleQ}" 검색 (동일 여권 시드로 0.04초 매칭)`}
+                                title={`[${rk.label}] 방에서 "${sampleQ}" 검색 (동일 여권 시드로 1초 만에 매칭)`}
                                 className="px-2 py-0.5 rounded bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-mono text-[10px] flex items-center gap-1 transition-colors"
                               >
                                 <span className="text-zinc-400">{rk.shortLabel}:</span>
@@ -804,7 +804,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 shadow"
               >
                 {retroScanRunning
-                  ? '⏳ 전 멤버 폰 0.04초 역스캔 중...'
+                  ? '⏳ 전 멤버 폰 1초 만에 역스캔 중...'
                   : hostCleanupItems.length > 0
                   ? `✓ 👑 방장 누락분 ${hostCleanupItems.length}건 일괄 등록`
                   : '✓ 전 멤버 여권 시드 100% 반영됨 (재검증 역스캔)'}

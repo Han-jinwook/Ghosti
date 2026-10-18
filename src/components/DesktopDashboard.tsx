@@ -101,9 +101,9 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 > = {
   personal: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: '파워 검색' },
-    { id: 'trash', label: '클리어', showTrashCount: true },
-    { id: 'sync', label: '설정도우미 Pro' },
+    { id: 'dashboard', label: 'AI 투시검색 몬스터' },
+    { id: 'trash', label: 'AI 클린 몬스터', showTrashCount: true },
+    { id: 'sync', label: 'AI 설정 몬스터' },
   ],
   family: [
     { id: 'trial', label: '무료체험' },
@@ -769,7 +769,7 @@ export const DesktopDashboard: React.FC = () => {
         </main>
       )}
 
-      {/* ─────────────── 서브메뉴 3번: 개인은 [🧹 클리어], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] ─────────────── */}
+      {/* ─────────────── 서브메뉴 3번: 개인은 [AI 클린 몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] ─────────────── */}
       {desktopTab === 'trash' &&
         (activeLoungeType === 'personal' ? (
           <SmartTrashView />
@@ -777,18 +777,76 @@ export const DesktopDashboard: React.FC = () => {
           <LoungeIndexingWaitingRoom />
         ))}
 
-      {/* ─────────────── 서브메뉴 4번: 라운지별 설정 / 업그레이드 / 초대 / 인증 & 24시간 GPU 클라우드 서버 도우미 ─────────────── */}
+      {/* ─────────────── 서브메뉴 4번: AI 설정 몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 ─────────────── */}
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1280px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-5">
-          {/* 라운지별 전용 상단 설정 섹션 (⚡Pro 업그레이드 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
+          {/* 라운지별 전용 상단 설정 섹션 (AI 설정 몬스터 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
           <LoungeCustomSettingsHeader />
 
-          {/* [필수 반영] 🛠️ 설정도우미 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 카드 */}
+          {/* 정식 스토어 및 공인 설치 가이드 (편법 배제 · 안드로이드 / iOS / Windows PC 정공법) */}
+          <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
+                  스토어 정공법 · 공인 설치 가이드
+                </span>
+                <span className="font-body-sm text-[12px] text-zinc-400">
+                  복잡한 편법 설정 없이 정식 스토어 및 MS 공식 인증서 서명 설치파일로 안전하게 연결됩니다
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                    Android 스마트폰
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10.5px] font-bold">
+                    Google Play / 공식 APK
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                  Google Play 스토어 정식 앱 또는 공식 서명된 APK로 원터치 설치 후 PC와 QR로 즉시 페어링합니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                    iOS (아이폰 · 아이패드)
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-bold">
+                    App Store / 공식 TestFlight
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                  App Store 정식 출시 앱 및 Apple 공식 TestFlight를 통해 공인 iOS 앱으로 안전하고 깔끔하게 설치합니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                    Windows PC
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-bold">
+                    MS 공식 인증서 서명 설치파일
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                  Microsoft 공식 EV 코드사이닝 인증서가 서명된 정식 설치파일(<code>SaySee_Setup.exe</code>)로 보안 경고 없이 안전하게 구동됩니다.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* [필수 반영] AI 설정 몬스터 내 '24시간 GPU 클라우드 서버 도우미' 초특가 요금 카드 */}
           <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                  🛠️ 설정도우미 핵심 기능
+                  AI 설정 몬스터 핵심 기능
                 </span>
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
                   방장 PC가 꺼져 있거나 고장 났을 때 스마트폰에서 원터치 가동
@@ -917,7 +975,7 @@ export const DesktopDashboard: React.FC = () => {
                 battery_charging_full
               </span>
               <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                <strong>배터리 · OS 제재 방어 원칙:</strong> 세이씨 모바일 에이전트(1MB APK)는 상시 백그라운드 통신을 하지 않으며,{' '}
+                <strong>배터리 · OS 제재 방어 원칙:</strong> 세이씨 정식 모바일 앱(Google Play / App Store)은 상시 백그라운드 통신을 하지 않으며,{' '}
                 <strong className="text-white">[집 Wi-Fi 연결 + 충전 중]</strong>이거나{' '}
                 <strong className="text-primary-container">[지금 일치시키기]</strong> 버튼을 누를 때만 작동합니다.
               </p>
@@ -1017,7 +1075,7 @@ export const DesktopDashboard: React.FC = () => {
               </div>
 
               <span className="font-label-sm text-[11.5px] text-zinc-300 pt-2 border-t border-white/10">
-                ⚡ 집 PC 전원이 꺼져 있어도 밖에서 내 폰으로 0.04초 만에 100% 검색·열람 가능
+                ⚡ 집 PC 전원이 꺼져 있어도 밖에서 내 폰으로 1초 만에 100% 검색·열람 가능
               </span>
             </div>
           </div>

@@ -260,7 +260,7 @@ export const OnboardingModal: React.FC = () => {
                     Track A • 강력 추천 (외부 서버 전송 0%)
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-mono text-[10px] font-bold">
-                    MS EV 코드사이닝 인증서 서명 완료
+                    Windows MS 공식 인증서 서명 설치파일
                   </span>
                 </div>
 
@@ -269,7 +269,7 @@ export const OnboardingModal: React.FC = () => {
                 </h3>
 
                 <p className="font-body-sm text-[12px] text-on-surface-variant leading-relaxed">
-                  비로그인 상태라도 아래 버튼을 누르면 MS EV 코드사이닝 인증서가 서명된{' '}
+                  비로그인 상태라도 아래 버튼을 누르면 MS 공식 코드사이닝 인증서가 서명된 정식 설치파일{' '}
                   <code className="text-emerald-300 font-bold">SaySee_PC_Agent.exe</code>가 실행되어, 내 사진·서류·동영상이{' '}
                   <strong className="text-white">외부로 단 1바이트도 나가지 않고 100% 내 PC 내부에서만</strong> 초고속 분석됩니다.
                 </p>
@@ -297,7 +297,7 @@ export const OnboardingModal: React.FC = () => {
               <div className="w-full md:w-64 p-3 rounded-2xl bg-surface-container-lowest/95 border border-primary-container/45 flex flex-col items-center text-center gap-2 shrink-0">
                 <div className="flex items-center justify-between w-full">
                   <span className="font-label-mono text-[10px] text-primary-container font-black">
-                    📱 실시간 QR 모바일 동시 페어링
+                    📱 정식 스토어 QR 모바일 페어링
                   </span>
                   <span
                     onClick={(e) => {
@@ -317,8 +317,7 @@ export const OnboardingModal: React.FC = () => {
                 <PairingQrCodeSvg />
 
                 <p className="font-body-sm text-[11px] text-white font-semibold leading-snug">
-                  “스마트폰 카메라로 이 QR을 스캔해 <strong className="text-primary-container">1MB 앱</strong>을 실행하면, 번거로운 로그인이나 6자리 코드 입력 없이{' '}
-                  <strong className="text-emerald-300">내 폰과 PC가 그 자리에서 하나로 연결</strong>됩니다!”
+                  “스마트폰 카메라로 QR을 스캔해 <strong className="text-primary-container">Google Play / 공식 APK (안드로이드)</strong> 또는 <strong className="text-primary-container">App Store / 공식 TestFlight (iOS)</strong> 앱을 실행하면, 내 폰과 PC가 그 자리에서 하나로 연결됩니다!”
                 </p>
               </div>
             </div>

@@ -14,8 +14,8 @@ const LOUNGE_TABS: Array<{
     id: 'personal',
     icon: '👤',
     label: '개인 라운지',
-    shortPrice: '단품 2,900원 · 월 3,900원',
-    desc: '서류 19건 + 동영상 4개 해부 + 연사 진단 브리핑 보드 (내 기기 검색 & 청소)',
+    shortPrice: 'AI 클린 1,900원 · AI 투시검색 월 1,900원',
+    desc: 'AI 투시검색 몬스터 | AI 클린 몬스터 | AI 설정 몬스터',
   },
   {
     id: 'family',
@@ -42,9 +42,9 @@ const LOUNGE_TABS: Array<{
 
 const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   free_trial: '✨ 무료체험 중',
-  personal_single_2900: '👤 개인 단품 클리어 (2,900원)',
-  personal_sub_3900: '👤 개인 정기구독 (월 3,900원)',
-  personal_year_35000: '👤 개인 연간구독 (연 35,000원)',
+  personal_single_2900: 'AI 클린 몬스터 (기기 1대당 1,900원)',
+  personal_sub_3900: 'AI 투시검색 몬스터 (월 1,900원)',
+  personal_year_35000: 'AI 투시검색 몬스터 (연 19,000원 · 초기 100명 평생권)',
   family_home_5900: '🏠 패밀리 우리집 단독 (월 5,900원)',
   family_home_year_59000: '🏠 패밀리 우리집 연간 (연 59,000원)',
   family_three_8900: '👨‍👩‍👧‍👦 패밀리 양가 통합 3방 (월 8,900원)',
@@ -64,7 +64,7 @@ export const LoungeModeSwitcherBar: React.FC = () => null;
 /**
  * ⛳ 클럽 라운지 (4050 동창회 특화 UX — Warm Light 앨범 프레임 + 1줄 요약 정화 버전)
  * 1) 생성형 맞춤형 간판 'Text-to-Banner' (복고풍 칠판 / 노을 진 운동장 그래픽 + '성동고 89회 동창회' + 초대장 카피 버튼)
- * 2) 첫 화면 검색 전면 배치 ([🎯 내 얼굴로 학창 시절 사진 0.04초 찾기]) & '추억 vs 근황' 투트랙 탭 ([🎞️ 응답하라 1989 (추억)] 기본 고정 / [🍻 최근 우리들 (근황)]) + 1줄 스마트 알림 클린존 안내
+ * 2) 첫 화면 검색 전면 배치 ([🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기]) & '추억 vs 근황' 투트랙 탭 ([🎞️ 응답하라 1989 (추억)] 기본 고정 / [🍻 최근 우리들 (근황)]) + 1줄 스마트 알림 클린존 안내
  */
 const AlumniRetroBannerAndTwoTrackBar: React.FC<{
   onNavigateToFeed?: () => void;
@@ -211,7 +211,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
       {/* 2. 필수 액션 버튼 바 (크기·여백 통일 & 모바일 줄바꿈 깨짐 방지 whitespace-nowrap) */}
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          {/* 전면 배치: 내 얼굴로 학창 시절 사진 0.04초 찾기 */}
+          {/* 전면 배치: 내 얼굴로 학창 시절 사진 1초 만에 찾기 */}
           <button
             type="button"
             onClick={() => {
@@ -220,7 +220,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
             }}
             className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold shadow-sm flex items-center gap-1.5 shrink-0 whitespace-nowrap transition-all"
           >
-            <span>🎯 내 얼굴로 학창 시절 사진 0.04초 찾기</span>
+            <span>🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기</span>
           </button>
 
           {/* 투트랙 탭: [🎞️ 응답하라 1989 (추억)] (기본값) vs [🍻 최근 우리들 (근황)] */}
@@ -432,14 +432,14 @@ export const LoungeView: React.FC = () => {
       {/* ─────────────── 👤 개인 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(전체 모수 vs 무료체험 범위 + 시작/완료 버튼) ➔ 3단(브리핑 결과 & 정리➔원복 안전 체험) ─────────────── */}
       {activeLoungeType === 'personal' && (
         <>
-          {/* 1단: 개인 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
+          {/* 1단: 개인 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 (AI 투시검색 몬스터 | AI 클린 몬스터 | AI 설정 몬스터) */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                👤 개인 라운지 — 사진·영상·문서 AI 검색 &amp; 클린몬스터 주치의 케어
+                개인 라운지 — AI 투시검색 몬스터 · AI 클린 몬스터 · AI 설정 몬스터
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                클라우드에 파일을 올리지 않고 내 기기 안에서 <strong>사진·영상·문서 0.04초 파워검색</strong>과 <strong>클린몬스터 디지털 종합건강검진·대화형 컨설팅</strong>을 수행합니다.
+                클라우드에 파일을 올리지 않고 내 기기 안에서 <strong>사진·영상·문서 1초 투시검색</strong>과 <strong>AI 클린 몬스터 종합건강검진·대화형 컨설팅</strong>을 수행합니다.
               </p>
             </div>
 
@@ -447,42 +447,42 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🎬 사진·영상 파워검색 &amp; 연사·중복 선택
+                    AI 투시검색 몬스터
                   </span>
                   <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    정기구독 서비스
+                    월 1,900원 (연 19,000원)
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  0.04초 인물·장면·동영상 구간 검색을 기본으로, 검색의 묘미를 살리기 위해 <strong>동일 내용 중복 사진은 최고화질 원본 1장만 남기고</strong>, <strong>연사는 한눈에 펼쳐 보여줘 유저가 1장을 직접 선택(Pick)한 뒤 나머지를 버리는 부가서비스</strong>를 제공합니다.
+                  사진·동영상 구간·내 PC 서류(PDF·계약서)를 <strong>1초 만에</strong> 찾아주며, <strong>동일 내용 중복 사진은 최고화질 원본 1장만 남기고 연사는 한눈에 펼쳐 유저가 1장을 직접 선택(Pick)</strong>하는 부가서비스를 제공합니다.
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    📁 스마트 서류함 자동 분리
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    정기구독 서비스
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  내 PC 문서 파일(PDF·계약서·문서)과 사진첩 속 중요 문서를 자동 분류해 본문 키워드로 0.04초 만에 찾아줍니다.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🩺 클린몬스터 — 디지털 종합검진 &amp; 대화형 주치의
+                    AI 클린 몬스터
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    단품 대행 · 구독 시 월 1회 왕진
+                    기기 1대당 1,900원
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 종합검진하고, <strong>LLM 대화형 상담 가이드</strong>를 통해 각 항목을 유저가 직접 결정하며 쾌적화합니다.
+                  모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 종합검진하고, <strong>LLM 대화형 상담 가이드</strong>로 각 항목을 유저가 직접 결정합니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    AI 설정 몬스터
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10.5px] font-extrabold">
+                    정식 스토어 · 공인 설치
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  안드로이드(Google Play / 공식 APK), iOS(App Store / 공식 TestFlight), Windows PC(MS 공식 인증서 서명 설치파일) 정식 설치 방식으로 내 폰과 PC를 1초 만에 안전하게 연결합니다.
                 </p>
               </div>
             </div>
@@ -732,7 +732,7 @@ export const LoungeView: React.FC = () => {
                         }}
                         className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
                       >
-                        🩺 클린몬스터 &amp; 클리어 보드 이동 →
+                        AI 클린 몬스터 이동 →
                       </button>
                     </div>
                   )}
@@ -746,18 +746,18 @@ export const LoungeView: React.FC = () => {
               </div>
             )}
 
-            {/* 개인 라운지 요금제: 단품 클린몬스터(종합건강검진 & LLM 대화형 컨설팅) vs 사진·영상·문서 토탈 정기구독(월 1회 주치의 무료 포함) */}
+            {/* 개인 라운지 요금제: AI 클린 몬스터(기기 1대당 1,900원) vs AI 투시검색 몬스터(월 1,900원 / 연 19,000원 초기 100명 한정 평생권 프로모션) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
               <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-1.5">
                   <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                    🩺 디지털 종합건강검진 &amp; LLM 1:1 대화형 컨설팅 대행
+                    AI 클린 몬스터 — 디지털 종합건강검진 &amp; 대화형 컨설팅
                   </span>
                   <div className="font-headline-md text-[24px] text-white font-black">
-                    클린몬스터 단품 2,900원
+                    기기 1대당 1,900원
                   </div>
                   <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                    모바일·PC 바탕화면 정리(미사용 앱 구분/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 정리) + 전기 먹는 유령 모듈 제거로 CPU·메모리 속도 향상. AI 주치의와 대화하며 항목별로 유저가 직접 결정하고 언제든 0.5초 원복됩니다.
+                    모바일·PC 바탕화면 정리(미사용 앱 구분/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거로 CPU·메모리 속도 향상. AI 주치의와 대화하며 항목별로 유저가 직접 결정하고 언제든 0.5초 원복됩니다.
                   </p>
                 </div>
                 <button
@@ -765,25 +765,30 @@ export const LoungeView: React.FC = () => {
                   onClick={() => activatePricingPlan('personal_single_2900')}
                   className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold transition-colors whitespace-nowrap"
                 >
-                  클린몬스터 종합검진·컨설팅 단품 (2,900원)
+                  AI 클린 몬스터 (기기 1대당 1,900원)
                 </button>
               </div>
 
               <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                    👑 사진·영상·문서 파워검색 정기구독 + 월 1회 클린몬스터 주치의 무료 왕진
-                  </span>
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
+                      AI 투시검색 몬스터 + 월 1회 AI 클린 몬스터 무료 왕진
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold whitespace-nowrap">
+                      초기 100명 한정 연 19,000원 평생권 프로모션
+                    </span>
+                  </div>
                   <div className="flex items-baseline gap-2">
                     <span className="font-headline-md text-[24px] text-white font-black">
-                      토탈 정기구독 월 3,900원
+                      월 1,900원
                     </span>
                     <span className="font-label-mono text-[13px] text-primary-container font-bold">
-                      (연 35,000원)
+                      (연 19,000원)
                     </span>
                   </div>
                   <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                    전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) 0.04초 파워검색 + 중복 사진 최고화질 원본 보존 &amp; 연사 1장 선택 부가서비스 + <strong>매월 1회 클린몬스터 종합건강검진·주치의 케어 무료 제공!</strong>
+                    전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) <strong>1초 투시검색</strong> + 중복 사진 최고화질 원본 보존 &amp; 연사 1장 선택 부가서비스 + <strong>초기 100명 한정 연 19,000원 평생권 프로모션!</strong>
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -792,14 +797,14 @@ export const LoungeView: React.FC = () => {
                     onClick={() => activatePricingPlan('personal_sub_3900')}
                     className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
                   >
-                    월 3,900원 토탈 구독
+                    월 1,900원 시작
                   </button>
                   <button
                     type="button"
                     onClick={() => activatePricingPlan('personal_year_35000')}
-                    className="py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-md text-[12.5px] font-bold whitespace-nowrap"
+                    className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
                   >
-                    연 35,000원 토탈 구독
+                    연 19,000원 (100명 평생권)
                   </button>
                 </div>
               </div>
@@ -858,14 +863,14 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🛂 가족 얼굴 여권 &amp; 0.04초 실명 검색
+                    🛂 가족 얼굴 여권 &amp; 1초 실명 검색
                   </span>
                   <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
                     호칭·실명 자동 매칭
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  가족 단체 사진에서 얼굴을 자동 추출해 이름·호칭(할머니, 큰삼촌 등)만 적어두면 온 가족 스마트폰에서 이름으로 0.04초 만에 찾습니다.
+                  가족 단체 사진에서 얼굴을 자동 추출해 이름·호칭(할머니, 큰삼촌 등)만 적어두면 온 가족 스마트폰에서 이름으로 1초 만에 찾습니다.
                 </p>
               </div>
 
@@ -1044,7 +1049,7 @@ export const LoungeView: React.FC = () => {
                     </span>
                   </div>
                   <p className="font-body-sm text-[12px] text-zinc-400">
-                    부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 0.04초 실명 검색
+                    부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 1초 실명 검색
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -1157,7 +1162,7 @@ export const LoungeView: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  카톡방 사진처럼 만료되지 않고 13KB 캐시로 0.04초 만에 열람하며, 간직할 사진만 총무 PC에서 5MB 무손실 원본으로 1초 소환합니다.
+                  카톡방 사진처럼 만료되지 않고 13KB 캐시로 1초 만에 열람하며, 간직할 사진만 총무 PC에서 5MB 무손실 원본으로 1초 소환합니다.
                 </p>
               </div>
             </div>
@@ -1382,7 +1387,7 @@ export const LoungeView: React.FC = () => {
                 🎒 스쿨 라운지 — 초·중·고 학급 · 동아리 · 체육대회 (월 900원 단일 특가)
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                학생증 로컬 0.1초 인증만으로 학급·동아리 인원수 상관없이 <strong>월 900원(연 9,000원)</strong>! 반 친구들 전원이 무료로 수련회·축제 사진을 0.04초 만에 찾습니다.
+                학생증 로컬 0.1초 인증만으로 학급·동아리 인원수 상관없이 <strong>월 900원(연 9,000원)</strong>! 반 친구들 전원이 무료로 수련회·축제 사진을 1초 만에 찾습니다.
               </p>
             </div>
 
@@ -1656,10 +1661,10 @@ export const LoungeView: React.FC = () => {
 
 /**
  * 2번 서브메뉴(메인 피드 & 검색) 상단에 라운지 성격별로 표시되는 전용 컨트롤 바
- * - 개인 라운지: null (얼굴/여권 바 완전 비노출, 기본 파워 검색 바로 시작)
- * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 방별 별명 알약([👑 멀린], [👑 둘째사위], [은숙] 등) 0.04초 검색 통합 바
- * - 클럽 라운지: Text-to-Banner 자동 간판('성동고 89회 동창회') + [🎯 내 얼굴로 학창 시절 사진 0.04초 찾기] + [🎞️ 응답하라 1989 (추억) / 🍻 최근 우리들 (근황)] 투트랙 탭 + 13KB 캐시 & 5MB 무손실 원본 P2P 소환 바
- * - 스쿨 라운지: 낮(학교/학원) 로컬 캐시 0.04초 구간 점프 + 스쿨방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
+ * - 개인 라운지: null (얼굴/여권 바 완전 비노출, AI 투시검색 몬스터 바로 시작)
+ * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 방별 별명 알약([👑 멀린], [👑 둘째사위], [은숙] 등) 1초 검색 통합 바
+ * - 클럽 라운지: Text-to-Banner 자동 간판('성동고 89회 동창회') + [🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기] + [🎞️ 응답하라 1989 (추억) / 🍻 최근 우리들 (근황)] 투트랙 탭 + 13KB 캐시 & 5MB 무손실 원본 P2P 소환 바
+ * - 스쿨 라운지: 낮(학교/학원) 로컬 캐시 1초 구간 점프 + 스쿨방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
  */
 export const LoungeFeedContextBanner: React.FC = () => {
   const {
@@ -1707,7 +1712,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               key={c.clusterId}
               type="button"
               onClick={() => void runTextQuery(queryTarget)}
-              title={`클릭 시 "${queryTarget}" 0.04초 검색`}
+              title={`클릭 시 "${queryTarget}" 1초 검색`}
               className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[12px] font-bold flex items-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
             >
               <img
@@ -1765,7 +1770,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
   if (activeLoungeType === 'club') {
     return (
       <div className="flex flex-col gap-3">
-        {/* 최상단: 4050 동창회 Text-to-Banner 자동 간판 + 0.04초 학창시절 찾기 + 응답하라 투트랙 탭 */}
+        {/* 최상단: 4050 동창회 Text-to-Banner 자동 간판 + 1초 학창시절 찾기 + 응답하라 투트랙 탭 */}
         <AlumniRetroBannerAndTwoTrackBar
           onOpenWaitingRoom={() => {
             setDesktopTab('trash');
@@ -1773,9 +1778,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
           }}
         />
 
-        {/* 하단 1줄: 모임 별명 0.04초 검색 알약 + 5MB 무손실 원본 1초 소환 */}
+        {/* 하단 1줄: 모임 별명 1초 검색 알약 + 5MB 무손실 원본 1초 소환 */}
         <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
-          {renderMemberPersonaPills('모임 별명 검색:')}
+          {renderMemberPersonaPills('모임 별명 1초 검색:')}
 
           <button
             type="button"
@@ -1825,10 +1830,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
             🛂 여권 연동
           </span>
           <span className="font-label-sm text-[12px] text-primary-container font-bold">
-            ⚡ 타임캡슐 로컬 캐시 (낮에 👑 방장 PC 꺼져 있어도 0.04초 재생)
+            ⚡ 타임캡슐 로컬 캐시 (낮에 👑 방장 PC 꺼져 있어도 1초 만에 재생)
           </span>
         </div>
-        {renderMemberPersonaPills('스쿨방 별명:')}
+        {renderMemberPersonaPills('스쿨방 별명 1초 검색:')}
       </div>
     </div>
   );
@@ -2083,7 +2088,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[11px] font-extrabold"
                 >
                   {retroScanRunning
-                    ? '0.04초 역스캔 중...'
+                    ? '1초 만에 역스캔 중...'
                     : `👑 방장 누락분 뒷정리: ${hostCleanupQueue.length}건 일괄 등록`}
                 </button>
               )}
@@ -2161,7 +2166,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               <span>
                 {hostCleanupQueue.length > 0
                   ? `⚡ 확인을 건너뛴 사진 속 얼굴 후보 ${hostCleanupQueue.length}건이 👑 방장 정리 대기열에 안전하게 보관되어 있습니다.`
-                  : '✓ 사진 속 모든 얼굴이 멤버별 여권에 자동 반영되어 0.04초 검색 준비가 완료되었습니다!'}
+                  : '✓ 사진 속 모든 얼굴이 멤버별 여권에 자동 반영되어 1초 검색 준비가 완료되었습니다!'}
               </span>
               {lastRetroScanReport && (
                 <span className="text-emerald-300 font-mono text-[11px] font-bold">
@@ -2483,7 +2488,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
 
 /**
  * 4번 서브메뉴 상단에 라운지 성격별로 표시되는 전용 관리/업그레이드/인증 섹션
- * - 개인: [🛠️ 설정도우미 ⚡Pro] 정기 구독 업그레이드 안내
+ * - 개인: [AI 설정 몬스터] 정기 구독 업그레이드 안내
  * - 패밀리: [👑 가족 초대 & 서버도우미] 가족 무수락 초대 링크/QR (방장 강퇴권 포함) + 양가 통합권 설정
  * - 클럽: [👥 클럽 관리 & 서버도우미] 소(20명)/중(100명)/대(무제한) 클럽 설정 + 회원 초대/강퇴 관리
  * - 10대 학생: [🎮 게이밍 PC & 학생인증] 하교 후 방장 게이밍 PC 집중 동기화 토글 + 학생증 로컬 OCR 0.1초 인증(월 900원)
@@ -2526,19 +2531,22 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     return (
       <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-              🛠️ 설정도우미 ⚡Pro (정기 구독 업그레이드 전용)
+              AI 설정 몬스터
             </span>
             <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px]">
               현재 플랜: {PLAN_BADGE_LABELS[activePricingPlan]}
+            </span>
+            <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+              초기 100명 한정 연 19,000원 평생권 프로모션
             </span>
           </div>
           <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
             내 PC↔폰 13KB 섀도우 자동 싱크 &amp; 상시 AI 색인 업그레이드
           </h2>
           <p className="font-body-sm text-[12.5px] text-zinc-300">
-            1회성 대청소는 <strong>단품 클리어 2,900원</strong>으로, 상시 스마트폰↔PC 13KB 섀도우 캐시 자동 동기화는 <strong>정기 구독 월 3,900원(연 35,000원)</strong>으로 즉시 개통됩니다.
+            종합건강검진·대화형 청소는 <strong>AI 클린 몬스터(기기 1대당 1,900원)</strong>로, 상시 스마트폰↔PC 13KB 섀도우 캐시 자동 동기화 및 1초 검색은 <strong>AI 투시검색 몬스터 월 1,900원(연 19,000원 · 초기 100명 한정 평생권)</strong>으로 즉시 개통됩니다.
           </p>
         </div>
 
@@ -2548,21 +2556,21 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             onClick={() => activatePricingPlan('personal_single_2900')}
             className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
           >
-            단품 클리어 2,900원
+            AI 클린 몬스터 1,900원
           </button>
           <button
             type="button"
             onClick={() => activatePricingPlan('personal_sub_3900')}
             className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold"
           >
-            ⚡Pro 월 3,900원 업그레이드
+            AI 투시검색 월 1,900원
           </button>
           <button
             type="button"
             onClick={() => activatePricingPlan('personal_year_35000')}
-            className="px-3.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[12px] font-bold"
+            className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
           >
-            연 35,000원
+            연 19,000원 (100명 평생권)
           </button>
         </div>
       </div>

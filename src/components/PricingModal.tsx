@@ -5,9 +5,9 @@ import { LoungeModeSwitcherBar } from './LoungeView';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '✨ 무료체험 모드 이용 중',
-  personal_single_2900: '👤 개인 라운지 • 단품 클리어 (2,900원)',
-  personal_sub_3900: '👤 개인 라운지 • 정기 구독 (월 3,900원)',
-  personal_year_35000: '👤 개인 라운지 • 연간 구독 (연 35,000원)',
+  personal_single_2900: '개인 라운지 • AI 클린 몬스터 (기기 1대당 1,900원)',
+  personal_sub_3900: '개인 라운지 • AI 투시검색 몬스터 (월 1,900원)',
+  personal_year_35000: '개인 라운지 • AI 투시검색 몬스터 (연 19,000원 · 초기 100명 평생권)',
   family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원)',
   family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 (연 59,000원)',
   family_three_8900: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합권 3방 (월 8,900원)',
@@ -23,7 +23,7 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
 };
 
 /**
- * 상단 4대 라운지 스위처 바 (특판 문구 0%)
+ * 상단 4대 라운지 스위처 바
  */
 export const FoundingMemberFomoBar: React.FC = () => {
   return <LoungeModeSwitcherBar />;
@@ -31,7 +31,6 @@ export const FoundingMemberFomoBar: React.FC = () => {
 
 /**
  * [4대 라운지 초심플 기본 요금제 + ⚡ 24시간 GPU 클라우드 서버 도우미] 모달
- * - 주의: 특판(평생권/10년권) 언급 완전 배제, 순수 요금 구조만 깔끔하게 표시
  */
 export const PricingModal: React.FC = () => {
   const {
@@ -132,29 +131,29 @@ export const PricingModal: React.FC = () => {
 
         {/* 1. 4대 라운지 초심플 기본 요금제 (마스터 1인 결제 ➔ 멤버 전원 무료) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ① 👤 개인 라운지 */}
+          {/* ① 개인 라운지 */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11.5px] font-bold">
                   1. 개인 전용
                 </span>
-                <span className="font-label-mono text-[11px] text-zinc-400">
-                  나 혼자 쓰는 No-클라우드 금고
+                <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
+                  초기 100명 한정 연 19,000원 평생권 프로모션
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                👤 개인 라운지
+                개인 라운지
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                 <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-2">
                   <div>
-                    <span className="font-label-sm text-[11px] text-zinc-400 font-semibold">
-                      단품 클리어 (1회 대청소)
+                    <span className="font-label-sm text-[11px] text-amber-400 font-bold">
+                      AI 클린 몬스터 (기기 1대당)
                     </span>
                     <div className="font-headline-md text-[20px] text-white font-black mt-0.5">
-                      2,900원
+                      1,900원
                     </div>
                   </div>
                   <button
@@ -162,20 +161,20 @@ export const PricingModal: React.FC = () => {
                     onClick={() => activatePricingPlan('personal_single_2900')}
                     className="w-full py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[12px] font-bold"
                   >
-                    단품 2,900원 결제
+                    기기 1대당 1,900원 결제
                   </button>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/40 flex flex-col justify-between gap-2">
                   <div>
                     <span className="font-label-sm text-[11px] text-primary-container font-bold">
-                      정기 구독 (상시 색인·싱크)
+                      AI 투시검색 몬스터
                     </span>
                     <div className="font-headline-md text-[20px] text-white font-black mt-0.5">
-                      월 3,900원
+                      월 1,900원
                     </div>
                     <span className="font-label-mono text-[11.5px] text-primary-container font-bold">
-                      (연 35,000원)
+                      (연 19,000원 · 100명 평생권)
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -184,14 +183,14 @@ export const PricingModal: React.FC = () => {
                       onClick={() => activatePricingPlan('personal_sub_3900')}
                       className="py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
                     >
-                      월 3,900원
+                      월 1,900원
                     </button>
                     <button
                       type="button"
                       onClick={() => activatePricingPlan('personal_year_35000')}
-                      className="py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold"
+                      className="py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
                     >
-                      연 35,000원
+                      연 19,000원
                     </button>
                   </div>
                 </div>
@@ -458,12 +457,12 @@ export const PricingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. [🛠️ 설정도우미] 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 반영 */}
+        {/* 2. [AI 설정 몬스터] 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 반영 */}
         <div className="p-5 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                🛠️ 설정도우미 핵심 옵션
+                AI 설정 몬스터 핵심 옵션
               </span>
               <h3 className="font-headline-sm text-[17px] text-white font-extrabold">
                 ⚡ 24시간 GPU 클라우드 서버 도우미 (방장 PC OFF 시 원터치 일일 대여)

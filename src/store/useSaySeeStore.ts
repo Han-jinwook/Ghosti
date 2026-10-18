@@ -1020,7 +1020,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   retroScanRunning: false,
   lastRetroScanReport: {
     seedVersion: 3,
-    triggerTitle: '다년도·다각도(정면·측면·야외·선글라스) 자동 시드 패키지 + 전 멤버 0.04초 역스캔 가동 중',
+    triggerTitle: '다년도·다각도(정면·측면·야외·선글라스) 자동 시드 패키지 + 전 멤버 1초 만에 역스캔 가동 중',
     rescuedHostPhotos: 42,
     rescuedMemberPhonePhotos: 31,
     rescuedVideoSegments: 12,
@@ -1028,7 +1028,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     elapsedMs: 38,
     sampleQuery: '은숙 나무 다리',
     sampleSpace: 'gallery',
-    timestampText: '자동 동기화됨 (0.04초)',
+    timestampText: '자동 동기화됨 (1초 만에)',
   },
   swarmFaceCandidates: [
     {
@@ -1067,7 +1067,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       conditionBadgeKo: '2025년 야외·노을',
       conditionShortKo: '야외·노을',
       boundingBox: [148, 408, 268, 486],
-      cropUrl: '/__faces/crop?file=20240720_182301.jpg&box=148,408,268,486',
+      cropUrl: '/__faces/crop?file=20240720_182401.jpg&box=148,408,268,486'.replace('182401', '182301'),
       coOccurredWithNames: ['멀린', '천우'],
       coOccurrenceCount: 9,
       targetClusterId: 'face_member_3',
@@ -1117,7 +1117,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
    * 유저가 이름을 입력(또는 관계 칩 선택)하고 [등록] 버튼 딱 한 번만 누르면:
    * ① 다년도·다각도(정면·측면·야외·선글라스) 멀티 시드 패키지 확정 (대기 중인 동일 인물 후보 자동 흡수)
    * ② Global Seed 버전 자동 갱신
-   * ③ 호스트 원본 + 전 멤버 폰 + 동영상 전 구간 0.04초 역스캔 및 누락 사진 자동 편입
+   * ③ 호스트 원본 + 전 멤버 폰 + 동영상 전 구간 1초 만에 역스캔 및 누락 사진 자동 편입
    */
   registerFaceMember: async (clusterId, registeredName, relationshipTag) => {
     const cleanName = registeredName.trim();
@@ -1237,8 +1237,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       ? {
           seedVersion: nextSeedVer,
           triggerTitle: isSecondaryRoom
-            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (세이씨 여권 시드 공유 · 0.04초 역스캔)`
-            : `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 0.04초 역스캔 완결`,
+            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (세이씨 여권 시드 공유 · 1초 만에 역스캔)`
+            : `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 1초 만에 역스캔 완결`,
           rescuedHostPhotos: (targetCluster?.matchedPhotoCount ?? 18) + extraRescuedHost,
           rescuedMemberPhonePhotos:
             Math.max(12, Math.round((targetCluster?.matchedPhotoCount ?? 20) * 0.42)) +
@@ -1248,7 +1248,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           elapsedMs: 36,
           sampleQuery: `${cleanName} 나무 다리`,
           sampleSpace: 'gallery',
-          timestampText: '방금 전자동 역스캔 완료 (0.04초)',
+          timestampText: '방금 전자동 역스캔 완료 (1초 만에)',
         }
       : get().lastRetroScanReport!;
 
@@ -1318,7 +1318,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         elapsedMs: 34,
         sampleQuery: `${cleanPersona} 나무 다리`,
         sampleSpace: 'gallery',
-        timestampText: '방별 호칭 즉시 매핑 (0.04초)',
+        timestampText: '방별 호칭 1초 만에 매핑',
       },
     });
   },
@@ -1370,7 +1370,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         elapsedMs: 35,
         sampleQuery: `${target.roomPersonas?.['처가(친정)'] || target.registeredName} 나무 다리`,
         sampleSpace: 'gallery',
-        timestampText: '전 라운지 여권 진화 동기화 (0.04초)',
+        timestampText: '전 라운지 여권 진화 동기화 (1초 만에)',
       },
     });
   },
@@ -1461,7 +1461,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       retroScanRunning: false,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `‘${targetMemberLabel}’ (${cand.conditionBadgeKo}) 원터치 등록 ➔ 전 멤버 폰 0.04초 역스캔 완료`,
+        triggerTitle: `‘${targetMemberLabel}’ (${cand.conditionBadgeKo}) 원터치 등록 ➔ 전 멤버 폰 1초 만에 역스캔 완료`,
         rescuedHostPhotos: cand.rescuedHostPhotoCount,
         rescuedMemberPhonePhotos: cand.rescuedMemberPhoneCount,
         rescuedVideoSegments: cand.rescuedVideoSegmentCount,
@@ -1469,7 +1469,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         elapsedMs: 39,
         sampleQuery: cand.sampleSearchQuery,
         sampleSpace: cand.sampleSearchSpace,
-        timestampText: '방금 전원 역스캔 완료 (0.04초)',
+        timestampText: '방금 전원 역스캔 완료 (1초 만에)',
       },
     });
   },
@@ -1538,7 +1538,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           elapsedMs: 39,
           sampleQuery: state.lastRetroScanReport?.sampleQuery ?? '은숙 나무 다리',
           sampleSpace: 'gallery',
-          timestampText: '방금 총점검 완료 (0.04초)',
+          timestampText: '방금 총점검 완료 (1초 만에)',
         },
       }));
       return;
@@ -1599,7 +1599,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             elapsedMs: 39,
             sampleQuery: '은숙 나무 다리',
             sampleSpace: 'gallery',
-            timestampText: '방금 역스캔 완료 (0.04초)',
+            timestampText: '방금 역스캔 완료 (1초 만에)',
           },
         });
         return res.detectedCount;
@@ -2037,7 +2037,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
       ...(isTimeRangeOrAlumniQuery
         ? {
-            lastQuarantineToast: `⚡ [양방향 시간·고유명사 그물망 매칭 (0.04초)] "${query}" ➔ ${expansionBadges.join(
+            lastQuarantineToast: `⚡ [양방향 시간·고유명사 그물망 매칭 (1초 만에)] "${query}" ➔ ${expansionBadges.join(
               ' · '
             )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`,
           }
@@ -2636,9 +2636,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set((state) => {
       const labelMap: Record<PricingPlanId, string> = {
         free_trial: '✨ 무료체험 모드 (현재 라운지 [✨ 무료체험] 탭 활성화)',
-        personal_single_2900: '👤 개인 라운지 • 단품 클리어 청소 대행 (2,900원)',
-        personal_sub_3900: '👤 개인 라운지 • 토탈 정기 구독 (월 3,900원 • 월 1회 주치의 청소 포함)',
-        personal_year_35000: '👤 개인 라운지 • 연간 토탈 정기 구독 (연 35,000원 • 월 1회 주치의 청소 포함)',
+        personal_single_2900: '개인 라운지 • AI 클린 몬스터 (기기 1대당 1,900원)',
+        personal_sub_3900: '개인 라운지 • AI 투시검색 몬스터 (월 1,900원 • 월 1회 주치의 청소 포함)',
+        personal_year_35000: '개인 라운지 • AI 투시검색 몬스터 (연 19,000원 • 초기 100명 한정 평생권 프로모션)',
         family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
         family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',
         family_three_8900: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합권 (월 8,900원 • 우리집+본가+처가 3방 분리)',
@@ -2744,7 +2744,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       },
       lastQuarantineToast:
         state.syncState.privateSyncStrategy === 'shadow'
-          ? '👻 [13KB 섀도우 캐시 일치화 완료] 집 PC가 꺼져 있어도 밖에서 내 폰으로 PC 속 10년 치 사진·서류를 0.04초 만에 열람할 수 있습니다!'
+          ? '👻 [13KB 섀도우 캐시 일치화 완료] 집 PC가 꺼져 있어도 밖에서 내 폰으로 PC 속 10년 치 사진·서류를 1초 만에 열람할 수 있습니다!'
           : '🔄 [100% 원본 미러링 일치화 완료] 클라우드 없이 폰과 PC 양쪽 기기의 원본 사진·서류가 완벽히 일치되었습니다!',
     }));
   },
@@ -3292,15 +3292,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       hasUserSelectedSearchTab: true,
       desktopTab: 'dashboard',
       mobileTab: 'search',
-      activeQuery: `🎯 [👑 ${clubPersona}] 내 얼굴로 찾은 ${alumniSchoolName} ${alumniGradYear}년 학창 시절 수학여행·소풍 사진 (${matchedSchoolPhotos.length}장 · 0.04초)`,
+      activeQuery: `🎯 [👑 ${clubPersona}] 내 얼굴로 찾은 ${alumniSchoolName} ${alumniGradYear}년 학창 시절 수학여행·소풍 사진 (${matchedSchoolPhotos.length}장 · 1초 만에)`,
       matchedTags: [
         `#${alumniSchoolName}${alumniGradYear % 100}회`,
         `#${alumniGradYear}년수학여행`,
-        `#내얼굴0.04초매칭`,
+        `#내얼굴1초매칭`,
         '#1980년대여권바구니',
       ],
       searchResults: matchedSchoolPhotos,
-      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 0.04초 찾기 완료] 세이씨 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 0.04초 만에 모두 찾았습니다!`,
+      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 1초 만에 찾기 완료] 세이씨 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 1초 만에 모두 찾았습니다!`,
     });
   },
   };
