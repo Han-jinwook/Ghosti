@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { GpuHelperTierId, PricingPlanId } from '../types/saysee';
 import { LoungeModeSwitcherBar } from './LoungeView';
