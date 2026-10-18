@@ -222,6 +222,8 @@ export const PricingModal: React.FC = () => {
   } = useSaySeeStore();
 
   const [trojanCouponCopied, setTrojanCouponCopied] = useState(false);
+  const [referralLinkCopied, setReferralLinkCopied] = useState(false);
+  const [p2pGiftSent, setP2pGiftSent] = useState(false);
 
   if (!showProModal) return null;
 
@@ -237,6 +239,24 @@ export const PricingModal: React.FC = () => {
     }
     setTrojanCouponCopied(true);
     window.setTimeout(() => setTrojanCouponCopied(false), 2600);
+  };
+
+  const handleCopyReferralLink = async () => {
+    const referralUrl = 'https://saysee.sundreamer.app/?ref=merlin_vip_1010';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(referralUrl);
+      }
+    } catch {
+      // ignore clipboard fallback
+    }
+    setReferralLinkCopied(true);
+    window.setTimeout(() => setReferralLinkCopied(false), 2600);
+  };
+
+  const handleSimulateP2pCoinGift = () => {
+    setP2pGiftSent(true);
+    window.setTimeout(() => setP2pGiftSent(false), 3000);
   };
 
   // [스토어 1차 심사용 모바일 클린 모드(isStoreAppMode === true)]:
@@ -364,22 +384,22 @@ export const PricingModal: React.FC = () => {
         {/* 모바일 접속자 편의: 검색 없이 내 이메일/카톡으로 PC 마스터 접속 주소 보내기 */}
         <PcMasterQuickSendPanel compact />
 
-        {/* [치트키 2] 홈쇼핑식 '실시간 잔여 수량' 카운터 노출 (시각적 FOMO) */}
+        {/* [치트키 2 & 다단계 특판 시스템] 홈쇼핑식 '실시간 잔여 수량' 카운터 + 4단계 한정 수량 티어 자동 전환 */}
         <div
           data-keep-dark="true"
-          className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/90 via-red-950/85 to-zinc-950 border border-rose-500/50 shadow-[0_0_24px_rgba(244,63,94,0.18)] flex flex-col gap-2.5"
+          className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/90 via-red-950/85 to-zinc-950 border border-rose-500/50 shadow-[0_0_24px_rgba(244,63,94,0.18)] flex flex-col gap-3"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white font-label-sm text-[11px] font-black animate-pulse">
-                LIVE 마감 임박
+                LIVE 마감 임박 · 글로벌 원빌드 특판
               </span>
               <span className="font-headline-sm text-[15px] md:text-[16.5px] text-white font-black">
                 🔥 1차 평생권 100명 중 87개 소진 <span className="text-amber-300">(잔여 13석)</span>
               </span>
             </div>
             <span className="font-label-mono text-[11.5px] text-rose-200 font-bold">
-              소진율 87% · 13석 마감 시 정상 구독가로 자동 전환됩니다
+              특판 기준: 10개월 치 구독료 일시불 · 13석 소진 즉시 2차(10년권)로 자동 전환!
             </span>
           </div>
 
@@ -390,9 +410,54 @@ export const PricingModal: React.FC = () => {
             />
           </div>
 
+          {/* 다단계 한정 수량 4대 티어 로드맵 (100명 평생권 -> 500명 10년권 -> 1,000명 5년권 -> 10,000명 2년권) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-0.5">
+            <div className="p-2.5 rounded-xl bg-rose-500/20 border border-amber-300/70 flex flex-col gap-0.5">
+              <div className="flex items-center justify-between text-[10.5px]">
+                <span className="text-amber-300 font-black">🔥 1차: 100명 한정</span>
+                <span className="px-1.5 py-0.2 rounded bg-rose-500 text-white font-mono text-[9.5px] font-extrabold">
+                  잔여 13석
+                </span>
+              </div>
+              <span className="font-headline-sm text-[13.5px] text-white font-black">
+                평생권 (최고 VIP 혜택)
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 flex flex-col gap-0.5 opacity-85">
+              <div className="flex items-center justify-between text-[10.5px]">
+                <span className="text-zinc-300 font-bold">⚡ 2차: 500명 한정</span>
+                <span className="text-zinc-400 font-mono text-[9.5px]">1차 마감 후 자동전환</span>
+              </div>
+              <span className="font-headline-sm text-[13.5px] text-zinc-200 font-bold">
+                10년권 (10개월치 일시불)
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 flex flex-col gap-0.5 opacity-75">
+              <div className="flex items-center justify-between text-[10.5px]">
+                <span className="text-zinc-300 font-bold">🚀 3차: 1,000명 한정</span>
+                <span className="text-zinc-400 font-mono text-[9.5px]">2차 마감 후 자동전환</span>
+              </div>
+              <span className="font-headline-sm text-[13.5px] text-zinc-200 font-bold">
+                5년권 (10개월치 일시불)
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 flex flex-col gap-0.5 opacity-70">
+              <div className="flex items-center justify-between text-[10.5px]">
+                <span className="text-zinc-300 font-bold">🎯 4차: 10,000명 한정</span>
+                <span className="text-zinc-400 font-mono text-[9.5px]">3차 마감 후 자동전환</span>
+              </div>
+              <span className="font-headline-sm text-[13.5px] text-zinc-200 font-bold">
+                2년권 (10개월치 일시불)
+              </span>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-200 pt-0.5">
             <span>
-              🏅 <strong>연간권·평생권 VIP 3대 특권:</strong> ① 라운지 상단 <strong>[총무 명예의 전당 헌정 배지]</strong> 영구 각인 · ② 변천사 쇼츠 <strong>[모임 전용 맞춤형 워터마크]</strong> 권한 · ③ 클럽 장기권 결제 시 <strong>[가족 라운지 1년 무료 초대권 3장]</strong> 사은품 지급
+              🏅 <strong>연간권·장기권·평생권 VIP 특권:</strong> ① 라운지 상단 <strong>[총무 명예의 전당 헌정 배지]</strong> 영구 각인 · ② 변천사 쇼츠 <strong>[모임 전용 맞춤형 워터마크]</strong> 권한 · ③ 클럽 장기권 결제 시 <strong>[가족 라운지 1년 무료 초대권 3장]</strong> 사은품 지급
             </span>
           </div>
         </div>
@@ -808,6 +873,97 @@ export const PricingModal: React.FC = () => {
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* 3. 💎 평생 리워드 초대 제도 (쌍방향 10/10 정책 & SSO 통합 코인 · P2P 무수수료 선물하기) */}
+        <div className="p-5 rounded-2xl bg-[#18181B] border border-amber-400/45 flex flex-col gap-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                쌍방향 10/10 정책 · 평생 리워드 (Give &amp; Get)
+              </span>
+              <h3 className="font-headline-sm text-[17px] text-white font-extrabold">
+                💎 평생 리워드 초대 제도 &amp; SSO 통합 코인 P2P 무수수료 선물하기
+              </h3>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
+              ✓ 멀린 패밀리 앱 SSO 100% 호환
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-1">
+              <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
+                ① 초대받은 신규 유저 (Get 10%)
+              </span>
+              <span className="font-headline-sm text-[15px] text-white font-black">
+                최초 1회 결제액 10% 즉시 할인
+              </span>
+              <p className="font-body-sm text-[11.5px] text-zinc-400">
+                초대 링크로 진입 시 첫 결제 10% 즉시 할인을 제공하여 당당하게 지인·동창을 초대할 명분을 드립니다.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-amber-400/35 flex flex-col gap-1">
+              <span className="font-label-sm text-[11.5px] text-amber-300 font-bold">
+                ② 초대한 기존 유저 (Earn 10% 평생)
+              </span>
+              <span className="font-headline-sm text-[15px] text-white font-black">
+                첫 결제 10% + 평생 연장 10% 영구 적립
+              </span>
+              <p className="font-body-sm text-[11.5px] text-zinc-300">
+                초대한 유저가 평생 동안 결제·연장하는 모든 금액의 10%가 멀린 생태계 <strong>통합 코인</strong>으로 영구 지급됩니다.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-1">
+              <span className="font-label-sm text-[11.5px] text-emerald-300 font-bold">
+                ③ P2P 코인 무수수료 선물하기
+              </span>
+              <span className="font-headline-sm text-[15px] text-white font-black">
+                가족·지인·동창회 총무에게 수수료 0원 선물
+              </span>
+              <p className="font-body-sm text-[11.5px] text-zinc-400">
+                적립된 통합 코인을 동창회 총무나 가족에게 선물하여 라운지 연장 결제 및 패밀리 앱 전 서비스에 즉시 사용합니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <span className="font-body-sm text-[11.5px] text-zinc-400">
+              💡 세이씨는 연산 비용을 유저 마스터 PC가 분담하는 에어갭(Air-gap) 구조이므로 한계 비용이 0원에 수렴하여 평생 10% 리워드 환원이 가능합니다.
+            </span>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleCopyReferralLink()}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold transition-all ${
+                  referralLinkCopied
+                    ? 'bg-emerald-400 text-zinc-950'
+                    : 'bg-amber-400 hover:bg-amber-300 text-zinc-950'
+                }`}
+              >
+                {referralLinkCopied
+                  ? '✓ 내 10/10 평생 리워드 초대 링크 복사됨!'
+                  : '🔗 내 10/10 평생 리워드 초대 링크 복사'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSimulateP2pCoinGift}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-bold border transition-all ${
+                  p2pGiftSent
+                    ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
+                    : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200'
+                }`}
+              >
+                {p2pGiftSent
+                  ? '✓ 총무님께 통합 코인 무수수료 선물 완료!'
+                  : '🎁 동창회 총무·가족에게 코인 무수수료 선물하기'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
