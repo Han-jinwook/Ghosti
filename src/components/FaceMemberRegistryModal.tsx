@@ -691,20 +691,20 @@ export const FaceMemberRegistryModal: React.FC = () => {
             </div>
           </section>
 
-          {/* 1단계 & 2단계: 멤버 사진 추가 시 'AI 추가 힌트' 원터치 [등록] vs 노약자 고민 없는 [그냥 사진만 올리기 / 패스] */}
+          {/* ✨ AI 얼굴 자동 매칭 도우미: 원터치 [⭕ 맞아요! 등록] vs [⚡ 확인 건너뛰고 사진만 바로 올리기] */}
           <section className="rounded-xl bg-zinc-900/80 border border-primary-container/30 p-4 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-sm text-[10.5px] font-extrabold">
-                    1단계 (일반 멤버 참여) &amp; 2단계 (노약자 자동 패스)
+                    ✨ AI 얼굴 자동 매칭 도우미
                   </span>
                   <h3 className="font-label-md text-[14px] text-white font-bold">
-                    멤버가 사진을 올릴 때 뜨는 ‘원터치 AI 힌트’ (패스해도 👑 방장 대기열에 100% 보존)
+                    멤버가 사진을 올릴 때 뜨는 ‘원터치 AI 힌트’ (건너뛰어도 👑 방장 대기열에 100% 보관)
                   </h3>
                 </div>
                 <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
-                  참여하고 싶은 멤버는 <strong>[등록]</strong> 한 번으로 여권 시드를 진화시키고, 할머니나 바쁜 멤버는 고민 없이 <strong>[그냥 사진만 올리기 / 패스]</strong>를 누르면 됩니다.
+                  새로 찾은 얼굴은 <strong>[⭕ 맞아요! 등록]</strong> 한 번으로 여권 시드에 반영하고, 바쁠 때는 고민 없이 <strong>[⚡ 확인 건너뛰고 사진만 바로 올리기]</strong>를 누르면 됩니다.
                 </p>
               </div>
 
@@ -714,7 +714,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                   onClick={() => passAllSwarmCandidatesToHostQueue()}
                   className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold shrink-0"
                 >
-                  👵 노약자 모드: 그냥 사진만 올리기 / 전체 패스 (👑 방장 대기열로 이관)
+                  ⚡ 확인 건너뛰고 사진만 바로 올리기 (방장이 나중에 정리)
                 </button>
               )}
             </div>
@@ -722,7 +722,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
             {memberActiveHints.length === 0 ? (
               <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-zinc-300 font-body-sm text-[12px] flex items-center justify-between">
                 <span>
-                  ✓ 현재 멤버 업로드 화면의 AI 힌트가 모두 처리되었습니다. (패스된 항목은 아래 3단계 👑 방장 누락분 뒷정리 대기열로 안전하게 이관되었습니다.)
+                  ✓ 현재 멤버 업로드 화면의 AI 힌트가 모두 처리되었습니다. (건너뛴 항목은 아래 👑 방장 누락분 뒷정리 대기열로 안전하게 보관되었습니다.)
                 </span>
               </div>
             ) : (
@@ -771,7 +771,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                         onClick={() => passSwarmFaceCandidateToHostQueue(cand.candidateId)}
                         className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-zinc-200 font-label-sm text-[10.5px]"
                       >
-                        그냥 넘어가기(패스)
+                        확인 건너뛰기
                       </button>
                     </div>
                   </div>
@@ -780,20 +780,20 @@ export const FaceMemberRegistryModal: React.FC = () => {
             )}
           </section>
 
-          {/* 3단계: 👑 방장의 권한과 뒷정리 — 누락 연도·조건 총점검 & 원터치 마감 */}
+          {/* 👑 방장의 권한과 뒷정리 — 누락 연도·조건 총점검 & 원터치 마감 */}
           <section className="rounded-xl bg-zinc-900/80 border border-amber-400/35 p-4 flex flex-col gap-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
-                    3단계 (👑 방장 누락분 뒷정리 &amp; 총점검)
+                    👑 방장 누락분 뒷정리 &amp; 총점검
                   </span>
                   <h3 className="font-label-md text-[14px] text-white font-bold">
-                    할머니·멤버가 패스한 사진 속 얼굴 &amp; 누락 연도·각도 👑 방장 총점검
+                    확인을 건너뛴 사진 속 얼굴 &amp; 누락 연도·각도 👑 방장 총점검
                   </h3>
                 </div>
                 <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
-                  할머니가 아무것도 안 누르고 올린 사진 속 얼굴 후보까지 버리지 않고 이곳에 모아둡니다. 방장이 <strong>[누락분 일괄 등록]</strong> 한 번만 누르면 세이씨 여권 시드에 100% 흡수됩니다.
+                  멤버들이 확인을 건너뛰고 바로 올린 사진 속 얼굴 후보까지 빠짐없이 이곳에 보관됩니다. 👑 방장이 <strong>[누락분 일괄 등록]</strong> 한 번만 누르면 세이씨 여권 시드에 100% 반영됩니다.
                 </p>
               </div>
 

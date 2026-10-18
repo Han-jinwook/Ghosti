@@ -1047,15 +1047,15 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         </div>
 
-        {/* 🎯 [3단 집단지성 프로토콜] ① 일반 멤버 원터치 [등록] 힌트 ➔ ② 노약자 고민 없는 [그냥 사진만 올리기 / 패스] ➔ ③ 👑 방장 뒷정리 대기열 */}
+        {/* 🎯 ✨ AI 얼굴 자동 매칭 도우미 */}
         <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-mono text-[10.5px] font-extrabold">
-                3단 집단지성 프로토콜 · Global Seed v{globalSeedVersion}
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                ✨ AI 얼굴 자동 매칭 도우미
               </span>
               <span className="font-label-sm text-[12.5px] text-white font-bold">
-                ① 멤버는 원터치 [⭕ 맞아요! 등록] ➔ ② 할머니는 고민 없이 [그냥 넘어가기(Pass)] ➔ ③ 빠진 건 👑 방장이 [누락분 일괄 등록]
+                새로 찾은 얼굴은 원터치로 등록하고, 바쁠 때는 확인을 건너뛰고 사진만 바로 올리세요 (👑 방장이 나중에 한 번에 정리)
               </span>
             </div>
 
@@ -1066,7 +1066,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   onClick={() => passAllSwarmCandidatesToHostQueue()}
                   className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-bold"
                 >
-                  👵 노약자 모드: 그냥 사진만 올리기 / 패스 (👑 방장 대기열 이관)
+                  ⚡ 확인 건너뛰고 사진만 바로 올리기 (방장이 나중에 정리)
                 </button>
               )}
               {hostCleanupQueue.length > 0 && (
@@ -1091,7 +1091,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             </div>
           </div>
 
-          {/* 1단계 & 2단계: 방금 올린 사진 속 새로운 연도/각도 힌트 카드 */}
+          {/* 방금 올린 사진 속 새로운 연도/각도 힌트 카드 */}
           {memberActiveHints.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               {memberActiveHints.map((cand) => (
@@ -1129,7 +1129,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                       onClick={() => passSwarmFaceCandidateToHostQueue(cand.candidateId)}
                       className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-zinc-200 font-label-sm text-[11px]"
                     >
-                      패스
+                      건너뛰기
                     </button>
                   </div>
                 </div>
@@ -1139,8 +1139,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             <div className="px-3 py-2 rounded-lg bg-zinc-900/80 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300">
               <span>
                 {hostCleanupQueue.length > 0
-                  ? `👵 할머니·멤버가 패스한 사진 속 누락 연도/각도 얼굴 후보 ${hostCleanupQueue.length}건이 👑 방장 뒷정리 대기열에 안전하게 보존되어 있습니다.`
-                  : '✓ 할머니가 그냥 올린 사진 속 얼굴까지 전 멤버 다년도·다각도 시드에 100% 흡수 및 0.04초 역스캔 완결되었습니다!'}
+                  ? `⚡ 확인을 건너뛴 사진 속 얼굴 후보 ${hostCleanupQueue.length}건이 👑 방장 정리 대기열에 안전하게 보관되어 있습니다.`
+                  : '✓ 사진 속 모든 얼굴이 멤버별 여권에 자동 반영되어 0.04초 검색 준비가 완료되었습니다!'}
               </span>
               {lastRetroScanReport && (
                 <span className="text-emerald-300 font-mono text-[11px] font-bold">
