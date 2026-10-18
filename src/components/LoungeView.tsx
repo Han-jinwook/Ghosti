@@ -314,6 +314,14 @@ export const LoungeView: React.FC = () => {
   const [radarSimulated, setRadarSimulated] = useState(false);
   // 개인 라운지 무료체험 상태: 'idle'(실행 전) -> 'running'(진단 중) -> 'done'(진단 완료)
   const [personalTrialStatus, setPersonalTrialStatus] = useState<'idle' | 'running' | 'done'>('idle');
+  // 패밀리 / 클럽 / 스쿨 라운지 무료체험 상태 (라운지별 독립 작동)
+  const [groupTrialStatus, setGroupTrialStatus] = useState<
+    Record<'family' | 'club' | 'student', 'idle' | 'running' | 'done'>
+  >({
+    family: 'idle',
+    club: 'idle',
+    student: 'idle',
+  });
   // 무료체험 내 안전 검증(정리 대기함 이동 -> 원복 직접 눌러보기) 상태
   const [trialSafetyStep, setTrialSafetyStep] = useState<'ready' | 'quarantined' | 'restored'>('ready');
   const [trialMovedIds, setTrialMovedIds] = useState<string[]>([]);
@@ -324,6 +332,14 @@ export const LoungeView: React.FC = () => {
     window.setTimeout(() => {
       setPersonalTrialStatus('done');
     }, 800);
+  };
+
+  const handleStartGroupTrial = (lounge: 'family' | 'club' | 'student') => {
+    setGroupTrialStatus((prev) => ({ ...prev, [lounge]: 'running' }));
+    setRadarSimulated(false);
+    window.setTimeout(() => {
+      setGroupTrialStatus((prev) => ({ ...prev, [lounge]: 'done' }));
+    }, 700);
   };
 
   const activeClusters = faceClusters.filter((c) => !c.excludedAsPasserby);
@@ -418,22 +434,13 @@ export const LoungeView: React.FC = () => {
         <>
           {/* 1단: 개인 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                  👤 개인 라운지 — 사진·영상·문서 AI 검색 &amp; 클리어몬스터 주치의 청소
-                </h1>
-                <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                  클라우드에 파일을 올리지 않고 내 기기 안에서 <strong>사진·영상·문서 정기 관리</strong>와 <strong>클리어(기본 쓰레기 청소)</strong>를 수행합니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={goToMainFeed}
-                className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[12.5px] font-bold whitespace-nowrap"
-              >
-                🔍 파워 검색 바로가기 →
-              </button>
+            <div>
+              <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
+                👤 개인 라운지 — 사진·영상·문서 AI 검색 &amp; 클린몬스터 주치의 케어
+              </h1>
+              <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
+                클라우드에 파일을 올리지 않고 내 기기 안에서 <strong>사진·영상·문서 0.04초 파워검색</strong>과 <strong>클린몬스터 디지털 종합건강검진·대화형 컨설팅</strong>을 수행합니다.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
@@ -801,133 +808,506 @@ export const LoungeView: React.FC = () => {
         </>
       )}
 
+      {/* ─────────────── 👨‍👩‍👧‍👦 패밀리 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(무료체험 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
       {activeLoungeType === 'family' && (
-        <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                👨‍👩‍👧‍👦 패밀리 라운지 — 양가 분리 가족 사진관 (마스터 1인 결제 ➔ 가족 전원 무료)
-              </h2>
-              <p className="font-body-sm text-[12.5px] text-zinc-400 mt-0.5">
-                가족 대표 사진 얼굴 추출 &amp; 이름 등록 후 카톡 초대 링크를 보내면, 가족 아이폰·갤럭시에서 3초 레이더 스캔으로 함께 찍힌 사진만 자동 수합합니다.
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {FAMILY_ROOMS.map((room) => (
-                <button
-                  key={room}
-                  type="button"
-                  onClick={() => setActiveFamilyRoom(room)}
-                  className={`px-3 py-1 rounded-lg font-label-sm text-[11.5px] font-bold border transition-all ${
-                    activeFamilyRoom === room
-                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                      : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                  }`}
-                >
-                  {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
-              <div className="flex flex-col gap-1.5">
-                <span className="font-label-sm text-[11.5px] text-zinc-300 font-bold">
-                  🏠 우리집 단독 — 우리집 전용 시크릿 라운지 (방 1개)
-                </span>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-headline-md text-[24px] text-white font-black">
-                    월 5,900원
-                  </span>
-                  <span className="font-label-mono text-[13px] text-zinc-300 font-bold">
-                    (연 59,000원)
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12px] text-zinc-400">
-                  부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 0.04초 실명 검색
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('family_home_5900')}
-                  className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold"
-                >
-                  월 5,900원 시작
-                </button>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('family_home_year_59000')}
-                  className="py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
-                >
-                  연 59,000원 시작
-                </button>
-              </div>
-            </div>
-
-            <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
-              <div className="flex flex-col gap-1.5">
-                <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                  👨‍👩‍👧‍👦 양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
-                </span>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-headline-md text-[24px] text-white font-black">
-                    월 8,900원
-                  </span>
-                  <span className="font-label-mono text-[13px] text-primary-container font-bold">
-                    (연 89,000원)
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12px] text-zinc-300">
-                  사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 손주·가족 사진을 원하는 방에만 자동 배포합니다.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('family_three_8900')}
-                  className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
-                >
-                  양가 3방 월 8,900원
-                </button>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('family_three_year_89000')}
-                  className="py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-md text-[12.5px] font-bold"
-                >
-                  연 89,000원 시작
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {activeLoungeType === 'club' && (
-        <section className="flex flex-col gap-4">
-          {/* 4050 동창회 락인: Text-to-Banner 자동 간판 + 0.04초 학창시절 얼굴 찾기 + 응답하라 투트랙 탭 */}
-          <AlumniRetroBannerAndTwoTrackBar
-            onNavigateToFeed={goToMainFeed}
-            onOpenWaitingRoom={() => {
-              setDesktopTab('trash');
-              setMobileTab('trash');
-            }}
-          />
-
-          <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+        <>
+          {/* 1단: 패밀리 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
+          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                  ⛳ 클럽 라운지 — 4050 동창회 · 골프 · 산악회 총무 1인 결제로 전 회원 무료
-                </h2>
-                <p className="font-body-sm text-[12.5px] text-zinc-400 mt-0.5">
-                  동창회·모임 총무(👑 방장) 1인 결제로 회원 전원 무료! 13KB 초경량 캐시 열람과 5MB 무손실 원본 P2P 1초 소환을 지원합니다 (방 1개 기준).
+                <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
+                  👨‍👩‍👧‍👦 패밀리 라운지 — 양가 분리 가족 사진관 (마스터 1인 결제 ➔ 가족 전원 무료)
+                </h1>
+                <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
+                  사생활 혼선 없이 <strong>[우리집] · [본가(친가)] · [처가(친정)]</strong> 방을 분리하고, 카톡 링크 하나로 가족 스마트폰에서 함께 찍힌 사진만 3초 만에 자동 수합합니다.
                 </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {FAMILY_ROOMS.map((room) => (
+                  <button
+                    key={room}
+                    type="button"
+                    onClick={() => setActiveFamilyRoom(room)}
+                    className={`px-3 py-1 rounded-lg font-label-sm text-[11.5px] font-bold border transition-all ${
+                      activeFamilyRoom === room
+                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                        : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
+                  </button>
+                ))}
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🏠🏡🌸 양가 3방 완벽 분리
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                    프라이버시 보장
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  <strong>[우리집] · [본가(친가)] · [처가(친정)]</strong> 3개 방을 독립 분리하여, 친가·외가 어르신께는 손주·가족 사진만 원하는 방으로 깔끔하게 자동 배포합니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🛂 가족 얼굴 여권 &amp; 0.04초 실명 검색
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                    호칭·실명 자동 매칭
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  가족 단체 사진에서 얼굴을 자동 추출해 이름·호칭(할머니, 큰삼촌 등)만 적어두면 온 가족 스마트폰에서 이름으로 0.04초 만에 찾습니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    📡 카톡 초대 &amp; 3초 레이더 수합
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
+                    방장 1인 결제 ➔ 전원 무료
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  명절·가족여행 후 카톡 초대 링크만 보내면 가족들의 아이폰·갤럭시에서 우리 가족이 함께 찍힌 사진만 3초 만에 골라 대기실로 모읍니다.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 2단: 패밀리 라운지 무료체험 안내 + 우측 [무료체험 시작] / [완료] 버튼 */}
+          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+              <div className="flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-headline-sm text-[18px] text-white font-bold">
+                    ✨ 패밀리 라운지 무료체험 — 가족 얼굴 여권 &amp; 3초 레이더 수합
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
+                    ⏱️ 소요 시간: 약 20초
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
+                    📊 <strong>감지된 가족 인물:</strong> 전체 <strong>{activeClusters.length}명</strong> (이름 등록 <strong>{namedClusters.length}명</strong>)
+                  </span>
+                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
+                    🔬 <strong>무료체험 범위:</strong> 🛂 가족 얼굴 여권 등록 · 📡 가족 폰 3초 레이더 스캔 <strong>최대 10장 수합 맛보기</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {groupTrialStatus.family === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={() => handleStartGroupTrial('family')}
+                    className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                  >
+                    🚀 무료체험 시작
+                  </button>
+                )}
+
+                {groupTrialStatus.family === 'running' && (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-6 py-3 rounded-xl bg-zinc-800 border border-white/15 text-zinc-300 font-headline-sm text-[14px] font-bold whitespace-nowrap cursor-wait"
+                  >
+                    ⏳ 가족 대표 사진 얼굴 추출 &amp; 레이더 준비 중...
+                  </button>
+                )}
+
+                {groupTrialStatus.family === 'done' && (
+                  <>
+                    <button
+                      type="button"
+                      disabled
+                      className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
+                    >
+                      ✓ 무료체험 완료
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartGroupTrial('family')}
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold whitespace-nowrap"
+                    >
+                      🔄 다시 체험하기
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 3단: 무료체험 완료 시 열리는 가족 여권 등록 & 3초 레이더 수합 보드 */}
+            {groupTrialStatus.family === 'done' ? (
+              <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                  <span className="font-headline-sm text-[15.5px] text-white font-bold">
+                    👑 Step 1. 가족 얼굴 여권 자동 장착 &amp; 방장 누락분 확인 ({activeFamilyRoom})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowFaceRegistryModal(true)}
+                    className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
+                  >
+                    🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
+                  </button>
+                </div>
+
+                <FaceMemberInlineBar
+                  onRunRealNameQuery={(query) => {
+                    goToMainFeed();
+                    void runTextQuery(query);
+                  }}
+                />
+
+                <div className="p-4 rounded-xl bg-zinc-950 border border-white/15 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="font-label-md text-[13px] text-white font-bold">
+                      📡 Step 2. 카톡 초대 &amp; 가족 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
+                    </span>
+                    <p className="font-body-sm text-[12px] text-zinc-400">
+                      등록된 가족 얼굴({namedClusters.length}명)의 768차원 특징량과 촬영 날짜를 기준으로 가족 폰에서 함께 찍힌 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRadarSimulated(true);
+                        setDesktopTab('trash');
+                        setMobileTab('trash');
+                      }}
+                      className="px-3.5 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
+                    </button>
+                    {namedClusters.map((c) => {
+                      const { activePersona, isRoomCreator } = getActivePersonaForCluster(
+                        c,
+                        activeLoungeType,
+                        activeFamilyRoom
+                      );
+                      const labelName = activePersona || c.registeredName;
+                      return (
+                        <button
+                          key={c.clusterId}
+                          type="button"
+                          onClick={() => {
+                            goToMainFeed();
+                            void runTextQuery(`${labelName} 나무 다리`);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
+                        >
+                          🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
+                <span className="font-body-sm text-[12.5px] text-zinc-400">
+                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 가족 대표 사진에서 얼굴을 추출해 이름을 붙이고, 카톡 초대 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
+                </span>
+              </div>
+            )}
+
+            {/* 패밀리 라운지 요금제 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
+              <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <span className="font-label-sm text-[11.5px] text-zinc-300 font-bold">
+                    🏠 우리집 단독 — 우리집 전용 시크릿 라운지 (방 1개)
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-headline-md text-[24px] text-white font-black">
+                      월 5,900원
+                    </span>
+                    <span className="font-label-mono text-[13px] text-zinc-300 font-bold">
+                      (연 59,000원)
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12px] text-zinc-400">
+                    부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 0.04초 실명 검색
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => activatePricingPlan('family_home_5900')}
+                    className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold"
+                  >
+                    월 5,900원 시작
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => activatePricingPlan('family_home_year_59000')}
+                    className="py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
+                  >
+                    연 59,000원 시작
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
+                    👨‍👩‍👧‍👦 양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-headline-md text-[24px] text-white font-black">
+                      월 8,900원
+                    </span>
+                    <span className="font-label-mono text-[13px] text-primary-container font-bold">
+                      (연 89,000원)
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12px] text-zinc-300">
+                    사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 손주·가족 사진을 원하는 방에만 자동 배포합니다.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => activatePricingPlan('family_three_8900')}
+                    className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
+                  >
+                    양가 3방 월 8,900원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => activatePricingPlan('family_three_year_89000')}
+                    className="py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-md text-[12.5px] font-bold"
+                  >
+                    연 89,000원 시작
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* ─────────────── ⛳ 클럽 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(무료체험 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
+      {activeLoungeType === 'club' && (
+        <>
+          {/* 1단: 클럽 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
+          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+            <div>
+              <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
+                ⛳ 클럽 라운지 — 4050 동창회 · 골프 · 산악회 (총무 1인 결제 ➔ 전 회원 무료)
+              </h1>
+              <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
+                동창회·모임 총무(👑 방장) 1인 결제로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 열람</strong>과 <strong>5MB 무손실 원본 1초 소환</strong>을 누립니다.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🏫 8090 응답하라 투트랙 앨범
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                    4050 동창회 특화
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  방 개설 즉시 복고풍 간판이 장착되며, <strong>[🏫 학창시절 (아날로그 복원)]</strong>과 <strong>[🥂 최근 모임]</strong> 투트랙으로 졸업앨범·필름 사진과 현재 모임 사진을 함께 관리합니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🏷️ 스틱 태깅 &amp; 계절↔월 양방향 검색
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                    검색 누락 0%
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  스캔 사진에 <strong>1989년 · 봄 · 수학여행</strong> 스틱만 톡톡 눌러도, 친구가 <strong>&ldquo;89년 5월&rdquo;</strong>이나 별명으로 검색할 때 100% 매칭됩니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    ⚡ 13KB 초경량 열람 &amp; 5MB 원본 소환
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
+                    총무 1인 결제 ➔ 회원 무료
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  카톡방 사진처럼 만료되지 않고 13KB 캐시로 0.04초 만에 열람하며, 간직할 사진만 총무 PC에서 5MB 무손실 원본으로 1초 소환합니다.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 2단: 클럽 라운지 무료체험 안내 + 우측 [무료체험 시작] / [완료] 버튼 */}
+          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+              <div className="flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-headline-sm text-[18px] text-white font-bold">
+                    ✨ 클럽 라운지 무료체험 — 동창·회원 얼굴 여권 &amp; 3초 레이더 수합
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
+                    ⏱️ 소요 시간: 약 20초
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
+                    📊 <strong>감지된 모임 회원:</strong> 전체 <strong>{activeClusters.length}명</strong> (실명·별명 등록 <strong>{namedClusters.length}명</strong>)
+                  </span>
+                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
+                    🔬 <strong>무료체험 범위:</strong> 🛂 회원 얼굴 여권 등록 · 📡 총무 카톡 초대 <strong>3초 레이더 10장 수합 맛보기</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {groupTrialStatus.club === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={() => handleStartGroupTrial('club')}
+                    className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                  >
+                    🚀 무료체험 시작
+                  </button>
+                )}
+
+                {groupTrialStatus.club === 'running' && (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-6 py-3 rounded-xl bg-zinc-800 border border-white/15 text-zinc-300 font-headline-sm text-[14px] font-bold whitespace-nowrap cursor-wait"
+                  >
+                    ⏳ 모임 단체 사진 얼굴 추출 &amp; 레이더 준비 중...
+                  </button>
+                )}
+
+                {groupTrialStatus.club === 'done' && (
+                  <>
+                    <button
+                      type="button"
+                      disabled
+                      className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
+                    >
+                      ✓ 무료체험 완료
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartGroupTrial('club')}
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold whitespace-nowrap"
+                    >
+                      🔄 다시 체험하기
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 3단: 무료체험 완료 시 열리는 회원 여권 등록 & 3초 레이더 수합 보드 */}
+            {groupTrialStatus.club === 'done' ? (
+              <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                  <span className="font-headline-sm text-[15.5px] text-white font-bold">
+                    👑 Step 1. 동창·회원 여권 자동 장착 &amp; 총무 누락분 1장씩 확인
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowFaceRegistryModal(true)}
+                    className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
+                  >
+                    🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
+                  </button>
+                </div>
+
+                <FaceMemberInlineBar
+                  onRunRealNameQuery={(query) => {
+                    goToMainFeed();
+                    void runTextQuery(query);
+                  }}
+                />
+
+                <div className="p-4 rounded-xl bg-zinc-950 border border-white/15 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="font-label-md text-[13px] text-white font-bold">
+                      📡 Step 2. 카톡 단톡방 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
+                    </span>
+                    <p className="font-body-sm text-[12px] text-zinc-400">
+                      총무가 등록한 회원 얼굴({namedClusters.length}명)의 768차원 특징량과 모임 날짜를 기준으로 회원 폰에서 모임 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRadarSimulated(true);
+                        setDesktopTab('trash');
+                        setMobileTab('trash');
+                      }}
+                      className="px-3.5 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
+                    </button>
+                    {namedClusters.map((c) => {
+                      const { activePersona, isRoomCreator } = getActivePersonaForCluster(
+                        c,
+                        activeLoungeType,
+                        activeFamilyRoom
+                      );
+                      const labelName = activePersona || c.registeredName;
+                      return (
+                        <button
+                          key={c.clusterId}
+                          type="button"
+                          onClick={() => {
+                            goToMainFeed();
+                            void runTextQuery(`${labelName} 나무 다리`);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
+                        >
+                          🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
+                <span className="font-body-sm text-[12.5px] text-zinc-400">
+                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 단체 사진에서 회원 얼굴을 추출해 실명·별명을 등록하고, 단톡방 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
+                </span>
+              </div>
+            )}
+
+            {/* 클럽 라운지 인원별 3단계 요금제 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-white/10">
               {CLUB_TIERS.map((tier) => {
                 const isSelected = clubSizeTier === tier.id;
                 return (
@@ -988,168 +1368,287 @@ export const LoungeView: React.FC = () => {
                 );
               })}
             </div>
-          </div>
-        </section>
+          </section>
+        </>
       )}
 
+      {/* ─────────────── 🎒 스쿨 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(무료체험 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
       {activeLoungeType === 'student' && (
-        <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <>
+          {/* 1단: 스쿨 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
+          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div>
-              <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)
-              </h2>
-              <p className="font-body-sm text-[12.5px] text-zinc-400 mt-0.5">
-                초·중·고 학급·동아리·수련회·체육대회 인원수 상관없이 라운지 1개 개설 시 무조건{' '}
-                <strong className="text-white">월 900원 (연 9,000원)</strong> 단일 요금! 무료체험 10장 수합 한도 도달 시 방장에게 게이밍 PC 설치 알림을 보낼 수 있습니다.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setStudentPokedHost(true)}
-              className={`px-4 py-2 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all ${
-                studentPokedHost
-                  ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
-                  : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 shadow-[0_0_20px_rgba(251,191,36,0.25)]'
-              }`}
-            >
-              {studentPokedHost
-                ? '✓ 방장에게 "집 게이밍 PC에 설치해!" 카톡 알림 발송됨!'
-                : '👉 방장에게 "집 게이밍 PC에 설치해!" 콕 찌르기'}
-            </button>
-          </div>
-
-          <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  초·중·고 반/동아리 특가 월 900원
-                </span>
-                <span
-                  className={`px-2.5 py-0.5 rounded font-label-mono text-[11px] font-bold border ${
-                    studentOcrVerified
-                      ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
-                      : 'bg-zinc-950 border-white/10 text-zinc-300'
-                  }`}
-                >
-                  {studentOcrVerified
-                    ? '✓ 학생증 로컬 OCR 0.1초 인증 완료 (외부 전송 0 Byte)'
-                    : '🔒 학생증 로컬 OCR 0.1초 인증 대기'}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="font-headline-md text-[26px] text-white font-black">
-                  월 900원
-                </span>
-                <span className="font-label-mono text-[14px] text-primary-container font-bold">
-                  (연 9,000원 · 인원 제한 없음)
-                </span>
-              </div>
-              <p className="font-body-sm text-[12px] text-zinc-300">
-                학생증 사진 1장을 로컬 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정이 없습니다.
+              <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
+                🎒 스쿨 라운지 — 초·중·고 학급 · 동아리 · 체육대회 (월 900원 단일 특가)
+              </h1>
+              <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
+                학생증 로컬 0.1초 인증만으로 학급·동아리 인원수 상관없이 <strong>월 900원(연 9,000원)</strong>! 반 친구들 전원이 무료로 수련회·축제 사진을 0.04초 만에 찾습니다.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {!studentOcrVerified && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🪪 학생증 로컬 OCR 0.1초 인증
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10.5px] font-extrabold">
+                    외부 전송 0 Byte
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  학생증 사진 1장을 내 기기 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정 없이 학생 할인을 즉시 적용합니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🏃 수련회·체육대회·축제 3초 수합
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                    우리 반 전원 무료
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  반장·동아리 기장이 반 단톡방에 초대 링크만 올리면, 친구들 아이폰·갤럭시에서 우리 반 사진만 3초 레이더로 자동 수합합니다.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🪙 인원 무제한 월 900원 단일 특가
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
+                    방장 PC 콕 찌르기
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                  30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 무료체험 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 2단: 스쿨 라운지 무료체험 안내 + 우측 [무료체험 시작] / [완료] 버튼 */}
+          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+              <div className="flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-headline-sm text-[18px] text-white font-bold">
+                    ✨ 스쿨 라운지 무료체험 — 우리 반 얼굴 여권 &amp; 10장 레이더 수합
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
+                    ⏱️ 소요 시간: 약 20초
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
+                    📊 <strong>감지된 우리 반 친구:</strong> 전체 <strong>{activeClusters.length}명</strong> (이름·별명 등록 <strong>{namedClusters.length}명</strong>)
+                  </span>
+                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
+                    🔬 <strong>무료체험 범위:</strong> 🛂 친구 얼굴 여권 등록 · 📡 반 단톡방 <strong>3초 레이더 10장 수합 &amp; 방장 콕 찌르기</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {groupTrialStatus.student === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={() => handleStartGroupTrial('student')}
+                    className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                  >
+                    🚀 무료체험 시작
+                  </button>
+                )}
+
+                {groupTrialStatus.student === 'running' && (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-6 py-3 rounded-xl bg-zinc-800 border border-white/15 text-zinc-300 font-headline-sm text-[14px] font-bold whitespace-nowrap cursor-wait"
+                  >
+                    ⏳ 우리 반 단체 사진 얼굴 추출 &amp; 레이더 준비 중...
+                  </button>
+                )}
+
+                {groupTrialStatus.student === 'done' && (
+                  <>
+                    <button
+                      type="button"
+                      disabled
+                      className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
+                    >
+                      ✓ 무료체험 완료
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartGroupTrial('student')}
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold whitespace-nowrap"
+                    >
+                      🔄 다시 체험하기
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 3단: 무료체험 완료 시 열리는 반 친구 여권 등록 & 3초 레이더 수합 보드 */}
+            {groupTrialStatus.student === 'done' ? (
+              <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                  <span className="font-headline-sm text-[15.5px] text-white font-bold">
+                    👑 Step 1. 우리 반 친구 여권 자동 장착 &amp; 반장 누락분 확인
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStudentPokedHost(true)}
+                      className={`px-3 py-1 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all ${
+                        studentPokedHost
+                          ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
+                          : 'bg-amber-400 hover:bg-amber-300 text-zinc-950'
+                      }`}
+                    >
+                      {studentPokedHost
+                        ? '✓ 방장에게 "집 게이밍 PC에 설치해!" 알림 발송됨!'
+                        : '👉 무료 10장 도달 시 방장에게 "집 게이밍 PC에 설치해!" 콕 찌르기'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFaceRegistryModal(true)}
+                      className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
+                    >
+                      🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
+                    </button>
+                  </div>
+                </div>
+
+                <FaceMemberInlineBar
+                  onRunRealNameQuery={(query) => {
+                    goToMainFeed();
+                    void runTextQuery(query);
+                  }}
+                />
+
+                <div className="p-4 rounded-xl bg-zinc-950 border border-white/15 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="font-label-md text-[13px] text-white font-bold">
+                      📡 Step 2. 반 단톡방 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
+                    </span>
+                    <p className="font-body-sm text-[12px] text-zinc-400">
+                      반장이 등록한 친구 얼굴({namedClusters.length}명)의 768차원 특징량과 수련회·체육대회 날짜를 기준으로 친구 폰에서 우리 반 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRadarSimulated(true);
+                        setDesktopTab('trash');
+                        setMobileTab('trash');
+                      }}
+                      className="px-3.5 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
+                    </button>
+                    {namedClusters.map((c) => {
+                      const { activePersona, isRoomCreator } = getActivePersonaForCluster(
+                        c,
+                        activeLoungeType,
+                        activeFamilyRoom
+                      );
+                      const labelName = activePersona || c.registeredName;
+                      return (
+                        <button
+                          key={c.clusterId}
+                          type="button"
+                          onClick={() => {
+                            goToMainFeed();
+                            void runTextQuery(`${labelName} 나무 다리`);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
+                        >
+                          🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
+                <span className="font-body-sm text-[12.5px] text-zinc-400">
+                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 우리 반 단체 사진에서 친구 얼굴을 추출해 이름·별명을 등록하고, <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
+                </span>
+              </div>
+            )}
+
+            {/* 스쿨 라운지 요금제 */}
+            <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                    초·중·고 반/동아리 특가 월 900원
+                  </span>
+                  <span
+                    className={`px-2.5 py-0.5 rounded font-label-mono text-[11px] font-bold border ${
+                      studentOcrVerified
+                        ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
+                        : 'bg-zinc-950 border-white/10 text-zinc-300'
+                    }`}
+                  >
+                    {studentOcrVerified
+                      ? '✓ 학생증 로컬 OCR 0.1초 인증 완료 (외부 전송 0 Byte)'
+                      : '🔒 학생증 로컬 OCR 0.1초 인증 대기'}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="font-headline-md text-[26px] text-white font-black">
+                    월 900원
+                  </span>
+                  <span className="font-label-mono text-[14px] text-primary-container font-bold">
+                    (연 9,000원 · 인원 제한 없음)
+                  </span>
+                </div>
+                <p className="font-body-sm text-[12px] text-zinc-300">
+                  학생증 사진 1장을 로컬 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정이 없습니다.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {!studentOcrVerified && (
+                  <button
+                    type="button"
+                    onClick={verifyStudentOcr}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-md text-[12.5px] font-bold"
+                  >
+                    🪪 학생증 로컬 OCR 0.1초 인증
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={verifyStudentOcr}
-                  className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-md text-[12.5px] font-bold"
+                  onClick={() => activatePricingPlan('student_sub_900')}
+                  className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
                 >
-                  🪪 학생증 로컬 OCR 0.1초 인증
+                  월 900원 개설
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => activatePricingPlan('student_sub_900')}
-                className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
-              >
-                월 900원 개설
-              </button>
-              <button
-                type="button"
-                onClick={() => activatePricingPlan('student_year_9000')}
-                className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
-              >
-                연 9,000원 개설
-              </button>
+                <button
+                  type="button"
+                  onClick={() => activatePricingPlan('student_year_9000')}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-md text-[12.5px] font-bold"
+                >
+                  연 9,000원 개설
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
-      )}
-
-      {/* 3. 패밀리 / 클럽 / 스쿨 라운지에서만 노출 (👤 개인 라운지에서는 100% 완전 비노출!) */}
-      {activeLoungeType !== 'personal' && (
-        <section className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-            <div className="flex items-center gap-2">
-              <span className="font-headline-sm text-[16px] text-white font-bold">
-                👑 Step 1. 세이씨 여권 자동 장착 &amp; 방장 누락분 1장씩 확인
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowFaceRegistryModal(true)}
-              className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
-            >
-              🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
-            </button>
-          </div>
-
-          <FaceMemberInlineBar
-            onRunRealNameQuery={(query) => {
-              goToMainFeed();
-              void runTextQuery(query);
-            }}
-          />
-
-          <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="font-label-md text-[12.5px] text-white font-bold">
-                📡 Step 2~3. 카톡 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ 시드(Seed) 맛보기
-              </span>
-              <p className="font-body-sm text-[12px] text-zinc-400">
-                👑 방장이 등록한 얼굴 아바타({namedClusters.length}명 등록됨 / 전체 {activeClusters.length}명)의 768차원 특징량과 촬영 날짜를 기준으로 멤버 폰에서 함께 찍힌 사진만 3초 만에 자동 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setRadarSimulated(true);
-                  setDesktopTab('trash');
-                  setMobileTab('trash');
-                }}
-                className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
-              >
-                {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
-              </button>
-              {namedClusters.map((c) => {
-                const { activePersona, isRoomCreator } = getActivePersonaForCluster(
-                  c,
-                  activeLoungeType,
-                  activeFamilyRoom
-                );
-                const labelName = activePersona || c.registeredName;
-                return (
-                  <button
-                    key={c.clusterId}
-                    type="button"
-                    onClick={() => {
-                      goToMainFeed();
-                      void runTextQuery(`${labelName} 나무 다리`);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold"
-                  >
-                    🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+          </section>
+        </>
       )}
     </main>
   );
