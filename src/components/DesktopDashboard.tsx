@@ -183,21 +183,43 @@ export const DesktopDashboard: React.FC = () => {
             </nav>
           </div>
 
-          {/* 우측 상단: [☀️ 밝은 화면 / 🌙 어두운 화면] 토글 버튼 (기본값: 따뜻한 아이보리 밝은 화면 고정) */}
+          {/* 우측 상단: 심플 아이콘 테마 토글 (밝은 화면일 때 🌙 달 아이콘 / 어두운 화면일 때 ☀️ 해 아이콘) */}
           <div className="flex items-center gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
             <button
               type="button"
               onClick={toggleThemeMode}
-              title="따뜻한 아이보리 밝은 화면(기본값) ↔ 야간용 어두운 화면 전환"
-              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 font-label-sm text-[12px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 whitespace-nowrap"
+              title={themeMode === 'light' ? '어두운 화면(다크 모드)으로 전환' : '밝은 화면(웜 라이트)으로 전환'}
+              aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                themeMode === 'light'
+                  ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
+                  : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white shadow-sm'
+              }`}
             >
-              <span className={themeMode === 'light' ? 'text-amber-500 font-extrabold' : 'text-zinc-400'}>
-                ☀️ 밝은 화면
-              </span>
-              <span className="text-zinc-400">/</span>
-              <span className={themeMode === 'dark' ? 'text-primary-container font-extrabold' : 'text-zinc-400'}>
-                🌙 어두운 화면
-              </span>
+              {themeMode === 'light' ? (
+                <svg
+                  className="w-[18px] h-[18px]"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              ) : (
+                <svg
+                  className="w-[18px] h-[18px]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="4" fill="currentColor" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                </svg>
+              )}
             </button>
           </div>
         </div>

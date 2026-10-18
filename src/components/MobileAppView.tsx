@@ -146,15 +146,38 @@ export const MobileAppView: React.FC = () => {
               </button>
             </div>
 
-            {/* 우상단: [☀️ 밝은 화면 / 🌙 어두운 화면] 토글 버튼 */}
+            {/* 우상단: 심플 아이콘 테마 토글 (달/해 아이콘) */}
             <div className="flex items-center gap-1.5 shrink-0" aria-label="화면 테마 영역">
               <button
                 type="button"
                 onClick={toggleThemeMode}
-                title="밝은 화면(기본값) ↔ 어두운 화면 전환"
-                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 font-label-sm text-[10.5px] font-bold flex items-center gap-1 shrink-0 whitespace-nowrap"
+                title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
+                aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                  themeMode === 'light'
+                    ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
+                    : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
+                }`}
               >
-                <span>{themeMode === 'light' ? '☀️ 밝은 화면' : '🌙 어두운 화면'}</span>
+                {themeMode === 'light' ? (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="4" fill="currentColor" />
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>

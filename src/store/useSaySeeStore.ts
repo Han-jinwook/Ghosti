@@ -818,7 +818,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     applyHtmlThemeClass(next);
     set({ themeMode: next });
   },
-  layout: typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'desktop' : 'mobile',
+  layout: 'desktop',
   mobileTab: 'search',
   desktopTab: 'dashboard',
   setLayout: (layout) => set({ layout }),
