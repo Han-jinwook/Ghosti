@@ -11,15 +11,88 @@ import {
   LoungeView,
 } from './LoungeView';
 
+const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
+  id,
+  className = 'w-[16px] h-[16px]',
+}) => {
+  switch (id) {
+    case 'personal':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="8" r="4" />
+          <path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7" />
+        </svg>
+      );
+    case 'family':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="9" cy="8" r="3.5" />
+          <path d="M3 19c0-3.31 2.69-6 6-6s6 2.69 6 6" />
+          <circle cx="17" cy="9" r="2.5" />
+          <path d="M16 13.5c2.76 0 5 2.24 5 5" />
+        </svg>
+      );
+    case 'club':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M5 3v18" />
+          <path d="M5 4h12l-2.5 4.5L17 13H5" />
+        </svg>
+      );
+    case 'student':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M22 10L12 5 2 10l10 5 10-5z" />
+          <path d="M6 12.5V17c0 1.66 2.69 3 6 3s6-1.34 6-3v-4.5" />
+        </svg>
+      );
+  }
+};
+
 const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
-  icon: string;
   label: string;
 }> = [
-  { id: 'personal', icon: '👤', label: '개인 라운지' },
-  { id: 'family', icon: '👨‍👩‍👧‍👦', label: '패밀리 라운지' },
-  { id: 'club', icon: '⛳', label: '클럽 라운지' },
-  { id: 'student', icon: '🎒', label: '스쿨 라운지' },
+  { id: 'personal', label: '개인 라운지' },
+  { id: 'family', label: '패밀리 라운지' },
+  { id: 'club', label: '클럽 라운지' },
+  { id: 'student', label: '스쿨 라운지' },
 ];
 
 const LOUNGE_SUBMENU_CONFIG: Record<
@@ -27,28 +100,28 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   Array<{ id: DesktopTab; label: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'dashboard', label: '🔍 파워 검색' },
-    { id: 'trash', label: '🧹 클리어', showTrashCount: true },
-    { id: 'sync', label: '🛠️ 설정도우미 ⚡Pro' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'dashboard', label: '파워 검색' },
+    { id: 'trash', label: '클리어', showTrashCount: true },
+    { id: 'sync', label: '설정도우미 Pro' },
   ],
   family: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'dashboard', label: '🏠 우리집·본가·처가 피드' },
-    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
-    { id: 'sync', label: '👑 가족 초대 & 서버도우미' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'dashboard', label: '우리집·본가·처가 피드' },
+    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'sync', label: '가족 초대 & 서버도우미' },
   ],
   club: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'dashboard', label: '📸 모임 피드 & 원본 소환' },
-    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
-    { id: 'sync', label: '👥 클럽 관리 & 서버도우미' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'dashboard', label: '모임 피드 & 원본 소환' },
+    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'sync', label: '클럽 관리 & 서버도우미' },
   ],
   student: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'dashboard', label: '⚡ 타임캡슐 피드 & 씬 검색' },
-    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
-    { id: 'sync', label: '🎮 게이밍 PC & 학생인증' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'dashboard', label: '타임캡슐 피드 & 씬 검색' },
+    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'sync', label: '게이밍 PC & 학생인증' },
   ],
 };
 
@@ -118,10 +191,16 @@ export const DesktopDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* ─────────────── 상단 2단 통합 헤더: 1단(로고+슬로건 / 우측 메인메뉴 4개 / 우상단 달·해 아이콘) + 2단(메인메뉴 바로 아래 서브메뉴) ─────────────── */}
-      <header className="sticky top-0 bg-[#09090B]/95 backdrop-blur-xl z-40 border-b border-white/10">
-        {/* 1단: 로고(아래 슬로건) ─── (넉넉한 간격) ─── 메인메뉴 4개 + 우상단 테마 토글 */}
-        <div className="px-5 md:px-8 py-2.5 flex items-center justify-between gap-4">
+      {/* ─────────────── 상단 2단 통합 헤더 (뭐먹지? 스타일): 1단(화이트 바 + 흑백 라인 아이콘 메인메뉴 캡슐) + 2단(이모지 없는 깔끔한 언더라인 서브메뉴 탭) ─────────────── */}
+      <header className="sticky top-0 z-40 backdrop-blur-xl">
+        {/* 1단: 좌측 로고 ─── 세련된 흑백 라인 아이콘 메인메뉴 4개 ─── 우상단 테마 토글 */}
+        <div
+          className={`px-5 md:px-8 py-2.5 flex items-center justify-between gap-4 border-b transition-colors ${
+            themeMode === 'light'
+              ? 'bg-white/95 border-[#EAE8E1]'
+              : 'bg-[#09090B]/95 border-white/10'
+          }`}
+        >
           <div className="flex items-center min-w-0 flex-wrap gap-y-2">
             {/* 좌측 브랜드 로고(아래 슬로건) */}
             <div className="flex items-center gap-3.5 shrink-0 md:w-[210px]">
@@ -129,27 +208,60 @@ export const DesktopDashboard: React.FC = () => {
                 onClick={() => setDesktopTab('dashboard')}
                 className="flex items-center gap-2.5 cursor-pointer shrink-0"
               >
-                <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-white/15 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary-container text-[20px] font-bold">
+                <div
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                    themeMode === 'light'
+                      ? 'bg-[#F8F7F4] border-[#E5E0D5] text-[#0D9488]'
+                      : 'bg-zinc-900 border-white/15 text-primary-container'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[20px] font-bold">
                     graphic_eq
                   </span>
                 </div>
                 <div className="flex flex-col">
                   <div className="flex items-baseline gap-1.5 leading-none">
-                    <span className="font-headline-sm text-[18px] text-white tracking-tight font-extrabold whitespace-nowrap">
+                    <span
+                      className={`font-headline-sm text-[18px] tracking-tight font-extrabold whitespace-nowrap ${
+                        themeMode === 'light' ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
                       세이씨
                     </span>
-                    <span className="text-zinc-400 font-normal text-[12.5px]">SaySee</span>
+                    <span
+                      className={`font-normal text-[12.5px] ${
+                        themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      }`}
+                    >
+                      SaySee
+                    </span>
                   </div>
-                  <span className="text-zinc-400 font-label-sm text-[11px] font-medium mt-1 leading-none whitespace-nowrap">
-                    🔒 No-클라우드 시크릿 라운지
+                  <span
+                    className={`font-label-sm text-[11px] font-medium mt-1 leading-none whitespace-nowrap flex items-center gap-1 ${
+                      themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                    }`}
+                  >
+                    <svg
+                      className="w-3 h-3 shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="4" y="11" width="16" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                    <span>No-클라우드 시크릿 라운지</span>
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* 로고와 넉넉한 거리를 두고 배치한 메인메뉴 4개 */}
-            <nav className="ml-6 sm:ml-8 md:ml-8 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
+            {/* 1단 메인메뉴 4개: 세련된 흑백 라인 아이콘 + 캡슐 하이라이트 */}
+            <nav className="ml-6 sm:ml-8 md:ml-8 flex items-center gap-2 overflow-x-auto no-scrollbar">
               {MAIN_LOUNGE_MENUS.map((menu) => {
                 const active = activeLoungeType === menu.id;
                 const isLoungeSub = Boolean(subscribedLounges[menu.id]);
@@ -158,16 +270,20 @@ export const DesktopDashboard: React.FC = () => {
                     key={menu.id}
                     type="button"
                     onClick={() => setActiveLoungeType(menu.id)}
-                    className={`px-3.5 py-2 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap ${
+                    className={`px-4 py-2 rounded-full font-label-md text-[13.5px] flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                       active
-                        ? 'bg-primary-container text-zinc-950 font-extrabold shadow-[0_0_14px_rgba(32,247,219,0.2)]'
-                        : 'text-zinc-300 hover:text-white hover:bg-zinc-800/80'
+                        ? themeMode === 'light'
+                          ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-[0_1px_2px_rgba(13,148,136,0.08)]'
+                          : 'bg-zinc-800 text-primary-container font-extrabold'
+                        : themeMode === 'light'
+                        ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50 font-bold'
                     }`}
                   >
-                    <span>{menu.icon}</span>
+                    <MainLoungeMonoIcon id={menu.id} className="w-[16px] h-[16px] shrink-0" />
                     <span>{menu.label}</span>
                     {isLoungeSub && (
-                      <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-extrabold">
+                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-extrabold">
                         PRO
                       </span>
                     )}
@@ -177,14 +293,14 @@ export const DesktopDashboard: React.FC = () => {
             </nav>
           </div>
 
-          {/* 우측 상단: 심플 아이콘 테마 토글 (밝은 화면일 때 🌙 달 아이콘 / 어두운 화면일 때 ☀️ 해 아이콘) */}
+          {/* 우측 상단: 심플 아이콘 테마 토글 (밝은 화면일 때 달 아이콘 / 어두운 화면일 때 해 아이콘) */}
           <div className="flex items-center gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
             <button
               type="button"
               onClick={toggleThemeMode}
               title={themeMode === 'light' ? '어두운 화면(다크 모드)으로 전환' : '밝은 화면(웜 라이트)으로 전환'}
               aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none focus:outline-none ${
                 themeMode === 'light'
                   ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
                   : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white shadow-sm'
@@ -218,8 +334,14 @@ export const DesktopDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 2단: 메인메뉴 4개 바로 아래 라인에 맞춰 정렬된 라운지별 서브메뉴 바 (구독 여부는 라운지별로 독립 적용) */}
-        <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[274px]">
+        {/* 2단: 서브메뉴 바 — 이모지 없이 깔끔한 언더라인 탭 (먹로그 | 먹예약 | 먹캘린더 스타일) */}
+        <div
+          className={`px-5 md:px-8 pt-1.5 border-b flex items-center gap-1 overflow-x-auto no-scrollbar md:pl-[274px] transition-colors ${
+            themeMode === 'light'
+              ? 'bg-[#F8F7F4]/95 border-[#E5E0D5]'
+              : 'bg-[#111114]/95 border-white/10'
+          }`}
+        >
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
               return null;
@@ -230,20 +352,26 @@ export const DesktopDashboard: React.FC = () => {
                 key={sub.id}
                 type="button"
                 onClick={() => setDesktopTab(sub.id)}
-                className={`px-3.5 py-2 rounded-lg font-label-md text-[12.5px] font-bold flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap ${
+                className={`px-5 py-2.5 rounded-t-xl border-b-[3px] font-label-md text-[13.5px] flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                   isSubActive
-                    ? 'bg-primary-container/20 border border-primary-container/50 text-primary-container font-extrabold'
-                    : sub.id === 'trial'
-                    ? 'text-primary-container/90 hover:text-primary-container hover:bg-zinc-800/60 border border-transparent'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60 border border-transparent'
+                    ? themeMode === 'light'
+                      ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
+                      : 'bg-primary-container/15 text-primary-container border-primary-container font-extrabold'
+                    : themeMode === 'light'
+                    ? 'border-transparent text-slate-800 hover:text-[#0D9488] hover:bg-black/[0.02] font-bold'
+                    : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/[0.03] font-bold'
                 }`}
               >
                 <span>{sub.label}</span>
                 {sub.showTrashCount && (
                   <span
-                    className={`px-1.5 py-0.2 rounded-md text-[10.5px] font-mono font-bold ${
+                    className={`px-1.5 py-0.2 rounded-full text-[11px] font-mono font-bold ${
                       isSubActive
-                        ? 'bg-primary-container text-zinc-950'
+                        ? themeMode === 'light'
+                          ? 'bg-[#0D9488]/15 text-[#0D9488]'
+                          : 'bg-primary-container/20 text-primary-container'
+                        : themeMode === 'light'
+                        ? 'bg-slate-200/80 text-slate-600'
                         : 'bg-zinc-800 text-zinc-300'
                     }`}
                   >
@@ -275,7 +403,7 @@ export const DesktopDashboard: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
-                      🎬 “{activeQuery}” 타임라인 구간 검색 결과
+                      “{activeQuery}” 타임라인 구간 검색 결과
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
                       {matchedVideoScenes.length}개 영상 매칭 · 클릭 시 포착된 초(Sec) 즉시 재생
@@ -288,7 +416,7 @@ export const DesktopDashboard: React.FC = () => {
                         onClick={() => resetSearchSpaceToAll('video')}
                         className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-primary-container font-label-sm text-[12px] font-bold border border-white/10"
                       >
-                        🔄 동영상 {videoSceneItems.length}개 전체 보기
+                        동영상 {videoSceneItems.length}개 전체 보기
                       </button>
                     )}
                     <button
@@ -310,14 +438,14 @@ export const DesktopDashboard: React.FC = () => {
                       “{activeQuery}” 조건과 일치하는 동영상 타임라인 구간이 없습니다 (0건)
                     </h3>
                     <p className="font-body-sm text-[12.5px] text-zinc-400 max-w-lg">
-                      검색어 팩트와 무관한 동영상을 억지로 끼워 넣지 않습니다. 상단 탭에서 <strong>🖼️ 사진 ({searchResults.length})</strong>이나 <strong>📁 문서 ({matchedLocalDocs.length + matchedVaultPhotos.length})</strong> 결과를 확인하거나, 아래 버튼을 눌러 전체 동영상을 확인해 보세요.
+                      검색어 팩트와 무관한 동영상을 억지로 끼워 넣지 않습니다. 상단 탭에서 <strong>사진 ({searchResults.length})</strong>이나 <strong>문서 ({matchedLocalDocs.length + matchedVaultPhotos.length})</strong> 결과를 확인하거나, 아래 버튼을 눌러 전체 동영상을 확인해 보세요.
                     </p>
                     <button
                       type="button"
                       onClick={() => resetSearchSpaceToAll('video')}
                       className="mt-1 px-4 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
                     >
-                      🎬 동영상 {videoSceneItems.length}개 전 구간 전체 보기
+                      동영상 {videoSceneItems.length}개 전 구간 전체 보기
                     </button>
                   </div>
                 ) : (
@@ -362,7 +490,7 @@ export const DesktopDashboard: React.FC = () => {
 
                           <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between">
                             <span className="font-label-mono text-[11px] text-zinc-200 font-medium">
-                              📍 {vid.locationKo}
+                              {vid.locationKo}
                             </span>
                             <span className="font-label-mono text-[10.5px] text-zinc-400">
                               {vid.videoFileName} ({vid.sizeMB}MB)
@@ -428,7 +556,7 @@ export const DesktopDashboard: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
-                      📁 “{activeQuery}” 스마트 서류함 검색 결과
+                      “{activeQuery}” 스마트 서류함 검색 결과
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
                       로컬 문서 {matchedLocalDocs.length}건 + 촬영 서류 {matchedVaultPhotos.length}장
@@ -448,7 +576,7 @@ export const DesktopDashboard: React.FC = () => {
                 {matchedLocalDocs.length > 0 && (
                   <div className="flex flex-col gap-2.5">
                     <span className="font-label-md text-[13px] text-zinc-400 font-semibold px-0.5">
-                      📄 폰·PC 로컬 문서 파일 (PDF · TXT · DOCX — {matchedLocalDocs.length}건)
+                      폰·PC 로컬 문서 파일 (PDF · TXT · DOCX — {matchedLocalDocs.length}건)
                     </span>
 
                     <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-3.5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
@@ -495,7 +623,7 @@ export const DesktopDashboard: React.FC = () => {
                 {/* (2) 사진첩 속 촬영 서류 그리드 */}
                 <div className="flex flex-col gap-2.5">
                   <span className="font-label-md text-[13px] text-zinc-400 font-semibold px-0.5">
-                    📸 갤러리 내 촬영·캡처 서류 자산 ({matchedVaultPhotos.length}장)
+                    갤러리 내 촬영·캡처 서류 자산 ({matchedVaultPhotos.length}장)
                   </span>
 
                   {matchedVaultPhotos.length > 0 ? (

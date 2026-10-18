@@ -11,15 +11,88 @@ import {
   LoungeView,
 } from './LoungeView';
 
+const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
+  id,
+  className = 'w-[14px] h-[14px]',
+}) => {
+  switch (id) {
+    case 'personal':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="8" r="4" />
+          <path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7" />
+        </svg>
+      );
+    case 'family':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="9" cy="8" r="3.5" />
+          <path d="M3 19c0-3.31 2.69-6 6-6s6 2.69 6 6" />
+          <circle cx="17" cy="9" r="2.5" />
+          <path d="M16 13.5c2.76 0 5 2.24 5 5" />
+        </svg>
+      );
+    case 'club':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M5 3v18" />
+          <path d="M5 4h12l-2.5 4.5L17 13H5" />
+        </svg>
+      );
+    case 'student':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M22 10L12 5 2 10l10 5 10-5z" />
+          <path d="M6 12.5V17c0 1.66 2.69 3 6 3s6-1.34 6-3v-4.5" />
+        </svg>
+      );
+  }
+};
+
 const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
-  icon: string;
   label: string;
 }> = [
-  { id: 'personal', icon: '👤', label: '개인 라운지' },
-  { id: 'family', icon: '👨‍👩‍👧‍👦', label: '패밀리 라운지' },
-  { id: 'club', icon: '⛳', label: '클럽 라운지' },
-  { id: 'student', icon: '🎒', label: '스쿨 라운지' },
+  { id: 'personal', label: '개인 라운지' },
+  { id: 'family', label: '패밀리 라운지' },
+  { id: 'club', label: '클럽 라운지' },
+  { id: 'student', label: '스쿨 라운지' },
 ];
 
 const MOBILE_LOUNGE_SUBMENUS: Record<
@@ -27,28 +100,28 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   Array<{ id: MobileTab; label: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'search', label: '🔍 파워 검색' },
-    { id: 'trash', label: '🧹 클리어', showTrashCount: true },
-    { id: 'settings', label: '🛠️ 설정도우미 ⚡Pro' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'search', label: '파워 검색' },
+    { id: 'trash', label: '클리어', showTrashCount: true },
+    { id: 'settings', label: '설정도우미 Pro' },
   ],
   family: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'search', label: '🏠 우리집·본가·처가 피드' },
-    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
-    { id: 'settings', label: '👑 가족 초대 & 서버도우미' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'search', label: '우리집·본가·처가 피드' },
+    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'settings', label: '가족 초대 & 서버도우미' },
   ],
   club: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'search', label: '📸 모임 피드 & 원본 소환' },
-    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
-    { id: 'settings', label: '👥 클럽 관리 & 서버도우미' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'search', label: '모임 피드 & 원본 소환' },
+    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'settings', label: '클럽 관리 & 서버도우미' },
   ],
   student: [
-    { id: 'trial', label: '✨ 무료체험' },
-    { id: 'search', label: '⚡ 타임캡슐 피드 & 씬 검색' },
-    { id: 'trash', label: '⏳ AI 인덱싱 대기실' },
-    { id: 'settings', label: '🎮 게이밍 PC & 학생인증' },
+    { id: 'trial', label: '무료체험' },
+    { id: 'search', label: '타임캡슐 피드 & 씬 검색' },
+    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'settings', label: '게이밍 PC & 학생인증' },
   ],
 };
 
@@ -111,26 +184,66 @@ export const MobileAppView: React.FC = () => {
 
   return (
     <div className="bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen max-w-xl mx-auto relative shadow-2xl border-x border-white/10 pb-20">
-      {/* 상단 2단 통합 헤더: 로고+슬로건 / 엔진 가동중 / 4대 메인메뉴 / 하단 서브메뉴 */}
-      <header className="sticky top-0 inset-x-0 z-50 bg-[#09090B]/95 backdrop-blur-xl pt-safe border-b border-white/10">
-        <div className="px-3.5 py-2 flex flex-col gap-2">
+      {/* 상단 2단 통합 헤더 (뭐먹지? 스타일): 1단(화이트 바 + 흑백 라인 아이콘 메인메뉴 캡슐) + 2단(이모지 없는 언더라인 서브메뉴 탭) */}
+      <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe">
+        <div
+          className={`px-3.5 py-2 flex flex-col gap-2 border-b transition-colors ${
+            themeMode === 'light'
+              ? 'bg-white/95 border-[#EAE8E1]'
+              : 'bg-[#09090B]/95 border-white/10'
+          }`}
+        >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <div
                 onClick={() => setMobileTab('search')}
                 className="flex items-center gap-1.5 cursor-pointer shrink-0"
               >
-                <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-white/15 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary-container text-[16px] font-bold">
+                <div
+                  className={`w-7 h-7 rounded-lg border flex items-center justify-center ${
+                    themeMode === 'light'
+                      ? 'bg-[#F8F7F4] border-[#E5E0D5] text-[#0D9488]'
+                      : 'bg-zinc-900 border-white/15 text-primary-container'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px] font-bold">
                     graphic_eq
                   </span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-headline-sm text-[15px] text-white tracking-tight font-extrabold leading-none whitespace-nowrap">
-                    세이씨 <span className="text-zinc-400 font-normal text-[11px]">SaySee</span>
+                  <span
+                    className={`font-headline-sm text-[15px] tracking-tight font-extrabold leading-none whitespace-nowrap ${
+                      themeMode === 'light' ? 'text-slate-900' : 'text-white'
+                    }`}
+                  >
+                    세이씨{' '}
+                    <span
+                      className={`font-normal text-[11px] ${
+                        themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      }`}
+                    >
+                      SaySee
+                    </span>
                   </span>
-                  <span className="text-[9.5px] text-zinc-400 leading-tight mt-0.5 truncate">
-                    🔒 No-클라우드 시크릿 라운지
+                  <span
+                    className={`text-[9.5px] leading-tight mt-0.5 truncate flex items-center gap-1 ${
+                      themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                    }`}
+                  >
+                    <svg
+                      className="w-2.5 h-2.5 shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="4" y="11" width="16" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                    <span>No-클라우드 시크릿 라운지</span>
                   </span>
                 </div>
               </div>
@@ -143,7 +256,7 @@ export const MobileAppView: React.FC = () => {
                 onClick={toggleThemeMode}
                 title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
                 aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0 outline-none focus:outline-none ${
                   themeMode === 'light'
                     ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
                     : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
@@ -172,8 +285,8 @@ export const MobileAppView: React.FC = () => {
             </div>
           </div>
 
-          {/* 메인메뉴 4개 */}
-          <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {/* 1단 메인메뉴 4개: 흑백 라인 아이콘 + 캡슐 스타일 */}
+          <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {MAIN_LOUNGE_MENUS.map((menu) => {
               const active = activeLoungeType === menu.id;
               return (
@@ -181,13 +294,17 @@ export const MobileAppView: React.FC = () => {
                   key={menu.id}
                   type="button"
                   onClick={() => setActiveLoungeType(menu.id)}
-                  className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold flex items-center gap-1 transition-all shrink-0 whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
                     active
-                      ? 'bg-primary-container text-zinc-950 font-extrabold'
-                      : 'bg-zinc-900 text-zinc-300 border border-white/10'
+                      ? themeMode === 'light'
+                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                        : 'bg-zinc-800 text-primary-container font-extrabold'
+                      : themeMode === 'light'
+                      ? 'text-slate-500 hover:text-slate-900 font-bold'
+                      : 'text-zinc-400 hover:text-white font-bold'
                   }`}
                 >
-                  <span>{menu.icon}</span>
+                  <MainLoungeMonoIcon id={menu.id} className="w-[14px] h-[14px] shrink-0" />
                   <span>{menu.label}</span>
                 </button>
               );
@@ -195,8 +312,14 @@ export const MobileAppView: React.FC = () => {
           </nav>
         </div>
 
-        {/* 선택된 메인메뉴(라운지)의 서브메뉴 바 */}
-        <div className="px-3.5 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1 overflow-x-auto no-scrollbar">
+        {/* 2단 서브메뉴 바: 이모지 없는 깔끔한 언더라인 탭 */}
+        <div
+          className={`px-3.5 pt-1 border-b flex items-center gap-1 overflow-x-auto no-scrollbar transition-colors ${
+            themeMode === 'light'
+              ? 'bg-[#F8F7F4]/95 border-[#E5E0D5]'
+              : 'bg-[#111114]/95 border-white/10'
+          }`}
+        >
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
               return null;
@@ -207,15 +330,29 @@ export const MobileAppView: React.FC = () => {
                 key={sub.id}
                 type="button"
                 onClick={() => setMobileTab(sub.id)}
-                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold flex items-center gap-1 transition-all shrink-0 whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-t-xl border-b-[3px] font-label-sm text-[12.5px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
                   isSubActive
-                    ? 'bg-primary-container/20 border border-primary-container/50 text-primary-container font-extrabold'
-                    : 'text-zinc-400 hover:text-white'
+                    ? themeMode === 'light'
+                      ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
+                      : 'bg-primary-container/15 text-primary-container border-primary-container font-extrabold'
+                    : themeMode === 'light'
+                    ? 'border-transparent text-slate-800 hover:text-[#0D9488] font-bold'
+                    : 'border-transparent text-zinc-400 hover:text-white font-bold'
                 }`}
               >
                 <span>{sub.label}</span>
                 {sub.showTrashCount && (
-                  <span className="px-1 py-0.2 rounded bg-zinc-800 text-zinc-300 text-[9.5px] font-mono">
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                      isSubActive
+                        ? themeMode === 'light'
+                          ? 'bg-[#0D9488]/15 text-[#0D9488]'
+                          : 'bg-primary-container/20 text-primary-container'
+                        : themeMode === 'light'
+                        ? 'bg-slate-200/80 text-slate-600'
+                        : 'bg-zinc-800 text-zinc-300'
+                    }`}
+                  >
                     {activeTrashCount}
                   </span>
                 )}
