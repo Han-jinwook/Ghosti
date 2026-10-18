@@ -440,14 +440,14 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🎬 사진·영상 AI 큐레이션
+                    🎬 사진·영상 파워검색 &amp; 연사·중복 선택
                   </span>
                   <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
                     정기구독 서비스
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  인물·장소·시절 검색, 연사(연속 촬영) 중 베스트샷 선정, 동영상 초(Sec) 단위 장면 점프를 제공합니다.
+                  0.04초 인물·장면·동영상 구간 검색을 기본으로, 검색의 묘미를 살리기 위해 <strong>동일 내용 중복 사진은 최고화질 원본 1장만 남기고</strong>, <strong>연사는 한눈에 펼쳐 보여줘 유저가 1장을 직접 선택(Pick)한 뒤 나머지를 버리는 부가서비스</strong>를 제공합니다.
                 </p>
               </div>
 
@@ -468,14 +468,14 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🩺 클리어몬스터 쓰레기 청소
+                    🩺 클린몬스터 — 디지털 종합검진 &amp; 대화형 주치의
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    단품 대행 · 구독 시 월 1회 무료
+                    단품 대행 · 구독 시 월 1회 왕진
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  중복 파일명(사본) 사진, 영수증·사물·캡처 등 기본 쓰레기 파일을 골라내어 안전하게 청소 대행합니다.
+                  모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 종합검진하고, <strong>LLM 대화형 상담 가이드</strong>를 통해 각 항목을 유저가 직접 결정하며 쾌적화합니다.
                 </p>
               </div>
             </div>
@@ -608,7 +608,7 @@ export const LoungeView: React.FC = () => {
                       사진 {trialSamplePhotos}장 정밀 분석 완료
                     </div>
                     <p className="font-body-sm text-[12px] text-zinc-400">
-                      인물·배경·연사 색인 완료 (나머지 {totalDevicePhotos - trialSamplePhotos}장 대기 중)
+                      동일 내용 중복(최고화질 원본 보존) · 연사 1장 직접 선택 부가서비스 지원 (나머지 {totalDevicePhotos - trialSamplePhotos}장 대기)
                     </p>
                     <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
                       분석된 사진 검색해보기 →
@@ -648,14 +648,14 @@ export const LoungeView: React.FC = () => {
                     <div className="flex flex-col gap-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-headline-sm text-[15px] text-white font-bold">
-                          🛡️ 2. 클리어몬스터 안전성 직접 검증 — &lsquo;정리&rsquo; 후 &lsquo;원복&rsquo;까지 직접 눌러보세요!
+                          🛡️ 2. 안심 안전망 직접 검증 — &lsquo;정리&rsquo; 후 &lsquo;원복&rsquo;까지 직접 눌러보세요!
                         </span>
                         <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-extrabold">
                           즉시 영구삭제 절대 없음 · 30일 보관 후 휴지통 이동
                         </span>
                       </div>
                       <p className="font-body-sm text-[12.5px] text-zinc-300">
-                        정리(삭제)된 파일은 바로 사라지지 않고 내 PC의 <strong>[세이씨_정리대기함]에 한 달(30일) 동안 안전하게 보관된 후에야 휴지통으로 이동</strong>합니다. 아래 <strong>① 정리 ➔ ② 원복</strong> 버튼을 순서대로 눌러 안전함을 직접 확인해 보세요.
+                        정리(삭제)된 항목은 바로 사라지지 않고 내 PC의 <strong>[세이씨_정리대기함]에 한 달(30일) 동안 안전하게 보관된 후에야 휴지통으로 이동</strong>합니다. 아래 <strong>① 정리 ➔ ② 원복</strong> 버튼을 순서대로 눌러 안전함을 직접 확인해 보세요.
                       </p>
                     </div>
 
@@ -707,7 +707,7 @@ export const LoungeView: React.FC = () => {
                   {trialSafetyStep === 'quarantined' && (
                     <div className="px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[12.5px] text-amber-200 flex items-center justify-between gap-2">
                       <span>
-                        📦 <strong>중복 파일명 사진·영수증·사물 쓰레기 샘플 {trialMovedIds.length}건</strong>이 <strong>[세이씨_정리대기함]</strong>(30일 보관소)으로 안전 격리되었습니다. 이제 우측의 <strong>[↩️ ② 0.5초 원복 눌러보기]</strong> 버튼을 눌러보세요!
+                        📦 <strong>선택한 샘플 {trialMovedIds.length}건</strong>이 <strong>[세이씨_정리대기함]</strong>(30일 보관소)으로 안전 격리되었습니다. 이제 우측의 <strong>[↩️ ② 0.5초 원복 눌러보기]</strong> 버튼을 눌러보세요!
                       </span>
                     </div>
                   )}
@@ -725,7 +725,7 @@ export const LoungeView: React.FC = () => {
                         }}
                         className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
                       >
-                        🧹 클리어 전체 목록 보기 ({trashCount}건) →
+                        🩺 클린몬스터 &amp; 클리어 보드 이동 →
                       </button>
                     </div>
                   )}
@@ -739,18 +739,18 @@ export const LoungeView: React.FC = () => {
               </div>
             )}
 
-            {/* 개인 라운지 요금제: 단품 클리어(청소 대행) vs 사진·영상·문서 토탈 정기구독(월 1회 주치의 청소 무료 포함) */}
+            {/* 개인 라운지 요금제: 단품 클린몬스터(종합건강검진 & LLM 대화형 컨설팅) vs 사진·영상·문서 토탈 정기구독(월 1회 주치의 무료 포함) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
               <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-1.5">
                   <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                    🩺 1회 단품 청소 대행 (중복 파일명 · 영수증 · 사물 기본 쓰레기 정리)
+                    🩺 디지털 종합건강검진 &amp; LLM 1:1 대화형 컨설팅 대행
                   </span>
                   <div className="font-headline-md text-[24px] text-white font-black">
-                    클리어몬스터 단품 2,900원
+                    클린몬스터 단품 2,900원
                   </div>
-                  <p className="font-body-sm text-[12px] text-zinc-400">
-                    구독 없이 내 PC·폰의 중복 파일명 사본, 영수증·사물·캡처 기본 쓰레기만 1회 깔끔하게 대청소하고 끝내는 단품권 (30일 대기함 보관 + 0.5초 원복 보증)
+                  <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+                    모바일·PC 바탕화면 정리(미사용 앱 구분/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 정리) + 전기 먹는 유령 모듈 제거로 CPU·메모리 속도 향상. AI 주치의와 대화하며 항목별로 유저가 직접 결정하고 언제든 0.5초 원복됩니다.
                   </p>
                 </div>
                 <button
@@ -758,14 +758,14 @@ export const LoungeView: React.FC = () => {
                   onClick={() => activatePricingPlan('personal_single_2900')}
                   className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold transition-colors whitespace-nowrap"
                 >
-                  클리어 단품 1회 청소 (2,900원)
+                  클린몬스터 종합검진·컨설팅 단품 (2,900원)
                 </button>
               </div>
 
               <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-1.5">
                   <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                    👑 사진·영상·문서 토탈 정기구독 + 매월 1회 클리어 주치의 무료 케어
+                    👑 사진·영상·문서 파워검색 정기구독 + 월 1회 클린몬스터 주치의 무료 왕진
                   </span>
                   <div className="flex items-baseline gap-2">
                     <span className="font-headline-md text-[24px] text-white font-black">
@@ -775,8 +775,8 @@ export const LoungeView: React.FC = () => {
                       (연 35,000원)
                     </span>
                   </div>
-                  <p className="font-body-sm text-[12px] text-zinc-300">
-                    전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) 무제한 AI 검색 &amp; 연사 베스트샷 큐레이션 + <strong>서비스로 월 1회 클리어몬스터 주치의 정기 청소 무료 제공!</strong>
+                  <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                    전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) 0.04초 파워검색 + 중복 사진 최고화질 원본 보존 &amp; 연사 1장 선택 부가서비스 + <strong>매월 1회 클린몬스터 종합건강검진·주치의 케어 무료 제공!</strong>
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">

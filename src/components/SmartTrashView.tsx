@@ -14,16 +14,16 @@ const TRASH_TABS: {
   {
     key: 'duplicate',
     stepNum: '①',
-    title: '동일한 복사본 · 연사',
-    shortBadge: '복사본·연사',
+    title: '동일 내용 중복(최고화질 보존) · 연사(1장 직접 선택)',
+    shortBadge: '중복·연사 선택',
     cleanTag: '#중복·연사사본',
-    subtitle: '베스트 컷 1장만 클릭(Pick)하면 나머지 연사 사본이 즉시 격리됩니다',
+    subtitle: '중복 사진은 최고화질 원본 1장만 남기고, 연사는 펼쳐 보고 마음에 드는 1장을 직접 선택(Pick)해 나머지를 정리합니다',
     icon: 'burst_mode',
   },
   {
     key: 'memo',
     stepNum: '②',
-    title: '주차장 · 영수증 · 일회성 메모',
+    title: '주차장 · 영수증 · 일회성 사물 메모',
     shortBadge: '주차·사물·일회성메모',
     cleanTag: '#주차·부품·일회성메모',
     subtitle: '주차장 기둥(K13) · 케이블/부품 접사 · 단기 택배/현수막 메모',
@@ -32,7 +32,7 @@ const TRASH_TABS: {
   {
     key: 'screenshot',
     stepNum: '③',
-    title: '스크린샷',
+    title: '스크린샷 · 불필요 캡처',
     shortBadge: '스크린샷 캡처',
     cleanTag: '#스크린샷 캡처',
     subtitle: '문자 메시지 캡처 · 모바일 홈 화면 · 일회성 앱 알림 화면 캡처',
@@ -41,10 +41,10 @@ const TRASH_TABS: {
   {
     key: 'blurry',
     stepNum: '④',
-    title: '심한 흔들림 · 오촬영',
+    title: '심한 흔들림 · 바닥 오촬영',
     shortBadge: '흔들림·오촬영',
     cleanTag: '#초점이탈·오촬영',
-    subtitle: '8방향 라플라시안 선명도 붕괴 · 보행 중 바닥 오촬영 및 모션 블러',
+    subtitle: '보행 중 바닥 오촬영 및 초점 완전 붕괴 불량 사진',
     icon: 'blur_on',
   },
 ];
@@ -92,6 +92,40 @@ export const SmartTrashView: React.FC = () => {
   } = useSaySeeStore();
 
   const [gridColumns, setGridColumns] = useState<3 | 4>(3);
+  // 클린몬스터 종합건강검진 항목별 유저 직접 결정 상태
+  const [decisions, setDecisions] = useState<{
+    mobileHome: 'pending' | 'separate_folder' | 'senior_big_icon';
+    pcDesktop: 'pending' | 'archive_move' | 'keep';
+    powerDrain: 'pending' | 'freeze_remove' | 'keep';
+  }>({
+    mobileHome: 'pending',
+    pcDesktop: 'pending',
+    powerDrain: 'pending',
+  });
+  const [doctorChatInput, setDoctorChatInput] = useState('');
+  const [doctorChatReply, setDoctorChatReply] = useState<string>(
+    '💬 AI 주치의 컨설턴트: "고클린처럼 기계적으로 지우지 않습니다. 종합건강검진 결과를 보시고 궁금한 항목을 물어보시면, 왜 전기를 먹는지·별도로 모아놓으면 왜 안전한지 친절히 설명해 드립니다. 최종 결정은 항목마다 직접 선택해 주세요."'
+  );
+
+  const handleAskDoctor = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = doctorChatInput.trim();
+    if (!q) return;
+    if (q.includes('바탕화면') || q.includes('바로가기') || q.includes('중복')) {
+      setDoctorChatReply(
+        `💬 AI 주치의 답변 ("${q}"): PC 바탕화면에 작업 문서와 바로가기(.lnk), 중복 사본이 뒤섞여 있으면 탐색기 부하가 커집니다. Chrome 등 핵심 아이콘만 남기고 나머지는 [D:\\_바탕화면_정리자료_아카이브]로 안전하게 모아두시길 권합니다.`
+      );
+    } else if (q.includes('어르신') || q.includes('아이콘') || q.includes('앱')) {
+      setDoctorChatReply(
+        `💬 AI 주치의 답변 ("${q}"): 6개월 이상 안 쓴 앱 42개는 지우지 않고 [별도 보관함]으로 모아두거나 [안전 동결]하면 배터리를 아낄 수 있습니다. 자주 쓰시는 카톡·유튜브·단골 카페는 어르신용 큰 아이콘으로 첫 화면에 배치해 드릴까요?`
+      );
+    } else {
+      setDoctorChatReply(
+        `💬 AI 주치의 답변 ("${q}"): 현재 백그라운드에서 은행·관공서 보안모듈(MagicLine, AnySign 등)이 전기와 CPU·메모리(약 420MB)를 상시 점유 중입니다. 은행 접속 시에만 켜지도록 안전 동결하시면 체감 속도가 확 올라갑니다.`
+      );
+    }
+    setDoctorChatInput('');
+  };
 
   const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
   const quarantinedPhotos = photos.filter((p) => p.quarantined);
@@ -135,14 +169,164 @@ export const SmartTrashView: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 py-6 flex flex-col gap-5 pb-24">
-      {/* ─────────────── [처방 2] 차분하고 정돈된 주치의 종합 진단 박스 (상단 알록달록 3대 배지 삭제 & 1줄 안심 문구로 축소) ─────────────── */}
+      {/* ─────────────── 🩺 1. 클린몬스터(CleanMonster) 종합건강검진 & LLM 대화형 주치의 컨설팅 (항목별 유저 직접 결정) ─────────────── */}
+      <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span className="font-label-mono text-[11px] text-amber-400 font-bold uppercase tracking-wider">
+              CLEANMONSTER AI DIGITAL DOCTOR · 특허 기반 종합건강검진 &amp; 대화형 컨설팅
+            </span>
+            <h2 className="font-headline-sm text-[18px] md:text-[20px] text-white font-bold mt-0.5">
+              🩺 클린몬스터 종합건강검진 — 주치의 컨설팅을 보고 항목마다 직접 결정하세요
+            </h2>
+          </div>
+          <span className="px-3 py-1 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-bold">
+            🛡️ 모든 처치는 0.5초 원복(Undo) 및 30일 대기함 보관 보장
+          </span>
+        </div>
+
+        {/* 3대 종합검진 & 유저 직접 결정 카드 (모바일 바탕화면·미사용 앱 / PC 바탕화면 중복·바로가기 / 전기·CPU·메모리 쾌적화) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          {/* ① 모바일 바탕화면 & 미사용 앱·어르신 큰 아이콘 */}
+          <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                📱 모바일 바탕화면 &amp; 미사용 앱 분류
+              </span>
+              <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                쓰레기 아이콘으로 넘치는 바탕화면과 6개월 이상 안 쓴 앱(42개)·불필요한 웹 링크를 구분했습니다. 어르신용 <strong>큰 아이콘(3×4)</strong> 배치 또는 <strong>별도 보관함 모아놓기</strong> 중 선택하세요.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setDecisions((d) => ({ ...d, mobileHome: 'separate_folder' }))}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all ${
+                  decisions.mobileHome === 'separate_folder'
+                    ? 'bg-primary-container text-zinc-950 font-extrabold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                }`}
+              >
+                {decisions.mobileHome === 'separate_folder' ? '✓ 미사용 앱 별도 모아놓기 선택됨' : '📦 미사용 앱 별도 모아놓기'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDecisions((d) => ({ ...d, mobileHome: 'senior_big_icon' }))}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all ${
+                  decisions.mobileHome === 'senior_big_icon'
+                    ? 'bg-amber-400 text-zinc-950 font-extrabold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                }`}
+              >
+                {decisions.mobileHome === 'senior_big_icon' ? '✓ 어르신 큰 아이콘 정리 선택됨' : '👵 어르신 큰 아이콘 정리'}
+              </button>
+            </div>
+          </div>
+
+          {/* ② PC 바탕화면 중복파일 & 바로가기(.lnk) 뒤섞임 정리 */}
+          <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                💻 PC 바탕화면 중복파일 · 바로가기 분리
+              </span>
+              <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                바탕화면에 문서·폴더가 널려 있어 중복이 심하고 프로그램 바로가기(<code>.lnk</code>)·깨진 링크와 뒤섞여 있습니다. 핵심 바로가기만 남기고 정리 아카이브로 분류할까요?
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setDecisions((d) => ({ ...d, pcDesktop: 'archive_move' }))}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all ${
+                  decisions.pcDesktop === 'archive_move'
+                    ? 'bg-primary-container text-zinc-950 font-extrabold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                }`}
+              >
+                {decisions.pcDesktop === 'archive_move' ? '✓ 바탕화면 분류·아카이브 선택됨' : '🗂️ 중복·바로가기 분리 정리'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDecisions((d) => ({ ...d, pcDesktop: 'keep' }))}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all ${
+                  decisions.pcDesktop === 'keep'
+                    ? 'bg-zinc-700 text-white font-extrabold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
+                }`}
+              >
+                그대로 두기
+              </button>
+            </div>
+          </div>
+
+          {/* ③ 전기 먹는 이슈 제거로 CPU·메모리 쾌적화 & 속도 향상 */}
+          <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                ⚡ 전기 먹는 상주 이슈 제거 (CPU·메모리 속도 향상)
+              </span>
+              <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                은행·관공서 상주 보안모듈(MagicLine, AnySign 등)과 백그라운드 캐시가 전기와 메모리(420MB)를 상시 소모 중입니다. 안전 동결로 속도를 높이시겠습니까?
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }))}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all ${
+                  decisions.powerDrain === 'freeze_remove'
+                    ? 'bg-primary-container text-zinc-950 font-extrabold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                }`}
+              >
+                {decisions.powerDrain === 'freeze_remove' ? '✓ 유령 모듈 안전 동결 선택됨' : '⚡ 상주 모듈 동결 & 속도 향상'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDecisions((d) => ({ ...d, powerDrain: 'keep' }))}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all ${
+                  decisions.powerDrain === 'keep'
+                    ? 'bg-zinc-700 text-white font-extrabold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
+                }`}
+              >
+                유지하기
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 💬 LLM 개입 1:1 대화형 주치의 상담 바 */}
+        <div className="p-3.5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2.5">
+          <p className="font-body-sm text-[12.5px] text-zinc-200 leading-relaxed">
+            {doctorChatReply}
+          </p>
+          <form onSubmit={handleAskDoctor} className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={doctorChatInput}
+              onChange={(e) => setDoctorChatInput(e.target.value)}
+              placeholder="주치의에게 질문하기 (예: 바탕화면 바로가기 지워도 돼? / 어르신 큰 아이콘은 어떻게 해? / 전기 먹는 보안모듈이 뭐야?)"
+              className="flex-1 min-w-[240px] px-3.5 py-2 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12.5px] focus:outline-none focus:border-primary-container"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
+            >
+              💬 AI 주치의에게 물어보기
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {/* ─────────────── 📸 2. 세이씨 파워검색 부가서비스: 중복 사진(최고화질 원본 보존) & 연사(1장 직접 선택) 정리 보드 ─────────────── */}
       <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
           {/* 좌측 진단 요약 및 1줄 안심 가이드 */}
           <div className="lg:col-span-8 flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-label-mono text-[11px] text-zinc-400 font-semibold uppercase tracking-wider">
-                DIGITAL DOCTOR REPORT · 기기 자체 정밀 진단
+                POWER SEARCH ADD-ON · 파워검색의 묘미를 살리는 사진 부가서비스
               </span>
 
               {/* 우측: 스마트 서류함 분리 안내만 심플한 무채색 링크로 유지 */}
@@ -162,27 +346,27 @@ export const SmartTrashView: React.FC = () => {
             <h1 className="font-headline-md text-[18px] md:text-[21px] text-white font-bold leading-snug tracking-tight">
               {activeTrash.length > 0 ? (
                 <>
-                  🩺 진단 결과: 중복·연사 사본 <span className="text-primary-container">{dupCount}장</span>, 흔들린 사진{' '}
+                  📸 사진 정리 부가서비스: 동일 내용 중복·연사 사본 <span className="text-primary-container">{dupCount}장</span>, 오촬영·흔들림{' '}
                   <span className="text-white">{blurryCount}장</span>, 일회성 메모·캡처{' '}
                   <span className="text-white">{memoAndScreenCount}장</span>{' '}
                   <span className="text-zinc-400 font-normal text-[16px]">
-                    (총 {fmtMB(totalTrashBytes)} 낭비 중)
+                    (총 {fmtMB(totalTrashBytes)})
                   </span>
-                  <span className="block text-[14.5px] md:text-[15.5px] text-primary-container font-semibold mt-1">
-                    ➔ 처치 완료 시 기기 탐색 및 인덱싱 반응 속도 약 +{expectedSpeedBoostPct}% 향상 예상
+                  <span className="block text-[14px] md:text-[15px] text-primary-container font-semibold mt-1">
+                    ➔ 동일 내용 중복 사진은 최고화질 원본 1장만 남기고, 연사는 펼쳐 보고 마음에 드는 1장을 직접 선택(Pick)해 나머지를 버립니다.
                   </span>
                 </>
               ) : (
                 <span className="text-primary-container">
-                  ✨ 주치의 처치 완료! 모든 중복·흔들림·일회성 메모({quarantinedPhotos.length}장)가 안전하게 정리되어 최적(98점) 상태입니다.
+                  ✨ 사진 부가서비스 정리 완료! 모든 중복·연사 사본({quarantinedPhotos.length}장)이 정리되어 파워검색 결과가 가장 깔끔한 상태입니다.
                 </span>
               )}
             </h1>
 
             {/* 3중 안전망 장문 박스 축소 ➔ 차분한 1줄 보조 텍스트 */}
             <p className="font-body-sm text-[12.5px] text-zinc-400 pt-0.5">
-              🛡️ 정리된 파일은 영구 삭제되지 않으며 <strong className="text-zinc-200">[30일 대기함]</strong> 및 하단{' '}
-              <strong className="text-zinc-200">[1초 되돌리기(Undo)]</strong>로 언제든 즉시 복구됩니다.
+              🛡️ 정리된 파일은 바로 삭제되지 않고 <strong className="text-zinc-200">[세이씨_정리대기함]에 30일(한 달) 보관 후 휴지통으로 이동</strong>하며, 하단{' '}
+              <strong className="text-zinc-200">[1초 되돌리기(Undo)]</strong>로 언제든 즉시 원복됩니다.
             </p>
           </div>
 
@@ -349,16 +533,17 @@ export const SmartTrashView: React.FC = () => {
         })}
       </div>
 
-      {/* ─────────────── ① 동일한 복사본·연사 탭: PC 3×3 / 4×4 바둑판(Grid) 원클릭 Pick UI (중복 초록 배지 제거 & 다크 슬레이트 통일) ─────────────── */}
+      {/* ─────────────── ① 동일 내용 중복(최고화질 원본 보존) · 연사(유저 1장 직접 선택) 바둑판 Pick UI ─────────────── */}
       {showDuplicatePickSection && (
         <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div className="flex flex-col gap-1">
               <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
-                ① 동일한 복사본 · 연사 바둑판 비교 ({activeDuplicateGroups.length}개 묶음)
+                ① 동일 내용 중복 사진(최고화질 원본 1장 보존) &amp; 연사 묶음(유저가 1장 직접 선택) ({activeDuplicateGroups.length}개 묶음)
               </h2>
               <p className="font-body-sm text-[12.5px] text-zinc-400">
-                가장 표정·구도가 좋은 <strong className="text-zinc-200">베스트 컷 1장을 클릭(Pick)</strong>하면 그 1장은 안전하게 보존되고 나머지 연사 사본만 대기함으로 정리됩니다.
+                • <strong className="text-zinc-200">파일명은 다른데 내용이 같은 중복 사진:</strong> 해상도·용량이 가장 높은 <strong>최고화질 원본 1장</strong>만 남겨두고 나머지 사본을 정리합니다.<br />
+                • <strong className="text-zinc-200">연사(연속 촬영) 사진들:</strong> 나란히 펼쳐진 연사 중 마음에 드는 <strong className="text-primary-container">1장을 직접 클릭(선택)</strong>하시면 그 1장만 남기고 나머지를 대기함으로 버립니다.
               </p>
             </div>
 
@@ -391,7 +576,7 @@ export const SmartTrashView: React.FC = () => {
             </div>
           </div>
 
-          {/* 각 연사/중복 묶음별 바둑판(Grid) — 군더더기 중복 배지 제거 후 깔끔한 제목만 노출 */}
+          {/* 각 연사/중복 묶음별 바둑판(Grid) */}
           <div className="flex flex-col gap-4">
             {activeDuplicateGroups.map((group, gIdx) => {
               const groupPhotos = group.photoIds
@@ -402,6 +587,7 @@ export const SmartTrashView: React.FC = () => {
               const repPhoto = groupPhotos[0];
               const sceneLabel =
                 repPhoto?.tags.find((t) => !t.includes('연사') && !t.includes('원본')) || '#연사묶음';
+              const isExactDuplicateGroup = gIdx === 0;
 
               return (
                 <div
@@ -410,8 +596,11 @@ export const SmartTrashView: React.FC = () => {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[11.5px] font-extrabold">
+                        {isExactDuplicateGroup ? '📑 파일명 다른 동일 내용 중복' : '📸 연사 묶음 (1장 직접 선택)'}
+                      </span>
                       <span className="font-headline-sm text-[15px] text-white font-bold">
-                        연사·중복 묶음 #{gIdx + 1} ({groupPhotos.length}장 연사)
+                        묶음 #{gIdx + 1} ({groupPhotos.length}장)
                       </span>
                       <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
                         {sceneLabel}
@@ -431,7 +620,11 @@ export const SmartTrashView: React.FC = () => {
                       className="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-primary-container text-zinc-100 hover:text-zinc-950 border border-white/10 font-label-sm text-[12px] font-bold transition-all flex items-center gap-1.5 shrink-0"
                     >
                       <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                      <span>베스트 1장만 남기고 사본 {redundantCount}장 정리</span>
+                      <span>
+                        {isExactDuplicateGroup
+                          ? `최고화질 원본 1장만 남기고 중복 사본 ${redundantCount}장 정리`
+                          : `선택한 1장만 남기고 나머지 연사 ${redundantCount}장 버리기`}
+                      </span>
                     </button>
                   </div>
 
@@ -470,11 +663,17 @@ export const SmartTrashView: React.FC = () => {
                               <span className="material-symbols-outlined text-[14px]">
                                 verified_user
                               </span>
-                              <span>보존할 베스트 컷 (Best)</span>
+                              <span>
+                                {isExactDuplicateGroup
+                                  ? '보존할 최고화질 원본 1장'
+                                  : '현재 선택된 1장 (엔진 추천)'}
+                              </span>
                             </div>
                           ) : (
                             <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/80 backdrop-blur-md border border-white/15 text-zinc-300 font-label-sm text-[11px] font-medium">
-                              연사 #{idx + 1} · 사본 정리 후보
+                              {isExactDuplicateGroup
+                                ? `동일 내용 사본 #${idx + 1} · 정리 후보`
+                                : `연사 #${idx + 1} · 클릭 시 이 1장만 남김`}
                             </div>
                           )}
 
