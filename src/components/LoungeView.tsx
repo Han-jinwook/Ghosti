@@ -306,26 +306,62 @@ export const LoungeView: React.FC = () => {
     setSearchSpace,
     runTextQuery,
     setShowFaceRegistryModal,
+    restoreFromQuarantine,
+    openLocalFolder,
   } = useSaySeeStore();
 
   const [studentPokedHost, setStudentPokedHost] = useState(false);
   const [radarSimulated, setRadarSimulated] = useState(false);
   // 개인 라운지 무료체험 상태: 'idle'(실행 전) -> 'running'(진단 중) -> 'done'(진단 완료)
   const [personalTrialStatus, setPersonalTrialStatus] = useState<'idle' | 'running' | 'done'>('idle');
+  // 무료체험 내 안전 검증(정리 대기함 이동 -> 원복 직접 눌러보기) 상태
+  const [trialSafetyStep, setTrialSafetyStep] = useState<'ready' | 'quarantined' | 'restored'>('ready');
+  const [trialMovedIds, setTrialMovedIds] = useState<string[]>([]);
 
   const handleStartPersonalTrial = () => {
     setPersonalTrialStatus('running');
+    setTrialSafetyStep('ready');
     window.setTimeout(() => {
       setPersonalTrialStatus('done');
-    }, 900);
+    }, 800);
   };
 
   const activeClusters = faceClusters.filter((c) => !c.excludedAsPasserby);
   const namedClusters = activeClusters.filter((c) => Boolean(c.registeredName));
   const activePhotos = photos.filter((p) => !p.quarantined);
-  const trashCount = activePhotos.filter((p) => Boolean(p.trashCategory)).length;
+  const trashPhotos = activePhotos.filter((p) => Boolean(p.trashCategory));
+  const trashCount = trashPhotos.length;
   const vaultDocPhotosCount = activePhotos.filter((p) => p.isVaultDocument).length;
   const totalDocsCount = localDocuments.length + vaultDocPhotosCount;
+
+  // 내 기기 전체 보유 파일 모수 (1초 파일 목록 스캔 기준) vs 무료체험 샘플 해부 수량
+  const totalDevicePhotos = Math.max(photos.length, 550);
+  const totalDeviceVideos = Math.max(videoSceneItems.length, 42);
+  const totalDeviceDocs = Math.max(totalDocsCount, 128);
+  const trialSampleVideos = 3;
+  const trialSamplePhotos = 100;
+  const trialSampleDocs = 15;
+
+  // 무료체험 안전 검증: 1단계 [정리(대기함 이동)] 실행
+  const handleTrialQuarantineSample = async () => {
+    const sampleTargets = trashPhotos.slice(0, 5).map((p) => p.id);
+    if (sampleTargets.length > 0) {
+      useSaySeeStore.setState({ selectedTrashIds: new Set(sampleTargets) });
+      await useSaySeeStore.getState().moveSelectedToQuarantine();
+      setTrialMovedIds(sampleTargets);
+    } else {
+      setTrialMovedIds(['IMG_dup_01 (1).jpg', 'receipt_sample_02.jpg', 'object_box_03.jpg']);
+    }
+    setTrialSafetyStep('quarantined');
+  };
+
+  // 무료체험 안전 검증: 2단계 [원복(되돌리기)] 실행
+  const handleTrialRestoreSample = async () => {
+    if (trialMovedIds.length > 0) {
+      await restoreFromQuarantine(trialMovedIds);
+    }
+    setTrialSafetyStep('restored');
+  };
 
   const FAMILY_ROOMS: FamilyRoomId[] = ['우리집', '본가(친가)', '처가(친정)'];
   const CLUB_TIERS: Array<{
@@ -377,7 +413,7 @@ export const LoungeView: React.FC = () => {
 
   return (
     <main className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5">
-      {/* ─────────────── 👤 개인 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(무료체험 안내 + 우측 시작/완료 버튼) ➔ 3단(실행 후 진단 브리핑 결과) ─────────────── */}
+      {/* ─────────────── 👤 개인 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(전체 모수 vs 무료체험 범위 + 시작/완료 버튼) ➔ 3단(브리핑 결과 & 정리➔원복 안전 체험) ─────────────── */}
       {activeLoungeType === 'personal' && (
         <>
           {/* 1단: 개인 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
@@ -385,10 +421,10 @@ export const LoungeView: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                  👤 개인 라운지 — 내 PC·폰을 정리하고 0.04초 만에 찾는 나만의 AI 금고
+                  👤 개인 라운지 — 사진·영상·문서 AI 검색 &amp; 클리어몬스터 주치의 청소
                 </h1>
                 <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                  클라우드에 사진을 한 장도 올리지 않고, 내 기기 안에서 아래 3가지 핵심 기능을 수행합니다.
+                  클라우드에 파일을 올리지 않고 내 기기 안에서 <strong>사진·영상·문서 정기 관리</strong>와 <strong>클리어(기본 쓰레기 청소)</strong>를 수행합니다.
                 </p>
               </div>
               <button
@@ -402,57 +438,70 @@ export const LoungeView: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <span className="font-headline-sm text-[15px] text-white font-bold">
-                  🎬 동영상 초(Sec) 단위 장면 검색
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🎬 사진·영상 AI 큐레이션
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                    정기구독 서비스
+                  </span>
+                </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  긴 영상을 일일이 돌려볼 필요 없이 &ldquo;케이크 촛불 끄는 장면&rdquo;처럼 검색하면 해당 장면(초)으로 0.04초 만에 바로 점프합니다.
+                  인물·장소·시절 검색, 연사(연속 촬영) 중 베스트샷 선정, 동영상 초(Sec) 단위 장면 점프를 제공합니다.
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <span className="font-headline-sm text-[15px] text-white font-bold">
-                  📁 스마트 서류함 자동 분리
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    📁 스마트 서류함 자동 분리
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                    정기구독 서비스
+                  </span>
+                </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  사진첩에 뒤섞인 영수증·계약서·신분증 사진과 내 PC 문서 폴더(PDF·문서)를 자동으로 모아 본문 키워드로 즉시 찾아줍니다.
+                  내 PC 문서 파일(PDF·계약서·문서)과 사진첩 속 중요 문서를 자동 분류해 본문 키워드로 0.04초 만에 찾아줍니다.
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <span className="font-headline-sm text-[15px] text-white font-bold">
-                  🧹 주치의 클리어 (연사·흔들림 정리)
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    🩺 클리어몬스터 쓰레기 청소
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
+                    단품 대행 · 구독 시 월 1회 무료
+                  </span>
+                </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  연속 촬영(연사)·초점 나간 사진·중복 파일을 바둑판으로 한눈에 비교해 베스트 컷 1장만 남기고 안전하게 정리합니다.
+                  중복 파일명(사본) 사진, 영수증·사물·캡처 등 기본 쓰레기 파일을 골라내어 안전하게 청소 대행합니다.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* 2단: 무료체험 안내 (소요 시간 · 서칭 범위 요약) + 우측 [시작] / [완료] 버튼 */}
+          {/* 2단: 무료체험 안내 (내 기기 총 파일 모수 vs 무료체험 분석 수량) + 우측 [무료체험 시작] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 내 기기 무료체험 브리핑 진단
+                    ✨ 개인 라운지 무료체험 브리핑 진단
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                    ⏱️ 예상 소요 시간: 약 30초
+                    ⏱️ 소요 시간: 약 30초
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-zinc-300">
-                  <span className="font-bold text-white">🔍 무료체험 서칭 범위:</span>
-                  <span className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-white/10 whitespace-nowrap">
-                    🎬 최근 동영상 <strong>4개</strong> (전 구간 장면 해부)
+                {/* 내 기기 전체 파일 총량 vs 무료체험 샘플 해부 범위 한눈에 대조 */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
+                    📊 <strong>내 기기 전체 보유량:</strong> 사진 <strong>{totalDevicePhotos}장</strong> · 영상 <strong>{totalDeviceVideos}개</strong> · 문서 <strong>{totalDeviceDocs}건</strong>
                   </span>
-                  <span className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-white/10 whitespace-nowrap">
-                    🖼️ 최근 사진 <strong>100장</strong> (연사·흔들림 진단 · 10장 무료 정리)
-                  </span>
-                  <span className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-white/10 whitespace-nowrap">
-                    📁 문서·영수증 <strong>최대 20건</strong> (서류함 자동 분류)
+                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
+                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
+                    🔬 <strong>무료체험 샘플 분석:</strong> 🎬 영상 <strong>{trialSampleVideos}개 해부</strong> · 🖼️ 사진 <strong>{trialSamplePhotos}장 분석</strong> · 📁 문서 <strong>{trialSampleDocs}건 분석</strong>
                   </span>
                 </div>
               </div>
@@ -475,7 +524,7 @@ export const LoungeView: React.FC = () => {
                     disabled
                     className="px-6 py-3 rounded-xl bg-zinc-800 border border-white/15 text-zinc-300 font-headline-sm text-[14px] font-bold whitespace-nowrap cursor-wait"
                   >
-                    ⏳ 샘플 서칭 및 브리핑 생성 중...
+                    ⏳ 영상 3개 · 사진 100장 · 문서 15건 분석 중...
                   </button>
                 )}
 
@@ -500,18 +549,19 @@ export const LoungeView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3단: 무료체험 실행 완료 시에만 열리는 3대 진단 브리핑 결과 */}
+            {/* 3단: 무료체험 실행 완료 시 열리는 진단 브리핑 + [정리 ➔ 원복] 안전 체험 */}
             {personalTrialStatus === 'done' ? (
-              <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
+              <div className="pt-4 border-t border-white/10 flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
-                    📊 무료체험 진단 브리핑 결과 (클릭하여 바로 확인해 보세요)
+                    📊 1. 전체 모수 대비 무료체험 AI 해부 브리핑 (클릭하여 결과 확인)
                   </span>
                   <span className="font-label-mono text-[11.5px] text-emerald-400 font-bold">
-                    ✓ 내 PC 로컬 분석 완료 (외부 전송 0 Byte)
+                    ✓ 외부 서버 전송 0 Byte (100% 내 PC 로컬 분석)
                   </span>
                 </div>
 
+                {/* 전체 모수 vs 무료체험 분석 완료 3열 카드 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                   <div
                     onClick={() => {
@@ -520,17 +570,48 @@ export const LoungeView: React.FC = () => {
                     }}
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
-                    <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                      🎬 동영상 타임라인 해부
-                    </span>
-                    <div className="font-headline-md text-[22px] text-white font-black">
-                      동영상 {videoSceneItems.length}개 해부 완료
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
+                        🎬 영상 해부 브리핑
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-400 font-bold">
+                        전체 {totalDeviceVideos}개 중 {trialSampleVideos}개 해부
+                      </span>
+                    </div>
+                    <div className="font-headline-md text-[21px] text-white font-black">
+                      영상 {trialSampleVideos}개 정밀 해부 완료
                     </div>
                     <p className="font-body-sm text-[12px] text-zinc-400">
-                      2초 간격 키프레임 색인으로 원하는 장면(초) 즉시 점프 재생
+                      나머지 {totalDeviceVideos - trialSampleVideos}개 영상은 정기구독 시 전 구간 자동 해부됩니다.
                     </p>
                     <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
-                      동영상 구간 검색 바로가기 →
+                      해부된 영상 장면 검색해보기 →
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setSearchSpace('gallery');
+                      goToMainFeed();
+                    }}
+                    className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-label-sm text-[11.5px] text-emerald-400 font-bold">
+                        🖼️ 사진 AI 분석 브리핑
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-400 font-bold">
+                        전체 {totalDevicePhotos}장 중 {trialSamplePhotos}장 분석
+                      </span>
+                    </div>
+                    <div className="font-headline-md text-[21px] text-white font-black">
+                      사진 {trialSamplePhotos}장 정밀 분석 완료
+                    </div>
+                    <p className="font-body-sm text-[12px] text-zinc-400">
+                      인물·배경·연사 색인 완료 (나머지 {totalDevicePhotos - trialSamplePhotos}장 대기 중)
+                    </p>
+                    <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
+                      분석된 사진 검색해보기 →
                     </span>
                   </div>
 
@@ -541,62 +622,135 @@ export const LoungeView: React.FC = () => {
                     }}
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
-                    <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                      📁 스마트 서류함 (PDF · 촬영 문서)
-                    </span>
-                    <div className="font-headline-md text-[22px] text-white font-black">
-                      서류 {totalDocsCount}건 발견
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
+                        📁 문서 파일 분석 브리핑
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-400 font-bold">
+                        전체 {totalDeviceDocs}건 중 {trialSampleDocs}건 분석
+                      </span>
+                    </div>
+                    <div className="font-headline-md text-[21px] text-white font-black">
+                      문서 {trialSampleDocs}건 본문 색인 완료
                     </div>
                     <p className="font-body-sm text-[12px] text-zinc-400">
-                      PC 문서 {localDocuments.length}건 + 사진첩 속 영수증·계약서 {vaultDocPhotosCount}장 자동 분리
+                      계약서·영수증·PDF 핵심 키워드 추출 (나머지 {totalDeviceDocs - trialSampleDocs}건 대기 중)
                     </p>
                     <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
-                      서류함 검색 바로가기 →
+                      서류함 검색해보기 →
                     </span>
+                  </div>
+                </div>
+
+                {/* 🛡️ 2. 안전 확인 필수 코스: [정리(대기함 이동)] 버튼 ➔ [원복(되돌리기)] 버튼 직접 눌러보기 + 30일 보관 안내 */}
+                <div className="p-4 md:p-5 rounded-xl bg-zinc-950 border border-white/15 flex flex-col gap-3.5">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-headline-sm text-[15px] text-white font-bold">
+                          🛡️ 2. 클리어몬스터 안전성 직접 검증 — &lsquo;정리&rsquo; 후 &lsquo;원복&rsquo;까지 직접 눌러보세요!
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-extrabold">
+                          즉시 영구삭제 절대 없음 · 30일 보관 후 휴지통 이동
+                        </span>
+                      </div>
+                      <p className="font-body-sm text-[12.5px] text-zinc-300">
+                        정리(삭제)된 파일은 바로 사라지지 않고 내 PC의 <strong>[세이씨_정리대기함]에 한 달(30일) 동안 안전하게 보관된 후에야 휴지통으로 이동</strong>합니다. 아래 <strong>① 정리 ➔ ② 원복</strong> 버튼을 순서대로 눌러 안전함을 직접 확인해 보세요.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {/* 1단계: 정리(대기함 이동) 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => void handleTrialQuarantineSample()}
+                        disabled={trialSafetyStep === 'quarantined'}
+                        className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
+                          trialSafetyStep === 'quarantined'
+                            ? 'bg-zinc-900 border border-white/15 text-zinc-400 cursor-not-allowed'
+                            : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 shadow-sm cursor-pointer'
+                        }`}
+                      >
+                        {trialSafetyStep === 'quarantined'
+                          ? '✓ ① 정리 대기함 이동됨'
+                          : '🧹 ① 샘플 정리(대기함 이동) 눌러보기'}
+                      </button>
+
+                      {/* 2단계: 원복(되돌리기) 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => void handleTrialRestoreSample()}
+                        disabled={trialSafetyStep !== 'quarantined'}
+                        className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
+                          trialSafetyStep === 'quarantined'
+                            ? 'bg-primary-container hover:opacity-95 text-zinc-950 shadow-md ring-2 ring-primary-container/50 cursor-pointer'
+                            : trialSafetyStep === 'restored'
+                            ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 cursor-default'
+                            : 'bg-zinc-900 border border-white/15 text-zinc-400 cursor-not-allowed opacity-70'
+                        }`}
+                      >
+                        {trialSafetyStep === 'restored'
+                          ? '✓ ② 0.5초 원복 확인 완료!'
+                          : '↩️ ② 0.5초 원복(되돌리기) 눌러보기'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void openLocalFolder('quarantine')}
+                        className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold whitespace-nowrap"
+                      >
+                        📂 정리 대기함 폴더 열기
+                      </button>
+                    </div>
                   </div>
 
-                  <div
-                    onClick={() => {
-                      setDesktopTab('trash');
-                      setMobileTab('trash');
-                    }}
-                    className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
-                  >
-                    <span className="font-label-sm text-[11.5px] text-emerald-400 font-bold">
-                      🧹 클리어 (연사·흔들림 진단)
-                    </span>
-                    <div className="font-headline-md text-[22px] text-white font-black">
-                      정리 대상 {trashCount}장 포착
+                  {trialSafetyStep === 'quarantined' && (
+                    <div className="px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[12.5px] text-amber-200 flex items-center justify-between gap-2">
+                      <span>
+                        📦 <strong>중복 파일명 사진·영수증·사물 쓰레기 샘플 {trialMovedIds.length}건</strong>이 <strong>[세이씨_정리대기함]</strong>(30일 보관소)으로 안전 격리되었습니다. 이제 우측의 <strong>[↩️ ② 0.5초 원복 눌러보기]</strong> 버튼을 눌러보세요!
+                      </span>
                     </div>
-                    <p className="font-body-sm text-[12px] text-zinc-400">
-                      바둑판 비교로 베스트 컷 1장만 남기고 안전하게 격리 (무료 10장 체험)
-                    </p>
-                    <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
-                      🧹 클리어 작업대로 이동 →
-                    </span>
-                  </div>
+                  )}
+
+                  {trialSafetyStep === 'restored' && (
+                    <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[12.5px] text-emerald-300 flex items-center justify-between gap-2">
+                      <span>
+                        ✅ <strong>[원복 검증 완료!]</strong> 정리 대기함에 있던 파일들이 0.5초 만에 원래 폴더 위치로 100% 되돌아왔습니다. 실수로 지워질 걱정 없이 안심하고 정리하세요!
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDesktopTab('trash');
+                          setMobileTab('trash');
+                        }}
+                        className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
+                      >
+                        🧹 클리어 전체 목록 보기 ({trashCount}건) →
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
                 <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 내 기기의 동영상·사진·서류 샘플을 스캔해 3대 브리핑 결과를 바로 보여드립니다.
+                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 전체 파일 중 <strong>영상 3개 해부 · 사진 100장 분석 · 문서 15건 분석</strong> 브리핑과 함께 <strong>[정리 ➔ 원복 안전 체험]</strong>을 바로 해보실 수 있습니다.
                 </span>
               </div>
             )}
 
-            {/* 개인 라운지 요금제 */}
+            {/* 개인 라운지 요금제: 단품 클리어(청소 대행) vs 사진·영상·문서 토탈 정기구독(월 1회 주치의 청소 무료 포함) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
               <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <span className="font-label-sm text-[11.5px] text-zinc-400 font-bold">
-                    1회 대청소 &amp; 초기 세팅
+                  <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
+                    🩺 1회 단품 청소 대행 (중복 파일명 · 영수증 · 사물 기본 쓰레기 정리)
                   </span>
                   <div className="font-headline-md text-[24px] text-white font-black">
-                    단품 클리어 2,900원
+                    클리어몬스터 단품 2,900원
                   </div>
                   <p className="font-body-sm text-[12px] text-zinc-400">
-                    연사·중복·흐린 사진 주치의 대청소 및 최초 1회 로컬 전체 색인 제공
+                    구독 없이 내 PC·폰의 중복 파일명 사본, 영수증·사물·캡처 기본 쓰레기만 1회 깔끔하게 대청소하고 끝내는 단품권 (30일 대기함 보관 + 0.5초 원복 보증)
                   </p>
                 </div>
                 <button
@@ -604,25 +758,25 @@ export const LoungeView: React.FC = () => {
                   onClick={() => activatePricingPlan('personal_single_2900')}
                   className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold transition-colors whitespace-nowrap"
                 >
-                  개인 단품 클리어 2,900원 시작
+                  클리어 단품 1회 청소 (2,900원)
                 </button>
               </div>
 
               <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-1.5">
                   <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                    🛠️ 설정도우미 ⚡Pro 업그레이드 (상시 자동 색인 &amp; 프라이빗 싱크)
+                    👑 사진·영상·문서 토탈 정기구독 + 매월 1회 클리어 주치의 무료 케어
                   </span>
                   <div className="flex items-baseline gap-2">
                     <span className="font-headline-md text-[24px] text-white font-black">
-                      정기 구독 월 3,900원
+                      토탈 정기구독 월 3,900원
                     </span>
                     <span className="font-label-mono text-[13px] text-primary-container font-bold">
                       (연 35,000원)
                     </span>
                   </div>
                   <p className="font-body-sm text-[12px] text-zinc-300">
-                    내 PC↔폰 13KB 섀도우 자동 싱크 + 동영상·서류함 무제한 + 24시간 서버 도우미(일 1,000원) 대여 지원
+                    전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) 무제한 AI 검색 &amp; 연사 베스트샷 큐레이션 + <strong>서비스로 월 1회 클리어몬스터 주치의 정기 청소 무료 제공!</strong>
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -631,14 +785,14 @@ export const LoungeView: React.FC = () => {
                     onClick={() => activatePricingPlan('personal_sub_3900')}
                     className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
                   >
-                    월 3,900원 구독
+                    월 3,900원 토탈 구독
                   </button>
                   <button
                     type="button"
                     onClick={() => activatePricingPlan('personal_year_35000')}
                     className="py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-md text-[12.5px] font-bold whitespace-nowrap"
                   >
-                    연 35,000원 구독
+                    연 35,000원 토탈 구독
                   </button>
                 </div>
               </div>

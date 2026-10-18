@@ -79,6 +79,7 @@ export const DesktopDashboard: React.FC = () => {
     openLocalFolder,
     setShowOnboarding,
     activePricingPlan,
+    subscribedLounges,
     gpuHelper24hActive,
     gpuHelperActiveTier,
     activateGpuHelper24h,
@@ -113,6 +114,7 @@ export const DesktopDashboard: React.FC = () => {
 
   const collapsedBurstCount = searchResults.length - groupedResults.length;
   const currentSubmenus = LOUNGE_SUBMENU_CONFIG[activeLoungeType] || LOUNGE_SUBMENU_CONFIG.personal;
+  const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
@@ -150,6 +152,7 @@ export const DesktopDashboard: React.FC = () => {
             <nav className="ml-6 sm:ml-10 md:ml-14 lg:ml-16 flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900/90 border border-white/10 overflow-x-auto no-scrollbar">
               {MAIN_LOUNGE_MENUS.map((menu) => {
                 const active = activeLoungeType === menu.id;
+                const isLoungeSub = Boolean(subscribedLounges[menu.id]);
                 return (
                   <button
                     key={menu.id}
@@ -163,6 +166,11 @@ export const DesktopDashboard: React.FC = () => {
                   >
                     <span>{menu.icon}</span>
                     <span>{menu.label}</span>
+                    {isLoungeSub && (
+                      <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-extrabold">
+                        PRO
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -210,10 +218,10 @@ export const DesktopDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 2단: 메인메뉴 4개 바로 아래 라인에 맞춰 정렬된 라운지별 서브메뉴 바 */}
+        {/* 2단: 메인메뉴 4개 바로 아래 라인에 맞춰 정렬된 라운지별 서브메뉴 바 (구독 여부는 라운지별로 독립 적용) */}
         <div className="px-5 md:px-8 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:pl-[316px] lg:pl-[324px]">
           {currentSubmenus.map((sub) => {
-            if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
+            if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
               return null;
             }
             const isSubActive = desktopTab === sub.id;

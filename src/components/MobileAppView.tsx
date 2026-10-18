@@ -76,6 +76,7 @@ export const MobileAppView: React.FC = () => {
     openLocalFolder,
     setShowOnboarding,
     activePricingPlan,
+    subscribedLounges,
     gpuHelper24hActive,
     gpuHelperActiveTier,
     activateGpuHelper24h,
@@ -106,6 +107,7 @@ export const MobileAppView: React.FC = () => {
   }, [searchResults, groupBurstsInSearch, searchSpace]);
 
   const currentSubmenus = MOBILE_LOUNGE_SUBMENUS[activeLoungeType] || MOBILE_LOUNGE_SUBMENUS.personal;
+  const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);
 
   return (
     <div className="bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen max-w-xl mx-auto relative shadow-2xl border-x border-white/10 pb-20">
@@ -196,7 +198,7 @@ export const MobileAppView: React.FC = () => {
         {/* 선택된 메인메뉴(라운지)의 서브메뉴 바 */}
         <div className="px-3.5 py-1.5 bg-[#111114]/90 border-t border-white/5 flex items-center gap-1 overflow-x-auto no-scrollbar">
           {currentSubmenus.map((sub) => {
-            if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
+            if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
               return null;
             }
             const isSubActive = mobileTab === sub.id;

@@ -227,6 +227,7 @@ interface SaySeeStore {
   showProModal: boolean;
   freeTrialUsed: boolean;
   activePricingPlan: PricingPlanId;
+  subscribedLounges: Record<LoungeType, PricingPlanId | null>;
   activeLoungeType: LoungeType;
   activeFamilyRoom: FamilyRoomId;
   clubSizeTier: ClubSizeTier;
@@ -2539,7 +2540,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   showProModal: false,
   freeTrialUsed: false,
   activePricingPlan: 'free_trial',
-  activeLoungeType: 'family',
+  subscribedLounges: {
+    personal: null,
+    family: null,
+    club: null,
+    student: null,
+  },
+  activeLoungeType: 'personal',
   activeFamilyRoom: '우리집',
   clubSizeTier: 'small',
   studentOcrVerified: false,
@@ -2550,19 +2557,32 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setShowProModal: (showProModal) => set({ showProModal }),
 
   setActiveLoungeType: (activeLoungeType) =>
-    set((state) => ({
-      activeLoungeType,
-      // 방 진입 시 기본 탭은 무조건 [🎞️ 응답하라 1989 (추억)]으로 고정
-      clubFeedTrack: activeLoungeType === 'club' ? 'memories_1989' : state.clubFeedTrack,
-      gpuHelperActiveTier:
-        activeLoungeType === 'club'
-          ? state.clubSizeTier === 'large'
-            ? 'club_large_3000'
-            : state.clubSizeTier === 'medium'
-            ? 'club_medium_2000'
-            : 'club_small_1000'
-          : 'standard_1000',
-    })),
+    set((state) => {
+      const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
+      return {
+        activeLoungeType,
+        activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
+        // 해당 라운지가 이미 구독 중이면 [✨ 무료체험] 탭이 숨김 처리되므로 파워 검색 탭으로 이동
+        desktopTab:
+          isTargetLoungeSubscribed && state.desktopTab === 'trial'
+            ? 'dashboard'
+            : state.desktopTab,
+        mobileTab:
+          isTargetLoungeSubscribed && state.mobileTab === 'trial'
+            ? 'search'
+            : state.mobileTab,
+        // 방 진입 시 기본 탭은 무조건 [🎞️ 응답하라 1989 (추억)]으로 고정
+        clubFeedTrack: activeLoungeType === 'club' ? 'memories_1989' : state.clubFeedTrack,
+        gpuHelperActiveTier:
+          activeLoungeType === 'club'
+            ? state.clubSizeTier === 'large'
+              ? 'club_large_3000'
+              : state.clubSizeTier === 'medium'
+              ? 'club_medium_2000'
+              : 'club_small_1000'
+            : 'standard_1000',
+      };
+    }),
 
   setActiveFamilyRoom: (activeFamilyRoom) =>
     set({
@@ -2615,10 +2635,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   activatePricingPlan: (planId: PricingPlanId) => {
     set((state) => {
       const labelMap: Record<PricingPlanId, string> = {
-        free_trial: '✨ 무료체험 모드 (서브메뉴 [✨ 무료체험] 탭 활성화)',
-        personal_single_2900: '👤 개인 라운지 • 단품 클리어 (2,900원)',
-        personal_sub_3900: '👤 개인 라운지 • 정기 구독 (월 3,900원)',
-        personal_year_35000: '👤 개인 라운지 • 연간 정기 구독 (연 35,000원)',
+        free_trial: '✨ 무료체험 모드 (현재 라운지 [✨ 무료체험] 탭 활성화)',
+        personal_single_2900: '👤 개인 라운지 • 단품 클리어 청소 대행 (2,900원)',
+        personal_sub_3900: '👤 개인 라운지 • 토탈 정기 구독 (월 3,900원 • 월 1회 주치의 청소 포함)',
+        personal_year_35000: '👤 개인 라운지 • 연간 토탈 정기 구독 (연 35,000원 • 월 1회 주치의 청소 포함)',
         family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
         family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',
         family_three_8900: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합권 (월 8,900원 • 우리집+본가+처가 3방 분리)',
@@ -2644,22 +2664,27 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         : state.activeLoungeType;
 
       const isPaidSubscription = planId !== 'free_trial';
+      const nextSubscribedLounges: Record<LoungeType, PricingPlanId | null> = {
+        ...state.subscribedLounges,
+        [nextLoungeType]: isPaidSubscription ? planId : null,
+      };
 
       return {
         activePricingPlan: planId,
+        subscribedLounges: nextSubscribedLounges,
         activeLoungeType: nextLoungeType,
         clubFeedTrack: nextLoungeType === 'club' ? 'memories_1989' : state.clubFeedTrack,
         showProModal: false,
-        // 정식 구독 활성화 시 서브메뉴 1번 자리 [✨ 무료체험] 탭은 자동으로 숨김(Auto-Hide) 처리되므로 파워 검색 탭으로 이동
+        // 해당 라운지 구독 시 해당 라운지의 [✨ 무료체험] 탭만 자동 숨김(Auto-Hide) 처리되며 다른 미구독 라운지는 유지됨
         desktopTab: isPaidSubscription && state.desktopTab === 'trial' ? 'dashboard' : state.desktopTab,
         mobileTab: isPaidSubscription && state.mobileTab === 'trial' ? 'search' : state.mobileTab,
         merlinAuth: {
           ...state.merlinAuth,
-          tier: planId === 'free_trial' ? 'FREE' : 'PRO_LIFETIME',
+          tier: isPaidSubscription ? 'PRO_LIFETIME' : 'FREE',
         },
         lastQuarantineToast: isPaidSubscription
-          ? `🎉 [${labelMap[planId]}] 마스터 결제가 완료되었습니다! (초대 멤버 전원 무료 • [✨ 무료체험] 탭 자동 숨김 처리됨)`
-          : `✨ [무료체험 모드]로 전환되어 상단 서브메뉴 1번 자리에 [✨ 무료체험] 탭이 다시 표시됩니다.`,
+          ? `🎉 [${labelMap[planId]}] 활성화 완료! (현재 라운지의 [✨ 무료체험] 탭만 자동 숨김 처리되며, 다른 라운지는 별도로 작동합니다)`
+          : `✨ 현재 라운지가 [무료체험 모드]로 전환되어 상단 서브메뉴 1번 자리에 [✨ 무료체험] 탭이 다시 표시됩니다.`,
       };
     });
   },
