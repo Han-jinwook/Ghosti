@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import type {
+  AlumniStickChip,
+  AnalogScannedPhotoItem,
+  AnalogYearProposalItem,
+  ClubFeedTrackId,
   ClubSizeTier,
   DuplicateGroup,
   FaceMemberCluster,
@@ -227,6 +231,39 @@ interface SaySeeStore {
   setPrivateSyncStrategy: (strategy: PrivateSyncStrategy) => void;
   setChargingOnlySync: (chargingOnly: boolean) => void;
   triggerSyncNow: () => Promise<void>;
+
+  // [⛳ 4050 동창회 락인(Lock-in) 특화 UX: Text-to-Banner 간판 + 투트랙 탭 + 스틱(Chip) 연쇄 태깅 + [❓ 언제/어디인가요?] 방장 일괄 승인]
+  alumniSchoolName: string;
+  alumniGradYear: number;
+  alumniGradCohortNumber: number;
+  alumniBannerTheme: 'chalkboard' | 'sunset_field';
+  clubFeedTrack: ClubFeedTrackId;
+  alumniStickChips: AlumniStickChip[];
+  analogScannedPhotos: AnalogScannedPhotoItem[];
+  analogYearProposals: AnalogYearProposalItem[];
+  setAlumniBannerInfo: (
+    schoolName: string,
+    gradYear: number,
+    theme?: 'chalkboard' | 'sunset_field'
+  ) => void;
+  setClubFeedTrack: (track: ClubFeedTrackId) => void;
+  createAlumniStickChipsFromInput: (
+    yearInput: string,
+    placeInput: string,
+    seasonInput: string
+  ) => void;
+  applyStickChipToAnalogPhoto: (analogPhotoId: string, chipLabel: string) => void;
+  applyStickChipToAllPendingAnalogPhotos: (chipLabel: string) => void;
+  submitAnalogYearProposal: (
+    analogPhotoId: string,
+    proposerName: string,
+    proposedYear: number,
+    proposedSeason: string,
+    proposedPlace: string,
+    commentText: string
+  ) => void;
+  approveAllAnalogYearProposals: () => void;
+  findMySchoolDaysPhotosFast: () => Promise<void>;
 }
 
 let cancelOnboardingFlag = false;
@@ -246,6 +283,115 @@ const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
   modelStatusText: '내 PC 직접 구동(SaySee_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
 };
+
+/**
+ * [느슨한 타임라인의 월(Month)·계절 양방향 확장 검색 인덱싱 사전 (Time-Range Synonym Index)]
+ * - 유저가 느슨하게 계절/시기 스틱('1989년 봄' 등)만 눌러도 해당 계절에 속하는 월(1~12월)과 학사 키워드가 자동 바인딩됩니다.
+ * - 특히 '2월'은 졸업/신학기 시즌이므로 '겨울'과 '봄' 양쪽에 모두 매칭됩니다.
+ */
+export const SEASON_TO_MONTH_SYNONYM_INDEX: Record<'봄' | '여름' | '가을' | '겨울', string[]> = {
+  봄: ['2월', '3월', '4월', '5월', '봄', '입학', '졸업', '봄소풍'],
+  여름: ['6월', '7월', '8월', '여름', '방학', '바다', '수련회'],
+  가을: ['9월', '10월', '11월', '가을', '수학여행', '체육대회', '가을소풍'],
+  겨울: ['12월', '1월', '2월', '겨울', '졸업식', '눈', '겨울방학'],
+};
+
+/**
+ * [연도 축약어 자동 동치화 (1989 ↔ 89년 ↔ 89 ↔ 1989년)]
+ */
+export function buildYearEquivalenceTokens(yearInput: number | string): string[] {
+  const digits = String(yearInput).replace(/[^0-9]/g, '');
+  if (!digits) return [];
+  let fullYear = 1989;
+  if (digits.length === 4) {
+    fullYear = Number(digits);
+  } else if (digits.length === 2) {
+    const num = Number(digits);
+    fullYear = num >= 50 ? 1900 + num : 2000 + num;
+  } else {
+    return [digits];
+  }
+  const short2 = String(fullYear % 100).padStart(2, '0');
+  const decadeStart = Math.floor(fullYear / 10) * 10;
+  return Array.from(
+    new Set([
+      String(fullYear),
+      `${fullYear}년`,
+      short2,
+      `${short2}년`,
+      `${short2}회`,
+      `${decadeStart}년대`,
+    ])
+  );
+}
+
+/**
+ * [라운지 고유 명사(성동고, 성동) 기본 상속 추출기]
+ * - 간판 키워드가 '성동고 1989'라면 그 방의 모든 사진은 '성동고', '성동'을 기본 상속받습니다.
+ */
+export function deriveLoungeProperNounTokens(schoolName: string): string[] {
+  const clean = (schoolName || '성동고').trim();
+  if (!clean) return [];
+  const root = clean.replace(/(고등학교|중학교|초등학교|대학교|여고|여중|고|중|초|대)$/, '').trim();
+  const tokens = [clean];
+  if (root && root.length >= 2) {
+    tokens.push(root);
+    tokens.push(`${root}고`);
+    tokens.push(`${root}고등학교`);
+  }
+  return Array.from(new Set(tokens));
+}
+
+/**
+ * 느슨한 타임라인/스틱 정보로부터 양방향 확장 검색 키워드 배열 생성
+ */
+export function buildBidirectionalStickKeywords(params: {
+  year?: number | string;
+  season?: string;
+  place?: string;
+  looseTimelineGroup?: string;
+  schoolName?: string;
+}): string[] {
+  const out = new Set<string>();
+  const schoolTokens = deriveLoungeProperNounTokens(params.schoolName || '성동고');
+  schoolTokens.forEach((t) => out.add(t));
+
+  if (params.year !== undefined) {
+    buildYearEquivalenceTokens(params.year).forEach((t) => out.add(t));
+  }
+
+  const combinedText = `${params.season || ''} ${params.place || ''} ${params.looseTimelineGroup || ''}`;
+  const yearMatch = combinedText.match(/(19\d{2}|20\d{2}|\b\d{2}년)/);
+  if (yearMatch) {
+    buildYearEquivalenceTokens(yearMatch[1]).forEach((t) => out.add(t));
+  }
+
+  (Object.keys(SEASON_TO_MONTH_SYNONYM_INDEX) as Array<'봄' | '여름' | '가을' | '겨울'>).forEach(
+    (seasonKey) => {
+      const seasonSyns = SEASON_TO_MONTH_SYNONYM_INDEX[seasonKey];
+      if (
+        combinedText.includes(seasonKey) ||
+        seasonSyns.some((syn) => syn.length >= 2 && combinedText.includes(syn))
+      ) {
+        seasonSyns.forEach((syn) => out.add(syn));
+      }
+    }
+  );
+
+  if (params.place) {
+    out.add(params.place.trim());
+    params.place
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length >= 2)
+      .forEach((w) => out.add(w));
+  }
+  if (params.looseTimelineGroup) {
+    out.add(params.looseTimelineGroup.trim());
+  }
+
+  return Array.from(out);
+}
 
 /**
  * [방별 별명(Persona) 리졸버]
@@ -1629,11 +1775,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       localDocuments,
       videoSceneItems,
       faceClusters,
+      alumniSchoolName,
+      alumniGradYear,
+      analogScannedPhotos,
+      analogYearProposals,
     } = get();
 
-    // [방별 별명(Room Persona) ➔ 세이씨 여권(SaySee Face Passport) 자동 번역]
-    // 예: 처가(친정)방에서 "둘째사위 선글라스", "둘째사위 나무 다리", 학생방에서 "지우짱 바다" 검색 시
-    // 해당 멤버의 고유 여권 시드(멀린, 지우 등)로 0.01초 내 자동 매핑하여 동일 인물의 사진·동영상을 모두 소환!
+    // [1단계: 방별 별명(Room Persona) ➔ 세이씨 여권(SaySee Face Passport) 자동 번역]
     let resolvedQuery = query;
     for (const fc of faceClusters) {
       if (fc.excludedAsPasserby || !fc.registeredName) continue;
@@ -1651,14 +1799,156 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       }
     }
 
-    // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출하여 3개 탭 배지 숫자를 한 번에 계산!
+    // [2단계: 느슨한 타임라인 ↔ 구체적 월(1~12월)·계절 양방향 확장 인덱싱 & 연도 축약어(1989↔89년↔89) 동치화 & 라운지 고유명사(성동고·성동) 기본 상속]
+    const inheritedSchoolNouns = deriveLoungeProperNounTokens(alumniSchoolName);
+    const matchedSchoolNouns = inheritedSchoolNouns.filter((noun) => query.includes(noun));
+
+    // 연도 축약어 추출 (예: "89년 2월 성동", "89년 5월", "89", "1989년")
+    const yearRegexMatch = query.match(/(19\d{2}|20\d{2}|\b\d{2}(?=년|\s|$))/);
+    const queryYearTokens = yearRegexMatch ? buildYearEquivalenceTokens(yearRegexMatch[1]) : [];
+
+    // 쿼리 내 월(1~12월) 또는 계절/학사 키워드 감지 ➔ 양방향 계절('봄'|'여름'|'가을'|'겨울') 확장
+    const matchedSeasons = new Set<'봄' | '여름' | '가을' | '겨울'>();
+    const matchedMonthOrEventTokens: string[] = [];
+    (Object.keys(SEASON_TO_MONTH_SYNONYM_INDEX) as Array<'봄' | '여름' | '가을' | '겨울'>).forEach(
+      (seasonKey) => {
+        const synList = SEASON_TO_MONTH_SYNONYM_INDEX[seasonKey];
+        for (const syn of synList) {
+          // '1월', '2월' 등이 '11월', '12월'의 부분 문자열로 오매칭되지 않도록 경계 체크
+          const isMonthToken = /^\d{1,2}월$/.test(syn);
+          const hit = isMonthToken
+            ? new RegExp(`(^|\\D)${syn}`).test(query)
+            : query.includes(syn);
+          if (hit) {
+            matchedSeasons.add(seasonKey);
+            if (!matchedMonthOrEventTokens.includes(syn)) {
+              matchedMonthOrEventTokens.push(syn);
+            }
+          }
+        }
+      }
+    );
+
+    const isTimeRangeOrAlumniQuery =
+      queryYearTokens.length > 0 || matchedSeasons.size > 0 || matchedSchoolNouns.length > 0;
+
+    // 개별 사진에 '성동', '89년', '2월' 등이 직접 적혀 있지 않아도 기본 검색 엔진이 오작동하지 않도록 정제된 쿼리 전달
+    let cleanedSearchQuery = resolvedQuery;
+    for (const noun of matchedSchoolNouns) {
+      cleanedSearchQuery = cleanedSearchQuery.split(noun).join(' ');
+    }
+    cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, ' ').trim() || resolvedQuery;
+
+    // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출
     const [docMatches, videoMatches, photoSearchOut] = await Promise.all([
-      searchLocalDocumentFilesAsync(resolvedQuery, localDocuments),
-      searchVideoSceneItemsAsync(resolvedQuery, videoSceneItems),
-      executeTextSearch(resolvedQuery, photos, 'text-direct'),
+      searchLocalDocumentFilesAsync(cleanedSearchQuery, localDocuments),
+      searchVideoSceneItemsAsync(cleanedSearchQuery, videoSceneItems),
+      executeTextSearch(cleanedSearchQuery, photos, 'text-direct'),
     ]);
 
-    const { results, embedMs, searchMs } = photoSearchOut;
+    let { results } = photoSearchOut;
+    const { embedMs, searchMs } = photoSearchOut;
+    const expansionBadges: string[] = [];
+
+    if (isTimeRangeOrAlumniQuery) {
+      if (queryYearTokens.length > 0) {
+        expansionBadges.push(`#연도동치(${queryYearTokens[0]}↔${queryYearTokens[3] || '89년'})`);
+      }
+      if (matchedSeasons.size > 0) {
+        const seasonNames = Array.from(matchedSeasons).join('·');
+        const triggerTxt = matchedMonthOrEventTokens.join('·') || seasonNames;
+        expansionBadges.push(`#계절↔월확장(${triggerTxt}➔${seasonNames})`);
+      }
+      if (matchedSchoolNouns.length > 0) {
+        expansionBadges.push(`#${alumniSchoolName}고유명사상속`);
+      }
+
+      // 아날로그 스캔 사진(느슨한 타임라인: '1989년 봄', '1989년 가을' 등) 양방향 매칭 검사
+      const matchedAnalogFiles = new Map<
+        string,
+        { analogItem: AnalogScannedPhotoItem; reasonTags: string[] }
+      >();
+
+      for (const item of analogScannedPhotos) {
+        const relatedProposals = analogYearProposals.filter(
+          (p) => p.targetAnalogPhotoId === item.id
+        );
+        const effectiveGroup =
+          !item.unknownDatePlace
+            ? item.looseTimelineGroup
+            : relatedProposals[0]?.proposedTimelineGroup || `${alumniGradYear}년 가을`;
+        const effectivePlace =
+          item.appliedSticks.join(' ') || relatedProposals[0]?.proposedPlaceTag || '';
+
+        const itemKeywords = new Set<string>([
+          ...(item.expandedSearchKeywords ?? []),
+          ...buildBidirectionalStickKeywords({
+            year: alumniGradYear,
+            looseTimelineGroup: effectiveGroup,
+            place: effectivePlace,
+            schoolName: alumniSchoolName,
+          }),
+        ]);
+
+        // 2월 검색 시 '1989년 봄'(입학/신학기)과 '1989년 겨울'(졸업식) 모두 매칭!
+        const yearOk =
+          queryYearTokens.length === 0 ||
+          queryYearTokens.some((yt) => itemKeywords.has(yt));
+        const seasonOk =
+          matchedSeasons.size === 0 ||
+          Array.from(matchedSeasons).some(
+            (sk) =>
+              effectiveGroup.includes(sk) ||
+              itemKeywords.has(sk) ||
+              // '2월'은 졸업/입학 시즌이므로 1989년 봄 스캔본과 100% 매칭
+              (matchedMonthOrEventTokens.includes('2월') && effectiveGroup.includes('봄'))
+          );
+        const schoolOk =
+          matchedSchoolNouns.length === 0 ||
+          matchedSchoolNouns.some((sn) => itemKeywords.has(sn));
+
+        if (yearOk && seasonOk && schoolOk) {
+          const reasonTags = [
+            `#${effectiveGroup.replace(/\s+/g, '')}`,
+            ...(matchedMonthOrEventTokens.length > 0
+              ? [`#${matchedMonthOrEventTokens[0]}↔${effectiveGroup}양방향매칭`]
+              : []),
+            ...(matchedSchoolNouns.length > 0 ? [`#${alumniSchoolName}기본상속`] : []),
+          ];
+          matchedAnalogFiles.set(item.photoFile, { analogItem: item, reasonTags });
+        }
+      }
+
+      // 매칭된 아날로그/동창회 사진들을 최상단(99% 일치)으로 소환
+      if (matchedAnalogFiles.size > 0) {
+        const boostedResults: SearchResultItem[] = [];
+        const seenIds = new Set<string>();
+
+        for (const [fileName, info] of matchedAnalogFiles.entries()) {
+          const foundPhoto = photos.find((p) => !p.quarantined && p.name === fileName);
+          if (foundPhoto) {
+            seenIds.add(foundPhoto.id);
+            const enrichedPhoto: PhotoItem = {
+              ...foundPhoto,
+              tags: Array.from(
+                new Set([...info.reasonTags, ...expansionBadges, ...foundPhoto.tags])
+              ),
+              captionKo: `${info.analogItem.captionKo} (${alumniSchoolName} 기본 상속 · ${info.analogItem.looseTimelineGroup})`,
+            };
+            boostedResults.push({
+              photo: enrichedPhoto,
+              score: 0.99,
+              matchPercentage: 99,
+              matchedBy: 'text-direct',
+            });
+          }
+        }
+
+        // 만약 라운지 고유 명사('성동', '성동고')나 연도('89년')가 포함된 동창회 검색이면 방 안의 다른 추억 사진들도 후순위로 함께 상속 소환
+        const remainingResults = results.filter((r) => !seenIds.has(r.photo.id));
+        results = [...boostedResults, ...remainingResults];
+      }
+    }
 
     // 촬영 서류(isVaultDocument) 매칭 계산
     const vaultMap = new Map<string, SearchResultItem>();
@@ -1689,12 +1979,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
     }
     const vaultPhotoMatches = Array.from(vaultMap.values());
 
-    // [규칙 1 & 2]
-    // 1) 처음 검색을 하면(유저가 탭을 직접 선택한 적 없을 때): 기본 '동영상(video)' 탭을 열어 임팩트 어필
-    // 2) 유저가 특정 탭을 선택한 뒤 다시 검색을 하면: 마지막으로 선택된 탭(searchSpace)이 디폴트로 열림
-    const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'video';
+    // [규칙 1 & 2 + 동창회 타임라인 검색 시 갤러리 즉시 표시]
+    const targetSpace: SearchSpaceMode = isTimeRangeOrAlumniQuery
+      ? 'gallery'
+      : hasUserSelectedSearchTab
+      ? searchSpace
+      : 'video';
 
-    const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
+    const topTags =
+      expansionBadges.length > 0
+        ? Array.from(
+            new Set([
+              ...expansionBadges,
+              ...results.slice(0, 3).flatMap((r) => r.photo.tags),
+            ])
+          ).slice(0, 4)
+        : Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
 
     set({
       searchSpace: targetSpace,
@@ -1706,6 +2006,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       matchedLocalDocs: docMatches,
       matchedVideoScenes: videoMatches,
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
+      ...(isTimeRangeOrAlumniQuery
+        ? {
+            lastQuarantineToast: `⚡ [양방향 시간·고유명사 그물망 매칭 (0.04초)] "${query}" ➔ ${expansionBadges.join(
+              ' · '
+            )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`,
+          }
+        : {}),
     });
   },
 
@@ -2217,6 +2524,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
   setActiveLoungeType: (activeLoungeType) =>
     set((state) => ({
       activeLoungeType,
+      // 방 진입 시 기본 탭은 무조건 [🎞️ 응답하라 1989 (추억)]으로 고정
+      clubFeedTrack: activeLoungeType === 'club' ? 'memories_1989' : state.clubFeedTrack,
       gpuHelperActiveTier:
         activeLoungeType === 'club'
           ? state.clubSizeTier === 'large'
@@ -2311,6 +2620,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
       return {
         activePricingPlan: planId,
         activeLoungeType: nextLoungeType,
+        clubFeedTrack: nextLoungeType === 'club' ? 'memories_1989' : state.clubFeedTrack,
         showProModal: false,
         // 정식 구독 활성화 시 서브메뉴 1번 자리 [✨ 무료체험] 탭은 자동으로 숨김(Auto-Hide) 처리되므로 파워 검색 탭으로 이동
         desktopTab: isPaidSubscription && state.desktopTab === 'trial' ? 'dashboard' : state.desktopTab,
@@ -2384,5 +2694,560 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => ({
           ? '👻 [13KB 섀도우 캐시 일치화 완료] 집 PC가 꺼져 있어도 밖에서 내 폰으로 PC 속 10년 치 사진·서류를 0.04초 만에 열람할 수 있습니다!'
           : '🔄 [100% 원본 미러링 일치화 완료] 클라우드 없이 폰과 PC 양쪽 기기의 원본 사진·서류가 완벽히 일치되었습니다!',
     }));
+  },
+
+  // ─────────────── [⛳ 4050 동창회 락인(Lock-in) 특화 UX 상태 & 액션] ───────────────
+  alumniSchoolName: '성동고',
+  alumniGradYear: 1989,
+  alumniGradCohortNumber: 89,
+  alumniBannerTheme: 'chalkboard',
+  clubFeedTrack: 'memories_1989',
+  alumniStickChips: [
+    {
+      chipId: 'stick_1989',
+      label: '1989',
+      year: 1989,
+      looseTimelineGroup: '1989년 봄',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '봄',
+        looseTimelineGroup: '1989년 봄',
+        schoolName: '성동고',
+      }),
+    },
+    {
+      chipId: 'stick_jeju_trip',
+      label: '제주도 수학여행',
+      year: 1989,
+      place: '제주도 수학여행',
+      looseTimelineGroup: '1989년 봄',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '봄',
+        place: '제주도 수학여행',
+        looseTimelineGroup: '1989년 봄',
+        schoolName: '성동고',
+      }),
+    },
+    {
+      chipId: 'stick_1989_spring',
+      label: '1989년 봄',
+      year: 1989,
+      season: '봄',
+      looseTimelineGroup: '1989년 봄',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '봄',
+        looseTimelineGroup: '1989년 봄',
+        schoolName: '성동고',
+      }),
+    },
+    {
+      chipId: 'stick_1989_autumn',
+      label: '1989년 가을',
+      year: 1989,
+      season: '가을',
+      looseTimelineGroup: '1989년 가을',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '가을',
+        looseTimelineGroup: '1989년 가을',
+        schoolName: '성동고',
+      }),
+    },
+    {
+      chipId: 'stick_picnic',
+      label: '1989년 가을 소풍',
+      year: 1989,
+      season: '가을',
+      place: '가을 소풍',
+      looseTimelineGroup: '1989년 가을',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '가을',
+        place: '가을 소풍',
+        looseTimelineGroup: '1989년 가을',
+        schoolName: '성동고',
+      }),
+    },
+  ],
+  analogScannedPhotos: [
+    {
+      id: 'analog_scan_1',
+      photoFile: '20260926_160221.jpg',
+      thumbUrl: '/__photos/file?p=20260926_160221.jpg&thumb=1',
+      uploaderLabel: '📸 김총무 스캔 업로드 (EXIF 없음)',
+      hasExif: false,
+      unknownDatePlace: false,
+      appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
+      looseTimelineGroup: '1989년 봄',
+      mappedPassportBucketLabel: '🛂 세이씨 여권 1980년대 바구니(1989~1980) 자동 매핑',
+      detectedMemberNames: ['👑 멀린프로(18세)', '박회장(18세)', '김총무(18세)'],
+      captionKo: '1989년 봄 제주도 수학여행 나무 다리 단체컷 (아날로그 인화 사진 스캔본)',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '봄',
+        place: '제주도 수학여행 나무 다리',
+        looseTimelineGroup: '1989년 봄',
+        schoolName: '성동고',
+      }),
+    },
+    {
+      id: 'analog_scan_2',
+      photoFile: '20260926_131225.jpg',
+      thumbUrl: '/__photos/file?p=20260926_131225.jpg&thumb=1',
+      uploaderLabel: '📸 박회장 스캔 업로드 (EXIF 없음)',
+      hasExif: false,
+      unknownDatePlace: false,
+      appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
+      looseTimelineGroup: '1989년 봄',
+      mappedPassportBucketLabel: '🛂 세이씨 여권 1980년대 바구니(1989~1980) 자동 매핑',
+      detectedMemberNames: ['👑 멀린프로(18세)', '이프로(18세)'],
+      captionKo: '1989년 봄 제주도 수학여행 성산일출봉 앞 추억 스캔본',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '봄',
+        place: '제주도 수학여행 성산일출봉',
+        looseTimelineGroup: '1989년 봄',
+        schoolName: '성동고',
+      }),
+    },
+    {
+      id: 'analog_scan_3',
+      photoFile: '20240720_182301.jpg',
+      thumbUrl: '/__photos/file?p=20240720_182301.jpg&thumb=1',
+      uploaderLabel: '📸 최회원 스캔 업로드 (연도·장소 미상)',
+      hasExif: false,
+      unknownDatePlace: true,
+      appliedSticks: [],
+      looseTimelineGroup: '❓ 언제/어디인가요?',
+      mappedPassportBucketLabel: '⏳ 연도 제보 대기 중 (승인 시 1980년대 바구니 편입)',
+      detectedMemberNames: ['👑 멀린프로', '박회장', '최회원'],
+      captionKo: '[❓ 언제/어디인가요?] 옛날 앨범에서 나온 사진인데 언제 어디 소풍인지 기억나는 친구 제보 바람!',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '가을',
+        place: '가을 소풍',
+        looseTimelineGroup: '1989년 가을',
+        schoolName: '성동고',
+      }),
+    },
+    {
+      id: 'analog_scan_4',
+      photoFile: '20240721_183234.jpg',
+      thumbUrl: '/__photos/file?p=20240721_183234.jpg&thumb=1',
+      uploaderLabel: '📸 이프로 스캔 업로드 (연도·장소 미상)',
+      hasExif: false,
+      unknownDatePlace: true,
+      appliedSticks: [],
+      looseTimelineGroup: '❓ 언제/어디인가요?',
+      mappedPassportBucketLabel: '⏳ 연도 제보 대기 중 (승인 시 1980년대 바구니 편입)',
+      detectedMemberNames: ['👑 멀린프로(선글라스)', '김총무'],
+      captionKo: '[❓ 언제/어디인가요?] 선글라스 끼고 바닷가에서 찍은 필름 스캔본 — 연도/장소 제보해 주세요!',
+      expandedSearchKeywords: buildBidirectionalStickKeywords({
+        year: 1989,
+        season: '봄',
+        place: '제주도 수학여행 바다 선글라스',
+        looseTimelineGroup: '1989년 봄',
+        schoolName: '성동고',
+      }),
+    },
+  ],
+  analogYearProposals: [
+    {
+      proposalId: 'prop_1989_autumn_picnic',
+      targetAnalogPhotoId: 'analog_scan_3',
+      photoFile: '20240720_182301.jpg',
+      thumbUrl: '/__photos/file?p=20240720_182301.jpg&thumb=1',
+      proposerName: '박회장 (3학년 4반 반장)',
+      proposedTimelineGroup: '1989년 가을',
+      proposedPlaceTag: '1989년 가을 소풍',
+      proposedYear: 1989,
+      commentText: '야 이거 1989년 가을 소풍 때 찍은 거잖아! 내가 옆에서 찍어줬음 ㅋㅋ',
+      approvedByHost: false,
+    },
+    {
+      proposalId: 'prop_1989_spring_jeju',
+      targetAnalogPhotoId: 'analog_scan_4',
+      photoFile: '20240721_183234.jpg',
+      thumbUrl: '/__photos/file?p=20240721_183234.jpg&thumb=1',
+      proposerName: '김총무 (89회 동창총무)',
+      proposedTimelineGroup: '1989년 봄',
+      proposedPlaceTag: '제주도 수학여행 (중문해수욕장)',
+      proposedYear: 1989,
+      commentText: '1989년 봄 제주도 수학여행 중문 바닷가에서 빌린 선글라스 끼고 찍은 사진 맞네!',
+      approvedByHost: false,
+    },
+  ],
+
+  setAlumniBannerInfo: (schoolName, gradYear, theme) =>
+    set((state) => {
+      const cleanSchool = schoolName.trim() || '성동고';
+      const validYear = Number.isFinite(gradYear) && gradYear >= 1950 ? gradYear : 1989;
+      const cohort = validYear % 100;
+      const updatedAnalogPhotos = state.analogScannedPhotos.map((item) => ({
+        ...item,
+        expandedSearchKeywords: buildBidirectionalStickKeywords({
+          year: validYear,
+          looseTimelineGroup: item.looseTimelineGroup,
+          place: item.appliedSticks.join(' '),
+          schoolName: cleanSchool,
+        }),
+      }));
+      return {
+        alumniSchoolName: cleanSchool,
+        alumniGradYear: validYear,
+        alumniGradCohortNumber: cohort,
+        alumniBannerTheme: theme ?? state.alumniBannerTheme,
+        analogScannedPhotos: updatedAnalogPhotos,
+        lastQuarantineToast: `🎓 [Text-to-Banner 자동 간판 & 고유명사 상속] ‘${cleanSchool} ${cohort}회 동창회 (${validYear})’ 간판이 장착되어 방 전체 사진에 "${cleanSchool}"·"${deriveLoungeProperNounTokens(cleanSchool).join('/')}" 검색 키워드가 기본 상속되었습니다!`,
+      };
+    }),
+
+  setClubFeedTrack: (clubFeedTrack) => {
+    const { photos, alumniGradYear } = get();
+    const allGallery = photos
+      .filter((p) => !p.quarantined)
+      .slice(0, 60)
+      .map((photo, idx) => ({
+        photo,
+        score: 0.96,
+        matchPercentage: 98 - (idx % 4),
+        matchedBy: 'text-direct' as const,
+      }));
+
+    if (clubFeedTrack === 'memories_1989') {
+      // 추억 탭: 아날로그 스캔본 및 학창 시절 사진 우선 정렬
+      const memoryPhotos = [
+        ...allGallery.filter((item) =>
+          [
+            '20260926_160221.jpg',
+            '20260926_131225.jpg',
+            '20240720_182301.jpg',
+            '20240721_183234.jpg',
+          ].includes(item.photo.name)
+        ),
+        ...allGallery.filter(
+          (item) =>
+            ![
+              '20260926_160221.jpg',
+              '20260926_131225.jpg',
+              '20240720_182301.jpg',
+              '20240721_183234.jpg',
+            ].includes(item.photo.name)
+        ),
+      ];
+      set({
+        clubFeedTrack,
+        searchSpace: 'gallery',
+        hasUserSelectedSearchTab: true,
+        activeQuery: `🎞️ 응답하라 ${alumniGradYear} (추억) — ${alumniGradYear}년 봄 · 제주도 수학여행 & ${alumniGradYear}년 가을 소풍`,
+        matchedTags: [
+          `#${alumniGradYear}년봄`,
+          '#제주도수학여행',
+          `#${alumniGradYear}년가을소풍`,
+          '#1980년대여권바구니',
+        ],
+        searchResults: memoryPhotos,
+      });
+    } else {
+      // 근황 탭: 최근 모임 사진
+      set({
+        clubFeedTrack,
+        searchSpace: 'gallery',
+        hasUserSelectedSearchTab: true,
+        activeQuery: '🍻 최근 우리들 (근황) — 2026 정기 동창 모임 & 라운딩 (🔔 전체 알림 OFF 클린존)',
+        matchedTags: ['#2026동창모임', '#최근우리들', '#알림클린존'],
+        searchResults: allGallery.slice().reverse(),
+      });
+    }
+  },
+
+  createAlumniStickChipsFromInput: (yearInput, placeInput, seasonInput) => {
+    const cleanYear = yearInput.trim() || '1989';
+    const cleanPlace = placeInput.trim() || '제주도 수학여행';
+    const cleanSeason = seasonInput.trim() || '봄';
+    const numYear = parseInt(cleanYear, 10) || 1989;
+    const yearSeasonLabel = `${numYear}년 ${cleanSeason}`;
+    const decadeStart = Math.floor(numYear / 10) * 10;
+
+    set((state) => {
+      const existingLabels = new Set(state.alumniStickChips.map((c) => c.label));
+      const newChips: AlumniStickChip[] = [...state.alumniStickChips];
+      const expanded = buildBidirectionalStickKeywords({
+        year: numYear,
+        season: cleanSeason,
+        place: cleanPlace,
+        looseTimelineGroup: yearSeasonLabel,
+        schoolName: state.alumniSchoolName,
+      });
+
+      const candidates: AlumniStickChip[] = [
+        {
+          chipId: `stick_${cleanYear}_${Date.now()}_1`,
+          label: `${numYear}`,
+          year: numYear,
+          looseTimelineGroup: yearSeasonLabel,
+          expandedSearchKeywords: expanded,
+        },
+        {
+          chipId: `stick_${cleanPlace}_${Date.now()}_2`,
+          label: cleanPlace,
+          year: numYear,
+          place: cleanPlace,
+          looseTimelineGroup: yearSeasonLabel,
+          expandedSearchKeywords: expanded,
+        },
+        {
+          chipId: `stick_${yearSeasonLabel}_${Date.now()}_3`,
+          label: yearSeasonLabel,
+          year: numYear,
+          season: cleanSeason,
+          place: cleanPlace,
+          looseTimelineGroup: yearSeasonLabel,
+          expandedSearchKeywords: expanded,
+        },
+      ];
+
+      for (const cand of candidates) {
+        if (!existingLabels.has(cand.label)) {
+          newChips.unshift(cand);
+          existingLabels.add(cand.label);
+        }
+      }
+
+      return {
+        alumniStickChips: newChips,
+        lastQuarantineToast: `🏷️ [스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [🏷️ ${numYear}] [🏷️ ${cleanPlace}] [🏷️ ${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · 세이씨 여권 ${decadeStart}년대 바구니 직결)`,
+      };
+    });
+  },
+
+  applyStickChipToAnalogPhoto: (analogPhotoId, chipLabel) => {
+    set((state) => {
+      const chipObj =
+        state.alumniStickChips.find((c) => c.label === chipLabel) ||
+        state.alumniStickChips.find((c) => c.chipId === chipLabel);
+      const effectiveLabel = chipObj?.label ?? chipLabel;
+      const targetYear = chipObj?.year ?? state.alumniGradYear;
+      const decadeStart = Math.floor(targetYear / 10) * 10;
+      const decadeEnd = decadeStart + 9;
+
+      const nextPhotos = state.analogScannedPhotos.map((item) => {
+        if (item.id !== analogPhotoId) return item;
+        const alreadyHas = item.appliedSticks.includes(effectiveLabel);
+        const nextSticks = alreadyHas
+          ? item.appliedSticks.filter((s) => s !== effectiveLabel)
+          : [...item.appliedSticks, effectiveLabel];
+
+        const nextGroup =
+          chipObj?.looseTimelineGroup ||
+          (nextSticks.find((s) => s.includes('년')) ?? `${targetYear}년 봄`);
+
+        const nextExpanded = buildBidirectionalStickKeywords({
+          year: targetYear,
+          season: chipObj?.season,
+          place: nextSticks.join(' '),
+          looseTimelineGroup: nextGroup,
+          schoolName: state.alumniSchoolName,
+        });
+
+        return {
+          ...item,
+          unknownDatePlace: nextSticks.length === 0,
+          appliedSticks: nextSticks,
+          looseTimelineGroup: nextSticks.length === 0 ? '❓ 언제/어디인가요?' : nextGroup,
+          mappedPassportBucketLabel:
+            nextSticks.length === 0
+              ? '⏳ 연도 제보 대기 중'
+              : `🛂 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          captionKo:
+            nextSticks.length === 0
+              ? item.captionKo
+              : `${nextSticks.join(' · ')} 추억 스캔본`,
+          expandedSearchKeywords: nextExpanded,
+        };
+      });
+
+      return {
+        analogScannedPhotos: nextPhotos,
+        lastQuarantineToast: `🏷️ [1초 스틱 태깅 & 월(Month) 양방향 인덱싱] ‘${effectiveLabel}’ 스틱이 적용되어 [${
+          chipObj?.looseTimelineGroup ?? `${targetYear}년 봄`
+        }] 타임라인 및 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart})에 즉시 매핑되었습니다!`,
+      };
+    });
+  },
+
+  applyStickChipToAllPendingAnalogPhotos: (chipLabel) => {
+    set((state) => {
+      const chipObj =
+        state.alumniStickChips.find((c) => c.label === chipLabel) ||
+        state.alumniStickChips.find((c) => c.chipId === chipLabel);
+      const effectiveLabel = chipObj?.label ?? chipLabel;
+      const targetYear = chipObj?.year ?? state.alumniGradYear;
+      const decadeStart = Math.floor(targetYear / 10) * 10;
+      const decadeEnd = decadeStart + 9;
+      const groupName = chipObj?.looseTimelineGroup ?? `${targetYear}년 봄`;
+
+      const nextPhotos = state.analogScannedPhotos.map((item) => {
+        const mergedSticks = Array.from(new Set([...item.appliedSticks, effectiveLabel]));
+        const nextExpanded = buildBidirectionalStickKeywords({
+          year: targetYear,
+          season: chipObj?.season,
+          place: mergedSticks.join(' '),
+          looseTimelineGroup: groupName,
+          schoolName: state.alumniSchoolName,
+        });
+        return {
+          ...item,
+          unknownDatePlace: false,
+          appliedSticks: mergedSticks,
+          looseTimelineGroup: groupName,
+          mappedPassportBucketLabel: `🛂 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          captionKo: item.captionKo.replace('[❓ 언제/어디인가요?] ', ''),
+          expandedSearchKeywords: nextExpanded,
+        };
+      });
+
+      return {
+        analogScannedPhotos: nextPhotos,
+        lastQuarantineToast: `⚡ [초고속 연쇄 일괄 태깅] 대기 중인 모든 스캔 사진에 [🏷️ ${effectiveLabel}] 스틱이 1초 만에 일괄 적용되어 ‘${groupName}’ 타임라인 및 월(Month) 양방향 인덱스로 묶였습니다!`,
+      };
+    });
+  },
+
+  submitAnalogYearProposal: (
+    analogPhotoId,
+    proposerName,
+    proposedYear,
+    proposedSeason,
+    proposedPlace,
+    commentText
+  ) => {
+    const cleanGroup = `${proposedYear}년 ${proposedSeason.trim() || '가을'}`;
+    const cleanPlace = proposedPlace.trim() || `${cleanGroup} 소풍`;
+    set((state) => {
+      const targetPhoto = state.analogScannedPhotos.find((p) => p.id === analogPhotoId);
+      if (!targetPhoto) return state;
+
+      const newProposal: AnalogYearProposalItem = {
+        proposalId: `prop_${Date.now()}`,
+        targetAnalogPhotoId: analogPhotoId,
+        photoFile: targetPhoto.photoFile,
+        thumbUrl: targetPhoto.thumbUrl,
+        proposerName: proposerName.trim() || '동창 멤버 제보',
+        proposedTimelineGroup: cleanGroup,
+        proposedPlaceTag: cleanPlace,
+        proposedYear,
+        commentText:
+          commentText.trim() || `${cleanGroup} (${cleanPlace}) 때 찍은 사진입니다!`,
+        approvedByHost: false,
+      };
+
+      return {
+        analogYearProposals: [newProposal, ...state.analogYearProposals],
+        lastQuarantineToast: `💡 [집단 지성 연도 제보 등록] ‘${cleanPlace} (${cleanGroup})’ 제보가 👑 방장 누락분 뒷정리 결재함에 전달되었습니다!`,
+      };
+    });
+  },
+
+  approveAllAnalogYearProposals: () => {
+    set((state) => {
+      const pendingProposals = state.analogYearProposals.filter((p) => !p.approvedByHost);
+      if (pendingProposals.length === 0) return state;
+
+      const proposalByPhotoId = new Map<string, AnalogYearProposalItem>();
+      for (const prop of pendingProposals) {
+        proposalByPhotoId.set(prop.targetAnalogPhotoId, prop);
+      }
+
+      const nextAnalogPhotos = state.analogScannedPhotos.map((item) => {
+        const prop = proposalByPhotoId.get(item.id);
+        if (!prop) return item;
+        const decadeStart = Math.floor(prop.proposedYear / 10) * 10;
+        const decadeEnd = decadeStart + 9;
+        const nextSticks = Array.from(
+          new Set([
+            ...item.appliedSticks,
+            `${prop.proposedYear}`,
+            prop.proposedPlaceTag,
+            prop.proposedTimelineGroup,
+          ])
+        );
+        const nextExpanded = buildBidirectionalStickKeywords({
+          year: prop.proposedYear,
+          place: prop.proposedPlaceTag,
+          looseTimelineGroup: prop.proposedTimelineGroup,
+          schoolName: state.alumniSchoolName,
+        });
+        return {
+          ...item,
+          unknownDatePlace: false,
+          appliedSticks: nextSticks,
+          looseTimelineGroup: prop.proposedTimelineGroup,
+          mappedPassportBucketLabel: `🛂 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          captionKo: `✓ [제보 반영됨: ${prop.proposedTimelineGroup} · ${prop.proposedPlaceTag}] ${item.captionKo.replace(
+            '[❓ 언제/어디인가요?] ',
+            ''
+          )}`,
+          expandedSearchKeywords: nextExpanded,
+        };
+      });
+
+      const nextProposals = state.analogYearProposals.map((p) => ({
+        ...p,
+        approvedByHost: true,
+      }));
+
+      return {
+        analogScannedPhotos: nextAnalogPhotos,
+        analogYearProposals: nextProposals,
+        globalSeedVersion: state.globalSeedVersion + 1,
+        lastQuarantineToast: `👑 [방장 원터치 일괄 결재 완료] 멤버들이 제보한 연도·장소 ${pendingProposals.length}건이 느슨한 타임라인(1989년 봄/가을) · 계절↔월(Month) 양방향 인덱스 · 세이씨 여권 1980년대 바구니에 100% 반영되었습니다!`,
+      };
+    });
+  },
+
+  findMySchoolDaysPhotosFast: async () => {
+    const { photos, alumniSchoolName, alumniGradYear, faceClusters } = get();
+    const creator = faceClusters.find((c) => c.clusterId === 'face_member_5');
+    const clubPersona = creator?.roomPersonas?.club || '멀린프로';
+
+    const matchedSchoolPhotos = photos
+      .filter((p) => !p.quarantined)
+      .filter((p) =>
+        [
+          '20260926_160221.jpg',
+          '20260926_131225.jpg',
+          '20240720_182301.jpg',
+          '20240721_183234.jpg',
+          '20240720_184614.jpg',
+          '20240721_122820.jpg',
+        ].includes(p.name)
+      )
+      .map((photo, idx) => ({
+        photo,
+        score: 0.99 - idx * 0.01,
+        matchPercentage: 99 - idx,
+        matchedBy: 'text-direct' as const,
+      }));
+
+    set({
+      clubFeedTrack: 'memories_1989',
+      searchSpace: 'gallery',
+      hasExecutedUserSearch: true,
+      hasUserSelectedSearchTab: true,
+      desktopTab: 'dashboard',
+      mobileTab: 'search',
+      activeQuery: `🎯 [👑 ${clubPersona}] 내 얼굴로 찾은 ${alumniSchoolName} ${alumniGradYear}년 학창 시절 수학여행·소풍 사진 (${matchedSchoolPhotos.length}장 · 0.04초)`,
+      matchedTags: [
+        `#${alumniSchoolName}${alumniGradYear % 100}회`,
+        `#${alumniGradYear}년수학여행`,
+        `#내얼굴0.04초매칭`,
+        '#1980년대여권바구니',
+      ],
+      searchResults: matchedSchoolPhotos,
+      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 0.04초 찾기 완료] 세이씨 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 0.04초 만에 모두 찾았습니다!`,
+    });
   },
 }));

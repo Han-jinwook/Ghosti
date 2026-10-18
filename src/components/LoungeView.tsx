@@ -62,6 +62,472 @@ const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
 export const LoungeModeSwitcherBar: React.FC = () => null;
 
 /**
+ * ⛳ 클럽 라운지 (4050 동창회 특화 UX)
+ * 1) 생성형 맞춤형 간판 'Text-to-Banner' (복고풍 칠판 / 노을 진 운동장 그래픽 + '성동고 89회 동창회' + 초대장 카피 버튼)
+ * 2) 첫 화면 검색 전면 배치 ([🎯 내 얼굴로 학창 시절 사진 0.04초 찾기]) & '추억 vs 근황' 투트랙 탭 ([🎞️ 응답하라 1989 (추억)] 기본 고정 / [🍻 최근 우리들 (근황)]) + 스마트 알림 클린존 배지
+ */
+const AlumniRetroBannerAndTwoTrackBar: React.FC<{
+  onNavigateToFeed?: () => void;
+  onOpenWaitingRoom?: () => void;
+}> = ({ onNavigateToFeed, onOpenWaitingRoom }) => {
+  const {
+    alumniSchoolName,
+    alumniGradYear,
+    alumniGradCohortNumber,
+    alumniBannerTheme,
+    setAlumniBannerInfo,
+    clubFeedTrack,
+    setClubFeedTrack,
+    findMySchoolDaysPhotosFast,
+    runTextQuery,
+    analogScannedPhotos,
+    analogYearProposals,
+    submitAnalogYearProposal,
+    approveAllAnalogYearProposals,
+  } = useSaySeeStore();
+
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [editingBannerKeyword, setEditingBannerKeyword] = useState(false);
+  const [keywordDraft, setKeywordDraft] = useState(`${alumniSchoolName} ${alumniGradYear}`);
+  const [fastSearchTriggered, setFastSearchTriggered] = useState(false);
+  const [activeProposalPhotoId, setActiveProposalPhotoId] = useState<string | null>(null);
+  const [proposalTextDraft, setProposalTextDraft] = useState('1989년 가을 소풍');
+  const [proposalAuthorDraft, setProposalAuthorDraft] = useState('박회장');
+
+  const cohortShort = String(alumniGradCohortNumber).padStart(2, '0');
+  const bannerTitle = `${alumniSchoolName} ${cohortShort}회 동창회`;
+  const inviteHookCopy = `네가 몰랐던 ${cohortShort}년 수학여행 네 사진 다 찾았다`;
+
+  const pendingProposals = analogYearProposals.filter((p) => !p.approvedByHost);
+
+  const handleCopyInviteHook = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(inviteHookCopy);
+      }
+    } catch {
+      // ignore clipboard fallback
+    }
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2600);
+  };
+
+  const handleApplyBannerKeyword = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = keywordDraft.trim();
+    if (!trimmed) return;
+    const yearMatch = trimmed.match(/(19\d{2}|20\d{2}|\d{2})/);
+    const yearNum = yearMatch
+      ? Number(yearMatch[1].length === 2 ? `19${yearMatch[1]}` : yearMatch[1])
+      : alumniGradYear;
+    const schoolPart = trimmed.replace(/(19\d{2}|20\d{2}|\d{2})년?|\s+/g, '').trim() || alumniSchoolName;
+    setAlumniBannerInfo(schoolPart, yearNum);
+    setEditingBannerKeyword(false);
+  };
+
+  const handleSubmitQuickProposal = (photoId: string, rawText: string) => {
+    const yearMatch = rawText.match(/(19\d{2}|20\d{2}|\d{2})/);
+    const parsedYear = yearMatch
+      ? Number(yearMatch[1].length === 2 ? `19${yearMatch[1]}` : yearMatch[1])
+      : alumniGradYear;
+    const seasonMatch = rawText.match(/(봄|여름|가을|겨울)/);
+    const parsedSeason = seasonMatch ? seasonMatch[1] : '가을';
+    submitAnalogYearProposal(
+      photoId,
+      proposalAuthorDraft,
+      parsedYear,
+      parsedSeason,
+      rawText,
+      `${rawText} 때 찍은 사진입니다!`
+    );
+  };
+
+  const isChalkboard = alumniBannerTheme === 'chalkboard';
+
+  // 느슨한 타임라인 그룹별 아날로그 스캔 사진 묶기
+  const looseTimelineGroups = analogScannedPhotos.reduce<Record<string, typeof analogScannedPhotos>>(
+    (acc, item) => {
+      const key = item.unknownDatePlace ? '❓ 언제/어디인가요? (제보 대기)' : item.looseTimelineGroup;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
+      return acc;
+    },
+    {}
+  );
+
+  const sampleBidirectionalQueries = [
+    `${cohortShort}년 2월 ${alumniSchoolName.replace(/고$/, '')}`,
+    `${cohortShort}년 5월`,
+    `${cohortShort}년 10월`,
+  ];
+
+  return (
+    <div className="flex flex-col gap-3.5">
+      {/* 1. 생성형 맞춤형 간판 'Text-to-Banner' 최상단 와이드 장착 */}
+      <div
+        className={`relative rounded-2xl overflow-hidden border p-5 md:p-6 transition-all shadow-lg ${
+          isChalkboard
+            ? 'bg-gradient-to-r from-[#132A1E] via-[#1B3B2B] to-[#12261C] border-[#5C8D73]/50 shadow-[inset_0_0_40px_rgba(0,0,0,0.55)]'
+            : 'bg-gradient-to-r from-[#3B1D1A] via-[#6E2E1E] to-[#2B1829] border-amber-400/40 shadow-[inset_0_0_40px_rgba(0,0,0,0.45)]'
+        }`}
+      >
+        {/* 8090 레트로 그래픽 장식 레이어 (칠판 분필선 / 노을 운동장 실루엣) */}
+        <div className="pointer-events-none select-none absolute inset-0 opacity-20">
+          {isChalkboard ? (
+            <div className="w-full h-full border-[6px] border-amber-900/60 rounded-2xl flex items-end justify-between px-6 pb-2 text-[11px] font-mono text-emerald-100">
+              <span>▮▮ 백묵 &amp; 칠판지우개 · 1980s CLASSROOM</span>
+              <span>급훈: 성실 · 협동 · 우정</span>
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-end justify-between px-6 pb-2 text-[11px] font-mono text-amber-200">
+              <span>🌅 1980s SUNSET SCHOOLYARD · 노을 진 운동장 축구 골대</span>
+              <span>응답하라 {alumniGradYear}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          {/* 좌측: 레트로 감성 태그 & 배경 테마 스위치 + 키워드 자동 감지 편집 */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold shadow-sm">
+              🎨 Text-to-Banner 8090 자동 간판
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setAlumniBannerInfo(
+                  alumniSchoolName,
+                  alumniGradYear,
+                  isChalkboard ? 'sunset_field' : 'chalkboard'
+                )
+              }
+              className="px-2.5 py-1 rounded-md bg-black/40 hover:bg-black/60 border border-white/20 text-zinc-100 font-label-sm text-[11px] font-bold"
+            >
+              {isChalkboard ? '🏫 복고풍 칠판 그래픽 (클릭 시 🌅 노을 운동장)' : '🌅 노을 진 운동장 그래픽 (클릭 시 🏫 복고풍 칠판)'}
+            </button>
+
+            {editingBannerKeyword ? (
+              <form onSubmit={handleApplyBannerKeyword} className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={keywordDraft}
+                  onChange={(e) => setKeywordDraft(e.target.value)}
+                  placeholder="예: 성동고 1989"
+                  className="px-2.5 py-1 rounded-md bg-zinc-950/90 border border-amber-300/60 text-white text-[11.5px] font-bold w-36 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="px-2.5 py-1 rounded-md bg-primary-container text-zinc-950 text-[11px] font-extrabold"
+                >
+                  적용
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setKeywordDraft(`${alumniSchoolName} ${alumniGradYear}`);
+                  setEditingBannerKeyword(true);
+                }}
+                className="px-2.5 py-1 rounded-md bg-black/35 hover:bg-black/55 border border-white/15 text-amber-200 font-label-mono text-[11px]"
+              >
+                ✏️ 키워드 감지: &ldquo;{alumniSchoolName} {alumniGradYear}&rdquo; 변경
+              </button>
+            )}
+          </div>
+
+          {/* 중앙: 굵고 세련된 8090 레트로 타이포그래피 간판 */}
+          <div className="flex flex-col items-start lg:items-center text-left lg:text-center my-1 lg:my-0">
+            <span className="font-label-mono text-[11px] tracking-widest uppercase text-amber-200/90 font-bold">
+              SINCE {alumniGradYear} · OFFICIAL ALUMNI LOUNGE
+            </span>
+            <h2 className="font-headline-md text-[26px] md:text-[32px] text-white font-black tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]">
+              {bannerTitle}
+            </h2>
+          </div>
+
+          {/* 우측: 바이럴 초대 훅(Hook) 복사 버튼 */}
+          <div className="flex flex-col items-stretch sm:items-end gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => void handleCopyInviteHook()}
+              className={`px-4 py-2.5 rounded-xl font-label-sm text-[12px] font-extrabold transition-all shadow-md flex items-center gap-2 ${
+                inviteCopied
+                  ? 'bg-emerald-400 text-zinc-950 shadow-[0_0_20px_rgba(52,211,153,0.4)]'
+                  : 'bg-amber-300 hover:bg-amber-200 text-zinc-950 shadow-[0_0_20px_rgba(252,211,77,0.3)]'
+              }`}
+            >
+              <span>
+                {inviteCopied
+                  ? `✓ 카톡 초대장 카피 복사됨! ("${inviteHookCopy}")`
+                  : `💌 초대장 카피: "${inviteHookCopy}"`}
+              </span>
+            </button>
+            <span className="font-body-sm text-[10.5px] text-zinc-200/80">
+              총무가 카톡방에 붙여넣기만 하면 유령 동창들도 100% 클릭하는 바이럴 훅
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. 첫 화면 검색 전면 배치 & '추억 vs 근황' 투트랙(Two-Track) 탭 이원화 */}
+      <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* 전면 원터치 타겟팅 버튼 */}
+          <button
+            type="button"
+            onClick={() => {
+              void findMySchoolDaysPhotosFast();
+              setFastSearchTriggered(true);
+              if (onNavigateToFeed) onNavigateToFeed();
+            }}
+            className="px-4 py-3 rounded-xl bg-gradient-to-r from-primary-container via-emerald-300 to-amber-300 hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] md:text-[15px] font-black shadow-[0_0_24px_rgba(32,247,219,0.25)] flex items-center justify-center gap-2 shrink-0 transition-all"
+          >
+            <span>🎯 내 얼굴로 학창 시절 사진 0.04초 찾기</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-950/85 text-primary-container font-label-mono text-[10.5px] font-extrabold">
+              1980s 여권 시드 직결
+            </span>
+          </button>
+
+          {/* 투트랙 탭 분리 (기본값 = [🎞️ 응답하라 1989 (추억)] 고정) */}
+          <div className="grid grid-cols-2 gap-2 flex-1 max-w-xl">
+            <button
+              type="button"
+              onClick={() => setClubFeedTrack('memories_1989')}
+              className={`px-4 py-2.5 rounded-xl font-label-md text-[13px] font-extrabold border transition-all flex items-center justify-center gap-2 ${
+                clubFeedTrack === 'memories_1989'
+                  ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.3)]'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>🎞️ 응답하라 {alumniGradYear} (추억)</span>
+              <span className="px-1.5 py-0.5 rounded bg-black/20 text-[10px] font-mono">
+                기본 고정
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setClubFeedTrack('recent_now')}
+              className={`px-4 py-2.5 rounded-xl font-label-md text-[13px] font-extrabold border transition-all flex items-center justify-center gap-2 ${
+                clubFeedTrack === 'recent_now'
+                  ? 'bg-primary-container text-zinc-950 border-primary-container shadow-[0_0_16px_rgba(32,247,219,0.25)]'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>🍻 최근 우리들 (근황)</span>
+              <span className="px-1.5 py-0.5 rounded bg-black/20 text-[10px] font-mono">
+                무소음 트랙
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* 스마트 알림 통제 배지 표시 */}
+        <div className="px-3.5 py-2.5 rounded-xl bg-zinc-950/90 border border-amber-400/30 flex flex-wrap items-center justify-between gap-2">
+          <p className="font-body-sm text-[12px] text-amber-200 font-bold">
+            🔔 알림 클린존: 최근 친목 사진은 전체 알림을 울리지 않으며, &lsquo;과거 추억 사진 업로드&rsquo; 또는 &lsquo;내 얼굴이 발견된 경우&rsquo;에만 알림이 발송됩니다.
+          </p>
+          {fastSearchTriggered && (
+            <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
+              ✓ 0.04초 학창 시절 얼굴 매칭 완료 ({alumniGradYear}년 여권 바구니 연동)
+            </span>
+          )}
+        </div>
+
+        {/* 양방향 시간·고유명사 그물망 원터치 검색 체험 바 */}
+        <div className="px-3.5 py-2 rounded-xl bg-zinc-950/80 border border-primary-container/25 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-zinc-300">
+            <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container font-mono text-[10.5px] font-bold">
+              ⚡ 계절↔월(1~12월) 양방향 그물망
+            </span>
+            <span>
+              <strong>&lsquo;{alumniGradYear}년 봄&rsquo;</strong>으로 대충 넣어도 <strong>&ldquo;{cohortShort}년 2월 {alumniSchoolName.replace(/고$/, '')}&rdquo;</strong>처럼 구체적 월·학교명으로 100% 검색됩니다:
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {sampleBidirectionalQueries.map((sq) => (
+              <button
+                key={sq}
+                type="button"
+                onClick={() => {
+                  if (onNavigateToFeed) onNavigateToFeed();
+                  void runTextQuery(sq);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-bold"
+              >
+                🔍 &ldquo;{sq}&rdquo; 0.04초 검색 →
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 투트랙 선택 상태에 따른 느슨한 타임라인(추억) vs 최근 모임(근황) 미니 보드 */}
+        {clubFeedTrack === 'memories_1989' ? (
+          <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-extrabold">
+                  🎞️ 응답하라 {alumniGradYear} 느슨한 타임라인
+                </span>
+                <span className="font-body-sm text-[12px] text-zinc-300">
+                  정확한 월/일(EXIF)이 없는 옛날 종이 스캔 사진도 <strong>&lsquo;{alumniGradYear}년 봄&rsquo;</strong>, <strong>&lsquo;{alumniGradYear}년 가을&rsquo;</strong>로 자연스럽게 군집화되어 1980년대 여권 바구니(<strong>1989~1980</strong>)에 직결됩니다.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {pendingProposals.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => approveAllAnalogYearProposals()}
+                    className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
+                  >
+                    👑 [✓ 멤버 연도 제보 일괄 승인 ({pendingProposals.length}건)]
+                  </button>
+                )}
+                {onOpenWaitingRoom && (
+                  <button
+                    type="button"
+                    onClick={onOpenWaitingRoom}
+                    className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold"
+                  >
+                    🏷️ 옛날 스캔 사진 스틱(Chip) 연쇄 태깅 열기 →
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              {Object.entries(looseTimelineGroups).map(([groupTitle, groupPhotos]) => (
+                <div
+                  key={groupTitle}
+                  className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col justify-between gap-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-label-sm text-[12px] text-white font-bold">
+                      {groupTitle}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-amber-300 font-label-mono text-[10.5px] font-bold">
+                      {groupPhotos.length}장
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    {groupPhotos.map((ap) => (
+                      <div
+                        key={ap.id}
+                        className="p-2 rounded-lg bg-zinc-950/90 border border-white/5 flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img
+                            src={ap.thumbUrl}
+                            alt={ap.captionKo}
+                            className="w-9 h-9 rounded-lg object-cover shrink-0 border border-white/15"
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[11.5px] text-zinc-100 font-bold truncate">
+                              {ap.captionKo}
+                            </span>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {ap.appliedSticks.map((t) => (
+                                <span
+                                  key={t}
+                                  className="px-1.5 py-0.2 rounded bg-amber-400/15 text-amber-300 font-mono text-[10px]"
+                                >
+                                  🏷️ {t}
+                                </span>
+                              ))}
+                              <span className="text-[10px] text-emerald-300 font-mono truncate">
+                                {ap.mappedPassportBucketLabel}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {ap.unknownDatePlace && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveProposalPhotoId(
+                                activeProposalPhotoId === ap.id ? null : ap.id
+                              )
+                            }
+                            className="px-2 py-1 rounded-md bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/50 text-amber-200 font-label-sm text-[10.5px] font-extrabold shrink-0"
+                          >
+                            ❓ 언제/어디인가요?
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {groupPhotos.some((ap) => ap.id === activeProposalPhotoId) && (
+                    <div className="p-2.5 rounded-lg bg-zinc-950 border border-amber-400/40 flex flex-col gap-2 mt-1">
+                      <span className="text-[11px] text-amber-200 font-bold">
+                        💬 동기들의 집단 지성 연도/장소 댓글 제보 (👑 방장 일괄 승인 연동)
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={proposalAuthorDraft}
+                          onChange={(e) => setProposalAuthorDraft(e.target.value)}
+                          placeholder="제보자"
+                          className="w-20 px-2 py-1 rounded bg-zinc-900 border border-white/15 text-white text-[11px]"
+                        />
+                        <input
+                          type="text"
+                          value={proposalTextDraft}
+                          onChange={(e) => setProposalTextDraft(e.target.value)}
+                          placeholder="예: 1989년 가을 소풍"
+                          className="flex-1 px-2 py-1 rounded bg-zinc-900 border border-white/15 text-white text-[11px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (activeProposalPhotoId) {
+                              handleSubmitQuickProposal(
+                                activeProposalPhotoId,
+                                proposalTextDraft
+                              );
+                              setActiveProposalPhotoId(null);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded bg-primary-container text-zinc-950 text-[11px] font-extrabold shrink-0"
+                        >
+                          제보 등록
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-primary-container/20 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-extrabold">
+                🍻 최근 우리들 (근황 트랙)
+              </span>
+              <span className="font-body-sm text-[12px] text-zinc-300">
+                최근 골프·등산·정기 모임 친목 사진 전용 공간입니다. 소수 인원의 잦은 친목 사진으로 인한 전체 푸시 알림 피로도를 100% 차단합니다.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setClubFeedTrack('memories_1989')}
+              className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-bold"
+            >
+              🎞️ 응답하라 {alumniGradYear} (추억) 탭으로 돌아가기 →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/**
  * 1번 서브메뉴 `[✨ 무료체험]` (정식 구독 활성화 시 메뉴에서 Auto-Hide)
  */
 export const LoungeView: React.FC = () => {
@@ -465,78 +931,89 @@ export const LoungeView: React.FC = () => {
       )}
 
       {activeLoungeType === 'club' && (
-        <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                ⛳ 클럽 라운지 — 모임 단체컷 얼굴 추출 &amp; 참석자 폰 사진 레이더 수합
-              </h2>
-              <p className="font-body-sm text-[12.5px] text-zinc-400 mt-0.5">
-                동호회·모임 총무(마스터) 1인 결제로 회원 전원 무료! 13KB 초경량 캐시 열람과 5MB 무손실 원본 P2P 1초 소환을 지원합니다 (방 1개 기준).
-              </p>
+        <section className="flex flex-col gap-4">
+          {/* 4050 동창회 락인: Text-to-Banner 자동 간판 + 0.04초 학창시절 얼굴 찾기 + 응답하라 투트랙 탭 */}
+          <AlumniRetroBannerAndTwoTrackBar
+            onNavigateToFeed={goToMainFeed}
+            onOpenWaitingRoom={() => {
+              setDesktopTab('trash');
+              setMobileTab('trash');
+            }}
+          />
+
+          <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-headline-sm text-[18px] text-white font-bold">
+                  ⛳ 클럽 라운지 — 4050 동창회 · 골프 · 산악회 총무 1인 결제로 전 회원 무료
+                </h2>
+                <p className="font-body-sm text-[12.5px] text-zinc-400 mt-0.5">
+                  동창회·모임 총무(👑 방장) 1인 결제로 회원 전원 무료! 13KB 초경량 캐시 열람과 5MB 무손실 원본 P2P 1초 소환을 지원합니다 (방 1개 기준).
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            {CLUB_TIERS.map((tier) => {
-              const isSelected = clubSizeTier === tier.id;
-              return (
-                <div
-                  key={tier.id}
-                  onClick={() => setClubSizeTier(tier.id)}
-                  className={`p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between gap-3 border ${
-                    isSelected
-                      ? 'bg-zinc-900 border-primary-container'
-                      : 'bg-zinc-950/80 border-white/10 hover:bg-zinc-900/60'
-                  }`}
-                >
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-headline-sm text-[15px] text-white font-bold">
-                        {tier.title}
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-mono text-[10.5px]">
-                        {tier.capacity}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {CLUB_TIERS.map((tier) => {
+                const isSelected = clubSizeTier === tier.id;
+                return (
+                  <div
+                    key={tier.id}
+                    onClick={() => setClubSizeTier(tier.id)}
+                    className={`p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between gap-3 border ${
+                      isSelected
+                        ? 'bg-zinc-900 border-primary-container'
+                        : 'bg-zinc-950/80 border-white/10 hover:bg-zinc-900/60'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-headline-sm text-[15px] text-white font-bold">
+                          {tier.title}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-mono text-[10.5px]">
+                          {tier.capacity}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="font-headline-md text-[22px] text-white font-black">
+                          {tier.monthly}
+                        </span>
+                        <span className="font-label-mono text-[12px] text-primary-container font-bold">
+                          ({tier.yearly})
+                        </span>
+                      </div>
+                      <span className="font-label-mono text-[11px] text-zinc-400">
+                        ⚡ {tier.gpuDaily}
                       </span>
                     </div>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <span className="font-headline-md text-[22px] text-white font-black">
+
+                    <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          activatePricingPlan(tier.monthlyPlanId);
+                        }}
+                        className="py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
+                      >
                         {tier.monthly}
-                      </span>
-                      <span className="font-label-mono text-[12px] text-primary-container font-bold">
-                        ({tier.yearly})
-                      </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          activatePricingPlan(tier.yearlyPlanId);
+                        }}
+                        className="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold"
+                      >
+                        {tier.yearly}
+                      </button>
                     </div>
-                    <span className="font-label-mono text-[11px] text-zinc-400">
-                      ⚡ {tier.gpuDaily}
-                    </span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-white/10">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        activatePricingPlan(tier.monthlyPlanId);
-                      }}
-                      className="py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
-                    >
-                      {tier.monthly}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        activatePricingPlan(tier.yearlyPlanId);
-                      }}
-                      className="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold"
-                    >
-                      {tier.yearly}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </section>
       )}
@@ -628,7 +1105,7 @@ export const LoungeView: React.FC = () => {
         </section>
       )}
 
-      {/* 3. 패밀리 / 클럽 / 10대 학생 라운지에서만 노출 (👤 개인 라운지에서는 100% 완전 비노출!) */}
+      {/* 3. 패밀리 / 클럽 / 스쿨 라운지에서만 노출 (👤 개인 라운지에서는 100% 완전 비노출!) */}
       {activeLoungeType !== 'personal' && (
         <section className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -708,8 +1185,8 @@ export const LoungeView: React.FC = () => {
  * 2번 서브메뉴(메인 피드 & 검색) 상단에 라운지 성격별로 표시되는 전용 컨트롤 바
  * - 개인 라운지: null (얼굴/여권 바 완전 비노출, 기본 파워 검색 바로 시작)
  * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 방별 별명 알약([👑 멀린], [👑 둘째사위], [은숙] 등) 0.04초 검색 통합 바
- * - 클럽 라운지: 13KB 캐시 초고속 열람 & 클럽 별명 알약([👑 멀린프로] 등) + [📥 5MB 무손실 원본 P2P 1초 소환] 컨트롤 바
- * - 10대 학생 라운지: 낮(학교/학원) 로컬 캐시 0.04초 구간 점프 + 학생방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
+ * - 클럽 라운지: Text-to-Banner 자동 간판('성동고 89회 동창회') + [🎯 내 얼굴로 학창 시절 사진 0.04초 찾기] + [🎞️ 응답하라 1989 (추억) / 🍻 최근 우리들 (근황)] 투트랙 탭 + 13KB 캐시 & 5MB 무손실 원본 P2P 소환 바
+ * - 스쿨 라운지: 낮(학교/학원) 로컬 캐시 0.04초 구간 점프 + 스쿨방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
  */
 export const LoungeFeedContextBanner: React.FC = () => {
   const {
@@ -720,6 +1197,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
     runTextQuery,
     photos,
     setShowFaceRegistryModal,
+    setDesktopTab,
+    setMobileTab,
   } = useSaySeeStore();
 
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
@@ -815,38 +1294,48 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
   if (activeLoungeType === 'club') {
     return (
-      <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-              🛂 세이씨 여권 자동 연동됨
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-mono text-[11.5px] font-bold">
-              ⚡ 13KB 섀도우 캐시 초고속 열람 중 (데이터 소모 99.4% 절감)
-            </span>
+      <div className="flex flex-col gap-3.5">
+        {/* 최상단: 4050 동창회 Text-to-Banner 자동 간판 + 0.04초 학창시절 찾기 + 응답하라 투트랙 탭 */}
+        <AlumniRetroBannerAndTwoTrackBar
+          onOpenWaitingRoom={() => {
+            setDesktopTab('trash');
+            setMobileTab('trash');
+          }}
+        />
+
+        <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+                🛂 세이씨 여권 자동 연동됨
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-mono text-[11.5px] font-bold">
+                ⚡ 13KB 섀도우 캐시 초고속 열람 중 (데이터 소모 99.4% 절감)
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setP2pOriginalSummoned((v) => !v)}
+              className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-extrabold transition-all border ${
+                p2pOriginalSummoned
+                  ? 'bg-primary-container text-zinc-950 border-primary-container'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
+              }`}
+            >
+              {p2pOriginalSummoned
+                ? '✓ 5MB 무손실 원본 P2P 1초 소환 완료 (현재 결과 전체 원본 적용)'
+                : '📥 현재 검색 결과 5MB 무손실 원본 P2P 1초 소환'}
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setP2pOriginalSummoned((v) => !v)}
-            className={`px-3.5 py-1.5 rounded-xl font-label-sm text-[12px] font-extrabold transition-all border ${
-              p2pOriginalSummoned
-                ? 'bg-primary-container text-zinc-950 border-primary-container'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
-            }`}
-          >
-            {p2pOriginalSummoned
-              ? '✓ 5MB 무손실 원본 P2P 1초 소환 완료 (현재 결과 전체 원본 적용)'
-              : '📥 현재 검색 결과 5MB 무손실 원본 P2P 1초 소환'}
-          </button>
+          {renderMemberPersonaPills('모임 별명 0.04초 검색:')}
         </div>
-
-        {renderMemberPersonaPills('모임 별명 0.04초 검색:')}
       </div>
     );
   }
 
-  // student ('🎒 10대 학생 라운지')
+  // student ('🎒 스쿨 라운지')
   return (
     <div className="flex flex-col gap-2.5">
       {!monthlyReportDismissed && (
@@ -888,6 +1377,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
 /**
  * 3번 서브메뉴 `[⏳ AI 인덱싱 대기실]` (패밀리 / 클럽 / 스쿨 라운지 전용)
  * - 수동 검사가 아니라 AI 인덱싱(Gemma 2 768d 벡터 + 13KB 캐시 변환) 시간 벌기용 안심 버퍼 뷰!
+ * - 4050 동창회 아날로그 스캔 사진용 '스틱(Chip) 연쇄 태깅' & '[❓ 언제/어디인가요?] 집단 지성 연도 제보 ➔ 👑 방장 일괄 승인' 탑재
  */
 export const LoungeIndexingWaitingRoom: React.FC = () => {
   const {
@@ -899,7 +1389,6 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     activateGpuHelper24h,
     setDesktopTab,
     setMobileTab,
-    globalSeedVersion,
     swarmFaceCandidates,
     retroScanRunning,
     lastRetroScanReport,
@@ -908,12 +1397,29 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     passAllSwarmCandidatesToHostQueue,
     runGlobalSwarmRetroScanAll,
     setShowFaceRegistryModal,
+    alumniStickChips,
+    analogScannedPhotos,
+    analogYearProposals,
+    createAlumniStickChipsFromInput,
+    applyStickChipToAnalogPhoto,
+    applyStickChipToAllPendingAnalogPhotos,
+    submitAnalogYearProposal,
+    approveAllAnalogYearProposals,
   } = useSaySeeStore();
 
   const [instantFlushed, setInstantFlushed] = useState(false);
   const [pokedStudentHost, setPokedStudentHost] = useState(false);
+  const [stickYearInput, setStickYearInput] = useState('1989');
+  const [stickPlaceInput, setStickPlaceInput] = useState('제주도 수학여행');
+  const [stickSeasonInput, setStickSeasonInput] = useState('봄');
+  const [selectedStickLabel, setSelectedStickLabel] = useState<string>('1989년 봄');
+  const [proposalDraftByPhoto, setProposalDraftByPhoto] = useState<Record<string, string>>({});
+  const [proposalAuthor] = useState('박회장(동기)');
+  const [batchApprovedBanner, setBatchApprovedBanner] = useState<string | null>(null);
+
   const memberActiveHints = swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue);
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
+  const pendingAnalogProposals = analogYearProposals.filter((p) => !p.approvedByHost);
 
   const queuePhotos = photos.filter((p) => !p.quarantined).slice(0, 8);
 
@@ -936,11 +1442,11 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       senderLabels: ['아내(은숙) 아이폰', '남편(진욱) 갤럭시', '우리딸 아이폰', '본가 어머님 폰'],
     },
     club: {
-      badge: '⏳ 클럽 AI 인덱싱 대기실 (모임컷 수합 & 원본 시드 버퍼)',
-      title: '참석자 폰에서 수합된 모임 사진·영상이 마스터 엔진에서 자동 색인·캐싱 중입니다',
+      badge: '⏳ 클럽 AI 인덱싱 대기실 (모임컷 수합 & 옛날 스캔 사진 스틱 태깅 버퍼)',
+      title: '참석자 폰 사진과 EXIF 없는 옛날 앨범 스캔본이 마스터 엔진에서 자동 색인·캐싱 중입니다',
       subtitle:
-        '라운딩·산행·모임 직후 회원들이 대량으로 올린 사진과 동영상을 13KB 초경량 캐시와 5MB 무손실 원본 P2P 시드로 변환하여 전 회원 피드에 동시 배포하기 전 머무는 AI 인덱싱 버퍼입니다.',
-      bufferReason: '동호회 참석자 얼굴 클러스터링 & 13KB 섀도우 캐시 패키징 진행 중',
+        '학창 시절 종이 앨범 스캔본(EXIF 없음)은 [🏷️ 스틱(Chip) 연쇄 태깅]으로 1초 만에 1980년대 여권 바구니(1989~1980)에 꽂아 넣고, 헷갈리는 연도는 동기들의 제보를 받아 👑 방장이 원터치로 일괄 승인합니다.',
+      bufferReason: '동창회·모임 얼굴 클러스터링 & 1980s 아날로그 스캔 사진 타임라인 매핑 진행 중',
       senderLabels: ['김총무 갤럭시 S24', '박회장 아이폰 16 Pro', '이프로 갤럭시', '최회원 아이폰'],
     },
     student: {
@@ -957,6 +1463,46 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
 
   const currentMeta =
     metaByLounge[activeLoungeType === 'personal' ? 'family' : activeLoungeType];
+
+  const handleGenerateSticks = (e: React.FormEvent) => {
+    e.preventDefault();
+    createAlumniStickChipsFromInput(stickYearInput, stickPlaceInput, stickSeasonInput);
+    if (analogScannedPhotos.length > 0) {
+      const firstId = analogScannedPhotos[0].id;
+      const cleanYear = stickYearInput.replace(/[^0-9]/g, '') || '1989';
+      const cleanSeason = stickSeasonInput.trim() || '봄';
+      const comboLabel = `${cleanYear}년 ${cleanSeason}`;
+      setSelectedStickLabel(comboLabel);
+      setTimeout(() => {
+        applyStickChipToAnalogPhoto(firstId, comboLabel);
+      }, 0);
+    }
+  };
+
+  const handleApproveAllAnalog = () => {
+    const count = pendingAnalogProposals.length;
+    approveAllAnalogYearProposals();
+    setBatchApprovedBanner(
+      `✓ 동기들이 제보한 옛날 사진 연도/장소 ${count}건이 👑 방장 일괄 결재로 느슨한 타임라인 · 계절↔월(Month) 양방향 인덱스 · 세이씨 여권 1980년대 바구니(1989~1980)에 즉시 반영되었습니다!`
+    );
+  };
+
+  const handleSubmitWaitingRoomProposal = (photoId: string, rawText: string) => {
+    const yearMatch = rawText.match(/(19\d{2}|20\d{2}|\d{2})/);
+    const parsedYear = yearMatch
+      ? Number(yearMatch[1].length === 2 ? `19${yearMatch[1]}` : yearMatch[1])
+      : 1989;
+    const seasonMatch = rawText.match(/(봄|여름|가을|겨울)/);
+    const parsedSeason = seasonMatch ? seasonMatch[1] : '가을';
+    submitAnalogYearProposal(
+      photoId,
+      proposalAuthor,
+      parsedYear,
+      parsedSeason,
+      rawText,
+      `${rawText} 때 찍은 사진입니다!`
+    );
+  };
 
   return (
     <main className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5">
@@ -1047,7 +1593,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         </div>
 
-        {/* 🎯 ✨ AI 얼굴 자동 매칭 도우미 */}
+        {/* 🎯 ✨ AI 얼굴 자동 매칭 도우미 + 👑 방장 누락분 & 연도 제보 일괄 승인 */}
         <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -1059,7 +1605,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {memberActiveHints.length > 0 && (
                 <button
                   type="button"
@@ -1081,6 +1627,15 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                     : `👑 방장 누락분 뒷정리: ${hostCleanupQueue.length}건 일괄 등록`}
                 </button>
               )}
+              {pendingAnalogProposals.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleApproveAllAnalog}
+                  className="px-3 py-1 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11px] font-extrabold shadow-[0_0_14px_rgba(52,211,153,0.3)]"
+                >
+                  ✓ 멤버 연도 제보 일괄 승인 ({pendingAnalogProposals.length}건)
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowFaceRegistryModal(true)}
@@ -1090,6 +1645,12 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {batchApprovedBanner && (
+            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-200 text-[11.5px] font-bold">
+              {batchApprovedBanner}
+            </div>
+          )}
 
           {/* 방금 올린 사진 속 새로운 연도/각도 힌트 카드 */}
           {memberActiveHints.length > 0 ? (
@@ -1149,6 +1710,258 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               )}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* 3 & 4. EXIF 없는 옛날 스캔 사진용 '스틱(Chip) 연쇄 태깅' & [❓ 언제/어디인가요?] 집단 지성 연도 제보 ➔ 👑 방장 원터치 일괄 결재 */}
+      <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-amber-400/35 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                🎞️ EXIF 없는 옛날 종이 사진 · 스틱(Chip) 1초 연쇄 태깅
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
+                🛂 1989 입력 즉시 ➔ 세이씨 여권 [1989~1980] 10년 바구니 강제 매핑
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container/15 border border-primary-container/40 text-primary-container font-label-mono text-[11px] font-bold">
+                ⚡ 봄↔2·3·4·5월 / 가을↔9·10·11월 / 성동고 고유명사 양방향 자동 인덱싱
+              </span>
+            </div>
+            <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold mt-0.5">
+              첫 번째 스캔 사진에 연도·장소·계절을 한 번만 치면 [🏷️ 스틱]이 생성되어, 두 번째 사진부터는 1초 만에 톡톡 찍어 바릅니다
+            </h2>
+          </div>
+
+          {pendingAnalogProposals.length > 0 && (
+            <button
+              type="button"
+              onClick={handleApproveAllAnalog}
+              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shadow-[0_0_20px_rgba(251,191,36,0.3)] shrink-0"
+            >
+              👑 방장 뒷정리: [✓ 멤버 연도 제보 일괄 승인 ({pendingAnalogProposals.length}건)]
+            </button>
+          )}
+        </div>
+
+        {/* 스틱(Chip) 생성 입력 바 & 생성된 스틱 팔레트 */}
+        <div className="p-4 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3">
+          <form
+            onSubmit={handleGenerateSticks}
+            className="flex flex-wrap items-center justify-between gap-2.5"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-label-sm text-[12px] text-amber-300 font-bold">
+                ① 첫 사진 키워드 입력:
+              </span>
+              <input
+                type="text"
+                value={stickYearInput}
+                onChange={(e) => setStickYearInput(e.target.value)}
+                placeholder="연도 (예: 1989)"
+                className="w-24 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold"
+              />
+              <input
+                type="text"
+                value={stickPlaceInput}
+                onChange={(e) => setStickPlaceInput(e.target.value)}
+                placeholder="장소/행사 (예: 제주도 수학여행)"
+                className="w-40 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold"
+              />
+              <input
+                type="text"
+                value={stickSeasonInput}
+                onChange={(e) => setStickSeasonInput(e.target.value)}
+                placeholder="계절 (예: 봄/가을)"
+                className="w-24 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold"
+              />
+              <button
+                type="submit"
+                className="px-3.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
+              >
+                + 스틱(Chip) 자동 생성
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => applyStickChipToAllPendingAnalogPhotos(selectedStickLabel)}
+              className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
+            >
+              ⚡ 선택된 스틱으로 미분류 스캔 사진 전체 1초 연쇄 태깅
+            </button>
+          </form>
+
+          {/* 자동 생성된 스틱(Chip) 버튼들 */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
+            <span className="font-label-sm text-[11.5px] text-zinc-400 font-bold">
+              ② 생성된 스틱(클릭하여 선택 후 아래 사진에 1초 부착):
+            </span>
+            {alumniStickChips.map((chip) => {
+              const isSelected = selectedStickLabel === chip.label;
+              return (
+                <button
+                  key={chip.chipId}
+                  type="button"
+                  onClick={() => setSelectedStickLabel(chip.label)}
+                  className={`px-3 py-1 rounded-full font-label-sm text-[12px] font-extrabold transition-all border ${
+                    isSelected
+                      ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-amber-200 border-amber-400/35'
+                  }`}
+                >
+                  🏷️ {chip.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 스캔된 옛날 사진 카드 그리드 (1초 스틱 부착 & [❓ 언제/어디인가요?] 댓글 제보) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {analogScannedPhotos.map((ap, index) => {
+            const photoProposals = analogYearProposals.filter(
+              (p) => p.targetAnalogPhotoId === ap.id
+            );
+            const activeStick = alumniStickChips.find((s) => s.label === selectedStickLabel);
+            return (
+              <div
+                key={ap.id}
+                className={`rounded-2xl overflow-hidden bg-zinc-950 border flex flex-col justify-between transition-all ${
+                  ap.unknownDatePlace
+                    ? 'border-amber-400/60 shadow-[0_0_18px_rgba(251,191,36,0.12)]'
+                    : 'border-white/10'
+                }`}
+              >
+                <div>
+                  <div className="relative aspect-[4/3] w-full bg-zinc-900 overflow-hidden">
+                    <img
+                      src={ap.thumbUrl}
+                      alt={ap.captionKo}
+                      className="w-full h-full object-cover sepia-[0.25] contrast-[1.04]"
+                    />
+                    <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1">
+                      <span className="px-2 py-0.5 rounded bg-black/80 border border-white/15 text-zinc-300 font-mono text-[10px]">
+                        {ap.uploaderLabel}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-1">
+                      <span className="px-2 py-0.5 rounded bg-emerald-950/90 border border-emerald-400/50 text-emerald-300 font-mono text-[10px] font-bold truncate">
+                        {ap.mappedPassportBucketLabel}
+                      </span>
+                      {ap.unknownDatePlace ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold animate-pulse shrink-0">
+                          ❓ 언제/어디인가요?
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-zinc-950/90 border border-amber-400/40 text-amber-300 font-label-sm text-[10.5px] font-bold shrink-0">
+                          🗓️ {ap.looseTimelineGroup}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-label-sm text-[12px] text-white font-bold truncate">
+                        #{index + 1}. {ap.captionKo}
+                      </span>
+                    </div>
+
+                    {/* 부착된 스틱 태그 목록 */}
+                    <div className="flex flex-wrap items-center gap-1 min-h-[24px]">
+                      {ap.appliedSticks.length > 0 ? (
+                        ap.appliedSticks.map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-200 font-label-sm text-[10.5px] font-bold"
+                          >
+                            🏷️ {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-amber-300/90 font-bold">
+                          ⚠️ 연도·장소 미분류 — 스틱을 찍거나 동기 제보를 기다립니다
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 양방향 확장 인덱싱 키워드 미리보기 */}
+                    {ap.expandedSearchKeywords && ap.expandedSearchKeywords.length > 0 && (
+                      <div className="px-2 py-1 rounded bg-zinc-900/90 border border-white/5 text-[10px] text-zinc-400 font-mono truncate">
+                        🔍 자동매칭: {ap.expandedSearchKeywords.slice(0, 7).join(' · ')}
+                      </div>
+                    )}
+
+                    {/* 동기들의 연도/장소 제보 내역 */}
+                    {photoProposals.length > 0 && (
+                      <div className="p-2 rounded-lg bg-zinc-900 border border-amber-400/30 flex flex-col gap-1">
+                        {photoProposals.map((prop) => (
+                          <div
+                            key={prop.proposalId}
+                            className="flex items-center justify-between gap-1 text-[11px]"
+                          >
+                            <span className="text-amber-200 font-bold truncate">
+                              💬 {prop.proposerName}: &ldquo;{prop.proposedPlaceTag}&rdquo;
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-mono text-[9.5px] shrink-0 ${
+                                prop.approvedByHost
+                                  ? 'bg-emerald-500/20 text-emerald-300'
+                                  : 'bg-amber-400/20 text-amber-300'
+                              }`}
+                            >
+                              {prop.approvedByHost ? '✓ 방장 승인됨' : '결재 대기'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 하단 액션: 1초 스틱 찍기 & [❓ 언제인가요?] 제보 입력 */}
+                <div className="p-3 pt-0 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyStickChipToAnalogPhoto(ap.id, selectedStickLabel)}
+                    className="w-full py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-300 font-label-sm text-[11.5px] font-extrabold transition-colors"
+                  >
+                    👆 {activeStick ? `[🏷️ ${activeStick.label}] 1초 부착` : '선택한 스틱 1초 부착'}
+                  </button>
+
+                  {ap.unknownDatePlace && (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={proposalDraftByPhoto[ap.id] ?? '1989년 가을 소풍'}
+                        onChange={(e) =>
+                          setProposalDraftByPhoto((prev) => ({
+                            ...prev,
+                            [ap.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="예: 1989년 가을 소풍"
+                        className="flex-1 min-w-0 px-2 py-1 rounded-lg bg-zinc-900 border border-white/15 text-white text-[11px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleSubmitWaitingRoomProposal(
+                            ap.id,
+                            proposalDraftByPhoto[ap.id] ?? '1989년 가을 소풍'
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0"
+                      >
+                        제보
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

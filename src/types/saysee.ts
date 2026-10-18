@@ -253,7 +253,7 @@ export interface UndoQuarantineBatch {
 /** [스펙 3] 클라우드 대체 프라이빗 싱크 2-Track 모드 */
 export type PrivateSyncStrategy = 'mirror' | 'shadow';
 
-/** [4대 라운지 스펙] 라운지 카테고리: 개인 | 패밀리 | 클럽 | 10대 학생 */
+/** [4대 라운지 스펙] 라운지 카테고리: 개인 | 패밀리 | 클럽 | 스쿨 */
 export type LoungeType = 'personal' | 'family' | 'club' | 'student';
 
 /** [패밀리 라운지 양가 통합권] 3개 방 분리 ID */
@@ -261,6 +261,52 @@ export type FamilyRoomId = '우리집' | '본가(친가)' | '처가(친정)';
 
 /** [클럽 라운지 규모] 소형(20명 기준) | 중형(100명 기준) | 대형(인원 제한 없음) */
 export type ClubSizeTier = 'small' | 'medium' | 'large';
+
+/** [4050 동창회 투트랙 탭] 기본값 = 'memories_1989' (🎞️ 응답하라 1989 (추억)) | 'recent_now' (🍻 최근 우리들 (근황)) */
+export type ClubFeedTrackId = 'memories_1989' | 'recent_now';
+
+/** [EXIF 없는 아날로그 스캔 사진용 스틱(Chip) 연쇄 태깅] */
+export interface AlumniStickChip {
+  chipId: string;
+  label: string;
+  year?: number;
+  season?: string;
+  place?: string;
+  looseTimelineGroup: string;
+  /** 계절↔월(Month) 양방향 확장 인덱싱 + 연도 축약어(1989↔89년↔89) + 라운지 고유 명사(성동고·성동) 자동 바인딩 */
+  expandedSearchKeywords?: string[];
+}
+
+/** [아날로그 인화 스캔 사진 아이템 — 느슨한 타임라인 & [❓ 언제/어디인가요?] & 스틱 연쇄 태깅] */
+export interface AnalogScannedPhotoItem {
+  id: string;
+  photoFile: string;
+  thumbUrl: string;
+  uploaderLabel: string;
+  hasExif: boolean;
+  unknownDatePlace: boolean;
+  appliedSticks: string[];
+  looseTimelineGroup: string;
+  mappedPassportBucketLabel: string;
+  detectedMemberNames: string[];
+  captionKo: string;
+  /** 느슨한 타임라인('1989년 봄' 등) 저장 시 자동 바인딩된 양방향 확장 검색 키워드 배열 */
+  expandedSearchKeywords?: string[];
+}
+
+/** [[❓ 언제/어디인가요?] 집단 지성 연도/장소 제보 ➔ 👑 방장 원터치 일괄 결재] */
+export interface AnalogYearProposalItem {
+  proposalId: string;
+  targetAnalogPhotoId: string;
+  photoFile: string;
+  thumbUrl: string;
+  proposerName: string;
+  proposedTimelineGroup: string;
+  proposedPlaceTag: string;
+  proposedYear: number;
+  commentText: string;
+  approvedByHost: boolean;
+}
 
 /** [⚡ 24시간 GPU 클라우드 서버 도우미] 대여 티어 */
 export type GpuHelperTierId =
