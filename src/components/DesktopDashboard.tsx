@@ -169,8 +169,11 @@ export const DesktopDashboard: React.FC = () => {
     isStoreAppMode,
     enableMobileCoinDisplay,
     showCoinBalanceInApp,
+    enablePcGuideShareButton,
     setIsStoreAppMode,
     setEnableMobileCoinDisplay,
+    setEnablePcGuideShareButton,
+    setShowMobileMasterPcIntroModal,
     setShowProModal,
   } = useSaySeeStore();
 
@@ -805,25 +808,25 @@ export const DesktopDashboard: React.FC = () => {
           {/* 라운지별 전용 상단 설정 섹션 (AI 설정 몬스터 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
           <LoungeCustomSettingsHeader />
 
-          {/* 📩 모바일 ➔ PC 마스터 원클릭 주소 전송 패널 (내 이메일 / 카톡으로 PC 시작 주소 보내기) */}
+          {/* 💻 모바일 ➔ PC 전환 시 스토어 규정(Anti-steering)을 100% 준수하는 데스크톱 기기 연동 패널 */}
           <PcMasterQuickSendPanel />
 
-          {/* 🛡️ 스토어 1차 심사 통과용 클린 모드(isStoreAppMode) & 코인 잔액 노출 플래그(enableMobileCoinDisplay) 제어 바 */}
+          {/* 🛡️ 스토어 1차 심사 통과용 클린 모드(isStoreAppMode) · 코인 잔액(enableMobileCoinDisplay) · 원격 공유 토글(enablePcGuideShareButton) · /?master=pc 이중 방어 제어 바 */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-                  스토어 1차 출시 정책 (넷플릭스 방식)
+                  스토어 1차 출시 3중 안전장치 (Anti-steering 완벽 방어)
                 </span>
                 <span className="font-label-mono text-[11px] text-zinc-400">
-                  isStoreAppMode={String(isStoreAppMode)} · showCoinBalanceInApp={String(showCoinBalanceInApp)}
+                  isStoreAppMode={String(isStoreAppMode)} · showCoinBalanceInApp={String(showCoinBalanceInApp)} · enablePcGuideShareButton={String(enablePcGuideShareButton)}
                 </span>
               </div>
               <h3 className="font-headline-sm text-[15.5px] text-white font-bold">
-                모바일 스토어 클린 모드 &amp; 상단 코인 잔액 노출 토글 (AI 설정 몬스터 정식 개통 전 기본 OFF)
+                모바일 스토어 클린 모드 · 코인 비노출 · PC 연동 가이드 원격 토글 &amp; <code>/?master=pc</code> 이중 방어
               </h3>
               <p className="font-body-sm text-[12px] text-zinc-400">
-                1차 스토어 심사 시 요금표·결제창과 상단 코인 잔액을 100% 숨겨 순수 무료 라운지 뷰어로 무마찰 통과하며, 추후 서버 배포(<code>git push</code>)만으로 코인 잔액 UI를 즉시 켤 수 있습니다.
+                ① ‘주소/URL/결제’ 단어 전면 배제(데스크톱 기기 연동 워딩), ② 모바일에서 <code>/?master=pc</code> 접속 시 결제 없는 순수 ‘PC 데스크톱 엔진 기능 소개 화면’만 렌더링, ③ 심사 기간 중 공유 버튼 원격 토글(<code>enablePcGuideShareButton</code>)을 1초 만에 제어합니다.
               </p>
             </div>
 
@@ -837,7 +840,7 @@ export const DesktopDashboard: React.FC = () => {
                     : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/15'
                 }`}
               >
-                {isStoreAppMode ? '📱 현재: 스토어 심사 클린 모드 ON' : '💻 현재: PC 웹 마스터 모드 (클릭 시 스토어 모드 미리보기)'}
+                {isStoreAppMode ? '📱 스토어 심사 클린 모드: ON' : '💻 PC 마스터 모드 (클릭 시 스토어 모드)'}
               </button>
 
               <button
@@ -850,8 +853,30 @@ export const DesktopDashboard: React.FC = () => {
                 }`}
               >
                 {enableMobileCoinDisplay
-                  ? '🪙 코인 잔액 표시: ON (enableMobileCoinDisplay=true)'
-                  : '🔒 코인 잔액 완전 숨김: OFF (1차 출시 기본값)'}
+                  ? '🪙 코인 잔액 표시: ON'
+                  : '🔒 코인 잔액 완전 숨김: OFF (기본값)'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEnablePcGuideShareButton(!enablePcGuideShareButton)}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold border transition-all cursor-pointer ${
+                  enablePcGuideShareButton
+                    ? 'bg-[#FEE500] text-[#191919] border-[#FEE500]'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-white/15'
+                }`}
+              >
+                {enablePcGuideShareButton
+                  ? '💬 카톡·이메일 가이드 버튼: ON'
+                  : '🔒 카톡·이메일 가이드 버튼: OFF (심사 잠금)'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowMobileMasterPcIntroModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
+              >
+                🛡️ /?master=pc 모바일 접속 시 방어 화면 보기
               </button>
             </div>
           </div>

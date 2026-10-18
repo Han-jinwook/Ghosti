@@ -6,6 +6,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { PhotoDetailModal } from './components/PhotoDetailModal';
 import {
   LocalDocPreviewModal,
+  MobileMasterPcIntroModal,
   PricingModal,
   VideoScenePreviewModal,
 } from './components/PricingModal';
@@ -42,8 +43,11 @@ export const App: React.FC = () => {
       {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
       <PhotoDetailModal />
 
-      {/* [스펙 4] 카페 런칭용 심플 과금 퍼널 & 선착순 기간 뻥튀기 모달 */}
+      {/* [스펙 4] 카페 런칭용 심플 과금 퍼널 & 스토어 클린 모드 데스크톱 기기 연동 모달 */}
       <PricingModal />
+
+      {/* [안전장치 2] /?master=pc 모바일 접속 시 결제/요금 안내 없는 순수 'PC 데스크톱 엔진 기능 소개 화면' 이중 방어 모달 */}
+      <MobileMasterPcIntroModal />
 
       {/* [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달 */}
       <LocalDocPreviewModal />

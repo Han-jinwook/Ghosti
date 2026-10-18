@@ -30,9 +30,11 @@ export const FoundingMemberFomoBar: React.FC = () => {
 };
 
 /**
- * 모바일 유저가 PC 마스터 세팅이 필요한 기능을 눌렀을 때,
- * PC에서 일일이 검색하지 않고 클릭 한 번으로 진입할 수 있도록
- * [📩 내 이메일로 PC 마스터 접속 주소 보내기] 및 [💬 카톡으로 PC 버전 주소 보내두기]를 제공하는 공통 패널
+ * [안전장치 1 & 3] 모바일 ➔ PC 전환 시 스토어 규정(Anti-steering)을 100% 준수하는 ‘데스크톱 기기 연동 & 대화면 작업 이어가기’ 패널
+ * - '주소 / URL / 웹사이트 / 결제 / 구매' 단어 완전 배제
+ * - 메인 버튼(카톡 1순위): [💬 카톡(나에게)으로 ‘내 PC 연동 시작 가이드’ 보내두기] (navigator.share / Kakao SDK 무료 연동)
+ * - 보조 버튼(이메일 2순위): [📩 가입 이메일로 PC 연동 안내서 발송]
+ * - 원격 토글(enablePcGuideShareButton)로 심사 기간 중 버튼 노출 여부까지 1초 만에 제어
  */
 export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   const {
@@ -40,6 +42,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
     sendPcMasterUrlToEmail,
     sharePcMasterUrlToKakao,
     lastSentPcLinkChannel,
+    enablePcGuideShareButton,
   } = useSaySeeStore();
 
   return (
@@ -51,47 +54,53 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-            💻 PC 마스터 1초 바로가기
+            💻 데스크톱(PC) 기기 연동 안내
           </span>
           <span className="font-headline-sm text-[15px] md:text-[16.5px] text-white font-extrabold">
-            PC에서 검색할 필요 없이, 내 이메일·카톡으로 시작 주소를 보내두세요!
+            💻 대용량 미디어 정리 및 마스터 설정은 데스크톱(PC) 환경에서 작동합니다
           </span>
         </div>
         <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px]">
-          🛂 여권 이메일: <strong className="text-primary-container">{merlinAuth.email}</strong>
+          🛂 연동 계정: <strong className="text-primary-container">{merlinAuth.email}</strong>
         </span>
       </div>
 
       <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-        아래 버튼을 누르면 로그인된 세이씨 여권 이메일(또는 카카오톡)로{' '}
-        <strong className="text-white">세이씨 PC 마스터({merlinAuth.pcMasterUrl})</strong> 및{' '}
-        <strong className="text-primary-container">멀린 패밀리 허브({merlinAuth.hubUrl})</strong> 접속 주소가 즉시 전송됩니다. PC 앞에 앉아 링크만 클릭하면 바로 마스터 환경으로 연결됩니다.
+        수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 PC 엔진 연결이 필요합니다. 나중에 PC에서 바로 이어서 작업하실 수 있도록 연동 가이드를 보내드릴까요?
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
-        <button
-          type="button"
-          onClick={() => void sendPcMasterUrlToEmail()}
-          className="px-4 py-3 rounded-xl bg-primary-container hover:bg-primary-container/90 text-zinc-950 font-label-md text-[13px] font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-[0.98]"
-        >
-          <span>📩 내 이메일로 PC 마스터 접속 주소 보내기</span>
-        </button>
+      {enablePcGuideShareButton ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+          {/* 메인 버튼 (카톡 1순위): 스마트폰 기본 공유창(navigator.share) / 카카오 무료 SDK로 나에게 0.1초 전송 */}
+          <button
+            type="button"
+            onClick={() => void sharePcMasterUrlToKakao()}
+            className="px-4 py-3 rounded-xl bg-[#FEE500] hover:bg-[#FDD800] text-[#191919] font-label-md text-[13px] font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-[0.98]"
+          >
+            <span>💬 카톡(나에게)으로 ‘내 PC 연동 시작 가이드’ 보내두기</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => void sharePcMasterUrlToKakao()}
-          className="px-4 py-3 rounded-xl bg-[#FEE500] hover:bg-[#FDD800] text-[#191919] font-label-md text-[13px] font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-[0.98]"
-        >
-          <span>💬 카톡으로 PC 버전 주소 보내두기</span>
-        </button>
-      </div>
+          {/* 보조 버튼 (이메일 2순위): 가입된 세이씨 여권 이메일로 PC 연동 안내서 발송 */}
+          <button
+            type="button"
+            onClick={() => void sendPcMasterUrlToEmail()}
+            className="px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-md text-[13px] font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-[0.98]"
+          >
+            <span>📩 가입 이메일로 PC 연동 안내서 발송</span>
+          </button>
+        </div>
+      ) : (
+        <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 text-zinc-300 font-body-sm text-[12px]">
+          💡 데스크톱(Windows / Mac) 환경에서 세이씨 마스터 엔진을 실행한 뒤 동일한 여권 계정({merlinAuth.email})으로 로그인하시면 즉시 연동됩니다.
+        </div>
+      )}
 
-      {lastSentPcLinkChannel && (
+      {enablePcGuideShareButton && lastSentPcLinkChannel && (
         <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 font-body-sm text-[12px] flex items-center justify-between gap-2">
           <span>
-            {lastSentPcLinkChannel === 'email'
-              ? `✓ [${merlinAuth.email}] 메일로 세이씨 PC 마스터(${merlinAuth.pcMasterUrl}) 및 멀린허브 바로가기 주소가 발송되었습니다!`
-              : `✓ 카카오톡 공유용 PC 마스터 주소(${merlinAuth.pcMasterUrl})가 준비·복사되었습니다! PC 카톡에서 클릭 한 번으로 바로 진입하세요.`}
+            {lastSentPcLinkChannel === 'kakao'
+              ? '✓ 카톡(나에게)으로 ‘내 PC 연동 시작 가이드’가 준비되었습니다! 데스크톱(PC) 카카오톡에서 열어 작업을 바로 이어가세요.'
+              : `✓ 가입 이메일(${merlinAuth.email})로 ‘내 PC 연동 안내서’가 발송되었습니다! 데스크톱(PC)에서 확인해 주세요.`}
           </span>
         </div>
       )}
@@ -100,8 +109,102 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
 };
 
 /**
+ * [안전장치 2] 전송된 링크(/?master=pc)의 ‘모바일 vs PC’ 접속 환경 이중 방어 화면
+ * - 스토어 심사관이 모바일 기기(iOS/Android)에서 공유된 링크(/?master=pc)를 직접 열어보더라도
+ *   가격표나 결제창이 절대 보이지 않고 순수 ‘PC 데스크톱 엔진 기능 소개 화면’만 렌더링됩니다.
+ */
+export const MobileMasterPcIntroModal: React.FC = () => {
+  const { showMobileMasterPcIntroModal, setShowMobileMasterPcIntroModal } = useSaySeeStore();
+
+  if (!showMobileMasterPcIntroModal) return null;
+
+  return (
+    <div
+      onClick={() => setShowMobileMasterPcIntroModal(false)}
+      className="fixed inset-0 z-[108] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl rounded-3xl bg-[#121215] border border-primary-container/40 p-6 md:p-8 shadow-2xl flex flex-col gap-5 my-auto"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="px-3 py-1 rounded-full bg-amber-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold w-fit">
+              💻 이 페이지는 PC 화면 전용 마스터 세팅 페이지입니다
+            </span>
+            <h2 className="font-headline-lg text-[20px] md:text-[22px] text-white font-black tracking-tight mt-1">
+              💻 대용량 미디어 정리 및 마스터 설정은 데스크톱(PC) 환경에서 작동합니다
+            </h2>
+            <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+              현재 모바일 기기(iOS/Android)로 접속하셨습니다. 수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 볼트 관리는 Windows / Mac 데스크톱 환경에서 연결됩니다.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowMobileMasterPcIntroModal(false)}
+            className="w-9 h-9 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 flex items-center justify-center text-zinc-200 shrink-0 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        {/* 결제/요금 안내가 전혀 없는 순수 'PC 데스크톱 엔진 기능 소개 화면' 3대 카드 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-1.5">
+            <span className="font-label-sm text-[11px] text-primary-container font-extrabold">
+              엔진 아키텍처 01
+            </span>
+            <h3 className="font-headline-sm text-[14.5px] text-white font-bold">
+              🧠 데스크톱 로컬 AI 고속 인덱싱
+            </h3>
+            <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+              내 PC 그래픽카드(GPU)와 로컬 비전 엔진(Gemma 2 768차원)을 활용해 수만 장의 원본 사진·영상을 외부 클라우드 업로드 없이 1초 검색 인덱스로 변환합니다.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-1.5">
+            <span className="font-label-sm text-[11px] text-primary-container font-extrabold">
+              엔진 아키텍처 02
+            </span>
+            <h3 className="font-headline-sm text-[14.5px] text-white font-bold">
+              👻 13KB 초경량 섀도우 동기화
+            </h3>
+            <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+              무거운 원본 파일은 데스크톱 마스터 볼트에 안전하게 보관하고, 스마트폰에는 장당 13KB 초경량 썸네일+벡터 캐시만 동기화해 폰 저장공간을 99.4% 절약합니다.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-1.5">
+            <span className="font-label-sm text-[11px] text-primary-container font-extrabold">
+              엔진 아키텍처 03
+            </span>
+            <h3 className="font-headline-sm text-[14.5px] text-white font-bold">
+              🔒 프라이빗 라운지 기기 연결
+            </h3>
+            <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+              데스크톱(Windows / Mac)에서 카카오톡이나 이메일로 보내두신 시작 가이드를 열면 내 스마트폰 라운지와 1초 만에 연동됩니다.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setShowMobileMasterPcIntroModal(false)}
+            className="px-5 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[13px] font-black cursor-pointer"
+          >
+            📱 모바일 라운지 뷰어로 계속 둘러보기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * [4대 라운지 초심플 기본 요금제 + ⚡ 24시간 GPU 클라우드 서버 도우미] 모달
- * - isStoreAppMode === true 일 때는 요금표를 100% 숨기고 '내 이메일/카톡으로 PC 마스터 접속 주소 보내기' 전용 클린 모달로 작동
+ * - isStoreAppMode === true 일 때는 요금표를 100% 숨기고 '데스크톱 기기 연동 & 대화면 작업 이어가기' 전용 클린 모달로 작동
  */
 export const PricingModal: React.FC = () => {
   const {
@@ -121,7 +224,8 @@ export const PricingModal: React.FC = () => {
   if (!showProModal) return null;
 
   // [스토어 1차 심사용 모바일 클린 모드(isStoreAppMode === true)]:
-  // 인앱결제(IAP) 수수료 및 리젝(Guideline 3.1.1) 원천 방어를 위해 요금표 노출 없이 PC 마스터 주소 전송 모달만 깔끔하게 노출
+  // 인앱결제(IAP) 수수료 및 외부 결제 유도 금지 규정(Anti-steering) 원천 방어를 위해
+  // '주소/URL/결제' 단어를 배제하고 순수 데스크톱 기기 연동 모달만 노출
   if (isStoreAppMode) {
     return (
       <div
@@ -135,13 +239,13 @@ export const PricingModal: React.FC = () => {
           <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
             <div className="flex flex-col gap-1.5">
               <span className="px-3 py-1 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold w-fit">
-                📱 모바일 라운지 뷰어 ➔ 💻 PC 마스터 연동 안내
+                📱 모바일 뷰어 ➔ 💻 데스크톱(PC) 대화면 작업 이어가기
               </span>
-              <h2 className="font-headline-lg text-[20px] md:text-[23px] text-white font-black tracking-tight mt-1">
-                PC 마스터 세팅은 내 PC에서 클릭 한 번으로 이어가세요
+              <h2 className="font-headline-lg text-[19px] md:text-[22px] text-white font-black tracking-tight mt-1">
+                💻 대용량 미디어 정리 및 마스터 설정은 데스크톱(PC) 환경에서 작동합니다
               </h2>
-              <p className="font-body-sm text-[12.5px] text-zinc-400">
-                대용량 원본 사진·영상의 로컬 AI 인덱싱과 마스터 라운지 관리 설정은 PC 웹 환경에서 지원됩니다.
+              <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 PC 엔진 연결이 필요합니다. 나중에 PC에서 바로 이어서 작업하실 수 있도록 연동 가이드를 보내드릴까요?
               </p>
             </div>
 

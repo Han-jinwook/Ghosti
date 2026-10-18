@@ -164,8 +164,11 @@ export const MobileAppView: React.FC = () => {
     isStoreAppMode,
     enableMobileCoinDisplay,
     showCoinBalanceInApp,
+    enablePcGuideShareButton,
     setIsStoreAppMode,
     setEnableMobileCoinDisplay,
+    setEnablePcGuideShareButton,
+    setShowMobileMasterPcIntroModal,
     setShowProModal,
   } = useSaySeeStore();
 
@@ -670,16 +673,16 @@ export const MobileAppView: React.FC = () => {
         <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
           <LoungeCustomSettingsHeader />
 
-          {/* 📩 모바일 ➔ PC 마스터 원클릭 주소 전송 패널 */}
+          {/* 💻 모바일 ➔ PC 전환 시 스토어 규정(Anti-steering)을 100% 준수하는 데스크톱 기기 연동 패널 */}
           <PcMasterQuickSendPanel compact />
 
-          {/* 🛡️ 스토어 1차 심사 통과용 클린 모드(isStoreAppMode) & 코인 잔액 노출 토글 */}
+          {/* 🛡️ 스토어 1차 심사 통과용 3중 안전장치 제어 (isStoreAppMode · enableMobileCoinDisplay · enablePcGuideShareButton · /?master=pc 이중 방어) */}
           <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-2.5">
             <span className="px-2.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-bold w-fit">
-              스토어 1차 출시 클린 모드 · 코인 비노출 제어
+              스토어 1차 출시 3중 안전장치 (Anti-steering 완벽 방어)
             </span>
             <p className="font-body-sm text-[11.5px] text-zinc-400">
-              AI 설정 몬스터 정식 개통 전까지는 요금표와 상단 코인 잔액을 100% 숨겨 순수 무료 라운지 뷰어로 심사를 통과합니다.
+              ‘주소/URL/결제’ 단어를 배제하고 순수 데스크톱 기기 연동 워딩을 사용하며, 코인 잔액·가이드 버튼 노출 및 <code>/?master=pc</code> 모바일 방어 화면을 1초 만에 제어합니다.
             </p>
             <div className="grid grid-cols-1 gap-2">
               <button
@@ -691,7 +694,7 @@ export const MobileAppView: React.FC = () => {
                     : 'bg-zinc-900 text-zinc-200 border-white/15'
                 }`}
               >
-                {isStoreAppMode ? '📱 스토어 심사 클린 모드: ON' : '💻 PC 웹 마스터 모드 (클릭 시 스토어 모드)'}
+                {isStoreAppMode ? '📱 스토어 심사 클린 모드: ON' : '💻 PC 마스터 모드 (클릭 시 스토어 모드)'}
               </button>
               <button
                 type="button"
@@ -705,6 +708,26 @@ export const MobileAppView: React.FC = () => {
                 {enableMobileCoinDisplay
                   ? '🪙 코인 잔액 표시: ON'
                   : '🔒 코인 잔액 완전 숨김: OFF (기본값)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnablePcGuideShareButton(!enablePcGuideShareButton)}
+                className={`py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border ${
+                  enablePcGuideShareButton
+                    ? 'bg-[#FEE500] text-[#191919] border-[#FEE500]'
+                    : 'bg-zinc-900 text-zinc-400 border-white/15'
+                }`}
+              >
+                {enablePcGuideShareButton
+                  ? '💬 카톡·이메일 가이드 버튼: ON'
+                  : '🔒 카톡·이메일 가이드 버튼: OFF (심사 잠금)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMobileMasterPcIntroModal(true)}
+                className="py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border bg-zinc-900 text-primary-container border-primary-container/50"
+              >
+                🛡️ /?master=pc 모바일 접속 시 방어 화면 보기
               </button>
             </div>
           </div>

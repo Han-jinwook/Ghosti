@@ -2093,7 +2093,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-bold"
               >
                 {isStoreAppMode
-                  ? '💻 방장 PC 마스터 접속 주소 내 이메일/카톡으로 받기'
+                  ? '💻 카톡·이메일로 ‘내 PC 연동 시작 가이드’ 보내두기'
                   : '⚡ 방장 PC가 꺼져 있나요? 1일 1,000원 GPU 서버 도우미 즉시 가동'}
               </button>
             )}
@@ -2605,7 +2605,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </h2>
           <p className="font-body-sm text-[12.5px] text-zinc-300">
             {isStoreAppMode
-              ? '모바일 앱에서는 내 PC 마스터와 연결된 사진·문서·영상 13KB 섀도우 캐시를 1초 만에 검색·열람합니다. PC 마스터 세팅이 필요하면 아래 버튼으로 내 이메일이나 카톡에 시작 주소를 보내두세요.'
+              ? '수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 엔진 연결이 필요합니다. 나중에 PC에서 바로 이어서 작업하실 수 있도록 연동 가이드를 보내두세요.'
               : '종합건강검진·대화형 청소는 AI 클린 몬스터(기기 1대당 1,900원)로, 상시 스마트폰↔PC 13KB 섀도우 캐시 자동 동기화 및 1초 검색은 AI 투시검색 몬스터 월 1,900원(연 19,000원 · 초기 100명 한정 평생권)으로 즉시 개통됩니다.'}
           </p>
         </div>
@@ -2615,9 +2615,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowProModal(true)}
-              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold"
+              className="px-4 py-2 rounded-xl bg-[#FEE500] hover:bg-[#FDD800] text-[#191919] font-label-sm text-[12.5px] font-extrabold"
             >
-              📩 내 이메일/카톡으로 PC 마스터 주소 보내기
+              💬 카톡·이메일로 ‘내 PC 연동 시작 가이드’ 보내두기
             </button>
           ) : (
             <>
@@ -2682,7 +2682,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 onClick={() => setShowProModal(true)}
                 className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
               >
-                📩 PC 마스터 주소 보내기
+                💻 내 PC 연동 시작 가이드 보내기
               </button>
             ) : (
               <>
@@ -2773,7 +2773,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             </h2>
             <p className="font-body-sm text-[12.5px] text-zinc-400">
               {isStoreAppMode
-                ? '초대받은 클럽 회원은 모바일 앱에서 100% 무료로 모임 사진을 찾고 감상합니다. 방 개설 및 마스터 서버 연동은 PC 마스터에서 관리합니다.'
+                ? '초대받은 클럽 회원은 모바일 앱에서 100% 무료로 모임 사진을 찾고 감상합니다. 방 개설 및 마스터 엔진 연동은 데스크톱(PC)에서 관리합니다.'
                 : '각 클럽권은 방 1개 기준이며, 소모임/파트별 방 분리를 원할 경우 소형 클럽 등을 별도 추가 구매할 수 있습니다.'}
             </p>
           </div>
@@ -2792,7 +2792,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 onClick={() => setShowProModal(true)}
                 className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
               >
-                📩 PC 마스터 주소 보내기
+                💻 내 PC 연동 시작 가이드 보내기
               </button>
             )}
           </div>
@@ -2898,7 +2898,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               onClick={() => setShowProModal(true)}
               className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
             >
-              📩 PC 마스터 주소 보내기
+              💻 내 PC 연동 시작 가이드 보내기
             </button>
           ) : (
             <button

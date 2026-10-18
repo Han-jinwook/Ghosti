@@ -241,9 +241,15 @@ interface SaySeeStore {
   enableMobileCoinDisplay: boolean;
   /** 앱 내 코인 잔액 표시 여부 (기본값 false: !isStoreAppMode ? enableMobileCoinDisplay : enableMobileCoinDisplay) */
   showCoinBalanceInApp: boolean;
+  /** 스토어 심사 기간에 PC 연동 가이드 공유 버튼 노출 여부를 1초 만에 켜고 끌 수 있는 원격 토글 스위치 (기본값 true) */
+  enablePcGuideShareButton: boolean;
+  /** 전송된 링크(/?master=pc)를 모바일 OS(iOS/Android)에서 열었을 때 결제/요금 안내 없이 순수 'PC 데스크톱 엔진 기능 소개 화면'만 띄우는 이중 방어 모달 상태 */
+  showMobileMasterPcIntroModal: boolean;
   lastSentPcLinkChannel: 'email' | 'kakao' | null;
   setIsStoreAppMode: (isStoreAppMode: boolean) => void;
   setEnableMobileCoinDisplay: (enable: boolean) => void;
+  setEnablePcGuideShareButton: (enable: boolean) => void;
+  setShowMobileMasterPcIntroModal: (show: boolean) => void;
   sendPcMasterUrlToEmail: () => Promise<void>;
   sharePcMasterUrlToKakao: () => Promise<void>;
   setShowProModal: (show: boolean) => void;
@@ -2544,11 +2550,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   dismissQuarantineToast: () => set({ lastQuarantineToast: null }),
 
-  // ─────────────── [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 + 1차 출시용 모바일 클린 모드] ───────────────
+  // ─────────────── [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 + 1차 출시용 모바일 클린 모드 & 이중 방어] ───────────────
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(550, 3230438906),
-  showProModal: false,
+  showProModal:
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('master') === 'pc' &&
+    !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
+    window.innerWidth >= 860,
   freeTrialUsed: false,
   activePricingPlan: 'free_trial',
   subscribedLounges: {
@@ -2569,9 +2579,16 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     (Boolean(
       (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
     ) ||
-      new URLSearchParams(window.location.search).get('storeApp') === '1'),
+      new URLSearchParams(window.location.search).get('storeApp') === '1' ||
+      (new URLSearchParams(window.location.search).get('master') === 'pc' &&
+        (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860))),
   enableMobileCoinDisplay: false,
   showCoinBalanceInApp: false,
+  enablePcGuideShareButton: true,
+  showMobileMasterPcIntroModal:
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('master') === 'pc' &&
+    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860),
   lastSentPcLinkChannel: null,
 
   setIsStoreAppMode: (isStoreAppMode) =>
@@ -2579,8 +2596,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       isStoreAppMode,
       showCoinBalanceInApp: isStoreAppMode ? state.enableMobileCoinDisplay : state.enableMobileCoinDisplay,
       lastQuarantineToast: isStoreAppMode
-        ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: 요금표·코인 잔액을 100% 숨기고 PC 마스터 주소 전송 모드로 전환했습니다.'
-        : '💻 [PC 마스터 웹 모드(isStoreAppMode=false)]로 전환되었습니다.',
+        ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: 요금표·코인 잔액을 100% 숨기고 데스크톱 기기 연동 가이드 모드로 전환했습니다.'
+        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)]로 전환되었습니다.',
     })),
 
   setEnableMobileCoinDisplay: (enableMobileCoinDisplay) =>
@@ -2592,35 +2609,81 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         : '🔒 [코인 잔액 완전 비노출(showCoinBalanceInApp=false)] 기본값 적용 완료.',
     }),
 
+  setEnablePcGuideShareButton: (enablePcGuideShareButton) =>
+    set({
+      enablePcGuideShareButton,
+      lastQuarantineToast: enablePcGuideShareButton
+        ? '💬 [원격 토글 enablePcGuideShareButton=true] 카톡·이메일 PC 연동 가이드 전송 버튼이 활성화되었습니다.'
+        : '🔒 [원격 토글 enablePcGuideShareButton=false] 스토어 심사 보호를 위해 PC 연동 가이드 전송 버튼이 즉시 숨김 처리되었습니다.',
+    }),
+
+  setShowMobileMasterPcIntroModal: (showMobileMasterPcIntroModal) =>
+    set({ showMobileMasterPcIntroModal }),
+
   sendPcMasterUrlToEmail: async () => {
     const { merlinAuth } = get();
     const targetEmail = merlinAuth.email || 'beakes@sundreamer.app';
-    const pcMasterUrl = merlinAuth.pcMasterUrl || 'https://saysee.sundreamer.app';
-    const hubUrl = merlinAuth.hubUrl || 'https://os.sundreamer.app';
     set({
       lastSentPcLinkChannel: 'email',
-      lastQuarantineToast: `📩 [${targetEmail}] 메일로 세이씨 PC 마스터(${pcMasterUrl}) 및 멀린허브(${hubUrl}) 접속 주소를 발송했습니다! PC에서 메일을 열어 클릭 한 번으로 바로 시작하세요.`,
+      lastQuarantineToast: `📩 가입 이메일(${targetEmail})로 ‘내 PC 연동 안내서’가 발송되었습니다! 데스크톱(PC)에서 열어 이어서 작업하세요.`,
     });
   },
 
   sharePcMasterUrlToKakao: async () => {
     const { merlinAuth } = get();
-    const pcMasterUrl = merlinAuth.pcMasterUrl || 'https://saysee.sundreamer.app';
-    const hubUrl = merlinAuth.hubUrl || 'https://os.sundreamer.app';
-    const shareText = `[세이씨 SaySee PC 마스터 바로가기]\n검색할 필요 없이 PC에서 아래 링크를 클릭해 바로 마스터 세팅을 이어가세요!\n• 세이씨 PC 마스터: ${pcMasterUrl}\n• 썬드리머 멀린허브: ${hubUrl}`;
+    const baseMasterDomain = merlinAuth.pcMasterUrl || 'https://saysee.sundreamer.app';
+    const masterPcLink = `${baseMasterDomain.replace(/\/$/, '')}/?master=pc`;
+    const shareTitle = '💻 세이씨 PC 마스터 시작하기 — 클릭 시 바로 이동';
+    const shareText = `[💻 세이씨(SaySee) 내 PC 연동 시작 가이드]\n수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 환경에서 작동합니다.\nPC 카카오톡에서 아래 가이드를 클릭해 대화면 작업을 바로 이어가세요!\n👉 ${masterPcLink}`;
 
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareText);
-      }
-      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-        await navigator
-          .share({
-            title: '세이씨(SaySee) PC 마스터 접속 주소',
-            text: shareText,
-            url: pcMasterUrl,
-          })
-          .catch(() => {});
+      // 방법 2 대응: 카카오 공식 무료 SDK(Kakao.Share.sendDefault)가 로드된 환경이면 우선 호출
+      const winKakao = (
+        window as unknown as {
+          Kakao?: {
+            isInitialized?: () => boolean;
+            Share?: { sendDefault?: (opts: Record<string, unknown>) => void };
+          };
+        }
+      ).Kakao;
+
+      if (winKakao?.isInitialized?.() && typeof winKakao.Share?.sendDefault === 'function') {
+        winKakao.Share.sendDefault({
+          objectType: 'feed',
+          content: {
+            title: shareTitle,
+            description:
+              '수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 환경에서 작동합니다.',
+            imageUrl: `${baseMasterDomain.replace(/\/$/, '')}/favicon.ico`,
+            link: {
+              mobileWebUrl: masterPcLink,
+              webUrl: masterPcLink,
+            },
+          },
+          buttons: [
+            {
+              title: '💻 PC에서 마스터 세팅 열기',
+              link: {
+                mobileWebUrl: masterPcLink,
+                webUrl: masterPcLink,
+              },
+            },
+          ],
+        });
+      } else {
+        // 방법 1 (기본 추천 · 가입/심사 0초 · 평생 0원): 스마트폰 기본 공유 시트(navigator.share) 즉시 호출 + 클립보드 백업
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(shareText);
+        }
+        if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+          await navigator
+            .share({
+              title: shareTitle,
+              text: '수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 환경에서 작동합니다. 나와의 채팅방에 보내두고 PC에서 바로 이어가세요.',
+              url: masterPcLink,
+            })
+            .catch(() => {});
+        }
       }
     } catch {
       /* ignore */
@@ -2628,7 +2691,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     set({
       lastSentPcLinkChannel: 'kakao',
-      lastQuarantineToast: `💬 카카오톡으로 보낼 PC 버전 주소(${pcMasterUrl})가 준비·복사되었습니다! PC 카톡에서 클릭 한 번으로 세이씨 PC 마스터 및 멀린허브에 바로 진입하세요.`,
+      lastQuarantineToast:
+        '💬 카톡(나에게)으로 보낼 ‘내 PC 연동 시작 가이드’가 준비되었습니다! PC 카카오톡에서 클릭해 바로 작업을 이어가세요.',
     });
   },
 
