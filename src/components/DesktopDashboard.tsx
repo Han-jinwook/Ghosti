@@ -191,13 +191,16 @@ export const DesktopDashboard: React.FC = () => {
     toggleThemeMode,
     merlinAuth,
     isStoreAppMode,
+    enableSetupMonster,
     enableMobileCoinDisplay,
     showCoinBalanceInApp,
     enablePcGuideShareButton,
     setIsStoreAppMode,
+    setEnableSetupMonster,
     setEnableMobileCoinDisplay,
     setEnablePcGuideShareButton,
     setShowMobileMasterPcIntroModal,
+    setShowSetupMonsterModal,
     setShowProModal,
   } = useSaySeeStore();
 
@@ -329,21 +332,31 @@ export const DesktopDashboard: React.FC = () => {
             </nav>
           </div>
 
-          {/* 우측 상단: 코인 잔액(1차 출시 시 showCoinBalanceInApp=false 기본 완전 비노출 · enableMobileCoinDisplay 플래그 연동) + 심플 아이콘 테마 토글 */}
+          {/* 우측 상단: 설정 몬스터 바로가기 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 테마 토글 */}
           <div className="flex items-center gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
-            {showCoinBalanceInApp && (!isStoreAppMode || enableMobileCoinDisplay) && (
-              <button
-                type="button"
-                onClick={() => setShowProModal(true)}
-                title="멀린 패밀리 허브 코인 지갑"
-                className={`px-3 py-1.5 rounded-full font-label-mono text-[11.5px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  themeMode === 'light'
-                    ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
-                    : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
-                }`}
-              >
-                <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()} 코인</span>
-              </button>
+            {(!isStoreAppMode || enableSetupMonster) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowSetupMonsterModal(true, 'pc')}
+                  title="🛠️ Z-Eye 설정 몬스터 (AI 스마트폰 & PC 1초 수리기사)"
+                  className="px-3 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <span>🛠️ 설정 몬스터</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowProModal(true)}
+                  title="멀린 패밀리 허브 크레딧 지갑 (수리 승인 시 100 크레딧)"
+                  className={`px-3 py-1.5 rounded-full font-label-mono text-[11.5px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                    themeMode === 'light'
+                      ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                      : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
+                  }`}
+                >
+                  <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()} 크레딧</span>
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -394,6 +407,14 @@ export const DesktopDashboard: React.FC = () => {
         >
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
+              return null;
+            }
+            if (
+              activeLoungeType === 'personal' &&
+              sub.id === 'sync' &&
+              isStoreAppMode &&
+              !enableSetupMonster
+            ) {
               return null;
             }
             const isSubActive = desktopTab === sub.id;
@@ -866,6 +887,20 @@ export const DesktopDashboard: React.FC = () => {
                 }`}
               >
                 {isStoreAppMode ? '📱 스토어 심사 클린 모드: ON' : '💻 PC 마스터 모드 (클릭 시 스토어 모드)'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEnableSetupMonster(!enableSetupMonster)}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold border transition-all cursor-pointer ${
+                  enableSetupMonster
+                    ? 'bg-primary-container text-zinc-950 border-primary-container'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-white/15'
+                }`}
+              >
+                {enableSetupMonster
+                  ? '🛠️ 설정 몬스터 (enableSetupMonster=true)'
+                  : '🔒 설정 몬스터 숨김 (enableSetupMonster=false)'}
               </button>
 
               <button

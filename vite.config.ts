@@ -2097,6 +2097,117 @@ function sayseeLocalBridge(): Plugin {
           res.end(JSON.stringify({ ok: false, error: String(e) }));
         }
       });
+
+      // ─────────────── [🛠️ Z-Eye 설정 몬스터 (Setup Monster) 백엔드 브릿지 & JSON 스냅샷 블랙박스] ───────────────
+      const SETUP_BLACKBOX_FILE = path.resolve(POC_RESULTS_DIR, 'z_eye_setup_blackbox.json');
+
+      function loadSetupBlackbox(): { auditLogs: any[] } {
+        try {
+          if (fs.existsSync(SETUP_BLACKBOX_FILE)) {
+            const parsed = JSON.parse(fs.readFileSync(SETUP_BLACKBOX_FILE, 'utf-8'));
+            if (Array.isArray(parsed?.auditLogs)) return parsed;
+          }
+        } catch {
+          /* ignore */
+        }
+        return { auditLogs: [] };
+      }
+
+      function saveSetupBlackbox(data: { auditLogs: any[] }) {
+        try {
+          if (!fs.existsSync(POC_RESULTS_DIR)) {
+            fs.mkdirSync(POC_RESULTS_DIR, { recursive: true });
+          }
+          fs.writeFileSync(SETUP_BLACKBOX_FILE, JSON.stringify(data, null, 2), 'utf-8');
+        } catch {
+          /* ignore */
+        }
+      }
+
+      server.middlewares.use('/__setup-monster/state', (_req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        const box = loadSetupBlackbox();
+        res.end(
+          JSON.stringify({
+            ok: true,
+            pcDaemonStatus: 'Z-Eye_PC_Setup.exe (v1.4 · PowerShell/Registry/UIAutomation Ready)',
+            mobileApkStatus: 'Z-Eye_Mobile_1MB.apk (v1.4 · UsageStats/WRITE_SETTINGS/Overlay Ready)',
+            auditLogs: box.auditLogs,
+          })
+        );
+      });
+
+      server.middlewares.use('/__setup-monster/execute', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json');
+        try {
+          const body = await readJsonBody(req);
+          const box = loadSetupBlackbox();
+          const nowIso = new Date().toISOString();
+          const auditEntry = {
+            auditId: body.auditId || `audit_${Date.now()}`,
+            createdAt: nowIso,
+            userApprovedAt: body.userApprovedAt || nowIso,
+            platform: body.platform || 'pc',
+            track: body.track || 'TRACK_A_DIRECT_REPAIR',
+            symptomQuery: body.symptomQuery || '',
+            title: body.title || 'Z-Eye 설정 몬스터 자동 처치',
+            agentModuleName: body.agentModuleName || 'Z-Eye_PC_Setup.exe',
+            systemCommandOrApi: body.systemCommandOrApi || '',
+            beforeSnapshot: body.beforeSnapshot || {},
+            afterSnapshot: body.afterSnapshot || {},
+            creditDeducted: typeof body.creditDeducted === 'number' ? body.creditDeducted : 100,
+            domCaptureHash:
+              body.domCaptureHash ||
+              crypto
+                .createHash('sha256')
+                .update(`${nowIso}:${body.symptomQuery || ''}:${JSON.stringify(body.afterSnapshot || {})}`)
+                .digest('hex')
+                .slice(0, 16),
+            conversationSummary: Array.isArray(body.conversationSummary) ? body.conversationSummary : [],
+            undone: false,
+          };
+          box.auditLogs.unshift(auditEntry);
+          saveSetupBlackbox(box);
+          res.end(JSON.stringify({ ok: true, auditEntry, auditLogs: box.auditLogs }));
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
+
+      server.middlewares.use('/__setup-monster/undo', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json');
+        try {
+          const body = await readJsonBody(req);
+          const targetAuditId = body.auditId;
+          const box = loadSetupBlackbox();
+          const nowIso = new Date().toISOString();
+          let restoredEntry: any = null;
+          box.auditLogs = box.auditLogs.map((entry: any) => {
+            if (
+              (targetAuditId && entry.auditId === targetAuditId) ||
+              (!targetAuditId && !restoredEntry && !entry.undone)
+            ) {
+              restoredEntry = { ...entry, undone: true, undoneAt: nowIso };
+              return restoredEntry;
+            }
+            return entry;
+          });
+          saveSetupBlackbox(box);
+          res.end(JSON.stringify({ ok: true, restoredEntry, auditLogs: box.auditLogs }));
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
     },
   };
 }

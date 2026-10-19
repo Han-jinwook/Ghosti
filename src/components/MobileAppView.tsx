@@ -186,13 +186,16 @@ export const MobileAppView: React.FC = () => {
     toggleThemeMode,
     merlinAuth,
     isStoreAppMode,
+    enableSetupMonster,
     enableMobileCoinDisplay,
     showCoinBalanceInApp,
     enablePcGuideShareButton,
     setIsStoreAppMode,
+    setEnableSetupMonster,
     setEnableMobileCoinDisplay,
     setEnablePcGuideShareButton,
     setShowMobileMasterPcIntroModal,
+    setShowSetupMonsterModal,
     setShowProModal,
   } = useSaySeeStore();
 
@@ -284,20 +287,29 @@ export const MobileAppView: React.FC = () => {
               </div>
             </div>
 
-            {/* 우상단: 코인 잔액(1차 출시 시 showCoinBalanceInApp=false 기본 완전 비노출) + 심플 아이콘 테마 토글 */}
+            {/* 우상단: 설정 몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
             <div className="flex items-center gap-1.5 shrink-0" aria-label="화면 테마 영역">
-              {showCoinBalanceInApp && (!isStoreAppMode || enableMobileCoinDisplay) && (
-                <button
-                  type="button"
-                  onClick={() => setShowProModal(true)}
-                  className={`px-2.5 py-1 rounded-full font-label-mono text-[10.5px] font-extrabold border flex items-center gap-1 ${
-                    themeMode === 'light'
-                      ? 'bg-amber-50 border-amber-200 text-amber-800'
-                      : 'bg-zinc-900 border-amber-400/35 text-amber-300'
-                  }`}
-                >
-                  <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()}</span>
-                </button>
+              {(!isStoreAppMode || enableSetupMonster) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowSetupMonsterModal(true, 'mobile')}
+                    className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-extrabold"
+                  >
+                    🛠️ 설정 몬스터
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowProModal(true)}
+                    className={`px-2.5 py-1 rounded-full font-label-mono text-[10.5px] font-extrabold border flex items-center gap-1 ${
+                      themeMode === 'light'
+                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                        : 'bg-zinc-900 border-amber-400/35 text-amber-300'
+                    }`}
+                  >
+                    <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()}</span>
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -370,6 +382,14 @@ export const MobileAppView: React.FC = () => {
         >
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
+              return null;
+            }
+            if (
+              activeLoungeType === 'personal' &&
+              sub.id === 'settings' &&
+              isStoreAppMode &&
+              !enableSetupMonster
+            ) {
               return null;
             }
             const isSubActive = mobileTab === sub.id;
@@ -719,6 +739,19 @@ export const MobileAppView: React.FC = () => {
                 }`}
               >
                 {isStoreAppMode ? '📱 스토어 심사 클린 모드: ON' : '💻 PC 마스터 모드 (클릭 시 스토어 모드)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnableSetupMonster(!enableSetupMonster)}
+                className={`py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border ${
+                  enableSetupMonster
+                    ? 'bg-primary-container text-zinc-950 border-primary-container'
+                    : 'bg-zinc-900 text-zinc-400 border-white/15'
+                }`}
+              >
+                {enableSetupMonster
+                  ? '🛠️ 설정 몬스터 (enableSetupMonster=true)'
+                  : '🔒 설정 몬스터 숨김 (enableSetupMonster=false)'}
               </button>
               <button
                 type="button"

@@ -11,6 +11,10 @@ import {
   VideoScenePreviewModal,
 } from './components/PricingModal';
 import { FaceMemberRegistryModal } from './components/FaceMemberRegistryModal';
+import {
+  SetupFloatingOverlayGuide,
+  SetupMonsterModal,
+} from './components/SetupMonsterModal';
 
 export const App: React.FC = () => {
   const {
@@ -57,6 +61,10 @@ export const App: React.FC = () => {
 
       {/* [라운지 마스터 스펙] 자율 얼굴 추출(Face Crop) & 당해 연도 대표 멤버 등록 & 초대 레이더 시드 모달 */}
       <FaceMemberRegistryModal />
+
+      {/* [🛠️ Z-Eye 설정 몬스터] 독립 모달 & 타사 앱/프로그램 최상단 투명 유리판 손가락 화살표 가이드(👆) */}
+      <SetupMonsterModal />
+      <SetupFloatingOverlayGuide />
 
       {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}
       {lastUndoBatch && (

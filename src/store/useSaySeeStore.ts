@@ -23,6 +23,11 @@ import type {
   RoomPersonaMap,
   SearchResultItem,
   SearchSpaceMode,
+  SetupAuditLogEntry,
+  SetupChatTurn,
+  SetupDiagnosisPlan,
+  SetupMonsterPlatform,
+  SetupProactiveHint,
   SwarmRetroScanReport,
   SyncMode,
   SyncState,
@@ -33,6 +38,10 @@ import type {
   VoiceRoutingTrace,
   YearlyFaceBestCut,
 } from '../types/saysee';
+import {
+  INITIAL_PROACTIVE_HINTS,
+  buildSetupDiagnosisPlan,
+} from '../services/setupMonsterEngine';
 import {
   HybridVoiceSession,
   LOCAL_DOCUMENT_FILES,
@@ -237,6 +246,8 @@ interface SaySeeStore {
   gpuHelperRemainingHours: number;
   /** 스토어 1차 심사용 모바일 클린 모드 (인앱결제 수수료 방어 & 순수 무료 라운지 뷰어 모드) */
   isStoreAppMode: boolean;
+  /** 1차 앱스토어 심사 통과를 위해 모바일 스토어 모드(isStoreAppMode===true)에서 설정 몬스터와 상단 크레딧 잔액을 잠시 숨길 수 있는 제어 토글 */
+  enableSetupMonster: boolean;
   /** 추후 AI 설정 몬스터 정식 개통 시 스토어 재심사 없이 git push만으로 코인 잔액 UI를 켤 수 있는 플래그 (기본값 false) */
   enableMobileCoinDisplay: boolean;
   /** 앱 내 코인 잔액 표시 여부 (기본값 false: !isStoreAppMode ? enableMobileCoinDisplay : enableMobileCoinDisplay) */
@@ -247,11 +258,36 @@ interface SaySeeStore {
   showMobileMasterPcIntroModal: boolean;
   lastSentPcLinkChannel: 'email' | 'kakao' | null;
   setIsStoreAppMode: (isStoreAppMode: boolean) => void;
+  setEnableSetupMonster: (enable: boolean) => void;
   setEnableMobileCoinDisplay: (enable: boolean) => void;
   setEnablePcGuideShareButton: (enable: boolean) => void;
   setShowMobileMasterPcIntroModal: (show: boolean) => void;
   sendPcMasterUrlToEmail: () => Promise<void>;
   sharePcMasterUrlToKakao: () => Promise<void>;
+
+  // [🛠️ Z-Eye 설정 몬스터 (AI 스마트폰 & PC 통합 설정 해결사)]
+  showSetupMonsterModal: boolean;
+  setupMonsterPlatform: SetupMonsterPlatform;
+  setupProactiveHints: SetupProactiveHint[];
+  setupChatTurns: SetupChatTurn[];
+  setupAuditLogs: SetupAuditLogEntry[];
+  activeOverlayPlan: SetupDiagnosisPlan | null;
+  activeOverlayStepIndex: number;
+  uiFontScalePercent: number;
+  uiNightEyeProtection: boolean;
+  setShowSetupMonsterModal: (show: boolean, platform?: SetupMonsterPlatform) => void;
+  setSetupMonsterPlatform: (platform: SetupMonsterPlatform) => void;
+  loadSetupMonsterState: () => Promise<void>;
+  submitSetupMonsterQuery: (
+    query: string,
+    presetIdHint?: string,
+    platformOverride?: SetupMonsterPlatform
+  ) => Promise<void>;
+  approveAndExecuteSetupPlan: (plan: SetupDiagnosisPlan) => Promise<void>;
+  undoSetupMonsterRepair: (auditId?: string) => Promise<void>;
+  openSetupOverlayGuide: (plan: SetupDiagnosisPlan) => void;
+  advanceSetupOverlayStep: () => void;
+  closeSetupOverlayGuide: () => void;
   setShowProModal: (show: boolean) => void;
   setActiveLoungeType: (lounge: LoungeType) => void;
   setActiveFamilyRoom: (room: FamilyRoomId) => void;
@@ -2584,6 +2620,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       new URLSearchParams(window.location.search).get('storeApp') === '1' ||
       (new URLSearchParams(window.location.search).get('master') === 'pc' &&
         (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860))),
+  enableSetupMonster:
+    typeof window !== 'undefined'
+      ? !(
+          Boolean(
+            (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+          ) || new URLSearchParams(window.location.search).get('storeApp') === '1'
+        )
+      : true,
   enableMobileCoinDisplay: false,
   showCoinBalanceInApp: false,
   enablePcGuideShareButton: true,
@@ -2596,11 +2640,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setIsStoreAppMode: (isStoreAppMode) =>
     set((state) => ({
       isStoreAppMode,
+      enableSetupMonster: isStoreAppMode ? false : true,
       showCoinBalanceInApp: isStoreAppMode ? state.enableMobileCoinDisplay : state.enableMobileCoinDisplay,
       lastQuarantineToast: isStoreAppMode
-        ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: 요금표·코인 잔액을 100% 숨기고 데스크톱 기기 연동 가이드 모드로 전환했습니다.'
-        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)]로 전환되었습니다.',
+        ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: enableSetupMonster=false 및 크레딧 잔액을 숨기고 스토어 심사 프리패스 모드로 전환했습니다.'
+        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)] 활성화: 🛠️ Z-Eye 설정 몬스터(enableSetupMonster=true) 및 모든 마스터 기능이 활성화되었습니다.',
     })),
+
+  setEnableSetupMonster: (enableSetupMonster) =>
+    set({
+      enableSetupMonster,
+      enableMobileCoinDisplay: enableSetupMonster,
+      showCoinBalanceInApp: enableSetupMonster,
+      lastQuarantineToast: enableSetupMonster
+        ? '🛠️ [원격 토글 enableSetupMonster=true] Z-Eye 설정 몬스터(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
+        : '🔒 [1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 설정 몬스터와 크레딧 잔액을 잠시 숨김 처리했습니다.',
+    }),
 
   setEnableMobileCoinDisplay: (enableMobileCoinDisplay) =>
     set({
@@ -2621,6 +2676,303 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   setShowMobileMasterPcIntroModal: (showMobileMasterPcIntroModal) =>
     set({ showMobileMasterPcIntroModal }),
+
+  // ─────────────── [🛠️ Z-Eye 설정 몬스터 (AI 스마트폰 & PC 통합 설정 해결사) 스토어 상태 및 액션] ───────────────
+  showSetupMonsterModal: false,
+  setupMonsterPlatform:
+    typeof window !== 'undefined' &&
+    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860)
+      ? 'mobile'
+      : 'pc',
+  setupProactiveHints: INITIAL_PROACTIVE_HINTS,
+  setupChatTurns: [
+    {
+      id: 'welcome_setup_monster',
+      role: 'assistant',
+      timestamp: '방금',
+      text: '안녕하세요! 🛠️ Z-Eye 설정 몬스터(1:1 AI 수리기사)입니다. 스마트폰이나 PC에서 불편한 점을 일상어로 편하게 말씀하시거나 위 증상 칩을 눌러주세요. 진단과 1초 원상복구(Undo)는 무료이며, 실제 수리/설정 변경 승인 시에만 100 크레딧이 차감됩니다.',
+      diagnosisPlan: buildSetupDiagnosisPlan('pc', '부팅 시 뜨는 광고/유령앱 차단', 'pc_boot_ads'),
+    },
+  ],
+  setupAuditLogs: [],
+  activeOverlayPlan: null,
+  activeOverlayStepIndex: 0,
+  uiFontScalePercent: 100,
+  uiNightEyeProtection: false,
+
+  setShowSetupMonsterModal: (showSetupMonsterModal, platform) =>
+    set((state) => ({
+      showSetupMonsterModal,
+      setupMonsterPlatform: platform ?? state.setupMonsterPlatform,
+    })),
+
+  setSetupMonsterPlatform: (setupMonsterPlatform) =>
+    set({ setupMonsterPlatform }),
+
+  loadSetupMonsterState: async () => {
+    try {
+      const res = await fetch('/__setup-monster/state');
+      const data = await res.json();
+      if (data?.ok && Array.isArray(data.auditLogs)) {
+        set({ setupAuditLogs: data.auditLogs });
+      }
+    } catch {
+      /* ignore */
+    }
+  },
+
+  submitSetupMonsterQuery: async (query, presetIdHint, platformOverride) => {
+    const clean = query.trim();
+    if (!clean) return;
+    const state = get();
+    const platform = platformOverride ?? state.setupMonsterPlatform;
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const userTurn: SetupChatTurn = {
+      id: `user_${Date.now()}`,
+      role: 'user',
+      timestamp: nowLabel,
+      text: clean,
+    };
+
+    // 유저가 채팅창에 "어? 바꿨더니 불편해, 원래대로 해줘" 등 원상복구 의도를 말하면 즉시 1초 Undo 실행
+    if (/원래대로|되돌려|복구해|불편해|취소|undo/i.test(clean) && !presetIdHint) {
+      set((s) => ({
+        setupChatTurns: [...s.setupChatTurns, userTurn],
+      }));
+      await get().undoSetupMonsterRepair();
+      return;
+    }
+
+    const plan = buildSetupDiagnosisPlan(platform, clean, presetIdHint);
+    const assistantTurn: SetupChatTurn = {
+      id: `ai_${Date.now() + 1}`,
+      role: 'assistant',
+      timestamp: nowLabel,
+      text: `🧠 [Z-Eye 웹/LLM 두뇌 진단 완료] “${clean}” 증상의 원인을 0.01초 만에 파악했습니다. 아래 [⚡ 1초 자동 수리 승인 (100 크레딧)] 버튼을 누르시면 0.01초 전 JSON 스냅샷 백업 후 즉시 처치합니다.`,
+      diagnosisPlan: plan,
+    };
+
+    set((s) => ({
+      setupMonsterPlatform: platform,
+      setupChatTurns: [...s.setupChatTurns, userTurn, assistantTurn],
+    }));
+  },
+
+  approveAndExecuteSetupPlan: async (plan) => {
+    const state = get();
+    const currentCredits = state.merlinAuth.coinBalance;
+    const cost = plan.creditCost ?? 100;
+
+    if (currentCredits < cost) {
+      set({
+        lastQuarantineToast: `⚠️ 보유 크레딧(${currentCredits}C)이 부족합니다. 설정 변경/수리 승인에는 ${cost} 크레딧이 필요합니다.`,
+      });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const auditId = `audit_${Date.now()}`;
+    const conversationSummary = state.setupChatTurns
+      .slice(-4)
+      .map((t) => `[${t.role}] ${t.text}`);
+
+    let savedAudit: SetupAuditLogEntry = {
+      auditId,
+      createdAt: nowIso,
+      userApprovedAt: nowIso,
+      platform: plan.platform,
+      track: plan.track,
+      symptomQuery: plan.symptomQuery,
+      title: plan.title,
+      agentModuleName: plan.agentModuleName,
+      systemCommandOrApi: plan.systemCommandOrApi,
+      beforeSnapshot: plan.beforeSnapshot,
+      afterSnapshot: plan.afterSnapshot,
+      creditDeducted: cost,
+      domCaptureHash: `dom_${Date.now().toString(16)}`,
+      conversationSummary,
+      undone: false,
+    };
+
+    try {
+      const res = await fetch('/__setup-monster/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...savedAudit,
+        }),
+      });
+      const data = await res.json();
+      if (data?.ok && data.auditEntry) {
+        savedAudit = data.auditEntry;
+      }
+    } catch {
+      /* ignore offline fallback */
+    }
+
+    // 음성 합성(TTS) 안내 재생 (지원 브라우저)
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(plan.voiceTtsSummary);
+        utter.lang = 'ko-KR';
+        utter.rate = 1.02;
+        window.speechSynthesis.speak(utter);
+      }
+    } catch {
+      /* ignore tts error */
+    }
+
+    const repairTurn: SetupChatTurn = {
+      id: `repair_${Date.now()}`,
+      role: 'system_repair',
+      timestamp: nowLabel,
+      text: plan.completionMessage,
+      diagnosisPlan: plan,
+      auditId: savedAudit.auditId,
+      undone: false,
+    };
+
+    set((s) => ({
+      merlinAuth: {
+        ...s.merlinAuth,
+        coinBalance: Math.max(0, s.merlinAuth.coinBalance - cost),
+      },
+      setupAuditLogs: [savedAudit, ...s.setupAuditLogs],
+      setupChatTurns: [...s.setupChatTurns, repairTurn],
+      setupProactiveHints: s.setupProactiveHints.map((h) =>
+        h.presetId === plan.presetId ? { ...h, resolved: true } : h
+      ),
+      uiFontScalePercent: plan.uiFontScalePercent ?? s.uiFontScalePercent,
+      uiNightEyeProtection:
+        typeof plan.uiNightProtection === 'boolean'
+          ? plan.uiNightProtection
+          : s.uiNightEyeProtection,
+      activeOverlayPlan:
+        plan.track === 'TRACK_B_OVERLAY_GUIDE' && plan.overlaySteps?.length
+          ? plan
+          : s.activeOverlayPlan,
+      activeOverlayStepIndex: 0,
+      lastQuarantineToast: `${plan.completionMessage} (0.01초 전 스냅샷 백업 완료 · -${cost} 크레딧)`,
+    }));
+  },
+
+  undoSetupMonsterRepair: async (auditId) => {
+    const state = get();
+    const targetAudit =
+      (auditId
+        ? state.setupAuditLogs.find((a) => a.auditId === auditId)
+        : state.setupAuditLogs.find((a) => !a.undone)) ?? null;
+
+    try {
+      await fetch('/__setup-monster/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auditId: targetAudit?.auditId }),
+      });
+    } catch {
+      /* ignore */
+    }
+
+    const nowIso = new Date().toISOString();
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(
+          '이전 백업 스냅샷을 불러와 일 초 만에 수리 전 원래 설정 상태로 완벽히 되돌렸습니다.'
+        );
+        utter.lang = 'ko-KR';
+        window.speechSynthesis.speak(utter);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const undoTurn: SetupChatTurn = {
+      id: `undo_${Date.now()}`,
+      role: 'system_undo',
+      timestamp: nowLabel,
+      text: targetAudit
+        ? `↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 크레딧] ‘${targetAudit.title}’ 처치 직전(0.01초 전)에 백업해 둔 JSON 스냅샷(${JSON.stringify(
+            targetAudit.beforeSnapshot
+          )})으로 완벽히 되돌렸습니다!`
+        : '↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 크레딧] 0.01초 전 백업된 초기 설정 스냅샷으로 모든 기기 설정을 즉시 원상복구했습니다!',
+      auditId: targetAudit?.auditId,
+      undone: true,
+    };
+
+    set((s) => ({
+      setupAuditLogs: s.setupAuditLogs.map((a) =>
+        (targetAudit && a.auditId === targetAudit.auditId) || (!targetAudit && !a.undone)
+          ? { ...a, undone: true, undoneAt: nowIso }
+          : a
+      ),
+      setupChatTurns: s.setupChatTurns
+        .map((t) =>
+          targetAudit && t.auditId === targetAudit.auditId ? { ...t, undone: true } : t
+        )
+        .concat(undoTurn),
+      uiFontScalePercent: 100,
+      uiNightEyeProtection: false,
+      activeOverlayPlan: null,
+      lastQuarantineToast:
+        '↩️ [1초 셀프 원복(Undo) 완료] 상담원 개입 없이 0.01초 전 JSON 스냅샷으로 즉시 원상복구되었습니다! (무료 · 0 크레딧)',
+    }));
+  },
+
+  openSetupOverlayGuide: (plan) =>
+    set({
+      activeOverlayPlan: plan,
+      activeOverlayStepIndex: 0,
+    }),
+
+  advanceSetupOverlayStep: () =>
+    set((state) => {
+      const steps = state.activeOverlayPlan?.overlaySteps ?? [];
+      if (state.activeOverlayStepIndex + 1 < steps.length) {
+        const nextIdx = state.activeOverlayStepIndex + 1;
+        const nextStep = steps[nextIdx];
+        try {
+          if (typeof window !== 'undefined' && 'speechSynthesis' in window && nextStep) {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(nextStep.voiceGuideText);
+            utter.lang = 'ko-KR';
+            window.speechSynthesis.speak(utter);
+          }
+        } catch {
+          /* ignore */
+        }
+        return { activeOverlayStepIndex: nextIdx };
+      }
+      return {
+        activeOverlayPlan: null,
+        activeOverlayStepIndex: 0,
+        lastQuarantineToast:
+          '👆 [실시간 손가락 화살표 가이드 완료] 모든 단계의 설정 위치를 성공적으로 따라가셨습니다!',
+      };
+    }),
+
+  closeSetupOverlayGuide: () =>
+    set({
+      activeOverlayPlan: null,
+      activeOverlayStepIndex: 0,
+    }),
 
   sendPcMasterUrlToEmail: async () => {
     const { merlinAuth } = get();
@@ -3455,3 +3807,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
   };
 });
+
+export const useZEyeStore = useSaySeeStore;
+

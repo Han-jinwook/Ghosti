@@ -487,3 +487,83 @@ export interface SyncState {
   originalSizeGB: number;
   syncing: boolean;
 }
+
+// ─────────────── [🛠️ Z-Eye 설정 몬스터 (Setup Monster — AI 스마트폰 & PC 통합 설정 해결사)] ───────────────
+
+export type SetupMonsterPlatform = 'pc' | 'mobile';
+
+export type SetupMonsterTrack = 'TRACK_A_DIRECT_REPAIR' | 'TRACK_B_OVERLAY_GUIDE';
+
+export interface SetupOverlayStep {
+  step: number;
+  screenTitle: string;
+  scrapedElements: Array<{ text: string; rect: [number, number] }>;
+  /** 화면 내 퍼센트 좌표 (left%, top%) */
+  fingerCoordPct: [number, number];
+  targetLabel: string;
+  bubbleMessage: string;
+  voiceGuideText: string;
+}
+
+export interface SetupProactiveHint {
+  id: string;
+  platform: SetupMonsterPlatform;
+  badgeText: string;
+  title: string;
+  telemetrySource: string;
+  userProfileContext: string;
+  presetQuery: string;
+  presetId: string;
+  resolved: boolean;
+}
+
+export interface SetupDiagnosisPlan {
+  planId: string;
+  presetId: string;
+  platform: SetupMonsterPlatform;
+  track: SetupMonsterTrack;
+  symptomQuery: string;
+  title: string;
+  rootCause: string;
+  agentModuleName: string;
+  systemCommandOrApi: string;
+  beforeSnapshot: Record<string, unknown>;
+  afterSnapshot: Record<string, unknown>;
+  completionMessage: string;
+  voiceTtsSummary: string;
+  creditCost: number;
+  /** UI 화면 글자 크기 스케일 등 웹에 즉시 반영할 부가 효과 */
+  uiFontScalePercent?: number;
+  uiNightProtection?: boolean;
+  overlaySteps?: SetupOverlayStep[];
+}
+
+export interface SetupAuditLogEntry {
+  auditId: string;
+  createdAt: string;
+  userApprovedAt: string;
+  platform: SetupMonsterPlatform;
+  track: SetupMonsterTrack;
+  symptomQuery: string;
+  title: string;
+  agentModuleName: string;
+  systemCommandOrApi: string;
+  beforeSnapshot: Record<string, unknown>;
+  afterSnapshot: Record<string, unknown>;
+  creditDeducted: number;
+  domCaptureHash: string;
+  conversationSummary: string[];
+  undone: boolean;
+  undoneAt?: string;
+}
+
+export interface SetupChatTurn {
+  id: string;
+  role: 'user' | 'assistant' | 'system_repair' | 'system_undo';
+  timestamp: string;
+  text: string;
+  diagnosisPlan?: SetupDiagnosisPlan;
+  auditId?: string;
+  undone?: boolean;
+}
+

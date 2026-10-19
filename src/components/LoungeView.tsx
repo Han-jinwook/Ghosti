@@ -3,6 +3,7 @@ import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeSt
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../types/saysee';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { PcMasterQuickSendPanel } from './PricingModal';
+import { SetupMonsterContent } from './SetupMonsterModal';
 
 const LOUNGE_TABS: Array<{
   id: LoungeType;
@@ -904,15 +905,18 @@ export const LoungeView: React.FC = () => {
                   <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
                     <div className="flex flex-col gap-1.5">
                       <span className="font-label-sm text-[11.5px] text-emerald-400 font-bold">
-                        🛠️ Z-Eye 설정 몬스터 — AI 음성 기기 설정 1:1 해결사
+                        🛠️ Z-Eye 설정 몬스터 — AI 스마트폰 & PC 통합 설정 해결사
                       </span>
                       <div className="flex items-baseline gap-2">
                         <span className="font-headline-md text-[23px] text-white font-black">
-                          구독 시 무제한 포함
+                          100 크레딧
+                        </span>
+                        <span className="font-label-sm text-[12px] text-zinc-400">
+                          / 수리 승인 1건 (진단 · 1초 원상복구 무료)
                         </span>
                       </div>
                       <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                        핸드폰의 특정 설정이나 앱의 어떤 기능으로 세팅하고자 할 때, 복잡한 설정 메뉴를 뒤질 필요 없이 <strong>AI 음성으로 설정을 직접 찾아주고 세팅을 도와주는</strong> 1:1 해결사입니다.
+                        일상어로 대화하면 AI가 <strong>PC·스마트폰 설정을 1초 만에 직접 고쳐주거나 화면 위 손가락 화살표(👆)를 띄워 동행 안내</strong>하고, 0.01초 전 JSON 스냅샷으로 1초 원상복구(Undo)까지 보장합니다.
                       </p>
                     </div>
                     <button
@@ -923,7 +927,7 @@ export const LoungeView: React.FC = () => {
                       }}
                       className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-label-md text-[12px] font-extrabold transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      🛠️ Z-Eye 설정 몬스터 음성 해결사 열기
+                      🛠️ Z-Eye 설정 몬스터 (PC·모바일 1초 해결사) 열기
                     </button>
                   </div>
                 </div>
@@ -3490,189 +3494,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     setTimeout(() => setShortsExportToast(null), 3200);
   };
 
-  const [voiceSettingQuery, setVoiceSettingQuery] = useState('');
-  const [activeVoicePresetId, setActiveVoicePresetId] = useState<string>('font_zoom');
-  const [appliedVoiceSettings, setAppliedVoiceSettings] = useState<Record<string, boolean>>({
-    font_zoom: true,
-  });
-  const [customVoiceResult, setCustomVoiceResult] = useState<string | null>(null);
-
   if (activeLoungeType === 'personal') {
-    const VOICE_SETTING_PRESETS = [
-      {
-        id: 'font_zoom',
-        command: '“핸드폰 글씨 크기랑 화면 좀 시원하게 키워줘”',
-        target: '스마트폰 디스플레이 · 글꼴 및 화면 확대 설정',
-        guide:
-          '🔊 AI 음성 안내: “어르신과 사용자분께서 눈이 편하시도록 시스템 글자 크기를 135%로 키우고, 버튼 윤곽선과 고대비 가독성 모드를 바로 세팅해 드렸습니다.”',
-      },
-      {
-        id: 'kakao_notif',
-        command: '“밤에 울리는 카톡이랑 쇼핑앱 알림 소리 좀 꺼줘”',
-        target: '특정 앱(카카오톡·쇼핑앱) 알림 소리 & 방해금지 설정',
-        guide:
-          '🔊 AI 음성 안내: “가족·중요 연락처 알림은 유지하고, 밤 10시 이후 단체방 알림음과 쇼핑·광고성 앱 푸시 알림 소리를 자동으로 무음 세팅해 드렸습니다.”',
-      },
-      {
-        id: 'volume_wifi',
-        command: '“벨소리·통화 음량 최대로 키우고 와이파이 잡아줘”',
-        target: '사운드·통화 볼륨 증폭 & 와이파이·블루투스 자동 연결',
-        guide:
-          '🔊 AI 음성 안내: “벨소리와 통화 수화기 음량을 가장 또렷한 최대 단계로 맞추고, 현재 공간의 가장 빠른 와이파이에 자동 연결되도록 세팅을 완료했습니다.”',
-      },
-      {
-        id: 'battery_sleep',
-        command: '“배터리 빨리 안 닳게 절전 세팅하고 화면 늦게 꺼지게 해줘”',
-        target: '배터리 최적화 · 화면 자동 꺼짐 시간 설정',
-        guide:
-          '🔊 AI 음성 안내: “뒤에서 몰래 배터리를 소모하는 미사용 앱을 절전 상태로 묶고, 글씨를 읽는 도중 화면이 빨리 꺼지지 않도록 화면 유지 시간을 2분으로 넉넉히 세팅했습니다.”',
-      },
-      {
-        id: 'app_shortcut',
-        command: '“자주 쓰는 앱 기능이랑 동창회 카페 홈 화면에 크게 빼줘”',
-        target: '특정 앱 핵심 기능 바로가기 & 홈 화면 큰 아이콘 배치',
-        guide:
-          '🔊 AI 음성 안내: “복잡하게 앱 안으로 여러 번 들어갈 필요 없이, 홈 화면 첫 페이지에 한 번만 누르면 바로 열리는 큼직한 전용 바로가기 아이콘으로 세팅해 드렸습니다.”',
-      },
-    ];
-
-    const selectedPreset =
-      VOICE_SETTING_PRESETS.find((item) => item.id === activeVoicePresetId) ??
-      VOICE_SETTING_PRESETS[0];
-
-    const handleRunCustomVoiceSetting = () => {
-      const trimmed = voiceSettingQuery.trim();
-      if (!trimmed) return;
-      setCustomVoiceResult(
-        `🔊 Z-Eye 설정 몬스터 세팅 완료: 요청하신 “${trimmed}” 설정 경로를 핸드폰·앱 설정에서 즉시 찾아 최적 상태로 맞춤 적용했습니다!`
-      );
-      setVoiceSettingQuery('');
-    };
-
-    return (
-      <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                🛠️ Z-Eye 설정 몬스터
-              </span>
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-bold">
-                복잡한 기기 설정과 오프라인 서버 릴레이를 해결하는 1:1 음성 해결사
-              </span>
-            </div>
-            <h2 className="font-headline-sm text-[19px] md:text-[21px] text-white font-bold mt-1">
-              말 한마디로 핸드폰의 특정 설정이나 앱 기능을 AI 음성으로 직접 찾아 세팅해 드립니다
-            </h2>
-            <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-              복잡하게 숨어 있는 핸드폰 환경설정이나 특정 앱(카톡·유튜브·카메라·알림 등)의 기능을 어떻게 세팅할지 막막할 때, 원하는 내용을 말로 하면 AI 음성 안내와 함께 즉시 설정을 도와줍니다.
-            </p>
-          </div>
-        </div>
-
-        {/* 직접 말하거나 입력해서 세팅하는 AI 음성 명령 바 */}
-        <div className="p-4 rounded-xl bg-zinc-950 border border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-          <div className="flex items-center gap-2.5 flex-1 px-3 py-2 rounded-lg bg-zinc-900 border border-white/10">
-            <span className="text-[18px]">🎙️</span>
-            <input
-              type="text"
-              value={voiceSettingQuery}
-              onChange={(e) => setVoiceSettingQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRunCustomVoiceSetting();
-              }}
-              placeholder="예: 카톡 글씨 크게 해줘, 스팸 전화 차단 설정해줘, 카메라 타이머 켜줘..."
-              className="w-full bg-transparent text-white text-[13px] placeholder:text-zinc-500 focus:outline-none"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleRunCustomVoiceSetting}
-            className="px-5 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap cursor-pointer"
-          >
-            🎙️ AI 음성으로 설정 도와주기
-          </button>
-        </div>
-
-        {customVoiceResult && (
-          <div className="p-3.5 rounded-xl bg-emerald-950/50 border border-emerald-400/40 text-emerald-200 font-body-sm text-[12.5px] flex items-center justify-between gap-2">
-            <span>{customVoiceResult}</span>
-            <button
-              type="button"
-              onClick={() => setCustomVoiceResult(null)}
-              className="text-xs text-emerald-300 underline shrink-0"
-            >
-              닫기
-            </button>
-          </div>
-        )}
-
-        {/* 자주 요청하는 핸드폰 설정 & 앱 기능 세팅 음성 프리셋 5선 */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
-          {VOICE_SETTING_PRESETS.map((preset) => {
-            const isSelected = preset.id === activeVoicePresetId;
-            const isApplied = Boolean(appliedVoiceSettings[preset.id]);
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => {
-                  setActiveVoicePresetId(preset.id);
-                  setAppliedVoiceSettings((prev) => ({ ...prev, [preset.id]: true }));
-                }}
-                className={`p-3.5 rounded-xl text-left flex flex-col justify-between gap-2 border transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-zinc-900 border-primary-container shadow-[0_0_16px_rgba(32,247,219,0.14)]'
-                    : 'bg-zinc-950/80 hover:bg-zinc-900/70 border-white/10'
-                }`}
-              >
-                <div className="flex flex-col gap-1">
-                  <span className="font-label-sm text-[10.5px] text-primary-container font-bold">
-                    {preset.target}
-                  </span>
-                  <span className="font-headline-sm text-[13px] text-white font-bold leading-snug">
-                    {preset.command}
-                  </span>
-                </div>
-                <span
-                  className={`font-label-sm text-[11px] font-extrabold ${
-                    isApplied ? 'text-emerald-400' : 'text-zinc-400'
-                  }`}
-                >
-                  {isApplied ? '✓ AI 음성 세팅 적용됨' : '🎙️ 눌러서 음성 세팅'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 선택된 음성 설정의 AI 음성 브리핑 및 원복/재설정 제어 */}
-        <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/35 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="font-label-sm text-[11px] text-amber-300 font-bold">
-              🎯 현재 선택된 음성 세팅: {selectedPreset.target}
-            </span>
-            <p className="font-body-sm text-[12.5px] text-zinc-200 leading-relaxed">
-              {selectedPreset.guide}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() =>
-              setAppliedVoiceSettings((prev) => ({
-                ...prev,
-                [selectedPreset.id]: !prev[selectedPreset.id],
-              }))
-            }
-            className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold shrink-0 cursor-pointer"
-          >
-            {appliedVoiceSettings[selectedPreset.id]
-              ? '↩️ 이전 설정으로 되돌리기'
-              : '⚡ 이 설정 바로 적용하기'}
-          </button>
-        </div>
-      </div>
-    );
+    return <SetupMonsterContent />;
   }
 
   if (activeLoungeType === 'family') {
