@@ -14,6 +14,7 @@ import type {
   LocalDocumentFile,
   LoungeType,
   MerlinAuthState,
+  MerlinCoinTopupBridgeState,
   OnboardingAhaItem,
   OnboardingTrackMode,
   PersonTimelineBucketInfo,
@@ -26,7 +27,9 @@ import type {
   SetupAuditLogEntry,
   SetupChatTurn,
   SetupDiagnosisPlan,
+  SetupFailureTelemetryEntry,
   SetupMonsterPlatform,
+  SetupPreTriageQuestion,
   SetupProactiveHint,
   SwarmRetroScanReport,
   SyncMode,
@@ -41,6 +44,7 @@ import type {
 import {
   INITIAL_PROACTIVE_HINTS,
   buildSetupDiagnosisPlan,
+  buildSetupPreTriageQuestion,
 } from '../services/setupMonsterEngine';
 import {
   HybridVoiceSession,
@@ -271,20 +275,39 @@ interface SaySeeStore {
   setupProactiveHints: SetupProactiveHint[];
   setupChatTurns: SetupChatTurn[];
   setupAuditLogs: SetupAuditLogEntry[];
+  setupFailureTelemetryQueue: SetupFailureTelemetryEntry[];
+  pendingTriageQuestion: SetupPreTriageQuestion | null;
+  setupEscrowHoldingCoins: number;
+  merlinCoinTopupBridge: MerlinCoinTopupBridgeState;
   activeOverlayPlan: SetupDiagnosisPlan | null;
   activeOverlayStepIndex: number;
   uiFontScalePercent: number;
   uiNightEyeProtection: boolean;
   setShowSetupMonsterModal: (show: boolean, platform?: SetupMonsterPlatform) => void;
   setSetupMonsterPlatform: (platform: SetupMonsterPlatform) => void;
+  setSimulatedMerlinCoinBalance: (coins: number) => void;
+  openMerlinCoinTopupBridge: (plan: SetupDiagnosisPlan) => void;
+  closeMerlinCoinTopupBridge: () => void;
+  topupMerlinCoinAndStartEscrowRepair: (topupAmount?: number) => Promise<void>;
+  confirmSetupEscrowSettlement: (auditId?: string) => void;
   loadSetupMonsterState: () => Promise<void>;
   submitSetupMonsterQuery: (
     query: string,
     presetIdHint?: string,
     platformOverride?: SetupMonsterPlatform
   ) => Promise<void>;
+  answerSetupPreTriage: (
+    questionId: string,
+    detailAnswer: string,
+    presetId: string,
+    skipDirectQuote?: boolean
+  ) => Promise<void>;
   approveAndExecuteSetupPlan: (plan: SetupDiagnosisPlan) => Promise<void>;
   undoSetupMonsterRepair: (auditId?: string) => Promise<void>;
+  reportUnresolvedAndRefundSetup: (
+    auditId?: string,
+    errorCode?: string
+  ) => Promise<void>;
   openSetupOverlayGuide: (plan: SetupDiagnosisPlan) => void;
   advanceSetupOverlayStep: () => void;
   closeSetupOverlayGuide: () => void;
@@ -2688,13 +2711,32 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setupChatTurns: [
     {
       id: 'welcome_setup_monster',
-      role: 'assistant',
+      role: 'assistant_triage',
       timestamp: '방금',
-      text: '안녕하세요! 🛠️ Z-Eye 설정 몬스터(1:1 AI 수리기사)입니다. 스마트폰이나 PC에서 불편한 점을 일상어로 편하게 말씀하시거나 위 증상 칩을 눌러주세요. 진단과 1초 원상복구(Undo)는 무료이며, 실제 수리/설정 변경 승인 시에만 100 크레딧이 차감됩니다.',
-      diagnosisPlan: buildSetupDiagnosisPlan('pc', '부팅 시 뜨는 광고/유령앱 차단', 'pc_boot_ads'),
+      text: '안녕하세요! 🛠️ Z-Eye 설정 몬스터(멀린코인 에스크로 기반 무위험 1:1 AI 수리기사)입니다.\n• 🔍 선(先) 무료 문진 & .exe 백그라운드 사태 파악은 지갑 잔액이 0 코인이어도 100% 무료로 진행됩니다.\n• 🪙 후(後) 난이도별 견적(🟢 Level 1: 100 코인 / 🟡 Level 2: 300 코인 / 🔴 Level 3: 500 코인) 제시 시 멀린허브 통합 지갑 잔액을 즉시 조회(Pre-Check)하며, 잔액 부족 시 원클릭 1초 충전 브릿지를 통해 충전 즉시 에스크로 홀딩 후 수리에 돌입합니다.\n• 🛡️ 수리 실패 또는 [👎 아직 해결 안 됨] 클릭 시 1초 원상복구 + 에스크로 홀딩 코인 100% 즉시 반환 + 본사 실패 블랙박스 로그 자동 전송이 보장됩니다.',
+      triageQuestion: buildSetupPreTriageQuestion(
+        'pc',
+        '부팅 시 뜨는 광고/유령앱 차단',
+        'pc_boot_ads'
+      ),
+      triageAnswered: false,
     },
   ],
   setupAuditLogs: [],
+  setupFailureTelemetryQueue: [],
+  pendingTriageQuestion: buildSetupPreTriageQuestion(
+    'pc',
+    '부팅 시 뜨는 광고/유령앱 차단',
+    'pc_boot_ads'
+  ),
+  setupEscrowHoldingCoins: 0,
+  merlinCoinTopupBridge: {
+    open: false,
+    targetPlan: null,
+    requiredCoins: 0,
+    currentCoins: 0,
+    deficitCoins: 0,
+  },
   activeOverlayPlan: null,
   activeOverlayStepIndex: 0,
   uiFontScalePercent: 100,
@@ -2709,12 +2751,110 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setSetupMonsterPlatform: (setupMonsterPlatform) =>
     set({ setupMonsterPlatform }),
 
+  setSimulatedMerlinCoinBalance: (coins) =>
+    set((state) => ({
+      merlinAuth: {
+        ...state.merlinAuth,
+        coinBalance: Math.max(0, coins),
+      },
+      lastQuarantineToast: `🪙 [멀린허브 통합 지갑 잔액 시뮬레이션] 현재 보유 멀린코인이 ${Math.max(
+        0,
+        coins
+      ).toLocaleString()} 코인으로 설정되었습니다. (0코인 무료 문진 및 부족분 원클릭 충전 브릿지 테스트 가능)`,
+    })),
+
+  openMerlinCoinTopupBridge: (plan) =>
+    set((state) => {
+      const current = state.merlinAuth.coinBalance;
+      const required = plan.creditCost ?? 100;
+      const deficit = Math.max(0, required - current);
+      return {
+        merlinCoinTopupBridge: {
+          open: true,
+          targetPlan: plan,
+          requiredCoins: required,
+          currentCoins: current,
+          deficitCoins: deficit,
+        },
+      };
+    }),
+
+  closeMerlinCoinTopupBridge: () =>
+    set((state) => ({
+      merlinCoinTopupBridge: {
+        ...state.merlinCoinTopupBridge,
+        open: false,
+      },
+    })),
+
+  topupMerlinCoinAndStartEscrowRepair: async (topupAmount) => {
+    const state = get();
+    const bridge = state.merlinCoinTopupBridge;
+    const plan = bridge.targetPlan;
+    const addCoins = Math.max(
+      topupAmount ?? bridge.deficitCoins,
+      bridge.deficitCoins > 0 ? bridge.deficitCoins : 200
+    );
+
+    set((s) => ({
+      merlinAuth: {
+        ...s.merlinAuth,
+        coinBalance: s.merlinAuth.coinBalance + addCoins,
+      },
+      merlinCoinTopupBridge: {
+        ...s.merlinCoinTopupBridge,
+        open: false,
+      },
+      lastQuarantineToast: `🪙 [멀린허브 1초 원클릭 충전 완료 (+${addCoins} 코인)] 충전 즉시 ${
+        plan?.creditCost ?? 300
+      } 코인 에스크로 홀딩(Escrow Holding)을 걸고 1초 자동 수리에 돌입합니다!`,
+    }));
+
+    if (plan) {
+      await get().approveAndExecuteSetupPlan(plan);
+    }
+  },
+
+  confirmSetupEscrowSettlement: (auditId) =>
+    set((state) => {
+      const targetAudit =
+        (auditId
+          ? state.setupAuditLogs.find((a) => a.auditId === auditId)
+          : state.setupAuditLogs.find((a) => a.escrowStatus === 'ESCROW_HOLDING')) ??
+        null;
+      const settledCoins = targetAudit?.creditDeducted ?? 0;
+      return {
+        setupEscrowHoldingCoins: Math.max(
+          0,
+          state.setupEscrowHoldingCoins - settledCoins
+        ),
+        setupAuditLogs: state.setupAuditLogs.map((a) =>
+          targetAudit && a.auditId === targetAudit.auditId
+            ? { ...a, escrowStatus: 'SETTLED_COMPLETED' as const }
+            : a
+        ),
+        setupChatTurns: state.setupChatTurns.map((t) =>
+          targetAudit && t.auditId === targetAudit.auditId
+            ? { ...t, escrowStatus: 'SETTLED_COMPLETED' as const }
+            : t
+        ),
+        lastQuarantineToast: `✅ [완치 확인 · 에스크로 최종 정산 완료] 홀딩 중이던 ${settledCoins} 멀린코인이 정상 정산 확정되었습니다!`,
+      };
+    }),
+
   loadSetupMonsterState: async () => {
     try {
       const res = await fetch('/__setup-monster/state');
       const data = await res.json();
-      if (data?.ok && Array.isArray(data.auditLogs)) {
-        set({ setupAuditLogs: data.auditLogs });
+      if (data?.ok) {
+        set((state) => ({
+          setupAuditLogs: Array.isArray(data.auditLogs)
+            ? data.auditLogs
+            : state.setupAuditLogs,
+          setupFailureTelemetryQueue: Array.isArray(data.failureTelemetryQueue)
+            ? data.failureTelemetryQueue
+            : state.setupFailureTelemetryQueue,
+        }));
       }
     } catch {
       /* ignore */
@@ -2739,7 +2879,19 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       text: clean,
     };
 
-    // 유저가 채팅창에 "어? 바꿨더니 불편해, 원래대로 해줘" 등 원상복구 의도를 말하면 즉시 1초 Undo 실행
+    // 유저가 채팅창에 "아직 해결 안 됨 / 안 고쳐졌어 / 환불해줘" 등 수리 실패를 말하면 즉시 1초 원상복구 + 에스크로 100% 반환 + 본사 실패 로그 전송 실행
+    if (
+      /해결\s*안|안\s*고쳐|그대로|환불|여전히\s*먹통|실패/i.test(clean) &&
+      !presetIdHint
+    ) {
+      set((s) => ({
+        setupChatTurns: [...s.setupChatTurns, userTurn],
+      }));
+      await get().reportUnresolvedAndRefundSetup();
+      return;
+    }
+
+    // 유저가 채팅창에 "어? 바꿨더니 불편해, 원래대로 해줘" 등 단순 원상복구 의도를 말하면 즉시 1초 Undo 실행
     if (/원래대로|되돌려|복구해|불편해|취소|undo/i.test(clean) && !presetIdHint) {
       set((s) => ({
         setupChatTurns: [...s.setupChatTurns, userTurn],
@@ -2748,18 +2900,125 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       return;
     }
 
-    const plan = buildSetupDiagnosisPlan(platform, clean, presetIdHint);
+    // [PC 환경: 선(先) 무료 문진 & Z-Eye_PC_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료!) ➔ 후(後) 난이도별 차등 견적 & 멀린허브 잔액 Pre-Check]
+    if (platform === 'pc') {
+      if (state.pendingTriageQuestion && !presetIdHint) {
+        const activeTriage = state.pendingTriageQuestion;
+        const combinedQuery = `${activeTriage.symptomQuery} — ${clean}`;
+        const plan = buildSetupDiagnosisPlan('pc', combinedQuery, activeTriage.presetId);
+        const currentCoins = state.merlinAuth.coinBalance;
+        const deficit = Math.max(0, plan.creditCost - currentCoins);
+        const preCheckLine =
+          deficit > 0
+            ? `⚠️ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins} 코인 ➔ 멀린코인 ${deficit}개가 부족합니다. 아래 [🪙 멀린코인 ${deficit}개가 부족합니다 — 1초 충전 후 바로 고치기] 버튼을 누르면 즉시 충전 후 에스크로 수리에 돌입합니다.`
+            : `✅ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins.toLocaleString()} 코인 (충분) ➔ 아래 버튼으로 ${plan.creditCost} 코인 에스크로 홀딩 후 즉시 1초 수리를 시작할 수 있습니다.`;
+
+        const assistantTurn: SetupChatTurn = {
+          id: `ai_${Date.now() + 1}`,
+          role: 'assistant',
+          timestamp: nowLabel,
+          text: `🧠 [무료 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+          diagnosisPlan: plan,
+        };
+
+        set((s) => ({
+          setupMonsterPlatform: 'pc',
+          pendingTriageQuestion: null,
+          setupChatTurns: s.setupChatTurns
+            .map((t) =>
+              t.triageQuestion?.questionId === activeTriage.questionId
+                ? { ...t, triageAnswered: true }
+                : t
+            )
+            .concat([userTurn, assistantTurn]),
+        }));
+        return;
+      }
+
+      // 신규 PC 증상 입력 또는 증상 칩 클릭 ➔ 잔액이 0코인이어도 100% 무료로 사전 문진 & .exe 백그라운드 스캔 진행!
+      const triageQ = buildSetupPreTriageQuestion('pc', clean, presetIdHint);
+      const triageTurn: SetupChatTurn = {
+        id: `triage_${Date.now() + 1}`,
+        role: 'assistant_triage',
+        timestamp: nowLabel,
+        text: `🔍 [선(先) 무료 문진 & Z-Eye_PC_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료)]\n곧바로 결제창을 띄우지 않고 해결 가능 여부와 작업 복잡도를 먼저 무료로 스캔했습니다.\n• ${triageQ.exeBackgroundScanNote}\n\n${triageQ.questionText}`,
+        triageQuestion: triageQ,
+        triageAnswered: false,
+      };
+
+      set((s) => ({
+        setupMonsterPlatform: 'pc',
+        pendingTriageQuestion: triageQ,
+        setupChatTurns: [...s.setupChatTurns, userTurn, triageTurn],
+      }));
+      return;
+    }
+
+    // [모바일 환경: 단순 설정 변경 100 코인 단일 요금 + 멀린허브 사전 잔액 체크(Pre-Check)]
+    const plan = buildSetupDiagnosisPlan('mobile', clean, presetIdHint);
+    const currentCoins = state.merlinAuth.coinBalance;
+    const deficit = Math.max(0, plan.creditCost - currentCoins);
+    const preCheckLine =
+      deficit > 0
+        ? `⚠️ [멀린허브 지갑 사전 잔액 체크] 필요 100 코인 / 보유 ${currentCoins} 코인 ➔ 멀린코인 ${deficit}개가 부족합니다 (1초 충전 후 바로 고치기 지원).`
+        : `✅ [멀린허브 지갑 사전 잔액 체크] 필요 100 코인 / 보유 ${currentCoins.toLocaleString()} 코인 (에스크로 홀딩 가능).`;
+
     const assistantTurn: SetupChatTurn = {
       id: `ai_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🧠 [Z-Eye 웹/LLM 두뇌 진단 완료] “${clean}” 증상의 원인을 0.01초 만에 파악했습니다. 아래 [⚡ 1초 자동 수리 승인 (100 크레딧)] 버튼을 누르시면 0.01초 전 JSON 스냅샷 백업 후 즉시 처치합니다.`,
+      text: `🧠 [모바일 1MB APK 진단 완료 ➔ ${plan.difficultyBadgeKo}]\n• ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 실패 시 1초 원상복구 + 100 코인 100% 즉시 반환 보장`,
       diagnosisPlan: plan,
     };
 
     set((s) => ({
-      setupMonsterPlatform: platform,
+      setupMonsterPlatform: 'mobile',
       setupChatTurns: [...s.setupChatTurns, userTurn, assistantTurn],
+    }));
+  },
+
+  answerSetupPreTriage: async (questionId, detailAnswer, presetId, skipDirectQuote) => {
+    const state = get();
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const userTurn: SetupChatTurn = {
+      id: `user_triage_${Date.now()}`,
+      role: 'user',
+      timestamp: nowLabel,
+      text: skipDirectQuote
+        ? `[문진 완료 · 즉시 견적 요청] ${detailAnswer}`
+        : detailAnswer,
+    };
+
+    const plan = buildSetupDiagnosisPlan('pc', detailAnswer, presetId);
+    const currentCoins = state.merlinAuth.coinBalance;
+    const deficit = Math.max(0, plan.creditCost - currentCoins);
+    const preCheckLine =
+      deficit > 0
+        ? `⚠️ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins} 코인 ➔ 멀린코인 ${deficit}개가 부족합니다! 아래 [🪙 멀린코인 ${deficit}개가 부족합니다 — 1초 충전 후 바로 고치기] 버튼을 누르면 즉시 충전 후 에스크로 수리에 돌입합니다.`
+        : `✅ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins.toLocaleString()} 코인 (충분) ➔ [${plan.creditCost} 코인 에스크로 홀딩 후 1초 수리 시작] 버튼이 활성화되었습니다.`;
+
+    const assistantTurn: SetupChatTurn = {
+      id: `ai_quote_${Date.now() + 1}`,
+      role: 'assistant',
+      timestamp: nowLabel,
+      text: `🧠 [사전 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+      diagnosisPlan: plan,
+    };
+
+    set((s) => ({
+      pendingTriageQuestion: null,
+      setupChatTurns: s.setupChatTurns
+        .map((t) =>
+          t.triageQuestion?.questionId === questionId
+            ? { ...t, triageAnswered: true }
+            : t
+        )
+        .concat([userTurn, assistantTurn]),
     }));
   },
 
@@ -2768,9 +3027,18 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const currentCredits = state.merlinAuth.coinBalance;
     const cost = plan.creditCost ?? 100;
 
+    // [사전 잔액 검증 (Pre-Check) ➔ 부족 시 원클릭 충전 브릿지 모달 자동 오픈!]
     if (currentCredits < cost) {
+      const deficit = cost - currentCredits;
       set({
-        lastQuarantineToast: `⚠️ 보유 크레딧(${currentCredits}C)이 부족합니다. 설정 변경/수리 승인에는 ${cost} 크레딧이 필요합니다.`,
+        merlinCoinTopupBridge: {
+          open: true,
+          targetPlan: plan,
+          requiredCoins: cost,
+          currentCoins: currentCredits,
+          deficitCoins: deficit,
+        },
+        lastQuarantineToast: `🪙 멀린코인 ${deficit}개가 부족합니다 (보유 ${currentCredits}C / 필요 ${cost}C) — 멀린허브 1초 원클릭 충전 브릿지를 열었습니다!`,
       });
       return;
     }
@@ -2792,6 +3060,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       userApprovedAt: nowIso,
       platform: plan.platform,
       track: plan.track,
+      difficultyLevel: plan.difficultyLevel,
+      escrowStatus: 'ESCROW_HOLDING',
       symptomQuery: plan.symptomQuery,
       title: plan.title,
       agentModuleName: plan.agentModuleName,
@@ -2802,6 +3072,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       domCaptureHash: `dom_${Date.now().toString(16)}`,
       conversationSummary,
       undone: false,
+      refunded: false,
     };
 
     try {
@@ -2814,7 +3085,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       });
       const data = await res.json();
       if (data?.ok && data.auditEntry) {
-        savedAudit = data.auditEntry;
+        savedAudit = {
+          ...data.auditEntry,
+          escrowStatus: 'ESCROW_HOLDING',
+        };
       }
     } catch {
       /* ignore offline fallback */
@@ -2840,7 +3114,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       text: plan.completionMessage,
       diagnosisPlan: plan,
       auditId: savedAudit.auditId,
+      escrowStatus: 'ESCROW_HOLDING',
       undone: false,
+      refunded: false,
     };
 
     set((s) => ({
@@ -2848,6 +3124,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         ...s.merlinAuth,
         coinBalance: Math.max(0, s.merlinAuth.coinBalance - cost),
       },
+      setupEscrowHoldingCoins: s.setupEscrowHoldingCoins + cost,
       setupAuditLogs: [savedAudit, ...s.setupAuditLogs],
       setupChatTurns: [...s.setupChatTurns, repairTurn],
       setupProactiveHints: s.setupProactiveHints.map((h) =>
@@ -2863,7 +3140,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? plan
           : s.activeOverlayPlan,
       activeOverlayStepIndex: 0,
-      lastQuarantineToast: `${plan.completionMessage} (0.01초 전 스냅샷 백업 완료 · -${cost} 크레딧)`,
+      lastQuarantineToast: `🔒 [${cost} 멀린코인 에스크로 홀딩 & 1초 수리 완료] 완치 확인 전까지 에스크로에 안전하게 보관되며, 실패 시 100% 즉시 반환됩니다!`,
     }));
   },
 
@@ -2909,10 +3186,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       role: 'system_undo',
       timestamp: nowLabel,
       text: targetAudit
-        ? `↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 크레딧] ‘${targetAudit.title}’ 처치 직전(0.01초 전)에 백업해 둔 JSON 스냅샷(${JSON.stringify(
+        ? `↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 코인] ‘${targetAudit.title}’ 처치 직전(0.01초 전)에 백업해 둔 JSON 스냅샷(${JSON.stringify(
             targetAudit.beforeSnapshot
           )})으로 완벽히 되돌렸습니다!`
-        : '↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 크레딧] 0.01초 전 백업된 초기 설정 스냅샷으로 모든 기기 설정을 즉시 원상복구했습니다!',
+        : '↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 코인] 0.01초 전 백업된 초기 설정 스냅샷으로 모든 기기 설정을 즉시 원상복구했습니다!',
       auditId: targetAudit?.auditId,
       undone: true,
     };
@@ -2932,7 +3209,154 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       uiNightEyeProtection: false,
       activeOverlayPlan: null,
       lastQuarantineToast:
-        '↩️ [1초 셀프 원복(Undo) 완료] 상담원 개입 없이 0.01초 전 JSON 스냅샷으로 즉시 원상복구되었습니다! (무료 · 0 크레딧)',
+        '↩️ [1초 셀프 원복(Undo) 완료] 상담원 개입 없이 0.01초 전 JSON 스냅샷으로 즉시 원상복구되었습니다! (무료 · 0 코인)',
+    }));
+  },
+
+  reportUnresolvedAndRefundSetup: async (auditId, errorCode) => {
+    const state = get();
+    const targetAudit =
+      (auditId
+        ? state.setupAuditLogs.find((a) => a.auditId === auditId)
+        : state.setupAuditLogs.find((a) => !a.refunded)) ?? null;
+
+    if (targetAudit?.refunded) {
+      set({
+        lastQuarantineToast: '이미 에스크로 홀딩 코인 100% 반환 및 원상복구가 완료된 수리 내역입니다.',
+      });
+      return;
+    }
+
+    const refundCoins = targetAudit?.creditDeducted ?? 100;
+    const effectiveErrorCode =
+      errorCode ?? 'ERR_SETUP_UNRESOLVED_USER_REPORT_0x80070005';
+    const conversationTranscript = state.setupChatTurns
+      .slice(-6)
+      .map((t) => `[${t.role}] ${t.text}`);
+    const windowsBuildEnv =
+      (targetAudit?.platform ?? state.setupMonsterPlatform) === 'pc'
+        ? 'Windows 11 Pro 23H2 (Build 22631.4317) · x64 · Z-Eye_PC_Setup.exe v2.4'
+        : 'Android 15 (One UI 7.0) · Z-Eye_Mobile_1MB.apk v2.4';
+
+    const nowIso = new Date().toISOString();
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    let failurePacket: SetupFailureTelemetryEntry = {
+      failureId: `fail_${Date.now()}`,
+      auditId: targetAudit?.auditId ?? `audit_fallback_${Date.now()}`,
+      reportedAt: nowIso,
+      platform: targetAudit?.platform ?? state.setupMonsterPlatform,
+      difficultyLevel: targetAudit?.difficultyLevel ?? 'LEVEL_2_INTERMEDIATE_300',
+      symptomQuery: targetAudit?.symptomQuery ?? '사용자 미해결 환불 요청',
+      conversationTranscript,
+      windowsBuildEnv,
+      attemptedScript:
+        targetAudit?.systemCommandOrApi ??
+        'Stop-Service Spooler -Force; Remove-Item PRINTERS\\* -Force; Start-Service Spooler',
+      errorCode: effectiveErrorCode,
+      refundedCoins: refundCoins,
+      hqQueueStatus: 'QUEUED_FOR_SCRIPT_PATCH',
+    };
+
+    try {
+      const res = await fetch('/__setup-monster/report-failure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auditId: targetAudit?.auditId,
+          platform: failurePacket.platform,
+          difficultyLevel: failurePacket.difficultyLevel,
+          symptomQuery: failurePacket.symptomQuery,
+          conversationTranscript,
+          windowsBuildEnv,
+          attemptedScript: failurePacket.attemptedScript,
+          errorCode: effectiveErrorCode,
+          refundedCoins: refundCoins,
+        }),
+      });
+      const data = await res.json();
+      if (data?.ok && data.failurePacket) {
+        failurePacket = data.failurePacket;
+      }
+    } catch {
+      /* ignore offline fallback */
+    }
+
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(
+          `수리가 해결되지 않아 일 초 만에 원래 설정으로 원상복구하고, 에스크로에 홀딩되어 있던 ${refundCoins} 멀린코인을 백 퍼센트 즉시 지갑으로 반환해 드렸습니다. 실패 로그는 본사로 자동 전송되어 스크립트를 보강하겠습니다.`
+        );
+        utter.lang = 'ko-KR';
+        window.speechSynthesis.speak(utter);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const refundTurn: SetupChatTurn = {
+      id: `refund_${Date.now()}`,
+      role: 'system_refund',
+      timestamp: nowLabel,
+      text: `💸 [무위험(Zero-Risk) 1초 원상복구 + 에스크로 홀딩 +${refundCoins} 멀린코인 100% 즉시 반환 완료]\n① 백업해 둔 0.01초 전 JSON 스냅샷(${JSON.stringify(
+        targetAudit?.beforeSnapshot ?? { state: 'restored_initial' }
+      )})으로 기기 설정을 1초 만에 완벽히 원상복구했습니다.\n② 에스크로에 홀딩되어 있던 +${refundCoins} 멀린코인을 멀린허브 통합 지갑에 100% 즉시 반환(환불)했습니다.\n③ 📡 본사 실패 분석 큐(Failure Telemetry: ${
+        failurePacket.failureId
+      })로 [대화 내역 + ${windowsBuildEnv} + 실행 스크립트 + ${effectiveErrorCode}] 패킷을 자동 전송하여 수리 스크립트를 즉시 업데이트합니다.`,
+      auditId: targetAudit?.auditId,
+      escrowStatus: 'RELEASED_REFUNDED',
+      undone: true,
+      refunded: true,
+      refundedAmount: refundCoins,
+      failureTelemetryId: failurePacket.failureId,
+    };
+
+    set((s) => ({
+      merlinAuth: {
+        ...s.merlinAuth,
+        coinBalance: s.merlinAuth.coinBalance + refundCoins,
+      },
+      setupEscrowHoldingCoins:
+        targetAudit?.escrowStatus === 'ESCROW_HOLDING'
+          ? Math.max(0, s.setupEscrowHoldingCoins - refundCoins)
+          : s.setupEscrowHoldingCoins,
+      setupAuditLogs: s.setupAuditLogs.map((a) =>
+        (targetAudit && a.auditId === targetAudit.auditId) ||
+        (!targetAudit && !a.refunded)
+          ? {
+              ...a,
+              escrowStatus: 'RELEASED_REFUNDED' as const,
+              undone: true,
+              undoneAt: nowIso,
+              refunded: true,
+              refundedAt: nowIso,
+              failureErrorCode: effectiveErrorCode,
+            }
+          : a
+      ),
+      setupFailureTelemetryQueue: [failurePacket, ...s.setupFailureTelemetryQueue],
+      setupChatTurns: s.setupChatTurns
+        .map((t) =>
+          targetAudit && t.auditId === targetAudit.auditId
+            ? {
+                ...t,
+                escrowStatus: 'RELEASED_REFUNDED' as const,
+                undone: true,
+                refunded: true,
+                refundedAmount: refundCoins,
+              }
+            : t
+        )
+        .concat(refundTurn),
+      uiFontScalePercent: 100,
+      uiNightEyeProtection: false,
+      activeOverlayPlan: null,
+      lastQuarantineToast: `💸 [1초 원상복구 & 에스크로 +${refundCoins} 코인 100% 즉시 반환 완료] 본사 실패 분석 큐(${failurePacket.failureId})로 실패 블랙박스 로그가 자동 전송되었습니다!`,
     }));
   },
 

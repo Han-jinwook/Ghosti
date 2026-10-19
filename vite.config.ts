@@ -2101,19 +2101,24 @@ function sayseeLocalBridge(): Plugin {
       // ─────────────── [🛠️ Z-Eye 설정 몬스터 (Setup Monster) 백엔드 브릿지 & JSON 스냅샷 블랙박스] ───────────────
       const SETUP_BLACKBOX_FILE = path.resolve(POC_RESULTS_DIR, 'z_eye_setup_blackbox.json');
 
-      function loadSetupBlackbox(): { auditLogs: any[] } {
+      function loadSetupBlackbox(): { auditLogs: any[]; failureTelemetryQueue: any[] } {
         try {
           if (fs.existsSync(SETUP_BLACKBOX_FILE)) {
             const parsed = JSON.parse(fs.readFileSync(SETUP_BLACKBOX_FILE, 'utf-8'));
-            if (Array.isArray(parsed?.auditLogs)) return parsed;
+            return {
+              auditLogs: Array.isArray(parsed?.auditLogs) ? parsed.auditLogs : [],
+              failureTelemetryQueue: Array.isArray(parsed?.failureTelemetryQueue)
+                ? parsed.failureTelemetryQueue
+                : [],
+            };
           }
         } catch {
           /* ignore */
         }
-        return { auditLogs: [] };
+        return { auditLogs: [], failureTelemetryQueue: [] };
       }
 
-      function saveSetupBlackbox(data: { auditLogs: any[] }) {
+      function saveSetupBlackbox(data: { auditLogs: any[]; failureTelemetryQueue: any[] }) {
         try {
           if (!fs.existsSync(POC_RESULTS_DIR)) {
             fs.mkdirSync(POC_RESULTS_DIR, { recursive: true });
@@ -2130,9 +2135,10 @@ function sayseeLocalBridge(): Plugin {
         res.end(
           JSON.stringify({
             ok: true,
-            pcDaemonStatus: 'Z-Eye_PC_Setup.exe (v1.4 · PowerShell/Registry/UIAutomation Ready)',
-            mobileApkStatus: 'Z-Eye_Mobile_1MB.apk (v1.4 · UsageStats/WRITE_SETTINGS/Overlay Ready)',
+            pcDaemonStatus: 'Z-Eye_PC_Setup.exe (v1.5 · PowerShell/Registry/UIAutomation Ready)',
+            mobileApkStatus: 'Z-Eye_Mobile_1MB.apk (v1.5 · UsageStats/WRITE_SETTINGS/Overlay Ready)',
             auditLogs: box.auditLogs,
+            failureTelemetryQueue: box.failureTelemetryQueue,
           })
         );
       });
@@ -2154,6 +2160,7 @@ function sayseeLocalBridge(): Plugin {
             userApprovedAt: body.userApprovedAt || nowIso,
             platform: body.platform || 'pc',
             track: body.track || 'TRACK_A_DIRECT_REPAIR',
+            difficultyLevel: body.difficultyLevel || 'LEVEL_1_SIMPLE_100',
             symptomQuery: body.symptomQuery || '',
             title: body.title || 'Z-Eye 설정 몬스터 자동 처치',
             agentModuleName: body.agentModuleName || 'Z-Eye_PC_Setup.exe',
@@ -2170,10 +2177,18 @@ function sayseeLocalBridge(): Plugin {
                 .slice(0, 16),
             conversationSummary: Array.isArray(body.conversationSummary) ? body.conversationSummary : [],
             undone: false,
+            refunded: false,
           };
           box.auditLogs.unshift(auditEntry);
           saveSetupBlackbox(box);
-          res.end(JSON.stringify({ ok: true, auditEntry, auditLogs: box.auditLogs }));
+          res.end(
+            JSON.stringify({
+              ok: true,
+              auditEntry,
+              auditLogs: box.auditLogs,
+              failureTelemetryQueue: box.failureTelemetryQueue,
+            })
+          );
         } catch (e) {
           res.end(JSON.stringify({ ok: false, error: String(e) }));
         }
@@ -2203,7 +2218,86 @@ function sayseeLocalBridge(): Plugin {
             return entry;
           });
           saveSetupBlackbox(box);
-          res.end(JSON.stringify({ ok: true, restoredEntry, auditLogs: box.auditLogs }));
+          res.end(
+            JSON.stringify({
+              ok: true,
+              restoredEntry,
+              auditLogs: box.auditLogs,
+              failureTelemetryQueue: box.failureTelemetryQueue,
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
+
+      server.middlewares.use('/__setup-monster/report-failure', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json');
+        try {
+          const body = await readJsonBody(req);
+          const targetAuditId = body.auditId;
+          const box = loadSetupBlackbox();
+          const nowIso = new Date().toISOString();
+          let targetEntry: any = null;
+
+          box.auditLogs = box.auditLogs.map((entry: any) => {
+            if (
+              (targetAuditId && entry.auditId === targetAuditId) ||
+              (!targetAuditId && !targetEntry && !entry.refunded)
+            ) {
+              targetEntry = {
+                ...entry,
+                undone: true,
+                undoneAt: nowIso,
+                refunded: true,
+                refundedAt: nowIso,
+                failureErrorCode: body.errorCode || 'ERR_USER_REPORTED_UNRESOLVED_0x80070005',
+              };
+              return targetEntry;
+            }
+            return entry;
+          });
+
+          const failurePacket = {
+            failureId: body.failureId || `fail_${Date.now()}`,
+            auditId: targetEntry?.auditId || targetAuditId || `audit_${Date.now()}`,
+            reportedAt: nowIso,
+            platform: body.platform || targetEntry?.platform || 'pc',
+            difficultyLevel:
+              body.difficultyLevel || targetEntry?.difficultyLevel || 'LEVEL_2_INTERMEDIATE_300',
+            symptomQuery: body.symptomQuery || targetEntry?.symptomQuery || '',
+            conversationTranscript: Array.isArray(body.conversationTranscript)
+              ? body.conversationTranscript
+              : targetEntry?.conversationSummary || [],
+            windowsBuildEnv:
+              body.windowsBuildEnv ||
+              'Windows 11 Pro 23H2 (Build 22631.4317 · x64 · Z-Eye_PC_Setup.exe v1.5)',
+            attemptedScript: body.attemptedScript || targetEntry?.systemCommandOrApi || '',
+            errorCode: body.errorCode || 'ERR_USER_REPORTED_UNRESOLVED_0x80070005',
+            refundedCoins:
+              typeof body.refundedCoins === 'number'
+                ? body.refundedCoins
+                : targetEntry?.creditDeducted || 100,
+            hqQueueStatus: 'TRANSMITTED_TO_HQ_ADMIN_QUEUE (레시피 자동 보강 대기)',
+          };
+
+          box.failureTelemetryQueue.unshift(failurePacket);
+          saveSetupBlackbox(box);
+
+          res.end(
+            JSON.stringify({
+              ok: true,
+              refundedEntry: targetEntry,
+              failurePacket,
+              auditLogs: box.auditLogs,
+              failureTelemetryQueue: box.failureTelemetryQueue,
+            })
+          );
         } catch (e) {
           res.end(JSON.stringify({ ok: false, error: String(e) }));
         }

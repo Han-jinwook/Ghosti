@@ -494,6 +494,30 @@ export type SetupMonsterPlatform = 'pc' | 'mobile';
 
 export type SetupMonsterTrack = 'TRACK_A_DIRECT_REPAIR' | 'TRACK_B_OVERLAY_GUIDE';
 
+/**
+ * PC 설정 몬스터 난이도별 3단계 차등 견적 티어 (모바일은 LEVEL_1_SIMPLE_100 100 코인 단일 요금)
+ * - 🟢 LEVEL_1_SIMPLE_100: 단순 OS 설정 변경 (100 코인)
+ * - 🟡 LEVEL_2_INTERMEDIATE_300: 중급 장치·네트워크·앱 가이드 (300 코인)
+ * - 🔴 LEVEL_3_ADVANCED_500: 고난도 복합 수리 (500 코인)
+ */
+export type SetupDifficultyLevel =
+  | 'LEVEL_1_SIMPLE_100'
+  | 'LEVEL_2_INTERMEDIATE_300'
+  | 'LEVEL_3_ADVANCED_500';
+
+export interface SetupPreTriageQuestion {
+  questionId: string;
+  presetId: string;
+  platform: SetupMonsterPlatform;
+  symptomQuery: string;
+  exeBackgroundScanNote: string;
+  questionText: string;
+  options: Array<{
+    label: string;
+    detailAnswer: string;
+  }>;
+}
+
 export interface SetupOverlayStep {
   step: number;
   screenTitle: string;
@@ -522,6 +546,9 @@ export interface SetupDiagnosisPlan {
   presetId: string;
   platform: SetupMonsterPlatform;
   track: SetupMonsterTrack;
+  difficultyLevel: SetupDifficultyLevel;
+  difficultyBadgeKo: string;
+  feasibilityCheckKo: string;
   symptomQuery: string;
   title: string;
   rootCause: string;
@@ -538,12 +565,27 @@ export interface SetupDiagnosisPlan {
   overlaySteps?: SetupOverlayStep[];
 }
 
+export type SetupEscrowStatus =
+  | 'ESCROW_HOLDING'
+  | 'SETTLED_COMPLETED'
+  | 'RELEASED_REFUNDED';
+
+export interface MerlinCoinTopupBridgeState {
+  open: boolean;
+  targetPlan: SetupDiagnosisPlan | null;
+  requiredCoins: number;
+  currentCoins: number;
+  deficitCoins: number;
+}
+
 export interface SetupAuditLogEntry {
   auditId: string;
   createdAt: string;
   userApprovedAt: string;
   platform: SetupMonsterPlatform;
   track: SetupMonsterTrack;
+  difficultyLevel?: SetupDifficultyLevel;
+  escrowStatus?: SetupEscrowStatus;
   symptomQuery: string;
   title: string;
   agentModuleName: string;
@@ -555,15 +597,41 @@ export interface SetupAuditLogEntry {
   conversationSummary: string[];
   undone: boolean;
   undoneAt?: string;
+  refunded?: boolean;
+  refundedAt?: string;
+  failureErrorCode?: string;
+}
+
+export interface SetupFailureTelemetryEntry {
+  failureId: string;
+  auditId: string;
+  reportedAt: string;
+  platform: SetupMonsterPlatform;
+  difficultyLevel: SetupDifficultyLevel;
+  symptomQuery: string;
+  conversationTranscript: string[];
+  windowsBuildEnv: string;
+  attemptedScript: string;
+  errorCode: string;
+  refundedCoins: number;
+  hqQueueStatus: string;
 }
 
 export interface SetupChatTurn {
   id: string;
-  role: 'user' | 'assistant' | 'system_repair' | 'system_undo';
+  role: 'user' | 'assistant' | 'assistant_triage' | 'system_repair' | 'system_undo' | 'system_refund';
   timestamp: string;
   text: string;
+  triageQuestion?: SetupPreTriageQuestion;
+  triageAnswered?: boolean;
   diagnosisPlan?: SetupDiagnosisPlan;
   auditId?: string;
+  escrowStatus?: SetupEscrowStatus;
   undone?: boolean;
+  refunded?: boolean;
+  refundedAmount?: number;
+  failureTelemetryId?: string;
 }
+
+
 
