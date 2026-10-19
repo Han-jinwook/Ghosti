@@ -3,14 +3,14 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { AutoConfig, AutoModel, AutoTokenizer } from '@huggingface/transformers';
 
-const PHOTO_DIR = path.resolve('D:/SaySee/test_photos');
-const AUDIT_FILE = path.resolve('D:/SaySee/poc/results/corpus_physical_audit.json');
-const OUT_FILE = path.resolve('D:/SaySee/poc/results/corpus_550_semantic_index.json');
+const PHOTO_DIR = path.resolve('d:/Z-Eye/test_photos');
+const AUDIT_FILE = path.resolve('d:/Z-Eye/poc/results/corpus_physical_audit.json');
+const OUT_FILE = path.resolve('d:/Z-Eye/poc/results/corpus_550_semantic_index.json');
 
 function resolveGeminiApiKey() {
   const candidates = [
-    path.resolve('D:/SaySee/.env.local'),
-    path.resolve('D:/SaySee/.env'),
+    path.resolve('d:/Z-Eye/.env.local'),
+    path.resolve('d:/Z-Eye/.env'),
     path.resolve('D:/Bes2-Marketer/.env'),
     path.resolve('D:/Bes2/.env'),
   ];

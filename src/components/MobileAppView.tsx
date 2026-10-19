@@ -442,7 +442,7 @@ export const MobileAppView: React.FC = () => {
           <VoiceHeroStage />
 
           {/* 검색 결과 영역 */}
-          <div id="saysee-search-results" className="scroll-mt-16">
+          <div id="zeye-search-results" className="scroll-mt-16">
             {searchSpace === 'video' ? (
               <section className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between px-0.5">
@@ -701,7 +701,7 @@ export const MobileAppView: React.FC = () => {
         </main>
       )}
 
-      {/* 서브메뉴 3번: 개인은 [🧹 클리어], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] */}
+      {/* 서브메뉴 3번: 개인은 [🩺 클린 몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] */}
       {mobileTab === 'trash' && (
         <div className="flex-1 w-full">
           {activeLoungeType === 'personal' ? (

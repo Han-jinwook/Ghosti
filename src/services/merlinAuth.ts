@@ -2,15 +2,15 @@
  * Merlin Hub Mock Auth & License Bridge (D-06, D-09)
  *
  * 결제·인증은 최종적으로 '멀린 패밀리 허브(Merlin Family Hub)'가 담당하며,
- * 세이씨(SaySee)는 Mock Token 인터페이스로 라이선스 등급(FREE / PRO_LIFETIME)과
+ * 제트아이(Z-Eye)는 Mock Token 인터페이스로 라이선스 등급(FREE / PRO_LIFETIME)과
  * 상위 Bes2 프로페셔널 에디션 업셀 브릿지만 제공.
  */
 import type { MerlinAuthState } from '../types/saysee';
 
-const STORAGE_KEY = 'saysee_merlin_mock_token';
+const STORAGE_KEY = 'zeye_merlin_mock_token';
 
 export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
-  token: 'merlin_jwt_mock_pro_9900_saysee_v1',
+  token: 'merlin_jwt_mock_pro_9900_zeye_v1',
   tier: 'PRO_LIFETIME',
   userId: 'merlin-user-01',
   email: 'beakes@sundreamer.app',
@@ -37,8 +37,8 @@ export function toggleMerlinTier(current: MerlinAuthState): MerlinAuthState {
     tier: current.tier === 'PRO_LIFETIME' ? 'FREE' : 'PRO_LIFETIME',
     token:
       current.tier === 'PRO_LIFETIME'
-        ? 'merlin_jwt_mock_free_300_saysee_v1'
-        : 'merlin_jwt_mock_pro_9900_saysee_v1',
+        ? 'merlin_jwt_mock_free_300_zeye_v1'
+        : 'merlin_jwt_mock_pro_9900_zeye_v1',
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));

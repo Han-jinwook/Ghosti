@@ -468,7 +468,7 @@ export const DesktopDashboard: React.FC = () => {
           <VoiceHeroStage />
 
           {/* 검색 결과 영역 */}
-          <div id="saysee-search-results" className="scroll-mt-20">
+          <div id="zeye-search-results" className="scroll-mt-20">
             {searchSpace === 'video' ? (
               <section className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">

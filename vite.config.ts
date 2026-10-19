@@ -9,7 +9,7 @@ import sharp from 'sharp';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PHOTO_DIR = path.resolve(ROOT, 'test_photos');
-const QUARANTINE_DIR = path.resolve(ROOT, '세이씨_정리대기함');
+const QUARANTINE_DIR = path.resolve(ROOT, 'Z-Eye_정리대기함');
 const AUDIO_DIR = path.resolve(ROOT, 'poc/audio_queries');
 const POC_RESULTS_DIR = path.resolve(ROOT, 'poc/results');
 const PHYSICAL_AUDIT_FILE = path.resolve(POC_RESULTS_DIR, 'corpus_physical_audit.json');
@@ -414,9 +414,9 @@ function findBestPocResultFile(): string | null {
 
 const thumbCache = new Map<string, Buffer>();
 
-function sayseeLocalBridge(): Plugin {
+function zeyeLocalBridge(): Plugin {
   return {
-    name: 'saysee-local-bridge',
+    name: 'zeye-local-bridge',
     apply: 'serve',
     configureServer(server) {
       // Ensure quarantine folder exists
@@ -2393,7 +2393,7 @@ function sayseeLocalBridge(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [basicSsl(), sayseeLocalBridge()],
+  plugins: [basicSsl(), zeyeLocalBridge()],
   server: {
     host: true,
     port: 5199,

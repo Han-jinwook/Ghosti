@@ -1,5 +1,5 @@
 /**
- * SaySee (세이씨) 온디바이스 AI 엔진 (EmbeddingGemma 2)
+ * Z-Eye (제트아이) 온디바이스 AI 엔진 (EmbeddingGemma 2)
  *
  * 핵심 아키텍처:
  * 1) OPFS 영구 캐시 연동 (두 번째 실행부터 0MB 다운로드, 3.7초 즉시 로드)
@@ -872,7 +872,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     }
   }
 
-  // 2) [스마트 서류함 정보 자산 vs 클리어몬스터 4대 쓰레기 정밀 분리]
+  // 2) [스마트 서류함 정보 자산 vs 클린 몬스터 4대 쓰레기 정밀 분리]
   for (const f of [...fileList, ...quarantinedList]) {
     ensureMap(f.path);
     const semMeta = semanticByPhoto.get(f.path) as any;
@@ -1129,7 +1129,7 @@ export async function ensureSearchEngineLoaded(
       onProgress?.('Zero-STT 오디오 & 텍스트 엔진 준비 완료', 100);
       return true;
     } catch (e) {
-      console.warn('[SaySee Engine] WebGPU 오디오 모델 로드 실패, 하이브리드 인덱스 모드로 작동:', e);
+      console.warn('[Z-Eye Engine] WebGPU 오디오 모델 로드 실패, 하이브리드 인덱스 모드로 작동:', e);
       return false;
     } finally {
       searchModelLoading = null;

@@ -1,5 +1,5 @@
 /**
- * SaySee (세이씨) — 100% 자율 동영상 전 구간(Full-Timeline) 해부 인덱서
+ * Z-Eye (제트아이) — 100% 자율 동영상 전 구간(Full-Timeline) 해부 인덱서
  * - 수동 개입/하드코딩 0%: 디스크(test_photos)의 실제 .mp4 비디오 파일을 자동 탐색
  * - HTML5 Video + Canvas 디코더(Headless Chrome)로 실제 재생시간(duration)·해상도 측정 및 2~3초 간격 키프레임 이미지 자동 추출
  * - 멀티모달 비전 엔진 + 한국어 시각 개념 온톨로지(koreanPhotoOntology.json) + 768차원 EmbeddingGemma 2 벡터 자동 산출

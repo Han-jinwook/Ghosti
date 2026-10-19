@@ -123,7 +123,7 @@ interface SaySeeStore {
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
 
-  // [라운지 마스터 스펙 & 만국공통 세이씨 여권(SaySee Face Passport)]
+  // [라운지 마스터 스펙 & 만국공통 Z-Eye 여권(Z-Eye Face Passport)]
   faceClusters: FaceMemberCluster[];
   latestCorpusYear: number;
   showFaceRegistryModal: boolean;
@@ -500,7 +500,7 @@ export function buildBidirectionalStickKeywords(params: {
 
 /**
  * [방별 별명(Persona) 리졸버]
- * 동일한 이메일 기반 '세이씨 여권(SaySee Face Passport)'을 쓰지만,
+ * 동일한 이메일 기반 'Z-Eye 여권(Z-Eye Face Passport)'을 쓰지만,
  * 현재 라운지/방(우리집 / 처가(친정) / 본가(친가) / 클럽 / 10대 학생)에 따라 화면 표시 및 검색에 쓰이는 호칭을 반환합니다.
  */
 export function getActivePersonaForCluster(
@@ -555,10 +555,10 @@ export function getActivePersonaForCluster(
 }
 
 /**
- * [만국공통 세이씨 여권(SaySee Face Passport) & 인물별 독립 타임라인 바구니 + 다년도·다각도 자동 추출]
+ * [만국공통 Z-Eye 여권(Z-Eye Face Passport) & 인물별 독립 타임라인 바구니 + 다년도·다각도 자동 추출]
  * 1. 바구니 기준 연도(anchorCreationYear)는 방(Room)이 아닌 각 인물의 시드 최초 생성 연도(예: 기존 가족 2026년 vs 신규 합류 처가 식구 2029년)에 귀속!
  * 2. 성인 10년(2026~2017, 미래 2027~2036) / 미성년 5년(2026~2022, 미래 2027~2031) 바구니 자동 구성
- * 3. 이메일(Email ID) 기반 세이씨 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 방별 별명(우리집 '멀린' ↔ 처가방 '둘째사위' ↔ 학생방 '지우짱')만 독립 매핑!
+ * 3. 이메일(Email ID) 기반 Z-Eye 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 방별 별명(우리집 '멀린' ↔ 처가방 '둘째사위' ↔ 학생방 '지우짱')만 독립 매핑!
  */
 function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): FaceMemberCluster[] {
   const enriched = rawClusters.map((c) => {
@@ -1093,7 +1093,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }
     } else if (typeof document !== 'undefined') {
       window.setTimeout(() => {
-        document.getElementById('saysee-search-results')?.scrollIntoView({
+        document.getElementById('zeye-search-results')?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });
@@ -1899,7 +1899,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       analogYearProposals,
     } = get();
 
-    // [1단계: 방별 별명(Room Persona) ➔ Z-Eye 여권(SaySee Face Passport) 자동 번역]
+    // [1단계: 방별 별명(Room Persona) ➔ Z-Eye 여권(Z-Eye Face Passport) 자동 번역]
     let resolvedQuery = query;
     for (const fc of faceClusters) {
       if (fc.excludedAsPasserby || !fc.registeredName) continue;

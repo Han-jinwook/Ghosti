@@ -3,7 +3,7 @@
 > **문서 성격:** 참고용 사실 자료. 외부 LLM 딥리서치의 **의견·결론은 빼고 사실 주장만** 남겼고, 공식 모델 카드와 대조함.
 > **최종 갱신:** 2026-10-14
 > **공식 출처:** [onnx-community/embeddinggemma-2-ONNX 모델 카드](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX) · [google/embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2)
-> **연관 문서:** [SaySee기획서.md](./SaySee기획서.md)
+> **연관 문서:** [Z-Eye기획서.md](./Z-Eye기획서.md)
 >
 > **검증 표시:** ✅ 공식 모델 카드로 확인 · ⚠️ 공식 카드와 다름 · ❔ 딥리서치 주장(출처 미확인) → PoC 실측으로 검증
 

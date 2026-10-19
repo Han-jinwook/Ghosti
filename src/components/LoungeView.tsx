@@ -2583,7 +2583,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
  * - 개인 라운지: null (얼굴/여권 바 완전 비노출, AI 투시검색 몬스터 바로 시작)
  * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 방별 별명 알약([👑 멀린], [👑 둘째사위], [은숙] 등) 1초 검색 통합 바
  * - 클럽 라운지: Text-to-Banner 자동 간판('성동고 89회 동창회') + [🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기] + [🎞️ 응답하라 1989 (추억) / 🍻 최근 우리들 (근황)] 투트랙 탭 + 13KB 캐시 & 5MB 무손실 원본 P2P 소환 바
- * - 스쿨 라운지: 낮(학교/학원) 로컬 캐시 1초 구간 점프 + 스쿨방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
+ * - 스쿨 라운지: 낮(학교/학원) 로컬 캐시 1초 구간 점프 + 스쿨방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클린 리포트] 배너
  * - 업무 라운지: B2B 듀얼 뷰(AI 투시검색 뷰 vs 윈도우 폴더 트리 뷰) + 30KB 0.1초 선행 캐시 프리뷰 + 업무 드라이브(S:) 자동 마운트 & File Lock 충돌 방지 허브
  */
 export const LoungeFeedContextBanner: React.FC = () => {
@@ -2731,7 +2731,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
         <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
-              🎉 월간 용량 클리어
+              🎉 월간 용량 클린
             </span>
             <span className="font-body-sm text-[12.5px] text-zinc-100 font-medium truncate">
               이번 달 우리반 원본 사진 {photos.length}장 &amp; 영상이 👑 방장 PC로 안전 이관되어{' '}
