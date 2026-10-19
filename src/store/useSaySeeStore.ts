@@ -455,6 +455,7 @@ export function getActivePersonaForCluster(
     '처가(친정)': '처가(친정) 방',
     club: '클럽 라운지',
     student: '스쿨 라운지',
+    work: '업무 라운지',
   };
   const isRoomCreator = cluster.clusterId === 'face_member_5';
   // 아직 미등록된 신규 인물(baseName === '')은 등록 전까지 빈 문자열 유지
@@ -2566,6 +2567,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     family: null,
     club: null,
     student: null,
+    work: null,
   },
   activeLoungeType: 'personal',
   activeFamilyRoom: '우리집',
@@ -2793,6 +2795,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         club_large_year_149000: '⛳ 클럽 라운지 • 대형 클럽 연간권 (연 149,000원 • 방 1개)',
         student_sub_900: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)',
         student_year_9000: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 연 9,000원)',
+        work_soho_9900: '💼 업무 라운지 • 소호·팀 10인 기준 (월 9,900원 • S: 드라이브 마운트)',
+        work_soho_year_99000: '💼 업무 라운지 • 소호·팀 연간권 (연 99,000원 • S: 드라이브 마운트)',
+        work_biz_19900: '💼 업무 라운지 • 비즈니스 무제한 (월 19,900원 • 전 직원 S: 드라이브)',
+        work_biz_year_199000: '💼 업무 라운지 • 비즈니스 연간권 (연 199,000원 • 전 직원 S: 드라이브)',
       };
 
       const nextLoungeType: LoungeType = planId.startsWith('personal_')
@@ -2803,6 +2809,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         ? 'club'
         : planId.startsWith('student_')
         ? 'student'
+        : planId.startsWith('work_')
+        ? 'work'
         : state.activeLoungeType;
 
       const isPaidSubscription = planId !== 'free_trial';

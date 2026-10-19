@@ -83,6 +83,23 @@ const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
           <path d="M6 12.5V17c0 1.66 2.69 3 6 3s6-1.34 6-3v-4.5" />
         </svg>
       );
+    case 'work':
+      return (
+        <svg
+          className={className}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+          <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+          <path d="M2 12h20" />
+        </svg>
+      );
   }
 };
 
@@ -94,6 +111,7 @@ const MAIN_LOUNGE_MENUS: Array<{
   { id: 'family', label: '패밀리 라운지' },
   { id: 'club', label: '클럽 라운지' },
   { id: 'student', label: '스쿨 라운지' },
+  { id: 'work', label: '업무 라운지' },
 ];
 
 const LOUNGE_SUBMENU_CONFIG: Record<
@@ -123,6 +141,12 @@ const LOUNGE_SUBMENU_CONFIG: Record<
     { id: 'dashboard', label: '타임캡슐 피드 & 씬 검색' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
     { id: 'sync', label: '게이밍 PC & 학생인증' },
+  ],
+  work: [
+    { id: 'trial', label: '무료체험' },
+    { id: 'dashboard', label: '투시검색 & 폴더 트리(S:)' },
+    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'sync', label: '팀원 권한 & S: 드라이브' },
   ],
 };
 

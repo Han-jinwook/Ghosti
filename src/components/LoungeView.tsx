@@ -39,6 +39,13 @@ const LOUNGE_TABS: Array<{
     shortPrice: '초·중·고 반/동아리 특가 월 900원 (연 9,000원)',
     desc: '친구 얼굴 크롭 & 별명 등록 ➔ 레이더 10장 수합 ➔ 방장 게이밍 PC 콕 찌르기',
   },
+  {
+    id: 'work',
+    icon: '💼',
+    label: '업무 라운지',
+    shortPrice: 'SOHO 팀 월 9,900원 · 기업 무제한 월 19,900원',
+    desc: '사무실 PC 폴더 1초 투시검색 & 윈도우 탐색기(S:) 자동 마운트 · 30KB 오프라인 프리뷰 · File Lock 충돌 방지',
+  },
 ];
 
 const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
@@ -58,6 +65,10 @@ const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   club_large_year_149000: '⛳ 대형 클럽 연간 (연 149,000원)',
   student_sub_900: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)',
   student_year_9000: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 연 9,000원)',
+  work_soho_9900: '💼 업무 라운지 SOHO 10인 (월 9,900원)',
+  work_soho_year_99000: '💼 업무 라운지 SOHO 연간 (연 99,000원 · 100명 평생권)',
+  work_biz_19900: '💼 업무 라운지 기업 무제한 (월 19,900원)',
+  work_biz_year_199000: '💼 업무 라운지 기업 연간 (연 199,000원 · 100명 평생권)',
 };
 
 export const LoungeModeSwitcherBar: React.FC = () => null;
@@ -1784,7 +1795,774 @@ export const LoungeView: React.FC = () => {
           </section>
         </>
       )}
+
+      {/* ====================================================================
+          5. 업무 라운지 (work) — B2B SOHO & 기업 팀 듀얼 뷰 & 가상 드라이브(S:) 브릿지
+         ==================================================================== */}
+      {activeLoungeType === 'work' && <WorkLoungeB2BHub />}
     </main>
+  );
+};
+
+interface WorkLoungeDocItem {
+  id: string;
+  folderId: string;
+  folderPath: string;
+  fileName: string;
+  ext: 'XLSX' | 'DOCX' | 'PDF' | 'HWP' | 'DWG';
+  sizeLabel: string;
+  updatedAt: string;
+  author: string;
+  lockedBy: string | null;
+  cacheSizeLabel: string;
+  summaryTitle: string;
+  matchedSnippet: string;
+  tableHeaders: string[];
+  tableRows: string[][];
+  fullTextPreview: string;
+}
+
+const WORK_LOUNGE_FOLDERS = [
+  { id: 'all', name: 'S:\\ (업무 드라이브 전체)', count: 6, path: 'S:\\' },
+  { id: 'contracts', name: '01_계약서_법무문서', count: 2, path: 'S:\\01_계약서_법무문서' },
+  { id: 'quotes', name: '02_견적서_단가표_엑셀', count: 2, path: 'S:\\02_견적서_단가표_엑셀' },
+  { id: 'tax', name: '03_세금계산서_회계증빙', count: 1, path: 'S:\\03_세금계산서_회계증빙' },
+  { id: 'site', name: '04_현장시공_도면_미디어', count: 1, path: 'S:\\04_현장시공_도면_미디어' },
+];
+
+const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
+  {
+    id: 'work-doc-1',
+    folderId: 'quotes',
+    folderPath: 'S:\\02_견적서_단가표_엑셀',
+    fileName: '2026_상반기_을지로현장_실내건축_표준단가표_v4.xlsx',
+    ext: 'XLSX',
+    sizeLabel: '4.8 MB',
+    updatedAt: '방금 전 (14:22)',
+    author: '박과장 (공무팀)',
+    lockedBy: '박과장',
+    cacheSizeLabel: '29.4 KB 선행 캐싱됨',
+    summaryTitle: '[엑셀 시트 1~3 통합 투시 요약] 을지로 오피스 리모델링 철거·목공·전기 공정별 일위대가 및 협력사 네고 단가표',
+    matchedSnippet:
+      '표(Sheet2_철거단가) C14셀: "야간 방음 가설벽 설치 및 폐기물 반출 일식 — 단가 4,850,000원 (부자재 포함, 안전관리비 8% 별도)"',
+    tableHeaders: ['공종 코드', '세부 내역 (규격)', '단위', '2026 표준 단가', '비고 / 협력사'],
+    tableRows: [
+      ['DEM-101', '야간 방음 가설벽 설치 및 철거 반출', '일식', '4,850,000원', '성수건업 (야간 할증 포함)'],
+      ['CAR-204', '친환경 방염 석고보드 2P 시공 (9.5T)', '㎡', '38,500원', 'KCC 방염 인증필'],
+      ['ELC-309', '회의실 라인조명 매립 타공 및 배선', 'M', '64,000원', 'SMPS 안정기 별도'],
+      ['TOT-999', '총 직접공사비 합계 (VAT 별도)', '식', '68,420,000원', '대표님 결재 완료 (10% 네고 반영)'],
+    ],
+    fullTextPreview:
+      '1. 현장명: 을지로 3가 프라임타워 8층 오피스 인테리어 공사\n2. 발주처: (주)메타솔루션파트너스 / 담당: 이팀장\n3. 핵심 특기사항: 주간 소음 민원으로 인해 철거 및 폐기물 반출은 금요일 22:00 ~ 일요일 18:00 야간 집중 공정으로 진행함. 단가표 Sheet 2의 C14~F18 구간에 협력사 네고 단가(-7.5%)가 최종 반영되어 있음.',
+  },
+  {
+    id: 'work-doc-2',
+    folderId: 'contracts',
+    folderPath: 'S:\\01_계약서_법무문서',
+    fileName: '2026_외주개발_및_유지보수_표준도급계약서_최종.docx',
+    ext: 'DOCX',
+    sizeLabel: '2.1 MB',
+    updatedAt: '오늘 11:40',
+    author: '이팀장 (전략기획)',
+    lockedBy: '이팀장',
+    cacheSizeLabel: '28.1 KB 선행 캐싱됨',
+    summaryTitle: '[계약서 본문 + 별첨 과업지시서 투시 요약] 제14조 지체상금(1일 0.15%) 및 제19조 지식재산권 공동귀속 특약 조항',
+    matchedSnippet:
+      '본문 제14조(지체상금 및 위약금) 제2항: "을이 정당한 사유 없이 납기를 지연할 경우 매 지체일수당 계약금액의 1,000분의 1.5(0.15%)를 공제하며, 최대 한도는 총 계약금액의 10%로 한다."',
+    tableHeaders: ['조항', '핵심 규정 항목', '적용 기준 / 비율', '법무 검토 의견'],
+    tableRows: [
+      ['제4조 (대금지급)', '선금 30% / 중도금 40% / 잔금 30%', '검수 완료 후 7영업일 이내 현금', '적정 (표준하도급 준수)'],
+      ['제14조 (지체상금)', '납기 지연 시 일할 위약금', '1일당 0.15% (상한 10%)', '특약 반영 완료'],
+      ['제19조 (지재권)', '산출물 원본 소스코드 및 특허권', '갑·을 공동 소유 (제3자 라이선스 제한)', '대표님 확인 필'],
+    ],
+    fullTextPreview:
+      '제1조(목적) 본 계약은 갑이 위탁하는 클라우드 대체형 로컬 P2P 문서 검색 인프라 구축 과업을 을이 수행함에 있어 필요한 권리·의무를 규정한다.\n제14조(지체상금) 납기 지연 시 일 0.15%를 적용하되, 갑의 요구사항 변경으로 인한 일정 연장은 지체일수에서 제외한다.\n제21조(하자보수) 무상 하자보수 기간은 최종 검수 완료일로부터 12개월로 한다.',
+  },
+  {
+    id: 'work-doc-3',
+    folderId: 'tax',
+    folderPath: 'S:\\03_세금계산서_회계증빙',
+    fileName: '2026_3분기_거래처별_미수금_및_세금계산서_정산원장.xlsx',
+    ext: 'XLSX',
+    sizeLabel: '6.4 MB',
+    updatedAt: '어제 18:15',
+    author: '정실장 (재무회계)',
+    lockedBy: null,
+    cacheSizeLabel: '30.0 KB 선행 캐싱됨',
+    summaryTitle: '[회계원장 시트 투시 요약] 3분기 전자세금계산서 발행분 18건 중 미수금 2건(한빛테크·청담디자인) 입금 독촉 일정',
+    matchedSnippet:
+      '표(3Q_미수금현황) 행 8~9: "(주)한빛테크 잔금 13,200,000원 (세금계산서 09/25 발행, 입금약정일 10/25) · 청담디자인스튜디오 5,500,000원 (10/20 입금예정)"',
+    tableHeaders: ['거래처명', '품목 / 프로젝트', '공급가액 (VAT포함)', '계산서 발행일', '수금 상태'],
+    tableRows: [
+      ['(주)한빛테크', '본사 서버랙 및 내부망 구축 잔금', '13,200,000원', '2026-09-25', '미수 (10/25 입금약정)'],
+      ['청담디자인스튜디오', '브랜드 쇼룸 영상 납품 중도금', '5,500,000원', '2026-09-30', '미수 (10/20 입금예정)'],
+      ['성동메디컬의원', '원내 안내 키오스크 납품 완납', '24,200,000원', '2026-09-12', '수금완료 (09/18)'],
+    ],
+    fullTextPreview:
+      '■ 2026년 3분기 매출 세금계산서 총괄: 총 발행액 1억 8,450만 원 중 수금 완료 1억 6,580만 원 (수금률 89.8%).\n■ 미수 거래처 조치 내역: 한빛테크 재무팀 김차장 통화 완료(10월 25일 정기결제일 전액 입금 확정), 청담디자인스튜디오는 금주 금요일 오전 입금 예정.',
+  },
+  {
+    id: 'work-doc-4',
+    folderId: 'contracts',
+    folderPath: 'S:\\01_계약서_법무문서',
+    fileName: '2026_신규입사자_표준근로계약서_및_비밀유지서약서(NDA).hwp',
+    ext: 'HWP',
+    sizeLabel: '1.4 MB',
+    updatedAt: '2026-10-16',
+    author: '정실장 (인사총무)',
+    lockedBy: null,
+    cacheSizeLabel: '26.8 KB 선행 캐싱됨',
+    summaryTitle: '[한글(HWP) 본문 투시 요약] 포괄산정 연장근로수당 기준, 식대 비과세 20만 원 항목 및 영업비밀 보호 특약',
+    matchedSnippet:
+      '제6조(임금의 구성항목) 표2: "기본급 및 직무수당 외 식대 월 200,000원(비과세)을 별도 지급하며, 퇴직금 산정 기준은 근로기준법 제34조를 따른다."',
+    tableHeaders: ['급여 항목', '산정 기준', '과세 여부', '지급일'],
+    tableRows: [
+      ['기본급', '주 40시간 (월 209시간 기준)', '과세', '매월 25일'],
+      ['식대 보조비', '월 고정 지급 (200,000원)', '비과세 한도 적용', '매월 25일'],
+      ['자가운전보조금', '외근직 차량 업무 사용 시 (200,000원)', '비과세 요건 충족 시', '매월 25일'],
+    ],
+    fullTextPreview:
+      '본 근로계약서는 2026년 개정 노동관계법령을 준수하여 작성되었으며, 부속 서류인 [별첨1] 영업비밀 및 고객DB 보호 서약서(NDA)에 서명함으로써 효력이 발생한다.',
+  },
+  {
+    id: 'work-doc-5',
+    folderId: 'quotes',
+    folderPath: 'S:\\02_견적서_단가표_엑셀',
+    fileName: '성수동_팝업스토어_집기제작_비교견적서_3개사비교.pdf',
+    ext: 'PDF',
+    sizeLabel: '8.7 MB',
+    updatedAt: '2026-10-15',
+    author: '최대리 (공간기획)',
+    lockedBy: null,
+    cacheSizeLabel: '29.9 KB 선행 캐싱됨',
+    summaryTitle: '[스캔 PDF OCR + 표 투시 요약] A사(다온팩토리) vs B사(성수목공) vs C사(아크릴랩) 쇼케이스 제작 단가 및 납기 비교표',
+    matchedSnippet:
+      '비교표 4행: "B사(성수목공) — SUS 헤어라인 쇼케이스 + LED 간접조명 일체형 1,280만 원 (납기 10일, 무상 A/S 1년) ★최종 선정 추천"',
+    tableHeaders: ['비교 항목', 'A사 (다온팩토리)', 'B사 (성수목공 ★추천)', 'C사 (아크릴랩)'],
+    tableRows: [
+      ['총 견적금액 (VAT별도)', '14,500,000원', '12,800,000원 (최저가)', '15,200,000원'],
+      ['제작 및 설치 납기', '발주 후 14일', '발주 후 10일 (야간설치 포함)', '발주 후 12일'],
+      ['특장점 / 비고', '도장 마감 우수', '성수동 인근 공장으로 즉시 대응 가능', '특수 아크릴 가공 포함'],
+    ],
+    fullTextPreview:
+      '성수동 연무장길 팝업스토어 메인 디스플레이 집기 제작을 위해 3개 협력사로부터 입수한 견적서 스캔본을 AI OCR 및 표 구조 추출로 통합 비교함. B사(성수목공)가 단가(-170만 원 절감) 및 현장 긴급 대응력 면에서 가장 우수함.',
+  },
+  {
+    id: 'work-doc-6',
+    folderId: 'site',
+    folderPath: 'S:\\04_현장시공_도면_미디어',
+    fileName: '성수동_쇼룸_천장배선_및_분전반_시공도면_현장검수본.dwg',
+    ext: 'DWG',
+    sizeLabel: '18.2 MB',
+    updatedAt: '2026-10-14',
+    author: '강사원 (현장감리)',
+    lockedBy: null,
+    cacheSizeLabel: '27.5 KB 선행 캐싱됨',
+    summaryTitle: '[도면 주기(Note) & 레이어 텍스트 투시 요약] 메인 분전반(MCCB 100A) 증설 위치 및 에스프레소 머신 전용 단독 회로(30A) 배선 지시',
+    matchedSnippet:
+      '도면 우측 하단 특기시방 주기(Note #4): "바리스타 바(Bar) 하부 에스프레소 머신(7.2kW) 및 제빙기는 반드시 30A 누전차단기 단독 회로로 직결 시공할 것 (타 콘센트 분기 절대 금지)"',
+    tableHeaders: ['회로 번호', '부하 명칭', '차단기 용량', '전선 규격 / 배관'],
+    tableRows: [
+      ['M-01 (Main)', '쇼룸 통합 주분전반 메인', 'MCCB 4P 100A', 'F-CV 35sq / 강제전선관'],
+      ['P-04 (단독)', '에스프레소 머신 (7.2kW 전용)', 'ELCB 2P 30A (감도 30mA)', 'HIV 6.0sq 단독 직결'],
+      ['L-02 (조명)', '매장 메인 트랙조명 & 간판', 'ELCB 2P 20A', 'HIV 2.5sq / CD관 매립'],
+    ],
+    fullTextPreview:
+      '현장 감리 메모: 기존 건물 분전반 용량이 50A로 부족하여 한전 승압 신청 완료(100A). 바리스타존 커피머신 가동 시 차단기 트립 방지를 위해 P-04 단독 회로를 천장 트레이 경유하여 바 하부 점검구로 인출 완료함.',
+  },
+];
+
+export const WorkLoungeB2BHub: React.FC = () => {
+  const { isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges } =
+    useSaySeeStore();
+  const [viewMode, setViewMode] = useState<'semantic' | 'explorer'>('semantic');
+  const [masterPcOnline, setMasterPcOnline] = useState(true);
+  const [driveMounted, setDriveMounted] = useState(true);
+  const [mountBannerToast, setMountBannerToast] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
+  const [docs, setDocs] = useState<WorkLoungeDocItem[]>(INITIAL_WORK_DOCS);
+  const [selectedDocId, setSelectedDocId] = useState<string>('work-doc-1');
+
+  const workPlan = subscribedLounges.work;
+
+  const filteredDocs = docs.filter((doc) => {
+    const folderMatch =
+      viewMode === 'semantic'
+        ? true
+        : selectedFolderId === 'all' || doc.folderId === selectedFolderId;
+    if (!folderMatch) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      doc.fileName.toLowerCase().includes(q) ||
+      doc.summaryTitle.toLowerCase().includes(q) ||
+      doc.matchedSnippet.toLowerCase().includes(q) ||
+      doc.fullTextPreview.toLowerCase().includes(q) ||
+      doc.tableRows.some((row) => row.some((cell) => cell.toLowerCase().includes(q)))
+    );
+  });
+
+  const selectedDoc =
+    docs.find((d) => d.id === selectedDocId) || filteredDocs[0] || docs[0];
+
+  const handleToggleMountDrive = () => {
+    const next = !driveMounted;
+    setDriveMounted(next);
+    setMountBannerToast(
+      next
+        ? '✓ 내 PC 윈도우 탐색기에 [업무 드라이브 (S:)]가 원클릭 자동 마운트되었습니다! 이제 탐색기에서 기존 폴더 그대로 열고 저장하면 실시간 File Lock(동시 편집 충돌 방지)이 자동 작동합니다.'
+        : '안내: 윈도우 탐색기 [업무 드라이브 (S:)] 마운트가 일시 해제되었습니다. 언제든 원클릭으로 다시 연결할 수 있습니다.'
+    );
+  };
+
+  const handleToggleLockSimulation = (docId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDocs((prev) =>
+      prev.map((d) => {
+        if (d.id !== docId) return d;
+        const nextLock = d.lockedBy ? null : '김대표(나)';
+        return { ...d, lockedBy: nextLock };
+      })
+    );
+  };
+
+  const QUICK_WORK_QUERIES = [
+    '철거 단가 4,850,000원',
+    '지체상금 0.15%',
+    '한빛테크 미수금',
+    '성수목공 비교견적',
+    '에스프레소 30A 단독 회로',
+  ];
+
+  return (
+    <section className="flex flex-col gap-4">
+      {/* 1. 최상단 B2B 업무 라운지 전용 배너 + 우측 마스터 PC 상태 / 접속 팀원 수 / [💽 업무 드라이브(S:) 자동 마운트] 원클릭 버튼 */}
+      <div className="p-5 md:p-6 rounded-2xl bg-gradient-to-br from-[#0F172A] via-[#111827] to-[#18181B] border-2 border-cyan-400/45 shadow-xl flex flex-col gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-1.5 max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                💼 B2B 업무 라운지 (SOHO · 기업 팀 유료 클라우드 100% 대체)
+              </span>
+              {workPlan ? (
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+                  ✓ {PLAN_BADGE_LABELS[workPlan]} 이용 중
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-bold">
+                  월별 인당 과금 0원 · 사무실 PC 유휴 용량 무제한 활용
+                </span>
+              )}
+            </div>
+            <h2 className="font-headline-sm text-[18px] md:text-[21px] text-white font-extrabold tracking-tight leading-snug">
+              사무실 PC 폴더를 전 직원의 1초 투시 검색 서버 &amp; 윈도우 탐색기(S:)로 연결합니다
+            </h2>
+            <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+              마이박스·구글 드라이브 용량 요금 없이, 사무실 마스터 PC의 업무 폴더를 전 직원이{' '}
+              <strong className="text-cyan-300">🔍 AI 1초 본문·표 투시검색</strong>과{' '}
+              <strong className="text-white">🗂️ 윈도우 탐색기 네트워크 드라이브(S:)</strong>로 동시에 사용합니다.
+              마스터 PC가 꺼져 있어도 모바일·외부 PC에 선행 캐싱된{' '}
+              <strong className="text-emerald-300">30KB 전체 텍스트·표 요약 프리뷰가 0.1초 만에</strong> 열립니다.
+            </p>
+          </div>
+
+          {/* 우측 상단: 마스터 PC 온라인 상태 배지 + 접속 중인 팀원 수 배지 + [💽 내 PC 윈도우 탐색기에 '업무 드라이브(S:)' 자동 마운트] 원클릭 버튼 */}
+          <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMasterPcOnline((v) => !v)}
+                title="클릭하여 마스터 PC 온라인/오프라인(30KB 로컬 프리뷰 작동) 상태를 테스트해 보세요"
+                className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  masterPcOnline
+                    ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/25'
+                    : 'bg-rose-500/20 border-rose-400/60 text-rose-200 hover:bg-rose-500/30'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    masterPcOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+                  }`}
+                />
+                <span>
+                  {masterPcOnline
+                    ? '🟢 사무실 마스터 PC 온라인 (실시간 동기화)'
+                    : '🔴 마스터 PC 오프라인 (30KB 선행 캐시 0.1초 모드)'}
+                </span>
+                <span className="text-[10px] underline ml-1 opacity-85">상태 전환 테스트</span>
+              </button>
+
+              <span className="px-3 py-1.5 rounded-xl bg-zinc-900/90 border border-cyan-400/35 text-cyan-200 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 whitespace-nowrap">
+                👥 접속 중인 팀원 6명 (편집 2명)
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleToggleMountDrive}
+              className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${
+                driveMounted
+                  ? 'bg-cyan-400 text-zinc-950 hover:bg-cyan-300 border border-cyan-200'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-cyan-300 border-2 border-cyan-400/60'
+              }`}
+            >
+              <span>💽 내 PC 윈도우 탐색기에 ‘업무 드라이브(S:)’ 자동 마운트</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-950/20 text-[10.5px] font-black">
+                {driveMounted ? 'S:\\ 연결됨 ✓' : '원클릭 연결'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {mountBannerToast && (
+          <div className="px-3.5 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-between gap-3">
+            <span className="font-body-sm text-[12px] text-cyan-100 font-bold">
+              {mountBannerToast}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMountBannerToast(null)}
+              className="text-zinc-400 hover:text-white text-[11px] font-bold shrink-0"
+            >
+              ✕ 닫기
+            </button>
+          </div>
+        )}
+
+        {/* 듀얼 모드 스위처 바 (🔍 AI 투시검색 뷰 vs 🗂️ 윈도우 폴더 트리 뷰) + 검색창 */}
+        <div className="pt-2 border-t border-white/10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setViewMode('semantic')}
+              className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+                viewMode === 'semantic'
+                  ? 'bg-primary-container text-zinc-950 shadow-md'
+                  : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+              }`}
+            >
+              <span>🔍 AI 투시검색 뷰 (기본)</span>
+              <span className="px-1.5 py-0.5 rounded bg-black/20 text-[10.5px]">
+                본문·표 1초 투시
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setViewMode('explorer')}
+              className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+                viewMode === 'explorer'
+                  ? 'bg-primary-container text-zinc-950 shadow-md'
+                  : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+              }`}
+            >
+              <span>🗂️ 윈도우 폴더 트리 뷰</span>
+              <span className="px-1.5 py-0.5 rounded bg-black/20 text-[10.5px]">
+                탐색기 S:\ 구조 그대로
+              </span>
+            </button>
+          </div>
+
+          {/* 실시간 본문·표 투시 검색 입력창 */}
+          <div className="flex-1 max-w-xl flex items-center gap-2 bg-zinc-950/90 border border-cyan-400/40 rounded-xl px-3.5 py-2">
+            <span className="text-cyan-300 text-sm">🔍</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="계약서 조항, 엑셀 단가표 셀 숫자, 거래처 미수금, 도면 주기를 1초 만에 투시 검색..."
+              className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[12.5px] focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-zinc-400 hover:text-white text-[11px] font-bold shrink-0"
+              >
+                초기화
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 추천 1초 투시 검색어 알약 */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-label-sm text-[11px] text-zinc-400 mr-1">
+            ⚡ 1초 본문·표 투시 키워드:
+          </span>
+          {QUICK_WORK_QUERIES.map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => setSearchQuery(searchQuery === q ? '' : q)}
+              className={`px-2.5 py-1 rounded-full font-label-sm text-[11px] font-bold border transition-all cursor-pointer ${
+                searchQuery === q
+                  ? 'bg-cyan-400 text-zinc-950 border-cyan-300 font-extrabold'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. 메인 워크스페이스: 듀얼 모드 (🔍 AI 투시검색 뷰 vs 🗂️ 윈도우 폴더 트리 뷰) + 우측(또는 하단) 0.1초 30KB 선행 캐싱 프리뷰 패널 */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        {/* 좌측/중앙 영역 (7컬럼): 선택된 뷰 모드 렌더링 */}
+        <div className="xl:col-span-7 flex flex-col gap-3">
+          {viewMode === 'semantic' ? (
+            <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 font-label-sm text-[11px] font-extrabold">
+                    🔍 AI 투시검색 결과 ({filteredDocs.length}건)
+                  </span>
+                  <span className="font-body-sm text-[12px] text-zinc-400">
+                    계약서·견적서·엑셀 표 셀 내용까지 파일을 열지 않고 1초 만에 관통합니다
+                  </span>
+                </div>
+                <span className="font-label-sm text-[11px] text-emerald-300 font-bold">
+                  ⚡ 전 파일 30KB 요약본 모바일/외부PC 선행 캐싱 완료
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                {filteredDocs.map((doc) => {
+                  const isSelected = doc.id === selectedDoc.id;
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => setSelectedDocId(doc.id)}
+                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                        isSelected
+                          ? 'bg-cyan-950/30 border-cyan-400 shadow-lg'
+                          : 'bg-zinc-950/80 hover:bg-zinc-900/90 border-white/10'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span
+                            className={`px-2 py-0.5 rounded font-label-sm text-[10.5px] font-extrabold ${
+                              doc.ext === 'XLSX'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                                : doc.ext === 'DOCX' || doc.ext === 'HWP'
+                                ? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
+                                : doc.ext === 'PDF'
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
+                            }`}
+                          >
+                            {doc.ext}
+                          </span>
+                          <span className="font-label-md text-[13.5px] text-white font-extrabold truncate">
+                            {doc.fileName}
+                          </span>
+                        </div>
+
+                        {/* File Lock 배지 (동시 편집 충돌 방지 UI) */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {doc.lockedBy ? (
+                            <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-sm">
+                              🔒 편집 중 ({doc.lockedBy})
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
+                              🔓 편집 가능
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleLockSimulation(doc.id, e)}
+                            className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[10px]"
+                            title="동시 편집 충돌 방지(File Lock) 잠금/해제 전환 테스트"
+                          >
+                            {doc.lockedBy ? '잠금해제' : '잠금테스트'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="font-label-sm text-[12px] text-cyan-200 font-bold">
+                        {doc.summaryTitle}
+                      </p>
+
+                      {/* 본문 / 표 셀 매칭 하이라이트 박스 */}
+                      <div className="p-2.5 rounded-lg bg-zinc-900/95 border border-cyan-400/25 font-body-sm text-[12px] text-zinc-200 leading-relaxed">
+                        <span className="text-cyan-300 font-extrabold mr-1.5">🎯 1초 본문·표 투시:</span>
+                        {doc.matchedSnippet}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 pt-0.5">
+                        <span>
+                          📁 {doc.folderPath} · 원본 {doc.sizeLabel} · 작성: {doc.author}
+                        </span>
+                        <span className="text-emerald-300 font-bold">
+                          ⚡ {doc.cacheSizeLabel} (오프라인 0.1초 열람)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* 🗂️ 윈도우 폴더 트리 뷰 (좌측 실제 업무 폴더 트리 + 우측 파일 리스트) */
+            <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                    🗂️ 윈도우 탐색기 폴더 트리 뷰 (S:\)
+                  </span>
+                  <span className="font-body-sm text-[12px] text-zinc-300">
+                    사무실 마스터 PC의 실제 업무 폴더 구조를 레거시 탐색기 습관 그대로 탐색합니다
+                  </span>
+                </div>
+                <span className="font-label-sm text-[11px] text-cyan-300 font-bold">
+                  {driveMounted ? '💽 내 PC 탐색기 S:\\ 드라이브 실시간 동기화 중' : '⚠️ S:\\ 드라이브 미마운트'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                {/* 좌측 폴더 트리 (4컬럼) */}
+                <div className="md:col-span-4 p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1.5">
+                  <div className="font-label-sm text-[11px] text-zinc-400 font-bold px-2 py-1 border-b border-white/10 flex items-center justify-between">
+                    <span>💻 마스터 PC 폴더 트리</span>
+                    <span className="text-cyan-300">S:\</span>
+                  </div>
+                  {WORK_LOUNGE_FOLDERS.map((folder) => {
+                    const active = selectedFolderId === folder.id;
+                    return (
+                      <button
+                        key={folder.id}
+                        type="button"
+                        onClick={() => setSelectedFolderId(folder.id)}
+                        className={`px-3 py-2.5 rounded-lg text-left font-label-sm text-[12px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                          active
+                            ? 'bg-cyan-400/20 border border-cyan-400 text-cyan-200 font-extrabold'
+                            : 'hover:bg-zinc-900 text-zinc-300 border border-transparent'
+                        }`}
+                      >
+                        <span className="truncate">
+                          {folder.id === 'all' ? '💽 ' : active ? '📂 ' : '📁 '}
+                          {folder.name}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[10.5px] shrink-0">
+                          {folder.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 우측 파일 리스트 (8컬럼) */}
+                <div className="md:col-span-8 p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2">
+                  <div className="px-2 py-1 border-b border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 font-bold">
+                    <span>
+                      경로:{' '}
+                      <strong className="text-cyan-300">
+                        {WORK_LOUNGE_FOLDERS.find((f) => f.id === selectedFolderId)?.path || 'S:\\'}
+                      </strong>
+                    </span>
+                    <span>파일 클릭 시 우측 30KB 프리뷰 0.1초 오픈</span>
+                  </div>
+
+                  <div className="flex flex-col divide-y divide-white/10">
+                    {filteredDocs.map((doc) => {
+                      const isSelected = doc.id === selectedDoc.id;
+                      return (
+                        <div
+                          key={doc.id}
+                          onClick={() => setSelectedDocId(doc.id)}
+                          className={`px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 cursor-pointer transition-colors ${
+                            isSelected ? 'bg-cyan-950/40' : 'hover:bg-zinc-900/80'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-cyan-300 font-label-sm text-[10px] font-extrabold shrink-0">
+                              {doc.ext}
+                            </span>
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-label-sm text-[12.5px] text-white font-bold truncate">
+                                {doc.fileName}
+                              </span>
+                              <span className="text-[11px] text-zinc-400 truncate">
+                                {doc.sizeLabel} · {doc.updatedAt} · {doc.author}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {doc.lockedBy ? (
+                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[11px] font-extrabold">
+                                🔒 편집 중 ({doc.lockedBy})
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
+                                🔓 편집 가능
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleLockSimulation(doc.id, e)}
+                              className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[10px]"
+                            >
+                              {doc.lockedBy ? '해제' : '잠금'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 우측 영역 (5컬럼): 마스터 PC 오프라인 시에도 0.1초 만에 열리는 [30KB 선행 캐싱 전체 텍스트 & 표 요약 프리뷰] 패널 */}
+        <div className="xl:col-span-5 p-4 md:p-5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/45 shadow-xl flex flex-col gap-3.5 sticky top-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                ⚡ 0.1초 즉시 오픈 (30KB 로컬 캐시 프리뷰)
+              </span>
+              <span className="font-label-sm text-[11px] text-emerald-300 font-bold">
+                {selectedDoc.cacheSizeLabel}
+              </span>
+            </div>
+            <span
+              className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold ${
+                masterPcOnline
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : 'bg-rose-500/25 text-rose-200 border border-rose-400/50'
+              }`}
+            >
+              {masterPcOnline
+                ? '🟢 마스터 PC 연결 중'
+                : '🔴 마스터 PC 꺼짐 — 캐시만으로 0.1초 열람 중'}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="font-label-sm text-[11px] text-cyan-300 font-bold">
+              {selectedDoc.folderPath}\{selectedDoc.fileName}
+            </span>
+            <h3 className="font-headline-sm text-[16px] text-white font-extrabold leading-snug">
+              {selectedDoc.summaryTitle}
+            </h3>
+          </div>
+
+          {/* File Lock 충돌 방지 경고 배너 */}
+          {selectedDoc.lockedBy ? (
+            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-400/50 flex items-center justify-between gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-label-sm text-[12px] text-amber-200 font-extrabold">
+                  🔒 현재 [{selectedDoc.lockedBy}] 님이 윈도우 탐색기(S:)에서 편집 중입니다
+                </span>
+                <span className="font-body-sm text-[11.5px] text-amber-100/90">
+                  덮어쓰기 충돌을 완벽히 차단하기 위해 다른 팀원에게는 [읽기 전용 &amp; 30KB 0.1초 프리뷰]로 안전하게 열립니다.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleLockSimulation(selectedDoc.id)}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-amber-300/40 text-amber-200 font-label-sm text-[11px] font-bold shrink-0"
+              >
+                잠금 해제 시뮬레이션
+              </button>
+            </div>
+          ) : (
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 flex items-center justify-between gap-2">
+              <span className="font-label-sm text-[11.5px] text-emerald-300 font-bold">
+                🔓 현재 편집 중인 팀원이 없습니다 — S:\ 드라이브에서 즉시 편집 및 자동 잠금 가능
+              </span>
+              <button
+                type="button"
+                onClick={() => handleToggleLockSimulation(selectedDoc.id)}
+                className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold shrink-0"
+              >
+                내가 편집 잠금 걸기
+              </button>
+            </div>
+          )}
+
+          {/* 30KB 선행 캐싱된 표(Table) 구조 프리뷰 */}
+          <div className="flex flex-col gap-1.5">
+            <span className="font-label-sm text-[11.5px] text-zinc-300 font-extrabold">
+              📊 30KB 선행 캐싱 표(Table) 핵심 데이터 요약 (원본 미다운로드 0.1초 렌더링)
+            </span>
+            <div className="overflow-x-auto rounded-xl border border-white/10 bg-zinc-950">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-zinc-900 border-b border-white/10">
+                    {selectedDoc.tableHeaders.map((h) => (
+                      <th
+                        key={h}
+                        className="px-2.5 py-2 font-label-sm text-[11px] text-cyan-300 font-extrabold whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {selectedDoc.tableRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-zinc-900/50">
+                      {row.map((cell, cIdx) => (
+                        <td
+                          key={cIdx}
+                          className="px-2.5 py-1.5 font-body-sm text-[11.5px] text-zinc-200"
+                        >
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 30KB 선행 캐싱된 본문 전체 텍스트 요약 프리뷰 */}
+          <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1">
+            <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
+              📄 30KB 선행 캐싱 본문 전체 텍스트 요약
+            </span>
+            <p className="font-body-sm text-[12px] text-zinc-200 whitespace-pre-line leading-relaxed">
+              {selectedDoc.fullTextPreview}
+            </p>
+          </div>
+
+          {/* 하단 액션 버튼: S: 드라이브 원본 열기 / 요금제 개통 */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <span className="font-body-sm text-[11px] text-zinc-400">
+              원본 용량 {selectedDoc.sizeLabel} ➔ 로컬 캐시 {selectedDoc.cacheSizeLabel}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {!isStoreAppMode && !workPlan && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => activatePricingPlan('work_soho_9900')}
+                    className="px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                  >
+                    💼 SOHO 10인 월 9,900원 개통
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowProModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                  >
+                    B2B 평생권/연간권 보기
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 };
 
@@ -1794,6 +2572,7 @@ export const LoungeView: React.FC = () => {
  * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 방별 별명 알약([👑 멀린], [👑 둘째사위], [은숙] 등) 1초 검색 통합 바
  * - 클럽 라운지: Text-to-Banner 자동 간판('성동고 89회 동창회') + [🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기] + [🎞️ 응답하라 1989 (추억) / 🍻 최근 우리들 (근황)] 투트랙 탭 + 13KB 캐시 & 5MB 무손실 원본 P2P 소환 바
  * - 스쿨 라운지: 낮(학교/학원) 로컬 캐시 1초 구간 점프 + 스쿨방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클리어 리포트] 배너
+ * - 업무 라운지: B2B 듀얼 뷰(AI 투시검색 뷰 vs 윈도우 폴더 트리 뷰) + 30KB 0.1초 선행 캐시 프리뷰 + 업무 드라이브(S:) 자동 마운트 & File Lock 충돌 방지 허브
  */
 export const LoungeFeedContextBanner: React.FC = () => {
   const {
@@ -1929,6 +2708,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
     );
   }
 
+  if (activeLoungeType === 'work') {
+    return <WorkLoungeB2BHub />;
+  }
+
   // student ('🎒 스쿨 라운지')
   return (
     <div className="flex flex-col gap-2.5">
@@ -1969,8 +2752,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
 };
 
 /**
- * 3번 서브메뉴 `[⏳ AI 인덱싱 대기실]` (패밀리 / 클럽 / 스쿨 라운지 전용)
- * - 수동 검사가 아니라 AI 인덱싱(Gemma 2 768d 벡터 + 13KB 캐시 변환) 시간 벌기용 안심 버퍼 뷰!
+ * 3번 서브메뉴 `[⏳ AI 인덱싱 대기실]` (패밀리 / 클럽 / 스쿨 / 업무 라운지 전용)
+ * - 수동 검사가 아니라 AI 인덱싱(Gemma 2 768d 벡터 + 13KB/30KB 캐시 변환) 시간 벌기용 안심 버퍼 뷰!
  * - 4050 동창회 아날로그 스캔 사진용 '스틱(Chip) 연쇄 태깅' & '[❓ 언제/어디인가요?] 집단 지성 연도 제보 ➔ 👑 방장 일괄 승인' 탑재
  */
 export const LoungeIndexingWaitingRoom: React.FC = () => {
@@ -2054,6 +2837,14 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
         ? '⚡ 24시간 GPU 클라우드 도우미가 즉시 인덱싱 대행 중!'
         : '방장 게이밍 PC(RTX) 하교 후 부팅 대기 중 · 켜지는 즉시 0.1초 자동 색인 배포',
       senderLabels: ['민준 아이폰', '서연 갤럭시', '도윤 아이폰', '하은 아이폰'],
+    },
+    work: {
+      badge: '⏳ 업무 라운지 AI 인덱싱 대기실 (계약서·엑셀 표 파싱 & 30KB 오프라인 요약본 생성 버퍼)',
+      title: '외근·현장 직원이 올린 계약서·견적서·시공사진이 사무실 마스터 PC에서 30KB 요약본으로 자동 색인됩니다',
+      subtitle:
+        '외부에서 업로드된 엑셀 단가표, PDF 견적서, 현장 도면의 본문과 표(Table) 셀 데이터를 추출해 전 직원의 스마트폰과 외부 PC에 30KB 선행 캐시로 배포하는 자동 색인 버퍼입니다.',
+      bufferReason: 'S:\\ 업무 드라이브 폴더 자동 분류 & 30KB 전체 텍스트·표 요약 프리뷰 생성 중',
+      senderLabels: ['박과장 외근 노트북', '이팀장 아이폰', '정실장 데스크탑', '강사원 현장 태블릿'],
     },
   };
 
@@ -3182,6 +3973,47 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (activeLoungeType === 'work') {
+    return (
+      <div className="p-6 rounded-2xl bg-[#18181B] border border-cyan-400/45 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
+              💼 업무 라운지 — 팀원 권한 &amp; 윈도우 탐색기 가상 드라이브(S:) 브릿지 관리
+            </span>
+            <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
+              사무실 PC 폴더를 전 직원의 1초 투시 검색 서버 &amp; 윈도우 탐색기(S:)로 연결합니다
+            </h2>
+            <p className="font-body-sm text-[12.5px] text-zinc-300">
+              부서별 폴더 접근 권한, 윈도우 탐색기 네트워크 드라이브(S:) 원클릭 자동 마운트, 동시 편집 충돌 방지(File Lock) 및 30KB 오프라인 선행 캐시 배포 정책을 통합 관리합니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isStoreAppMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => activatePricingPlan('work_soho_9900')}
+                  className="px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
+                >
+                  💼 SOHO 팀 (10인) 월 9,900원 개통
+                </button>
+                <button
+                  type="button"
+                  onClick={() => activatePricingPlan('work_biz_19900')}
+                  className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/50 text-cyan-300 font-label-sm text-[12px] font-extrabold"
+                >
+                  🏢 기업 무제한 월 19,900원 개통
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        <WorkLoungeB2BHub />
       </div>
     );
   }

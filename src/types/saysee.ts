@@ -125,6 +125,7 @@ export interface RoomPersonaMap {
   '처가(친정)'?: string;
   club?: string;
   student?: string;
+  work?: string;
 }
 
 /** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 만국공통 세이씨 여권(SaySee Face Passport) 클러스터 */
@@ -253,8 +254,8 @@ export interface UndoQuarantineBatch {
 /** [스펙 3] 클라우드 대체 프라이빗 싱크 2-Track 모드 */
 export type PrivateSyncStrategy = 'mirror' | 'shadow';
 
-/** [4대 라운지 스펙] 라운지 카테고리: 개인 | 패밀리 | 클럽 | 스쿨 */
-export type LoungeType = 'personal' | 'family' | 'club' | 'student';
+/** [5대 라운지 스펙] 라운지 카테고리: 개인 | 패밀리 | 클럽 | 스쿨 | 업무(B2B) */
+export type LoungeType = 'personal' | 'family' | 'club' | 'student' | 'work';
 
 /** [패밀리 라운지 양가 통합권] 3개 방 분리 ID */
 export type FamilyRoomId = '우리집' | '본가(친가)' | '처가(친정)';
@@ -315,7 +316,7 @@ export type GpuHelperTierId =
   | 'club_medium_2000'
   | 'club_large_3000';
 
-/** [4대 라운지 초심플 기본 요금제] 마스터 1인 결제 ➔ 멤버 전원 무료 (특판 문구 제외 순수 요금 구조) */
+/** [5대 라운지 초심플 기본 요금제] 마스터 1인 결제 ➔ 멤버 전원 무료 */
 export type PricingPlanId =
   | 'free_trial'
   | 'personal_single_2900'
@@ -332,7 +333,11 @@ export type PricingPlanId =
   | 'club_large_14900'
   | 'club_large_year_149000'
   | 'student_sub_900'
-  | 'student_year_9000';
+  | 'student_year_9000'
+  | 'work_soho_9900'
+  | 'work_soho_year_99000'
+  | 'work_biz_19900'
+  | 'work_biz_year_199000';
 
 export interface DuplicateGroup {
   groupId: string;

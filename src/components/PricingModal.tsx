@@ -20,6 +20,10 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
   club_large_year_149000: '⛳ 클럽 라운지 • 대형 클럽 무제한 (연 149,000원)',
   student_sub_900: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)',
   student_year_9000: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 연 9,000원)',
+  work_soho_9900: '💼 업무 라운지 • SOHO 팀 10인 (월 9,900원)',
+  work_soho_year_99000: '💼 업무 라운지 • SOHO 팀 10인 (연 99,000원 · 100명 평생권)',
+  work_biz_19900: '💼 업무 라운지 • 기업 무제한 (월 19,900원)',
+  work_biz_year_199000: '💼 업무 라운지 • 기업 무제한 (연 199,000원 · 100명 평생권)',
 };
 
 /**
@@ -816,6 +820,91 @@ export const PricingModal: React.FC = () => {
                   >
                     연 9,000원 결제
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ⑤ 💼 업무 라운지 (SOHO · 기업 팀 유료 클라우드 100% 대체) */}
+          <div className="p-5 rounded-2xl bg-[#18181B] border-2 border-cyan-400/45 lg:col-span-2 flex flex-col justify-between gap-4">
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                  5. B2B 소규모 사업장(SOHO) &amp; 기업 팀 • 유료 클라우드(마이박스·구글 드라이브) 100% 대체
+                </span>
+                <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+                  💽 윈도우 탐색기(S:) 자동 마운트 · ⚡ 30KB 0.1초 오프라인 프리뷰 · 🔒 File Lock 충돌 방지
+                </span>
+              </div>
+              <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
+                💼 업무 라운지 — &ldquo;사무실 PC 폴더를 전 직원의 1초 투시 검색 서버 &amp; 윈도우 탐색기(S:)로 연결합니다&rdquo;
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="p-4 rounded-xl bg-zinc-950/90 border border-cyan-400/35 flex flex-col justify-between gap-2.5">
+                  <div>
+                    <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
+                      💼 SOHO 팀 플랜 (10인 이하 사업장·세무·법무·인테리어·디자인팀)
+                    </span>
+                    <div className="font-headline-md text-[22px] text-white font-black mt-0.5">
+                      월 9,900원{' '}
+                      <span className="font-label-mono text-[12px] text-cyan-300 font-bold">
+                        (연 99,000원 · 100명 평생권)
+                      </span>
+                    </div>
+                    <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
+                      직원당 월 과금 0원! 사무실 마스터 PC 1대로 계약서·견적서·엑셀 표 1초 투시검색 + S: 드라이브 자동 마운트
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('work_soho_9900')}
+                      className="py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
+                    >
+                      월 9,900원 결제
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('work_soho_year_99000')}
+                      className="py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
+                    >
+                      연 99,000원 (평생권)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-zinc-900 border border-white/15 flex flex-col justify-between gap-2.5">
+                  <div>
+                    <span className="font-label-sm text-[11.5px] text-white font-extrabold">
+                      🏢 기업 무제한 플랜 (전 부서 인원 무제한 + 다중 부서 폴더 권한)
+                    </span>
+                    <div className="font-headline-md text-[22px] text-white font-black mt-0.5">
+                      월 19,900원{' '}
+                      <span className="font-label-mono text-[12px] text-amber-300 font-bold">
+                        (연 199,000원 · 100명 평생권)
+                      </span>
+                    </div>
+                    <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
+                      인원수 무제한 + 부서별 폴더 트리 권한 분리 + 동시 편집 충돌 방지(File Lock) + 30KB 오프라인 프리뷰 무제한
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('work_biz_19900')}
+                      className="py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[12px] font-bold"
+                    >
+                      월 19,900원 결제
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('work_biz_year_199000')}
+                      className="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[12px] font-extrabold"
+                    >
+                      연 199,000원 (평생권)
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
