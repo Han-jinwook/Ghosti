@@ -3,10 +3,31 @@ node_modules/
 dist/
 .vite/
 
-# Environment variables & secrets (NEVER commit API keys)
+# Environment variables & secrets (NEVER commit API keys or credentials)
 .env
 .env.*
+!.env.example
 *.local
+*secret*
+*credential*
+*credentials*
+
+# Microsoft Artifact Signing (Azure Trusted Signing) & Windows Code Signing
+.azure/
+*signing-metadata*.json
+azure-signing*.json
+*.pfx
+*.p12
+*.key
+*.pem
+*.cer
+*.crt
+
+# Android APK Signing Keystores
+*.jks
+*.keystore
+key.properties
+local.properties
 
 # Personal test photos & quarantine vault (Privacy protection)
 test_photos/*.jpg
@@ -16,6 +37,8 @@ test_photos/*.png
 test_photos/*.webp
 test_photos/*.mp4
 test_photos/*.MP4
+Z-Eye_정리대기함/
+세이씨_정리대기함/
 test_photos_quarantine/
 
 # Large binaries & temporary caches
