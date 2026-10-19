@@ -568,7 +568,32 @@ export interface SetupDiagnosisPlan {
 export type SetupEscrowStatus =
   | 'ESCROW_HOLDING'
   | 'SETTLED_COMPLETED'
+  | 'RELEASED_EMPATHY_REFUND'
   | 'RELEASED_REFUNDED';
+
+export type SetupTrajectoryGrade =
+  | 'GRADE_0_EXPRESS'
+  | 'GRADE_1_TOLERATED'
+  | 'GRADE_2_EMPATHY_REFUND'
+  | 'GRADE_FAIL_ABORTED';
+
+export interface SetupSelfHealingOtaEntry {
+  otaId: string;
+  auditId: string;
+  createdAt: string;
+  platform: SetupMonsterPlatform;
+  presetId: string;
+  title: string;
+  backtrackCount: number;
+  trajectoryGrade: SetupTrajectoryGrade;
+  trajectoryGradeBadgeKo: string;
+  escrowSettlementKo: string;
+  multiLlmActionKo: string;
+  rawTrajectorySteps: string[];
+  prunedShortestPathSteps: string[];
+  otaBroadcastStatus: string;
+  refundedCoins: number;
+}
 
 export interface MerlinCoinTopupBridgeState {
   open: boolean;
@@ -586,6 +611,8 @@ export interface SetupAuditLogEntry {
   track: SetupMonsterTrack;
   difficultyLevel?: SetupDifficultyLevel;
   escrowStatus?: SetupEscrowStatus;
+  backtrackCount?: number;
+  trajectoryGrade?: SetupTrajectoryGrade;
   symptomQuery: string;
   title: string;
   agentModuleName: string;
@@ -619,7 +646,14 @@ export interface SetupFailureTelemetryEntry {
 
 export interface SetupChatTurn {
   id: string;
-  role: 'user' | 'assistant' | 'assistant_triage' | 'system_repair' | 'system_undo' | 'system_refund';
+  role:
+    | 'user'
+    | 'assistant'
+    | 'assistant_triage'
+    | 'system_repair'
+    | 'system_undo'
+    | 'system_refund'
+    | 'system_empathy_refund';
   timestamp: string;
   text: string;
   triageQuestion?: SetupPreTriageQuestion;
@@ -627,11 +661,15 @@ export interface SetupChatTurn {
   diagnosisPlan?: SetupDiagnosisPlan;
   auditId?: string;
   escrowStatus?: SetupEscrowStatus;
+  backtrackCount?: number;
+  trajectoryGrade?: SetupTrajectoryGrade;
+  selfHealingOta?: SetupSelfHealingOtaEntry;
   undone?: boolean;
   refunded?: boolean;
   refundedAmount?: number;
   failureTelemetryId?: string;
 }
+
 
 
 

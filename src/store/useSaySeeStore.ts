@@ -31,6 +31,7 @@ import type {
   SetupMonsterPlatform,
   SetupPreTriageQuestion,
   SetupProactiveHint,
+  SetupSelfHealingOtaEntry,
   SwarmRetroScanReport,
   SyncMode,
   SyncState,
@@ -46,6 +47,7 @@ import {
   buildSetupDiagnosisPlan,
   buildSetupPreTriageQuestion,
 } from '../services/setupMonsterEngine';
+import { evaluateTrajectoryAndBuildSelfHealingOta } from '../services/selfHealingEngine';
 import {
   HybridVoiceSession,
   LOCAL_DOCUMENT_FILES,
@@ -276,11 +278,13 @@ interface SaySeeStore {
   setupChatTurns: SetupChatTurn[];
   setupAuditLogs: SetupAuditLogEntry[];
   setupFailureTelemetryQueue: SetupFailureTelemetryEntry[];
+  setupSelfHealingOtaQueue: SetupSelfHealingOtaEntry[];
   pendingTriageQuestion: SetupPreTriageQuestion | null;
   setupEscrowHoldingCoins: number;
   merlinCoinTopupBridge: MerlinCoinTopupBridgeState;
   activeOverlayPlan: SetupDiagnosisPlan | null;
   activeOverlayStepIndex: number;
+  activeOverlayBacktrackCount: number;
   uiFontScalePercent: number;
   uiNightEyeProtection: boolean;
   setShowSetupMonsterModal: (show: boolean, platform?: SetupMonsterPlatform) => void;
@@ -302,13 +306,21 @@ interface SaySeeStore {
     presetId: string,
     skipDirectQuote?: boolean
   ) => Promise<void>;
-  approveAndExecuteSetupPlan: (plan: SetupDiagnosisPlan) => Promise<void>;
+  approveAndExecuteSetupPlan: (
+    plan: SetupDiagnosisPlan,
+    simulatedBacktrackCount?: number
+  ) => Promise<void>;
+  triggerEmpathyRefundForCompletedRepair: (
+    auditId?: string,
+    backtrackCount?: number
+  ) => Promise<void>;
   undoSetupMonsterRepair: (auditId?: string) => Promise<void>;
   reportUnresolvedAndRefundSetup: (
     auditId?: string,
     errorCode?: string
   ) => Promise<void>;
   openSetupOverlayGuide: (plan: SetupDiagnosisPlan) => void;
+  recordOverlayBacktrack: () => void;
   advanceSetupOverlayStep: () => void;
   closeSetupOverlayGuide: () => void;
   setShowProModal: (show: boolean) => void;
@@ -2724,6 +2736,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   ],
   setupAuditLogs: [],
   setupFailureTelemetryQueue: [],
+  setupSelfHealingOtaQueue: [],
   pendingTriageQuestion: buildSetupPreTriageQuestion(
     'pc',
     '부팅 시 뜨는 광고/유령앱 차단',
@@ -2739,6 +2752,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
   activeOverlayPlan: null,
   activeOverlayStepIndex: 0,
+  activeOverlayBacktrackCount: 0,
   uiFontScalePercent: 100,
   uiNightEyeProtection: false,
 
@@ -2854,6 +2868,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           setupFailureTelemetryQueue: Array.isArray(data.failureTelemetryQueue)
             ? data.failureTelemetryQueue
             : state.setupFailureTelemetryQueue,
+          setupSelfHealingOtaQueue: Array.isArray(data.selfHealingOtaQueue)
+            ? data.selfHealingOtaQueue
+            : state.setupSelfHealingOtaQueue,
         }));
       }
     } catch {
@@ -2878,6 +2895,19 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       timestamp: nowLabel,
       text: clean,
     };
+
+    // 유저가 채팅창에 "2번 헤맸어 / 초행길 / 두 번 뒤로 갔어" 등을 말하면 완료된 수리는 유지하면서 100% 쿨 환불(인간미 환불) 실행
+    if (
+      /두\s*번|2\s*번|초행길|헤매|헤맸|헛클릭/i.test(clean) &&
+      !presetIdHint &&
+      state.setupAuditLogs.length > 0
+    ) {
+      set((s) => ({
+        setupChatTurns: [...s.setupChatTurns, userTurn],
+      }));
+      await get().triggerEmpathyRefundForCompletedRepair(undefined, 2);
+      return;
+    }
 
     // 유저가 채팅창에 "아직 해결 안 됨 / 안 고쳐졌어 / 환불해줘" 등 수리 실패를 말하면 즉시 1초 원상복구 + 에스크로 100% 반환 + 본사 실패 로그 전송 실행
     if (
@@ -2917,7 +2947,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           id: `ai_${Date.now() + 1}`,
           role: 'assistant',
           timestamp: nowLabel,
-          text: `🧠 [무료 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+          text: `🧠 [무료 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패(또는 초행길 2회 이상 헤맨 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
           diagnosisPlan: plan,
         };
 
@@ -2967,7 +2997,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `ai_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🧠 [모바일 1MB APK 진단 완료 ➔ ${plan.difficultyBadgeKo}]\n• ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 실패 시 1초 원상복구 + 100 코인 100% 즉시 반환 보장`,
+      text: `🧠 [모바일 1MB APK 진단 완료 ➔ ${plan.difficultyBadgeKo}]\n• ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 실패(또는 초행길 2회 이상 헤맨 성공) 시 100 코인 100% 즉시 반환 보장`,
       diagnosisPlan: plan,
     };
 
@@ -3006,7 +3036,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `ai_quote_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🧠 [사전 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+      text: `🧠 [사전 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
       diagnosisPlan: plan,
     };
 
@@ -3022,7 +3052,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }));
   },
 
-  approveAndExecuteSetupPlan: async (plan) => {
+  approveAndExecuteSetupPlan: async (plan, simulatedBacktrackCount) => {
     const state = get();
     const currentCredits = state.merlinAuth.coinBalance;
     const cost = plan.creditCost ?? 100;
@@ -3043,6 +3073,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       return;
     }
 
+    const effectiveBacktrack = Math.max(0, Math.floor(simulatedBacktrackCount ?? 0));
     const nowIso = new Date().toISOString();
     const nowLabel = new Date().toLocaleTimeString('ko-KR', {
       hour: '2-digit',
@@ -3054,6 +3085,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       .slice(-4)
       .map((t) => `[${t.role}] ${t.text}`);
 
+    const evalResult = evaluateTrajectoryAndBuildSelfHealingOta({
+      plan,
+      auditId,
+      backtrackCount: effectiveBacktrack,
+    });
+
+    const isEmpathyRefund = evalResult.shouldEmpathyRefund100Pct;
+
     let savedAudit: SetupAuditLogEntry = {
       auditId,
       createdAt: nowIso,
@@ -3061,7 +3100,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       platform: plan.platform,
       track: plan.track,
       difficultyLevel: plan.difficultyLevel,
-      escrowStatus: 'ESCROW_HOLDING',
+      escrowStatus: isEmpathyRefund ? 'RELEASED_EMPATHY_REFUND' : 'ESCROW_HOLDING',
+      backtrackCount: effectiveBacktrack,
+      trajectoryGrade: evalResult.trajectoryGrade,
       symptomQuery: plan.symptomQuery,
       title: plan.title,
       agentModuleName: plan.agentModuleName,
@@ -3072,7 +3113,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       domCaptureHash: `dom_${Date.now().toString(16)}`,
       conversationSummary,
       undone: false,
-      refunded: false,
+      refunded: isEmpathyRefund,
+      refundedAt: isEmpathyRefund ? nowIso : undefined,
     };
 
     try {
@@ -3081,13 +3123,17 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...savedAudit,
+          selfHealingOta: evalResult.otaEntry,
         }),
       });
       const data = await res.json();
       if (data?.ok && data.auditEntry) {
         savedAudit = {
           ...data.auditEntry,
-          escrowStatus: 'ESCROW_HOLDING',
+          escrowStatus: isEmpathyRefund ? 'RELEASED_EMPATHY_REFUND' : 'ESCROW_HOLDING',
+          backtrackCount: effectiveBacktrack,
+          trajectoryGrade: evalResult.trajectoryGrade,
+          refunded: isEmpathyRefund,
         };
       }
     } catch {
@@ -3098,7 +3144,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(plan.voiceTtsSummary);
+        const ttsText = isEmpathyRefund
+          ? `설정과 수리는 완료되었지만, 제가 초행길이라 두 번 이상 길을 헤매게 해드려 죄송합니다! 소중한 학습 기회를 주신 보답으로 이번 수리비 ${cost} 코인은 받지 않고 백 퍼센트 전액 환불해 드렸습니다. 방금 배운 최단 직행 지름길은 지금 즉시 전 세계 에이전트에 업데이트해 두겠습니다!`
+          : plan.voiceTtsSummary;
+        const utter = new SpeechSynthesisUtterance(ttsText);
         utter.lang = 'ko-KR';
         utter.rate = 1.02;
         window.speechSynthesis.speak(utter);
@@ -3111,22 +3160,58 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `repair_${Date.now()}`,
       role: 'system_repair',
       timestamp: nowLabel,
-      text: plan.completionMessage,
+      text:
+        effectiveBacktrack === 1
+          ? `${plan.completionMessage}\n\n🟡 [1회 뒤로 가기(Back) 인간적 허용 · 정상 정산 + 경로 미세 교정 OTA] 초행길 화면에서 딱 1번 뒤로 갔다가 바로 찾아가셨네요! 수리비(${cost} 코인)는 정상 에스크로 처리되며, 방금 1회 우회한 갈림길 로그는 본사 Multi-LLM으로 전송되어 다음번엔 0회 직행 코스로 미세 교정되었습니다.`
+          : plan.completionMessage,
       diagnosisPlan: plan,
       auditId: savedAudit.auditId,
-      escrowStatus: 'ESCROW_HOLDING',
+      escrowStatus: isEmpathyRefund ? 'RELEASED_EMPATHY_REFUND' : 'ESCROW_HOLDING',
+      backtrackCount: effectiveBacktrack,
+      trajectoryGrade: evalResult.trajectoryGrade,
+      selfHealingOta: evalResult.otaEntry ?? undefined,
       undone: false,
-      refunded: false,
+      refunded: isEmpathyRefund,
+      refundedAmount: isEmpathyRefund ? cost : undefined,
     };
 
+    const nextTurns: SetupChatTurn[] = [...state.setupChatTurns, repairTurn];
+
+    if (isEmpathyRefund && evalResult.otaEntry) {
+      const empathyTurn: SetupChatTurn = {
+        id: `empathy_refund_${Date.now() + 1}`,
+        role: 'system_empathy_refund',
+        timestamp: nowLabel,
+        text: evalResult.empathyBriefingChatKo,
+        diagnosisPlan: plan,
+        auditId: savedAudit.auditId,
+        escrowStatus: 'RELEASED_EMPATHY_REFUND',
+        backtrackCount: effectiveBacktrack,
+        trajectoryGrade: evalResult.trajectoryGrade,
+        selfHealingOta: evalResult.otaEntry,
+        undone: false, // 수리 완료 상태는 그대로 유지!
+        refunded: true,
+        refundedAmount: cost,
+      };
+      nextTurns.push(empathyTurn);
+    }
+
     set((s) => ({
+      // 2회 이상 헤맨 성공(isEmpathyRefund)일 때는 에스크로 홀딩된 코인을 즉시 100% 환불하여 유저 지갑 잔액 차감 0원!
       merlinAuth: {
         ...s.merlinAuth,
-        coinBalance: Math.max(0, s.merlinAuth.coinBalance - cost),
+        coinBalance: isEmpathyRefund
+          ? s.merlinAuth.coinBalance
+          : Math.max(0, s.merlinAuth.coinBalance - cost),
       },
-      setupEscrowHoldingCoins: s.setupEscrowHoldingCoins + cost,
+      setupEscrowHoldingCoins: isEmpathyRefund
+        ? s.setupEscrowHoldingCoins
+        : s.setupEscrowHoldingCoins + cost,
       setupAuditLogs: [savedAudit, ...s.setupAuditLogs],
-      setupChatTurns: [...s.setupChatTurns, repairTurn],
+      setupSelfHealingOtaQueue: evalResult.otaEntry
+        ? [evalResult.otaEntry, ...s.setupSelfHealingOtaQueue]
+        : s.setupSelfHealingOtaQueue,
+      setupChatTurns: nextTurns,
       setupProactiveHints: s.setupProactiveHints.map((h) =>
         h.presetId === plan.presetId ? { ...h, resolved: true } : h
       ),
@@ -3136,11 +3221,155 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? plan.uiNightProtection
           : s.uiNightEyeProtection,
       activeOverlayPlan:
-        plan.track === 'TRACK_B_OVERLAY_GUIDE' && plan.overlaySteps?.length
+        plan.track === 'TRACK_B_OVERLAY_GUIDE' &&
+        plan.overlaySteps?.length &&
+        simulatedBacktrackCount === undefined
           ? plan
           : s.activeOverlayPlan,
       activeOverlayStepIndex: 0,
-      lastQuarantineToast: `🔒 [${cost} 멀린코인 에스크로 홀딩 & 1초 수리 완료] 완치 확인 전까지 에스크로에 안전하게 보관되며, 실패 시 100% 즉시 반환됩니다!`,
+      activeOverlayBacktrackCount: 0,
+      lastQuarantineToast: isEmpathyRefund
+        ? evalResult.empathyApologyToastKo
+        : effectiveBacktrack === 1
+        ? `🟡 [1회 뒤로 가기 인간적 허용 · ${cost} 코인 에스크로 홀딩] 1회 우회 갈림길 로그를 본사로 전송해 0회 직행 코스로 미세 교정(OTA)했습니다!`
+        : `🔒 [${cost} 멀린코인 에스크로 홀딩 & 1초 수리 완료] 완치 확인 전까지 에스크로에 안전하게 보관되며, 실패 또는 2회 이상 헤맴 시 100% 즉시 반환됩니다!`,
+    }));
+  },
+
+  triggerEmpathyRefundForCompletedRepair: async (auditId, backtrackCount = 2) => {
+    const state = get();
+    const targetAudit =
+      (auditId
+        ? state.setupAuditLogs.find((a) => a.auditId === auditId)
+        : state.setupAuditLogs.find((a) => !a.refunded)) ?? null;
+
+    if (!targetAudit) {
+      set({
+        lastQuarantineToast:
+          '환불할 최근 수리 내역이 없습니다. 먼저 수리를 실행하거나 견적 카드에서 [💖 2회 헤맨 성공 시뮬레이션]을 눌러보세요!',
+      });
+      return;
+    }
+
+    if (targetAudit.refunded) {
+      set({
+        lastQuarantineToast: '이미 100% 자동 환불 완료된 수리 내역입니다.',
+      });
+      return;
+    }
+
+    const effectiveBacktrack = Math.max(2, Math.floor(backtrackCount));
+    const matchingTurn = state.setupChatTurns.find(
+      (t) => t.auditId === targetAudit.auditId && t.diagnosisPlan
+    );
+    const plan =
+      matchingTurn?.diagnosisPlan ??
+      buildSetupDiagnosisPlan(targetAudit.platform, targetAudit.symptomQuery);
+    const refundCoins = targetAudit.creditDeducted ?? plan.creditCost ?? 100;
+
+    const evalResult = evaluateTrajectoryAndBuildSelfHealingOta({
+      plan,
+      auditId: targetAudit.auditId,
+      backtrackCount: effectiveBacktrack,
+    });
+
+    const nowIso = new Date().toISOString();
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    try {
+      await fetch('/__setup-monster/self-healing-ota', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auditId: targetAudit.auditId,
+          backtrackCount: effectiveBacktrack,
+          trajectoryGrade: evalResult.trajectoryGrade,
+          escrowStatus: 'RELEASED_EMPATHY_REFUND',
+          refunded: true,
+          otaEntry: evalResult.otaEntry,
+        }),
+      });
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(
+          `설정은 완료되었지만 제가 초행길이라 ${effectiveBacktrack}번이나 길을 헤매게 해드려 죄송합니다! 소중한 학습 기회를 주신 보답으로 ${refundCoins} 코인은 받지 않고 백 퍼센트 전액 환불해 드렸습니다. 방금 배운 최단 직행 지름길은 지금 즉시 전 세계 기기에 업데이트해 두겠습니다!`
+        );
+        utter.lang = 'ko-KR';
+        utter.rate = 1.02;
+        window.speechSynthesis.speak(utter);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const empathyTurn: SetupChatTurn = {
+      id: `empathy_refund_${Date.now()}`,
+      role: 'system_empathy_refund',
+      timestamp: nowLabel,
+      text: evalResult.empathyBriefingChatKo,
+      diagnosisPlan: plan,
+      auditId: targetAudit.auditId,
+      escrowStatus: 'RELEASED_EMPATHY_REFUND',
+      backtrackCount: effectiveBacktrack,
+      trajectoryGrade: evalResult.trajectoryGrade,
+      selfHealingOta: evalResult.otaEntry ?? undefined,
+      undone: false, // 과업 자체는 최종 성공했으므로 수리 완료 상태 그대로 유지!
+      refunded: true,
+      refundedAmount: refundCoins,
+    };
+
+    set((s) => ({
+      merlinAuth: {
+        ...s.merlinAuth,
+        coinBalance: s.merlinAuth.coinBalance + refundCoins,
+      },
+      setupEscrowHoldingCoins:
+        targetAudit.escrowStatus === 'ESCROW_HOLDING'
+          ? Math.max(0, s.setupEscrowHoldingCoins - refundCoins)
+          : s.setupEscrowHoldingCoins,
+      setupAuditLogs: s.setupAuditLogs.map((a) =>
+        a.auditId === targetAudit.auditId
+          ? {
+              ...a,
+              escrowStatus: 'RELEASED_EMPATHY_REFUND' as const,
+              backtrackCount: effectiveBacktrack,
+              trajectoryGrade: evalResult.trajectoryGrade,
+              refunded: true,
+              refundedAt: nowIso,
+            }
+          : a
+      ),
+      setupSelfHealingOtaQueue: evalResult.otaEntry
+        ? [evalResult.otaEntry, ...s.setupSelfHealingOtaQueue]
+        : s.setupSelfHealingOtaQueue,
+      setupChatTurns: s.setupChatTurns
+        .map((t) =>
+          t.auditId === targetAudit.auditId
+            ? {
+                ...t,
+                escrowStatus: 'RELEASED_EMPATHY_REFUND' as const,
+                backtrackCount: effectiveBacktrack,
+                trajectoryGrade: evalResult.trajectoryGrade,
+                selfHealingOta: evalResult.otaEntry ?? t.selfHealingOta,
+                refunded: true,
+                refundedAmount: refundCoins,
+              }
+            : t
+        )
+        .concat(empathyTurn),
+      activeOverlayPlan: null,
+      activeOverlayStepIndex: 0,
+      activeOverlayBacktrackCount: 0,
+      lastQuarantineToast: evalResult.empathyApologyToastKo,
     }));
   },
 
@@ -3208,6 +3437,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       uiFontScalePercent: 100,
       uiNightEyeProtection: false,
       activeOverlayPlan: null,
+      activeOverlayBacktrackCount: 0,
       lastQuarantineToast:
         '↩️ [1초 셀프 원복(Undo) 완료] 상담원 개입 없이 0.01초 전 JSON 스냅샷으로 즉시 원상복구되었습니다! (무료 · 0 코인)',
     }));
@@ -3310,6 +3540,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       })로 [대화 내역 + ${windowsBuildEnv} + 실행 스크립트 + ${effectiveErrorCode}] 패킷을 자동 전송하여 수리 스크립트를 즉시 업데이트합니다.`,
       auditId: targetAudit?.auditId,
       escrowStatus: 'RELEASED_REFUNDED',
+      trajectoryGrade: 'GRADE_FAIL_ABORTED',
       undone: true,
       refunded: true,
       refundedAmount: refundCoins,
@@ -3331,6 +3562,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? {
               ...a,
               escrowStatus: 'RELEASED_REFUNDED' as const,
+              trajectoryGrade: 'GRADE_FAIL_ABORTED' as const,
               undone: true,
               undoneAt: nowIso,
               refunded: true,
@@ -3346,6 +3578,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             ? {
                 ...t,
                 escrowStatus: 'RELEASED_REFUNDED' as const,
+                trajectoryGrade: 'GRADE_FAIL_ABORTED' as const,
                 undone: true,
                 refunded: true,
                 refundedAmount: refundCoins,
@@ -3356,6 +3589,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       uiFontScalePercent: 100,
       uiNightEyeProtection: false,
       activeOverlayPlan: null,
+      activeOverlayBacktrackCount: 0,
       lastQuarantineToast: `💸 [1초 원상복구 & 에스크로 +${refundCoins} 코인 100% 즉시 반환 완료] 본사 실패 분석 큐(${failurePacket.failureId})로 실패 블랙박스 로그가 자동 전송되었습니다!`,
     }));
   },
@@ -3364,38 +3598,85 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set({
       activeOverlayPlan: plan,
       activeOverlayStepIndex: 0,
+      activeOverlayBacktrackCount: 0,
     }),
 
-  advanceSetupOverlayStep: () =>
+  recordOverlayBacktrack: () =>
     set((state) => {
-      const steps = state.activeOverlayPlan?.overlaySteps ?? [];
-      if (state.activeOverlayStepIndex + 1 < steps.length) {
-        const nextIdx = state.activeOverlayStepIndex + 1;
-        const nextStep = steps[nextIdx];
-        try {
-          if (typeof window !== 'undefined' && 'speechSynthesis' in window && nextStep) {
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(nextStep.voiceGuideText);
-            utter.lang = 'ko-KR';
-            window.speechSynthesis.speak(utter);
-          }
-        } catch {
-          /* ignore */
-        }
-        return { activeOverlayStepIndex: nextIdx };
-      }
+      const nextCount = state.activeOverlayBacktrackCount + 1;
+      const prevIdx = Math.max(0, state.activeOverlayStepIndex - 1);
+      const toastMsg =
+        nextCount >= 2
+          ? `💖 [뒤로 가기(Back) ${nextCount}회 감지 — 인간미 100% 쿨 환불 예약!] 초행길에 ${nextCount}번이나 헤매게 해드려 죄송합니다. 가이드를 끝까지 완료하시면 수리는 유지한 채 수리비 100%가 자동 환불되고 최단 지름길이 전 세계에 배포됩니다!`
+          : `🟡 [뒤로 가기(Back) 1회 감지 — 인간적 허용 구간] 낯선 화면에서 1회 우회하셨습니다. 한 번만 더 헤매시면(2회+) 완료 즉시 100% 자동 환불(수업료 면제)이 발동합니다!`;
       return {
-        activeOverlayPlan: null,
-        activeOverlayStepIndex: 0,
-        lastQuarantineToast:
-          '👆 [실시간 손가락 화살표 가이드 완료] 모든 단계의 설정 위치를 성공적으로 따라가셨습니다!',
+        activeOverlayBacktrackCount: nextCount,
+        activeOverlayStepIndex: prevIdx,
+        lastQuarantineToast: toastMsg,
       };
     }),
+
+  advanceSetupOverlayStep: () => {
+    const state = get();
+    const steps = state.activeOverlayPlan?.overlaySteps ?? [];
+    if (state.activeOverlayStepIndex + 1 < steps.length) {
+      const nextIdx = state.activeOverlayStepIndex + 1;
+      const nextStep = steps[nextIdx];
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window && nextStep) {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(nextStep.voiceGuideText);
+          utter.lang = 'ko-KR';
+          window.speechSynthesis.speak(utter);
+        }
+      } catch {
+        /* ignore */
+      }
+      set({ activeOverlayStepIndex: nextIdx });
+      return;
+    }
+
+    // 마지막 단계 완주! 뒤로 가기(Back) 횟수가 2회 이상이면 즉시 100% 인간미 쿨 환불 + 최단 직행 지름길 OTA 발동!
+    const backtrackCount = state.activeOverlayBacktrackCount;
+    if (backtrackCount >= 2) {
+      void get().triggerEmpathyRefundForCompletedRepair(undefined, backtrackCount);
+      return;
+    }
+
+    if (backtrackCount === 1 && state.activeOverlayPlan) {
+      const latestAudit = state.setupAuditLogs.find((a) => !a.refunded);
+      const evalResult = evaluateTrajectoryAndBuildSelfHealingOta({
+        plan: state.activeOverlayPlan,
+        auditId: latestAudit?.auditId ?? `audit_${Date.now()}`,
+        backtrackCount: 1,
+      });
+      set((s) => ({
+        activeOverlayPlan: null,
+        activeOverlayStepIndex: 0,
+        activeOverlayBacktrackCount: 0,
+        setupSelfHealingOtaQueue: evalResult.otaEntry
+          ? [evalResult.otaEntry, ...s.setupSelfHealingOtaQueue]
+          : s.setupSelfHealingOtaQueue,
+        lastQuarantineToast:
+          '🟡 [손가락 가이드 완주 · 뒤로 가기 1회 인간적 허용] 정상 정산 처리되었으며, 1회 우회 갈림길 로그를 본사 Multi-LLM으로 보내 0회 직행 코스로 미세 교정(OTA)했습니다!',
+      }));
+      return;
+    }
+
+    set({
+      activeOverlayPlan: null,
+      activeOverlayStepIndex: 0,
+      activeOverlayBacktrackCount: 0,
+      lastQuarantineToast:
+        '🟢 [실시간 손가락 화살표 가이드 0회 쾌속 완주!] 사전 답사 지도대로 막힘없이 한 번에 도착하셨습니다!',
+    });
+  },
 
   closeSetupOverlayGuide: () =>
     set({
       activeOverlayPlan: null,
       activeOverlayStepIndex: 0,
+      activeOverlayBacktrackCount: 0,
     }),
 
   sendPcMasterUrlToEmail: async () => {

@@ -2101,7 +2101,11 @@ function sayseeLocalBridge(): Plugin {
       // ─────────────── [🛠️ Z-Eye 설정 몬스터 (Setup Monster) 백엔드 브릿지 & JSON 스냅샷 블랙박스] ───────────────
       const SETUP_BLACKBOX_FILE = path.resolve(POC_RESULTS_DIR, 'z_eye_setup_blackbox.json');
 
-      function loadSetupBlackbox(): { auditLogs: any[]; failureTelemetryQueue: any[] } {
+      function loadSetupBlackbox(): {
+        auditLogs: any[];
+        failureTelemetryQueue: any[];
+        selfHealingOtaQueue: any[];
+      } {
         try {
           if (fs.existsSync(SETUP_BLACKBOX_FILE)) {
             const parsed = JSON.parse(fs.readFileSync(SETUP_BLACKBOX_FILE, 'utf-8'));
@@ -2110,20 +2114,41 @@ function sayseeLocalBridge(): Plugin {
               failureTelemetryQueue: Array.isArray(parsed?.failureTelemetryQueue)
                 ? parsed.failureTelemetryQueue
                 : [],
+              selfHealingOtaQueue: Array.isArray(parsed?.selfHealingOtaQueue)
+                ? parsed.selfHealingOtaQueue
+                : [],
             };
           }
         } catch {
           /* ignore */
         }
-        return { auditLogs: [], failureTelemetryQueue: [] };
+        return { auditLogs: [], failureTelemetryQueue: [], selfHealingOtaQueue: [] };
       }
 
-      function saveSetupBlackbox(data: { auditLogs: any[]; failureTelemetryQueue: any[] }) {
+      function saveSetupBlackbox(data: {
+        auditLogs: any[];
+        failureTelemetryQueue: any[];
+        selfHealingOtaQueue?: any[];
+      }) {
         try {
           if (!fs.existsSync(POC_RESULTS_DIR)) {
             fs.mkdirSync(POC_RESULTS_DIR, { recursive: true });
           }
-          fs.writeFileSync(SETUP_BLACKBOX_FILE, JSON.stringify(data, null, 2), 'utf-8');
+          fs.writeFileSync(
+            SETUP_BLACKBOX_FILE,
+            JSON.stringify(
+              {
+                auditLogs: data.auditLogs,
+                failureTelemetryQueue: data.failureTelemetryQueue,
+                selfHealingOtaQueue: Array.isArray(data.selfHealingOtaQueue)
+                  ? data.selfHealingOtaQueue
+                  : [],
+              },
+              null,
+              2
+            ),
+            'utf-8'
+          );
         } catch {
           /* ignore */
         }
@@ -2139,6 +2164,7 @@ function sayseeLocalBridge(): Plugin {
             mobileApkStatus: 'Z-Eye_Mobile_1MB.apk (v1.5 · UsageStats/WRITE_SETTINGS/Overlay Ready)',
             auditLogs: box.auditLogs,
             failureTelemetryQueue: box.failureTelemetryQueue,
+            selfHealingOtaQueue: box.selfHealingOtaQueue,
           })
         );
       });
@@ -2161,6 +2187,9 @@ function sayseeLocalBridge(): Plugin {
             platform: body.platform || 'pc',
             track: body.track || 'TRACK_A_DIRECT_REPAIR',
             difficultyLevel: body.difficultyLevel || 'LEVEL_1_SIMPLE_100',
+            escrowStatus: body.escrowStatus || 'ESCROW_HOLDING',
+            backtrackCount: typeof body.backtrackCount === 'number' ? body.backtrackCount : 0,
+            trajectoryGrade: body.trajectoryGrade || 'GRADE_0_EXPRESS',
             symptomQuery: body.symptomQuery || '',
             title: body.title || 'Z-Eye 설정 몬스터 자동 처치',
             agentModuleName: body.agentModuleName || 'Z-Eye_PC_Setup.exe',
@@ -2177,9 +2206,13 @@ function sayseeLocalBridge(): Plugin {
                 .slice(0, 16),
             conversationSummary: Array.isArray(body.conversationSummary) ? body.conversationSummary : [],
             undone: false,
-            refunded: false,
+            refunded: Boolean(body.refunded),
+            refundedAt: body.refundedAt,
           };
           box.auditLogs.unshift(auditEntry);
+          if (body.selfHealingOta) {
+            box.selfHealingOtaQueue.unshift(body.selfHealingOta);
+          }
           saveSetupBlackbox(box);
           res.end(
             JSON.stringify({
@@ -2187,6 +2220,57 @@ function sayseeLocalBridge(): Plugin {
               auditEntry,
               auditLogs: box.auditLogs,
               failureTelemetryQueue: box.failureTelemetryQueue,
+              selfHealingOtaQueue: box.selfHealingOtaQueue,
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
+
+      server.middlewares.use('/__setup-monster/self-healing-ota', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json');
+        try {
+          const body = await readJsonBody(req);
+          const box = loadSetupBlackbox();
+          const nowIso = new Date().toISOString();
+          const targetAuditId = body.auditId;
+          const otaEntry = body.otaEntry;
+
+          if (otaEntry) {
+            box.selfHealingOtaQueue.unshift(otaEntry);
+          }
+
+          box.auditLogs = box.auditLogs.map((entry: any) => {
+            if (targetAuditId && entry.auditId === targetAuditId) {
+              return {
+                ...entry,
+                backtrackCount:
+                  typeof body.backtrackCount === 'number'
+                    ? body.backtrackCount
+                    : entry.backtrackCount,
+                trajectoryGrade: body.trajectoryGrade || entry.trajectoryGrade,
+                escrowStatus: body.escrowStatus || entry.escrowStatus,
+                refunded:
+                  typeof body.refunded === 'boolean' ? body.refunded : entry.refunded,
+                refundedAt: body.refunded ? nowIso : entry.refundedAt,
+              };
+            }
+            return entry;
+          });
+
+          saveSetupBlackbox(box);
+          res.end(
+            JSON.stringify({
+              ok: true,
+              otaEntry,
+              auditLogs: box.auditLogs,
+              selfHealingOtaQueue: box.selfHealingOtaQueue,
             })
           );
         } catch (e) {
@@ -2224,6 +2308,7 @@ function sayseeLocalBridge(): Plugin {
               restoredEntry,
               auditLogs: box.auditLogs,
               failureTelemetryQueue: box.failureTelemetryQueue,
+              selfHealingOtaQueue: box.selfHealingOtaQueue,
             })
           );
         } catch (e) {
@@ -2296,6 +2381,7 @@ function sayseeLocalBridge(): Plugin {
               failurePacket,
               auditLogs: box.auditLogs,
               failureTelemetryQueue: box.failureTelemetryQueue,
+              selfHealingOtaQueue: box.selfHealingOtaQueue,
             })
           );
         } catch (e) {
