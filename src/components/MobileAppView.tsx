@@ -732,33 +732,12 @@ export const MobileAppView: React.FC = () => {
             </div>
           </div>
 
-          {/* 정식 스토어 및 공인 설치 가이드 (편법 배제) */}
-          <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-2.5">
-            <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold w-fit">
-              스토어 정공법 · 공인 설치 가이드
-            </span>
-            <div className="flex flex-col gap-2 text-[12px]">
-              <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
-                <span className="text-white font-bold">Android</span>
-                <span className="text-emerald-300 font-bold">Google Play / 공식 APK</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
-                <span className="text-white font-bold">iOS (아이폰)</span>
-                <span className="text-primary-container font-bold">App Store / 공식 TestFlight</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
-                <span className="text-white font-bold">Windows PC</span>
-                <span className="text-amber-300 font-bold">MS 공식 인증서 서명 설치파일</span>
-              </div>
-            </div>
-          </div>
-
           {/* ⚡ 24시간 GPU 클라우드 서버 도우미 (스토어 클린 모드 시 비노출) */}
           {!isStoreAppMode && (
             <div className="p-4 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  AI 설정 몬스터 핵심 기능
+                  ⚡ 24시간 GPU 클라우드 서버 도우미
                 </span>
                 {gpuHelper24hActive && (
                   <button

@@ -493,14 +493,14 @@ export const LoungeView: React.FC = () => {
       {/* ─────────────── 👤 개인 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(전체 모수 vs 무료체험 범위 + 시작/완료 버튼) ➔ 3단(브리핑 결과 & 정리➔원복 안전 체험) ─────────────── */}
       {activeLoungeType === 'personal' && (
         <>
-          {/* 1단: 개인 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 (AI 투시검색 몬스터 | AI 클린 몬스터 | AI 설정 몬스터) */}
+          {/* 1단: 개인 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 (AI 투시검색 몬스터 | AI 클린 몬스터 | AI 설정 몬스터) — 가격은 하단에 통합 배치 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
                 개인 라운지 — AI 투시검색 몬스터 · AI 클린 몬스터 · AI 설정 몬스터
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                클라우드에 파일을 올리지 않고 내 기기 안에서 <strong>사진·영상·문서 1초 투시검색</strong>과 <strong>AI 클린 몬스터 종합건강검진·대화형 컨설팅</strong>을 수행합니다.
+                클라우드에 파일을 올리지 않고 내 기기 안에서 <strong>사진·동영상·서류 1초 투시검색</strong>, <strong>AI 클린 몬스터 종합건강검진·대화형 정리</strong>, 그리고 <strong>AI 설정 몬스터 음성 맞춤 세팅 도우미</strong>를 제공합니다.
               </p>
             </div>
 
@@ -510,12 +510,9 @@ export const LoungeView: React.FC = () => {
                   <span className="font-headline-sm text-[15px] text-white font-bold">
                     AI 투시검색 몬스터
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    {isStoreAppMode ? '1초 로컬 투시검색' : '월 1,900원 (연 19,000원)'}
-                  </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  사진·동영상 구간·내 PC 서류(PDF·계약서)를 <strong>1초 만에</strong> 찾아주며, <strong>동일 내용 중복 사진은 최고화질 원본 1장만 남기고 연사는 한눈에 펼쳐 유저가 1장을 직접 선택(Pick)</strong>하는 부가서비스를 제공합니다.
+                  사진·동영상 프레임별, 모든 서류파일의 내용을 투시하듯 <strong>1초 만에</strong> 찾아주며, <strong>동일 내용 중복 파일 찾아 정리를 도와주며 사진 연사도 쉽게 정리</strong>할 수 있게 하는 부가서비스를 제공합니다.
                 </p>
               </div>
 
@@ -523,9 +520,6 @@ export const LoungeView: React.FC = () => {
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
                     AI 클린 몬스터
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    {isStoreAppMode ? 'AI 미디어 주치의 진단' : '기기 1대당 1,900원'}
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
@@ -546,12 +540,9 @@ export const LoungeView: React.FC = () => {
                   <span className="font-headline-sm text-[15px] text-white font-bold">
                     AI 설정 몬스터
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10.5px] font-extrabold">
-                    정식 스토어 · 공인 설치
-                  </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  안드로이드(Google Play / 공식 APK), iOS(App Store / 공식 TestFlight), Windows PC(MS 공식 인증서 서명 설치파일) 정식 설치 방식으로 내 폰과 PC를 1초 만에 안전하게 연결합니다.
+                  핸드폰의 특정 설정이나 앱의 어떤 기능으로 세팅하고자 할 때, 복잡한 설정 메뉴를 일일이 찾을 필요 없이 <strong>AI 음성으로 설정을 직접 찾아주고 맞춤 세팅을 도와주는</strong> 음성 도우미입니다.
                 </p>
               </div>
             </div>
@@ -815,70 +806,105 @@ export const LoungeView: React.FC = () => {
               </div>
             )}
 
-            {/* 개인 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
+            {/* 개인 라운지 하단: 상단 카드에서는 가격을 빼고 하단에 통합 배치 (스토어 클린 모드 시 PC 연동 패널 노출) */}
             {isStoreAppMode ? (
               <div className="pt-3 border-t border-white/10">
                 <PcMasterQuickSendPanel />
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
-                <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                      AI 클린 몬스터 — 디지털 종합건강검진 &amp; 대화형 컨설팅
-                    </span>
-                    <div className="font-headline-md text-[24px] text-white font-black">
-                      기기 1대당 1,900원
-                    </div>
-                    <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                      모바일·PC 바탕화면 정리(미사용 앱 구분/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거로 CPU·메모리 속도 향상. AI 주치의와 대화하며 항목별로 유저가 직접 결정하고 언제든 0.5초 원복됩니다.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('personal_single_2900')}
-                    className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold transition-colors whitespace-nowrap"
-                  >
-                    AI 클린 몬스터 (기기 1대당 1,900원)
-                  </button>
+              <div className="pt-4 border-t border-white/10 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    💳 개인 라운지 서비스 요금 안내
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                    초기 100명 한정 연 19,000원 평생권 프로모션 진행 중
+                  </span>
                 </div>
 
-                <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* 1. AI 투시검색 몬스터 */}
+                  <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
+                    <div className="flex flex-col gap-1.5">
                       <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                        AI 투시검색 몬스터 + 월 1회 AI 클린 몬스터 무료 왕진
+                        AI 투시검색 몬스터 (+ 월 1회 클린 왕진 포함)
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold whitespace-nowrap">
-                        초기 100명 한정 연 19,000원 평생권 프로모션
-                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-headline-md text-[23px] text-white font-black">
+                          월 1,900원
+                        </span>
+                        <span className="font-label-mono text-[12.5px] text-primary-container font-bold">
+                          (연 19,000원)
+                        </span>
+                      </div>
+                      <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+                        사진·동영상 프레임별, 모든 서류파일의 내용을 투시하듯 <strong>1초 만에</strong> 찾아주며, <strong>동일 내용 중복 파일 찾아 정리를 도와주며 사진 연사도 쉽게 정리</strong>할 수 있게 하는 부가서비스를 제공합니다.
+                      </p>
                     </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-headline-md text-[24px] text-white font-black">
-                        월 1,900원
-                      </span>
-                      <span className="font-label-mono text-[13px] text-primary-container font-bold">
-                        (연 19,000원)
-                      </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => activatePricingPlan('personal_sub_3900')}
+                        className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12px] font-extrabold whitespace-nowrap cursor-pointer"
+                      >
+                        월 1,900원 시작
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => activatePricingPlan('personal_year_35000')}
+                        className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12px] font-extrabold whitespace-nowrap cursor-pointer"
+                      >
+                        연 19,000원 (평생권)
+                      </button>
                     </div>
-                    <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                      전체 사진({totalDevicePhotos}장)·영상({totalDeviceVideos}개)·문서({totalDeviceDocs}건) <strong>1초 투시검색</strong> + 중복 사진 최고화질 원본 보존 &amp; 연사 1장 선택 부가서비스 + <strong>초기 100명 한정 연 19,000원 평생권 프로모션!</strong>
-                    </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+
+                  {/* 2. AI 클린 몬스터 */}
+                  <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
+                        AI 클린 몬스터 — 종합건강검진 &amp; 대화형 정리
+                      </span>
+                      <div className="font-headline-md text-[23px] text-white font-black">
+                        기기 1대당 1,900원
+                      </div>
+                      <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+                        모바일·PC 바탕화면 정리(미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거 및 AI 주치의 대화형 컨설팅 (0.5초 즉시 원복 보장).
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => activatePricingPlan('personal_sub_3900')}
-                      className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
+                      onClick={() => activatePricingPlan('personal_single_2900')}
+                      className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12px] font-bold transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      월 1,900원 시작
+                      AI 클린 몬스터 (기기 1대당 1,900원)
                     </button>
+                  </div>
+
+                  {/* 3. AI 설정 몬스터 */}
+                  <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="font-label-sm text-[11.5px] text-emerald-400 font-bold">
+                        AI 설정 몬스터 — AI 음성 핸드폰·앱 설정 도우미
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-headline-md text-[23px] text-white font-black">
+                          구독 시 무제한 포함
+                        </span>
+                      </div>
+                      <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+                        핸드폰의 특정 설정이나 앱의 어떤 기능으로 세팅하고자 할 때, 복잡한 설정 메뉴를 뒤질 필요 없이 <strong>AI 음성으로 설정을 직접 찾아주고 세팅을 도와주는</strong> 음성 도우미입니다.
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => activatePricingPlan('personal_year_35000')}
-                      className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap"
+                      onClick={() => {
+                        setDesktopTab('sync');
+                        setMobileTab('settings');
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-label-md text-[12px] font-extrabold transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      연 19,000원 (100명 평생권)
+                      🎙️ AI 설정 몬스터 음성 도우미 열기
                     </button>
                   </div>
                 </div>
@@ -2665,69 +2691,186 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     setTimeout(() => setShortsExportToast(null), 3200);
   };
 
+  const [voiceSettingQuery, setVoiceSettingQuery] = useState('');
+  const [activeVoicePresetId, setActiveVoicePresetId] = useState<string>('font_zoom');
+  const [appliedVoiceSettings, setAppliedVoiceSettings] = useState<Record<string, boolean>>({
+    font_zoom: true,
+  });
+  const [customVoiceResult, setCustomVoiceResult] = useState<string | null>(null);
+
   if (activeLoungeType === 'personal') {
+    const VOICE_SETTING_PRESETS = [
+      {
+        id: 'font_zoom',
+        command: '“핸드폰 글씨 크기랑 화면 좀 시원하게 키워줘”',
+        target: '스마트폰 디스플레이 · 글꼴 및 화면 확대 설정',
+        guide:
+          '🔊 AI 음성 안내: “어르신과 사용자분께서 눈이 편하시도록 시스템 글자 크기를 135%로 키우고, 버튼 윤곽선과 고대비 가독성 모드를 바로 세팅해 드렸습니다.”',
+      },
+      {
+        id: 'kakao_notif',
+        command: '“밤에 울리는 카톡이랑 쇼핑앱 알림 소리 좀 꺼줘”',
+        target: '특정 앱(카카오톡·쇼핑앱) 알림 소리 & 방해금지 설정',
+        guide:
+          '🔊 AI 음성 안내: “가족·중요 연락처 알림은 유지하고, 밤 10시 이후 단체방 알림음과 쇼핑·광고성 앱 푸시 알림 소리를 자동으로 무음 세팅해 드렸습니다.”',
+      },
+      {
+        id: 'volume_wifi',
+        command: '“벨소리·통화 음량 최대로 키우고 와이파이 잡아줘”',
+        target: '사운드·통화 볼륨 증폭 & 와이파이·블루투스 자동 연결',
+        guide:
+          '🔊 AI 음성 안내: “벨소리와 통화 수화기 음량을 가장 또렷한 최대 단계로 맞추고, 현재 공간의 가장 빠른 와이파이에 자동 연결되도록 세팅을 완료했습니다.”',
+      },
+      {
+        id: 'battery_sleep',
+        command: '“배터리 빨리 안 닳게 절전 세팅하고 화면 늦게 꺼지게 해줘”',
+        target: '배터리 최적화 · 화면 자동 꺼짐 시간 설정',
+        guide:
+          '🔊 AI 음성 안내: “뒤에서 몰래 배터리를 소모하는 미사용 앱을 절전 상태로 묶고, 글씨를 읽는 도중 화면이 빨리 꺼지지 않도록 화면 유지 시간을 2분으로 넉넉히 세팅했습니다.”',
+      },
+      {
+        id: 'app_shortcut',
+        command: '“자주 쓰는 앱 기능이랑 동창회 카페 홈 화면에 크게 빼줘”',
+        target: '특정 앱 핵심 기능 바로가기 & 홈 화면 큰 아이콘 배치',
+        guide:
+          '🔊 AI 음성 안내: “복잡하게 앱 안으로 여러 번 들어갈 필요 없이, 홈 화면 첫 페이지에 한 번만 누르면 바로 열리는 큼직한 전용 바로가기 아이콘으로 세팅해 드렸습니다.”',
+      },
+    ];
+
+    const selectedPreset =
+      VOICE_SETTING_PRESETS.find((item) => item.id === activeVoicePresetId) ??
+      VOICE_SETTING_PRESETS[0];
+
+    const handleRunCustomVoiceSetting = () => {
+      const trimmed = voiceSettingQuery.trim();
+      if (!trimmed) return;
+      setCustomVoiceResult(
+        `🔊 AI 음성 도우미 세팅 완료: 요청하신 “${trimmed}” 설정 경로를 핸드폰·앱 설정에서 즉시 찾아 최적 상태로 맞춤 적용했습니다!`
+      );
+      setVoiceSettingQuery('');
+    };
+
     return (
-      <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-              AI 설정 몬스터
-            </span>
-            {!isStoreAppMode && (
-              <>
-                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px]">
-                  현재 플랜: {PLAN_BADGE_LABELS[activePricingPlan]}
-                </span>
-                <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  초기 100명 한정 연 19,000원 평생권 프로모션
-                </span>
-              </>
-            )}
+      <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                🎙️ AI 설정 몬스터
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-bold">
+                AI 음성 기반 핸드폰 특정 설정 · 앱 기능 맞춤 세팅 도우미
+              </span>
+            </div>
+            <h2 className="font-headline-sm text-[19px] md:text-[21px] text-white font-bold mt-1">
+              말 한마디로 핸드폰의 특정 설정이나 앱 기능을 AI 음성으로 직접 찾아 세팅해 드립니다
+            </h2>
+            <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+              복잡하게 숨어 있는 핸드폰 환경설정이나 특정 앱(카톡·유튜브·카메라·알림 등)의 기능을 어떻게 세팅할지 막막할 때, 원하는 내용을 말로 하면 AI 음성 안내와 함께 즉시 설정을 도와줍니다.
+            </p>
           </div>
-          <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-            내 PC↔폰 13KB 섀도우 자동 싱크 &amp; 상시 AI 색인 관리
-          </h2>
-          <p className="font-body-sm text-[12.5px] text-zinc-300">
-            {isStoreAppMode
-              ? '수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 엔진 연결이 필요합니다. 나중에 PC에서 바로 이어서 작업하실 수 있도록 연동 가이드를 보내두세요.'
-              : '종합건강검진·대화형 청소는 AI 클린 몬스터(기기 1대당 1,900원)로, 상시 스마트폰↔PC 13KB 섀도우 캐시 자동 동기화 및 1초 검색은 AI 투시검색 몬스터 월 1,900원(연 19,000원 · 초기 100명 한정 평생권)으로 즉시 개통됩니다.'}
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {isStoreAppMode ? (
+        {/* 직접 말하거나 입력해서 세팅하는 AI 음성 명령 바 */}
+        <div className="p-4 rounded-xl bg-zinc-950 border border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-1 px-3 py-2 rounded-lg bg-zinc-900 border border-white/10">
+            <span className="text-[18px]">🎙️</span>
+            <input
+              type="text"
+              value={voiceSettingQuery}
+              onChange={(e) => setVoiceSettingQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRunCustomVoiceSetting();
+              }}
+              placeholder="예: 카톡 글씨 크게 해줘, 스팸 전화 차단 설정해줘, 카메라 타이머 켜줘..."
+              className="w-full bg-transparent text-white text-[13px] placeholder:text-zinc-500 focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleRunCustomVoiceSetting}
+            className="px-5 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap cursor-pointer"
+          >
+            🎙️ AI 음성으로 설정 도와주기
+          </button>
+        </div>
+
+        {customVoiceResult && (
+          <div className="p-3.5 rounded-xl bg-emerald-950/50 border border-emerald-400/40 text-emerald-200 font-body-sm text-[12.5px] flex items-center justify-between gap-2">
+            <span>{customVoiceResult}</span>
             <button
               type="button"
-              onClick={() => setShowProModal(true)}
-              className="px-4 py-2 rounded-xl bg-[#FEE500] hover:bg-[#FDD800] text-[#191919] font-label-sm text-[12.5px] font-extrabold"
+              onClick={() => setCustomVoiceResult(null)}
+              className="text-xs text-emerald-300 underline shrink-0"
             >
-              💬 카톡·이메일로 ‘내 PC 연동 시작 가이드’ 보내두기
+              닫기
             </button>
-          ) : (
-            <>
+          </div>
+        )}
+
+        {/* 자주 요청하는 핸드폰 설정 & 앱 기능 세팅 음성 프리셋 5선 */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
+          {VOICE_SETTING_PRESETS.map((preset) => {
+            const isSelected = preset.id === activeVoicePresetId;
+            const isApplied = Boolean(appliedVoiceSettings[preset.id]);
+            return (
               <button
+                key={preset.id}
                 type="button"
-                onClick={() => activatePricingPlan('personal_single_2900')}
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
+                onClick={() => {
+                  setActiveVoicePresetId(preset.id);
+                  setAppliedVoiceSettings((prev) => ({ ...prev, [preset.id]: true }));
+                }}
+                className={`p-3.5 rounded-xl text-left flex flex-col justify-between gap-2 border transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-zinc-900 border-primary-container shadow-[0_0_16px_rgba(32,247,219,0.14)]'
+                    : 'bg-zinc-950/80 hover:bg-zinc-900/70 border-white/10'
+                }`}
               >
-                AI 클린 몬스터 1,900원
+                <div className="flex flex-col gap-1">
+                  <span className="font-label-sm text-[10.5px] text-primary-container font-bold">
+                    {preset.target}
+                  </span>
+                  <span className="font-headline-sm text-[13px] text-white font-bold leading-snug">
+                    {preset.command}
+                  </span>
+                </div>
+                <span
+                  className={`font-label-sm text-[11px] font-extrabold ${
+                    isApplied ? 'text-emerald-400' : 'text-zinc-400'
+                  }`}
+                >
+                  {isApplied ? '✓ AI 음성 세팅 적용됨' : '🎙️ 눌러서 음성 세팅'}
+                </span>
               </button>
-              <button
-                type="button"
-                onClick={() => activatePricingPlan('personal_sub_3900')}
-                className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold"
-              >
-                AI 투시검색 월 1,900원
-              </button>
-              <button
-                type="button"
-                onClick={() => activatePricingPlan('personal_year_35000')}
-                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
-              >
-                연 19,000원 (100명 평생권)
-              </button>
-            </>
-          )}
+            );
+          })}
+        </div>
+
+        {/* 선택된 음성 설정의 AI 음성 브리핑 및 원복/재설정 제어 */}
+        <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/35 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <span className="font-label-sm text-[11px] text-amber-300 font-bold">
+              🎯 현재 선택된 음성 세팅: {selectedPreset.target}
+            </span>
+            <p className="font-body-sm text-[12.5px] text-zinc-200 leading-relaxed">
+              {selectedPreset.guide}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setAppliedVoiceSettings((prev) => ({
+                ...prev,
+                [selectedPreset.id]: !prev[selectedPreset.id],
+              }))
+            }
+            className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold shrink-0 cursor-pointer"
+          >
+            {appliedVoiceSettings[selectedPreset.id]
+              ? '↩️ 이전 설정으로 되돌리기'
+              : '⚡ 이 설정 바로 적용하기'}
+          </button>
         </div>
       </div>
     );

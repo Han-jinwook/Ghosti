@@ -881,71 +881,13 @@ export const DesktopDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* 정식 스토어 및 공인 설치 가이드 (편법 배제 · 안드로이드 / iOS / Windows PC 정공법) */}
-          <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                  스토어 정공법 · 공인 설치 가이드
-                </span>
-                <span className="font-body-sm text-[12px] text-zinc-400">
-                  복잡한 편법 설정 없이 정식 스토어 및 MS 공식 인증서 서명 설치파일로 안전하게 연결됩니다
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                    Android 스마트폰
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10.5px] font-bold">
-                    Google Play / 공식 APK
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  Google Play 스토어 정식 앱 또는 공식 서명된 APK로 원터치 설치 후 PC와 QR로 즉시 페어링합니다.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                    iOS (아이폰 · 아이패드)
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-bold">
-                    App Store / 공식 TestFlight
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  App Store 정식 출시 앱 및 Apple 공식 TestFlight를 통해 공인 iOS 앱으로 안전하고 깔끔하게 설치합니다.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                    Windows PC
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-bold">
-                    MS 공식 인증서 서명 설치파일
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  Microsoft 공식 코드사이닝 인증서가 서명된 정식 설치파일(<code>SaySee_Setup.exe</code>)로 보안 경고 없이 안전하게 구동됩니다.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* [필수 반영] AI 설정 몬스터 내 '24시간 GPU 클라우드 서버 도우미' 카드 (isStoreAppMode 시 가격 비노출) */}
+          {/* 24시간 GPU 클라우드 서버 도우미 카드 (isStoreAppMode 시 가격 비노출) */}
           {!isStoreAppMode && (
             <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                    AI 설정 몬스터 핵심 기능
+                    ⚡ 24시간 GPU 클라우드 서버 도우미
                   </span>
                   <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
                     방장 PC가 꺼져 있거나 고장 났을 때 스마트폰에서 원터치 가동
