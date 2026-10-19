@@ -315,7 +315,7 @@ const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   currentPhotoName: '로컬 서류함 및 동영상 전 구간 타임라인 프레임 자율 색인 완료',
   currentPhotoThumb: '',
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
-  modelStatusText: '내 PC 직접 구동(SaySee_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
+  modelStatusText: '내 PC 직접 구동(Z-Eye_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
 };
 
 /**
@@ -518,7 +518,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
           ];
 
     const extraCuts: YearlyFaceBestCut[] = [];
-    let passportEmail = c.passportEmail || 'member@saysee.ai';
+    let passportEmail = c.passportEmail || 'member@z-eye.ai';
     let timelineBucket: PersonTimelineBucketInfo = c.timelineBucket || {
       anchorCreationYear: 2026,
       bucketSpanYears: 10,
@@ -535,7 +535,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
 
     if (c.clusterId === 'face_member_3' || c.personKey === 'person_adult_female_partner') {
       // 은숙 (성인 10년 주기: 기준 2026년 -> 2026~2017 + 미래 바구니 2027~2036)
-      passportEmail = 'eunsook@saysee.ai';
+      passportEmail = 'eunsook@z-eye.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 10,
@@ -574,7 +574,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_5' || c.personKey === 'person_adult_male_host') {
       // 멀린 (방장·대표님: 우리집='멀린', 처가(친정)='둘째사위', 클럽='멀린프로')
-      passportEmail = 'merlin@saysee.ai';
+      passportEmail = 'merlin@z-eye.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 10,
@@ -613,7 +613,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_1' || c.personKey === 'person_youth_glasses_2') {
       // 치우 (미성년/청년 5년 주기: 기준 2026년 -> 2026~2022 + 미래 바구니 2027~2031)
-      passportEmail = 'chiwoo@saysee.ai';
+      passportEmail = 'chiwoo@z-eye.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 5,
@@ -652,7 +652,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_4') {
       // 지우 (미성년 5년 주기: 친구 모임방에서 진화해 우리집 가족방으로 역전파되는 대표 사례!)
-      passportEmail = 'jiwoo@saysee.ai';
+      passportEmail = 'jiwoo@z-eye.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 5,
@@ -691,7 +691,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_2') {
       // 천우 (미성년 5년 주기: 기준 2026년 -> 2026~2022)
-      passportEmail = 'cheonwoo@saysee.ai';
+      passportEmail = 'cheonwoo@z-eye.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 5,
@@ -746,7 +746,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
     enriched.push({
       clusterId: 'face_companion_auto_6',
       personKey: 'person_companion_discovered_6',
-      passportEmail: 'inlaw2029@saysee.ai',
+      passportEmail: 'inlaw2029@z-eye.ai',
       timelineBucket: {
         anchorCreationYear: 2029,
         bucketSpanYears: 10,
@@ -1255,7 +1255,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       ? {
           seedVersion: nextSeedVer,
           triggerTitle: isSecondaryRoom
-            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (세이씨 여권 시드 공유 · 1초 만에 역스캔)`
+            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (Z-Eye 여권 시드 공유 · 1초 만에 역스캔)`
             : `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 1초 만에 역스캔 완결`,
           rescuedHostPhotos: (targetCluster?.matchedPhotoCount ?? 18) + extraRescuedHost,
           rescuedMemberPhonePhotos:
@@ -1328,7 +1328,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `🛂 세이씨 여권(${target.passportEmail}) 시드 100% 공유 + [${roomKey}] 방 전용 호칭 ‘${cleanPersona}’ 즉시 매핑`,
+        triggerTitle: `🛂 Z-Eye 여권(${target.passportEmail}) 시드 100% 공유 + [${roomKey}] 방 전용 호칭 ‘${cleanPersona}’ 즉시 매핑`,
         rescuedHostPhotos: target.matchedPhotoCount,
         rescuedMemberPhonePhotos: Math.max(14, Math.round(target.matchedPhotoCount * 0.45)),
         rescuedVideoSegments: target.matchedVideoSegmentCount,
@@ -1828,7 +1828,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       analogYearProposals,
     } = get();
 
-    // [1단계: 방별 별명(Room Persona) ➔ 세이씨 여권(SaySee Face Passport) 자동 번역]
+    // [1단계: 방별 별명(Room Persona) ➔ Z-Eye 여권(SaySee Face Passport) 자동 번역]
     let resolvedQuery = query;
     for (const fc of faceClusters) {
       if (fc.excludedAsPasserby || !fc.registeredName) continue;
@@ -2353,7 +2353,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             },
             lastQuarantineToast: wasFreeTrialFirstUse
               ? `🎁 [입문 무료 체험 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
-              : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
+              : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 [Z-Eye_정리대기함]으로 즉시 격리했습니다.`,
           };
         });
       } catch {
@@ -2413,7 +2413,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             savedBytes,
             timestamp: Date.now(),
           },
-          lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 [세이씨_정리대기함]으로 즉시 격리했습니다.`,
+          lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 [Z-Eye_정리대기함]으로 즉시 격리했습니다.`,
         };
       });
     } catch {
@@ -2469,7 +2469,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           savedBytes,
           timestamp: Date.now(),
         },
-        lastQuarantineToast: `✅ ${movedSet.size}장의 사진이 [세이씨_정리대기함]으로 30일 안전 격리되었습니다.`,
+        lastQuarantineToast: `✅ ${movedSet.size}장의 사진이 [Z-Eye_정리대기함]으로 30일 안전 격리되었습니다.`,
       }));
     } catch {
       set({ quarantineMoving: false });
@@ -2539,7 +2539,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       set({
         lastQuarantineToast:
           target === 'quarantine'
-            ? '📂 윈도우 탐색기에서 [세이씨_정리대기함] 폴더를 열었습니다.'
+            ? '📂 윈도우 탐색기에서 [Z-Eye_정리대기함] 폴더를 열었습니다.'
             : target === 'docs'
             ? '📂 윈도우 탐색기에서 [로컬 스마트 서류함 (test_docs)] 폴더를 열었습니다.'
             : '📂 윈도우 탐색기에서 원본 사진 폴더를 열었습니다.',
@@ -2633,10 +2633,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   sharePcMasterUrlToKakao: async () => {
     const { merlinAuth } = get();
-    const baseMasterDomain = merlinAuth.pcMasterUrl || 'https://saysee.sundreamer.app';
+    const baseMasterDomain = merlinAuth.pcMasterUrl || 'https://z-eye.sundreamer.app';
     const masterPcLink = `${baseMasterDomain.replace(/\/$/, '')}/?master=pc`;
-    const shareTitle = '💻 세이씨 PC 마스터 시작하기 — 클릭 시 바로 이동';
-    const shareText = `[💻 세이씨(SaySee) 내 PC 연동 시작 가이드]\n수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 환경에서 작동합니다.\nPC 카카오톡에서 아래 가이드를 클릭해 대화면 작업을 바로 이어가세요!\n👉 ${masterPcLink}`;
+    const shareTitle = '💻 제트아이(Z-Eye) PC 마스터 시작하기 — 클릭 시 바로 이동';
+    const shareText = `[💻 제트아이(Z-Eye) 내 PC 연동 시작 가이드]\n수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 환경에서 작동합니다.\nPC 카카오톡에서 아래 가이드를 클릭해 대화면 작업을 바로 이어가세요!\n👉 ${masterPcLink}`;
 
     try {
       // 방법 2 대응: 카카오 공식 무료 SDK(Kakao.Share.sendDefault)가 로드된 환경이면 우선 호출
@@ -2984,7 +2984,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       unknownDatePlace: false,
       appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
       looseTimelineGroup: '1989년 봄',
-      mappedPassportBucketLabel: '🛂 세이씨 여권 1980년대 바구니(1989~1980) 자동 매핑',
+      mappedPassportBucketLabel: '🛂 Z-Eye 여권 1980년대 바구니(1989~1980) 자동 매핑',
       detectedMemberNames: ['👑 멀린프로(18세)', '박회장(18세)', '김총무(18세)'],
       captionKo: '1989년 봄 제주도 수학여행 나무 다리 단체컷 (아날로그 인화 사진 스캔본)',
       expandedSearchKeywords: buildBidirectionalStickKeywords({
@@ -3004,7 +3004,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       unknownDatePlace: false,
       appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
       looseTimelineGroup: '1989년 봄',
-      mappedPassportBucketLabel: '🛂 세이씨 여권 1980년대 바구니(1989~1980) 자동 매핑',
+      mappedPassportBucketLabel: '🛂 Z-Eye 여권 1980년대 바구니(1989~1980) 자동 매핑',
       detectedMemberNames: ['👑 멀린프로(18세)', '이프로(18세)'],
       captionKo: '1989년 봄 제주도 수학여행 성산일출봉 앞 추억 스캔본',
       expandedSearchKeywords: buildBidirectionalStickKeywords({
@@ -3221,7 +3221,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
       return {
         alumniStickChips: newChips,
-        lastQuarantineToast: `🏷️ [스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [🏷️ ${numYear}] [🏷️ ${cleanPlace}] [🏷️ ${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · 세이씨 여권 ${decadeStart}년대 바구니 직결)`,
+        lastQuarantineToast: `🏷️ [스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [🏷️ ${numYear}] [🏷️ ${cleanPlace}] [🏷️ ${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · Z-Eye 여권 ${decadeStart}년대 바구니 직결)`,
       };
     });
   },
@@ -3263,7 +3263,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           mappedPassportBucketLabel:
             nextSticks.length === 0
               ? '⏳ 연도 제보 대기 중'
-              : `🛂 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+              : `🛂 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo:
             nextSticks.length === 0
               ? item.captionKo
@@ -3276,7 +3276,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         analogScannedPhotos: nextPhotos,
         lastQuarantineToast: `🏷️ [1초 스틱 태깅 & 월(Month) 양방향 인덱싱] ‘${effectiveLabel}’ 스틱이 적용되어 [${
           chipObj?.looseTimelineGroup ?? `${targetYear}년 봄`
-        }] 타임라인 및 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart})에 즉시 매핑되었습니다!`,
+        }] 타임라인 및 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart})에 즉시 매핑되었습니다!`,
       };
     });
   },
@@ -3306,7 +3306,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           unknownDatePlace: false,
           appliedSticks: mergedSticks,
           looseTimelineGroup: groupName,
-          mappedPassportBucketLabel: `🛂 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          mappedPassportBucketLabel: `🛂 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo: item.captionKo.replace('[❓ 언제/어디인가요?] ', ''),
           expandedSearchKeywords: nextExpanded,
         };
@@ -3388,7 +3388,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           unknownDatePlace: false,
           appliedSticks: nextSticks,
           looseTimelineGroup: prop.proposedTimelineGroup,
-          mappedPassportBucketLabel: `🛂 세이씨 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          mappedPassportBucketLabel: `🛂 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo: `✓ [제보 반영됨: ${prop.proposedTimelineGroup} · ${prop.proposedPlaceTag}] ${item.captionKo.replace(
             '[❓ 언제/어디인가요?] ',
             ''
@@ -3406,7 +3406,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         analogScannedPhotos: nextAnalogPhotos,
         analogYearProposals: nextProposals,
         globalSeedVersion: state.globalSeedVersion + 1,
-        lastQuarantineToast: `👑 [방장 원터치 일괄 결재 완료] 멤버들이 제보한 연도·장소 ${pendingProposals.length}건이 느슨한 타임라인(1989년 봄/가을) · 계절↔월(Month) 양방향 인덱스 · 세이씨 여권 1980년대 바구니에 100% 반영되었습니다!`,
+        lastQuarantineToast: `👑 [방장 원터치 일괄 결재 완료] 멤버들이 제보한 연도·장소 ${pendingProposals.length}건이 느슨한 타임라인(1989년 봄/가을) · 계절↔월(Month) 양방향 인덱스 · Z-Eye 여권 1980년대 바구니에 100% 반영되었습니다!`,
       };
     });
   },
@@ -3450,7 +3450,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         '#1980년대여권바구니',
       ],
       searchResults: matchedSchoolPhotos,
-      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 1초 만에 찾기 완료] 세이씨 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 1초 만에 모두 찾았습니다!`,
+      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 1초 만에 찾기 완료] Z-Eye 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 1초 만에 모두 찾았습니다!`,
     });
   },
   };

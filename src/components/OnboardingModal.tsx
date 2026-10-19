@@ -225,7 +225,7 @@ export const OnboardingModal: React.FC = () => {
             <p className="font-body-sm text-[12.5px] text-on-surface-variant leading-relaxed">
               집이나 사무실 PC 앞이라면 파일이 외부로 단 1바이트도 나가지 않는{' '}
               <strong className="text-emerald-300">‘내 PC 직접 구동(Track A)’</strong>을 기본 코스로 강력 추천하며, 밖에서 스마트폰만 들고 계실 때만{' '}
-              <strong className="text-primary-container">‘세이씨 초고속 GPU 서버 무료 대여(Track B)’</strong>를 지원합니다.
+              <strong className="text-primary-container">‘Z-Eye 초고속 GPU 서버 무료 대여(Track B)’</strong>를 지원합니다.
             </p>
           </div>
           <button
@@ -270,7 +270,7 @@ export const OnboardingModal: React.FC = () => {
 
                 <p className="font-body-sm text-[12px] text-on-surface-variant leading-relaxed">
                   비로그인 상태라도 아래 버튼을 누르면 MS 공식 코드사이닝 인증서가 서명된 정식 설치파일{' '}
-                  <code className="text-emerald-300 font-bold">SaySee_PC_Agent.exe</code>가 실행되어, 내 사진·서류·동영상이{' '}
+                  <code className="text-emerald-300 font-bold">Z-Eye_PC_Agent.exe</code>가 실행되어, 내 사진·서류·동영상이{' '}
                   <strong className="text-white">외부로 단 1바이트도 나가지 않고 100% 내 PC 내부에서만</strong> 초고속 분석됩니다.
                 </p>
 
@@ -288,7 +288,7 @@ export const OnboardingModal: React.FC = () => {
                     <span>💻 내 PC로 1분 안심 체험하기 (권장)</span>
                   </button>
                   <span className="px-2.5 py-1 rounded-lg bg-surface-container-lowest/90 border border-emerald-400/35 font-label-mono text-[10.5px] text-emerald-300 font-bold">
-                    ✓ SaySee_PC_Agent.exe 가동 중 (0 Byte 외부 전송)
+                    ✓ Z-Eye_PC_Agent.exe 가동 중 (0 Byte 외부 전송)
                   </span>
                 </div>
               </div>
@@ -323,7 +323,7 @@ export const OnboardingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Track B: 밖에서 스마트폰만 들고 있을 때 — 세이씨 초고속 GPU 서버 무료 대여 */}
+          {/* Track B: 밖에서 스마트폰만 들고 있을 때 — Z-Eye 초고속 GPU 서버 무료 대여 */}
           <div
             onClick={() => setOnboardingTrackMode('cloud_rental')}
             className={`lg:col-span-4 p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
@@ -343,12 +343,12 @@ export const OnboardingModal: React.FC = () => {
               </div>
 
               <h3 className="font-headline-sm text-[15px] text-white font-extrabold">
-                📱 밖에서 스마트폰만 들고 있을 때 — 세이씨 초고속 GPU 서버 무료 대여
+                📱 밖에서 스마트폰만 들고 있을 때 — Z-Eye 초고속 GPU 서버 무료 대여
               </h3>
 
               <p className="font-body-sm text-[11.5px] text-on-surface-variant leading-relaxed">
                 “현재 PC 앞이 아니신가요? 스마트폰 발열과 배터리 소모를 막기 위해{' '}
-                <strong className="text-primary-container">세이씨의 초고속 클라우드 PC(GPU 서버)를 잠시 무료로 빌려드립니다!</strong>{' '}
+                <strong className="text-primary-container">제트아이(Z-Eye)의 초고속 클라우드 PC(GPU 서버)를 잠시 무료로 빌려드립니다!</strong>{' '}
                 (무거운 원본 미전송 / 서버 RAM에서 0.1초 연산 후 즉시 자동 소각되므로 안심하셔도 됩니다)”
               </p>
             </div>
@@ -380,7 +380,7 @@ export const OnboardingModal: React.FC = () => {
             <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
               {onboardingTrackMode === 'pc_local'
                 ? '🔒 현재 모드: Track A 내 PC 직접 구동 (외부 서버 전송 0%)'
-                : '⚡ 현재 모드: Track B 세이씨 GPU 서버 무료 대여 (원본 미전송 · 0.1초 RAM 즉시 소각)'}
+                : '⚡ 현재 모드: Track B Z-Eye GPU 서버 무료 대여 (원본 미전송 · 0.1초 RAM 즉시 소각)'}
             </span>
           </div>
 
@@ -511,8 +511,8 @@ export const OnboardingModal: React.FC = () => {
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="font-label-mono text-[10.5px] text-primary-container font-bold">
                 {onboardingTrackMode === 'pc_local'
-                  ? `내 PC 직접 구동(SaySee_PC_Agent.exe) 768D 벡터 변환 중 (${percent.toFixed(0)}%) • 외부 전송 0 Byte`
-                  : `세이씨 초고속 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 자동 소각 (${percent.toFixed(0)}%)`}
+                  ? `내 PC 직접 구동(Z-Eye_PC_Agent.exe) 768D 벡터 변환 중 (${percent.toFixed(0)}%) • 외부 전송 0 Byte`
+                  : `Z-Eye 초고속 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 자동 소각 (${percent.toFixed(0)}%)`}
               </span>
               <span className="font-label-md text-[12px] text-on-surface font-bold truncate">
                 {currentPhotoName}

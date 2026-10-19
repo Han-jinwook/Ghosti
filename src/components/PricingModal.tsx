@@ -5,9 +5,9 @@ import { LoungeModeSwitcherBar } from './LoungeView';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '✨ 무료체험 모드 이용 중',
-  personal_single_2900: '개인 라운지 • AI 클린 몬스터 (기기 1대당 1,900원)',
-  personal_sub_3900: '개인 라운지 • AI 투시검색 몬스터 (월 1,900원)',
-  personal_year_35000: '개인 라운지 • AI 투시검색 몬스터 (연 19,000원 · 초기 100명 평생권)',
+  personal_single_2900: '개인 라운지 • 🩺 Z-Eye 클린 몬스터 (기기 1대당 1,900원)',
+  personal_sub_3900: '개인 라운지 • 👁️ Z-Eye 투시검색 (월 1,900원)',
+  personal_year_35000: '개인 라운지 • 👁️ Z-Eye 투시검색 (연 19,000원 · 초기 100명 평생권)',
   family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원)',
   family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 (연 59,000원)',
   family_three_8900: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합권 3방 (월 8,900원)',
@@ -27,7 +27,7 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
 };
 
 /**
- * 상단 4대 라운지 스위처 바
+ * 상단 5대 라운지 스위처 바
  */
 export const FoundingMemberFomoBar: React.FC = () => {
   return <LoungeModeSwitcherBar />;
@@ -84,7 +84,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
             <span>💬 카톡(나에게)으로 ‘내 PC 연동 시작 가이드’ 보내두기</span>
           </button>
 
-          {/* 보조 버튼 (이메일 2순위): 가입된 세이씨 여권 이메일로 PC 연동 안내서 발송 */}
+          {/* 보조 버튼 (이메일 2순위): 가입된 Z-Eye 여권 이메일로 PC 연동 안내서 발송 */}
           <button
             type="button"
             onClick={() => void sendPcMasterUrlToEmail()}
@@ -95,7 +95,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
         </div>
       ) : (
         <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 text-zinc-300 font-body-sm text-[12px]">
-          💡 데스크톱(Windows / Mac) 환경에서 세이씨 마스터 엔진을 실행한 뒤 동일한 여권 계정({merlinAuth.email})으로 로그인하시면 즉시 연동됩니다.
+          💡 데스크톱(Windows / Mac) 환경에서 제트아이(Z-Eye) 마스터 엔진을 실행한 뒤 동일한 여권 계정({merlinAuth.email})으로 로그인하시면 즉시 연동됩니다.
         </div>
       )}
 
@@ -246,7 +246,7 @@ export const PricingModal: React.FC = () => {
   };
 
   const handleCopyReferralLink = async () => {
-    const referralUrl = 'https://saysee.sundreamer.app/?ref=merlin_vip_1010';
+    const referralUrl = 'https://z-eye.sundreamer.app/?ref=merlin_vip_1010';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(referralUrl);
@@ -487,7 +487,7 @@ export const PricingModal: React.FC = () => {
                 <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-2">
                   <div>
                     <span className="font-label-sm text-[11px] text-amber-400 font-bold">
-                      AI 클린 몬스터 (기기 1대당)
+                      🩺 Z-Eye 클린 몬스터 (기기 1대당)
                     </span>
                     <div className="font-headline-md text-[20px] text-white font-black mt-0.5">
                       1,900원
@@ -505,7 +505,7 @@ export const PricingModal: React.FC = () => {
                 <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/40 flex flex-col justify-between gap-2">
                   <div>
                     <span className="font-label-sm text-[11px] text-primary-container font-bold">
-                      AI 투시검색 몬스터
+                      👁️ Z-Eye 투시검색
                     </span>
                     <div className="font-headline-md text-[20px] text-white font-black mt-0.5">
                       월 1,900원
@@ -618,7 +618,7 @@ export const PricingModal: React.FC = () => {
               </div>
 
               <div className="px-3 py-2 rounded-xl bg-zinc-950/90 border border-primary-container/30 text-[11.5px] text-zinc-300">
-                🎬 <strong>연간권 특권:</strong> 변천사 쇼츠 영상 우측 하단 워터마크를 <code>[SaySee]</code> 로고 대신 <strong>[사랑하는 우리가족]</strong> 등 가족 전용 타이틀로 커스텀 가능!
+                🎬 <strong>연간권 특권:</strong> 변천사 쇼츠 영상 우측 하단 워터마크를 <code>[Z-Eye]</code> 로고 대신 <strong>[사랑하는 우리가족]</strong> 등 가족 전용 타이틀로 커스텀 가능!
               </div>
             </div>
           </div>
@@ -740,7 +740,7 @@ export const PricingModal: React.FC = () => {
                     🎁 <strong>[트로이 목마 VIP 사은품]</strong> 클럽 연간권·평생권 결제 시 총무님께 <strong>[패밀리 라운지 1년 무료 초대권 3장]</strong>을 즉시 드립니다!
                   </span>
                   <span className="text-zinc-300">
-                    🎬 <strong>[모임 전용 워터마크 특권]</strong> 자동 생성 쇼츠 우측 하단에 <code>[SaySee]</code> 대신 <strong>[제주여고 89회 공식 갤러리]</strong> 등 모임 전용 로고 각인!
+                    🎬 <strong>[모임 전용 워터마크 특권]</strong> 자동 생성 쇼츠 우측 하단에 <code>[Z-Eye]</code> 대신 <strong>[제주여고 89회 공식 갤러리]</strong> 등 모임 전용 로고 각인!
                   </span>
                 </div>
                 <button
@@ -911,12 +911,12 @@ export const PricingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. [AI 설정 몬스터] 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 반영 */}
+        {/* 2. [🛠️ Z-Eye 설정 몬스터] 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 반영 */}
         <div className="p-5 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                AI 설정 몬스터 핵심 옵션
+                🛠️ Z-Eye 설정 몬스터 핵심 옵션
               </span>
               <h3 className="font-headline-sm text-[17px] text-white font-extrabold">
                 ⚡ 24시간 GPU 클라우드 서버 도우미 (방장 PC OFF 시 원터치 일일 대여)
@@ -1021,7 +1021,7 @@ export const PricingModal: React.FC = () => {
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <span className="font-body-sm text-[11.5px] text-zinc-400">
-              💡 세이씨는 연산 비용을 유저 마스터 PC가 분담하는 에어갭(Air-gap) 구조이므로 한계 비용이 0원에 수렴하여 평생 10% 리워드 환원이 가능합니다.
+              💡 제트아이(Z-Eye)는 연산 비용을 유저 마스터 PC가 분담하는 에어갭(Air-gap) 구조이므로 한계 비용이 0원에 수렴하여 평생 10% 리워드 환원이 가능합니다.
             </span>
 
             <div className="flex flex-wrap items-center gap-2">

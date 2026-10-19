@@ -17,7 +17,7 @@ export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
   coinBalance: 5200,
   maxFreePhotos: 300,
   hubUrl: 'https://os.sundreamer.app',
-  pcMasterUrl: 'https://saysee.sundreamer.app',
+  pcMasterUrl: 'https://z-eye.sundreamer.app',
   studioUrl: 'https://studio.sundreamer.app',
 };
 

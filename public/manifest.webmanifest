@@ -1,7 +1,7 @@
 {
-  "name": "SaySee (세이씨) — Zero-Cloud 로컬 AI 사진 스나이퍼",
-  "short_name": "SaySee",
-  "description": "100% 온디바이스 Zero-Cloud 음성/자연어 시맨틱 사진 검색기 및 스마트 다이어트 툴",
+  "name": "제트아이 (Z-Eye) — The Ultimate All-Seeing AI & Zero-Cloud Lounge",
+  "short_name": "Z-Eye",
+  "description": "만물을 꿰뚫어 보는 궁극의 AI 투시 엔진 & 무클라우드 시크릿 라운지 (The Ultimate All-Seeing AI & Zero-Cloud Lounge)",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#121318",

@@ -393,9 +393,9 @@ export const FaceMemberInlineBar: React.FC<{
 };
 
 /**
- * [세이씨 여권(SaySee Face Passport) · 인물별 독립 타임라인 바구니 · 3단 집단지성 총점검 모달]
+ * [Z-Eye 여권(Face Passport) · 인물별 독립 타임라인 바구니 · 3단 집단지성 총점검 모달]
  * 1. 인물별 독립 타임라인 바구니: 방(Room)이 아닌 각 인물(Person ID)의 최초 생성 연도(2026년 vs 2029년 신규 합류)에 귀속 + 미래 바구니(2027~2036 / 2027~2031) 자동 확장
- * 2. 무질문 0.1초 자동 장착: "시드를 가져올까요?" 질문 팝업 제로 — 이메일 ID 기반 만국공통 [🛂 세이씨 여권 자동 연동됨]
+ * 2. 무질문 0.1초 자동 장착: "시드를 가져올까요?" 질문 팝업 제로 — 이메일 ID 기반 만국공통 [🛂 Z-Eye 여권 자동 연동됨]
  * 3. 방별 별명(Room Persona) 독립 매핑: 시드(768차원 벡터 + 연도 바구니)는 100% 공유하되 방마다 부르는 호칭(멀린 ↔ 둘째사위 ↔ 큰아들 ↔ 지우짱)만 독립 작동
  * 4. 크로스-라운지 집단지성 진화: 타 방(예: 10대 학생방)에서 채워진 베스트 컷이 이메일 여권을 통해 우리집·처가·본가방에 자동 전파
  */
@@ -466,10 +466,10 @@ export const FaceMemberRegistryModal: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-                🛂 세이씨 여권 관리 · 👑 방장 총점검 (Global Seed v{globalSeedVersion})
+                🛂 Z-Eye 여권 관리 · 👑 방장 총점검 (Global Seed v{globalSeedVersion})
               </span>
               <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-extrabold">
-                만국공통 세이씨 여권(SaySee Face Passport) &amp; 👑 방장 누락분 총점검 센터
+                만국공통 Z-Eye 여권(Face Passport) &amp; 👑 방장 누락분 총점검 센터
               </h2>
             </div>
             <p className="font-body-sm text-[12px] text-zinc-400">
@@ -575,7 +575,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-mono text-[9.5px] font-extrabold">
-                              🛂 {c.passportEmail || 'passport@saysee.ai'}
+                              🛂 {c.passportEmail || 'passport@z-eye.ai'}
                             </span>
                             {bucket && (
                               <span
@@ -793,7 +793,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                   </h3>
                 </div>
                 <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
-                  멤버들이 확인을 건너뛰고 바로 올린 사진 속 얼굴 후보까지 빠짐없이 이곳에 보관됩니다. 👑 방장이 <strong>[누락분 일괄 등록]</strong> 한 번만 누르면 세이씨 여권 시드에 100% 반영됩니다.
+                  멤버들이 확인을 건너뛰고 바로 올린 사진 속 얼굴 후보까지 빠짐없이 이곳에 보관됩니다. 👑 방장이 <strong>[누락분 일괄 등록]</strong> 한 번만 누르면 Z-Eye 여권 시드에 100% 반영됩니다.
                 </p>
               </div>
 

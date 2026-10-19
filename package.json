@@ -1,9 +1,9 @@
 {
-  "name": "saysee-pwa",
+  "name": "z-eye-pwa",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "SaySee (세이씨) - Zero-Cloud On-Device AI Semantic Photo Search & Smart Diet Tool",
+  "description": "Z-Eye (제트아이) - The Ultimate All-Seeing AI & Zero-Cloud Lounge",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

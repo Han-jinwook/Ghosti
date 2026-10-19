@@ -66,7 +66,7 @@ export const App: React.FC = () => {
               history
             </span>
             <span className="font-label-md text-[13px] md:text-[13.5px] font-bold truncate">
-              🛡️ 방금 정리한 {lastUndoBatch.count}장이 [세이씨_정리대기함]으로 안전 격리되었습니다.
+              🛡️ 방금 정리한 {lastUndoBatch.count}장이 [Z-Eye_정리대기함]으로 안전 격리되었습니다.
             </span>
           </div>
 

@@ -342,14 +342,14 @@ export const SmartTrashView: React.FC = () => {
         </div>
       </section>
 
-      {/* ─────────────── 📸 2. 세이씨 파워검색 부가서비스: 중복 사진(최고화질 원본 보존) & 연사(1장 직접 선택) 정리 보드 ─────────────── */}
+      {/* ─────────────── 📸 2. Z-Eye 투시검색 부가서비스: 중복 사진(최고화질 원본 보존) & 연사(1장 직접 선택) 정리 보드 ─────────────── */}
       <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
           {/* 좌측 진단 요약 및 1줄 안심 가이드 */}
           <div className="lg:col-span-8 flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-label-mono text-[11px] text-zinc-400 font-semibold uppercase tracking-wider">
-                POWER SEARCH ADD-ON · 파워검색의 묘미를 살리는 사진 부가서비스
+                Z-EYE ALL-SEEING ADD-ON · 투시검색의 묘미를 살리는 사진 부가서비스
               </span>
 
               {/* 우측: 스마트 서류함 분리 안내만 심플한 무채색 링크로 유지 */}
@@ -381,14 +381,14 @@ export const SmartTrashView: React.FC = () => {
                 </>
               ) : (
                 <span className="text-primary-container">
-                  ✨ 사진 부가서비스 정리 완료! 모든 중복·연사 사본({quarantinedPhotos.length}장)이 정리되어 파워검색 결과가 가장 깔끔한 상태입니다.
+                  ✨ 사진 부가서비스 정리 완료! 모든 중복·연사 사본({quarantinedPhotos.length}장)이 정리되어 투시검색 결과가 가장 깔끔한 상태입니다.
                 </span>
               )}
             </h1>
 
             {/* 3중 안전망 장문 박스 축소 ➔ 차분한 1줄 보조 텍스트 */}
             <p className="font-body-sm text-[12.5px] text-zinc-400 pt-0.5">
-              🛡️ 정리된 파일은 바로 삭제되지 않고 <strong className="text-zinc-200">[세이씨_정리대기함]에 30일(한 달) 보관 후 휴지통으로 이동</strong>하며, 하단{' '}
+              🛡️ 정리된 파일은 바로 삭제되지 않고 <strong className="text-zinc-200">[Z-Eye_정리대기함]에 30일(한 달) 보관 후 휴지통으로 이동</strong>하며, 하단{' '}
               <strong className="text-zinc-200">[1초 되돌리기(Undo)]</strong>로 언제든 즉시 원복됩니다.
             </p>
           </div>
@@ -872,14 +872,14 @@ export const SmartTrashView: React.FC = () => {
                 이 탭의 추천 정리 대상 사진이 모두 격리되었습니다!
               </span>
               <span className="font-body-sm text-[12.5px] text-zinc-400">
-                아래 [세이씨_정리대기함 격리 보관소]에서 언제든 확인하거나 원본 폴더로 복원할 수 있습니다.
+                아래 [Z-Eye_정리대기함 격리 보관소]에서 언제든 확인하거나 원본 폴더로 복원할 수 있습니다.
               </span>
             </div>
           )}
         </>
       )}
 
-      {/* 물리 격리 보관소 ([세이씨_정리대기함]) */}
+      {/* 물리 격리 보관소 ([Z-Eye_정리대기함]) */}
       <div className="mt-1 p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5">
@@ -888,11 +888,11 @@ export const SmartTrashView: React.FC = () => {
                 inventory_2
               </span>
               <h3 className="font-headline-sm text-[15.5px] text-white font-bold">
-                [세이씨_정리대기함] 30일 안전 보관소 ({quarantinedPhotos.length}장)
+                [Z-Eye_정리대기함] 30일 안전 보관소 ({quarantinedPhotos.length}장)
               </h3>
             </div>
             <p className="font-body-sm text-[12px] text-zinc-400">
-              실제 <code className="text-zinc-200">D:\SaySee\세이씨_정리대기함</code> 폴더로 이동된 파일입니다. 클릭 한 번으로 언제든 원래 폴더로 복원할 수 있습니다.
+              실제 로컬 <code className="text-zinc-200">Z-Eye_정리대기함</code> 안전 보관 폴더로 이동된 파일입니다. 클릭 한 번으로 언제든 원래 폴더로 복원할 수 있습니다.
             </p>
           </div>
 
@@ -938,7 +938,7 @@ export const SmartTrashView: React.FC = () => {
           </div>
         ) : (
           <div className="py-5 text-center font-body-sm text-[12.5px] text-zinc-500">
-            현재 <code className="text-zinc-400">세이씨_정리대기함</code> 폴더가 비어 있습니다.
+            현재 <code className="text-zinc-400">Z-Eye_정리대기함</code> 폴더가 비어 있습니다.
           </div>
         )}
       </div>

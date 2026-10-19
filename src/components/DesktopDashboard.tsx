@@ -120,9 +120,9 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 > = {
   personal: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: 'AI 투시검색 몬스터' },
-    { id: 'trash', label: 'AI 클린 몬스터', showTrashCount: true },
-    { id: 'sync', label: 'AI 설정 몬스터' },
+    { id: 'dashboard', label: '👁️ Z-Eye 투시검색' },
+    { id: 'trash', label: '🩺 Z-Eye 클린 몬스터', showTrashCount: true },
+    { id: 'sync', label: '🛠️ Z-Eye 설정 몬스터' },
   ],
   family: [
     { id: 'trial', label: '무료체험' },
@@ -261,20 +261,21 @@ export const DesktopDashboard: React.FC = () => {
                         themeMode === 'light' ? 'text-slate-900' : 'text-white'
                       }`}
                     >
-                      세이씨
+                      제트아이
                     </span>
                     <span
-                      className={`font-normal text-[12.5px] ${
-                        themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      className={`font-extrabold text-[12.5px] ${
+                        themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
                       }`}
                     >
-                      SaySee
+                      Z-Eye
                     </span>
                   </div>
                   <span
                     className={`font-label-sm text-[11px] font-medium mt-1 leading-none whitespace-nowrap flex items-center gap-1 ${
                       themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
                     }`}
+                    title="The Ultimate All-Seeing AI & Zero-Cloud Lounge"
                   >
                     <svg
                       className="w-3 h-3 shrink-0"
@@ -289,7 +290,7 @@ export const DesktopDashboard: React.FC = () => {
                       <rect x="4" y="11" width="16" height="10" rx="2" />
                       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
                     </svg>
-                    <span>No-클라우드 시크릿 라운지</span>
+                    <span>Zero-Cloud 시크릿 라운지</span>
                   </span>
                 </div>
               </div>
@@ -1041,7 +1042,7 @@ export const DesktopDashboard: React.FC = () => {
                 battery_charging_full
               </span>
               <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                <strong>배터리 · OS 제재 방어 원칙:</strong> 세이씨 정식 모바일 앱(Google Play / App Store)은 상시 백그라운드 통신을 하지 않으며,{' '}
+                <strong>배터리 · OS 제재 방어 원칙:</strong> 제트아이(Z-Eye) 정식 모바일 앱(Google Play / App Store)은 상시 백그라운드 통신을 하지 않으며,{' '}
                 <strong className="text-white">[집 Wi-Fi 연결 + 충전 중]</strong>이거나{' '}
                 <strong className="text-primary-container">[지금 일치시키기]</strong> 버튼을 누를 때만 작동합니다.
               </p>
