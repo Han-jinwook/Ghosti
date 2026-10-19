@@ -518,12 +518,61 @@ export interface SetupPreTriageQuestion {
   }>;
 }
 
+export type SetupUiScanStrategy =
+  | 'PLAYBOOK_ZERO_TOKEN_CACHE'
+  | 'PRE_SCOUT_TARGET_REGION_PINSET'
+  | 'UNEXPLORED_2STAGE_HIERARCHICAL_ZOOM_IN';
+
+export interface SetupOsSecuritySpec {
+  platform: SetupMonsterPlatform;
+  // 💻 Windows .exe 데몬 (Z-Eye_PC_Setup.exe): UIPI 장벽 통과 & JEA 최소 권한 제어
+  windowsManifestUiAccess?: boolean;
+  windowsAuthenticodeSigned?: boolean;
+  windowsJeaLeastPrivilegePolicy?: string;
+  windowsPreBackupRegistryJsonPath?: string;
+  // 📱 Android APK (Z-Eye_Agent.apk): SDK 35 (Android 15) Edge-to-Edge WindowInsets 좌표 보정 & RECEIVER_NOT_EXPORTED
+  androidTargetSdk?: number;
+  androidStatusBarInsetPx?: number;
+  androidNavigationBarInsetPx?: number;
+  androidEdgeToEdgeOffsetFormula?: string;
+  androidBroadcastReceiverFlag?: string;
+}
+
+export interface SetupSmartUiScanTelemetry {
+  scanStrategy: SetupUiScanStrategy;
+  scanStrategyBadgeKo: string;
+  foregroundWindowTitle: string;
+  rawTotalDomNodes: number;
+  rawEstimatedTokens: number;
+  scannedTargetNodes: number;
+  finalSentTokens: number;
+  tokenSavingsPercent: number;
+  playbookCacheHit: boolean;
+  targetRegionOrZoomPathKo: string;
+  /** 관공서/레거시 웹·앱의 div/span 비표준 클릭 요소 및 중요 안내·에러 문구 무손실 보존 목록 */
+  preservedNonStandardNodes: Array<{
+    tagOrRole: string;
+    label: string;
+    rect: [number, number, number, number];
+    reasonKo: string;
+  }>;
+}
+
 export interface SetupOverlayStep {
   step: number;
   screenTitle: string;
-  scrapedElements: Array<{ text: string; rect: [number, number] }>;
+  scrapedElements: Array<{
+    text: string;
+    rect: [number, number];
+    role?: string;
+  }>;
   /** 화면 내 퍼센트 좌표 (left%, top%) */
   fingerCoordPct: [number, number];
+  /** AccessibilityNodeInfo / UIA 원본 논리 좌표 [x, y, w, h] */
+  rawLogicalRect?: [number, number, number, number];
+  /** Android 15 SDK 35 WindowInsets(StatusBar/NavBar) 또는 Windows DPI 보정 후 실제 오버레이 물리 좌표 [x, y, w, h] */
+  calibratedPhysicalRect?: [number, number, number, number];
+  scanModeBadgeKo?: string;
   targetLabel: string;
   bubbleMessage: string;
   voiceGuideText: string;
@@ -559,6 +608,10 @@ export interface SetupDiagnosisPlan {
   completionMessage: string;
   voiceTtsSummary: string;
   creditCost: number;
+  /** OS 보안 정책 대응 명세 (Windows UIPI/JEA · Android SDK 35 Edge-to-Edge WindowInsets 보정) */
+  osSecuritySpec?: SetupOsSecuritySpec;
+  /** PC/모바일 화면 스캔 시 토큰 99% 절감 + 비표준 요소 무손실 보존(사전 답사 핀셋 & 초행길 2단 줌인) 텔레메트리 */
+  smartScanTelemetry?: SetupSmartUiScanTelemetry;
   /** UI 화면 글자 크기 스케일 등 웹에 즉시 반영할 부가 효과 */
   uiFontScalePercent?: number;
   uiNightProtection?: boolean;

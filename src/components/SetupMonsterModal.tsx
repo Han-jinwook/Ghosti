@@ -64,7 +64,7 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
         {/* 눈(Eye)이 0.01초 만에 긁어온 화면 텍스트·좌표 배열 시각화 & 시뮬레이션 캔버스 */}
         <div className="p-5 flex flex-col gap-4">
           <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-label-sm text-[11px] text-primary-container font-extrabold">
                 👁️ 에이전트 눈(Eye) 0.01초 화면 좌표 스캔 배열 (Scraped DOM/UI Tree)
               </span>
@@ -72,6 +72,18 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
                 Latency: 8.4ms · Backtrack: {activeOverlayBacktrackCount}회
               </span>
             </div>
+            {currentStep.scanModeBadgeKo && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                <span className="px-2 py-0.5 rounded bg-cyan-500/15 border border-cyan-400/40 text-cyan-200 font-mono text-[10.5px] font-bold">
+                  🛡️ {currentStep.scanModeBadgeKo}
+                </span>
+                {currentStep.rawLogicalRect && currentStep.calibratedPhysicalRect && (
+                  <span className="font-mono text-[10.5px] text-amber-300 font-bold">
+                    논리 좌표 [{currentStep.rawLogicalRect[0]}, {currentStep.rawLogicalRect[1]}] ➔ 물리 보정 좌표 [{currentStep.calibratedPhysicalRect[0]}, {currentStep.calibratedPhysicalRect[1]}]
+                  </span>
+                )}
+              </div>
+            )}
             <p className="font-mono text-[11px] text-zinc-300 break-all">
               {JSON.stringify(currentStep.scrapedElements)}
             </p>
@@ -412,6 +424,57 @@ export const SetupMonsterContent: React.FC = () => {
           </div>
         </div>
 
+        {/* [딥리서치 엔지니어링 2대 급소: OS 보안 정책(Windows UIPI·JEA / Android SDK 35 WindowInsets) + 스마트 타겟팅 UI 스캔(토큰 99% 절감 & div/span 무손실 보존)] */}
+        {(plan.osSecuritySpec || plan.smartScanTelemetry) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {plan.osSecuritySpec && (
+              <div className="p-2.5 rounded-xl bg-cyan-950/25 border border-cyan-400/35 flex flex-col gap-1">
+                <div className="flex flex-wrap items-center justify-between gap-1">
+                  <span className="font-label-sm text-[10.5px] text-cyan-300 font-extrabold">
+                    {plan.osSecuritySpec.platform === 'pc'
+                      ? '💻 Windows 11 OS 보안 (UIPI 관통 & JEA 최소 권한)'
+                      : '📱 Android 15 (SDK 35) Edge-to-Edge 오프셋 보정'}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 font-mono text-[9.5px] font-bold">
+                    {plan.osSecuritySpec.platform === 'pc'
+                      ? 'uiAccess="true" · Authenticode · JEA'
+                      : `WindowInsets (상단 -${plan.osSecuritySpec.androidStatusBarInsetPx ?? 112}px) · RECEIVER_NOT_EXPORTED`}
+                  </span>
+                </div>
+                <p className="font-body-sm text-[10.5px] text-zinc-300 leading-snug">
+                  {plan.osSecuritySpec.platform === 'pc'
+                    ? `JEA 정책: ${plan.osSecuritySpec.windowsJeaLeastPrivilegePolicy} · 백업: ${plan.osSecuritySpec.windowsPreBackupRegistryJsonPath}`
+                    : `보정 공식: ${plan.osSecuritySpec.androidEdgeToEdgeOffsetFormula} · 플래그: ${plan.osSecuritySpec.androidBroadcastReceiverFlag}`}
+                </p>
+              </div>
+            )}
+
+            {plan.smartScanTelemetry && (
+              <div className="p-2.5 rounded-xl bg-emerald-950/25 border border-emerald-400/35 flex flex-col gap-1">
+                <div className="flex flex-wrap items-center justify-between gap-1">
+                  <span className="font-label-sm text-[10.5px] text-emerald-300 font-extrabold">
+                    {plan.smartScanTelemetry.scanStrategyBadgeKo}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 font-mono text-[9.5px] font-bold">
+                    {plan.smartScanTelemetry.rawTotalDomNodes.toLocaleString()}노드({plan.smartScanTelemetry.rawEstimatedTokens.toLocaleString()}T) ➔{' '}
+                    {plan.smartScanTelemetry.scannedTargetNodes}노드({plan.smartScanTelemetry.finalSentTokens}T ·{' '}
+                    {plan.smartScanTelemetry.tokenSavingsPercent}% 절감)
+                  </span>
+                </div>
+                <p className="font-mono text-[10px] text-zinc-300">
+                  • 활성 창: {plan.smartScanTelemetry.foregroundWindowTitle} | 타겟 경로: {plan.smartScanTelemetry.targetRegionOrZoomPathKo}
+                </p>
+                <p className="font-mono text-[10px] text-amber-200">
+                  • 비표준 클릭 요소(div/span/에러 라벨) 무손실 보존:{' '}
+                  {plan.smartScanTelemetry.preservedNonStandardNodes
+                    .map((n) => `${n.tagOrRole}("${n.label}")`)
+                    .join(' | ')}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* [에스크로 홀딩 후 1초 수리 시작] + [1회 우회 / 2회 헤맨 성공 100% 쿨 환불 시뮬레이션] */}
         <div className="flex flex-col gap-2 pt-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -670,6 +733,43 @@ export const SetupMonsterContent: React.FC = () => {
         </div>
       </div>
 
+      {/* 1-C. 🛡️ 딥리서치 엔지니어링 2대 급소: OS 보안 정책(Windows UIPI·JEA / Android SDK 35 WindowInsets) + 스마트 타겟팅 스캔(토큰 99% 절감 & div/span 무손실 보존) */}
+      <div className="p-3.5 rounded-2xl bg-zinc-950/95 border border-cyan-400/35 grid grid-cols-1 md:grid-cols-3 gap-2.5">
+        <div className="p-2.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex flex-col gap-0.5">
+          <span className="font-label-sm text-[11px] text-cyan-300 font-extrabold">
+            💻 Windows 11 UIPI 관통 & JEA 최소 권한
+          </span>
+          <span className="font-mono text-[10.5px] text-zinc-200 font-bold">
+            app.manifest uiAccess=&quot;true&quot; · Authenticode · 0.01s JSON 백업
+          </span>
+          <span className="font-body-sm text-[10.5px] text-zinc-400">
+            관리자 권한 창 UI Automation 트리 무차단 스캔 & V3/Defender 오탐 제로
+          </span>
+        </div>
+        <div className="p-2.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex flex-col gap-0.5">
+          <span className="font-label-sm text-[11px] text-cyan-300 font-extrabold">
+            📱 Android 15 (SDK 35) Edge-to-Edge 오차 보정
+          </span>
+          <span className="font-mono text-[10.5px] text-zinc-200 font-bold">
+            WindowInsets(상태바 -112px / 내비바 144px) · RECEIVER_NOT_EXPORTED
+          </span>
+          <span className="font-body-sm text-[10.5px] text-zinc-400">
+            Accessibility 논리 좌표와 SYSTEM_ALERT_WINDOW 물리 화살표 위치 1px 오차 없이 정렬
+          </span>
+        </div>
+        <div className="p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col gap-0.5">
+          <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
+            🎯 토큰 99% 절감 & 비표준 div/span 100% 보존
+          </span>
+          <span className="font-mono text-[10.5px] text-zinc-200 font-bold">
+            Playbook 0토큰 캐시 · 사전답사 정답구역 핀셋 · 초행길 2단 줌인 스캔
+          </span>
+          <span className="font-body-sm text-[10.5px] text-zinc-400">
+            무작정 Button만 남기고 div/span 삭제 금지 — 가짜 버튼·에러 라벨 무손실 스캔(300~500 토큰 이내)
+          </span>
+        </div>
+      </div>
+
       {/* 2. 플랫폼 모드 스위처 (💻 PC판 1초 수리기사 vs 📱 모바일판 선제 진단 & 손가락 가이드) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex p-1 rounded-xl bg-zinc-950 border border-white/10">
@@ -699,8 +799,8 @@ export const SetupMonsterContent: React.FC = () => {
 
         <span className="font-mono text-[11px] text-zinc-400">
           {setupMonsterPlatform === 'pc'
-            ? '🟢 Z-Eye_PC_Setup.exe (사전 무료 복잡도 스캔 · PowerShell / Registry / Spooler / UIAutomation 대기 중)'
-            : '🟢 Z-Eye_Mobile_1MB.apk (UsageStats / WRITE_SETTINGS / SYSTEM_ALERT_WINDOW 대기 중)'}
+            ? '🟢 Z-Eye_PC_Setup.exe (uiAccess="true" UIPI 관통 · JEA 최소 권한 · 정답 구역 핀셋 & 2단 줌인 스캔 대기 중)'
+            : '🟢 Z-Eye_Mobile_1MB.apk (SDK 35 WindowInsets 보정 · RECEIVER_NOT_EXPORTED · SYSTEM_ALERT_WINDOW 대기 중)'}
         </span>
       </div>
 

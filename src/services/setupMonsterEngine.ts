@@ -1,9 +1,190 @@
 import type {
   SetupDiagnosisPlan,
   SetupMonsterPlatform,
+  SetupOsSecuritySpec,
   SetupPreTriageQuestion,
   SetupProactiveHint,
+  SetupSmartUiScanTelemetry,
 } from '../types/saysee';
+
+/**
+ * [📱 Android 15 (Target SDK 35) Edge-to-Edge WindowInsets 좌표 오차 동적 보정기]
+ * - Android 15부터 강제 적용되는 Edge-to-Edge 레이아웃으로 인해 AccessibilityNodeInfo의 논리적 Y축 좌표와
+ *   SYSTEM_ALERT_WINDOW 오버레이의 물리적 손가락 화살표 위치가 상단 상태바(Status Bar) 및 하단 내비게이션 바 높이만큼 밀리는 현상을 보정합니다.
+ */
+export function calibrateAndroidSdk35EdgeToEdgeOverlayRect(
+  logicalRect: [number, number, number, number],
+  statusBarInsetPx = 112,
+  navigationBarInsetPx = 144,
+  screenHeightPx = 2400
+): [number, number, number, number] {
+  const [lx, ly, lw, lh] = logicalRect;
+  const maxSafeBottom = screenHeightPx - navigationBarInsetPx - lh;
+  const calibratedY = Math.min(maxSafeBottom, Math.max(0, ly - statusBarInsetPx));
+  return [lx, calibratedY, lw, lh];
+}
+
+/**
+ * [🛠️ OS 보안 정책(Windows UIPI / Android SDK 35) 대응 엔지니어링 규격 생성기]
+ */
+export function buildOsSecuritySpec(
+  platform: SetupMonsterPlatform,
+  presetId: string
+): SetupOsSecuritySpec {
+  if (platform === 'pc') {
+    return {
+      platform: 'pc',
+      windowsManifestUiAccess: true,
+      windowsAuthenticodeSigned: true,
+      windowsJeaLeastPrivilegePolicy:
+        'app.manifest uiAccess="true" (Authenticode EV 서명 · 관리자/타사 창 UIPI 장벽 관통) + PowerShell JEA(Just Enough Administration) 최소 권한 제어로 백신(V3/Defender) 오탐 원천 차단',
+      windowsPreBackupRegistryJsonPath: `poc/results/z_eye_setup_blackbox.json#${presetId}_beforeSnapshot (0.01초 전 타겟 레지스트리/서비스 노드 JSON 직렬화 백업)`,
+    };
+  }
+  return {
+    platform: 'mobile',
+    androidTargetSdk: 35,
+    androidStatusBarInsetPx: 112,
+    androidNavigationBarInsetPx: 144,
+    androidEdgeToEdgeOffsetFormula:
+      'WindowInsets.getInsets(Type.statusBars() | Type.navigationBars()) 실시간 계산 ➔ overlayY = accessibilityLogicalY - statusBarInset(112px) (NavBar 144px 하단 클램핑 보정)',
+    androidBroadcastReceiverFlag:
+      'Context.registerReceiver(..., Context.RECEIVER_NOT_EXPORTED [0x00000004]) 명시로 Android 15 (SDK 35) 런타임 SecurityException 크래시 원천 방지',
+  };
+}
+
+/**
+ * [💻 PC/모바일 화면 스캔 시 토큰 비용 99% 절감 + 과도한 필터링 오탐 방지(사전 답사 핀셋 스캔 & 초행길 2단 줌인 스캔) 텔레메트리 생성기]
+ * - 무작정 Button만 남기고 div/span/Text를 일괄 삭제하면 관공서·레거시 웹/앱의 비표준 버튼이나 중요 에러 문구가 증발하는 사고를 막기 위해:
+ *   ① Foreground Active Window 1개 창 한정 스캔
+ *   ② 표준 경로 캐시(Playbook DB) 등록 화면은 LLM 호출 없이 0 토큰 직결
+ *   ③ 사전 답사(Pre-Scout) 완료 화면은 목표 부모 컨테이너만 '정답 구역(Target Region) 핀셋 스캔'하여 내부 텍스트·비표준 노드 100% 보존
+ *   ④ 미답사(초행길) 화면은 '1차 대분류(Landmark/Panel 5~10개 블록) ➔ 2차 타겟 구역 줌인(Zoom-in) 정밀 스캔'으로 cursor:pointer / div / span 가짜 버튼과 안내 문구를 무손실 추출(300~450 토큰 이내)
+ */
+export function buildSmartUiScanTelemetry(
+  platform: SetupMonsterPlatform,
+  presetId: string
+): SetupSmartUiScanTelemetry {
+  if (presetId === 'pc_security_plugin') {
+    return {
+      scanStrategy: 'UNEXPLORED_2STAGE_HIERARCHICAL_ZOOM_IN',
+      scanStrategyBadgeKo:
+        '🔍 초행길 계층형 2단 줌인(Hierarchical Zoom-in) 스캔 · 관공서 비표준 div/span 버튼 100% 보존',
+      foregroundWindowTitle:
+        'Foreground Active Window: [홈택스/인터넷뱅킹 통합 보안모듈 관리창 (HWND 0x001408A2)] 1개 창 한정',
+      rawTotalDomNodes: 3420,
+      rawEstimatedTokens: 24800,
+      scannedTargetNodes: 19,
+      finalSentTokens: 385,
+      tokenSavingsPercent: 98.4,
+      playbookCacheHit: false,
+      targetRegionOrZoomPathKo:
+        '1차 대분류 Landmark 6개 블록 스캔(110 토큰) ➔ [보안모듈/인증서 충돌 안내 패널] 2차 Zoom-in 정밀 스캔(275 토큰 · 합계 385 토큰)',
+      preservedNonStandardNodes: [
+        {
+          tagOrRole: 'div[style*="cursor:pointer"]',
+          label: '공동·금융인증서 키보드보안 충돌 수동해제',
+          rect: [412, 318, 220, 42],
+          reasonKo: '표준 <button>이 아닌 관공서 레거시 <div> 클릭 요소 무손실 보존',
+        },
+        {
+          tagOrRole: 'span.legacy-link-btn',
+          label: 'ASTx / TouchEn 상주 서비스 설정 열기',
+          rect: [412, 372, 220, 36],
+          reasonKo: '<span> 태그로 구현된 비표준 제어 버튼 보존',
+        },
+        {
+          tagOrRole: 'p.error-notice-text',
+          label: '오류코드 0x80040154: UpperFilters 키보드 드라이버 중복 후킹 감지',
+          rect: [380, 250, 460, 48],
+          reasonKo: '원인 진단에 필수적인 핵심 에러 안내 문구(Text) 삭제 방지 및 보존',
+        },
+      ],
+    };
+  }
+
+  if (presetId === 'pc_excel_overlay') {
+    return {
+      scanStrategy: 'PRE_SCOUT_TARGET_REGION_PINSET',
+      scanStrategyBadgeKo:
+        '🎯 사전 답사(Pre-Scout) 정답 구역 핀셋 스캔 + Playbook 캐시 우선 매칭 (LLM 호출 0 토큰)',
+      foregroundWindowTitle:
+        'Foreground Active Window: [Microsoft Excel - 매출원장.xlsx (HWND 0x000904F0)] 1개 창 한정',
+      rawTotalDomNodes: 2890,
+      rawEstimatedTokens: 19400,
+      scannedTargetNodes: 11,
+      finalSentTokens: 0,
+      tokenSavingsPercent: 100,
+      playbookCacheHit: true,
+      targetRegionOrZoomPathKo:
+        '사전 답사 Blueprint 매칭 완료 ➔ 수만 개 셀(DataItem) 전체 무시 & 상단 [RibbonBar > 보기(V) > 틀 고정 컨테이너]만 핀셋 타겟팅 (Playbook DB 캐시 직결 · LLM 0원)',
+      preservedNonStandardNodes: [
+        {
+          tagOrRole: 'NetUIRibbonTab (Custom Pane)',
+          label: '보기(V) 탭 컨테이너',
+          rect: [240, 48, 64, 28],
+          reasonKo: '핀셋 타겟 컨테이너 내부 커스텀 리본 탭 텍스트·좌표 무손실 스캔',
+        },
+        {
+          tagOrRole: 'NetUIAnchor (SplitButton)',
+          label: '틀 고정(F) ➔ 첫 행 고정(R)',
+          rect: [520, 148, 128, 32],
+          reasonKo: 'Playbook 캐시 좌표 규칙과 100% 일치하여 LLM 호출 없이 0원에 화살표 오버레이 즉시 렌더링',
+        },
+      ],
+    };
+  }
+
+  if (platform === 'pc') {
+    return {
+      scanStrategy: 'PRE_SCOUT_TARGET_REGION_PINSET',
+      scanStrategyBadgeKo:
+        '🎯 Foreground 활성 창 한정 + 사전 답사 정답 구역(Target Region) 핀셋 스캔 (Playbook 0 토큰)',
+      foregroundWindowTitle:
+        `Foreground Active Window: [Windows 설정 / 서비스 제어판 (${presetId})] 1개 창 한정`,
+      rawTotalDomNodes: 2150,
+      rawEstimatedTokens: 15200,
+      scannedTargetNodes: 12,
+      finalSentTokens: 0,
+      tokenSavingsPercent: 100,
+      playbookCacheHit: true,
+      targetRegionOrZoomPathKo:
+        '모니터 백그라운드 창 무시 ➔ 사전 답사된 목표 설정 컨테이너만 핀셋 스캔 & 본사 Playbook DB 표준 레시피 즉시 매칭 (LLM 추론 토큰 0원)',
+      preservedNonStandardNodes: [
+        {
+          tagOrRole: 'CustomControl / TextLabel',
+          label: '핵심 상태 안내 텍스트 및 토글 영역',
+          rect: [320, 180, 280, 40],
+          reasonKo: '정답 구역(Target Region) 내부의 비표준 상태 텍스트와 제어 노드 100% 무손실 보존',
+        },
+      ],
+    };
+  }
+
+  return {
+    scanStrategy: 'PRE_SCOUT_TARGET_REGION_PINSET',
+    scanStrategyBadgeKo:
+      '📱 Android SDK 35 정답 구역 핀셋 스캔 + WindowInsets Edge-to-Edge 오프셋 보정 (Playbook 0 토큰)',
+    foregroundWindowTitle:
+      `Foreground Active Package: [현재 활성 앱 화면 (${presetId})] 단일 트리`,
+    rawTotalDomNodes: 640,
+    rawEstimatedTokens: 4200,
+    scannedTargetNodes: 8,
+    finalSentTokens: 0,
+    tokenSavingsPercent: 100,
+    playbookCacheHit: true,
+    targetRegionOrZoomPathKo:
+      'AccessibilityNodeInfo 목표 상단바/알림 설정 컨테이너 핀셋 스캔 + WindowInsets(상태바 112px / 내비바 144px) Y축 좌표 오차 실시간 가감 보정',
+    preservedNonStandardNodes: [
+      {
+        tagOrRole: 'ViewGroup[clickable=true] + TextView',
+        label: '커스텀 이미지 탭 / 스위치 라벨',
+        rect: [840, 448, 120, 48],
+        reasonKo: '일반 ViewGroup으로 구현된 앱 내 커스텀 스위치 및 설명 텍스트 무손실 보존',
+      },
+    ],
+  };
+}
 
 export const INITIAL_PROACTIVE_HINTS: SetupProactiveHint[] = [
   {
@@ -349,7 +530,66 @@ export function buildSetupPreTriageQuestion(
   };
 }
 
+function enrichSetupDiagnosisPlanWithSecurityAndSmartScan(
+  basePlan: SetupDiagnosisPlan
+): SetupDiagnosisPlan {
+  const osSecuritySpec = buildOsSecuritySpec(basePlan.platform, basePlan.presetId);
+  const smartScanTelemetry = buildSmartUiScanTelemetry(
+    basePlan.platform,
+    basePlan.presetId
+  );
+
+  const enrichedOverlaySteps = basePlan.overlaySteps?.map((step) => {
+    const targetEl =
+      step.scrapedElements[step.scrapedElements.length - 1] ?? {
+        text: step.targetLabel,
+        rect: [480, 240] as [number, number],
+      };
+    const rawLogicalRect: [number, number, number, number] = [
+      targetEl.rect[0],
+      targetEl.rect[1],
+      140,
+      44,
+    ];
+    const calibratedPhysicalRect: [number, number, number, number] =
+      basePlan.platform === 'mobile'
+        ? calibrateAndroidSdk35EdgeToEdgeOverlayRect(
+            rawLogicalRect,
+            osSecuritySpec.androidStatusBarInsetPx ?? 112,
+            osSecuritySpec.androidNavigationBarInsetPx ?? 144
+          )
+        : rawLogicalRect;
+
+    return {
+      ...step,
+      rawLogicalRect,
+      calibratedPhysicalRect,
+      scanModeBadgeKo:
+        basePlan.platform === 'mobile'
+          ? `📱 SDK 35 WindowInsets 오프셋 보정 (논리 Y:${rawLogicalRect[1]}px ➔ 물리 Y:${calibratedPhysicalRect[1]}px · 상태바 -112px 반영)`
+          : `💻 UIAccess="true" UIPI 관통 + 정답 구역(Target Region) 핀셋 스캔 (Playbook 캐시 0 토큰)`,
+    };
+  });
+
+  return {
+    ...basePlan,
+    osSecuritySpec,
+    smartScanTelemetry,
+    overlaySteps: enrichedOverlaySteps,
+  };
+}
+
 export function buildSetupDiagnosisPlan(
+  platform: SetupMonsterPlatform,
+  rawQuery: string,
+  presetIdHint?: string
+): SetupDiagnosisPlan {
+  return enrichSetupDiagnosisPlanWithSecurityAndSmartScan(
+    buildSetupDiagnosisPlanBase(platform, rawQuery, presetIdHint)
+  );
+}
+
+function buildSetupDiagnosisPlanBase(
   platform: SetupMonsterPlatform,
   rawQuery: string,
   presetIdHint?: string
@@ -373,9 +613,9 @@ export function buildSetupDiagnosisPlan(
       title: '💽 [Level 3 복합 수리] 업무 드라이브(S:) 레지스트리·SMB 자격증명·권한 3단계 완전 복구',
       rootCause:
         '눈(Eye) 스캔 결과: 단순 연결 끊김이 아니라 ① Windows 자격 증명 관리자 세션 충돌, ② SMBv2/v3 게스트 보안 서명 레지스트리(RequireSecuritySignature) 차단, ③ 탐색기 드라이브 문자 캐시 잠금이 겹친 3중 복합 장애입니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (3-Stage Registry + CredMan + SMB Mount Engine)',
+      agentModuleName: 'Z-Eye_PC_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)',
       systemCommandOrApi:
-        '[Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters" -Name "AllowInsecureGuestAuth" -Value 1; [Stage 3] net use S: "\\\\127.0.0.1\\Z-Eye_Work_Vault" /persistent:yes',
+        '[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters" -Name "AllowInsecureGuestAuth" -Value 1; [Stage 3] net use S: "\\\\127.0.0.1\\Z-Eye_Work_Vault" /persistent:yes',
       beforeSnapshot: {
         driveLetter: 'S:',
         mounted: false,
@@ -407,14 +647,14 @@ export function buildSetupDiagnosisPlan(
       difficultyLevel: 'LEVEL_3_ADVANCED_500',
       difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 500 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 정밀 진단 완료: 3단계 복합 처치(① 금융/관공서 보안 서비스 11종 수동 전환 ➔ ② UpperFilters 키보드 후킹 드라이버 충돌 해제 ➔ ③ WMI/브라우저 포트 점유 정리)로 해결 가능합니다.',
+        '✅ Z-Eye_PC_Setup.exe 정밀 진단 완료: 초행길 계층형 2단 줌인(Zoom-in) 스캔으로 관공서 비표준 div/span 버튼과 에러 문구를 100% 보존 분석했으며, JEA 최소 권한 3단계 복합 처치로 해결 가능합니다.',
       symptomQuery: q,
       title: '🏦 [Level 3 복합 수리] 관공서·금융 보안 플러그인 11종 충돌 제어 & 키보드 먹통 3단계 복구',
       rootCause:
-        '눈(Eye) 스캔 결과: 은행·관공서 사이트 방문 시 설치된 11개의 보안 서비스가 평상시에도 백그라운드에서 서로 키보드 입력 후킹(UpperFilters)과 로컬 루프백 포트를 다투며 CPU 28% 점유 및 타이핑 지연을 유발하고 있습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (3-Stage Service + Driver Filter + Port Resolver)',
+        '눈(Eye) 2단 줌인(Zoom-in) 스캔 결과: 은행·관공서 사이트의 비표준 div/span 컨트롤과 11개 보안 서비스가 백그라운드에서 키보드 입력 후킹(UpperFilters)과 로컬 루프백 포트를 다투며 CPU 28% 점유 및 타이핑 지연을 유발하고 있습니다.',
+      agentModuleName: 'Z-Eye_PC_Setup.exe (UIAccess="true" + JEA 3-Stage Service/Driver Resolver)',
       systemCommandOrApi:
-        '[Stage 1] Get-Service ASTx,TouchEnNx,AnySign4PC,IPInside,Veraport | Stop-Service -Force | Set-Service -StartupType Manual; [Stage 2] Repair-KeyboardClassFilter -Hive HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e96b-e325-11ce-bfc1-08002be10318}; [Stage 3] Clear-LoopbackSocketConflict',
+        '[JEA Session · 0.01s HKLM JSON Backup] [Stage 1] Get-Service ASTx,TouchEnNx,AnySign4PC,IPInside,Veraport | Stop-Service -Force | Set-Service -StartupType Manual; [Stage 2] Repair-KeyboardClassFilter -Hive HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e96b-e325-11ce-bfc1-08002be10318}; [Stage 3] Clear-LoopbackSocketConflict',
       beforeSnapshot: {
         activeSecurityServices: 11,
         cpuBackgroundUsagePct: 28.4,
@@ -445,14 +685,14 @@ export function buildSetupDiagnosisPlan(
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
       difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 300 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 진단 완료: 인쇄 스풀러 유령 문서 강제 퍼지(Purge) 및 WSD 포트를 표준 TCP/IP 포트로 재바인딩하여 즉시 해결 가능합니다.',
+        '✅ Z-Eye_PC_Setup.exe 진단 완료: JEA 최소 권한 세션으로 인쇄 스풀러 유령 문서 강제 퍼지(Purge) 및 표준 TCP/IP 포트 재바인딩이 즉시 가능합니다.',
       symptomQuery: q,
       title: '🖨️ [Level 2 중급 수리] Windows 인쇄 스풀러(Spooler) 유령 큐 초기화 및 포트 재바인딩',
       rootCause:
         '눈(Eye) 스캔 결과: Windows Spooler 서비스에 응답 없는 손상된 스풀 파일(.SPL/.SHD) 4건이 큐를 가로막고 있으며 WSD 포트가 오프라인으로 잠겨 있습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (PowerShell Spooler & TCP/IP Port Reset)',
+      agentModuleName: 'Z-Eye_PC_Setup.exe (JEA PowerShell Spooler & TCP/IP Port Reset)',
       systemCommandOrApi:
-        'Stop-Service -Name Spooler -Force; Remove-Item "$env:SystemRoot\\System32\\spool\\PRINTERS\\*.*" -Force; Reset-PrinterPort -Mode StandardTCPIP; Start-Service -Name Spooler',
+        '[JEA Endpoint] Stop-Service -Name Spooler -Force; Remove-Item "$env:SystemRoot\\System32\\spool\\PRINTERS\\*.*" -Force; Reset-PrinterPort -Mode StandardTCPIP; Start-Service -Name Spooler',
       beforeSnapshot: {
         service: 'Spooler',
         status: 'Stuck (4 Dead Jobs in PRINTERS)',
@@ -480,14 +720,14 @@ export function buildSetupDiagnosisPlan(
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
       difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 300 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe UI Automation 스캔 완료: 타사 프로그램 내부 메뉴 좌표를 실시간 추적하여 모니터 최상단 손가락 화살표 가이드로 안내 가능합니다.',
+        '✅ Z-Eye_PC_Setup.exe (uiAccess="true" UIPI 관통 + 정답 구역 핀셋 스캔 + Playbook 0토큰 캐시) 완료: 타사 프로그램 내부 메뉴 좌표를 실시간 추적하여 모니터 최상단 손가락 화살표 가이드로 안내 가능합니다.',
       symptomQuery: q,
       title: '👆 [Level 2 다단계 가이드] 타사 프로그램(엑셀·PC카톡) 모니터 최상단 손가락 화살표 동행 가이드',
       rootCause:
-        '눈(Eye) UI Automation 스캔 완료: 타사 프로그램 내부 메뉴 좌표를 0.01초 만에 추출했습니다 ([보기(V) rect: 240,48] ➔ [틀 고정(F) rect: 520,96]). 모니터 최상단에 반투명 손가락 화살표를 띄워 안내합니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (UI Automation & Topmost Overlay)',
+        '눈(Eye) 사전 답사 정답 구역(Target Region) 핀셋 스캔 완료: 수만 개 엑셀 셀(DataItem)은 무시하고 상단 리본 컨테이너만 핀셋 스캔하여 Playbook DB 캐시(LLM 토큰 0원)로 [보기(V) rect: 240,48] ➔ [틀 고정(F) rect: 520,96] 좌표를 0.01초 만에 추출했습니다.',
+      agentModuleName: 'Z-Eye_PC_Setup.exe (uiAccess="true" UIPI Bypass & Topmost Overlay)',
       systemCommandOrApi:
-        'Z-Eye_Overlay.DrawTopmostArrow(targetHwnd="EXCEL.EXE", coords=[[240,48],[520,96]])',
+        'Z-Eye_Overlay.DrawTopmostArrow(manifestUiAccess=true, targetHwnd="EXCEL.EXE", playbookCacheHit=true, coords=[[240,48],[520,96]])',
       beforeSnapshot: {
         overlayActive: false,
         targetApp: 'Microsoft Excel / KakaoTalk PC',
@@ -497,19 +737,19 @@ export function buildSetupDiagnosisPlan(
         guidedStepsCompleted: 2,
       },
       completionMessage:
-        '✅ [Level 2 오버레이 가이드 가동] 모니터 최상단 투명 유리판(Overlay)에 빨간 손가락 화살표 가이드(👆)를 띄웠습니다! 화살표가 가리키는 순서대로 클릭만 하시면 됩니다.',
+        '✅ [Level 2 오버레이 가이드 가동] 모니터 최상단 투명 유리판(uiAccess="true" UIPI 관통 Overlay)에 빨간 손가락 화살표 가이드(👆)를 띄웠습니다! 화살표가 가리키는 순서대로 클릭만 하시면 됩니다.',
       voiceTtsSummary:
         '화면 위에 손가락 화살표를 띄워 드렸습니다. 먼저 오른쪽 위 보기 메뉴를 누르신 뒤 틀 고정을 눌러주세요.',
       creditCost: 300,
       overlaySteps: [
         {
           step: 1,
-          screenTitle: 'PC 모니터 최상단 오버레이 (0.01초 UI Automation 좌표 인식 완료)',
+          screenTitle: 'PC 모니터 최상단 오버레이 (uiAccess="true" UIPI 관통 · 정답 구역 핀셋 스캔)',
           scrapedElements: [
-            { text: '파일(F)', rect: [80, 48] },
-            { text: '홈(H)', rect: [140, 48] },
-            { text: '보기(V)', rect: [240, 48] },
-            { text: '⚙️ 설정', rect: [920, 48] },
+            { text: '파일(F)', rect: [80, 48], role: 'TabItem' },
+            { text: '홈(H)', rect: [140, 48], role: 'TabItem' },
+            { text: '보기(V)', rect: [240, 48], role: 'TabItem' },
+            { text: '⚙️ 설정', rect: [920, 48], role: 'Button' },
           ],
           fingerCoordPct: [38, 22],
           targetLabel: '상단 리본 메뉴 [보기(V)] (좌표 240, 48)',
@@ -518,11 +758,11 @@ export function buildSetupDiagnosisPlan(
         },
         {
           step: 2,
-          screenTitle: '다음 화면 이동 감지 완료 ➔ 2단계 좌표 자동 추적',
+          screenTitle: '다음 화면 이동 감지 완료 ➔ Playbook 캐시(LLM 0원) 2단계 좌표 자동 추적',
           scrapedElements: [
-            { text: '기본(N)', rect: [120, 96] },
-            { text: '틀 고정(F)', rect: [520, 96] },
-            { text: '첫 행 고정(R)', rect: [520, 148] },
+            { text: '기본(N)', rect: [120, 96], role: 'Button' },
+            { text: '틀 고정(F)', rect: [520, 96], role: 'SplitButton' },
+            { text: '첫 행 고정(R)', rect: [520, 148], role: 'MenuItem' },
           ],
           fingerCoordPct: [66, 56],
           targetLabel: '[틀 고정(F)] ➔ [첫 행 고정(R)] (좌표 520, 148)',
@@ -615,14 +855,14 @@ export function buildSetupDiagnosisPlan(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 100 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 진단 완료: 시작프로그램 레지스트리 Run 키 1단계 정리로 부팅 속도를 즉시 개선할 수 있습니다.',
+        '✅ Z-Eye_PC_Setup.exe 진단 완료: JEA 최소 권한 및 0.01초 전 레지스트리 JSON 직렬화 백업 후 Run 키 1단계 정리로 부팅 속도를 즉시 개선할 수 있습니다.',
       symptomQuery: q || '부팅 시 뜨는 광고/유령앱 차단 및 PC 속도 최적화',
       title: '🚀 [Level 1 단순 설정] 시작프로그램 광고·유령앱 7종 백그라운드 즉시 차단',
       rootCause:
         '눈(Eye) 스캔 결과: 레지스트리(HKCU\\...\\Run) 및 작업 스케줄러에 부팅 시 몰래 켜지는 광고 팝업 도우미·유령 업데이터 7개가 상주하여 부팅 시간을 37초 지연시키고 있습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (Registry Run & ScheduledTask Cleaner)',
+      agentModuleName: 'Z-Eye_PC_Setup.exe (JEA Registry Run & ScheduledTask Cleaner)',
       systemCommandOrApi:
-        'Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "AdPopupHelper","ShoppingToast","GhostUpdater" -Force',
+        '[JEA Session · 0.01s JSON Backup] Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "AdPopupHelper","ShoppingToast","GhostUpdater" -Force',
       beforeSnapshot: {
         startupAppsCount: 14,
         ghostProcesses: [
@@ -649,7 +889,7 @@ export function buildSetupDiagnosisPlan(
     };
   }
 
-  // ─────────────── [모바일 설정 몬스터 (단일 요금 100 코인)] ───────────────
+  // ─────────────── [모바일 설정 몬스터 (단일 요금 100 코인 · Android 15 SDK 35 대응)] ───────────────
   if (resolvedId === 'mobile_kakao_overlay') {
     return {
       planId,
@@ -657,16 +897,16 @@ export function buildSetupDiagnosisPlan(
       platform: 'mobile',
       track: 'TRACK_B_OVERLAY_GUIDE',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
-      difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · 실패 시 100% 환불)',
+      difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · SDK 35 WindowInsets 보정)',
       feasibilityCheckKo:
-        '✅ 1MB APK 진단 완료: 타사 앱 Deep Link 이동 및 최상단 손가락 화살표 오버레이 가이드가 즉시 작동합니다.',
+        '✅ Z-Eye_Agent.apk (Target SDK 35 · RECEIVER_NOT_EXPORTED · WindowInsets Edge-to-Edge 오프셋 동적 보정) 완료: 타사 앱 Deep Link 이동 및 최상단 손가락 화살표 오버레이 가이드가 밀림 오차 0px로 작동합니다.',
       symptomQuery: q,
-      title: '👆 타사 앱(카카오톡·유튜브) 딥링크 순간이동 + 실시간 플로팅 손가락 화살표 가이드',
+      title: '👆 타사 앱(카카오톡·유튜브) 딥링크 순간이동 + SDK 35 Edge-to-Edge 보정 손가락 가이드',
       rootCause:
-        '보안상 백그라운드에서 타사 앱 내부 스위치를 대신 누를 수 없으므로, 해당 설정 화면으로 즉시 순간이동(Deep Link)한 뒤 APK가 화면 좌표([{text:"설정", rect:[980,120]}])를 0.01초 만에 읽어 최상단 투명 유리판(SYSTEM_ALERT_WINDOW)에 손가락 화살표를 띄웁니다.',
-      agentModuleName: 'Z-Eye_Mobile_1MB.apk (DeepLink + SYSTEM_ALERT_WINDOW Overlay)',
+        'Android 15(SDK 35) 강제 Edge-to-Edge 레이아웃에서 상태바(112px)·내비바(144px)만큼 밀리는 현상을 WindowInsets 실시간 가감 보정으로 해결하여, 최상단 투명 유리판(SYSTEM_ALERT_WINDOW) 정확한 물리 좌표에 손가락 화살표를 띄웁니다.',
+      agentModuleName: 'Z-Eye_Agent.apk (SDK 35 WindowInsets Calibrated Overlay + RECEIVER_NOT_EXPORTED)',
       systemCommandOrApi:
-        'Intent.ACTION_VIEW("kakaotalk://settings/notifications") + WindowManager.addView(FloatingFingerOverlay)',
+        'Intent.ACTION_VIEW("kakaotalk://settings/notifications") + WindowManager.addView(FloatingFingerOverlay, calibratedY = logicalY - statusBarInset[112px])',
       beforeSnapshot: {
         targetPackage: 'com.kakao.talk',
         deepLinkLaunched: false,
@@ -676,40 +916,41 @@ export function buildSetupDiagnosisPlan(
         targetPackage: 'com.kakao.talk',
         deepLinkLaunched: true,
         overlayWindowAttached: true,
+        sdk35WindowInsetsApplied: { statusBarPx: 112, navBarPx: 144 },
         guidedCoords: [
-          { text: '설정(톱니바퀴)', rect: [980, 120] },
-          { text: '메시지 알림음', rect: [840, 560] },
+          { text: '설정(톱니바퀴)', logicalRect: [980, 232], calibratedRect: [980, 120] },
+          { text: '메시지 알림음', logicalRect: [840, 672], calibratedRect: [840, 560] },
         ],
       },
       completionMessage:
-        '✅ 카카오톡 설정 화면으로 순간이동 후, 화면 최상단 투명 유리판(Overlay)에 빨간 손가락 화살표(👆)와 음성 안내를 띄웠습니다!',
+        '✅ 카카오톡 설정 화면으로 순간이동 후, Android 15(SDK 35) WindowInsets 상태바/내비바 오프셋을 실시간 보정한 최상단 투명 유리판(Overlay)에 빨간 손가락 화살표(👆)와 음성 안내를 띄웠습니다!',
       voiceTtsSummary:
         '카카오톡 화면 오른쪽 위 톱니바퀴를 누르신 뒤, 세 번째 알림 스위치를 꺼주세요.',
       creditCost: 100,
       overlaySteps: [
         {
           step: 1,
-          screenTitle: '카카오톡 메인 화면 (APK 눈이 0.01초 만에 좌표 [{text:"설정", rect:[980,120]}] 추출)',
+          screenTitle: '카카오톡 메인 화면 (SDK 35 WindowInsets 보정: 논리 Y:232px ➔ 물리 Y:120px)',
           scrapedElements: [
-            { text: '친구', rect: [140, 120] },
-            { text: '🔍 검색', rect: [820, 120] },
-            { text: '⚙️ 설정', rect: [980, 120] },
+            { text: '친구', rect: [140, 232], role: 'TabView' },
+            { text: '🔍 검색', rect: [820, 232], role: 'ImageButton' },
+            { text: '⚙️ 설정', rect: [980, 232], role: 'ImageButton' },
           ],
           fingerCoordPct: [84, 18],
-          targetLabel: '⚙️ 오른쪽 위 톱니바퀴 [설정] (좌표 980, 120)',
+          targetLabel: '⚙️ 오른쪽 위 톱니바퀴 [설정] (논리 980,232 ➔ 보정 980,120)',
           bubbleMessage: '👆 오른쪽 위 톱니바퀴를 누르세요!',
           voiceGuideText: '오른쪽 위에 있는 톱니바퀴 모양 버튼을 눌러주세요.',
         },
         {
           step: 2,
-          screenTitle: '카카오톡 > 설정 > 알림 화면 (다음 화면 이동 즉시 좌표 자동 갱신)',
+          screenTitle: '카카오톡 > 설정 > 알림 화면 (SDK 35 WindowInsets 보정: 논리 Y:672px ➔ 물리 Y:560px)',
           scrapedElements: [
-            { text: '공지사항', rect: [220, 260] },
-            { text: '개인/보안', rect: [220, 410] },
-            { text: '🔔 알림 스위치', rect: [840, 560] },
+            { text: '공지사항', rect: [220, 372], role: 'ViewGroup' },
+            { text: '개인/보안', rect: [220, 522], role: 'ViewGroup' },
+            { text: '🔔 알림 스위치', rect: [840, 672], role: 'SwitchCompat' },
           ],
           fingerCoordPct: [78, 60],
-          targetLabel: '🔔 세 번째 [알림] 스위치 (좌표 840, 560)',
+          targetLabel: '🔔 세 번째 [알림] 스위치 (논리 840,672 ➔ 보정 840,560)',
           bubbleMessage: '👆 세 번째 [알림] 스위치를 끄세요!',
           voiceGuideText: '세 번째 줄에 있는 알림 스위치를 눌러 꺼주시면 완료됩니다.',
         },
@@ -726,12 +967,12 @@ export function buildSetupDiagnosisPlan(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · 실패 시 100% 환불)',
       feasibilityCheckKo:
-        '✅ 1MB APK 진단 완료: NotificationPolicy API를 통해 저녁 운동 시간대 자동 무음 규칙을 직접 세팅할 수 있습니다.',
+        '✅ 1MB APK (SDK 35 · RECEIVER_NOT_EXPORTED) 진단 완료: NotificationPolicy API를 통해 저녁 운동 시간대 자동 무음 규칙을 직접 세팅할 수 있습니다.',
       symptomQuery: q,
       title: '🔕 저녁 7시~8시 운동 시간대 자동 방해금지(DND) 스케줄 백그라운드 직접 세팅',
       rootCause:
         '눈(Eye) 진단 결과: 현재 스마트폰 NotificationPolicy에 저녁 운동 시간대 자동 무음 규칙(AutomaticZenRule)이 등록되어 있지 않아 운동 중 단체방·스팸 알림이 계속 울립니다.',
-      agentModuleName: 'Z-Eye_Mobile_1MB.apk (NotificationManager Policy API)',
+      agentModuleName: 'Z-Eye_Agent.apk (SDK 35 NotificationManager Policy API)',
       systemCommandOrApi:
         'NotificationManager.addAutomaticZenRule(ZenRule(name="저녁 운동 집중", time="19:00-20:00", allowStarredFamily=true))',
       beforeSnapshot: {
@@ -761,12 +1002,12 @@ export function buildSetupDiagnosisPlan(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · 실패 시 100% 환불)',
       feasibilityCheckKo:
-        '✅ 1MB APK 진단 완료: UsageStatsManager 미사용 앱 15개를 초절전 버킷으로 즉시 격리 가능합니다.',
+        '✅ 1MB APK (SDK 35 · RECEIVER_NOT_EXPORTED) 진단 완료: UsageStatsManager 미사용 앱 15개를 초절전 버킷으로 즉시 격리 가능합니다.',
       symptomQuery: q,
       title: '🔋 배터리를 20% 갉아먹는 미사용 유령앱 15개 초절전(Deep Sleep) 일괄 격리',
       rootCause:
         '눈(Eye) UsageStatsManager 분석 결과: 최근 30일 동안 한 번도 열지 않은 앱 15개가 백그라운드에서 위치·네트워크 WakeLock을 잡고 배터리의 20.4%를 소모 중입니다.',
-      agentModuleName: 'Z-Eye_Mobile_1MB.apk (UsageStats & AppStandby Controller)',
+      agentModuleName: 'Z-Eye_Agent.apk (SDK 35 UsageStats & AppStandby Controller)',
       systemCommandOrApi:
         'UsageStatsManager.setAppStandbyBuckets(unused15Packages, STANDBY_BUCKET_RESTRICTED)',
       beforeSnapshot: {
@@ -795,12 +1036,12 @@ export function buildSetupDiagnosisPlan(
     difficultyLevel: 'LEVEL_1_SIMPLE_100',
     difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · 실패 시 100% 환불)',
     feasibilityCheckKo:
-      '✅ 1MB APK 진단 완료: 시스템 글자 배율(FONT_SCALE) 및 블루라이트 차단 필터를 백그라운드에서 즉시 적용할 수 있습니다.',
+      '✅ 1MB APK (SDK 35 · RECEIVER_NOT_EXPORTED) 진단 완료: 시스템 글자 배율(FONT_SCALE) 및 블루라이트 차단 필터를 백그라운드에서 즉시 적용할 수 있습니다.',
     symptomQuery: q || '글씨가 너무 작아서 눈이 침침해, 글씨 키우고 눈 보호 모드 켜줘',
     title: '👀 스마트폰 시스템 글자 크기 135% 확대 & 야간 블루라이트 차단 직접 세팅',
     rootCause:
       '눈(Eye) 진단 결과: 시스템 글자 배율(FONT_SCALE=1.0)이 작게 설정되어 있고 야간 눈 보호 모드가 꺼져 있어 야간 유튜브·카톡 열람 시 시력 피로가 발생합니다.',
-    agentModuleName: 'Z-Eye_Mobile_1MB.apk (android.provider.Settings.System.WRITE_SETTINGS)',
+    agentModuleName: 'Z-Eye_Agent.apk (SDK 35 Settings.System.WRITE_SETTINGS)',
     systemCommandOrApi:
       'Settings.System.putFloat(FONT_SCALE, 1.35f); Settings.Secure.putInt(NIGHT_DISPLAY_ACTIVATED, 1)',
     beforeSnapshot: {
