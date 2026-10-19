@@ -149,18 +149,18 @@ export function dispatchAndroidOverlayArrowViaBridge(params: {
     }
   }
 
-  const calibration = calibrateAndroidSdk35EdgeToEdgeOverlayRect(
+  const calibratedPhysicalRect = calibrateAndroidSdk35EdgeToEdgeOverlayRect(
     params.rawLogicalRect,
     statusBarPx,
     navBarPx
   );
-  const [x, y, width, height] = calibration.calibratedPhysicalRect;
+  const [x, y, width, height] = calibratedPhysicalRect;
 
   if (bridge?.showFloatingFingerOverlay) {
     const ok = bridge.showFloatingFingerOverlay(x, y, width, height, params.instructionKo);
     return {
       dispatchedToNativeApk: ok,
-      calibratedPhysicalRect: calibration.calibratedPhysicalRect,
+      calibratedPhysicalRect,
       statusBarInsetPx: statusBarPx,
       navigationBarInsetPx: navBarPx,
       bridgeMode: 'ANDROID_WEBVIEW_JS_INTERFACE',
@@ -169,7 +169,7 @@ export function dispatchAndroidOverlayArrowViaBridge(params: {
 
   return {
     dispatchedToNativeApk: false,
-    calibratedPhysicalRect: calibration.calibratedPhysicalRect,
+    calibratedPhysicalRect,
     statusBarInsetPx: statusBarPx,
     navigationBarInsetPx: navBarPx,
     bridgeMode: 'WEB_SIMULATION_FALLBACK',
