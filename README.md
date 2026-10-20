@@ -64,7 +64,7 @@
    - **P2P 2단계 하이브리드 폴백 (`src/services/p2pHybridBridge.ts`, 특허 제2호 핵심):**
      - ① `Supabase Realtime Broadcast`(DB 저장 0 Byte 시그널링) 중매
      - ② 1순위 `WebRTC DataChannel` 다이렉트 전송 시도 ➔ 외부 LTE/5G Symmetric NAT 장벽(3.5초 초과) 시 유료 TURN 없이 2순위 마스터 PC 데몬 아웃바운드 QUIC 터널(`cloudflared` 등)로 0.1초 자동 폴백 (성공률 99.9% + 중계 서버비 0원)
-   - **Windows `.exe` 데몬 (`멀린 Z 코어 · Merlin_Z_Core_Setup.exe`) 브릿지 검증:**
+   - **Windows `.exe` 데몬 (`멀린 Z 코어 · Merlin_Z_Core_Setup.exe / Merlin_Z_Core.exe`) 브릿지 & `%LOCALAPPDATA%\Merlin\` 양방향 품앗이 자동 소환 (`ensureSiblingAgent` ↔ `SenseTalk.exe`):**
      - 서드파티 드라이버(`WinFsp`) 설치 없이 Windows 내장 WebClient(`net use S: \\localhost@SSL@5199\DavWWWRoot /persistent:yes`)로 0.5초 만에 `S:` 업무 드라이브 마운트 테스트
      - **썬드림주식회사 `Microsoft Artifact Signing (구 Azure Trusted Signing)`** 완비됨 (추가 비용 0원, 대기 0초로 `uiAccess="true"` Authenticode 무인 자동 서명 및 SmartScreen 프리패스 적용)
    - **Android `멀린 Z 코어 (Merlin_Z_Core.apk)` (`window.MerlinZCoreBridge` / `executeMerlinQuery`) 브릿지 & 무소음 비서 원칙:**

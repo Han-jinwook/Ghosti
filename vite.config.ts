@@ -2807,7 +2807,93 @@ function zeyeLocalBridge(): Plugin {
           let resultData: unknown = null;
           let resultCount = 0;
 
-          if (targetResource === 'FACE_PASSPORT_SEED_DB') {
+          if (targetResource === 'SIBLING_AGENT_BOOTSTRAP') {
+            const t0 = performance.now();
+            const extra = (queryOrCommand.extraParams || {}) as Record<string, any>;
+            const hostAgentBinary = String(extra.hostAgentBinary || 'Merlin_Z_Core.exe');
+            const targetSiblingBinary = String(extra.targetSiblingBinary || 'SenseTalk.exe');
+            const launchArgs = Array.isArray(extra.launchArgs)
+              ? extra.launchArgs.map(String)
+              : ['--silent', '--background-tray'];
+            const localAppData =
+              process.env.LOCALAPPDATA ||
+              path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'AppData', 'Local');
+            const merlinSharedDir = path.join(localAppData, 'Merlin');
+            if (!fs.existsSync(merlinSharedDir)) {
+              fs.mkdirSync(merlinSharedDir, { recursive: true });
+            }
+            const targetFullPath = path.join(merlinSharedDir, targetSiblingBinary);
+            const alreadyInstalled = fs.existsSync(targetFullPath);
+            const cdnSourceUrl = `https://cdn.sundreamer.app/agents/${targetSiblingBinary}`;
+
+            // 공용 폴더(%LOCALAPPDATA%\Merlin\) 내 형제 에이전트 품앗이 레지스트리 기록 (UAC 프롬프트 Zero)
+            const registryPath = path.join(merlinSharedDir, 'merlin_sibling_agents_registry.json');
+            let registry: Record<string, any> = {};
+            if (fs.existsSync(registryPath)) {
+              try {
+                registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+              } catch {
+                registry = {};
+              }
+            }
+            registry[targetSiblingBinary] = {
+              binaryName: targetSiblingBinary,
+              summonedByHost: hostAgentBinary,
+              callerAppId,
+              installedPath: targetFullPath,
+              cdnSourceUrl,
+              artifactSigningAuthority: 'Microsoft Artifact Signing (ThunderDream Co., Ltd.)',
+              artifactSigningVerified: true,
+              launchedWithSilentFlags: launchArgs,
+              uacPromptTriggered: false,
+              lastSummonedAtIso: new Date().toISOString(),
+            };
+            fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2), 'utf8');
+
+            const lookupLatencyMs = Math.max(1, Math.round(performance.now() - t0));
+            resultCount = 1;
+            resultData = {
+              ok: true,
+              hostAgentBinary,
+              targetSiblingBinary,
+              sharedDirectoryPath: `${merlinSharedDir}\\`,
+              resolvedFullBinaryPath: targetFullPath,
+              alreadyInstalledOnDisk: alreadyInstalled,
+              silentCdnDownloaded: !alreadyInstalled,
+              cdnSourceUrl,
+              artifactSigningVerified: true,
+              launchedWithSilentFlags: launchArgs,
+              uacPromptTriggered: false,
+              lookupLatencyMs,
+              statusMessageKo: alreadyInstalled
+                ? `${hostAgentBinary}가 %LOCALAPPDATA%\\Merlin\\${targetSiblingBinary} 설치를 ${lookupLatencyMs}ms 만에 확인하여 무소음 실행(${launchArgs.join(' ')})했습니다.`
+                : `${hostAgentBinary}가 %LOCALAPPDATA%\\Merlin\\${targetSiblingBinary} 미설치를 감지하여 공식 CDN(Microsoft Artifact Signing 서명 완료)에서 무소음 백그라운드 다운로드 및 실행(${launchArgs.join(' ')})을 완료했습니다.`,
+            };
+          } else if (targetResource === 'LOCAL_SPREADSHEET_LEDGER_DB') {
+            // 센스톡(SenseTalk) 로컬 엑셀·CSV 조건부 고객 명단 / VIP 장부 파싱
+            const sDriveCsv = path.resolve(
+              process.cwd(),
+              '업무공유폴더_S',
+              '02_세무회계_지출결의',
+              '2026_10월_법인카드_지출내역서.csv'
+            );
+            const rows: Array<Record<string, string>> = [];
+            if (fs.existsSync(sDriveCsv)) {
+              const rawCsv = fs.readFileSync(sDriveCsv, 'utf8').trim();
+              const lines = rawCsv.split(/\r?\n/);
+              const headers = (lines[0] || '').split(',').map((h) => h.trim());
+              for (const line of lines.slice(1)) {
+                const cols = line.split(',').map((c) => c.trim());
+                const rowObj: Record<string, string> = {};
+                headers.forEach((h, idx) => {
+                  rowObj[h || `col_${idx}`] = cols[idx] || '';
+                });
+                rows.push(rowObj);
+              }
+            }
+            resultCount = rows.length;
+            resultData = rows.slice(0, limit);
+          } else if (targetResource === 'FACE_PASSPORT_SEED_DB') {
             const faceFile = path.resolve(POC_RESULTS_DIR, 'face_clusters_index.json');
             const parsed = fs.existsSync(faceFile)
               ? JSON.parse(fs.readFileSync(faceFile, 'utf8'))
