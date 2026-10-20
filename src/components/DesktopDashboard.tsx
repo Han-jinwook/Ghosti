@@ -126,27 +126,27 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   ],
   family: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: '우리집·본가·처가 피드' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'sync', label: '가족 초대 & 서버도우미' },
+    { id: 'dashboard', label: '우리집·본가·처가 앨범' },
+    { id: 'trash', label: '새 사진 정리함' },
+    { id: 'sync', label: '가족 초대 & 방 관리' },
   ],
   club: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: '모임 피드 & 원본 소환' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'sync', label: '클럽 관리 & 서버도우미' },
+    { id: 'dashboard', label: '모임 앨범 & 원본 다운로드' },
+    { id: 'trash', label: '새 사진 정리함' },
+    { id: 'sync', label: '모임 관리 & 회원 초대' },
   ],
   student: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: '타임캡슐 피드 & 씬 검색' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'sync', label: '게이밍 PC & 학생인증' },
+    { id: 'dashboard', label: '타임캡슐 앨범 & 영상 검색' },
+    { id: 'trash', label: '새 사진·영상 정리함' },
+    { id: 'sync', label: '우리반 관리 & 학생인증' },
   ],
   work: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: '투시검색 & 폴더 트리(S:)' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'sync', label: '팀원 권한 & S: 드라이브' },
+    { id: 'dashboard', label: '업무 문서 검색 & 폴더(S:)' },
+    { id: 'trash', label: '새 문서 정리함' },
+    { id: 'sync', label: '팀원 권한 & 공유폴더 안내' },
   ],
 };
 
@@ -1155,11 +1155,11 @@ export const DesktopDashboard: React.FC = () => {
                 </div>
 
                 <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                  👻 초경량 섀도우 캐시 모드 (장당 13KB)
+                  ⚡ 스마트폰 용량 절약 모드 (원본은 PC에 안전 보관)
                 </h2>
 
                 <p className="font-body-sm text-[13px] text-zinc-400 leading-relaxed">
-                  무거운 원본(수십 GB)은 집 PC 하드디스크로 이관해 폰 용량을 비우고, 폰에는 장당 13KB 경량 WebP 썸네일 + 768d 벡터 인덱스만 남깁니다.
+                  무거운 원본(수십 GB)은 집 PC 하드디스크로 안전하게 옮겨 폰 용량을 비우고, 폰에는 어디서든 바로 찾아볼 수 있는 가벼운 미리보기 사진만 남깁니다.
                 </p>
 
                 <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">

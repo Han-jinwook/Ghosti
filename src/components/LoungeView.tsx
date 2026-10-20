@@ -1927,10 +1927,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const { isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges } =
     useSaySeeStore();
   const [viewMode, setViewMode] = useState<'semantic' | 'explorer'>('semantic');
-  const [driveMounted, setDriveMounted] = useState(false);
-  const [driveTargetPath, setDriveTargetPath] = useState('D:\\Z-Eye\\test_docs');
-  const [mountBannerToast, setMountBannerToast] = useState<string | null>(null);
-  const [p2pDiagnostics, setP2pDiagnostics] = useState<P2PHybridConnectionDiagnostics | null>(null);
+  const [driveTargetPath, setDriveTargetPath] = useState('D:\\Z-Eye\\업무공유폴더_S');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [docs, setDocs] = useState<WorkLoungeDocItem[]>(INITIAL_WORK_DOCS);
@@ -1938,35 +1935,21 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const workPlan = subscribedLounges.work;
 
-  // 라운지 진입 시 100% 무인 자동(Auto-Pilot)으로 P2P 하이브리드 브릿지 개통 및 윈도우 S: 드라이브 자동 마운트 확인
+  // 라운지 진입 시 100% 무인 자동으로 연결 개통 및 윈도우 S: 드라이브 자동 연결
   useEffect(() => {
     void verifyHybridP2PBridgeConnection({
       roomId: 'lounge-work-b2b',
       simulateSymmetricNatBlock: false,
-    }).then((diag) => {
-      setP2pDiagnostics(diag);
     });
 
-    void fetch('/__work/s-drive')
+    void fetch('/__work/s-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mount', openExplorer: false }),
+    })
       .then((r) => r.json())
-      .then((data: { ok?: boolean; mounted?: boolean; targetDir?: string }) => {
+      .then((data: { targetDir?: string }) => {
         if (data?.targetDir) setDriveTargetPath(data.targetDir);
-        if (data?.mounted) {
-          setDriveMounted(true);
-        } else {
-          // 아직 S: 드라이브가 없으면 백그라운드에서 즉시 실제 S: 드라이브 생성
-          void fetch('/__work/s-drive', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'mount', openExplorer: false }),
-          })
-            .then((r2) => r2.json())
-            .then((res2: { mounted?: boolean; targetDir?: string }) => {
-              if (res2?.mounted) setDriveMounted(true);
-              if (res2?.targetDir) setDriveTargetPath(res2.targetDir);
-            })
-            .catch(() => {});
-        }
       })
       .catch(() => {});
   }, []);
@@ -1997,51 +1980,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const selectedDoc =
     filteredDocs.find((d) => d.id === selectedDocId) || filteredDocs[0] || docs[0];
 
-  const handleOpenOrMountSDrive = async () => {
-    try {
-      const res = await fetch('/__work/s-drive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mount', openExplorer: true }),
-      });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        mounted?: boolean;
-        message?: string;
-        targetDir?: string;
-      };
-      if (data.mounted) setDriveMounted(true);
-      if (data.targetDir) setDriveTargetPath(data.targetDir);
-      setMountBannerToast(
-        data.message ||
-          '✓ 윈도우 탐색기(내 PC)에 실제 [업무 드라이브 (S:)]를 연결하고 탐색기 창을 열었습니다!'
-      );
-    } catch {
-      const webdav = buildWindowsNativeWebDavMountCommand('S:');
-      setDriveMounted(true);
-      setMountBannerToast(
-        `✓ 내 PC 윈도우 탐색기에 [업무 드라이브 (S:)]가 연결(${webdav.mountCmd})되었습니다.`
-      );
-    }
-  };
-
-  const handleUnmountSDrive = async () => {
-    try {
-      const res = await fetch('/__work/s-drive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'unmount' }),
-      });
-      const data = (await res.json()) as { mounted?: boolean; message?: string };
-      setDriveMounted(Boolean(data.mounted));
-      setMountBannerToast(
-        data.message || '안내: 윈도우 탐색기 [업무 드라이브 (S:)] 연결을 해제했습니다.'
-      );
-    } catch {
-      setDriveMounted(false);
-    }
-  };
-
   const handleToggleLockSimulation = (docId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setDocs((prev) =>
@@ -2063,82 +2001,38 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   return (
     <section className="flex flex-col gap-4">
-      {/* 1. 정갈한 업무 라운지 상단 컨트롤 헤더 (100% 무인 자동 P2P 상태 + 실제 윈도우 탐색기 S: 열기 버튼) */}
+      {/* 1. 정갈한 업무 라운지 상단 헤더 (우측 버튼 제거 · 온보딩 상식 안내로 통합) */}
       <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 shadow-sm flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="font-headline-sm text-[19px] text-white font-extrabold tracking-tight">
-                💼 사무실 업무 라운지
-              </h2>
-              {workPlan && (
-                <span className="text-[12px] text-emerald-400 font-bold">
-                  · ✓ {PLAN_BADGE_LABELS[workPlan]}
-                </span>
-              )}
-            </div>
-
-            {/* 수동 조작 버튼 없이 100% 무인 오토파일럿(Auto-Pilot)으로 동작하는 상태 표시줄 */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-zinc-400">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <strong className="text-zinc-200">마스터 PC 상시 온라인</strong>
+        <div className="flex flex-col gap-1.5 pb-3.5 border-b border-white/10">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="font-headline-sm text-[19px] text-white font-extrabold tracking-tight">
+              💼 사무실 업무 라운지
+            </h2>
+            {workPlan && (
+              <span className="text-[12px] text-emerald-400 font-bold">
+                · ✓ {PLAN_BADGE_LABELS[workPlan]}
               </span>
-
-              <span className="text-zinc-500">|</span>
-
-              <span>접속 팀원 6명</span>
-
-              <span className="text-zinc-500">|</span>
-
-              <span>
-                ⚡ 무인 자동 통신:{' '}
-                <strong className="text-zinc-200">
-                  사내망 P2P 직통 ({p2pDiagnostics?.roundTripLatencyMs ?? 11}ms) · 외부 LTE/5G 접속 시 비상터널 자동 전환
-                </strong>
-              </span>
-            </div>
-          </div>
-
-          {/* 우측: 실제 윈도우 탐색기 S:\ 드라이브를 생성하고 즉시 창을 띄우는 액션 버튼 */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => void handleOpenOrMountSDrive()}
-              className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-md text-[13px] font-extrabold transition-all shadow-sm cursor-pointer"
-              title={`실제 윈도우 내 PC에 S: 드라이브(${driveTargetPath})를 연결하고 탐색기 창을 바로 엽니다`}
-            >
-              {driveMounted
-                ? '📂 내 PC 탐색기에서 업무 드라이브(S:) 열기 ✓'
-                : '💽 내 PC에 업무 드라이브(S:) 즉시 생성·열기'}
-            </button>
-            {driveMounted && (
-              <button
-                type="button"
-                onClick={() => void handleUnmountSDrive()}
-                className="px-2.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
-                title="윈도우 탐색기에서 S: 드라이브 연결 해제"
-              >
-                연결 해제
-              </button>
             )}
           </div>
-        </div>
 
-        {mountBannerToast && (
-          <div className="px-3.5 py-2 rounded-xl bg-cyan-500/10 border border-cyan-400/30 flex items-center justify-between gap-3">
-            <span className="font-body-sm text-[12px] text-cyan-200 font-bold">
-              {mountBannerToast}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-zinc-400">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <strong className="text-zinc-200">사무실 PC 연결됨</strong>
             </span>
-            <button
-              type="button"
-              onClick={() => setMountBannerToast(null)}
-              className="text-zinc-400 hover:text-white text-[11px] font-bold shrink-0 cursor-pointer"
-            >
-              ✕ 닫기
-            </button>
+
+            <span className="text-zinc-500">|</span>
+
+            <span>접속 팀원 6명</span>
+
+            <span className="text-zinc-500">|</span>
+
+            <span>
+              💡 내 컴퓨터 <strong className="text-zinc-200">[윈도우 탐색기 ➔ 내 PC ➔ S: 드라이브]</strong>에서 모든 업무 폴더를 평소처럼 바로 열고 작업할 수 있습니다{' '}
+              <span className="text-zinc-500">(원본 폴더: {driveTargetPath})</span>
+            </span>
           </div>
-        )}
+        </div>
 
         {/* 2행: 좌측 뷰 전환 탭 (깔끔한 2단 스위치) + 우측 검색창 */}
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
@@ -2152,7 +2046,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              🔍 AI 본문·표 검색
+              🔍 본문·표 내용 검색
             </button>
 
             <button
@@ -2164,7 +2058,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              🗂️ 윈도우 폴더 트리 (S:\)
+              🗂️ 폴더별 보기 (S:\)
             </button>
           </div>
 
@@ -2184,14 +2078,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   onClick={() => setSearchQuery('')}
                   className="text-zinc-400 hover:text-white text-[11.5px] font-bold shrink-0 cursor-pointer"
                 >
-                  전체보기(초기화)
+                  전체보기
                 </button>
               )}
             </div>
 
-            {/* 빠른 검색 예시 클릭 시 좌측 리스트 필터링 + 우측 프리뷰 패널도 해당 문서로 즉시 전환 */}
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-[11.5px] text-zinc-400">
-              <span>빠른 검색 예시 (클릭 시 우측에 즉시 표시):</span>
+              <span>예시 검색어:</span>
               {QUICK_WORK_QUERIES.map((q) => (
                 <button
                   key={q}
@@ -2228,24 +2121,20 @@ export const WorkLoungeB2BHub: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. 메인 워크스페이스: 듀얼 모드 (🔍 AI 투시검색 뷰 vs 🗂️ 윈도우 폴더 트리 뷰) + 우측(또는 하단) 0.1초 30KB 선행 캐싱 프리뷰 패널 */}
+      {/* 2. 메인 워크스페이스: 좌측 문서 목록 + 우측 문서 미리보기 */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        {/* 좌측/중앙 영역 (7컬럼): 선택된 뷰 모드 렌더링 */}
         <div className="xl:col-span-7 flex flex-col gap-3">
           {viewMode === 'semantic' ? (
             <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 font-label-sm text-[11px] font-extrabold">
-                    🔍 AI 투시검색 결과 ({filteredDocs.length}건)
+                    검색 결과 ({filteredDocs.length}건)
                   </span>
                   <span className="font-body-sm text-[12px] text-zinc-400">
-                    계약서·견적서·엑셀 표 셀 내용까지 파일을 열지 않고 1초 만에 관통합니다
+                    파일을 직접 열지 않아도 계약서 조항과 엑셀 표 내용을 바로 확인할 수 있습니다
                   </span>
                 </div>
-                <span className="font-label-sm text-[11px] text-emerald-300 font-bold">
-                  ⚡ 전 파일 30KB 요약본 모바일/외부PC 선행 캐싱 완료
-                </span>
               </div>
 
               <div className="flex flex-col gap-2.5">
@@ -2281,45 +2170,33 @@ export const WorkLoungeB2BHub: React.FC = () => {
                           </span>
                         </div>
 
-                        {/* File Lock 배지 (동시 편집 충돌 방지 UI) */}
                         <div className="flex items-center gap-1.5 shrink-0">
                           {doc.lockedBy ? (
                             <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-sm">
-                              🔒 편집 중 ({doc.lockedBy})
+                              🔒 {doc.lockedBy} 수정 중
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
-                              🔓 편집 가능
+                              🔓 수정 가능
                             </span>
                           )}
-                          <button
-                            type="button"
-                            onClick={(e) => handleToggleLockSimulation(doc.id, e)}
-                            className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[10px]"
-                            title="동시 편집 충돌 방지(File Lock) 잠금/해제 전환 테스트"
-                          >
-                            {doc.lockedBy ? '잠금해제' : '잠금테스트'}
-                          </button>
                         </div>
                       </div>
 
                       <p className="font-label-sm text-[12px] text-cyan-200 font-bold">
-                        {doc.summaryTitle}
+                        {doc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
                       </p>
 
-                      {/* 본문 / 표 셀 매칭 하이라이트 박스 */}
                       <div className="p-2.5 rounded-lg bg-zinc-900/95 border border-cyan-400/25 font-body-sm text-[12px] text-zinc-200 leading-relaxed">
-                        <span className="text-cyan-300 font-extrabold mr-1.5">🎯 1초 본문·표 투시:</span>
+                        <span className="text-cyan-300 font-extrabold mr-1.5">📌 핵심 내용:</span>
                         {doc.matchedSnippet}
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 pt-0.5">
                         <span>
-                          📁 {doc.folderPath} · 원본 {doc.sizeLabel} · 작성: {doc.author}
+                          📁 {doc.folderPath} · {doc.sizeLabel} · 작성: {doc.author}
                         </span>
-                        <span className="text-emerald-300 font-bold">
-                          ⚡ {doc.cacheSizeLabel} (오프라인 0.1초 열람)
-                        </span>
+                        <span>최근 수정: {doc.updatedAt}</span>
                       </div>
                     </div>
                   );
@@ -2327,27 +2204,22 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </div>
             </div>
           ) : (
-            /* 🗂️ 윈도우 폴더 트리 뷰 (좌측 실제 업무 폴더 트리 + 우측 파일 리스트) */
             <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                    🗂️ 윈도우 탐색기 폴더 트리 뷰 (S:\)
+                    🗂️ 업무 폴더 목록 (S:\)
                   </span>
                   <span className="font-body-sm text-[12px] text-zinc-300">
-                    사무실 마스터 PC의 실제 업무 폴더 구조를 레거시 탐색기 습관 그대로 탐색합니다
+                    내 컴퓨터 탐색기(S:)와 동일한 폴더 구조입니다
                   </span>
                 </div>
-                <span className="font-label-sm text-[11px] text-cyan-300 font-bold">
-                  {driveMounted ? '💽 내 PC 탐색기 S:\\ 드라이브 실시간 동기화 중' : '⚠️ S:\\ 드라이브 미마운트'}
-                </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                {/* 좌측 폴더 트리 (4컬럼) */}
                 <div className="md:col-span-4 p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1.5">
                   <div className="font-label-sm text-[11px] text-zinc-400 font-bold px-2 py-1 border-b border-white/10 flex items-center justify-between">
-                    <span>💻 마스터 PC 폴더 트리</span>
+                    <span>📁 업무 폴더</span>
                     <span className="text-cyan-300">S:\</span>
                   </div>
                   {WORK_LOUNGE_FOLDERS.map((folder) => {
@@ -2375,16 +2247,15 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   })}
                 </div>
 
-                {/* 우측 파일 리스트 (8컬럼) */}
                 <div className="md:col-span-8 p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2">
                   <div className="px-2 py-1 border-b border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 font-bold">
                     <span>
-                      경로:{' '}
+                      위치:{' '}
                       <strong className="text-cyan-300">
                         {WORK_LOUNGE_FOLDERS.find((f) => f.id === selectedFolderId)?.path || 'S:\\'}
                       </strong>
                     </span>
-                    <span>파일 클릭 시 우측 30KB 프리뷰 0.1초 오픈</span>
+                    <span>파일을 누르면 우측에 내용이 표시됩니다</span>
                   </div>
 
                   <div className="flex flex-col divide-y divide-white/10">
@@ -2415,20 +2286,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
                           <div className="flex items-center gap-1.5 shrink-0">
                             {doc.lockedBy ? (
                               <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[11px] font-extrabold">
-                                🔒 편집 중 ({doc.lockedBy})
+                                🔒 {doc.lockedBy} 수정 중
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
-                                🔓 편집 가능
+                                🔓 수정 가능
                               </span>
                             )}
-                            <button
-                              type="button"
-                              onClick={(e) => handleToggleLockSimulation(doc.id, e)}
-                              className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[10px]"
-                            >
-                              {doc.lockedBy ? '해제' : '잠금'}
-                            </button>
                           </div>
                         </div>
                       );
@@ -2440,19 +2304,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
           )}
         </div>
 
-        {/* 우측 영역 (5컬럼): 마스터 PC 오프라인 시에도 0.1초 만에 열리는 [30KB 선행 캐싱 전체 텍스트 & 표 요약 프리뷰] 패널 */}
+        {/* 우측 영역 (5컬럼): 기술 용어 없이 깔끔한 문서 미리보기 패널 */}
         <div className="xl:col-span-5 p-4 md:p-5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/45 shadow-xl flex flex-col gap-3.5 sticky top-4">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                ⚡ 0.1초 즉시 오픈 (30KB 로컬 캐시 프리뷰)
-              </span>
-              <span className="font-label-sm text-[11px] text-emerald-300 font-bold">
-                {selectedDoc.cacheSizeLabel}
-              </span>
-            </div>
-            <span className="px-2 py-0.5 rounded text-[10.5px] font-extrabold bg-emerald-500/15 text-emerald-300">
-              🟢 마스터 PC 상시 연결 중
+            <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+              📄 문서 내용 미리보기
+            </span>
+            <span className="text-[11px] text-zinc-400 font-bold">
+              작성: {selectedDoc.author} · {selectedDoc.updatedAt}
             </span>
           </div>
 
@@ -2461,19 +2320,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
               {selectedDoc.folderPath}\{selectedDoc.fileName}
             </span>
             <h3 className="font-headline-sm text-[16px] text-white font-extrabold leading-snug">
-              {selectedDoc.summaryTitle}
+              {selectedDoc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
             </h3>
           </div>
 
-          {/* File Lock 충돌 방지 경고 배너 */}
           {selectedDoc.lockedBy ? (
             <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-400/50 flex items-center justify-between gap-2">
               <div className="flex flex-col gap-0.5">
                 <span className="font-label-sm text-[12px] text-amber-200 font-extrabold">
-                  🔒 현재 [{selectedDoc.lockedBy}] 님이 윈도우 탐색기(S:)에서 편집 중입니다
+                  🔒 현재 [{selectedDoc.lockedBy}] 님이 수정 중인 문서입니다
                 </span>
                 <span className="font-body-sm text-[11.5px] text-zinc-300 font-medium">
-                  덮어쓰기 충돌을 완벽히 차단하기 위해 다른 팀원에게는 [읽기 전용 &amp; 30KB 0.1초 프리뷰]로 안전하게 열립니다.
+                  다른 분이 수정 중일 때는 내용이 덮어써지지 않도록 읽기 전용으로 안전하게 열립니다.
                 </span>
               </div>
               <button
@@ -2481,28 +2339,28 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 onClick={() => handleToggleLockSimulation(selectedDoc.id)}
                 className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-amber-300/40 text-amber-200 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
               >
-                잠금 해제 시뮬레이션
+                잠금 해제
               </button>
             </div>
           ) : (
             <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 flex items-center justify-between gap-2">
               <span className="font-label-sm text-[11.5px] text-emerald-300 font-bold">
-                🔓 현재 편집 중인 팀원이 없습니다 — S:\ 드라이브에서 즉시 편집 및 자동 잠금 가능
+                🔓 현재 수정 중인 팀원이 없습니다 — 바로 열어서 편집할 수 있습니다
               </span>
               <button
                 type="button"
                 onClick={() => handleToggleLockSimulation(selectedDoc.id)}
                 className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
               >
-                내가 편집 잠금 걸기
+                잠금 표시하기
               </button>
             </div>
           )}
 
-          {/* 30KB 선행 캐싱된 표(Table) 구조 프리뷰 */}
+          {/* 표 핵심 데이터 */}
           <div className="flex flex-col gap-1.5">
             <span className="font-label-sm text-[11.5px] text-zinc-300 font-extrabold">
-              📊 30KB 선행 캐싱 표(Table) 핵심 데이터 요약 (원본 미다운로드 0.1초 렌더링)
+              📊 표 핵심 내용
             </span>
             <div className="overflow-x-auto rounded-xl border border-white/10 bg-zinc-950">
               <table className="w-full text-left border-collapse">
@@ -2536,20 +2394,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
           </div>
 
-          {/* 30KB 선행 캐싱된 본문 전체 텍스트 요약 프리뷰 */}
+          {/* 본문 요약 */}
           <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1">
             <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
-              📄 30KB 선행 캐싱 본문 전체 텍스트 요약
+              📄 본문 주요 내용
             </span>
             <p className="font-body-sm text-[12px] text-zinc-200 whitespace-pre-line leading-relaxed">
               {selectedDoc.fullTextPreview}
             </p>
           </div>
 
-          {/* 하단 액션 버튼: S: 드라이브 원본 열기 / 요금제 개통 */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <span className="font-body-sm text-[11px] text-zinc-400">
-              원본 용량 {selectedDoc.sizeLabel} ➔ 로컬 캐시 {selectedDoc.cacheSizeLabel}
+              파일 크기: {selectedDoc.sizeLabel} · 위치: {selectedDoc.folderPath}
             </span>
             <div className="flex flex-wrap items-center gap-2">
               {!isStoreAppMode && !workPlan && (
@@ -2566,7 +2423,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     onClick={() => setShowProModal(true)}
                     className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
                   >
-                    B2B 평생권/연간권 보기
+                    요금제 안내 보기
                   </button>
                 </>
               )}
@@ -2578,14 +2435,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
   );
 };
 
-/**
- * 2번 서브메뉴(메인 피드 & 검색) 상단에 라운지 성격별로 표시되는 전용 컨트롤 바
- * - 개인 라운지: null (얼굴/여권 바 완전 비노출, AI 투시검색 몬스터 바로 시작)
- * - 패밀리 라운지: [🏠 우리집 / 🏡 본가(친가) / 🌸 처가(친정)] 서브 룸 캡슐 전환 + 방별 별명 알약([👑 멀린], [👑 둘째사위], [은숙] 등) 1초 검색 통합 바
- * - 클럽 라운지: Text-to-Banner 자동 간판('성동고 89회 동창회') + [🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기] + [🎞️ 응답하라 1989 (추억) / 🍻 최근 우리들 (근황)] 투트랙 탭 + 13KB 캐시 & 5MB 무손실 원본 P2P 소환 바
- * - 스쿨 라운지: 낮(학교/학원) 로컬 캐시 1초 구간 점프 + 스쿨방 별명 알약([지우짱] 등) + [🎉 매월 1일 폰 용량 클린 리포트] 배너
- * - 업무 라운지: B2B 듀얼 뷰(AI 투시검색 뷰 vs 윈도우 폴더 트리 뷰) + 30KB 0.1초 선행 캐시 프리뷰 + 업무 드라이브(S:) 자동 마운트 & File Lock 충돌 방지 허브
- */
 export const LoungeFeedContextBanner: React.FC = () => {
   const {
     activeLoungeType,
@@ -2600,7 +2449,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
   } = useSaySeeStore();
 
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
-  const [clubP2pDiag, setClubP2pDiag] = useState<P2PHybridConnectionDiagnostics | null>(null);
+  const [downloadDirPath, setDownloadDirPath] = useState('D:\\Z-Eye\\다운로드_원본');
   const [monthlyReportDismissed, setMonthlyReportDismissed] = useState(false);
 
   const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
@@ -2633,7 +2482,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               key={c.clusterId}
               type="button"
               onClick={() => void runTextQuery(queryTarget)}
-              title={`클릭 시 "${queryTarget}" 1초 검색`}
+              title={`클릭 시 "${queryTarget}" 검색`}
               className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[12px] font-bold flex items-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
             >
               <img
@@ -2650,7 +2499,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
           onClick={() => setShowFaceRegistryModal(true)}
           className="px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold ml-0.5 shrink-0 whitespace-nowrap"
         >
-          🛂 여권 관리
+          🛂 인물 관리
         </button>
       </div>
     );
@@ -2660,10 +2509,6 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return (
       <div className="p-3.5 md:p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            🛂 여권 연동
-          </span>
           {FAMILY_ROOMS.map((room) => {
             const active = activeFamilyRoom === room;
             return (
@@ -2683,7 +2528,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
           })}
         </div>
 
-        {renderMemberPersonaPills(`[${activeFamilyRoom}] 별명:`)}
+        {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}
       </div>
     );
   }
@@ -2691,7 +2536,6 @@ export const LoungeFeedContextBanner: React.FC = () => {
   if (activeLoungeType === 'club') {
     return (
       <div className="flex flex-col gap-3">
-        {/* 최상단: 4050 동창회 Text-to-Banner 자동 간판 + 1초 학창시절 찾기 + 응답하라 투트랙 탭 */}
         <AlumniRetroBannerAndTwoTrackBar
           onOpenWaitingRoom={() => {
             setDesktopTab('trash');
@@ -2699,9 +2543,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
           }}
         />
 
-        {/* 하단 1줄: 모임 별명 1초 검색 알약 + 5MB 무손실 원본 1초 소환 */}
+        {/* 하단 1줄: 모임 인물 빠른 검색 + 원본 다운로드 */}
         <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
-          {renderMemberPersonaPills('모임 별명 1초 검색:')}
+          {renderMemberPersonaPills('회원별 사진 찾기:')}
 
           <button
             type="button"
@@ -2709,84 +2553,64 @@ export const LoungeFeedContextBanner: React.FC = () => {
               const next = !p2pOriginalSummoned;
               setP2pOriginalSummoned(next);
               if (next) {
-                void verifyHybridP2PBridgeConnection({ roomId: 'lounge-club-1989' }).then((diag) => {
-                  setClubP2pDiag(diag);
-                });
+                void fetch('/__club/download-originals', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ openExplorer: false }),
+                })
+                  .then((r) => r.json())
+                  .then((d: { downloadDir?: string }) => {
+                    if (d?.downloadDir) setDownloadDirPath(d.downloadDir);
+                  })
+                  .catch(() => {});
               }
             }}
-            className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2 rounded-xl font-label-sm text-[12.5px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
               p2pOriginalSummoned
                 ? 'bg-primary-container text-zinc-950 border-primary-container'
                 : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
             }`}
           >
-            {p2pOriginalSummoned
-              ? '✓ 5MB 무손실 원본 소환 완료 (신호 보기 ▼)'
-              : '📥 5MB 무손실 원본 P2P 1초 소환'}
+            {p2pOriginalSummoned ? '✓ 원본 다운로드 완료' : '📥 원본 다운로드'}
           </button>
         </div>
 
-        {/* 소환 버튼 클릭 시 즉시 펼쳐지는 실시간 P2P 신호 모니터 & 무손실 원본 수신 결과 패널 */}
+        {/* 다운로드 완료 시 기술 용어 없이 저장 경로와 [폴더 열기] 버튼만 깔끔하게 표시 */}
         {p2pOriginalSummoned && (
-          <div className="p-4 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-md flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                  📡 P2P 직통 신호 수신 완료 ({clubP2pDiag?.roundTripLatencyMs ?? 11}ms)
-                </span>
-                <span className="font-label-sm text-[12.5px] text-white font-extrabold">
-                  방장 마스터 PC ➔ 내 기기 다이렉트 전송 완료 (서버 중계비 0원)
-                </span>
-              </div>
+          <div className="px-4 py-3 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-extrabold text-[11.5px]">
+                ✓ 다운로드 완료
+              </span>
+              <span className="text-white font-bold">
+                원본 사진이 내 컴퓨터에 저장되었습니다.
+              </span>
+              <span className="text-zinc-400 text-[12px]">
+                (저장 위치: <strong className="text-zinc-200">{downloadDirPath}</strong>)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  void fetch('/__club/download-originals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ openExplorer: true }),
+                  }).catch(() => {});
+                }}
+                className="px-3.5 py-2 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[12px] font-extrabold cursor-pointer"
+              >
+                📂 저장 폴더 열기
+              </button>
               <button
                 type="button"
                 onClick={() => setP2pOriginalSummoned(false)}
-                className="text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+                className="px-2.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
               >
-                ✕ 신호창 닫기
+                ✕ 닫기
               </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px]">
-              <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1">
-                <span className="text-zinc-400 font-bold text-[11px]">① P2P 신호 경로 (WebRTC)</span>
-                <strong className="text-emerald-300 font-extrabold">
-                  🟢{' '}
-                  {clubP2pDiag?.fallbackTriggered
-                    ? '2순위 비상터널 직통 (0원)'
-                    : '1순위 P2P 다이렉트 직통 (0원)'}
-                </strong>
-                <span className="text-zinc-400 text-[11px]">
-                  왕복 지연시간 {clubP2pDiag?.roundTripLatencyMs ?? 11}ms · 패킷 손실 0%
-                </span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1">
-                <span className="text-zinc-400 font-bold text-[11px]">② 화질 복원 상태 (13KB ➔ 5.2MB)</span>
-                <strong className="text-cyan-300 font-extrabold">
-                  ✨ 4032×3024 무손실 원본 {Math.max(photos.length, 24)}장 수신 완료
-                </strong>
-                <span className="text-zinc-400 text-[11px]">
-                  평소 13KB 초경량 캐시 ➔ 클릭 즉시 5MB 원본 직통 소환
-                </span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col justify-between gap-2">
-                <span className="text-zinc-400 font-bold text-[11px]">③ 내 PC에서 실제 파일 확인</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void fetch('/__work/s-drive', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'mount', openExplorer: true }),
-                    }).catch(() => {});
-                  }}
-                  className="px-3 py-2 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[12px] font-extrabold text-center cursor-pointer"
-                >
-                  📂 내 PC 탐색기에서 원본 폴더 열기
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -2805,10 +2629,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
         <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
-              🎉 월간 용량 클린
+              🎉 월간 용량 정리
             </span>
             <span className="font-body-sm text-[12.5px] text-zinc-100 font-medium truncate">
-              이번 달 우리반 원본 사진 {photos.length}장 &amp; 영상이 👑 방장 PC로 안전 이관되어{' '}
+              이번 달 우리반 원본 사진 {photos.length}장 &amp; 영상이 방장 PC로 안전하게 보관되어{' '}
               <strong className="text-emerald-300">내 폰 여유 공간 +14.2GB</strong> 확보!
             </span>
           </div>
@@ -2824,14 +2648,11 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
       <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
-            🛂 여권 연동
-          </span>
-          <span className="font-label-sm text-[12px] text-primary-container font-bold">
-            ⚡ 타임캡슐 로컬 캐시 (낮에 👑 방장 PC 꺼져 있어도 1초 만에 재생)
+          <span className="font-label-sm text-[12.5px] text-primary-container font-bold">
+            📸 학교·학원에서 언제든 우리 반 사진과 영상을 바로 찾아볼 수 있습니다
           </span>
         </div>
-        {renderMemberPersonaPills('스쿨방 별명 1초 검색:')}
+        {renderMemberPersonaPills('친구 이름 검색:')}
       </div>
     </div>
   );
@@ -2899,37 +2720,37 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     }
   > = {
     family: {
-      badge: `⏳ 패밀리 AI 인덱싱 대기실 (${activeFamilyRoom} 베스트컷 전송 버퍼)`,
-      title: '가족들이 보낸 베스트 컷이 AI 색인 & 13KB 캐시 변환을 거쳐 피드로 자동 배포됩니다',
+      badge: `📥 가족 새 사진 정리함 (${activeFamilyRoom})`,
+      title: '가족들이 새로 올린 사진·영상을 인물·날짜별로 자동 정리하여 앨범에 올립니다',
       subtitle:
-        '누군가 수동으로 검열하는 공간이 아닙니다! 가족 스마트폰에서 올라온 고화질 사진·영상이 마스터 PC(또는 24시간 서버 도우미)에서 Gemma 2 768차원 실명·상황 인덱싱을 마치는 동안 머무는 안심 시간 벌기용 버퍼입니다.',
-      bufferReason: '우리집 · 본가(친가) · 처가(친정) 방 분리 태그 및 가족 얼굴 자동 매칭 진행 중',
+        '가족 스마트폰에서 올라온 사진과 영상을 인물·날짜·장소별로 자동 분류하는 공간입니다. 정리가 끝나는 대로 가족 앨범 피드에 자동으로 올라갑니다.',
+      bufferReason: '우리집 · 본가(친가) · 처가(친정) 방별 분류 및 가족 얼굴 자동 정리 중',
       senderLabels: ['아내(은숙) 아이폰', '남편(진욱) 갤럭시', '우리딸 아이폰', '본가 어머님 폰'],
     },
     club: {
-      badge: '⏳ 클럽 AI 인덱싱 대기실 (모임컷 수합 & 옛날 스캔 사진 스틱 태깅 버퍼)',
-      title: '참석자 폰 사진과 EXIF 없는 옛날 앨범 스캔본이 마스터 엔진에서 자동 색인·캐싱 중입니다',
+      badge: '📥 모임 새 사진 정리함 (모임 사진 & 옛날 앨범 스캔 사진)',
+      title: '회원들이 올린 모임 사진과 옛날 종이 앨범 스캔 사진을 자동으로 정리하고 있습니다',
       subtitle:
-        '학창 시절 종이 앨범 스캔본(EXIF 없음)은 [🏷️ 스틱(Chip) 연쇄 태깅]으로 1초 만에 1980년대 여권 바구니(1989~1980)에 꽂아 넣고, 헷갈리는 연도는 동기들의 제보를 받아 👑 방장이 원터치로 일괄 승인합니다.',
-      bufferReason: '동창회·모임 얼굴 클러스터링 & 1980s 아날로그 스캔 사진 타임라인 매핑 진행 중',
+        '촬영 날짜 정보가 없는 옛날 종이 사진은 아래 [🏷️ 연도·장소 스티커]를 눌러 1초 만에 연도와 장소를 붙여줄 수 있습니다.',
+      bufferReason: '모임 회원 얼굴 분류 및 옛날 스캔 사진 연도별 정리 진행 중',
       senderLabels: ['김총무 갤럭시 S24', '박회장 아이폰 16 Pro', '이프로 갤럭시', '최회원 아이폰'],
     },
     student: {
-      badge: '⏳ 스쿨 라운지 AI 인덱싱 대기실 (인생샷·축제 영상 수합 버퍼)',
-      title: '친구들이 보낸 인생샷과 골인 영상이 방장 게이밍 PC가 켜질 때 자동 색인·압축 배포됩니다',
+      badge: '📥 우리반 새 사진·영상 정리함',
+      title: '친구들이 올린 사진과 축제 영상을 방장 PC에서 자동으로 정리하여 앨범에 올립니다',
       subtitle:
-        '학교·학원에 있는 낮 시간 동안 친구들이 찍어 올린 사진·영상을 안전하게 모아 두었다가, 하교 후 방장의 집 게이밍 PC가 켜지는 즉시 초고속 Gemma 2 인덱싱을 거쳐 전 멤버 타임캡슐 피드로 쏴주는 대기 버퍼입니다.',
+        '학교·학원에 있는 낮 시간 동안 친구들이 찍어 올린 사진·영상을 모아 두었다가, 하교 후 방장 PC가 켜지면 자동으로 분류해 우리반 피드에 올려줍니다.',
       bufferReason: gpuHelper24hActive
-        ? '⚡ 24시간 GPU 클라우드 도우미가 즉시 인덱싱 대행 중!'
-        : '방장 게이밍 PC(RTX) 하교 후 부팅 대기 중 · 켜지는 즉시 0.1초 자동 색인 배포',
+        ? '⚡ 24시간 클라우드 도우미가 실시간으로 정리 중!'
+        : '방장 PC가 켜지면 자동으로 사진·영상 정리가 시작됩니다',
       senderLabels: ['민준 아이폰', '서연 갤럭시', '도윤 아이폰', '하은 아이폰'],
     },
     work: {
-      badge: '⏳ 업무 라운지 AI 인덱싱 대기실 (계약서·엑셀 표 파싱 & 30KB 오프라인 요약본 생성 버퍼)',
-      title: '외근·현장 직원이 올린 계약서·견적서·시공사진이 사무실 마스터 PC에서 30KB 요약본으로 자동 색인됩니다',
+      badge: '📥 새 업무 문서 정리함 (부서 폴더 자동 분류)',
+      title: '외근·현장 직원이 새로 올린 계약서·견적서·시공사진을 폴더별로 자동 정리합니다',
       subtitle:
-        '외부에서 업로드된 엑셀 단가표, PDF 견적서, 현장 도면의 본문과 표(Table) 셀 데이터를 추출해 전 직원의 스마트폰과 외부 PC에 30KB 선행 캐시로 배포하는 자동 색인 버퍼입니다.',
-      bufferReason: 'S:\\ 업무 드라이브 폴더 자동 분류 & 30KB 전체 텍스트·표 요약 프리뷰 생성 중',
+        '외부에서 올린 엑셀 단가표, PDF 견적서, 현장 도면의 내용을 읽어 부서별 폴더(S: 드라이브)로 자동 분류하고, 스마트폰에서도 바로 검색할 수 있게 준비합니다.',
+      bufferReason: '내 PC 업무 공유 드라이브(S:) 폴더 자동 분류 및 본문 검색 준비 중',
       senderLabels: ['박과장 외근 노트북', '이팀장 아이폰', '정실장 데스크탑', '강사원 현장 태블릿'],
     },
   };
@@ -2986,8 +2807,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
               {currentMeta.badge}
             </span>
-            <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-emerald-300 font-label-mono text-[11px] font-bold">
-              ✓ 수동 검열 ZERO · 100% 자율 AI 인덱싱 버퍼
+            <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-emerald-300 font-label-sm text-[11px] font-bold">
+              ✓ 인물·날짜·폴더별 자동 정리
             </span>
           </div>
 
@@ -2999,8 +2820,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
               >
                 {pokedStudentHost
-                  ? '✓ 방장에게 "집 게이밍 PC 켜!" 알림 전송됨'
-                  : '👉 방장에게 "집 게이밍 PC 켜!" 콕 찌르기'}
+                  ? '✓ 방장에게 "PC 켜줘!" 알림 전송됨'
+                  : '👉 방장에게 "PC 켜줘!" 알림 보내기'}
               </button>
             )}
 
@@ -3010,8 +2831,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               className="px-3.5 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
             >
               {instantFlushed
-                ? '✓ 전 항목 인덱싱 & 피드 배포 완료!'
-                : '⚡ 지금 즉시 인덱싱 완료 & 피드 배포하기'}
+                ? '✓ 앨범 피드에 전체 반영 완료!'
+                : '⚡ 지금 바로 앨범 피드에 올리기'}
             </button>
           </div>
         </div>
@@ -3034,7 +2855,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             </span>
             <span className="font-label-sm text-[12.5px] text-zinc-200 font-bold">
               {instantFlushed
-                ? `대기 큐 0건 — 수합된 사진 ${queuePhotos.length}장 & 동영상 ${videoSceneItems.length}개 전 구간이 피드에 100% 배포되었습니다!`
+                ? `정리 완료 — 새로 올라온 사진 ${queuePhotos.length}장 & 동영상 ${videoSceneItems.length}개가 앨범 피드에 모두 반영되었습니다!`
                 : `${currentMeta.bufferReason} (사진 ${queuePhotos.length}장 · 동영상 ${videoSceneItems.length}개)`}
             </span>
           </div>
@@ -3055,8 +2876,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-bold"
               >
                 {isStoreAppMode
-                  ? '💻 카톡·이메일로 ‘내 PC 연동 시작 가이드’ 보내두기'
-                  : '⚡ 방장 PC가 꺼져 있나요? 1일 1,000원 GPU 서버 도우미 즉시 가동'}
+                  ? '💻 카톡·이메일로 ‘내 PC 연동 가이드’ 보내두기'
+                  : '⚡ 방장 PC가 꺼져 있나요? 1일 1,000원 클라우드 도우미 켜기'}
               </button>
             )}
             <button
@@ -3067,7 +2888,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               }}
               className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
             >
-              배포된 피드 보러가기 →
+              앨범 피드 보러가기 →
             </button>
           </div>
         </div>
@@ -3192,23 +3013,20 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
         </div>
       </section>
 
-      {/* 3 & 4. EXIF 없는 옛날 스캔 사진용 '스틱(Chip) 연쇄 태깅' & [❓ 언제/어디인가요?] 집단 지성 연도 제보 ➔ 👑 방장 원터치 일괄 결재 */}
+      {/* 3 & 4. 옛날 스캔 사진용 '연도·장소 스티커' & [❓ 언제/어디인가요?] 동기 제보 ➔ 👑 방장 일괄 승인 */}
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-amber-400/35 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                🎞️ EXIF 없는 옛날 종이 사진 · 스틱(Chip) 1초 연쇄 태깅
+                🎞️ 촬영 날짜 없는 옛날 종이 사진 · 연도·장소 스티커 붙이기
               </span>
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-                🛂 1989 입력 즉시 ➔ Z-Eye 여권 [1989~1980] 10년 바구니 강제 매핑
-              </span>
-              <span className="px-2.5 py-0.5 rounded-md bg-primary-container/15 border border-primary-container/40 text-primary-container font-label-mono text-[11px] font-bold">
-                ⚡ 봄↔2·3·4·5월 / 가을↔9·10·11월 / 성동고 고유명사 양방향 자동 인덱싱
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold">
+                🛂 연도 입력 시 [1980년대 앨범]으로 자동 분류
               </span>
             </div>
             <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold mt-0.5">
-              첫 번째 스캔 사진에 연도·장소·계절을 한 번만 치면 [🏷️ 스틱]이 생성되어, 두 번째 사진부터는 1초 만에 톡톡 찍어 바릅니다
+              첫 번째 스캔 사진에 연도·장소·계절을 한 번만 적으면 [🏷️ 스티커]가 만들어져, 다음 사진부터는 클릭 한 번으로 바로 붙일 수 있습니다
             </h2>
           </div>
 
@@ -3444,14 +3262,14 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
         </div>
       </section>
 
-      {/* 수합된 베스트컷 / 모임컷 / 인생샷 인덱싱 버퍼 그리드 */}
+      {/* 새로 올라온 사진 정리함 그리드 */}
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between px-1">
           <span className="font-headline-sm text-[15.5px] text-white font-bold">
-            📥 최근 멤버 스마트폰에서 수합된 미디어 버퍼 ({queuePhotos.length}장)
+            📥 최근 멤버 스마트폰에서 올라온 사진 ({queuePhotos.length}장)
           </span>
-          <span className="font-label-mono text-[11.5px] text-zinc-400">
-            장당 13KB 섀도우 캐시 + 768차원 의미·얼굴 벡터 자동 생성
+          <span className="font-label-sm text-[11.5px] text-zinc-400">
+            인물·날짜·장소별로 자동 정리하여 앨범에 올립니다
           </span>
         </div>
 
@@ -3473,13 +3291,13 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                     className="w-full h-full object-cover"
                   />
                   <div
-                    className={`absolute top-2 left-2 px-2 py-0.5 rounded-md font-label-mono text-[10px] font-bold border ${
+                    className={`absolute top-2 left-2 px-2 py-0.5 rounded-md font-label-sm text-[10px] font-bold border ${
                       isDone
                         ? 'bg-emerald-950/90 border-emerald-400/50 text-emerald-300'
                         : 'bg-amber-950/90 border-amber-400/50 text-amber-300'
                     }`}
                   >
-                    {isDone ? '✓ 13KB 캐시 · 피드 배포됨' : '⏳ Gemma 2 색인 중 (88%)'}
+                    {isDone ? '✓ 정리 완료 · 앨범에 반영됨' : '⏳ 자동 정리 중'}
                   </div>
                 </div>
                 <div className="p-3 flex flex-col gap-1">
@@ -3488,7 +3306,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                     <span className="text-zinc-500 font-mono">{photo.date.split(' ')[0]}</span>
                   </div>
                   <p className="text-[11px] text-zinc-400 truncate">
-                    {photo.tags.slice(0, 3).join(' · ') || '장면·얼굴 벡터 추출 완료'}
+                    {photo.tags.slice(0, 3).join(' · ') || '인물·장소 분류 완료'}
                   </p>
                 </div>
               </article>
@@ -3888,13 +3706,13 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-              💼 업무 라운지 — 팀원 권한 &amp; 윈도우 탐색기 가상 드라이브(S:) 브릿지 관리
+              💼 업무 라운지 — 팀원 권한 &amp; 내 컴퓨터 업무 공유 드라이브(S:) 안내
             </span>
             <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-              사무실 PC 폴더를 전 직원의 1초 투시 검색 서버 &amp; 윈도우 탐색기(S:)로 연결합니다
+              사무실 PC 업무 폴더가 전 직원의 문서 검색창과 윈도우 탐색기(S:)에 자동으로 연결됩니다
             </h2>
             <p className="font-body-sm text-[12.5px] text-zinc-300">
-              부서별 폴더 접근 권한, 윈도우 탐색기 네트워크 드라이브(S:) 원클릭 자동 마운트, 동시 편집 충돌 방지(File Lock) 및 30KB 오프라인 선행 캐시 배포 정책을 통합 관리합니다.
+              따로 연결 버튼을 누를 필요 없이 <strong>[윈도우 탐색기 ➔ 내 PC ➔ S: 드라이브]</strong>(`D:\Z-Eye\업무공유폴더_S`)에서 계약서·견적서·세금계산서·도면 폴더를 일반 폴더처럼 바로 열어 쓰고, 외근 중인 직원은 스마트폰 LTE/5G로 들어와도 자동으로 외부 접속 모드로 연결됩니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

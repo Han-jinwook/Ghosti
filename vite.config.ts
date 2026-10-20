@@ -2471,7 +2471,7 @@ function zeyeLocalBridge(): Plugin {
       // [업무 라운지 실물 윈도우 S: 드라이브 마운트/해제 및 탐색기 자동 오픈 엔드포인트]
       server.middlewares.use('/__work/s-drive', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        const workVaultDir = path.resolve(ROOT, 'test_docs');
+        const workVaultDir = path.resolve(ROOT, '업무공유폴더_S');
         const subFolders = [
           '01_계약서_법무문서',
           '02_견적서_단가표_엑셀',
@@ -2551,11 +2551,12 @@ function zeyeLocalBridge(): Plugin {
             return;
           }
 
-          if (!fs.existsSync('S:\\')) {
-            await new Promise<void>((resolve) => {
-              exec(`subst S: "${workVaultDir}"`, () => resolve());
-            });
-          }
+          await new Promise<void>((resolve) => {
+            exec('subst S: /d', () => resolve());
+          });
+          await new Promise<void>((resolve) => {
+            exec(`subst S: "${workVaultDir}"`, () => resolve());
+          });
 
           const mountedNow = fs.existsSync('S:\\');
           const openTarget = mountedNow ? 'S:\\' : workVaultDir;
@@ -2570,11 +2571,48 @@ function zeyeLocalBridge(): Plugin {
               driveLetter: 'S:',
               targetDir: workVaultDir,
               openedExplorer: shouldOpenExplorer,
-              message: `✓ 윈도우 탐색기(내 PC)에 실제 [업무 드라이브 (S:)]가 생성되었으며 탐색기 창을 바로 열었습니다!`,
+              message: `✓ 내 컴퓨터 [윈도우 탐색기 ➔ 내 PC ➔ S: 드라이브]에 업무 공유폴더(${workVaultDir})가 연결되었습니다.`,
             })
           );
         } catch (e) {
           res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
+
+      // [클럽/패밀리 라운지 원본 다운로드 및 저장 위치 폴더 열기 엔드포인트]
+      server.middlewares.use('/__club/download-originals', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const downloadDir = path.resolve(ROOT, '다운로드_원본');
+        try {
+          if (!fs.existsSync(downloadDir)) {
+            fs.mkdirSync(downloadDir, { recursive: true });
+          }
+          // 샘플 이미지 복사 (폴더를 열었을 때 실제 사진 파일이 보이도록 보장)
+          if (fs.existsSync(FACE_CROPS_DIR)) {
+            const crops = fs
+              .readdirSync(FACE_CROPS_DIR)
+              .filter((f) => /\.(jpe?g|png|webp)$/i.test(f))
+              .slice(0, 6);
+            crops.forEach((f, idx) => {
+              const dest = path.join(downloadDir, `동창회_원본사진_${String(idx + 1).padStart(2, '0')}.jpg`);
+              if (!fs.existsSync(dest)) {
+                fs.copyFileSync(path.join(FACE_CROPS_DIR, f), dest);
+              }
+            });
+          }
+          const body = req.method === 'POST' ? await readJsonBody(req) : {};
+          if (body?.openExplorer) {
+            exec(`explorer.exe "${downloadDir}"`);
+          }
+          res.end(
+            JSON.stringify({
+              ok: true,
+              downloadDir,
+              fileCount: fs.existsSync(downloadDir) ? fs.readdirSync(downloadDir).length : 0,
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e), downloadDir }));
         }
       });
     },

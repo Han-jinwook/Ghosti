@@ -324,7 +324,7 @@ export const SetupMonsterContent: React.FC = () => {
 
     return (
       <div className="mt-3 p-4 rounded-2xl bg-zinc-950/95 border border-primary-container/40 flex flex-col gap-3">
-        {/* 상단 난이도 배지 + 트랙 배지 + 무위험 에스크로 100% 반환 보증 배지 */}
+        {/* 상단 난이도 배지 + 환불 보증 안내 */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -342,15 +342,12 @@ export const SetupMonsterContent: React.FC = () => {
               }`}
             >
               {isTrackA
-                ? '⚡ Track A · 백그라운드 1초 자동 수리 (90%)'
-                : '👆 Track B · 실시간 플로팅 손가락 가이드 (10%)'}
-            </span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-mono text-[10.5px]">
-              🦶 손발 에이전트: {plan.agentModuleName}
+                ? '⚡ 자동 해결 가능'
+                : '👆 화면 위 화살표 안내'}
             </span>
           </div>
           <span className="px-2.5 py-0.5 rounded-md bg-pink-500/15 border border-pink-400/40 font-label-sm text-[11px] text-pink-200 font-extrabold">
-            💖 초행길 2회 이상 헤매도 100% 쿨 환불 & 실패 시 100% 즉시 반환
+            💖 해결되지 않거나 헤매면 100% 환불 & 원상복구 보장
           </span>
         </div>
 
@@ -361,14 +358,9 @@ export const SetupMonsterContent: React.FC = () => {
           <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
             {plan.rootCause}
           </p>
-          {plan.feasibilityCheckKo && (
-            <p className="font-mono text-[11px] text-emerald-300 mt-0.5">
-              ✓ {plan.feasibilityCheckKo}
-            </p>
-          )}
         </div>
 
-        {/* [멀린허브(Merlin Hub) 통합 지갑 사전 잔액 검증 (Pre-Check) 상태 바] */}
+        {/* 수리 비용 및 잔액 안내 바 */}
         <div
           className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${
             hasEnoughCoins
@@ -383,20 +375,14 @@ export const SetupMonsterContent: React.FC = () => {
               }`}
             >
               {hasEnoughCoins
-                ? `✅ 멀린허브 통합 지갑 사전 잔액 검증(Pre-Check) 통과 — 즉시 에스크로 홀딩 가능`
-                : `⚠️ 멀린허브 통합 지갑 사전 잔액 검증(Pre-Check) — 멀린코인 ${deficitCoins.toLocaleString()}개가 부족합니다!`}
+                ? `✅ 바로 수리 가능 — 해결이 확인된 뒤에만 코인이 차감됩니다`
+                : `⚠️ 코인이 ${deficitCoins.toLocaleString()}개 부족합니다`}
             </span>
             <span className="font-body-sm text-[11px] text-zinc-300">
-              필요 견적: <strong className="text-white">{requiredCoins.toLocaleString()} 코인</strong> · 현재 내 지갑 잔액:{' '}
+              수리 비용: <strong className="text-white">{requiredCoins.toLocaleString()} 코인</strong> · 현재 내 잔액:{' '}
               <strong className={hasEnoughCoins ? 'text-emerald-300' : 'text-amber-300'}>
                 {currentCoins.toLocaleString()} 코인
               </strong>
-              {!hasEnoughCoins && (
-                <span>
-                  {' '}
-                  (충전이 완료되는 즉시 {requiredCoins} 코인 에스크로 홀딩을 걸고 1초 수리에 돌입합니다)
-                </span>
-              )}
             </span>
           </div>
           {!hasEnoughCoins && (
@@ -406,115 +392,25 @@ export const SetupMonsterContent: React.FC = () => {
           )}
         </div>
 
-        {/* 실행 명령 및 0.01초 전 JSON 스냅샷 백업 명세 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-          <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1">
-            <span className="font-label-sm text-[10.5px] text-primary-container font-bold">
-              🛡️ 0.01초 전 JSON 스냅샷 자동 백업 (Before ➔ After)
-            </span>
-            <p className="font-mono text-[10.5px] text-zinc-400 break-all">
-              Before: {JSON.stringify(plan.beforeSnapshot)}
-            </p>
-            <p className="font-mono text-[10.5px] text-emerald-300 break-all">
-              After: {JSON.stringify(plan.afterSnapshot)}
-            </p>
-          </div>
-          <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1">
-            <span className="font-label-sm text-[10.5px] text-amber-300 font-bold">
-              ⚙️ 에이전트 실행 API / PowerShell 명령
-            </span>
-            <p className="font-mono text-[10.5px] text-zinc-200 break-all">
-              {plan.systemCommandOrApi}
-            </p>
-          </div>
-        </div>
-
-        {/* [딥리서치 엔지니어링 2대 급소: OS 보안 정책(Windows UIPI·JEA / Android SDK 35 WindowInsets) + 스마트 타겟팅 UI 스캔(토큰 99% 절감 & div/span 무손실 보존)] */}
-        {(plan.osSecuritySpec || plan.smartScanTelemetry) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-            {plan.osSecuritySpec && (
-              <div className="p-2.5 rounded-xl bg-cyan-950/25 border border-cyan-400/35 flex flex-col gap-1">
-                <div className="flex flex-wrap items-center justify-between gap-1">
-                  <span className="font-label-sm text-[10.5px] text-cyan-300 font-extrabold">
-                    {plan.osSecuritySpec.platform === 'pc'
-                      ? '💻 Windows 11 OS 보안 (UIPI 관통 & JEA 최소 권한)'
-                      : '📱 Android 15 (SDK 35) Edge-to-Edge 오프셋 보정'}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 font-mono text-[9.5px] font-bold">
-                    {plan.osSecuritySpec.platform === 'pc'
-                      ? 'uiAccess="true" · Authenticode · JEA'
-                      : `WindowInsets (상단 -${plan.osSecuritySpec.androidStatusBarInsetPx ?? 112}px) · RECEIVER_NOT_EXPORTED`}
-                  </span>
-                </div>
-                <p className="font-body-sm text-[10.5px] text-zinc-300 leading-snug">
-                  {plan.osSecuritySpec.platform === 'pc'
-                    ? `JEA 정책: ${plan.osSecuritySpec.windowsJeaLeastPrivilegePolicy} · 백업: ${plan.osSecuritySpec.windowsPreBackupRegistryJsonPath}`
-                    : `보정 공식: ${plan.osSecuritySpec.androidEdgeToEdgeOffsetFormula} · 플래그: ${plan.osSecuritySpec.androidBroadcastReceiverFlag}`}
-                </p>
-              </div>
-            )}
-
-            {plan.smartScanTelemetry && (
-              <div className="p-2.5 rounded-xl bg-emerald-950/25 border border-emerald-400/35 flex flex-col gap-1">
-                <div className="flex flex-wrap items-center justify-between gap-1">
-                  <span className="font-label-sm text-[10.5px] text-emerald-300 font-extrabold">
-                    {plan.smartScanTelemetry.scanStrategyBadgeKo}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 font-mono text-[9.5px] font-bold">
-                    {plan.smartScanTelemetry.rawTotalDomNodes.toLocaleString()}노드({plan.smartScanTelemetry.rawEstimatedTokens.toLocaleString()}T) ➔{' '}
-                    {plan.smartScanTelemetry.scannedTargetNodes}노드({plan.smartScanTelemetry.finalSentTokens}T ·{' '}
-                    {plan.smartScanTelemetry.tokenSavingsPercent}% 절감)
-                  </span>
-                </div>
-                <p className="font-mono text-[10px] text-zinc-300">
-                  • 활성 창: {plan.smartScanTelemetry.foregroundWindowTitle} | 타겟 경로: {plan.smartScanTelemetry.targetRegionOrZoomPathKo}
-                </p>
-                <p className="font-mono text-[10px] text-amber-200">
-                  • 비표준 클릭 요소(div/span/에러 라벨) 무손실 보존:{' '}
-                  {plan.smartScanTelemetry.preservedNonStandardNodes
-                    .map((n) => `${n.tagOrRole}("${n.label}")`)
-                    .join(' | ')}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* [에스크로 홀딩 후 1초 수리 시작] + [1회 우회 / 2회 헤맨 성공 100% 쿨 환불 시뮬레이션] */}
+        {/* 깔끔한 실행 버튼 */}
         <div className="flex flex-col gap-2 pt-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {hasEnoughCoins ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => approveAndExecuteSetupPlan(plan, 0)}
-                    className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-[0_0_20px_rgba(32,247,219,0.25)] cursor-pointer"
-                  >
-                    ⚡ {requiredCoins} 코인 에스크로 홀딩 후 1초 수리 시작 (🟢 0회 쾌속 완주)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => approveAndExecuteSetupPlan(plan, 1)}
-                    className="px-3 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-                  >
-                    🟡 1회 우회 성공 (정상 정산 + 미세 교정 OTA)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => approveAndExecuteSetupPlan(plan, 2)}
-                    className="px-3.5 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-label-sm text-[12px] font-extrabold shadow-[0_0_20px_rgba(236,72,153,0.4)] cursor-pointer"
-                  >
-                    💖 2회 헤맨 성공 시뮬레이션 (수리 유지 + 100% 쿨 환불 + 최단 지름길 OTA!)
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => approveAndExecuteSetupPlan(plan, 0)}
+                  className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-[0_0_20px_rgba(32,247,219,0.25)] cursor-pointer"
+                >
+                  ⚡ 바로 해결하기 ({requiredCoins} 코인)
+                </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => openMerlinCoinTopupBridge(plan)}
                   className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-[0_0_25px_rgba(251,191,36,0.35)] cursor-pointer animate-pulse"
                 >
-                  🪙 멀린코인 {deficitCoins.toLocaleString()}개가 부족합니다 — 1초 충전 후 바로 고치기
+                  🪙 코인 충전 후 바로 고치기
                 </button>
               )}
 
@@ -524,17 +420,17 @@ export const SetupMonsterContent: React.FC = () => {
                   onClick={() => openSetupOverlayGuide(plan)}
                   className="px-3.5 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/50 text-rose-200 font-label-sm text-[12px] font-extrabold cursor-pointer"
                 >
-                  👆 손가락 화살표 오버레이 띄우기 (Back 버튼 테스트 가능)
+                  👆 화면 위 화살표 안내 보기
                 </button>
               )}
             </div>
             {turnRefunded ? (
               <span className="font-label-sm text-[11px] text-pink-300 font-extrabold">
-                💖 에스크로 {requiredCoins} 코인 100% 반환 완료
+                💖 {requiredCoins} 코인 100% 환불 완료
               </span>
             ) : turnUndone ? (
               <span className="font-label-sm text-[11px] text-amber-300 font-bold">
-                ↩️ 원상복구 완료된 내역입니다
+                ↩️ 원래 설정으로 복구됨
               </span>
             ) : null}
           </div>
@@ -657,15 +553,15 @@ export const SetupMonsterContent: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. 📱 모바일판 전용: 선제적 맞춤 진단 카드 (Proactive Hints) */}
+      {/* 3. 📱 모바일판 전용: 선제적 맞춤 진단 카드 */}
       {setupMonsterPlatform === 'mobile' && (
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
             <span className="font-label-sm text-[12px] text-primary-container font-extrabold">
-              🩺 모바일 APK 선제적 맞춤 진단 (UsageStatsManager 앱 사용 통계 + 연령·생활 패턴 결합)
+              🩺 스마트폰 맞춤 추천 설정
             </span>
             <span className="font-body-sm text-[11px] text-zinc-400">
-              스마트폰 잘 아는 젊은 조카가 먼저 발견해 챙겨주는 힌트 카드
+              자주 쓰는 기능과 불편한 점을 먼저 찾아 알려드립니다
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -685,7 +581,7 @@ export const SetupMonsterContent: React.FC = () => {
                     </span>
                     {hint.resolved && (
                       <span className="text-emerald-400 font-label-sm text-[11px] font-extrabold">
-                        ✓ 처치 완료
+                        ✓ 해결됨
                       </span>
                     )}
                   </div>
@@ -693,7 +589,7 @@ export const SetupMonsterContent: React.FC = () => {
                     {hint.title}
                   </h4>
                   <p className="font-body-sm text-[11.5px] text-zinc-400">
-                    • 감지 근거: {hint.telemetrySource}
+                    • {hint.telemetrySource}
                   </p>
                 </div>
                 <button
@@ -703,7 +599,7 @@ export const SetupMonsterContent: React.FC = () => {
                   }
                   className="w-full py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[12px] font-extrabold cursor-pointer"
                 >
-                  ⚡ 이 문제 1초 진단 & 해결하기 (100 코인)
+                  ⚡ 이 문제 바로 해결하기
                 </button>
               </div>
             ))}
@@ -711,7 +607,7 @@ export const SetupMonsterContent: React.FC = () => {
         </div>
       )}
 
-      {/* 4. 원클릭 증상 칩 (PC 6대 수리 칩: Level 1/2/3 표시 / 모바일 증상 칩) */}
+      {/* 4. 원클릭 증상 칩 */}
       <div className="flex flex-col gap-2">
         <span className="font-label-sm text-[12px] text-zinc-400 font-bold">
           💡 자주 찾는 증상 선택 (무료 상담부터 시작)
@@ -732,7 +628,7 @@ export const SetupMonsterContent: React.FC = () => {
         </div>
       </div>
 
-      {/* 5. 대화형 수리 창구 (사전 무료 문진 ➔ 난이도별 견적 & 사전 잔액 Pre-Check ➔ 에스크로 수리 완료 리포트) */}
+      {/* 5. 대화형 수리 창구 */}
       <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3 max-h-[620px] overflow-y-auto">
         {setupChatTurns.map((turn) => {
           if (turn.role === 'user') {
@@ -746,7 +642,6 @@ export const SetupMonsterContent: React.FC = () => {
             );
           }
 
-          // [선(先) 무료 문진 & Z-Eye_PC_Setup.exe 사태 파악 턴 — 잔액 0코인이어도 100% 무료]
           if (turn.role === 'assistant_triage' && turn.triageQuestion) {
             const q = turn.triageQuestion;
             return (
@@ -757,10 +652,7 @@ export const SetupMonsterContent: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-md bg-primary-container/20 border border-primary-container/50 text-primary-container font-label-sm text-[11px] font-extrabold">
-                      🔍 STEP 1 · 선(先) 무료 문진 & Z-Eye_PC_Setup.exe 사태 파악 (잔액 0코인이어도 100% 무료)
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-zinc-950 border border-white/10 text-emerald-300 font-mono text-[10.5px]">
-                      해결 가능 여부 & 작업 복잡도 스캔 완료
+                      🔍 1단계 · 무료 증상 확인 (0 코인)
                     </span>
                   </div>
                   <span className="font-mono text-[10.5px] text-zinc-400">
@@ -772,10 +664,9 @@ export const SetupMonsterContent: React.FC = () => {
                   {turn.text}
                 </p>
 
-                {/* 문진 선택지 버튼 (1~2회 질문 응답 시 맞춤 난이도 견적 카드 + 멀린허브 사전 잔액 검증 제시) */}
                 <div className="flex flex-col gap-2 pt-1">
                   <span className="font-label-sm text-[11px] text-amber-300 font-bold">
-                    👇 아래 증상 세부 항목을 선택하시거나 하단 채팅창에 편하게 답변해 주세요 (선택 시 난이도별 견적 및 멀린허브 지갑 잔액 Pre-Check가 실행됩니다):
+                    👇 아래 항목 중 해당하는 증상을 선택해 주세요:
                   </span>
                   <div className="flex flex-wrap gap-2">
                     {q.options.map((opt, idx) => (
@@ -806,12 +697,12 @@ export const SetupMonsterContent: React.FC = () => {
                       }
                       className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
                     >
-                      ⚡ 문진 건너뛰고 바로 견적 & 잔액 체크 보기
+                      ⚡ 바로 해결 방법 보기
                     </button>
                   </div>
                   {turn.triageAnswered && (
                     <span className="font-label-sm text-[11px] text-emerald-300 font-bold">
-                      ✓ 사전 문진 응답 완료 — 아래에 난이도별 차등 견적 및 멀린코인 에스크로 승인 카드가 제시되었습니다.
+                      ✓ 증상 확인 완료 — 아래에서 바로 해결하실 수 있습니다.
                     </span>
                   )}
                 </div>
@@ -819,12 +710,10 @@ export const SetupMonsterContent: React.FC = () => {
             );
           }
 
-          // [수리 완료 리포트 턴: 에스크로 홀딩 상태 표시 + 완치 확정 정산 or [💖 초행길 2회 헤맴 100% 쿨 환불] or [👎 아직 해결 안 됨]]
           if (turn.role === 'system_repair') {
             const cost = turn.diagnosisPlan?.creditCost ?? 100;
             const isSettled = turn.escrowStatus === 'SETTLED_COMPLETED';
             const isEmpathyRefund = turn.escrowStatus === 'RELEASED_EMPATHY_REFUND';
-            const btCount = turn.backtrackCount ?? 0;
             return (
               <div
                 key={turn.id}
@@ -833,38 +722,25 @@ export const SetupMonsterContent: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-                      {isEmpathyRefund
-                        ? `💖 수리 완료 유지 · 초행길 ${btCount}회 헤맴으로 +${cost} 코인 100% 쿨 환불 완료`
-                        : turn.refunded
-                        ? `💸 에스크로 홀딩 ${cost} 코인 100% 반환됨`
+                      {isEmpathyRefund || turn.refunded
+                        ? `💸 ${cost} 코인 100% 환불 완료`
                         : isSettled
-                        ? `✅ 완치 확인 · 에스크로 ${cost} 코인 최종 정산 확정`
-                        : `🔒 1초 수리 완료 · ${cost} 멀린코인 에스크로 홀딩 중 (Back ${btCount}회)`}
+                        ? `✅ 수리 완료 확정 (${cost} 코인)`
+                        : `✓ 수리 조치 완료 — 잘 해결되었는지 확인해 주세요`}
                     </span>
-                    {turn.diagnosisPlan?.difficultyBadgeKo && (
-                      <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-200 font-label-sm text-[10.5px] font-bold">
-                        {turn.diagnosisPlan.difficultyBadgeKo}
-                      </span>
-                    )}
                   </div>
                   <span className="font-mono text-[10.5px] text-zinc-400">
-                    Audit ID: {turn.auditId} · {turn.timestamp}
+                    {turn.timestamp}
                   </span>
                 </div>
                 <p className="font-body-sm text-[13px] text-white font-bold whitespace-pre-line leading-relaxed">
                   {turn.text}
                 </p>
 
-                {/* 멀린코인 에스크로 완치 정산 vs 초행길 2회 헤맴 100% 쿨 환불 vs 실패 시 100% 즉시 반환 액션 바 */}
                 <div className="p-3 rounded-xl bg-zinc-950/85 border border-white/10 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-label-sm text-[11.5px] text-primary-container font-extrabold">
-                      🔒 멀린코인 에스크로 & 인간미 쿨 환불 판정
-                    </span>
-                    <span className="font-body-sm text-[11px] text-zinc-300">
-                      초행길에 2번 이상 헤매며 완료됐다면 수리는 그대로 유지한 채 {cost} 코인을 100% 돌려드리고 최단 지름길을 전 세계에 배포합니다!
-                    </span>
-                  </div>
+                  <span className="font-body-sm text-[11.5px] text-zinc-300">
+                    문제가 잘 해결되었나요? 해결되지 않았거나 과정에서 불편하셨다면 코인을 100% 돌려드립니다.
+                  </span>
                   <div className="flex flex-wrap items-center gap-2">
                     {turn.diagnosisPlan?.overlaySteps?.length ? (
                       <button
@@ -872,7 +748,7 @@ export const SetupMonsterContent: React.FC = () => {
                         onClick={() => openSetupOverlayGuide(turn.diagnosisPlan!)}
                         className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
                       >
-                        👆 손가락 오버레이 다시 띄우기
+                        👆 화면 위 화살표 다시 보기
                       </button>
                     ) : null}
 
@@ -882,19 +758,7 @@ export const SetupMonsterContent: React.FC = () => {
                         onClick={() => confirmSetupEscrowSettlement(turn.auditId)}
                         className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
                       >
-                        ✅ 잘 고쳐졌어요 (정상 정산 확정)
-                      </button>
-                    )}
-
-                    {!turn.refunded && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          triggerEmpathyRefundForCompletedRepair(turn.auditId, 2)
-                        }
-                        className="px-3.5 py-2 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-label-sm text-[11.5px] font-extrabold shadow-[0_0_18px_rgba(236,72,153,0.4)] cursor-pointer"
-                      >
-                        💖 초행길 2회 헤맨 성공 (수리 유지 + {cost}C 100% 쿨 환불 & 지름길 OTA)
+                        ✅ 잘 고쳐졌어요
                       </button>
                     )}
 
@@ -909,8 +773,8 @@ export const SetupMonsterContent: React.FC = () => {
                       }`}
                     >
                       {turn.refunded
-                        ? `✓ +${cost} 코인 100% 환불 완료`
-                        : `👎 아직 해결 안 됨 (원상복구 + ${cost}C 100% 반환)`}
+                        ? `✓ ${cost} 코인 환불 완료`
+                        : `👎 아직 해결 안 됨 (원상복구 + 100% 환불)`}
                     </button>
 
                     <button
@@ -923,7 +787,7 @@ export const SetupMonsterContent: React.FC = () => {
                           : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 shadow'
                       }`}
                     >
-                      {turn.undone ? '✓ 원상복구됨' : '↩️ 단순 1초 원상복구'}
+                      {turn.undone ? '✓ 원래대로 복구됨' : '↩️ 원래 설정으로 되돌리기'}
                     </button>
                   </div>
                 </div>
@@ -931,83 +795,29 @@ export const SetupMonsterContent: React.FC = () => {
             );
           }
 
-          // [💖 초행길 2회 이상 우회 성공 시 100% 쿨 환불(인간미 UX) + 본사 Multi-LLM 최단 직행 지름길 전 세계 OTA 배포 완료 턴]
           if (turn.role === 'system_empathy_refund') {
             const ota = turn.selfHealingOta;
             const refundedCoins = turn.refundedAmount ?? ota?.refundedCoins ?? 100;
             return (
               <div
                 key={turn.id}
-                className="p-4 rounded-2xl bg-gradient-to-br from-pink-950/55 via-zinc-950 to-emerald-950/35 border-2 border-pink-400/70 shadow-[0_0_30px_rgba(236,72,153,0.2)] flex flex-col gap-3"
+                className="p-4 rounded-2xl bg-gradient-to-br from-pink-950/55 via-zinc-950 to-emerald-950/35 border-2 border-pink-400/70 flex flex-col gap-2"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-pink-500 text-white font-label-sm text-[11px] font-extrabold">
-                      💖 인간 냄새 나는 100% 쿨 환불 완료 (+{refundedCoins} 멀린코인 즉시 반환 · 수리 완료 상태 유지!)
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-label-sm text-[11px] font-extrabold">
-                      🌍 Multi-LLM 최단 직행 지름길 전 세계 APK/.exe 실시간 OTA 배포 완료
-                    </span>
-                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-pink-500 text-white font-label-sm text-[11px] font-extrabold">
+                    💖 +{refundedCoins} 코인 100% 환불 완료 (수리된 설정은 그대로 유지됩니다)
+                  </span>
                   <span className="font-mono text-[10.5px] text-pink-200">
-                    {ota?.otaId} · {turn.timestamp}
+                    {turn.timestamp}
                   </span>
                 </div>
-
-                {/* 인간미 넘치는 사과 & 100% 환불 브리핑 메시지 */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/85 border border-pink-400/35">
-                  <p className="font-body-sm text-[13px] text-white whitespace-pre-line leading-relaxed">
-                    {turn.text}
-                  </p>
-                </div>
-
-                {/* 소중한 학습 기회 즉시 자산화 (우회 궤적 ➔ 최단 직행 지름길 도출 명세) */}
-                {ota && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                    <div className="p-3 rounded-xl bg-zinc-900/90 border border-rose-400/35 flex flex-col gap-1.5">
-                      <span className="font-label-sm text-[11px] text-rose-300 font-extrabold">
-                        🧭 현장 우회 성공 궤적 (Trajectory Log · 뒤로 가기 {ota.backtrackCount}회)
-                      </span>
-                      <div className="flex flex-col gap-1">
-                        {ota.rawTrajectorySteps.map((step, idx) => (
-                          <span
-                            key={idx}
-                            className={`font-mono text-[10.5px] ${
-                              step.includes('뒤로 가기(Back)')
-                                ? 'text-rose-300 font-bold'
-                                : 'text-zinc-300'
-                            }`}
-                          >
-                            • {step}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-400/45 flex flex-col gap-1.5">
-                      <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
-                        ⚡ Multi-LLM 최단 직행 지름길 (Shortest Path · 헤맨 구간 100% 제거 & 전 세계 OTA)
-                      </span>
-                      <div className="flex flex-col gap-1">
-                        {ota.prunedShortestPathSteps.map((step, idx) => (
-                          <span
-                            key={idx}
-                            className="font-mono text-[10.5px] text-emerald-200 font-bold"
-                          >
-                            {step}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="mt-1 font-mono text-[10px] text-primary-container">
-                        ✓ {ota.multiLlmActionKo}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                <p className="font-body-sm text-[13px] text-white whitespace-pre-line leading-relaxed">
+                  {turn.text}
+                </p>
               </div>
             );
           }
 
-          // [수리 실패 시 1초 원상복구 + 에스크로 코인 100% 즉시 반환 + 본사 실패 블랙박스 로그 전송 완료 턴]
           if (turn.role === 'system_refund') {
             return (
               <div
@@ -1016,10 +826,10 @@ export const SetupMonsterContent: React.FC = () => {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="px-2.5 py-0.5 rounded-md bg-rose-500 text-white font-label-sm text-[11px] font-extrabold">
-                    💸 무위험(Zero-Risk) 1초 원상복구 & 에스크로 +{turn.refundedAmount ?? 100} 멀린코인 100% 즉시 반환 완료
+                    💸 원래 설정 복구 & +{turn.refundedAmount ?? 100} 코인 100% 환불 완료
                   </span>
                   <span className="font-mono text-[10.5px] text-rose-200">
-                    Failure Telemetry ID: {turn.failureTelemetryId} · {turn.timestamp}
+                    {turn.timestamp}
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-white whitespace-pre-line leading-relaxed">
@@ -1047,7 +857,7 @@ export const SetupMonsterContent: React.FC = () => {
             >
               <div className="flex items-center justify-between">
                 <span className="font-label-sm text-[11px] text-primary-container font-extrabold">
-                  🧠 STEP 2 · Z-Eye 설정 몬스터 (난이도별 견적 & 멀린허브 사전 잔액 Pre-Check 완료)
+                  🛠️ 2단계 · 진단 결과 및 해결 방법
                 </span>
                 <span className="font-mono text-[10.5px] text-zinc-500">
                   {turn.timestamp}
