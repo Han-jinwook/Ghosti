@@ -229,177 +229,211 @@ export const DesktopDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* ─────────────── 상단 2단 통합 헤더 (뭐먹지? 스타일): 1단(화이트 바 + 흑백 라인 아이콘 메인메뉴 캡슐) + 2단(이모지 없는 깔끔한 언더라인 서브메뉴 탭) ─────────────── */}
+      {/* ─────────────── 상단 통합 헤더: 모바일(360px~)에서는 3단(로고바 / 5대 라운지 메인메뉴 / 서브메뉴), 데스크톱에서는 2단 ─────────────── */}
       <header className="sticky top-0 z-40 backdrop-blur-xl">
-        {/* 1단: 좌측 로고 ─── 세련된 흑백 라인 아이콘 메인메뉴 4개 ─── 우상단 테마 토글 */}
+        {/* 1단: 좌측 로고 ─── (데스크톱) 메인메뉴 5개 ─── 우상단 유틸 버튼 */}
         <div
-          className={`px-5 md:px-8 py-2.5 flex items-center justify-between gap-4 border-b transition-colors ${
+          className={`px-3.5 sm:px-5 md:px-8 py-2.5 flex flex-col gap-2.5 border-b transition-colors ${
             themeMode === 'light'
               ? 'bg-white/95 border-[#EAE8E1]'
               : 'bg-[#09090B]/95 border-white/10'
           }`}
         >
-          <div className="flex items-center min-w-0 flex-wrap gap-y-2">
-            {/* 좌측 브랜드 로고(아래 슬로건) */}
-            <div className="flex items-center gap-3.5 shrink-0 md:w-[210px]">
-              <div
-                onClick={() => setDesktopTab('dashboard')}
-                className="flex items-center gap-2.5 cursor-pointer shrink-0"
-              >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center min-w-0">
+              {/* 좌측 브랜드 로고 */}
+              <div className="flex items-center gap-2.5 shrink-0 lg:w-[210px]">
                 <div
-                  className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
-                    themeMode === 'light'
-                      ? 'bg-[#F8F7F4] border-[#E5E0D5] text-[#0D9488]'
-                      : 'bg-zinc-900 border-white/15 text-primary-container'
-                  }`}
+                  onClick={() => setDesktopTab('dashboard')}
+                  className="flex items-center gap-2 cursor-pointer shrink-0"
                 >
-                  <span className="material-symbols-outlined text-[20px] font-bold">
-                    graphic_eq
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-baseline gap-1.5 leading-none">
-                    <span
-                      className={`font-headline-sm text-[18px] tracking-tight font-extrabold whitespace-nowrap ${
-                        themeMode === 'light' ? 'text-slate-900' : 'text-white'
-                      }`}
-                    >
-                      제트아이
-                    </span>
-                    <span
-                      className={`font-extrabold text-[12.5px] ${
-                        themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
-                      }`}
-                    >
-                      Z-Eye
+                  <div
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                      themeMode === 'light'
+                        ? 'bg-[#F8F7F4] border-[#E5E0D5] text-[#0D9488]'
+                        : 'bg-zinc-900 border-white/15 text-primary-container'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[18px] sm:text-[20px] font-bold">
+                      graphic_eq
                     </span>
                   </div>
-                  <span
-                    className={`font-label-sm text-[11px] font-medium mt-1 leading-none whitespace-nowrap flex items-center gap-1 ${
-                      themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
-                    }`}
-                    title="The Ultimate All-Seeing AI & Zero-Cloud Lounge"
-                  >
-                    <svg
-                      className="w-3 h-3 shrink-0"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
+                  <div className="flex flex-col">
+                    <div className="flex items-baseline gap-1.5 leading-none">
+                      <span
+                        className={`font-headline-sm text-[16px] sm:text-[18px] tracking-tight font-extrabold whitespace-nowrap ${
+                          themeMode === 'light' ? 'text-slate-900' : 'text-white'
+                        }`}
+                      >
+                        제트아이
+                      </span>
+                      <span
+                        className={`font-extrabold text-[11.5px] sm:text-[12.5px] ${
+                          themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
+                        }`}
+                      >
+                        Z-Eye
+                      </span>
+                    </div>
+                    <span
+                      className={`font-label-sm text-[10px] sm:text-[11px] font-medium mt-0.5 leading-none whitespace-nowrap flex items-center gap-1 ${
+                        themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+                      }`}
                     >
-                      <rect x="4" y="11" width="16" height="10" rx="2" />
-                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                    </svg>
-                    <span>Zero-Cloud 시크릿 라운지</span>
-                  </span>
+                      <svg
+                        className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="4" y="11" width="16" height="10" rx="2" />
+                        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                      </svg>
+                      <span>시크릿 라운지</span>
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              {/* 데스크톱(lg 이상) 전용 1단 인라인 메인메뉴 5개 */}
+              <nav className="hidden lg:flex ml-6 items-center gap-2 overflow-x-auto no-scrollbar">
+                {MAIN_LOUNGE_MENUS.map((menu) => {
+                  const active = activeLoungeType === menu.id;
+                  const isLoungeSub = Boolean(subscribedLounges[menu.id]);
+                  return (
+                    <button
+                      key={menu.id}
+                      type="button"
+                      onClick={() => setActiveLoungeType(menu.id)}
+                      className={`px-4 py-2 rounded-full font-label-md text-[13.5px] flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                        active
+                          ? themeMode === 'light'
+                            ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-[0_1px_2px_rgba(13,148,136,0.08)]'
+                            : 'bg-zinc-800 text-primary-container font-extrabold'
+                          : themeMode === 'light'
+                          ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 font-bold'
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50 font-bold'
+                      }`}
+                    >
+                      <MainLoungeMonoIcon id={menu.id} className="w-[16px] h-[16px] shrink-0" />
+                      <span>{menu.label}</span>
+                      {isLoungeSub && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-extrabold">
+                          PRO
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
 
-            {/* 1단 메인메뉴 4개: 세련된 흑백 라인 아이콘 + 캡슐 하이라이트 */}
-            <nav className="ml-6 sm:ml-8 md:ml-8 flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {MAIN_LOUNGE_MENUS.map((menu) => {
-                const active = activeLoungeType === menu.id;
-                const isLoungeSub = Boolean(subscribedLounges[menu.id]);
-                return (
+            {/* 우측 상단: 설정 몬스터 바로가기 + 코인 잔액 + 테마 토글 (모바일 360px에서도 로고와 절대 겹치지 않도록 컴팩트 구성) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
+              {(!isStoreAppMode || enableSetupMonster) && (
+                <>
                   <button
-                    key={menu.id}
                     type="button"
-                    onClick={() => setActiveLoungeType(menu.id)}
-                    className={`px-4 py-2 rounded-full font-label-md text-[13.5px] flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
-                      active
-                        ? themeMode === 'light'
-                          ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-[0_1px_2px_rgba(13,148,136,0.08)]'
-                          : 'bg-zinc-800 text-primary-container font-extrabold'
-                        : themeMode === 'light'
-                        ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 font-bold'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50 font-bold'
+                    onClick={() => setShowSetupMonsterModal(true, 'pc')}
+                    title="🛠️ Z-Eye 설정 몬스터"
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-600 dark:text-emerald-300 font-label-sm text-[11px] sm:text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <span>🛠️ 설정 몬스터</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowProModal(true)}
+                    title="크레딧 지갑"
+                    className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full font-label-mono text-[11px] sm:text-[11.5px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
+                      themeMode === 'light'
+                        ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                        : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
                     }`}
                   >
-                    <MainLoungeMonoIcon id={menu.id} className="w-[16px] h-[16px] shrink-0" />
-                    <span>{menu.label}</span>
-                    {isLoungeSub && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-extrabold">
-                        PRO
-                      </span>
-                    )}
+                    <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()}</span>
+                    <span className="hidden sm:inline">크레딧</span>
                   </button>
-                );
-              })}
-            </nav>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={toggleThemeMode}
+                title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
+                aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
+                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none focus:outline-none ${
+                  themeMode === 'light'
+                    ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
+                    : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white shadow-sm'
+                }`}
+              >
+                {themeMode === 'light' ? (
+                  <svg
+                    className="w-[16px] h-[16px] sm:w-[18px] sm:h-[18px]"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-[16px] h-[16px] sm:w-[18px] sm:h-[18px]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="4" fill="currentColor" />
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* 우측 상단: 설정 몬스터 바로가기 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 테마 토글 */}
-          <div className="flex items-center gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
-            {(!isStoreAppMode || enableSetupMonster) && (
-              <>
+          {/* 모바일·태블릿(lg 미만, 360px 화면 포함) 전용 5대 라운지 메인메뉴 바: 짤림 없이 100% 전체 폭 표시 */}
+          <nav className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+            {MAIN_LOUNGE_MENUS.map((menu) => {
+              const active = activeLoungeType === menu.id;
+              const isLoungeSub = Boolean(subscribedLounges[menu.id]);
+              return (
                 <button
+                  key={menu.id}
                   type="button"
-                  onClick={() => setShowSetupMonsterModal(true, 'pc')}
-                  title="🛠️ Z-Eye 설정 몬스터 (AI 스마트폰 & PC 1초 수리기사)"
-                  className="px-3 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <span>🛠️ 설정 몬스터</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowProModal(true)}
-                  title="멀린 패밀리 허브 크레딧 지갑 (수리 승인 시 100 크레딧)"
-                  className={`px-3 py-1.5 rounded-full font-label-mono text-[11.5px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                    themeMode === 'light'
-                      ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
-                      : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
+                  onClick={() => setActiveLoungeType(menu.id)}
+                  className={`px-3 py-1.5 rounded-full font-label-md text-[12px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                    active
+                      ? themeMode === 'light'
+                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-[0_1px_2px_rgba(13,148,136,0.08)]'
+                        : 'bg-zinc-800 text-primary-container font-extrabold'
+                      : themeMode === 'light'
+                      ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
+                      : 'bg-zinc-900/80 text-zinc-400 hover:text-white font-bold'
                   }`}
                 >
-                  <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()} 크레딧</span>
+                  <MainLoungeMonoIcon id={menu.id} className="w-[14px] h-[14px] shrink-0" />
+                  <span>{menu.label}</span>
+                  {isLoungeSub && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 text-[9.5px] font-extrabold">
+                      PRO
+                    </span>
+                  )}
                 </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={toggleThemeMode}
-              title={themeMode === 'light' ? '어두운 화면(다크 모드)으로 전환' : '밝은 화면(웜 라이트)으로 전환'}
-              aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none focus:outline-none ${
-                themeMode === 'light'
-                  ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
-                  : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white shadow-sm'
-              }`}
-            >
-              {themeMode === 'light' ? (
-                <svg
-                  className="w-[18px] h-[18px]"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-              ) : (
-                <svg
-                  className="w-[18px] h-[18px]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="4" fill="currentColor" />
-                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                </svg>
-              )}
-            </button>
-          </div>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* 2단: 서브메뉴 바 — 이모지 없이 깔끔한 언더라인 탭 (먹로그 | 먹예약 | 먹캘린더 스타일) */}
+        {/* 2단: 서브메뉴 바 — 모바일에서도 4개 탭이 한눈에 보이도록 여백 최적화 */}
         <div
-          className={`px-5 md:px-8 pt-1.5 border-b flex items-center gap-1 overflow-x-auto no-scrollbar md:pl-[274px] transition-colors ${
+          className={`px-3 sm:px-5 md:px-8 pt-1 border-b flex items-center gap-1 overflow-x-auto no-scrollbar lg:pl-[274px] transition-colors ${
             themeMode === 'light'
               ? 'bg-[#F8F7F4]/95 border-[#E5E0D5]'
               : 'bg-[#111114]/95 border-white/10'
@@ -423,7 +457,7 @@ export const DesktopDashboard: React.FC = () => {
                 key={sub.id}
                 type="button"
                 onClick={() => setDesktopTab(sub.id)}
-                className={`px-5 py-2.5 rounded-t-xl border-b-[3px] font-label-md text-[13.5px] flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-t-xl border-b-[3px] font-label-md text-[12px] sm:text-[13.5px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                   isSubActive
                     ? themeMode === 'light'
                       ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
@@ -436,7 +470,7 @@ export const DesktopDashboard: React.FC = () => {
                 <span>{sub.label}</span>
                 {sub.showTrashCount && (
                   <span
-                    className={`px-1.5 py-0.2 rounded-full text-[11px] font-mono font-bold ${
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] sm:text-[11px] font-mono font-bold ${
                       isSubActive
                         ? themeMode === 'light'
                           ? 'bg-[#0D9488]/15 text-[#0D9488]'
@@ -460,14 +494,15 @@ export const DesktopDashboard: React.FC = () => {
 
       {/* ─────────────── 서브메뉴 2번: 메인 피드 & 파워 검색 ─────────────── */}
       {desktopTab === 'dashboard' && (
-        <main className="flex-1 w-full max-w-[1440px] mx-auto px-5 md:px-8 py-5 flex flex-col gap-5">
-          {/* 라운지별 전용 상단 컨트롤 바 (패밀리 서브룸 전환 / 클럽 5MB 원본 소환 / 10대 학생 타임캡슐 리포트) */}
+        <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-5 md:px-8 py-4 sm:py-5 flex flex-col gap-5">
+          {/* 라운지별 전용 상단 컨트롤 바 */}
           <LoungeFeedContextBanner />
 
-          {/* 1층: 통합 검색창 + 3대 카테고리 탭 + 1줄 추천 칩 / 2층: 접이식 브리핑 보드 아코디언 */}
-          <VoiceHeroStage />
+          {/* 업무 라운지가 아닐 때만 미디어(동영상·사진·개인서류) 통합 검색창 표시 */}
+          {activeLoungeType !== 'work' && <VoiceHeroStage />}
 
           {/* 검색 결과 영역 */}
+          {activeLoungeType !== 'work' && (
           <div id="zeye-search-results" className="scroll-mt-20">
             {searchSpace === 'video' ? (
               <section className="flex flex-col gap-4">
@@ -837,6 +872,7 @@ export const DesktopDashboard: React.FC = () => {
               </section>
             )}
           </div>
+          )}
         </main>
       )}
 
