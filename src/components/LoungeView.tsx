@@ -156,8 +156,8 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
   const isChalkboard = alumniBannerTheme === 'chalkboard';
 
   return (
-    <div className="p-3.5 md:p-4 rounded-2xl bg-[#18181B] border border-white/10 shadow-sm flex flex-col gap-3">
-      {/* 1. 생성형 맞춤형 간판 'Text-to-Banner' (종이 앨범/화이트 카드 위에 얹힌 8090 감성 칠판·운동장 간판) */}
+    <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 shadow-sm flex flex-col gap-3">
+      {/* 1. 생성형 맞춤형 간판 'Text-to-Banner' (칠판/노을 간판 안에 후원 문구까지 깔끔하게 통합) */}
       <div
         data-keep-dark="true"
         className={`relative rounded-xl overflow-hidden border px-5 py-4 md:px-6 md:py-5 transition-all ${
@@ -167,8 +167,8 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
         }`}
       >
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3.5">
-          {/* 좌측: 배경 그래픽 전환 & 학교·연도 변경 (컴팩트 통일 버튼) */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* 좌측: 배경 전환 & 학교·연도 변경 (조용한 텍스트 링크 스타일) */}
+          <div className="flex flex-wrap items-center gap-3 text-[12px] text-white/85">
             <button
               type="button"
               onClick={() =>
@@ -178,10 +178,12 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
                   isChalkboard ? 'sunset_field' : 'chalkboard'
                 )
               }
-              className="px-3 py-1.5 rounded-lg bg-black/35 hover:bg-black/55 border border-white/25 text-white font-label-sm text-[11.5px] font-bold whitespace-nowrap transition-colors"
+              className="underline hover:text-white cursor-pointer font-bold whitespace-nowrap"
             >
-              {isChalkboard ? '🏫 복고풍 칠판 ➔ 🌅 노을 운동장' : '🌅 노을 운동장 ➔ 🏫 복고풍 칠판'}
+              {isChalkboard ? '🌅 노을 운동장 배경으로 변경' : '🏫 복고풍 칠판 배경으로 변경'}
             </button>
+
+            <span className="text-white/40">|</span>
 
             {editingBannerKeyword ? (
               <form onSubmit={handleApplyBannerKeyword} className="flex items-center gap-1.5">
@@ -190,11 +192,11 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
                   value={keywordDraft}
                   onChange={(e) => setKeywordDraft(e.target.value)}
                   placeholder="예: 성동고 1989"
-                  className="px-2.5 py-1.5 rounded-lg bg-black/60 border border-amber-300/70 text-white text-[12px] font-bold w-32 focus:outline-none"
+                  className="px-2.5 py-1 rounded bg-black/60 border border-amber-300/70 text-white text-[12px] font-bold w-32 focus:outline-none"
                 />
                 <button
                   type="submit"
-                  className="px-3 py-1.5 rounded-lg bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold whitespace-nowrap"
+                  className="px-2.5 py-1 rounded bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer"
                 >
                   적용
                 </button>
@@ -206,156 +208,88 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
                   setKeywordDraft(`${alumniSchoolName} ${alumniGradYear}`);
                   setEditingBannerKeyword(true);
                 }}
-                className="px-3 py-1.5 rounded-lg bg-black/30 hover:bg-black/50 border border-white/20 text-amber-200 font-label-sm text-[11.5px] font-bold whitespace-nowrap"
+                className="underline text-amber-200 hover:text-amber-100 cursor-pointer font-bold whitespace-nowrap"
               >
-                ✏️ {alumniSchoolName} {alumniGradYear} 변경
+                ✏️ 학교·연도 변경
               </button>
             )}
           </div>
 
-          {/* 중앙: 굵고 또렷한 8090 타이포그래피 간판 */}
-          <div className="flex flex-col items-start lg:items-center text-left lg:text-center">
-            <span className="font-label-mono text-[10.5px] tracking-widest uppercase text-amber-200 font-bold">
-              SINCE {alumniGradYear} · ALUMNI LOUNGE
-            </span>
-            <h2 className="font-headline-md text-[24px] md:text-[29px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] whitespace-nowrap">
+          {/* 중앙: 굵고 또렷한 8090 타이포그래피 간판 + 총무 후원 한 줄 텍스트 */}
+          <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5">
+            <h2 className="font-headline-md text-[24px] md:text-[28px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] whitespace-nowrap">
               {bannerTitle}
             </h2>
+            <span className="text-[12px] text-amber-200/95 font-medium">
+              🏅 김철수 총무님의 후원으로 회원 전원 무료 운영 중
+            </span>
           </div>
 
-          {/* 우측: 카톡 단톡방 바이럴 초대장 복사 버튼 */}
+          {/* 우측: 카톡 단톡방 초대장 복사 버튼 딱 1개 */}
           <button
             type="button"
             onClick={() => void handleCopyInviteHook()}
-            className={`px-4 py-2.5 rounded-xl font-label-sm text-[12px] font-extrabold transition-all shadow-md flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+            className={`px-4 py-2.5 rounded-xl font-label-sm text-[12.5px] font-extrabold transition-all shadow-md shrink-0 whitespace-nowrap cursor-pointer ${
               inviteCopied
                 ? 'bg-emerald-400 text-zinc-950'
                 : 'bg-amber-300 hover:bg-amber-200 text-zinc-950'
             }`}
           >
-            <span>
-              {inviteCopied
-                ? `✓ 초대장 카피 복사됨!`
-                : `💌 초대장 카피: "${inviteHookCopy}"`}
-            </span>
+            {inviteCopied ? '✓ 단톡방 초대장 복사됨!' : '💌 단톡방 초대 문구 복사'}
           </button>
         </div>
       </div>
 
-      {/* 1-2. [치트키 1·2·3] 총무 명예의 전당 헌정 배지 + 실시간 잔여 수량 게이지 + 가족방 1년 쿠폰 3장 생색내기 */}
-      <div className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-zinc-950 to-zinc-950 border border-amber-400/40 flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-black whitespace-nowrap">
-            🏅 명예의 전당
-          </span>
-          <span className="font-label-md text-[12.5px] md:text-[13px] text-amber-200 font-extrabold">
-            {isStoreAppMode
-              ? '🏅 본 라운지는 김철수 총무님의 마스터 후원으로 회원 전원 영구 무료 운영됩니다.'
-              : '🏅 본 라운지는 김철수 총무님의 [평생권] 후원으로 영구 무료 운영됩니다.'}
-          </span>
+      {/* 2. 하단 컨트롤 바 딱 1줄: 좌측 투트랙 탭 스위치 / 우측 핵심 액션 버튼 */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex p-1 rounded-xl bg-zinc-950 border border-white/10">
+          <button
+            type="button"
+            onClick={() => setClubFeedTrack('memories_1989')}
+            className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+              clubFeedTrack === 'memories_1989'
+                ? 'bg-primary-container text-zinc-950 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            🎞️ 응답하라 {alumniGradYear} (추억)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setClubFeedTrack('recent_now')}
+            className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+              clubFeedTrack === 'recent_now'
+                ? 'bg-primary-container text-zinc-950 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            🍻 최근 우리들 (근황)
+          </button>
         </div>
 
-        {!isStoreAppMode && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowProModal(true)}
-              className="px-3 py-1.5 rounded-lg bg-rose-950/90 hover:bg-rose-900/90 border border-rose-500/50 text-rose-200 font-label-sm text-[11.5px] font-extrabold flex items-center gap-2 whitespace-nowrap"
-            >
-              <span>🔥 1차 평생권 100명 중 87개 소진 (잔여 13석)</span>
-              <span className="w-14 h-2 rounded-full bg-black/60 overflow-hidden inline-flex">
-                <span className="h-full bg-gradient-to-r from-rose-500 to-amber-400" style={{ width: '87%' }} />
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void handleCopyTrojanBrag()}
-              className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold whitespace-nowrap transition-all ${
-                trojanBragCopied
-                  ? 'bg-emerald-400 text-zinc-950'
-                  : 'bg-zinc-900 hover:bg-zinc-800 border border-amber-400/45 text-amber-300'
-              }`}
-            >
-              {trojanBragCopied
-                ? '✓ 가족방 무료 쿠폰 3장 생색 문구 복사됨!'
-                : '🎁 사은품 [가족 라운지 1년 무료권 3장] 단톡방에 뿌리기'}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 2. 필수 액션 버튼 바 (크기·여백 통일 & 모바일 줄바꿈 깨짐 방지 whitespace-nowrap) */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          {/* 전면 배치: 내 얼굴로 학창 시절 사진 1초 만에 찾기 */}
           <button
             type="button"
             onClick={() => {
               void findMySchoolDaysPhotosFast();
               if (onNavigateToFeed) onNavigateToFeed();
             }}
-            className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold shadow-sm flex items-center gap-1.5 shrink-0 whitespace-nowrap transition-all"
+            className="px-4 py-2 rounded-xl bg-primary-container hover:opacity-90 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-sm cursor-pointer whitespace-nowrap"
           >
-            <span>🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기</span>
+            🎯 내 얼굴로 학창 시절 사진 찾기
           </button>
 
-          {/* 투트랙 탭: [🎞️ 응답하라 1989 (추억)] (기본값) vs [🍻 최근 우리들 (근황)] */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setClubFeedTrack('memories_1989')}
-              className={`px-4 py-2.5 rounded-xl font-label-md text-[13px] font-extrabold border transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
-                clubFeedTrack === 'memories_1989'
-                  ? 'bg-amber-400 text-zinc-950 border-amber-400 shadow-sm'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
-              }`}
-            >
-              <span>🎞️ 응답하라 {alumniGradYear} (추억)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setClubFeedTrack('recent_now')}
-              className={`px-4 py-2.5 rounded-xl font-label-md text-[13px] font-extrabold border transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
-                clubFeedTrack === 'recent_now'
-                  ? 'bg-primary-container text-zinc-950 border-primary-container shadow-sm'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
-              }`}
-            >
-              <span>🍻 최근 우리들 (근황)</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 우측 보조 버튼: 미승인 연도 제보 일괄 승인 & 스캔 사진 스틱 태깅 */}
-        <div className="flex flex-wrap items-center gap-2">
           {pendingProposals.length > 0 && (
             <button
               type="button"
               onClick={() => approveAllAnalogYearProposals()}
-              className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 whitespace-nowrap"
+              className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer whitespace-nowrap"
             >
-              👑 ✓ 멤버 연도 제보 일괄 승인 ({pendingProposals.length}건)
-            </button>
-          )}
-          {onOpenWaitingRoom && (
-            <button
-              type="button"
-              onClick={onOpenWaitingRoom}
-              className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold shrink-0 whitespace-nowrap"
-            >
-              🏷️ 옛날 스캔 사진 스틱 태깅 →
+              👑 연도 제보 일괄 승인 ({pendingProposals.length}건)
             </button>
           )}
         </div>
-      </div>
-
-      {/* 3. 한 줄 요약 안내 (알림 클린존) */}
-      <div className="px-3.5 py-2 rounded-xl bg-zinc-950/80 border border-white/10 flex items-center justify-between gap-2">
-        <p className="font-body-sm text-[12px] text-zinc-300 font-medium truncate">
-          🔔 <strong>알림 클린존:</strong> 최근 친목 사진은 전체 알림을 울리지 않으며, &lsquo;과거 추억 사진 업로드&rsquo; 또는 &lsquo;내 얼굴이 발견된 경우&rsquo;에만 알림이 발송됩니다.
-        </p>
       </div>
     </div>
   );
@@ -2078,182 +2012,165 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   return (
     <section className="flex flex-col gap-4">
-      {/* 1. 최상단 B2B 업무 라운지 전용 배너 + 우측 마스터 PC 상태 / 접속 팀원 수 / [💽 업무 드라이브(S:) 자동 마운트] 원클릭 버튼 */}
-      <div className="p-5 md:p-6 rounded-2xl bg-gradient-to-br from-[#0F172A] via-[#111827] to-[#18181B] border-2 border-cyan-400/45 shadow-xl flex flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-1.5 max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                💼 B2B 업무 라운지 (SOHO · 기업 팀 유료 클라우드 100% 대체)
-              </span>
-              {workPlan ? (
-                <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-                  ✓ {PLAN_BADGE_LABELS[workPlan]} 이용 중
-                </span>
-              ) : (
-                <span className="px-2.5 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-bold">
-                  월별 인당 과금 0원 · 사무실 PC 유휴 용량 무제한 활용
+      {/* 1. 정갈한 업무 라운지 상단 컨트롤 헤더 (제목·상태 텍스트 vs 실제 액션 버튼 명확히 분리) */}
+      <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 shadow-sm flex flex-col gap-4">
+        {/* 1행: 좌측 타이틀 & 순수 상태 텍스트 / 우측 단 1개의 메인 마운트 버튼 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h2 className="font-headline-sm text-[19px] text-white font-extrabold tracking-tight">
+                💼 사무실 업무 라운지
+              </h2>
+              {workPlan && (
+                <span className="text-[12px] text-emerald-400 font-bold">
+                  · ✓ {PLAN_BADGE_LABELS[workPlan]}
                 </span>
               )}
             </div>
-            <h2 className="font-headline-sm text-[18px] md:text-[21px] text-white font-extrabold tracking-tight leading-snug">
-              사무실 PC 폴더를 전 직원의 1초 투시 검색 서버 &amp; 윈도우 탐색기(S:)로 연결합니다
-            </h2>
-            <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-              마이박스·구글 드라이브 용량 요금 없이, 사무실 마스터 PC의 업무 폴더를 전 직원이{' '}
-              <strong className="text-cyan-300">🔍 AI 1초 본문·표 투시검색</strong>과{' '}
-              <strong className="text-white">🗂️ 윈도우 탐색기 네트워크 드라이브(S:)</strong>로 동시에 사용합니다.
-              마스터 PC가 꺼져 있어도 모바일·외부 PC에 선행 캐싱된{' '}
-              <strong className="text-emerald-300">30KB 전체 텍스트·표 요약 프리뷰가 0.1초 만에</strong> 열립니다.
-            </p>
-          </div>
 
-          {/* 우측 상단: 마스터 PC 온라인 상태 배지 + 접속 중인 팀원 수 배지 + [💽 내 PC 윈도우 탐색기에 '업무 드라이브(S:)' 자동 마운트] 원클릭 버튼 */}
-          <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMasterPcOnline((v) => !v)}
-                title="클릭하여 마스터 PC 온라인/오프라인(30KB 로컬 프리뷰 작동) 상태를 테스트해 보세요"
-                className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  masterPcOnline
-                    ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/25'
-                    : 'bg-rose-500/20 border-rose-400/60 text-rose-200 hover:bg-rose-500/30'
-                }`}
-              >
+            {/* 버튼처럼 보이지 않는 순수 상태 표시줄 (테스트용 전환만 밑줄 텍스트 링크로 분리) */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-zinc-400">
+              <span className="inline-flex items-center gap-1.5">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    masterPcOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+                    masterPcOnline ? 'bg-emerald-400' : 'bg-rose-400'
                   }`}
                 />
-                <span>
-                  {masterPcOnline
-                    ? '🟢 사무실 마스터 PC 온라인 (실시간 동기화)'
-                    : '🔴 마스터 PC 오프라인 (30KB 선행 캐시 0.1초 모드)'}
-                </span>
-                <span className="text-[10px] underline ml-1 opacity-85">상태 전환 테스트</span>
-              </button>
-
-              <span className="px-3 py-1.5 rounded-xl bg-zinc-900/90 border border-cyan-400/35 text-cyan-200 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 whitespace-nowrap">
-                👥 접속 중인 팀원 6명 ·{' '}
-                <span
-                  onClick={() => void handleRunP2pFallbackTest()}
-                  className="underline text-amber-300 cursor-pointer"
+                <strong className="text-zinc-200">
+                  {masterPcOnline ? '마스터 PC 온라인' : '마스터 PC 오프라인 (30KB 캐시 모드)'}
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => setMasterPcOnline((v) => !v)}
+                  className="text-[11px] text-cyan-300 underline hover:opacity-80 cursor-pointer ml-0.5"
                 >
-                  {p2pDiagnostics?.fallbackTriggered
-                    ? `⚡ 2순위 비상터널(${p2pDiagnostics.roundTripLatencyMs}ms · 중계비 0원)`
-                    : `⚡ 1순위 P2P 직통(${p2pDiagnostics?.roundTripLatencyMs ?? 11}ms · 중계비 0원) [LTE/5G 폴백 테스트]`}
+                  [상태 전환]
+                </button>
+              </span>
+
+              <span className="text-zinc-500">|</span>
+
+              <span>접속 팀원 6명</span>
+
+              <span className="text-zinc-500">|</span>
+
+              <span className="inline-flex items-center gap-1">
+                <span>
+                  통신:{' '}
+                  <strong className="text-zinc-200">
+                    {p2pDiagnostics?.fallbackTriggered
+                      ? `2순위 비상터널 (${p2pDiagnostics.roundTripLatencyMs}ms)`
+                      : `1순위 P2P 직통 (${p2pDiagnostics?.roundTripLatencyMs ?? 11}ms)`}
+                  </strong>
                 </span>
+                <button
+                  type="button"
+                  onClick={() => void handleRunP2pFallbackTest()}
+                  className="text-[11px] text-amber-300 underline hover:opacity-80 cursor-pointer ml-0.5"
+                >
+                  [LTE/5G 폴백 테스트]
+                </button>
               </span>
             </div>
-
-            <button
-              type="button"
-              onClick={handleToggleMountDrive}
-              className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${
-                driveMounted
-                  ? 'bg-cyan-400 text-zinc-950 hover:bg-cyan-300 border border-cyan-200'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-cyan-300 border-2 border-cyan-400/60'
-              }`}
-            >
-              <span>💽 내 PC 윈도우 탐색기에 ‘업무 드라이브(S:)’ 자동 마운트</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-950/20 text-[10.5px] font-black">
-                {driveMounted ? 'S:\\ 연결됨 ✓' : '원클릭 연결'}
-              </span>
-            </button>
           </div>
+
+          {/* 우측: 진짜 누르는 액션 버튼 딱 1개 (내부 이중 박스 제거) */}
+          <button
+            type="button"
+            onClick={handleToggleMountDrive}
+            className={`px-4 py-2.5 rounded-xl font-label-md text-[13px] font-extrabold transition-all shadow-sm cursor-pointer shrink-0 ${
+              driveMounted
+                ? 'bg-primary-container text-zinc-950 hover:opacity-90'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border border-primary-container/60'
+            }`}
+          >
+            {driveMounted
+              ? '💽 탐색기 업무 드라이브(S:) 연결됨 ✓'
+              : '💽 탐색기 업무 드라이브(S:) 자동 마운트'}
+          </button>
         </div>
 
         {mountBannerToast && (
-          <div className="px-3.5 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-between gap-3">
-            <span className="font-body-sm text-[12px] text-cyan-100 font-bold">
+          <div className="px-3.5 py-2 rounded-xl bg-cyan-500/10 border border-cyan-400/30 flex items-center justify-between gap-3">
+            <span className="font-body-sm text-[12px] text-cyan-200 font-bold">
               {mountBannerToast}
             </span>
             <button
               type="button"
               onClick={() => setMountBannerToast(null)}
-              className="text-zinc-400 hover:text-white text-[11px] font-bold shrink-0"
+              className="text-zinc-400 hover:text-white text-[11px] font-bold shrink-0 cursor-pointer"
             >
               ✕ 닫기
             </button>
           </div>
         )}
 
-        {/* 듀얼 모드 스위처 바 (🔍 AI 투시검색 뷰 vs 🗂️ 윈도우 폴더 트리 뷰) + 검색창 */}
-        <div className="pt-2 border-t border-white/10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* 2행: 좌측 뷰 전환 탭 (깔끔한 2단 스위치) + 우측 검색창 */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          <div className="inline-flex p-1 rounded-xl bg-zinc-950 border border-white/10 shrink-0 self-start">
             <button
               type="button"
               onClick={() => setViewMode('semantic')}
-              className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
                 viewMode === 'semantic'
-                  ? 'bg-primary-container text-zinc-950 shadow-md'
-                  : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+                  ? 'bg-primary-container text-zinc-950 shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
-              <span>🔍 AI 투시검색 뷰 (기본)</span>
-              <span className="px-1.5 py-0.5 rounded bg-black/20 text-[10.5px]">
-                본문·표 1초 투시
-              </span>
+              🔍 AI 본문·표 검색
             </button>
 
             <button
               type="button"
               onClick={() => setViewMode('explorer')}
-              className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
                 viewMode === 'explorer'
-                  ? 'bg-primary-container text-zinc-950 shadow-md'
-                  : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+                  ? 'bg-primary-container text-zinc-950 shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
-              <span>🗂️ 윈도우 폴더 트리 뷰</span>
-              <span className="px-1.5 py-0.5 rounded bg-black/20 text-[10.5px]">
-                탐색기 S:\ 구조 그대로
-              </span>
+              🗂️ 윈도우 폴더 트리 (S:\)
             </button>
           </div>
 
-          {/* 실시간 본문·표 투시 검색 입력창 */}
-          <div className="flex-1 max-w-xl flex items-center gap-2 bg-zinc-950/90 border border-cyan-400/40 rounded-xl px-3.5 py-2">
-            <span className="text-cyan-300 text-sm">🔍</span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="계약서 조항, 엑셀 단가표 셀 숫자, 거래처 미수금, 도면 주기를 1초 만에 투시 검색..."
-              className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[12.5px] focus:outline-none"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-zinc-400 hover:text-white text-[11px] font-bold shrink-0"
-              >
-                초기화
-              </button>
-            )}
-          </div>
-        </div>
+          <div className="flex-1 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 bg-zinc-950 border border-white/15 rounded-xl px-3.5 py-2">
+              <span className="text-zinc-400 text-sm">🔍</span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="계약서 조항, 엑셀 단가표 숫자, 거래처 미수금 검색..."
+                className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13px] focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-zinc-400 hover:text-white text-[11.5px] font-bold shrink-0 cursor-pointer"
+                >
+                  지우기
+                </button>
+              )}
+            </div>
 
-        {/* 추천 1초 투시 검색어 알약 */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-label-sm text-[11px] text-zinc-400 mr-1">
-            ⚡ 1초 본문·표 투시 키워드:
-          </span>
-          {QUICK_WORK_QUERIES.map((q) => (
-            <button
-              key={q}
-              type="button"
-              onClick={() => setSearchQuery(searchQuery === q ? '' : q)}
-              className={`px-2.5 py-1 rounded-full font-label-sm text-[11px] font-bold border transition-all cursor-pointer ${
-                searchQuery === q
-                  ? 'bg-cyan-400 text-zinc-950 border-cyan-300 font-extrabold'
-                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
-              }`}
-            >
-              {q}
-            </button>
-          ))}
+            {/* 알약 버튼 5개 대신 조용한 텍스트 예시 링크 */}
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-[11.5px] text-zinc-400">
+              <span>빠른 검색 예시:</span>
+              {QUICK_WORK_QUERIES.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setSearchQuery(searchQuery === q ? '' : q)}
+                  className={`underline cursor-pointer transition-colors ${
+                    searchQuery === q ? 'text-cyan-300 font-extrabold' : 'hover:text-zinc-200'
+                  }`}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

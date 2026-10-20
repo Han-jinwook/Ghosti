@@ -551,262 +551,110 @@ export const SetupMonsterContent: React.FC = () => {
       }}
       className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-5 transition-all"
     >
-      {/* 1. 상단 헤더: 두뇌(웹/LLM) vs 손발(APK/.exe) 분업 아키텍처 & 플랫폼 스위처 & 멀린코인 에스크로 지갑 */}
-      <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-white/10">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-              🛠️ Z-Eye 설정 몬스터 (인간 냄새 나는 에스크로 무위험 수리기사)
+      {/* 1. 정갈한 상단 헤더: 좌측 타이틀 & PC/모바일 전환 탭 / 우측 지갑 상태 텍스트 & 액션 버튼 */}
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/10">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col gap-0.5">
+            <h2 className="font-headline-sm text-[19px] text-white font-extrabold tracking-tight">
+              🛠️ Z-Eye 설정 몬스터
+            </h2>
+            <span className="text-[12px] text-zinc-400">
+              무료 상담 후 수리 · 초행길 2회 이상 헤매거나 실패 시 100% 자동 환불
             </span>
-            <span className="px-2.5 py-0.5 rounded-md bg-pink-500/20 border border-pink-400/40 text-pink-200 font-label-sm text-[11px] font-extrabold">
-              💖 초행길 2회 이상 헤매고 성공 시 수리는 유지 + 100% 쿨 환불 & 전 세계 최단 지름길 OTA!
+          </div>
+
+          {/* 깔끔한 2단 플랫폼 스위처 */}
+          <div className="inline-flex p-1 rounded-xl bg-zinc-950 border border-white/10">
+            <button
+              type="button"
+              onClick={() => setSetupMonsterPlatform('pc')}
+              className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
+                setupMonsterPlatform === 'pc'
+                  ? 'bg-primary-container text-zinc-950 shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              💻 PC 설정·수리
+            </button>
+            <button
+              type="button"
+              onClick={() => setSetupMonsterPlatform('mobile')}
+              className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
+                setupMonsterPlatform === 'mobile'
+                  ? 'bg-primary-container text-zinc-950 shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              📱 스마트폰 설정
+            </button>
+          </div>
+        </div>
+
+        {/* 우측: 지갑 상태(순수 텍스트 위계) + 꼭 필요한 버튼만 배치 */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-[12.5px] text-zinc-300">
+            <span>
+              🪙 잔액: <strong className="text-amber-300">{merlinAuth.coinBalance.toLocaleString()} 코인</strong>
             </span>
-            {uiNightEyeProtection && (
-              <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-200 font-label-sm text-[11px] font-bold">
-                🌙 눈 보호 모드 & 큰 글씨({uiFontScalePercent}%) 작동 중
+            {setupEscrowHoldingCoins > 0 && (
+              <span className="text-primary-container font-bold">
+                (🔒 에스크로 {setupEscrowHoldingCoins}C)
               </span>
             )}
+            <span className="text-[11px] text-zinc-500 ml-1">
+              테스트 잔액:{' '}
+              {[0, 100, 1250].map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => setSimulatedMerlinCoinBalance(amt)}
+                  className={`underline ml-1 cursor-pointer ${
+                    merlinAuth.coinBalance === amt ? 'text-amber-300 font-extrabold' : 'hover:text-zinc-300'
+                  }`}
+                >
+                  {amt}C
+                </button>
+              ))}
+            </span>
           </div>
-          <h2 className="font-headline-sm text-[19px] md:text-[21px] text-white font-bold mt-1">
-            0코인 무료 문진 ➔ 에스크로 수리 ➔ 2번 이상 헤맨 초행길 성공도 100% 쿨하게 환불하고 전 세계에 최단 지름길을 즉시 배포합니다
-          </h2>
-          <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-            딱 1번 뒤로 갔다가 찾은 건 애교로 정상 정산하되 경로를 미세 교정하고, 2번 이상 뒤로 가기(Back)하며 헤맨 성공은 과업이 완료되었더라도 피로감을 드린 보답으로 코인을 100% 돌려드린 뒤 본사 Multi-LLM이 최단 직행 지름길(Shortest Path)을 전 세계 기기에 실시간 OTA 배포합니다.
-          </p>
-        </div>
 
-        {/* 우측: 멀린허브 통합 지갑 잔액 + 에스크로 홀딩 배지 + 잔액 시뮬레이터 + 감사로그 토글 */}
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="px-3.5 py-2 rounded-xl bg-zinc-950 border border-amber-400/40 flex items-center gap-2.5">
-              <span className="text-[16px]">🪙</span>
-              <div className="flex flex-col">
-                <span className="font-label-sm text-[10px] text-zinc-400">
-                  멀린허브 통합 지갑 잔액
-                </span>
-                <span className="font-headline-sm text-[14px] text-amber-300 font-extrabold">
-                  {merlinAuth.coinBalance.toLocaleString()} 멀린코인
-                </span>
-              </div>
-              {setupEscrowHoldingCoins > 0 && (
-                <div className="pl-2.5 border-l border-white/10 flex flex-col">
-                  <span className="font-label-sm text-[10px] text-primary-container font-bold">
-                    🔒 에스크로 홀딩 중
-                  </span>
-                  <span className="font-headline-sm text-[13px] text-primary-container font-extrabold">
-                    {setupEscrowHoldingCoins.toLocaleString()} 코인
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {hasActiveRefundableAudit && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => triggerEmpathyRefundForCompletedRepair(undefined, 2)}
-                  className="px-3.5 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-label-sm text-[11.5px] font-extrabold shadow-md cursor-pointer"
-                >
-                  💖 초행길 2회 헤맴 100% 쿨 환불 (수리 유지 + 지름길 OTA)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => reportUnresolvedAndRefundSetup()}
-                  className="px-3.5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-label-sm text-[11.5px] font-extrabold shadow-md cursor-pointer"
-                >
-                  👎 아직 해결 안 됨 (원상복구 + 100% 반환)
-                </button>
-              </>
-            )}
-
-            {hasActiveUndoableAudit && (
+          {hasActiveRefundableAudit && (
+            <>
               <button
                 type="button"
-                onClick={() => undoSetupMonsterRepair()}
-                className="px-3 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold shadow-md cursor-pointer"
+                onClick={() => triggerEmpathyRefundForCompletedRepair(undefined, 2)}
+                className="px-3 py-2 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer"
               >
-                ↩️ 1초 원상복구 (Undo)
+                💖 2회 헤맴 100% 쿨 환불
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => reportUnresolvedAndRefundSetup()}
+                className="px-3 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+              >
+                👎 미해결 환불
+              </button>
+            </>
+          )}
 
+          {hasActiveUndoableAudit && (
             <button
               type="button"
-              onClick={() => setShowBlackboxPanel((prev) => !prev)}
-              className="px-3 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+              onClick={() => undoSetupMonsterRepair()}
+              className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
             >
-              🌍 지름길 OTA({setupSelfHealingOtaQueue.length}) · 실패 큐({setupFailureTelemetryQueue.length}) · 감사({setupAuditLogs.length})
+              ↩️ 1초 원상복구
             </button>
-          </div>
+          )}
 
-          {/* 사전 잔액 체크(Pre-Check) & 충전 브릿지 즉시 테스트용 지갑 잔액 시뮬레이터 */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[10.5px] text-zinc-400">
-              🧪 지갑 잔액 Pre-Check 시뮬레이션:
-            </span>
-            <button
-              type="button"
-              onClick={() => setSimulatedMerlinCoinBalance(0)}
-              className={`px-2 py-0.5 rounded text-[10.5px] font-bold cursor-pointer border ${
-                merlinAuth.coinBalance === 0
-                  ? 'bg-amber-400 text-zinc-950 border-amber-300'
-                  : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-              }`}
-            >
-              0 코인 (무료 문진 미끼 테스트)
-            </button>
-            <button
-              type="button"
-              onClick={() => setSimulatedMerlinCoinBalance(100)}
-              className={`px-2 py-0.5 rounded text-[10.5px] font-bold cursor-pointer border ${
-                merlinAuth.coinBalance === 100
-                  ? 'bg-amber-400 text-zinc-950 border-amber-300'
-                  : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-              }`}
-            >
-              100 코인 (Level 2·3 부족 ➔ 1초 충전 브릿지 테스트)
-            </button>
-            <button
-              type="button"
-              onClick={() => setSimulatedMerlinCoinBalance(1250)}
-              className={`px-2 py-0.5 rounded text-[10.5px] font-bold cursor-pointer border ${
-                merlinAuth.coinBalance >= 500
-                  ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
-                  : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-              }`}
-            >
-              1,250 코인 (잔액 충분)
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 1-B. 💖 '인간 냄새 나는' 3단계 관용 & 쿨 환불 기준표 + Multi-LLM 전 세계 최단 직행 지름길 OTA */}
-      <div className="p-3.5 rounded-2xl bg-zinc-950/95 border border-pink-400/35 flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="font-label-sm text-[12px] text-pink-300 font-extrabold">
-            💖 ‘인간 냄새 나는’ 3단계 관용 & 쿨 환불 기준표 (뒤로 가기 Back / 재시도 카운트 실시간 연동)
-          </span>
-          <span className="font-mono text-[10.5px] text-emerald-300">
-            🌍 2회+ 헤맨 궤적은 Multi-LLM이 ‘최단 직행 지름길(Shortest Path)’로 압축해 전 세계 APK/.exe에 실시간 OTA 배포
-          </span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-          <div className="p-2.5 rounded-xl bg-emerald-950/25 border border-emerald-500/30 flex flex-col gap-0.5">
-            <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
-              🟢 쾌속 완주 (Back 0회)
-            </span>
-            <span className="font-body-sm text-[11px] text-zinc-200 font-bold">
-              정상 차감 (100%) · 패스
-            </span>
-            <span className="font-body-sm text-[10.5px] text-zinc-400">
-              사전 답사 지도대로 막힘없이 한 번에 도착 (완벽한 경로 유지)
-            </span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-amber-950/25 border border-amber-500/30 flex flex-col gap-0.5">
-            <span className="font-label-sm text-[11px] text-amber-300 font-extrabold">
-              🟡 인간적 허용 (딱 1회 Back)
-            </span>
-            <span className="font-body-sm text-[11px] text-zinc-200 font-bold">
-              정상 차감 (100%) + 경로 미세 교정
-            </span>
-            <span className="font-body-sm text-[10.5px] text-zinc-400">
-              초행길 애교 수준 허용 · 1회 우회 갈림길 로그를 본사로 보내 0회 직행 코스로 미세 교정
-            </span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-pink-950/35 border border-pink-400/55 flex flex-col gap-0.5">
-            <span className="font-label-sm text-[11px] text-pink-200 font-extrabold">
-              💖 미안함 환불 (2회+ 헤맨 성공)
-            </span>
-            <span className="font-body-sm text-[11px] text-pink-200 font-extrabold">
-              수리 유지 + 100% 자동 환불 (수업료 면제!)
-            </span>
-            <span className="font-body-sm text-[10.5px] text-zinc-300">
-              과업은 성공했어도 피로감을 드렸으니 100% 환불 + Multi-LLM 최단 직행 지름길 전 세계 OTA 배포
-            </span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-rose-950/25 border border-rose-500/35 flex flex-col gap-0.5">
-            <span className="font-label-sm text-[11px] text-rose-300 font-extrabold">
-              🔴 작업 실패 (해결 불가/포기)
-            </span>
-            <span className="font-body-sm text-[11px] text-rose-200 font-bold">
-              100% 전액 환불 + 1초 스냅샷 원상복구
-            </span>
-            <span className="font-body-sm text-[10.5px] text-zinc-400">
-              0.01초 전 JSON 스냅샷으로 즉시 원복 + 본사 실패 분석 큐 전송 및 우회 스크립트 배포
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 1-C. 🛡️ 딥리서치 엔지니어링 2대 급소: OS 보안 정책(Windows UIPI·JEA / Android SDK 35 WindowInsets) + 스마트 타겟팅 스캔(토큰 99% 절감 & div/span 무손실 보존) */}
-      <div className="p-3.5 rounded-2xl bg-zinc-950/95 border border-cyan-400/35 grid grid-cols-1 md:grid-cols-3 gap-2.5">
-        <div className="p-2.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex flex-col gap-0.5">
-          <span className="font-label-sm text-[11px] text-cyan-300 font-extrabold">
-            💻 Windows 11 UIPI 관통 & JEA 최소 권한
-          </span>
-          <span className="font-mono text-[10.5px] text-zinc-200 font-bold">
-            app.manifest uiAccess=&quot;true&quot; · Authenticode · 0.01s JSON 백업
-          </span>
-          <span className="font-body-sm text-[10.5px] text-zinc-400">
-            관리자 권한 창 UI Automation 트리 무차단 스캔 & V3/Defender 오탐 제로
-          </span>
-        </div>
-        <div className="p-2.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex flex-col gap-0.5">
-          <span className="font-label-sm text-[11px] text-cyan-300 font-extrabold">
-            📱 Android 15 (SDK 35) Edge-to-Edge 오차 보정
-          </span>
-          <span className="font-mono text-[10.5px] text-zinc-200 font-bold">
-            WindowInsets(상태바 -112px / 내비바 144px) · RECEIVER_NOT_EXPORTED
-          </span>
-          <span className="font-body-sm text-[10.5px] text-zinc-400">
-            Accessibility 논리 좌표와 SYSTEM_ALERT_WINDOW 물리 화살표 위치 1px 오차 없이 정렬
-          </span>
-        </div>
-        <div className="p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col gap-0.5">
-          <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
-            🎯 토큰 99% 절감 & 비표준 div/span 100% 보존
-          </span>
-          <span className="font-mono text-[10.5px] text-zinc-200 font-bold">
-            Playbook 0토큰 캐시 · 사전답사 정답구역 핀셋 · 초행길 2단 줌인 스캔
-          </span>
-          <span className="font-body-sm text-[10.5px] text-zinc-400">
-            무작정 Button만 남기고 div/span 삭제 금지 — 가짜 버튼·에러 라벨 무손실 스캔(300~500 토큰 이내)
-          </span>
-        </div>
-      </div>
-
-      {/* 2. 플랫폼 모드 스위처 (💻 PC판 1초 수리기사 vs 📱 모바일판 선제 진단 & 손가락 가이드) */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex p-1 rounded-xl bg-zinc-950 border border-white/10">
           <button
             type="button"
-            onClick={() => setSetupMonsterPlatform('pc')}
-            className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
-              setupMonsterPlatform === 'pc'
-                ? 'bg-primary-container text-zinc-950 shadow'
-                : 'text-zinc-300 hover:text-white'
-            }`}
+            onClick={() => setShowBlackboxPanel((prev) => !prev)}
+            className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
           >
-            💻 PC판 설정 몬스터 (선 무료 문진 ➔ 100/300/500 코인 에스크로)
-          </button>
-          <button
-            type="button"
-            onClick={() => setSetupMonsterPlatform('mobile')}
-            className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
-              setupMonsterPlatform === 'mobile'
-                ? 'bg-primary-container text-zinc-950 shadow'
-                : 'text-zinc-300 hover:text-white'
-            }`}
-          >
-            📱 모바일판 설정 몬스터 (1MB APK · 100 코인 단일 요금 & 오버레이 👆)
+            📋 기록 ({setupAuditLogs.length})
           </button>
         </div>
-
-        <span className="font-mono text-[11px] text-zinc-400">
-          {setupMonsterPlatform === 'pc'
-            ? '🟢 Z-Eye_PC_Setup.exe (uiAccess="true" UIPI 관통 · JEA 최소 권한 · 정답 구역 핀셋 & 2단 줌인 스캔 대기 중)'
-            : '🟢 Z-Eye_Mobile_1MB.apk (SDK 35 WindowInsets 보정 · RECEIVER_NOT_EXPORTED · SYSTEM_ALERT_WINDOW 대기 중)'}
-        </span>
       </div>
 
       {/* 3. 📱 모바일판 전용: 선제적 맞춤 진단 카드 (Proactive Hints) */}
@@ -865,8 +713,8 @@ export const SetupMonsterContent: React.FC = () => {
 
       {/* 4. 원클릭 증상 칩 (PC 6대 수리 칩: Level 1/2/3 표시 / 모바일 증상 칩) */}
       <div className="flex flex-col gap-2">
-        <span className="font-label-sm text-[11.5px] text-zinc-300 font-bold">
-          💡 자주 찾는 원클릭 증상 칩 (잔액이 0코인이어도 무료 사전 문진 & .exe 백그라운드 스캔까지는 100% 무료로 작동합니다!)
+        <span className="font-label-sm text-[12px] text-zinc-400 font-bold">
+          💡 자주 찾는 증상 선택 (무료 상담부터 시작)
         </span>
         <div className="flex flex-wrap gap-2">
           {activeChips.map((chip) => (
@@ -876,17 +724,9 @@ export const SetupMonsterContent: React.FC = () => {
               onClick={() =>
                 submitSetupMonsterQuery(chip.query, chip.id, chip.platform)
               }
-              className="px-3.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 hover:border-primary-container/60 text-left flex items-center gap-2 transition-all cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 hover:border-primary-container text-white font-label-sm text-[12.5px] font-bold transition-all cursor-pointer"
             >
-              <span className="font-label-sm text-[12px] text-white font-bold">
-                {chip.label}
-              </span>
-              <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 font-label-sm text-[10px] font-extrabold">
-                {chip.levelBadge}
-              </span>
-              <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-primary-container font-label-sm text-[10px] font-bold">
-                {chip.trackBadge}
-              </span>
+              {chip.label}
             </button>
           ))}
         </div>

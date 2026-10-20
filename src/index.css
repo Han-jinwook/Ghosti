@@ -175,6 +175,12 @@ html.theme-warm-light .bg-zinc-900\/80:not([data-keep-dark="true"]) {
 }
 
 /* 3. 다크 그라데이션 박스 -> 웜 화이트/크림 톤 전환 ([data-keep-dark="true"] 레트로 간판은 제외!) */
+html.theme-warm-light [class*="from-[#0"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="via-[#1"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="to-[#1"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="to-zinc-9"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="from-rose-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="from-pink-950"]:not([data-keep-dark="true"]),
 html.theme-warm-light [class*="via-[#0"]:not([data-keep-dark="true"]),
 html.theme-warm-light [class*="to-[#0"]:not([data-keep-dark="true"]),
 html.theme-warm-light [class*="from-slate-9"]:not([data-keep-dark="true"]),
