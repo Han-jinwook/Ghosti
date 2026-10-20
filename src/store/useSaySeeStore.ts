@@ -3062,7 +3062,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       return;
     }
 
-    // [PC 환경: 선(先) 무료 문진 & Z-Eye_PC_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료!) ➔ 후(後) 난이도별 차등 견적 & 멀린허브 잔액 Pre-Check]
+    // [PC 환경: 선(先) 무료 문진 & Merlin_Z_Core_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료!) ➔ 후(後) 난이도별 차등 견적 & 멀린허브 잔액 Pre-Check]
     if (platform === 'pc') {
       if (state.pendingTriageQuestion && !presetIdHint) {
         const activeTriage = state.pendingTriageQuestion;
@@ -3079,7 +3079,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           id: `ai_${Date.now() + 1}`,
           role: 'assistant',
           timestamp: nowLabel,
-          text: `🧠 [무료 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패(또는 초행길 2회 이상 헤맨 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+          text: `🧠 [무료 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패(또는 초행길 2회 이상 헤맨 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
           diagnosisPlan: plan,
         };
 
@@ -3103,7 +3103,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         id: `triage_${Date.now() + 1}`,
         role: 'assistant_triage',
         timestamp: nowLabel,
-        text: `🔍 [선(先) 무료 문진 & Z-Eye_PC_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료)]\n곧바로 결제창을 띄우지 않고 해결 가능 여부와 작업 복잡도를 먼저 무료로 스캔했습니다.\n• ${triageQ.exeBackgroundScanNote}\n\n${triageQ.questionText}`,
+        text: `🔍 [선(先) 무료 문진 & Merlin_Z_Core_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료)]\n곧바로 결제창을 띄우지 않고 해결 가능 여부와 작업 복잡도를 먼저 무료로 스캔했습니다.\n• ${triageQ.exeBackgroundScanNote}\n\n${triageQ.questionText}`,
         triageQuestion: triageQ,
         triageAnswered: false,
       };
@@ -3168,7 +3168,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `ai_quote_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🧠 [사전 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+      text: `🧠 [사전 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
       diagnosisPlan: plan,
     };
 
@@ -3597,7 +3597,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       .map((t) => `[${t.role}] ${t.text}`);
     const windowsBuildEnv =
       (targetAudit?.platform ?? state.setupMonsterPlatform) === 'pc'
-        ? 'Windows 11 Pro 23H2 (Build 22631.4317) · x64 · Z-Eye_PC_Setup.exe v2.4'
+        ? 'Windows 11 Pro 23H2 (Build 22631.4317) · x64 · Merlin_Z_Core_Setup.exe v2.4'
         : 'Android 15 (One UI 7.0) · Z-Eye_Mobile_1MB.apk v2.4';
 
     const nowIso = new Date().toISOString();

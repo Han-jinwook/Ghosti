@@ -269,8 +269,8 @@ export const OnboardingModal: React.FC = () => {
                 </h3>
 
                 <p className="font-body-sm text-[12px] text-on-surface-variant leading-relaxed">
-                  비로그인 상태라도 아래 버튼을 누르면 MS 공식 코드사이닝 인증서가 서명된 정식 설치파일{' '}
-                  <code className="text-emerald-300 font-bold">Z-Eye_PC_Agent.exe</code>가 실행되어, 내 사진·서류·동영상이{' '}
+                  비로그인 상태라도 아래 버튼을 누르면 MS 공식 코드사이닝 인증서가 서명된 멀린 Z 코어(
+                  <code className="text-emerald-300 font-bold">Merlin_Z_Core_Setup.exe</code>)가 조용히 작동하여, 내 사진·서류·동영상이{' '}
                   <strong className="text-white">외부로 단 1바이트도 나가지 않고 100% 내 PC 내부에서만</strong> 초고속 분석됩니다.
                 </p>
 
@@ -287,9 +287,6 @@ export const OnboardingModal: React.FC = () => {
                     <span className="material-symbols-outlined text-[18px]">computer</span>
                     <span>💻 내 PC로 1분 안심 체험하기 (권장)</span>
                   </button>
-                  <span className="px-2.5 py-1 rounded-lg bg-surface-container-lowest/90 border border-emerald-400/35 font-label-mono text-[10.5px] text-emerald-300 font-bold">
-                    ✓ Z-Eye_PC_Agent.exe 가동 중 (0 Byte 외부 전송)
-                  </span>
                 </div>
               </div>
 
@@ -511,7 +508,7 @@ export const OnboardingModal: React.FC = () => {
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="font-label-mono text-[10.5px] text-primary-container font-bold">
                 {onboardingTrackMode === 'pc_local'
-                  ? `내 PC 직접 구동(Z-Eye_PC_Agent.exe) 768D 벡터 변환 중 (${percent.toFixed(0)}%) • 외부 전송 0 Byte`
+                  ? `내 PC 로컬 구동(Merlin_Z_Core_Setup.exe) 768D 벡터 변환 중 (${percent.toFixed(0)}%) • 외부 전송 0 Byte`
                   : `Z-Eye 초고속 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 자동 소각 (${percent.toFixed(0)}%)`}
               </span>
               <span className="font-label-md text-[12px] text-on-surface font-bold truncate">

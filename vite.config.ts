@@ -414,6 +414,25 @@ function findBestPocResultFile(): string | null {
 
 const thumbCache = new Map<string, Buffer>();
 
+function isTrustedMerlinBridgeOrigin(originHeader?: string): boolean {
+  if (!originHeader) return true;
+  try {
+    const u = new URL(originHeader);
+    const h = u.hostname.toLowerCase();
+    return (
+      h === 'sundreamer.app' ||
+      h.endsWith('.sundreamer.app') ||
+      h === 'localhost' ||
+      h === '127.0.0.1' ||
+      h.startsWith('192.168.') ||
+      h.startsWith('100.') ||
+      h.endsWith('.trycloudflare.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
 function zeyeLocalBridge(): Plugin {
   return {
     name: 'zeye-local-bridge',
@@ -423,6 +442,31 @@ function zeyeLocalBridge(): Plugin {
       if (!fs.existsSync(QUARANTINE_DIR)) {
         fs.mkdirSync(QUARANTINE_DIR, { recursive: true });
       }
+
+      // [멀린 Z 코어 (Merlin_Z_Core) — *.sundreamer.app 와일드카드 도메인 화이트리스트 CORS & Private Network Access 미들웨어]
+      // 향후 출시될 20개 멀린 패밀리 웹앱들이 네이티브 재빌드나 스토어 재심사 없이 로컬 코어를 직접 호출할 수 있도록 허용합니다.
+      server.middlewares.use((req, res, next) => {
+        if (req.url && req.url.startsWith('/__')) {
+          const reqOrigin = req.headers.origin;
+          if (reqOrigin && isTrustedMerlinBridgeOrigin(reqOrigin)) {
+            res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+            res.setHeader('Vary', 'Origin');
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.setHeader(
+              'Access-Control-Allow-Headers',
+              'Content-Type, Authorization, X-Merlin-App-Id, X-Merlin-Origin'
+            );
+            res.setHeader('Access-Control-Allow-Private-Network', 'true');
+          }
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 204;
+            res.end();
+            return;
+          }
+        }
+        next();
+      });
 
       server.middlewares.use('/__photos/list', (_req, res) => {
         const files = listImages(PHOTO_DIR);
@@ -2174,7 +2218,7 @@ function zeyeLocalBridge(): Plugin {
         res.end(
           JSON.stringify({
             ok: true,
-            pcDaemonStatus: 'Z-Eye_PC_Setup.exe (v1.5 · PowerShell/Registry/UIAutomation Ready)',
+            pcDaemonStatus: 'Merlin_Z_Core_Setup.exe (v1.5 · PowerShell/Registry/UIAutomation Ready)',
             mobileApkStatus: 'Z-Eye_Mobile_1MB.apk (v1.5 · UsageStats/WRITE_SETTINGS/Overlay Ready)',
             auditLogs: box.auditLogs,
             failureTelemetryQueue: box.failureTelemetryQueue,
@@ -2206,7 +2250,7 @@ function zeyeLocalBridge(): Plugin {
             trajectoryGrade: body.trajectoryGrade || 'GRADE_0_EXPRESS',
             symptomQuery: body.symptomQuery || '',
             title: body.title || 'Z-Eye 설정 몬스터 자동 처치',
-            agentModuleName: body.agentModuleName || 'Z-Eye_PC_Setup.exe',
+            agentModuleName: body.agentModuleName || 'Merlin_Z_Core_Setup.exe',
             systemCommandOrApi: body.systemCommandOrApi || '',
             beforeSnapshot: body.beforeSnapshot || {},
             afterSnapshot: body.afterSnapshot || {},
@@ -2375,7 +2419,7 @@ function zeyeLocalBridge(): Plugin {
               : targetEntry?.conversationSummary || [],
             windowsBuildEnv:
               body.windowsBuildEnv ||
-              'Windows 11 Pro 23H2 (Build 22631.4317 · x64 · Z-Eye_PC_Setup.exe v1.5)',
+              'Windows 11 Pro 23H2 (Build 22631.4317 · x64 · Merlin_Z_Core_Setup.exe v1.5)',
             attemptedScript: body.attemptedScript || targetEntry?.systemCommandOrApi || '',
             errorCode: body.errorCode || 'ERR_USER_REPORTED_UNRESOLVED_0x80070005',
             refundedCoins:
@@ -2745,24 +2789,7 @@ function zeyeLocalBridge(): Plugin {
           const queryOrCommand = body.queryOrCommand || {};
 
           // 당사 공식 도메인(*.sundreamer.app) 및 로컬/터널 호스트 화이트리스트 검증
-          let isTrustedOrigin = false;
-          try {
-            const u = new URL(callerOrigin);
-            const h = u.hostname.toLowerCase();
-            if (
-              h === 'sundreamer.app' ||
-              h.endsWith('.sundreamer.app') ||
-              h === 'localhost' ||
-              h === '127.0.0.1' ||
-              h.startsWith('192.168.') ||
-              h.startsWith('100.') ||
-              h.endsWith('.trycloudflare.com')
-            ) {
-              isTrustedOrigin = true;
-            }
-          } catch {
-            isTrustedOrigin = false;
-          }
+          const isTrustedOrigin = isTrustedMerlinBridgeOrigin(callerOrigin);
 
           if (!isTrustedOrigin) {
             res.statusCode = 403;

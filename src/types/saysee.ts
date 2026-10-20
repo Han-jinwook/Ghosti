@@ -529,7 +529,7 @@ export type SetupUiScanStrategy =
 
 export interface SetupOsSecuritySpec {
   platform: SetupMonsterPlatform;
-  // 💻 Windows .exe 데몬 (Z-Eye_PC_Setup.exe): UIPI 장벽 통과 & JEA 최소 권한 제어
+  // 💻 Windows .exe 데몬 (Merlin_Z_Core_Setup.exe): UIPI 장벽 통과 & JEA 최소 권한 제어
   windowsManifestUiAccess?: boolean;
   windowsAuthenticodeSigned?: boolean;
   windowsJeaLeastPrivilegePolicy?: string;

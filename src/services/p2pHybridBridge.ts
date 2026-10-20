@@ -1,15 +1,18 @@
 /**
- * Z-Eye No-Cloud P2P 하이브리드 폴백 & 멀린 패밀리 앱 범용 쿼리 브릿지 엔진
+ * 멀린 Z 코어 (Merlin_Z_Core) — 무소음 그림자 비서 & 도메인 화이트리스트(*.sundreamer.app) 범용 브릿지 엔진
  *
  * 핵심 설계 원칙:
- * 1. [스토어 재심사 0회 — 단일 범용 쿼리 브릿지 (`executeMerlinQuery`)]:
+ * 1. [네이밍 및 UI 무소음 원칙 (연결 배지 노출 금지)]:
+ *    - 설치 에이전트 공식 명칭은 일반인의 거부감을 없앤 `멀린 Z 코어 (Merlin_Z_Core.apk / Merlin_Z_Core_Setup.exe)`로 통일합니다.
+ *    - 화면을 최대한 가볍게 유지하기 위해, 웹 화면 상단에 `[🟢 코어 연결됨]` 같은 상태 표시등이나 배지는 절대 띄우지 않고
+ *      평소에는 존재감을 완전히 숨긴 채 뒤에서 조용히 일하는 그림자 비서(Silent Background Assistant)로만 작동합니다.
+ * 2. [스토어 재심사 0회 — 도메인 조건(`*.sundreamer.app`) 하나로 20개 패밀리 앱 범용 지원 (`executeMerlinQuery`)]:
  *    - 향후 `뭐먹지?`, `센스톡`, `어그로필터` 등 신규 멀린 패밀리 앱이 출시될 때마다
  *      APK나 `.exe`를 업데이트하고 스토어 재심사를 받는 일을 원천 차단합니다.
- *    - 네이티브 에이전트(`APK` / `.exe`)에는 특정 앱 전용 함수를 하드코딩하지 않고,
- *      오직 당사 공식 도메인(`*.sundreamer.app` 및 로컬 개발 호스트)의 웹앱들이
- *      Z-Eye 로컬 인덱스 DB(사진/동영상/문서/안면여권/UI 트리/오버레이)에 조건부 쿼리나 스크립트 명령을 던지면
- *      결과만 반환해 주는 단일 범용 인터페이스 `executeMerlinQuery`만 뚫어둡니다.
- * 2. [특허 제2호 — 무클라우드 P2P 2단계 하이브리드 폴백]:
+ *    - 네이티브 에이전트(`Merlin_Z_Core.apk` / `Merlin_Z_Core_Setup.exe`)에는 특정 앱 전용 함수를 하드코딩하지 않고,
+ *      로컬 브릿지의 CORS 및 보안 검증에 `*.sundreamer.app` (및 당사 지정 패밀리 도메인) 와일드카드 허용 조건만 열어두어
+ *      웹 쪽 조건부 쿼리/스크립트 명령만으로 무한 확장되는 단일 범용 인터페이스 `executeMerlinQuery`를 제공합니다.
+ * 3. [특허 제2호 — 무클라우드 P2P 2단계 하이브리드 폴백]:
  *    - Stage 0: Supabase Realtime Broadcast (`dbWriteBytes: 0` 패스스루 시그널링)
  *    - Stage 1: 1순위 `WebRTC DataChannel` 다이렉트 P2P 전송
  *    - Stage 2: 외부 LTE/5G Symmetric NAT 장벽(3.5초 초과) 시 유료 TURN 없이
@@ -17,6 +20,19 @@
  */
 
 import { calibrateAndroidSdk35EdgeToEdgeOverlayRect } from './setupMonsterEngine';
+
+/** 공식 설치 에이전트 명칭 및 UI 무소음 정책 상수 */
+export const MERLIN_Z_CORE_SPEC = {
+  brandNameKo: '멀린 Z 코어',
+  brandNameEn: 'Merlin_Z_Core',
+  androidApkFileName: 'Merlin_Z_Core.apk',
+  windowsSetupExeFileName: 'Merlin_Z_Core_Setup.exe',
+  /** 웹 화면 상단에 [🟢 코어 연결됨] 등 상태 표시등/배지 노출 절대 금지 (무소음 그림자 비서 원칙) */
+  exposeConnectionStatusBadgeInUi: false,
+  silentBackgroundShadowMode: true,
+  /** 20개 멀린 패밀리 웹앱 범용 지원을 위한 와일드카드 허용 도메인 */
+  allowedDomainWildcards: ['*.sundreamer.app', 'sundreamer.app'] as const,
+} as const;
 
 export type P2PTransportMode =
   | 'WEBRTC_DATACHANNEL_DIRECT'
@@ -131,8 +147,9 @@ export interface UniversalNativeAgentBridge {
 
 declare global {
   interface Window {
-    ZEyeNativeBridge?: UniversalNativeAgentBridge;
+    MerlinZCoreBridge?: UniversalNativeAgentBridge;
     MerlinNativeBridge?: UniversalNativeAgentBridge;
+    ZEyeNativeBridge?: UniversalNativeAgentBridge;
   }
 }
 
@@ -203,10 +220,10 @@ export async function executeMerlinQuery<T = unknown>(
     requestedAtIso: request.requestedAtIso || new Date().toISOString(),
   };
 
-  // 1순위: 실물 APK / .exe WebView에 주입된 단일 범용 네이티브 브릿지 호출
+  // 1순위: 실물 Merlin_Z_Core.apk / Merlin_Z_Core_Setup.exe WebView에 주입된 단일 범용 네이티브 브릿지 호출
   const nativeBridge =
     typeof window !== 'undefined'
-      ? window.MerlinNativeBridge || window.ZEyeNativeBridge
+      ? window.MerlinZCoreBridge || window.MerlinNativeBridge || window.ZEyeNativeBridge
       : undefined;
 
   if (nativeBridge?.executeMerlinQuery) {
@@ -325,7 +342,7 @@ export function dispatchAndroidOverlayArrowViaBridge(params: {
 
   const nativeBridge =
     typeof window !== 'undefined'
-      ? window.MerlinNativeBridge || window.ZEyeNativeBridge
+      ? window.MerlinZCoreBridge || window.MerlinNativeBridge || window.ZEyeNativeBridge
       : undefined;
 
   if (nativeBridge?.getDeviceWindowInsetsJson) {
@@ -413,7 +430,7 @@ export async function verifyHybridP2PBridgeConnection(options?: {
   const webdav = buildWindowsNativeWebDavMountCommand('S:');
   const hasAndroidBridge =
     typeof window !== 'undefined' &&
-    Boolean(window.MerlinNativeBridge || window.ZEyeNativeBridge);
+    Boolean(window.MerlinZCoreBridge || window.MerlinNativeBridge || window.ZEyeNativeBridge);
 
   return {
     roomId,
