@@ -2724,6 +2724,116 @@ function zeyeLocalBridge(): Plugin {
           res.end(JSON.stringify({ ok: false, error: String(e), downloadDir }));
         }
       });
+
+      // [스토어 재심사 0회 — 멀린 패밀리 앱(*.sundreamer.app) 공용 단일 범용 쿼리 게이트웨이 `executeMerlinQuery`]
+      server.middlewares.use('/__merlin/query', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (req.method === 'OPTIONS') {
+          res.end();
+          return;
+        }
+        try {
+          const body = req.method === 'POST' ? await readJsonBody(req) : {};
+          const callerAppId = String(body.callerAppId || 'z-eye');
+          const callerOrigin = String(
+            body.callerOrigin || req.headers.origin || 'https://zeye.sundreamer.app'
+          );
+          const targetResource = String(body.targetResource || 'LOCAL_PHOTO_INDEX_DB');
+          const queryOrCommand = body.queryOrCommand || {};
+
+          // 당사 공식 도메인(*.sundreamer.app) 및 로컬/터널 호스트 화이트리스트 검증
+          let isTrustedOrigin = false;
+          try {
+            const u = new URL(callerOrigin);
+            const h = u.hostname.toLowerCase();
+            if (
+              h === 'sundreamer.app' ||
+              h.endsWith('.sundreamer.app') ||
+              h === 'localhost' ||
+              h === '127.0.0.1' ||
+              h.startsWith('192.168.') ||
+              h.startsWith('100.') ||
+              h.endsWith('.trycloudflare.com')
+            ) {
+              isTrustedOrigin = true;
+            }
+          } catch {
+            isTrustedOrigin = false;
+          }
+
+          if (!isTrustedOrigin) {
+            res.statusCode = 403;
+            res.end(
+              JSON.stringify({
+                ok: false,
+                storeReReviewRequired: false,
+                error: `ERR_UNTRUSTED_ORIGIN: *.sundreamer.app 공식 도메인 외 호출 차단 (${callerOrigin})`,
+              })
+            );
+            return;
+          }
+
+          const limit = Math.min(Number(queryOrCommand.limit || 20), 100);
+          let resultData: unknown = null;
+          let resultCount = 0;
+
+          if (targetResource === 'FACE_PASSPORT_SEED_DB') {
+            const faceFile = path.resolve(POC_RESULTS_DIR, 'face_clusters_index.json');
+            const parsed = fs.existsSync(faceFile)
+              ? JSON.parse(fs.readFileSync(faceFile, 'utf8'))
+              : { clusters: [] };
+            const clusters = Array.isArray(parsed.clusters) ? parsed.clusters : [];
+            resultCount = clusters.length;
+            resultData = clusters.slice(0, limit);
+          } else if (targetResource === 'LOCAL_DOC_INDEX_DB') {
+            const docFile = path.resolve(POC_RESULTS_DIR, 'docs_semantic_index.json');
+            const parsed = fs.existsSync(docFile)
+              ? JSON.parse(fs.readFileSync(docFile, 'utf8'))
+              : { docs: [] };
+            const docs = Array.isArray(parsed.docs) ? parsed.docs : [];
+            const qText = String(queryOrCommand.semanticQueryText || '').trim();
+            const filtered = qText
+              ? docs.filter((d: any) =>
+                  `${d.title || ''} ${d.extractedText || ''} ${(d.keywords || []).join(' ')}`
+                    .toLowerCase()
+                    .includes(qText.toLowerCase())
+                )
+              : docs;
+            resultCount = filtered.length;
+            resultData = filtered.slice(0, limit);
+          } else if (targetResource === 'LOCAL_PHOTO_INDEX_DB') {
+            const files = listImages(PHOTO_DIR);
+            resultCount = files.length;
+            resultData = files.slice(0, limit);
+          } else {
+            resultCount = 1;
+            resultData = {
+              executedUniversalResource: targetResource,
+              callerAppId,
+              queryOrCommand,
+              status: 'EXECUTED_VIA_SINGLE_UNIVERSAL_BRIDGE',
+            };
+          }
+
+          res.end(
+            JSON.stringify({
+              ok: true,
+              callerAppId,
+              verifiedOrigin: callerOrigin,
+              targetResource,
+              universalBridgeMethod: 'executeMerlinQuery',
+              storeReReviewRequired: false,
+              resultCount,
+              data: resultData,
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
     },
   };
 }

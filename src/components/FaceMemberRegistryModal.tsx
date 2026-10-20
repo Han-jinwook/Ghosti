@@ -909,3 +909,249 @@ export const FaceMemberRegistryModal: React.FC = () => {
   );
 };
 
+/**
+ * [Z-Eye 여권 연동 — 최신 연도 정면 얼굴 자동 문패(Auto Profile Doorplate) & 5대 스타일 슬롯 원터치 교체 모달]
+ * - 유저가 번거롭게 프로필 사진을 수동 업로드할 필요 없이, Z-Eye 여권 인덱싱으로 확인된
+ *   해당 유저의 '가장 최신 연도(당해 연도) 정면 기준컷(Slot 1 Anchor)' 얼굴 크롭 이미지를 기본 문패로 자동 장착!
+ * - 프로필 문패 클릭 시 5대 스타일 슬롯(① 정면 / ② 활짝 미소 / ③ 측면 / ④ 선글라스 / ⑤ 야외)을 원터치로 취향껏 교체!
+ */
+export const PassportDoorplateStyleModal: React.FC = () => {
+  const {
+    doorplatePickerClusterId,
+    setDoorplatePickerClusterId,
+    selectDoorplateStyleSlot,
+    faceClusters,
+    activeLoungeType,
+    activeFamilyRoom,
+  } = useSaySeeStore();
+
+  if (!doorplatePickerClusterId) return null;
+
+  const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
+  const targetCluster =
+    faceClusters.find((c) => c.clusterId === doorplatePickerClusterId) ||
+    namedClusters.find((c) => c.clusterId === 'face_member_5') ||
+    namedClusters[0];
+
+  if (!targetCluster) return null;
+
+  const { activePersona, isRoomCreator, roomLabelKo } = getActivePersonaForCluster(
+    targetCluster,
+    activeLoungeType,
+    activeFamilyRoom
+  );
+  const displayPersona = activePersona || targetCluster.registeredName || '내 프로필';
+  const slots = targetCluster.yearlyBestCuts || [];
+  const activeSlotIdx = targetCluster.activeDoorplateSlotIndex ?? 0;
+  const activeSlot = slots[activeSlotIdx] || slots[0];
+
+  const SLOT_TITLES = [
+    { num: '①', name: '정면', desc: '당해 연도 최신 기준컷 (기본 자동 장착)' },
+    { num: '②', name: '활짝 미소', desc: '밝게 웃는 표정 베스트컷' },
+    { num: '③', name: '측면', desc: '자연스러운 옆모습 베스트컷' },
+    { num: '④', name: '선글라스', desc: '야외·라운딩 선글라스 컷' },
+    { num: '⑤', name: '야외', desc: '여행·자연광 감성 베스트컷' },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setDoorplatePickerClusterId(null)}
+    >
+      <div
+        className="w-full max-w-2xl rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="px-5 py-4 border-b border-white/10 bg-zinc-950/90 flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                🛂 Z-Eye 여권 자동 문패
+              </span>
+              <h2 className="font-headline-sm text-[16px] sm:text-[18px] font-extrabold text-white">
+                최신 연도 정면 얼굴 자동 문패 &amp; 5대 스타일 슬롯
+              </h2>
+            </div>
+            <p className="font-body-sm text-[12px] text-zinc-400">
+              수동 업로드 없이 Z-Eye 여권의 최신 정면 기준컷(① 정면)이 자동 장착되며, 원터치로 스타일을 바꿀 수 있습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDoorplatePickerClusterId(null)}
+            className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="p-5 overflow-y-auto flex flex-col gap-4">
+          {/* 멤버 전환 탭 */}
+          {namedClusters.length > 1 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-label-sm text-[11.5px] text-zinc-400 mr-1">문패 주인공:</span>
+              {namedClusters.map((mc) => {
+                const pInfo = getActivePersonaForCluster(mc, activeLoungeType, activeFamilyRoom);
+                const isSelected = mc.clusterId === targetCluster.clusterId;
+                return (
+                  <button
+                    key={mc.clusterId}
+                    type="button"
+                    onClick={() => setDoorplatePickerClusterId(mc.clusterId)}
+                    className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    }`}
+                  >
+                    <img
+                      src={mc.avatarUrl || mc.representativePhoto}
+                      alt={pInfo.activePersona}
+                      className="w-4 h-4 rounded-full object-cover"
+                    />
+                    <span>
+                      {pInfo.isRoomCreator ? `👑 ${pInfo.activePersona}` : pInfo.activePersona}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 현재 장착된 대표 문패 프리뷰 카드 */}
+          <div className="p-4 rounded-2xl bg-zinc-900/90 border border-primary-container/35 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <AutonomousCanvasFaceAvatar
+                photoFile={activeSlot?.representativePhoto || targetCluster.representativePhoto}
+                boundingBox={activeSlot?.boundingBox || targetCluster.boundingBox}
+                fallbackAvatarUrl={targetCluster.avatarUrl}
+                altText={displayPersona}
+                isHighlighted={true}
+                sizeClass="w-20 h-20"
+                shape="square"
+              />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-headline-sm text-[18px] font-extrabold text-white">
+                    {isRoomCreator ? `👑 ${displayPersona}` : displayPersona}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold">
+                    현재 문패: {targetCluster.doorplateSlotLabelKo || '① 정면'} (
+                    {activeSlot?.year || 2026}년)
+                  </span>
+                </div>
+                <span className="font-body-sm text-[12px] text-zinc-300">
+                  현재 공간({roomLabelKo}) 자동 호칭 · 이메일 여권({targetCluster.passportEmail})
+                </span>
+                <span className="font-body-sm text-[11.5px] text-primary-container">
+                  ✨ {activeSlotIdx === 0
+                    ? '당해 연도(2026년) 가장 선명한 정면 기준컷(Slot 1 Anchor)이 자동 장착되어 있습니다.'
+                    : `Z-Eye 여권 5대 스타일 슬롯 중 [${targetCluster.doorplateSlotLabelKo}] 컷이 문패로 적용 중입니다.`}
+                </span>
+              </div>
+            </div>
+
+            {activeSlotIdx !== 0 && (
+              <button
+                type="button"
+                onClick={() => selectDoorplateStyleSlot(targetCluster.clusterId, 0)}
+                className="px-3 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold shrink-0 cursor-pointer"
+              >
+                ↺ ① 정면 기준컷 복원
+              </button>
+            )}
+          </div>
+
+          {/* 5대 스타일 슬롯 원터치 선택 그리드 */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-label-md text-[13px] font-extrabold text-white">
+                🎨 Z-Eye 여권에 확보된 5대 스타일 슬롯 (원터치 문패 변경)
+              </span>
+              <span className="font-label-sm text-[11px] text-zinc-400">
+                클릭 즉시 상단 프로필 및 라운지 문패에 반영됩니다
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {SLOT_TITLES.map((meta, idx) => {
+                const cut = slots[idx] || slots[0];
+                const isSelected = activeSlotIdx === idx;
+                return (
+                  <button
+                    key={meta.num}
+                    type="button"
+                    onClick={() => selectDoorplateStyleSlot(targetCluster.clusterId, idx)}
+                    className={`p-3 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary-container/15 border-2 border-primary-container shadow-[0_0_20px_rgba(45,212,191,0.2)]'
+                        : 'bg-zinc-900/70 border-white/10 hover:bg-zinc-800/80 hover:border-white/25'
+                    }`}
+                  >
+                    <div className="relative">
+                      <AutonomousCanvasFaceAvatar
+                        photoFile={cut?.representativePhoto || targetCluster.representativePhoto}
+                        boundingBox={cut?.boundingBox || targetCluster.boundingBox}
+                        fallbackAvatarUrl={cut?.cropUrl || cut?.avatarUrl || targetCluster.avatarUrl}
+                        altText={`${displayPersona} ${meta.name}`}
+                        isHighlighted={isSelected}
+                        sizeClass="w-16 h-16"
+                        shape="square"
+                      />
+                      <span
+                        className={`absolute -top-1.5 -left-1.5 px-1.5 py-0.5 rounded-md font-label-sm text-[10px] font-extrabold ${
+                          isSelected
+                            ? 'bg-primary-container text-zinc-950'
+                            : 'bg-zinc-950/90 text-zinc-200 border border-white/15'
+                        }`}
+                      >
+                        {meta.num} {meta.name}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-label-sm text-[11.5px] font-extrabold text-white">
+                        {cut?.year || 2026}년 컷
+                      </span>
+                      <span className="font-body-sm text-[10.5px] text-zinc-400 leading-tight line-clamp-2">
+                        {meta.desc}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`w-full py-1 rounded-lg font-label-sm text-[10.5px] font-extrabold ${
+                        isSelected
+                          ? 'bg-primary-container text-zinc-950'
+                          : 'bg-zinc-950 text-zinc-300'
+                      }`}
+                    >
+                      {isSelected ? '✓ 현재 문패' : '원터치 장착'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 푸터 */}
+        <div className="px-5 py-3.5 border-t border-white/10 bg-zinc-950/90 flex items-center justify-between">
+          <span className="font-body-sm text-[11.5px] text-zinc-400">
+            💡 새해(2027년~)에 더 선명한 정면 사진이 찍히면 Slot 1 문패가 자동으로 최신화됩니다.
+          </span>
+          <button
+            type="button"
+            onClick={() => setDoorplatePickerClusterId(null)}
+            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer"
+          >
+            완료
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+

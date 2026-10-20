@@ -2552,6 +2552,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     runTextQuery,
     photos,
     setShowFaceRegistryModal,
+    setDoorplatePickerClusterId,
     setDesktopTab,
     setMobileTab,
   } = useSaySeeStore();
@@ -2586,26 +2587,48 @@ export const LoungeFeedContextBanner: React.FC = () => {
               ? `${displayPersona} 선글라스`
               : `${displayPersona} 나무 다리`;
           return (
-            <button
+            <div
               key={c.clusterId}
-              type="button"
-              onClick={() => void runTextQuery(queryTarget)}
-              title={`클릭 시 "${queryTarget}" 검색`}
-              className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[12px] font-bold flex items-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
+              className="pl-1.5 pr-3 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[12px] font-bold flex items-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
             >
-              <img
-                src={c.avatarUrl || c.representativePhoto}
-                alt={displayPersona}
-                className="w-4 h-4 rounded-full object-cover shrink-0"
-              />
-              <span>{isRoomCreator ? `👑 ${displayPersona}` : displayPersona}</span>
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDoorplatePickerClusterId(c.clusterId);
+                }}
+                title={`${displayPersona} 문패 사진 클릭: 5대 스타일 슬롯(${c.doorplateSlotLabelKo || '① 정면'}) 원터치 변경`}
+                className="relative group/avatar shrink-0 cursor-pointer"
+              >
+                <img
+                  src={c.avatarUrl || c.representativePhoto}
+                  alt={displayPersona}
+                  className="w-5 h-5 rounded-full object-cover border border-primary-container/70 group-hover/avatar:ring-2 group-hover/avatar:ring-primary-container transition-all"
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => void runTextQuery(queryTarget)}
+                title={`클릭 시 "${queryTarget}" 검색`}
+                className="flex items-center gap-1 cursor-pointer"
+              >
+                <span>{isRoomCreator ? `👑 ${displayPersona}` : displayPersona}</span>
+              </button>
+            </div>
           );
         })}
         <button
           type="button"
+          onClick={() => setDoorplatePickerClusterId('face_member_5')}
+          className="px-2.5 py-1.5 rounded-full bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-extrabold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
+          title="Z-Eye 여권 5대 스타일 슬롯(①정면/②미소/③측면/④선글라스/⑤야외) 원터치 문패 사진 교체"
+        >
+          🎨 내 문패 사진 변경
+        </button>
+        <button
+          type="button"
           onClick={() => setShowFaceRegistryModal(true)}
-          className="px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold ml-0.5 shrink-0 whitespace-nowrap"
+          className="px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
         >
           🛂 인물 관리
         </button>
