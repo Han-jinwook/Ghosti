@@ -106,12 +106,13 @@ const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
 const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
   label: string;
+  shortLabel: string;
 }> = [
-  { id: 'personal', label: '개인 라운지' },
-  { id: 'family', label: '패밀리 라운지' },
-  { id: 'club', label: '클럽 라운지' },
-  { id: 'student', label: '스쿨 라운지' },
-  { id: 'work', label: '업무 라운지' },
+  { id: 'personal', label: '개인 라운지', shortLabel: '개인' },
+  { id: 'family', label: '패밀리 라운지', shortLabel: '패밀리' },
+  { id: 'club', label: '클럽 라운지', shortLabel: '클럽' },
+  { id: 'student', label: '스쿨 라운지', shortLabel: '스쿨' },
+  { id: 'work', label: '업무 라운지', shortLabel: '업무' },
 ];
 
 const LOUNGE_SUBMENU_CONFIG: Record<
@@ -268,7 +269,7 @@ export const DesktopDashboard: React.FC = () => {
                         제트아이
                       </span>
                       <span
-                        className={`font-extrabold text-[11.5px] sm:text-[12.5px] ${
+                        className={`hidden sm:inline font-extrabold text-[11.5px] sm:text-[12.5px] ${
                           themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
                         }`}
                       >
@@ -332,7 +333,7 @@ export const DesktopDashboard: React.FC = () => {
               </nav>
             </div>
 
-            {/* 우측 상단: 설정 몬스터 바로가기 + 코인 잔액 + 테마 토글 (모바일 360px에서도 로고와 절대 겹치지 않도록 컴팩트 구성) */}
+            {/* 우측 상단: 설정 몬스터 바로가기 + 코인 잔액 + 테마 토글 */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
               {(!isStoreAppMode || enableSetupMonster) && (
                 <>
@@ -398,17 +399,16 @@ export const DesktopDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* 모바일·태블릿(lg 미만, 360px 화면 포함) 전용 5대 라운지 메인메뉴 바: 짤림 없이 100% 전체 폭 표시 */}
-          <nav className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+          {/* 모바일·태블릿(lg 미만, 360px 화면 포함) 전용 5대 메인메뉴 바: '라운지' 글자를 빼고 5개(개인·패밀리·클럽·스쿨·업무)가 한 줄에 100% 다 보이게 배치 */}
+          <nav className="grid grid-cols-5 lg:hidden gap-1 pt-0.5">
             {MAIN_LOUNGE_MENUS.map((menu) => {
               const active = activeLoungeType === menu.id;
-              const isLoungeSub = Boolean(subscribedLounges[menu.id]);
               return (
                 <button
                   key={menu.id}
                   type="button"
                   onClick={() => setActiveLoungeType(menu.id)}
-                  className={`px-3 py-1.5 rounded-full font-label-md text-[12px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                  className={`py-1.5 px-1 rounded-full font-label-md text-[12px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                     active
                       ? themeMode === 'light'
                         ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-[0_1px_2px_rgba(13,148,136,0.08)]'
@@ -418,13 +418,8 @@ export const DesktopDashboard: React.FC = () => {
                       : 'bg-zinc-900/80 text-zinc-400 hover:text-white font-bold'
                   }`}
                 >
-                  <MainLoungeMonoIcon id={menu.id} className="w-[14px] h-[14px] shrink-0" />
-                  <span>{menu.label}</span>
-                  {isLoungeSub && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 text-[9.5px] font-extrabold">
-                      PRO
-                    </span>
-                  )}
+                  <MainLoungeMonoIcon id={menu.id} className="w-[13px] h-[13px] shrink-0" />
+                  <span>{menu.shortLabel}</span>
                 </button>
               );
             })}
