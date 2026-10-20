@@ -1760,7 +1760,7 @@ interface WorkLoungeDocItem {
   folderId: string;
   folderPath: string;
   fileName: string;
-  ext: 'XLSX' | 'DOCX' | 'PDF' | 'HWP' | 'DWG';
+  ext: string;
   sizeLabel: string;
   updatedAt: string;
   author: string;
@@ -1771,10 +1771,13 @@ interface WorkLoungeDocItem {
   tableHeaders: string[];
   tableRows: string[][];
   fullTextPreview: string;
+  isImage?: boolean;
+  imageBase64?: string;
 }
 
 const WORK_LOUNGE_FOLDERS = [
   { id: 'all', name: 'S:\\ (업무 드라이브 전체)', count: 6, path: 'S:\\' },
+  { id: 'root', name: 'S:\\ 루트 (최상단 파일)', count: 1, path: 'S:\\' },
   { id: 'contracts', name: '01_계약서_법무문서', count: 2, path: 'S:\\01_계약서_법무문서' },
   { id: 'quotes', name: '02_견적서_단가표_엑셀', count: 2, path: 'S:\\02_견적서_단가표_엑셀' },
   { id: 'tax', name: '03_세금계산서_회계증빙', count: 1, path: 'S:\\03_세금계산서_회계증빙' },
@@ -1934,8 +1937,87 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [selectedDocId, setSelectedDocId] = useState<string>('work-doc-1');
 
   const workPlan = subscribedLounges.work;
+  const [folderCounts, setFolderCounts] = useState<Record<string, number>>({
+    all: 6,
+    root: 1,
+    contracts: 2,
+    quotes: 2,
+    tax: 1,
+    site: 1,
+  });
 
-  // 라운지 진입 시 100% 무인 자동으로 연결 개통 및 윈도우 S: 드라이브 자동 연결
+  // 실제 S: 드라이브 폴더 스캔 및 문서 목록 실시간 동기화
+  const syncRealWorkFiles = () => {
+    fetch('/__work/files')
+      .then((r) => r.json())
+      .then((data: { ok: boolean; files: any[] }) => {
+        if (!data?.ok || !Array.isArray(data.files)) return;
+        const realFiles = data.files;
+        if (realFiles.length === 0) return;
+
+        // 실제 파일들을 WorkLoungeDocItem 구조로 매핑
+        const mappedRealDocs: WorkLoungeDocItem[] = realFiles.map((rf: any, idx: number) => {
+          const isGifOrImg = rf.isImage;
+          const defaultSnippet = isGifOrImg
+            ? `이미지/미디어 파일: ${rf.name} (${rf.sizeFormatted}) — 실시간 투시 가능`
+            : rf.previewText
+            ? rf.previewText.slice(0, 160).replace(/\n/g, ' ')
+            : `S: 드라이브 보관 파일 — ${rf.relPath}`;
+
+          return {
+            id: `real-file-${idx}-${rf.name}`,
+            folderId: rf.folderId || 'root',
+            folderPath: rf.folderPath || 'S:\\',
+            fileName: rf.name,
+            ext: rf.ext || 'FILE',
+            sizeLabel: rf.sizeFormatted || '0 KB',
+            updatedAt: rf.mtimeFormatted || '최근',
+            author: '멀린님 (로컬)',
+            lockedBy: null,
+            cacheSizeLabel: '실시간 로컬 동기화',
+            summaryTitle: isGifOrImg
+              ? `[이미지 파일 투시] ${rf.name} (해상도 및 원본 즉시 확인)`
+              : `[문서 투시] ${rf.name}`,
+            matchedSnippet: defaultSnippet,
+            tableHeaders: rf.tableHeaders && rf.tableHeaders.length > 0 ? rf.tableHeaders : ['속성', '상세 정보'],
+            tableRows:
+              rf.tableRows && rf.tableRows.length > 0
+                ? rf.tableRows
+                : [
+                    ['파일명', rf.name],
+                    ['위치', rf.folderPath],
+                    ['용량', rf.sizeFormatted],
+                    ['최근 수정일', rf.mtimeFormatted],
+                  ],
+            fullTextPreview: rf.previewText || (isGifOrImg ? `[이미지 미리보기 지원] ${rf.name}` : `S: 드라이브 로컬 원본 파일입니다.`),
+            isImage: rf.isImage,
+            imageBase64: rf.imageBase64,
+          };
+        });
+
+        // 폴더별 카운트 계산
+        const counts: Record<string, number> = { all: mappedRealDocs.length, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 };
+        mappedRealDocs.forEach((d) => {
+          if (counts[d.folderId] !== undefined) {
+            counts[d.folderId]++;
+          }
+        });
+        setFolderCounts(counts);
+
+        // 실제 파일 목록과 기존 데모 템플릿(실제 파일에 없는 것)을 조화롭게 병합
+        setDocs(mappedRealDocs);
+        if (mappedRealDocs.length > 0) {
+          // 새로 추가된 파일(예: 1줄빛러M.gif)이 있으면 자동 선택 가능하도록
+          setSelectedDocId((prev) => {
+            const exists = mappedRealDocs.some((d) => d.id === prev);
+            return exists ? prev : mappedRealDocs[0].id;
+          });
+        }
+      })
+      .catch(() => {});
+  };
+
+  // 라운지 진입 시 100% 무인 자동으로 연결 개통 및 윈도우 S: 드라이브 자동 연결 + 파일 스캔
   useEffect(() => {
     void verifyHybridP2PBridgeConnection({
       roomId: 'lounge-work-b2b',
@@ -1952,6 +2034,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (data?.targetDir) setDriveTargetPath(data.targetDir);
       })
       .catch(() => {});
+
+    syncRealWorkFiles();
+    const interval = setInterval(syncRealWorkFiles, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   // 어절(단어) 단위 스마트 매칭: "지체상금 0.15%" 클릭 시 "지체상금(1일 0.15%)"도 100% 매칭
@@ -2224,6 +2310,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   </div>
                   {WORK_LOUNGE_FOLDERS.map((folder) => {
                     const active = selectedFolderId === folder.id;
+                    const count = folderCounts[folder.id] ?? folder.count;
                     return (
                       <button
                         key={folder.id}
@@ -2236,11 +2323,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
                         }`}
                       >
                         <span className="truncate">
-                          {folder.id === 'all' ? '💽 ' : active ? '📂 ' : '📁 '}
+                          {folder.id === 'all' ? '💽 ' : folder.id === 'root' ? '📄 ' : active ? '📂 ' : '📁 '}
                           {folder.name}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[10.5px] shrink-0">
-                          {folder.count}
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[10.5px] shrink-0 font-bold">
+                          {count}
                         </span>
                       </button>
                     );
@@ -2354,6 +2441,27 @@ export const WorkLoungeB2BHub: React.FC = () => {
               >
                 잠금 표시하기
               </button>
+            </div>
+          )}
+
+          {/* 이미지 미리보기 (GIF / PNG / JPG 등 미디어 파일 지원) */}
+          {selectedDoc.isImage && selectedDoc.imageBase64 && (
+            <div className="p-3 rounded-xl bg-zinc-950 border border-cyan-400/30 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
+                  🖼️ 이미지 원본 실시간 미리보기
+                </span>
+                <span className="text-[11px] text-zinc-400">
+                  {selectedDoc.ext} · {selectedDoc.sizeLabel}
+                </span>
+              </div>
+              <div className="w-full flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/5 overflow-hidden">
+                <img
+                  src={selectedDoc.imageBase64}
+                  alt={selectedDoc.fileName}
+                  className="max-h-64 object-contain rounded"
+                />
+              </div>
             </div>
           )}
 

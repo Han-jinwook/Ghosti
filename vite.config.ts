@@ -2579,6 +2579,115 @@ function zeyeLocalBridge(): Plugin {
         }
       });
 
+      // [업무 라운지 S: 드라이브 실제 파일 목록 및 내용 조회 API]
+      server.middlewares.use('/__work/files', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const workVaultDir = path.resolve(ROOT, '업무공유폴더_S');
+        try {
+          if (!fs.existsSync(workVaultDir)) {
+            fs.mkdirSync(workVaultDir, { recursive: true });
+          }
+
+          function scanDirectory(currentDir: string, relativeDir: string = ''): any[] {
+            const items = fs.readdirSync(currentDir, { withFileTypes: true });
+            let list: any[] = [];
+            for (const item of items) {
+              const fullPath = path.join(currentDir, item.name);
+              const relPath = relativeDir ? path.join(relativeDir, item.name) : item.name;
+              if (item.isDirectory()) {
+                list = list.concat(scanDirectory(fullPath, relPath));
+              } else {
+                try {
+                  const stat = fs.statSync(fullPath);
+                  const extName = path.extname(item.name).replace('.', '').toUpperCase();
+                  let previewText = '';
+                  let tableRows: string[][] = [];
+                  let tableHeaders: string[] = [];
+
+                  // 텍스트 계열(txt, csv, md 등) 간단 미리보기 추출
+                  if (['TXT', 'CSV', 'MD', 'JSON', 'LOG'].includes(extName)) {
+                    const rawContent = fs.readFileSync(fullPath, 'utf-8');
+                    previewText = rawContent.slice(0, 500);
+                    if (extName === 'CSV') {
+                      const lines = rawContent.split(/\r?\n/).filter((l) => l.trim().length > 0);
+                      if (lines.length > 0) {
+                        tableHeaders = lines[0].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+                        tableRows = lines.slice(1, 5).map((l) => l.split(',').map((c) => c.trim().replace(/^"|"$/g, '')));
+                      }
+                    }
+                  }
+
+                  // 폴더 분류 매핑
+                  let folderId = 'root';
+                  let folderName = 'S:\\ 루트 (최상단)';
+                  const normalizedRel = relPath.replace(/\\/g, '/');
+                  if (normalizedRel.startsWith('01_계약서')) {
+                    folderId = 'contracts';
+                    folderName = '01_계약서_법무문서';
+                  } else if (normalizedRel.startsWith('02_견적서')) {
+                    folderId = 'quotes';
+                    folderName = '02_견적서_단가표_엑셀';
+                  } else if (normalizedRel.startsWith('03_세금계산서')) {
+                    folderId = 'tax';
+                    folderName = '03_세금계산서_회계증빙';
+                  } else if (normalizedRel.startsWith('04_현장시공')) {
+                    folderId = 'site';
+                    folderName = '04_현장시공_도면_미디어';
+                  }
+
+                  const isImage = ['GIF', 'PNG', 'JPG', 'JPEG', 'WEBP', 'SVG'].includes(extName);
+                  let imageBase64 = '';
+                  if (isImage && stat.size < 10 * 1024 * 1024) {
+                    const buf = fs.readFileSync(fullPath);
+                    const mime = extName === 'GIF' ? 'image/gif' : extName === 'PNG' ? 'image/png' : extName === 'SVG' ? 'image/svg+xml' : 'image/jpeg';
+                    imageBase64 = `data:${mime};base64,${buf.toString('base64')}`;
+                  }
+
+                  list.push({
+                    name: item.name,
+                    relPath,
+                    folderId,
+                    folderName,
+                    folderPath: `S:\\${path.dirname(relPath) === '.' ? '' : path.dirname(relPath)}`.replace(/\\$/, ''),
+                    size: stat.size,
+                    sizeFormatted:
+                      stat.size > 1024 * 1024
+                        ? `${(stat.size / (1024 * 1024)).toFixed(1)} MB`
+                        : `${(stat.size / 1024).toFixed(1)} KB`,
+                    mtime: stat.mtime.toISOString(),
+                    mtimeFormatted: new Date(stat.mtime).toLocaleString('ko-KR', {
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }),
+                    ext: extName,
+                    isImage,
+                    imageBase64,
+                    previewText,
+                    tableHeaders,
+                    tableRows,
+                  });
+                } catch {}
+              }
+            }
+            return list;
+          }
+
+          const fileList = scanDirectory(workVaultDir);
+          res.end(
+            JSON.stringify({
+              ok: true,
+              workVaultDir,
+              totalCount: fileList.length,
+              files: fileList,
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e), files: [] }));
+        }
+      });
+
       // [클럽/패밀리 라운지 원본 다운로드 및 저장 위치 폴더 열기 엔드포인트]
       server.middlewares.use('/__club/download-originals', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
