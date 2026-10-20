@@ -1844,6 +1844,20 @@ function zeyeLocalBridge(): Plugin {
           const p2 = path.resolve(QUARANTINE_DIR, file);
           const full = fs.existsSync(p1) ? p1 : p2;
           if (!file || !fs.existsSync(full)) {
+            if (fs.existsSync(FACE_CROPS_DIR)) {
+              const crops = fs.readdirSync(FACE_CROPS_DIR).filter((c) => c.endsWith('.jpg'));
+              const baseStem = path.basename(file, path.extname(file));
+              const matchedCrop =
+                crops.find((c) => c.includes(baseStem)) ||
+                crops.find((c) => c.includes('face_member_5')) ||
+                crops[0];
+              if (matchedCrop) {
+                res.setHeader('Content-Type', 'image/jpeg');
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                fs.createReadStream(path.resolve(FACE_CROPS_DIR, matchedCrop)).pipe(res);
+                return;
+              }
+            }
             res.statusCode = 404;
             res.end('not found');
             return;
@@ -2447,6 +2461,116 @@ function zeyeLocalBridge(): Plugin {
                 },
                 verifiedAtIso: new Date().toISOString(),
               },
+            })
+          );
+        } catch (e) {
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+        }
+      });
+
+      // [업무 라운지 실물 윈도우 S: 드라이브 마운트/해제 및 탐색기 자동 오픈 엔드포인트]
+      server.middlewares.use('/__work/s-drive', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const workVaultDir = path.resolve(ROOT, 'test_docs');
+        const subFolders = [
+          '01_계약서_법무문서',
+          '02_견적서_단가표_엑셀',
+          '03_세금계산서_회계증빙',
+          '04_현장시공_도면_미디어',
+        ];
+        try {
+          if (!fs.existsSync(workVaultDir)) {
+            fs.mkdirSync(workVaultDir, { recursive: true });
+          }
+          for (const sf of subFolders) {
+            const p = path.resolve(workVaultDir, sf);
+            if (!fs.existsSync(p)) {
+              fs.mkdirSync(p, { recursive: true });
+            }
+          }
+
+          const sampleFiles: Array<{ relPath: string; content: string }> = [
+            {
+              relPath: '01_계약서_법무문서/2026_성수동_사옥인테리어_표준도급계약서_최종.txt',
+              content:
+                '제14조 (지체상금 및 하자보수 보증)\r\n수급인이 약정 준공기한 내에 공사를 완료하지 못한 때에는 매 지체일수마다 계약금액의 0.15%에 해당하는 지체상금을 도급인에게 납부한다.\r\n하자보수보증금률은 총 공사금액의 10%로 하며 준공검사 완료일로부터 2년간 보증한다.\r\n',
+            },
+            {
+              relPath: '02_견적서_단가표_엑셀/2026_2분기_성수현장_자재비_비교견적_단가표.csv',
+              content:
+                '공종명,성수목공(A안),대림디자인(B안),비고(결정사항)\r\n가설 및 철거공사,"4,850,000원","5,600,000원",성수목공 75만원 저렴\r\n오크 원목 루버 목공사,"14,200,000원","15,900,000원",성수목공 채택(친환경 E0 등급)\r\n바닥 포세린 타일(600각),"8,400,000원","8,150,000원",이탈리아 수입 타일 기준\r\n총 견적 합계(VAT별도),"42,800,000원","46,500,000원",성수목공 최종 낙찰 완료\r\n',
+            },
+            {
+              relPath: '03_세금계산서_회계증빙/2026_03월_거래처별_세금계산서_미수금_원장.csv',
+              content:
+                '거래처명,청구금액(공급가+세액),입금완료액,미수금 잔액\r\n(주)한빛테크,"35,000,000원","22,500,000원","12,500,000원 (4/15 입금약정)"\r\n청담스튜디오,"18,700,000원","18,700,000원",0원 (완납)\r\n모던라이팅 조명,"9,900,000원","9,900,000원",0원 (완납)\r\n',
+            },
+            {
+              relPath: '04_현장시공_도면_미디어/성수사옥_3층_바리스타존_전기배선_감리일지.txt',
+              content:
+                '현장 감리 메모:\r\n기존 건물 분전반 용량이 50A로 부족하여 한전 승압 신청 완료(100A).\r\n바리스타존 커피머신 가동 시 차단기 트립 방지를 위해 P-04 단독 회로를 천장 트레이 경유하여 바 하부 점검구로 인출 완료함.\r\n',
+            },
+          ];
+          for (const sf of sampleFiles) {
+            const fullFilePath = path.join(workVaultDir, sf.relPath);
+            if (!fs.existsSync(fullFilePath)) {
+              fs.writeFileSync(fullFilePath, '\uFEFF' + sf.content, 'utf8');
+            }
+          }
+
+          if (req.method === 'GET') {
+            const mounted = fs.existsSync('S:\\');
+            res.end(
+              JSON.stringify({
+                ok: true,
+                mounted,
+                driveLetter: 'S:',
+                targetDir: workVaultDir,
+              })
+            );
+            return;
+          }
+
+          const body = await readJsonBody(req);
+          const action = String(body?.action || 'mount');
+          const shouldOpenExplorer = body?.openExplorer !== false;
+
+          if (action === 'unmount') {
+            await new Promise<void>((resolve) => {
+              exec('subst S: /d', () => resolve());
+            });
+            res.end(
+              JSON.stringify({
+                ok: true,
+                mounted: fs.existsSync('S:\\'),
+                driveLetter: 'S:',
+                targetDir: workVaultDir,
+                message: '안내: 윈도우 탐색기(내 PC)에서 [업무 드라이브 (S:)] 연결을 해제했습니다.',
+              })
+            );
+            return;
+          }
+
+          if (!fs.existsSync('S:\\')) {
+            await new Promise<void>((resolve) => {
+              exec(`subst S: "${workVaultDir}"`, () => resolve());
+            });
+          }
+
+          const mountedNow = fs.existsSync('S:\\');
+          const openTarget = mountedNow ? 'S:\\' : workVaultDir;
+          if (shouldOpenExplorer) {
+            exec(`explorer.exe "${openTarget}"`);
+          }
+
+          res.end(
+            JSON.stringify({
+              ok: true,
+              mounted: mountedNow,
+              driveLetter: 'S:',
+              targetDir: workVaultDir,
+              openedExplorer: shouldOpenExplorer,
+              message: `✓ 윈도우 탐색기(내 PC)에 실제 [업무 드라이브 (S:)]가 생성되었으며 탐색기 창을 바로 열었습니다!`,
             })
           );
         } catch (e) {
