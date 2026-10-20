@@ -2458,7 +2458,7 @@ function zeyeLocalBridge(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [basicSsl(), zeyeLocalBridge()],
+  plugins: [ ...(process.env.VITE_HTTPS === '1' ? [basicSsl()] : []), zeyeLocalBridge()],
   server: {
     host: true,
     port: 5199,

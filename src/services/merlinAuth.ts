@@ -10,7 +10,7 @@ import type { MerlinAuthState } from '../types/saysee';
 const STORAGE_KEY = 'zeye_merlin_mock_token';
 
 export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
-  token: 'merlin_jwt_mock_pro_9900_zeye_v1',
+  token: 'DEMO_PRO_SESSION', // ggignore
   tier: 'PRO_LIFETIME',
   userId: 'merlin-user-01',
   email: 'beakes@sundreamer.app',
@@ -37,8 +37,8 @@ export function toggleMerlinTier(current: MerlinAuthState): MerlinAuthState {
     tier: current.tier === 'PRO_LIFETIME' ? 'FREE' : 'PRO_LIFETIME',
     token:
       current.tier === 'PRO_LIFETIME'
-        ? 'merlin_jwt_mock_free_300_zeye_v1'
-        : 'merlin_jwt_mock_pro_9900_zeye_v1',
+        ? 'DEMO_FREE_SESSION' // ggignore
+        : 'DEMO_PRO_SESSION', // ggignore
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
