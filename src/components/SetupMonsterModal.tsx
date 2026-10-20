@@ -3,6 +3,7 @@ import {
   MOBILE_SYMPTOM_CHIPS,
   PC_SYMPTOM_CHIPS,
 } from '../services/setupMonsterEngine';
+import { dispatchAndroidOverlayArrowViaBridge } from '../services/p2pHybridBridge';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { SetupDiagnosisPlan } from '../types/saysee';
 
@@ -26,6 +27,10 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
   const steps = activeOverlayPlan.overlaySteps;
   const currentStep = steps[activeOverlayStepIndex] ?? steps[0];
   const [leftPct, topPct] = currentStep.fingerCoordPct;
+  const nativeOverlayDispatch = dispatchAndroidOverlayArrowViaBridge({
+    rawLogicalRect: currentStep.rawLogicalRect ?? [leftPct * 10, topPct * 20, 120, 56],
+    instructionKo: currentStep.bubbleMessage,
+  });
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/65 backdrop-blur-[2px] flex items-center justify-center p-4">
@@ -69,7 +74,7 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
                 👁️ 에이전트 눈(Eye) 0.01초 화면 좌표 스캔 배열 (Scraped DOM/UI Tree)
               </span>
               <span className="font-mono text-[10.5px] text-emerald-300">
-                Latency: 8.4ms · Backtrack: {activeOverlayBacktrackCount}회
+                Latency: 8.4ms · Backtrack: {activeOverlayBacktrackCount}회 · Bridge: {nativeOverlayDispatch.bridgeMode} (Inset -{nativeOverlayDispatch.statusBarInsetPx}px)
               </span>
             </div>
             {currentStep.scanModeBadgeKo && (

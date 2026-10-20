@@ -1,0 +1,28 @@
+{
+  "auditLogs": [
+    {
+      "auditId": "audit_1792458843176",
+      "createdAt": "2026-10-20T01:14:03.176Z",
+      "userApprovedAt": "2026-10-20T01:14:03.176Z",
+      "platform": "pc",
+      "track": "TRACK_A_DIRECT_REPAIR",
+      "difficultyLevel": "LEVEL_1_SIMPLE_100",
+      "escrowStatus": "ESCROW_HOLDING",
+      "backtrackCount": 2,
+      "trajectoryGrade": "GRADE_0_EXPRESS",
+      "symptomQuery": "",
+      "title": "Z-Eye 설정 몬스터 자동 처치",
+      "agentModuleName": "Z-Eye_PC_Setup.exe",
+      "systemCommandOrApi": "",
+      "beforeSnapshot": {},
+      "afterSnapshot": {},
+      "creditDeducted": 100,
+      "domCaptureHash": "547d03c1e5765f6d",
+      "conversationSummary": [],
+      "undone": false,
+      "refunded": false
+    }
+  ],
+  "failureTelemetryQueue": [],
+  "selfHealingOtaQueue": []
+}

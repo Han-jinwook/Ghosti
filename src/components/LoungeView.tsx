@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import {
+  buildWindowsNativeWebDavMountCommand,
+  verifyHybridP2PBridgeConnection,
+  type P2PHybridConnectionDiagnostics,
+} from '../services/p2pHybridBridge';
 import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeStore';
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../types/saysee';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
@@ -1991,6 +1996,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [masterPcOnline, setMasterPcOnline] = useState(true);
   const [driveMounted, setDriveMounted] = useState(true);
   const [mountBannerToast, setMountBannerToast] = useState<string | null>(null);
+  const [p2pDiagnostics, setP2pDiagnostics] = useState<P2PHybridConnectionDiagnostics | null>(null);
+  const [p2pFallbackSimulated, setP2pFallbackSimulated] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [docs, setDocs] = useState<WorkLoungeDocItem[]>(INITIAL_WORK_DOCS);
@@ -2018,7 +2025,29 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const selectedDoc =
     docs.find((d) => d.id === selectedDocId) || filteredDocs[0] || docs[0];
 
+  const handleRunP2pFallbackTest = async (simulateBlock?: boolean) => {
+    const targetBlock = simulateBlock ?? !p2pFallbackSimulated;
+    setP2pFallbackSimulated(targetBlock);
+    const diag = await verifyHybridP2PBridgeConnection({
+      roomId: 'lounge-work-b2b',
+      simulateSymmetricNatBlock: targetBlock,
+    });
+    setP2pDiagnostics(diag);
+  };
+
   const handleToggleMountDrive = () => {
+    const next = !driveMounted;
+    const webdav = buildWindowsNativeWebDavMountCommand('S:');
+    setDriveMounted(next);
+    void handleRunP2pFallbackTest(p2pFallbackSimulated);
+    setMountBannerToast(
+      next
+        ? `✓ 내 PC 윈도우 탐색기에 [업무 드라이브 (S:)]가 무설치 내장 명령어(${webdav.mountCmd})로 0.5초 자동 마운트되었습니다! 이제 탐색기에서 기존 폴더 그대로 열고 저장하면 실시간 File Lock이 작동합니다.`
+        : `안내: 윈도우 탐색기 [업무 드라이브 (S:)] 마운트가 해제(${webdav.unmountCmd})되었습니다. 언제든 원클릭으로 다시 연결할 수 있습니다.`
+    );
+  };
+
+  const _unusedOriginalMount = () => {
     const next = !driveMounted;
     setDriveMounted(next);
     setMountBannerToast(
@@ -2106,7 +2135,15 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </button>
 
               <span className="px-3 py-1.5 rounded-xl bg-zinc-900/90 border border-cyan-400/35 text-cyan-200 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 whitespace-nowrap">
-                👥 접속 중인 팀원 6명 (편집 2명)
+                👥 접속 중인 팀원 6명 ·{' '}
+                <span
+                  onClick={() => void handleRunP2pFallbackTest()}
+                  className="underline text-amber-300 cursor-pointer"
+                >
+                  {p2pDiagnostics?.fallbackTriggered
+                    ? `⚡ 2순위 비상터널(${p2pDiagnostics.roundTripLatencyMs}ms · 중계비 0원)`
+                    : `⚡ 1순위 P2P 직통(${p2pDiagnostics?.roundTripLatencyMs ?? 11}ms · 중계비 0원) [LTE/5G 폴백 테스트]`}
+                </span>
               </span>
             </div>
 
@@ -2704,7 +2741,13 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setP2pOriginalSummoned((v) => !v)}
+            onClick={() => {
+              const next = !p2pOriginalSummoned;
+              setP2pOriginalSummoned(next);
+              if (next) {
+                void verifyHybridP2PBridgeConnection({ roomId: 'lounge-club-1989' });
+              }
+            }}
             className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap ${
               p2pOriginalSummoned
                 ? 'bg-primary-container text-zinc-950 border-primary-container'
