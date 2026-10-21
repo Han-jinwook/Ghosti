@@ -127,12 +127,15 @@ interface SaySeeStore {
   faceClusters: FaceMemberCluster[];
   latestCorpusYear: number;
   showFaceRegistryModal: boolean;
+  doorplatePickerClusterId: string | null;
   detectingLiveFaces: boolean;
   globalSeedVersion: number;
   retroScanRunning: boolean;
   lastRetroScanReport: SwarmRetroScanReport | null;
   swarmFaceCandidates: GlobalSwarmFaceCandidate[];
   setShowFaceRegistryModal: (show: boolean) => void;
+  setDoorplatePickerClusterId: (clusterId: string | null) => void;
+  selectDoorplateStyleSlot: (clusterId: string, slotIndex: number) => void;
   registerFaceMember: (
     clusterId: string,
     registeredName: string,
@@ -801,14 +804,97 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     }
 
-    const mergedYearly = [...baseCuts, ...extraCuts].sort((a, b) => b.year - a.year);
+    const mergedYearlyRaw = [...baseCuts, ...extraCuts].sort((a, b) => b.year - a.year);
+    const slot1Anchor = mergedYearlyRaw[0] || {
+      year: c.representativeYear || 2026,
+      representativePhoto: c.representativePhoto,
+      representativeDate: c.representativeDate || '2026.10.02',
+      frontalScore: c.frontalScore || 0.99,
+      opticalSharpness: c.opticalSharpness || 35000,
+      avatarUrl: c.cropUrl || c.avatarUrl,
+      cropUrl: c.cropUrl || c.avatarUrl,
+      boundingBox: c.boundingBox,
+      conditionTag: '정면·선명' as const,
+      conditionShortKo: '① 정면',
+      sourceDeviceKo: 'Z-Eye 여권 최신 기준컷',
+    };
+
+    const secondCut = mergedYearlyRaw[1] || slot1Anchor;
+    const thirdCut = mergedYearlyRaw[2] || secondCut;
+
+    // 5대 스타일 슬롯 표준화: ① 정면(당해 연도 Anchor) / ② 활짝 미소 / ③ 측면 / ④ 선글라스 / ⑤ 야외
+    const fiveStyleSlotCuts: YearlyFaceBestCut[] = [
+      {
+        ...slot1Anchor,
+        year: Math.max(slot1Anchor.year || 2026, 2026),
+        conditionTag: '정면·선명',
+        conditionShortKo: '① 정면',
+        sourceDeviceKo: '당해 연도 정면 기준컷 (Slot 1)',
+      },
+      {
+        ...secondCut,
+        year: secondCut.year || 2025,
+        conditionTag: '측면·미소',
+        conditionShortKo: '② 활짝 미소',
+        sourceDeviceKo: secondCut.sourceDeviceKo || '가족방 미소 베스트컷',
+      },
+      {
+        ...thirdCut,
+        year: thirdCut.year || 2024,
+        conditionTag: '측면·미소',
+        conditionShortKo: '③ 측면',
+        sourceDeviceKo: thirdCut.sourceDeviceKo || '측면 자연스러운 컷',
+      },
+      {
+        ...(mergedYearlyRaw.find((y) => y.conditionTag === '선글라스·역광') || secondCut),
+        year: 2024,
+        conditionTag: '선글라스·역광',
+        conditionShortKo: '④ 선글라스',
+        sourceDeviceKo: '여행·라운딩 선글라스 컷',
+      },
+      {
+        ...(mergedYearlyRaw.find((y) => y.conditionTag === '야외·노을') || slot1Anchor),
+        year: 2025,
+        conditionTag: '야외·노을',
+        conditionShortKo: '⑤ 야외',
+        sourceDeviceKo: '야외 자연광 베스트컷',
+      },
+    ];
+
+    let savedSlotIdx = 0;
+    try {
+      const rawPrefs =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('zeye_doorplate_slot_prefs')
+          : null;
+      if (rawPrefs) {
+        const parsed = JSON.parse(rawPrefs);
+        if (typeof parsed[c.clusterId] === 'number') {
+          savedSlotIdx = Math.max(0, Math.min(4, parsed[c.clusterId]));
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const activeSlot = fiveStyleSlotCuts[savedSlotIdx] || fiveStyleSlotCuts[0];
+    const autoDoorplateUrl =
+      activeSlot.cropUrl || activeSlot.avatarUrl || c.cropUrl || c.avatarUrl;
+
     return {
       ...c,
       passportEmail,
-      timelineBucket,
+      timelineBucket: {
+        ...timelineBucket,
+        filledStyleSlots: ['① 정면', '② 활짝 미소', '③ 측면', '④ 선글라스', '⑤ 야외'],
+      },
       roomPersonas,
       crossLoungeEvolutionNote,
-      yearlyBestCuts: mergedYearly,
+      yearlyBestCuts: fiveStyleSlotCuts,
+      activeDoorplateSlotIndex: savedSlotIdx,
+      doorplateSlotLabelKo: activeSlot.conditionShortKo || '① 정면',
+      avatarUrl: autoDoorplateUrl,
+      cropUrl: autoDoorplateUrl,
     };
   });
 
@@ -851,6 +937,8 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       representativeDate: '2026.09.26',
       frontalScore: 0.95,
       opticalSharpness: 32400,
+      activeDoorplateSlotIndex: 0,
+      doorplateSlotLabelKo: '① 정면',
       avatarUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
       cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
       boundingBox: [445, 180, 525, 236],
@@ -1104,6 +1192,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   faceClusters: [],
   latestCorpusYear: 2026,
   showFaceRegistryModal: false,
+  doorplatePickerClusterId: null,
   detectingLiveFaces: false,
   globalSeedVersion: 3,
   retroScanRunning: false,
@@ -1200,6 +1289,49 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     },
   ],
   setShowFaceRegistryModal: (showFaceRegistryModal) => set({ showFaceRegistryModal }),
+  setDoorplatePickerClusterId: (doorplatePickerClusterId) => set({ doorplatePickerClusterId }),
+  selectDoorplateStyleSlot: (clusterId, slotIndex) => {
+    const { faceClusters, activeLoungeType, activeFamilyRoom } = get();
+    const target = faceClusters.find((c) => c.clusterId === clusterId);
+    if (!target || !Array.isArray(target.yearlyBestCuts) || target.yearlyBestCuts.length === 0) {
+      return;
+    }
+    const clampedIdx = Math.max(0, Math.min(target.yearlyBestCuts.length - 1, slotIndex));
+    const chosenSlot = target.yearlyBestCuts[clampedIdx];
+    const nextAvatarUrl = chosenSlot.cropUrl || chosenSlot.avatarUrl || target.avatarUrl;
+    const slotLabel = chosenSlot.conditionShortKo || '① 정면';
+
+    try {
+      const rawPrefs = localStorage.getItem('zeye_doorplate_slot_prefs');
+      const prefs = rawPrefs ? JSON.parse(rawPrefs) : {};
+      prefs[clusterId] = clampedIdx;
+      localStorage.setItem('zeye_doorplate_slot_prefs', JSON.stringify(prefs));
+    } catch {
+      /* ignore */
+    }
+
+    const { activePersona } = getActivePersonaForCluster(
+      target,
+      activeLoungeType,
+      activeFamilyRoom
+    );
+    const displayName = activePersona || target.registeredName || '내 프로필';
+
+    set({
+      faceClusters: faceClusters.map((c) =>
+        c.clusterId === clusterId
+          ? {
+              ...c,
+              activeDoorplateSlotIndex: clampedIdx,
+              doorplateSlotLabelKo: slotLabel,
+              avatarUrl: nextAvatarUrl,
+              cropUrl: nextAvatarUrl,
+            }
+          : c
+      ),
+      lastQuarantineToast: `🛂 [자동 문패 스타일 변경] ‘${displayName}’님의 문패가 [${slotLabel} (${chosenSlot.year}년)] 컷으로 즉시 변경되었습니다!`,
+    });
+  },
 
   /**
    * [원터치 [등록] 100% 전자동 완결]
@@ -2930,7 +3062,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       return;
     }
 
-    // [PC 환경: 선(先) 무료 문진 & Z-Eye_PC_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료!) ➔ 후(後) 난이도별 차등 견적 & 멀린허브 잔액 Pre-Check]
+    // [PC 환경: 선(先) 무료 문진 & Merlin_Z_Core_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료!) ➔ 후(後) 난이도별 차등 견적 & 멀린허브 잔액 Pre-Check]
     if (platform === 'pc') {
       if (state.pendingTriageQuestion && !presetIdHint) {
         const activeTriage = state.pendingTriageQuestion;
@@ -2947,7 +3079,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           id: `ai_${Date.now() + 1}`,
           role: 'assistant',
           timestamp: nowLabel,
-          text: `🧠 [무료 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패(또는 초행길 2회 이상 헤맨 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+          text: `🧠 [무료 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패(또는 초행길 2회 이상 헤맨 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
           diagnosisPlan: plan,
         };
 
@@ -2971,7 +3103,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         id: `triage_${Date.now() + 1}`,
         role: 'assistant_triage',
         timestamp: nowLabel,
-        text: `🔍 [선(先) 무료 문진 & Z-Eye_PC_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료)]\n곧바로 결제창을 띄우지 않고 해결 가능 여부와 작업 복잡도를 먼저 무료로 스캔했습니다.\n• ${triageQ.exeBackgroundScanNote}\n\n${triageQ.questionText}`,
+        text: `🔍 [선(先) 무료 문진 & Merlin_Z_Core_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료)]\n곧바로 결제창을 띄우지 않고 해결 가능 여부와 작업 복잡도를 먼저 무료로 스캔했습니다.\n• ${triageQ.exeBackgroundScanNote}\n\n${triageQ.questionText}`,
         triageQuestion: triageQ,
         triageAnswered: false,
       };
@@ -3036,7 +3168,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `ai_quote_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🧠 [사전 문진 & Z-Eye_PC_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+      text: `🧠 [사전 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
       diagnosisPlan: plan,
     };
 
@@ -3465,7 +3597,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       .map((t) => `[${t.role}] ${t.text}`);
     const windowsBuildEnv =
       (targetAudit?.platform ?? state.setupMonsterPlatform) === 'pc'
-        ? 'Windows 11 Pro 23H2 (Build 22631.4317) · x64 · Z-Eye_PC_Setup.exe v2.4'
+        ? 'Windows 11 Pro 23H2 (Build 22631.4317) · x64 · Merlin_Z_Core_Setup.exe v2.4'
         : 'Android 15 (One UI 7.0) · Z-Eye_Mobile_1MB.apk v2.4';
 
     const nowIso = new Date().toISOString();

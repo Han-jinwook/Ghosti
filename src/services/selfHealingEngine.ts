@@ -170,7 +170,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
     prunedShortestPathSteps: [
       `[✂️ 도려낸 구간] 초행길 우회 탐색 ${backtrackCount}단계 완전 삭제 (Pruning 100%)`,
       `[⚡ 신규 최단 직행 지름길] 진입 즉시 최종 정답 좌표/스크립트(${plan.systemCommandOrApi.slice(0, 58)}...)로 1초 직행!`,
-      `[🌍 전 세계 OTA 배포] 글로벌 Z-Eye_Mobile_1MB.apk & Z-Eye_PC_Setup.exe 노드에 실시간 동기화 완료`,
+      `[🌍 전 세계 OTA 배포] 글로벌 멀린 Z 코어 (Merlin_Z_Core.apk & Merlin_Z_Core_Setup.exe) 노드에 실시간 동기화 완료`,
     ],
     otaBroadcastStatus: 'URGENT_SHORTEST_PATH_GLOBAL_OTA_DEPLOYED',
     refundedCoins: cost,

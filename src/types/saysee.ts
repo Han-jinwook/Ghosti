@@ -167,6 +167,10 @@ export interface FaceMemberCluster {
   boundingBox: [number, number, number, number];
   /** 당해 연도 정면 + 타 연도 측면·야외·선글라스 베스트 컷이 알고리즘에 의해 자동 결합된 멀티-조건 시드 패키지 */
   yearlyBestCuts?: YearlyFaceBestCut[];
+  /** [자동 문패(Auto Profile Doorplate)] 현재 장착된 5대 스타일 슬롯 인덱스 (기본값 0 = Slot 1 당해 연도 최신 정면 기준컷) */
+  activeDoorplateSlotIndex?: number;
+  /** 현재 장착된 문패 스타일 라벨 (예: '① 정면 (2026 기준컷)') */
+  doorplateSlotLabelKo?: string;
   detectedSampleCount: number;
   matchedPhotoCount: number;
   matchedPhotoFiles: string[];
@@ -525,7 +529,7 @@ export type SetupUiScanStrategy =
 
 export interface SetupOsSecuritySpec {
   platform: SetupMonsterPlatform;
-  // 💻 Windows .exe 데몬 (Z-Eye_PC_Setup.exe): UIPI 장벽 통과 & JEA 최소 권한 제어
+  // 💻 Windows .exe 데몬 (Merlin_Z_Core_Setup.exe): UIPI 장벽 통과 & JEA 최소 권한 제어
   windowsManifestUiAccess?: boolean;
   windowsAuthenticodeSigned?: boolean;
   windowsJeaLeastPrivilegePolicy?: string;

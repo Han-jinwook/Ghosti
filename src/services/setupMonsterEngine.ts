@@ -350,7 +350,7 @@ export function resolvePresetIdFromQuery(
 }
 
 /**
- * [1단계: 선(先) 무료 문진 & Z-Eye_PC_Setup.exe 백그라운드 사태 파악]
+ * [1단계: 선(先) 무료 문진 & Merlin_Z_Core_Setup.exe 백그라운드 사태 파악]
  * PC 환경에서 유저가 증상을 말하면 곧바로 결제창을 띄우지 않고,
  * LLM이 1~2회 추가 질문을 거치며 .exe를 통해 백그라운드에서 해결 가능 여부와 작업 복잡도를 먼저 스캔합니다.
  */
@@ -369,7 +369,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-Eye_PC_Setup.exe 백그라운드 사전 스캔(무료): Windows Spooler 큐에 멈춘 문서 4건 및 WSD 네트워크 포트 지연 감지됨 (해결 가능 판정 · Level 2 중급 수리 대상)',
+        '🔍 Merlin_Z_Core_Setup.exe 백그라운드 사전 스캔(무료): Windows Spooler 큐에 멈춘 문서 4건 및 WSD 네트워크 포트 지연 감지됨 (해결 가능 판정 · Level 2 중급 수리 대상)',
       questionText:
         '정확한 수리 레시피 선택을 위해 한 가지만 여쭤볼게요! 현재 프린터 증상이 아래 중 어느 쪽에 가장 가까운가요?',
       options: [
@@ -396,7 +396,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-Eye_PC_Setup.exe 백그라운드 사전 스캔(무료): SMB 자격 증명 캐시 만료 + LanmanWorkstation 레지스트리 보안 서명 충돌 감지됨 (해결 가능 판정 · Level 3 고난도 3단계 복합 수리 대상)',
+        '🔍 Merlin_Z_Core_Setup.exe 백그라운드 사전 스캔(무료): SMB 자격 증명 캐시 만료 + LanmanWorkstation 레지스트리 보안 서명 충돌 감지됨 (해결 가능 판정 · Level 3 고난도 3단계 복합 수리 대상)',
       questionText:
         '업무 라운지 S: 드라이브 복구를 위해 현재 탐색기 상태를 확인해 주세요 (선택 즉시 맞춤형 견적 카드가 생성됩니다):',
       options: [
@@ -423,7 +423,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-Eye_PC_Setup.exe 백그라운드 사전 스캔(무료): 관공서·금융권 보안 서비스(TouchEn, AhnLab Safe Transaction, ASTx, IPInside, Veraport 등 11종)가 상주하며 CPU 28% 점유 및 키보드 필터 드라이버 충돌 중 (해결 가능 판정 · Level 3 고난도 복합 수리 대상)',
+        '🔍 Merlin_Z_Core_Setup.exe 백그라운드 사전 스캔(무료): 관공서·금융권 보안 서비스(TouchEn, AhnLab Safe Transaction, ASTx, IPInside, Veraport 등 11종)가 상주하며 CPU 28% 점유 및 키보드 필터 드라이버 충돌 중 (해결 가능 판정 · Level 3 고난도 복합 수리 대상)',
       questionText:
         '은행·관공서 이용 후 언제부터 불편하셨나요? 원하시는 정리 범위를 선택해 주세요:',
       options: [
@@ -446,7 +446,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-Eye_PC_Setup.exe 백그라운드 사전 스캔(무료): 현재 모니터에 실행 중인 타사 프로그램(Excel / KakaoTalk) 창 핸들(HWND) 및 리본 메뉴 UI Automation 트리 스캔 성공 (해결 가능 판정 · Level 2 다단계 오버레이 가이드)',
+        '🔍 Merlin_Z_Core_Setup.exe 백그라운드 사전 스캔(무료): 현재 모니터에 실행 중인 타사 프로그램(Excel / KakaoTalk) 창 핸들(HWND) 및 리본 메뉴 UI Automation 트리 스캔 성공 (해결 가능 판정 · Level 2 다단계 오버레이 가이드)',
       questionText:
         '모니터 화면 위에 빨간 손가락 화살표(👆)를 띄워 한 걸음씩 짚어드릴게요. 어떤 기능을 먼저 찾으시나요?',
       options: [
@@ -469,7 +469,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-Eye_PC_Setup.exe 백그라운드 사전 스캔(무료): 현재 Windows PowerCfg 전원 정책이 덮개 닫음 시 "절전(Sleep)"으로 되어 있어 서버가 끊깁니다 (해결 가능 판정 · Level 1 단순 OS 설정)',
+        '🔍 Merlin_Z_Core_Setup.exe 백그라운드 사전 스캔(무료): 현재 Windows PowerCfg 전원 정책이 덮개 닫음 시 "절전(Sleep)"으로 되어 있어 서버가 끊깁니다 (해결 가능 판정 · Level 1 단순 OS 설정)',
       questionText:
         '노트북 덮개를 닫았을 때 어떤 상태로 작동하길 원하시나요?',
       options: [
@@ -492,7 +492,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-Eye_PC_Setup.exe 백그라운드 사전 스캔(무료): 현재 디스플레이 배율 100%(기본 작은 글씨) 및 청색광 야간 모드 OFF 상태 확인됨 (해결 가능 판정 · Level 1 단순 OS 설정)',
+        '🔍 Merlin_Z_Core_Setup.exe 백그라운드 사전 스캔(무료): 현재 디스플레이 배율 100%(기본 작은 글씨) 및 청색광 야간 모드 OFF 상태 확인됨 (해결 가능 판정 · Level 1 단순 OS 설정)',
       questionText:
         '부모님(또는 사용자분) 눈이 가장 편안하시도록 어느 정도로 맞춰 드릴까요?',
       options: [
@@ -514,7 +514,7 @@ export function buildSetupPreTriageQuestion(
     platform: 'pc',
     symptomQuery: rawQuery,
     exeBackgroundScanNote:
-      '🔍 Z-Eye_PC_Setup.exe 백그라운드 사전 스캔(무료): 레지스트리(HKCU\\...\\Run) 및 작업 스케줄러에서 부팅 시 자동 실행되는 광고·유령 프로세스 7종 발견 (해결 가능 판정 · Level 1 단순 OS 설정)',
+      '🔍 Merlin_Z_Core_Setup.exe 백그라운드 사전 스캔(무료): 레지스트리(HKCU\\...\\Run) 및 작업 스케줄러에서 부팅 시 자동 실행되는 광고·유령 프로세스 7종 발견 (해결 가능 판정 · Level 1 단순 OS 설정)',
     questionText:
       '부팅 속도를 늦추는 유령 시작프로그램 7개가 발견되었습니다. 어떻게 정리해 드릴까요?',
     options: [
@@ -608,12 +608,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_3_ADVANCED_500',
       difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 500 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 정밀 진단 완료: 3단계 복합 처치(① 좀비 세션 강제 해제 ➔ ② LanmanWorkstation 보안 서명 레지스트리 교정 ➔ ③ S: 영구 마운트 및 File Lock 데몬 복구)로 100% 해결 가능합니다.',
+        '✅ Merlin_Z_Core_Setup.exe 정밀 진단 완료: 3단계 복합 처치(① 좀비 세션 강제 해제 ➔ ② LanmanWorkstation 보안 서명 레지스트리 교정 ➔ ③ S: 영구 마운트 및 File Lock 데몬 복구)로 100% 해결 가능합니다.',
       symptomQuery: q,
       title: '💽 [Level 3 복합 수리] 업무 드라이브(S:) 레지스트리·SMB 자격증명·권한 3단계 완전 복구',
       rootCause:
         '눈(Eye) 스캔 결과: 단순 연결 끊김이 아니라 ① Windows 자격 증명 관리자 세션 충돌, ② SMBv2/v3 게스트 보안 서명 레지스트리(RequireSecuritySignature) 차단, ③ 탐색기 드라이브 문자 캐시 잠금이 겹친 3중 복합 장애입니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)',
+      agentModuleName: 'Merlin_Z_Core_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)',
       systemCommandOrApi:
         '[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters" -Name "AllowInsecureGuestAuth" -Value 1; [Stage 3] net use S: "\\\\127.0.0.1\\Z-Eye_Work_Vault" /persistent:yes',
       beforeSnapshot: {
@@ -647,12 +647,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_3_ADVANCED_500',
       difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 500 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 정밀 진단 완료: 초행길 계층형 2단 줌인(Zoom-in) 스캔으로 관공서 비표준 div/span 버튼과 에러 문구를 100% 보존 분석했으며, JEA 최소 권한 3단계 복합 처치로 해결 가능합니다.',
+        '✅ Merlin_Z_Core_Setup.exe 정밀 진단 완료: 초행길 계층형 2단 줌인(Zoom-in) 스캔으로 관공서 비표준 div/span 버튼과 에러 문구를 100% 보존 분석했으며, JEA 최소 권한 3단계 복합 처치로 해결 가능합니다.',
       symptomQuery: q,
       title: '🏦 [Level 3 복합 수리] 관공서·금융 보안 플러그인 11종 충돌 제어 & 키보드 먹통 3단계 복구',
       rootCause:
         '눈(Eye) 2단 줌인(Zoom-in) 스캔 결과: 은행·관공서 사이트의 비표준 div/span 컨트롤과 11개 보안 서비스가 백그라운드에서 키보드 입력 후킹(UpperFilters)과 로컬 루프백 포트를 다투며 CPU 28% 점유 및 타이핑 지연을 유발하고 있습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (UIAccess="true" + JEA 3-Stage Service/Driver Resolver)',
+      agentModuleName: 'Merlin_Z_Core_Setup.exe (UIAccess="true" + JEA 3-Stage Service/Driver Resolver)',
       systemCommandOrApi:
         '[JEA Session · 0.01s HKLM JSON Backup] [Stage 1] Get-Service ASTx,TouchEnNx,AnySign4PC,IPInside,Veraport | Stop-Service -Force | Set-Service -StartupType Manual; [Stage 2] Repair-KeyboardClassFilter -Hive HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e96b-e325-11ce-bfc1-08002be10318}; [Stage 3] Clear-LoopbackSocketConflict',
       beforeSnapshot: {
@@ -685,12 +685,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
       difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 300 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 진단 완료: JEA 최소 권한 세션으로 인쇄 스풀러 유령 문서 강제 퍼지(Purge) 및 표준 TCP/IP 포트 재바인딩이 즉시 가능합니다.',
+        '✅ Merlin_Z_Core_Setup.exe 진단 완료: JEA 최소 권한 세션으로 인쇄 스풀러 유령 문서 강제 퍼지(Purge) 및 표준 TCP/IP 포트 재바인딩이 즉시 가능합니다.',
       symptomQuery: q,
       title: '🖨️ [Level 2 중급 수리] Windows 인쇄 스풀러(Spooler) 유령 큐 초기화 및 포트 재바인딩',
       rootCause:
         '눈(Eye) 스캔 결과: Windows Spooler 서비스에 응답 없는 손상된 스풀 파일(.SPL/.SHD) 4건이 큐를 가로막고 있으며 WSD 포트가 오프라인으로 잠겨 있습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (JEA PowerShell Spooler & TCP/IP Port Reset)',
+      agentModuleName: 'Merlin_Z_Core_Setup.exe (JEA PowerShell Spooler & TCP/IP Port Reset)',
       systemCommandOrApi:
         '[JEA Endpoint] Stop-Service -Name Spooler -Force; Remove-Item "$env:SystemRoot\\System32\\spool\\PRINTERS\\*.*" -Force; Reset-PrinterPort -Mode StandardTCPIP; Start-Service -Name Spooler',
       beforeSnapshot: {
@@ -720,12 +720,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
       difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 300 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe (uiAccess="true" UIPI 관통 + 정답 구역 핀셋 스캔 + Playbook 0토큰 캐시) 완료: 타사 프로그램 내부 메뉴 좌표를 실시간 추적하여 모니터 최상단 손가락 화살표 가이드로 안내 가능합니다.',
+        '✅ Merlin_Z_Core_Setup.exe (uiAccess="true" UIPI 관통 + 정답 구역 핀셋 스캔 + Playbook 0토큰 캐시) 완료: 타사 프로그램 내부 메뉴 좌표를 실시간 추적하여 모니터 최상단 손가락 화살표 가이드로 안내 가능합니다.',
       symptomQuery: q,
       title: '👆 [Level 2 다단계 가이드] 타사 프로그램(엑셀·PC카톡) 모니터 최상단 손가락 화살표 동행 가이드',
       rootCause:
         '눈(Eye) 사전 답사 정답 구역(Target Region) 핀셋 스캔 완료: 수만 개 엑셀 셀(DataItem)은 무시하고 상단 리본 컨테이너만 핀셋 스캔하여 Playbook DB 캐시(LLM 토큰 0원)로 [보기(V) rect: 240,48] ➔ [틀 고정(F) rect: 520,96] 좌표를 0.01초 만에 추출했습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (uiAccess="true" UIPI Bypass & Topmost Overlay)',
+      agentModuleName: 'Merlin_Z_Core_Setup.exe (uiAccess="true" UIPI Bypass & Topmost Overlay)',
       systemCommandOrApi:
         'Z-Eye_Overlay.DrawTopmostArrow(manifestUiAccess=true, targetHwnd="EXCEL.EXE", playbookCacheHit=true, coords=[[240,48],[520,96]])',
       beforeSnapshot: {
@@ -783,12 +783,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 100 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 진단 완료: Windows PowerCfg 전원 구성표 1단계 명령으로 즉시 설정 변경 가능합니다.',
+        '✅ Merlin_Z_Core_Setup.exe 진단 완료: Windows PowerCfg 전원 구성표 1단계 명령으로 즉시 설정 변경 가능합니다.',
       symptomQuery: q,
       title: '🔋 [Level 1 단순 설정] 노트북 덮개(Lid) 닫음 시 절전 진입 방지 & 24시간 마스터 서버 유지',
       rootCause:
         '눈(Eye) 스캔 결과: 현재 Windows 전원 옵션(SUB_BUTTONS -> LIDACTION)이 AC 전원 연결 시에도 "절전(Sleep=1)"으로 설정되어 덮개를 닫으면 Z-Eye 서버가 중단됩니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (Windows PowerCfg Engine)',
+      agentModuleName: 'Merlin_Z_Core_Setup.exe (Windows PowerCfg Engine)',
       systemCommandOrApi:
         'powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0; powercfg /setactive SCHEME_CURRENT',
       beforeSnapshot: {
@@ -818,12 +818,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 100 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 진단 완료: 디스플레이 가독성 배율 및 청색광 필터 1단계 제어로 즉시 적용 가능합니다.',
+        '✅ Merlin_Z_Core_Setup.exe 진단 완료: 디스플레이 가독성 배율 및 청색광 필터 1단계 제어로 즉시 적용 가능합니다.',
       symptomQuery: q,
       title: '👀 [Level 1 단순 설정] 부모님 맞춤형 큰 글씨 배율(125%) & 청색광 차단 야간 보호 모드',
       rootCause:
         '눈(Eye) 스캔 결과: 모니터 DPI 텍스트 배율이 기본 100%(작은 글씨)로 되어 있고 야간 청색광 필터가 비활성화되어 눈 피로도가 높습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (Display DPI & Night Light Registry)',
+      agentModuleName: 'Merlin_Z_Core_Setup.exe (Display DPI & Night Light Registry)',
       systemCommandOrApi:
         'Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop" -Name "LogPixels" -Value 120; Enable-NightLight -ColorTemp 3800K',
       beforeSnapshot: {
@@ -855,12 +855,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 100 코인)',
       feasibilityCheckKo:
-        '✅ Z-Eye_PC_Setup.exe 진단 완료: JEA 최소 권한 및 0.01초 전 레지스트리 JSON 직렬화 백업 후 Run 키 1단계 정리로 부팅 속도를 즉시 개선할 수 있습니다.',
+        '✅ Merlin_Z_Core_Setup.exe 진단 완료: JEA 최소 권한 및 0.01초 전 레지스트리 JSON 직렬화 백업 후 Run 키 1단계 정리로 부팅 속도를 즉시 개선할 수 있습니다.',
       symptomQuery: q || '부팅 시 뜨는 광고/유령앱 차단 및 PC 속도 최적화',
       title: '🚀 [Level 1 단순 설정] 시작프로그램 광고·유령앱 7종 백그라운드 즉시 차단',
       rootCause:
         '눈(Eye) 스캔 결과: 레지스트리(HKCU\\...\\Run) 및 작업 스케줄러에 부팅 시 몰래 켜지는 광고 팝업 도우미·유령 업데이터 7개가 상주하여 부팅 시간을 37초 지연시키고 있습니다.',
-      agentModuleName: 'Z-Eye_PC_Setup.exe (JEA Registry Run & ScheduledTask Cleaner)',
+      agentModuleName: 'Merlin_Z_Core_Setup.exe (JEA Registry Run & ScheduledTask Cleaner)',
       systemCommandOrApi:
         '[JEA Session · 0.01s JSON Backup] Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "AdPopupHelper","ShoppingToast","GhostUpdater" -Force',
       beforeSnapshot: {

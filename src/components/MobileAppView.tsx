@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useSaySeeStore, type MobileTab } from '../store/useSaySeeStore';
+import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
@@ -197,7 +197,24 @@ export const MobileAppView: React.FC = () => {
     setShowMobileMasterPcIntroModal,
     setShowSetupMonsterModal,
     setShowProModal,
+    faceClusters,
+    activeFamilyRoom,
+    setDoorplatePickerClusterId,
   } = useSaySeeStore();
+
+  const myPassportCluster = useMemo(
+    () => faceClusters.find((c) => c.clusterId === 'face_member_5') || faceClusters[0],
+    [faceClusters]
+  );
+  const myDoorplatePersona = useMemo(() => {
+    if (!myPassportCluster) return '멀린';
+    const { activePersona } = getActivePersonaForCluster(
+      myPassportCluster,
+      activeLoungeType,
+      activeFamilyRoom
+    );
+    return activePersona || myPassportCluster.registeredName || '멀린';
+  }, [myPassportCluster, activeLoungeType, activeFamilyRoom]);
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
   const activeTrashCount = useMemo(
@@ -287,8 +304,29 @@ export const MobileAppView: React.FC = () => {
               </div>
             </div>
 
-            {/* 우상단: 설정 몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
+            {/* 우상단: Z-Eye 여권 자동 문패 + 설정 몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
             <div className="flex items-center gap-1.5 shrink-0" aria-label="화면 테마 영역">
+              {myPassportCluster && (
+                <button
+                  type="button"
+                  onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
+                  title="🛂 Z-Eye 여권 최신 연도 정면 얼굴 자동 문패 (5대 스타일 슬롯 원터치 변경)"
+                  className={`pl-1 pr-2 py-0.5 rounded-full border flex items-center gap-1 transition-all cursor-pointer ${
+                    themeMode === 'light'
+                      ? 'bg-teal-50/90 border-teal-300 text-teal-900'
+                      : 'bg-zinc-900 border-primary-container/45 text-white'
+                  }`}
+                >
+                  <img
+                    src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
+                    alt={myDoorplatePersona}
+                    className="w-5 h-5 rounded-full object-cover border border-primary-container shrink-0"
+                  />
+                  <span className="font-label-sm text-[10.5px] font-extrabold whitespace-nowrap">
+                    👑 {myDoorplatePersona}
+                  </span>
+                </button>
+              )}
               {(!isStoreAppMode || enableSetupMonster) && (
                 <>
                   <button
