@@ -47,7 +47,7 @@ def load_env_local(env_path: str = ".env.local") -> None:
 
 load_env_local()
 
-DATABASE_ID: str = os.getenv("NOTION_DATABASE_ID", "400f9ffd2c1d808bae34e9170fb56519").strip()
+DATABASE_ID: str = os.getenv("NOTION_DATABASE_ID", "400f9ffd2c1d807fa3e7c705d2b0ceab").strip()
 NOTION_TOKEN: str = os.getenv(
     "NOTION_TOKEN",
     "[여기에 아까 발급받은 secret_ 또는 ntn_ 토큰 붙여넣기]",
@@ -104,10 +104,25 @@ class NotionKanbanSchema:
         self._loaded: bool = False
 
     def detect(self, database_id: str) -> None:
+        global DATABASE_ID
         if self._loaded:
             return
         url = f"{NOTION_API_BASE}/databases/{database_id}"
         res = requests.get(url, headers=get_headers(), timeout=15)
+        if res.status_code == 400 and "is a page, not a database" in res.text:
+            # 페이지 ID가 들어온 경우 부모 데이터베이스 ID를 자동 추적
+            page_res = requests.get(
+                f"{NOTION_API_BASE}/pages/{database_id}", headers=get_headers(), timeout=15
+            )
+            if page_res.status_code == 200:
+                parent_db = page_res.json().get("parent", {}).get("database_id")
+                if parent_db:
+                    DATABASE_ID = parent_db
+                    res = requests.get(
+                        f"{NOTION_API_BASE}/databases/{DATABASE_ID}",
+                        headers=get_headers(),
+                        timeout=15,
+                    )
         if res.status_code != 200:
             raise RuntimeError(
                 f"데이터베이스 조회 실패 (HTTP {res.status_code}): {res.text}\n"
