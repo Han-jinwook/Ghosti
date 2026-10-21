@@ -141,8 +141,8 @@ export const VoiceHeroStage: React.FC = () => {
 
   return (
     <section className="w-full flex flex-col gap-3">
-      {/* ─────────────── 통합 검색창 + 3대 카테고리 캡슐 탭 + 탭 맞춤형 1줄 추천 칩 (컬러 이모지 제거) ─────────────── */}
-      <div className="w-full rounded-2xl bg-[#18181B] border border-white/10 p-4 md:p-5 shadow-lg flex flex-col gap-3.5">
+      {/* ─────────────── 노션형 보더리스(Borderless) 통합 검색 캔버스 블록 ─────────────── */}
+      <div className="w-full flex flex-col gap-3">
         {/* 1-A. 자연어 문장형 통합 검색창 */}
         <form onSubmit={handleTextSubmit} className="w-full flex items-center gap-2">
           <div className="relative flex-1 flex items-center">
@@ -158,13 +158,13 @@ export const VoiceHeroStage: React.FC = () => {
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full h-12 md:h-13 pl-11 pr-24 rounded-xl bg-zinc-950/90 border border-white/10 focus:border-primary-container outline-none font-body-md text-[13.5px] md:text-[14.5px] text-white placeholder:text-zinc-500 transition-colors"
+              className="w-full h-12 md:h-13 pl-11 pr-24 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13.5px] md:text-[14.5px] text-white placeholder:text-zinc-500 transition-colors"
             />
             {textInput && (
               <button
                 type="button"
                 onClick={() => setTextInput('')}
-                className="absolute right-20 text-zinc-400 hover:text-white p-1"
+                className="absolute right-20 text-zinc-400 hover:text-white p-1 cursor-pointer"
                 title="지우기"
               >
                 <span className="material-symbols-outlined text-[17px]">close</span>
@@ -172,7 +172,7 @@ export const VoiceHeroStage: React.FC = () => {
             )}
             <button
               type="submit"
-              className="absolute right-1.5 h-9 md:h-10 px-4 rounded-lg bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+              className="absolute right-1.5 h-9 md:h-10 px-4 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
             >
               검색
             </button>
@@ -182,10 +182,10 @@ export const VoiceHeroStage: React.FC = () => {
             type="button"
             onClick={() => void toggleMicRecording()}
             title="음성으로 검색"
-            className={`h-12 md:h-13 px-3.5 rounded-xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+            className={`h-12 md:h-13 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
               isListening
                 ? 'bg-primary-container text-zinc-950 border-primary-container'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/10'
+                : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
             }`}
           >
             <span

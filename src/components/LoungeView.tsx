@@ -154,143 +154,159 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
   };
 
   const isChalkboard = alumniBannerTheme === 'chalkboard';
+  const [showRetroCover, setShowRetroCover] = useState(false);
 
   return (
-    <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 shadow-sm flex flex-col gap-3">
-      {/* 1. 생성형 맞춤형 간판 'Text-to-Banner' (칠판/노을 간판 안에 후원 문구까지 깔끔하게 통합) */}
-      <div
-        data-keep-dark="true"
-        className={`relative rounded-xl overflow-hidden border px-5 py-4 md:px-6 md:py-5 transition-all ${
-          isChalkboard
-            ? 'bg-gradient-to-r from-[#163325] via-[#1E4432] to-[#142B1F] border-[#6A9E82]/60 shadow-[inset_0_0_32px_rgba(0,0,0,0.45)]'
-            : 'bg-gradient-to-r from-[#4A221D] via-[#7A3522] to-[#361D33] border-amber-300/50 shadow-[inset_0_0_32px_rgba(0,0,0,0.4)]'
-        }`}
-      >
-        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3.5">
-          {/* 좌측: 배경 전환 & 학교·연도 변경 (조용한 텍스트 링크 스타일) */}
-          <div className="flex flex-wrap items-center gap-3 text-[12px] text-white/85">
-            <button
-              type="button"
-              onClick={() =>
-                setAlumniBannerInfo(
-                  alumniSchoolName,
-                  alumniGradYear,
-                  isChalkboard ? 'sunset_field' : 'chalkboard'
-                )
-              }
-              className="underline hover:text-white cursor-pointer font-bold whitespace-nowrap"
-            >
-              {isChalkboard ? '🌅 노을 운동장 배경으로 변경' : '🏫 복고풍 칠판 배경으로 변경'}
-            </button>
-
-            <span className="text-white/40">|</span>
-
-            {editingBannerKeyword ? (
-              <form onSubmit={handleApplyBannerKeyword} className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={keywordDraft}
-                  onChange={(e) => setKeywordDraft(e.target.value)}
-                  placeholder="예: 성동고 1989"
-                  className="px-2.5 py-1 rounded bg-black/60 border border-amber-300/70 text-white text-[12px] font-bold w-32 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="px-2.5 py-1 rounded bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer"
-                >
-                  적용
-                </button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setKeywordDraft(`${alumniSchoolName} ${alumniGradYear}`);
-                  setEditingBannerKeyword(true);
-                }}
-                className="underline text-amber-200 hover:text-amber-100 cursor-pointer font-bold whitespace-nowrap"
-              >
-                ✏️ 학교·연도 변경
-              </button>
-            )}
-          </div>
-
-          {/* 중앙: 굵고 또렷한 8090 타이포그래피 간판 + 총무 후원 한 줄 텍스트 */}
-          <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5">
-            <h2 className="font-headline-md text-[24px] md:text-[28px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] whitespace-nowrap">
-              {bannerTitle}
-            </h2>
-            <span className="text-[12px] text-amber-200/95 font-medium">
-              🏅 김철수 총무님의 후원으로 회원 전원 무료 운영 중
-            </span>
-          </div>
-
-          {/* 우측: 카톡 단톡방 초대장 복사 버튼 딱 1개 */}
+    <div className="flex flex-col gap-2.5">
+      {/* 노션식 컴팩트 페이지 헤더 + [간판 펼치기] 토글 */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold tracking-tight">
+            ⛳ {bannerTitle}
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-300/30 text-amber-300 text-[11px] font-bold">
+            🏅 김철수 총무님 후원 · 회원 무료
+          </span>
           <button
             type="button"
-            onClick={() => void handleCopyInviteHook()}
-            className={`px-4 py-2.5 rounded-xl font-label-sm text-[12.5px] font-extrabold transition-all shadow-md shrink-0 whitespace-nowrap cursor-pointer ${
-              inviteCopied
-                ? 'bg-emerald-400 text-zinc-950'
-                : 'bg-amber-300 hover:bg-amber-200 text-zinc-950'
-            }`}
+            onClick={() => setShowRetroCover((v) => !v)}
+            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white text-[11px] font-bold cursor-pointer"
           >
-            {inviteCopied ? '✓ 단톡방 초대장 복사됨!' : '💌 단톡방 초대 문구 복사'}
-          </button>
-        </div>
-      </div>
-
-      {/* 2. 하단 컨트롤 바 딱 1줄: 좌측 투트랙 탭 스위치 / 우측 핵심 액션 버튼 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex p-1 rounded-xl bg-zinc-950 border border-white/10">
-          <button
-            type="button"
-            onClick={() => setClubFeedTrack('memories_1989')}
-            className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-              clubFeedTrack === 'memories_1989'
-                ? 'bg-primary-container text-zinc-950 shadow-sm'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            🎞️ 응답하라 {alumniGradYear} (추억)
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setClubFeedTrack('recent_now')}
-            className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-              clubFeedTrack === 'recent_now'
-                ? 'bg-primary-container text-zinc-950 shadow-sm'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            🍻 최근 우리들 (근황)
+            {showRetroCover ? '추억 간판 접기 ▴' : '🏫 추억 간판·초대장 열기 ▾'}
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex p-0.5 rounded-xl bg-zinc-900 border border-white/10">
+            <button
+              type="button"
+              onClick={() => setClubFeedTrack('memories_1989')}
+              className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                clubFeedTrack === 'memories_1989'
+                  ? 'bg-primary-container text-zinc-950 shadow-xs'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              🎞️ {alumniGradYear} 추억
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setClubFeedTrack('recent_now')}
+              className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                clubFeedTrack === 'recent_now'
+                  ? 'bg-primary-container text-zinc-950 shadow-xs'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              🍻 최근 근황
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => {
               void findMySchoolDaysPhotosFast();
               if (onNavigateToFeed) onNavigateToFeed();
             }}
-            className="px-4 py-2 rounded-xl bg-primary-container hover:opacity-90 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-sm cursor-pointer whitespace-nowrap"
+            className="px-3 py-1.5 rounded-xl bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
           >
-            🎯 내 얼굴로 학창 시절 사진 찾기
+            🎯 내 학창시절 사진 찾기
           </button>
 
           {pendingProposals.length > 0 && (
             <button
               type="button"
               onClick={() => approveAllAnalogYearProposals()}
-              className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer whitespace-nowrap"
+              className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
             >
-              👑 연도 제보 일괄 승인 ({pendingProposals.length}건)
+              👑 연도 제보 승인 ({pendingProposals.length})
             </button>
           )}
         </div>
       </div>
+
+      {/* 사용자가 [🏫 추억 간판·초대장 열기 ▾]를 눌렀을 때만 펼쳐지는 복고 간판 */}
+      {showRetroCover && (
+        <div
+          data-keep-dark="true"
+          className={`relative rounded-xl overflow-hidden border px-5 py-4 transition-all ${
+            isChalkboard
+              ? 'bg-gradient-to-r from-[#163325] via-[#1E4432] to-[#142B1F] border-[#6A9E82]/60 shadow-[inset_0_0_32px_rgba(0,0,0,0.45)]'
+              : 'bg-gradient-to-r from-[#4A221D] via-[#7A3522] to-[#361D33] border-amber-300/50 shadow-[inset_0_0_32px_rgba(0,0,0,0.4)]'
+          }`}
+        >
+          <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3.5">
+            <div className="flex flex-wrap items-center gap-3 text-[12px] text-white/85">
+              <button
+                type="button"
+                onClick={() =>
+                  setAlumniBannerInfo(
+                    alumniSchoolName,
+                    alumniGradYear,
+                    isChalkboard ? 'sunset_field' : 'chalkboard'
+                  )
+                }
+                className="underline hover:text-white cursor-pointer font-bold whitespace-nowrap"
+              >
+                {isChalkboard ? '🌅 노을 운동장 배경으로 변경' : '🏫 복고풍 칠판 배경으로 변경'}
+              </button>
+
+              <span className="text-white/40">|</span>
+
+              {editingBannerKeyword ? (
+                <form onSubmit={handleApplyBannerKeyword} className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={keywordDraft}
+                    onChange={(e) => setKeywordDraft(e.target.value)}
+                    placeholder="예: 성동고 1989"
+                    className="px-2.5 py-1 rounded bg-black/60 border border-amber-300/70 text-white text-[12px] font-bold w-32 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="px-2.5 py-1 rounded bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer"
+                  >
+                    적용
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKeywordDraft(`${alumniSchoolName} ${alumniGradYear}`);
+                    setEditingBannerKeyword(true);
+                  }}
+                  className="underline text-amber-200 hover:text-amber-100 cursor-pointer font-bold whitespace-nowrap"
+                >
+                  ✏️ 학교·연도 변경
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5">
+              <h2 className="font-headline-md text-[22px] md:text-[25px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] whitespace-nowrap">
+                {bannerTitle}
+              </h2>
+              <span className="text-[12px] text-amber-200/95 font-medium">
+                🏅 김철수 총무님의 후원으로 회원 전원 무료 운영 중
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleCopyInviteHook()}
+              className={`px-4 py-2 rounded-xl font-label-sm text-[12px] font-extrabold transition-all shadow-md shrink-0 whitespace-nowrap cursor-pointer ${
+                inviteCopied
+                  ? 'bg-emerald-400 text-zinc-950'
+                  : 'bg-amber-300 hover:bg-amber-200 text-zinc-950'
+              }`}
+            >
+              {inviteCopied ? '✓ 단톡방 초대장 복사됨!' : '💌 단톡방 초대 문구 복사'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1935,6 +1951,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [docs, setDocs] = useState<WorkLoungeDocItem[]>(INITIAL_WORK_DOCS);
   const [selectedDocId, setSelectedDocId] = useState<string>('work-doc-1');
+  const [isSidePeekOpen, setIsSidePeekOpen] = useState<boolean>(false);
 
   const workPlan = subscribedLounges.work;
   const [folderCounts, setFolderCounts] = useState<Record<string, number>>({
@@ -1959,7 +1976,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         const mappedRealDocs: WorkLoungeDocItem[] = realFiles.map((rf: any, idx: number) => {
           const isGifOrImg = rf.isImage;
           const defaultSnippet = isGifOrImg
-            ? `이미지/미디어 파일: ${rf.name} (${rf.sizeFormatted}) — 실시간 투시 가능`
+            ? `이미지/미디어 파일: ${rf.name} (${rf.sizeFormatted}) — 실시간 미리보기 가능`
             : rf.previewText
             ? rf.previewText.slice(0, 160).replace(/\n/g, ' ')
             : `S: 드라이브 보관 파일 — ${rf.relPath}`;
@@ -1976,8 +1993,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
             lockedBy: null,
             cacheSizeLabel: '실시간 로컬 동기화',
             summaryTitle: isGifOrImg
-              ? `[이미지 파일 투시] ${rf.name} (해상도 및 원본 즉시 확인)`
-              : `[문서 투시] ${rf.name}`,
+              ? `[이미지 파일 미리보기] ${rf.name}`
+              : `[문서 미리보기] ${rf.name}`,
             matchedSnippet: defaultSnippet,
             tableHeaders: rf.tableHeaders && rf.tableHeaders.length > 0 ? rf.tableHeaders : ['속성', '상세 정보'],
             tableRows:
@@ -1995,24 +2012,21 @@ export const WorkLoungeB2BHub: React.FC = () => {
           };
         });
 
+        // 실제 파일(예: 1줄빛러M.gif 등)을 최상단에 배치하고 기존 표준 업무 문서 템플릿과 병합
+        const combinedDocs = [
+          ...mappedRealDocs,
+          ...INITIAL_WORK_DOCS.filter((initDoc) => !mappedRealDocs.some((r) => r.fileName === initDoc.fileName)),
+        ];
+
         // 폴더별 카운트 계산
-        const counts: Record<string, number> = { all: mappedRealDocs.length, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 };
-        mappedRealDocs.forEach((d) => {
+        const counts: Record<string, number> = { all: combinedDocs.length, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 };
+        combinedDocs.forEach((d) => {
           if (counts[d.folderId] !== undefined) {
             counts[d.folderId]++;
           }
         });
         setFolderCounts(counts);
-
-        // 실제 파일 목록과 기존 데모 템플릿(실제 파일에 없는 것)을 조화롭게 병합
-        setDocs(mappedRealDocs);
-        if (mappedRealDocs.length > 0) {
-          // 새로 추가된 파일(예: 1줄빛러M.gif)이 있으면 자동 선택 가능하도록
-          setSelectedDocId((prev) => {
-            const exists = mappedRealDocs.some((d) => d.id === prev);
-            return exists ? prev : mappedRealDocs[0].id;
-          });
-        }
+        setDocs(combinedDocs);
       })
       .catch(() => {});
   };
@@ -2086,91 +2100,94 @@ export const WorkLoungeB2BHub: React.FC = () => {
   ];
 
   return (
-    <section className="flex flex-col gap-4">
-      {/* 1. 정갈한 업무 라운지 상단 헤더 (우측 버튼 제거 · 온보딩 상식 안내로 통합) */}
-      <div className="p-5 rounded-2xl bg-[#18181B] border border-white/10 shadow-sm flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5 pb-3.5 border-b border-white/10">
+    <section className="flex flex-col gap-5">
+      {/* 1. 노션형 보더리스(Borderless) 업무 도화지 헤더 + 검색창 + 폴더 필터 칩 */}
+      <div className="flex flex-col gap-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="font-headline-sm text-[19px] text-white font-extrabold tracking-tight">
-              💼 사무실 업무 라운지
+            <h2 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight">
+              💼 사무실 업무 문서함 (S:\)
             </h2>
             {workPlan && (
               <span className="text-[12px] text-emerald-400 font-bold">
                 · ✓ {PLAN_BADGE_LABELS[workPlan]}
               </span>
             )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-zinc-400">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <strong className="text-zinc-200">사무실 PC 연결됨</strong>
-            </span>
-
-            <span className="text-zinc-500">|</span>
-
-            <span>접속 팀원 6명</span>
-
-            <span className="text-zinc-500">|</span>
-
-            <span>
-              💡 내 컴퓨터 <strong className="text-zinc-200">[윈도우 탐색기 ➔ 내 PC ➔ S: 드라이브]</strong>에서 모든 업무 폴더를 평소처럼 바로 열고 작업할 수 있습니다{' '}
-              <span className="text-zinc-500">(원본 폴더: {driveTargetPath})</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-400/25 text-[11.5px] text-emerald-300 font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              사무실 PC 연결됨 · 팀원 6명
             </span>
           </div>
+
+          <span className="text-[12px] text-zinc-400">
+            💡 내 컴퓨터 <strong className="text-zinc-200">[탐색기 ➔ S: 드라이브]</strong>에 파일을 넣으면 자동으로 동기화됩니다
+          </span>
         </div>
 
-        {/* 2행: 좌측 뷰 전환 탭 (깔끔한 2단 스위치) + 우측 검색창 */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          <div className="inline-flex p-1 rounded-xl bg-zinc-950 border border-white/10 shrink-0 self-start">
-            <button
-              type="button"
-              onClick={() => setViewMode('semantic')}
-              className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
-                viewMode === 'semantic'
-                  ? 'bg-primary-container text-zinc-950 shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              🔍 본문·표 내용 검색
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setViewMode('explorer')}
-              className={`px-4 py-2 rounded-lg font-label-md text-[12.5px] font-extrabold transition-all cursor-pointer ${
-                viewMode === 'explorer'
-                  ? 'bg-primary-container text-zinc-950 shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              🗂️ 폴더별 보기 (S:\)
-            </button>
+        {/* 노션형 깔끔한 검색창 + 예시 검색어 칩 */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 bg-[#18181B] border border-white/15 focus-within:border-primary-container rounded-2xl px-4 py-2.5 shadow-sm transition-colors">
+            <span className="text-zinc-400 text-sm">🔍</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (e.target.value.trim()) setIsSidePeekOpen(true);
+              }}
+              placeholder="계약서 조항, 엑셀 단가표 숫자, 거래처 미수금, 파일명 검색..."
+              className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13.5px] focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-zinc-400 hover:text-white text-[11.5px] font-bold shrink-0 cursor-pointer"
+              >
+                ✕ 지우기
+              </button>
+            )}
           </div>
 
-          <div className="flex-1 flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 bg-zinc-950 border border-white/15 rounded-xl px-3.5 py-2">
-              <span className="text-zinc-400 text-sm">🔍</span>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="계약서 조항, 엑셀 단가표 숫자, 거래처 미수금 검색..."
-                className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13px] focus:outline-none"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="text-zinc-400 hover:text-white text-[11.5px] font-bold shrink-0 cursor-pointer"
-                >
-                  전체보기
-                </button>
-              )}
+          {/* 1줄 폴더 필터 알약 + 예시 검색어 */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              {WORK_LOUNGE_FOLDERS.map((folder) => {
+                const active = selectedFolderId === folder.id && viewMode === 'explorer';
+                const isAllActive = folder.id === 'all' && (selectedFolderId === 'all' || viewMode === 'semantic');
+                const highlight = active || isAllActive;
+                const count = folderCounts[folder.id] ?? folder.count;
+                return (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedFolderId(folder.id);
+                      setViewMode(folder.id === 'all' ? 'semantic' : 'explorer');
+                    }}
+                    className={`px-3 py-1.5 rounded-full font-label-sm text-[11.5px] flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
+                      highlight
+                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                        : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10 font-bold'
+                    }`}
+                  >
+                    <span>
+                      {folder.id === 'all' ? '💽 전체' : folder.id === 'root' ? '📄 S:\\ 최상단' : `📁 ${folder.name.replace(/^\d+_/, '')}`}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                        highlight ? 'bg-black/15 text-zinc-950 font-black' : 'text-zinc-400'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-[11.5px] text-zinc-400">
-              <span>예시 검색어:</span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-zinc-400">
+              <span>빠른 검색:</span>
               {QUICK_WORK_QUERIES.map((q) => (
                 <button
                   key={q}
@@ -2179,6 +2196,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     const nextQ = searchQuery === q ? '' : q;
                     setSearchQuery(nextQ);
                     if (nextQ) {
+                      setViewMode('semantic');
                       const tokens = nextQ.toLowerCase().split(/\s+/).filter(Boolean);
                       const matched = docs.find((d) => {
                         const text = [
@@ -2192,7 +2210,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
                           .toLowerCase();
                         return tokens.every((t) => text.includes(t));
                       });
-                      if (matched) setSelectedDocId(matched.id);
+                      if (matched) {
+                        setSelectedDocId(matched.id);
+                        setIsSidePeekOpen(true);
+                      }
                     }
                   }}
                   className={`underline cursor-pointer transition-colors ${
@@ -2207,337 +2228,255 @@ export const WorkLoungeB2BHub: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. 메인 워크스페이스: 좌측 문서 목록 + 우측 문서 미리보기 */}
+      {/* 2. 노션 데이터베이스형 깔끔한 리스트 + 파일 클릭 시 우측에서 열리는 Side Peek 프리뷰 */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        <div className="xl:col-span-7 flex flex-col gap-3">
-          {viewMode === 'semantic' ? (
-            <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 font-label-sm text-[11px] font-extrabold">
-                    검색 결과 ({filteredDocs.length}건)
-                  </span>
-                  <span className="font-body-sm text-[12px] text-zinc-400">
-                    파일을 직접 열지 않아도 계약서 조항과 엑셀 표 내용을 바로 확인할 수 있습니다
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2.5">
-                {filteredDocs.map((doc) => {
-                  const isSelected = doc.id === selectedDoc.id;
-                  return (
-                    <div
-                      key={doc.id}
-                      onClick={() => setSelectedDocId(doc.id)}
-                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 ${
-                        isSelected
-                          ? 'bg-cyan-950/30 border-cyan-400 shadow-lg'
-                          : 'bg-zinc-950/80 hover:bg-zinc-900/90 border-white/10'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <span
-                            className={`px-2 py-0.5 rounded font-label-sm text-[10.5px] font-extrabold ${
-                              doc.ext === 'XLSX'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                                : doc.ext === 'DOCX' || doc.ext === 'HWP'
-                                ? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
-                                : doc.ext === 'PDF'
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40'
-                                : 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
-                            }`}
-                          >
-                            {doc.ext}
-                          </span>
-                          <span className="font-label-md text-[13.5px] text-white font-extrabold truncate">
-                            {doc.fileName}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {doc.lockedBy ? (
-                            <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-sm">
-                              🔒 {doc.lockedBy} 수정 중
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
-                              🔓 수정 가능
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <p className="font-label-sm text-[12px] text-cyan-200 font-bold">
-                        {doc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
-                      </p>
-
-                      <div className="p-2.5 rounded-lg bg-zinc-900/95 border border-cyan-400/25 font-body-sm text-[12px] text-zinc-200 leading-relaxed">
-                        <span className="text-cyan-300 font-extrabold mr-1.5">📌 핵심 내용:</span>
-                        {doc.matchedSnippet}
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 pt-0.5">
-                        <span>
-                          📁 {doc.folderPath} · {doc.sizeLabel} · 작성: {doc.author}
-                        </span>
-                        <span>최근 수정: {doc.updatedAt}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                    🗂️ 업무 폴더 목록 (S:\)
-                  </span>
-                  <span className="font-body-sm text-[12px] text-zinc-300">
-                    내 컴퓨터 탐색기(S:)와 동일한 폴더 구조입니다
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                <div className="md:col-span-4 p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1.5">
-                  <div className="font-label-sm text-[11px] text-zinc-400 font-bold px-2 py-1 border-b border-white/10 flex items-center justify-between">
-                    <span>📁 업무 폴더</span>
-                    <span className="text-cyan-300">S:\</span>
-                  </div>
-                  {WORK_LOUNGE_FOLDERS.map((folder) => {
-                    const active = selectedFolderId === folder.id;
-                    const count = folderCounts[folder.id] ?? folder.count;
-                    return (
-                      <button
-                        key={folder.id}
-                        type="button"
-                        onClick={() => setSelectedFolderId(folder.id)}
-                        className={`px-3 py-2.5 rounded-lg text-left font-label-sm text-[12px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                          active
-                            ? 'bg-cyan-400/20 border border-cyan-400 text-cyan-200 font-extrabold'
-                            : 'hover:bg-zinc-900 text-zinc-300 border border-transparent'
-                        }`}
-                      >
-                        <span className="truncate">
-                          {folder.id === 'all' ? '💽 ' : folder.id === 'root' ? '📄 ' : active ? '📂 ' : '📁 '}
-                          {folder.name}
-                        </span>
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[10.5px] shrink-0 font-bold">
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="md:col-span-8 p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2">
-                  <div className="px-2 py-1 border-b border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 font-bold">
-                    <span>
-                      위치:{' '}
-                      <strong className="text-cyan-300">
-                        {WORK_LOUNGE_FOLDERS.find((f) => f.id === selectedFolderId)?.path || 'S:\\'}
-                      </strong>
-                    </span>
-                    <span>파일을 누르면 우측에 내용이 표시됩니다</span>
-                  </div>
-
-                  <div className="flex flex-col divide-y divide-white/10">
-                    {filteredDocs.map((doc) => {
-                      const isSelected = doc.id === selectedDoc.id;
-                      return (
-                        <div
-                          key={doc.id}
-                          onClick={() => setSelectedDocId(doc.id)}
-                          className={`px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 cursor-pointer transition-colors ${
-                            isSelected ? 'bg-cyan-950/40' : 'hover:bg-zinc-900/80'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-cyan-300 font-label-sm text-[10px] font-extrabold shrink-0">
-                              {doc.ext}
-                            </span>
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-label-sm text-[12.5px] text-white font-bold truncate">
-                                {doc.fileName}
-                              </span>
-                              <span className="text-[11px] text-zinc-400 truncate">
-                                {doc.sizeLabel} · {doc.updatedAt} · {doc.author}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {doc.lockedBy ? (
-                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[11px] font-extrabold">
-                                🔒 {doc.lockedBy} 수정 중
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
-                                🔓 수정 가능
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 우측 영역 (5컬럼): 기술 용어 없이 깔끔한 문서 미리보기 패널 */}
-        <div className="xl:col-span-5 p-4 md:p-5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/45 shadow-xl flex flex-col gap-3.5 sticky top-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
-            <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-              📄 문서 내용 미리보기
-            </span>
-            <span className="text-[11px] text-zinc-400 font-bold">
-              작성: {selectedDoc.author} · {selectedDoc.updatedAt}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <span className="font-label-sm text-[11px] text-cyan-300 font-bold">
-              {selectedDoc.folderPath}\{selectedDoc.fileName}
-            </span>
-            <h3 className="font-headline-sm text-[16px] text-white font-extrabold leading-snug">
-              {selectedDoc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
-            </h3>
-          </div>
-
-          {selectedDoc.lockedBy ? (
-            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-400/50 flex items-center justify-between gap-2">
-              <div className="flex flex-col gap-0.5">
-                <span className="font-label-sm text-[12px] text-amber-200 font-extrabold">
-                  🔒 현재 [{selectedDoc.lockedBy}] 님이 수정 중인 문서입니다
-                </span>
-                <span className="font-body-sm text-[11.5px] text-zinc-300 font-medium">
-                  다른 분이 수정 중일 때는 내용이 덮어써지지 않도록 읽기 전용으로 안전하게 열립니다.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleToggleLockSimulation(selectedDoc.id)}
-                className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-amber-300/40 text-amber-200 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
-              >
-                잠금 해제
-              </button>
-            </div>
-          ) : (
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 flex items-center justify-between gap-2">
-              <span className="font-label-sm text-[11.5px] text-emerald-300 font-bold">
-                🔓 현재 수정 중인 팀원이 없습니다 — 바로 열어서 편집할 수 있습니다
+        <div className={`${isSidePeekOpen ? 'xl:col-span-7' : 'xl:col-span-12'} flex flex-col transition-all`}>
+          <div className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden">
+            {/* 테이블 헤더 */}
+            <div className="px-4 py-2.5 bg-zinc-950/70 border-b border-white/10 flex items-center justify-between text-[11.5px] text-zinc-400 font-bold">
+              <span>
+                문서 및 미디어 ({filteredDocs.length}건) · 항목을 클릭하면 우측에 상세 표·미리보기가 열립니다
               </span>
-              <button
-                type="button"
-                onClick={() => handleToggleLockSimulation(selectedDoc.id)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
-              >
-                잠금 표시하기
-              </button>
-            </div>
-          )}
-
-          {/* 이미지 미리보기 (GIF / PNG / JPG 등 미디어 파일 지원) */}
-          {selectedDoc.isImage && selectedDoc.imageBase64 && (
-            <div className="p-3 rounded-xl bg-zinc-950 border border-cyan-400/30 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
-                  🖼️ 이미지 원본 실시간 미리보기
-                </span>
-                <span className="text-[11px] text-zinc-400">
-                  {selectedDoc.ext} · {selectedDoc.sizeLabel}
-                </span>
-              </div>
-              <div className="w-full flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/5 overflow-hidden">
-                <img
-                  src={selectedDoc.imageBase64}
-                  alt={selectedDoc.fileName}
-                  className="max-h-64 object-contain rounded"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 표 핵심 데이터 */}
-          <div className="flex flex-col gap-1.5">
-            <span className="font-label-sm text-[11.5px] text-zinc-300 font-extrabold">
-              📊 표 핵심 내용
-            </span>
-            <div className="overflow-x-auto rounded-xl border border-white/10 bg-zinc-950">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-zinc-900 border-b border-white/10">
-                    {selectedDoc.tableHeaders.map((h) => (
-                      <th
-                        key={h}
-                        className="px-2.5 py-2 font-label-sm text-[11px] text-cyan-300 font-extrabold whitespace-nowrap"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {selectedDoc.tableRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-zinc-900/50">
-                      {row.map((cell, cIdx) => (
-                        <td
-                          key={cIdx}
-                          className="px-2.5 py-1.5 font-body-sm text-[11.5px] text-zinc-200"
-                        >
-                          {cell}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 본문 요약 */}
-          <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1">
-            <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
-              📄 본문 주요 내용
-            </span>
-            <p className="font-body-sm text-[12px] text-zinc-200 whitespace-pre-line leading-relaxed">
-              {selectedDoc.fullTextPreview}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <span className="font-body-sm text-[11px] text-zinc-400">
-              파일 크기: {selectedDoc.sizeLabel} · 위치: {selectedDoc.folderPath}
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-              {!isStoreAppMode && !workPlan && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => activatePricingPlan('work_soho_9900')}
-                    className="px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-                  >
-                    💼 SOHO 10인 월 9,900원 개통
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowProModal(true)}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
-                  >
-                    요금제 안내 보기
-                  </button>
-                </>
+              {isSidePeekOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsSidePeekOpen(false)}
+                  className="text-zinc-400 hover:text-white text-[11px] font-bold cursor-pointer"
+                >
+                  우측 미리보기 닫기 ✕
+                </button>
               )}
             </div>
+
+            {/* 노션 데이터베이스 행(Row) 리스트 */}
+            <div className="flex flex-col divide-y divide-white/8">
+              {filteredDocs.map((doc) => {
+                const isSelected = isSidePeekOpen && doc.id === selectedDoc.id;
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        setIsSidePeekOpen(false);
+                      } else {
+                        setSelectedDocId(doc.id);
+                        setIsSidePeekOpen(true);
+                      }
+                    }}
+                    className={`px-4 py-3 flex flex-col gap-1.5 cursor-pointer transition-colors ${
+                      isSelected ? 'bg-cyan-950/35' : 'hover:bg-zinc-900/70'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span
+                          className={`px-2 py-0.5 rounded font-label-sm text-[10px] font-extrabold shrink-0 ${
+                            doc.ext === 'XLSX' || doc.ext === 'CSV'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                              : doc.ext === 'DOCX' || doc.ext === 'HWP' || doc.ext === 'TXT'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
+                              : doc.ext === 'PDF'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
+                          }`}
+                        >
+                          {doc.ext}
+                        </span>
+                        <span className="font-label-md text-[13.5px] text-white font-bold truncate">
+                          {doc.fileName}
+                        </span>
+                        <span className="hidden md:inline text-[11.5px] text-zinc-400 truncate">
+                          · {doc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className="hidden sm:inline text-[11px] text-zinc-400">
+                          {doc.folderPath} · {doc.sizeLabel} · {doc.updatedAt}
+                        </span>
+                        {doc.lockedBy ? (
+                          <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[10.5px] font-extrabold">
+                            🔒 {doc.lockedBy} 수정 중
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
+                            🔓 수정 가능
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 검색어가 입력되었을 때만 해당 행 아래에 매칭된 핵심 스니펫 1줄 표시 */}
+                    {searchQuery.trim() && (
+                      <div className="pl-11 text-[12px] text-cyan-200 truncate">
+                        📌 {doc.matchedSnippet}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        {/* 우측 Side Peek 패널: 문서를 클릭했을 때만 우측에서 스르륵 열림 */}
+        {isSidePeekOpen && selectedDoc && (
+          <div className="xl:col-span-5 p-4 md:p-5 rounded-2xl bg-[#18181B] border border-cyan-400/40 shadow-xl flex flex-col gap-3.5 sticky top-16">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                  📄 문서 내용 미리보기
+                </span>
+                <span className="text-[11px] text-zinc-400 font-bold">
+                  {selectedDoc.author} · {selectedDoc.updatedAt}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSidePeekOpen(false)}
+                className="px-2 py-0.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+              >
+                ✕ 닫기
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="font-label-sm text-[11px] text-cyan-300 font-bold">
+                {selectedDoc.folderPath}\{selectedDoc.fileName}
+              </span>
+              <h3 className="font-headline-sm text-[16px] text-white font-extrabold leading-snug">
+                {selectedDoc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
+              </h3>
+            </div>
+
+            {selectedDoc.lockedBy ? (
+              <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-400/50 flex items-center justify-between gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-label-sm text-[12px] text-amber-200 font-extrabold">
+                    🔒 현재 [{selectedDoc.lockedBy}] 님이 수정 중인 문서입니다
+                  </span>
+                  <span className="font-body-sm text-[11.5px] text-zinc-300 font-medium">
+                    다른 분이 수정 중일 때는 읽기 전용으로 안전하게 열립니다.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleLockSimulation(selectedDoc.id)}
+                  className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-amber-300/40 text-amber-200 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
+                >
+                  잠금 해제
+                </button>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 flex items-center justify-between gap-2">
+                <span className="font-label-sm text-[11.5px] text-emerald-300 font-bold">
+                  🔓 현재 수정 중인 팀원이 없습니다 — 바로 편집 가능
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleLockSimulation(selectedDoc.id)}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
+                >
+                  잠금 표시하기
+                </button>
+              </div>
+            )}
+
+            {/* 이미지 미리보기 (GIF / PNG / JPG 등 미디어 파일 지원) */}
+            {selectedDoc.isImage && selectedDoc.imageBase64 && (
+              <div className="p-3 rounded-xl bg-zinc-950 border border-cyan-400/30 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
+                    🖼️ 이미지 원본 실시간 미리보기
+                  </span>
+                  <span className="text-[11px] text-zinc-400">
+                    {selectedDoc.ext} · {selectedDoc.sizeLabel}
+                  </span>
+                </div>
+                <div className="w-full flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/5 overflow-hidden">
+                  <img
+                    src={selectedDoc.imageBase64}
+                    alt={selectedDoc.fileName}
+                    className="max-h-64 object-contain rounded"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 표 핵심 데이터 */}
+            <div className="flex flex-col gap-1.5">
+              <span className="font-label-sm text-[11.5px] text-zinc-300 font-extrabold">
+                📊 표 핵심 내용
+              </span>
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-zinc-950">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-zinc-900 border-b border-white/10">
+                      {selectedDoc.tableHeaders.map((h) => (
+                        <th
+                          key={h}
+                          className="px-2.5 py-2 font-label-sm text-[11px] text-cyan-300 font-extrabold whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {selectedDoc.tableRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-900/50">
+                        {row.map((cell, cIdx) => (
+                          <td
+                            key={cIdx}
+                            className="px-2.5 py-1.5 font-body-sm text-[11.5px] text-zinc-200"
+                          >
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 본문 요약 */}
+            <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1">
+              <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
+                📄 본문 주요 내용
+              </span>
+              <p className="font-body-sm text-[12px] text-zinc-200 whitespace-pre-line leading-relaxed">
+                {selectedDoc.fullTextPreview}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <span className="font-body-sm text-[11px] text-zinc-400">
+                파일 크기: {selectedDoc.sizeLabel} · 위치: {selectedDoc.folderPath}
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {!isStoreAppMode && !workPlan && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => activatePricingPlan('work_soho_9900')}
+                      className="px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                    >
+                      💼 SOHO 10인 월 9,900원 개통
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowProModal(true)}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                    >
+                      요금제 안내 보기
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -2638,8 +2577,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
   if (activeLoungeType === 'family') {
     return (
-      <div className="p-3.5 md:p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {FAMILY_ROOMS.map((room) => {
             const active = activeFamilyRoom === room;
             return (
@@ -2647,10 +2586,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 key={room}
                 type="button"
                 onClick={() => setActiveFamilyRoom(room)}
-                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12.5px] font-bold border transition-all shrink-0 whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] font-bold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                   active
-                    ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-sm'
-                    : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-xs'
+                    : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
                 }`}
               >
                 {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
@@ -2666,7 +2605,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
   if (activeLoungeType === 'club') {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5">
         <AlumniRetroBannerAndTwoTrackBar
           onOpenWaitingRoom={() => {
             setDesktopTab('trash');
@@ -2674,8 +2613,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
           }}
         />
 
-        {/* 하단 1줄: 모임 인물 빠른 검색 + 원본 다운로드 */}
-        <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
+        {/* 하단 1줄: 모임 인물 빠른 검색 + 원본 다운로드 (보더리스 캔버스 배치) */}
+        <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
           {renderMemberPersonaPills('회원별 사진 찾기:')}
 
           <button
@@ -2696,7 +2635,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   .catch(() => {});
               }
             }}
-            className={`px-4 py-2 rounded-xl font-label-sm text-[12.5px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
               p2pOriginalSummoned
                 ? 'bg-primary-container text-zinc-950 border-primary-container'
                 : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
@@ -2755,34 +2694,32 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
   // student ('🎒 스쿨 라운지')
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2">
       {!monthlyReportDismissed && (
-        <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-3.5 py-2 rounded-xl bg-zinc-900/60 border border-emerald-400/30 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
-              🎉 월간 용량 정리
+            <span className="px-2 py-0.5 rounded bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold whitespace-nowrap">
+              🎉 용량 정리
             </span>
-            <span className="font-body-sm text-[12.5px] text-zinc-100 font-medium truncate">
-              이번 달 우리반 원본 사진 {photos.length}장 &amp; 영상이 방장 PC로 안전하게 보관되어{' '}
+            <span className="font-body-sm text-[12px] text-zinc-200 truncate">
+              이번 달 우리반 원본 사진 {photos.length}장 &amp; 영상이 방장 PC로 보관되어{' '}
               <strong className="text-emerald-300">내 폰 여유 공간 +14.2GB</strong> 확보!
             </span>
           </div>
           <button
             type="button"
             onClick={() => setMonthlyReportDismissed(true)}
-            className="px-3 py-1.5 rounded-lg bg-zinc-950/80 hover:bg-zinc-800 text-zinc-400 hover:text-white font-label-sm text-[11.5px] shrink-0 whitespace-nowrap"
+            className="text-zinc-400 hover:text-white font-label-sm text-[11px] shrink-0 whitespace-nowrap cursor-pointer"
           >
             ✕ 닫기
           </button>
         </div>
       )}
 
-      <div className="px-4 py-3 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-label-sm text-[12.5px] text-primary-container font-bold">
-            📸 학교·학원에서 언제든 우리 반 사진과 영상을 바로 찾아볼 수 있습니다
-          </span>
-        </div>
+      <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
+        <span className="font-label-sm text-[12.5px] text-zinc-400">
+          🎒 우리 반 사진과 영상을 친구 이름이나 장면으로 바로 찾아보세요
+        </span>
         {renderMemberPersonaPills('친구 이름 검색:')}
       </div>
     </div>

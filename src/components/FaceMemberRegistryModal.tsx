@@ -166,6 +166,7 @@ export const FaceMemberInlineBar: React.FC<{
 
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [newPersonDraft, setNewPersonDraft] = useState('처남(민수)');
+  const [isCalloutExpanded, setIsCalloutExpanded] = useState(false);
 
   // 1. 👤 개인 라운지에서는 얼굴/여권 등록 박스 100% 제거 (완전 비노출!)
   if (activeLoungeType === 'personal') {
@@ -252,6 +253,45 @@ export const FaceMemberInlineBar: React.FC<{
     setDismissedIds((prev) => [...prev, currentItem.id]);
   };
 
+  if (!isCalloutExpanded) {
+    return (
+      <div className="w-full rounded-xl bg-zinc-900/60 hover:bg-zinc-900/90 border border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 transition-all">
+        <div
+          onClick={() => setIsCalloutExpanded(true)}
+          className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+        >
+          <span className="text-[14px] shrink-0">💡</span>
+          <span className="font-label-sm text-[12.5px] text-zinc-300 truncate">
+            새 얼굴 확인 대기 <strong className="text-amber-300 font-extrabold">{remainingCount}건</strong>이 있습니다
+            {currentItem.kind === 'candidate'
+              ? ` (${currentItem.headlinePrefix} [${currentItem.targetDisplayName}]님 맞죠?)`
+              : ' (새로 등장한 인물 별명 등록)'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {remainingCount > 1 && (
+            <button
+              type="button"
+              disabled={retroScanRunning}
+              onClick={() => void runGlobalSwarmRetroScanAll()}
+              className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/35 text-amber-300 font-label-sm text-[11px] font-bold transition-colors cursor-pointer"
+            >
+              ⚡ 한 번에 등록
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsCalloutExpanded(true)}
+            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[11px] font-bold cursor-pointer"
+          >
+            열어보기 ▾
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full rounded-2xl bg-[#18181B] border border-amber-400/35 p-4 md:p-5 shadow-lg transition-all duration-300">
       {/* 상단 슬림 상태 바: 👑 방장 누락분 뒷정리 & 남은 카드 수 */}
@@ -261,7 +301,7 @@ export const FaceMemberInlineBar: React.FC<{
             👑 방장 누락분 뒷정리 · 남은 확인 {remainingCount}건
           </span>
           <span className="font-body-sm text-[12px] text-zinc-400">
-            1장씩 확인 후 완료되면 이 박스는 화면에서 자동으로 사라집니다
+            1장씩 확인 후 완료되면 자동으로 닫힙니다
           </span>
         </div>
 
@@ -271,7 +311,7 @@ export const FaceMemberInlineBar: React.FC<{
               type="button"
               disabled={retroScanRunning}
               onClick={() => void runGlobalSwarmRetroScanAll()}
-              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-bold transition-colors"
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-bold transition-colors cursor-pointer"
             >
               ⚡ {remainingCount}건 한 번에 등록
             </button>
@@ -279,9 +319,16 @@ export const FaceMemberInlineBar: React.FC<{
           <button
             type="button"
             onClick={() => setShowFaceRegistryModal(true)}
-            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium"
+            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium cursor-pointer"
           >
-            👑 방장 총점검 모달
+            👑 방장 총점검
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsCalloutExpanded(false)}
+            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white font-label-sm text-[11px] font-bold cursor-pointer"
+          >
+            접기 ▴
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
-import type { GpuHelperTierId, LoungeType } from '../types/saysee';
+import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
@@ -205,8 +205,27 @@ export const DesktopDashboard: React.FC = () => {
     setShowProModal,
     faceClusters,
     activeFamilyRoom,
+    setActiveFamilyRoom,
     setDoorplatePickerClusterId,
+    hasExecutedUserSearch,
+    hasUserSelectedSearchTab,
   } = useSaySeeStore();
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [isCanvasExpanded, setIsCanvasExpanded] = useState(false);
+  const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
+
+  const showCanvasResults =
+    hasExecutedUserSearch || hasUserSelectedSearchTab || isCanvasExpanded;
+  const resetToZenCanvas = () => {
+    setIsCanvasExpanded(false);
+    useSaySeeStore.setState({
+      hasExecutedUserSearch: false,
+      hasUserSelectedSearchTab: false,
+    });
+  };
+  const FAMILY_ROOMS: FamilyRoomId[] = ['우리집', '본가(친가)', '처가(친정)'];
 
   const myPassportCluster = useMemo(
     () => faceClusters.find((c) => c.clusterId === 'face_member_5') || faceClusters[0],
@@ -244,309 +263,532 @@ export const DesktopDashboard: React.FC = () => {
   const collapsedBurstCount = searchResults.length - groupedResults.length;
   const currentSubmenus = LOUNGE_SUBMENU_CONFIG[activeLoungeType] || LOUNGE_SUBMENU_CONFIG.personal;
   const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);
+  const activeLoungeLabel =
+    MAIN_LOUNGE_MENUS.find((m) => m.id === activeLoungeType)?.label || '개인 라운지';
+  const activeSubmenuLabel =
+    currentSubmenus.find((s) => s.id === desktopTab)?.label || '투시검색';
 
-  return (
-    <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* ─────────────── 상단 통합 헤더: 모바일(360px~)에서는 3단(로고바 / 5대 라운지 메인메뉴 / 서브메뉴), 데스크톱에서는 2단 ─────────────── */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl">
-        {/* 1단: 좌측 로고 ─── (데스크톱) 메인메뉴 5개 ─── 우상단 유틸 버튼 */}
-        <div
-          className={`px-3.5 sm:px-5 md:px-8 py-2.5 flex flex-col gap-2.5 border-b transition-colors ${
-            themeMode === 'light'
-              ? 'bg-white/95 border-[#EAE8E1]'
-              : 'bg-[#09090B]/95 border-white/10'
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center min-w-0">
-              {/* 좌측 브랜드 로고 */}
-              <div className="flex items-center gap-2.5 shrink-0 lg:w-[210px]">
-                <div
-                  onClick={() => setDesktopTab('dashboard')}
-                  className="flex items-center gap-2 cursor-pointer shrink-0"
-                >
-                  <div
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl border flex items-center justify-center shrink-0 ${
-                      themeMode === 'light'
-                        ? 'bg-[#F8F7F4] border-[#E5E0D5] text-[#0D9488]'
-                        : 'bg-zinc-900 border-white/15 text-primary-container'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[18px] sm:text-[20px] font-bold">
-                      graphic_eq
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-baseline gap-1.5 leading-none">
-                      <span
-                        className={`font-headline-sm text-[16px] sm:text-[18px] tracking-tight font-extrabold whitespace-nowrap ${
-                          themeMode === 'light' ? 'text-slate-900' : 'text-white'
-                        }`}
-                      >
-                        제트아이
-                      </span>
-                      <span
-                        className={`hidden sm:inline font-extrabold text-[11.5px] sm:text-[12.5px] ${
-                          themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
-                        }`}
-                      >
-                        Z-Eye
-                      </span>
-                    </div>
-                    <span
-                      className={`font-label-sm text-[10px] sm:text-[11px] font-medium mt-0.5 leading-none whitespace-nowrap flex items-center gap-1 ${
-                        themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
-                      }`}
-                    >
-                      <svg
-                        className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <rect x="4" y="11" width="16" height="10" rx="2" />
-                        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                      </svg>
-                      <span>시크릿 라운지</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 데스크톱(lg 이상) 전용 1단 인라인 메인메뉴 5개 */}
-              <nav className="hidden lg:flex ml-6 items-center gap-2 overflow-x-auto no-scrollbar">
-                {MAIN_LOUNGE_MENUS.map((menu) => {
-                  const active = activeLoungeType === menu.id;
-                  const isLoungeSub = Boolean(subscribedLounges[menu.id]);
-                  return (
-                    <button
-                      key={menu.id}
-                      type="button"
-                      onClick={() => setActiveLoungeType(menu.id)}
-                      className={`px-4 py-2 rounded-full font-label-md text-[13.5px] flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
-                        active
-                          ? themeMode === 'light'
-                            ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-[0_1px_2px_rgba(13,148,136,0.08)]'
-                            : 'bg-zinc-800 text-primary-container font-extrabold'
-                          : themeMode === 'light'
-                          ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 font-bold'
-                          : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50 font-bold'
-                      }`}
-                    >
-                      <MainLoungeMonoIcon id={menu.id} className="w-[16px] h-[16px] shrink-0" />
-                      <span>{menu.label}</span>
-                      {isLoungeSub && (
-                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-extrabold">
-                          PRO
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </nav>
+  const renderSidebarNavigationContent = (isMobileDrawer = false) => (
+    <div
+      className={`h-full flex flex-col justify-between p-3 select-none ${
+        themeMode === 'light'
+          ? 'bg-[#F8F7F4] border-r border-[#E5E0D5] text-slate-800'
+          : 'bg-[#111114] border-r border-white/10 text-zinc-200'
+      }`}
+    >
+      <div className="flex flex-col gap-4 overflow-y-auto no-scrollbar">
+        {/* 1. 사이드바 최상단: Z-Eye 로고 & 사이드바 접기 버튼 */}
+        <div className="flex items-center justify-between px-1.5 py-1">
+          <div
+            onClick={() => {
+              setDesktopTab('dashboard');
+              resetToZenCanvas();
+              if (isMobileDrawer) setIsMobileDrawerOpen(false);
+            }}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <div
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${
+                themeMode === 'light'
+                  ? 'bg-white border-[#E5E0D5] text-[#0D9488]'
+                  : 'bg-zinc-900 border-white/15 text-primary-container'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px] font-bold">graphic_eq</span>
             </div>
-
-            {/* 우측 상단: Z-Eye 여권 자동 문패(Smart Profile) + 설정 몬스터 바로가기 + 코인 잔액 + 테마 토글 */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
-              {myPassportCluster && (
-                <button
-                  type="button"
-                  onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
-                  title="🛂 Z-Eye 여권 최신 연도 정면 얼굴 자동 문패 (클릭 시 5대 스타일 슬롯 원터치 변경)"
-                  className={`pl-1 pr-2.5 py-1 rounded-full border flex items-center gap-1.5 transition-all cursor-pointer ${
-                    themeMode === 'light'
-                      ? 'bg-teal-50/90 hover:bg-teal-100/80 border-teal-300 text-teal-900 shadow-xs'
-                      : 'bg-zinc-900/95 hover:bg-zinc-800 border-primary-container/45 text-white shadow-xs'
-                  }`}
-                >
-                  <img
-                    src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
-                    alt={myDoorplatePersona}
-                    className="w-6 h-6 rounded-full object-cover border border-primary-container shrink-0"
-                  />
-                  <span className="font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
-                    👑 {myDoorplatePersona}
-                  </span>
-                  <span
-                    className={`hidden xl:inline-block px-1.5 py-0.5 rounded-full font-label-sm text-[9.5px] font-extrabold ${
-                      themeMode === 'light'
-                        ? 'bg-teal-600/15 text-teal-800'
-                        : 'bg-primary-container/20 text-primary-container'
-                    }`}
-                  >
-                    {myPassportCluster.doorplateSlotLabelKo || '① 정면'}
-                  </span>
-                </button>
-              )}
-              {(!isStoreAppMode || enableSetupMonster) && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowSetupMonsterModal(true, 'pc')}
-                    title="🛠️ Z-Eye 설정 몬스터"
-                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-600 dark:text-emerald-300 font-label-sm text-[11px] sm:text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
-                  >
-                    <span>🛠️ 설정 몬스터</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowProModal(true)}
-                    title="크레딧 지갑"
-                    className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full font-label-mono text-[11px] sm:text-[11.5px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
-                      themeMode === 'light'
-                        ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
-                        : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()}</span>
-                    <span className="hidden sm:inline">크레딧</span>
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={toggleThemeMode}
-                title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-                aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none focus:outline-none ${
-                  themeMode === 'light'
-                    ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
-                    : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white shadow-sm'
+            <div className="flex items-baseline gap-1.5">
+              <span
+                className={`font-headline-sm text-[15.5px] font-extrabold tracking-tight ${
+                  themeMode === 'light' ? 'text-slate-900' : 'text-white'
                 }`}
               >
-                {themeMode === 'light' ? (
-                  <svg
-                    className="w-[16px] h-[16px] sm:w-[18px] sm:h-[18px]"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
-                ) : (
-                  <svg
-                    className="w-[16px] h-[16px] sm:w-[18px] sm:h-[18px]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="4" fill="currentColor" />
-                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                  </svg>
-                )}
-              </button>
+                제트아이
+              </span>
+              <span
+                className={`text-[11px] font-extrabold ${
+                  themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
+                }`}
+              >
+                Z-Eye
+              </span>
             </div>
           </div>
 
-          {/* 모바일·태블릿(lg 미만, 360px 화면 포함) 전용 5대 메인메뉴 바: '라운지' 글자를 빼고 5개(개인·패밀리·클럽·스쿨·업무)가 한 줄에 100% 다 보이게 배치 */}
-          <nav className="grid grid-cols-5 lg:hidden gap-1 pt-0.5">
-            {MAIN_LOUNGE_MENUS.map((menu) => {
-              const active = activeLoungeType === menu.id;
-              return (
-                <button
-                  key={menu.id}
-                  type="button"
-                  onClick={() => setActiveLoungeType(menu.id)}
-                  className={`py-1.5 px-1 rounded-full font-label-md text-[12px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
-                    active
-                      ? themeMode === 'light'
-                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-[0_1px_2px_rgba(13,148,136,0.08)]'
-                        : 'bg-zinc-800 text-primary-container font-extrabold'
-                      : themeMode === 'light'
-                      ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
-                      : 'bg-zinc-900/80 text-zinc-400 hover:text-white font-bold'
-                  }`}
-                >
-                  <MainLoungeMonoIcon id={menu.id} className="w-[13px] h-[13px] shrink-0" />
-                  <span>{menu.shortLabel}</span>
-                </button>
-              );
-            })}
-          </nav>
+          <button
+            type="button"
+            onClick={() =>
+              isMobileDrawer ? setIsMobileDrawerOpen(false) : setIsSidebarCollapsed(true)
+            }
+            title={isMobileDrawer ? '메뉴 닫기' : '사이드바 접기'}
+            className="w-7 h-7 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center text-[13px] font-bold cursor-pointer"
+          >
+            {isMobileDrawer ? '✕' : '«'}
+          </button>
         </div>
 
-        {/* 2단: 서브메뉴 바 — 모바일에서도 4개 탭이 한눈에 보이도록 여백 최적화 */}
-        <div
-          className={`px-3 sm:px-5 md:px-8 pt-1 border-b flex items-center gap-1 overflow-x-auto no-scrollbar lg:pl-[274px] transition-colors ${
-            themeMode === 'light'
-              ? 'bg-[#F8F7F4]/95 border-[#E5E0D5]'
-              : 'bg-[#111114]/95 border-white/10'
-          }`}
-        >
-          {currentSubmenus.map((sub) => {
-            if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
-              return null;
-            }
-            if (
-              activeLoungeType === 'personal' &&
-              sub.id === 'sync' &&
-              isStoreAppMode &&
-              !enableSetupMonster
-            ) {
-              return null;
-            }
-            const isSubActive = desktopTab === sub.id;
+        {/* 2. 5대 시크릿 라운지 & 하위 메뉴 트리 (노션 워크스페이스 스타일) */}
+        <div className="flex flex-col gap-1">
+          <span className="px-2 py-0.5 text-[10.5px] font-extrabold uppercase tracking-wider text-zinc-500">
+            시크릿 라운지
+          </span>
+
+          {MAIN_LOUNGE_MENUS.map((menu) => {
+            const active = activeLoungeType === menu.id;
+            const isLoungeSub = Boolean(subscribedLounges[menu.id]);
             return (
-              <button
-                key={sub.id}
-                type="button"
-                onClick={() => setDesktopTab(sub.id)}
-                className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-t-xl border-b-[3px] font-label-md text-[12px] sm:text-[13.5px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
-                  isSubActive
-                    ? themeMode === 'light'
-                      ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
-                      : 'bg-primary-container/15 text-primary-container border-primary-container font-extrabold'
-                    : themeMode === 'light'
-                    ? 'border-transparent text-slate-800 hover:text-[#0D9488] hover:bg-black/[0.02] font-bold'
-                    : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/[0.03] font-bold'
-                }`}
-              >
-                <span>{sub.label}</span>
-                {sub.showTrashCount && (
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] sm:text-[11px] font-mono font-bold ${
-                      isSubActive
-                        ? themeMode === 'light'
-                          ? 'bg-[#0D9488]/15 text-[#0D9488]'
-                          : 'bg-primary-container/20 text-primary-container'
-                        : themeMode === 'light'
-                        ? 'bg-slate-200/80 text-slate-600'
-                        : 'bg-zinc-800 text-zinc-300'
-                    }`}
-                  >
-                    {activeTrashCount}
-                  </span>
+              <div key={menu.id} className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveLoungeType(menu.id);
+                    setDesktopTab('dashboard');
+                    resetToZenCanvas();
+                  }}
+                  className={`w-full px-2.5 py-2 rounded-xl font-label-md text-[13px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                    active
+                      ? themeMode === 'light'
+                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                        : 'bg-zinc-800/90 text-primary-container font-extrabold'
+                      : themeMode === 'light'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-bold'
+                      : 'text-zinc-400 hover:text-white hover:bg-white/5 font-bold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MainLoungeMonoIcon id={menu.id} className="w-[15px] h-[15px] shrink-0" />
+                    <span className="truncate">{menu.label}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isLoungeSub && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500 text-[9.5px] font-extrabold">
+                        PRO
+                      </span>
+                    )}
+                    <span className="text-[10px] opacity-60">{active ? '▾' : '▸'}</span>
+                  </div>
+                </button>
+
+                {/* 선택된 라운지의 하위 트리 (노션 페이지 인덴트 구조) */}
+                {active && (
+                  <div className="ml-4 pl-2.5 border-l border-white/10 flex flex-col gap-0.5 py-0.5">
+                    {/* 패밀리 라운지일 때: 우리집 / 본가 / 처가 방 전환 트리 */}
+                    {menu.id === 'family' && (
+                      <div className="flex flex-col gap-0.5 pb-1 mb-1 border-b border-white/5">
+                        {FAMILY_ROOMS.map((room) => {
+                          const roomActive =
+                            desktopTab === 'dashboard' && activeFamilyRoom === room;
+                          return (
+                            <button
+                              key={room}
+                              type="button"
+                              onClick={() => {
+                                setActiveFamilyRoom(room);
+                                setDesktopTab('dashboard');
+                                if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                              }}
+                              className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[12px] flex items-center justify-between transition-colors cursor-pointer ${
+                                roomActive
+                                  ? 'bg-primary-container/15 text-primary-container font-extrabold'
+                                  : 'text-zinc-400 hover:text-white hover:bg-white/5 font-medium'
+                              }`}
+                            >
+                              <span>
+                                {room === '우리집'
+                                  ? '🏠 우리집'
+                                  : room === '본가(친가)'
+                                  ? '🏡 본가(친가)'
+                                  : '🌸 처가(친정)'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 해당 라운지의 서브메뉴 트리 */}
+                    {currentSubmenus.map((sub) => {
+                      if (sub.id === 'trial' && isCurrentLoungeSubscribed) return null;
+                      if (
+                        activeLoungeType === 'personal' &&
+                        sub.id === 'sync' &&
+                        isStoreAppMode &&
+                        !enableSetupMonster
+                      ) {
+                        return null;
+                      }
+                      const isSubActive = desktopTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => {
+                            setDesktopTab(sub.id);
+                            if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                          }}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[12px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+                            isSubActive
+                              ? themeMode === 'light'
+                                ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
+                                : 'bg-white/10 text-white font-extrabold'
+                              : themeMode === 'light'
+                              ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
+                          }`}
+                        >
+                          <span className="truncate">{sub.label}</span>
+                          {sub.showTrashCount && (
+                            <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-mono font-bold shrink-0">
+                              {activeTrashCount}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
-      </header>
+      </div>
 
-      {/* ─────────────── 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) ─────────────── */}
-      {desktopTab === 'trial' && <LoungeView />}
+      {/* 3. 사이드바 하단: 멀린 패밀리 생태계 앱 런처 (확장성 대응) */}
+      <div className="pt-3 border-t border-white/10 flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={() => setShowFamilyAppsInSidebar((v) => !v)}
+          className="w-full px-2.5 py-2 rounded-xl hover:bg-white/5 flex items-center justify-between text-[12px] font-extrabold text-zinc-400 hover:text-white cursor-pointer"
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="w-5 h-5 rounded-md bg-primary-container/20 text-primary-container flex items-center justify-center text-[11px] font-black">
+              F
+            </span>
+            <span>멀린 패밀리 앱</span>
+          </span>
+          <span className="text-[10px]">{showFamilyAppsInSidebar ? '▾' : '▸'}</span>
+        </button>
 
-      {/* ─────────────── 서브메뉴 2번: 메인 피드 & 파워 검색 ─────────────── */}
-      {desktopTab === 'dashboard' && (
-        <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-5 md:px-8 py-4 sm:py-5 flex flex-col gap-5">
-          {/* 라운지별 전용 상단 컨트롤 바 */}
-          <LoungeFeedContextBanner />
+        {showFamilyAppsInSidebar && (
+          <div className="px-2 py-1.5 rounded-xl bg-zinc-950/70 border border-white/5 flex flex-col gap-1 text-[11.5px] text-zinc-400">
+            <div className="px-2 py-1 rounded hover:bg-white/5 text-primary-container font-bold flex items-center justify-between">
+              <span>⚡ 제트아이 (Z-Eye)</span>
+              <span className="text-[9.5px]">현재 앱</span>
+            </div>
+            <div className="px-2 py-1 rounded hover:bg-white/5 flex items-center justify-between">
+              <span>☀️ 썬드리머 (SunDreamer)</span>
+              <span className="text-[9.5px] text-zinc-500">SSO 연동</span>
+            </div>
+            <div className="px-2 py-1 rounded hover:bg-white/5 flex items-center justify-between">
+              <span>📝 루미노트 (LumiNote)</span>
+              <span className="text-[9.5px] text-zinc-500">SSO 연동</span>
+            </div>
+            <div className="px-2 py-1 rounded hover:bg-white/5 flex items-center justify-between">
+              <span>🍽️ 오늘뭐먹지</span>
+              <span className="text-[9.5px] text-zinc-500">SSO 연동</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
-          {/* 업무 라운지가 아닐 때만 미디어(동영상·사진·개인서류) 통합 검색창 표시 */}
-          {activeLoungeType !== 'work' && <VoiceHeroStage />}
+  return (
+    <div className="min-h-screen flex bg-[#09090B] text-zinc-100">
+      {/* ─────────────── [PC/데스크톱 lg+] 노션형 좌측 접이식 사이드바 (244px) ─────────────── */}
+      {!isSidebarCollapsed && (
+        <aside className="hidden lg:block w-[244px] shrink-0 sticky top-0 h-screen z-40">
+          {renderSidebarNavigationContent(false)}
+        </aside>
+      )}
 
-          {/* 검색 결과 영역 */}
-          {activeLoungeType !== 'work' && (
-          <div id="zeye-search-results" className="scroll-mt-20">
-            {searchSpace === 'video' ? (
+      {/* ─────────────── [모바일 lg 미만] 좌상단 ☰ 터치 시 열리는 슬라이드 드로어 ─────────────── */}
+      {isMobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            onClick={() => setIsMobileDrawerOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+          />
+          <aside className="relative w-[264px] max-w-[82vw] h-full z-10 shadow-2xl">
+            {renderSidebarNavigationContent(true)}
+          </aside>
+        </div>
+      )}
+
+      {/* ─────────────── 우측 메인 도화지(Canvas) 영역 ─────────────── */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* 상단 슬림 바: PC에서는 노션 브레드크럼 + 우상단 고정 앵커(문패/크레딧/테마), 모바일에서는 1줄 5대 라운지 탭 병행 */}
+        <header className="sticky top-0 z-30 backdrop-blur-xl">
+          <div
+            className={`px-3.5 sm:px-5 md:px-7 py-2 flex flex-col gap-2 border-b transition-colors ${
+              themeMode === 'light'
+                ? 'bg-white/90 border-[#EAE8E1]'
+                : 'bg-[#09090B]/90 border-white/8'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              {/* 좌측: 모바일 ☰ 버튼 / PC 사이드바 열기 버튼 + 현재 위치 브레드크럼 */}
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileDrawerOpen(true)}
+                  title="전체 메뉴 열기"
+                  className="lg:hidden w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 flex items-center justify-center cursor-pointer shrink-0"
+                >
+                  ☰
+                </button>
+
+                {isSidebarCollapsed && (
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarCollapsed(false)}
+                    title="좌측 사이드바 펼치기"
+                    className="hidden lg:flex px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 text-[12px] font-bold items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <span>☰</span>
+                    <span>메뉴</span>
+                  </button>
+                )}
+
+                {/* 노션 스타일 상단 경로(Breadcrumb) 표시 */}
+                <div className="flex items-center gap-1.5 text-[13px] truncate">
+                  <span
+                    onClick={() => {
+                      setDesktopTab('dashboard');
+                      resetToZenCanvas();
+                    }}
+                    className="font-extrabold text-zinc-200 hover:text-white cursor-pointer truncate"
+                  >
+                    {activeLoungeLabel}
+                  </span>
+                  {activeLoungeType === 'family' && desktopTab === 'dashboard' && (
+                    <>
+                      <span className="text-zinc-600">/</span>
+                      <span className="text-primary-container font-bold truncate">
+                        {activeFamilyRoom}
+                      </span>
+                    </>
+                  )}
+                  <span className="hidden sm:inline text-zinc-600">/</span>
+                  <span className="hidden sm:inline text-zinc-400 font-medium truncate">
+                    {activeSubmenuLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* 우측 상단 불변의 생태계 앵커: Z-Eye 여권 문패 + 설정 몬스터 + 크레딧 + 테마 토글 */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
+                {myPassportCluster && (
+                  <button
+                    type="button"
+                    onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
+                    title="🛂 Z-Eye 여권 문패 사진 변경"
+                    className={`pl-1 pr-2.5 py-1 rounded-full border flex items-center gap-1.5 transition-all cursor-pointer ${
+                      themeMode === 'light'
+                        ? 'bg-teal-50/90 hover:bg-teal-100/80 border-teal-300 text-teal-900 shadow-xs'
+                        : 'bg-zinc-900/95 hover:bg-zinc-800 border-primary-container/45 text-white shadow-xs'
+                    }`}
+                  >
+                    <img
+                      src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
+                      alt={myDoorplatePersona}
+                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover border border-primary-container shrink-0"
+                    />
+                    <span className="font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
+                      👑 {myDoorplatePersona}
+                    </span>
+                  </button>
+                )}
+                {(!isStoreAppMode || enableSetupMonster) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupMonsterModal(true, 'pc')}
+                      title="🛠️ Z-Eye 설정 몬스터"
+                      className="px-2.5 py-1 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-600 dark:text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <span>🛠️ 설정 몬스터</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowProModal(true)}
+                      title="크레딧 지갑"
+                      className={`px-2.5 py-1 rounded-full font-label-mono text-[11px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
+                        themeMode === 'light'
+                          ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                          : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()}</span>
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleThemeMode}
+                  title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+                    themeMode === 'light'
+                      ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
+                      : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  {themeMode === 'light' ? (
+                    <svg className="w-[16px] h-[16px]" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="w-[16px] h-[16px]"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="4" fill="currentColor" />
+                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* 모바일(lg 미만, 360px 포함) 전용 1줄 5대 라운지 빠른 전환 바 */}
+            <nav className="grid grid-cols-5 lg:hidden gap-1">
+              {MAIN_LOUNGE_MENUS.map((menu) => {
+                const active = activeLoungeType === menu.id;
+                return (
+                  <button
+                    key={menu.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveLoungeType(menu.id);
+                      setDesktopTab('dashboard');
+                      resetToZenCanvas();
+                    }}
+                    className={`py-1.5 px-1 rounded-full font-label-md text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap cursor-pointer ${
+                      active
+                        ? themeMode === 'light'
+                          ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                          : 'bg-zinc-800 text-primary-container font-extrabold'
+                        : themeMode === 'light'
+                        ? 'bg-slate-100/80 text-slate-600 font-bold'
+                        : 'bg-zinc-900/80 text-zinc-400 font-bold'
+                    }`}
+                  >
+                    <MainLoungeMonoIcon id={menu.id} className="w-[12px] h-[12px] shrink-0" />
+                    <span>{menu.shortLabel}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </header>
+
+        {/* ─────────────── 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) ─────────────── */}
+        {desktopTab === 'trial' && <LoungeView />}
+
+        {/* ─────────────── 서브메뉴 2번: 노션형 백지 도화지(Zen Canvas) & 점진적 결과 펼침 ─────────────── */}
+        {desktopTab === 'dashboard' && (
+          <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
+            {activeLoungeType === 'work' ? (
+              <LoungeFeedContextBanner />
+            ) : (
+              <>
+                {/* 노션 빈 페이지 시작점처럼 여유로운 여백을 가진 중앙 도화지 블록 */}
+                <div
+                  className={`w-full transition-all duration-300 flex flex-col gap-4 ${
+                    !showCanvasResults ? 'max-w-3xl mx-auto py-6 md:py-12' : ''
+                  }`}
+                >
+                  {/* 도화지 타이틀 헤더 */}
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+                    <div className="flex items-center gap-2.5">
+                      <h1 className="font-headline-md text-[22px] md:text-[26px] text-white font-extrabold tracking-tight">
+                        {activeLoungeType === 'personal'
+                          ? '👤 내 기기 투시 검색'
+                          : activeLoungeType === 'family'
+                          ? `👨‍👩‍👧‍👦 ${activeFamilyRoom} 패밀리 앨범`
+                          : activeLoungeType === 'club'
+                          ? '⛳ 모임 추억 & 원본 보관함'
+                          : '🎒 우리반 타임캡슐'}
+                      </h1>
+                      <span className="text-[12px] text-zinc-500 font-medium">
+                        말 한마디나 인물 클릭으로 도화지를 채워보세요
+                      </span>
+                    </div>
+
+                    {showCanvasResults && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetSearchSpaceToAll(searchSpace);
+                          resetToZenCanvas();
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white font-label-sm text-[11.5px] font-bold cursor-pointer"
+                      >
+                        ▲ 백지 도화지로 접기
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 라운지별 인물 시드 알약 & 컨트롤 바 (보더리스) */}
+                  <LoungeFeedContextBanner />
+
+                  {/* 보더리스 통합 검색창 + [동영상/사진/문서] 캡슐 + 추천 칩 */}
+                  <VoiceHeroStage />
+
+                  {/* [Zero-State 도화지 안내]: 아직 검색 전일 때는 무거운 카드 덤프 대신 깔끔한 펼치기 블록만 노출 */}
+                  {!showCanvasResults && (
+                    <div className="pt-4 flex flex-col items-center gap-3 text-center">
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchSpace('video');
+                            setIsCanvasExpanded(true);
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          <span>🎬 동영상 전체 펼치기 ({videoSceneItems.length}개)</span>
+                          <span className="text-zinc-500">▾</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchSpace('gallery');
+                            setIsCanvasExpanded(true);
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          <span>🖼️ 사진 전체 펼치기 ({activePhotos.length}장)</span>
+                          <span className="text-zinc-500">▾</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchSpace('vault');
+                            setIsCanvasExpanded(true);
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          <span>
+                            📄 서류 전체 펼치기 ({matchedLocalDocs.length + matchedVaultPhotos.length}건)
+                          </span>
+                          <span className="text-zinc-500">▾</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 검색을 실행했거나 [전체 펼치기]를 눌렀을 때만 도화지 아래로 채워지는 결과 영역 */}
+                {showCanvasResults && (
+                  <div id="zeye-search-results" className="scroll-mt-20">
+                    {searchSpace === 'video' ? (
               <section className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
                   <div className="flex flex-wrap items-center gap-2">
@@ -914,6 +1156,8 @@ export const DesktopDashboard: React.FC = () => {
               </section>
             )}
           </div>
+          )}
+            </>
           )}
         </main>
       )}
@@ -1364,6 +1608,7 @@ export const DesktopDashboard: React.FC = () => {
           </div>
         </main>
       )}
+      </div>
     </div>
   );
 };
