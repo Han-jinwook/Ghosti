@@ -65,7 +65,8 @@ NOTION_TOKEN: str = os.getenv(
 NOTION_VERSION: str = "2022-06-28"
 NOTION_API_BASE: str = "https://api.notion.com/v1"
 
-# 칸반 보드 상태 컬럼값 정의
+# 칸반 보드 상태 컬럼값 정의 (좌 -> 우 순서: 테스트 미션 -> 발견된 버그 -> 수정 중 -> 재테스트 대기 -> 완료)
+STATUS_MISSION = "테스트 미션"
 STATUS_DISCOVERED = "발견된 버그"
 STATUS_IN_PROGRESS = "수정 중"
 STATUS_READY_FOR_QA = "재테스트 대기"
@@ -429,12 +430,12 @@ def update_bug_status(page_id: str, new_status: str) -> bool:
 def create_mission(
     title: str,
     steps_text: str,
-    initial_status: str = STATUS_READY_FOR_QA,
+    initial_status: str = STATUS_MISSION,
 ) -> Optional[str]:
     """
     멀린님과 AI가 새 기능/UI를 만든 직후, 비개발자 알바생(테스터)이
-    '오늘 뭐 테스트할까요?'라고 물어보지 않도록 노션 보드에 친절한 체크리스트 미션 카드를 자동 생성합니다.
-    - 기본 상태: '재테스트 대기' (알바생이 바로 보고 테스트 후 -> 정상이면 '완료', 이상하면 '발견된 버그'로 이동)
+    '오늘 뭐 테스트할까요?'라고 물어보지 않도록 노션 보드 맨 앞 '테스트 미션' 칸에
+    친절한 체크리스트 미션 카드를 자동 생성합니다.
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
