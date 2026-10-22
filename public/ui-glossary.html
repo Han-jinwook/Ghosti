@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🧙‍♂️ 멀린패밀리 앱 테스터(QA) 필수 UI/UX 그림 용어사전</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .demo-box {
+      background: linear-gradient(145deg, #1e293b, #0f172a);
+      border: 1px solid #334155;
+      height: 150px;
+      position: relative;
+      overflow: hidden;
+    }
+    @keyframes pulse-fast {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .skeleton-anim {
+      animation: pulse-fast 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes float-up {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-4px); }
+    }
+    .fab-anim {
+      animation: float-up 2s ease-in-out infinite;
+    }
+    @keyframes slide-up-sheet {
+      0%, 15% { transform: translateY(100%); }
+      35%, 80% { transform: translateY(0%); }
+      95%, 100% { transform: translateY(100%); }
+    }
+    .sheet-anim {
+      animation: slide-up-sheet 4s ease-in-out infinite;
+    }
+    @keyframes toast-pop {
+      0%, 15% { transform: translate(-50%, 24px); opacity: 0; }
+      25%, 75% { transform: translate(-50%, 0px); opacity: 1; }
+      85%, 100% { transform: translate(-50%, -10px); opacity: 0; }
+    }
+    .toast-anim {
+      animation: toast-pop 3.5s ease-in-out infinite;
+    }
+    @keyframes drawer-slide {
+      0%, 15% { transform: translateX(-100%); }
+      35%, 75% { transform: translateX(0%); }
+      90%, 100% { transform: translateX(-100%); }
+    }
+    .drawer-anim {
+      animation: drawer-slide 4s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-20">
+  <!-- 상단 복사 알림 토스트 -->
+  <div id="copyToast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden bg-emerald-500 text-slate-950 font-bold px-5 py-2.5 rounded-full shadow-2xl text-sm transition-all">
+    ✅ 복사 완료! 노션 버그 카드에 Ctrl+V로 붙여넣으세요.
+  </div>
+
+  <!-- 헤더 -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-slate-900/90 border-b border-slate-800 px-6 py-4">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-0.5 text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-full">Z-Eye & 멀린패밀리 QA 표준</span>
+          <span class="text-xs text-slate-400">듀얼 모니터에 띄워두고 참고하세요!</span>
+        </div>
+        <h1 class="text-xl md:text-2xl font-extrabold text-white mt-1">
+          🎨 초보 앱 테스터를 위한 <span class="text-indigo-400">UI/UX 그림 용어사전 TOP 20</span>
+        </h1>
+      </div>
+
+      <!-- 검색 & 카테고리 필터 -->
+      <div class="flex flex-wrap items-center gap-2">
+        <input id="searchInput" type="text" placeholder="🔍 용어 또는 증상 검색 (예: 팝업, 여백, 로딩...)" 
+          class="bg-slate-800 border border-slate-700 text-sm text-white rounded-xl px-4 py-2 w-64 focus:outline-none focus:border-indigo-500" />
+        <button onclick="filterCategory('all')" class="cat-btn active px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white" data-cat="all">전체 (20)</button>
+        <button onclick="filterCategory('popup')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="popup">창·팝업 (5)</button>
+        <button onclick="filterCategory('control')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="control">버튼·조작 (6)</button>
+        <button onclick="filterCategory('layout')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="layout">화면·여백 (5)</button>
+        <button onclick="filterCategory('state')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="state">로딩·상태 (4)</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 안내 배너 -->
+  <section class="max-w-7xl mx-auto px-6 mt-6">
+    <div class="bg-gradient-to-r from-indigo-950/80 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="text-sm text-slate-200 leading-relaxed">
+        💡 <b>노션에 버그 적는 꿀팁:</b> "거기 밑에서 올라오는 네모난 창이 이상해요" 대신, 아래 카드에서 <b>[📋 예시 문장 복사]</b> 버튼을 누르면 AI 개발자가 0.1초 만에 정확히 알아듣고 고쳐줍니다!
+      </div>
+      <div class="text-xs text-indigo-300 font-semibold shrink-0">
+        ⚡ 모든 그림은 실제 움직이는 라이브 데모입니다
+      </div>
+    </div>
+  </section>
+
+  <!-- 카드 그리드 -->
+  <main id="glossaryGrid" class="max-w-7xl mx-auto px-6 mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+    <!-- JS로 20개 카드가 렌더링됩니다 -->
+  </main>
+
+  <script>
+    const terms = [
+      // 1. 창·팝업 (popup)
+      {
+        id: 1,
+        cat: 'popup',
+        catName: '창·팝업',
+        ko: '모달 (Modal / 팝업창)',
+        en: 'Modal Dialog',
+        desc: '화면 정중앙에 뜨면서 뒷배경이 어두워지는 안내·확인 창입니다. 닫기(X)나 확인을 눌러야 뒷화면을 만질 수 있습니다.',
+        example: '[모달] 창이 떴을 때 닫기(X) 버튼을 눌러도 안 닫혀요.',
+        demo: `
+          <div class="w-full h-full bg-slate-950/75 flex items-center justify-center p-3">
+            <div class="bg-slate-800 border border-indigo-400/50 rounded-xl p-3 w-44 shadow-2xl text-center">
+              <div class="text-xs font-bold text-white mb-1">삭제하시겠습니까?</div>
+              <div class="text-[10px] text-slate-400 mb-2">복구할 수 없습니다</div>
+              <div class="flex gap-1.5 justify-center">
+                <span class="px-2 py-0.5 bg-slate-700 rounded text-[10px]">취소</span>
+                <span class="px-2 py-0.5 bg-indigo-500 text-white rounded text-[10px] font-bold">확인</span>
+              </div>
+            </div>
+          </div>`
+      },
+      {
+        id: 2,
+        cat: 'popup',
+        catName: '창·팝업',
+        ko: '바텀시트 (Bottom Sheet)',
+        en: 'Bottom Sheet',
+        desc: '화면 맨 아래에서 위로 스르륵 올라오는 반쪽짜리 창입니다. 옵션 선택이나 상세 필터에서 자주 쓰입니다.',
+        example: '[바텀시트]가 밑에서 올라올 때 글씨가 잘려서 보여요.',
+        demo: `
+          <div class="w-full h-full bg-slate-950/60 flex items-end justify-center">
+            <div class="sheet-anim bg-slate-800 border-t-2 border-indigo-400 rounded-t-2xl w-full p-3 shadow-2xl">
+              <div class="w-8 h-1 bg-slate-500 rounded-full mx-auto mb-2"></div>
+              <div class="text-xs font-bold text-center text-white">정렬 기준 선택 (바텀시트)</div>
+              <div class="mt-1.5 flex justify-around text-[10px] text-indigo-300">
+                <span>최신순 ✓</span><span>인기순</span>
+              </div>
+            </div>
+          </div>`
+      },
+      {
+        id: 3,
+        cat: 'popup',
+        catName: '창·팝업',
+        ko: '토스트 (Toast 알림)',
+        en: 'Toast Message',
+        desc: '화면 위나 아래에 "저장되었습니다" 하고 잠깐(2~3초) 떴다가 혼자 스르륵 사라지는 한 줄 알림창입니다.',
+        example: '저장 버튼을 눌렀는데 완료 [토스트] 알림이 안 떠요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center relative">
+            <span class="text-[11px] text-slate-500">배경 화면</span>
+            <div class="toast-anim absolute bottom-4 left-1/2 bg-emerald-500 text-slate-950 font-bold text-[11px] px-3.5 py-1.5 rounded-full shadow-lg whitespace-nowrap">
+              ✓ 클립보드에 복사되었습니다!
+            </div>
+          </div>`
+      },
+      {
+        id: 4,
+        cat: 'popup',
+        catName: '창·팝업',
+        ko: '드로어 / 사이드바 (Drawer)',
+        en: 'Side Drawer / Sidebar',
+        desc: '왼쪽이나 오른쪽 화면 끝에서 서랍처럼 옆으로 밀려 나오는 메뉴판입니다.',
+        example: '왼쪽 메뉴 버튼을 눌렀는데 [드로어(사이드바)]가 안 열려요.',
+        demo: `
+          <div class="w-full h-full relative bg-slate-950 flex items-center justify-end pr-6">
+            <span class="text-[10px] text-slate-500">메인 화면</span>
+            <div class="drawer-anim absolute top-0 left-0 bottom-0 w-28 bg-slate-800 border-r border-indigo-500/40 p-2.5 flex flex-col gap-1.5">
+              <div class="text-[10px] font-bold text-indigo-400">☰ 메뉴 드로어</div>
+              <div class="h-2 bg-slate-700 rounded w-16"></div>
+              <div class="h-2 bg-slate-700 rounded w-20"></div>
+              <div class="h-2 bg-slate-700 rounded w-14"></div>
+            </div>
+          </div>`
+      },
+      {
+        id: 5,
+        cat: 'popup',
+        catName: '창·팝업',
+        ko: '툴팁 (Tooltip 말풍선)',
+        en: 'Tooltip',
+        desc: '아이콘이나 물음표(?) 위에 마우스를 올렸을 때 작게 뜨는 설명 말풍선입니다.',
+        example: '아이콘에 마우스를 올리면 뜨는 [툴팁] 말풍선이 화면 밖으로 삐져나가요.',
+        demo: `
+          <div class="w-full h-full flex flex-col items-center justify-center gap-1">
+            <div class="bg-indigo-600 text-white text-[10px] px-2.5 py-1 rounded-lg shadow relative">
+              클릭하면 AI가 요약해 줍니다!
+              <div class="w-2 h-2 bg-indigo-600 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2"></div>
+            </div>
+            <div class="mt-1 w-7 h-7 rounded-full bg-slate-700 text-xs flex items-center justify-center font-bold border border-slate-500">?</div>
+          </div>`
+      },
+
+      // 2. 버튼·조작 (control)
+      {
+        id: 6,
+        cat: 'control',
+        catName: '버튼·조작',
+        ko: '플로팅 버튼 (FAB)',
+        en: 'Floating Action Button',
+        desc: '화면 오른쪽 아래 모서리에 둥둥 떠 있는 동그란 핵심 버튼(예: + 글쓰기, 챗봇 열기)입니다.',
+        example: '오른쪽 아래 [플로팅 버튼]이 하단 글씨를 가려서 누르기 힘들어요.',
+        demo: `
+          <div class="w-full h-full p-3 relative bg-slate-950/50">
+            <div class="space-y-1.5">
+              <div class="h-3 bg-slate-800 rounded w-3/4"></div>
+              <div class="h-3 bg-slate-800 rounded w-1/2"></div>
+            </div>
+            <button class="fab-anim absolute bottom-3 right-3 w-11 h-11 rounded-full bg-indigo-500 text-white font-bold text-lg shadow-xl flex items-center justify-center border-2 border-indigo-300">
+              +
+            </button>
+          </div>`
+      },
+      {
+        id: 7,
+        cat: 'control',
+        catName: '버튼·조작',
+        ko: '토글 스위치 (Toggle)',
+        en: 'Toggle Switch',
+        desc: '전등 스위치처럼 딸깍 눌러서 켜기(ON) / 끄기(OFF) 상태를 바꾸는 가로형 스위치입니다.',
+        example: '알림 설정 [토글 스위치]를 켰는데 다시 들어오면 꺼져 있어요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-4" onclick="this.querySelector('.knob').classList.toggle('translate-x-6'); this.querySelector('.track').classList.toggle('bg-indigo-500'); this.querySelector('.track').classList.toggle('bg-slate-600');">
+            <span class="text-xs text-slate-300">자동 필터 (클릭해 보세요)</span>
+            <div class="track w-12 h-6 bg-indigo-500 rounded-full p-1 cursor-pointer transition-colors">
+              <div class="knob w-4 h-4 bg-white rounded-full shadow-md transform translate-x-6 transition-transform"></div>
+            </div>
+          </div>`
+      },
+      {
+        id: 8,
+        cat: 'control',
+        catName: '버튼·조작',
+        ko: '칩 / 필터 태그 (Chip)',
+        en: 'Filter Chip / Tag',
+        desc: '카테고리나 키워드를 선택할 때 알약 모양으로 나열된 작은 버튼들입니다.',
+        example: '상단 카테고리 [칩] 버튼을 선택해도 색깔이 안 바뀌어요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-1.5 px-2 flex-wrap">
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-indigo-500 text-white">#전체 ✓</span>
+            <span class="px-3 py-1 rounded-full text-xs bg-slate-800 text-slate-300 border border-slate-600">#광고차단</span>
+            <span class="px-3 py-1 rounded-full text-xs bg-slate-800 text-slate-300 border border-slate-600">#쇼핑요약</span>
+          </div>`
+      },
+      {
+        id: 9,
+        cat: 'control',
+        catName: '버튼·조작',
+        ko: '드롭다운 / 셀렉트 (Dropdown)',
+        en: 'Dropdown / Select Box',
+        desc: '클릭하면 아래로 목록이 주르륵 펼쳐져서 하나를 고를 수 있는 선택 상자입니다.',
+        example: '언어 선택 [드롭다운]을 눌렀는데 목록이 안 펼쳐져요.',
+        demo: `
+          <div class="w-full h-full flex flex-col items-center justify-center p-2">
+            <div class="w-40 bg-slate-800 border border-indigo-400 rounded-lg px-3 py-1.5 text-xs flex justify-between items-center">
+              <span>한국어 (KR)</span><span>▼</span>
+            </div>
+            <div class="w-40 bg-slate-900 border border-slate-700 rounded-lg mt-1 text-[11px] overflow-hidden">
+              <div class="px-3 py-1 bg-indigo-600/30 text-indigo-300">한국어 (KR)</div>
+              <div class="px-3 py-1 text-slate-400">English (US)</div>
+            </div>
+          </div>`
+      },
+      {
+        id: 10,
+        cat: 'control',
+        catName: '버튼·조작',
+        ko: '아코디언 (Accordion)',
+        en: 'Accordion (접기/펼치기)',
+        desc: '제목을 누르면 아래 숨겨진 상세 내용이 펼쳐지고, 다시 누르면 접히는 구조(자주 묻는 질문 등)입니다.',
+        example: '상세보기 [아코디언]을 펼쳐도 안에 글씨가 안 보여요.',
+        demo: `
+          <div class="w-full h-full flex flex-col justify-center px-4">
+            <div class="bg-slate-800 border border-slate-700 rounded-lg p-2">
+              <div class="flex justify-between text-xs font-bold text-indigo-300">
+                <span>Q. 환불은 어떻게 하나요?</span><span>▲</span>
+              </div>
+              <div class="mt-1.5 pt-1.5 border-t border-slate-700 text-[10px] text-slate-300">
+                A. 마이페이지 > 결제내역에서 즉시 가능합니다.
+              </div>
+            </div>
+          </div>`
+      },
+      {
+        id: 11,
+        cat: 'control',
+        catName: '버튼·조작',
+        ko: '케밥 / 미트볼 메뉴 (⋮ / ⋯)',
+        en: 'More Menu (점 3개 버튼)',
+        desc: '점 3개가 세로(⋮)나 가로(⋯)로 찍힌 [더보기] 아이콘 버튼입니다. 수정·삭제 메뉴가 숨어 있습니다.',
+        example: '오른쪽 위 [점 3개(더보기) 메뉴]를 눌러도 반응이 없어요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-6">
+            <div class="flex flex-col items-center gap-1">
+              <div class="w-9 h-9 rounded-lg bg-slate-800 border border-indigo-400 flex items-center justify-center text-lg font-extrabold text-white">⋮</div>
+              <span class="text-[10px] text-slate-400">세로 점 3개 (케밥)</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <div class="w-9 h-9 rounded-lg bg-slate-800 border border-indigo-400 flex items-center justify-center text-lg font-extrabold text-white">⋯</div>
+              <span class="text-[10px] text-slate-400">가로 점 3개 (미트볼)</span>
+            </div>
+          </div>`
+      },
+
+      // 3. 화면·여백 (layout)
+      {
+        id: 12,
+        cat: 'layout',
+        catName: '화면·여백',
+        ko: '헤더 / 상단바 (Header / GNB)',
+        en: 'Top Header Bar',
+        desc: '화면 맨 위에 항상 고정되어 로고, 뒤로가기(←), 프로필 버튼이 들어있는 상단 영역입니다.',
+        example: '스크롤을 내릴 때 상단 [헤더]가 본문 글씨랑 겹쳐 보여요.',
+        demo: `
+          <div class="w-full h-full flex flex-col">
+            <div class="bg-indigo-950 border-b border-indigo-400 px-3 py-2 flex justify-between items-center">
+              <span class="text-xs font-bold text-white">← Z-Eye 헤더</span>
+              <span class="text-[10px] bg-indigo-600 px-2 py-0.5 rounded">MY</span>
+            </div>
+            <div class="flex-1 flex items-center justify-center text-[11px] text-slate-500">아래 본문 영역</div>
+          </div>`
+      },
+      {
+        id: 13,
+        cat: 'layout',
+        catName: '화면·여백',
+        ko: '하단 탭바 (Bottom Nav)',
+        en: 'Bottom Navigation Bar',
+        desc: '모바일 앱 맨 아래에 고정된 4~5개 메뉴 아이콘 바(홈, 검색, 내정보 등)입니다.',
+        example: '모바일 화면에서 [하단 탭바] 아이콘 글씨가 두 줄로 깨져요.',
+        demo: `
+          <div class="w-full h-full flex flex-col justify-end">
+            <div class="flex-1 flex items-center justify-center text-[11px] text-slate-500">본문 영역</div>
+            <div class="bg-slate-800 border-t border-indigo-400 py-2 flex justify-around text-[10px]">
+              <span class="text-indigo-400 font-bold">🏠 홈</span>
+              <span class="text-slate-400">🔍 검색</span>
+              <span class="text-slate-400">⚡ 라운지</span>
+              <span class="text-slate-400">👤 내정보</span>
+            </div>
+          </div>`
+      },
+      {
+        id: 14,
+        cat: 'layout',
+        catName: '화면·여백',
+        ko: '패딩 vs 마진 (안쪽/바깥 여백)',
+        en: 'Padding (안) vs Margin (밖)',
+        desc: '패딩(Padding)은 상자 안쪽 글씨와의 여백이고, 마진(Margin)은 상자와 옆 상자 사이의 바깥 간격입니다.',
+        example: '버튼 안쪽 여백([패딩])이 너무 좁아서 글씨가 테두리에 딱 붙어 있어요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center p-2">
+            <div class="border-2 border-dashed border-amber-400/70 p-2 rounded-lg text-center">
+              <div class="text-[9px] text-amber-300 mb-1">바깥 간격 = 마진(Margin)</div>
+              <div class="bg-indigo-600/30 border border-indigo-400 p-2.5 rounded text-[10px] text-white font-bold">
+                안쪽 여백 = 패딩(Padding)
+              </div>
+            </div>
+          </div>`
+      },
+      {
+        id: 15,
+        cat: 'layout',
+        catName: '화면·여백',
+        ko: '카드 뷰 (Card UI)',
+        en: 'Card Component',
+        desc: '사진, 제목, 설명을 네모난 박스 하나에 깔끔하게 묶어놓은 덩어리 단위입니다.',
+        example: '목록에서 두 번째 [카드]의 테두리 높이가 다른 카드랑 안 맞아요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-2 px-3">
+            <div class="bg-slate-800 border border-slate-600 rounded-xl p-2.5 w-28">
+              <div class="w-full h-8 bg-indigo-500/30 rounded mb-1.5"></div>
+              <div class="text-[10px] font-bold text-white">상품 카드 A</div>
+              <div class="text-[9px] text-slate-400">12,000원</div>
+            </div>
+            <div class="bg-slate-800 border border-slate-600 rounded-xl p-2.5 w-28">
+              <div class="w-full h-8 bg-emerald-500/30 rounded mb-1.5"></div>
+              <div class="text-[10px] font-bold text-white">상품 카드 B</div>
+              <div class="text-[9px] text-slate-400">19,000원</div>
+            </div>
+          </div>`
+      },
+      {
+        id: 16,
+        cat: 'layout',
+        catName: '화면·여백',
+        ko: '말줄임표 / 텍스트 넘침 (Overflow)',
+        en: 'Text Overflow / Ellipsis (...)',
+        desc: '글씨가 길 때 상자 밖으로 삐져나가거나 깨지지 않고 "..."(말줄임표)으로 깔끔하게 줄여주는 처리입니다.',
+        example: '제목이 길 때 "..." 처리가 안 되고 박스 밖으로 글씨가 [삐져나가요(Overflow)].',
+        demo: `
+          <div class="w-full h-full flex flex-col items-center justify-center gap-2 px-4">
+            <div class="w-44 bg-rose-950/60 border border-rose-500/60 rounded px-2 py-1 text-[10px] whitespace-nowrap">
+              ❌ 나쁜 예: 글씨가 상자 밖으로 막 삐져나감!!
+            </div>
+            <div class="w-44 bg-emerald-950/60 border border-emerald-500/60 rounded px-2 py-1 text-[10px] truncate">
+              ⭕ 좋은 예: 긴 제목은 이렇게 말줄임표로 깔끔하게...
+            </div>
+          </div>`
+      },
+
+      // 4. 로딩·상태 (state)
+      {
+        id: 17,
+        cat: 'state',
+        catName: '로딩·상태',
+        ko: '스켈레톤 로딩 (Skeleton UI)',
+        en: 'Skeleton Loader',
+        desc: '내용이 뜨기 전에 회색 네모 뼈대가 반짝거리며 "곧 내용이 나옵니다"라고 보여주는 세련된 로딩 화면입니다.',
+        example: '데이터가 다 불러와졌는데도 회색 [스켈레톤 로딩] 화면에서 안 넘어가요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center px-6">
+            <div class="w-full bg-slate-800/80 rounded-xl p-3 flex gap-3 items-center">
+              <div class="skeleton-anim w-10 h-10 rounded-full bg-slate-600 shrink-0"></div>
+              <div class="flex-1 space-y-2">
+                <div class="skeleton-anim h-3 bg-slate-600 rounded w-3/4"></div>
+                <div class="skeleton-anim h-2.5 bg-slate-700 rounded w-1/2"></div>
+              </div>
+            </div>
+          </div>`
+      },
+      {
+        id: 18,
+        cat: 'state',
+        catName: '로딩·상태',
+        ko: '스피너 / 무한 로딩 (Spinner)',
+        en: 'Loading Spinner',
+        desc: '처리 중일 때 빙글빙글 도는 동그라미 아이콘입니다. 10초 이상 계속 돌면 버그(무한 로딩)입니다.',
+        example: '검색 버튼을 눌렀는데 [스피너]만 계속 돌고 결과 화면이 안 나와요(무한 로딩).',
+        demo: `
+          <div class="w-full h-full flex flex-col items-center justify-center gap-2">
+            <div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-[11px] text-slate-400">데이터 불러오는 중...</span>
+          </div>`
+      },
+      {
+        id: 19,
+        cat: 'state',
+        catName: '로딩·상태',
+        ko: '빈 상태 화면 (Empty State)',
+        en: 'Empty State',
+        desc: '검색 결과나 등록된 글이 0개일 때 하얀 백지 대신 "아직 내역이 없습니다"라고 안내해 주는 화면입니다.',
+        example: '내역이 없을 때 안내 문구([빈 상태 화면]) 없이 그냥 까만 빈 화면만 나와서 고장 난 줄 알았어요.',
+        demo: `
+          <div class="w-full h-full flex flex-col items-center justify-center text-center p-2">
+            <div class="text-2xl mb-1">📭</div>
+            <div class="text-xs font-bold text-slate-300">아직 차단된 내역이 없어요</div>
+            <div class="text-[10px] text-slate-500">새로운 키워드를 등록해 보세요</div>
+          </div>`
+      },
+      {
+        id: 20,
+        cat: 'state',
+        catName: '로딩·상태',
+        ko: '뱃지 / 알림 점 (Badge)',
+        en: 'Notification Badge',
+        desc: '아이콘 어깨 위에 빨간 숫자(3)나 점(•)으로 안 읽은 알림 개수를 표시하는 작은 동그라미입니다.',
+        example: '알림을 다 읽었는데도 종 모양 아이콘 위에 빨간 숫자 [뱃지]가 안 사라져요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-6">
+            <div class="relative bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <span class="text-xl">🔔</span>
+              <span class="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center">3</span>
+            </div>
+            <span class="text-xs text-slate-300">어깨 위 빨간 숫자 = <b>뱃지</b></span>
+          </div>`
+      }
+    ];
+
+    let currentCategory = 'all';
+
+    function renderCards() {
+      const grid = document.getElementById('glossaryGrid');
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      const filtered = terms.filter(t => {
+        const matchCat = currentCategory === 'all' || t.cat === currentCategory;
+        const matchQuery = !query ||
+          t.ko.toLowerCase().includes(query) ||
+          t.en.toLowerCase().includes(query) ||
+          t.desc.toLowerCase().includes(query) ||
+          t.example.toLowerCase().includes(query);
+        return matchCat && matchQuery;
+      });
+
+      grid.innerHTML = filtered.map(t => `
+        <article class="bg-slate-900 border border-slate-800 hover:border-indigo-500/60 rounded-2xl overflow-hidden flex flex-col justify-between transition-all shadow-lg">
+          <div>
+            <!-- 상단 라이브 데모 박스 -->
+            <div class="demo-box">
+              ${t.demo}
+              <span class="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-bold bg-slate-900/90 text-indigo-300 rounded border border-slate-700">
+                #${t.id} ${t.catName}
+              </span>
+            </div>
+
+            <!-- 용어 설명 -->
+            <div class="p-4">
+              <div class="flex items-baseline justify-between gap-2">
+                <h2 class="text-base font-extrabold text-white">${t.ko}</h2>
+              </div>
+              <p class="text-[11px] text-indigo-400 font-medium mb-2">${t.en}</p>
+              <p class="text-xs text-slate-300 leading-relaxed">${t.desc}</p>
+            </div>
+          </div>
+
+          <!-- 하단 노션 복사 영역 -->
+          <div class="px-4 pb-4 pt-2 border-t border-slate-800/80 bg-slate-950/40">
+            <div class="text-[11px] text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-lg p-2 mb-2 leading-snug">
+              🗣️ <b>노션 제보 예시:</b><br/>"${t.example}"
+            </div>
+            <div class="flex gap-2">
+              <button onclick="copyText('${t.ko.split(' ')[0]}')" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition">
+                📌 용어만 복사
+              </button>
+              <button onclick="copyText('${t.example}')" class="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+                📋 예시 문장 복사
+              </button>
+            </div>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function filterCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-btn').forEach(btn => {
+        if (btn.dataset.cat === cat) {
+          btn.className = 'cat-btn active px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white';
+        } else {
+          btn.className = 'cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700';
+        }
+      });
+      renderCards();
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text);
+      const toast = document.getElementById('copyToast');
+      toast.textContent = `✅ 복사됨: "${text}" (노션에 Ctrl+V 하세요)`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2400);
+    }
+
+    document.getElementById('searchInput').addEventListener('input', renderCards);
+    renderCards();
+  </script>
+</body>
+</html>
