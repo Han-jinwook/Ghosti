@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Merlin Z-Core (Power Agent CDP Edition)",
+  "version": "1.0.0",
+  "description": "전사 16개 프로젝트 사내 에이전트 공용 만능 브라우저 제어 코어 (chrome.debugger CDP 물리 신호 + Shadow DOM 관통 + 로컬 브릿지)",
+  "permissions": [
+    "debugger",
+    "clipboardWrite",
+    "clipboardRead",
+    "scripting",
+    "activeTab",
+    "tabs",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}

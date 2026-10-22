@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Merlin Z-Core (Store Clean Edition)",
+  "version": "1.0.0",
+  "description": "멀린 패밀리 앱(Z-Eye, 어그로필터, 센스톡, 오늘뭐먹지) 공식 스토어 출시용 안전 브릿지 코어",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.sundreamer.app/*",
+    "http://localhost:5199/*",
+    "http://127.0.0.1:5199/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.sundreamer.app/*",
+        "https://*.youtube.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
