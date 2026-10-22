@@ -426,6 +426,119 @@ def update_bug_status(page_id: str, new_status: str) -> bool:
     return False
 
 
+def create_mission(
+    title: str,
+    steps_text: str,
+    initial_status: str = STATUS_READY_FOR_QA,
+) -> Optional[str]:
+    """
+    멀린님과 AI가 새 기능/UI를 만든 직후, 비개발자 알바생(테스터)이
+    '오늘 뭐 테스트할까요?'라고 물어보지 않도록 노션 보드에 친절한 체크리스트 미션 카드를 자동 생성합니다.
+    - 기본 상태: '재테스트 대기' (알바생이 바로 보고 테스트 후 -> 정상이면 '완료', 이상하면 '발견된 버그'로 이동)
+    """
+    ensure_valid_token()
+    SCHEMA.detect(DATABASE_ID)
+
+    clean_title = title.strip()
+    if not clean_title.startswith("🎯"):
+        clean_title = f"🎯 [테스트 미션] {clean_title}"
+
+    if SCHEMA.status_prop_type == "status":
+        status_prop = {"status": {"name": initial_status}}
+    else:
+        status_prop = {"select": {"name": initial_status}}
+
+    # 줄바꿈 또는 번호로 구분된 체크리스트 블록 생성
+    raw_lines = [
+        ln.strip()
+        for ln in steps_text.replace("\\n", "\n").splitlines()
+        if ln.strip()
+    ]
+
+    children_blocks: List[Dict[str, Any]] = [
+        {
+            "object": "block",
+            "type": "callout",
+            "callout": {
+                "icon": {"type": "emoji", "emoji": "😊"},
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": "안녕하세요! 새로 추가·개선된 화면이 잘 작동하는지 아래 순서대로 편하게 눌러보며 확인 부탁드립니다."
+                        },
+                        "annotations": {"bold": True},
+                    }
+                ],
+            },
+        }
+    ]
+
+    for step_line in raw_lines:
+        children_blocks.append(
+            {
+                "object": "block",
+                "type": "to_do",
+                "to_do": {
+                    "rich_text": [
+                        {"type": "text", "text": {"content": step_line[:1900]}}
+                    ],
+                    "checked": False,
+                },
+            }
+        )
+
+    children_blocks.extend(
+        [
+            {"object": "block", "type": "divider", "divider": {}},
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "✅ 모두 잘 작동하면: 이 카드를 [완료] 칸으로 옮겨주세요!\n🚨 안 되거나 어색한 부분이 있으면: 이 글 맨 아래에 어떤 점이 이상한지(가능하면 캡처 사진과 함께) 적어주시고, 카드를 [발견된 버그] 칸으로 옮겨주시면 AI가 자동으로 감지해 바로 고치겠습니다. 감사합니다!"
+                            },
+                            "annotations": {"color": "gray"},
+                        }
+                    ]
+                },
+            },
+        ]
+    )
+
+    payload = {
+        "parent": {"database_id": DATABASE_ID},
+        "properties": {
+            SCHEMA.title_prop_name: {
+                "title": [{"type": "text", "text": {"content": clean_title}}]
+            },
+            SCHEMA.status_prop_name: status_prop,
+        },
+        "children": children_blocks,
+    }
+
+    res = requests.post(
+        f"{NOTION_API_BASE}/pages",
+        headers=get_headers(),
+        json=payload,
+        timeout=15,
+    )
+
+    if res.status_code != 200:
+        print(f"❌ 테스트 미션 카드 생성 실패 (HTTP {res.status_code}): {res.text}")
+        return None
+
+    new_page_id = res.json().get("id", "")
+    print("\n🎯 [알바생용 노션 테스트 미션 카드 생성 완료!]")
+    print(f"   • 미션 제목: {clean_title}")
+    print(f"   • 배치 컬럼: '{initial_status}'")
+    print(f"   • 카드 ID  : {new_page_id}")
+    return new_page_id
+
+
 # =====================================================================
 # 5. 무토큰 백그라운드 감시 모드: watch_bugs(interval_sec)
 #    (평상시 AI 토큰 소모 0원 -> 새 버그 등록 시에만 즉시 종료하며 에이전트 호출)
@@ -597,5 +710,10 @@ if __name__ == "__main__":
             guide = " ".join(sys.argv[3:])
             ok = complete_bug(target_id, guide)
             sys.exit(0 if ok else 1)
+        elif subcmd == "mission" and len(sys.argv) >= 4:
+            mission_title = sys.argv[2]
+            mission_steps = " ".join(sys.argv[3:])
+            created_id = create_mission(mission_title, mission_steps)
+            sys.exit(0 if created_id else 1)
 
     run_cli()
