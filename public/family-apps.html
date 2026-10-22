@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>멀린 패밀리 & 썬드리머 전사 앱 생태계 마스터 소개서 (24선)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: #0b1120;
+      color: #f8fafc;
+    }
+    .card-glow:hover {
+      box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.35);
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+  <!-- 상단 복사 알림 토스트 -->
+  <div id="copyToast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden bg-emerald-500 text-slate-950 font-extrabold px-6 py-3 rounded-full shadow-2xl text-sm transition-all">
+    ✅ 복사 완료! 노션·카톡 또는 NotebookLM에 Ctrl+V로 붙여넣으세요.
+  </div>
+
+  <!-- 고정 헤더 -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-slate-900/95 border-b border-slate-800 px-4 md:px-8 py-4 shadow-xl">
+    <div class="max-w-7xl mx-auto flex flex-col gap-3.5">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">SSOT v2026.10</span>
+            <span class="text-xs text-slate-400">신규 실무자·QA 알바생 온보딩 & NotebookLM 공식 레퍼런스</span>
+          </div>
+          <h1 class="text-xl md:text-2xl font-extrabold text-white mt-1">
+            🌌 멀린 패밀리 & 썬드리머 <span class="text-indigo-400">전사 앱 생태계 마스터 소개서 (6대 부문 · 24선)</span>
+          </h1>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="copyAllForNotebookLM()" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg transition flex items-center gap-1.5">
+            📚 NotebookLM 주입용 전체 텍스트 복사
+          </button>
+          <a href="/ui-glossary.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+            ⚡ UI/UX 그림 용어사전 보기 ↗
+          </a>
+        </div>
+      </div>
+
+      <!-- 검색 & 6대 부문 필터 탭 -->
+      <div class="flex flex-wrap items-center gap-1.5 pt-1">
+        <input id="searchInput" type="text" placeholder="🔍 앱 이름·기능·키워드 검색 (예: 센스톡, 문자, 세무, 쇼츠, 조사기...)"
+          class="bg-slate-800/90 border border-slate-700 text-xs text-white rounded-xl px-3.5 py-2 w-full sm:w-64 focus:outline-none focus:border-indigo-500" />
+        <button onclick="filterCategory('all')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white" data-cat="all">전체 (24)</button>
+        <button onclick="filterCategory('sec1')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="sec1">🏛️ 1. 허브·코어 (3)</button>
+        <button onclick="filterCategory('sec2')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="sec2">☀️ 2. 헬스케어·치유 (4)</button>
+        <button onclick="filterCategory('sec3')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="sec3">💼 3. B2B CRM·메신저·세무 (3)</button>
+        <button onclick="filterCategory('sec4')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="sec4">📱 4. 대중 라이프·미디어 (5)</button>
+        <button onclick="filterCategory('sec5')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="sec5">🌿 5. 네이버 카페 AI (4)</button>
+        <button onclick="filterCategory('sec6')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="sec6">🎬 6. 마케팅·게임 (5)</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 md:px-8 mt-6 space-y-6">
+    <!-- 최상단 오해 방지 5대 핵심 팩트 배너 -->
+    <section class="bg-gradient-to-br from-rose-950/60 via-slate-900 to-slate-900 border border-rose-500/40 rounded-2xl p-4 md:p-5 shadow-lg">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
+        <h2 class="text-sm md:text-base font-extrabold text-rose-300 flex items-center gap-2">
+          🚨 [필독] 실무자(알바생) 및 AI(NotebookLM)가 절대 헷갈리면 안 되는 5대 핵심 팩트
+        </h2>
+        <span class="text-[11px] text-rose-200/80 bg-rose-500/20 px-2.5 py-0.5 rounded-full font-semibold">할루시네이션 & 업무 혼선 방지 기준</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+        <div class="bg-slate-950/70 border border-rose-500/30 rounded-xl p-3">
+          <div class="font-extrabold text-rose-300 mb-1">① 센스톡 ≠ 이메일 발송기!</div>
+          <p class="text-slate-300 leading-relaxed"><b>센스톡(SensTalk)</b>은 이메일을 보내는 앱이 절대 아닙니다! <b>카톡·라인·텔레그램·왓츠앱·위챗·문자(SMS) 6대 채널</b> 대화창에 1:1 맞춤 글+사진을 올려두고 사람이 <b>[Enter]</b>만 치는 반자동 소통 도구입니다.</p>
+        </div>
+        <div class="bg-slate-950/70 border border-amber-500/30 rounded-xl p-3">
+          <div class="font-extrabold text-amber-300 mb-1">② 3Monster ➔ 썬드리머 스튜디오</div>
+          <p class="text-slate-300 leading-relaxed">구 '3몬스터' 명칭은 폐기되었고, 대외 공식 브랜드는 <b>썬드리머 스튜디오(studio.sundreamer.app)</b>입니다. (패밀리 쇼룸 + 통합 고객센터 + 마케팅 공장)</p>
+        </div>
+        <div class="bg-slate-950/70 border border-indigo-500/30 rounded-xl p-3">
+          <div class="font-extrabold text-indigo-300 mb-1">③ 세이씨(SaySee) ➔ 제트아이(Z-Eye)</div>
+          <p class="text-slate-300 leading-relaxed">구 2호앱 세이씨는 <b>제트아이(Z-Eye)</b>로 통합 승격되었으며, 16개 웹앱이 PC/폰 하드웨어를 제어하는 <b>범용 멀린 Z 코어</b>의 본진입니다.</p>
+        </div>
+        <div class="bg-slate-950/70 border border-emerald-500/30 rounded-xl p-3">
+          <div class="font-extrabold text-emerald-300 mb-1">④ 루미노트 vs 썬드리머 구분</div>
+          <p class="text-slate-300 leading-relaxed"><b>루미노트</b>는 사내 직원이 쓰는 5,000명 고객·택배 CRM이고, <b>썬드리머(1호앱)</b>는 조사기 구매 고객이 폰에서 1,600시간 램프 수명을 재는 회원용 앱입니다.</p>
+        </div>
+        <div class="bg-slate-950/70 border border-cyan-500/30 rounded-xl p-3">
+          <div class="font-extrabold text-cyan-300 mb-1">⑤ 볼터(Vaulter) 2가지 얼굴</div>
+          <p class="text-slate-300 leading-relaxed">개인에겐 서버 저장 없는 <b>무클라우드 가계부·금고</b>이고, 사장님에겐 통장 0.5초 자동 분개 후 홈택스 화면 위를 화살표(👆)로 짚어주는 <b>AI 세무 코파일럿</b>입니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 앱 카드 그리드 -->
+    <div id="appsContainer" class="space-y-8"></div>
+  </main>
+
+  <script>
+    const sections = [
+      {
+        id: 'sec1',
+        title: '🏛️ 제1부문. 생태계 심장 & 컨트롤 타워 (Hub & Core Backbone — 3종)',
+        subtitle: '모든 패밀리 앱의 로그인·결제(내적 허브), 쇼룸·고객센터(외적 허브), PC/폰 하드웨어 제어(Z-코어)를 총괄하는 3대 기둥입니다.',
+        badgeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+      },
+      {
+        id: 'sec2',
+        title: '☀️ 제2부문. 썬드림 헬스케어 & 자연치유 코어 (Healthcare & Wellness — 4종)',
+        subtitle: '12년 역사의 비타민D·자외선·자연치유 카페와 자외선 조사기 하드웨어 비즈니스를 지탱하는 핵심 케어 앱군입니다.',
+        badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+      },
+      {
+        id: 'sec3',
+        title: '💼 제3부문. B2B 스마트 CRM · 메신저 소통 · 세무/금융 자동화 (B2B SaaS & FinTech — 3종)',
+        subtitle: '사내에서 검증된 고객 소통·장부 정리 노하우를 전국 소상공인·영업자 누구나 쓸 수 있도록 상용화한 B2B 솔루션입니다.',
+        badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+      },
+      {
+        id: 'sec4',
+        title: '📱 제4부문. B2C 대중 라이프스타일 · 미디어 · 쇼핑 킬러앱 (B2C Consumer Apps — 5종)',
+        subtitle: '일반 대중을 패밀리 생태계로 유입시키고 코인 과금 및 광고 수익을 창출하는 생활 밀착형 서비스군입니다.',
+        badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+      },
+      {
+        id: 'sec5',
+        title: '🌿 제5부문. 네이버 카페 무인 운영 · 임상 상담 · 빅데이터 스위트 (Cafe AI Suite — 4종)',
+        subtitle: '네이버 카페(sundreamd)의 논문 칼럼 집필, 24시간 규정 수호, 환우 임상 상담, 4.2만 건 DB 구축을 전담하는 사내 브레인입니다.',
+        badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+      },
+      {
+        id: 'sec6',
+        title: '🎬 제6부문. 마케팅 자동화 공장 & 실시간 커뮤니티 게임 엔진 (Marketing & Gamification — 5종)',
+        subtitle: '유튜브 쇼츠·인스타 릴스·검색광고 트래픽을 무인으로 끌어오고, 카페 회원들이 실시간으로 함께 즐기는 이벤트 게임 엔진입니다.',
+        badgeClass: 'bg-pink-500/20 text-pink-300 border-pink-500/40'
+      }
+    ];
+
+    const apps = [
+      // ==================== 제1부문 ====================
+      {
+        num: 1,
+        sec: 'sec1',
+        secName: '1. 허브·코어',
+        ko: '멀린 패밀리 OS (내적 허브)',
+        en: 'MerlinFamilyOS (D:\\MerlinFamilyOS)',
+        url: 'https://os.sundreamer.app',
+        icon: '🔐',
+        easyDef: '한 번 로그인하면 우리 회사 모든 앱이 자동으로 열리는 [통합 아이디 · 코인 지갑 · 결제 본부]입니다.',
+        features: [
+          '비밀번호 없이 이메일 인증번호(OTP) 한 번으로 전 패밀리 앱 자동 로그인(SSO)',
+          '어느 앱에서 충전하든 모든 패밀리 앱에서 함께 쓰는 단일 코인 지갑(Wallet) & KCP 결제',
+          '전 패밀리 앱 상단 공통 바(HubHeader), 지갑 창, 1초 에러 신고 팝업(Support SDK) 공급'
+        ],
+        value: '새 앱을 만들 때마다 복잡한 로그인·결제·고객센터를 새로 짤 필요 없이 레고처럼 5분 만에 붙여 즉시 출시할 수 있습니다.',
+        caution: '일반 고객이 직접 들어가는 단독 앱이라기보다, 모든 패밀리 앱 뒤에서 로그인과 코인을 관리해 주는 심장(백엔드/SDK)입니다.'
+      },
+      {
+        num: 2,
+        sec: 'sec1',
+        secName: '1. 허브·코어',
+        ko: '썬드리머 스튜디오 (외적 허브)',
+        en: 'SunDreamer Studio (D:\\studio ⇔ D:\\3Monster)',
+        url: 'https://studio.sundreamer.app',
+        icon: '🏛️',
+        easyDef: '우리 패밀리 앱들을 전시하는 [공식 백화점 쇼룸]이자, 모든 앱의 에러·문의를 모아서 고치는 [통합 AS 고객센터]입니다.',
+        features: [
+          '[전면 쇼룸] 썬드리머, 제트아이, 뭐먹지, 어그로필터 등 패밀리 앱 소개 및 교차 체험',
+          '[통합 고객센터] 에러 발생 시 직전 20개 행동 기록(블랙박스 로그) 자동 첨부 접수 & 카톡 문의 스태프 대리접수 자동 매핑',
+          '[무인 수리 & 마케팅] 3호기 AI가 버그를 자동 수리해 고객/스태프에게 동시 알림 발송 + 후면 쇼츠 마케팅 공장'
+        ],
+        value: '광고비 0원으로 A앱 고객을 B앱으로 자연스럽게 이동시키고, 고객 문의 응대와 버그 수리 시간을 90% 단축합니다.',
+        caution: '과거 코드에 남아있는 "3Monster(3몬스터)"라는 옛날 이름을 쓰지 마세요! 대외 공식 명칭은 무조건 [썬드리머 스튜디오]입니다.'
+      },
+      {
+        num: 3,
+        sec: 'sec1',
+        secName: '1. 허브·코어',
+        ko: '제트아이 & 범용 멀린 Z 코어',
+        en: 'Z-Eye & Universal Z-Core (D:\\Z-Eye)',
+        url: 'https://zeye.sundreamer.app',
+        icon: '👁️',
+        easyDef: '내 컴퓨터·폰 속 수만 장의 사진과 문서를 클라우드 업로드 없이 0.1초 만에 말로 찾아주고, 화면 위에 손가락 화살표(👆)를 띄워주는 만능 AI 비서입니다.',
+        features: [
+          '음성/비전 0.1초 투시 검색 ("작년 제주도에서 노란 모자 쓴 사진 찾아줘") & 다각도 얼굴 인식 [Z-Eye 여권]',
+          '클라우드 요금 0원! 가족·동호회·학교·사무실(S:드라이브)끼리 원본 화질 그대로 공유하는 [5대 무클라우드 라운지]',
+          '흔들린·중복 사진 및 악성앱을 청소하는 [클린 몬스터] & 화면 위에 화살표(👆)를 띄워 클릭할 곳을 알려주는 [설정 몬스터]',
+          '16개 패밀리 웹앱이 로컬 PC/폰 기능을 쓸 수 있게 해주는 공용 엔진 [범용 멀린 Z 코어] (스토어용/사내용 2트랙)'
+        ],
+        value: '일반 인터넷 창(웹앱)은 절대 못하는 내 컴퓨터 파일 정리, 화면 위 화살표 안내, 자동 붙여넣기를 가능하게 만드는 핵심 기술 무기입니다.',
+        caution: '구 2호앱 "세이씨(SaySee)"가 바로 이 "제트아이(Z-Eye)"로 통합·진화했습니다. 두 개를 별개 앱으로 착각하지 마세요!'
+      },
+
+      // ==================== 제2부문 ====================
+      {
+        num: 4,
+        sec: 'sec2',
+        secName: '2. 헬스케어·치유',
+        ko: '루미노트 (본진 조사기 고객 CRM)',
+        en: 'LumiNote (D:\\LumiNote)',
+        url: '',
+        icon: '📋',
+        easyDef: '사내 본진에서 5,000명 이상의 썬드림 자외선 조사기 구매 고객 정보, 상담 차트, 포인트, 택배 송장을 관리하는 [직원용 통합 장부 프로그램]입니다.',
+        features: [
+          '조사기 구매 고객 마스터 정보, 기기 시리얼, 램프 교체 주기, 질환별 임상 상담 차트 관리',
+          'CJ대한통운(CNPlus) 택배 송장 원클릭 생성 및 인쇄 미리보기',
+          '안내가 필요한 고객들을 골라 [센스톡] 발송 대기열로 1초 만에 보내기'
+        ],
+        value: '10년 넘게 쌓인 소중한 구매 고객 한 분 한 분의 치유 이력과 소모품(램프) 교체 시기를 놓치지 않고 챙길 수 있습니다.',
+        caution: '루미노트는 사내 관리자용 프로그램입니다. 일반 고객이 스마트폰으로 쓰는 앱은 아래 5번 [썬드리머]입니다.'
+      },
+      {
+        num: 5,
+        sec: 'sec2',
+        secName: '2. 헬스케어·치유',
+        ko: '썬드리머 (1호앱 · 멤버십 케어)',
+        en: 'SunDreamer PWA (D:\\LumiNote\\sundream)',
+        url: 'https://sundreamer.app',
+        icon: '☀️',
+        easyDef: '자외선 조사기를 산 고객님이 매일 쬐는 시간을 기록하면 [1,600시간 램프 잔여 수명]을 자동으로 계산해 주고 포인트로 할인 쇼핑도 하는 1호 공식 앱입니다.',
+        features: [
+          '1,600시간 자외선 램프 수명 계산기(LampCheck) 및 적정 교체 시기 자동 알림',
+          '매일 자외선 조사 시간 기록 타임라인 & 30개 질환별 실제 완치/호전 사례 열람',
+          '카페 활동 포인트로 램프·소모품을 할인 구매(네이버페이/KCP)하거나 회원끼리 포인트 선물하기'
+        ],
+        value: '기계만 팔고 끝나는 것이 아니라, 고객님이 매일 앱을 켜서 꾸준히 빛을 쬐고 건강해지도록 돕는 평생 동반자 앱입니다.',
+        caution: '정식 오픈되어 실제 고객님들이 매일 쓰시는 1호 라이브 서비스이므로 UI나 결제 코드를 건드릴 때 가장 주의해야 합니다.'
+      },
+      {
+        num: 6,
+        sec: 'sec2',
+        secName: '2. 헬스케어·치유',
+        ko: '역경사각도기 (중력이완요법 코칭)',
+        en: 'GravityEase (D:\\GravityEase)',
+        url: '',
+        icon: '📐',
+        easyDef: '거꾸리(역경사 침대) 운동을 할 때 스마트폰을 올려두면 [기울어진 각도를 0.1도 단위로 재서 목소리로 알려주는] 안전한 헬스케어 앱입니다.',
+        features: [
+          '스마트폰 자이로 센서로 역경사 각도(-3° ~ -15°) 실시간 정밀 측정 및 영점 조절',
+          '누워서 화면을 안 봐도 목표 각도와 시간을 한국어 음성(TTS)과 진동으로 친절히 안내',
+          '일자별 중력이완 수련 시간 타이머 및 누적 건강 기록 저장'
+        ],
+        value: '비싼 각도 측정기 없이도 스마트폰 하나로 집에서 안전하고 정확하게 척추 이완·중력이완요법을 실천할 수 있습니다.',
+        caution: '단순 수평계 앱이 아니라, 카페 중력이완요법 수련자들을 위해 각도별 안전 가이드와 음성 코칭이 결합된 특화 앱입니다.'
+      },
+      {
+        num: 7,
+        sec: 'sec2',
+        secName: '2. 헬스케어·치유',
+        ko: '헤모로그 (AI 어혈 분석 & 사혈 바디맵)',
+        en: 'HemoLog (D:\\_Archive_Legacy\\HemoLog)',
+        url: '',
+        icon: '🩸',
+        easyDef: '부항·사혈 요법을 할 때 [사진 한 장으로 어혈 배출량을 AI가 계산해 주고, 부위별 다음 사혈 가능 날짜(휴식기)를 챙겨주는] 관리 앱입니다.',
+        features: [
+          '휴지나 부항 컵 사진을 찍으면 Gemini Vision AI가 어혈량(ml)과 어혈 상태를 자동 추정',
+          '인체 앞/뒤 바디맵(BodyMap)에 부위별 사혈 기록 저장 및 안전 휴식기(쿨타임) 카운트다운',
+          '누적 배출량에 따른 철분·영양 보충 알림 가이드'
+        ],
+        value: '주먹구구식 감에 의존하던 사혈·부항 요법을 안전한 정량 데이터 관리로 바꾸어 과도한 사혈을 예방합니다.',
+        caution: '현재 마스터 백업 보관소(_Archive_Legacy)에 보존된 자연치유 특화 헬스케어 라인업입니다.'
+      },
+
+      // ==================== 제3부문 ====================
+      {
+        num: 8,
+        sec: 'sec3',
+        secName: '3. B2B CRM·메신저·세무',
+        ko: '센스톡 (6대 메신저·문자 1:1 반자동 발송기)',
+        en: 'SensTalk (D:\\SensTalk)',
+        url: 'https://sensetalk.netlify.app',
+        icon: '💬',
+        easyDef: '🚨 [이메일 앱 아님!] 카톡·라인·텔레그램·문자 등 6대 대화창에 고객별 맞춤 인사말+사진을 0.2초 만에 올려두고, 사람은 눈으로 보며 [Enter]만 톡톡 치는 1:1 소통 앱입니다.',
+        features: [
+          '카카오톡, 라인(LINE), 텔레그램, 왓츠앱, 위챗, 휴대폰 문자(윈도우 휴대폰과 연결) 총 6대 채널 지원 (※ 이메일 기능 없음!)',
+          '고객별 {이름}, {맞춤안내} 레고 블록 조립 + 고화질 사진 클립보드(CF_DIB) 자동 장전',
+          '[Zero-Auto-Action 철칙] 기계가 혼자 전송까지 누르면 계정이 정지되므로, 대화창에 붙여넣기까지만 자동 세팅하고 마지막 [Enter]는 사람이 직접 타이핑',
+          '발송 전 호칭 오류나 변수 누락을 잡아내는 AI 사전 발송 사고 방지기'
+        ],
+        value: '광고처럼 보이는 단체문자 대신, 정성스러운 1:1 맞춤형 카톡·문자를 계정 정지 위험 0%·문자요금 0원으로 초고속 발송합니다.',
+        caution: '🚨 다시 강조합니다! 센스톡은 이메일(Email) 발송기가 절대 아닙니다! 6대 메신저 및 SMS 문자 전용 1:1 반자동 발송 솔루션입니다.'
+      },
+      {
+        num: 9,
+        sec: 'sec3',
+        secName: '3. B2B CRM·메신저·세무',
+        ko: '오토노트 (무설정 엑셀 자동합체 CRM)',
+        en: 'AutoNote (D:\\AutoNote)',
+        url: 'https://autonote.sundreamer.app',
+        icon: '📊',
+        easyDef: '어려운 프로그램 세팅 없이, 평소 쓰던 엑셀 파일 여러 개를 마우스로 끌어다 놓기만 하면 알아서 고객 카드로 합쳐주는 초간편 고객관리 앱입니다.',
+        features: [
+          '주문 엑셀, 상담 엑셀, 배송 엑셀 등 여러 시트를 드래그앤드롭하면 전화번호/이름 기준으로 1초 만에 자동 결합(Auto-Join)',
+          '복잡한 엑셀 수식 없이 "작년에 사고 올해 안 산 고객만 뽑아줘"라고 말로 찾는 AI 자연어 필터',
+          '추출한 고객에게 스마트폰 무제한 요금제 연동 무료 문자 발송 및 센스톡 직결'
+        ],
+        value: '엑셀 함수를 몰라 고객 명단 정리에 몇 시간씩 쏟던 소상공인과 실무자가 10초 만에 전문 CRM을 갖게 됩니다.',
+        caution: '복잡한 DB 입력을 강요하지 않고 사장님이 기존에 쓰던 날것의 엑셀 파일을 그대로 넣으면 작동하는 것이 핵심 매력입니다.'
+      },
+      {
+        num: 10,
+        sec: 'sec3',
+        secName: '3. B2B CRM·메신저·세무',
+        ko: '볼터 (무클라우드 금고지기 & AI 세무 코파일럿)',
+        en: 'Vaulter (D:\\Vaulter)',
+        url: 'https://vaulter.sundreamer.app',
+        icon: '🏦',
+        easyDef: '내 돈 데이터를 외부 서버에 안 올리는 [100% 비밀 가계부·금고]이자, 사장님이 홈택스 세금 신고할 때 화면 위에 손가락 화살표(👆)를 띄워 알려주는 [AI 세무 도우미]입니다.',
+        features: [
+          '[개인] 서버 저장 Zero! 내 기기(IndexedDB)와 내 개인 구글드라이브에만 암호화 저장되는 영수증 OCR 가계부·비밀금고·AI 자산관리',
+          '[사장님 B2B] 통장·카드·홈택스 엑셀을 넣으면 0.5초 만에 90% 자동 복식부기 장부 정리 + 헷갈리는 10%만 AI가 채팅으로 물어봐서 해결',
+          '[사장님 B2B] 국세청 홈택스·4대보험 화면 위에 손가락 화살표(👆)를 띄워 클릭할 곳을 짚어주고 숫자를 채워주는 셀프 세무신고 동행'
+        ],
+        value: '일 년에 수백만 원 드는 세무 기장료를 아끼면서도, 불법 대리신고나 무인 자동제출 사고 없이 사장님이 직접 안전하게 신고를 끝내게 돕습니다.',
+        caution: 'AI가 멋대로 국세청 [제출] 버튼까지 누르지 않습니다! 계산·입력까지만 돕고 최종 [신고서 제출]은 사장님이 직접 누르는 합법 100% 구조입니다.'
+      },
+
+      // ==================== 제4부문 ====================
+      {
+        num: 11,
+        sec: 'sec4',
+        secName: '4. 대중 라이프·미디어',
+        ko: '어그로필터 (유튜브 낚시 판별 & 3줄 요약)',
+        en: 'AggroFilter (D:\\AggroFilter)',
+        url: 'https://aggrofilter.sundreamer.app',
+        icon: '🚦',
+        easyDef: '20분짜리 유튜브 영상을 끝까지 다 안 봐도 [제목 낚시(어그로)·뒷광고인지 10초 만에 신호등으로 알려주고 핵심 결론 3줄만 뽑아주는] 앱입니다.',
+        features: [
+          '영상 제목/썸네일과 실제 자막 내용의 불일치도(어그로 지수 0~100%) 측정 및 신호등 배지(🟢 안심 / ⚠️ 낚시주의) 표시',
+          '본론이 나오는 정확한 시간(분:초) 안내 및 핵심 팩트 3줄 요약 (건당 50코인 과금)',
+          '내 유튜브 시청기록 일괄 팩트체크 스캔 & 스튜디오 블랙박스 에러신고 1차 탑재 완료'
+        ],
+        value: '자극적인 가짜 건강정보, 코인/주식 낚시 영상에 속아 소중한 시간과 돈을 날리는 것을 10초 만에 막아줍니다.',
+        caution: '현재 KCP 2호 상점(ALRJ8) 네이버페이 재심사가 진행 중이므로 심사 완료 전까지 결제창 하단 상점명 표시 영역은 절대 수정하지 않습니다.'
+      },
+      {
+        num: 12,
+        sec: 'sec4',
+        secName: '4. 대중 라이프·미디어',
+        ko: '뭐먹지? (3호앱 · 먹자 배틀 & 가족 위시리스트)',
+        en: 'WhatEat (D:\\WhatEat)',
+        url: 'https://whateat.sundreamer.app',
+        icon: '🍔',
+        easyDef: '"오늘 뭐 먹지?" 고민될 때 [1:1 음식 이상형 월드컵]으로 메뉴를 골라주고, 가족끼리 먹고 싶은 맛집을 [📌 위시리스트]에 담아 투표하는 무료 앱입니다.',
+        features: [
+          '음식 사진만 찍으면 AI가 알아서 메뉴 이름을 적고 식단 달력을 만들어주는 [솔로 먹로그]',
+          '가족·모임 방에서 맛있어 보이는 사진에 [📌 위시]를 눌러 주말 외식 후보를 모으고 투표하기',
+          '결정 장애 해결용 [1:1 먹자 배틀(음식 월드컵)] & 전국 초·중·고 실시간 학교 급식 랭킹/퀴즈'
+        ],
+        value: '전 국민 누구나 매일 무료로 즐겁게 쓰면서 자연스럽게 멀린 패밀리 회원이 되게 만드는 대중 유입 일등공신 앱입니다.',
+        caution: '구 폴더명(eat-meal-battle)은 폐기되었고 D:\\WhatEat으로 완전 통일되었습니다.'
+      },
+      {
+        num: 13,
+        sec: 'sec4',
+        secName: '4. 대중 라이프·미디어',
+        ko: '베스2 (AI 베스트 포토 선별 & 유튜버 마케터)',
+        en: 'Bes2 & Bes2-Marketer (D:\\Bes2)',
+        url: '',
+        icon: '📸',
+        easyDef: '여행 가서 찍은 수천 장의 연속 사진 중에서 [눈 감거나 흔들린 사진은 빼고 제일 잘 나온 베스트 2장만 쏙 골라 정리해 주는] AI 사진사입니다.',
+        features: [
+          '기기 내 AI(TensorFlow.js)로 흔들린 사진을 1차 걸러내고, Gemini AI가 16장씩 한 번에 비교해 최고 표정 컷 선별',
+          '사진 속 GPS 위치와 날짜를 읽어 "2026 제주 애월읍 여행"처럼 장소별 앨범 자동 정리',
+          '[부속 도구 Bes2-Marketer] 유튜버들에게 우리 앱을 소개하는 맞춤 홍보 이메일/댓글 초안 자동 생성기'
+        ],
+        value: '휴대폰 용량을 꽉 채운 수만 장의 사진 중 잘 나온 사진만 남기고 정리하는 고통을 몇 분 만에 해결합니다.',
+        caution: '참고: 유튜버에게 홍보 이메일 초안을 쓰는 도구는 센스톡이 아니라 바로 이 Bes2 안의 [Bes2-Marketer]입니다!'
+      },
+      {
+        num: 14,
+        sec: 'sec4',
+        secName: '4. 대중 라이프·미디어',
+        ko: 'AI 리퍼메타 (리퍼비시 전자기기 최저가 검색)',
+        en: 'RefurbMeta (D:\\RefurbMeta)',
+        url: '',
+        icon: '💻',
+        easyDef: '여러 쇼핑몰에 흩어진 반품·전시·리퍼 노트북과 가전제품을 한곳에 모아 [AI가 등급(S/A/B)을 통일하고 진짜 최저가 꿀매물을 찾아주는] 가격비교 앱입니다.',
+        features: [
+          '컴퓨존, 뉴퍼마켓, 리퍼코리아 등 국내 주요 리퍼비시 전문몰 재고·가격 실시간 수집',
+          '쇼핑몰마다 제각각인 상태 설명을 AI가 읽고 통일된 S/A/B 등급과 새 제품 대비 실제 할인율로 변환',
+          '원하는 모델이 목표 가격 이하로 떨어지면 즉시 알려주는 최저가 알림'
+        ],
+        value: '여러 사이트를 일일이 뒤지지 않고도 새것 같은 리퍼 전자기기를 가장 저렴하게 득템할 수 있습니다.',
+        caution: '단순 중고장터가 아니라 검증된 기업형 리퍼비시/전시 몰의 매물만 모아 비교해 주는 메타서치 서비스입니다.'
+      },
+      {
+        num: 15,
+        sec: 'sec4',
+        secName: '4. 대중 라이프·미디어',
+        ko: '리얼픽 (2호앱 · 연애예능 결과 예측 & 예언법정)',
+        en: 'RealPick (D:\\RealPick)',
+        url: '',
+        icon: '💘',
+        easyDef: '나는 솔로·하트시그널 같은 연애 예능을 보면서 [누가 최종 커플이 될지 시청자들이 실시간으로 찍고 적중률을 겨루는] 참여형 놀이터입니다.',
+        features: [
+          '회원가입 없이도 3초 만에 화살표로 최종 커플과 메기남/메기녀를 지목하는 실시간 투표',
+          '시청자 예측 통계 그래프를 맘카페·단톡방·쇼츠 공유용 이미지 카드로 1초 변환',
+          '[확장 모듈: 노스트라 예언법정] 일상 속 논쟁이나 미래 이슈를 AI 판사와 대중 배심원이 함께 판결·예측'
+        ],
+        value: '방송 직후 폭발하는 실시간 검색 유입을 흡수하여 광고 수익(애드센스)과 바이럴 확산을 동시에 만들어냅니다.',
+        caution: '실제 방송 회차별 출연자 데이터와 투표 마감 시간이 연동되어 돌아가는 실시간 이벤트형 플랫폼입니다.'
+      },
+
+      // ==================== 제5부문 ====================
+      {
+        num: 16,
+        sec: 'sec5',
+        secName: '5. 네이버 카페 AI',
+        ko: '전속비서 (마법사멀린 카페 관제탑 & 전사 전령)',
+        en: 'Secretary (D:\\Secretary · 서버 :8282)',
+        url: 'http://100.88.230.16:8282/dashboard',
+        icon: '🎩',
+        easyDef: '매일 전 세계 최신 의학 논문을 찾아 마법사멀린 매니저님 문체로 카페 칼럼을 써서 임시저장해 두고, 우리 회사 21개 앱의 규칙(코딩강령)을 총괄하는 수석 비서입니다.',
+        features: [
+          '최신 논문 기사 발굴 ➔ 4.2만 건 로컬 카페 DB 0.001초 중복 검사 ➔ 스마트에디터 ONE 공식 서식(5대 형광펜 하이라이팅) 자동 임시등록',
+          '과거 명작 글 리바이벌 재발행, 화습카페 동기화, 깨진 링크 복구 등 11대 카페 자동화 미션 무인 수행',
+          '사무실 1호·3호·집 PC의 21개 전체 프로젝트를 일괄 동기화(Pull/Push)하고 코딩강령을 배포하는 전령(Courier) 본부'
+        ],
+        value: '매일 몇 시간씩 걸리던 해외 논문 탐색과 카페 글 서식 편집을 5분 만의 최종 확인으로 줄여주고, 전사 AI 에이전트들을 일사불란하게 지휘합니다.',
+        caution: '전사 헌법인 [멀린코딩강령]과 본 [앱 생태계 소개서]의 원본 수정 권한은 오직 이 전속비서(Secretary)에게만 있습니다.'
+      },
+      {
+        num: 17,
+        sec: 'sec5',
+        secName: '5. 네이버 카페 AI',
+        ko: '카페오토 V1 (24시간 카페 AI 보안관 & 자동 등업)',
+        en: 'CafeAuto (D:\\CafeAuto)',
+        url: '',
+        icon: '🛡️',
+        easyDef: '24시간 잠들지 않고 네이버 카페 새 글과 댓글을 지켜보며 [분탕·비방·교묘한 병원/영양제 광고를 AI로 잡아내 1초 만에 지우는] 무인 보안관입니다.',
+        features: [
+          '단순 금지어 피하기 수법까지 문맥으로 잡아내는 AI 자연어 정책 위반(저격·비방·우회 홍보) 감지',
+          '위반 글 발견 즉시 텔레그램 경보 발송 및 버튼 한 번으로 1초 삭제·활동정지 처분',
+          '신규 회원 등업 양식 자동 심사 및 따뜻한 가입 환영 댓글 24시간 무인 작성'
+        ],
+        value: '새벽이나 휴일에도 광고꾼과 분란 글을 즉각 차단하여 회원님들이 안심하고 치유에만 집중할 수 있는 평화로운 카페를 지킵니다.',
+        caution: '글쓰기(Secretary)나 임상 상담(CafeCopilot)과 달리, 카페 보안·등업·환영 등 운영 관리를 전담하는 V1 인프라입니다.'
+      },
+      {
+        num: 18,
+        sec: 'sec5',
+        secName: '5. 네이버 카페 AI',
+        ko: '카페 코파일럿 V2 (요술램프 비서 지니 임상 보좌)',
+        en: 'CafeCopilot (D:\\CafeCopilot)',
+        url: '',
+        icon: '🪔',
+        easyDef: '매니저님이 아픈 환우의 치유일기에 답글을 달 때, 화면 오른쪽에 [그 환우의 과거 핵심 이력 3줄]과 [12년 정통 처방 문구]를 0.5초 만에 띄워주는 진료 보좌관입니다.',
+        features: [
+          '환우가 과거에 썼던 수십 개 글 중에서 오늘 호소하는 증상(진물, 각질, 불면 등)과 직결된 과거 팩트만 3줄 차트로 즉시 요약',
+          '14대 난치성 피부·면역 질환별 마법사멀린 정통 원문 처방 블록 0.01초 추천 및 팩트 문답',
+          '[4대 무창작 헌법] 인터넷의 흔한 의학 상식이나 AI의 임의 추측을 100% 금지하고 오직 카페 DB 팩트만 보고'
+        ],
+        value: '수백 명 환우 각자의 지난 아픔과 경과를 10초 만에 완벽히 파악하고 가장 정확한 맞춤형 치유 가이드를 건넬 수 있게 돕습니다.',
+        caution: 'AI가 멋대로 환자를 진단하거나 외부 의학 지식을 섞지 않으며, 오직 매니저님의 임상 기억과 타이핑을 돕는 부조종사(Copilot)입니다.'
+      },
+      {
+        num: 19,
+        sec: 'sec5',
+        secName: '5. 네이버 카페 AI',
+        ko: '카페스크래퍼 (네이버 카페 빅데이터 수집기)',
+        en: 'CafeScraper (D:\\CafeScraper)',
+        url: '',
+        icon: '⛏️',
+        easyDef: '네이버 카페 12년 역사인 [4만 2천 개 게시글과 18만 개 댓글 데이터]를 빠짐없이 모아서 초고속 검색 데이터베이스(DB)로 만들어주는 데이터 광부입니다.',
+        features: [
+          '게시판별·기간별·회원별 게시글 본문과 댓글 전체 초고속 수집 및 SQLite DB(cafe_data.db) 구축',
+          '카페 이벤트 참여 횟수, 출석·댓글 활동 우수 회원 통계 엑셀 자동 추출',
+          '썬드리머 스튜디오 정품 라이선스 인증 연동'
+        ],
+        value: '인터넷 창을 띄워 느리게 검색하지 않고도 0.001초 만에 카페의 모든 과거 글과 논문을 찾을 수 있는 지식 보물창고를 만듭니다.',
+        caution: '여기서 모은 마스터 DB(cafe_data.db)를 전속비서(Secretary)와 카페브레이커(CafeBreaker), 코파일럿이 함께 공유해 씁니다.'
+      },
+
+      // ==================== 제6부문 ====================
+      {
+        num: 20,
+        sec: 'sec6',
+        secName: '6. 마케팅·게임',
+        ko: '카페브레이커 (유튜브 쇼츠 & 릴스 무인 방송국)',
+        en: 'CafeBreaker (D:\\CafeBreaker · 서버 :4001)',
+        url: 'http://100.88.230.16:4001',
+        icon: '🎬',
+        easyDef: '카페의 감동적인 치유 사례와 최신 논문을 가지고 [혼자서 대본 쓰고, 목소리 입히고, 자막 달아서 하루 3번 유튜브 쇼츠와 인스타 릴스에 자동 업로드하는] 무인 영상 공장입니다.',
+        features: [
+          '1호 본채널(자연치유·비타민D 팩트) 및 2호 서브채널(장수과학·바이오해킹 다큐) 투트랙 영상 자동 합성(FFmpeg)',
+          '매일 오전·오후·저녁 정해진 시간에 유튜브 쇼츠 & 인스타그램 릴스 무인 업로드',
+          '업로드 직후 카페로 안내하는 첫 번째 고정댓글까지 100% 무인 자동 등록'
+        ],
+        value: '영상 편집자 없이도 1년 365일 매일 고품질 숏폼 영상을 방송하여 유튜브·인스타 대중을 우리 카페와 앱으로 데려옵니다.',
+        caution: '2호 서버(office-server:4001)에서 화면 창 없이 24시간 조용히 돌아가는 핵심 무인 마케팅 엔진입니다.'
+      },
+      {
+        num: 21,
+        sec: 'sec6',
+        secName: '6. 마케팅·게임',
+        ko: '애드브레이커 (네이버 검색광고 AI 자동 입찰기)',
+        en: 'AdBreaker (D:\\AdBreaker)',
+        url: '',
+        icon: '📈',
+        easyDef: '네이버 검색광고비를 1원도 낭비하지 않도록 [장사가 잘되는 키워드에만 돈을 쓰고 효율 없는 광고는 알아서 줄여주는] AI 광고 사령관입니다.',
+        features: [
+          '네이버 검색광고(파워링크)·쇼핑검색 API 실시간 연동 및 광고비 대비 매출 효율(ROAS) 정밀 분석',
+          '하루 목표 예산을 절대 넘기지 않으면서 전환율이 높은 시간대·키워드 순위를 방어하는 자율 입찰',
+          '스마트스토어 상세페이지 구매 전환 배너 자동 생성 및 성과 비교'
+        ],
+        value: '비싼 광고 대행사에 맡기지 않고도 최소한의 광고비로 자외선 조사기와 패밀리 제품의 매출 효율을 극대화합니다.',
+        caution: '실제 광고 예산이 움직이는 시스템이므로 일일 예산 상한선(Cap) 안전장치가 최우선으로 적용되어 있습니다.'
+      },
+      {
+        num: 22,
+        sec: 'sec6',
+        secName: '6. 마케팅·게임',
+        ko: '서바이벌 게임 (실시간 가위바위보 하나빼기)',
+        en: 'survival-game (D:\\survival-game)',
+        url: '',
+        icon: '✊',
+        easyDef: '카페 이벤트 시간에 회원 수백 명이 동시에 접속해 [실시간 가위바위보 하나빼기로 최후의 1인을 뽑는] 짜릿한 단체 웹 게임입니다.',
+        features: [
+          '양손으로 가위바위보를 낸 뒤 제한 시간 안에 한 손을 빼는 심리전 실시간 동시 중계',
+          '아쉽게 탈락한 회원도 끝까지 응원하며 구경할 수 있는 실시간 관전 모드',
+          '우승자 축하 폭죽 연출 및 이벤트 포인트 보상 연동'
+        ],
+        value: '온라인 카페 회원들이 같은 시간에 모여 함께 웃고 손에 땀을 쥐게 만드는 최고의 커뮤니티 축제 도구입니다.',
+        caution: '설치 없이 인터넷 주소(URL)만 누르면 스마트폰과 PC에서 즉시 참여할 수 있는 실시간 웹 게임입니다.'
+      },
+      {
+        num: 23,
+        sec: 'sec6',
+        secName: '6. 마케팅·게임',
+        ko: '끝말잇기 게임 (카페 댓글 0.1초 AI 자동 심판)',
+        en: 'wordchain-game (D:\\wordchain-game)',
+        url: '',
+        icon: '🔤',
+        easyDef: '네이버 카페 게시글에 회원들이 댓글로 끝말잇기를 달면 [0.1초 만에 댓글을 읽어서 국어사전과 AI 심판이 자동으로 통과/탈락을 판정해 주는] 이벤트 중계기입니다.',
+        features: [
+          '카페 이벤트 게시글 댓글 0.1초 초고속 감지 및 두음법칙·중복 단어 자동 체크',
+          '표준국어대사전 + AI 심판(ai_referee)이 결합하여 사전에 있는 명사인지 공정하게 즉시 판정',
+          '실시간 생존자 현황판 및 연승 기록 전광판 화면 송출'
+        ],
+        value: '진행자가 눈 아프게 댓글 순서를 확인하고 국어사전을 찾아보던 수작업을 100% 없애고 댓글 참여 열기를 폭발시킵니다.',
+        caution: '별도 게임 앱이 아니라 실제 네이버 카페 게시글 댓글창에서 진행되는 이벤트를 0.1초 단위로 중계·심판하는 시스템입니다.'
+      },
+      {
+        num: 24,
+        sec: 'sec6',
+        secName: '6. 마케팅·게임',
+        ko: '썬드림 룰렛 (카페 댓글 연동 실시간 추첨 방송기)',
+        en: 'roulette (D:\\roulette · Render 라이브)',
+        url: '',
+        icon: '🎯',
+        easyDef: '카페 이벤트 댓글 참가자 명단을 그대로 불러와서 [화려한 룰렛·다트 회전 화면으로 당첨자를 뽑고 연속 추첨까지 자동으로 해주는] 라이브 추첨기입니다.',
+        features: [
+          '네이버 카페 이벤트 게시글 댓글 작성자 자동 추출 및 실시간 웹소켓(Socket.IO) 룰렛/다트 회전 중계',
+          '여러 명을 뽑을 때 당첨 발표 후 10초 뒤 자동으로 다음 룰렛이 돌아가는 [무인 Auto 연속 추첨 모드]',
+          '당첨자 명단 엑셀/텍스트 즉시 복사 및 축하 사운드·폭죽 이펙트'
+        ],
+        value: '누가 봐도 공정하고 심장이 쫄깃해지는 라이브 추첨 화면으로 카페 이벤트 만족도를 최고조로 끌어올립니다.',
+        caution: 'D:\\roulette 폴더는 Render 클라우드 서버와 실시간 직결되어 있으므로 전령 에이전트의 일괄 자동 푸시 대상에서는 제외해 보호합니다.'
+      }
+    ];
+
+    let currentCategory = 'all';
+
+    function renderApps() {
+      const container = document.getElementById('appsContainer');
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      const visibleSections = sections.filter(s => currentCategory === 'all' || s.id === currentCategory);
+
+      let html = '';
+      visibleSections.forEach(sec => {
+        const secApps = apps.filter(a => {
+          if (a.sec !== sec.id) return false;
+          if (!query) return true;
+          const haystack = [
+            a.ko, a.en, a.easyDef, a.value, a.caution, ...a.features
+          ].join(' ').toLowerCase();
+          return haystack.includes(query);
+        });
+
+        if (secApps.length === 0) return;
+
+        html += `
+          <section class="space-y-3.5">
+            <div class="border-b border-slate-800 pb-2.5 flex flex-col md:flex-row md:items-end justify-between gap-1">
+              <div>
+                <h2 class="text-base md:text-lg font-extrabold text-white">${sec.title}</h2>
+                <p class="text-xs text-slate-400 mt-0.5">${sec.subtitle}</p>
+              </div>
+              <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${sec.badgeClass} self-start md:self-auto">
+                ${secApps.length}개 프로젝트
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${secApps.map(a => renderCard(a, sec.badgeClass)).join('')}
+            </div>
+          </section>
+        `;
+      });
+
+      if (!html) {
+        html = `
+          <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-12 text-center">
+            <div class="text-3xl mb-2">🔍</div>
+            <div class="text-sm font-bold text-slate-200">검색어와 일치하는 패밀리 앱이 없습니다.</div>
+            <div class="text-xs text-slate-400 mt-1">다른 키워드(예: 센스톡, 제트아이, 세무, 조사기, 카페, 게임)로 검색해 보세요!</div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function renderCard(a, badgeClass) {
+      const isSensTalk = a.num === 8;
+      const borderClass = isSensTalk ? 'border-rose-500/60 ring-1 ring-rose-500/30' : 'border-slate-800 hover:border-indigo-500/70';
+
+      return `
+        <article class="card-glow bg-slate-900/95 border ${borderClass} rounded-2xl overflow-hidden flex flex-col justify-between transition-all">
+          <div class="p-4 space-y-3">
+            <!-- 상단 헤더 -->
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl shrink-0">
+                  ${a.icon}
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="px-2 py-0.5 text-[10px] font-extrabold rounded border ${badgeClass}">#${String(a.num).padStart(2, '0')} ${a.secName}</span>
+                    ${a.url ? `<a href="${a.url}" target="_blank" class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition">🌐 사이트 열기 ↗</a>` : ''}
+                  </div>
+                  <h3 class="text-sm md:text-base font-extrabold text-white mt-1">${a.ko}</h3>
+                  <p class="text-[11px] text-indigo-400 font-medium">${a.en}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 알바생 3초 이해 한 줄 정의 -->
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+              <div class="text-[10px] font-extrabold text-amber-300 mb-1">💡 3초 만에 이해하는 핵심 역할</div>
+              <p class="text-xs text-slate-200 leading-relaxed font-medium">${a.easyDef}</p>
+            </div>
+
+            <!-- 주요 기능 -->
+            <div>
+              <div class="text-[11px] font-extrabold text-slate-300 mb-1.5">⚙️ 주요 핵심 기능</div>
+              <ul class="space-y-1 text-xs text-slate-300 leading-snug">
+                ${a.features.map(f => `<li class="flex items-start gap-1.5"><span class="text-indigo-400 mt-0.5">•</span><span>${f}</span></li>`).join('')}
+              </ul>
+            </div>
+
+            <!-- 효과 및 가치 -->
+            <div class="bg-indigo-950/25 border border-indigo-500/25 rounded-xl p-2.5">
+              <div class="text-[10px] font-extrabold text-indigo-300 mb-0.5">💎 효과 및 핵심 가치</div>
+              <p class="text-[11px] text-slate-300 leading-relaxed">${a.value}</p>
+            </div>
+          </div>
+
+          <!-- 하단 주의사항 & 복사 버튼 -->
+          <div class="px-4 pb-4 pt-2.5 border-t border-slate-800/80 bg-slate-950/50 space-y-2.5">
+            <div class="text-[11px] ${isSensTalk ? 'text-rose-200 bg-rose-950/60 border-rose-500/50' : 'text-amber-200/90 bg-amber-950/30 border-amber-500/25'} border rounded-lg p-2 leading-snug">
+              ⚠️ <b>혼동 주의:</b> ${a.caution}
+            </div>
+            <button onclick="copyAppSummary(${a.num})" class="w-full py-2 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5">
+              📌 #${String(a.num).padStart(2, '0')} [${a.ko}] 소개 텍스트 복사
+            </button>
+          </div>
+        </article>
+      `;
+    }
+
+    function filterCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-btn').forEach(btn => {
+        if (btn.dataset.cat === cat) {
+          btn.className = 'cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow';
+        } else {
+          btn.className = 'cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700';
+        }
+      });
+      renderApps();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('copyToast');
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2600);
+    }
+
+    function copyAppSummary(num) {
+      const a = apps.find(x => x.num === num);
+      if (!a) return;
+      const text = [
+        `[#${String(a.num).padStart(2, '0')} ${a.ko} | ${a.en}]`,
+        `• 한줄 정의: ${a.easyDef}`,
+        `• 핵심 기능:`,
+        ...a.features.map(f => `  - ${f}`),
+        `• 효과 및 가치: ${a.value}`,
+        `• 혼동 주의: ${a.caution}`
+      ].join('\n');
+      navigator.clipboard.writeText(text);
+      showToast(`✅ [#${String(a.num).padStart(2, '0')} ${a.ko}] 소개가 클립보드에 복사되었습니다!`);
+    }
+
+    function copyAllForNotebookLM() {
+      const header = [
+        `# 멀린 패밀리 & 썬드리머 전사 앱 생태계 공식 마스터 소개서 (6대 부문 · 24개 프로젝트 SSOT)`,
+        ``,
+        `[최우선 필독: AI(NotebookLM) 및 실무자 오해 방지 5대 핵심 팩트]`,
+        `1. 센스톡(SensTalk)은 이메일 발송기가 절대 아닙니다! 카카오톡·라인·텔레그램·왓츠앱·위챗·휴대폰 문자(SMS) 총 6대 메신저/문자 채널에 1:1 맞춤형 블록을 자동 조립해 올려두고 사람이 [Enter] 키만 치는 반자동 소통 솔루션입니다.`,
+        `2. 구 3Monster 브랜드는 폐기되었으며 대외 공식 명칭은 [썬드리머 스튜디오(SunDreamer Studio, studio.sundreamer.app)]입니다.`,
+        `3. 구 2호앱 세이씨(SaySee)는 [제트아이(Z-Eye)]로 통합 승격되었으며 전사 웹앱의 로컬 하드웨어 브릿지인 [범용 멀린 Z 코어]의 본진입니다.`,
+        `4. 루미노트(LumiNote)는 사내 관리자용 5,000명 조사기 고객 CRM이고, 썬드리머(SunDreamer)는 고객이 폰에서 1,600시간 램프 수명을 계산하는 1호 멤버십 웹앱입니다.`,
+        `5. 볼터(Vaulter)는 서버 저장 없는 무클라우드 개인 가계부·금고이자, 소상공인의 통장 내역을 0.5초 만에 복식부기로 분개하고 홈택스 화면 위에 화살표(👆)를 띄워 셀프 세금신고를 돕는 AI 세무 코파일럿입니다.`,
+        ``
+      ].join('\n');
+
+      const body = sections.map(sec => {
+        const secApps = apps.filter(a => a.sec === sec.id);
+        const appTexts = secApps.map(a => [
+          `### #${String(a.num).padStart(2, '0')}. ${a.ko} (${a.en})${a.url ? ` - ${a.url}` : ''}`,
+          `- 핵심 정의: ${a.easyDef}`,
+          `- 주요 기능:`,
+          ...a.features.map(f => `  * ${f}`),
+          `- 효과 및 가치: ${a.value}`,
+          `- 오해 방지 주의사항: ${a.caution}`
+        ].join('\n')).join('\n\n');
+        return `## ${sec.title}\n${sec.subtitle}\n\n${appTexts}`;
+      }).join('\n\n---\n\n');
+
+      navigator.clipboard.writeText(header + '\n' + body);
+      showToast(`✅ 24개 전체 패밀리 앱 마스터 소개서가 복사되었습니다! NotebookLM에 바로 붙여넣으세요.`);
+    }
+
+    document.getElementById('searchInput').addEventListener('input', renderApps);
+    renderApps();
+  </script>
+</body>
+</html>
