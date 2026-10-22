@@ -34,27 +34,25 @@ except ImportError:
 
 
 # =====================================================================
-# 1. 연동 설정 (현재 프로젝트 .env.local 우선 로드 + D:\Z-Eye\.env.local 마스터 토큰 폴백)
+# 1. 연동 설정 (현재 프로젝트 폴더의 .env.local 로드)
 # =====================================================================
 def load_env_local(env_path: str = ".env.local") -> None:
-    """현재 작업 폴더의 .env.local을 먼저 읽고, 없는 항목(예: NOTION_TOKEN)은 D:\\Z-Eye\\.env.local에서 자동 보충합니다."""
-    script_dir_env = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
-    for candidate_path in (env_path, script_dir_env):
-        if not os.path.exists(candidate_path):
-            continue
-        try:
-            with open(candidate_path, "r", encoding="utf-8") as f:
-                for raw_line in f:
-                    line = raw_line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    k, v = line.split("=", 1)
-                    key = k.strip()
-                    val = v.strip().strip('"').strip("'")
-                    if key and val and not os.environ.get(key):
-                        os.environ[key] = val
-        except Exception:
-            pass
+    """현재 프로젝트 폴더의 .env.local 파일에서 NOTION_TOKEN과 NOTION_DATABASE_ID를 로드합니다."""
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                key = k.strip()
+                val = v.strip().strip('"').strip("'")
+                if key and val and not os.environ.get(key):
+                    os.environ[key] = val
+    except Exception:
+        pass
 
 
 load_env_local()
