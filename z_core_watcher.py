@@ -55,16 +55,16 @@ def _clean_summary_line(line: str) -> str:
 
 def derive_session_title(explicit_title: str | None = None) -> str:
     if explicit_title and explicit_title.strip():
-        return explicit_title.strip()
-    now_prefix = datetime.now().strftime("%m-%d, %H:%M")
+        return re.sub(r"^\d{1,2}-\d{1,2},?\s*(?:\d{1,2}:\d{2})?\s*-\s*", "", explicit_title.strip())
     if HANDOVER_FILE.exists():
         try:
             text = HANDOVER_FILE.read_text(encoding="utf-8", errors="ignore")
             m_explicit = re.search(r"세션\s*제목[^:\n]*:\s*([^\r\n]+)", text)
             if m_explicit:
                 val = m_explicit.group(1).strip().strip("`*")
-                if val and not val.startswith("(") and "MM-DD" not in val:
-                    return val[:50]
+                val = re.sub(r"^\d{1,2}-\d{1,2},?\s*(?:\d{1,2}:\d{2})?\s*-\s*", "", val)
+                if val and not val.startswith("(") and "MM-DD" not in val and "일시 제외" not in val:
+                    return val[:45]
             sections = re.split(r"\n---\s*\n", text)
             top_section = ""
             for sec in sections:
@@ -91,7 +91,7 @@ def derive_session_title(explicit_title: str | None = None) -> str:
             if numbered:
                 last_item = _clean_summary_line(numbered[-1])
                 if last_item:
-                    return f"{now_prefix} - {last_item}"
+                    return last_item[:45]
         except Exception:
             pass
     try:
@@ -113,10 +113,10 @@ def derive_session_title(explicit_title: str | None = None) -> str:
                 ):
                     continue
                 msg = re.sub(r"^(?:feat|fix|chore|docs|refactor)(?:\([^)]+\))?:\s*", "", msg, flags=re.I)
-                return f"{now_prefix} - {msg[:40]}"
+                return msg[:45]
     except Exception:
         pass
-    return f"{now_prefix} - {ROOT_DIR.name} 체크인"
+    return f"{ROOT_DIR.name} 체크인"
 
 
 def _patch_protobuf_title(raw_bytes: bytes, old_title: str, new_title: str) -> bytes:
@@ -154,6 +154,7 @@ def sync_antigravity_session_title(explicit_title: str | None = None) -> str | N
                 or not cur_title
                 or "check-in" in cur_title.lower()
                 or cur_title.strip() in ("체크인", "출근", "이어서 하자")
+                or bool(re.match(r"^\d{1,2}-\d{1,2},?\s*(?:\d{1,2}:\d{2})?\s*-\s*", cur_title))
             )
             if should_replace and cur_title != target_title:
                 new_raw = _patch_protobuf_title(raw_sum, cur_title, target_title)
