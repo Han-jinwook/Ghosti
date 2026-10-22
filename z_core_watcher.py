@@ -14,8 +14,12 @@
 
 import hashlib
 import os
+import re
+import sqlite3
+import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Set
 
@@ -27,7 +31,153 @@ if hasattr(sys.stderr, "reconfigure"):
 ROOT_DIR = Path(__file__).resolve().parent
 INBOX_DIR = ROOT_DIR / "universal_z_core" / "inbox"
 DOCTRINE_FILE = ROOT_DIR / "docs" / "멀린코딩강령_v20261020.md"
+HANDOVER_FILE = ROOT_DIR / "docs" / "SESSION_HANDOVER.md"
 STATE_FILE = ROOT_DIR / ".watcher_state.json"
+AGY_DIR = Path.home() / ".gemini" / "antigravity"
+AGY_DB = AGY_DIR / "conversation_summaries.db"
+AGY_ANNOTATIONS = AGY_DIR / "annotations"
+
+
+def _clean_summary_line(line: str) -> str:
+    s = line.strip()
+    s = re.sub(r"^[-*•\d.)\s]+", "", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)
+    s = re.sub(r"`([^`]+)`", r"\1", s)
+    if ":" in s:
+        head, tail = s.split(":", 1)
+        if len(head.strip()) <= 38:
+            s = head.strip()
+        else:
+            s = f"{head.strip()}: {tail.strip()}"
+    s = re.sub(r"\s+", " ", s).strip(" -–—:·")
+    return s[:42]
+
+
+def derive_session_title(explicit_title: str | None = None) -> str:
+    if explicit_title and explicit_title.strip():
+        return explicit_title.strip()
+    now_prefix = datetime.now().strftime("%m-%d, %H:%M")
+    if HANDOVER_FILE.exists():
+        try:
+            text = HANDOVER_FILE.read_text(encoding="utf-8", errors="ignore")
+            m_explicit = re.search(r"세션\s*제목[^:\n]*:\s*([^\r\n]+)", text)
+            if m_explicit:
+                val = m_explicit.group(1).strip().strip("`*")
+                if val and not val.startswith("(") and "MM-DD" not in val:
+                    return val[:50]
+            sections = re.split(r"\n---\s*\n", text)
+            top_section = ""
+            for sec in sections:
+                if any(k in sec for k in ("완료", "체크아웃", "작업", "내역", "요약")):
+                    top_section = sec
+                    break
+            if not top_section:
+                top_section = text[:2000]
+            work_block = top_section
+            m_work = re.search(
+                r"(?:완료한\s*핵심\s*작업|완료\s*내역[^\n]*)(.*?)(?:\n[-*#\d]*\s*(?:직전\s*대화|다음\s*체크인)|\Z)",
+                top_section,
+                re.S,
+            )
+            if m_work:
+                work_block = m_work.group(1)
+            numbered = re.findall(r"(?m)^\s*\d+[.)]\s+\*\*([^\n*]+)\*\*", work_block)
+            if not numbered:
+                numbered = re.findall(r"(?m)^\s*\d+[.)]\s+([^\r\n]+)", work_block)
+            if not numbered:
+                numbered = re.findall(r"(?m)^\s*[-*•]\s+\*\*([^\n*]+)\*\*", work_block)
+            if not numbered:
+                numbered = re.findall(r"(?m)^\s*[-*•]\s+([^\r\n]+)", work_block)
+            if numbered:
+                last_item = _clean_summary_line(numbered[-1])
+                if last_item:
+                    return f"{now_prefix} - {last_item}"
+        except Exception:
+            pass
+    try:
+        res = subprocess.run(
+            ["git", "log", "-n", "15", "--pretty=format:%s"],
+            cwd=str(ROOT_DIR),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=5,
+        )
+        if res.returncode == 0 and res.stdout:
+            for line in res.stdout.splitlines():
+                msg = line.strip()
+                if not msg or any(
+                    skip in msg
+                    for skip in ("멀린코딩강령", "doctrine_watcher", "전사 동기화", "루트 방황 문서")
+                ):
+                    continue
+                msg = re.sub(r"^(?:feat|fix|chore|docs|refactor)(?:\([^)]+\))?:\s*", "", msg, flags=re.I)
+                return f"{now_prefix} - {msg[:40]}"
+    except Exception:
+        pass
+    return f"{now_prefix} - {ROOT_DIR.name} 체크인"
+
+
+def _patch_protobuf_title(raw_bytes: bytes, old_title: str, new_title: str) -> bytes:
+    if not raw_bytes or not old_title:
+        return raw_bytes
+    old_b = old_title.encode("utf-8")
+    new_b = new_title.encode("utf-8")
+    if len(old_b) >= 128 or len(new_b) >= 128:
+        return raw_bytes
+    old_chunk = bytes([0x0A, len(old_b)]) + old_b
+    new_chunk = bytes([0x0A, len(new_b)]) + new_b
+    if raw_bytes.startswith(old_chunk):
+        return new_chunk + raw_bytes[len(old_chunk) :]
+    return raw_bytes
+
+
+def sync_antigravity_session_title(explicit_title: str | None = None) -> str | None:
+    if not AGY_DB.exists():
+        return None
+    target_title = derive_session_title(explicit_title)
+    folder_name = ROOT_DIR.name.lower()
+    updated_cid = None
+    try:
+        conn = sqlite3.connect(str(AGY_DB), timeout=5)
+        cur = conn.cursor()
+        rows = cur.execute(
+            "SELECT conversation_id, title, workspace_uris, raw_summary FROM conversation_summaries ORDER BY last_modified_time DESC LIMIT 20"
+        ).fetchall()
+        for cid, cur_title, uris, raw_sum in rows:
+            uris_lower = (uris or "").lower()
+            if f"/{folder_name}\"" not in uris_lower and f"/{folder_name}]" not in uris_lower:
+                continue
+            should_replace = (
+                explicit_title is not None
+                or not cur_title
+                or "check-in" in cur_title.lower()
+                or cur_title.strip() in ("체크인", "출근", "이어서 하자")
+            )
+            if should_replace and cur_title != target_title:
+                new_raw = _patch_protobuf_title(raw_sum, cur_title, target_title)
+                cur.execute(
+                    "UPDATE conversation_summaries SET title = ?, preview = ?, raw_summary = ? WHERE conversation_id = ?",
+                    (target_title, target_title, new_raw, cid),
+                )
+                pbtxt_path = AGY_ANNOTATIONS / f"{cid}.pbtxt"
+                if pbtxt_path.exists():
+                    pb_text = pbtxt_path.read_text(encoding="utf-8", errors="ignore")
+                    escaped = target_title.replace('"', '\\"')
+                    if 'title:"' in pb_text:
+                        pb_text = re.sub(r'title:"[^"]*"', f'title:"{escaped}"', pb_text, count=1)
+                    else:
+                        pb_text = f'title:"{escaped}" ' + pb_text
+                    pbtxt_path.write_text(pb_text, encoding="utf-8")
+                updated_cid = cid
+            break
+        if updated_cid:
+            conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    return target_title if updated_cid else None
 
 
 def file_md5(path: Path) -> str:
@@ -67,7 +217,16 @@ def check_notion_new_bugs(seen_bug_ids: Set[str]) -> list:
 
 
 def main() -> None:
-    interval_sec = int(sys.argv[1]) if len(sys.argv) >= 2 else 10
+    if len(sys.argv) >= 3 and sys.argv[1] == "--set-title":
+        custom_title = " ".join(sys.argv[2:])
+        applied = sync_antigravity_session_title(custom_title)
+        print(f"🏷️ [세션 제목 변경 완료] {applied or custom_title}")
+        return
+
+    interval_sec = int(sys.argv[1]) if len(sys.argv) >= 2 and sys.argv[1].isdigit() else 10
+    applied_title = sync_antigravity_session_title()
+    if applied_title:
+        print(f"🏷️ [{ROOT_DIR.name} 세션 창 제목 자동 각인] ➔ '{applied_title}'")
 
     # 초기 스냅샷 기록 (시작 시점의 상태는 이미 확인된 것으로 간주하되, 우체통에 미처리 파일이 있으면 즉시 알림)
     initial_inbox = scan_inbox_files()
@@ -113,6 +272,8 @@ def main() -> None:
     while True:
         time.sleep(interval_sec)
         tick += 1
+        if tick <= 6:
+            sync_antigravity_session_title()
 
         # 1) 우체통(inbox/) 신규 파일 또는 수정 감지 (매 주기마다 즉시 체크)
         current_inbox = scan_inbox_files()
