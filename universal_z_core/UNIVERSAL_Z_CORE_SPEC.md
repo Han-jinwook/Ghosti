@@ -88,3 +88,12 @@ await ZCore.trustedPaste({
 | `navigate` | `url`, `tabId` | 대상 탭을 지정된 URL로 즉시 이동 |
 | `evalJs` | `expression`, `tabId` | CDP `Runtime.evaluate`로 페이지 내 JS 표현식 실행 후 결과 반환 |
 | `listTabs` | 없음 | 현재 열려 있는 모든 브라우저 탭의 `id`, `title`, `url` 목록 조회 |
+
+---
+
+## 📦 5. 로컬 AI 모델 가중치(Weights) 자체 스토리지 ‘마스터 사본’ 영구 보관 강령
+
+> **🚨 전사 인프라 절대 원칙:**  
+> **“현재 로컬 서버와 PC 코어에 사용 중인 젬마 2 및 비전/임베딩 모델 가중치 원본 파일들을 외부(HuggingFace 등)에서 매번 당겨오지 말고, 우리 자체 스토리지(백업 하드디스크 및 R2 CDN)에 ‘마스터 사본’으로 영구 보관해 두어라.”**
+
+- 로컬 서버와 PC 코어(`universal_z_core`)에서 구동되는 모든 AI 모델(Gemma 2, 비전/OCR, 768차원 임베딩 모델 등)의 가중치 원본은 외부 레지스트리(HuggingFace 등)에서 런타임에 풀(Pull)하지 않고, 당사 **백업 하드디스크 및 자체 R2 CDN에 보관된 ‘마스터 사본(SHA-256 고정)’**에서만 로드·배포합니다.
