@@ -661,19 +661,17 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
 
 
 # ============================================================================
-# 6. 실제 Windows 모니터 최상단(TopMost) 타겟 실시간 추적 화살표 투사기 (WinSta0\Default 직결)
+# 6. 실제 Windows 모니터 최상단(TopMost) 타겟 버튼 가이드 화살표 투사기 (WinSta0\Default 직결)
 # ============================================================================
 def launch_real_topmost_overlay(
     x: int,
     y: int,
     text: str,
-    duration_sec: int = 12,
-    target_hwnd: int = 0,
-    target_title: str = "",
+    duration_sec: int = 10,
 ) -> None:
     """
-    유저가 실제로 보고 있는 Windows 모니터(WinSta0\\Default) 맨 위(-topmost True)에
-    실제 타겟 창(target_hwnd) 또는 타겟 좌표를 실시간(25 FPS)으로 추적하는 화살표 창을 띄웁니다.
+    유저가 클릭해야 할 실제 타겟 버튼 좌표(x, y) 바로 위에
+    컴팩트한 손가락 화살표(👇/👆) 가이드 말풍선을 정확히 띄웁니다.
     """
     attach_thread_to_interactive_desktop()
     try:
@@ -692,97 +690,60 @@ def launch_real_topmost_overlay(
 
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
-    win_w = 510
-    win_h = 158
+    win_w = 370
+    win_h = 92
 
-    def compute_target_pos() -> tuple[int, int, str]:
-        if target_hwnd and user32.IsWindow(wintypes.HWND(target_hwnd)):
-            rc = wintypes.RECT()
-            if user32.GetWindowRect(wintypes.HWND(target_hwnd), ctypes.byref(rc)):
-                tw = rc.right - rc.left
-                th = rc.bottom - rc.top
-                # 타겟 창의 상단 테두리 바로 위(공간 부족 시 상단 내부)에 정확히 밀착
-                px = max(20, min(screen_w - win_w - 20, rc.left + 20))
-                if rc.top >= win_h + 15:
-                    py = rc.top - win_h - 6
-                else:
-                    py = max(15, rc.top + 45)
-                coord_str = f"타겟 창 [{target_title[:18]}] 실측 좌표 ({rc.left}, {rc.top}) · 크기 {tw}×{th}"
-                return px, py, coord_str
-        px = max(20, min(screen_w - win_w - 20, x))
-        py = max(20, min(screen_h - win_h - 60, y))
-        return px, py, f"타겟 실측 좌표 ({px}, {py})"
-
-    pos_x, pos_y, init_coord_label = compute_target_pos()
+    # 타겟 버튼 좌표 (x, y) 바로 위에 말풍선 끝이 오도록 배치
+    pos_x = max(16, min(screen_w - win_w - 16, x - (win_w // 2)))
+    pos_y = max(16, min(screen_h - win_h - 40, y - win_h - 10))
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
 
     outer = tk.Frame(root, bg="#FACC15", padx=3, pady=3)
     outer.pack(fill="both", expand=True)
 
-    card = tk.Frame(outer, bg="#0F172A", padx=14, pady=10)
+    card = tk.Frame(outer, bg="#0F172A", padx=12, pady=8)
     card.pack(fill="both", expand=True)
 
     top_row = tk.Frame(card, bg="#0F172A")
     top_row.pack(fill="x")
 
-    arrow_lbl = tk.Label(
+    msg_lbl = tk.Label(
         top_row,
-        text="🎯 타겟 실시간 락온!",
-        font=("Malgun Gothic", 13, "bold"),
-        fg="#0F172A",
-        bg="#FACC15",
-        padx=10,
-        pady=2,
-    )
-    arrow_lbl.pack(side="left")
-
-    badge_lbl = tk.Label(
-        top_row,
-        text=init_coord_label,
-        font=("Malgun Gothic", 9, "bold"),
-        fg="#FDE047",
+        text=text,
+        font=("Malgun Gothic", 10, "bold"),
+        fg="#FFFFFF",
         bg="#0F172A",
-        padx=8,
+        anchor="w",
+        justify="left",
+        wraplength=295,
     )
-    badge_lbl.pack(side="left")
+    msg_lbl.pack(side="left", fill="x", expand=True)
 
     close_btn = tk.Button(
         top_row,
-        text="✕ 닫기",
+        text="✕",
         font=("Malgun Gothic", 9, "bold"),
         fg="#FFFFFF",
         bg="#E11D48",
         activebackground="#BE123C",
         activeforeground="#FFFFFF",
         relief="flat",
-        padx=10,
-        pady=2,
+        padx=7,
+        pady=1,
         command=root.destroy,
         cursor="hand2",
     )
     close_btn.pack(side="right")
 
-    msg_lbl = tk.Label(
-        card,
-        text=text,
-        font=("Malgun Gothic", 11, "bold"),
-        fg="#FFFFFF",
-        bg="#0F172A",
-        anchor="w",
-        justify="left",
-        wraplength=475,
-    )
-    msg_lbl.pack(fill="x", pady=(8, 4))
-
     pointer_lbl = tk.Label(
         card,
-        text="▼▼▼ 바로 아래 타겟 창을 마우스로 드래그해 보세요! 이 화살표가 실시간으로 따라다닙니다 ▼▼▼",
-        font=("Malgun Gothic", 9, "bold"),
-        fg="#FB7185",
-        bg="#1E293B",
-        pady=4,
+        text="👇 바로 아래 버튼을 클릭하세요! 👇",
+        font=("Malgun Gothic", 10, "bold"),
+        fg="#0F172A",
+        bg="#FACC15",
+        pady=2,
     )
-    pointer_lbl.pack(fill="x", side="bottom")
+    pointer_lbl.pack(fill="x", side="bottom", pady=(6, 0))
 
     root.deiconify()
     root.lift()
@@ -791,28 +752,8 @@ def launch_real_topmost_overlay(
     hwnd = int(root.winfo_id())
     top_hwnd = int(user32.GetParent(wintypes.HWND(hwnd))) or hwnd
     user32.ShowWindow(wintypes.HWND(top_hwnd), 5)
-    user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), pos_x, pos_y, win_w, win_h, 0x0040)
+    user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), pos_x, pos_y, win_w, win_h, 0x0040 | 0x0010)
 
-    step_state = {"dy": 0, "dir": 1, "tick": 0}
-
-    def animate() -> None:
-        if not root.winfo_exists():
-            return
-        step_state["tick"] += 1
-        if step_state["tick"] % 2 == 0:
-            step_state["dy"] += step_state["dir"] * 2
-            if abs(step_state["dy"]) >= 6:
-                step_state["dir"] *= -1
-                outer.config(bg="#F43F5E" if step_state["dir"] > 0 else "#FACC15")
-
-        tx, ty, live_coord_str = compute_target_pos()
-        badge_lbl.config(text=live_coord_str)
-        cur_y = ty + step_state["dy"]
-        root.geometry(f"{win_w}x{win_h}+{tx}+{cur_y}")
-        user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), tx, cur_y, win_w, win_h, 0x0040 | 0x0010)
-        root.after(45, animate)
-
-    root.after(45, animate)
     root.after(max(3, duration_sec) * 1000, root.destroy)
     root.mainloop()
 
@@ -993,46 +934,11 @@ def run_gui_task_runner() -> None:
         return
 
     if mode == "overlay":
-        target_kw = str(payload.get("targetKeyword", "")).strip()
-        target_win: Dict[str, Any] = {}
-
-        # 타겟 창 탐색: 지정 키워드가 있으면 해당 창, 없으면 현재 열려 있는 탐색기(test_docs)/스티커 메모/카카오톡 우선 락온
-        search_candidates = [target_kw] if target_kw else ["test_docs", "스티커 메모", "카카오톡"]
-        for cand in search_candidates:
-            if not cand:
-                continue
-            found = find_window_on_default_desktop(cand)
-            if found:
-                target_win = found
-                break
-
-        # 만약 타겟으로 삼을 개별 창이 아직 안 열려 있으면 test_docs 폴더를 즉시 열어서 실제 타겟으로 락온!
-        if not target_win:
-            project_root = Path(__file__).resolve().parents[2]
-            sample_dir = project_root / "test_docs"
-            subprocess.Popen(f'explorer.exe "{sample_dir}"', shell=True)
-            for _ in range(25):
-                time.sleep(0.05)
-                found = find_window_on_default_desktop("test_docs")
-                if found:
-                    target_win = found
-                    break
-
-        target_hwnd = int(target_win.get("rawHwnd", 0)) if target_win else 0
-        target_title = str(target_win.get("title", "")) if target_win else ""
-
-        if target_hwnd:
-            bring_window_to_front_immediately(target_hwnd)
-            time.sleep(0.1)
-            user32.SetWindowPos(wintypes.HWND(target_hwnd), wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
-
         launch_real_topmost_overlay(
             int(payload.get("x", 320)),
-            int(payload.get("y", 90)),
-            str(payload.get("text", "👆 실제 타겟 창의 좌표를 실시간(25 FPS)으로 추적 중입니다!")),
-            int(payload.get("duration", 12)),
-            target_hwnd=target_hwnd,
-            target_title=target_title,
+            int(payload.get("y", 160)),
+            str(payload.get("text", "👆 여기 버튼을 클릭하세요!")),
+            int(payload.get("duration", 10)),
         )
 
 
@@ -1040,8 +946,7 @@ def spawn_overlay_detached(
     x: int,
     y: int,
     text: str,
-    duration_sec: int = 12,
-    target_keyword: str = "",
+    duration_sec: int = 10,
 ) -> Dict[str, Any]:
     ensure_merlin_dirs()
     script_path = str(Path(__file__).resolve())
@@ -1053,7 +958,6 @@ def spawn_overlay_detached(
         "y": int(y),
         "text": text,
         "duration": int(duration_sec),
-        "targetKeyword": target_keyword,
     }
     GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -1061,8 +965,8 @@ def spawn_overlay_detached(
     sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", tr_cmd)
 
     verified_win: Dict[str, Any] = {}
-    for _ in range(28):
-        time.sleep(0.06)
+    for _ in range(20):
+        time.sleep(0.05)
         verified_win = find_window_on_default_desktop("Merlin Z-Core TopMost Overlay")
         if verified_win:
             break
@@ -1080,8 +984,7 @@ def spawn_overlay_detached(
         "text": text,
         "durationSec": duration_sec,
         "message": (
-            f"✅ 실제 타겟 창 상단 테두리에 실시간 추적 화살표(HWND {verified_win.get('hwnd', '활성')})를 락온했습니다! "
-            f"타겟 창을 마우스로 드래그해 보세요 — 화살표가 실시간으로 따라다닙니다!"
+            f"✅ 타겟 버튼 위치(모니터 좌표 {x}, {y}) 바로 위에 👆 버튼 가이드 화살표(HWND {verified_win.get('hwnd', '활성')})를 정확히 띄웠습니다!"
         ),
     }
 

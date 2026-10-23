@@ -246,6 +246,7 @@ export const SetupMonsterContent: React.FC = () => {
   const [forensicResult, setForensicResult] = useState<RealForensicScanResult | null>(null);
   const [loadingForensic, setLoadingForensic] = useState(false);
   const [overlayStatusMsg, setOverlayStatusMsg] = useState<string>('');
+  const [buttonGuideStep, setButtonGuideStep] = useState<0 | 1 | 2>(0);
 
   const handleRefreshRealPcState = async () => {
     setLoadingRealPc(true);
@@ -254,33 +255,54 @@ export const SetupMonsterContent: React.FC = () => {
     setLoadingRealPc(false);
   };
 
+  const pointOsArrowAtButtonElement = async (elId: string, guideText: string) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const chromeTop = Math.max(70, window.outerHeight - window.innerHeight);
+    const screenX = Math.round(window.screenX + rect.left + rect.width / 2);
+    const screenY = Math.round(window.screenY + chromeTop + rect.top);
+    await launchRealOsTopmostOverlay({
+      x: screenX,
+      y: screenY,
+      text: guideText,
+      durationSec: 8,
+    });
+  };
+
   const handleRunForensicScan = async (qOverride?: string) => {
     setLoadingForensic(true);
     const q = qOverride !== undefined ? qOverride : forensicQuery;
     const res = await runRealForensicScan(q);
     if (res) setForensicResult(res);
     setLoadingForensic(false);
-  };
-
-  const handleLaunchRealOverlay = async () => {
-    setOverlayStatusMsg('⏳ 실제 타겟 창을 전면 배치하고 상단 테두리에 실시간 좌표 추적 화살표를 락온하는 중...');
-    const res = (await launchRealOsTopmostOverlay({
-      x: 280,
-      y: 46,
-      text: '🎯 [실제 타겟 창 좌표 락온] 바로 아래 타겟 창을 마우스로 드래그해 보세요! 이 화살표 창이 실시간(25 FPS)으로 좌표를 읽으며 따라다닙니다!',
-      durationSec: 12,
-    })) as { ok: boolean; hwnd?: string; message?: string };
-    if (res.ok) {
-      setOverlayStatusMsg(
-        res.message ||
-          `✅ 실제 타겟 창 상단에 실시간 추적 화살표(HWND ${res.hwnd || '활성'})를 락온했습니다! 타겟 창을 마우스로 드래그해 보세요!`
-      );
-    } else {
-      setOverlayStatusMsg('⚠️ 로컬 서버가 실행 중인지 확인해 주세요.');
+    if (buttonGuideStep === 1) {
+      setButtonGuideStep(2);
+      setOverlayStatusMsg('👆 [2/2단계 가이드] 스캔 완료! 이제 아래 첫 번째 문서의 [📂 윈도우 탐색기 열기] 버튼을 눌러보세요!');
+      setTimeout(() => {
+        void pointOsArrowAtButtonElement(
+          'zcore-target-btn-open-0',
+          '👆 [2/2단계] 여기 [📂 윈도우 탐색기 열기] 버튼을 클릭하세요!'
+        );
+      }, 150);
     }
   };
 
+  const handleLaunchRealOverlay = async () => {
+    setButtonGuideStep(1);
+    setOverlayStatusMsg(
+      '👆 [1/2단계 버튼 가이드 시작] 아래 화살표가 가리키는 [🔍 3초 실물 스캔] 버튼을 직접 눌러보세요! (누르면 자동으로 2단계 버튼으로 이동합니다)'
+    );
+    await pointOsArrowAtButtonElement(
+      'zcore-target-btn-scan',
+      '👆 [1/2단계] 여기 [🔍 3초 실물 스캔] 버튼을 클릭하세요!'
+    );
+  };
+
   const handleOpenRealFileLocation = async (fullPath: string, fileName: string) => {
+    if (buttonGuideStep === 2) {
+      setButtonGuideStep(0);
+    }
     setOverlayStatusMsg(`⚡ [${fileName}] 윈도우 탐색기 폴더를 모니터 맨 앞으로 즉시 여는 중...`);
     const res = await executeRealOsAction('open_file_location', fullPath);
     if (res.ok) {
@@ -699,7 +721,7 @@ export const SetupMonsterContent: React.FC = () => {
                 onClick={handleLaunchRealOverlay}
                 className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-label-sm text-[11.5px] font-extrabold shadow-md cursor-pointer"
               >
-                🎯 실제 타겟 창 실시간 추적 화살표 띄우기 (창을 드래그하면 따라다님)
+                👆 유저 버튼 클릭 가이드 시작 (1단계: 스캔 버튼 ➔ 2단계: 폴더 열기 버튼)
               </button>
               <button
                 type="button"
@@ -785,14 +807,24 @@ export const SetupMonsterContent: React.FC = () => {
                   placeholder="찾을 문서 키워드 (예: 계약서, 정산, 견적)"
                   className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-white/15 text-white text-[12px] w-52 focus:outline-none focus:border-emerald-400"
                 />
-                <button
-                  type="button"
-                  onClick={() => void handleRunForensicScan()}
-                  disabled={loadingForensic}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-                >
-                  {loadingForensic ? '스캔 중...' : '🔍 3초 실물 스캔'}
-                </button>
+                <div className="relative inline-flex">
+                  {buttonGuideStep === 1 && (
+                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap px-3 py-1.5 rounded-xl bg-rose-600 border-2 border-yellow-300 text-white font-label-sm text-[11.5px] font-extrabold shadow-[0_8px_25px_rgba(225,29,72,0.85)] animate-bounce">
+                      👇 [1/2단계] 여기 [🔍 3초 실물 스캔] 버튼을 클릭하세요!
+                    </div>
+                  )}
+                  <button
+                    id="zcore-target-btn-scan"
+                    type="button"
+                    onClick={() => void handleRunForensicScan()}
+                    disabled={loadingForensic}
+                    className={`px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer ${
+                      buttonGuideStep === 1 ? 'ring-4 ring-yellow-300 shadow-[0_0_20px_rgba(253,224,71,0.9)]' : ''
+                    }`}
+                  >
+                    {loadingForensic ? '스캔 중...' : '🔍 3초 실물 스캔'}
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -837,11 +869,21 @@ export const SetupMonsterContent: React.FC = () => {
                           ))}
                         </div>
                       </div>
-                      <div className="flex justify-end">
+                      <div className="relative flex justify-end">
+                        {buttonGuideStep === 2 && idx === 0 && (
+                          <div className="absolute -top-11 right-0 z-50 whitespace-nowrap px-3 py-1.5 rounded-xl bg-rose-600 border-2 border-yellow-300 text-white font-label-sm text-[11.5px] font-extrabold shadow-[0_8px_25px_rgba(225,29,72,0.85)] animate-bounce">
+                            👇 [2/2단계] 이제 여기 [📂 탐색기 열기] 버튼을 클릭하세요!
+                          </div>
+                        )}
                         <button
+                          id={idx === 0 ? 'zcore-target-btn-open-0' : undefined}
                           type="button"
                           onClick={() => void handleOpenRealFileLocation(f.fullPath, f.fileName)}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-label-sm text-[11.5px] font-extrabold shadow cursor-pointer"
+                          className={`px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-label-sm text-[11.5px] font-extrabold shadow cursor-pointer ${
+                            buttonGuideStep === 2 && idx === 0
+                              ? 'ring-4 ring-yellow-300 shadow-[0_0_20px_rgba(253,224,71,0.9)]'
+                              : ''
+                          }`}
                         >
                           📂 윈도우 탐색기에서 이 파일 실제 위치 열기 (모니터 전면 표시)
                         </button>
