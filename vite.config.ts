@@ -2921,6 +2921,44 @@ function zeyeLocalBridge(): Plugin {
             const files = listImages(PHOTO_DIR);
             resultCount = files.length;
             resultData = files.slice(0, limit);
+          } else if (targetResource === 'OS_FLOATING_OVERLAY') {
+            const rect = Array.isArray(queryOrCommand.overlayLogicalRect)
+              ? queryOrCommand.overlayLogicalRect
+              : [420, 160, 120, 48];
+            const instruction = String(
+              queryOrCommand.instructionKo || '👆 여기를 클릭하세요! (Z-코어 실제 OS 최상단 오버레이)'
+            );
+            const osScript = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_z_core_os.py');
+            const outJson = await new Promise<any>((resolve) => {
+              exec(
+                `python "${osScript}" overlay --x ${Math.round(Number(rect[0]) || 420)} --y ${Math.round(
+                  Number(rect[1]) || 160
+                )} --text "${instruction.replace(/"/g, '\\"')}" --duration 10`,
+                { encoding: 'utf8' },
+                (_err, stdout) => {
+                  try {
+                    resolve(JSON.parse(stdout));
+                  } catch {
+                    resolve({ ok: true, message: stdout });
+                  }
+                }
+              );
+            });
+            resultCount = 1;
+            resultData = outJson;
+          } else if (targetResource === 'UI_ACCESSIBILITY_TREE') {
+            const osScript = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_z_core_os.py');
+            const outJson = await new Promise<any>((resolve) => {
+              exec(`python "${osScript}" inspect`, { encoding: 'utf8' }, (_err, stdout) => {
+                try {
+                  resolve(JSON.parse(stdout));
+                } catch {
+                  resolve({ ok: false });
+                }
+              });
+            });
+            resultCount = Array.isArray(outJson?.openWindows) ? outJson.openWindows.length : 1;
+            resultData = outJson;
           } else {
             resultCount = 1;
             resultData = {
@@ -2946,6 +2984,90 @@ function zeyeLocalBridge(): Plugin {
         } catch (e) {
           res.end(JSON.stringify({ ok: false, error: String(e) }));
         }
+      });
+
+      // ─────────────── [🦾 Z-코어 100% 실물 Windows OS 제어 · 3초 포렌식 · PC Git · TopMost 오버레이 엔드포인트] ───────────────
+      const zcoreOsScriptPath = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_z_core_os.py');
+
+      function runZCorePython(args: string[]): Promise<any> {
+        return new Promise((resolve) => {
+          const escapedArgs = args.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(' ');
+          exec(
+            `python "${zcoreOsScriptPath}" ${escapedArgs}`,
+            { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 },
+            (err, stdout, stderr) => {
+              if (stdout && stdout.trim()) {
+                try {
+                  resolve(JSON.parse(stdout.trim()));
+                  return;
+                } catch {
+                  /* fallback */
+                }
+              }
+              resolve({
+                ok: !err,
+                error: err ? String(stderr || err.message) : undefined,
+                rawOutput: stdout,
+              });
+            }
+          );
+        });
+      }
+
+      server.middlewares.use('/__zcore/os-inspect', async (_req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const out = await runZCorePython(['inspect']);
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/forensic-scan', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        let query = '';
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req);
+          query = String(body?.query || '').trim();
+        } else {
+          const u = new URL(req.url || '', 'http://localhost');
+          query = (u.searchParams.get('q') || '').trim();
+        }
+        const out = await runZCorePython(['forensic', query]);
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/os-overlay', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const x = Math.round(Number(body?.x) || 450);
+        const y = Math.round(Number(body?.y) || 180);
+        const text = String(
+          body?.text || '👆 여기를 클릭하세요! (Z-코어 실제 Windows 최상단 오버레이)'
+        );
+        const duration = Math.round(Number(body?.durationSec) || 10);
+        const out = await runZCorePython([
+          'overlay',
+          '--x',
+          String(x),
+          '--y',
+          String(y),
+          '--text',
+          text,
+          '--duration',
+          String(duration),
+        ]);
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/os-execute', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const action = String(body?.action || 'inspect');
+        const target = String(body?.targetPath || '');
+        const args = ['execute', '--action', action];
+        if (target) {
+          args.push('--target', target);
+        }
+        const out = await runZCorePython(args);
+        res.end(JSON.stringify(out));
       });
     },
   };

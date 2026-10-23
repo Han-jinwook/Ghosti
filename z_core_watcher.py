@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-제트아이 (Z-Eye) 무토큰 3중 통합 감시 데몬 (z_core_watcher.py)
+제트아이 (Z-Eye) 무토큰 3중 통합 점검 및 세션 창 제목 자동 각인 스크립트 (z_core_watcher.py)
 - 평상시 AI 토큰 소모: 0 (파이썬 로컬 프로세스만 동작)
-- 감시 대상 3가지:
+- 점검/감시 대상 3가지:
   1. [직통 우체통 감지] D:\\Z-Eye\\universal_z_core\\inbox\\ 내 신규 피드백/요청 문서(.md) 투함 여부
-  2. [전사 강령 이식 감지] D:\\Z-Eye\\docs\\멀린코딩강령_v20261020.md (및 docs/ 내 비서 전령 이식 파일) 변경 여부
+  2. [전사 강령 이식 감지] D:\\Z-Eye\\docs\\멀린코딩강령_v20261020.md 변경 여부
   3. [노션 QA 버그 감지] 노션 칸반 보드에 알바생(테스터)이 등록한 신규 '발견된 버그' 티켓 여부
 - 작동 방식:
-  평소에는 조용히 대기하다가 위 3가지 중 하나라도 변화가 감지되면,
-  즉시 상세 내용을 출력하고 프로세스를 종료(Exit 0)하여 Antigravity AI 에이전트를 자동으로 깨웁니다.
+  체크인 시 기본 실행(`python z_core_watcher.py`)은 세션 창 제목을 자동 각인하고 3대 항목을 즉시 점검한 뒤,
+  Antigravity 채팅창의 'Queued Messages(대기열)' 걸림 현상을 100% 원천 방지하기 위해 즉시 종료(Exit 0)합니다.
+  상시 루프 감시가 명시적으로 필요한 경우에만 `--watch` 옵션을 사용합니다.
 """
 
 import hashlib
@@ -224,10 +225,11 @@ def main() -> None:
         print(f"🏷️ [세션 제목 변경 완료] {applied or custom_title}")
         return
 
-    interval_sec = int(sys.argv[1]) if len(sys.argv) >= 2 and sys.argv[1].isdigit() else 10
     applied_title = sync_antigravity_session_title()
     if applied_title:
         print(f"🏷️ [{ROOT_DIR.name} 세션 창 제목 자동 각인] ➔ '{applied_title}'")
+    else:
+        print(f"🏷️ [{ROOT_DIR.name} 세션 창 제목 확인 완료] ➔ '{derive_session_title()}'")
 
     # 초기 스냅샷 기록 (시작 시점의 상태는 이미 확인된 것으로 간주하되, 우체통에 미처리 파일이 있으면 즉시 알림)
     initial_inbox = scan_inbox_files()
@@ -261,6 +263,20 @@ def main() -> None:
             seen_bug_ids.add(b["page_id"])
     except Exception:
         pass
+
+    # 기본 실행(체크인 시)은 Antigravity 채팅창의 'Queued Messages(대기열)' 걸림 현상을
+    # 100% 원천 방지하기 위해 제목 각인 및 우체통/노션 점검 후 즉시 종료(Exit 0)합니다.
+    if "--watch" not in sys.argv:
+        print(
+            f"✅ [Z-Eye 체크인 3중 점검 및 제목 각인 완료] (우체통 미처리 0건, 노션 발견된 버그 {len(seen_bug_ids)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
+        )
+        return
+
+    interval_sec = 10
+    for arg in sys.argv[1:]:
+        if arg.isdigit():
+            interval_sec = int(arg)
+            break
 
     print(
         f"👀 [Z-Eye 무토큰 3중 감시병 가동] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
