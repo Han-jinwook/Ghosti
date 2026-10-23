@@ -2021,6 +2021,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
   ]);
   const [newBackupPcName, setNewBackupPcName] = useState<string>('');
   const [newBackupPcPath, setNewBackupPcPath] = useState<string>('D:\\Z-Eye_추가백업_폴더');
+  const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
+
+  const triggerNightSleepMode = () => {
+    setNightSleepBannerPhase('visible');
+    window.setTimeout(() => {
+      setNightSleepBannerPhase('fading');
+    }, 1800);
+    window.setTimeout(() => {
+      setNightSleepBannerPhase('hidden');
+    }, 3800);
+  };
 
   const workPlan = subscribedLounges.work;
   const [folderCounts, setFolderCounts] = useState<Record<string, number>>({
@@ -2220,11 +2231,40 @@ export const WorkLoungeB2BHub: React.FC = () => {
               <span>🛡️ 공용 S: PC 1대 + 백업 PC ({backupPcNodes.filter((b) => b.active).length}대 가동 중)</span>
               <span>{showBackupManager ? '▴' : '▾'}</span>
             </button>
-            <span className="text-[12px] text-zinc-400">
-              💡 내 컴퓨터 <strong className="text-zinc-200">[탐색기 ➔ S: 드라이브]</strong>에 파일을 넣으면 자동으로 동기화·백업됩니다
+            <button
+              type="button"
+              onClick={triggerNightSleepMode}
+              className="px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/45 text-indigo-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+              title="바탕화면 단축아이콘과 동일: 퇴근·취침 시 모니터 즉시 OFF + 15W 초절전 대기 + 메모리 찌꺼기 청소"
+            >
+              <span>🌙 퇴근·야간 초절전 모드 (월 1,800원)</span>
+            </button>
+            <span className="px-2.5 py-1 rounded-xl bg-zinc-900 border border-amber-400/30 text-[11px] text-amber-200 font-bold">
+              🛡️ 이중 안전장치: 30일 보관함 ➔ 한 달 뒤 휴지통 (앱 임의 삭제 0%)
             </span>
           </div>
         </div>
+
+        {/* 🌙 퇴근·취침 시 실행되는 야간 초절전 모드 페이드아웃 안내 메시지 */}
+        {nightSleepBannerPhase !== 'hidden' && (
+          <div
+            className={`p-4 rounded-2xl bg-gradient-to-r from-indigo-950/95 via-zinc-950/95 to-slate-950/95 border border-indigo-400/60 shadow-2xl flex flex-wrap items-center justify-between gap-3 transition-opacity duration-[1800ms] ${
+              nightSleepBannerPhase === 'fading' ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <div className="flex flex-col gap-1">
+              <span className="font-headline-sm text-[15px] text-indigo-200 font-black">
+                🌙 Z-Eye 초절전·무소음 야간모드가 가동되었습니다 — 편히 퇴근·취침하세요!
+              </span>
+              <span className="text-[12px] text-zinc-300">
+                ✓ 램(RAM) 찌꺼기 청소 완료 · ✓ CPU 15W 초저전력 대기 전환(한 달 전기요금 약 1,800원) · <strong className="text-amber-300">이 안내 메시지는 서서히 사라진 뒤 모니터 전원이 꺼집니다...</strong>
+              </span>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-indigo-500/30 border border-indigo-300/50 text-indigo-100 font-mono text-[11px] font-bold">
+              화면 페이드아웃 중...
+            </span>
+          </div>
+        )}
 
         {/* 🛡️ 방장(대표) 전용: 공용 업무 PC(S: 1대) 지정 & 다중 백업 PC 실시간 원본 미러링 관리 패널 */}
         {showBackupManager && (
@@ -2731,9 +2771,115 @@ export const LoungeFeedContextBanner: React.FC = () => {
     setMobileTab,
   } = useSaySeeStore();
 
-  const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
+  const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(true);
+  const [showStorageCheckBanner, setShowStorageCheckBanner] = useState(false);
+  const [simulateLowStorage, setSimulateLowStorage] = useState(false);
   const [downloadDirPath, setDownloadDirPath] = useState('D:\\Z-Eye\\다운로드_원본');
   const [monthlyReportDismissed, setMonthlyReportDismissed] = useState(false);
+
+  const renderOriginalAutoSyncControl = () => (
+    <div className="flex flex-wrap items-center gap-2 shrink-0">
+      {/* 동기화 완료 (새로 9장 추가) 작은 풍선 배지 */}
+      {p2pOriginalSummoned && (
+        <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-pulse">
+          <span>✨ 동기화 완료 (새로 9장 추가)</span>
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={() => {
+          const next = !p2pOriginalSummoned;
+          setP2pOriginalSummoned(next);
+          setShowStorageCheckBanner(true);
+          if (next) {
+            void fetch('/__club/download-originals', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ openExplorer: false }),
+            })
+              .then((r) => r.json())
+              .then((d: { downloadDir?: string }) => {
+                if (d?.downloadDir) setDownloadDirPath(d.downloadDir);
+              })
+              .catch(() => {});
+          }
+        }}
+        className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
+          p2pOriginalSummoned
+            ? 'bg-primary-container text-zinc-950 border-primary-container'
+            : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
+        }`}
+      >
+        {p2pOriginalSummoned ? '🔄 원본 자동 동기화 중 (ON)' : '📥 원본 동기화 켜기'}
+      </button>
+    </div>
+  );
+
+  const renderStorageCheckAndSyncDetail = () => {
+    if (!showStorageCheckBanner) return null;
+    return (
+      <div className="px-4 py-3 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+          <span
+            className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] ${
+              simulateLowStorage
+                ? 'bg-rose-500 text-white'
+                : 'bg-emerald-400 text-zinc-950'
+            }`}
+          >
+            {simulateLowStorage
+              ? '⚠️ 남은 용량 부족 (동기화 불가)'
+              : '✓ 남은 용량 충분 · 자동 동기화 ON'}
+          </span>
+          {simulateLowStorage ? (
+            <span className="text-rose-200 font-bold">
+              내 기기 남은 용량(0.4GB)이 공유방 원본 총량(1.2GB)보다 부족하여 썸네일 모드로 유지됩니다.
+            </span>
+          ) : (
+            <span className="text-white font-bold">
+              내 기기 남은 용량 <strong className="text-emerald-300">48.2GB</strong> / 공유방 원본 <strong className="text-emerald-300">1.2GB (충분 ✓)</strong> — 원본+썸네일이 내 기기에 모두 보관되어 언제든 내 기기에서 0.01초 만에 바로 열립니다!
+            </span>
+          )}
+          {!simulateLowStorage && (
+            <span className="text-zinc-400 text-[11.5px]">
+              (저장 위치: <strong className="text-zinc-200">{downloadDirPath}</strong>)
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setSimulateLowStorage((v) => !v)}
+            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[11px] font-bold cursor-pointer"
+          >
+            {simulateLowStorage ? '💡 용량 충분 상태로 보기' : '📱 용량 부족 안내 시뮬레이션'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void fetch('/__club/download-originals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ openExplorer: true }),
+              }).catch(() => {});
+            }}
+            className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+          >
+            📂 내 기기 원본 폴더 열기
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowStorageCheckBanner(false)}
+            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+          >
+            ✕ 닫기
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
   const FAMILY_ROOMS: FamilyRoomId[] = ['우리집', '본가(친가)', '처가(친정)'];
@@ -2812,28 +2958,34 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
   if (activeLoungeType === 'family') {
     return (
-      <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {FAMILY_ROOMS.map((room) => {
-            const active = activeFamilyRoom === room;
-            return (
-              <button
-                key={room}
-                type="button"
-                onClick={() => setActiveFamilyRoom(room)}
-                className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] font-bold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
-                  active
-                    ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-xs'
-                    : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                }`}
-              >
-                {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
-              </button>
-            );
-          })}
-        </div>
+      <div className="flex flex-col gap-2.5">
+        <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {FAMILY_ROOMS.map((room) => {
+              const active = activeFamilyRoom === room;
+              return (
+                <button
+                  key={room}
+                  type="button"
+                  onClick={() => setActiveFamilyRoom(room)}
+                  className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] font-bold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                    active
+                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-xs'
+                      : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                  }`}
+                >
+                  {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
+                </button>
+              );
+            })}
+          </div>
 
-        {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}
+          <div className="flex flex-wrap items-center gap-2">
+            {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}
+            {renderOriginalAutoSyncControl()}
+          </div>
+        </div>
+        {renderStorageCheckAndSyncDetail()}
       </div>
     );
   }
@@ -2848,77 +3000,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
           }}
         />
 
-        {/* 하단 1줄: 모임 인물 빠른 검색 + 원본 다운로드 (보더리스 캔버스 배치) */}
+        {/* 하단 1줄: 모임 인물 빠른 검색 + 각자의 페이지 [원본 자동 동기화] 버튼 & (새로 9장 추가) 풍선 */}
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
           {renderMemberPersonaPills('회원별 사진 찾기:')}
-
-          <button
-            type="button"
-            onClick={() => {
-              const next = !p2pOriginalSummoned;
-              setP2pOriginalSummoned(next);
-              if (next) {
-                void fetch('/__club/download-originals', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ openExplorer: false }),
-                })
-                  .then((r) => r.json())
-                  .then((d: { downloadDir?: string }) => {
-                    if (d?.downloadDir) setDownloadDirPath(d.downloadDir);
-                  })
-                  .catch(() => {});
-              }
-            }}
-            className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
-              p2pOriginalSummoned
-                ? 'bg-primary-container text-zinc-950 border-primary-container'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
-            }`}
-          >
-            {p2pOriginalSummoned ? '✓ 원본 다운로드 완료' : '📥 원본 다운로드'}
-          </button>
+          {renderOriginalAutoSyncControl()}
         </div>
 
-        {/* 다운로드 완료 시 기술 용어 없이 저장 경로와 [폴더 열기] 버튼만 깔끔하게 표시 */}
-        {p2pOriginalSummoned && (
-          <div className="px-4 py-3 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-sm flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2 text-[13px]">
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-extrabold text-[11.5px]">
-                ✓ 다운로드 완료
-              </span>
-              <span className="text-white font-bold">
-                원본 사진이 내 컴퓨터에 저장되었습니다.
-              </span>
-              <span className="text-zinc-400 text-[12px]">
-                (저장 위치: <strong className="text-zinc-200">{downloadDirPath}</strong>)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  void fetch('/__club/download-originals', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ openExplorer: true }),
-                  }).catch(() => {});
-                }}
-                className="px-3.5 py-2 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[12px] font-extrabold cursor-pointer"
-              >
-                📂 저장 폴더 열기
-              </button>
-              <button
-                type="button"
-                onClick={() => setP2pOriginalSummoned(false)}
-                className="px-2.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
-              >
-                ✕ 닫기
-              </button>
-            </div>
-          </div>
-        )}
+        {/* 남은 용량 대비 가능/불가능 안내 및 내 기기 저장 폴더 열기 */}
+        {renderStorageCheckAndSyncDetail()}
       </div>
     );
   }

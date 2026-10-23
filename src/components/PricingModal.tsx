@@ -905,25 +905,25 @@ export const PricingModal: React.FC = () => {
               </h3>
             </div>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-              ✓ 앱 자율 삭제 절대 금지 (정리 시 30일 안전 보관함 보호)
+              ✓ 이중 안전장치: 30일 보관함 ➔ 한 달 뒤 휴지통
             </span>
           </div>
 
           <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed bg-zinc-950/80 p-3.5 rounded-xl border border-white/10">
-            <strong>① 📸 사진 공유방(가족·동호회·동창회):</strong> 처음엔 스마트폰 용량 보호를 위해 <strong>13KB 썸네일만 표시(모바일 원본 전체 동기화 제한)</strong>되고, 용량이 넉넉한 PC에서는 누구나 <strong>[🔄 원본 동기화]</strong> 버튼만 누르면 내 PC에 원본이 100% 일치됩니다(원본 열기 시 내 PC 로컬 원본 0.01초 최우선 호출 · <strong>회장님은 밤에 PC 끄고 편히 주무셔도 됨!</strong>).<br />
+            <strong>① 📸 사진 공유방(가족·동호회·동창회):</strong> 각자의 페이지에 <strong>[🔄 원본 동기화]</strong> 버튼 하나만 둡니다! 한 번 켜두면 내 PC나 모바일(남은 용량 대비 가능/불가능 자동 안내)에 원본+썸네일을 모두 받아두어 <strong>원본 열기 시 자기 디바이스 내에서 0.01초 만에 자체 해결</strong>되며, 새 사진이 올라오면 <strong>✨ 동기화 완료 (새로 9장 추가)</strong> 풍선이 자동으로 달립니다.<br />
             <strong>② 💼 업무 공유방(S: 드라이브):</strong> 사장님이 통제하는 <strong>공용 PC 1대 + 백업 PC 1·2호</strong>만 세팅하고, 퇴근 시 바탕화면 <strong>[🌙 야간·퇴근 초절전 모드]</strong>(안내 메시지가 서서히 사라지며 모니터 OFF · <strong>한 달 전기세 약 1,800원</strong>)를 눌러두고 퇴근하면 끝납니다.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-emerald-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-emerald-300 font-extrabold">
-                ① 📸 사진방: 누구나 PC 원본 동기화
+                ① 📸 사진방: 내 기기(PC·폰) 자체 해결
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                내 원본 0.01초 열기 · 회장님 숙면
+                ✨ 동기화 완료 (새로 9장 추가)
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                모바일은 13KB 썸네일만 가볍게 보고, PC에서는 원하는 회원이 [원본 동기화]를 켜두어 회장님 PC가 꺼져 있어도 언제든 동기화됩니다.
+                PC·모바일(남은 용량 체크 안내) 모두 내 기기에 원본과 썸네일을 함께 받아두어, 원본 열기 시 내 기기 안에서 즉시 자체 해결합니다.
               </span>
             </div>
 
@@ -941,13 +941,13 @@ export const PricingModal: React.FC = () => {
 
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-amber-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-amber-300 font-extrabold">
-                ③ 🛡️ 사장님 안심: 앱 임의 삭제 0%
+                ③ 🛡️ 이중 안전장치 (앱 삭제 0%)
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                정리 시 [30일 안전 보관함] 보호
+                [30일 보관함] ➔ 한 달 뒤 [휴지통]
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                앱이 사고로 파일을 지우는 일은 절대 없습니다. 유저가 직접 정리 버튼을 누른 파일도 보관함에서 30일간 안전하게 보호된 후 제거됩니다.
+                앱이 사고로 파일을 지우는 일은 절대 없습니다. 정리된 파일도 30일 보관함 보호 후 한 달 뒤 휴지통으로 한 번 더 가는 이중 안전장치입니다.
               </span>
             </div>
           </div>
