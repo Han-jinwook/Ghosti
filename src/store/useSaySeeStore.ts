@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import {
+  speakSetupMonsterTts,
+  triggerSetupMonsterTtsPrewarm,
+} from '../services/setupMonsterTts';
 import type {
   AlumniStickChip,
   AnalogScannedPhotoItem,
@@ -2991,6 +2995,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }),
 
   loadSetupMonsterState: async () => {
+    triggerSetupMonsterTtsPrewarm();
     try {
       const res = await fetch('/__setup-monster/state');
       const data = await res.json();
@@ -3294,12 +3299,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const ttsText = isEmpathyRefund
-          ? `설정과 수리는 완료되었지만, 제가 초행길이라 두 번 이상 길을 헤매게 해드려 죄송합니다! 소중한 학습 기회를 주신 보답으로 이번 수리비 ${cost} 코인은 받지 않고 백 퍼센트 전액 환불해 드렸습니다. 방금 배운 최단 직행 지름길은 지금 즉시 전 세계 에이전트에 업데이트해 두겠습니다!`
+          ? '두 번 이상 길을 헤매게 해드려 죄송합니다. 이번 수리비는 받지 않고 전액 환불해 드렸습니다.'
           : plan.voiceTtsSummary;
         const utter = new SpeechSynthesisUtterance(ttsText);
         utter.lang = 'ko-KR';
         utter.rate = 1.02;
-        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
+        void speakSetupMonsterTts(utter.text);
       }
     } catch {
       /* ignore tts error */
@@ -3450,11 +3455,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(
-          `설정은 완료되었지만 제가 초행길이라 ${effectiveBacktrack}번이나 길을 헤매게 해드려 죄송합니다! 소중한 학습 기회를 주신 보답으로 ${refundCoins} 코인은 받지 않고 백 퍼센트 전액 환불해 드렸습니다. 방금 배운 최단 직행 지름길은 지금 즉시 전 세계 기기에 업데이트해 두겠습니다!`
+          '두 번 이상 길을 헤매게 해드려 죄송합니다. 이번 수리비는 받지 않고 전액 환불해 드렸습니다.'
         );
         utter.lang = 'ko-KR';
         utter.rate = 1.02;
-        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
+        void speakSetupMonsterTts(utter.text);
       }
     } catch {
       /* ignore */
@@ -3561,10 +3566,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(
-          '이전 백업 스냅샷을 불러와 일 초 만에 수리 전 원래 설정 상태로 완벽히 되돌렸습니다.'
+          '수리하기 전 원래 설정 상태로 깔끔하게 되돌렸습니다.'
         );
         utter.lang = 'ko-KR';
-        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
+        void speakSetupMonsterTts(utter.text);
       }
     } catch {
       /* ignore */
@@ -3680,10 +3685,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(
-          `수리가 해결되지 않아 일 초 만에 원래 설정으로 원상복구하고, 에스크로에 홀딩되어 있던 ${refundCoins} 멀린코인을 백 퍼센트 즉시 지갑으로 반환해 드렸습니다. 실패 로그는 본사로 자동 전송되어 스크립트를 보강하겠습니다.`
+          '문제가 해결되지 않아 원래 설정으로 되돌리고 코인을 전액 환불해 드렸습니다.'
         );
         utter.lang = 'ko-KR';
-        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
+        void speakSetupMonsterTts(utter.text);
       }
     } catch {
       /* ignore */
@@ -3787,7 +3792,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           window.speechSynthesis.cancel();
           const utter = new SpeechSynthesisUtterance(nextStep.voiceGuideText);
           utter.lang = 'ko-KR';
-          // window.speechSynthesis.speak(utter); // 성우 기계음 제거
+          void speakSetupMonsterTts(utter.text);
         }
       } catch {
         /* ignore */

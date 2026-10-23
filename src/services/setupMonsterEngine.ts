@@ -812,7 +812,7 @@ function buildSetupDiagnosisPlanBase(
       completionMessage:
         '✅ 해결 완료! 끊어졌던 업무용 폴더(S: 드라이브)를 다시 연결하고 폴더 창을 열어 드렸습니다.',
       voiceTtsSummary:
-        '고난도 삼 단계 복합 수리로 윈도우 레지스트리와 네트워크 권한을 복구하고 업무용 S 드라이브를 다시 연결했습니다.',
+        '끊어졌던 업무용 S 드라이브를 다시 연결하고 폴더 창을 열어 드렸습니다.',
       creditCost: 500,
     };
   }
@@ -856,7 +856,7 @@ function buildSetupDiagnosisPlanBase(
       completionMessage:
         `✅ [Level 3 실물 수리 완료] 내 PC에 상주하던 보안/알림 모듈 ${realPlugins.length}종(${realPlugins.join(', ')})을 은행 접속 시에만 작동하도록 전환 완료했습니다!`,
       voiceTtsSummary:
-        '컴퓨터에 실제로 켜져 있던 보안 프로그램들의 백그라운드 자동실행을 정리했습니다.',
+        '컴퓨터 뒤에서 계속 돌아가던 보안 프로그램들을 은행을 쓸 때만 켜지도록 정리했습니다.',
       creditCost: 500,
     };
   }
@@ -901,7 +901,7 @@ function buildSetupDiagnosisPlanBase(
       completionMessage:
         `✅ [Level 2 실물 점검/수리 완료] 내 PC 프린터(${realPrinters[0] || '기본 프린터'} 외 ${Math.max(0, realPrinters.length - 1)}대)의 인쇄 스풀러 큐 및 포트 상태를 정상화했습니다.`,
       voiceTtsSummary:
-        '프린터 인쇄 스풀러 서비스와 대기열 상태를 점검하여 바로 인쇄할 수 있도록 조치했습니다.',
+        '막혀 있던 프린터 인쇄 대기 목록을 비우고 바로 인쇄가 되도록 다시 연결했습니다.',
       creditCost: 300,
     };
   }
@@ -1089,7 +1089,7 @@ function buildSetupDiagnosisPlanBase(
       completionMessage:
         `✅ [Level 1 실물 진단/처치 완료] 내 PC의 실제 시작프로그램 ${realStartups.length}개 중 필수 앱(KakaoTalk, SensTalk_Engine, GoogleDriveFS 등)은 보호하고 불필요 자동실행 ${nonEssentialStartups.length}종(${nonEssentialStartups.join(', ')})을 식별·정리했습니다.`,
       voiceTtsSummary:
-        '내 컴퓨터 레지스트리에 실제로 등록된 시작프로그램 중 불필요한 자동실행 항목을 정리했습니다.',
+        '내 컴퓨터 시작프로그램 중 부팅을 느리게 하던 불필요한 항목을 정리했습니다.',
       creditCost: 100,
     };
   }

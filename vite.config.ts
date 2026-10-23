@@ -3057,6 +3057,108 @@ function zeyeLocalBridge(): Plugin {
         res.end(JSON.stringify(out));
       });
 
+      const ttsScriptPath = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_tts_engine.py');
+      const ttsCacheDir = path.resolve(ROOT, 'tts_cache');
+      if (!fs.existsSync(ttsCacheDir)) {
+        fs.mkdirSync(ttsCacheDir, { recursive: true });
+      }
+      const ttsInFlightMap = new Map<string, Promise<any>>();
+
+      // 서버 시작 시 고정 안내 멘트 백그라운드 자동 프리워밍(Pre-warming)
+      exec(`python "${ttsScriptPath}" prewarm`, { encoding: 'utf8', windowsHide: true }, () => {});
+
+      server.middlewares.use('/__setup-monster/tts-audio', (req, res) => {
+        const u = new URL(req.url || '', 'http://localhost');
+        const hash = String(u.searchParams.get('hash') || '').replace(/[^a-f0-9]/gi, '');
+        const mp3Path = path.resolve(ttsCacheDir, `${hash}.mp3`);
+        if (!hash || !fs.existsSync(mp3Path)) {
+          res.statusCode = 404;
+          res.end('Not found');
+          return;
+        }
+        const stat = fs.statSync(mp3Path);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Content-Length', String(stat.size));
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        fs.createReadStream(mp3Path).pipe(res);
+      });
+
+      server.middlewares.use('/__setup-monster/tts-prewarm', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const voice = String(body?.voice || 'ko-KR-InJoonNeural');
+        const rate = String(body?.rate || '+5%');
+        exec(
+          `python "${ttsScriptPath}" prewarm "${voice}" "${rate}"`,
+          { encoding: 'utf8', windowsHide: true },
+          () => {}
+        );
+        res.end(JSON.stringify({ ok: true, status: 'PREWARM_QUEUED', voice, rate }));
+      });
+
+      server.middlewares.use('/__setup-monster/tts', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const t0 = performance.now();
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const rawText = String(body?.text || '').trim().replace(/\s+/g, ' ');
+        const voice =
+          body?.voice === 'ko-KR-HyunsuNeural' ? 'ko-KR-HyunsuNeural' : 'ko-KR-InJoonNeural';
+        const rate = String(body?.rate || '+5%');
+        if (!rawText) {
+          res.end(JSON.stringify({ ok: false, error: 'EMPTY_TEXT' }));
+          return;
+        }
+        const hash = crypto
+          .createHash('sha256')
+          .update(`${voice}|${rate}|${rawText}`, 'utf8')
+          .digest('hex')
+          .slice(0, 24);
+        const mp3Path = path.resolve(ttsCacheDir, `${hash}.mp3`);
+
+        // ① [Cache Hit — 이미 캐싱된 문장]: 네트워크/프로세스 호출 없이 0.01초 즉시 반환
+        if (fs.existsSync(mp3Path) && fs.statSync(mp3Path).size > 256) {
+          const elapsedMs = Math.round((performance.now() - t0) * 100) / 100;
+          res.end(
+            JSON.stringify({
+              ok: true,
+              cacheStatus: 'HIT',
+              hash,
+              voice,
+              rate,
+              text: rawText,
+              audioUrl: `/__setup-monster/tts-audio?hash=${hash}`,
+              fileSize: fs.statSync(mp3Path).size,
+              elapsedMs,
+            })
+          );
+          return;
+        }
+
+        // ② [Cache Miss — Write-Through 캐싱 큐에서 실시간 합성 및 저장]
+        let job = ttsInFlightMap.get(hash);
+        if (!job) {
+          job = new Promise<any>((resolve) => {
+            const escapedText = rawText.replace(/"/g, '\\"');
+            exec(
+              `python "${ttsScriptPath}" speak "${escapedText}" "${voice}" "${rate}"`,
+              { encoding: 'utf8', windowsHide: true },
+              (_err, stdout) => {
+                try {
+                  resolve(JSON.parse((stdout || '').trim()));
+                } catch {
+                  resolve({ ok: false, cacheStatus: 'ERROR' });
+                }
+              }
+            );
+          }).finally(() => {
+            ttsInFlightMap.delete(hash);
+          });
+          ttsInFlightMap.set(hash, job);
+        }
+        const out = await job;
+        res.end(JSON.stringify(out));
+      });
+
       server.middlewares.use('/__zcore/os-execute', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
