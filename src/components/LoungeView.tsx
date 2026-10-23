@@ -329,6 +329,7 @@ export const LoungeView: React.FC = () => {
     restoreFromQuarantine,
     openLocalFolder,
     isStoreAppMode,
+    setShowProModal,
   } = useSaySeeStore();
 
   const [studentPokedHost, setStudentPokedHost] = useState(false);
@@ -450,6 +451,36 @@ export const LoungeView: React.FC = () => {
 
   return (
     <main className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5">
+      {/* 📢 전사 공통 핵심 선언 배너: 혼자 쓰면 평생 100% 무료 + 선착순 100명 [10년 방장 마스터권] */}
+      {!isStoreAppMode && (
+        <section className="p-4 md:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-teal-950/85 to-zinc-950 border-2 border-emerald-400/60 shadow-[0_0_24px_rgba(16,185,129,0.16)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-black">
+                신용카드 등록 NO · 광고 NO · 개인 평생 0원
+              </span>
+              <p className="font-headline-sm text-[14.5px] md:text-[16px] text-white font-black">
+                📢 &ldquo;혼자 쓰는 AI 투시검색 &amp; 내 기기 정비는 평생 100% 무료입니다!&rdquo;{' '}
+                <span className="text-emerald-300 text-[12.5px] font-bold">
+                  (신용카드 등록 NO, 광고 NO, 혼자 쓰실 분은 평생 그냥 무료로 쓰세요)
+                </span>
+              </p>
+            </div>
+            <p className="font-body-sm text-[12.5px] md:text-[13px] text-amber-200 font-extrabold">
+              🎁 단, 온 가족과 모임 전체의 사진관을 &lsquo;월 구독료 0원&rsquo;으로 10년간 개설할 수 있는{' '}
+              <strong className="underline decoration-amber-300 text-amber-300">[10년 방장 마스터권]</strong>만 선착순 100명에게 제공합니다!
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowProModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer whitespace-nowrap"
+          >
+            🔥 10년 방장 마스터권(5단계 특판) 보기 →
+          </button>
+        </section>
+      )}
+
       {/* ─────────────── 👤 개인 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(전체 모수 vs 무료체험 범위 + 시작/완료 버튼) ➔ 3단(브리핑 결과 & 정리➔원복 안전 체험) ─────────────── */}
       {activeLoungeType === 'personal' && (
         <>
@@ -1968,6 +1999,28 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [docs, setDocs] = useState<WorkLoungeDocItem[]>(INITIAL_WORK_DOCS);
   const [selectedDocId, setSelectedDocId] = useState<string>('work-doc-1');
   const [isSidePeekOpen, setIsSidePeekOpen] = useState<boolean>(false);
+  const [showBackupManager, setShowBackupManager] = useState<boolean>(false);
+  const [masterWorkPcName, setMasterWorkPcName] = useState<string>('사무실 메인 공용 PC (S: 드라이브)');
+  const [backupPcNodes, setBackupPcNodes] = useState<
+    Array<{ id: string; name: string; mirrorPath: string; status: string; active: boolean }>
+  >([
+    {
+      id: 'backup-1',
+      name: '대표님 집 데스크탑 (백업 1호)',
+      mirrorPath: 'D:\\Z-Eye_업무백업_원본미러',
+      status: '✓ 원본 100% 실시간 동기화됨',
+      active: true,
+    },
+    {
+      id: 'backup-2',
+      name: '정실장 재무회계 PC (백업 2호)',
+      mirrorPath: 'E:\\Z-Eye_안전백업_금고',
+      status: '✓ 원본 100% 실시간 동기화됨',
+      active: true,
+    },
+  ]);
+  const [newBackupPcName, setNewBackupPcName] = useState<string>('');
+  const [newBackupPcPath, setNewBackupPcPath] = useState<string>('D:\\Z-Eye_추가백업_폴더');
 
   const workPlan = subscribedLounges.work;
   const [folderCounts, setFolderCounts] = useState<Record<string, number>>({
@@ -2158,10 +2211,153 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </span>
           </div>
 
-          <span className="text-[12px] text-zinc-400">
-            💡 내 컴퓨터 <strong className="text-zinc-200">[탐색기 ➔ S: 드라이브]</strong>에 파일을 넣으면 자동으로 동기화됩니다
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowBackupManager((v) => !v)}
+              className="px-3 py-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+            >
+              <span>🛡️ 공용 S: PC 1대 + 백업 PC ({backupPcNodes.filter((b) => b.active).length}대 가동 중)</span>
+              <span>{showBackupManager ? '▴' : '▾'}</span>
+            </button>
+            <span className="text-[12px] text-zinc-400">
+              💡 내 컴퓨터 <strong className="text-zinc-200">[탐색기 ➔ S: 드라이브]</strong>에 파일을 넣으면 자동으로 동기화·백업됩니다
+            </span>
+          </div>
         </div>
+
+        {/* 🛡️ 방장(대표) 전용: 공용 업무 PC(S: 1대) 지정 & 다중 백업 PC 실시간 원본 미러링 관리 패널 */}
+        {showBackupManager && (
+          <div className="p-4 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-col gap-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-headline-sm text-[14.5px] text-white font-extrabold">
+                  🛡️ 클라우드 불신 제로! 공용 업무 PC(S: 드라이브 1대) + 다중 백업 PC 실시간 미러링
+                </span>
+                <span className="text-[12px] text-zinc-300">
+                  방장이 <strong>공용 업무 PC 1대(S: 드라이브)</strong>를 정하고, <strong>백업 PC를 원하는 만큼 여러 대 지정</strong>하면 각 백업 PC의 별도 지정 폴더에 항상 원본과 100% 동일하게 실시간 복제됩니다.
+                </span>
+              </div>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                ✓ 30KB 본문 요약 선행 캐시 + 다중 PC 원본 미러링
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              {/* 1) 공용 업무 PC (S: 드라이브 1대) */}
+              <div className="p-3.5 rounded-xl bg-zinc-950 border border-cyan-400/45 flex flex-col justify-between gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 rounded bg-cyan-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
+                    👑 메인 공용 업무 PC (1대)
+                  </span>
+                  <span className="text-[11px] text-cyan-300 font-mono font-bold">S:\ 마운트 마스터</span>
+                </div>
+                <div className="font-headline-sm text-[14px] text-white font-bold">
+                  {masterWorkPcName}
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  원본 경로: <code className="text-zinc-200">{driveTargetPath}</code> (전 직원 탐색기 S: 드라이브 직결)
+                </p>
+                <div className="flex items-center gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMasterWorkPcName((prev) =>
+                        prev.includes('사무실')
+                          ? '대표님 메인 워크스테이션 (S: 드라이브)'
+                          : '사무실 메인 공용 PC (S: 드라이브)'
+                      )
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-cyan-300 text-[11px] font-bold cursor-pointer"
+                  >
+                    🔄 공용 업무 PC 변경 지정
+                  </button>
+                </div>
+              </div>
+
+              {/* 2) 다중 백업 PC 목록 (여러 대 마음대로 지정) */}
+              <div className="lg:col-span-2 p-3.5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col justify-between gap-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-label-sm text-[12px] text-emerald-300 font-extrabold">
+                    💾 실시간 원본 백업 PC 목록 ({backupPcNodes.length}대 지정됨 · 대수 제한 없음)
+                  </span>
+                  <span className="text-[11px] text-zinc-400">
+                    각 백업 PC의 별도 지정 폴더에 S: 드라이브 원본이 1:1 실시간 복제됩니다
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {backupPcNodes.map((node) => (
+                    <div
+                      key={node.id}
+                      className="p-2.5 rounded-lg bg-zinc-900 border border-emerald-400/30 flex items-center justify-between gap-2"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[12px] text-white font-bold truncate">
+                          🖥️ {node.name}
+                        </span>
+                        <span className="text-[10.5px] text-zinc-400 font-mono truncate">
+                          백업 경로: {node.mirrorPath}
+                        </span>
+                        <span className="text-[10.5px] text-emerald-300 font-bold">
+                          {node.status}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBackupPcNodes((prev) => prev.filter((item) => item.id !== node.id))
+                        }
+                        className="px-2 py-1 rounded bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[10.5px] font-bold shrink-0 cursor-pointer"
+                      >
+                        해제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 새 백업 PC 추가 지정 폼 */}
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/10">
+                  <input
+                    type="text"
+                    value={newBackupPcName}
+                    onChange={(e) => setNewBackupPcName(e.target.value)}
+                    placeholder="추가할 백업 PC 이름 (예: 김이사 노트북)"
+                    className="flex-1 min-w-[160px] px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[11.5px]"
+                  />
+                  <input
+                    type="text"
+                    value={newBackupPcPath}
+                    onChange={(e) => setNewBackupPcPath(e.target.value)}
+                    placeholder="백업 저장 폴더 경로 (예: D:\Z-Eye_원본백업)"
+                    className="flex-1 min-w-[180px] px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[11.5px] font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const name = newBackupPcName.trim() || `추가 백업 PC ${backupPcNodes.length + 1}호`;
+                      const path = newBackupPcPath.trim() || 'D:\\Z-Eye_추가백업_폴더';
+                      setBackupPcNodes((prev) => [
+                        ...prev,
+                        {
+                          id: `backup-${Date.now()}`,
+                          name,
+                          mirrorPath: path,
+                          status: '✓ 원본 100% 실시간 동기화됨',
+                          active: true,
+                        },
+                      ]);
+                      setNewBackupPcName('');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
+                  >
+                    + 백업 PC 추가 지정
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 노션형 깔끔한 검색창 + 예시 검색어 칩 */}
         <div className="flex flex-col gap-2">
