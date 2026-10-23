@@ -245,8 +245,30 @@ export const SetupMonsterContent: React.FC = () => {
   const [forensicQuery, setForensicQuery] = useState('계약서');
   const [forensicResult, setForensicResult] = useState<RealForensicScanResult | null>(null);
   const [loadingForensic, setLoadingForensic] = useState(false);
-  const [overlayStatusMsg, setOverlayStatusMsg] = useState<string>('');
-  const [buttonGuideStep, setButtonGuideStep] = useState<0 | 1 | 2>(0);
+  const [overlayStatusMsg, setOverlayStatusMsg] = useState<string>(
+    '👇 [2단계 시작] 화면이 아래로 자동 이동했습니다! 노란 테두리와 화살표가 가리키는 [💽 업무 라운지 S: 드라이브 복합 복구] 버튼 하나만 먼저 눌러보세요!'
+  );
+  const [buttonGuideStep, setButtonGuideStep] = useState<0 | 1 | 2 | 3 | 4 | 5 | 6>(3);
+
+  useEffect(() => {
+    const targetIdMap: Record<number, string> = {
+      1: 'zcore-target-btn-scan',
+      2: 'zcore-target-btn-open-0',
+      3: 'zcore-step2-chip-sdrive',
+      4: 'zcore-step2-triage-skip',
+      5: 'zcore-step2-execute-btn',
+      6: 'zcore-step2-undo-btn',
+    };
+    const tid = targetIdMap[buttonGuideStep];
+    if (!tid) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(tid);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [buttonGuideStep, setupChatTurns.length]);
 
   const handleRefreshRealPcState = async () => {
     setLoadingRealPc(true);
@@ -472,13 +494,26 @@ export const SetupMonsterContent: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {hasEnoughCoins ? (
-                <button
-                  type="button"
-                  onClick={() => approveAndExecuteSetupPlan(plan, 0)}
-                  className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-[0_0_20px_rgba(32,247,219,0.25)] cursor-pointer"
-                >
-                  ⚡ 바로 해결하기 ({requiredCoins} 코인)
-                </button>
+                <div className="relative inline-flex">
+                  {buttonGuideStep === 5 && (
+                    <div className="absolute -top-12 left-0 z-50 whitespace-nowrap px-3.5 py-1.5 rounded-xl bg-rose-600 border-2 border-yellow-300 text-white font-label-sm text-[12px] font-extrabold shadow-[0_8px_25px_rgba(225,29,72,0.9)] animate-bounce">
+                      👇 [지금 누를 버튼] 여기 [⚡ 바로 해결하기]를 클릭하세요!
+                    </div>
+                  )}
+                  <button
+                    id="zcore-step2-execute-btn"
+                    type="button"
+                    onClick={() => {
+                      if (buttonGuideStep === 5) setButtonGuideStep(6);
+                      void approveAndExecuteSetupPlan(plan, 0);
+                    }}
+                    className={`px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-[0_0_20px_rgba(32,247,219,0.25)] cursor-pointer ${
+                      buttonGuideStep === 5 ? 'ring-4 ring-yellow-300 shadow-[0_0_25px_rgba(253,224,71,0.95)]' : ''
+                    }`}
+                  >
+                    ⚡ 바로 해결하기 ({requiredCoins} 코인)
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
@@ -892,23 +927,39 @@ export const SetupMonsterContent: React.FC = () => {
       )}
 
       {/* 4. 원클릭 증상 칩 */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 pt-2">
         <span className="font-label-sm text-[12px] text-zinc-400 font-bold">
           💡 자주 찾는 증상 선택 (무료 상담부터 시작)
         </span>
         <div className="flex flex-wrap gap-2">
-          {activeChips.map((chip) => (
-            <button
-              key={chip.id}
-              type="button"
-              onClick={() =>
-                submitSetupMonsterQuery(chip.query, chip.id, chip.platform)
-              }
-              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 hover:border-primary-container text-white font-label-sm text-[12.5px] font-bold transition-all cursor-pointer"
-            >
-              {chip.label}
-            </button>
-          ))}
+          {activeChips.map((chip) => {
+            const isTargetStep2Chip = chip.id === 'pc_work_s_drive';
+            const showChipGuide = buttonGuideStep === 3 && isTargetStep2Chip;
+            return (
+              <div key={chip.id} className="relative inline-flex">
+                {showChipGuide && (
+                  <div className="absolute -top-12 left-0 z-50 whitespace-nowrap px-3.5 py-1.5 rounded-xl bg-rose-600 border-2 border-yellow-300 text-white font-label-sm text-[12px] font-extrabold shadow-[0_8px_25px_rgba(225,29,72,0.9)] animate-bounce">
+                    👇 [지금 누를 버튼] 여기 [💽 업무 라운지 S: 드라이브 복합 복구]를 클릭하세요!
+                  </div>
+                )}
+                <button
+                  id={isTargetStep2Chip ? 'zcore-step2-chip-sdrive' : undefined}
+                  type="button"
+                  onClick={() => {
+                    if (buttonGuideStep === 3 && isTargetStep2Chip) {
+                      setButtonGuideStep(4);
+                    }
+                    submitSetupMonsterQuery(chip.query, chip.id, chip.platform);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 hover:border-primary-container text-white font-label-sm text-[12.5px] font-bold transition-all cursor-pointer ${
+                    showChipGuide ? 'ring-4 ring-yellow-300 bg-rose-950/80 border-yellow-300 shadow-[0_0_25px_rgba(253,224,71,0.95)]' : ''
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -969,20 +1020,33 @@ export const SetupMonsterContent: React.FC = () => {
                         💬 {opt.label}
                       </button>
                     ))}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        answerSetupPreTriage(
-                          q.questionId,
-                          q.symptomQuery,
-                          q.presetId,
-                          true
-                        )
-                      }
-                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
-                    >
-                      ⚡ 바로 해결 방법 보기
-                    </button>
+                    <div className="relative inline-flex">
+                      {buttonGuideStep === 4 && !turn.triageAnswered && (
+                        <div className="absolute -top-12 left-0 z-50 whitespace-nowrap px-3.5 py-1.5 rounded-xl bg-rose-600 border-2 border-yellow-300 text-white font-label-sm text-[12px] font-extrabold shadow-[0_8px_25px_rgba(225,29,72,0.9)] animate-bounce">
+                          👇 [지금 누를 버튼] 여기 [⚡ 바로 해결 방법 보기]를 클릭하세요!
+                        </div>
+                      )}
+                      <button
+                        id={!turn.triageAnswered ? 'zcore-step2-triage-skip' : undefined}
+                        type="button"
+                        onClick={() => {
+                          if (buttonGuideStep === 4) setButtonGuideStep(5);
+                          void answerSetupPreTriage(
+                            q.questionId,
+                            q.symptomQuery,
+                            q.presetId,
+                            true
+                          );
+                        }}
+                        className={`px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer ${
+                          buttonGuideStep === 4 && !turn.triageAnswered
+                            ? 'ring-4 ring-yellow-300 bg-rose-950/80 text-white shadow-[0_0_25px_rgba(253,224,71,0.95)]'
+                            : ''
+                        }`}
+                      >
+                        ⚡ 바로 해결 방법 보기
+                      </button>
+                    </div>
                   </div>
                   {turn.triageAnswered && (
                     <span className="font-label-sm text-[11px] text-emerald-300 font-bold">
@@ -1061,18 +1125,33 @@ export const SetupMonsterContent: React.FC = () => {
                         : `👎 아직 해결 안 됨 (원상복구 + 100% 환불)`}
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => undoSetupMonsterRepair(turn.auditId)}
-                      disabled={turn.undone}
-                      className={`px-3 py-2 rounded-xl font-label-sm text-[11.5px] font-extrabold cursor-pointer ${
-                        turn.undone
-                          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                          : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 shadow'
-                      }`}
-                    >
-                      {turn.undone ? '✓ 원래대로 복구됨' : '↩️ 원래 설정으로 되돌리기'}
-                    </button>
+                    <div className="relative inline-flex">
+                      {buttonGuideStep === 6 && !turn.undone && (
+                        <div className="absolute -top-12 right-0 z-50 whitespace-nowrap px-3.5 py-1.5 rounded-xl bg-rose-600 border-2 border-yellow-300 text-white font-label-sm text-[12px] font-extrabold shadow-[0_8px_25px_rgba(225,29,72,0.9)] animate-bounce">
+                          👇 [지금 누를 버튼] 여기 [↩️ 원래 설정으로 되돌리기]를 클릭하세요!
+                        </div>
+                      )}
+                      <button
+                        id={!turn.undone ? 'zcore-step2-undo-btn' : undefined}
+                        type="button"
+                        onClick={() => {
+                          if (buttonGuideStep === 6) setButtonGuideStep(0);
+                          void undoSetupMonsterRepair(turn.auditId);
+                        }}
+                        disabled={turn.undone}
+                        className={`px-3 py-2 rounded-xl font-label-sm text-[11.5px] font-extrabold cursor-pointer ${
+                          turn.undone
+                            ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                            : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 shadow'
+                        } ${
+                          buttonGuideStep === 6 && !turn.undone
+                            ? 'ring-4 ring-white shadow-[0_0_25px_rgba(253,224,71,0.95)]'
+                            : ''
+                        }`}
+                      >
+                        {turn.undone ? '✓ 원래대로 복구됨' : '↩️ 원래 설정으로 되돌리기'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
