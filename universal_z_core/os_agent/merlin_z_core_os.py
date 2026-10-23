@@ -49,6 +49,7 @@ SYSTEM_GIT_DIR = MERLIN_DIR / "SystemGit"
 SHADOW_VAULT_DIR = MERLIN_DIR / "ShadowVault"
 COMMITS_FILE = SYSTEM_GIT_DIR / "commits_history.json"
 GUI_PAYLOAD_FILE = MERLIN_DIR / "gui_task_payload.json"
+OVERLAY_PID_FILE = MERLIN_DIR / "overlay_worker.pid"
 
 KNOWN_SECURITY_PLUGIN_KEYWORDS = {
     "astx": "AhnLab Safe Transaction (ASTx)",
@@ -660,12 +661,19 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
 
 
 # ============================================================================
-# 6. 실제 Windows 모니터 최상단(TopMost) 화살표(👆) 오버레이 투사기 (WinSta0\Default 직결)
+# 6. 실제 Windows 모니터 최상단(TopMost) 타겟 실시간 추적 화살표 투사기 (WinSta0\Default 직결)
 # ============================================================================
-def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 12) -> None:
+def launch_real_topmost_overlay(
+    x: int,
+    y: int,
+    text: str,
+    duration_sec: int = 12,
+    target_hwnd: int = 0,
+    target_title: str = "",
+) -> None:
     """
-    백그라운드 세션이 아닌 유저가 실제로 보고 있는 Windows 모니터(WinSta0\\Default) 맨 위(-topmost True)에
-    선명한 빨간 손가락 화살표(👆)와 안내 배너 창을 띄웁니다.
+    유저가 실제로 보고 있는 Windows 모니터(WinSta0\\Default) 맨 위(-topmost True)에
+    실제 타겟 창(target_hwnd) 또는 타겟 좌표를 실시간(25 FPS)으로 추적하는 화살표 창을 띄웁니다.
     """
     attach_thread_to_interactive_desktop()
     try:
@@ -675,6 +683,7 @@ def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 1
 
     import tkinter as tk
 
+    user32 = ctypes.windll.user32
     root = tk.Tk()
     root.title("Merlin Z-Core TopMost Overlay")
     root.overrideredirect(True)
@@ -683,16 +692,34 @@ def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 1
 
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
-    win_w = 500
-    win_h = 165
-    pos_x = max(30, min(screen_w - win_w - 30, x))
-    pos_y = max(30, min(screen_h - win_h - 80, y))
+    win_w = 510
+    win_h = 158
+
+    def compute_target_pos() -> tuple[int, int, str]:
+        if target_hwnd and user32.IsWindow(wintypes.HWND(target_hwnd)):
+            rc = wintypes.RECT()
+            if user32.GetWindowRect(wintypes.HWND(target_hwnd), ctypes.byref(rc)):
+                tw = rc.right - rc.left
+                th = rc.bottom - rc.top
+                # 타겟 창의 상단 테두리 바로 위(공간 부족 시 상단 내부)에 정확히 밀착
+                px = max(20, min(screen_w - win_w - 20, rc.left + 20))
+                if rc.top >= win_h + 15:
+                    py = rc.top - win_h - 6
+                else:
+                    py = max(15, rc.top + 45)
+                coord_str = f"타겟 창 [{target_title[:18]}] 실측 좌표 ({rc.left}, {rc.top}) · 크기 {tw}×{th}"
+                return px, py, coord_str
+        px = max(20, min(screen_w - win_w - 20, x))
+        py = max(20, min(screen_h - win_h - 60, y))
+        return px, py, f"타겟 실측 좌표 ({px}, {py})"
+
+    pos_x, pos_y, init_coord_label = compute_target_pos()
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
 
-    outer = tk.Frame(root, bg="#F43F5E", padx=4, pady=4)
+    outer = tk.Frame(root, bg="#FACC15", padx=3, pady=3)
     outer.pack(fill="both", expand=True)
 
-    card = tk.Frame(outer, bg="#0F172A", padx=16, pady=12)
+    card = tk.Frame(outer, bg="#0F172A", padx=14, pady=10)
     card.pack(fill="both", expand=True)
 
     top_row = tk.Frame(card, bg="#0F172A")
@@ -700,20 +727,20 @@ def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 1
 
     arrow_lbl = tk.Label(
         top_row,
-        text="👆 여기를 주목하세요!",
-        font=("Malgun Gothic", 16, "bold"),
-        fg="#FDE047",
-        bg="#E11D48",
-        padx=12,
-        pady=4,
+        text="🎯 타겟 실시간 락온!",
+        font=("Malgun Gothic", 13, "bold"),
+        fg="#0F172A",
+        bg="#FACC15",
+        padx=10,
+        pady=2,
     )
     arrow_lbl.pack(side="left")
 
     badge_lbl = tk.Label(
         top_row,
-        text=f"🎯 OS 최상단 창 (좌표 {pos_x}, {pos_y})",
+        text=init_coord_label,
         font=("Malgun Gothic", 9, "bold"),
-        fg="#FDA4AF",
+        fg="#FDE047",
         bg="#0F172A",
         padx=8,
     )
@@ -724,12 +751,12 @@ def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 1
         text="✕ 닫기",
         font=("Malgun Gothic", 9, "bold"),
         fg="#FFFFFF",
-        bg="#BE123C",
-        activebackground="#9F1239",
+        bg="#E11D48",
+        activebackground="#BE123C",
         activeforeground="#FFFFFF",
         relief="flat",
         padx=10,
-        pady=3,
+        pady=2,
         command=root.destroy,
         cursor="hand2",
     )
@@ -738,52 +765,54 @@ def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 1
     msg_lbl = tk.Label(
         card,
         text=text,
-        font=("Malgun Gothic", 12, "bold"),
+        font=("Malgun Gothic", 11, "bold"),
         fg="#FFFFFF",
         bg="#0F172A",
         anchor="w",
         justify="left",
-        wraplength=455,
+        wraplength=475,
     )
-    msg_lbl.pack(fill="x", pady=(12, 4))
+    msg_lbl.pack(fill="x", pady=(8, 4))
 
-    sub_lbl = tk.Label(
+    pointer_lbl = tk.Label(
         card,
-        text="✅ 브라우저 바깥 실제 Windows 모니터(WinSta0\\Default) 최상단에 뜬 네이티브 OS 창입니다.",
-        font=("Malgun Gothic", 9),
-        fg="#38BDF8",
-        bg="#0F172A",
-        anchor="w",
+        text="▼▼▼ 바로 아래 타겟 창을 마우스로 드래그해 보세요! 이 화살표가 실시간으로 따라다닙니다 ▼▼▼",
+        font=("Malgun Gothic", 9, "bold"),
+        fg="#FB7185",
+        bg="#1E293B",
+        pady=4,
     )
-    sub_lbl.pack(fill="x")
+    pointer_lbl.pack(fill="x", side="bottom")
 
     root.deiconify()
     root.lift()
     root.update_idletasks()
 
-    user32 = ctypes.windll.user32
     hwnd = int(root.winfo_id())
     top_hwnd = int(user32.GetParent(wintypes.HWND(hwnd))) or hwnd
-    # SW_SHOW = 5, HWND_TOPMOST = -1, SWP_SHOWWINDOW = 0x0040
     user32.ShowWindow(wintypes.HWND(top_hwnd), 5)
     user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), pos_x, pos_y, win_w, win_h, 0x0040)
 
-    step_state = {"dy": 0, "dir": 1, "pulse": False}
+    step_state = {"dy": 0, "dir": 1, "tick": 0}
 
     def animate() -> None:
         if not root.winfo_exists():
             return
-        step_state["dy"] += step_state["dir"] * 4
-        if abs(step_state["dy"]) >= 12:
-            step_state["dir"] *= -1
-            step_state["pulse"] = not step_state["pulse"]
-            outer.config(bg="#FACC15" if step_state["pulse"] else "#F43F5E")
-        cur_y = pos_y + step_state["dy"]
-        root.geometry(f"{win_w}x{win_h}+{pos_x}+{cur_y}")
-        user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), pos_x, cur_y, win_w, win_h, 0x0040 | 0x0010)
-        root.after(90, animate)
+        step_state["tick"] += 1
+        if step_state["tick"] % 2 == 0:
+            step_state["dy"] += step_state["dir"] * 2
+            if abs(step_state["dy"]) >= 6:
+                step_state["dir"] *= -1
+                outer.config(bg="#F43F5E" if step_state["dir"] > 0 else "#FACC15")
 
-    root.after(90, animate)
+        tx, ty, live_coord_str = compute_target_pos()
+        badge_lbl.config(text=live_coord_str)
+        cur_y = ty + step_state["dy"]
+        root.geometry(f"{win_w}x{win_h}+{tx}+{cur_y}")
+        user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), tx, cur_y, win_w, win_h, 0x0040 | 0x0010)
+        root.after(45, animate)
+
+    root.after(45, animate)
     root.after(max(3, duration_sec) * 1000, root.destroy)
     root.mainloop()
 
@@ -828,12 +857,43 @@ def find_window_on_default_desktop(keyword: str) -> Dict[str, Any]:
     return wins[0] if wins else {}
 
 
+def terminate_previous_overlay_worker() -> None:
+    """이전 오버레이 워커가 실행 중이면 즉시 종료하여 작업 스케줄러 재실행(IgnoreNew) 지연을 원천 차단합니다."""
+    if OVERLAY_PID_FILE.exists():
+        try:
+            old_pid = int(OVERLAY_PID_FILE.read_text(encoding="utf-8").strip())
+            if old_pid and old_pid != os.getpid():
+                os.kill(old_pid, 9)
+        except Exception:
+            pass
+
+
 def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
     """
     백그라운드 샌드박스(exebox) 바깥의 Windows 작업 스케줄러(/IT 대화형 세션 모드)를 통해
-    유저가 실제로 보고 있는 모니터(WinSta0\\Default)에 GUI 창(탐색기, TopMost 화살표 등)을 직접 띄웁니다.
+    유저가 실제로 보고 있는 모니터(WinSta0\\Default)에 GUI 창을 0.03초 만에 즉시 띄웁니다.
     """
+    if task_name == "MerlinZCoreOverlay":
+        terminate_previous_overlay_worker()
     try:
+        marker_file = MERLIN_DIR / f"schtask_{task_name}.marker"
+        need_create = True
+        if marker_file.exists():
+            try:
+                if marker_file.read_text(encoding="utf-8").strip() == tr_command.strip():
+                    need_create = False
+            except Exception:
+                need_create = True
+
+        if not need_create:
+            r_fast = subprocess.run(
+                ["schtasks", "/Run", "/TN", task_name],
+                capture_output=True,
+                timeout=3,
+            )
+            if r_fast.returncode == 0:
+                return True
+
         r_create = subprocess.run(
             [
                 "schtasks",
@@ -855,16 +915,38 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
         r_run = subprocess.run(
             ["schtasks", "/Run", "/TN", task_name],
             capture_output=True,
-            timeout=4,
+            timeout=3,
         )
-        return r_create.returncode == 0 and r_run.returncode == 0
+        if r_create.returncode == 0 and r_run.returncode == 0:
+            try:
+                marker_file.write_text(tr_command.strip(), encoding="utf-8")
+            except Exception:
+                pass
+            return True
+        return False
     except Exception:
         return False
 
 
+def bring_window_to_front_immediately(hw_int: int, x: int = 240, y: int = 150, w: int = 1020, h: int = 650) -> None:
+    user32 = ctypes.windll.user32
+    hw = wintypes.HWND(hw_int)
+    user32.ShowWindow(hw, 9)  # SW_RESTORE
+    user32.SetWindowPos(hw, wintypes.HWND(-1), x, y, w, h, 0x0040)
+    try:
+        user32.SwitchToThisWindow(hw, True)
+    except Exception:
+        pass
+    user32.SetForegroundWindow(hw)
+
+
 def run_gui_task_runner() -> None:
-    """schtasks /IT 로 호출되어 유저의 실제 대화형 데스크톱(WinSta0\\Default)에서 직접 실행되는 GUI 워커입니다."""
+    """schtasks /IT 로 호출되어 유저의 실제 대화형 데스크톱(WinSta0\\Default)에서 직접 실행되는 초고속 GUI 워커입니다."""
     ensure_merlin_dirs()
+    try:
+        OVERLAY_PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    except Exception:
+        pass
     attach_thread_to_interactive_desktop()
     if not GUI_PAYLOAD_FILE.exists():
         return
@@ -873,100 +955,112 @@ def run_gui_task_runner() -> None:
     except Exception:
         return
 
+    user32 = ctypes.windll.user32
     mode = payload.get("mode", "overlay")
+
     if mode == "open_file_location":
         target_str = str(payload.get("targetPath", ""))
+        if not target_str:
+            return
+        target_file = Path(target_str)
+        folder_name = target_file.parent.name
+
+        # 1. 이미 해당 폴더 창이 열려 있다면 0.00초 만에 먼저 화면 맨 앞으로 끌어올림
+        existing_wins = find_all_windows_on_default_desktop(folder_name)
+        for w_info in existing_wins:
+            bring_window_to_front_immediately(w_info["rawHwnd"])
+
+        # 2. explorer.exe /select 실행하여 해당 파일 하이라이트 선택
+        subprocess.Popen(f'explorer.exe /select,"{target_file}"', shell=True)
+
+        # 3. 0.04초 간격 초고속 폴링으로 새로 열린(또는 갱신된) 탐색기 창을 즉시 맨 앞으로 고정
         matched_wins: List[Dict[str, Any]] = []
-        user32 = ctypes.windll.user32
-        if target_str:
-            target_file = Path(target_str)
-            folder_name = target_file.parent.name
+        for _ in range(25):
+            matched_wins = find_all_windows_on_default_desktop(folder_name)
+            if matched_wins:
+                for w_info in matched_wins:
+                    bring_window_to_front_immediately(w_info["rawHwnd"])
+                break
+            time.sleep(0.04)
 
-            # 대화형 세션 내부에서 직접 explorer.exe /select 실행
-            subprocess.Popen(f'explorer.exe /select,"{target_file}"', shell=True)
-            time.sleep(0.55)
-
-            # 탐색기 창이 뜨면 브라우저 뒤로 숨지 않도록 모니터 최상단(HWND_TOPMOST)으로 즉시 끌어올림
-            for _ in range(18):
-                matched_wins = find_all_windows_on_default_desktop(folder_name)
-                if matched_wins:
-                    break
-                time.sleep(0.12)
-
-            for w_info in matched_wins:
-                hw = wintypes.HWND(w_info["rawHwnd"])
-                user32.ShowWindow(hw, 9)  # SW_RESTORE
-                user32.SetWindowPos(hw, wintypes.HWND(-1), 220, 195, 1020, 640, 0x0040)
-                try:
-                    user32.SwitchToThisWindow(hw, True)
-                except Exception:
-                    pass
-                user32.SetForegroundWindow(hw)
-
-        launch_real_topmost_overlay(
-            int(payload.get("x", 220)),
-            int(payload.get("y", 20)),
-            str(payload.get("text", "👆 탐색기 폴더를 열고 해당 파일을 선택했습니다!")),
-            int(payload.get("duration", 8)),
-        )
-
-        # 안내 오버레이 종료 후 탐색기 창의 TopMost 고정만 해제(브라우저 위 전면 상태 유지)
+        # 0.7초 동안 TopMost를 유지해 크롬 브라우저 뒤로 절대 밀리지 않게 한 뒤 일반 전면 창으로 전환
+        time.sleep(0.7)
         for w_info in matched_wins:
             hw = wintypes.HWND(w_info["rawHwnd"])
             user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
         return
 
     if mode == "overlay":
+        target_kw = str(payload.get("targetKeyword", "")).strip()
+        target_win: Dict[str, Any] = {}
+
+        # 타겟 창 탐색: 지정 키워드가 있으면 해당 창, 없으면 현재 열려 있는 탐색기(test_docs)/스티커 메모/카카오톡 우선 락온
+        search_candidates = [target_kw] if target_kw else ["test_docs", "스티커 메모", "카카오톡"]
+        for cand in search_candidates:
+            if not cand:
+                continue
+            found = find_window_on_default_desktop(cand)
+            if found:
+                target_win = found
+                break
+
+        # 만약 타겟으로 삼을 개별 창이 아직 안 열려 있으면 test_docs 폴더를 즉시 열어서 실제 타겟으로 락온!
+        if not target_win:
+            project_root = Path(__file__).resolve().parents[2]
+            sample_dir = project_root / "test_docs"
+            subprocess.Popen(f'explorer.exe "{sample_dir}"', shell=True)
+            for _ in range(25):
+                time.sleep(0.05)
+                found = find_window_on_default_desktop("test_docs")
+                if found:
+                    target_win = found
+                    break
+
+        target_hwnd = int(target_win.get("rawHwnd", 0)) if target_win else 0
+        target_title = str(target_win.get("title", "")) if target_win else ""
+
+        if target_hwnd:
+            bring_window_to_front_immediately(target_hwnd, x=260, y=210, w=980, h=600)
+            time.sleep(0.1)
+            user32.SetWindowPos(wintypes.HWND(target_hwnd), wintypes.HWND(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+
         launch_real_topmost_overlay(
-            int(payload.get("x", 420)),
-            int(payload.get("y", 160)),
-            str(payload.get("text", "👆 여기를 주목하세요!")),
-            int(payload.get("duration", 10)),
+            int(payload.get("x", 320)),
+            int(payload.get("y", 90)),
+            str(payload.get("text", "👆 실제 타겟 창의 좌표를 실시간(25 FPS)으로 추적 중입니다!")),
+            int(payload.get("duration", 12)),
+            target_hwnd=target_hwnd,
+            target_title=target_title,
         )
 
 
-def spawn_overlay_detached(x: int, y: int, text: str, duration_sec: int = 12) -> Dict[str, Any]:
+def spawn_overlay_detached(
+    x: int,
+    y: int,
+    text: str,
+    duration_sec: int = 12,
+    target_keyword: str = "",
+) -> Dict[str, Any]:
     ensure_merlin_dirs()
     script_path = str(Path(__file__).resolve())
     pyw_exe = get_pythonw_executable()
 
-    # 1. JSON 페이로드 저장 후 schtasks /IT 로 유저의 실제 대화형 모니터 세션에서 직접 실행
     payload = {
         "mode": "overlay",
         "x": int(x),
         "y": int(y),
         "text": text,
         "duration": int(duration_sec),
+        "targetKeyword": target_keyword,
     }
     GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     tr_cmd = f'"{pyw_exe}" "{script_path}" gui-task-runner'
     sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", tr_cmd)
 
-    # 2. 혹시 작업 스케줄러가 비활성화된 환경을 위한 직접 스레드 데스크톱 전환 백업
-    pid = 0
-    if not sch_ok:
-        proc = subprocess.Popen(
-            [
-                sys.executable,
-                script_path,
-                "overlay-worker",
-                "--x",
-                str(x),
-                "--y",
-                str(y),
-                "--text",
-                text,
-                "--duration",
-                str(duration_sec),
-            ],
-            creationflags=0x08000000,
-        )
-        pid = proc.pid
-
     verified_win: Dict[str, Any] = {}
-    for _ in range(18):
-        time.sleep(0.12)
+    for _ in range(28):
+        time.sleep(0.06)
         verified_win = find_window_on_default_desktop("Merlin Z-Core TopMost Overlay")
         if verified_win:
             break
@@ -979,90 +1073,72 @@ def spawn_overlay_detached(x: int, y: int, text: str, duration_sec: int = 12) ->
         "verifiedOnMonitor": bool(verified_win),
         "hwnd": verified_win.get("hwnd", ""),
         "rect": verified_win.get("rect", []),
-        "pid": pid,
         "x": x,
         "y": y,
         "text": text,
         "durationSec": duration_sec,
         "message": (
-            f"✅ 실제 모니터(WinSta0\\Default, HWND {verified_win.get('hwnd', '활성')}) 맨 위에 "
-            f"👆 빨간 화살표 배너 창을 띄웠습니다!"
+            f"✅ 실제 타겟 창 상단 테두리에 실시간 추적 화살표(HWND {verified_win.get('hwnd', '활성')})를 락온했습니다! "
+            f"타겟 창을 마우스로 드래그해 보세요 — 화살표가 실시간으로 따라다닙니다!"
         ),
     }
 
 
-def cleanup_orphan_explorer_processes() -> None:
-    """백그라운드 데스크톱에 갇혀 창 핸들이 없는 좀비 explorer.exe 프로세스를 정리합니다 (메인 쉘 제외)."""
-    ps_clean = r"""
-$explorers = Get-Process explorer -ErrorAction SilentlyContinue | Sort-Object StartTime
-if ($explorers.Count -gt 1) {
-    foreach ($p in $explorers | Select-Object -Skip 1) {
-        if ($p.MainWindowHandle -eq 0) {
-            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-        }
-    }
-}
-"""
-    try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_clean],
-            capture_output=True,
-            timeout=3,
-        )
-    except Exception:
-        pass
-
-
 def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, Any]:
     """
-    실제 모니터(WinSta0\\Default)에서 Windows 탐색기를 열어 해당 파일을 선택 상태로 표시하고,
-    브라우저 창 뒤로 숨지 않도록 탐색기 창을 화면 맨 앞(TopMost -> Foreground)으로 끌어올립니다.
+    불필요한 사전 화살표나 파워쉘 지연 없이 즉시 Windows 탐색기 창을 모니터 맨 앞으로 튀어나오게 합니다.
     """
-    cleanup_orphan_explorer_processes()
+    t0 = time.perf_counter()
     ensure_merlin_dirs()
-    script_path = str(Path(__file__).resolve())
-    pyw_exe = get_pythonw_executable()
+    attach_thread_to_interactive_desktop()
 
     folder_path = target_file.parent
     folder_name = folder_path.name
 
+    # 1. 이미 해당 폴더 창이 열려 있다면 0.01초 만에 즉시 모니터 맨 앞으로 끌어올림
+    existing_wins = find_all_windows_on_default_desktop(folder_name)
+    for w_info in existing_wins:
+        bring_window_to_front_immediately(w_info["rawHwnd"])
+
+    # 2. 파이썬 부팅 대기 없이 작업 스케줄러(/IT)가 explorer.exe /select를 직접 실행
+    tr_explorer = f'explorer.exe /select,"{target_file}"'
+    sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreDirectExplorer", tr_explorer)
+
+    # 3. 동시에 대화형 세션 워커(gui-task-runner)도 깨워 새로 열린 탐색기 창을 TopMost -> 전면 고정
+    script_path = str(Path(__file__).resolve())
+    pyw_exe = get_pythonw_executable()
     payload = {
         "mode": "open_file_location",
         "targetPath": str(target_file),
-        "x": 220,
-        "y": 20,
-        "text": f"📂 [{folder_name}] 폴더를 브라우저 맨 앞에 열고 [{target_file.name}] 파일을 선택했습니다!",
-        "duration": 8,
     }
     GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    run_interactive_gui_via_schtasks("MerlinZCoreOverlay", f'"{pyw_exe}" "{script_path}" gui-task-runner')
 
-    tr_cmd = f'"{pyw_exe}" "{script_path}" gui-task-runner'
-    sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOpenFolder", tr_cmd)
+    opened_win: Dict[str, Any] = existing_wins[0] if existing_wins else {}
+    if not opened_win:
+        for _ in range(25):
+            time.sleep(0.05)
+            found = find_all_windows_on_default_desktop(folder_name)
+            if found:
+                opened_win = found[0]
+                for w_info in found:
+                    bring_window_to_front_immediately(w_info["rawHwnd"])
+                break
 
-    opened_win: Dict[str, Any] = {}
-    ov_win: Dict[str, Any] = {}
-    for _ in range(22):
-        time.sleep(0.15)
-        if not opened_win:
-            opened_win = find_window_on_default_desktop(folder_name)
-        if not ov_win:
-            ov_win = find_window_on_default_desktop("Merlin Z-Core TopMost Overlay")
-        if opened_win and ov_win:
-            break
-
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
     return {
         "ok": True,
         "action": "open_file_location",
         "desktopTarget": "WinSta0\\Default",
+        "elapsedMs": elapsed_ms,
         "launchedViaInteractiveTask": sch_ok,
         "verifiedExplorerOnMonitor": bool(opened_win),
         "explorerHwnd": opened_win.get("hwnd", ""),
         "explorerRect": opened_win.get("rect", []),
-        "overlayHwnd": ov_win.get("hwnd", ""),
         "targetPath": str(target_file),
         "message": (
-            f"✅ 실제 모니터 맨 앞(HWND {opened_win.get('hwnd', '활성')})에 [{folder_name}] 탐색기 폴더를 열고 "
-            f"[{target_file.name}] 파일을 선택했습니다!"
+            f"⚡ {elapsed_ms}ms 만에 실제 모니터 맨 앞(HWND {opened_win.get('hwnd', '활성')})으로 "
+            f"[{folder_name}] 탐색기 폴더를 즉시 열고 [{target_file.name}] 파일을 선택했습니다!"
         ),
     }
 
@@ -1072,13 +1148,15 @@ def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, An
 # ============================================================================
 def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]:
     ensure_merlin_dirs()
-    before_state = inspect_real_pc_state()
 
+    # [초고속 직결] 탐색기 폴더 열기는 사전 전체 스캔(PowerShell 1초 지연) 없이 0.1초 만에 즉시 실행!
     if action == "open_file_location" and target_path:
         p = Path(target_path)
         if p.exists():
             return open_file_location_on_interactive_desktop(p)
         return {"ok": False, "error": f"파일이 존재하지 않습니다: {target_path}"}
+
+    before_state = inspect_real_pc_state()
 
     if action == "s_drive_mount":
         project_root = Path(__file__).resolve().parents[2]

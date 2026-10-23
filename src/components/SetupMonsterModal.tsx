@@ -247,8 +247,6 @@ export const SetupMonsterContent: React.FC = () => {
   const [loadingForensic, setLoadingForensic] = useState(false);
   const [overlayStatusMsg, setOverlayStatusMsg] = useState<string>('');
 
-  const [liveFloatingArrow, setLiveFloatingArrow] = useState<string | null>(null);
-
   const handleRefreshRealPcState = async () => {
     setLoadingRealPc(true);
     const data = await fetchRealPcOsInspection();
@@ -265,37 +263,33 @@ export const SetupMonsterContent: React.FC = () => {
   };
 
   const handleLaunchRealOverlay = async () => {
-    setLiveFloatingArrow('👆 [실물 OS 최상단 화살표] 지금 모니터 상단에 뜬 빨간 손가락 배너 창을 확인하세요!');
-    setOverlayStatusMsg('⏳ 실제 모니터(WinSta0\\Default) 맨 위에 네이티브 OS 화살표 창을 띄우는 중...');
+    setOverlayStatusMsg('⏳ 실제 타겟 창을 전면 배치하고 상단 테두리에 실시간 좌표 추적 화살표를 락온하는 중...');
     const res = (await launchRealOsTopmostOverlay({
-      x: 320,
-      y: 90,
-      text: '👆 [Z-코어 실물 OS 오버레이] 브라우저 바깥 실제 모니터(WinSta0\\Default) 맨 위에 뜬 화살표 창입니다!',
+      x: 280,
+      y: 46,
+      text: '🎯 [실제 타겟 창 좌표 락온] 바로 아래 타겟 창을 마우스로 드래그해 보세요! 이 화살표 창이 실시간(25 FPS)으로 좌표를 읽으며 따라다닙니다!',
       durationSec: 12,
     })) as { ok: boolean; hwnd?: string; message?: string };
     if (res.ok) {
       setOverlayStatusMsg(
         res.message ||
-          `✅ 실제 모니터(WinSta0\\Default, HWND ${res.hwnd || '활성'}) 맨 위에 👆 빨간 화살표 창을 띄웠습니다!`
+          `✅ 실제 타겟 창 상단에 실시간 추적 화살표(HWND ${res.hwnd || '활성'})를 락온했습니다! 타겟 창을 마우스로 드래그해 보세요!`
       );
     } else {
       setOverlayStatusMsg('⚠️ 로컬 서버가 실행 중인지 확인해 주세요.');
     }
-    setTimeout(() => setLiveFloatingArrow(null), 10000);
   };
 
   const handleOpenRealFileLocation = async (fullPath: string, fileName: string) => {
-    setLiveFloatingArrow(`👆 [${fileName}] 실제 윈도우 탐색기 폴더를 모니터 맨 앞에 여는 중입니다!`);
-    setOverlayStatusMsg(`⏳ 실제 모니터(WinSta0\\Default) 맨 앞에 [${fileName}] 탐색기 폴더를 여는 중...`);
+    setOverlayStatusMsg(`⚡ [${fileName}] 윈도우 탐색기 폴더를 모니터 맨 앞으로 즉시 여는 중...`);
     const res = await executeRealOsAction('open_file_location', fullPath);
     if (res.ok) {
       setOverlayStatusMsg(
-        res.message || `✅ 실제 모니터 맨 앞에 [${fileName}] 탐색기 폴더를 열고 파일을 선택했습니다!`
+        res.message || `✅ 실제 모니터 맨 앞에 [${fileName}] 탐색기 폴더를 즉시 열고 파일을 선택했습니다!`
       );
     } else {
       setOverlayStatusMsg(`⚠️ 폴더 열기 실패: ${(res as { error?: string }).error || '경로를 확인해 주세요.'}`);
     }
-    setTimeout(() => setLiveFloatingArrow(null), 8000);
   };
 
   useEffect(() => {
@@ -705,7 +699,7 @@ export const SetupMonsterContent: React.FC = () => {
                 onClick={handleLaunchRealOverlay}
                 className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-label-sm text-[11.5px] font-extrabold shadow-md cursor-pointer"
               >
-                👆 내 모니터 맨 위에 진짜 OS 화살표 창 띄우기 (TopMost 실물 테스트)
+                🎯 실제 타겟 창 실시간 추적 화살표 띄우기 (창을 드래그하면 따라다님)
               </button>
               <button
                 type="button"
@@ -717,25 +711,6 @@ export const SetupMonsterContent: React.FC = () => {
               </button>
             </div>
           </div>
-
-          {liveFloatingArrow && (
-            <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[99999] px-6 py-4 rounded-2xl bg-rose-600 border-4 border-yellow-300 text-white shadow-[0_20px_60px_rgba(225,29,72,0.85)] flex items-center gap-4 animate-bounce">
-              <span className="text-[36px] leading-none">👆</span>
-              <div className="flex flex-col">
-                <span className="text-[12.5px] font-extrabold text-yellow-200">
-                  🎯 Z-코어 실시간 모니터 최상단 화살표 투사 중 (WinSta0\Default)
-                </span>
-                <span className="text-[14px] font-extrabold text-white">{liveFloatingArrow}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLiveFloatingArrow(null)}
-                className="ml-2 px-2.5 py-1 rounded-lg bg-rose-900 hover:bg-rose-800 text-xs font-bold cursor-pointer"
-              >
-                ✕ 닫기
-              </button>
-            </div>
-          )}
 
           {overlayStatusMsg && (
             <div className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 border-2 border-rose-400 text-rose-100 font-body-sm text-[12.5px] font-extrabold shadow">
