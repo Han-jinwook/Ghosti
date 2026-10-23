@@ -2994,7 +2994,7 @@ function zeyeLocalBridge(): Plugin {
           const escapedArgs = args.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(' ');
           exec(
             `python "${zcoreOsScriptPath}" ${escapedArgs}`,
-            { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 },
+            { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, windowsHide: true },
             (err, stdout, stderr) => {
               if (stdout && stdout.trim()) {
                 try {

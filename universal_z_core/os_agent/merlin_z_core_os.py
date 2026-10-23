@@ -304,12 +304,13 @@ $guiProcs = Get-Process | Where-Object { $_.ProcessName -match '^(chrome|msedge|
 """
     try:
         res = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
+            ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="ignore",
             timeout=5,
+            creationflags=0x08000000,
         )
         if res.returncode == 0 and res.stdout.strip():
             data = json.loads(res.stdout.strip())
@@ -885,6 +886,7 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
                 ["schtasks", "/Run", "/TN", task_name],
                 capture_output=True,
                 timeout=3,
+                creationflags=0x08000000,
             )
             if r_fast.returncode == 0:
                 return True
@@ -906,11 +908,13 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
             ],
             capture_output=True,
             timeout=4,
+            creationflags=0x08000000,
         )
         r_run = subprocess.run(
             ["schtasks", "/Run", "/TN", task_name],
             capture_output=True,
             timeout=3,
+            creationflags=0x08000000,
         )
         if r_create.returncode == 0 and r_run.returncode == 0:
             try:
@@ -962,129 +966,27 @@ def bring_window_to_front_immediately(hw_int: int) -> None:
         user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
 
 
-def center_and_find_file_item_rect_in_explorer(
-    hw_int: int,
-    target_file: Path,
-    is_search_mode: bool = False,
-) -> List[int]:
+def scroll_explorer_file_to_center_pure_win32(hw_int: int) -> None:
     """
-    500개 이상 파일이 있는 폴더에서도:
-    1) Shell.Application COM 인터페이스(SelectItem 29) 및 UIA ScrollItemPattern으로 타겟 파일을 즉시 가시화(EnsureVisible)하고,
-    2) 파일이 탐색기 하단 경계(하단 220px 이내)에 걸려 있으면 마우스 휠을 굴려 탐색기 창 정중앙으로 끌어올린 뒤,
-    3) Windows UI Automation으로 해당 파일 아이콘의 정확한 모니터 좌표 [x, y, w, h]를 단일 패스로 반환합니다.
+    PowerShell이나 외부 콘솔 프로세스를 단 1개도 띄우지 않고(파란 창 깜빡임 0%),
+    순수 Win32 ctypes(user32.mouse_event)만으로 탐색기 하단에 걸친 선택 파일을 창 중앙으로 스크롤합니다.
     """
     user32 = ctypes.windll.user32
     hw = wintypes.HWND(hw_int)
     rc = wintypes.RECT()
     user32.GetWindowRect(hw, ctypes.byref(rc))
-    win_left = int(rc.left)
-    win_top = int(rc.top)
     win_cx = int((rc.left + rc.right) // 2)
     win_cy = int((rc.top + rc.bottom) // 2)
-    win_bottom = int(rc.bottom)
 
-    file_name_esc = target_file.name.replace("'", "''")
-    file_stem_esc = target_file.stem.replace("'", "''")
-    do_com_select = "0" if is_search_mode else "1"
-
-    ps_uia = f"""
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class WinWheel {{
-    [DllImport("user32.dll")] public static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
-    [DllImport("user32.dll")] public static extern bool SetThreadDesktop(IntPtr hDesktop);
-    [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT lpPoint);
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
-    [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
-    public struct POINT {{ public int X; public int Y; }}
-    public static void AttachDesktop() {{
-        IntPtr h = OpenInputDesktop(0, false, 0x01FF);
-        if (h != IntPtr.Zero) SetThreadDesktop(h);
-    }}
-    public static void ScrollDownAt(int cx, int cy, int delta) {{
-        POINT pt;
-        GetCursorPos(out pt);
-        SetCursorPos(cx, cy);
-        mouse_event(0x0800, 0, 0, delta, 0);
-        SetCursorPos(pt.X, pt.Y);
-    }}
-}}
-"@
-[WinWheel]::AttachDesktop()
-
-try {{
-    if ({do_com_select} -eq 1) {{
-        $shell = New-Object -ComObject Shell.Application
-        foreach ($w in $shell.Windows()) {{
-            try {{
-                if ([int64]$w.HWND -eq {hw_int}) {{
-                    $doc = $w.Document
-                    $fi = $doc.Folder.ParseName('{file_name_esc}')
-                    if (-not $fi) {{
-                        $fi = $doc.Folder.ParseName('{file_stem_esc}')
-                    }}
-                    if ($fi) {{
-                        $doc.SelectItem($fi, 29)
-                        Start-Sleep -Milliseconds 160
-                    }}
-                }}
-            }} catch {{}}
-        }}
-    }}
-
-    $el = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]{hw_int})
-    if ($el) {{
-        $cond1 = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '{file_name_esc}')
-        $cond2 = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '{file_stem_esc}')
-        $orCond = New-Object System.Windows.Automation.OrCondition($cond1, $cond2)
-        $all = $el.FindAll([System.Windows.Automation.TreeScope]::Descendants, $orCond)
-        $targetItem = $null
-        if ($all -and $all.Count -gt 0) {{
-            foreach ($cand in $all) {{
-                $cr = $cand.Current.BoundingRectangle
-                if ($cr.Width -gt 0 -and $cr.Top -gt ({win_top} + 135) -and $cr.Left -gt ({win_left} + 140)) {{
-                    $targetItem = $cand
-                    break
-                }}
-            }}
-            if (-not $targetItem) {{
-                $targetItem = $all[0]
-            }}
-        }}
-
-        if ($targetItem) {{
-            $r = $targetItem.Current.BoundingRectangle
-            if ({do_com_select} -eq 1 -and $r.Height -gt 0 -and ($r.Bottom -gt ({win_bottom} - 220))) {{
-                [WinWheel]::ScrollDownAt({win_cx}, {win_cy}, -360)
-                Start-Sleep -Milliseconds 220
-                $r = $targetItem.Current.BoundingRectangle
-            }}
-            if ($r.Width -gt 0 -and $r.Height -gt 0) {{
-                Write-Output ("RECT:" + [int]$r.Left + "," + [int]$r.Top + "," + [int]$r.Width + "," + [int]$r.Height)
-            }}
-        }}
-    }}
-}} catch {{}}
-"""
     try:
-        res = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_uia],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            timeout=4.0,
-        )
-        for line in res.stdout.splitlines():
-            if line.startswith("RECT:"):
-                parts = [int(v) for v in line.replace("RECT:", "").split(",")]
-                if len(parts) == 4:
-                    return parts
+        old_pt = wintypes.POINT()
+        user32.GetCursorPos(ctypes.byref(old_pt))
+        user32.SetCursorPos(win_cx, win_cy)
+        # MOUSEEVENTF_WHEEL = 0x0800, -360 (아래로 3칸 스크롤하여 하단 경계에 걸친 선택 항목을 창 정중앙으로 이동)
+        user32.mouse_event(0x0800, 0, 0, -360, 0)
+        user32.SetCursorPos(old_pt.x, old_pt.y)
     except Exception:
         pass
-    return []
 
 
 def run_gui_task_runner() -> None:
@@ -1117,7 +1019,7 @@ def run_gui_task_runner() -> None:
             try:
                 os.startfile(str(target_file))
             except Exception:
-                subprocess.Popen(f'cmd /c start "" "{target_file}"', shell=True)
+                pass
             return
 
         folder_path = target_file.parent
@@ -1132,14 +1034,14 @@ def run_gui_task_runner() -> None:
             except Exception:
                 pass
         if old_same_wins:
-            time.sleep(0.12)
+            time.sleep(0.10)
 
         existing_other_explorers = {
             w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])
         }
 
         if is_search:
-            # Windows 탐색기 검색창에 파일명을 자동 입력(search-ms:)하여 수백 개 파일 중 이 파일 1개만 노란 하이라이트로 단독 표시!
+            # Windows 탐색기 검색창에 파일명을 자동 입력(search-ms:)하여 수백 개 파일 중 이 파일 1개만 노란 하이라이트로 단독 표시! (콘솔 창 0%)
             q_enc = urllib.parse.quote(target_file.stem)
             dname_enc = urllib.parse.quote(f"{folder_name}의 검색 결과")
             loc_enc = urllib.parse.quote(str(folder_path))
@@ -1148,13 +1050,21 @@ def run_gui_task_runner() -> None:
                 f"&crumb=System.Generic.String:{q_enc}"
                 f"&crumb=location:{loc_enc}"
             )
-            subprocess.Popen(f'explorer.exe "{search_uri}"', shell=True)
+            subprocess.Popen(
+                ["explorer.exe", search_uri],
+                shell=False,
+                creationflags=0x08000000,
+            )
         else:
-            subprocess.Popen(f'explorer.exe /select,"{target_file}"', shell=True)
+            subprocess.Popen(
+                ["explorer.exe", f"/select,{target_file}"],
+                shell=False,
+                creationflags=0x08000000,
+            )
 
         primary_win: Dict[str, Any] = {}
         for _ in range(50):
-            time.sleep(0.06)
+            time.sleep(0.05)
             candidates = find_explorer_windows_on_default_desktop(
                 [folder_name, "검색 결과", target_file.stem],
                 exclude_hwnds=existing_other_explorers,
@@ -1173,43 +1083,15 @@ def run_gui_task_runner() -> None:
             return
 
         hw_int = primary_win["rawHwnd"]
-        time.sleep(0.35 if not is_search else 0.55)
+        if not is_search:
+            time.sleep(0.32)
+            scroll_explorer_file_to_center_pure_win32(hw_int)
+        else:
+            time.sleep(0.45)
 
-        item_rect = center_and_find_file_item_rect_in_explorer(
-            hw_int,
-            target_file,
-            is_search_mode=is_search,
-        )
-
-        # 탐색기 창은 크롬 위 전면에 유지하되 TopMost 속성은 해제하여 그 위에 파일 지시 화살표가 자연스럽게 뜨도록 함
+        # 탐색기 창을 크롬 위 전면에 유지하되 일반 창(NOTOPMOST)으로 전환
         hw = wintypes.HWND(hw_int)
         user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
-
-        if item_rect and len(item_rect) == 4:
-            ix, iy, iw, _ih = item_rect
-            arrow_x = ix + min(iw // 2, 130)
-            arrow_y = iy
-        else:
-            rc = wintypes.RECT()
-            user32.GetWindowRect(hw, ctypes.byref(rc))
-            arrow_x = int(rc.left + 290) if is_search else int((rc.left + rc.right) // 2)
-            arrow_y = int(rc.top + 230) if is_search else int((rc.top + rc.bottom) // 2)
-
-        launch_real_topmost_overlay(
-            arrow_x,
-            arrow_y,
-            (
-                f"🔍 [{target_file.name}]\n검색창 필터로 이 파일 1개만 단독 표시했습니다!"
-                if is_search
-                else f"📄 [{target_file.name}]\n폴더 중앙으로 스크롤하여 선택했습니다!"
-            ),
-            duration_sec=10,
-            pointer_label=(
-                "👇 바로 아래 노란색 하이라이트된 파일입니다! 👇"
-                if is_search
-                else "👇 바로 아래 파랗게 선택된 파일입니다! 👇"
-            ),
-        )
         return
 
     if mode == "overlay":
@@ -1313,7 +1195,7 @@ def open_file_location_on_interactive_desktop(
     else:
         msg = (
             f"⚡ {elapsed_ms}ms 만에 현재 모니터 맨 앞으로 [{folder_name}] 탐색기를 열고 "
-            f"[{target_file.name}] 파일을 화면 중앙으로 스크롤하여 👇 화살표로 가리켰습니다!"
+            f"[{target_file.name}] 파일을 화면 중앙으로 스크롤하여 선택했습니다!"
         )
 
     return {
@@ -1349,8 +1231,8 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
         project_root = Path(__file__).resolve().parents[2]
         work_vault = project_root / "업무공유폴더_S"
         work_vault.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["subst", "S:", "/d"], capture_output=True)
-        subprocess.run(["subst", "S:", str(work_vault)], capture_output=True)
+        subprocess.run(["subst", "S:", "/d"], capture_output=True, creationflags=0x08000000)
+        subprocess.run(["subst", "S:", str(work_vault)], capture_output=True, creationflags=0x08000000)
         after_state = inspect_real_pc_state()
         return {
             "ok": True,

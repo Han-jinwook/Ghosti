@@ -287,7 +287,7 @@ export const SetupMonsterContent: React.FC = () => {
     } else if (mode === 'open_file_direct') {
       setOverlayStatusMsg(`📄 [${fileName}] 문서를 연결된 프로그램으로 바로 실행하는 중...`);
     } else {
-      setOverlayStatusMsg(`⚡ [${fileName}] 탐색기 폴더를 열고 중앙 스크롤 + 👇화살표로 파일 위치를 콕 집어주는 중...`);
+      setOverlayStatusMsg(`⚡ [${fileName}] 탐색기 폴더를 열고 선택된 파일을 중앙으로 스크롤하는 중...`);
     }
     const res = await executeRealOsAction(mode, fullPath);
     if (res.ok) {
@@ -883,7 +883,7 @@ export const SetupMonsterContent: React.FC = () => {
                               : ''
                           }`}
                         >
-                          📂 폴더에서 위치 열기 (중앙 스크롤 + 👇화살표)
+                          📂 폴더에서 위치 열기 (중앙 스크롤)
                         </button>
                         <button
                           type="button"
