@@ -1022,29 +1022,6 @@ def filter_explorer_by_search_box_pure_win32(hw_int: int, query_text: str) -> No
     user32.keybd_event(0x0D, 0, 2, 0)
 
 
-def scroll_explorer_file_to_center_pure_win32(hw_int: int) -> None:
-    """
-    PowerShell이나 외부 콘솔 프로세스를 단 1개도 띄우지 않고(파란 창 깜빡임 0%),
-    순수 Win32 ctypes(user32.mouse_event)만으로 탐색기 하단에 걸친 선택 파일을 창 중앙으로 스크롤합니다.
-    """
-    user32 = ctypes.windll.user32
-    hw = wintypes.HWND(hw_int)
-    rc = wintypes.RECT()
-    user32.GetWindowRect(hw, ctypes.byref(rc))
-    win_cx = int((rc.left + rc.right) // 2)
-    win_cy = int((rc.top + rc.bottom) // 2)
-
-    try:
-        old_pt = wintypes.POINT()
-        user32.GetCursorPos(ctypes.byref(old_pt))
-        user32.SetCursorPos(win_cx, win_cy)
-        # MOUSEEVENTF_WHEEL = 0x0800, -360 (아래로 3칸 스크롤하여 하단 경계에 걸친 선택 항목을 창 정중앙으로 이동)
-        user32.mouse_event(0x0800, 0, 0, -360, 0)
-        user32.SetCursorPos(old_pt.x, old_pt.y)
-    except Exception:
-        pass
-
-
 def run_gui_task_runner() -> None:
     """schtasks /IT 로 호출되어 유저의 실제 대화형 데스크톱(WinSta0\\Default)에서 직접 실행되는 초고속 GUI 워커입니다."""
     ensure_merlin_dirs()
@@ -1063,7 +1040,7 @@ def run_gui_task_runner() -> None:
     user32 = ctypes.windll.user32
     mode = payload.get("mode", "overlay")
 
-    if mode in ("open_file_location", "open_file_search", "open_file_direct"):
+    if mode in ("open_file_location", "open_file_search"):
         target_str = str(payload.get("targetPath", ""))
         if not target_str:
             return
@@ -1071,16 +1048,8 @@ def run_gui_task_runner() -> None:
         if not target_file.exists():
             return
 
-        if mode == "open_file_direct":
-            try:
-                os.startfile(str(target_file))
-            except Exception:
-                pass
-            return
-
         folder_path = target_file.parent
         folder_name = folder_path.name
-        is_search = mode == "open_file_search"
 
         # 기존에 같은 폴더나 검색 결과로 열려 있던 탐색기 창이 있으면 먼저 닫아 단일 창만 깔끔하게 표시
         old_same_wins = find_explorer_windows_on_default_desktop([folder_name, "검색 결과", target_file.stem])
@@ -1096,15 +1065,8 @@ def run_gui_task_runner() -> None:
             w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])
         }
 
-        if is_search:
-            # 일반 폴더를 안전하게 연 뒤(스토어 앱 팝업 0%) 탐색기 우측 상단 검색창에 파일명을 자동 입력!
-            os.startfile(str(folder_path))
-        else:
-            subprocess.Popen(
-                ["explorer.exe", f"/select,{target_file}"],
-                shell=False,
-                creationflags=0x08000000,
-            )
+        # 일반 폴더를 안전하게 연 뒤 탐색기 우측 상단 검색창에 파일명을 자동 입력하여 이 파일만 단독 표시! (뒤로가기 시 전체 폴더로 즉시 이동)
+        os.startfile(str(folder_path))
 
         primary_win: Dict[str, Any] = {}
         for _ in range(50):
@@ -1127,13 +1089,9 @@ def run_gui_task_runner() -> None:
             return
 
         hw_int = primary_win["rawHwnd"]
-        if is_search:
-            time.sleep(0.32)
-            filter_explorer_by_search_box_pure_win32(hw_int, target_file.stem)
-            time.sleep(0.25)
-        else:
-            time.sleep(0.32)
-            scroll_explorer_file_to_center_pure_win32(hw_int)
+        time.sleep(0.32)
+        filter_explorer_by_search_box_pure_win32(hw_int, target_file.stem)
+        time.sleep(0.25)
 
         # 탐색기 창을 크롬 위 전면에 유지하되 일반 창(NOTOPMOST)으로 전환
         hw = wintypes.HWND(hw_int)
@@ -1221,28 +1179,19 @@ def open_file_location_on_interactive_desktop(
     sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", f'"{pyw_exe}" "{script_path}" gui-task-runner')
 
     opened_win: Dict[str, Any] = {}
-    if mode != "open_file_direct":
-        time.sleep(0.18)
-        for _ in range(35):
-            time.sleep(0.05)
-            found = find_explorer_windows_on_default_desktop([folder_name, "검색 결과", target_file.stem])
-            if found:
-                opened_win = found[0]
-                break
+    time.sleep(0.18)
+    for _ in range(35):
+        time.sleep(0.05)
+        found = find_explorer_windows_on_default_desktop([folder_name, "검색 결과", target_file.stem])
+        if found:
+            opened_win = found[0]
+            break
 
     elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
-    if mode == "open_file_search":
-        msg = (
-            f"🔍 {elapsed_ms}ms 만에 탐색기 검색창에 [{target_file.stem}]을 자동 입력하여 "
-            f"수백 개 파일 중 [{target_file.name}] 1개만 노란 하이라이트로 단독 표시했습니다!"
-        )
-    elif mode == "open_file_direct":
-        msg = f"📄 {elapsed_ms}ms 만에 [{target_file.name}] 문서를 연결된 프로그램으로 즉시 실행했습니다!"
-    else:
-        msg = (
-            f"⚡ {elapsed_ms}ms 만에 현재 모니터 맨 앞으로 [{folder_name}] 탐색기를 열고 "
-            f"[{target_file.name}] 파일을 화면 중앙으로 스크롤하여 선택했습니다!"
-        )
+    msg = (
+        f"🔍 {elapsed_ms}ms 만에 탐색기 검색창에 [{target_file.stem}]을 자동 입력하여 "
+        f"수백 개 파일 중 [{target_file.name}]만 바로 표시했습니다! (탐색기 좌측 상단 ← 뒤로가기를 누르면 전체 폴더로 이동합니다)"
+    )
 
     return {
         "ok": True,
@@ -1250,7 +1199,7 @@ def open_file_location_on_interactive_desktop(
         "desktopTarget": "WinSta0\\Default",
         "elapsedMs": elapsed_ms,
         "launchedViaInteractiveTask": sch_ok,
-        "verifiedExplorerOnMonitor": bool(opened_win) or mode == "open_file_direct",
+        "verifiedExplorerOnMonitor": bool(opened_win),
         "explorerHwnd": opened_win.get("hwnd", ""),
         "explorerRect": opened_win.get("rect", []),
         "targetPath": str(target_file),
@@ -1264,11 +1213,11 @@ def open_file_location_on_interactive_desktop(
 def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]:
     ensure_merlin_dirs()
 
-    # [초고속 직결] 탐색기 폴더 열기 / 검색창 단독 필터 열기 / 문서 바로 열기는 사전 스캔 지연 없이 0.1초 만에 즉시 실행!
-    if action in ("open_file_location", "open_file_search", "open_file_direct") and target_path:
+    # [초고속 직결] 탐색기 검색창 자동 입력 단독 표시 모드로 0.1초 만에 즉시 실행!
+    if action in ("open_file_location", "open_file_search") and target_path:
         p = Path(target_path)
         if p.exists():
-            return open_file_location_on_interactive_desktop(p, mode=action)
+            return open_file_location_on_interactive_desktop(p, mode="open_file_search")
         return {"ok": False, "error": f"파일이 존재하지 않습니다: {target_path}"}
 
     before_state = inspect_real_pc_state()

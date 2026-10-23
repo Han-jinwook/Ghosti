@@ -274,25 +274,15 @@ export const SetupMonsterContent: React.FC = () => {
     );
   };
 
-  const handleOpenRealFileLocation = async (
-    fullPath: string,
-    fileName: string,
-    mode: 'open_file_location' | 'open_file_search' | 'open_file_direct' = 'open_file_location'
-  ) => {
+  const handleOpenRealFileLocation = async (fullPath: string, fileName: string) => {
     if (buttonGuideStep === 2) {
       setButtonGuideStep(0);
     }
-    if (mode === 'open_file_search') {
-      setOverlayStatusMsg(`🔍 [${fileName}] 탐색기 검색창에 파일명을 자동 입력해 이 파일 1개만 단독으로 띄우는 중...`);
-    } else if (mode === 'open_file_direct') {
-      setOverlayStatusMsg(`📄 [${fileName}] 문서를 연결된 프로그램으로 바로 실행하는 중...`);
-    } else {
-      setOverlayStatusMsg(`⚡ [${fileName}] 탐색기 폴더를 열고 선택된 파일을 중앙으로 스크롤하는 중...`);
-    }
-    const res = await executeRealOsAction(mode, fullPath);
+    setOverlayStatusMsg(`🔍 [${fileName}] 탐색기 검색창에 파일명을 자동 입력해 이 파일 1개만 단독으로 띄우는 중...`);
+    const res = await executeRealOsAction('open_file_search', fullPath);
     if (res.ok) {
       setOverlayStatusMsg(
-        res.message || `✅ 실제 모니터 맨 앞에 [${fileName}] 탐색기를 열고 파일을 표시했습니다!`
+        res.message || `✅ 실제 모니터 맨 앞에 [${fileName}] 탐색기를 열고 검색창 필터로 단독 표시했습니다!`
       );
     } else {
       setOverlayStatusMsg(`⚠️ 열기 실패: ${(res as { error?: string }).error || '경로를 확인해 주세요.'}`);
@@ -867,37 +857,23 @@ export const SetupMonsterContent: React.FC = () => {
                           ))}
                         </div>
                       </div>
-                      <div className="relative flex flex-wrap items-center justify-end gap-1.5 pt-1">
+                      <div className="relative flex justify-end pt-1">
                         {buttonGuideStep === 2 && idx === 0 && (
                           <div className="absolute -top-11 right-0 z-50 whitespace-nowrap px-3 py-1.5 rounded-xl bg-rose-600 border-2 border-yellow-300 text-white font-label-sm text-[11.5px] font-extrabold shadow-[0_8px_25px_rgba(225,29,72,0.85)] animate-bounce">
-                            👇 [2/2단계] 이제 여기 [📂 폴더 열기] 또는 [🔍 검색창 단독 띄우기] 버튼을 클릭하세요!
+                            👇 [2/2단계] 이제 여기 [🔍 검색창에 파일명 넣어 띄우기] 버튼을 클릭하세요!
                           </div>
                         )}
                         <button
                           id={idx === 0 ? 'zcore-target-btn-open-0' : undefined}
                           type="button"
-                          onClick={() => void handleOpenRealFileLocation(f.fullPath, f.fileName, 'open_file_location')}
-                          className={`px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-label-sm text-[11px] font-extrabold shadow cursor-pointer ${
+                          onClick={() => void handleOpenRealFileLocation(f.fullPath, f.fileName)}
+                          className={`px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-label-sm text-[11.5px] font-extrabold shadow cursor-pointer ${
                             buttonGuideStep === 2 && idx === 0
                               ? 'ring-4 ring-yellow-300 shadow-[0_0_20px_rgba(253,224,71,0.9)]'
                               : ''
                           }`}
                         >
-                          📂 폴더에서 위치 열기 (중앙 스크롤)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleOpenRealFileLocation(f.fullPath, f.fileName, 'open_file_search')}
-                          className="px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11px] font-extrabold shadow cursor-pointer"
-                        >
-                          🔍 검색창에 파일명 넣어 1개만 딱 띄우기
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleOpenRealFileLocation(f.fullPath, f.fileName, 'open_file_direct')}
-                          className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold cursor-pointer"
-                        >
-                          📄 문서 바로 실행
+                          🔍 탐색기 검색창에 파일명 넣어 이 파일만 바로 띄우기
                         </button>
                       </div>
                     </div>
