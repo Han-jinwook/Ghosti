@@ -245,7 +245,7 @@ export const SetupMonsterContent: React.FC = () => {
   const [forensicQuery, setForensicQuery] = useState('계약서');
   const [forensicResult, setForensicResult] = useState<RealForensicScanResult | null>(null);
   const [loadingForensic, setLoadingForensic] = useState(false);
-  const [buttonGuideStep, setButtonGuideStep] = useState<0 | 3 | 4 | 5 | 6>(3);
+  const [buttonGuideStep, setButtonGuideStep] = useState<0 | 3 | 4 | 5 | 6>(5);
 
   const handleRefreshRealPcState = async () => {
     setLoadingRealPc(true);
@@ -270,6 +270,21 @@ export const SetupMonsterContent: React.FC = () => {
     loadSetupMonsterState();
     void handleRefreshRealPcState();
     void handleRunForensicScan('계약서');
+    // 2번째 버튼([⚡ 바로 해결 방법 보기]) 클릭 완료 상태에 맞춰 S: 드라이브 수리 실행 카드를 최상단에 즉시 표시
+    const lastTurn = setupChatTurns[setupChatTurns.length - 1];
+    if (
+      !lastTurn ||
+      lastTurn.role !== 'system_repair' &&
+      lastTurn.diagnosisPlan?.presetId !== 'pc_work_s_drive'
+    ) {
+      void answerSetupPreTriage(
+        'triage_s_drive_direct',
+        '윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘',
+        'pc_work_s_drive',
+        true
+      );
+      setButtonGuideStep(5);
+    }
   }, [loadSetupMonsterState]);
 
   useEffect(() => {
@@ -709,9 +724,9 @@ export const SetupMonsterContent: React.FC = () => {
         </div>
       </div>
 
-      {/* 5. 대화형 수리 창구 */}
-      <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3 max-h-[620px] overflow-y-auto">
-        {setupChatTurns.map((turn) => {
+      {/* 5. 대화형 수리 창구 (이전 대화 적체 없이 현재 단계 카드 1개만 제자리 즉시 교체) */}
+      <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3">
+        {setupChatTurns.slice(-1).map((turn) => {
           if (turn.role === 'user') {
             return (
               <div key={turn.id} className="flex justify-end">
