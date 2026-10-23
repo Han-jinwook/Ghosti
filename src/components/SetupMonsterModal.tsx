@@ -255,21 +255,6 @@ export const SetupMonsterContent: React.FC = () => {
     setLoadingRealPc(false);
   };
 
-  const pointOsArrowAtButtonElement = async (elId: string, guideText: string) => {
-    const el = document.getElementById(elId);
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const chromeTop = Math.max(70, window.outerHeight - window.innerHeight);
-    const screenX = Math.round(window.screenX + rect.left + rect.width / 2);
-    const screenY = Math.round(window.screenY + chromeTop + rect.top);
-    await launchRealOsTopmostOverlay({
-      x: screenX,
-      y: screenY,
-      text: guideText,
-      durationSec: 8,
-    });
-  };
-
   const handleRunForensicScan = async (qOverride?: string) => {
     setLoadingForensic(true);
     const q = qOverride !== undefined ? qOverride : forensicQuery;
@@ -279,12 +264,6 @@ export const SetupMonsterContent: React.FC = () => {
     if (buttonGuideStep === 1) {
       setButtonGuideStep(2);
       setOverlayStatusMsg('👆 [2/2단계 가이드] 스캔 완료! 이제 아래 첫 번째 문서의 [📂 윈도우 탐색기 열기] 버튼을 눌러보세요!');
-      setTimeout(() => {
-        void pointOsArrowAtButtonElement(
-          'zcore-target-btn-open-0',
-          '👆 [2/2단계] 여기 [📂 윈도우 탐색기 열기] 버튼을 클릭하세요!'
-        );
-      }, 150);
     }
   };
 
@@ -292,10 +271,6 @@ export const SetupMonsterContent: React.FC = () => {
     setButtonGuideStep(1);
     setOverlayStatusMsg(
       '👆 [1/2단계 버튼 가이드 시작] 아래 화살표가 가리키는 [🔍 3초 실물 스캔] 버튼을 직접 눌러보세요! (누르면 자동으로 2단계 버튼으로 이동합니다)'
-    );
-    await pointOsArrowAtButtonElement(
-      'zcore-target-btn-scan',
-      '👆 [1/2단계] 여기 [🔍 3초 실물 스캔] 버튼을 클릭하세요!'
     );
   };
 
