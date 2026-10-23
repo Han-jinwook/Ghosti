@@ -452,7 +452,7 @@ export const PricingModal: React.FC = () => {
 
             <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 flex flex-col gap-0.5 opacity-90">
               <div className="flex items-center justify-between text-[10.5px]">
-                <span className="text-zinc-300 font-bold">⚡ 2차: 300명</span>
+                <span className="text-zinc-300 font-bold">⚡ 2차: 500명</span>
                 <span className="text-zinc-400 font-mono text-[9.5px]">1차 마감 후</span>
               </div>
               <span className="font-headline-sm text-[13px] text-zinc-200 font-bold">
@@ -462,7 +462,7 @@ export const PricingModal: React.FC = () => {
 
             <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 flex flex-col gap-0.5 opacity-80">
               <div className="flex items-center justify-between text-[10.5px]">
-                <span className="text-zinc-300 font-bold">🚀 3차: 500명</span>
+                <span className="text-zinc-300 font-bold">🚀 3차: 1,500명</span>
                 <span className="text-zinc-400 font-mono text-[9.5px]">2차 마감 후</span>
               </div>
               <span className="font-headline-sm text-[13px] text-zinc-200 font-bold">
@@ -472,7 +472,7 @@ export const PricingModal: React.FC = () => {
 
             <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 flex flex-col gap-0.5 opacity-75">
               <div className="flex items-center justify-between text-[10.5px]">
-                <span className="text-zinc-300 font-bold">💎 4차: 1,000명</span>
+                <span className="text-zinc-300 font-bold">💎 4차: 3,000명</span>
                 <span className="text-zinc-400 font-mono text-[9.5px]">3차 마감 후</span>
               </div>
               <span className="font-headline-sm text-[13px] text-zinc-200 font-bold">
@@ -482,7 +482,7 @@ export const PricingModal: React.FC = () => {
 
             <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 flex flex-col gap-0.5 opacity-70">
               <div className="flex items-center justify-between text-[10.5px]">
-                <span className="text-zinc-300 font-bold">🎯 5차: 3,000명</span>
+                <span className="text-zinc-300 font-bold">🎯 5차: 10,000명</span>
                 <span className="text-zinc-400 font-mono text-[9.5px]">4차 마감 후</span>
               </div>
               <span className="font-headline-sm text-[13px] text-zinc-200 font-bold">
@@ -893,57 +893,62 @@ export const PricingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. [🛠️ Z-Eye 설정 몬스터] 내 '⚡ 24시간 GPU 클라우드 서버 도우미' 초특가 요금 반영 */}
-        <div className="p-5 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-3.5">
+        {/* 2. [🛡️ 클라우드 과금 전면 폐지] 전 라운지 공통 '다중 백업 PC 1·2·3호 순차 자동 우회(Failover)' & '방장 PC 원클릭 초절전·무소음 모드' */}
+        <div className="p-5 rounded-2xl bg-[#18181B] border border-emerald-400/45 flex flex-col gap-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                🛠️ Z-Eye 설정 몬스터 핵심 옵션
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                🛡️ 클라우드 추가 과금 0원 · 전 라운지 기본 탑재
               </span>
               <h3 className="font-headline-sm text-[17px] text-white font-extrabold">
-                ⚡ 24시간 GPU 클라우드 서버 도우미 (방장 PC OFF 시 원터치 일일 대여)
+                방장 PC ➔ 백업 PC(1호·2호·3호) 순차 자동 우회 &amp; 원클릭 초절전·무소음 모드
               </h3>
             </div>
-            {gpuHelper24hActive && (
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-                🟢 현재 24시간 GPU 도우미 가동 중
-              </span>
-            )}
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
+              ✓ 패밀리 · 동호회 · 동창회 · 업무 공유 모두 무상 제공
+            </span>
           </div>
 
           <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed bg-zinc-950/80 p-3.5 rounded-xl border border-white/10">
-            내 PC가 꺼져 있을 때 단돈 1,000원(중·대형 클럽 2,000~3,000원)으로 24시간 동안 초고속 GPU 클라우드 도우미를 즉시 가동합니다. 멤버들이 올린 사진·영상의 Gemma 2 인덱싱과 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본을 내 PC로 안전하게 이관한 뒤 클라우드에서는 100% 자동 소각됩니다.
+            유료 클라우드 도우미 없이도 완벽합니다! <strong>① 방장 PC 원클릭 초절전·무소음 세팅</strong>(모니터 즉시 OFF · 대기 전력 10W급 · 메모리 찌꺼기 자동 청소)으로 전기세·소음 부담을 없애고, <strong>② 가족·모임·업무방 어디서나 백업 PC 1호·2호(예: 딸 방 PC, 회장님 PC)를 지정</strong>해 두면 각 PC에 전용 백업방이 자동 생성되어, <strong>방장 PC가 꺼져 있을 때 자동으로 2순위 ➔ 3순위 백업 PC에서 원본을 즉시 다운로드</strong>합니다.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-            {GPU_HELPER_TIERS.map((tier) => {
-              const isSelected = gpuHelper24hActive && gpuHelperActiveTier === tier.id;
-              return (
-                <button
-                  key={tier.id}
-                  type="button"
-                  onClick={() => {
-                    activateGpuHelper24h(tier.id);
-                    setShowProModal(false);
-                  }}
-                  className={`p-3.5 rounded-xl text-left transition-all flex flex-col justify-between gap-1.5 border ${
-                    isSelected
-                      ? 'bg-zinc-900 border-primary-container'
-                      : 'bg-zinc-950/90 hover:bg-zinc-900 border-white/10'
-                  }`}
-                >
-                  <span className="font-label-sm text-[11.5px] text-zinc-200 font-bold">
-                    {tier.title}
-                  </span>
-                  <span className="font-headline-sm text-[16px] text-primary-container font-black">
-                    {tier.priceText}
-                  </span>
-                  <span className="font-body-sm text-[11px] text-zinc-400">
-                    {tier.targetDesc} · 즉시 가동 →
-                  </span>
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-emerald-400/30 flex flex-col gap-1">
+              <span className="font-label-sm text-[11.5px] text-emerald-300 font-extrabold">
+                ① 1순위 ➔ 2순위 ➔ 3순위 자동 우회
+              </span>
+              <span className="font-headline-sm text-[14.5px] text-white font-black">
+                방장 PC ➔ 딸 방 PC ➔ 회장 PC
+              </span>
+              <span className="font-body-sm text-[11px] text-zinc-400">
+                방장 PC가 꺼져 있거나 방화벽에 막히면, 지정된 백업 PC 1호·2호 순서대로 0.5초 만에 자동 우회하여 원본을 내려받습니다.
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-cyan-400/30 flex flex-col gap-1">
+              <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
+                ② 방장 PC 원클릭 초절전·무소음 프리셋
+              </span>
+              <span className="font-headline-sm text-[14.5px] text-white font-black">
+                전기세 월 1,500원 · 팬 소음 0dB급
+              </span>
+              <span className="font-body-sm text-[11px] text-zinc-400">
+                모니터 즉시 끄기 + CPU 최소 상태 5% 하향 + 네트워크 깨어있기(Wake) + 30분 주기 램 찌꺼기(Working Set) 자동 청소.
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-amber-400/30 flex flex-col gap-1">
+              <span className="font-label-sm text-[11.5px] text-amber-300 font-extrabold">
+                ③ 백업 PC 전원 꺼져 있어도 0.1초 열람
+              </span>
+              <span className="font-headline-sm text-[14.5px] text-white font-black">
+                13KB 사진 · 30KB 문서 선행 캐싱
+              </span>
+              <span className="font-body-sm text-[11px] text-zinc-400">
+                모든 PC가 동시에 꺼져 있는 새벽에도 스마트폰에서 사진 감상과 문서 본문·표 검색은 0.1초 만에 100% 작동합니다.
+              </span>
+            </div>
           </div>
         </div>
 
