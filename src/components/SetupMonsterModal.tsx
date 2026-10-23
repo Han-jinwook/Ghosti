@@ -247,6 +247,8 @@ export const SetupMonsterContent: React.FC = () => {
   const [loadingForensic, setLoadingForensic] = useState(false);
   const [overlayStatusMsg, setOverlayStatusMsg] = useState<string>('');
 
+  const [liveFloatingArrow, setLiveFloatingArrow] = useState<string | null>(null);
+
   const handleRefreshRealPcState = async () => {
     setLoadingRealPc(true);
     const data = await fetchRealPcOsInspection();
@@ -263,20 +265,37 @@ export const SetupMonsterContent: React.FC = () => {
   };
 
   const handleLaunchRealOverlay = async () => {
-    setOverlayStatusMsg('⏳ 실제 Windows 최상단(TopMost) 투명 화살표 창을 모니터에 띄우는 중...');
-    const res = await launchRealOsTopmostOverlay({
-      x: 340,
-      y: 150,
-      text: '👆 [Z-코어 실물 OS 오버레이] 브라우저 바깥 실제 윈도우 화면 맨 위에 뜬 화살표 창입니다!',
+    setLiveFloatingArrow('👆 [실물 OS 최상단 화살표] 지금 모니터 상단에 뜬 빨간 손가락 배너 창을 확인하세요!');
+    setOverlayStatusMsg('⏳ 실제 모니터(WinSta0\\Default) 맨 위에 네이티브 OS 화살표 창을 띄우는 중...');
+    const res = (await launchRealOsTopmostOverlay({
+      x: 320,
+      y: 90,
+      text: '👆 [Z-코어 실물 OS 오버레이] 브라우저 바깥 실제 모니터(WinSta0\\Default) 맨 위에 뜬 화살표 창입니다!',
       durationSec: 12,
-    });
+    })) as { ok: boolean; hwnd?: string; message?: string };
     if (res.ok) {
       setOverlayStatusMsg(
-        `✅ 모니터 화면 좌측 상단(340, 150)에 실제 Windows TopMost 오버레이 창(PID ${res.pid})을 띄웠습니다!`
+        res.message ||
+          `✅ 실제 모니터(WinSta0\\Default, HWND ${res.hwnd || '활성'}) 맨 위에 👆 빨간 화살표 창을 띄웠습니다!`
       );
     } else {
       setOverlayStatusMsg('⚠️ 로컬 서버가 실행 중인지 확인해 주세요.');
     }
+    setTimeout(() => setLiveFloatingArrow(null), 10000);
+  };
+
+  const handleOpenRealFileLocation = async (fullPath: string, fileName: string) => {
+    setLiveFloatingArrow(`👆 [${fileName}] 실제 윈도우 탐색기 폴더를 모니터 맨 앞에 여는 중입니다!`);
+    setOverlayStatusMsg(`⏳ 실제 모니터(WinSta0\\Default) 맨 앞에 [${fileName}] 탐색기 폴더를 여는 중...`);
+    const res = await executeRealOsAction('open_file_location', fullPath);
+    if (res.ok) {
+      setOverlayStatusMsg(
+        res.message || `✅ 실제 모니터 맨 앞에 [${fileName}] 탐색기 폴더를 열고 파일을 선택했습니다!`
+      );
+    } else {
+      setOverlayStatusMsg(`⚠️ 폴더 열기 실패: ${(res as { error?: string }).error || '경로를 확인해 주세요.'}`);
+    }
+    setTimeout(() => setLiveFloatingArrow(null), 8000);
   };
 
   useEffect(() => {
@@ -699,8 +718,27 @@ export const SetupMonsterContent: React.FC = () => {
             </div>
           </div>
 
+          {liveFloatingArrow && (
+            <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[99999] px-6 py-4 rounded-2xl bg-rose-600 border-4 border-yellow-300 text-white shadow-[0_20px_60px_rgba(225,29,72,0.85)] flex items-center gap-4 animate-bounce">
+              <span className="text-[36px] leading-none">👆</span>
+              <div className="flex flex-col">
+                <span className="text-[12.5px] font-extrabold text-yellow-200">
+                  🎯 Z-코어 실시간 모니터 최상단 화살표 투사 중 (WinSta0\Default)
+                </span>
+                <span className="text-[14px] font-extrabold text-white">{liveFloatingArrow}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLiveFloatingArrow(null)}
+                className="ml-2 px-2.5 py-1 rounded-lg bg-rose-900 hover:bg-rose-800 text-xs font-bold cursor-pointer"
+              >
+                ✕ 닫기
+              </button>
+            </div>
+          )}
+
           {overlayStatusMsg && (
-            <div className="px-3.5 py-2 rounded-xl bg-rose-950/50 border border-rose-400/50 text-rose-200 font-body-sm text-[12px] font-bold">
+            <div className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 border-2 border-rose-400 text-rose-100 font-body-sm text-[12.5px] font-extrabold shadow">
               {overlayStatusMsg}
             </div>
           )}
@@ -817,7 +855,7 @@ export const SetupMonsterContent: React.FC = () => {
                           {f.vaultLabel} ➔ {f.fullPath}
                         </span>
                         <div className="mt-1 p-2 rounded bg-zinc-900 border border-white/5 font-mono text-[10.5px] text-zinc-200 flex flex-col gap-0.5">
-                          {f.preview5Lines.slice(0, 3).map((ln, lIdx) => (
+                          {f.preview5Lines.slice(0, 5).map((ln, lIdx) => (
                             <div key={lIdx} className="truncate">
                               {ln}
                             </div>
@@ -827,10 +865,10 @@ export const SetupMonsterContent: React.FC = () => {
                       <div className="flex justify-end">
                         <button
                           type="button"
-                          onClick={() => void executeRealOsAction('open_file_location', f.fullPath)}
-                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold cursor-pointer"
+                          onClick={() => void handleOpenRealFileLocation(f.fullPath, f.fileName)}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-label-sm text-[11.5px] font-extrabold shadow cursor-pointer"
                         >
-                          📂 윈도우 탐색기에서 이 파일 실제 위치 열기
+                          📂 윈도우 탐색기에서 이 파일 실제 위치 열기 (모니터 전면 표시)
                         </button>
                       </div>
                     </div>

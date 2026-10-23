@@ -32,10 +32,13 @@ import zipfile
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8")
+try:
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 APPDATA = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
@@ -45,6 +48,7 @@ MERLIN_DIR = LOCAL_APPDATA / "Merlin"
 SYSTEM_GIT_DIR = MERLIN_DIR / "SystemGit"
 SHADOW_VAULT_DIR = MERLIN_DIR / "ShadowVault"
 COMMITS_FILE = SYSTEM_GIT_DIR / "commits_history.json"
+GUI_PAYLOAD_FILE = MERLIN_DIR / "gui_task_payload.json"
 
 KNOWN_SECURITY_PLUGIN_KEYWORDS = {
     "astx": "AhnLab Safe Transaction (ASTx)",
@@ -71,10 +75,106 @@ def ensure_merlin_dirs() -> None:
 
 
 # ============================================================================
-# 1. 실제 Windows 활성 창(HWND) 및 화면 좌표 스캐너 (Win32 user32.dll 직결)
+# 0. Windows 대화형 모니터 데스크톱(WinSta0\Default) 강제 브릿지
+#    (백그라운드 터미널/샌드박스 데스크톱에서 실행돼도 유저 모니터에 직접 창을 띄움)
+# ============================================================================
+class STARTUPINFOW(ctypes.Structure):
+    _fields_ = [
+        ("cb", wintypes.DWORD),
+        ("lpReserved", wintypes.LPWSTR),
+        ("lpDesktop", wintypes.LPWSTR),
+        ("lpTitle", wintypes.LPWSTR),
+        ("dwX", wintypes.DWORD),
+        ("dwY", wintypes.DWORD),
+        ("dwXSize", wintypes.DWORD),
+        ("dwYSize", wintypes.DWORD),
+        ("dwXCountChars", wintypes.DWORD),
+        ("dwYCountChars", wintypes.DWORD),
+        ("dwFillAttribute", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("wShowWindow", wintypes.WORD),
+        ("cbReserved2", wintypes.WORD),
+        ("lpReserved2", ctypes.POINTER(wintypes.BYTE)),
+        ("hStdInput", wintypes.HANDLE),
+        ("hStdOutput", wintypes.HANDLE),
+        ("hStdError", wintypes.HANDLE),
+    ]
+
+
+class PROCESS_INFORMATION(ctypes.Structure):
+    _fields_ = [
+        ("hProcess", wintypes.HANDLE),
+        ("hThread", wintypes.HANDLE),
+        ("dwProcessId", wintypes.DWORD),
+        ("dwThreadId", wintypes.DWORD),
+    ]
+
+
+def open_interactive_desktop_handle() -> int:
+    """유저가 보고 있는 실제 모니터 데스크톱(WinSta0\\Default) 핸들을 반환합니다."""
+    try:
+        hdesk = ctypes.windll.user32.OpenDesktopW("Default", 0, False, 0x01FF)
+        return int(hdesk) if hdesk else 0
+    except Exception:
+        return 0
+
+
+def attach_thread_to_interactive_desktop() -> int:
+    """현재 스레드를 유저의 실제 모니터 데스크톱(WinSta0\\Default)에 직결합니다."""
+    hdesk = open_interactive_desktop_handle()
+    if hdesk:
+        try:
+            ctypes.windll.user32.SetThreadDesktop(wintypes.HANDLE(hdesk))
+        except Exception:
+            pass
+    return hdesk
+
+
+def spawn_on_interactive_desktop(cmd_line: str, hide_console: bool = False) -> int:
+    """
+    자식 프로세스를 백그라운드 세션이 아닌 유저의 실제 모니터 데스크톱(WinSta0\\Default)에 직접 생성합니다.
+    """
+    si = STARTUPINFOW()
+    si.cb = ctypes.sizeof(STARTUPINFOW)
+    si.lpDesktop = "WinSta0\\Default"
+    pi = PROCESS_INFORMATION()
+    buf = ctypes.create_unicode_buffer(cmd_line)
+    creation_flags = 0x08000000 if hide_console else 0  # CREATE_NO_WINDOW
+    ok = ctypes.windll.kernel32.CreateProcessW(
+        None,
+        buf,
+        None,
+        None,
+        False,
+        creation_flags,
+        None,
+        None,
+        ctypes.byref(si),
+        ctypes.byref(pi),
+    )
+    if ok:
+        pid = int(pi.dwProcessId)
+        ctypes.windll.kernel32.CloseHandle(pi.hProcess)
+        ctypes.windll.kernel32.CloseHandle(pi.hThread)
+        return pid
+    return 0
+
+
+def get_pythonw_executable() -> str:
+    """콘솔 창 없이 GUI만 즉시 띄우는 pythonw.exe 경로를 우선 반환합니다."""
+    exe_path = Path(sys.executable)
+    pythonw = exe_path.with_name("pythonw.exe")
+    if pythonw.exists():
+        return str(pythonw)
+    return str(exe_path)
+
+
+# ============================================================================
+# 1. 실제 Windows 활성 창(HWND) 및 화면 좌표 스캐너 (WinSta0\Default 직결)
 # ============================================================================
 def get_real_open_windows(max_count: int = 15) -> List[Dict[str, Any]]:
     user32 = ctypes.windll.user32
+    hdesk = attach_thread_to_interactive_desktop()
     windows: List[Dict[str, Any]] = []
     fg_hwnd = user32.GetForegroundWindow()
 
@@ -112,7 +212,10 @@ def get_real_open_windows(max_count: int = 15) -> List[Dict[str, Any]]:
 
     try:
         cb = WNDENUMPROC(enum_proc)
-        user32.EnumWindows(cb, 0)
+        if hdesk:
+            user32.EnumDesktopWindows(wintypes.HANDLE(hdesk), cb, 0)
+        if not windows:
+            user32.EnumWindows(cb, 0)
     except Exception:
         pass
     windows.sort(key=lambda x: (not x["isForeground"], x["title"]))
@@ -414,13 +517,21 @@ def extract_real_5_lines_preview(file_path: Path) -> List[str]:
                     if cells:
                         return [f"셀 데이터 {idx+1}: {val}" for idx, val in enumerate(cells[:5])]
 
-        # 일반 텍스트로 읽히는 문서인 경우 텍스트 라인 우선 추출
+        # 일반 텍스트로 읽히는 문서인 경우 텍스트 라인 우선 추출 (XML 태그 및 PDF 헤더 정제)
         raw_bytes = file_path.read_bytes()[:4096]
         if b"\x00" not in raw_bytes:
             text_try = raw_bytes.decode("utf-8", errors="ignore").strip()
-            lines = [ln.strip() for ln in text_try.splitlines() if ln.strip()]
-            if lines:
-                return lines[:5]
+            cleaned_lines: List[str] = []
+            for ln in text_try.splitlines():
+                stripped = re.sub(r"<[^>]+>", " ", ln).strip()
+                stripped = re.sub(r"\s{2,}", " ", stripped)
+                if not stripped:
+                    continue
+                if stripped.startswith(("%PDF-", "%%EOF")):
+                    continue
+                cleaned_lines.append(stripped)
+            if cleaned_lines:
+                return cleaned_lines[:5]
 
         stat = file_path.stat()
         mtime_str = datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
@@ -549,86 +660,72 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
 
 
 # ============================================================================
-# 6. 실제 Windows 모니터 최상단(TopMost) 투명 화살표(👆) 오버레이 투사기
+# 6. 실제 Windows 모니터 최상단(TopMost) 화살표(👆) 오버레이 투사기 (WinSta0\Default 직결)
 # ============================================================================
 def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 12) -> None:
     """
-    브라우저 내부가 아닌 실제 Windows OS 화면 맨 위(-topmost True)에
-    빨간 손가락 화살표(👆)와 안내 말풍선을 띄웁니다.
+    백그라운드 세션이 아닌 유저가 실제로 보고 있는 Windows 모니터(WinSta0\\Default) 맨 위(-topmost True)에
+    선명한 빨간 손가락 화살표(👆)와 안내 배너 창을 띄웁니다.
     """
+    attach_thread_to_interactive_desktop()
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
+
     import tkinter as tk
 
     root = tk.Tk()
     root.title("Merlin Z-Core TopMost Overlay")
     root.overrideredirect(True)
     root.attributes("-topmost", True)
-
-    transparent_key = "#010101"
-    root.config(bg=transparent_key)
-    try:
-        root.wm_attributes("-transparentcolor", transparent_key)
-    except Exception:
-        pass
+    root.config(bg="#E11D48")
 
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
-    win_w = 460
-    win_h = 150
-    pos_x = max(20, min(screen_w - win_w - 20, x - 40))
-    pos_y = max(20, min(screen_h - win_h - 60, y - 20))
+    win_w = 500
+    win_h = 165
+    pos_x = max(30, min(screen_w - win_w - 30, x))
+    pos_y = max(30, min(screen_h - win_h - 80, y))
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
 
-    container = tk.Frame(root, bg=transparent_key)
-    container.pack(fill="both", expand=True)
+    outer = tk.Frame(root, bg="#F43F5E", padx=4, pady=4)
+    outer.pack(fill="both", expand=True)
+
+    card = tk.Frame(outer, bg="#0F172A", padx=16, pady=12)
+    card.pack(fill="both", expand=True)
+
+    top_row = tk.Frame(card, bg="#0F172A")
+    top_row.pack(fill="x")
 
     arrow_lbl = tk.Label(
-        container,
-        text="👆",
-        font=("Segoe UI Emoji", 34, "bold"),
-        fg="#FF2E54",
-        bg=transparent_key,
+        top_row,
+        text="👆 여기를 주목하세요!",
+        font=("Malgun Gothic", 16, "bold"),
+        fg="#FDE047",
+        bg="#E11D48",
+        padx=12,
+        pady=4,
     )
-    arrow_lbl.pack(anchor="w", padx=12)
+    arrow_lbl.pack(side="left")
 
-    card = tk.Frame(
-        container,
-        bg="#18181B",
-        highlightbackground="#F43F5E",
-        highlightthickness=3,
-        padx=14,
-        pady=10,
-    )
-    card.pack(fill="x", padx=8)
-
-    title_lbl = tk.Label(
-        card,
-        text=f"🎯 [Z-코어 실제 OS 최상단 오버레이] (모니터 좌표 {x}, {y})",
+    badge_lbl = tk.Label(
+        top_row,
+        text=f"🎯 OS 최상단 창 (좌표 {pos_x}, {pos_y})",
         font=("Malgun Gothic", 9, "bold"),
         fg="#FDA4AF",
-        bg="#18181B",
-        anchor="w",
+        bg="#0F172A",
+        padx=8,
     )
-    title_lbl.pack(fill="x")
-
-    msg_lbl = tk.Label(
-        card,
-        text=text,
-        font=("Malgun Gothic", 11, "bold"),
-        fg="#FFFFFF",
-        bg="#18181B",
-        anchor="w",
-        justify="left",
-        wraplength=340,
-    )
-    msg_lbl.pack(fill="x", pady=(3, 4))
+    badge_lbl.pack(side="left")
 
     close_btn = tk.Button(
-        card,
-        text="✕ 확인 완료 (오버레이 닫기)",
+        top_row,
+        text="✕ 닫기",
         font=("Malgun Gothic", 9, "bold"),
         fg="#FFFFFF",
-        bg="#E11D48",
-        activebackground="#BE123C",
+        bg="#BE123C",
+        activebackground="#9F1239",
         activeforeground="#FFFFFF",
         relief="flat",
         padx=10,
@@ -636,52 +733,337 @@ def launch_real_topmost_overlay(x: int, y: int, text: str, duration_sec: int = 1
         command=root.destroy,
         cursor="hand2",
     )
-    close_btn.pack(anchor="e")
+    close_btn.pack(side="right")
 
-    step_state = {"dy": 0, "dir": 1}
+    msg_lbl = tk.Label(
+        card,
+        text=text,
+        font=("Malgun Gothic", 12, "bold"),
+        fg="#FFFFFF",
+        bg="#0F172A",
+        anchor="w",
+        justify="left",
+        wraplength=455,
+    )
+    msg_lbl.pack(fill="x", pady=(12, 4))
+
+    sub_lbl = tk.Label(
+        card,
+        text="✅ 브라우저 바깥 실제 Windows 모니터(WinSta0\\Default) 최상단에 뜬 네이티브 OS 창입니다.",
+        font=("Malgun Gothic", 9),
+        fg="#38BDF8",
+        bg="#0F172A",
+        anchor="w",
+    )
+    sub_lbl.pack(fill="x")
+
+    root.deiconify()
+    root.lift()
+    root.update_idletasks()
+
+    user32 = ctypes.windll.user32
+    hwnd = int(root.winfo_id())
+    top_hwnd = int(user32.GetParent(wintypes.HWND(hwnd))) or hwnd
+    # SW_SHOW = 5, HWND_TOPMOST = -1, SWP_SHOWWINDOW = 0x0040
+    user32.ShowWindow(wintypes.HWND(top_hwnd), 5)
+    user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), pos_x, pos_y, win_w, win_h, 0x0040)
+
+    step_state = {"dy": 0, "dir": 1, "pulse": False}
 
     def animate() -> None:
         if not root.winfo_exists():
             return
-        step_state["dy"] += step_state["dir"] * 3
-        if abs(step_state["dy"]) >= 9:
+        step_state["dy"] += step_state["dir"] * 4
+        if abs(step_state["dy"]) >= 12:
             step_state["dir"] *= -1
-        root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y + step_state['dy']}")
+            step_state["pulse"] = not step_state["pulse"]
+            outer.config(bg="#FACC15" if step_state["pulse"] else "#F43F5E")
+        cur_y = pos_y + step_state["dy"]
+        root.geometry(f"{win_w}x{win_h}+{pos_x}+{cur_y}")
+        user32.SetWindowPos(wintypes.HWND(top_hwnd), wintypes.HWND(-1), pos_x, cur_y, win_w, win_h, 0x0040 | 0x0010)
         root.after(90, animate)
 
     root.after(90, animate)
-    root.after(max(2, duration_sec) * 1000, root.destroy)
+    root.after(max(3, duration_sec) * 1000, root.destroy)
     root.mainloop()
 
 
+def find_all_windows_on_default_desktop(keyword: str) -> List[Dict[str, Any]]:
+    """WinSta0\\Default 데스크톱에서 특정 제목 키워드를 가진 모든 창(HWND) 목록을 반환합니다."""
+    user32 = ctypes.windll.user32
+    hdesk = attach_thread_to_interactive_desktop()
+    found: List[Dict[str, Any]] = []
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def cb(hwnd: int, _lp: int) -> bool:
+        hw = wintypes.HWND(hwnd)
+        if not user32.IsWindowVisible(hw):
+            return True
+        n = user32.GetWindowTextLengthW(hw)
+        if n <= 0:
+            return True
+        buf = ctypes.create_unicode_buffer(n + 1)
+        user32.GetWindowTextW(hw, buf, n + 1)
+        if keyword.lower() in buf.value.lower():
+            rect = wintypes.RECT()
+            user32.GetWindowRect(hw, ctypes.byref(rect))
+            found.append(
+                {
+                    "hwnd": f"0x{hwnd:08X}",
+                    "rawHwnd": int(hwnd),
+                    "title": buf.value,
+                    "rect": [int(rect.left), int(rect.top), int(rect.right - rect.left), int(rect.bottom - rect.top)],
+                }
+            )
+        return True
+
+    if hdesk:
+        user32.EnumDesktopWindows(wintypes.HANDLE(hdesk), WNDENUMPROC(cb), 0)
+    return found
+
+
+def find_window_on_default_desktop(keyword: str) -> Dict[str, Any]:
+    """WinSta0\\Default 데스크톱에서 특정 제목 키워드를 가진 창(HWND)이 실제로 떠 있는지 검증합니다."""
+    wins = find_all_windows_on_default_desktop(keyword)
+    return wins[0] if wins else {}
+
+
+def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
+    """
+    백그라운드 샌드박스(exebox) 바깥의 Windows 작업 스케줄러(/IT 대화형 세션 모드)를 통해
+    유저가 실제로 보고 있는 모니터(WinSta0\\Default)에 GUI 창(탐색기, TopMost 화살표 등)을 직접 띄웁니다.
+    """
+    try:
+        r_create = subprocess.run(
+            [
+                "schtasks",
+                "/Create",
+                "/TN",
+                task_name,
+                "/TR",
+                tr_command,
+                "/SC",
+                "ONCE",
+                "/ST",
+                "00:00",
+                "/IT",
+                "/F",
+            ],
+            capture_output=True,
+            timeout=4,
+        )
+        r_run = subprocess.run(
+            ["schtasks", "/Run", "/TN", task_name],
+            capture_output=True,
+            timeout=4,
+        )
+        return r_create.returncode == 0 and r_run.returncode == 0
+    except Exception:
+        return False
+
+
+def run_gui_task_runner() -> None:
+    """schtasks /IT 로 호출되어 유저의 실제 대화형 데스크톱(WinSta0\\Default)에서 직접 실행되는 GUI 워커입니다."""
+    ensure_merlin_dirs()
+    attach_thread_to_interactive_desktop()
+    if not GUI_PAYLOAD_FILE.exists():
+        return
+    try:
+        payload = json.loads(GUI_PAYLOAD_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    mode = payload.get("mode", "overlay")
+    if mode == "open_file_location":
+        target_str = str(payload.get("targetPath", ""))
+        matched_wins: List[Dict[str, Any]] = []
+        user32 = ctypes.windll.user32
+        if target_str:
+            target_file = Path(target_str)
+            folder_name = target_file.parent.name
+
+            # 대화형 세션 내부에서 직접 explorer.exe /select 실행
+            subprocess.Popen(f'explorer.exe /select,"{target_file}"', shell=True)
+            time.sleep(0.55)
+
+            # 탐색기 창이 뜨면 브라우저 뒤로 숨지 않도록 모니터 최상단(HWND_TOPMOST)으로 즉시 끌어올림
+            for _ in range(18):
+                matched_wins = find_all_windows_on_default_desktop(folder_name)
+                if matched_wins:
+                    break
+                time.sleep(0.12)
+
+            for w_info in matched_wins:
+                hw = wintypes.HWND(w_info["rawHwnd"])
+                user32.ShowWindow(hw, 9)  # SW_RESTORE
+                user32.SetWindowPos(hw, wintypes.HWND(-1), 220, 195, 1020, 640, 0x0040)
+                try:
+                    user32.SwitchToThisWindow(hw, True)
+                except Exception:
+                    pass
+                user32.SetForegroundWindow(hw)
+
+        launch_real_topmost_overlay(
+            int(payload.get("x", 220)),
+            int(payload.get("y", 20)),
+            str(payload.get("text", "👆 탐색기 폴더를 열고 해당 파일을 선택했습니다!")),
+            int(payload.get("duration", 8)),
+        )
+
+        # 안내 오버레이 종료 후 탐색기 창의 TopMost 고정만 해제(브라우저 위 전면 상태 유지)
+        for w_info in matched_wins:
+            hw = wintypes.HWND(w_info["rawHwnd"])
+            user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+        return
+
+    if mode == "overlay":
+        launch_real_topmost_overlay(
+            int(payload.get("x", 420)),
+            int(payload.get("y", 160)),
+            str(payload.get("text", "👆 여기를 주목하세요!")),
+            int(payload.get("duration", 10)),
+        )
+
+
 def spawn_overlay_detached(x: int, y: int, text: str, duration_sec: int = 12) -> Dict[str, Any]:
+    ensure_merlin_dirs()
     script_path = str(Path(__file__).resolve())
-    creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            script_path,
-            "overlay-worker",
-            "--x",
-            str(x),
-            "--y",
-            str(y),
-            "--text",
-            text,
-            "--duration",
-            str(duration_sec),
-        ],
-        creationflags=creation_flags,
-    )
+    pyw_exe = get_pythonw_executable()
+
+    # 1. JSON 페이로드 저장 후 schtasks /IT 로 유저의 실제 대화형 모니터 세션에서 직접 실행
+    payload = {
+        "mode": "overlay",
+        "x": int(x),
+        "y": int(y),
+        "text": text,
+        "duration": int(duration_sec),
+    }
+    GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    tr_cmd = f'"{pyw_exe}" "{script_path}" gui-task-runner'
+    sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", tr_cmd)
+
+    # 2. 혹시 작업 스케줄러가 비활성화된 환경을 위한 직접 스레드 데스크톱 전환 백업
+    pid = 0
+    if not sch_ok:
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                script_path,
+                "overlay-worker",
+                "--x",
+                str(x),
+                "--y",
+                str(y),
+                "--text",
+                text,
+                "--duration",
+                str(duration_sec),
+            ],
+            creationflags=0x08000000,
+        )
+        pid = proc.pid
+
+    verified_win: Dict[str, Any] = {}
+    for _ in range(18):
+        time.sleep(0.12)
+        verified_win = find_window_on_default_desktop("Merlin Z-Core TopMost Overlay")
+        if verified_win:
+            break
+
     return {
         "ok": True,
         "isRealOsTopMostOverlay": True,
-        "pid": proc.pid,
+        "desktopTarget": "WinSta0\\Default",
+        "launchedViaInteractiveTask": sch_ok,
+        "verifiedOnMonitor": bool(verified_win),
+        "hwnd": verified_win.get("hwnd", ""),
+        "rect": verified_win.get("rect", []),
+        "pid": pid,
         "x": x,
         "y": y,
         "text": text,
         "durationSec": duration_sec,
-        "message": f"실제 Windows 모니터 최상단(TopMost, PID {proc.pid})에 👆 화살표 오버레이 창을 띄웠습니다!",
+        "message": (
+            f"✅ 실제 모니터(WinSta0\\Default, HWND {verified_win.get('hwnd', '활성')}) 맨 위에 "
+            f"👆 빨간 화살표 배너 창을 띄웠습니다!"
+        ),
+    }
+
+
+def cleanup_orphan_explorer_processes() -> None:
+    """백그라운드 데스크톱에 갇혀 창 핸들이 없는 좀비 explorer.exe 프로세스를 정리합니다 (메인 쉘 제외)."""
+    ps_clean = r"""
+$explorers = Get-Process explorer -ErrorAction SilentlyContinue | Sort-Object StartTime
+if ($explorers.Count -gt 1) {
+    foreach ($p in $explorers | Select-Object -Skip 1) {
+        if ($p.MainWindowHandle -eq 0) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+"""
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_clean],
+            capture_output=True,
+            timeout=3,
+        )
+    except Exception:
+        pass
+
+
+def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, Any]:
+    """
+    실제 모니터(WinSta0\\Default)에서 Windows 탐색기를 열어 해당 파일을 선택 상태로 표시하고,
+    브라우저 창 뒤로 숨지 않도록 탐색기 창을 화면 맨 앞(TopMost -> Foreground)으로 끌어올립니다.
+    """
+    cleanup_orphan_explorer_processes()
+    ensure_merlin_dirs()
+    script_path = str(Path(__file__).resolve())
+    pyw_exe = get_pythonw_executable()
+
+    folder_path = target_file.parent
+    folder_name = folder_path.name
+
+    payload = {
+        "mode": "open_file_location",
+        "targetPath": str(target_file),
+        "x": 220,
+        "y": 20,
+        "text": f"📂 [{folder_name}] 폴더를 브라우저 맨 앞에 열고 [{target_file.name}] 파일을 선택했습니다!",
+        "duration": 8,
+    }
+    GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    tr_cmd = f'"{pyw_exe}" "{script_path}" gui-task-runner'
+    sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOpenFolder", tr_cmd)
+
+    opened_win: Dict[str, Any] = {}
+    ov_win: Dict[str, Any] = {}
+    for _ in range(22):
+        time.sleep(0.15)
+        if not opened_win:
+            opened_win = find_window_on_default_desktop(folder_name)
+        if not ov_win:
+            ov_win = find_window_on_default_desktop("Merlin Z-Core TopMost Overlay")
+        if opened_win and ov_win:
+            break
+
+    return {
+        "ok": True,
+        "action": "open_file_location",
+        "desktopTarget": "WinSta0\\Default",
+        "launchedViaInteractiveTask": sch_ok,
+        "verifiedExplorerOnMonitor": bool(opened_win),
+        "explorerHwnd": opened_win.get("hwnd", ""),
+        "explorerRect": opened_win.get("rect", []),
+        "overlayHwnd": ov_win.get("hwnd", ""),
+        "targetPath": str(target_file),
+        "message": (
+            f"✅ 실제 모니터 맨 앞(HWND {opened_win.get('hwnd', '활성')})에 [{folder_name}] 탐색기 폴더를 열고 "
+            f"[{target_file.name}] 파일을 선택했습니다!"
+        ),
     }
 
 
@@ -695,13 +1077,7 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
     if action == "open_file_location" and target_path:
         p = Path(target_path)
         if p.exists():
-            subprocess.Popen(["explorer.exe", f"/select,{p}"])
-            return {
-                "ok": True,
-                "action": action,
-                "targetPath": str(p),
-                "message": f"실제 Windows 탐색기에서 [{p.name}] 파일 위치를 바로 열었습니다!",
-            }
+            return open_file_location_on_interactive_desktop(p)
         return {"ok": False, "error": f"파일이 존재하지 않습니다: {target_path}"}
 
     if action == "s_drive_mount":
@@ -785,7 +1161,13 @@ def main() -> None:
     p_ex.add_argument("--action", type=str, default="inspect")
     p_ex.add_argument("--target", type=str, default="")
 
+    sub.add_parser("gui-task-runner")
+
     args = parser.parse_args()
+
+    if args.cmd == "gui-task-runner":
+        run_gui_task_runner()
+        return
 
     if args.cmd == "overlay-worker":
         launch_real_topmost_overlay(args.x, args.y, args.text, args.duration)
