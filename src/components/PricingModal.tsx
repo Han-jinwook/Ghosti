@@ -893,60 +893,61 @@ export const PricingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. [🛡️ 클라우드 과금 전면 폐지] 전 라운지 공통 '다중 백업 PC 1·2·3호 순차 자동 우회(Failover)' & '방장 PC 원클릭 초절전·무소음 모드' */}
+        {/* 2. [🛡️ 사진방 '누구나 PC 원본 동기화(회장님 숙면)' vs 업무방 '백업 PC 1·2호 + 퇴근 초절전 모드(월 1,800원)' & 무삭제 헌법] */}
         <div className="p-5 rounded-2xl bg-[#18181B] border border-emerald-400/45 flex flex-col gap-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                🛡️ 클라우드 추가 과금 0원 · 전 라운지 기본 탑재
+                🛡️ 사진방 자율 동기화 · 업무방 백업 PC 1·2호 · 앱 임의 삭제 0%
               </span>
               <h3 className="font-headline-sm text-[17px] text-white font-extrabold">
-                방장 PC ➔ 백업 PC(1호·2호·3호) 순차 자동 우회 &amp; 원클릭 초절전·무소음 모드
+                회장님은 편히 주무세요! 사진방 ‘PC 원본 동기화’ &amp; 업무방 ‘🌙 퇴근 초절전 모드(월 1,800원)’
               </h3>
             </div>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-              ✓ 패밀리 · 동호회 · 동창회 · 업무 공유 모두 무상 제공
+              ✓ 앱 자율 삭제 절대 금지 (정리 시 30일 안전 보관함 보호)
             </span>
           </div>
 
           <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed bg-zinc-950/80 p-3.5 rounded-xl border border-white/10">
-            유료 클라우드 도우미 없이도 완벽합니다! <strong>① 방장 PC 원클릭 초절전·무소음 세팅</strong>(모니터 즉시 OFF · 대기 전력 10W급 · 메모리 찌꺼기 자동 청소)으로 전기세·소음 부담을 없애고, <strong>② 가족·모임·업무방 어디서나 백업 PC 1호·2호(예: 딸 방 PC, 회장님 PC)를 지정</strong>해 두면 각 PC에 전용 백업방이 자동 생성되어, <strong>방장 PC가 꺼져 있을 때 자동으로 2순위 ➔ 3순위 백업 PC에서 원본을 즉시 다운로드</strong>합니다.
+            <strong>① 📸 사진 공유방(가족·동호회·동창회):</strong> 처음엔 스마트폰 용량 보호를 위해 <strong>13KB 썸네일만 표시(모바일 원본 전체 동기화 제한)</strong>되고, 용량이 넉넉한 PC에서는 누구나 <strong>[🔄 원본 동기화]</strong> 버튼만 누르면 내 PC에 원본이 100% 일치됩니다(원본 열기 시 내 PC 로컬 원본 0.01초 최우선 호출 · <strong>회장님은 밤에 PC 끄고 편히 주무셔도 됨!</strong>).<br />
+            <strong>② 💼 업무 공유방(S: 드라이브):</strong> 사장님이 통제하는 <strong>공용 PC 1대 + 백업 PC 1·2호</strong>만 세팅하고, 퇴근 시 바탕화면 <strong>[🌙 야간·퇴근 초절전 모드]</strong>(안내 메시지가 서서히 사라지며 모니터 OFF · <strong>한 달 전기세 약 1,800원</strong>)를 눌러두고 퇴근하면 끝납니다.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-emerald-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-emerald-300 font-extrabold">
-                ① 1순위 ➔ 2순위 ➔ 3순위 자동 우회
+                ① 📸 사진방: 누구나 PC 원본 동기화
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                방장 PC ➔ 딸 방 PC ➔ 회장 PC
+                내 원본 0.01초 열기 · 회장님 숙면
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                방장 PC가 꺼져 있거나 방화벽에 막히면, 지정된 백업 PC 1호·2호 순서대로 0.5초 만에 자동 우회하여 원본을 내려받습니다.
+                모바일은 13KB 썸네일만 가볍게 보고, PC에서는 원하는 회원이 [원본 동기화]를 켜두어 회장님 PC가 꺼져 있어도 언제든 동기화됩니다.
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-cyan-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
-                ② 방장 PC 원클릭 초절전·무소음 프리셋
+                ② 💼 업무방: 백업 1·2호 + 🌙 퇴근 절전
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                전기세 월 1,500원 · 팬 소음 0dB급
+                전기세 월 1,800원 · 서서히 화면 OFF
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                모니터 즉시 끄기 + CPU 최소 상태 5% 하향 + 네트워크 깨어있기(Wake) + 30분 주기 램 찌꺼기(Working Set) 자동 청소.
+                바탕화면 [야간모드] 실행 시 안내 메시지가 서서히 사라지며 모니터가 꺼지고, 램 찌꺼기 청소 후 15W 초저전력으로 조용히 대기합니다.
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-amber-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-amber-300 font-extrabold">
-                ③ 백업 PC 전원 꺼져 있어도 0.1초 열람
+                ③ 🛡️ 사장님 안심: 앱 임의 삭제 0%
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                13KB 사진 · 30KB 문서 선행 캐싱
+                정리 시 [30일 안전 보관함] 보호
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                모든 PC가 동시에 꺼져 있는 새벽에도 스마트폰에서 사진 감상과 문서 본문·표 검색은 0.1초 만에 100% 작동합니다.
+                앱이 사고로 파일을 지우는 일은 절대 없습니다. 유저가 직접 정리 버튼을 누른 파일도 보관함에서 30일간 안전하게 보호된 후 제거됩니다.
               </span>
             </div>
           </div>
