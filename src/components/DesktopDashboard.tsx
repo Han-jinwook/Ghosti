@@ -107,12 +107,33 @@ const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
   label: string;
   shortLabel: string;
+  sectionHeader?: string;
+  freeBadge?: boolean;
 }> = [
-  { id: 'personal', label: '개인 라운지', shortLabel: '개인' },
-  { id: 'family', label: '패밀리 라운지', shortLabel: '패밀리' },
-  { id: 'club', label: '클럽 라운지', shortLabel: '클럽' },
-  { id: 'student', label: '스쿨 라운지', shortLabel: '스쿨' },
-  { id: 'work', label: '업무 라운지', shortLabel: '업무' },
+  {
+    id: 'personal',
+    label: '내 기기 (PC·폰)',
+    shortLabel: '내 기기',
+    sectionHeader: '🆓 내 기기 (무료)',
+    freeBadge: true,
+  },
+  {
+    id: 'family',
+    label: '패밀리 (우리집·양가)',
+    shortLabel: '패밀리',
+    sectionHeader: '📸 사진 공유',
+  },
+  {
+    id: 'club',
+    label: '동호회 · 동창회',
+    shortLabel: '동호·동창',
+  },
+  {
+    id: 'work',
+    label: '업무 공유 (S: 드라이브)',
+    shortLabel: '업무(S:)',
+    sectionHeader: '💼 업무 공유',
+  },
 ];
 
 const LOUNGE_SUBMENU_CONFIG: Record<
@@ -133,7 +154,7 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   ],
   club: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: '모임 앨범 & 원본 다운로드' },
+    { id: 'dashboard', label: '모임·동창 앨범 & 원본 다운로드' },
     { id: 'trash', label: '새 사진 정리함' },
     { id: 'sync', label: '모임 관리 & 회원 초대' },
   ],
@@ -145,9 +166,9 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   ],
   work: [
     { id: 'trial', label: '무료체험' },
-    { id: 'dashboard', label: '업무 문서 검색 & 폴더(S:)' },
-    { id: 'trash', label: '새 문서 정리함' },
-    { id: 'sync', label: '팀원 권한 & 공유폴더 안내' },
+    { id: 'dashboard', label: '업무 문서·현장사진 & S: 드라이브' },
+    { id: 'trash', label: '새 업무파일 정리함' },
+    { id: 'sync', label: '팀원 권한 & S: 드라이브 연결' },
   ],
 };
 
@@ -326,17 +347,18 @@ export const DesktopDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* 2. 5대 시크릿 라운지 & 하위 메뉴 트리 (노션 워크스페이스 스타일) */}
+        {/* 2. 3대 전략 메뉴(🆓 내 기기 / 📸 사진 공유 / 💼 업무 공유) & 하위 메뉴 트리 (노션 워크스페이스 스타일) */}
         <div className="flex flex-col gap-1">
-          <span className="px-2 py-0.5 text-[10.5px] font-extrabold uppercase tracking-wider text-zinc-500">
-            시크릿 라운지
-          </span>
-
           {MAIN_LOUNGE_MENUS.map((menu) => {
             const active = activeLoungeType === menu.id;
             const isLoungeSub = Boolean(subscribedLounges[menu.id]);
             return (
               <div key={menu.id} className="flex flex-col gap-0.5">
+                {menu.sectionHeader && (
+                  <span className="px-2 pt-2 pb-0.5 text-[10.5px] font-extrabold uppercase tracking-wider text-zinc-500">
+                    {menu.sectionHeader}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -359,6 +381,11 @@ export const DesktopDashboard: React.FC = () => {
                     <span className="truncate">{menu.label}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {menu.freeBadge && !isLoungeSub && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-teal-500/15 text-teal-400 text-[9.5px] font-extrabold">
+                        FREE
+                      </span>
+                    )}
                     {isLoungeSub && (
                       <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500 text-[9.5px] font-extrabold">
                         PRO
@@ -575,9 +602,9 @@ export const DesktopDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 우측 상단 불변의 생태계 앵커: Z-Eye 여권 문패 + 설정 몬스터 + 크레딧 + 테마 토글 */}
+              {/* 우측 상단 불변의 생태계 앵커: Z-Eye 여권 문패(업무 공유 제외) + 설정 몬스터 + 크레딧 + 테마 토글 */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
-                {myPassportCluster && (
+                {myPassportCluster && activeLoungeType !== 'work' && (
                   <button
                     type="button"
                     onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
@@ -654,8 +681,8 @@ export const DesktopDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* 모바일(lg 미만, 360px 포함) 전용 1줄 5대 라운지 빠른 전환 바 */}
-            <nav className="grid grid-cols-5 lg:hidden gap-1">
+            {/* 모바일(lg 미만, 360px 포함) 전용 1줄 라운지 빠른 전환 바 */}
+            <nav className="grid grid-cols-4 lg:hidden gap-1">
               {MAIN_LOUNGE_MENUS.map((menu) => {
                 const active = activeLoungeType === menu.id;
                 return (

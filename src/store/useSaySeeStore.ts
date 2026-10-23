@@ -2024,6 +2024,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const query = q.trim();
     if (!query) return;
     const {
+      activeLoungeType,
       photos,
       telemetry,
       searchSpace,
@@ -2037,20 +2038,40 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       analogYearProposals,
     } = get();
 
-    // [1단계: 방별 별명(Room Persona) ➔ Z-Eye 여권(Z-Eye Face Passport) 자동 번역]
-    let resolvedQuery = query;
+    const isWorkLounge = activeLoungeType === 'work';
+
+    // 업무 공유(work)에서는 Z-Eye 인물 여권 발동 및 여권 인물 검색 매칭을 제외하고, 일반 사진(현장·자재·제품·서류) 시각 분석만 수행
+    const passportTagSet = new Set<string>();
     for (const fc of faceClusters) {
-      if (fc.excludedAsPasserby || !fc.registeredName) continue;
-      const baseName = fc.registeredName.trim();
-      const personas = Object.values(fc.roomPersonas ?? {})
-        .map((v) => (v || '').trim())
-        .filter((v) => v && v !== baseName);
-      for (const persona of personas) {
-        const shortPersona = persona.replace(/\([^)]*\)/g, '').trim();
-        if (resolvedQuery.includes(persona)) {
-          resolvedQuery = resolvedQuery.split(persona).join(baseName);
-        } else if (shortPersona.length >= 2 && resolvedQuery.includes(shortPersona)) {
-          resolvedQuery = resolvedQuery.split(shortPersona).join(baseName);
+      if (fc.registeredName?.trim()) {
+        passportTagSet.add(`#${fc.registeredName.trim()}`);
+      }
+      for (const pVal of Object.values(fc.roomPersonas ?? {})) {
+        const cleanP = (pVal || '').trim();
+        if (cleanP) {
+          passportTagSet.add(`#${cleanP}`);
+          const shortP = cleanP.replace(/\([^)]*\)/g, '').trim();
+          if (shortP.length >= 2) passportTagSet.add(`#${shortP}`);
+        }
+      }
+    }
+
+    // [1단계: 방별 별명(Room Persona) ➔ Z-Eye 여권(Z-Eye Face Passport) 자동 번역 (업무 공유 제외)]
+    let resolvedQuery = query;
+    if (!isWorkLounge) {
+      for (const fc of faceClusters) {
+        if (fc.excludedAsPasserby || !fc.registeredName) continue;
+        const baseName = fc.registeredName.trim();
+        const personas = Object.values(fc.roomPersonas ?? {})
+          .map((v) => (v || '').trim())
+          .filter((v) => v && v !== baseName);
+        for (const persona of personas) {
+          const shortPersona = persona.replace(/\([^)]*\)/g, '').trim();
+          if (resolvedQuery.includes(persona)) {
+            resolvedQuery = resolvedQuery.split(persona).join(baseName);
+          } else if (shortPersona.length >= 2 && resolvedQuery.includes(shortPersona)) {
+            resolvedQuery = resolvedQuery.split(shortPersona).join(baseName);
+          }
         }
       }
     }
@@ -2086,20 +2107,41 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     );
 
     const isTimeRangeOrAlumniQuery =
-      queryYearTokens.length > 0 || matchedSeasons.size > 0 || matchedSchoolNouns.length > 0;
+      !isWorkLounge &&
+      (queryYearTokens.length > 0 || matchedSeasons.size > 0 || matchedSchoolNouns.length > 0);
 
     // 개별 사진에 '성동', '89년', '2월' 등이 직접 적혀 있지 않아도 기본 검색 엔진이 오작동하지 않도록 정제된 쿼리 전달
     let cleanedSearchQuery = resolvedQuery;
-    for (const noun of matchedSchoolNouns) {
-      cleanedSearchQuery = cleanedSearchQuery.split(noun).join(' ');
+    if (!isWorkLounge) {
+      for (const noun of matchedSchoolNouns) {
+        cleanedSearchQuery = cleanedSearchQuery.split(noun).join(' ');
+      }
+    } else {
+      // 업무 공유(work)에서는 Z-Eye 여권 인물명/별명을 검색 대상에서 완전 제외
+      for (const tag of passportTagSet) {
+        const rawName = tag.slice(1);
+        if (rawName && cleanedSearchQuery.includes(rawName)) {
+          cleanedSearchQuery = cleanedSearchQuery.split(rawName).join(' ');
+        }
+      }
     }
-    cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, ' ').trim() || resolvedQuery;
+    cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, ' ').trim();
+
+    // 업무 공유(work)에서는 사진의 일반 시각/문서 분석 태그만 유지하고 Z-Eye 여권 인물 태그는 검색 대상에서 제외
+    const photosForSearch = isWorkLounge
+      ? photos.map((p) => ({
+          ...p,
+          tags: p.tags.filter((t) => !passportTagSet.has(t)),
+        }))
+      : photos;
 
     // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출
     const [docMatches, videoMatches, photoSearchOut] = await Promise.all([
-      searchLocalDocumentFilesAsync(cleanedSearchQuery, localDocuments),
-      searchVideoSceneItemsAsync(cleanedSearchQuery, videoSceneItems),
-      executeTextSearch(cleanedSearchQuery, photos, 'text-direct'),
+      searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
+      searchVideoSceneItemsAsync(cleanedSearchQuery || query, videoSceneItems),
+      cleanedSearchQuery
+        ? executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
+        : Promise.resolve({ results: [], embedMs: 0, searchMs: 0 }),
     ]);
 
     let { results } = photoSearchOut;

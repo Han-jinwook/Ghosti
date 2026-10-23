@@ -169,7 +169,7 @@ export const FaceMemberInlineBar: React.FC<{
   const [isCalloutExpanded, setIsCalloutExpanded] = useState(false);
 
   // 1. 👤 개인 라운지에서는 얼굴/여권 등록 박스 100% 제거 (완전 비노출!)
-  if (activeLoungeType === 'personal') {
+  if (activeLoungeType === 'personal' || activeLoungeType === 'work') {
     return null;
   }
 
@@ -466,6 +466,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
     runGlobalSwarmRetroScanAll,
     setSearchSpace,
     runTextQuery,
+    activeLoungeType,
   } = useSaySeeStore();
 
   const [selectedYearMap, setSelectedYearMap] = useState<Record<string, number>>({});
@@ -494,7 +495,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
     setModalDraftNames(map);
   }, [faceClusters]);
 
-  if (!showFaceRegistryModal) return null;
+  if (!showFaceRegistryModal || activeLoungeType === 'work') return null;
 
   const handleTriggerRealNameSearch = async (
     query: string,
@@ -972,7 +973,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
     activeFamilyRoom,
   } = useSaySeeStore();
 
-  if (!doorplatePickerClusterId) return null;
+  if (!doorplatePickerClusterId || activeLoungeType === 'work') return null;
 
   const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
   const targetCluster =

@@ -19,38 +19,31 @@ const LOUNGE_TABS: Array<{
 }> = [
   {
     id: 'personal',
-    icon: '👤',
-    label: '개인 라운지',
-    shortPrice: 'Z-Eye 클린 1,900원 · Z-Eye 투시검색 월 1,900원',
+    icon: '🆓',
+    label: '내 기기 (무료)',
+    shortPrice: 'PC 1대 + 모바일 1대 평생 무료',
     desc: '👁️ Z-Eye 투시검색 | 🩺 Z-Eye 클린 몬스터 | 🛠️ Z-Eye 설정 몬스터',
   },
   {
     id: 'family',
     icon: '👨‍👩‍👧‍👦',
-    label: '패밀리 라운지',
+    label: '패밀리 공유',
     shortPrice: '우리집 월 5,900원 · 양가 3방 월 8,900원',
     desc: '가족 대표 사진 얼굴 추출 & 이름 등록 ➔ 카톡 초대 & 3초 레이더 스캔 맛보기',
   },
   {
     id: 'club',
     icon: '⛳',
-    label: '클럽 라운지',
-    shortPrice: '소 4,900원 · 중 7,900원 · 대 14,900원',
-    desc: '모임 단체컷 얼굴 추출 & 참석자 폰 사진 레이더 수합 맛보기 (방 1개 기준)',
-  },
-  {
-    id: 'student',
-    icon: '🎒',
-    label: '스쿨 라운지',
-    shortPrice: '초·중·고 반/동아리 특가 월 900원 (연 9,000원)',
-    desc: '친구 얼굴 크롭 & 별명 등록 ➔ 레이더 10장 수합 ➔ 방장 게이밍 PC 콕 찌르기',
+    label: '동호회 · 동창회',
+    shortPrice: '인원수 무제한 월 4,900원 (연 49,000원) 단일가',
+    desc: '모임·동창 단체컷 얼굴 추출 & 참석자 폰 사진 레이더 수합 맛보기 (방 1개 기준)',
   },
   {
     id: 'work',
     icon: '💼',
-    label: '업무 라운지',
-    shortPrice: 'SOHO 팀 월 9,900원 · 기업 무제한 월 19,900원',
-    desc: '사무실 PC 폴더 1초 투시검색 & 윈도우 탐색기(S:) 자동 마운트 · 30KB 오프라인 프리뷰 · File Lock 충돌 방지',
+    label: '업무 공유 (S:)',
+    shortPrice: '1인 멀티PC 월 1,900원 · 소호 ~5인 월 9,900원 · 기업 ~100인 월 19,900원',
+    desc: '윈도우 탐색기(S:) 직접 마운트 · 서류 및 현장/제품 사진 AI 분석 (🛂 인물 여권 미발동)',
   },
 ];
 
@@ -1940,10 +1933,33 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
     fullTextPreview:
       '현장 감리 메모: 기존 건물 분전반 용량이 50A로 부족하여 한전 승압 신청 완료(100A). 바리스타존 커피머신 가동 시 차단기 트립 방지를 위해 P-04 단독 회로를 천장 트레이 경유하여 바 하부 점검구로 인출 완료함.',
   },
+  {
+    id: 'work-doc-7',
+    folderId: 'site',
+    folderPath: 'S:\\04_현장시공_도면_미디어',
+    fileName: '성수동_쇼룸_분전반_30A단독차단기_시공완료_현장사진.jpg',
+    ext: 'JPG',
+    sizeLabel: '3.6 MB',
+    updatedAt: '2026-10-14',
+    author: '강사원 (현장감리)',
+    lockedBy: null,
+    cacheSizeLabel: '18.2 KB 시각 분석 캐싱됨',
+    summaryTitle: '[현장 시공 사진 AI 시각·OCR 분석] 분전반 내부 ELCB 30A 단독 차단기 라벨(P-04 에스프레소 전용) 및 접지선 결선 상태 검수 사진',
+    matchedSnippet:
+      '사진 시각·라벨 OCR 분석: "분전반 우측 하단 P-04 에스프레소 머신 전용 ELCB 2P 30A 누전차단기 장착 및 녹색 접지선(HIV 6.0sq) 직결 시공 확인 완료 (※ 업무방: 인물 여권 미발동 · 현장 사물/라벨만 분석)"',
+    tableHeaders: ['분석 항목', 'AI 시각·OCR 판독 결과', '검수 상태'],
+    tableRows: [
+      ['차단기 명판 OCR', 'ELCB 2P 30A (정격감도전류 30mA) · P-04 에스프레소 전용', '도면 일치 (정상)'],
+      ['배선 및 접지 시각 분석', 'HIV 6.0sq 흑·적·녹 3선 압착단자 체결 완료', '합격'],
+      ['인물 여권 보호 정책', '업무 공유방 내 인물 얼굴 여권 미발동 (검색 대상 제외)', '적용됨'],
+    ],
+    fullTextPreview:
+      '업무 공유방 사진 분석 리포트: 현장 시공 사진, 자재 명판, 영수증·증빙 사진의 사물 및 텍스트(OCR)는 100% 시각 분석되어 검색되지만, Z-Eye 인물 여권(얼굴 클러스터링·인물 바구니)은 업무 프라이버시 원칙에 따라 발동하지 않으며 검색 대상에서도 제외됩니다.',
+  },
 ];
 
 export const WorkLoungeB2BHub: React.FC = () => {
-  const { isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges } =
+  const { isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges, faceClusters } =
     useSaySeeStore();
   const [viewMode, setViewMode] = useState<'semantic' | 'explorer'>('semantic');
   const [driveTargetPath, setDriveTargetPath] = useState('D:\\Z-Eye\\업무공유폴더_S');
@@ -1955,12 +1971,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const workPlan = subscribedLounges.work;
   const [folderCounts, setFolderCounts] = useState<Record<string, number>>({
-    all: 6,
+    all: 7,
     root: 1,
     contracts: 2,
     quotes: 2,
     tax: 1,
-    site: 1,
+    site: 2,
   });
 
   // 실제 S: 드라이브 폴더 스캔 및 문서 목록 실시간 동기화
@@ -2054,7 +2070,24 @@ export const WorkLoungeB2BHub: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // 어절(단어) 단위 스마트 매칭: "지체상금 0.15%" 클릭 시 "지체상금(1일 0.15%)"도 100% 매칭
+  // 업무 공유(work)에서는 Z-Eye 인물 여권(얼굴 클러스터링·인물 별명)이 발동하지 않으며 검색 대상에서도 제외됨
+  const passportPersonTokens = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const fc of faceClusters) {
+      if (fc.registeredName?.trim()) s.add(fc.registeredName.trim().toLowerCase());
+      for (const pv of Object.values(fc.roomPersonas ?? {})) {
+        const clean = (pv || '').trim();
+        if (clean) {
+          s.add(clean.toLowerCase());
+          const short = clean.replace(/\([^)]*\)/g, '').trim();
+          if (short.length >= 2) s.add(short.toLowerCase());
+        }
+      }
+    }
+    return s;
+  }, [faceClusters]);
+
+  // 어절(단어) 단위 스마트 매칭: "지체상금 0.15%" 클릭 시 "지체상금(1일 0.15%)"도 100% 매칭 (단, 여권 인물명은 검색 제외)
   const filteredDocs = docs.filter((doc) => {
     const folderMatch =
       viewMode === 'semantic'
@@ -2063,7 +2096,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (!folderMatch) return false;
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
-    const tokens = q.split(/\s+/).filter(Boolean);
+    const rawTokens = q.split(/\s+/).filter(Boolean);
+    const nonPassportTokens = rawTokens.filter((tk) => !passportPersonTokens.has(tk));
+    if (nonPassportTokens.length === 0) return false;
     const combinedText = [
       doc.fileName,
       doc.summaryTitle,
@@ -2073,7 +2108,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     ]
       .join(' ')
       .toLowerCase();
-    return tokens.every((token) => combinedText.includes(token));
+    return nonPassportTokens.every((token) => combinedText.includes(token));
   });
 
   // 검색 결과(filteredDocs) 중에서 우선 선택하여 좌측 리스트와 우측 프리뷰가 항상 100% 동기화되도록 보장
@@ -2097,6 +2132,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     '한빛테크 미수금',
     '성수목공 비교견적',
     '에스프레소 30A 단독 회로',
+    '분전반 시공완료 현장사진',
   ];
 
   return (
@@ -2106,7 +2142,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <h2 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight">
-              💼 사무실 업무 문서함 (S:\)
+              💼 사무실 업무 문서·현장사진함 (S:\)
             </h2>
             {workPlan && (
               <span className="text-[12px] text-emerald-400 font-bold">
@@ -2116,6 +2152,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-400/25 text-[11.5px] text-emerald-300 font-bold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               사무실 PC 연결됨 · 팀원 6명
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-400/25 text-[11px] text-cyan-300 font-bold">
+              📸 현장·증빙 사진 AI 분석 · 🛂 인물 여권 미발동(검색 제외)
             </span>
           </div>
 
@@ -2135,7 +2174,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 setSearchQuery(e.target.value);
                 if (e.target.value.trim()) setIsSidePeekOpen(true);
               }}
-              placeholder="계약서 조항, 엑셀 단가표 숫자, 거래처 미수금, 파일명 검색..."
+              placeholder="계약서 조항, 엑셀 단가표 숫자, 현장 시공 사진(차단기·배선·자재 라벨), 파일명 검색... (인물 여권 제외)"
               className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13.5px] focus:outline-none"
             />
             {searchQuery && (
@@ -2961,8 +3000,21 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         </div>
 
-        {/* 🎯 ✨ AI 얼굴 자동 매칭 도우미 + 👑 방장 누락분 & 연도 제보 일괄 승인 */}
-        <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
+        {/* 🎯 업무 공유(work)에서는 인물 여권 미발동 & 현장/제품 사진 일반 시각 분석 안내만 노출 */}
+        {activeLoungeType === 'work' ? (
+          <div className="p-4 rounded-xl bg-zinc-950/90 border border-cyan-400/30 flex flex-wrap items-center justify-between gap-2.5 text-[12px] text-zinc-200">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                📸 업무 사진·서류 시각 분석 가동 중
+              </span>
+              <span className="font-bold">
+                현장 시공 사진, 자재 라벨, 촬영 서류의 사물·텍스트(OCR)만 자동 분석합니다 (🛂 Z-Eye 인물 여권은 업무 공유에서 미발동 · 검색 제외)
+              </span>
+            </div>
+          </div>
+        ) : (
+          /* 🎯 ✨ AI 얼굴 자동 매칭 도우미 + 👑 방장 누락분 & 연도 제보 일괄 승인 */
+          <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
@@ -3079,9 +3131,11 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             </div>
           )}
         </div>
+        )}
       </section>
 
-      {/* 3 & 4. 옛날 스캔 사진용 '연도·장소 스티커' & [❓ 언제/어디인가요?] 동기 제보 ➔ 👑 방장 일괄 승인 */}
+      {/* 3 & 4. 옛날 스캔 사진용 '연도·장소 스티커' & [❓ 언제/어디인가요?] 동기 제보 ➔ 👑 방장 일괄 승인 (업무 공유 제외) */}
+      {activeLoungeType !== 'work' && (
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-amber-400/35 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -3329,6 +3383,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           })}
         </div>
       </section>
+      )}
 
       {/* 새로 올라온 사진 정리함 그리드 */}
       <section className="flex flex-col gap-3">

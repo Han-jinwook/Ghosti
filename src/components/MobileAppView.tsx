@@ -107,11 +107,10 @@ const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
   label: string;
 }> = [
-  { id: 'personal', label: '개인 라운지' },
-  { id: 'family', label: '패밀리 라운지' },
-  { id: 'club', label: '클럽 라운지' },
-  { id: 'student', label: '스쿨 라운지' },
-  { id: 'work', label: '업무 라운지' },
+  { id: 'personal', label: '내 기기(무료)' },
+  { id: 'family', label: '패밀리 공유' },
+  { id: 'club', label: '동호·동창회' },
+  { id: 'work', label: '업무 공유(S:)' },
 ];
 
 const MOBILE_LOUNGE_SUBMENUS: Record<
@@ -304,9 +303,9 @@ export const MobileAppView: React.FC = () => {
               </div>
             </div>
 
-            {/* 우상단: Z-Eye 여권 자동 문패 + 설정 몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
+            {/* 우상단: Z-Eye 여권 자동 문패(업무 공유 제외) + 설정 몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
             <div className="flex items-center gap-1.5 shrink-0" aria-label="화면 테마 영역">
-              {myPassportCluster && (
+              {myPassportCluster && activeLoungeType !== 'work' && (
                 <button
                   type="button"
                   onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
