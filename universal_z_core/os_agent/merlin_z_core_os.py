@@ -966,6 +966,62 @@ def bring_window_to_front_immediately(hw_int: int) -> None:
         user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
 
 
+def set_clipboard_unicode_text_pure_win32(text: str) -> None:
+    """외부 프로세스 없이 순수 Win32 API로 유니코드 문자열을 클립보드에 복사합니다."""
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    user32.SetClipboardData.restype = wintypes.HANDLE
+
+    data = text.encode("utf-16-le") + b"\x00\x00"
+    if user32.OpenClipboard(None):
+        try:
+            user32.EmptyClipboard()
+            h_mem = kernel32.GlobalAlloc(0x0042, len(data))  # GHND
+            if h_mem:
+                ptr = kernel32.GlobalLock(h_mem)
+                if ptr:
+                    ctypes.memmove(ptr, data, len(data))
+                    kernel32.GlobalUnlock(h_mem)
+                    user32.SetClipboardData(13, h_mem)  # CF_UNICODETEXT = 13
+        finally:
+            user32.CloseClipboard()
+
+
+def filter_explorer_by_search_box_pure_win32(hw_int: int, query_text: str) -> None:
+    """
+    'search-ms:' URI 프로토콜(system.generic.string 스토어 앱 팝업 오류 유발)을 일절 사용하지 않고,
+    일반 폴더 탐색기 창에서 F3(검색창 포커스) ➔ Ctrl+V(파일명 붙여넣기) ➔ Enter를 순수 Win32로 입력하여
+    멀린님이 직접 검색창에 입력하셨을 때와 100% 동일하게 타겟 파일 1개만 단독 필터링합니다.
+    """
+    user32 = ctypes.windll.user32
+    hw = wintypes.HWND(hw_int)
+    set_clipboard_unicode_text_pure_win32(query_text)
+    user32.SetForegroundWindow(hw)
+    time.sleep(0.12)
+
+    # 1. F3 (0x72): Windows 탐색기 우측 상단 검색창으로 즉시 포커스 이동
+    user32.keybd_event(0x72, 0, 0, 0)
+    user32.keybd_event(0x72, 0, 2, 0)
+    time.sleep(0.14)
+
+    # 2. Ctrl+V (0x11 + 0x56): 검색창에 파일명 붙여넣기
+    user32.keybd_event(0x11, 0, 0, 0)
+    user32.keybd_event(0x56, 0, 0, 0)
+    user32.keybd_event(0x56, 0, 2, 0)
+    user32.keybd_event(0x11, 0, 2, 0)
+    time.sleep(0.10)
+
+    # 3. Enter (0x0D): 즉시 검색 실행
+    user32.keybd_event(0x0D, 0, 0, 0)
+    user32.keybd_event(0x0D, 0, 2, 0)
+
+
 def scroll_explorer_file_to_center_pure_win32(hw_int: int) -> None:
     """
     PowerShell이나 외부 콘솔 프로세스를 단 1개도 띄우지 않고(파란 창 깜빡임 0%),
@@ -1041,20 +1097,8 @@ def run_gui_task_runner() -> None:
         }
 
         if is_search:
-            # Windows 탐색기 검색창에 파일명을 자동 입력(search-ms:)하여 수백 개 파일 중 이 파일 1개만 노란 하이라이트로 단독 표시! (콘솔 창 0%)
-            q_enc = urllib.parse.quote(target_file.stem)
-            dname_enc = urllib.parse.quote(f"{folder_name}의 검색 결과")
-            loc_enc = urllib.parse.quote(str(folder_path))
-            search_uri = (
-                f"search-ms:displayname={dname_enc}"
-                f"&crumb=System.Generic.String:{q_enc}"
-                f"&crumb=location:{loc_enc}"
-            )
-            subprocess.Popen(
-                ["explorer.exe", search_uri],
-                shell=False,
-                creationflags=0x08000000,
-            )
+            # 일반 폴더를 안전하게 연 뒤(스토어 앱 팝업 0%) 탐색기 우측 상단 검색창에 파일명을 자동 입력!
+            os.startfile(str(folder_path))
         else:
             subprocess.Popen(
                 ["explorer.exe", f"/select,{target_file}"],
@@ -1083,11 +1127,13 @@ def run_gui_task_runner() -> None:
             return
 
         hw_int = primary_win["rawHwnd"]
-        if not is_search:
+        if is_search:
+            time.sleep(0.32)
+            filter_explorer_by_search_box_pure_win32(hw_int, target_file.stem)
+            time.sleep(0.25)
+        else:
             time.sleep(0.32)
             scroll_explorer_file_to_center_pure_win32(hw_int)
-        else:
-            time.sleep(0.45)
 
         # 탐색기 창을 크롬 위 전면에 유지하되 일반 창(NOTOPMOST)으로 전환
         hw = wintypes.HWND(hw_int)
