@@ -928,11 +928,16 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
         return False
 
 
-def bring_window_to_front_immediately(hw_int: int, x: int = 240, y: int = 150, w: int = 1020, h: int = 650) -> None:
+def bring_window_to_front_immediately(hw_int: int) -> None:
+    """창의 원래 크기와 위치(큰 탐색기 창)를 그대로 유지(SWP_NOMOVE | SWP_NOSIZE)하면서 모니터 맨 앞으로 끌어올립니다."""
     user32 = ctypes.windll.user32
     hw = wintypes.HWND(hw_int)
-    user32.ShowWindow(hw, 9)  # SW_RESTORE
-    user32.SetWindowPos(hw, wintypes.HWND(-1), x, y, w, h, 0x0040)
+    if user32.IsIconic(hw):
+        user32.ShowWindow(hw, 9)  # 최소화된 경우에만 SW_RESTORE
+    else:
+        user32.ShowWindow(hw, 5)  # 원래 크기(최대화/큰 창) 그대로 SW_SHOW
+    # 0x0001(SWP_NOSIZE) | 0x0002(SWP_NOMOVE) | 0x0040(SWP_SHOWWINDOW) = 0x0043
+    user32.SetWindowPos(hw, wintypes.HWND(-1), 0, 0, 0, 0, 0x0043)
     try:
         user32.SwitchToThisWindow(hw, True)
     except Exception:
@@ -965,29 +970,26 @@ def run_gui_task_runner() -> None:
         target_file = Path(target_str)
         folder_name = target_file.parent.name
 
-        # 1. 이미 해당 폴더 창이 열려 있다면 0.00초 만에 먼저 화면 맨 앞으로 끌어올림
-        existing_wins = find_all_windows_on_default_desktop(folder_name)
-        for w_info in existing_wins:
-            bring_window_to_front_immediately(w_info["rawHwnd"])
-
-        # 2. explorer.exe /select 실행하여 해당 파일 하이라이트 선택
-        subprocess.Popen(f'explorer.exe /select,"{target_file}"', shell=True)
-
-        # 3. 0.04초 간격 초고속 폴링으로 새로 열린(또는 갱신된) 탐색기 창을 즉시 맨 앞으로 고정
+        # explorer.exe /select는 MerlinZCoreDirectExplorer에서 단 1회만 실행됨 (중복 실행 금지!)
+        # 여기서는 열린 단일 탐색기 창을 원래 큰 크기 그대로 모니터 맨 앞으로 전면 배치만 수행합니다.
         matched_wins: List[Dict[str, Any]] = []
         for _ in range(25):
             matched_wins = find_all_windows_on_default_desktop(folder_name)
             if matched_wins:
-                for w_info in matched_wins:
-                    bring_window_to_front_immediately(w_info["rawHwnd"])
+                # 혹시라도 이전 창이 남아 2개 이상이면 가장 최근(첫 번째) 창 1개만 남기고 중복 창은 즉시 닫음
+                primary_win = matched_wins[0]
+                for dup in matched_wins[1:]:
+                    user32.PostMessageW(wintypes.HWND(dup["rawHwnd"]), 0x0010, 0, 0)
+                bring_window_to_front_immediately(primary_win["rawHwnd"])
+                matched_wins = [primary_win]
                 break
             time.sleep(0.04)
 
-        # 0.7초 동안 TopMost를 유지해 크롬 브라우저 뒤로 절대 밀리지 않게 한 뒤 일반 전면 창으로 전환
-        time.sleep(0.7)
+        # 0.6초 동안 TopMost를 유지해 크롬 브라우저 뒤로 밀리지 않게 한 뒤 일반 전면 창으로 전환 (크기/위치 불변)
+        time.sleep(0.6)
         for w_info in matched_wins:
             hw = wintypes.HWND(w_info["rawHwnd"])
-            user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+            user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
         return
 
     if mode == "overlay":
@@ -1020,9 +1022,9 @@ def run_gui_task_runner() -> None:
         target_title = str(target_win.get("title", "")) if target_win else ""
 
         if target_hwnd:
-            bring_window_to_front_immediately(target_hwnd, x=260, y=210, w=980, h=600)
+            bring_window_to_front_immediately(target_hwnd)
             time.sleep(0.1)
-            user32.SetWindowPos(wintypes.HWND(target_hwnd), wintypes.HWND(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+            user32.SetWindowPos(wintypes.HWND(target_hwnd), wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
 
         launch_real_topmost_overlay(
             int(payload.get("x", 320)),
@@ -1086,25 +1088,29 @@ def spawn_overlay_detached(
 
 def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, Any]:
     """
-    불필요한 사전 화살표나 파워쉘 지연 없이 즉시 Windows 탐색기 창을 모니터 맨 앞으로 튀어나오게 합니다.
+    중복 창이나 크기 축소 없이, 단 1개의 큰 Windows 탐색기 창만 모니터 맨 앞으로 즉시 열고 해당 파일을 선택합니다.
     """
     t0 = time.perf_counter()
     ensure_merlin_dirs()
     attach_thread_to_interactive_desktop()
+    user32 = ctypes.windll.user32
 
     folder_path = target_file.parent
     folder_name = folder_path.name
 
-    # 1. 이미 해당 폴더 창이 열려 있다면 0.01초 만에 즉시 모니터 맨 앞으로 끌어올림
+    # 1. 이전에 열려 있던 동일 폴더 창이 있으면 먼저 닫아 탐색기 2개 중복 팝업을 원천 차단
     existing_wins = find_all_windows_on_default_desktop(folder_name)
     for w_info in existing_wins:
-        bring_window_to_front_immediately(w_info["rawHwnd"])
+        try:
+            user32.PostMessageW(wintypes.HWND(w_info["rawHwnd"]), 0x0010, 0, 0)
+        except Exception:
+            pass
 
-    # 2. 파이썬 부팅 대기 없이 작업 스케줄러(/IT)가 explorer.exe /select를 직접 실행
+    # 2. 작업 스케줄러(/IT)가 explorer.exe /select를 단 1회만 직접 실행 (원래 큰 창 크기 유지 + 파일 선택)
     tr_explorer = f'explorer.exe /select,"{target_file}"'
     sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreDirectExplorer", tr_explorer)
 
-    # 3. 동시에 대화형 세션 워커(gui-task-runner)도 깨워 새로 열린 탐색기 창을 TopMost -> 전면 고정
+    # 3. 대화형 세션 워커(gui-task-runner)가 새로 열린 단 1개의 큰 탐색기 창을 크롬 맨 앞으로 전면 고정
     script_path = str(Path(__file__).resolve())
     pyw_exe = get_pythonw_executable()
     payload = {
@@ -1114,16 +1120,14 @@ def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, An
     GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     run_interactive_gui_via_schtasks("MerlinZCoreOverlay", f'"{pyw_exe}" "{script_path}" gui-task-runner')
 
-    opened_win: Dict[str, Any] = existing_wins[0] if existing_wins else {}
-    if not opened_win:
-        for _ in range(25):
-            time.sleep(0.05)
-            found = find_all_windows_on_default_desktop(folder_name)
-            if found:
-                opened_win = found[0]
-                for w_info in found:
-                    bring_window_to_front_immediately(w_info["rawHwnd"])
-                break
+    opened_win: Dict[str, Any] = {}
+    for _ in range(6):
+        time.sleep(0.04)
+        found = find_all_windows_on_default_desktop(folder_name)
+        if found:
+            opened_win = found[0]
+            bring_window_to_front_immediately(opened_win["rawHwnd"])
+            break
 
     elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
     return {
@@ -1138,7 +1142,7 @@ def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, An
         "targetPath": str(target_file),
         "message": (
             f"⚡ {elapsed_ms}ms 만에 실제 모니터 맨 앞(HWND {opened_win.get('hwnd', '활성')})으로 "
-            f"[{folder_name}] 탐색기 폴더를 즉시 열고 [{target_file.name}] 파일을 선택했습니다!"
+            f"[{folder_name}] 큰 탐색기 창 1개를 즉시 열고 [{target_file.name}] 파일을 선택했습니다!"
         ),
     }
 
