@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.parse
 import winreg
 import zipfile
 import xml.etree.ElementTree as ET
@@ -581,6 +582,7 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
     scanned_dirs_report: List[Dict[str, Any]] = []
     found_files: List[Dict[str, Any]] = []
     seen_paths = set()
+    folder_count_cache: Dict[str, int] = {}
 
     for vault_label, folder in vault_locations:
         exists = folder.exists()
@@ -615,11 +617,18 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
                     stat = fpath.stat()
                     seen_paths.add(resolved_str)
                     matched_in_dir += 1
+                    parent_key = str(fpath.parent)
+                    if parent_key not in folder_count_cache:
+                        try:
+                            folder_count_cache[parent_key] = sum(1 for _ in fpath.parent.iterdir())
+                        except Exception:
+                            folder_count_cache[parent_key] = 1
                     found_files.append(
                         {
                             "fileName": fpath.name,
                             "fullPath": resolved_str,
                             "vaultLabel": vault_label,
+                            "folderFileCount": folder_count_cache[parent_key],
                             "sizeBytes": stat.st_size,
                             "sizeFormatted": f"{stat.st_size / 1024:.1f} KB" if stat.st_size < 1048576 else f"{stat.st_size / 1048576:.2f} MB",
                             "modifiedAt": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
@@ -668,10 +677,11 @@ def launch_real_topmost_overlay(
     y: int,
     text: str,
     duration_sec: int = 10,
+    pointer_label: str = "👇 바로 아래 버튼을 클릭하세요! 👇",
 ) -> None:
     """
-    유저가 클릭해야 할 실제 타겟 버튼 좌표(x, y) 바로 위에
-    컴팩트한 손가락 화살표(👇/👆) 가이드 말풍선을 정확히 띄웁니다.
+    유저가 확인/클릭해야 할 실제 타겟 좌표(x, y) 바로 위에
+    컴팩트한 손가락 화살표(👇) 가이드 말풍선을 정확히 띄웁니다.
     """
     attach_thread_to_interactive_desktop()
     try:
@@ -688,14 +698,12 @@ def launch_real_topmost_overlay(
     root.attributes("-topmost", True)
     root.config(bg="#E11D48")
 
-    screen_w = root.winfo_screenwidth()
-    screen_h = root.winfo_screenheight()
-    win_w = 370
-    win_h = 92
+    win_w = 380
+    win_h = 94
 
-    # 타겟 버튼 좌표 (x, y) 바로 위에 말풍선 끝이 오도록 배치
-    pos_x = max(16, min(screen_w - win_w - 16, x - (win_w // 2)))
-    pos_y = max(16, min(screen_h - win_h - 40, y - win_h - 10))
+    # 듀얼/멀티 모니터 전체 좌표계(x > 1920 또는 음수 좌표 포함)에서 클램핑 없이 타겟 좌표 바로 위에 정확히 배치!
+    pos_x = int(x - (win_w // 2))
+    pos_y = int(y - win_h - 8)
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
 
     outer = tk.Frame(root, bg="#FACC15", padx=3, pady=3)
@@ -715,7 +723,7 @@ def launch_real_topmost_overlay(
         bg="#0F172A",
         anchor="w",
         justify="left",
-        wraplength=295,
+        wraplength=305,
     )
     msg_lbl.pack(side="left", fill="x", expand=True)
 
@@ -737,7 +745,7 @@ def launch_real_topmost_overlay(
 
     pointer_lbl = tk.Label(
         card,
-        text="👇 바로 아래 버튼을 클릭하세요! 👇",
+        text=pointer_label,
         font=("Malgun Gothic", 10, "bold"),
         fg="#0F172A",
         bg="#FACC15",
@@ -782,6 +790,52 @@ def find_all_windows_on_default_desktop(keyword: str) -> List[Dict[str, Any]]:
                     "hwnd": f"0x{hwnd:08X}",
                     "rawHwnd": int(hwnd),
                     "title": buf.value,
+                    "rect": [int(rect.left), int(rect.top), int(rect.right - rect.left), int(rect.bottom - rect.top)],
+                }
+            )
+        return True
+
+    if hdesk:
+        user32.EnumDesktopWindows(wintypes.HANDLE(hdesk), WNDENUMPROC(cb), 0)
+    return found
+
+
+def find_explorer_windows_on_default_desktop(
+    keywords: List[str],
+    exclude_hwnds: set | None = None,
+) -> List[Dict[str, Any]]:
+    """WinSta0\\Default 데스크톱에서 열려 있는 실제 Windows 탐색기(CabinetWClass) 창을 찾습니다."""
+    user32 = ctypes.windll.user32
+    hdesk = attach_thread_to_interactive_desktop()
+    found: List[Dict[str, Any]] = []
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    kw_lowers = [k.lower() for k in keywords if k]
+
+    def cb(hwnd: int, _lp: int) -> bool:
+        hw = wintypes.HWND(hwnd)
+        if not user32.IsWindowVisible(hw):
+            return True
+        cls_buf = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(hw, cls_buf, 64)
+        if cls_buf.value not in ("CabinetWClass", "ExploreWClass"):
+            return True
+        n = user32.GetWindowTextLengthW(hw)
+        title_val = ""
+        if n > 0:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            user32.GetWindowTextW(hw, buf, n + 1)
+            title_val = buf.value
+
+        is_new = exclude_hwnds is not None and int(hwnd) not in exclude_hwnds
+        title_matched = any(k in title_val.lower() for k in kw_lowers) if kw_lowers else True
+        if is_new or title_matched:
+            rect = wintypes.RECT()
+            user32.GetWindowRect(hw, ctypes.byref(rect))
+            found.append(
+                {
+                    "hwnd": f"0x{hwnd:08X}",
+                    "rawHwnd": int(hwnd),
+                    "title": title_val,
                     "rect": [int(rect.left), int(rect.top), int(rect.right - rect.left), int(rect.bottom - rect.top)],
                 }
             )
@@ -872,33 +926,32 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
 def bring_window_to_front_immediately(hw_int: int) -> None:
     """
     멀린님이 현재 보고 계신 '제트아이 (Z-Eye)' 브라우저가 있는 모니터 한가운데 맨 앞으로
-    탐색기 창의 원래 큰 크기를 유지한 채 즉시 끌어올립니다 (작업줄 주황색 깜빡임 원천 차단).
+    작업표시줄에 가려지지 않는 넉넉한 크기로 탐색기 창을 즉시 끌어올립니다.
     """
     user32 = ctypes.windll.user32
     hw = wintypes.HWND(hw_int)
 
-    # 현재 탐색기 창의 원래 크기(w, h) 측정 (작게 줄이지 않고 원래 큰 크기 유지)
     rc = wintypes.RECT()
     user32.GetWindowRect(hw, ctypes.byref(rc))
-    w = max(960, rc.right - rc.left)
-    h = max(680, rc.bottom - rc.top)
+    w = max(1160, rc.right - rc.left)
+    h = max(760, rc.bottom - rc.top)
     target_x = rc.left
     target_y = rc.top
 
-    # '제트아이 (Z-Eye)' 브라우저 창이 있는 모니터 위치를 찾아 동일한 모니터 정중앙으로 이동
+    # '제트아이 (Z-Eye)' 브라우저 창이 있는 모니터 위치를 찾아 동일한 모니터 중앙(작업표시줄 위쪽 안전 영역)으로 이동
     z_win = find_window_on_default_desktop("제트아이") or find_window_on_default_desktop("Z-Eye")
     if z_win and z_win.get("rect"):
         zx, zy, zw, zh = z_win["rect"]
-        h = min(h, max(680, zh - 120))
-        target_x = zx + max(60, (zw - w) // 2)
-        target_y = zy + max(85, (zh - h) // 2)
+        w = min(max(1180, w), max(1000, zw - 120))
+        h = min(max(760, h), max(680, zh - 140))
+        target_x = zx + max(40, (zw - w) // 2)
+        target_y = zy + 55
 
     if user32.IsIconic(hw):
         user32.ShowWindow(hw, 9)  # SW_RESTORE
     else:
         user32.ShowWindow(hw, 5)  # SW_SHOW
 
-    # Windows Focus Stealing Prevention(작업줄만 주황색으로 깜빡이는 현상) 우회: Alt 키 이벤트 + TopMost 전면 배치
     try:
         user32.keybd_event(0x12, 0, 0, 0)  # VK_MENU press
         user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
@@ -907,6 +960,131 @@ def bring_window_to_front_immediately(hw_int: int) -> None:
         user32.SwitchToThisWindow(hw, True)
     except Exception:
         user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
+
+
+def center_and_find_file_item_rect_in_explorer(
+    hw_int: int,
+    target_file: Path,
+    is_search_mode: bool = False,
+) -> List[int]:
+    """
+    500개 이상 파일이 있는 폴더에서도:
+    1) Shell.Application COM 인터페이스(SelectItem 29) 및 UIA ScrollItemPattern으로 타겟 파일을 즉시 가시화(EnsureVisible)하고,
+    2) 파일이 탐색기 하단 경계(하단 220px 이내)에 걸려 있으면 마우스 휠을 굴려 탐색기 창 정중앙으로 끌어올린 뒤,
+    3) Windows UI Automation으로 해당 파일 아이콘의 정확한 모니터 좌표 [x, y, w, h]를 단일 패스로 반환합니다.
+    """
+    user32 = ctypes.windll.user32
+    hw = wintypes.HWND(hw_int)
+    rc = wintypes.RECT()
+    user32.GetWindowRect(hw, ctypes.byref(rc))
+    win_left = int(rc.left)
+    win_top = int(rc.top)
+    win_cx = int((rc.left + rc.right) // 2)
+    win_cy = int((rc.top + rc.bottom) // 2)
+    win_bottom = int(rc.bottom)
+
+    file_name_esc = target_file.name.replace("'", "''")
+    file_stem_esc = target_file.stem.replace("'", "''")
+    do_com_select = "0" if is_search_mode else "1"
+
+    ps_uia = f"""
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class WinWheel {{
+    [DllImport("user32.dll")] public static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
+    [DllImport("user32.dll")] public static extern bool SetThreadDesktop(IntPtr hDesktop);
+    [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT lpPoint);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
+    public struct POINT {{ public int X; public int Y; }}
+    public static void AttachDesktop() {{
+        IntPtr h = OpenInputDesktop(0, false, 0x01FF);
+        if (h != IntPtr.Zero) SetThreadDesktop(h);
+    }}
+    public static void ScrollDownAt(int cx, int cy, int delta) {{
+        POINT pt;
+        GetCursorPos(out pt);
+        SetCursorPos(cx, cy);
+        mouse_event(0x0800, 0, 0, delta, 0);
+        SetCursorPos(pt.X, pt.Y);
+    }}
+}}
+"@
+[WinWheel]::AttachDesktop()
+
+try {{
+    if ({do_com_select} -eq 1) {{
+        $shell = New-Object -ComObject Shell.Application
+        foreach ($w in $shell.Windows()) {{
+            try {{
+                if ([int64]$w.HWND -eq {hw_int}) {{
+                    $doc = $w.Document
+                    $fi = $doc.Folder.ParseName('{file_name_esc}')
+                    if (-not $fi) {{
+                        $fi = $doc.Folder.ParseName('{file_stem_esc}')
+                    }}
+                    if ($fi) {{
+                        $doc.SelectItem($fi, 29)
+                        Start-Sleep -Milliseconds 160
+                    }}
+                }}
+            }} catch {{}}
+        }}
+    }}
+
+    $el = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]{hw_int})
+    if ($el) {{
+        $cond1 = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '{file_name_esc}')
+        $cond2 = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '{file_stem_esc}')
+        $orCond = New-Object System.Windows.Automation.OrCondition($cond1, $cond2)
+        $all = $el.FindAll([System.Windows.Automation.TreeScope]::Descendants, $orCond)
+        $targetItem = $null
+        if ($all -and $all.Count -gt 0) {{
+            foreach ($cand in $all) {{
+                $cr = $cand.Current.BoundingRectangle
+                if ($cr.Width -gt 0 -and $cr.Top -gt ({win_top} + 135) -and $cr.Left -gt ({win_left} + 140)) {{
+                    $targetItem = $cand
+                    break
+                }}
+            }}
+            if (-not $targetItem) {{
+                $targetItem = $all[0]
+            }}
+        }}
+
+        if ($targetItem) {{
+            $r = $targetItem.Current.BoundingRectangle
+            if ({do_com_select} -eq 1 -and $r.Height -gt 0 -and ($r.Bottom -gt ({win_bottom} - 220))) {{
+                [WinWheel]::ScrollDownAt({win_cx}, {win_cy}, -360)
+                Start-Sleep -Milliseconds 220
+                $r = $targetItem.Current.BoundingRectangle
+            }}
+            if ($r.Width -gt 0 -and $r.Height -gt 0) {{
+                Write-Output ("RECT:" + [int]$r.Left + "," + [int]$r.Top + "," + [int]$r.Width + "," + [int]$r.Height)
+            }}
+        }}
+    }}
+}} catch {{}}
+"""
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_uia],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=4.0,
+        )
+        for line in res.stdout.splitlines():
+            if line.startswith("RECT:"):
+                parts = [int(v) for v in line.replace("RECT:", "").split(",")]
+                if len(parts) == 4:
+                    return parts
+    except Exception:
+        pass
+    return []
 
 
 def run_gui_task_runner() -> None:
@@ -927,38 +1105,111 @@ def run_gui_task_runner() -> None:
     user32 = ctypes.windll.user32
     mode = payload.get("mode", "overlay")
 
-    if mode == "open_file_location":
+    if mode in ("open_file_location", "open_file_search", "open_file_direct"):
         target_str = str(payload.get("targetPath", ""))
         if not target_str:
             return
         target_file = Path(target_str)
-        folder_name = target_file.parent.name
+        if not target_file.exists():
+            return
 
-        # 1. 대화형 세션(WinSta0\Default) 내부에서 explorer.exe /select 단 1회 실행
-        subprocess.Popen(f'explorer.exe /select,"{target_file}"', shell=True)
+        if mode == "open_file_direct":
+            try:
+                os.startfile(str(target_file))
+            except Exception:
+                subprocess.Popen(f'cmd /c start "" "{target_file}"', shell=True)
+            return
 
-        # 2. 열린 탐색기 창이 감지되는 즉시 '제트아이 (Z-Eye)'가 있는 모니터 한가운데 맨 앞으로 이동·고정
-        matched_wins: List[Dict[str, Any]] = []
-        for _ in range(45):
+        folder_path = target_file.parent
+        folder_name = folder_path.name
+        is_search = mode == "open_file_search"
+
+        # 기존에 같은 폴더나 검색 결과로 열려 있던 탐색기 창이 있으면 먼저 닫아 단일 창만 깔끔하게 표시
+        old_same_wins = find_explorer_windows_on_default_desktop([folder_name, "검색 결과", target_file.stem])
+        for old_w in old_same_wins:
+            try:
+                user32.PostMessageW(wintypes.HWND(old_w["rawHwnd"]), 0x0010, 0, 0)
+            except Exception:
+                pass
+        if old_same_wins:
+            time.sleep(0.12)
+
+        existing_other_explorers = {
+            w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])
+        }
+
+        if is_search:
+            # Windows 탐색기 검색창에 파일명을 자동 입력(search-ms:)하여 수백 개 파일 중 이 파일 1개만 노란 하이라이트로 단독 표시!
+            q_enc = urllib.parse.quote(target_file.stem)
+            dname_enc = urllib.parse.quote(f"{folder_name}의 검색 결과")
+            loc_enc = urllib.parse.quote(str(folder_path))
+            search_uri = (
+                f"search-ms:displayname={dname_enc}"
+                f"&crumb=System.Generic.String:{q_enc}"
+                f"&crumb=location:{loc_enc}"
+            )
+            subprocess.Popen(f'explorer.exe "{search_uri}"', shell=True)
+        else:
+            subprocess.Popen(f'explorer.exe /select,"{target_file}"', shell=True)
+
+        primary_win: Dict[str, Any] = {}
+        for _ in range(50):
             time.sleep(0.06)
-            matched_wins = find_all_windows_on_default_desktop(folder_name)
-            if matched_wins:
-                primary_win = matched_wins[0]
-                # 혹시 동일 폴더 창이 2개 이상이면 첫 번째 창만 남기고 나머지는 닫음
-                for dup in matched_wins[1:]:
+            candidates = find_explorer_windows_on_default_desktop(
+                [folder_name, "검색 결과", target_file.stem],
+                exclude_hwnds=existing_other_explorers,
+            )
+            if candidates:
+                primary_win = candidates[0]
+                for dup in candidates[1:]:
                     try:
                         user32.PostMessageW(wintypes.HWND(dup["rawHwnd"]), 0x0010, 0, 0)
                     except Exception:
                         pass
                 bring_window_to_front_immediately(primary_win["rawHwnd"])
-                matched_wins = [primary_win]
                 break
 
-        # 0.8초 동안 TopMost를 유지해 크롬 브라우저 뒤로 절대 밀리지 않게 한 뒤 일반 전면 창으로 전환
-        time.sleep(0.8)
-        for w_info in matched_wins:
-            hw = wintypes.HWND(w_info["rawHwnd"])
-            user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
+        if not primary_win:
+            return
+
+        hw_int = primary_win["rawHwnd"]
+        time.sleep(0.35 if not is_search else 0.55)
+
+        item_rect = center_and_find_file_item_rect_in_explorer(
+            hw_int,
+            target_file,
+            is_search_mode=is_search,
+        )
+
+        # 탐색기 창은 크롬 위 전면에 유지하되 TopMost 속성은 해제하여 그 위에 파일 지시 화살표가 자연스럽게 뜨도록 함
+        hw = wintypes.HWND(hw_int)
+        user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
+
+        if item_rect and len(item_rect) == 4:
+            ix, iy, iw, _ih = item_rect
+            arrow_x = ix + min(iw // 2, 130)
+            arrow_y = iy
+        else:
+            rc = wintypes.RECT()
+            user32.GetWindowRect(hw, ctypes.byref(rc))
+            arrow_x = int(rc.left + 290) if is_search else int((rc.left + rc.right) // 2)
+            arrow_y = int(rc.top + 230) if is_search else int((rc.top + rc.bottom) // 2)
+
+        launch_real_topmost_overlay(
+            arrow_x,
+            arrow_y,
+            (
+                f"🔍 [{target_file.name}]\n검색창 필터로 이 파일 1개만 단독 표시했습니다!"
+                if is_search
+                else f"📄 [{target_file.name}]\n폴더 중앙으로 스크롤하여 선택했습니다!"
+            ),
+            duration_sec=10,
+            pointer_label=(
+                "👇 바로 아래 노란색 하이라이트된 파일입니다! 👇"
+                if is_search
+                else "👇 바로 아래 파랗게 선택된 파일입니다! 👇"
+            ),
+        )
         return
 
     if mode == "overlay":
@@ -1017,10 +1268,13 @@ def spawn_overlay_detached(
     }
 
 
-def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, Any]:
+def open_file_location_on_interactive_desktop(
+    target_file: Path,
+    mode: str = "open_file_location",
+) -> Dict[str, Any]:
     """
     중복 창이나 작업줄 깜빡임 없이, 멀린님이 보고 계신 '제트아이 (Z-Eye)' 모니터 한가운데 맨 앞으로
-    단 1개의 큰 Windows 탐색기 창만 즉시 열고 해당 파일을 선택합니다.
+    단 1개의 큰 Windows 탐색기 창만 즉시 열고 해당 파일을 중앙 스크롤 + 화살표 지시 또는 검색창 단독 필터로 띄웁니다.
     """
     t0 = time.perf_counter()
     ensure_merlin_dirs()
@@ -1029,39 +1283,50 @@ def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, An
     folder_path = target_file.parent
     folder_name = folder_path.name
 
-    # 대화형 세션 워커(gui-task-runner)가 단일 프로세스로 기존 창 정리 + explorer.exe /select 1회 실행 + 현재 모니터 전면 배치를 일괄 수행
     script_path = str(Path(__file__).resolve())
     pyw_exe = get_pythonw_executable()
     payload = {
-        "mode": "open_file_location",
+        "mode": mode,
         "targetPath": str(target_file),
     }
     GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", f'"{pyw_exe}" "{script_path}" gui-task-runner')
 
     opened_win: Dict[str, Any] = {}
-    for _ in range(18):
-        time.sleep(0.05)
-        found = find_all_windows_on_default_desktop(folder_name)
-        if found:
-            opened_win = found[0]
-            break
+    if mode != "open_file_direct":
+        time.sleep(0.18)
+        for _ in range(35):
+            time.sleep(0.05)
+            found = find_explorer_windows_on_default_desktop([folder_name, "검색 결과", target_file.stem])
+            if found:
+                opened_win = found[0]
+                break
 
     elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+    if mode == "open_file_search":
+        msg = (
+            f"🔍 {elapsed_ms}ms 만에 탐색기 검색창에 [{target_file.stem}]을 자동 입력하여 "
+            f"수백 개 파일 중 [{target_file.name}] 1개만 노란 하이라이트로 단독 표시했습니다!"
+        )
+    elif mode == "open_file_direct":
+        msg = f"📄 {elapsed_ms}ms 만에 [{target_file.name}] 문서를 연결된 프로그램으로 즉시 실행했습니다!"
+    else:
+        msg = (
+            f"⚡ {elapsed_ms}ms 만에 현재 모니터 맨 앞으로 [{folder_name}] 탐색기를 열고 "
+            f"[{target_file.name}] 파일을 화면 중앙으로 스크롤하여 👇 화살표로 가리켰습니다!"
+        )
+
     return {
         "ok": True,
-        "action": "open_file_location",
+        "action": mode,
         "desktopTarget": "WinSta0\\Default",
         "elapsedMs": elapsed_ms,
         "launchedViaInteractiveTask": sch_ok,
-        "verifiedExplorerOnMonitor": bool(opened_win),
+        "verifiedExplorerOnMonitor": bool(opened_win) or mode == "open_file_direct",
         "explorerHwnd": opened_win.get("hwnd", ""),
         "explorerRect": opened_win.get("rect", []),
         "targetPath": str(target_file),
-        "message": (
-            f"⚡ {elapsed_ms}ms 만에 현재 모니터 맨 앞(HWND {opened_win.get('hwnd', '활성')})으로 "
-            f"[{folder_name}] 큰 탐색기 창 1개를 즉시 열고 [{target_file.name}] 파일을 선택했습니다!"
-        ),
+        "message": msg,
     }
 
 
@@ -1071,11 +1336,11 @@ def open_file_location_on_interactive_desktop(target_file: Path) -> Dict[str, An
 def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]:
     ensure_merlin_dirs()
 
-    # [초고속 직결] 탐색기 폴더 열기는 사전 전체 스캔(PowerShell 1초 지연) 없이 0.1초 만에 즉시 실행!
-    if action == "open_file_location" and target_path:
+    # [초고속 직결] 탐색기 폴더 열기 / 검색창 단독 필터 열기 / 문서 바로 열기는 사전 스캔 지연 없이 0.1초 만에 즉시 실행!
+    if action in ("open_file_location", "open_file_search", "open_file_direct") and target_path:
         p = Path(target_path)
         if p.exists():
-            return open_file_location_on_interactive_desktop(p)
+            return open_file_location_on_interactive_desktop(p, mode=action)
         return {"ok": False, "error": f"파일이 존재하지 않습니다: {target_path}"}
 
     before_state = inspect_real_pc_state()
