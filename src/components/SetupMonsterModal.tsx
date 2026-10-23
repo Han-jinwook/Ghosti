@@ -423,7 +423,7 @@ export const SetupMonsterContent: React.FC = () => {
             </span>
           </div>
           <span className="px-2.5 py-0.5 rounded-md bg-pink-500/15 border border-pink-400/40 font-label-sm text-[11px] text-pink-200 font-extrabold">
-            💖 해결되지 않거나 헤매면 100% 환불 & 원상복구 보장
+            🆓 전 국민 무제한 무료 · 수리 전 상태 자동 백업 & 1초 원상복구 보장
           </span>
         </div>
 
@@ -434,38 +434,6 @@ export const SetupMonsterContent: React.FC = () => {
           <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
             {plan.rootCause}
           </p>
-        </div>
-
-        {/* 수리 비용 및 잔액 안내 바 */}
-        <div
-          className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${
-            hasEnoughCoins
-              ? 'bg-emerald-950/30 border-emerald-400/40'
-              : 'bg-amber-950/35 border-amber-400/60'
-          }`}
-        >
-          <div className="flex flex-col gap-0.5">
-            <span
-              className={`font-label-sm text-[11.5px] font-extrabold ${
-                hasEnoughCoins ? 'text-emerald-300' : 'text-amber-300'
-              }`}
-            >
-              {hasEnoughCoins
-                ? `✅ 바로 수리 가능 — 해결이 확인된 뒤에만 코인이 차감됩니다`
-                : `⚠️ 코인이 ${deficitCoins.toLocaleString()}개 부족합니다`}
-            </span>
-            <span className="font-body-sm text-[11px] text-zinc-300">
-              수리 비용: <strong className="text-white">{requiredCoins.toLocaleString()} 코인</strong> · 현재 내 잔액:{' '}
-              <strong className={hasEnoughCoins ? 'text-emerald-300' : 'text-amber-300'}>
-                {currentCoins.toLocaleString()} 코인
-              </strong>
-            </span>
-          </div>
-          {!hasEnoughCoins && (
-            <span className="px-2.5 py-1 rounded-lg bg-amber-400/20 border border-amber-400/50 text-amber-200 font-label-sm text-[11px] font-extrabold">
-              부족분: -{deficitCoins.toLocaleString()} 코인
-            </span>
-          )}
         </div>
 
         {/* 깔끔한 실행 버튼 */}
@@ -485,7 +453,7 @@ export const SetupMonsterContent: React.FC = () => {
                       buttonGuideStep === 5 ? 'ring-2 ring-yellow-300' : ''
                     }`}
                   >
-                    ⚡ 바로 해결하기 ({requiredCoins} 코인)
+                    ⚡ 바로 해결하기 (무료)
                   </button>
                   {buttonGuideStep === 5 && (
                     <span className="ml-2 text-[28px] leading-none select-none pointer-events-none animate-bounce">
@@ -544,7 +512,7 @@ export const SetupMonsterContent: React.FC = () => {
               🛠️ Z-Eye 설정 몬스터
             </h2>
             <span className="text-[12px] text-zinc-400">
-              무료 상담 후 수리 · 초행길 2회 이상 헤매거나 실패 시 100% 자동 환불
+              전 국민 무제한 무료 PC·스마트폰 해결사 · 언제든 1초 원상복구 100% 보장
             </span>
           </div>
 
@@ -577,50 +545,8 @@ export const SetupMonsterContent: React.FC = () => {
 
         {/* 우측: 지갑 상태(순수 텍스트 위계) + 꼭 필요한 버튼만 배치 */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-[12.5px] text-zinc-300">
-            <span>
-              🪙 잔액: <strong className="text-amber-300">{merlinAuth.coinBalance.toLocaleString()} 코인</strong>
-            </span>
-            {setupEscrowHoldingCoins > 0 && (
-              <span className="text-primary-container font-bold">
-                (🔒 에스크로 {setupEscrowHoldingCoins}C)
-              </span>
-            )}
-            <span className="text-[11px] text-zinc-500 ml-1">
-              테스트 잔액:{' '}
-              {[0, 100, 1250].map((amt) => (
-                <button
-                  key={amt}
-                  type="button"
-                  onClick={() => setSimulatedMerlinCoinBalance(amt)}
-                  className={`underline ml-1 cursor-pointer ${
-                    merlinAuth.coinBalance === amt ? 'text-amber-300 font-extrabold' : 'hover:text-zinc-300'
-                  }`}
-                >
-                  {amt}C
-                </button>
-              ))}
-            </span>
-          </div>
 
-          {hasActiveRefundableAudit && (
-            <>
-              <button
-                type="button"
-                onClick={() => triggerEmpathyRefundForCompletedRepair(undefined, 2)}
-                className="px-3 py-2 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-              >
-                💖 2회 헤맴 100% 쿨 환불
-              </button>
-              <button
-                type="button"
-                onClick={() => reportUnresolvedAndRefundSetup()}
-                className="px-3 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-              >
-                👎 미해결 환불
-              </button>
-            </>
-          )}
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">🆓 전 국민 무제한 무료</span>
 
           {hasActiveUndoableAudit && (
             <button
@@ -859,7 +785,7 @@ export const SetupMonsterContent: React.FC = () => {
 
                 <div className="p-3 rounded-xl bg-zinc-950/85 border border-white/10 flex flex-wrap items-center justify-between gap-2">
                   <span className="font-body-sm text-[11.5px] text-zinc-300">
-                    문제가 잘 해결되었나요? 해결되지 않았거나 과정에서 불편하셨다면 코인을 100% 돌려드립니다.
+                    문제가 잘 해결되었나요? 언제든 원하실 때 클릭 한 번으로 수리 전 원래 설정으로 되돌릴 수 있습니다.
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     {turn.diagnosisPlan?.overlaySteps?.length ? (
@@ -882,20 +808,6 @@ export const SetupMonsterContent: React.FC = () => {
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => reportUnresolvedAndRefundSetup(turn.auditId)}
-                      disabled={turn.refunded}
-                      className={`px-3.5 py-2 rounded-xl font-label-sm text-[11.5px] font-extrabold cursor-pointer ${
-                        turn.refunded
-                          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                          : 'bg-rose-500 hover:bg-rose-400 text-white'
-                      }`}
-                    >
-                      {turn.refunded
-                        ? `✓ ${cost} 코인 환불 완료`
-                        : `👎 아직 해결 안 됨 (원상복구 + 100% 환불)`}
-                    </button>
 
                     <div className="relative inline-flex items-center">
                       <button
