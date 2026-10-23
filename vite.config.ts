@@ -384,7 +384,7 @@ function listImages(dir: string, base = dir): { path: string; size: number; date
 }
 
 function readJsonBody(req: any): Promise<any> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
@@ -392,10 +392,10 @@ function readJsonBody(req: any): Promise<any> {
         const raw = Buffer.concat(chunks).toString('utf-8');
         resolve(raw ? JSON.parse(raw) : {});
       } catch (e) {
-        reject(e);
+        resolve({});
       }
     });
-    req.on('error', reject);
+    req.on('error', () => resolve({}));
   });
 }
 
@@ -3086,8 +3086,8 @@ function zeyeLocalBridge(): Plugin {
       server.middlewares.use('/__setup-monster/tts-prewarm', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
-        const voice = String(body?.voice || 'ko-KR-InJoonNeural');
-        const rate = String(body?.rate || '+5%');
+        const voice = String(body?.voice || 'typecast_piljae');
+        const rate = String(body?.rate || '+0%');
         exec(
           `python "${ttsScriptPath}" prewarm "${voice}" "${rate}"`,
           { encoding: 'utf8', windowsHide: true },
@@ -3102,8 +3102,8 @@ function zeyeLocalBridge(): Plugin {
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
         const rawText = String(body?.text || '').trim().replace(/\s+/g, ' ');
         const voice =
-          body?.voice === 'ko-KR-HyunsuNeural' ? 'ko-KR-HyunsuNeural' : 'ko-KR-InJoonNeural';
-        const rate = String(body?.rate || '+5%');
+          String(body?.voice || 'typecast_piljae');
+        const rate = String(body?.rate || '+0%');
         if (!rawText) {
           res.end(JSON.stringify({ ok: false, error: 'EMPTY_TEXT' }));
           return;
@@ -3124,6 +3124,7 @@ function zeyeLocalBridge(): Plugin {
               cacheStatus: 'HIT',
               hash,
               voice,
+              voiceActor: '필재 (카페브레이크 전속)',
               rate,
               text: rawText,
               audioUrl: `/__setup-monster/tts-audio?hash=${hash}`,

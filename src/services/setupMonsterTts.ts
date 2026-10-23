@@ -1,23 +1,30 @@
 /**
  * [🛠️ Z-Eye 설정몬스터 Neural TTS 클라이언트 & 무지연 캐시 재생기]
- * 1. 기본 성우: ko-KR-InJoonNeural (옵션: ko-KR-HyunsuNeural 상수화)
- * 2. 억양/속도: rate="+5%"
- * 3. 3단 무지연 재생 구조:
- *    - ① Cache Hit: 로컬 tts_cache/{hash}.mp3 즉시 0.01초 재생 (메모리 ObjectURL 2차 캐싱 포함)
- *    - ② Cache Miss: edge-tts 실시간 합성 재생과 동시에 백그라운드 Write-Through 캐시 저장
- *    - ③ Pre-warming: 앱 시작 시 고정 안내 멘트 백그라운드 일괄 사전 합성
- * 4. 오프라인 비상 폴백 방어:
- *    - getVoices()에서 'Heami' 등 구형 데스크톱 기계음은 원천 차단
- *    - Microsoft InJoon Online (Natural) -> Google 한국의 순서로만 폴백 매칭
+ * 1. 기본 성우: typecast_piljae (카페브레이크 전속 시그니처 남성 성우 '필재')
+ * 2. 보조 성우: typecast_yujin (Typecast 전속 여성 성우 '유진')
+ * 3. 3단 무지연 무과금 캐시 재생 구조:
+ *    - ① Cache Hit: 로컬 tts_cache/{hash}.mp3 즉시 0.001초 재생 (메모리 ObjectURL 2차 캐싱 포함, 비용 0원)
+ *    - ② Cache Miss: Typecast 필재 성우 최초 1회 실시간 합성 재생 + 백그라운드 Write-Through 캐시 영구 저장
+ *    - ③ Pre-warming: 앱 시작 시 고정 안내 멘트 13종 백그라운드 일괄 사전 합성 (이후 영구 무과금 재활용)
+ * 4. 오프라인/비상 폴백 방어:
+ *    - Typecast API 장애/크레딧 부족 시 edge-tts (ko-KR-InJoonNeural) 자동 대체
+ *    - 네트워크 완전 단절 시 speechSynthesis (Microsoft InJoon Natural -> Google 한국의) 폴백
+ *    - 'Heami' 등 구형 데스크톱 기계음은 원천 차단
  */
 
-export const SETUP_MONSTER_TTS_VOICE_DEFAULT = 'ko-KR-InJoonNeural' as const;
-export const SETUP_MONSTER_TTS_VOICE_ALT = 'ko-KR-HyunsuNeural' as const;
-export type SetupMonsterTtsVoice =
-  | typeof SETUP_MONSTER_TTS_VOICE_DEFAULT
-  | typeof SETUP_MONSTER_TTS_VOICE_ALT;
+export const SETUP_MONSTER_TTS_VOICE_PILJAE = 'typecast_piljae' as const; // 카페브레이크 전속 성우 '필재'
+export const SETUP_MONSTER_TTS_VOICE_YUJIN = 'typecast_yujin' as const;
+export const SETUP_MONSTER_TTS_VOICE_EDGE = 'ko-KR-InJoonNeural' as const;
 
-export const SETUP_MONSTER_TTS_RATE_DEFAULT = '+5%' as const;
+export const SETUP_MONSTER_TTS_VOICE_DEFAULT = SETUP_MONSTER_TTS_VOICE_PILJAE;
+export const SETUP_MONSTER_TTS_VOICE_ALT = SETUP_MONSTER_TTS_VOICE_YUJIN;
+
+export type SetupMonsterTtsVoice =
+  | typeof SETUP_MONSTER_TTS_VOICE_PILJAE
+  | typeof SETUP_MONSTER_TTS_VOICE_YUJIN
+  | typeof SETUP_MONSTER_TTS_VOICE_EDGE;
+
+export const SETUP_MONSTER_TTS_RATE_DEFAULT = '+0%' as const;
 
 export const SETUP_MONSTER_PREWARM_PHRASES: readonly string[] = [
   '끊어졌던 업무용 S 드라이브를 다시 연결하고 폴더 창을 열어 드렸습니다.',
@@ -68,8 +75,8 @@ export function stopSetupMonsterTts(): void {
 }
 
 /**
- * [3. 오프라인 비상 폴백 — 'Heami' 기계음 원천 차단]
- * 네트워크 단절 등으로 edge-tts 호출이 불가능할 때만 최후의 수단으로 동작하며,
+ * [오프라인 비상 폴백 — 'Heami' 기계음 원천 차단]
+ * 네트워크 단절 등으로 서버 호출이 불가능할 때만 최후의 수단으로 동작하며,
  * getVoices()에서 'Heami' 같은 구형 기계음은 절대 선택하지 않고
  * 'Microsoft InJoon Online (Natural)' -> 'Google 한국의' 순서로만 매칭합니다.
  */
@@ -99,7 +106,7 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     const utter = new SpeechSynthesisUtterance(text);
     utter.voice = preferredVoice;
     utter.lang = 'ko-KR';
-    utter.rate = 1.05;
+    utter.rate = 1.0;
     window.speechSynthesis.speak(utter);
     return true;
   } catch {
@@ -108,7 +115,7 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
 }
 
 /**
- * [1 & 2. ko-KR-InJoonNeural 무지연 재생 & Write-Through 자동 캐싱]
+ * [카페브레이크 전속 성우 '필재' 무지연 재생 & Write-Through 캐싱]
  */
 export async function speakSetupMonsterTts(
   rawText: string,
@@ -120,6 +127,7 @@ export async function speakSetupMonsterTts(
   ok: boolean;
   cacheStatus: 'MEMORY_HIT' | 'HIT' | 'MISS' | 'FALLBACK_NATURAL' | 'SKIPPED';
   voice: string;
+  voiceActor?: string;
   elapsedMs: number;
 }> {
   const cleanText = normalizeTtsText(rawText);
@@ -150,6 +158,7 @@ export async function speakSetupMonsterTts(
         ok: true,
         cacheStatus: 'MEMORY_HIT',
         voice,
+        voiceActor: '필재 (카페브레이크 전속)',
         elapsedMs: Math.round((performance.now() - t0) * 100) / 100,
       };
     } catch {
@@ -157,7 +166,7 @@ export async function speakSetupMonsterTts(
     }
   }
 
-  // 1·2단계: 로컬 tts_cache 조회(Cache Hit 시 0.01초) 또는 edge-tts 실시간 합성 + Write-Through 캐싱(Cache Miss)
+  // 1·2단계: 로컬 tts_cache 조회(Cache Hit 시 0.001초) 또는 Typecast 실시간 합성 + Write-Through 캐싱(Cache Miss)
   try {
     const res = await fetch('/__setup-monster/tts', {
       method: 'POST',
@@ -175,6 +184,7 @@ export async function speakSetupMonsterTts(
           ok: true,
           cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',
           voice: data.voice || voice,
+          voiceActor: data.voiceActor || '필재 (카페브레이크 전속)',
           elapsedMs:
             typeof data.elapsedMs === 'number'
               ? data.elapsedMs
@@ -192,12 +202,13 @@ export async function speakSetupMonsterTts(
     ok: usedNaturalFallback,
     cacheStatus: usedNaturalFallback ? 'FALLBACK_NATURAL' : 'SKIPPED',
     voice: usedNaturalFallback ? 'BrowserNaturalFallback' : voice,
+    voiceActor: usedNaturalFallback ? '자연어 폴백' : '필재 (카페브레이크 전속)',
     elapsedMs: Math.round((performance.now() - t0) * 100) / 100,
   };
 }
 
 /**
- * [3. 고정 가이드 멘트 사전 프리워밍(Pre-warming)]
+ * [고정 가이드 멘트 사전 프리워밍(Pre-warming)]
  * 앱/모달 진입 시 백그라운드 캐싱 큐가 조용히 순회하며 미리 tts_cache/*.mp3로 구워둡니다.
  */
 export function triggerSetupMonsterTtsPrewarm(
