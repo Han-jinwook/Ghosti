@@ -259,8 +259,15 @@ def main() -> None:
     try:
         import notion_qa
 
-        for b in notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED):
-            seen_bug_ids.add(b["page_id"])
+        if (
+            not notion_qa.NOTION_TOKEN
+            or notion_qa.NOTION_TOKEN.startswith("[여기에")
+            or notion_qa.NOTION_TOKEN == "YOUR_NOTION_TOKEN"
+        ):
+            pass
+        else:
+            for b in notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED):
+                seen_bug_ids.add(b["page_id"])
     except Exception:
         pass
 
