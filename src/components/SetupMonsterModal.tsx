@@ -263,7 +263,7 @@ export const SetupMonsterContent: React.FC = () => {
     setLoadingForensic(false);
     if (buttonGuideStep === 1) {
       setButtonGuideStep(2);
-      setOverlayStatusMsg('👆 [2/2단계 가이드] 스캔 완료! 이제 아래 첫 번째 문서의 [📂 윈도우 탐색기 열기] 버튼을 눌러보세요!');
+      setOverlayStatusMsg('👆 [2/2단계 가이드] 스캔 완료! 이제 아래 첫 번째 문서의 [🔍 탐색기 검색창에 파일명 넣어 이 파일만 바로 띄우기] 버튼을 눌러보세요!');
     }
   };
 
@@ -294,6 +294,12 @@ export const SetupMonsterContent: React.FC = () => {
     void handleRefreshRealPcState();
     void handleRunForensicScan('계약서');
   }, [loadSetupMonsterState]);
+
+  useEffect(() => {
+    if (setupMonsterPlatform === 'pc') {
+      void handleRefreshRealPcState();
+    }
+  }, [setupAuditLogs.length, setupMonsterPlatform]);
 
   // 1차 앱스토어 심사 통과용 클린 모드 제어: isStoreAppMode === true && !enableSetupMonster 일 때 숨김 안내
   if (isStoreAppMode && !enableSetupMonster) {
@@ -696,7 +702,7 @@ export const SetupMonsterContent: React.FC = () => {
                 onClick={handleLaunchRealOverlay}
                 className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-label-sm text-[11.5px] font-extrabold shadow-md cursor-pointer"
               >
-                👆 유저 버튼 클릭 가이드 시작 (1단계: 스캔 버튼 ➔ 2단계: 폴더 열기 버튼)
+                👆 유저 버튼 클릭 가이드 시작 (1단계: 스캔 버튼 ➔ 2단계: 검색창 필터로 파일 띄우기 버튼)
               </button>
               <button
                 type="button"

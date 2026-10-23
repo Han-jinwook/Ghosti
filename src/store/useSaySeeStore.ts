@@ -46,6 +46,8 @@ import {
   INITIAL_PROACTIVE_HINTS,
   buildSetupDiagnosisPlan,
   buildSetupPreTriageQuestion,
+  executeRealOsAction,
+  fetchRealPcOsInspection,
 } from '../services/setupMonsterEngine';
 import { evaluateTrajectoryAndBuildSelfHealingOta } from '../services/selfHealingEngine';
 import {
@@ -3249,6 +3251,21 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       refundedAt: isEmpathyRefund ? nowIso : undefined,
     };
 
+    if (plan.platform === 'pc') {
+      try {
+        if (plan.presetId === 'pc_work_s_drive') {
+          const osRes = await executeRealOsAction('s_drive_mount');
+          if (osRes?.beforeSnapshot) savedAudit.beforeSnapshot = osRes.beforeSnapshot as Record<string, unknown>;
+          if (osRes?.afterSnapshot) savedAudit.afterSnapshot = osRes.afterSnapshot as Record<string, unknown>;
+        } else {
+          await executeRealOsAction('shadow_backup');
+        }
+        await fetchRealPcOsInspection();
+      } catch {
+        /* ignore */
+      }
+    }
+
     try {
       const res = await fetch('/__setup-monster/execute', {
         method: 'POST',
@@ -3511,6 +3528,17 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       (auditId
         ? state.setupAuditLogs.find((a) => a.auditId === auditId)
         : state.setupAuditLogs.find((a) => !a.undone)) ?? null;
+
+    if (targetAudit?.platform === 'pc') {
+      try {
+        if (targetAudit.title.includes('S:') || targetAudit.symptomQuery.includes('S:')) {
+          await executeRealOsAction('s_drive_unmount');
+        }
+        await fetchRealPcOsInspection();
+      } catch {
+        /* ignore */
+      }
+    }
 
     try {
       await fetch('/__setup-monster/undo', {

@@ -150,7 +150,7 @@ export async function launchRealOsTopmostOverlay(params: {
 }
 
 export async function executeRealOsAction(
-  action: 'open_file_location' | 'open_file_search' | 'open_file_direct' | 's_drive_mount' | 'shadow_backup' | 'inspect',
+  action: 'open_file_location' | 'open_file_search' | 'open_file_direct' | 's_drive_mount' | 's_drive_unmount' | 'shadow_backup' | 'inspect',
   targetPath?: string
 ): Promise<{ ok: boolean; message?: string; [k: string]: unknown }> {
   try {

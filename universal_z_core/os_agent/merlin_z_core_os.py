@@ -1040,6 +1040,21 @@ def run_gui_task_runner() -> None:
     user32 = ctypes.windll.user32
     mode = payload.get("mode", "overlay")
 
+    if mode == "open_folder":
+        target_str = str(payload.get("targetPath", ""))
+        if not target_str:
+            return
+        os.startfile(target_str)
+        for _ in range(40):
+            time.sleep(0.05)
+            candidates = find_explorer_windows_on_default_desktop(["S:", "업무공유폴더_S"])
+            if candidates:
+                bring_window_to_front_immediately(candidates[0]["rawHwnd"])
+                hw = wintypes.HWND(candidates[0]["rawHwnd"])
+                user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
+                break
+        return
+
     if mode in ("open_file_location", "open_file_search"):
         target_str = str(payload.get("targetPath", ""))
         if not target_str:
@@ -1228,6 +1243,13 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
         work_vault.mkdir(parents=True, exist_ok=True)
         subprocess.run(["subst", "S:", "/d"], capture_output=True, creationflags=0x08000000)
         subprocess.run(["subst", "S:", str(work_vault)], capture_output=True, creationflags=0x08000000)
+        script_path = str(Path(__file__).resolve())
+        pyw_exe = get_pythonw_executable()
+        GUI_PAYLOAD_FILE.write_text(
+            json.dumps({"mode": "open_folder", "targetPath": "S:\\"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        run_interactive_gui_via_schtasks("MerlinZCoreOverlay", f'"{pyw_exe}" "{script_path}" gui-task-runner')
         after_state = inspect_real_pc_state()
         return {
             "ok": True,
@@ -1240,7 +1262,22 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 "sDriveMounted": after_state["disks"].get("S", {}).get("mounted", False),
                 "targetFolder": str(work_vault),
             },
-            "message": f"실제 Windows 탐색기 S: 드라이브를 {work_vault} 폴더로 마운트 완료했습니다.",
+            "message": f"실제 Windows 탐색기 S: 드라이브를 {work_vault} 폴더로 마운트하고 탐색기 창을 열었습니다.",
+        }
+
+    if action == "s_drive_unmount":
+        subprocess.run(["subst", "S:", "/d"], capture_output=True, creationflags=0x08000000)
+        after_state = inspect_real_pc_state()
+        return {
+            "ok": True,
+            "action": action,
+            "beforeSnapshot": {
+                "sDriveMounted": before_state["disks"].get("S", {}).get("mounted", True),
+            },
+            "afterSnapshot": {
+                "sDriveMounted": after_state["disks"].get("S", {}).get("mounted", False),
+            },
+            "message": "1초 원상복구(Undo): 실제 Windows 탐색기 S: 드라이브 마운트를 해제하여 원래 상태로 되돌렸습니다.",
         }
 
     if action == "shadow_backup":
