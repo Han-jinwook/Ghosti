@@ -267,15 +267,24 @@ export const SetupMonsterContent: React.FC = () => {
   };
 
   useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch {
+      /* ignore */
+    }
     loadSetupMonsterState();
     void handleRefreshRealPcState();
     void handleRunForensicScan('계약서');
-    // 2번째 버튼([⚡ 바로 해결 방법 보기]) 클릭 완료 상태에 맞춰 S: 드라이브 수리 실행 카드를 최상단에 즉시 표시
     const lastTurn = setupChatTurns[setupChatTurns.length - 1];
-    if (
+    if (lastTurn?.role === 'system_repair' && !lastTurn.undone) {
+      setButtonGuideStep(6);
+    } else if (
       !lastTurn ||
-      lastTurn.role !== 'system_repair' &&
-      lastTurn.diagnosisPlan?.presetId !== 'pc_work_s_drive'
+      (lastTurn.role !== 'system_repair' &&
+        lastTurn.role !== 'system_undo' &&
+        lastTurn.diagnosisPlan?.presetId !== 'pc_work_s_drive')
     ) {
       void answerSetupPreTriage(
         'triage_s_drive_direct',
@@ -843,7 +852,9 @@ export const SetupMonsterContent: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[13px] text-white font-bold whitespace-pre-line leading-relaxed">
-                  {turn.text}
+                  {turn.diagnosisPlan?.presetId === 'pc_work_s_drive'
+                    ? '✅ 해결 완료! 끊어졌던 업무용 폴더(S: 드라이브)를 다시 연결하고 폴더 창을 열어 드렸습니다.'
+                    : turn.text}
                 </p>
 
                 <div className="p-3 rounded-xl bg-zinc-950/85 border border-white/10 flex flex-wrap items-center justify-between gap-2">

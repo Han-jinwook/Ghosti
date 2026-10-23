@@ -1,6 +1,40 @@
 {
   "auditLogs": [
     {
+      "auditId": "audit_1792738128220",
+      "createdAt": "2026-10-23T06:48:51.901Z",
+      "userApprovedAt": "2026-10-23T06:48:48.219Z",
+      "platform": "pc",
+      "track": "TRACK_A_DIRECT_REPAIR",
+      "difficultyLevel": "LEVEL_3_ADVANCED_500",
+      "escrowStatus": "ESCROW_HOLDING",
+      "backtrackCount": 0,
+      "trajectoryGrade": "GRADE_0_EXPRESS",
+      "symptomQuery": "윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘",
+      "title": "💽 [Level 3 복합 수리] 업무 드라이브(S:) 레지스트리·SMB 자격증명·권한 3단계 완전 복구",
+      "agentModuleName": "Merlin_Z_Core_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)",
+      "systemCommandOrApi": "[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes",
+      "beforeSnapshot": {
+        "sDriveMounted": false,
+        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+      },
+      "afterSnapshot": {
+        "sDriveMounted": true,
+        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+      },
+      "creditDeducted": 500,
+      "domCaptureHash": "dom_1a16784f15c",
+      "conversationSummary": [
+        "[user] [문진 완료 · 즉시 견적 요청] 윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘",
+        "[assistant] 🧠 [사전 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 🔴 Level 3 (고난도 복합 수리 - 500 코인)로 500 멀린코인이 필요합니다”]\n• 해결 가능 판정: ✅ Merlin_Z_Core_Setup.exe 정밀 진단 완료: 3단계 복합 처치(① 좀비 세션 강제 해제 ➔ ② LanmanWorkstation 보안 서명 레지스트리 교정 ➔ ③ S: 영구 마운트 및 File Lock 데몬 복구)로 100% 해결 가능합니다.\n• ✅ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 500 코인 / 현재 보유 5,200 코인 (충분) ➔ [500 코인 에스크로 홀딩 후 1초 수리 시작] 버튼이 활성화되었습니다.\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 500 코인 100% 즉시 반환 보장",
+        "[user] [문진 완료 · 즉시 견적 요청] 윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘",
+        "[assistant] 🧠 [사전 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 🔴 Level 3 (고난도 복합 수리 - 500 코인)로 500 멀린코인이 필요합니다”]\n• 해결 가능 판정: ✅ Merlin_Z_Core_Setup.exe 정밀 진단 완료: 3단계 복합 처치(① 좀비 세션 강제 해제 ➔ ② LanmanWorkstation 보안 서명 레지스트리 교정 ➔ ③ S: 영구 마운트 및 File Lock 데몬 복구)로 100% 해결 가능합니다.\n• ✅ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 500 코인 / 현재 보유 5,200 코인 (충분) ➔ [500 코인 에스크로 홀딩 후 1초 수리 시작] 버튼이 활성화되었습니다.\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 500 코인 100% 즉시 반환 보장"
+      ],
+      "undone": true,
+      "refunded": false,
+      "undoneAt": "2026-10-23T06:49:47.948Z"
+    },
+    {
       "auditId": "audit_1792458843176",
       "createdAt": "2026-10-20T01:14:03.176Z",
       "userApprovedAt": "2026-10-20T01:14:03.176Z",
@@ -24,5 +58,28 @@
     }
   ],
   "failureTelemetryQueue": [],
-  "selfHealingOtaQueue": []
+  "selfHealingOtaQueue": [
+    {
+      "otaId": "ota_1792738128220",
+      "auditId": "audit_1792738128220",
+      "createdAt": "2026-10-23T06:48:48.220Z",
+      "platform": "pc",
+      "presetId": "pc_work_s_drive",
+      "title": "💽 [Level 3 복합 수리] 업무 드라이브(S:) 레지스트리·SMB 자격증명·권한 3단계 완전 복구",
+      "backtrackCount": 0,
+      "trajectoryGrade": "GRADE_0_EXPRESS",
+      "trajectoryGradeBadgeKo": "🟢 쾌속 완주 (뒤로 가기 0회)",
+      "escrowSettlementKo": "정상 차감 100% (500 코인 에스크로 정산 확정)",
+      "multiLlmActionKo": "패스 (사전 답사 지도대로 막힘없이 한 번에 도착 · 완벽한 경로 유지)",
+      "rawTrajectorySteps": [
+        "[직행 1단계] 💽 [Level 3 복합 수리] 업무 드라이브(S:) 레지스트리·SMB 자격증명·권한 3단계 완전 복구 타겟 진입 (0.01초)",
+        "[직행 완료] 뒤로 가기(Back) 0회 · 최단 경로 완주"
+      ],
+      "prunedShortestPathSteps": [
+        "[최적 경로 유지] [JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes"
+      ],
+      "otaBroadcastStatus": "OPTIMAL_ROUTE_VERIFIED",
+      "refundedCoins": 0
+    }
+  ]
 }

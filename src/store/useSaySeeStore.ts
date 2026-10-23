@@ -3081,7 +3081,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           id: `ai_${Date.now() + 1}`,
           role: 'assistant',
           timestamp: nowLabel,
-          text: `🧠 [무료 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 수리 실패(또는 초행길 2회 이상 헤맨 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+          text: `🔍 무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
           diagnosisPlan: plan,
         };
 
@@ -3105,7 +3105,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         id: `triage_${Date.now() + 1}`,
         role: 'assistant_triage',
         timestamp: nowLabel,
-        text: `🔍 [선(先) 무료 문진 & Merlin_Z_Core_Setup.exe 백그라운드 사태 파악 (잔액 0코인이어도 100% 무료)]\n곧바로 결제창을 띄우지 않고 해결 가능 여부와 작업 복잡도를 먼저 무료로 스캔했습니다.\n• ${triageQ.exeBackgroundScanNote}\n\n${triageQ.questionText}`,
+        text: `${triageQ.questionText}`,
         triageQuestion: triageQ,
         triageAnswered: false,
       };
@@ -3131,7 +3131,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `ai_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🧠 [모바일 1MB APK 진단 완료 ➔ ${plan.difficultyBadgeKo}]\n• ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 백업 및 실패(또는 초행길 2회 이상 헤맨 성공) 시 100 코인 100% 즉시 반환 보장`,
+      text: `🔍 무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
       diagnosisPlan: plan,
     };
 
@@ -3170,7 +3170,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `ai_quote_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🧠 [사전 문진 & Merlin_Z_Core_Setup.exe 사태 파악 완료 ➔ “이 작업은 ${plan.difficultyBadgeKo}로 ${plan.creditCost} 멀린코인이 필요합니다”]\n• 해결 가능 판정: ${plan.feasibilityCheckKo}\n• ${preCheckLine}\n• 🛡️ 에스크로 안전장치: 0.01초 전 JSON 스냅샷 자동 백업 및 수리 실패(또는 초행길 2회 이상 우회 성공) 시 에스크로 홀딩된 ${plan.creditCost} 코인 100% 즉시 반환 보장`,
+      text: `🔍 무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
       diagnosisPlan: plan,
     };
 
@@ -3299,7 +3299,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         const utter = new SpeechSynthesisUtterance(ttsText);
         utter.lang = 'ko-KR';
         utter.rate = 1.02;
-        window.speechSynthesis.speak(utter);
+        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
       }
     } catch {
       /* ignore tts error */
@@ -3454,7 +3454,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         );
         utter.lang = 'ko-KR';
         utter.rate = 1.02;
-        window.speechSynthesis.speak(utter);
+        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
       }
     } catch {
       /* ignore */
@@ -3564,7 +3564,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           '이전 백업 스냅샷을 불러와 일 초 만에 수리 전 원래 설정 상태로 완벽히 되돌렸습니다.'
         );
         utter.lang = 'ko-KR';
-        window.speechSynthesis.speak(utter);
+        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
       }
     } catch {
       /* ignore */
@@ -3575,10 +3575,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       role: 'system_undo',
       timestamp: nowLabel,
       text: targetAudit
-        ? `↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 코인] ‘${targetAudit.title}’ 처치 직전(0.01초 전)에 백업해 둔 JSON 스냅샷(${JSON.stringify(
-            targetAudit.beforeSnapshot
-          )})으로 완벽히 되돌렸습니다!`
-        : '↩️ [1초 즉시 원상복구(Undo) 완료 · 무료 0 코인] 0.01초 전 백업된 초기 설정 스냅샷으로 모든 기기 설정을 즉시 원상복구했습니다!',
+        ? `↩️ 수리하기 전 원래 설정 상태로 깔끔하게 되돌렸습니다! (무료 · 0 코인${
+            ''
+          })`
+        : '↩️ 수리하기 전 원래 상태로 깔끔하게 되돌렸습니다! (무료 · 0 코인)',
       auditId: targetAudit?.auditId,
       undone: true,
     };
@@ -3683,7 +3683,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           `수리가 해결되지 않아 일 초 만에 원래 설정으로 원상복구하고, 에스크로에 홀딩되어 있던 ${refundCoins} 멀린코인을 백 퍼센트 즉시 지갑으로 반환해 드렸습니다. 실패 로그는 본사로 자동 전송되어 스크립트를 보강하겠습니다.`
         );
         utter.lang = 'ko-KR';
-        window.speechSynthesis.speak(utter);
+        // window.speechSynthesis.speak(utter); // 성우 기계음 제거
       }
     } catch {
       /* ignore */
@@ -3787,7 +3787,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           window.speechSynthesis.cancel();
           const utter = new SpeechSynthesisUtterance(nextStep.voiceGuideText);
           utter.lang = 'ko-KR';
-          window.speechSynthesis.speak(utter);
+          // window.speechSynthesis.speak(utter); // 성우 기계음 제거
         }
       } catch {
         /* ignore */

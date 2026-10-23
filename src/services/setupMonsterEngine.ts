@@ -787,11 +787,11 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_3_ADVANCED_500',
       difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 500 코인)',
       feasibilityCheckKo:
-        '✅ Merlin_Z_Core_Setup.exe 정밀 진단 완료: 3단계 복합 처치(① 좀비 세션 강제 해제 ➔ ② LanmanWorkstation 보안 서명 레지스트리 교정 ➔ ③ S: 영구 마운트 및 File Lock 데몬 복구)로 100% 해결 가능합니다.',
+        '✅ 바로 해결 가능: 끊어진 업무용 폴더(S: 드라이브)를 즉시 다시 연결할 수 있습니다.',
       symptomQuery: q,
-      title: '💽 [Level 3 복합 수리] 업무 드라이브(S:) 레지스트리·SMB 자격증명·권한 3단계 완전 복구',
+      title: '💽 끊어진 업무용 폴더(S: 드라이브) 다시 연결하기',
       rootCause:
-        '눈(Eye) 스캔 결과: 단순 연결 끊김이 아니라 ① Windows 자격 증명 관리자 세션 충돌, ② SMBv2/v3 게스트 보안 서명 레지스트리(RequireSecuritySignature) 차단, ③ 탐색기 드라이브 문자 캐시 잠금이 겹친 3중 복합 장애입니다.',
+        '업무용 폴더(S: 드라이브) 연결이 풀려서 내 컴퓨터에서 보이지 않는 상태입니다. 아래 버튼을 누르시면 바로 다시 연결해 드립니다.',
       agentModuleName: 'Merlin_Z_Core_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)',
       systemCommandOrApi:
         '[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters" -Name "AllowInsecureGuestAuth" -Value 1; [Stage 3] net use S: "\\\\127.0.0.1\\Z-Eye_Work_Vault" /persistent:yes',
@@ -810,7 +810,7 @@ function buildSetupDiagnosisPlanBase(
         fileLockDaemon: 'Running (Real-time Lock Sync)',
       },
       completionMessage:
-        '✅ [Level 3 고난도 3단계 수리 완료] ① 충돌난 네트워크 자격 증명 초기화 ➔ ② Windows SMB 레지스트리 보안 정책 교정 ➔ ③ 윈도우 탐색기 [업무 드라이브(S:)] 영구 마운트 및 동시 편집 잠금(File Lock) 복구를 완료했습니다!',
+        '✅ 해결 완료! 끊어졌던 업무용 폴더(S: 드라이브)를 다시 연결하고 폴더 창을 열어 드렸습니다.',
       voiceTtsSummary:
         '고난도 삼 단계 복합 수리로 윈도우 레지스트리와 네트워크 권한을 복구하고 업무용 S 드라이브를 다시 연결했습니다.',
       creditCost: 500,
