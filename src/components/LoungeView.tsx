@@ -22,7 +22,7 @@ const LOUNGE_TABS: Array<{
     icon: '🆓',
     label: '내 기기 (언제나 0원)',
     shortPrice: '개인 (기본) : 언제나 0원',
-    desc: '👁️ Z-Eye 투시검색 | 🩺 Z-Eye 클린 몬스터 | 🛠️ Z-Eye 설정 몬스터',
+    desc: '내 폰·PC 속 AI 주치의와 1초 투시검색 — 기간 제한 없이 언제나 0원',
   },
   {
     id: 'family',
@@ -488,17 +488,17 @@ export const LoungeView: React.FC = () => {
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  👁️ 제트아이 (Z-Eye) — The Ultimate All-Seeing AI &amp; Zero-Cloud Lounge
+                  🆓 내 기기 — 내 폰·PC 속 AI 주치의와 1초 투시검색 — 기간 제한 없이 언제나 0원
                 </span>
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-bold">
                   🛂 Z-Eye 여권 (Face Passport) · 🔒 5대 Z-Eye 라운지
                 </span>
               </div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                개인 라운지 — 👁️ Z-Eye 투시검색 · 🩺 Z-Eye 클린 몬스터 · 🛠️ Z-Eye 설정 몬스터
+                &ldquo;사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 AI 투시검색 — 내 폰·PC 속 AI 주치의는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만&rdquo;
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400">
-                클라우드 비용 Zero · 서버 유출 Zero! 내 기기 안에서 만물을 꿰뚫어 보는 <strong>👁️ Z-Eye 1초 투시검색</strong>, <strong>🩺 Z-Eye 클린 몬스터 종합건강검진·대화형 정리</strong>, 그리고 <strong>🛠️ Z-Eye 설정 몬스터 1:1 음성 세팅 해결사</strong>를 제공합니다.
+                클라우드 비용 Zero · 서버 유출 Zero! 내 기기 안에서 만물을 꿰뚫어 보는 <strong>👁️ Z-Eye 1초 투시검색</strong>, <strong>🩺 Z-Eye 클린 몬스터 종합건강검진·대화형 정리</strong>, 그리고 <strong>🛠️ Z-Eye 설정 몬스터 1:1 음성 세팅 해결사</strong>를 기간 제한 없이 언제나 0원으로 제공합니다.
               </p>
             </div>
 
@@ -813,7 +813,7 @@ export const LoungeView: React.FC = () => {
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    💳 개인 (기본) : 언제나 0원 — 혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다.
+                    💳 개인 (기본) : 언제나 0원 — &ldquo;내 폰·PC 속 AI 주치의와 1초 투시검색 — 기간 제한 없이 언제나 0원&rdquo;
                   </span>
                   <span className="px-2.5 py-0.5 rounded bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
                     신용카드 등록 NO · 광고 NO · 비용 없이 제한 없이

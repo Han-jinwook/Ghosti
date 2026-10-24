@@ -303,7 +303,7 @@ export const PricingModal: React.FC = () => {
 
   const handleShareApp = async () => {
     const shareText =
-      '제트아이(Z-Eye) — 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://z-eye.sundreamer.app';
+      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 AI 투시검색 — 내 폰·PC 속 AI 주치의는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
@@ -504,7 +504,7 @@ export const PricingModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12px] text-emerald-200/95 font-bold">
-                  &ldquo;혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다.&rdquo;
+                  &ldquo;내 폰·PC 속 AI 주치의와 1초 투시검색 — 기간 제한 없이 언제나 0원&rdquo;
                 </p>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
                   • 👁️ <strong>Z-Eye 투시검색</strong> (내 사진·영상·서류 1초 검색 · 언제나 0원)<br />

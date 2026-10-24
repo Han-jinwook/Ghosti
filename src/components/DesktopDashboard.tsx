@@ -378,7 +378,7 @@ export const DesktopDashboard: React.FC = () => {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <MainLoungeMonoIcon id={menu.id} className="w-[15px] h-[15px] shrink-0" />
-                    <span className="truncate">{menu.label}</span>
+                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 AI 주치의와 1초 투시검색 — 기간 제한 없이 언제나 0원' : undefined}>{menu.label}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {menu.freeBadge && !isLoungeSub && (
@@ -653,7 +653,7 @@ export const DesktopDashboard: React.FC = () => {
                   type="button"
                   onClick={() => {
                     const shareText =
-                      '제트아이(Z-Eye) — 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://z-eye.sundreamer.app';
+                      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 AI 투시검색 — 내 폰·PC 속 AI 주치의는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
                     if (typeof navigator !== 'undefined' && navigator.share) {
                       void navigator.share({ title: '제트아이 (Z-Eye)', text: shareText, url: 'https://z-eye.sundreamer.app' });
                     } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
