@@ -114,7 +114,7 @@ const MAIN_LOUNGE_MENUS: Array<{
     id: 'personal',
     label: '내 기기 (PC·폰)',
     shortLabel: '내 기기',
-    sectionHeader: '🆓 내 기기 (무료)',
+    sectionHeader: '🆓 내 기기 (언제나 0원)',
     freeBadge: true,
   },
   {
@@ -383,7 +383,7 @@ export const DesktopDashboard: React.FC = () => {
                   <div className="flex items-center gap-1 shrink-0">
                     {menu.freeBadge && !isLoungeSub && (
                       <span className="px-1.5 py-0.2 rounded-full bg-teal-500/15 text-teal-400 text-[9.5px] font-extrabold">
-                        FREE
+                        0원
                       </span>
                     )}
                     {isLoungeSub && (
@@ -638,7 +638,7 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowProModal(true)}
-                      title="크레딧 지갑"
+                      title="내 멀린 코인 지갑 & 요금 안내"
                       className={`px-2.5 py-1 rounded-full font-label-mono text-[11px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
                         themeMode === 'light'
                           ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
@@ -649,6 +649,29 @@ export const DesktopDashboard: React.FC = () => {
                     </button>
                   </>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const shareText =
+                      '제트아이(Z-Eye) — 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://z-eye.sundreamer.app';
+                    if (typeof navigator !== 'undefined' && navigator.share) {
+                      void navigator.share({ title: '제트아이 (Z-Eye)', text: shareText, url: 'https://z-eye.sundreamer.app' });
+                    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      void navigator.clipboard.writeText(shareText);
+                    }
+                    useSaySeeStore.setState({
+                      lastQuarantineToast: '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
+                    });
+                  }}
+                  title="지인·가족에게 앱 공유하기 (초대받은 가족·회원·직원은 언제나 무료)"
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+                    themeMode === 'light'
+                      ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
+                      : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[15px]">share</span>
+                </button>
                 <button
                   type="button"
                   onClick={toggleThemeMode}

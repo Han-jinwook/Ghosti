@@ -423,7 +423,7 @@ export const SetupMonsterContent: React.FC = () => {
             </span>
           </div>
           <span className="px-2.5 py-0.5 rounded-md bg-pink-500/15 border border-pink-400/40 font-label-sm text-[11px] text-pink-200 font-extrabold">
-            🆓 전 국민 무제한 무료 · 수리 전 상태 자동 백업 & 1초 원상복구 보장
+            🆓 개인 (기본) : 언제나 0원 · 수리 전 상태 자동 백업 & 1초 원상복구 보장
           </span>
         </div>
 
@@ -512,7 +512,7 @@ export const SetupMonsterContent: React.FC = () => {
               🛠️ Z-Eye 설정 몬스터
             </h2>
             <span className="text-[12px] text-zinc-400">
-              전 국민 무제한 무료 PC·스마트폰 해결사 · 언제든 1초 원상복구 100% 보장
+              비용 없이 제한 없이 (언제나 0원) PC·스마트폰 해결사 · 언제든 1초 원상복구 보장
             </span>
           </div>
 
@@ -546,7 +546,7 @@ export const SetupMonsterContent: React.FC = () => {
         {/* 우측: 지갑 상태(순수 텍스트 위계) + 꼭 필요한 버튼만 배치 */}
         <div className="flex flex-wrap items-center gap-3">
 
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">🆓 전 국민 무제한 무료</span>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">🆓 개인 (기본) : 언제나 0원</span>
 
           {hasActiveUndoableAudit && (
             <button

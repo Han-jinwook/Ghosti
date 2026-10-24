@@ -107,7 +107,7 @@ const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
   label: string;
 }> = [
-  { id: 'personal', label: '내 기기(무료)' },
+  { id: 'personal', label: '내 기기(0원)' },
   { id: 'family', label: '패밀리 공유' },
   { id: 'club', label: '동호·동창회' },
   { id: 'work', label: '업무 공유(S:)' },
