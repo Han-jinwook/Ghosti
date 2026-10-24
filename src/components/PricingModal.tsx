@@ -269,6 +269,7 @@ export const PricingModal: React.FC = () => {
   const [inviteCardCopied, setInviteCardCopied] = useState(false);
   const [appShareCopied, setAppShareCopied] = useState(false);
   const [p2pGiftSent, setP2pGiftSent] = useState(false);
+  const [hostRetainsHidePermission, setHostRetainsHidePermission] = useState(true);
 
   if (!showProModal) return null;
 
@@ -910,15 +911,15 @@ export const PricingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. [🛡️ 사진방 '누구나 PC 원본 동기화(회장님 숙면)' vs 업무방 '백업 PC 1·2호 + 퇴근 초절전 모드(월 1,800원)' & 무삭제 헌법] */}
+        {/* 2. [🛡️ 사진방 '방 개설 설정 옵션 + PC 원본 동기화' vs 업무방 '백업 PC 1·2호 + 퇴근 초절전 모드(월 1,800원)' & 무삭제 헌법] */}
         <div className="p-5 rounded-2xl bg-[#18181B] border border-emerald-400/45 flex flex-col gap-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                🛡️ 사진방 자율 동기화 · 업무방 백업 PC 1·2호 · 앱 임의 삭제 0%
+                🛡️ 방 개설 설정 옵션 · 내 기기 원본 동기화 · 탈퇴/강퇴 기준
               </span>
               <h3 className="font-headline-sm text-[17px] text-white font-extrabold">
-                회장님은 편히 주무세요! 사진방 ‘PC 원본 동기화’ &amp; 업무방 ‘🌙 퇴근 초절전 모드(월 1,800원)’
+                사진방 ‘내 기기 원본 동기화 자체 해결’ &amp; 업무방 ‘🌙 퇴근 초절전 모드(월 1,800원)’
               </h3>
             </div>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
@@ -926,33 +927,74 @@ export const PricingModal: React.FC = () => {
             </span>
           </div>
 
+          {/* 🛠️ 방 개설 시 설정 옵션 (24시간 내 본인 삭제 + 이후 방장 숨기기 권한 보유 여부 선택 & 탈퇴 시 안내) */}
+          <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-primary-container/35 flex flex-col gap-2.5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-label-sm text-[12px] text-primary-container font-extrabold">
+                  🛠️ [방 개설 설정 옵션] 사진 공유방 삭제 · 숨기기 권한 기준 선택
+                </span>
+                <span className="font-body-sm text-[11.5px] text-zinc-300">
+                  업로드 후 <strong>24시간 내에는 올린 원본 주인이 언제나 직접 삭제 가능</strong>하며, 24시간 경과 후 <strong>방장이 [숨기기] 권한을 가질지</strong> 방 개설 시 선택합니다.
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setHostRetainsHidePermission(true)}
+                  className={`px-3 py-1.5 rounded-lg font-label-sm text-[11px] font-extrabold border cursor-pointer ${
+                    hostRetainsHidePermission
+                      ? 'bg-primary-container text-zinc-950 border-primary-container'
+                      : 'bg-zinc-900 text-zinc-300 border-white/15'
+                  }`}
+                >
+                  👑 24시간 이후 방장 숨기기 권한 보유 (권장)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHostRetainsHidePermission(false)}
+                  className={`px-3 py-1.5 rounded-lg font-label-sm text-[11px] font-extrabold border cursor-pointer ${
+                    !hostRetainsHidePermission
+                      ? 'bg-primary-container text-zinc-950 border-primary-container'
+                      : 'bg-zinc-900 text-zinc-300 border-white/15'
+                  }`}
+                >
+                  🤝 방장 숨기기 없음 (24시간 내 본인 삭제만)
+                </button>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-white/10 text-[11px] text-zinc-400">
+              🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 안내 (약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 기기 내 보이지 않는 곳에 보관된 <strong>해당 방 썸네일 DB · 검색 인덱스 · 얼굴 여권 캐시는 즉시 자동 삭제</strong>되어 더 이상 해당 방 사진을 열람·검색할 수 없습니다. (단, 탈퇴 전 내 기기에 이미 동기화해 둔 원본 폴더는 반납 없이 각자 자율 관리합니다.)
+            </div>
+          </div>
+
           <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed bg-zinc-950/80 p-3.5 rounded-xl border border-white/10">
-            <strong>① 📸 사진 공유방(가족·동호회·동창회):</strong> 이미 올라간 중복 사진(<code>64-bit dHash</code>)은 자동 제외하되 <strong>조금이라도 더 큰 고화질 원본이면 자동으로 교체(댓글·좋아요 유지)</strong>합니다! 방장 사전 검수 없이 즉시 게시되며, 각자 페이지의 <strong>[🔄 원본 동기화]</strong> 토글(Wi-Fi · 여유공간 넉넉할 때만 활성화, 용량 부족 시 비활성 안내)로 내 기기에서 0.01초 만에 자체 해결하고, <strong>업로드한 본인(별명 표시)과 방장은 언제나 삭제 가능</strong>합니다.<br />
-            <strong>② 💼 업무 공유방(S: 드라이브):</strong> 기존 구글 드라이브·네이버 MYBOX 폴더 위에 그대로 중첩 지정해도 충돌 없는 <code>Zero-Footprint</code> 구조! <strong>공용 PC 1대 + 백업 PC 1·2호 + [🌙 야간·퇴근 초절전 모드]</strong>로 작동하며, 동시 편집 시 <strong>&ldquo;🔒 현재 [OOO]님이 사용 중입니다. 새로운 이름으로 열겠습니까, 읽기 모드로 열겠습니까?&rdquo;</strong> 안내로 충돌을 막습니다.
+            <strong>① 📸 사진 공유방(가족·동호회·동창회):</strong> 이미 올라간 중복 사진(<code>64-bit dHash</code>)은 자동 제외하되 <strong>EXIF 원본 메타데이터가 살아있고 실제 해상도가 더 큰 진짜 원본일 때만 자동으로 교체(댓글·좋아요 유지)</strong>합니다! 평소엔 보이지 않는 곳에 13KB 썸네일 DB만 두고, <strong>[🔄 원본 동기화]</strong>를 켜면 지정한 내 폴더에 원본이 복제되어 방장 PC 호출 없이 내 기기에서 100% 자체 해결합니다.<br />
+            <strong>② 💼 업무 공유방(S: 드라이브):</strong> 기존 구글 드라이브·네이버 MYBOX 폴더 위에 그대로 중첩 지정해도 충돌 없는 <code>Zero-Footprint</code> 구조! 윈도우 탐색기(<code>S:</code>)에서 열 때는 엑셀·오피스 기본 읽기 전용 규칙대로 작동하며, 웹/앱 검색에서 사용 중인 문서를 열 때는 <strong>&ldquo;🔒 현재 [OOO]님이 사용 중입니다. 읽기 모드로 열립니다.&rdquo;</strong> 안내만 깔끔하게 제공합니다.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-emerald-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-emerald-300 font-extrabold">
-                ① 📸 사진방: 중복 0% · 올린 본인 삭제
+                ① 📸 사진방: 진짜 원본 승격 · 24시간 본인 삭제
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                ✨ 고화질 자동 승격 &amp; [🔄 원본 동기화]
+                ✨ EXIF 원본 검증 &amp; [🔄 원본 동기화]
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                Wi-Fi 및 여유 공간이 넉넉할 때만 동기화 버튼이 켜지며(부족 시 비활성 안내), 업로더 별명 표시로 올린 본인과 방장은 언제든 삭제할 수 있습니다.
+                Wi-Fi 및 여유 공간이 넉넉할 때 지정한 내 폴더로 원본을 자동 동기화해 자체 해결하며, 탈퇴/강퇴 시 숨김 썸네일 DB는 즉시 자동 삭제됩니다.
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-cyan-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
-                ② 💼 업무방: 클라우드 중첩 호환 + 잠금 안내
+                ② 💼 업무방: 클라우드 중첩 호환 + 읽기모드 안내
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                🔒 &ldquo;OOO님 사용 중 · 새 이름 vs 읽기모드&rdquo;
+                🔒 &ldquo;OOO님 사용 중 · 읽기 모드로 열림&rdquo;
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                외부 캐시 격리(<code>%LOCALAPPDATA%\Merlin\</code>)로 기존 클라우드 폴더와 100% 호환되며, 퇴근 시 모니터 OFF 초절전 모드(월 1,800원)로 대기합니다.
+                탐색기(S:)에서는 오피스 기본 규칙대로 열리고 웹/앱 검색 열람 시에는 읽기 모드로 열림을 안내하며, 퇴근 시 초절전 모드(월 1,800원)로 대기합니다.
               </span>
             </div>
 
@@ -992,7 +1034,7 @@ export const PricingModal: React.FC = () => {
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <span className="font-body-sm text-[11.5px] text-zinc-400">
-              💡 동호회·동창회 마스터권 총무님께는 지인에게 선물할 수 있는 <strong>[패밀리 라운지 무료 이용권 3장]</strong> 특전이 함께 제공됩니다.
+              💡 모임 연구독 총무님께는 <strong>[가족 라운지 1개월 무료 구독권 3장]</strong>, 가족방 연구독 방장님께는 <strong>[모임 라운지 3개월 무료 구독권 1장]</strong> 교차 특전이 제공됩니다.
             </span>
 
             <div className="flex flex-wrap items-center gap-2">

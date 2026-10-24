@@ -414,33 +414,23 @@ export const LoungeView: React.FC = () => {
   }> = [
     {
       id: 'small',
-      title: '소형 클럽',
-      capacity: '20명 기준 (방 1개)',
+      title: '동호회 · 소모임',
+      capacity: '인원 무제한 (방 1개)',
       monthly: '월 4,900원',
-      yearly: '연 49,000원',
-      gpuDaily: '24시간 서버 도우미 일 1,000원',
+      yearly: '10년 마스터권 49,000원',
+      gpuDaily: '내 기기 원본 동기화 지원',
       monthlyPlanId: 'club_small_4900',
       yearlyPlanId: 'club_small_year_49000',
     },
     {
-      id: 'medium',
-      title: '중형 클럽',
-      capacity: '100명 기준 (방 1개)',
-      monthly: '월 7,900원',
-      yearly: '연 79,000원',
-      gpuDaily: '24시간 서버 도우미 일 2,000원',
-      monthlyPlanId: 'club_medium_7900',
-      yearlyPlanId: 'club_medium_year_79000',
-    },
-    {
       id: 'large',
-      title: '대형 클럽',
-      capacity: '인원 제한 없음 (방 1개)',
-      monthly: '월 14,900원',
-      yearly: '연 149,000원',
-      gpuDaily: '24시간 서버 도우미 일 3,000원',
-      monthlyPlanId: 'club_large_14900',
-      yearlyPlanId: 'club_large_year_149000',
+      title: '동창회 · 반창회',
+      capacity: '인원 무제한 (방 1개)',
+      monthly: '월 4,900원',
+      yearly: '10년 마스터권 49,000원',
+      gpuDaily: '내 기기 원본 동기화 지원',
+      monthlyPlanId: 'club_small_4900',
+      yearlyPlanId: 'club_small_year_49000',
     },
   ];
 
@@ -1230,7 +1220,7 @@ export const LoungeView: React.FC = () => {
                 ⛳ 클럽 라운지 — 4050 동창회 · 골프 · 산악회 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(총무 1인 결제 ➔ 전 회원 무료)'}
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                동창회·모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 열람</strong>과 <strong>5MB 무손실 원본 1초 소환</strong>을 누립니다.
+                동창회·모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 썸네일 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
               </p>
             </div>
 
@@ -1266,14 +1256,14 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    ⚡ 13KB 초경량 열람 &amp; 5MB 원본 소환
+                    🔄 13KB 썸네일 DB &amp; 내 기기 원본 동기화
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
                     전 회원 무료 열람
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  카톡방 사진처럼 만료되지 않고 13KB 캐시로 1초 만에 열람하며, 간직할 사진만 총무 PC에서 5MB 무손실 원본으로 1초 소환합니다.
+                  평소엔 보이지 않는 곳에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 0.01초 만에 검색하며, <strong>[🔄 원본 동기화]</strong>를 켜면 지정한 내 폴더에 원본이 복제되어 자체 해결합니다.
                 </p>
               </div>
             </div>
@@ -2669,10 +2659,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-col gap-0.5">
                     <span className="font-label-sm text-[12.5px] text-amber-200 font-extrabold">
-                      🔒 현재 [{selectedDoc.lockedBy}]님이 사용 중입니다.
+                      🔒 현재 [{selectedDoc.lockedBy}]님이 사용 중입니다. 읽기 모드로 열립니다.
                     </span>
-                    <span className="font-body-sm text-[11.5px] text-zinc-200 font-semibold">
-                      새로운 이름으로 열겠습니까, 읽기 모드로 열겠습니까?
+                    <span className="font-body-sm text-[11px] text-zinc-300">
+                      (윈도우 탐색기 S: 드라이브에서 열 때는 엑셀·오피스 기본 읽기 전용 규칙대로 자동 작동하며, 사본 저장은 파일 내에서 각자 처리합니다.)
                     </span>
                   </div>
                   <button
@@ -2688,19 +2678,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     type="button"
                     onClick={() =>
                       window.alert(
-                        `[${selectedDoc.fileName.replace(/(\.[^.]+)$/, '_사본$1')}] 새로운 이름으로 사본을 열었습니다.`
+                        `현재 [${selectedDoc.lockedBy}]님이 사용 중이므로 [${selectedDoc.fileName}] 문서를 읽기 모드로 열었습니다.`
                       )
                     }
-                    className="flex-1 py-1.5 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer text-center"
-                  >
-                    📝 새로운 이름으로 열기
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      window.alert(`[${selectedDoc.fileName}] 문서를 읽기 모드로 안전하게 열었습니다.`)
-                    }
-                    className="flex-1 py-1.5 px-3 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-amber-300/40 text-amber-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer text-center"
+                    className="w-full py-1.5 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer text-center"
                   >
                     👁️ 읽기 모드로 열기
                   </button>
@@ -2894,64 +2875,95 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const renderStorageCheckAndSyncDetail = () => {
     if (!showStorageCheckBanner) return null;
     return (
-      <div className="px-4 py-3 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-          <span
-            className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] ${
-              simulateLowStorage
-                ? 'bg-rose-500 text-white'
-                : 'bg-emerald-400 text-zinc-950'
-            }`}
-          >
-            {simulateLowStorage
-              ? '⚠️ 용량 부족 안내 (동기화 버튼 비활성)'
-              : '✓ Wi-Fi 연결 & 여유 공간 충분 · 자동 동기화 ON'}
-          </span>
-          {simulateLowStorage ? (
-            <span className="text-rose-200 font-bold">
-              ⚠️ 내 기기 여유 공간(0.4GB)이 공유방 원본 총량(1.2GB)보다 부족하여 원본 동기화 버튼이 비활성화되었습니다 (Wi-Fi 및 여유 공간이 넉넉할 때만 활성화).
+      <div className="px-4 py-3.5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-sm flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+            <span
+              className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] ${
+                simulateLowStorage
+                  ? 'bg-rose-500 text-white'
+                  : 'bg-emerald-400 text-zinc-950'
+              }`}
+            >
+              {simulateLowStorage
+                ? '⚠️ 용량 부족 안내 (동기화 버튼 비활성)'
+                : '✓ Wi-Fi 연결 & 여유 공간 충분 · 내 기기 원본 동기화 ON'}
             </span>
-          ) : (
-            <span className="text-white font-bold">
-              Wi-Fi 연결됨 · 내 기기 여유 공간 <strong className="text-emerald-300">48.2GB</strong> / 공유방 원본 <strong className="text-emerald-300">1.2GB (넉넉함 ✓)</strong> — 원본+썸네일이 내 기기에 모두 복제되어 0.01초 만에 자체 해결됩니다!
-            </span>
-          )}
-          {!simulateLowStorage && (
-            <span className="text-zinc-400 text-[11.5px]">
-              (저장 위치: <strong className="text-zinc-200">{downloadDirPath}</strong>)
-            </span>
-          )}
+            {simulateLowStorage ? (
+              <span className="text-rose-200 font-bold">
+                ⚠️ 내 기기 여유 공간(0.4GB)이 공유방 원본 총량(1.2GB)보다 부족하여 원본 동기화 버튼이 비활성화되었습니다 (평소엔 숨김 영역 13KB 썸네일 DB만 유지됩니다).
+              </span>
+            ) : (
+              <span className="text-white font-bold">
+                Wi-Fi 연결됨 · 내 기기 여유 공간 <strong className="text-emerald-300">48.2GB</strong> / 공유방 원본 <strong className="text-emerald-300">1.2GB (넉넉함 ✓)</strong> — 방장 PC 호출 없이 내 기기 동기화 폴더에서 원본까지 100% 자체 해결됩니다!
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSimulateLowStorage((v) => !v)}
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[11px] font-bold cursor-pointer"
+            >
+              {simulateLowStorage ? '💡 용량 충분 상태로 보기' : '📱 용량 부족 안내 시뮬레이션'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowStorageCheckBanner(false)}
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+            >
+              ✕ 닫기
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setSimulateLowStorage((v) => !v)}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[11px] font-bold cursor-pointer"
-          >
-            {simulateLowStorage ? '💡 용량 충분 상태로 보기' : '📱 용량 부족 안내 시뮬레이션'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void fetch('/__club/download-originals', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ openExplorer: true }),
-              }).catch(() => {});
-            }}
-            className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-          >
-            📂 내 기기 원본 폴더 열기
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowStorageCheckBanner(false)}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
-          >
-            ✕ 닫기
-          </button>
-        </div>
+        {/* 원본 동기화 저장 경로 지정 및 안내 메시지 */}
+        {!simulateLowStorage && (
+          <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-[12px]">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-emerald-300 font-extrabold">
+                📂 원본 동기화 저장 경로 안내 (초기 기본값은 숨김 썸네일 DB만 유지)
+              </span>
+              <span className="text-zinc-300 text-[11.5px]">
+                평소 멤버 기기에는 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>썸네일 DB</strong>만 보관되며, 원본 동기화를 켜면 아래 지정한 경로에 원본 사진이 저장됩니다.
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <input
+                type="text"
+                value={downloadDirPath}
+                onChange={(e) => setDownloadDirPath(e.target.value)}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white font-mono text-[11.5px] font-bold w-60"
+                aria-label="원본 동기화 저장 경로"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  window.alert(
+                    `[원본 동기화 경로 설정 완료]\n앞으로 이 방의 원본 사진은 내 기기의 '${downloadDirPath}' 폴더에 자동 동기화됩니다.`
+                  );
+                }}
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+              >
+                📍 경로 지정 확인
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void fetch('/__club/download-originals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ openExplorer: true }),
+                  }).catch(() => {});
+                }}
+                className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+              >
+                📂 내 기기 원본 폴더 열기
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -3194,15 +3206,15 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       badge: `⏳ AI 꽃단장(인덱싱) 대기실 (${activeFamilyRoom})`,
       title: '방장 사전 검수 없이 즉시 합류! AI가 예쁜 이름표를 달며 꽃단장 중이에요',
       subtitle:
-        '이미 라운지에 있는 중복 사진(64-bit dHash)은 자동 제외하되 조금이라도 더 큰 고화질 원본이면 자동으로 교체(댓글·좋아요 유지)하며, 올린 본인(별명 표시)과 방장은 언제나 삭제할 수 있습니다.',
+        '이미 라운지에 있는 중복 사진(64-bit dHash)은 자동 제외하되 EXIF 원본 메타데이터가 살아있고 실제 해상도가 더 큰 진짜 원본이면 자동으로 교체(댓글·좋아요 유지)하며, 업로드 후 24시간 내 올린 본인 삭제 및 방 개설 설정에 따른 방장 숨기기가 지원됩니다.',
       bufferReason: '✨ AI가 예쁜 이름표를 달며 꽃단장 중이에요 (Gemma 2 이름표 + 13KB 썸네일 생성 중)',
       senderLabels: ['은숙(아내)', '진욱(방장)', '우리딸', '본가 어머님'],
     },
     club: {
       badge: '⏳ AI 꽃단장(인덱싱) 대기실 (모임 사진 & 옛날 앨범 스캔 사진)',
-      title: '방장 사전 검수 없이 즉시 합류! 중복 사진은 빼고 고화질 원본으로 자동 업그레이드합니다',
+      title: '방장 사전 검수 없이 즉시 합류! 중복 사진은 빼고 진짜 고화질 원본으로 자동 업그레이드합니다',
       subtitle:
-        '64-bit dHash 대조로 중복 사진은 입구에서 자동 제외(조금이라도 더 큰 고화질 원본이면 자동 교체)되며, 업로드한 본인(별명 표시)과 방장은 언제나 삭제 가능합니다.',
+        '64-bit dHash 대조로 중복 사진은 입구에서 자동 제외(EXIF 원본 메타데이터+실제 고해상도 진짜 원본이면 자동 교체)되며, 업로드 후 24시간 내 올린 본인 삭제 및 방 개설 옵션에 따른 방장 숨기기가 지원됩니다.',
       bufferReason: '✨ AI가 예쁜 이름표를 달며 꽃단장 중이에요 (인물 분류 및 스캔 사진 정리 중)',
       senderLabels: ['김총무(방장)', '박회장', '이프로', '최회원'],
     },
@@ -3211,9 +3223,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       title: '친구들이 올린 사진과 축제 영상을 방장 PC에서 자동으로 정리하여 앨범에 올립니다',
       subtitle:
         '학교·학원에 있는 낮 시간 동안 친구들이 찍어 올린 사진·영상을 모아 두었다가, 하교 후 방장 PC가 켜지면 자동으로 분류해 우리반 피드에 올려줍니다.',
-      bufferReason: gpuHelper24hActive
-        ? '⚡ 24시간 클라우드 도우미가 실시간으로 정리 중!'
-        : '방장 PC가 켜지면 자동으로 사진·영상 정리가 시작됩니다',
+      bufferReason: '방장 PC가 켜지면 자동으로 사진·영상 정리가 시작됩니다',
       senderLabels: ['민준 아이폰', '서연 갤럭시', '도윤 아이폰', '하은 아이폰'],
     },
     work: {
@@ -3332,25 +3342,6 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {!gpuHelper24hActive && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (isStoreAppMode) {
-                    setShowProModal(true);
-                  } else {
-                    activateGpuHelper24h(
-                      activeLoungeType === 'club' ? 'club_small_1000' : 'standard_1000'
-                    );
-                  }
-                }}
-                className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-bold"
-              >
-                {isStoreAppMode
-                  ? '💻 카톡·이메일로 ‘내 PC 연동 가이드’ 보내두기'
-                  : '⚡ 방장 PC가 꺼져 있나요? 1일 1,000원 클라우드 도우미 켜기'}
-              </button>
-            )}
             <button
               type="button"
               onClick={() => {
@@ -3757,18 +3748,18 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               📥 최근 올라온 사진 ({queuePhotos.length}장)
             </span>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-              ✓ 64-bit dHash 중복 제외 (더 큰 고화질 원본은 자동 교체)
+              ✓ 64-bit dHash 중복 제외 (EXIF 원본 메타데이터+실제 고해상도 진짜 원본만 자동 교체)
             </span>
           </div>
           <span className="font-label-sm text-[11.5px] text-zinc-400">
-            👤 업로드한 본인(별명 표시)과 방장은 언제나 삭제 가능 (기동기화 멤버 로컬 폴더는 독립 보존)
+            👤 업로드 후 24시간 내 올린 본인 삭제 가능 · 24시간 이후에는 방 개설 설정에 따라 방장 숨기기 옵션 적용
           </span>
         </div>
 
         {lastDeletedPhotoId && (
           <div className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2 text-[12px] text-emerald-200">
             <span>
-              🗑️ 선택한 사진이 라운지에서 삭제되어 방장 PC의 OS 기본 [휴지통]으로 이동되었습니다.
+              🗑️ 업로드 후 24시간 내 본인 삭제 요청에 따라 사진이 라운지에서 내려가고 방장 PC의 OS 기본 [휴지통]으로 이동되었습니다.
             </span>
             <button
               type="button"
@@ -3823,10 +3814,10 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                         setDeletedLoungePhotoIds((prev) => [...prev, photo.id]);
                         setLastDeletedPhotoId(photo.id);
                       }}
-                      title="올린 원본 주인(본인) 및 방장은 언제나 삭제 가능"
+                      title="올린 원본 주인은 업로드 후 24시간 내에 언제나 직접 삭제할 수 있습니다"
                       className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-rose-950/80 border border-white/10 hover:border-rose-400/50 text-zinc-400 hover:text-rose-200 font-label-sm text-[10.5px] font-bold cursor-pointer shrink-0"
                     >
-                      🗑️ 삭제
+                      🗑️ 24시간 내 본인 삭제
                     </button>
                   </div>
                   <div className="flex items-center justify-between text-[10.5px]">
@@ -3874,6 +3865,58 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [clubShortsWatermark, setClubShortsWatermark] = useState('제주여고 89회 공식 갤러리');
   const [shortsExportToast, setShortsExportToast] = useState<string | null>(null);
   const [gamingPcAutoSyncAfterSchool, setGamingPcAutoSyncAfterSchool] = useState(true);
+  const [hostRetainsHidePermission, setHostRetainsHidePermission] = useState(true);
+
+  const renderRoomCreationAndExitPolicyBox = () => (
+    <div className="p-4 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-sm text-[10.5px] font-extrabold">
+              🛠️ 방 개설 설정 옵션 · 삭제/숨기기 권한 기준
+            </span>
+            <span className="text-[11.5px] text-emerald-300 font-bold">
+              ✓ 업로드 후 24시간 내에는 올린 원본 주인이 언제나 직접 삭제 가능
+            </span>
+          </div>
+          <p className="font-body-sm text-[11.5px] text-zinc-300">
+            올린 직후 실수 삭제는 24시간 내 본인이 직접 해결하고, 24시간 경과 후 <strong>방장이 [숨기기] 권한을 보유할지</strong> 방 개설 시 방장이 직접 선택합니다 (피드 화면에 상시 숨기기 버튼을 노출하지 않아 깔끔함 유지).
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setHostRetainsHidePermission(true)}
+            className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
+              hostRetainsHidePermission
+                ? 'bg-primary-container text-zinc-950 border-primary-container'
+                : 'bg-zinc-900 text-zinc-300 border-white/15'
+            }`}
+          >
+            👑 24시간 이후 방장 숨기기 권한 보유 (권장)
+          </button>
+          <button
+            type="button"
+            onClick={() => setHostRetainsHidePermission(false)}
+            className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
+              !hostRetainsHidePermission
+                ? 'bg-primary-container text-zinc-950 border-primary-container'
+                : 'bg-zinc-900 text-zinc-300 border-white/15'
+            }`}
+          >
+            🤝 방장 숨기기 없음 (24시간 내 본인 삭제만)
+          </button>
+        </div>
+      </div>
+
+      <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-400">
+        <span>
+          🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 기기 내 보이지 않는 곳에 저장된 <strong>해당 방 썸네일 DB · 검색 인덱스 · 얼굴 여권 캐시는 즉시 자동 삭제</strong>되어 더 이상 열람·검색할 수 없습니다. (단, 탈퇴 전 내 기기에 이미 받아둔 원본 동기화 폴더는 반납 없이 각자 자율 관리합니다.)
+        </span>
+      </div>
+    </div>
+  );
   const [familyMembers, setFamilyMembers] = useState([
     { id: 'm1', name: '진욱 (방장·마스터)', room: '우리집', role: 'HOST' },
     { id: 'm2', name: '은숙 (아내)', room: '우리집', role: 'MEMBER' },
@@ -4103,6 +4146,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             {shortsExportToast}
           </div>
         )}
+
+        {renderRoomCreationAndExitPolicyBox()}
       </div>
     );
   }
@@ -4271,6 +4316,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {renderRoomCreationAndExitPolicyBox()}
       </div>
     );
   }

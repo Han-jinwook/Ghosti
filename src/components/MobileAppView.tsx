@@ -127,13 +127,13 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
     { id: 'trial', label: '무료체험' },
     { id: 'search', label: '우리집·본가·처가 피드' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'settings', label: '가족 초대 & 서버도우미' },
+    { id: 'settings', label: '가족 초대 & 방 설정' },
   ],
   club: [
     { id: 'trial', label: '무료체험' },
-    { id: 'search', label: '모임 피드 & 원본 소환' },
+    { id: 'search', label: '모임 피드 & 원본 동기화' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'settings', label: '클럽 관리 & 서버도우미' },
+    { id: 'settings', label: '클럽 관리 & 방 설정' },
   ],
   student: [
     { id: 'trial', label: '무료체험' },
@@ -826,78 +826,20 @@ export const MobileAppView: React.FC = () => {
             </div>
           </div>
 
-          {/* ⚡ 24시간 GPU 클라우드 서버 도우미 (스토어 클린 모드 시 비노출) */}
-          {!isStoreAppMode && (
-            <div className="p-4 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  ⚡ 24시간 GPU 클라우드 서버 도우미
-                </span>
-                {gpuHelper24hActive && (
-                  <button
-                    type="button"
-                    onClick={deactivateGpuHelper24h}
-                    className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15 text-zinc-300 font-label-sm text-[10.5px]"
-                  >
-                    내 PC 모드로 복귀
-                  </button>
-                )}
-              </div>
-              <h3 className="font-headline-sm text-[15.5px] text-white font-bold">
-                ⚡ 24시간 GPU 클라우드 서버 도우미
-              </h3>
-              <p className="font-body-sm text-[11.5px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-3 rounded-xl border border-white/10">
-                내 PC가 꺼져 있을 때 단돈 1,000원(중·대형 클럽 2,000~3,000원)으로 24시간 동안 초고속 GPU 클라우드 도우미를 즉시 가동합니다. 멤버들이 올린 사진·영상의 Gemma 2 인덱싱과 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본을 내 PC로 안전하게 이관한 뒤 클라우드에서는 100% 자동 소각됩니다.
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    {
-                      id: 'standard_1000' as GpuHelperTierId,
-                      label: '개인·패밀리·스쿨',
-                      price: '24시간 1,000원',
-                    },
-                    {
-                      id: 'club_small_1000' as GpuHelperTierId,
-                      label: '소형 클럽 (~20명)',
-                      price: '24시간 1,000원',
-                    },
-                    {
-                      id: 'club_medium_2000' as GpuHelperTierId,
-                      label: '중형 클럽 (~100명)',
-                      price: '24시간 2,000원',
-                    },
-                    {
-                      id: 'club_large_3000' as GpuHelperTierId,
-                      label: '대형 클럽 (무제한)',
-                      price: '24시간 3,000원',
-                    },
-                  ]
-                ).map((item) => {
-                  const active = gpuHelper24hActive && gpuHelperActiveTier === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => activateGpuHelper24h(item.id)}
-                      className={`p-2.5 rounded-xl text-left flex flex-col gap-0.5 border ${
-                        active
-                          ? 'bg-zinc-900 border-primary-container'
-                          : 'bg-zinc-950 border-white/10'
-                      }`}
-                    >
-                      <span className="font-label-sm text-[11px] text-zinc-200 font-bold">
-                        {item.label}
-                      </span>
-                      <span className="font-headline-sm text-[13.5px] text-primary-container font-black">
-                        {item.price}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* 🔄 내 기기 원본 동기화 & 🚪 탈퇴(자퇴·강퇴) 시 데이터 처리 기준 */}
+          <div className="p-4 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-2.5">
+            <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
+              🔄 내 기기 원본 동기화 &amp; 🚪 탈퇴 시 데이터 처리 원칙
+            </span>
+            <h3 className="font-headline-sm text-[15.5px] text-white font-bold">
+              방장 PC 소환 없이 내 기기 동기화로 자체 해결 &amp; 탈퇴 시 썸네일 DB 즉시 삭제
+            </h3>
+            <p className="font-body-sm text-[11.5px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-3 rounded-xl border border-white/10">
+              • <strong>평소(기본):</strong> 기기 내 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 썸네일 DB</strong>만 보관하여 0.01초 만에 검색합니다.<br />
+              • <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 충분할 때 지정한 내 폴더로 원본을 자동 복제해 내 기기에서 100% 자체 해결합니다.<br />
+              • <strong>탈퇴(자퇴 · 강퇴 동일):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역의 <strong>해당 방 썸네일 DB · 검색 인덱스 · 얼굴 여권 캐시는 즉시 자동 삭제</strong>되어 더 이상 열람·검색할 수 없습니다 (기동기화된 로컬 원본 폴더는 반납 없이 각자 자율 관리).
+            </p>
+          </div>
 
           <div className="p-4 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-2">
             <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-semibold w-fit">

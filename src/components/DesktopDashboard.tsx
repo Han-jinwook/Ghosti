@@ -1313,122 +1313,25 @@ export const DesktopDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* 24시간 GPU 클라우드 서버 도우미 카드 (isStoreAppMode 시 가격 비노출) */}
-          {!isStoreAppMode && (
-            <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                    ⚡ 24시간 GPU 클라우드 서버 도우미
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
-                    방장 PC가 꺼져 있거나 고장 났을 때 스마트폰에서 원터치 가동
-                  </span>
-                </div>
-                {gpuHelper24hActive ? (
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-                      🟢 현재 24시간 GPU 클라우드 도우미 가동 중
-                    </span>
-                    <button
-                      type="button"
-                      onClick={deactivateGpuHelper24h}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11px] font-semibold"
-                    >
-                      내 PC 모드로 복귀 (클라우드 즉시 소각)
-                    </button>
-                  </div>
-                ) : (
-                  <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-400 font-label-mono text-[11px]">
-                    현재 상태: 내 PC 직접 구동 모드 (대기 중)
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <h1 className="font-headline-md text-[21px] md:text-[23px] text-white font-bold tracking-tight">
-                  ⚡ 24시간 GPU 클라우드 서버 도우미 (일 1,000원 / 클럽 규모별 1,000 · 2,000 · 3,000원)
-                </h1>
-                <p className="font-body-sm text-[13px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-4 rounded-xl border border-white/10">
-                  내 PC가 꺼져 있을 때 단돈 1,000원(중·대형 클럽 2,000~3,000원)으로 24시간 동안 초고속 GPU 클라우드 도우미를 즉시 가동합니다. 멤버들이 올린 사진·영상의 Gemma 2 인덱싱과 캐시 배포를 실시간 대행하며, 추후 내 PC가 켜지면 원본을 내 PC로 안전하게 이관한 뒤 클라우드에서는 100% 자동 소각됩니다.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {(
-                  [
-                    {
-                      id: 'standard_1000' as GpuHelperTierId,
-                      badge: '개인 / 패밀리 / 스쿨',
-                      title: '개인 · 패밀리 · 스쿨 라운지',
-                      price: '24시간 당 1,000원',
-                      sub: '방장 PC OFF 시 24시간 실시간 인덱싱·배포 대행',
-                    },
-                    {
-                      id: 'club_small_1000' as GpuHelperTierId,
-                      badge: '클럽 라운지 (소형)',
-                      title: '소형 클럽 (~20명)',
-                      price: '24시간 당 1,000원',
-                      sub: '20명 기준 모임 사진·영상 24시간 대행',
-                    },
-                    {
-                      id: 'club_medium_2000' as GpuHelperTierId,
-                      badge: '클럽 라운지 (중형)',
-                      title: '중형 클럽 (~100명)',
-                      price: '24시간 당 2,000원',
-                      sub: '100명 기준 모임 사진·영상 24시간 대행',
-                    },
-                    {
-                      id: 'club_large_3000' as GpuHelperTierId,
-                      badge: '클럽 라운지 (대형)',
-                      title: '대형 클럽 (무제한)',
-                      price: '24시간 당 3,000원',
-                      sub: '인원 무제한 대형 클럽 24시간 대행',
-                    },
-                  ]
-                ).map((item) => {
-                  const active = gpuHelper24hActive && gpuHelperActiveTier === item.id;
-                  return (
-                    <div
-                      key={item.id}
-                      className={`p-4 rounded-xl flex flex-col justify-between gap-3 border transition-all ${
-                        active
-                          ? 'bg-zinc-900 border-primary-container shadow-[0_0_20px_rgba(32,247,219,0.14)]'
-                          : 'bg-zinc-950/80 border-white/10'
-                      }`}
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="font-label-mono text-[10.5px] text-zinc-400">
-                          {item.badge}
-                        </span>
-                        <span className="font-headline-sm text-[15px] text-white font-bold">
-                          {item.title}
-                        </span>
-                        <span className="font-headline-sm text-[18px] text-primary-container font-black mt-0.5">
-                          {item.price}
-                        </span>
-                        <p className="font-body-sm text-[11.5px] text-zinc-400 mt-0.5">
-                          {item.sub}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => activateGpuHelper24h(item.id)}
-                        className={`w-full py-2 rounded-lg font-label-sm text-[12px] font-extrabold transition-all ${
-                          active
-                            ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
-                            : 'bg-primary-container text-zinc-950 hover:opacity-95'
-                        }`}
-                      >
-                        {active ? '✓ 현재 24시간 가동 중' : '⚡ 원터치 24시간 가동'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* 🔄 내 기기 원본 동기화 경로 & 🚪 탈퇴(자퇴·강퇴 동일) 시 썸네일 DB 즉시 자동 삭제 원칙 */}
+          <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                🔄 내 기기 원본 동기화 자체 해결 &amp; 🚪 탈퇴 시 썸네일 DB 즉시 자동 삭제 원칙
+              </span>
+              <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
+                ✓ 방장 PC 원본 호출 폐지 · 내 기기 동기화로 100% 자체 해결
+              </span>
             </div>
-          )}
+            <h2 className="font-headline-md text-[20px] text-white font-bold tracking-tight">
+              평소엔 보이지 않는 곳에 13KB 썸네일 DB만 두고, 원본 동기화 시 지정한 내 폴더에서 자체 해결합니다
+            </h2>
+            <div className="font-body-sm text-[13px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-4 rounded-xl border border-white/10 flex flex-col gap-1.5">
+              <p>• <strong>평소(기본):</strong> 멤버 기기에는 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 용량 부담 없이 0.01초 만에 검색합니다.</p>
+              <p>• <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 넉넉할 때 지정한 내 폴더 경로(예: <code>D:\Z-Eye\다운로드_원본</code>)로 원본 사진이 자동 복제되어, 방장 PC를 따로 호출할 필요 없이 내 기기에서 자체 해결합니다.</p>
+              <p>• <strong>탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>해당 방 썸네일 DB · 검색 인덱스 · 얼굴 여권 캐시는 0.1초 만에 자동 삭제</strong>되어 더 이상 해당 방 사진을 검색·열람할 수 없습니다 (단, 탈퇴 전 내 기기에 이미 받아둔 원본 폴더는 반납 없이 각자 자율 관리).</p>
+            </div>
+          </div>
 
           <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
