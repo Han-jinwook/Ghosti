@@ -119,7 +119,7 @@ export const SmartTrashView: React.FC = () => {
     } else if (q.includes('어르신') || q.includes('아이콘') || q.includes('앱') || q.includes('앨범')) {
       setDoctorChatReply(
         isStoreAppMode
-          ? `💬 AI 주치의 답변 ("${q}"): 어르신들이 자주 찾으시는 손주·가족 앨범과 중요 문서는 큰 카드 레이아웃으로 첫 화면에 모아드리고, 중복 사본·스크린샷은 [30일 정리 대기함]으로 안전하게 분리해 드릴까요?`
+          ? `💬 AI 주치의 답변 ("${q}"): 어르신들이 자주 찾으시는 손주·가족 앨범과 중요 문서는 큰 카드 레이아웃으로 첫 화면에 모아드리고, 중복 사본·스크린샷은 OS 기본 [휴지통]으로 안전하게 정리해 드릴까요?`
           : `💬 AI 주치의 답변 ("${q}"): 6개월 이상 안 쓴 앱 42개는 지우지 않고 [별도 보관함]으로 모아두거나 [안전 동결]하면 배터리를 아낄 수 있습니다. 자주 쓰시는 카톡·유튜브·단골 카페는 어르신용 큰 아이콘으로 첫 화면에 배치해 드릴까요?`
       );
     } else {
@@ -186,7 +186,7 @@ export const SmartTrashView: React.FC = () => {
             </h2>
           </div>
           <span className="px-3 py-1 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-bold">
-            🛡️ 모든 처치는 0.5초 원복(Undo) 및 30일 대기함 보관 보장
+            🛡️ 앱 임의 삭제 0% · OS 기본 [휴지통] 직행 + ↩️ 1초 실행 취소 보장
           </span>
         </div>
 
@@ -388,8 +388,8 @@ export const SmartTrashView: React.FC = () => {
 
             {/* 3중 안전망 장문 박스 축소 ➔ 차분한 1줄 보조 텍스트 */}
             <p className="font-body-sm text-[12.5px] text-zinc-400 pt-0.5">
-              🛡️ 정리된 파일은 바로 삭제되지 않고 <strong className="text-zinc-200">[Z-Eye_정리대기함]에 30일(한 달) 보관 후 휴지통으로 이동</strong>하며, 하단{' '}
-              <strong className="text-zinc-200">[1초 되돌리기(Undo)]</strong>로 언제든 즉시 원복됩니다.
+              🗑️ 유저가 직접 정리한 파일은 별도의 복잡한 보관함 없이 익숙한 <strong className="text-zinc-200">OS 기본 [휴지통]으로 직행</strong>하며, 하단{' '}
+              <strong className="text-zinc-200">[↩️ 1초 실행 취소(Undo)]</strong>로 언제든 즉시 원복됩니다.
             </p>
           </div>
 
@@ -428,7 +428,7 @@ export const SmartTrashView: React.FC = () => {
                 onClick={() => void openLocalFolder('quarantine')}
                 className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10 font-label-sm text-[12px] font-medium shrink-0"
               >
-                📂 대기함 열기
+                🗑️ 휴지통 확인
               </button>
 
               <button
@@ -452,7 +452,7 @@ export const SmartTrashView: React.FC = () => {
               history
             </span>
             <span className="font-label-md text-[13px] text-zinc-100 font-semibold">
-              방금 정리한 {lastUndoBatch.count}장 ({fmtMB(lastUndoBatch.savedBytes)})이 [30일 대기함]으로 안전 격리되었습니다.
+              방금 정리한 {lastUndoBatch.count}장 ({fmtMB(lastUndoBatch.savedBytes)})이 OS 기본 [휴지통]으로 안전하게 이동되었습니다.
             </span>
           </div>
 
@@ -869,30 +869,30 @@ export const SmartTrashView: React.FC = () => {
                 verified
               </span>
               <span className="font-headline-sm text-[15px] text-white font-bold">
-                이 탭의 추천 정리 대상 사진이 모두 격리되었습니다!
+                이 탭의 추천 정리 대상 사진이 모두 OS 기본 [휴지통]으로 이동되었습니다!
               </span>
               <span className="font-body-sm text-[12.5px] text-zinc-400">
-                아래 [Z-Eye_정리대기함 격리 보관소]에서 언제든 확인하거나 원본 폴더로 복원할 수 있습니다.
+                아래 [OS 기본 휴지통 이동 내역]에서 언제든 1초 실행 취소(복원)할 수 있습니다.
               </span>
             </div>
           )}
         </>
       )}
 
-      {/* 물리 격리 보관소 ([Z-Eye_정리대기함]) */}
+      {/* OS 기본 [휴지통] 이동 내역 & 1초 복원 */}
       <div className="mt-1 p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-zinc-400 text-[19px]">
-                inventory_2
+                delete
               </span>
               <h3 className="font-headline-sm text-[15.5px] text-white font-bold">
-                [Z-Eye_정리대기함] 30일 안전 보관소 ({quarantinedPhotos.length}장)
+                🗑️ OS 기본 [휴지통] 이동 내역 ({quarantinedPhotos.length}장)
               </h3>
             </div>
             <p className="font-body-sm text-[12px] text-zinc-400">
-              실제 로컬 <code className="text-zinc-200">Z-Eye_정리대기함</code> 안전 보관 폴더로 이동된 파일입니다. 클릭 한 번으로 언제든 원래 폴더로 복원할 수 있습니다.
+              별도의 복잡한 보관함 없이 익숙한 OS 기본 <code className="text-zinc-200">[휴지통]</code>으로 이동된 항목입니다. 클릭 한 번으로 언제든 원래 폴더로 1초 복원할 수 있습니다.
             </p>
           </div>
 
@@ -906,7 +906,7 @@ export const SmartTrashView: React.FC = () => {
               className="px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-primary-container font-label-sm text-[12px] font-bold border border-white/10 flex items-center gap-1.5 self-start sm:self-auto"
             >
               <span className="material-symbols-outlined text-[16px]">restore_from_trash</span>
-              <span>전체 원본 폴더로 복원 ({quarantinedPhotos.length}장)</span>
+              <span>↩️ 전체 원래 폴더로 복원 ({quarantinedPhotos.length}장)</span>
             </button>
           )}
         </div>
@@ -923,14 +923,14 @@ export const SmartTrashView: React.FC = () => {
                 </div>
                 <div className="p-2 flex flex-col gap-1 bg-zinc-900">
                   <span className="font-label-sm text-[11px] text-zinc-200 font-semibold truncate">
-                    {p.tags[0] || '#격리보관중'}
+                    {p.tags[0] || '#휴지통이동'}
                   </span>
                   <button
                     type="button"
                     onClick={() => void restoreFromQuarantine([p.name])}
                     className="w-full py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-primary-container font-label-sm text-[10px] font-bold"
                   >
-                    원본 복원
+                    ↩️ 1초 복원
                   </button>
                 </div>
               </div>
@@ -938,7 +938,7 @@ export const SmartTrashView: React.FC = () => {
           </div>
         ) : (
           <div className="py-5 text-center font-body-sm text-[12.5px] text-zinc-500">
-            현재 <code className="text-zinc-400">Z-Eye_정리대기함</code> 폴더가 비어 있습니다.
+            현재 최근 정리된 휴지통 이동 내역이 비어 있습니다.
           </div>
         )}
       </div>

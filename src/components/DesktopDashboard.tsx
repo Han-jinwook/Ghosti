@@ -1620,7 +1620,7 @@ export const DesktopDashboard: React.FC = () => {
                     </span>
                   </div>
                   <div className="p-3 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-col">
-                    <span className="font-body-sm text-[11px] text-zinc-400">30일 정리대기함</span>
+                    <span className="font-body-sm text-[11px] text-zinc-400">OS 기본 휴지통 이동</span>
                     <span className="font-headline-sm text-[17px] text-white font-bold">
                       {quarantinedPhotos.length}장
                     </span>
@@ -1645,7 +1645,7 @@ export const DesktopDashboard: React.FC = () => {
                   onClick={() => void openLocalFolder('quarantine')}
                   className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium"
                 >
-                  📂 정리대기함 폴더
+                  🗑️ OS 기본 휴지통 열기
                 </button>
                 <button
                   onClick={() => setShowOnboarding(true)}

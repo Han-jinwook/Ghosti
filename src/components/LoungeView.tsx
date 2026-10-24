@@ -523,7 +523,7 @@ export const LoungeView: React.FC = () => {
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
                   {isStoreAppMode ? (
                     <>
-                      내 사진첩 <strong>중복·유사 사진, 영수증·스크린샷·일회성 사물 메모</strong>를 AI 주치의가 정밀 투시 진단하고, <strong>대화형 상담 가이드</strong>를 통해 30일 안전 대기함 격리 및 PC 마스터 연동 정리를 유저가 직접 결정합니다.
+                      내 사진첩 <strong>중복·유사 사진, 영수증·스크린샷·일회성 사물 메모</strong>를 AI 주치의가 정밀 투시 진단하고, <strong>대화형 상담 가이드</strong>를 통해 익숙한 <strong>OS 기본 [휴지통] 정리(+ ↩️ 1초 실행 취소)</strong> 및 PC 마스터 연동을 유저가 직접 결정합니다.
                     </>
                   ) : (
                     <>
@@ -710,25 +710,25 @@ export const LoungeView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 🛡️ 2. 안전 확인 필수 코스: [정리(대기함 이동)] 버튼 ➔ [원복(되돌리기)] 버튼 직접 눌러보기 + 30일 보관 안내 */}
+                {/* 🛡️ 2. 안전 확인 필수 코스: [정리(OS 기본 휴지통 이동)] 버튼 ➔ [1초 실행 취소(Undo)] 버튼 직접 눌러보기 */}
                 <div className="p-4 md:p-5 rounded-xl bg-zinc-950 border border-white/15 flex flex-col gap-3.5">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                     <div className="flex flex-col gap-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-headline-sm text-[15px] text-white font-bold">
-                          🛡️ 2. 안심 안전망 직접 검증 — &lsquo;정리&rsquo; 후 &lsquo;원복&rsquo;까지 직접 눌러보세요!
+                          🛡️ 2. 안심 안전망 직접 검증 — &lsquo;OS 기본 휴지통 이동&rsquo; 후 &lsquo;1초 실행 취소&rsquo;까지 눌러보세요!
                         </span>
                         <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-extrabold">
-                          즉시 영구삭제 절대 없음 · 30일 보관 후 휴지통 이동
+                          앱 임의 삭제 0% · OS 기본 [휴지통] 직행 + ↩️ 1초 실행 취소
                         </span>
                       </div>
                       <p className="font-body-sm text-[12.5px] text-zinc-300">
-                        정리(삭제)된 항목은 바로 사라지지 않고 내 PC의 <strong>[Z-Eye_정리대기함]에 한 달(30일) 동안 안전하게 보관된 후에야 휴지통으로 이동</strong>합니다. 아래 <strong>① 정리 ➔ ② 원복</strong> 버튼을 순서대로 눌러 안전함을 직접 확인해 보세요.
+                        별도의 복잡한 보관함 없이 유저가 직접 정리한 항목은 모두 익숙한 <strong>OS 기본 [휴지통]으로 안전하게 이동</strong>하며, 하단 <strong>[↩️ 1초 실행 취소(Undo)]</strong>로 즉시 되돌릴 수 있습니다. 아래 <strong>① 정리 ➔ ② 원복</strong> 버튼을 순서대로 눌러 확인해 보세요.
                       </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      {/* 1단계: 정리(대기함 이동) 버튼 */}
+                      {/* 1단계: 정리(휴지통 이동) 버튼 */}
                       <button
                         type="button"
                         onClick={() => void handleTrialQuarantineSample()}
@@ -740,8 +740,8 @@ export const LoungeView: React.FC = () => {
                         }`}
                       >
                         {trialSafetyStep === 'quarantined'
-                          ? '✓ ① 정리 대기함 이동됨'
-                          : '🧹 ① 샘플 정리(대기함 이동) 눌러보기'}
+                          ? '✓ ① OS 기본 휴지통 이동됨'
+                          : '🗑️ ① 샘플 정리(휴지통 이동) 눌러보기'}
                       </button>
 
                       {/* 2단계: 원복(되돌리기) 버튼 */}
@@ -758,8 +758,8 @@ export const LoungeView: React.FC = () => {
                         }`}
                       >
                         {trialSafetyStep === 'restored'
-                          ? '✓ ② 0.5초 원복 확인 완료!'
-                          : '↩️ ② 0.5초 원복(되돌리기) 눌러보기'}
+                          ? '✓ ② 1초 실행 취소 확인 완료!'
+                          : '↩️ ② 1초 실행 취소(Undo) 눌러보기'}
                       </button>
 
                       <button
@@ -767,7 +767,7 @@ export const LoungeView: React.FC = () => {
                         onClick={() => void openLocalFolder('quarantine')}
                         className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold whitespace-nowrap"
                       >
-                        📂 정리 대기함 폴더 열기
+                        🗑️ 휴지통 확인
                       </button>
                     </div>
                   </div>
@@ -775,7 +775,7 @@ export const LoungeView: React.FC = () => {
                   {trialSafetyStep === 'quarantined' && (
                     <div className="px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[12.5px] text-amber-200 flex items-center justify-between gap-2">
                       <span>
-                        📦 <strong>선택한 샘플 {trialMovedIds.length}건</strong>이 <strong>[Z-Eye_정리대기함]</strong>(30일 보관소)으로 안전 격리되었습니다. 이제 우측의 <strong>[↩️ ② 0.5초 원복 눌러보기]</strong> 버튼을 눌러보세요!
+                        🗑️ <strong>선택한 샘플 {trialMovedIds.length}건</strong>이 <strong>OS 기본 [휴지통]</strong>으로 안전하게 이동되었습니다. 이제 우측의 <strong>[↩️ ② 1초 실행 취소 눌러보기]</strong> 버튼을 눌러보세요!
                       </span>
                     </div>
                   )}
@@ -783,7 +783,7 @@ export const LoungeView: React.FC = () => {
                   {trialSafetyStep === 'restored' && (
                     <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[12.5px] text-emerald-300 flex items-center justify-between gap-2">
                       <span>
-                        ✅ <strong>[원복 검증 완료!]</strong> 정리 대기함에 있던 파일들이 0.5초 만에 원래 폴더로 100% 되돌아왔습니다. 실수로 지워질 걱정 없이 안심하고 정리하세요!
+                        ✅ <strong>[1초 실행 취소 검증 완료!]</strong> 방금 정리했던 파일들이 원래 폴더로 100% 되돌아왔습니다. 실수로 지워질 걱정 없이 안심하고 정리하세요!
                       </span>
                       <button
                         type="button"
@@ -856,7 +856,7 @@ export const LoungeView: React.FC = () => {
                         내 기기 AI 주치의 검진 &amp; 정리
                       </div>
                       <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                        모바일·PC 바탕화면 정리(미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거 및 AI 주치의 대화형 컨설팅 (30일 안전 보관함 보장).
+                        모바일·PC 바탕화면 정리(미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거 및 AI 주치의 대화형 컨설팅 (OS 기본 [휴지통] + ↩️ 1초 실행 취소 보장).
                       </p>
                     </div>
                     <button
@@ -2280,7 +2280,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               <span>🌙 퇴근·야간 초절전 모드 (월 1,800원)</span>
             </button>
             <span className="px-2.5 py-1 rounded-xl bg-zinc-900 border border-amber-400/30 text-[11px] text-amber-200 font-bold">
-              🛡️ 이중 안전장치: 30일 보관함 ➔ 한 달 뒤 휴지통 (앱 임의 삭제 0%)
+              🛡️ 마스터 PC 기본 [휴지통] 직행 + 백업 PC 1·2호 랜섬웨어 서킷 브레이커
             </span>
           </div>
         </div>
@@ -2312,14 +2312,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-col gap-0.5">
                 <span className="font-headline-sm text-[14.5px] text-white font-extrabold">
-                  🛡️ 클라우드 불신 제로! 공용 업무 PC(S: 드라이브 1대) + 다중 백업 PC 실시간 미러링
+                  🛡️ 클라우드 불신 제로! 공용 업무 PC(S: 드라이브 1대) + 백업 PC 1·2호 실시간 미러링 &amp; 랜섬웨어 서킷 브레이커
                 </span>
                 <span className="text-[12px] text-zinc-300">
-                  방장이 <strong>공용 업무 PC 1대(S: 드라이브)</strong>를 정하고, <strong>백업 PC를 원하는 만큼 여러 대 지정</strong>하면 각 백업 PC의 별도 지정 폴더에 항상 원본과 100% 동일하게 실시간 복제됩니다.
+                  구글 드라이브·네이버 MYBOX 동기화 폴더 위에 그대로 중첩 지정해도 충돌 없는 <code className="text-emerald-300">%LOCALAPPDATA%\Merlin\</code> 외부 격리(Zero-Footprint) 구조이며, 1분 내 30개 이상 대량 삭제·미끼 파일 변조 감지 시 <strong>백업 PC 1·2호 미러링을 0.01초 만에 즉시 차단</strong>해 랜섬웨어를 완벽 방어합니다.
                 </span>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                ✓ 30KB 본문 요약 선행 캐시 + 다중 PC 원본 미러링
+                ✓ 마스터 PC 기본 [휴지통] 직행 + ↩️ 1초 실행 취소
               </span>
             </div>
 
@@ -2665,34 +2665,58 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
 
             {selectedDoc.lockedBy ? (
-              <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-400/50 flex items-center justify-between gap-2">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-label-sm text-[12px] text-amber-200 font-extrabold">
-                    🔒 현재 [{selectedDoc.lockedBy}] 님이 수정 중인 문서입니다
-                  </span>
-                  <span className="font-body-sm text-[11.5px] text-zinc-300 font-medium">
-                    다른 분이 수정 중일 때는 읽기 전용으로 안전하게 열립니다.
-                  </span>
+              <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-400/50 flex flex-col gap-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-label-sm text-[12.5px] text-amber-200 font-extrabold">
+                      🔒 현재 [{selectedDoc.lockedBy}]님이 사용 중입니다.
+                    </span>
+                    <span className="font-body-sm text-[11.5px] text-zinc-200 font-semibold">
+                      새로운 이름으로 열겠습니까, 읽기 모드로 열겠습니까?
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleLockSimulation(selectedDoc.id)}
+                    className="px-2 py-1 rounded-lg bg-zinc-950/80 hover:bg-zinc-900 border border-white/15 text-zinc-400 hover:text-white font-label-sm text-[10.5px] font-bold shrink-0 cursor-pointer"
+                  >
+                    잠금 시뮬레이션 해제
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleLockSimulation(selectedDoc.id)}
-                  className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-amber-300/40 text-amber-200 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
-                >
-                  잠금 해제
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.alert(
+                        `[${selectedDoc.fileName.replace(/(\.[^.]+)$/, '_사본$1')}] 새로운 이름으로 사본을 열었습니다.`
+                      )
+                    }
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer text-center"
+                  >
+                    📝 새로운 이름으로 열기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.alert(`[${selectedDoc.fileName}] 문서를 읽기 모드로 안전하게 열었습니다.`)
+                    }
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-amber-300/40 text-amber-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer text-center"
+                  >
+                    👁️ 읽기 모드로 열기
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 flex items-center justify-between gap-2">
                 <span className="font-label-sm text-[11.5px] text-emerald-300 font-bold">
-                  🔓 현재 수정 중인 팀원이 없습니다 — 바로 편집 가능
+                  🔓 현재 사용 중인 팀원이 없습니다 — 바로 편집 가능
                 </span>
                 <button
                   type="button"
                   onClick={() => handleToggleLockSimulation(selectedDoc.id)}
                   className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold shrink-0 cursor-pointer"
                 >
-                  잠금 표시하기
+                  잠금 시뮬레이션
                 </button>
               </div>
             )}
@@ -2819,8 +2843,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
   const renderOriginalAutoSyncControl = () => (
     <div className="flex flex-wrap items-center gap-2 shrink-0">
-      {/* 동기화 완료 (새로 9장 추가) 작은 풍선 배지 */}
-      {p2pOriginalSummoned && (
+      {/* 동기화 완료 (새로 9장 추가) 작은 풍선 배지 (Wi-Fi + 여유공간 충분할 때만 ON) */}
+      {p2pOriginalSummoned && !simulateLowStorage && (
         <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-pulse">
           <span>✨ 동기화 완료 (새로 9장 추가)</span>
         </span>
@@ -2829,9 +2853,13 @@ export const LoungeFeedContextBanner: React.FC = () => {
       <button
         type="button"
         onClick={() => {
+          setShowStorageCheckBanner(true);
+          if (simulateLowStorage) {
+            setP2pOriginalSummoned(false);
+            return;
+          }
           const next = !p2pOriginalSummoned;
           setP2pOriginalSummoned(next);
-          setShowStorageCheckBanner(true);
           if (next) {
             void fetch('/__club/download-originals', {
               method: 'POST',
@@ -2846,12 +2874,19 @@ export const LoungeFeedContextBanner: React.FC = () => {
           }
         }}
         className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
-          p2pOriginalSummoned
+          simulateLowStorage
+            ? 'bg-zinc-900/70 text-zinc-500 border-zinc-700/60 opacity-75'
+            : p2pOriginalSummoned
             ? 'bg-primary-container text-zinc-950 border-primary-container'
             : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
         }`}
+        title="Wi-Fi 연결 및 내 기기 여유 공간이 넉넉할 때만 활성화됩니다 (그 외 비활성 · 클릭 시 용량 부족 안내)"
       >
-        {p2pOriginalSummoned ? '🔄 원본 자동 동기화 중 (ON)' : '📥 원본 동기화 켜기'}
+        {simulateLowStorage
+          ? '⚠️ 원본 동기화 (용량 부족 · 비활성)'
+          : p2pOriginalSummoned
+          ? '🔄 원본 동기화 (ON · Wi-Fi+여유공간 확인됨)'
+          : '🔄 원본 동기화 켜기'}
       </button>
     </div>
   );
@@ -2869,16 +2904,16 @@ export const LoungeFeedContextBanner: React.FC = () => {
             }`}
           >
             {simulateLowStorage
-              ? '⚠️ 남은 용량 부족 (동기화 불가)'
-              : '✓ 남은 용량 충분 · 자동 동기화 ON'}
+              ? '⚠️ 용량 부족 안내 (동기화 버튼 비활성)'
+              : '✓ Wi-Fi 연결 & 여유 공간 충분 · 자동 동기화 ON'}
           </span>
           {simulateLowStorage ? (
             <span className="text-rose-200 font-bold">
-              내 기기 남은 용량(0.4GB)이 공유방 원본 총량(1.2GB)보다 부족하여 썸네일 모드로 유지됩니다.
+              ⚠️ 내 기기 여유 공간(0.4GB)이 공유방 원본 총량(1.2GB)보다 부족하여 원본 동기화 버튼이 비활성화되었습니다 (Wi-Fi 및 여유 공간이 넉넉할 때만 활성화).
             </span>
           ) : (
             <span className="text-white font-bold">
-              내 기기 남은 용량 <strong className="text-emerald-300">48.2GB</strong> / 공유방 원본 <strong className="text-emerald-300">1.2GB (충분 ✓)</strong> — 원본+썸네일이 내 기기에 모두 보관되어 언제든 내 기기에서 0.01초 만에 바로 열립니다!
+              Wi-Fi 연결됨 · 내 기기 여유 공간 <strong className="text-emerald-300">48.2GB</strong> / 공유방 원본 <strong className="text-emerald-300">1.2GB (넉넉함 ✓)</strong> — 원본+썸네일이 내 기기에 모두 복제되어 0.01초 만에 자체 해결됩니다!
             </span>
           )}
           {!simulateLowStorage && (
@@ -3134,12 +3169,16 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const [proposalDraftByPhoto, setProposalDraftByPhoto] = useState<Record<string, string>>({});
   const [proposalAuthor] = useState('박회장(동기)');
   const [batchApprovedBanner, setBatchApprovedBanner] = useState<string | null>(null);
+  const [deletedLoungePhotoIds, setDeletedLoungePhotoIds] = useState<string[]>([]);
+  const [lastDeletedPhotoId, setLastDeletedPhotoId] = useState<string | null>(null);
 
   const memberActiveHints = swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue);
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
   const pendingAnalogProposals = analogYearProposals.filter((p) => !p.approvedByHost);
 
-  const queuePhotos = photos.filter((p) => !p.quarantined).slice(0, 8);
+  const queuePhotos = photos
+    .filter((p) => !p.quarantined && !deletedLoungePhotoIds.includes(p.id))
+    .slice(0, 8);
 
   const metaByLounge: Record<
     Exclude<LoungeType, 'personal'>,
@@ -3152,20 +3191,20 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     }
   > = {
     family: {
-      badge: `📥 가족 새 사진 정리함 (${activeFamilyRoom})`,
-      title: '가족들이 새로 올린 사진·영상을 인물·날짜별로 자동 정리하여 앨범에 올립니다',
+      badge: `⏳ AI 꽃단장(인덱싱) 대기실 (${activeFamilyRoom})`,
+      title: '방장 사전 검수 없이 즉시 합류! AI가 예쁜 이름표를 달며 꽃단장 중이에요',
       subtitle:
-        '가족 스마트폰에서 올라온 사진과 영상을 인물·날짜·장소별로 자동 분류하는 공간입니다. 정리가 끝나는 대로 가족 앨범 피드에 자동으로 올라갑니다.',
-      bufferReason: '우리집 · 본가(친가) · 처가(친정) 방별 분류 및 가족 얼굴 자동 정리 중',
-      senderLabels: ['아내(은숙) 아이폰', '남편(진욱) 갤럭시', '우리딸 아이폰', '본가 어머님 폰'],
+        '이미 라운지에 있는 중복 사진(64-bit dHash)은 자동 제외하되 조금이라도 더 큰 고화질 원본이면 자동으로 교체(댓글·좋아요 유지)하며, 올린 본인(별명 표시)과 방장은 언제나 삭제할 수 있습니다.',
+      bufferReason: '✨ AI가 예쁜 이름표를 달며 꽃단장 중이에요 (Gemma 2 이름표 + 13KB 썸네일 생성 중)',
+      senderLabels: ['은숙(아내)', '진욱(방장)', '우리딸', '본가 어머님'],
     },
     club: {
-      badge: '📥 모임 새 사진 정리함 (모임 사진 & 옛날 앨범 스캔 사진)',
-      title: '회원들이 올린 모임 사진과 옛날 종이 앨범 스캔 사진을 자동으로 정리하고 있습니다',
+      badge: '⏳ AI 꽃단장(인덱싱) 대기실 (모임 사진 & 옛날 앨범 스캔 사진)',
+      title: '방장 사전 검수 없이 즉시 합류! 중복 사진은 빼고 고화질 원본으로 자동 업그레이드합니다',
       subtitle:
-        '촬영 날짜 정보가 없는 옛날 종이 사진은 아래 [🏷️ 연도·장소 스티커]를 눌러 1초 만에 연도와 장소를 붙여줄 수 있습니다.',
-      bufferReason: '모임 회원 얼굴 분류 및 옛날 스캔 사진 연도별 정리 진행 중',
-      senderLabels: ['김총무 갤럭시 S24', '박회장 아이폰 16 Pro', '이프로 갤럭시', '최회원 아이폰'],
+        '64-bit dHash 대조로 중복 사진은 입구에서 자동 제외(조금이라도 더 큰 고화질 원본이면 자동 교체)되며, 업로드한 본인(별명 표시)과 방장은 언제나 삭제 가능합니다.',
+      bufferReason: '✨ AI가 예쁜 이름표를 달며 꽃단장 중이에요 (인물 분류 및 스캔 사진 정리 중)',
+      senderLabels: ['김총무(방장)', '박회장', '이프로', '최회원'],
     },
     student: {
       badge: '📥 우리반 새 사진·영상 정리함',
@@ -3712,14 +3751,37 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
 
       {/* 새로 올라온 사진 정리함 그리드 */}
       <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="font-headline-sm text-[15.5px] text-white font-bold">
-            📥 최근 멤버 스마트폰에서 올라온 사진 ({queuePhotos.length}장)
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-headline-sm text-[15.5px] text-white font-bold">
+              📥 최근 올라온 사진 ({queuePhotos.length}장)
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+              ✓ 64-bit dHash 중복 제외 (더 큰 고화질 원본은 자동 교체)
+            </span>
+          </div>
           <span className="font-label-sm text-[11.5px] text-zinc-400">
-            인물·날짜·장소별로 자동 정리하여 앨범에 올립니다
+            👤 업로드한 본인(별명 표시)과 방장은 언제나 삭제 가능 (기동기화 멤버 로컬 폴더는 독립 보존)
           </span>
         </div>
+
+        {lastDeletedPhotoId && (
+          <div className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2 text-[12px] text-emerald-200">
+            <span>
+              🗑️ 선택한 사진이 라운지에서 삭제되어 방장 PC의 OS 기본 [휴지통]으로 이동되었습니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setDeletedLoungePhotoIds((prev) => prev.filter((id) => id !== lastDeletedPhotoId));
+                setLastDeletedPhotoId(null);
+              }}
+              className="px-3 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
+            >
+              ↩️ 1초 실행 취소 (되돌리기)
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
           {queuePhotos.map((photo, idx) => {
@@ -3745,17 +3807,34 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                         : 'bg-amber-950/90 border-amber-400/50 text-amber-300'
                     }`}
                   >
-                    {isDone ? '✓ 정리 완료 · 앨범에 반영됨' : '⏳ 자동 정리 중'}
+                    {isDone
+                      ? '✓ 정식 피드 반영 완료'
+                      : '✨ AI가 예쁜 이름표를 달며 꽃단장 중이에요'}
                   </div>
                 </div>
-                <div className="p-3 flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-zinc-200 font-bold truncate">{sender}</span>
-                    <span className="text-zinc-500 font-mono">{photo.date.split(' ')[0]}</span>
+                <div className="p-3 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-1 text-[11px]">
+                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-200 font-bold truncate">
+                      👤 {sender}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeletedLoungePhotoIds((prev) => [...prev, photo.id]);
+                        setLastDeletedPhotoId(photo.id);
+                      }}
+                      title="올린 원본 주인(본인) 및 방장은 언제나 삭제 가능"
+                      className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-rose-950/80 border border-white/10 hover:border-rose-400/50 text-zinc-400 hover:text-rose-200 font-label-sm text-[10.5px] font-bold cursor-pointer shrink-0"
+                    >
+                      🗑️ 삭제
+                    </button>
                   </div>
-                  <p className="text-[11px] text-zinc-400 truncate">
-                    {photo.tags.slice(0, 3).join(' · ') || '인물·장소 분류 완료'}
-                  </p>
+                  <div className="flex items-center justify-between text-[10.5px]">
+                    <p className="text-zinc-400 truncate">
+                      {photo.tags.slice(0, 3).join(' · ') || '인물·장소 분류 완료'}
+                    </p>
+                    <span className="text-zinc-500 font-mono shrink-0">{photo.date.split(' ')[0]}</span>
+                  </div>
                 </div>
               </article>
             );

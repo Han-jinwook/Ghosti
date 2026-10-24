@@ -922,49 +922,49 @@ export const PricingModal: React.FC = () => {
               </h3>
             </div>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-mono text-[11px] font-bold">
-              ✓ 이중 안전장치: 30일 보관함 ➔ 한 달 뒤 휴지통
+              ✓ OS 기본 [휴지통] 일원화 · 랜섬웨어 서킷 브레이커
             </span>
           </div>
 
           <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed bg-zinc-950/80 p-3.5 rounded-xl border border-white/10">
-            <strong>① 📸 사진 공유방(가족·동호회·동창회):</strong> 각자의 페이지에 <strong>[🔄 원본 동기화]</strong> 버튼 하나만 둡니다! 한 번 켜두면 내 PC나 모바일(남은 용량 대비 가능/불가능 자동 안내)에 원본+썸네일을 모두 받아두어 <strong>원본 열기 시 자기 디바이스 내에서 0.01초 만에 자체 해결</strong>되며, 새 사진이 올라오면 <strong>✨ 동기화 완료 (새로 9장 추가)</strong> 풍선이 자동으로 달립니다.<br />
-            <strong>② 💼 업무 공유방(S: 드라이브):</strong> 사장님이 통제하는 <strong>공용 PC 1대 + 백업 PC 1·2호</strong>만 세팅하고, 퇴근 시 바탕화면 <strong>[🌙 야간·퇴근 초절전 모드]</strong>(안내 메시지가 서서히 사라지며 모니터 OFF · <strong>한 달 전기세 약 1,800원</strong>)를 눌러두고 퇴근하면 끝납니다.
+            <strong>① 📸 사진 공유방(가족·동호회·동창회):</strong> 이미 올라간 중복 사진(<code>64-bit dHash</code>)은 자동 제외하되 <strong>조금이라도 더 큰 고화질 원본이면 자동으로 교체(댓글·좋아요 유지)</strong>합니다! 방장 사전 검수 없이 즉시 게시되며, 각자 페이지의 <strong>[🔄 원본 동기화]</strong> 토글(Wi-Fi · 여유공간 넉넉할 때만 활성화, 용량 부족 시 비활성 안내)로 내 기기에서 0.01초 만에 자체 해결하고, <strong>업로드한 본인(별명 표시)과 방장은 언제나 삭제 가능</strong>합니다.<br />
+            <strong>② 💼 업무 공유방(S: 드라이브):</strong> 기존 구글 드라이브·네이버 MYBOX 폴더 위에 그대로 중첩 지정해도 충돌 없는 <code>Zero-Footprint</code> 구조! <strong>공용 PC 1대 + 백업 PC 1·2호 + [🌙 야간·퇴근 초절전 모드]</strong>로 작동하며, 동시 편집 시 <strong>&ldquo;🔒 현재 [OOO]님이 사용 중입니다. 새로운 이름으로 열겠습니까, 읽기 모드로 열겠습니까?&rdquo;</strong> 안내로 충돌을 막습니다.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-emerald-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-emerald-300 font-extrabold">
-                ① 📸 사진방: 내 기기(PC·폰) 자체 해결
+                ① 📸 사진방: 중복 0% · 올린 본인 삭제
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                ✨ 동기화 완료 (새로 9장 추가)
+                ✨ 고화질 자동 승격 &amp; [🔄 원본 동기화]
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                PC·모바일(남은 용량 체크 안내) 모두 내 기기에 원본과 썸네일을 함께 받아두어, 원본 열기 시 내 기기 안에서 즉시 자체 해결합니다.
+                Wi-Fi 및 여유 공간이 넉넉할 때만 동기화 버튼이 켜지며(부족 시 비활성 안내), 업로더 별명 표시로 올린 본인과 방장은 언제든 삭제할 수 있습니다.
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-cyan-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
-                ② 💼 업무방: 백업 1·2호 + 🌙 퇴근 절전
+                ② 💼 업무방: 클라우드 중첩 호환 + 잠금 안내
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                전기세 월 1,800원 · 서서히 화면 OFF
+                🔒 &ldquo;OOO님 사용 중 · 새 이름 vs 읽기모드&rdquo;
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                바탕화면 [야간모드] 실행 시 안내 메시지가 서서히 사라지며 모니터가 꺼지고, 램 찌꺼기 청소 후 15W 초저전력으로 조용히 대기합니다.
+                외부 캐시 격리(<code>%LOCALAPPDATA%\Merlin\</code>)로 기존 클라우드 폴더와 100% 호환되며, 퇴근 시 모니터 OFF 초절전 모드(월 1,800원)로 대기합니다.
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-amber-400/30 flex flex-col gap-1">
               <span className="font-label-sm text-[11.5px] text-amber-300 font-extrabold">
-                ③ 🛡️ 이중 안전장치 (앱 삭제 0%)
+                ③ 🛡️ OS 기본 [휴지통] &amp; 랜섬웨어 방어
               </span>
               <span className="font-headline-sm text-[14.5px] text-white font-black">
-                [30일 보관함] ➔ 한 달 뒤 [휴지통]
+                OS 기본 [휴지통] 직행 + ↩️ 1초 실행 취소
               </span>
               <span className="font-body-sm text-[11px] text-zinc-400">
-                앱이 사고로 파일을 지우는 일은 절대 없습니다. 정리된 파일도 30일 보관함 보호 후 한 달 뒤 휴지통으로 한 번 더 가는 이중 안전장치입니다.
+                복잡한 30일 보관함 없이 익숙한 OS 기본 [휴지통](마스터 PC 휴지통)으로 직행하며, 1분 30개 대량 삭제·변조 시 백업 PC 1·2호 미러링을 즉시 차단해 랜섬웨어를 방어합니다.
               </span>
             </div>
           </div>

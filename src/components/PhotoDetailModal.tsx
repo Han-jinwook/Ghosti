@@ -141,7 +141,7 @@ export const PhotoDetailModal: React.FC = () => {
               >
                 <span className="material-symbols-outlined text-[15px]">check_circle</span>
                 <span>
-                  현재 사진 1장만 남기고 나머지 {activeBurstPhotos.length - 1}장 정리대기함 격리 (Pick)
+                  현재 사진 1장만 남기고 나머지 {activeBurstPhotos.length - 1}장 OS 기본 [휴지통] 정리 (Pick)
                 </span>
               </button>
             </div>

@@ -80,7 +80,7 @@ export const App: React.FC = () => {
               history
             </span>
             <span className="font-label-md text-[13px] md:text-[13.5px] font-bold truncate">
-              🛡️ 방금 정리한 {lastUndoBatch.count}장이 [Z-Eye_정리대기함]으로 안전 격리되었습니다.
+              🗑️ 방금 정리한 {lastUndoBatch.count}장이 OS 기본 [휴지통]으로 이동되었습니다.
             </span>
           </div>
 
@@ -90,7 +90,7 @@ export const App: React.FC = () => {
               onClick={() => void undoLastQuarantine()}
               className="px-4 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-surface-container-lowest font-label-sm text-[12.5px] font-black shadow-md transition-all"
             >
-              ↩️ 방금 정리한 항목 원래대로 되돌리기 (Undo)
+              ↩️ 1초 실행 취소 (원래대로 되돌리기)
             </button>
             <button
               type="button"

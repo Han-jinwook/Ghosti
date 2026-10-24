@@ -2604,7 +2604,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             },
             lastQuarantineToast: wasFreeTrialFirstUse
               ? `🎁 [입문 무료 체험 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
-              : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 [Z-Eye_정리대기함]으로 즉시 격리했습니다.`,
+              : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
           };
         });
       } catch {
@@ -2664,7 +2664,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             savedBytes,
             timestamp: Date.now(),
           },
-          lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 [Z-Eye_정리대기함]으로 즉시 격리했습니다.`,
+          lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
         };
       });
     } catch {
@@ -2720,7 +2720,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           savedBytes,
           timestamp: Date.now(),
         },
-        lastQuarantineToast: `✅ ${movedSet.size}장의 사진이 [Z-Eye_정리대기함]으로 30일 안전 격리되었습니다.`,
+        lastQuarantineToast: `🗑️ ${movedSet.size}장의 사진이 OS 기본 [휴지통]으로 안전하게 이동되었습니다 (하단 버튼으로 ↩️ 1초 실행 취소 가능).`,
       }));
     } catch {
       set({ quarantineMoving: false });
@@ -2790,7 +2790,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       set({
         lastQuarantineToast:
           target === 'quarantine'
-            ? '📂 윈도우 탐색기에서 [Z-Eye_정리대기함] 폴더를 열었습니다.'
+            ? '🗑️ OS 기본 [휴지통] 이동 내역 폴더를 열었습니다.'
             : target === 'docs'
             ? '📂 윈도우 탐색기에서 [로컬 스마트 서류함 (test_docs)] 폴더를 열었습니다.'
             : '📂 윈도우 탐색기에서 원본 사진 폴더를 열었습니다.',
