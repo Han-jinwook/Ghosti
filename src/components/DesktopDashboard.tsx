@@ -114,8 +114,8 @@ const MAIN_LOUNGE_MENUS: Array<{
     id: 'personal',
     label: '내 기기 (PC·폰)',
     shortLabel: '내 기기',
-    sectionHeader: '🆓 내 기기 (언제나 0원)',
-    freeBadge: true,
+    sectionHeader: '💻 내 기기',
+    freeBadge: false,
   },
   {
     id: 'family',
@@ -287,7 +287,7 @@ export const DesktopDashboard: React.FC = () => {
   const activeLoungeLabel =
     MAIN_LOUNGE_MENUS.find((m) => m.id === activeLoungeType)?.label || '개인 라운지';
   const activeSubmenuLabel =
-    currentSubmenus.find((s) => s.id === desktopTab)?.label || '투시검색';
+    (activeLoungeType === 'personal' && desktopTab === 'trial' ? '🩺 AI 주치의 진단' : currentSubmenus.find((s) => s.id === desktopTab)?.label) || '투시검색';
 
   const renderSidebarNavigationContent = (isMobileDrawer = false) => (
     <div
@@ -378,7 +378,7 @@ export const DesktopDashboard: React.FC = () => {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <MainLoungeMonoIcon id={menu.id} className="w-[15px] h-[15px] shrink-0" />
-                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 AI 주치의와 1초 투시검색 — 기간 제한 없이 언제나 0원' : undefined}>{menu.label}</span>
+                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 AI 주치의 진단과 1초 투시검색' : undefined}>{menu.label}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {menu.freeBadge && !isLoungeSub && (
@@ -462,7 +462,7 @@ export const DesktopDashboard: React.FC = () => {
                               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
                           }`}
                         >
-                          <span className="truncate">{sub.label}</span>
+                          <span className="truncate">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🩺 AI 주치의 진단' : sub.label}</span>
                           {sub.showTrashCount && (
                             <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-mono font-bold shrink-0">
                               {activeTrashCount}

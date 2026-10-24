@@ -107,7 +107,7 @@ const MAIN_LOUNGE_MENUS: Array<{
   id: LoungeType;
   label: string;
 }> = [
-  { id: 'personal', label: '내 기기(0원)' },
+  { id: 'personal', label: '내 기기' },
   { id: 'family', label: '패밀리 공유' },
   { id: 'club', label: '동호·동창회' },
   { id: 'work', label: '업무 공유(S:)' },
@@ -118,7 +118,7 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   Array<{ id: MobileTab; label: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '🩺 AI 주치의 진단' },
     { id: 'search', label: '👁️ Z-Eye 투시검색' },
     { id: 'trash', label: '🩺 Z-Eye 클린 몬스터', showTrashCount: true },
     { id: 'settings', label: '🛠️ Z-Eye 설정 몬스터' },

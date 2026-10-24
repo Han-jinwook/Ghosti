@@ -265,6 +265,7 @@ export const PricingModal: React.FC = () => {
   } = useSaySeeStore();
 
   const [trojanCouponCopied, setTrojanCouponCopied] = useState(false);
+  const [familyTrojanCopied, setFamilyTrojanCopied] = useState(false);
   const [inviteCardCopied, setInviteCardCopied] = useState(false);
   const [appShareCopied, setAppShareCopied] = useState(false);
   const [p2pGiftSent, setP2pGiftSent] = useState(false);
@@ -275,7 +276,7 @@ export const PricingModal: React.FC = () => {
 
   const handleCopyTrojanBrag = async () => {
     const bragCopy =
-      '내가 동호회·동창회 마스터권 끊어서 패밀리 라운지 무료 이용권 3장 받았는데, 선착순으로 줄 테니 쓸 사람?';
+      '내가 동호회·동창회 연구독(마스터권) 끊어서 [가족 라운지 1개월 무료 구독권 3장] 받았는데, 선착순 3명에게 줄 테니 가족방 쓸 사람?';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(bragCopy);
@@ -285,6 +286,20 @@ export const PricingModal: React.FC = () => {
     }
     setTrojanCouponCopied(true);
     window.setTimeout(() => setTrojanCouponCopied(false), 2600);
+  };
+
+  const handleCopyFamilyTrojanBrag = async () => {
+    const bragCopy =
+      '내가 가족 라운지 연구독(마스터권) 끊어서 [동호회·동창회 모임 라운지 3개월 무료 구독권 1장] 받았는데, 우리 모임 총무님께 선물할게요!';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(bragCopy);
+      }
+    } catch {
+      // ignore clipboard fallback
+    }
+    setFamilyTrojanCopied(true);
+    window.setTimeout(() => setFamilyTrojanCopied(false), 2600);
   };
 
   const handleCopyInviteCard = async () => {
@@ -599,6 +614,26 @@ export const PricingModal: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* 가족 라운지 연구독 특전: 모임 라운지 3개월 무료 구독권 1장 */}
+              <div className="p-3 rounded-xl bg-primary-container/10 border border-primary-container/35 flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                <span className="text-[11.5px] text-emerald-200">
+                  🎁 <strong>[가족방 연 구독 특전]</strong> 패밀리 연 구독(마스터권) 결제 시 <strong>[모임(동호회·동창회) 라운지 3개월 무료 구독권 1장]</strong>을 증정합니다!
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyFamilyTrojanBrag()}
+                  className={`py-1.5 px-3 rounded-lg font-label-sm text-[11px] font-extrabold shrink-0 transition-all cursor-pointer ${
+                    familyTrojanCopied
+                      ? 'bg-emerald-400 text-zinc-950'
+                      : 'bg-primary-container hover:opacity-95 text-zinc-950'
+                  }`}
+                >
+                  {familyTrojanCopied
+                    ? '✓ 모임 3개월권 선물 문구 복사됨!'
+                    : '💌 모임 3개월 무료권 선물 카피'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -610,7 +645,7 @@ export const PricingModal: React.FC = () => {
                   3. 📸 사진 공유 (동호회 · 동창회) • 인원수 무제한 4,900원 쿨 단일가!
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-extrabold">
-                  🏅 총무 명예의 전당 배지 + 🎁 패밀리방 1년 쿠폰 3장 증정
+                  🏅 총무 명예의 전당 배지 + 🎁 가족 라운지 1개월 무료 구독권 3장 증정
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
@@ -697,23 +732,23 @@ export const PricingModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* 트로이 목마 VIP 사은품 */}
+              {/* 모임 연 구독 특전: 가족 라운지 1개월 무료 구독권 3장 */}
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/35 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span className="text-[11.5px] text-amber-200">
-                  🎁 <strong>[트로이 목마 VIP 사은품]</strong> 동호회·동창회 마스터권(49,000원) 결제 시 총무님께 <strong>[패밀리 라운지 1년 무료 초대권 3장]</strong>을 즉시 증정합니다!
+                  🎁 <strong>[모임방 연 구독 특전]</strong> 동호회·동창회 연 구독(마스터권 49,000원) 결제 시 총무님께 <strong>[가족 라운지 1개월 무료 구독권 3장]</strong>을 즉시 증정합니다!
                 </span>
                 <button
                   type="button"
                   onClick={() => void handleCopyTrojanBrag()}
-                  className={`py-1.5 px-3 rounded-lg font-label-sm text-[11.5px] font-extrabold shrink-0 transition-all ${
+                  className={`py-1.5 px-3 rounded-lg font-label-sm text-[11.5px] font-extrabold shrink-0 transition-all cursor-pointer ${
                     trojanCouponCopied
                       ? 'bg-emerald-400 text-zinc-950'
                       : 'bg-amber-400 hover:bg-amber-300 text-zinc-950'
                   }`}
                 >
                   {trojanCouponCopied
-                    ? '✓ 단톡방 생색 문구 복사됨!'
-                    : '💌 단톡방 생색 카피 복사'}
+                    ? '✓ 가족방 1개월권 3장 문구 복사됨!'
+                    : '💌 가족방 1개월권 3장 선물 카피'}
                 </button>
               </div>
             </div>
