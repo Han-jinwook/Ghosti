@@ -273,6 +273,19 @@ def main() -> None:
 
     # 기본 실행(체크인 시)은 Antigravity 채팅창의 'Queued Messages(대기열)' 걸림 현상을
     # 100% 원천 방지하기 위해 제목 각인 및 우체통/노션 점검 후 즉시 종료(Exit 0)합니다.
+    # 전사 중앙 우체국 (D:\Secretary\post_office\) 새 메시지 스캔
+    post_office = Path(r"D:\Secretary\post_office")
+    if post_office.exists():
+        arrived = [
+            f.name for f in sorted(post_office.glob("*.md"))
+            if f.name.lower() != "readme.md" and f.name.split("_", 1)[0].lower() in ("z-eye", "zeye", "all")
+        ]
+        if arrived:
+            print(f"📮 [우체국 새 메시지 감지 ({len(arrived)}건)] ➔ {', '.join(arrived)}")
+            print("   👉 D:\\Secretary\\post_office\\ 내 해당 문서를 즉시 열람하고 체크인 보고에서 코멘트하세요! (처리 후 done/ 폴더로 이동)")
+        else:
+            print("📮 [우체국 확인 완료] 새로 도착한 미열람 메시지가 없습니다.")
+
     if "--watch" not in sys.argv:
         print(
             f"✅ [Z-Eye 체크인 3중 점검 및 제목 각인 완료] (우체통 미처리 0건, 노션 발견된 버그 {len(seen_bug_ids)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
