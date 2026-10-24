@@ -36,7 +36,7 @@ except ImportError:
 # =====================================================================
 # 1. 연동 설정 (현재 프로젝트 폴더의 .env.local 로드)
 # =====================================================================
-def load_env_local(env_path: str = ".env.local") -> None:
+def load_env_local(env_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")) -> None:
     """현재 프로젝트 폴더의 .env.local 파일에서 NOTION_TOKEN과 NOTION_DATABASE_ID를 로드합니다."""
     if not os.path.exists(env_path):
         return
@@ -263,15 +263,21 @@ def query_bugs_raw(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str
 
     results = res.json().get("results", [])
     bugs: List[Dict[str, str]] = []
-    for idx, page in enumerate(results, start=1):
+    for page in results:
         page_id: str = page.get("id", "")
         props: Dict[str, Any] = page.get("properties", {})
         title_obj = props.get(SCHEMA.title_prop_name, {})
         title_text = extract_plain_text(title_obj.get("title", [])) or "(제목 없음)"
+        app_select = (props.get("앱", {}).get("select") or {}).get("name", "")
+        # 센스톡·썬드리머 카드는 해당 담당 에이전트가 처리하도록 제외
+        if app_select in ("센스톡", "썬드리머") or any(k in title_text for k in ("[센스톡]", "[썬드리머]", "센스톡", "썬드리머")):
+            continue
         body_text = fetch_page_body_text(page_id)
+        if not app_select and any(k in body_text for k in ("센스톡", "썬드리머", "sensetalk", "sundreamer")):
+            continue
         bugs.append(
             {
-                "index": str(idx),
+                "index": str(len(bugs) + 1),
                 "page_id": page_id,
                 "title": title_text,
                 "body": body_text,
@@ -442,7 +448,10 @@ def create_mission(
 
     clean_title = title.strip()
     if not clean_title.startswith("🎯"):
-        clean_title = f"🎯 [테스트 미션] {clean_title}"
+        if "[제트아이]" in clean_title:
+            clean_title = f"🎯 {clean_title}"
+        else:
+            clean_title = f"🎯 [제트아이] {clean_title}"
 
     if SCHEMA.status_prop_type == "status":
         status_prop = {"status": {"name": initial_status}}
@@ -517,6 +526,7 @@ def create_mission(
                 "title": [{"type": "text", "text": {"content": clean_title}}]
             },
             SCHEMA.status_prop_name: status_prop,
+            "앱": {"select": {"name": "제트아이"}},
         },
         "children": children_blocks,
     }
