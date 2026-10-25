@@ -194,7 +194,7 @@ def scan_post_office_files() -> Dict[str, str]:
         return {}
     result: Dict[str, str] = {}
     for p in sorted(POST_OFFICE_DIR.glob("*.md")):
-        if p.name.lower() in ("readme.md", ".gitkeep"):
+        if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
             continue
         prefix = p.name.split("_", 1)[0].lower()
         if prefix in ("z-eye", "zeye", "all"):
@@ -242,7 +242,7 @@ def main() -> None:
             print(content_preview)
             print("-" * 60)
         print(
-            "\n👉 [AI 에이전트 지시] 위 중앙 우체국 문서를 읽고 1) 원 코어 내장 플러그인 vs 사내 파워 코어 분류, 2) 스토어 심사 안전성 여부를 판단하여 멀린님께 즉시 보고하세요! (처리 완료 후 done/ 폴더로 이동)"
+            "\n👉 [AI 에이전트 지시] 위 중앙 우체국 문서를 읽고 1) 원 코어 내장 플러그인 vs 사내 파워 코어 분류, 2) 스토어 심사 안전성 여부를 판단하여 멀린님께 즉시 보고하세요! (처리 완료 후 파일명 맨 앞에 (읽음) 부착)"
         )
         print("📮" * 24)
     else:
