@@ -124,25 +124,25 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
     { id: 'settings', label: '🛠️ 설정몬스터' },
   ],
   family: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '📸 패밀리 공유 시작' },
     { id: 'search', label: '우리집·본가·처가 피드' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
     { id: 'settings', label: '가족 초대 & 방 설정' },
   ],
   club: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '⛳ 동호·동창회 시작' },
     { id: 'search', label: '모임 피드 & 원본 동기화' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'settings', label: '클럽 관리 & 방 설정' },
+    { id: 'settings', label: '동호·동창회 관리 & 방 설정' },
   ],
   student: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '⛳ 동호·동창회 시작' },
     { id: 'search', label: '타임캡슐 피드 & 씬 검색' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
     { id: 'settings', label: '게이밍 PC & 학생인증' },
   ],
   work: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '💼 업무 공유(S:) 시작' },
     { id: 'search', label: '투시검색 & 폴더 트리(S:)' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
     { id: 'settings', label: '팀원 권한 & S: 드라이브' },
@@ -467,7 +467,7 @@ export const MobileAppView: React.FC = () => {
         </div>
       </header>
 
-      {/* 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) */}
+      {/* 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) */}
       {mobileTab === 'trial' && <LoungeView />}
 
       {/* 서브메뉴 2번: 메인 피드 & 파워 검색 */}
@@ -738,7 +738,7 @@ export const MobileAppView: React.FC = () => {
         </main>
       )}
 
-      {/* 서브메뉴 3번: 개인은 [🩺 클린몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] */}
+      {/* 서브메뉴 3번: 개인은 [🩺 클린몬스터], 사진 공유(패밀리·동호·동창회)은 [⏳ AI 인덱싱 대기실] */}
       {mobileTab === 'trash' && (
         <div className="flex-1 w-full">
           {activeLoungeType === 'personal' ? (

@@ -116,7 +116,7 @@ export interface PersonTimelineBucketInfo {
 /**
  * [방별 독립 별명(Persona) 매핑]
  * 시드(768차원 벡터 + 연도 바구니)는 이메일 기반 'Z-Eye 여권'으로 100% 공유하되,
- * 화면 표시 및 자연어 검색에 쓰이는 호칭/별명만 각 방(우리집 / 처가 / 본가 / 클럽 / 학생)에 맞게 독립 매핑!
+ * 화면 표시 및 자연어 검색에 쓰이는 호칭/별명만 각 방(우리집 / 처가 / 본가 / 동호회·동창회)에 맞게 독립 매핑!
  */
 export interface RoomPersonaMap {
   personal?: string;
@@ -258,13 +258,13 @@ export interface UndoQuarantineBatch {
 /** [스펙 3] 클라우드 대체 프라이빗 싱크 2-Track 모드 */
 export type PrivateSyncStrategy = 'mirror' | 'shadow';
 
-/** [5대 라운지 스펙] 라운지 카테고리: 개인 | 패밀리 | 클럽 | 스쿨 | 업무(B2B) */
+/** [5대 라운지 스펙] 라운지 카테고리: 내 기기 | 사진 공유(패밀리·동호회·동창회) | 업무 공유(S: 드라이브) */
 export type LoungeType = 'personal' | 'family' | 'club' | 'student' | 'work';
 
 /** [패밀리 라운지 양가 통합권] 3개 방 분리 ID */
 export type FamilyRoomId = '우리집' | '본가(친가)' | '처가(친정)';
 
-/** [클럽 라운지 규모] 소형(20명 기준) | 중형(100명 기준) | 대형(인원 제한 없음) */
+/** [동호회 · 동창회 규모] 소형(20명 기준) | 중형(100명 기준) | 대형(인원 제한 없음) */
 export type ClubSizeTier = 'small' | 'medium' | 'large';
 
 /** [4050 동창회 투트랙 탭] 기본값 = 'memories_1989' (🎞️ 응답하라 1989 (추억)) | 'recent_now' (🍻 최근 우리들 (근황)) */

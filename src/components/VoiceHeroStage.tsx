@@ -408,7 +408,7 @@ export const VoiceHeroStage: React.FC = () => {
         </div>
       </div>
 
-      {/* ─────────────── [라운지 마스터 단일 확인 카드] 개인 라운지에서는 100% 숨김 · 패밀리/클럽/학생 라운지에서 확인 대기 건이 있을 때만 1장씩 노출 후 Auto-Hide ─────────────── */}
+      {/* ─────────────── [라운지 마스터 단일 확인 카드] 개인 라운지에서는 100% 숨김 · 사진 공유(패밀리·동호회·동창회)에서 확인 대기 건이 있을 때만 1장씩 노출 후 Auto-Hide ─────────────── */}
       {activeLoungeType !== 'personal' && (searchSpace === 'gallery' || searchSpace === 'video') && (
         <FaceMemberInlineBar
           onRunRealNameQuery={(query, targetSpace = 'gallery') => {

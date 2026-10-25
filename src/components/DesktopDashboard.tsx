@@ -141,31 +141,31 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   Array<{ id: DesktopTab; label: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '🧹 클린몬스터 진단' },
     { id: 'dashboard', label: '👁️ Z-Eye 투시검색' },
     { id: 'trash', label: '🩺 Z-Eye 클린몬스터', showTrashCount: true },
     { id: 'sync', label: '🛠️ 설정몬스터' },
   ],
   family: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '📸 패밀리 공유 시작' },
     { id: 'dashboard', label: '우리집·본가·처가 앨범' },
     { id: 'trash', label: '새 사진 정리함' },
     { id: 'sync', label: '가족 초대 & 방 관리' },
   ],
   club: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '⛳ 동호·동창회 시작' },
     { id: 'dashboard', label: '모임·동창 앨범 & 원본 다운로드' },
     { id: 'trash', label: '새 사진 정리함' },
     { id: 'sync', label: '모임 관리 & 회원 초대' },
   ],
   student: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '⛳ 동호·동창회 시작' },
     { id: 'dashboard', label: '타임캡슐 앨범 & 영상 검색' },
     { id: 'trash', label: '새 사진·영상 정리함' },
     { id: 'sync', label: '우리반 관리 & 학생인증' },
   ],
   work: [
-    { id: 'trial', label: '무료체험' },
+    { id: 'trial', label: '💼 업무 공유(S:) 시작' },
     { id: 'dashboard', label: '업무 문서·현장사진 & S: 드라이브' },
     { id: 'trash', label: '새 업무파일 정리함' },
     { id: 'sync', label: '팀원 권한 & S: 드라이브 연결' },
@@ -736,7 +736,7 @@ export const DesktopDashboard: React.FC = () => {
           </div>
         </header>
 
-        {/* ─────────────── 서브메뉴 1번: ✨ 무료체험 (정식 구독 시 Auto-Hide) ─────────────── */}
+        {/* ─────────────── 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) ─────────────── */}
         {desktopTab === 'trial' && <LoungeView />}
 
         {/* ─────────────── 서브메뉴 2번: 노션형 백지 도화지(Zen Canvas) & 점진적 결과 펼침 ─────────────── */}
@@ -1212,7 +1212,7 @@ export const DesktopDashboard: React.FC = () => {
         </main>
       )}
 
-      {/* ─────────────── 서브메뉴 3번: 개인은 [AI 클린몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] ─────────────── */}
+      {/* ─────────────── 서브메뉴 3번: 개인은 [AI 클린몬스터], 사진 공유(패밀리·동호·동창회)은 [⏳ AI 인덱싱 대기실] ─────────────── */}
       {desktopTab === 'trash' &&
         (activeLoungeType === 'personal' ? (
           <SmartTrashView />
@@ -1223,7 +1223,7 @@ export const DesktopDashboard: React.FC = () => {
       {/* ─────────────── 서브메뉴 4번: AI 설정몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 ─────────────── */}
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1280px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-5">
-          {/* 라운지별 전용 상단 설정 섹션 (AI 설정몬스터 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
+          {/* 라운지별 전용 상단 설정 섹션 (AI 설정몬스터 / 가족 무수락 초대·강퇴 / 동호·동창회 관리 / 업무 공유(S:) 관리) */}
           <LoungeCustomSettingsHeader />
 
           {/* 💻 모바일 ➔ PC 전환 시 스토어 규정(Anti-steering)을 100% 준수하는 데스크톱 기기 연동 패널 */}

@@ -510,7 +510,7 @@ export function buildBidirectionalStickKeywords(params: {
 /**
  * [방별 별명(Persona) 리졸버]
  * 동일한 이메일 기반 'Z-Eye 여권(Z-Eye Face Passport)'을 쓰지만,
- * 현재 라운지/방(우리집 / 처가(친정) / 본가(친가) / 클럽 / 10대 학생)에 따라 화면 표시 및 검색에 쓰이는 호칭을 반환합니다.
+ * 현재 라운지/방(우리집 / 처가(친정) / 본가(친가) / 동호회·동창회)에 따라 화면 표시 및 검색에 쓰이는 호칭을 반환합니다.
  */
 export function getActivePersonaForCluster(
   cluster: FaceMemberCluster,
@@ -533,8 +533,8 @@ export function getActivePersonaForCluster(
     '우리집': '우리집 방',
     '본가(친가)': '본가(친가) 방',
     '처가(친정)': '처가(친정) 방',
-    club: '클럽 라운지',
-    student: '스쿨 라운지',
+    club: '동호회 · 동창회',
+    student: '동호회 · 동창회',
     work: '업무 라운지',
   };
   const isRoomCreator = cluster.clusterId === 'face_member_5';
@@ -653,7 +653,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_5' || c.personKey === 'person_adult_male_host') {
-      // 멀린 (방장·대표님: 우리집='멀린', 처가(친정)='둘째사위', 클럽='멀린프로')
+      // 멀린 (방장·대표님: 우리집='멀린', 처가(친정)='둘째사위', 동호회='멀린프로')
       passportEmail = 'merlin@z-eye.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
@@ -674,7 +674,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
-        '⛳ 클럽방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%) ➔ 처가집 방("둘째사위 선글라스") 자동 전파됨';
+        '⛳ 동호·동창회방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%) ➔ 처가집 방("둘째사위 선글라스") 자동 전파됨';
 
       if (!baseCuts.some((yc) => yc.year === 2023)) {
         extraCuts.push({
@@ -752,7 +752,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
-        '🎒 친구 모임방(스쿨 라운지)에서 [야간·실내] 슬롯 진화(유사도 93.8%) ➔ 우리집 가족방 과거 사진 +7장 자동 구출됨!';
+        '🎒 친구 모임방(동호회 · 동창회)에서 [야간·실내] 슬롯 진화(유사도 93.8%) ➔ 우리집 가족방 과거 사진 +7장 자동 구출됨!';
 
       if (baseCuts.length < 2) {
         extraCuts.push({
@@ -1413,7 +1413,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         ...(c.roomPersonas ?? {}),
         [activeRoomKey]: cleanName,
       };
-      // 우리집 또는 개인 라운지에서 변경할 때는 기본 이름과 동시에 동기화, 타 방(처가/본가/클럽/학생)에서는 방 전용 호칭만 독립 변경
+      // 우리집 또는 개인 라운지에서 변경할 때는 기본 이름과 동시에 동기화, 타 방(처가/본가/동호회·동창회)에서는 방 전용 호칭만 독립 변경
       const nextBaseName =
         !isSecondaryRoom || !c.registeredName ? cleanName : c.registeredName;
       if (!isSecondaryRoom) {
@@ -1579,7 +1579,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
               ],
             }
           : prevBucket,
-        crossLoungeEvolutionNote: `⚡ 방금 타 라운지 신작 사진에서 5대 스타일 슬롯(5/5) + 미래 바구니(${prevBucket?.forwardBucketRange ?? '2027~2036'}) 자동 확장 ➔ 전 라운지(우리집·처가·본가·클럽·스쿨) 실시간 전파 완료`,
+        crossLoungeEvolutionNote: `⚡ 방금 타 라운지 신작 사진에서 5대 스타일 슬롯(5/5) + 미래 바구니(${prevBucket?.forwardBucketRange ?? '2027~2036'}) 자동 확장 ➔ 전 라운지(우리집·처가·본가·동호·동창회·동호·동창회) 실시간 전파 완료`,
       };
     });
 
@@ -1589,7 +1589,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `🛂 [${target.passportEmail}] 크로스-라운지 자율 진화 ➔ 타 방 신작 시드가 우리집·처가·본가·클럽·스쿨방에 동시 전파됨`,
+        triggerTitle: `🛂 [${target.passportEmail}] 크로스-라운지 자율 진화 ➔ 타 방 신작 시드가 우리집·처가·본가·동호·동창회·동호·동창회방에 동시 전파됨`,
         rescuedHostPhotos: target.matchedPhotoCount + 9,
         rescuedMemberPhonePhotos: 27,
         rescuedVideoSegments: target.matchedVideoSegmentCount + 2,
@@ -2603,7 +2603,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
               timestamp: Date.now(),
             },
             lastQuarantineToast: wasFreeTrialFirstUse
-              ? `🎁 [입문 무료 체험 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
+              ? `🎁 [클린몬스터 연사 정리 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
               : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
           };
         });
@@ -3970,7 +3970,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       return {
         activeLoungeType,
         activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
-        // 해당 라운지가 이미 구독 중이면 [✨ 무료체험] 탭이 숨김 처리되므로 파워 검색 탭으로 이동
+        // 해당 라운지가 이미 구독 중이면 [✨ 공유 시작] 탭이 숨김 처리되므로 파워 검색 탭으로 이동
         desktopTab:
           isTargetLoungeSubscribed && state.desktopTab === 'trial'
             ? 'dashboard'
@@ -4013,15 +4013,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set({
       studentOcrVerified: true,
       lastQuarantineToast:
-        '🎒 [학생증 로컬 OCR 0.1초 인증 완료] 외부 서버 전송 0 Byte • 🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원) 자격이 즉시 확인되었습니다!',
+        '🎒 [학생증 로컬 OCR 0.1초 인증 완료] 외부 서버 전송 0 Byte • 🎒 동호회 · 동창회 (초·중·고 반/동아리 특가 월 900원) 자격이 즉시 확인되었습니다!',
     }),
 
   activateGpuHelper24h: (tier) => {
     const tierLabelMap: Record<GpuHelperTierId, string> = {
-      standard_1000: '개인 / 패밀리 / 스쿨 라운지 (24시간 1,000원)',
-      club_small_1000: '소형 클럽 ~20명 (24시간 1,000원)',
-      club_medium_2000: '중형 클럽 ~100명 (24시간 2,000원)',
-      club_large_3000: '대형 클럽 무제한 (24시간 3,000원)',
+      standard_1000: '개인 / 패밀리 / 동호회 · 동창회 (24시간 1,000원)',
+      club_small_1000: '소형 동호·동창회 ~20명 (24시간 1,000원)',
+      club_medium_2000: '중형 동호·동창회 ~100명 (24시간 2,000원)',
+      club_large_3000: '대형 동호·동창회 무제한 (24시간 3,000원)',
     };
     set({
       gpuHelper24hActive: true,
@@ -4051,14 +4051,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',
         family_three_8900: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합권 (월 8,900원 • 우리집+본가+처가 3방 분리)',
         family_three_year_89000: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합 연간권 (연 89,000원 • 3방 분리)',
-        club_small_4900: '⛳ 클럽 라운지 • 소형 클럽 20명 기준 (월 4,900원 • 방 1개)',
-        club_small_year_49000: '⛳ 클럽 라운지 • 소형 클럽 연간권 (연 49,000원 • 방 1개)',
-        club_medium_7900: '⛳ 클럽 라운지 • 중형 클럽 100명 기준 (월 7,900원 • 방 1개)',
-        club_medium_year_79000: '⛳ 클럽 라운지 • 중형 클럽 연간권 (연 79,000원 • 방 1개)',
-        club_large_14900: '⛳ 클럽 라운지 • 대형 클럽 인원 제한 없음 (월 14,900원 • 방 1개)',
-        club_large_year_149000: '⛳ 클럽 라운지 • 대형 클럽 연간권 (연 149,000원 • 방 1개)',
-        student_sub_900: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)',
-        student_year_9000: '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 연 9,000원)',
+        club_small_4900: '⛳ 동호회 · 동창회 • 소형 동호·동창회 20명 기준 (월 4,900원 • 방 1개)',
+        club_small_year_49000: '⛳ 동호회 · 동창회 • 소형 동호·동창회 연간권 (연 49,000원 • 방 1개)',
+        club_medium_7900: '⛳ 동호회 · 동창회 • 중형 동호·동창회 100명 기준 (월 7,900원 • 방 1개)',
+        club_medium_year_79000: '⛳ 동호회 · 동창회 • 중형 동호·동창회 연간권 (연 79,000원 • 방 1개)',
+        club_large_14900: '⛳ 동호회 · 동창회 • 대형 동호·동창회 인원 제한 없음 (월 14,900원 • 방 1개)',
+        club_large_year_149000: '⛳ 동호회 · 동창회 • 대형 동호·동창회 연간권 (연 149,000원 • 방 1개)',
+        student_sub_900: '🎒 동호회 · 동창회 (초·중·고 반/동아리 특가 월 900원)',
+        student_year_9000: '🎒 동호회 · 동창회 (초·중·고 반/동아리 특가 연 9,000원)',
         work_soho_9900: '💼 업무 라운지 • 소호·팀 10인 기준 (월 9,900원 • S: 드라이브 마운트)',
         work_soho_year_99000: '💼 업무 라운지 • 소호·팀 연간권 (연 99,000원 • S: 드라이브 마운트)',
         work_biz_19900: '💼 업무 라운지 • 비즈니스 무제한 (월 19,900원 • 전 직원 S: 드라이브)',
@@ -4089,7 +4089,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         activeLoungeType: nextLoungeType,
         clubFeedTrack: nextLoungeType === 'club' ? 'memories_1989' : state.clubFeedTrack,
         showProModal: false,
-        // 해당 라운지 구독 시 해당 라운지의 [✨ 무료체험] 탭만 자동 숨김(Auto-Hide) 처리되며 다른 미구독 라운지는 유지됨
+        // 해당 라운지 구독 시 해당 라운지의 [✨ 공유 시작] 탭만 자동 숨김(Auto-Hide) 처리되며 다른 미구독 라운지는 유지됨
         desktopTab: isPaidSubscription && state.desktopTab === 'trial' ? 'dashboard' : state.desktopTab,
         mobileTab: isPaidSubscription && state.mobileTab === 'trial' ? 'search' : state.mobileTab,
         merlinAuth: {
@@ -4097,8 +4097,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           tier: isPaidSubscription ? 'PRO_LIFETIME' : 'FREE',
         },
         lastQuarantineToast: isPaidSubscription
-          ? `🎉 [${labelMap[planId]}] 활성화 완료! (현재 라운지의 [✨ 무료체험] 탭만 자동 숨김 처리되며, 다른 라운지는 별도로 작동합니다)`
-          : `✨ 현재 라운지가 [무료체험 모드]로 전환되어 상단 서브메뉴 1번 자리에 [✨ 무료체험] 탭이 다시 표시됩니다.`,
+          ? `🎉 [${labelMap[planId]}] 활성화 완료! (현재 라운지의 [✨ 공유 시작] 탭만 자동 숨김 처리되며, 다른 라운지는 별도로 작동합니다)`
+          : `✨ 현재 라운지가 [기본 안내 모드]로 전환되어 상단 서브메뉴 1번 자리에 [✨ 공유 시작] 탭이 다시 표시됩니다.`,
       };
     });
   },

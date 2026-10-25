@@ -1,10 +1,10 @@
 /**
  * [🛠️ Z-Eye 설정몬스터 Neural TTS 클라이언트 & 무지연 캐시 재생기]
- * 1. 기본 성우: typecast_piljae (카페브레이크 전속 시그니처 남성 성우 '필재')
+ * 1. 기본 성우: typecast_piljae (MS 신경망 남성 성우 '현수(ko-KR-HyunsuNeural)')
  * 2. 보조 성우: typecast_yujin (Typecast 전속 여성 성우 '유진')
  * 3. 3단 무지연 무과금 캐시 재생 구조:
  *    - ① Cache Hit: 로컬 tts_cache/{hash}.mp3 즉시 0.001초 재생 (메모리 ObjectURL 2차 캐싱 포함, 비용 0원)
- *    - ② Cache Miss: Typecast 필재 성우 최초 1회 실시간 합성 재생 + 백그라운드 Write-Through 캐시 영구 저장
+ *    - ② Cache Miss: MS 신경망 현수 성우 최초 1회 실시간 합성 재생 + 백그라운드 Write-Through 캐시 영구 저장
  *    - ③ Pre-warming: 앱 시작 시 고정 안내 멘트 13종 백그라운드 일괄 사전 합성 (이후 영구 무과금 재활용)
  * 4. 오프라인/비상 폴백 방어:
  *    - Typecast API 장애/크레딧 부족 시 edge-tts (ko-KR-InJoonNeural) 자동 대체
@@ -12,7 +12,7 @@
  *    - 'Heami' 등 구형 데스크톱 기계음은 원천 차단
  */
 
-export const SETUP_MONSTER_TTS_VOICE_PILJAE = 'typecast_piljae' as const; // 카페브레이크 전속 성우 '필재'
+export const SETUP_MONSTER_TTS_VOICE_PILJAE = 'typecast_piljae' as const; // MS 신경망 성우 '현수(ko-KR-HyunsuNeural)'
 export const SETUP_MONSTER_TTS_VOICE_YUJIN = 'typecast_yujin' as const;
 export const SETUP_MONSTER_TTS_VOICE_EDGE = 'ko-KR-InJoonNeural' as const;
 
@@ -115,7 +115,7 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
 }
 
 /**
- * [카페브레이크 전속 성우 '필재' 무지연 재생 & Write-Through 캐싱]
+ * [MS 신경망 성우 '현수(ko-KR-HyunsuNeural)' 무지연 재생 & Write-Through 캐싱]
  */
 export async function speakSetupMonsterTts(
   rawText: string,
@@ -158,7 +158,7 @@ export async function speakSetupMonsterTts(
         ok: true,
         cacheStatus: 'MEMORY_HIT',
         voice,
-        voiceActor: '필재 (카페브레이크 전속)',
+        voiceActor: '현수 (MS Neural 무료 무제한)',
         elapsedMs: Math.round((performance.now() - t0) * 100) / 100,
       };
     } catch {
@@ -184,7 +184,7 @@ export async function speakSetupMonsterTts(
           ok: true,
           cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',
           voice: data.voice || voice,
-          voiceActor: data.voiceActor || '필재 (카페브레이크 전속)',
+          voiceActor: data.voiceActor || '현수 (MS Neural 무료 무제한)',
           elapsedMs:
             typeof data.elapsedMs === 'number'
               ? data.elapsedMs
@@ -202,7 +202,7 @@ export async function speakSetupMonsterTts(
     ok: usedNaturalFallback,
     cacheStatus: usedNaturalFallback ? 'FALLBACK_NATURAL' : 'SKIPPED',
     voice: usedNaturalFallback ? 'BrowserNaturalFallback' : voice,
-    voiceActor: usedNaturalFallback ? '자연어 폴백' : '필재 (카페브레이크 전속)',
+    voiceActor: usedNaturalFallback ? '자연어 폴백' : '현수 (MS Neural 무료 무제한)',
     elapsedMs: Math.round((performance.now() - t0) * 100) / 100,
   };
 }

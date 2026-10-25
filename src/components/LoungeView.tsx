@@ -62,8 +62,8 @@ const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   club_medium_year_79000: '⛳ 동호회 · 동창회 단일가 (49,000원 · 10년 마스터권)',
   club_large_14900: '⛳ 동호회 · 동창회 단일가 (월 4,900원)',
   club_large_year_149000: '⛳ 동호회 · 동창회 단일가 (49,000원 · 10년 마스터권)',
-  student_sub_900: '🎒 스쿨 라운지 (폐지)',
-  student_year_9000: '🎒 스쿨 라운지 (폐지)',
+  student_sub_900: '📸 사진 공유 (동호회·동창회 통합)',
+  student_year_9000: '📸 사진 공유 (동호회·동창회 통합)',
   work_soho_9900: '💼 업무 공유 SOHO ~5인 (월 9,900원)',
   work_soho_year_99000: '💼 업무 공유 SOHO ~5인 (99,000원 · 10년 마스터권)',
   work_biz_19900: '💼 업무 공유 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
@@ -73,7 +73,7 @@ const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
 export const LoungeModeSwitcherBar: React.FC = () => null;
 
 /**
- * ⛳ 클럽 라운지 (4050 동창회 특화 UX — Warm Light 앨범 프레임 + 1줄 요약 정화 버전)
+ * ⛳ 동호회 · 동창회 (사진 공유) (4050 동창회 특화 UX — Warm Light 앨범 프레임 + 1줄 요약 정화 버전)
  * 1) 생성형 맞춤형 간판 'Text-to-Banner' (복고풍 칠판 / 노을 진 운동장 그래픽 + '성동고 89회 동창회' + 초대장 카피 버튼)
  * 2) 첫 화면 검색 전면 배치 ([🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기]) & '추억 vs 근황' 투트랙 탭 ([🎞️ 응답하라 1989 (추억)] 기본 고정 / [🍻 최근 우리들 (근황)]) + 1줄 스마트 알림 클린존 안내
  */
@@ -305,7 +305,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
 };
 
 /**
- * 1번 서브메뉴 `[✨ 무료체험]` (정식 구독 활성화 시 메뉴에서 Auto-Hide)
+ * 1번 서브메뉴 `[✨ 1초 진단 & 공유 시작]` (정식 구독 활성화 시 메뉴에서 Auto-Hide)
  */
 export const LoungeView: React.FC = () => {
   const {
@@ -334,9 +334,9 @@ export const LoungeView: React.FC = () => {
 
   const [studentPokedHost, setStudentPokedHost] = useState(false);
   const [radarSimulated, setRadarSimulated] = useState(false);
-  // 개인 라운지 무료체험 상태: 'idle'(실행 전) -> 'running'(진단 중) -> 'done'(진단 완료)
+  // 개인 라운지 1초 진단 & 공유 시작 상태: 'idle'(실행 전) -> 'running'(진단 중) -> 'done'(진단 완료)
   const [personalTrialStatus, setPersonalTrialStatus] = useState<'idle' | 'running' | 'done'>('idle');
-  // 패밀리 / 클럽 / 스쿨 라운지 무료체험 상태 (라운지별 독립 작동)
+  // 패밀리 / 동호·동창회 / 동호회 · 동창회 공유방 1초 진단 & 공유 시작 상태 (라운지별 독립 작동)
   const [groupTrialStatus, setGroupTrialStatus] = useState<
     Record<'family' | 'club' | 'student', 'idle' | 'running' | 'done'>
   >({
@@ -344,7 +344,7 @@ export const LoungeView: React.FC = () => {
     club: 'idle',
     student: 'idle',
   });
-  // 무료체험 내 안전 검증(정리 대기함 이동 -> 원복 직접 눌러보기) 상태
+  // 1초 진단 & 공유 시작 내 안전 검증(정리 대기함 이동 -> 원복 직접 눌러보기) 상태
   const [trialSafetyStep, setTrialSafetyStep] = useState<'ready' | 'quarantined' | 'restored'>('ready');
   const [trialMovedIds, setTrialMovedIds] = useState<string[]>([]);
 
@@ -372,7 +372,7 @@ export const LoungeView: React.FC = () => {
   const vaultDocPhotosCount = activePhotos.filter((p) => p.isVaultDocument).length;
   const totalDocsCount = localDocuments.length + vaultDocPhotosCount;
 
-  // 내 기기 전체 보유 파일 모수 (1초 파일 목록 스캔 기준) vs 무료체험 샘플 해부 수량
+  // 내 기기 전체 보유 파일 모수 (1초 파일 목록 스캔 기준) vs 1초 진단 & 공유 시작 샘플 해부 수량
   const totalDevicePhotos = Math.max(photos.length, 550);
   const totalDeviceVideos = Math.max(videoSceneItems.length, 42);
   const totalDeviceDocs = Math.max(totalDocsCount, 128);
@@ -380,7 +380,7 @@ export const LoungeView: React.FC = () => {
   const trialSamplePhotos = 100;
   const trialSampleDocs = 15;
 
-  // 무료체험 안전 검증: 1단계 [정리(대기함 이동)] 실행
+  // 1초 진단 & 공유 시작 안전 검증: 1단계 [정리(대기함 이동)] 실행
   const handleTrialQuarantineSample = async () => {
     const sampleTargets = trashPhotos.slice(0, 5).map((p) => p.id);
     if (sampleTargets.length > 0) {
@@ -393,7 +393,7 @@ export const LoungeView: React.FC = () => {
     setTrialSafetyStep('quarantined');
   };
 
-  // 무료체험 안전 검증: 2단계 [원복(되돌리기)] 실행
+  // 1초 진단 & 공유 시작 안전 검증: 2단계 [원복(되돌리기)] 실행
   const handleTrialRestoreSample = async () => {
     if (trialMovedIds.length > 0) {
       await restoreFromQuarantine(trialMovedIds);
@@ -619,7 +619,7 @@ export const LoungeView: React.FC = () => {
                   </span>
                 </div>
 
-                {/* 전체 모수 vs 무료체험 분석 완료 3열 카드 */}
+                {/* 전체 모수 vs 1초 진단 & 공유 시작 분석 완료 3열 카드 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                   <div
                     onClick={() => {
@@ -892,7 +892,7 @@ export const LoungeView: React.FC = () => {
         </>
       )}
 
-      {/* ─────────────── 👨‍👩‍👧‍👦 패밀리 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(무료체험 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
+      {/* ─────────────── 👨‍👩‍👧‍👦 패밀리 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(1초 진단 & 공유 시작 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
       {activeLoungeType === 'family' && (
         <>
           {/* 1단: 패밀리 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
@@ -969,13 +969,13 @@ export const LoungeView: React.FC = () => {
             </div>
           </section>
 
-          {/* 2단: 패밀리 라운지 무료체험 안내 + 우측 [무료체험 시작] / [완료] 버튼 */}
+          {/* 2단: 패밀리 라운지 1초 진단 & 공유 시작 안내 + 우측 [공유방 시작하기] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div className="flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 패밀리 라운지 무료체험 — 가족 얼굴 여권 &amp; 3초 레이더 수합
+                    ✨ 패밀리 라운지 1초 진단 & 공유 시작 — 가족 얼굴 여권 &amp; 3초 레이더 수합
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
                     ⏱️ 소요 시간: 약 20초
@@ -988,7 +988,7 @@ export const LoungeView: React.FC = () => {
                   </span>
                   <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
                   <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🔬 <strong>무료체험 범위:</strong> 🛂 가족 얼굴 여권 등록 · 📡 가족 폰 3초 레이더 스캔 <strong>최대 10장 수합 맛보기</strong>
+                    🔬 <strong>초기 수합 범위:</strong> 🛂 가족 얼굴 여권 등록 · 📡 가족 폰 3초 레이더 스캔 <strong>최대 10장 수합 맛보기</strong>
                   </span>
                 </div>
               </div>
@@ -1000,7 +1000,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('family')}
                     className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🚀 무료체험 시작
+                    🚀 공유방 시작하기
                   </button>
                 )}
 
@@ -1021,7 +1021,7 @@ export const LoungeView: React.FC = () => {
                       disabled
                       className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
                     >
-                      ✓ 무료체험 완료
+                      ✓ 초기 설정 완료
                     </button>
                     <button
                       type="button"
@@ -1035,7 +1035,7 @@ export const LoungeView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3단: 무료체험 완료 시 열리는 가족 여권 등록 & 3초 레이더 수합 보드 */}
+            {/* 3단: 초기 설정 완료 시 열리는 가족 여권 등록 & 3초 레이더 수합 보드 */}
             {groupTrialStatus.family === 'done' ? (
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -1107,7 +1107,7 @@ export const LoungeView: React.FC = () => {
             ) : (
               <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
                 <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 가족 대표 사진에서 얼굴을 추출해 이름을 붙이고, 카톡 초대 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
+                  💡 우측의 <strong>[🚀 공유방 시작하기]</strong> 버튼을 누르면 가족 대표 사진에서 얼굴을 추출해 이름을 붙이고, 카톡 초대 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
                 </span>
               </div>
             )}
@@ -1210,14 +1210,14 @@ export const LoungeView: React.FC = () => {
         </>
       )}
 
-      {/* ─────────────── ⛳ 클럽 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(무료체험 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
+      {/* ─────────────── ⛳ 동호회 · 동창회 (사진 공유): 1단(온보딩 가로 3열 카드) ➔ 2단(1초 진단 & 공유 시작 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
       {activeLoungeType === 'club' && (
         <>
-          {/* 1단: 클럽 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
+          {/* 1단: 동호회 · 동창회 공유방가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                ⛳ 클럽 라운지 — 4050 동창회 · 골프 · 산악회 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(총무 1인 결제 ➔ 전 회원 무료)'}
+                ⛳ 동호회 · 동창회 (사진 공유) — 4050 동창회 · 골프 · 산악회 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(총무 1인 결제 ➔ 전 회원 무료)'}
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
                 동창회·모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 썸네일 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
@@ -1269,13 +1269,13 @@ export const LoungeView: React.FC = () => {
             </div>
           </section>
 
-          {/* 2단: 클럽 라운지 무료체험 안내 + 우측 [무료체험 시작] / [완료] 버튼 */}
+          {/* 2단: 동호회 · 동창회 공유방 1초 진단 & 공유 시작 안내 + 우측 [공유방 시작하기] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div className="flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 클럽 라운지 무료체험 — 동창·회원 얼굴 여권 &amp; 3초 레이더 수합
+                    ✨ 동호회 · 동창회 공유방 1초 진단 & 공유 시작 — 동창·회원 얼굴 여권 &amp; 3초 레이더 수합
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
                     ⏱️ 소요 시간: 약 20초
@@ -1288,7 +1288,7 @@ export const LoungeView: React.FC = () => {
                   </span>
                   <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
                   <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🔬 <strong>무료체험 범위:</strong> 🛂 회원 얼굴 여권 등록 · 📡 총무 카톡 초대 <strong>3초 레이더 10장 수합 맛보기</strong>
+                    🔬 <strong>초기 수합 범위:</strong> 🛂 회원 얼굴 여권 등록 · 📡 총무 카톡 초대 <strong>3초 레이더 10장 수합 맛보기</strong>
                   </span>
                 </div>
               </div>
@@ -1300,7 +1300,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('club')}
                     className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🚀 무료체험 시작
+                    🚀 공유방 시작하기
                   </button>
                 )}
 
@@ -1321,7 +1321,7 @@ export const LoungeView: React.FC = () => {
                       disabled
                       className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
                     >
-                      ✓ 무료체험 완료
+                      ✓ 초기 설정 완료
                     </button>
                     <button
                       type="button"
@@ -1335,7 +1335,7 @@ export const LoungeView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3단: 무료체험 완료 시 열리는 회원 여권 등록 & 3초 레이더 수합 보드 */}
+            {/* 3단: 초기 설정 완료 시 열리는 회원 여권 등록 & 3초 레이더 수합 보드 */}
             {groupTrialStatus.club === 'done' ? (
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -1407,12 +1407,12 @@ export const LoungeView: React.FC = () => {
             ) : (
               <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
                 <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 단체 사진에서 회원 얼굴을 추출해 실명·별명을 등록하고, 단톡방 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
+                  💡 우측의 <strong>[🚀 공유방 시작하기]</strong> 버튼을 누르면 단체 사진에서 회원 얼굴을 추출해 실명·별명을 등록하고, 단톡방 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
                 </span>
               </div>
             )}
 
-            {/* 클럽 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 4,900원 단일가 요금제 노출 */}
+            {/* 동호회 · 동창회 공유방 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 4,900원 단일가 요금제 노출 */}
             {isStoreAppMode ? (
               <div className="pt-3 border-t border-white/10">
                 <PcMasterQuickSendPanel />
@@ -1522,14 +1522,14 @@ export const LoungeView: React.FC = () => {
         </>
       )}
 
-      {/* ─────────────── 🎒 스쿨 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(무료체험 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
+      {/* ─────────────── ⛳ 동호회 · 동창회 (사진 공유): 1단(온보딩 가로 3열 카드) ➔ 2단(1초 진단 & 공유 시작 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
       {activeLoungeType === 'student' && (
         <>
-          {/* 1단: 스쿨 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
+          {/* 1단: 동호회 · 동창회 공유방가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                🎒 스쿨 라운지 — 초·중·고 학급 · 동아리 · 체육대회 {isStoreAppMode ? '(우리 반 전원 무료 타임캡슐)' : '(월 900원 단일 특가)'}
+                ⛳ 동호회 · 동창회 (사진 공유) — 초·중·고 학급 · 동아리 · 체육대회 {isStoreAppMode ? '(우리 반 전원 무료 타임캡슐)' : '(월 900원 단일 특가)'}
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
                 {isStoreAppMode ? (
@@ -1584,20 +1584,20 @@ export const LoungeView: React.FC = () => {
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
                   {isStoreAppMode
-                    ? '30명 학급이든 100명 동아리든 인원 제한 없이 연결! 무료체험 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'
-                    : '30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 무료체험 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'}
+                    ? '30명 학급이든 100명 동아리든 인원 제한 없이 연결! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'
+                    : '30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'}
                 </p>
               </div>
             </div>
           </section>
 
-          {/* 2단: 스쿨 라운지 무료체험 안내 + 우측 [무료체험 시작] / [완료] 버튼 */}
+          {/* 2단: 동호회 · 동창회 공유방 1초 진단 & 공유 시작 안내 + 우측 [공유방 시작하기] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div className="flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 스쿨 라운지 무료체험 — 우리 반 얼굴 여권 &amp; 10장 레이더 수합
+                    ✨ 동호회 · 동창회 공유방 1초 진단 & 공유 시작 — 우리 반 얼굴 여권 &amp; 10장 레이더 수합
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
                     ⏱️ 소요 시간: 약 20초
@@ -1610,7 +1610,7 @@ export const LoungeView: React.FC = () => {
                   </span>
                   <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
                   <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🔬 <strong>무료체험 범위:</strong> 🛂 친구 얼굴 여권 등록 · 📡 반 단톡방 <strong>3초 레이더 10장 수합 &amp; 방장 콕 찌르기</strong>
+                    🔬 <strong>초기 수합 범위:</strong> 🛂 친구 얼굴 여권 등록 · 📡 반 단톡방 <strong>3초 레이더 10장 수합 &amp; 방장 콕 찌르기</strong>
                   </span>
                 </div>
               </div>
@@ -1622,7 +1622,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('student')}
                     className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🚀 무료체험 시작
+                    🚀 공유방 시작하기
                   </button>
                 )}
 
@@ -1643,7 +1643,7 @@ export const LoungeView: React.FC = () => {
                       disabled
                       className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
                     >
-                      ✓ 무료체험 완료
+                      ✓ 초기 설정 완료
                     </button>
                     <button
                       type="button"
@@ -1657,7 +1657,7 @@ export const LoungeView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3단: 무료체험 완료 시 열리는 반 친구 여권 등록 & 3초 레이더 수합 보드 */}
+            {/* 3단: 초기 설정 완료 시 열리는 반 친구 여권 등록 & 3초 레이더 수합 보드 */}
             {groupTrialStatus.student === 'done' ? (
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -1744,12 +1744,12 @@ export const LoungeView: React.FC = () => {
             ) : (
               <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
                 <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 우측의 <strong>[🚀 무료체험 시작]</strong> 버튼을 누르면 우리 반 단체 사진에서 친구 얼굴을 추출해 이름·별명을 등록하고, <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
+                  💡 우측의 <strong>[🚀 공유방 시작하기]</strong> 버튼을 누르면 우리 반 단체 사진에서 친구 얼굴을 추출해 이름·별명을 등록하고, <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
                 </span>
               </div>
             )}
 
-            {/* 스쿨 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
+            {/* 동호회 · 동창회 공유방 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
             {isStoreAppMode ? (
               <div className="pt-3 border-t border-white/10">
                 <PcMasterQuickSendPanel />
@@ -3103,7 +3103,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return <WorkLoungeB2BHub />;
   }
 
-  // student ('🎒 스쿨 라운지')
+  // student ('⛳ 동호회 · 동창회 (사진 공유)')
   return (
     <div className="flex flex-col gap-2">
       {!monthlyReportDismissed && (
@@ -3138,7 +3138,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
 };
 
 /**
- * 3번 서브메뉴 `[⏳ AI 인덱싱 대기실]` (패밀리 / 클럽 / 스쿨 / 업무 라운지 전용)
+ * 3번 서브메뉴 `[⏳ AI 인덱싱 대기실]` (사진 공유(패밀리 / 동호회·동창회) / 업무 라운지 전용)
  * - 수동 검사가 아니라 AI 인덱싱(Gemma 2 768d 벡터 + 13KB/30KB 캐시 변환) 시간 벌기용 안심 버퍼 뷰!
  * - 4050 동창회 아날로그 스캔 사진용 '스틱(Chip) 연쇄 태깅' & '[❓ 언제/어디인가요?] 집단 지성 연도 제보 ➔ 👑 방장 일괄 승인' 탑재
  */
@@ -3840,7 +3840,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
  * 4번 서브메뉴 상단에 라운지 성격별로 표시되는 전용 관리/업그레이드/인증 섹션
  * - 개인: [AI 설정몬스터] 정기 구독 업그레이드 안내
  * - 패밀리: [👑 가족 초대 & 서버도우미] 가족 무수락 초대 링크/QR (방장 강퇴권 포함) + 양가 통합권 설정
- * - 클럽: [👥 클럽 관리 & 서버도우미] 소(20명)/중(100명)/대(무제한) 클럽 설정 + 회원 초대/강퇴 관리
+ * - 동호·동창회: [👥 동호·동창회 관리 & 서버도우미] 소(20명)/중(100명)/대(무제한) 동호·동창회 설정 + 회원 초대/강퇴 관리
  * - 10대 학생: [🎮 게이밍 PC & 학생인증] 하교 후 방장 게이밍 PC 집중 동기화 토글 + 학생증 로컬 OCR 0.1초 인증(월 900원)
  */
 export const LoungeCustomSettingsHeader: React.FC = () => {
@@ -4169,7 +4169,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             </h2>
             <p className="font-body-sm text-[12.5px] text-zinc-400">
               {isStoreAppMode
-                ? '초대받은 클럽 회원은 모바일 앱에서 100% 무료로 모임 사진을 찾고 감상합니다. 방 개설 및 마스터 엔진 연동은 데스크톱(PC)에서 관리합니다.'
+                ? '초대받은 동호·동창 회원은 모바일 앱에서 100% 무료로 모임 사진을 찾고 감상합니다. 방 개설 및 마스터 엔진 연동은 데스크톱(PC)에서 관리합니다.'
                 : '모임 인원이 10명이든 500명이든 인원수 계산 없이 월 4,900원(10년 마스터권 49,000원) 단일가로 운영되며, 초대받은 회원은 전원 무료입니다.'}
             </p>
           </div>
@@ -4180,7 +4180,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               onClick={copyInviteLink}
               className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
             >
-              {inviteCopied ? '✓ 클럽 회원 초대 링크 복사됨!' : '⛳ 클럽 무수락 초대 링크·QR 발급'}
+              {inviteCopied ? '✓ 동호·동창 회원 초대 링크 복사됨!' : '⛳ 동호·동창회 무수락 초대 링크·QR 발급'}
             </button>
             {isStoreAppMode && (
               <button
@@ -4293,7 +4293,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
           <span className="font-label-sm text-[12px] text-zinc-300 font-bold mr-1">
-            참여 클럽 회원 ({clubMembers.length}명):
+            참여 동호·동창 회원 ({clubMembers.length}명):
           </span>
           {clubMembers.map((m) => (
             <div
@@ -4370,15 +4370,15 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     );
   }
 
-  // student ('🎒 스쿨 라운지')
+  // student ('⛳ 동호회 · 동창회 (사진 공유)')
   return (
     <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
             {isStoreAppMode
-              ? '🎒 스쿨 라운지 (초·중·고 우리반·동아리 100% 무료 합류)'
-              : '🎒 스쿨 라운지 (초·중·고 반/동아리 특가 월 900원)'}
+              ? '⛳ 동호회 · 동창회 (사진 공유) (초·중·고 우리반·동아리 100% 무료 합류)'
+              : '⛳ 동호회 · 동창회 (사진 공유) (초·중·고 반/동아리 특가 월 900원)'}
           </span>
           <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
             {isStoreAppMode
