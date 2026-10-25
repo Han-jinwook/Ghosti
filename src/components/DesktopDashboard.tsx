@@ -143,8 +143,8 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   personal: [
     { id: 'trial', label: '무료체험' },
     { id: 'dashboard', label: '👁️ Z-Eye 투시검색' },
-    { id: 'trash', label: '🩺 Z-Eye 클린 몬스터', showTrashCount: true },
-    { id: 'sync', label: '🛠️ Z-Eye 설정 몬스터' },
+    { id: 'trash', label: '🩺 Z-Eye 클린몬스터', showTrashCount: true },
+    { id: 'sync', label: '🛠️ 설정몬스터' },
   ],
   family: [
     { id: 'trial', label: '무료체험' },
@@ -287,7 +287,7 @@ export const DesktopDashboard: React.FC = () => {
   const activeLoungeLabel =
     MAIN_LOUNGE_MENUS.find((m) => m.id === activeLoungeType)?.label || '개인 라운지';
   const activeSubmenuLabel =
-    (activeLoungeType === 'personal' && desktopTab === 'trial' ? '🩺 AI 주치의 진단' : currentSubmenus.find((s) => s.id === desktopTab)?.label) || '투시검색';
+    (activeLoungeType === 'personal' && desktopTab === 'trial' ? '🧹 클린몬스터 진단' : currentSubmenus.find((s) => s.id === desktopTab)?.label) || '투시검색';
 
   const renderSidebarNavigationContent = (isMobileDrawer = false) => (
     <div
@@ -378,7 +378,7 @@ export const DesktopDashboard: React.FC = () => {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <MainLoungeMonoIcon id={menu.id} className="w-[15px] h-[15px] shrink-0" />
-                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 AI 주치의 진단과 1초 투시검색' : undefined}>{menu.label}</span>
+                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 클린·설정몬스터 진단과 1초 투시검색' : undefined}>{menu.label}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {menu.freeBadge && !isLoungeSub && (
@@ -462,7 +462,7 @@ export const DesktopDashboard: React.FC = () => {
                               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
                           }`}
                         >
-                          <span className="truncate">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🩺 AI 주치의 진단' : sub.label}</span>
+                          <span className="truncate">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🧹 클린몬스터 진단' : sub.label}</span>
                           {sub.showTrashCount && (
                             <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-mono font-bold shrink-0">
                               {activeTrashCount}
@@ -602,7 +602,7 @@ export const DesktopDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 우측 상단 불변의 생태계 앵커: Z-Eye 여권 문패(업무 공유 제외) + 설정 몬스터 + 크레딧 + 테마 토글 */}
+              {/* 우측 상단 불변의 생태계 앵커: Z-Eye 여권 문패(업무 공유 제외) + 설정몬스터 + 크레딧 + 테마 토글 */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
                 {myPassportCluster && activeLoungeType !== 'work' && (
                   <button
@@ -630,10 +630,10 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowSetupMonsterModal(true, 'pc')}
-                      title="🛠️ Z-Eye 설정 몬스터"
+                      title="🛠️ 설정몬스터"
                       className="px-2.5 py-1 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-600 dark:text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
                     >
-                      <span>🛠️ 설정 몬스터</span>
+                      <span>🛠️ 설정몬스터</span>
                     </button>
                     <button
                       type="button"
@@ -653,7 +653,7 @@ export const DesktopDashboard: React.FC = () => {
                   type="button"
                   onClick={() => {
                     const shareText =
-                      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 AI 투시검색 — 내 폰·PC 속 AI 주치의는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
+                      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 투시검색 — 내 폰·PC 속 투시검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
                     if (typeof navigator !== 'undefined' && navigator.share) {
                       void navigator.share({ title: '제트아이 (Z-Eye)', text: shareText, url: 'https://z-eye.sundreamer.app' });
                     } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -1212,7 +1212,7 @@ export const DesktopDashboard: React.FC = () => {
         </main>
       )}
 
-      {/* ─────────────── 서브메뉴 3번: 개인은 [AI 클린 몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] ─────────────── */}
+      {/* ─────────────── 서브메뉴 3번: 개인은 [AI 클린몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] ─────────────── */}
       {desktopTab === 'trash' &&
         (activeLoungeType === 'personal' ? (
           <SmartTrashView />
@@ -1220,10 +1220,10 @@ export const DesktopDashboard: React.FC = () => {
           <LoungeIndexingWaitingRoom />
         ))}
 
-      {/* ─────────────── 서브메뉴 4번: AI 설정 몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 ─────────────── */}
+      {/* ─────────────── 서브메뉴 4번: AI 설정몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 ─────────────── */}
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1280px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-5">
-          {/* 라운지별 전용 상단 설정 섹션 (AI 설정 몬스터 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
+          {/* 라운지별 전용 상단 설정 섹션 (AI 설정몬스터 / 가족 무수락 초대·강퇴 / 클럽 관리 / 게이밍 PC·학생증 OCR 인증) */}
           <LoungeCustomSettingsHeader />
 
           {/* 💻 모바일 ➔ PC 전환 시 스토어 규정(Anti-steering)을 100% 준수하는 데스크톱 기기 연동 패널 */}
@@ -1271,8 +1271,8 @@ export const DesktopDashboard: React.FC = () => {
                 }`}
               >
                 {enableSetupMonster
-                  ? '🛠️ 설정 몬스터 (enableSetupMonster=true)'
-                  : '🔒 설정 몬스터 숨김 (enableSetupMonster=false)'}
+                  ? '🛠️ 설정몬스터 (enableSetupMonster=true)'
+                  : '🔒 설정몬스터 숨김 (enableSetupMonster=false)'}
               </button>
 
               <button
@@ -1387,7 +1387,7 @@ export const DesktopDashboard: React.FC = () => {
                 </h2>
 
                 <p className="font-body-sm text-[13px] text-zinc-400 leading-relaxed">
-                  폰과 PC를 주치의 정리로 먼저 깨끗이 비운 뒤, 양쪽 기기에 똑같은 원본 파일을 1:1로 유지하여 클라우드 없이 상호 백업 보험을 구축합니다.
+                  폰과 PC를 클린몬스터 정리로 먼저 깨끗이 비운 뒤, 양쪽 기기에 똑같은 원본 파일을 1:1로 유지하여 클라우드 없이 상호 백업 보험을 구축합니다.
                 </p>
 
                 <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">

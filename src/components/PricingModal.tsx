@@ -5,7 +5,7 @@ import { LoungeModeSwitcherBar } from './LoungeView';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 개인 (기본) : 언제나 0원 (혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다)',
-  personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 Z-Eye 클린 몬스터',
+  personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 Z-Eye 클린몬스터',
   personal_sub_3900: '💻 업무 입문 • 1인 멀티PC (월 1,900원)',
   personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 · 선착순 100명 10년 마스터권)',
   family_home_5900: '🏠 패밀리 공유 • 우리집 단독 (월 5,900원)',
@@ -319,7 +319,7 @@ export const PricingModal: React.FC = () => {
 
   const handleShareApp = async () => {
     const shareText =
-      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 AI 투시검색 — 내 폰·PC 속 AI 주치의는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
+      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 투시검색 — 내 폰·PC 속 투시검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
@@ -507,7 +507,7 @@ export const PricingModal: React.FC = () => {
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                🆓 내 기기 (투시검색 · 클린 · 설정 몬스터)
+                🆓 내 기기 (투시검색 · 클린 · 설정몬스터)
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/35 flex flex-col justify-between gap-2.5">
@@ -520,12 +520,12 @@ export const PricingModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12px] text-emerald-200/95 font-bold">
-                  &ldquo;내 폰·PC 속 AI 주치의와 1초 투시검색 — 기간 제한 없이 언제나 0원&rdquo;
+                  &ldquo;내 폰·PC 속 클린·설정몬스터와 1초 투시검색 — 기간 제한 없이 언제나 0원&rdquo;
                 </p>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
                   • 👁️ <strong>Z-Eye 투시검색</strong> (내 사진·영상·서류 1초 검색 · 언제나 0원)<br />
-                  • 🩺 <strong>Z-Eye 클린 몬스터</strong> (중복·스크린샷·바탕화면 정리 · 언제나 0원)<br />
-                  • 🛠️ <strong>Z-Eye 설정 몬스터</strong> (원클릭 수리 &amp; 1초 원상복구 · 비용 없이 제한 없이)
+                  • 🩺 <strong>Z-Eye 클린몬스터</strong> (중복·스크린샷·바탕화면 정리 · 언제나 0원)<br />
+                  • 🛠️ <strong>Z-Eye 설정몬스터</strong> (원클릭 수리 &amp; 1초 원상복구 · 비용 없이 제한 없이)
                 </p>
                 <div className="pt-1 border-t border-white/10 text-[11px] text-zinc-400">
                   ※ 기기 3대째(집 PC + 회사 PC 등 PC 2대 연결)부터는 아래 <strong>[💼 업무 공유 — 1인 멀티PC (월 1,900원)]</strong>으로 전환됩니다.

@@ -1,8 +1,8 @@
 /**
- * 🎬 제트아이 AI 주치의 — 맥락 맞춤 '1분 활용팁 숏폼' 큐레이션 & 무토큰(Zero-LLM) 투시검색 라우팅 엔진
+ * 🎬 제트아이 Z몬스터 — 맥락 맞춤 '1분 활용팁 숏폼' 큐레이션 & 무토큰(Zero-LLM) 투시검색 라우팅 엔진
  *
  * [멀린님 확정 3대 원칙]
- * 1. 노출 빈도 (2회당 1번): 매번 나오면 반감이 생기므로 주치의 작업 완료 2회당 1번(짝수 회차)에만 노출합니다.
+ * 1. 노출 빈도 (2회당 1번): 매번 나오면 반감이 생기므로 Z몬스터 작업 완료 2회당 1번(짝수 회차)에만 노출합니다.
  * 2. 구독 중인 라운지 주제 제외: 유저가 이미 '가족방(family)'을 구독 중이면 가족방 주제는 빼고, 미구독 라운지 주제만 추천합니다.
  * 3. 영구 잠금 금지 & 새 영상 우선 순환: 읽은 영상을 영구히 잠그지 않고, 미구독 라운지의 안 본 새 영상(shownCount === 0)을
  *    최우선 노출하되 모두 본 경우 가장 오래전에 본 영상부터 자연 순환합니다.
@@ -77,7 +77,7 @@ interface ShownRecord {
 }
 
 /**
- * 주치의 작업 완료 시 호출하여 2회당 1번(짝수 회차) & 구독 중인 라운지 제외 & 새 영상 우선 순환으로 숏폼 1개를 선정합니다.
+ * Z몬스터 작업 완료 시 호출하여 2회당 1번(짝수 회차) & 구독 중인 라운지 제외 & 새 영상 우선 순환으로 숏폼 1개를 선정합니다.
  */
 export function pickNextShortformTipOnCompletion(params: {
   contextTag: 'cleanup' | 'restore' | 'photo' | 'doc' | 'os_repair';
@@ -140,7 +140,7 @@ export function pickNextShortformTipOnCompletion(params: {
 }
 
 /**
- * 주치의 대화창에 입력된 문장이 '단순 파일/사진 찾기'인지 0.001초 만에 로컬 판별 (LLM 토큰 0원)
+ * Z몬스터 대화창에 입력된 문장이 '단순 파일/사진 찾기'인지 0.001초 만에 로컬 판별 (LLM 토큰 0원)
  */
 export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
   isSimpleSearchIntent: boolean;
@@ -149,7 +149,7 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
   const text = (userInput || '').trim();
   if (!text) return { isSimpleSearchIntent: false, extractedKeyword: '' };
 
-  // 정리/이동/숨김/복원/수리 명령어가 들어있으면 주치의 고유 작업으로 분류
+  // 정리/이동/숨김/복원/수리 명령어가 들어있으면 Z몬스터 고유 작업으로 분류
   const doctorActionRegex = /(정리|옮겨|이동|숨겨|숨김|복원|되돌려|고쳐|수리|안\s*돼|안\s*나와|오류|에러|느려|폴더\s*만들)/i;
   if (doctorActionRegex.test(text)) {
     return { isSimpleSearchIntent: false, extractedKeyword: '' };
@@ -171,7 +171,7 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
 }
 
 export const DOCTOR_3_RED_LINES_NOTICE = [
-  '🛡️ 영구 삭제(포맷/와이핑) 불가: 주치의는 이동·분류·숨김·휴지통 보호만 수행하며 파일을 영구 삭제(Shift+Del)하지 않습니다.',
+  '🛡️ 영구 삭제(포맷/와이핑) 불가: Z몬스터는 이동·분류·숨김·휴지통 보호만 수행하며 파일을 영구 삭제(Shift+Del)하지 않습니다.',
   '🔒 OS 시스템 폴더 개조 불가: C:\\Windows, Program Files 등 시스템 안정성 영역은 절대 건드리지 않습니다.',
   '👆 금융·메신저 대리 전송 불가 (Zero-Auto-Action): 홈택스 제출·계좌이체·메신저 발송은 화살표 안내와 입력칸 세팅까지만 돕고 최종 실행은 유저가 직접 누릅니다.',
 ];

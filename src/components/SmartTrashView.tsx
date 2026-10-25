@@ -105,7 +105,7 @@ export const SmartTrashView: React.FC = () => {
   });
   const [doctorChatInput, setDoctorChatInput] = useState('');
   const [doctorChatReply, setDoctorChatReply] = useState<string>(
-    '💬 AI 주치의 컨설턴트: "기계적으로 일괄 삭제하지 않습니다. 종합건강검진 결과를 보시고 궁금한 항목을 물어보시면, 왜 용량을 차지하는지·별도로 모아놓으면 왜 안전한지 친절히 설명해 드립니다. 최종 결정은 항목마다 직접 선택해 주세요."'
+    '💬 클린몬스터 컨설턴트: "기계적으로 일괄 삭제하지 않습니다. 종합건강검진 결과를 보시고 궁금한 항목을 물어보시면, 왜 용량을 차지하는지·별도로 모아놓으면 왜 안전한지 친절히 설명해 드립니다. 최종 결정은 항목마다 직접 선택해 주세요."'
   );
 
   const handleAskDoctor = (e: React.FormEvent) => {
@@ -114,19 +114,19 @@ export const SmartTrashView: React.FC = () => {
     if (!q) return;
     if (q.includes('바탕화면') || q.includes('바로가기') || q.includes('중복')) {
       setDoctorChatReply(
-        `💬 AI 주치의 답변 ("${q}"): PC 바탕화면에 작업 문서와 바로가기(.lnk), 중복 사본이 뒤섞여 있으면 탐색기 부하가 커집니다. Chrome 등 핵심 아이콘만 남기고 나머지는 [D:\\_바탕화면_정리자료_아카이브]로 안전하게 모아두시길 권합니다.`
+        `💬 클린몬스터 답변 ("${q}"): PC 바탕화면에 작업 문서와 바로가기(.lnk), 중복 사본이 뒤섞여 있으면 탐색기 부하가 커집니다. Chrome 등 핵심 아이콘만 남기고 나머지는 [D:\\_바탕화면_정리자료_아카이브]로 안전하게 모아두시길 권합니다.`
       );
     } else if (q.includes('어르신') || q.includes('아이콘') || q.includes('앱') || q.includes('앨범')) {
       setDoctorChatReply(
         isStoreAppMode
-          ? `💬 AI 주치의 답변 ("${q}"): 어르신들이 자주 찾으시는 손주·가족 앨범과 중요 문서는 큰 카드 레이아웃으로 첫 화면에 모아드리고, 중복 사본·스크린샷은 OS 기본 [휴지통]으로 안전하게 정리해 드릴까요?`
-          : `💬 AI 주치의 답변 ("${q}"): 6개월 이상 안 쓴 앱 42개는 지우지 않고 [별도 보관함]으로 모아두거나 [안전 동결]하면 배터리를 아낄 수 있습니다. 자주 쓰시는 카톡·유튜브·단골 카페는 어르신용 큰 아이콘으로 첫 화면에 배치해 드릴까요?`
+          ? `💬 클린몬스터 답변 ("${q}"): 어르신들이 자주 찾으시는 손주·가족 앨범과 중요 문서는 큰 카드 레이아웃으로 첫 화면에 모아드리고, 중복 사본·스크린샷은 OS 기본 [휴지통]으로 안전하게 정리해 드릴까요?`
+          : `💬 클린몬스터 답변 ("${q}"): 6개월 이상 안 쓴 앱 42개는 지우지 않고 [별도 보관함]으로 모아두거나 [안전 동결]하면 배터리를 아낄 수 있습니다. 자주 쓰시는 카톡·유튜브·단골 카페는 어르신용 큰 아이콘으로 첫 화면에 배치해 드릴까요?`
       );
     } else {
       setDoctorChatReply(
         isStoreAppMode
-          ? `💬 AI 주치의 답변 ("${q}"): 고화질 원본 영상·사진 사본을 내 PC 마스터 볼트로 안전하게 이관하고 폰에는 13KB 섀도우 캐시만 남기면 스마트폰 저장공간이 넉넉해지고 1초 검색이 유지됩니다.`
-          : `💬 AI 주치의 답변 ("${q}"): 현재 백그라운드에서 은행·관공서 보안모듈(MagicLine, AnySign 등)이 전기와 CPU·메모리(약 420MB)를 상시 점유 중입니다. 은행 접속 시에만 켜지도록 안전 동결하시면 체감 속도가 확 올라갑니다.`
+          ? `💬 클린몬스터 답변 ("${q}"): 고화질 원본 영상·사진 사본을 내 PC 마스터 볼트로 안전하게 이관하고 폰에는 13KB 섀도우 캐시만 남기면 스마트폰 저장공간이 넉넉해지고 1초 검색이 유지됩니다.`
+          : `💬 클린몬스터 답변 ("${q}"): 현재 백그라운드에서 은행·관공서 보안모듈(MagicLine, AnySign 등)이 전기와 CPU·메모리(약 420MB)를 상시 점유 중입니다. 은행 접속 시에만 켜지도록 안전 동결하시면 체감 속도가 확 올라갑니다.`
       );
     }
     setDoctorChatInput('');
@@ -174,7 +174,7 @@ export const SmartTrashView: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 py-6 flex flex-col gap-5 pb-24">
-      {/* ─────────────── 🩺 1. 클린몬스터(CleanMonster) 종합건강검진 & LLM 대화형 주치의 컨설팅 (항목별 유저 직접 결정) ─────────────── */}
+      {/* ─────────────── 🩺 1. 클린몬스터(CleanMonster) 종합건강검진 & LLM 대화형 Z몬스터 컨설팅 (항목별 유저 직접 결정) ─────────────── */}
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -182,7 +182,7 @@ export const SmartTrashView: React.FC = () => {
               CLEANMONSTER AI DIGITAL DOCTOR · 특허 기반 종합건강검진 &amp; 대화형 컨설팅
             </span>
             <h2 className="font-headline-sm text-[18px] md:text-[20px] text-white font-bold mt-0.5">
-              🩺 클린몬스터 종합건강검진 — 주치의 컨설팅을 보고 항목마다 직접 결정하세요
+              🩺 클린몬스터 종합건강검진 — 클린몬스터 컨설팅을 보고 항목마다 직접 결정하세요
             </h2>
           </div>
           <span className="px-3 py-1 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-bold">
@@ -319,7 +319,7 @@ export const SmartTrashView: React.FC = () => {
           </div>
         </div>
 
-        {/* 💬 LLM 개입 1:1 대화형 주치의 상담 바 */}
+        {/* 💬 LLM 개입 1:1 대화형 Z몬스터 상담 바 */}
         <div className="p-3.5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2.5">
           <p className="font-body-sm text-[12.5px] text-zinc-200 leading-relaxed">
             {doctorChatReply}
@@ -329,14 +329,14 @@ export const SmartTrashView: React.FC = () => {
               type="text"
               value={doctorChatInput}
               onChange={(e) => setDoctorChatInput(e.target.value)}
-              placeholder="주치의에게 질문하기 (예: 바탕화면 바로가기 지워도 돼? / 어르신 큰 아이콘은 어떻게 해? / 전기 먹는 보안모듈이 뭐야?)"
+              placeholder="클린몬스터에게 질문하기 (예: 바탕화면 바로가기 지워도 돼? / 어르신 큰 아이콘은 어떻게 해? / 전기 먹는 보안모듈이 뭐야?)"
               className="flex-1 min-w-[240px] px-3.5 py-2 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12.5px] focus:outline-none focus:border-primary-container"
             />
             <button
               type="submit"
               className="px-4 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
             >
-              💬 AI 주치의에게 물어보기
+              💬 클린몬스터에게 물어보기
             </button>
           </form>
         </div>

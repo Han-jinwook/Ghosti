@@ -16,7 +16,7 @@ export interface SelfHealingEvaluationResult {
 }
 
 /**
- * [🛠️ Z-Eye 설정 몬스터 SelfHealingEngine — '인간 냄새 나는' 3단계 관용 & 쿨 환불 + Multi-LLM 최단 직행 지름길 즉시 학습/OTA 엔진]
+ * [🛠️ 설정몬스터 SelfHealingEngine — '인간 냄새 나는' 3단계 관용 & 쿨 환불 + Multi-LLM 최단 직행 지름길 즉시 학습/OTA 엔진]
  * - backtrackCount === 0 (🟢 쾌속 완주): 정상 차감 (100%) / 패스 (완벽한 경로 유지)
  * - backtrackCount === 1 (🟡 인간적 허용): 정상 차감 (100%) / 경로 미세 교정 (1번 삐끗한 갈림길만 다듬어 다음 유저부터 0회 직행 패치)
  * - backtrackCount >= 2 (💖 미안함 환불 — 인간미 환불 발동!): 수리 자체는 성공 유지 + 에스크로 홀딩 코인 100% 전액 자동 환불(수업료 면제) + 헤맨 구간을 통째로 도려낸 '최단 직행 지름길(Shortest Path)' 전 세계 기기 즉시 OTA 배포!

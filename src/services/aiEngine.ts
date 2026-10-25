@@ -872,7 +872,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     }
   }
 
-  // 2) [스마트 서류함 정보 자산 vs 클린 몬스터 4대 쓰레기 정밀 분리]
+  // 2) [스마트 서류함 정보 자산 vs 클린몬스터 4대 쓰레기 정밀 분리]
   for (const f of [...fileList, ...quarantinedList]) {
     ensureMap(f.path);
     const semMeta = semanticByPhoto.get(f.path) as any;

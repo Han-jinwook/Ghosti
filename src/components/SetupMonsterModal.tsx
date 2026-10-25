@@ -200,7 +200,7 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
 };
 
 /**
- * [🛠️ Z-Eye 설정 몬스터 (Setup Monster) 본체 패널]
+ * [🛠️ 설정몬스터 (Setup Monster) 본체 패널]
  * - 개인 라운지 4번 탭 및 독립 모달에서 공통으로 렌더링됩니다.
  */
 export const SetupMonsterContent: React.FC = () => {
@@ -312,7 +312,7 @@ export const SetupMonsterContent: React.FC = () => {
               🛡️ 1차 앱스토어 심사 방어 모드 (isStoreAppMode=true · enableSetupMonster=false)
             </span>
             <h3 className="font-headline-sm text-[17px] text-white font-bold mt-1">
-              현재 1차 스토어 심사 프리패스를 위해 설정 몬스터와 크레딧 잔액이 숨김 상태입니다
+              현재 1차 스토어 심사 프리패스를 위해 설정몬스터와 크레딧 잔액이 숨김 상태입니다
             </h3>
             <p className="font-body-sm text-[12.5px] text-zinc-400">
               심사 통과 후 스토어 재심사 없이 원격 플래그(enableSetupMonster = true)만 켜면 즉시 전체 기능과 크레딧 지갑이 개통됩니다.
@@ -323,7 +323,7 @@ export const SetupMonsterContent: React.FC = () => {
             onClick={() => setEnableSetupMonster(true)}
             className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
           >
-            🛠️ 설정 몬스터 즉시 켜기 (enableSetupMonster=true 테스트)
+            🛠️ 설정몬스터 즉시 켜기 (enableSetupMonster=true 테스트)
           </button>
         </div>
       </div>
@@ -509,7 +509,7 @@ export const SetupMonsterContent: React.FC = () => {
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex flex-col gap-0.5">
             <h2 className="font-headline-sm text-[19px] text-white font-extrabold tracking-tight">
-              🛠️ Z-Eye 설정 몬스터
+              🛠️ 설정몬스터
             </h2>
             <span className="text-[12px] text-zinc-400">
               비용 없이 제한 없이 (언제나 0원) PC·스마트폰 해결사 · 언제든 1초 원상복구 보장
@@ -1413,7 +1413,7 @@ export const SetupMonsterModal: React.FC = () => {
             onClick={() => setShowSetupMonsterModal(false)}
             className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-white font-label-sm text-[12px] font-bold cursor-pointer"
           >
-            ✕ 설정 몬스터 창 닫기
+            ✕ 설정몬스터 창 닫기
           </button>
         </div>
         <SetupMonsterContent />

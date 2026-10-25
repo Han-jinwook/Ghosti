@@ -492,14 +492,14 @@ export interface SyncState {
   syncing: boolean;
 }
 
-// ─────────────── [🛠️ Z-Eye 설정 몬스터 (Setup Monster — AI 스마트폰 & PC 통합 설정 해결사)] ───────────────
+// ─────────────── [🛠️ 설정몬스터 (Setup Monster — AI 스마트폰 & PC 통합 설정 해결사)] ───────────────
 
 export type SetupMonsterPlatform = 'pc' | 'mobile';
 
 export type SetupMonsterTrack = 'TRACK_A_DIRECT_REPAIR' | 'TRACK_B_OVERLAY_GUIDE';
 
 /**
- * PC 설정 몬스터 난이도별 3단계 차등 견적 티어 (모바일은 LEVEL_1_SIMPLE_100 100 코인 단일 요금)
+ * PC 설정몬스터 난이도별 3단계 차등 견적 티어 (모바일은 LEVEL_1_SIMPLE_100 100 코인 단일 요금)
  * - 🟢 LEVEL_1_SIMPLE_100: 단순 OS 설정 변경 (100 코인)
  * - 🟡 LEVEL_2_INTERMEDIATE_300: 중급 장치·네트워크·앱 가이드 (300 코인)
  * - 🔴 LEVEL_3_ADVANCED_500: 고난도 복합 수리 (500 코인)

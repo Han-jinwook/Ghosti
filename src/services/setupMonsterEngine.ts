@@ -1094,7 +1094,7 @@ function buildSetupDiagnosisPlanBase(
     };
   }
 
-  // ─────────────── [모바일 설정 몬스터 (단일 요금 100 코인 · Android 15 SDK 35 대응)] ───────────────
+  // ─────────────── [모바일 설정몬스터 (단일 요금 100 코인 · Android 15 SDK 35 대응)] ───────────────
   if (resolvedId === 'mobile_kakao_overlay') {
     return {
       planId,

@@ -217,7 +217,7 @@ interface SaySeeStore {
   selectedBurstGroup: PhotoItem[] | null;
   setSelectedPhoto: (photo: PhotoItem | null, burstGroup?: PhotoItem[] | null) => void;
 
-  // [스펙 2] 주치의 정리 4대 탭 & 바둑판 Pick UI & 3중 타임머신 안전망 (Undo)
+  // [스펙 2] Z몬스터 정리 4대 탭 & 바둑판 Pick UI & 3중 타임머신 안전망 (Undo)
   selectedTrashIds: Set<string>;
   activeTrashCategoryFilter: TrashCategory | 'all';
   quarantineMoving: boolean;
@@ -261,9 +261,9 @@ interface SaySeeStore {
   gpuHelperRemainingHours: number;
   /** 스토어 1차 심사용 모바일 클린 모드 (인앱결제 수수료 방어 & 순수 무료 라운지 뷰어 모드) */
   isStoreAppMode: boolean;
-  /** 1차 앱스토어 심사 통과를 위해 모바일 스토어 모드(isStoreAppMode===true)에서 설정 몬스터와 상단 크레딧 잔액을 잠시 숨길 수 있는 제어 토글 */
+  /** 1차 앱스토어 심사 통과를 위해 모바일 스토어 모드(isStoreAppMode===true)에서 설정몬스터와 상단 크레딧 잔액을 잠시 숨길 수 있는 제어 토글 */
   enableSetupMonster: boolean;
-  /** 추후 AI 설정 몬스터 정식 개통 시 스토어 재심사 없이 git push만으로 코인 잔액 UI를 켤 수 있는 플래그 (기본값 false) */
+  /** 추후 AI 설정몬스터 정식 개통 시 스토어 재심사 없이 git push만으로 코인 잔액 UI를 켤 수 있는 플래그 (기본값 false) */
   enableMobileCoinDisplay: boolean;
   /** 앱 내 코인 잔액 표시 여부 (기본값 false: !isStoreAppMode ? enableMobileCoinDisplay : enableMobileCoinDisplay) */
   showCoinBalanceInApp: boolean;
@@ -280,7 +280,7 @@ interface SaySeeStore {
   sendPcMasterUrlToEmail: () => Promise<void>;
   sharePcMasterUrlToKakao: () => Promise<void>;
 
-  // [🛠️ Z-Eye 설정 몬스터 (AI 스마트폰 & PC 통합 설정 해결사)]
+  // [🛠️ 설정몬스터 (AI 스마트폰 & PC 통합 설정 해결사)]
   showSetupMonsterModal: boolean;
   setupMonsterPlatform: SetupMonsterPlatform;
   setupProactiveHints: SetupProactiveHint[];
@@ -2462,7 +2462,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         : null,
     }),
 
-  // ─────────────── [스펙 2] 주치의 정리 4대 탭 & 바둑판 Pick & 3중 타임머신 안전망 (Undo) ───────────────
+  // ─────────────── [스펙 2] Z몬스터 정리 4대 탭 & 바둑판 Pick & 3중 타임머신 안전망 (Undo) ───────────────
   selectedTrashIds: new Set<string>(),
   activeTrashCategoryFilter: 'duplicate',
   quarantineMoving: false,
@@ -2715,7 +2715,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         freeTrialUsed: true,
         lastUndoBatch: {
           fileNames: Array.from(movedSet),
-          actionLabel: '주치의 추천 항목 일괄 정리',
+          actionLabel: '클린몬스터 추천 항목 일괄 정리',
           count: movedSet.size,
           savedBytes,
           timestamp: Date.now(),
@@ -2859,7 +2859,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       showCoinBalanceInApp: isStoreAppMode ? state.enableMobileCoinDisplay : state.enableMobileCoinDisplay,
       lastQuarantineToast: isStoreAppMode
         ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: enableSetupMonster=false 및 크레딧 잔액을 숨기고 스토어 심사 프리패스 모드로 전환했습니다.'
-        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)] 활성화: 🛠️ Z-Eye 설정 몬스터(enableSetupMonster=true) 및 모든 마스터 기능이 활성화되었습니다.',
+        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)] 활성화: 🛠️ 설정몬스터(enableSetupMonster=true) 및 모든 마스터 기능이 활성화되었습니다.',
     })),
 
   setEnableSetupMonster: (enableSetupMonster) =>
@@ -2868,8 +2868,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       enableMobileCoinDisplay: enableSetupMonster,
       showCoinBalanceInApp: enableSetupMonster,
       lastQuarantineToast: enableSetupMonster
-        ? '🛠️ [원격 토글 enableSetupMonster=true] Z-Eye 설정 몬스터(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
-        : '🔒 [1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 설정 몬스터와 크레딧 잔액을 잠시 숨김 처리했습니다.',
+        ? '🛠️ [원격 토글 enableSetupMonster=true] Z-Eye 설정몬스터(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
+        : '🔒 [1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 설정몬스터와 크레딧 잔액을 잠시 숨김 처리했습니다.',
     }),
 
   setEnableMobileCoinDisplay: (enableMobileCoinDisplay) =>
@@ -2892,7 +2892,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setShowMobileMasterPcIntroModal: (showMobileMasterPcIntroModal) =>
     set({ showMobileMasterPcIntroModal }),
 
-  // ─────────────── [🛠️ Z-Eye 설정 몬스터 (AI 스마트폰 & PC 통합 설정 해결사) 스토어 상태 및 액션] ───────────────
+  // ─────────────── [🛠️ 설정몬스터 (AI 스마트폰 & PC 통합 설정 해결사) 스토어 상태 및 액션] ───────────────
   showSetupMonsterModal: false,
   setupMonsterPlatform:
     typeof window !== 'undefined' &&
@@ -2905,7 +2905,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: 'welcome_setup_monster',
       role: 'assistant_triage',
       timestamp: '방금',
-      text: '안녕하세요! 🛠️ Z-Eye 설정 몬스터(멀린코인 에스크로 기반 무위험 1:1 AI 수리기사)입니다.\n• 🔍 선(先) 무료 문진 & .exe 백그라운드 사태 파악은 지갑 잔액이 0 코인이어도 100% 무료로 진행됩니다.\n• 🪙 후(後) 난이도별 견적(🟢 Level 1: 100 코인 / 🟡 Level 2: 300 코인 / 🔴 Level 3: 500 코인) 제시 시 멀린허브 통합 지갑 잔액을 즉시 조회(Pre-Check)하며, 잔액 부족 시 원클릭 1초 충전 브릿지를 통해 충전 즉시 에스크로 홀딩 후 수리에 돌입합니다.\n• 🛡️ 수리 실패 또는 [👎 아직 해결 안 됨] 클릭 시 1초 원상복구 + 에스크로 홀딩 코인 100% 즉시 반환 + 본사 실패 블랙박스 로그 자동 전송이 보장됩니다.',
+      text: '안녕하세요! 🛠️ 설정몬스터(멀린코인 에스크로 기반 무위험 1:1 AI 수리기사)입니다.\n• 🔍 선(先) 무료 문진 & .exe 백그라운드 사태 파악은 지갑 잔액이 0 코인이어도 100% 무료로 진행됩니다.\n• 🪙 후(後) 난이도별 견적(🟢 Level 1: 100 코인 / 🟡 Level 2: 300 코인 / 🔴 Level 3: 500 코인) 제시 시 멀린허브 통합 지갑 잔액을 즉시 조회(Pre-Check)하며, 잔액 부족 시 원클릭 1초 충전 브릿지를 통해 충전 즉시 에스크로 홀딩 후 수리에 돌입합니다.\n• 🛡️ 수리 실패 또는 [👎 아직 해결 안 됨] 클릭 시 1초 원상복구 + 에스크로 홀딩 코인 100% 즉시 반환 + 본사 실패 블랙박스 로그 자동 전송이 보장됩니다.',
       triageQuestion: buildSetupPreTriageQuestion(
         'pc',
         '부팅 시 뜨는 광고/유령앱 차단',
@@ -4044,8 +4044,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set((state) => {
       const labelMap: Record<PricingPlanId, string> = {
         free_trial: '✨ 개인 (기본) : 언제나 0원 ("혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다.")',
-        personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 Z-Eye 클린 몬스터',
-        personal_sub_3900: '개인 라운지 • AI 투시검색 몬스터 (월 1,900원 • 월 1회 주치의 청소 포함)',
+        personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 Z-Eye 클린몬스터',
+        personal_sub_3900: '개인 라운지 • 1초 투시검색 몬스터 (월 1,900원 • 월 1회 클린몬스터 청소 포함)',
         personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 • 선착순 100명 10년 마스터권)',
         family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
         family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',

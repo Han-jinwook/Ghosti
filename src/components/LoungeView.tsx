@@ -22,7 +22,7 @@ const LOUNGE_TABS: Array<{
     icon: '💻',
     label: '내 기기',
     shortPrice: '이메일 로그인 즉시 사용',
-    desc: '내 폰·PC 속 AI 주치의 진단과 1초 투시검색',
+    desc: '내 폰·PC 속 클린·설정몬스터 진단과 1초 투시검색',
   },
   {
     id: 'family',
@@ -49,7 +49,7 @@ const LOUNGE_TABS: Array<{
 
 const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   free_trial: '✨ 개인 (기본) : 언제나 0원',
-  personal_single_2900: '🩺 Z-Eye 클린 몬스터 (개인 기본 : 언제나 0원)',
+  personal_single_2900: '🩺 Z-Eye 클린몬스터 (개인 기본 : 언제나 0원)',
   personal_sub_3900: '💻 업무 입문 • 1인 멀티PC (월 1,900원)',
   personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 · 10년 마스터권)',
   family_home_5900: '🏠 패밀리 우리집 단독 (월 5,900원)',
@@ -470,7 +470,7 @@ export const LoungeView: React.FC = () => {
         </section>
       )}
 
-      {/* ─────────────── 💻 내 기기: 1단(온보딩 가로 3열 카드) ➔ 2단(이메일 로그인 즉시 AI 주치의 진단) ➔ 3단(진단 브리핑 결과 & 정리➔원복 안전 검증) ─────────────── */}
+      {/* ─────────────── 💻 내 기기: 1단(온보딩 가로 3열 카드) ➔ 2단(이메일 로그인 즉시 Z몬스터 진단) ➔ 3단(진단 브리핑 결과 & 정리➔원복 안전 검증) ─────────────── */}
       {activeLoungeType === 'personal' && (
         <>
           {/* 1단: 내 기기가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
@@ -478,17 +478,17 @@ export const LoungeView: React.FC = () => {
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  💻 내 기기 — 이메일 로그인만 하면 누구나 바로 AI 주치의 진단 &amp; 1초 투시검색
+                  💻 내 기기 — 이메일 로그인만 하면 누구나 바로 클린몬스터 진단 &amp; 1초 투시검색
                 </span>
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-bold">
                   🛂 Z-Eye 여권 (Face Passport) · 🔒 로컬 프라이빗 볼트
                 </span>
               </div>
               <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                내 기기 — 👁️ Z-Eye 투시검색 · 🩺 Z-Eye 클린 몬스터 · 🛠️ Z-Eye 설정 몬스터
+                내 기기 — 👁️ Z-Eye 투시검색 · 🩺 Z-Eye 클린몬스터 · 🛠️ 설정몬스터
               </h1>
               <p className="font-body-sm text-[13px] text-zinc-400">
-                이메일 로그인만 하면 내 기기 안에서 사진·영상·서류를 1초 만에 꿰뚫어 찾는 <strong>👁️ Z-Eye 투시검색</strong>, <strong>🩺 Z-Eye 클린 몬스터 AI 주치의 진단·대화형 정리</strong>, 그리고 <strong>🛠️ Z-Eye 설정 몬스터 1:1 세팅 해결사</strong>를 바로 사용할 수 있습니다.
+                이메일 로그인만 하면 내 기기 안에서 사진·영상·서류를 1초 만에 꿰뚫어 찾는 <strong>👁️ Z-Eye 투시검색</strong>, <strong>🧹 클린몬스터 진단·대화형 정리</strong>, 그리고 <strong>🛠️ 설정몬스터 1:1 세팅 해결사</strong>를 바로 사용할 수 있습니다.
               </p>
             </div>
 
@@ -507,17 +507,17 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🩺 Z-Eye 클린 몬스터 (AI 주치의)
+                    🧹 클린몬스터
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
                   {isStoreAppMode ? (
                     <>
-                      내 사진첩 <strong>중복·유사 사진, 영수증·스크린샷·일회성 사물 메모</strong>를 AI 주치의가 정밀 투시 진단하고, <strong>대화형 상담 가이드</strong>를 통해 익숙한 <strong>OS 기본 [휴지통] 정리(+ ↩️ 1초 실행 취소)</strong> 및 PC 마스터 연동을 유저가 직접 결정합니다.
+                      내 사진첩 <strong>중복·유사 사진, 영수증·스크린샷·일회성 사물 메모</strong>를 클린몬스터가 정밀 투시 진단하고, <strong>대화형 상담 가이드</strong>를 통해 익숙한 <strong>OS 기본 [휴지통] 정리(+ ↩️ 1초 실행 취소)</strong> 및 PC 마스터 연동을 유저가 직접 결정합니다.
                     </>
                   ) : (
                     <>
-                      모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 AI 주치의가 진단하고, <strong>대화형 상담 가이드</strong>로 각 항목을 유저가 직접 결정합니다.
+                      모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 클린몬스터가 진단하고, <strong>대화형 상담 가이드</strong>로 각 항목을 유저가 직접 결정합니다.
                     </>
                   )}
                 </p>
@@ -526,7 +526,7 @@ export const LoungeView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🛠️ Z-Eye 설정 몬스터
+                    🛠️ 설정몬스터
                   </span>
                 </div>
                 <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
@@ -536,13 +536,13 @@ export const LoungeView: React.FC = () => {
             </div>
           </section>
 
-          {/* 2단: AI 주치의 진단 (이메일 로그인만 하면 누구나 바로 실행) + 우측 [AI 주치의 진단 시작] / [완료] 버튼 */}
+          {/* 2단: Z몬스터 진단 (이메일 로그인만 하면 누구나 바로 실행) + 우측 [Z몬스터 진단 시작] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div className="flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    🩺 내 기기 AI 주치의 진단
+                    🧹 내 기기 클린몬스터 진단
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold">
                     ✉️ 이메일 로그인 시 누구나 즉시 진단 가능
@@ -552,19 +552,19 @@ export const LoungeView: React.FC = () => {
                   </span>
                 </div>
 
-                {/* 내 기기 전체 파일 총량 vs AI 주치의 정밀 진단 범위 */}
+                {/* 내 기기 전체 파일 총량 vs Z몬스터 정밀 진단 범위 */}
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
                   <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
                     📊 <strong>내 기기 전체 보유량:</strong> 사진 <strong>{totalDevicePhotos}장</strong> · 영상 <strong>{totalDeviceVideos}개</strong> · 문서 <strong>{totalDeviceDocs}건</strong>
                   </span>
                   <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
                   <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🩺 <strong>AI 주치의 1차 진단:</strong> 🎬 영상 <strong>{trialSampleVideos}개 해부</strong> · 🖼️ 사진 <strong>{trialSamplePhotos}장 분석</strong> · 📁 문서 <strong>{trialSampleDocs}건 분석</strong>
+                    🩺 <strong>클린몬스터 1차 진단:</strong> 🎬 영상 <strong>{trialSampleVideos}개 해부</strong> · 🖼️ 사진 <strong>{trialSamplePhotos}장 분석</strong> · 📁 문서 <strong>{trialSampleDocs}건 분석</strong>
                   </span>
                 </div>
               </div>
 
-              {/* 우측: 실행 전 [AI 주치의 진단 시작] ➔ 실행 후 [✓ AI 주치의 진단 완료] + [다시 진단하기] */}
+              {/* 우측: 실행 전 [Z몬스터 진단 시작] ➔ 실행 후 [✓ 클린몬스터 진단 완료] + [다시 진단하기] */}
               <div className="flex items-center gap-2 shrink-0">
                 {personalTrialStatus === 'idle' && (
                   <button
@@ -572,7 +572,7 @@ export const LoungeView: React.FC = () => {
                     onClick={handleStartPersonalTrial}
                     className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🩺 AI 주치의 진단 시작
+                    🧹 클린몬스터 진단 시작
                   </button>
                 )}
 
@@ -582,7 +582,7 @@ export const LoungeView: React.FC = () => {
                     disabled
                     className="px-6 py-3 rounded-xl bg-zinc-800 border border-white/15 text-zinc-300 font-headline-sm text-[14px] font-bold whitespace-nowrap cursor-wait"
                   >
-                    ⏳ AI 주치의가 영상 3개 · 사진 100장 · 문서 15건 진단 중...
+                    ⏳ 클린몬스터가 영상 3개 · 사진 100장 · 문서 15건 진단 중...
                   </button>
                 )}
 
@@ -593,7 +593,7 @@ export const LoungeView: React.FC = () => {
                       disabled
                       className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
                     >
-                      ✓ AI 주치의 진단 완료
+                      ✓ 클린몬스터 진단 완료
                     </button>
                     <button
                       type="button"
@@ -607,12 +607,12 @@ export const LoungeView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3단: AI 주치의 진단 완료 시 열리는 브리핑 + [정리 ➔ 원복] 안전 검증 */}
+            {/* 3단: Z몬스터 진단 완료 시 열리는 브리핑 + [정리 ➔ 원복] 안전 검증 */}
             {personalTrialStatus === 'done' ? (
               <div className="pt-4 border-t border-white/10 flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
-                    🩺 1. AI 주치의 정밀 해부 브리핑 (클릭하여 결과 확인)
+                    🩺 1. 클린몬스터 정밀 해부 브리핑 (클릭하여 결과 확인)
                   </span>
                   <span className="font-label-mono text-[11.5px] text-emerald-400 font-bold">
                     ✓ 외부 서버 전송 0 Byte (100% 내 기기 로컬 진단)
@@ -783,7 +783,7 @@ export const LoungeView: React.FC = () => {
                         }}
                         className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
                       >
-                        🩺 Z-Eye 클린 몬스터 이동 →
+                        🩺 Z-Eye 클린몬스터 이동 →
                       </button>
                     </div>
                   )}
@@ -792,7 +792,7 @@ export const LoungeView: React.FC = () => {
             ) : (
               <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
                 <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 이메일 로그인만 하면 누구나 바로 우측의 <strong>[🩺 AI 주치의 진단 시작]</strong> 버튼을 눌러 <strong>영상 3개 해부 · 사진 100장 분석 · 문서 15건 분석</strong> 브리핑과 함께 <strong>[정리 ➔ 원복 안전 검증]</strong>을 실행할 수 있습니다.
+                  💡 이메일 로그인만 하면 누구나 바로 우측의 <strong>[🧹 클린몬스터 진단 시작]</strong> 버튼을 눌러 <strong>영상 3개 해부 · 사진 100장 분석 · 문서 15건 분석</strong> 브리핑과 함께 <strong>[정리 ➔ 원복 안전 검증]</strong>을 실행할 수 있습니다.
                 </span>
               </div>
             )}
@@ -806,7 +806,7 @@ export const LoungeView: React.FC = () => {
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    ⚡ 내 기기 3대 AI 주치의 &amp; 투시검색 바로가기
+                    ⚡ 내 기기 투시검색 · 클린몬스터 · 설정몬스터 바로가기
                   </span>
                 </div>
 
@@ -836,17 +836,17 @@ export const LoungeView: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* 2. 🩺 Z-Eye 클린 몬스터 */}
+                  {/* 2. 🩺 Z-Eye 클린몬스터 */}
                   <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
                     <div className="flex flex-col gap-1.5">
                       <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                        🩺 Z-Eye 클린 몬스터 — AI 주치의 진단 &amp; 대화형 정리
+                        🧹 클린몬스터 — 정밀 진단 &amp; 대화형 정리
                       </span>
                       <div className="font-headline-md text-[19px] text-white font-black">
-                        내 기기 AI 주치의 검진 &amp; 정리
+                        내 기기 클린몬스터 검진 &amp; 정리
                       </div>
                       <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                        모바일·PC 바탕화면 정리(미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거 및 AI 주치의 대화형 컨설팅 (OS 기본 [휴지통] + ↩️ 1초 실행 취소 보장).
+                        모바일·PC 바탕화면 정리(미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거 및 클린몬스터 대화형 컨설팅 (OS 기본 [휴지통] + ↩️ 1초 실행 취소 보장).
                       </p>
                     </div>
                     <button
@@ -857,15 +857,15 @@ export const LoungeView: React.FC = () => {
                       }}
                       className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12px] font-bold transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      🩺 Z-Eye 클린 몬스터 바로가기
+                      🩺 Z-Eye 클린몬스터 바로가기
                     </button>
                   </div>
 
-                  {/* 3. 🛠️ Z-Eye 설정 몬스터 */}
+                  {/* 3. 🛠️ 설정몬스터 */}
                   <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
                     <div className="flex flex-col gap-1.5">
                       <span className="font-label-sm text-[11.5px] text-emerald-400 font-bold">
-                        🛠️ Z-Eye 설정 몬스터 — AI 스마트폰 &amp; PC 통합 설정 해결사
+                        🛠️ 설정몬스터 — AI 스마트폰 &amp; PC 통합 설정 해결사
                       </span>
                       <div className="font-headline-md text-[19px] text-white font-black">
                         원클릭 수리 &amp; 화살표 동행 안내
@@ -882,7 +882,7 @@ export const LoungeView: React.FC = () => {
                       }}
                       className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-label-md text-[12px] font-extrabold transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      🛠️ Z-Eye 설정 몬스터 열기
+                      🛠️ 설정몬스터 열기
                     </button>
                   </div>
                 </div>
@@ -3838,7 +3838,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
 
 /**
  * 4번 서브메뉴 상단에 라운지 성격별로 표시되는 전용 관리/업그레이드/인증 섹션
- * - 개인: [AI 설정 몬스터] 정기 구독 업그레이드 안내
+ * - 개인: [AI 설정몬스터] 정기 구독 업그레이드 안내
  * - 패밀리: [👑 가족 초대 & 서버도우미] 가족 무수락 초대 링크/QR (방장 강퇴권 포함) + 양가 통합권 설정
  * - 클럽: [👥 클럽 관리 & 서버도우미] 소(20명)/중(100명)/대(무제한) 클럽 설정 + 회원 초대/강퇴 관리
  * - 10대 학생: [🎮 게이밍 PC & 학생인증] 하교 후 방장 게이밍 PC 집중 동기화 토글 + 학생증 로컬 OCR 0.1초 인증(월 900원)

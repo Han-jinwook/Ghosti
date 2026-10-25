@@ -118,10 +118,10 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   Array<{ id: MobileTab; label: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'trial', label: '🩺 AI 주치의 진단' },
+    { id: 'trial', label: '🧹 클린몬스터 진단' },
     { id: 'search', label: '👁️ Z-Eye 투시검색' },
-    { id: 'trash', label: '🩺 Z-Eye 클린 몬스터', showTrashCount: true },
-    { id: 'settings', label: '🛠️ Z-Eye 설정 몬스터' },
+    { id: 'trash', label: '🩺 Z-Eye 클린몬스터', showTrashCount: true },
+    { id: 'settings', label: '🛠️ 설정몬스터' },
   ],
   family: [
     { id: 'trial', label: '무료체험' },
@@ -303,7 +303,7 @@ export const MobileAppView: React.FC = () => {
               </div>
             </div>
 
-            {/* 우상단: Z-Eye 여권 자동 문패(업무 공유 제외) + 설정 몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
+            {/* 우상단: Z-Eye 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
             <div className="flex items-center gap-1.5 shrink-0" aria-label="화면 테마 영역">
               {myPassportCluster && activeLoungeType !== 'work' && (
                 <button
@@ -333,7 +333,7 @@ export const MobileAppView: React.FC = () => {
                     onClick={() => setShowSetupMonsterModal(true, 'mobile')}
                     className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-extrabold"
                   >
-                    🛠️ 설정 몬스터
+                    🛠️ 설정몬스터
                   </button>
                   <button
                     type="button"
@@ -738,7 +738,7 @@ export const MobileAppView: React.FC = () => {
         </main>
       )}
 
-      {/* 서브메뉴 3번: 개인은 [🩺 클린 몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] */}
+      {/* 서브메뉴 3번: 개인은 [🩺 클린몬스터], 패밀리/클럽/10대 학생은 [⏳ AI 인덱싱 대기실] */}
       {mobileTab === 'trash' && (
         <div className="flex-1 w-full">
           {activeLoungeType === 'personal' ? (
@@ -749,7 +749,7 @@ export const MobileAppView: React.FC = () => {
         </div>
       )}
 
-      {/* 서브메뉴 4번: AI 설정 몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 */}
+      {/* 서브메뉴 4번: AI 설정몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 */}
       {mobileTab === 'settings' && (
         <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
           <LoungeCustomSettingsHeader />
@@ -787,8 +787,8 @@ export const MobileAppView: React.FC = () => {
                 }`}
               >
                 {enableSetupMonster
-                  ? '🛠️ 설정 몬스터 (enableSetupMonster=true)'
-                  : '🔒 설정 몬스터 숨김 (enableSetupMonster=false)'}
+                  ? '🛠️ 설정몬스터 (enableSetupMonster=true)'
+                  : '🔒 설정몬스터 숨김 (enableSetupMonster=false)'}
               </button>
               <button
                 type="button"

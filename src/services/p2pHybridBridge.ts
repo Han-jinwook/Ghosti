@@ -52,7 +52,7 @@ export type MerlinQueryTargetResource =
   | 'LOCAL_SPREADSHEET_LEDGER_DB' // 센스톡(로컬 엑셀·CSV 조건부 고객 명단·VIP 장부 파싱)
   | 'BROWSER_HISTORY_SQLITE_DB' // 어그로필터(유튜브 화면 텍스트·알림 및 크롬/엣지 History SQLite 조회)
   | 'FACE_PASSPORT_SEED_DB' // Z-Eye 여권 768D 안면 시드 & 최신 연도 정면 얼굴 자동 문패
-  | 'UI_ACCESSIBILITY_TREE' // 설정 몬스터 & 어그로필터 화면 UI 트리 스캔
+  | 'UI_ACCESSIBILITY_TREE' // 설정몬스터 & 어그로필터 화면 UI 트리 스캔
   | 'OS_FLOATING_OVERLAY' // 최상단 투명 화살표 오버레이 투사
   | 'OS_SYSTEM_SCRIPT' // OS 시스템 제어/가상 드라이브(S:) 마운트 스크립트
   | 'P2P_TUNNEL_CONTROL' // No-Cloud P2P 터널 제어
