@@ -12,7 +12,7 @@
 | 구분 | 구성 모듈 / 경로 | 포트 / 프로토콜 | 핵심 역할 및 기술 스택 |
 | :--- | :--- | :--- | :--- |
 | **원 코어 마스터 데몬** | `os_agent/merlin_z_core_daemon.py`<br>(`Merlin_Z_Core_Setup.exe`) | **`127.0.0.1:5199`**<br>(`ThreadingHTTPServer`) | • 시계 옆 시스템 트레이 상주 (`pystray`)<br>• 윈도우 시작 시 자동 실행 (`HKCU\...\Run\Merlin_Z_Core`)<br>• 다중 웹앱 동시 요청 멀티스레드 비동기 처리<br>• MS 코드 서명 (`build_signed_merlin_z_core.py`, SmartScreen 방어) |
-| **내장 플러그인 ①**<br>*(제트아이·3몬스터)* | `os_agent/plugin_zeye_os.py`<br>`os_agent/merlin_z_core_os.py` | `127.0.0.1:5199`<br>`/__zcore/*`<br>`/api/zeye/*` | • 실물 Windows OS 레지스트리/스풀러/프로세스 진단<br>• 5대 은닉 금고 3초 오피스 포렌식 + 윈도우 휴지통(`$Recycle.Bin`) 추적<br>• Zero-LLM 폴더 트리 초경량 요약 (`folder-tree-summary`)<br>• **`[복원 기록]`(`restore_points.json`) 0.01초 3단계 무결성 Pre-Check & 1초 원복**<br>• 브라우저 밖 모니터 최상단(`TopMost`) 투명 화살표(`👆`) 오버레이 |
+| **내장 플러그인 ①**<br>*(제트아이(Z몬스터)·썬드리머 스튜디오)* | `os_agent/plugin_zeye_os.py`<br>`os_agent/merlin_z_core_os.py` | `127.0.0.1:5199`<br>`/__zcore/*`<br>`/api/zeye/*` | • 실물 Windows OS 레지스트리/스풀러/프로세스 진단<br>• 5대 은닉 금고 3초 오피스 포렌식 + 윈도우 휴지통(`$Recycle.Bin`) 추적<br>• Zero-LLM 폴더 트리 초경량 요약 (`folder-tree-summary`)<br>• **`[복원 기록]`(`restore_points.json`) 0.01초 3단계 무결성 Pre-Check & 1초 원복**<br>• 브라우저 밖 모니터 최상단(`TopMost`) 투명 화살표(`👆`) 오버레이 |
 | **내장 플러그인 ②**<br>*(센스톡 메신저)* | `os_agent/plugin_senstalk.py` | `127.0.0.1:5199`<br>`/api/senstalk/*` | • 6대 메신저(`kakao`, `line`, `telegram`, `whatsapp`, `wechat`, `insta`) 창 탐지<br>• `CF_DIB` 카드 이미지 / 유니코드 텍스트 클립보드 자동 장전<br>• `[Enter]` 키업 감응 연속 발송 + `F8`(일시정지)/`F9`(건너뛰기) 핫키<br>• 평상시 CPU 점유율 **0.0%** (`/sync` 또는 `/start` 시에만 On-Demand 기동) |
 | **내장 플러그인 ③**<br>*(어그로필터 자막)* | `os_agent/plugin_aggrofilter.py` | `127.0.0.1:5199`<br>`/api/aggrofilter/*` | • **크롬 확장팩 0%!** 유저 로컬 기기 IP(가정용/모바일 IP)로 유튜브 `captionTracks`/`TimedText` 자막 직접 추출 (서버 IP 차단 100% 우회)<br>• 모바일은 **OS 표준 공유 시트(`ACTION_SEND`) + 스마트폰 로컬 IP** 방식으로 스토어 심사 100% 프리패스 |
 | **공용 Win32 네이티브** | `os_agent/core_win32.py` | In-Process (`ctypes`) | • `WinSta0\Default` 대화형 데스크톱 바인딩, 창 강제 포커스(`AttachThreadInput`), 유니코드/DIB 클립보드 제어, 자동실행 레지스트리 제어 |
@@ -29,7 +29,7 @@ D:\Z-Eye\universal_z_core\
 ├── os_agent\                         👈 [핵심] 단일 포트(5199) PC 상주 데몬 & 내장 소프트웨어 플러그인
 │   ├── merlin_z_core_daemon.py       (마스터 데몬: 127.0.0.1:5199 멀티스레드 라우터)
 │   ├── core_win32.py                 (공용 Win32 API: 창 포커스, 클립보드, 레지스트리)
-│   ├── plugin_zeye_os.py             (플러그인 1: Z-Eye & 3몬스터 OS 제어 · [복원 기록] Pre-Check)
+│   ├── plugin_zeye_os.py             (플러그인 1: Z-Eye & Z몬스터(클린몬스터·설정몬스터) OS 제어 · [복원 기록] Pre-Check)
 │   ├── plugin_senstalk.py            (플러그인 2: 센스톡 6대 메신저 릴레이 발송 엔진)
 │   ├── plugin_aggrofilter.py         (플러그인 3: 어그로필터 로컬 IP 유튜브 자막 추출기)
 │   ├── merlin_z_core_os.py           (Windows 실물 포렌식 · TopMost 화살표 오버레이 워커)
@@ -86,7 +86,7 @@ const data = await res.json();
 // data.title, data.channelName, data.segments ([{ startSec, durationSec, text }]), data.fullTranscript
 ```
 
-### ④ 제트아이 & 3몬스터 (`Z-Eye`) — `[복원 기록]` 3단계 무결성 사전 검진(Pre-Check) 및 1초 원복
+### ④ 제트아이(Z몬스터) & 썬드리머 스튜디오 (`Z-Eye`) — `[복원 기록]` 3단계 무결성 사전 검진(Pre-Check) 및 1초 원복
 ```javascript
 // 1) 최근 한 달 [복원 기록] 조회 (0.01초 파일 존재 여부 Pre-Check 배지 포함)
 const rp = await (await fetch('http://127.0.0.1:5199/__zcore/restore-points')).json();
