@@ -837,7 +837,7 @@ export const MobileAppView: React.FC = () => {
             <p className="font-body-sm text-[11.5px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-3 rounded-xl border border-white/10">
               • <strong>평소(기본):</strong> 기기 내 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 썸네일 DB</strong>만 보관하여 0.01초 만에 검색합니다.<br />
               • <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 충분할 때 지정한 내 폴더로 원본을 자동 복제해 내 기기에서 100% 자체 해결합니다.<br />
-              • <strong>탈퇴(자퇴 · 강퇴 동일):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역의 <strong>해당 방 썸네일 DB · 검색 인덱스 · 얼굴 여권 캐시는 즉시 자동 삭제</strong>되어 더 이상 열람·검색할 수 없습니다 (기동기화된 로컬 원본 폴더는 반납 없이 각자 자율 관리).
+              • <strong>탈퇴(자퇴 · 강퇴 동일):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역의 <strong>그 공유방 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다 (※ 내 PC·계정의 ‘나 자신의 Z-Eye 여권’ 및 ‘내 기기 개인 인덱스’는 100% 보존되며, 기동기화된 원본 폴더도 각자 자율 관리).
             </p>
           </div>
 

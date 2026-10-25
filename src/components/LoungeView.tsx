@@ -3752,7 +3752,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             </span>
           </div>
           <span className="font-label-sm text-[11.5px] text-zinc-400">
-            👤 업로드 후 24시간 내 올린 본인 삭제 가능 · 24시간 이후에는 방 개설 설정에 따라 방장 숨기기 옵션 적용
+            👤 올린 본인은 24시간 내 직접 삭제 가능 · 방장은 올라오는 처음부터 상시 숨기기 가능(방 개설 설정 시)
           </span>
         </div>
 
@@ -3876,11 +3876,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               🛠️ 방 개설 설정 옵션 · 삭제/숨기기 권한 기준
             </span>
             <span className="text-[11.5px] text-emerald-300 font-bold">
-              ✓ 업로드 후 24시간 내에는 올린 원본 주인이 언제나 직접 삭제 가능
+              ✓ 올린 본인은 24시간 내 직접 삭제 · 방장은 올라오는 처음부터 상시 숨기기 감시 가능
             </span>
           </div>
           <p className="font-body-sm text-[11.5px] text-zinc-300">
-            올린 직후 실수 삭제는 24시간 내 본인이 직접 해결하고, 24시간 경과 후 <strong>방장이 [숨기기] 권한을 보유할지</strong> 방 개설 시 방장이 직접 선택합니다 (피드 화면에 상시 숨기기 버튼을 노출하지 않아 깔끔함 유지).
+            올린 원본 주인은 업로드 후 <strong>24시간 이내에 직접 삭제</strong>할 수 있고, 멤버가 잘못된 사진을 올릴 때를 대비해 <strong>방장이 사진이 올라오는 처음부터 상시 [숨기기] 권한을 가질지</strong> 방 개설 시 선택합니다.
           </p>
         </div>
 
@@ -3894,7 +3894,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 : 'bg-zinc-900 text-zinc-300 border-white/15'
             }`}
           >
-            👑 24시간 이후 방장 숨기기 권한 보유 (권장)
+            👑 방장 상시 숨기기 권한 보유 — 올라오는 처음부터 가능 (권장)
           </button>
           <button
             type="button"
@@ -3912,7 +3912,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
       <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-400">
         <span>
-          🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 기기 내 보이지 않는 곳에 저장된 <strong>해당 방 썸네일 DB · 검색 인덱스 · 얼굴 여권 캐시는 즉시 자동 삭제</strong>되어 더 이상 열람·검색할 수 없습니다. (단, 탈퇴 전 내 기기에 이미 받아둔 원본 동기화 폴더는 반납 없이 각자 자율 관리합니다.)
+          🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 기기 내 숨김 영역에 저장된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다. (※ 유저가 내 PC에 무료 서비스로 인덱싱해 둔 <strong>‘나 자신의 Z-Eye 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리합니다.)
         </span>
       </div>
     </div>

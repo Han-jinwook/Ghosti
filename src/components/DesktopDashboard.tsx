@@ -1329,7 +1329,7 @@ export const DesktopDashboard: React.FC = () => {
             <div className="font-body-sm text-[13px] text-zinc-200 leading-relaxed bg-zinc-950/90 p-4 rounded-xl border border-white/10 flex flex-col gap-1.5">
               <p>• <strong>평소(기본):</strong> 멤버 기기에는 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 용량 부담 없이 0.01초 만에 검색합니다.</p>
               <p>• <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 넉넉할 때 지정한 내 폴더 경로(예: <code>D:\Z-Eye\다운로드_원본</code>)로 원본 사진이 자동 복제되어, 방장 PC를 따로 호출할 필요 없이 내 기기에서 자체 해결합니다.</p>
-              <p>• <strong>탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>해당 방 썸네일 DB · 검색 인덱스 · 얼굴 여권 캐시는 0.1초 만에 자동 삭제</strong>되어 더 이상 해당 방 사진을 검색·열람할 수 없습니다 (단, 탈퇴 전 내 기기에 이미 받아둔 원본 폴더는 반납 없이 각자 자율 관리).</p>
+              <p>• <strong>탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 0.1초 만에 자동 삭제</strong>됩니다 (※ 유저가 자기 PC에 인덱싱한 <strong>‘나 자신의 Z-Eye 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리).</p>
             </div>
           </div>
 
