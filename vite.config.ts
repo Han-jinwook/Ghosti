@@ -3273,6 +3273,15 @@ function zeyeLocalBridge(): Plugin {
         res.end(JSON.stringify(out));
       });
 
+      server.middlewares.use('/__zcore/gdrive-smart-scan', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const u = new URL(req.url || '/', 'http://localhost');
+        const q = String(body?.query || u.searchParams.get('q') || '').trim();
+        const out = await runBuiltinPluginPython('zeye_os', 'gdrive-smart-scan', { query: q });
+        res.end(JSON.stringify(out));
+      });
+
       server.middlewares.use('/__zcore/os-execute', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
