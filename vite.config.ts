@@ -3086,7 +3086,8 @@ function zeyeLocalBridge(): Plugin {
       server.middlewares.use('/__setup-monster/tts-prewarm', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
-        const voice = String(body?.voice || 'typecast_piljae');
+        const rawVoice = String(body?.voice || 'ko-KR-HyunsuNeural').toLowerCase();
+        const voice = rawVoice.includes('sunhi') || rawVoice.includes('female') || rawVoice.includes('doc') ? 'ko-KR-SunHiNeural' : 'ko-KR-HyunsuNeural';
         const rate = String(body?.rate || '+0%');
         exec(
           `python "${ttsScriptPath}" prewarm "${voice}" "${rate}"`,
@@ -3102,7 +3103,11 @@ function zeyeLocalBridge(): Plugin {
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
         const rawText = String(body?.text || '').trim().replace(/\s+/g, ' ');
         const voice =
-          String(body?.voice || 'typecast_piljae');
+          String(body?.voice || 'ko-KR-HyunsuNeural').toLowerCase().includes('sunhi') ||
+          String(body?.voice || '').toLowerCase().includes('female') ||
+          String(body?.voice || '').toLowerCase().includes('doc')
+            ? 'ko-KR-SunHiNeural'
+            : 'ko-KR-HyunsuNeural';
         const rate = String(body?.rate || '+0%');
         if (!rawText) {
           res.end(JSON.stringify({ ok: false, error: 'EMPTY_TEXT' }));
@@ -3124,7 +3129,9 @@ function zeyeLocalBridge(): Plugin {
               cacheStatus: 'HIT',
               hash,
               voice,
-              voiceActor: '필재 (카페브레이크 전속)',
+              voiceActor: voice === 'ko-KR-SunHiNeural' ? '선희 (ko-KR-SunHiNeural · 문서 낭독 전담 여성 아나운서)' : '현수 (ko-KR-HyunsuNeural · 기본 브리핑 남성 중저음)',
+              costWon: 0,
+              dailyQuotaLimit: 'UNLIMITED',
               rate,
               text: rawText,
               audioUrl: `/__setup-monster/tts-audio?hash=${hash}`,
@@ -3256,6 +3263,13 @@ function zeyeLocalBridge(): Plugin {
         const u = new URL(req.url || '/', 'http://localhost');
         const q = String(body?.query || u.searchParams.get('q') || '').trim();
         const out = await runBuiltinPluginPython('zeye_os', 'omni-file-trace', { query: q });
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/ai-baton-touch', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const out = await runBuiltinPluginPython('zeye_os', 'ai-baton-touch', body);
         res.end(JSON.stringify(out));
       });
 

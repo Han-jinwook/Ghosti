@@ -475,6 +475,137 @@ def rollback_restore_point(restore_id: str) -> Dict[str, Any]:
     }
 
 
+def detect_most_recent_ai_and_baton_touch(
+    doc_title: str = "",
+    doc_text: str = "",
+    user_question: str = "",
+) -> Dict[str, Any]:
+    """
+    [고난도 질문 시 유저가 최근 사용한 AI(ChatGPT/Gemini/Claude) 0.01초 자동 판별 & 라이브 음성 바톤터치]
+    1순위: 현재 PC에 열려 있는 브라우저 탭/창 제목 실시간 스캔
+    2순위: 크롬·엣지·웨일 로컬 방문 기록(History SQLite DB)에서 last_visit_time이 가장 최신인 AI 판별
+    3순위 (열어본 기록이 0건인 초기 유저 기본값): 멀린님 확정 원칙에 따라 '제미나이(Gemini, https://gemini.google.com/app)' 오픈!
+    """
+    import sqlite3
+    import tempfile
+    import core_win32 as w32
+
+    t0 = time.perf_counter()
+    detected_service = "gemini"
+    detected_label = "제미나이 (Gemini)"
+    detected_url = "https://gemini.google.com/app"
+    detection_source = "DEFAULT_GEMINI_FALLBACK"
+
+    # 1) 현재 열려 있는 창 제목 스캔
+    try:
+        open_wins = zos.get_real_open_windows(max_count=20)
+        for w in open_wins:
+            title_low = str(w.get("title", "")).lower()
+            if "chatgpt" in title_low or "챗gpt" in title_low:
+                detected_service = "chatgpt"
+                detected_label = "챗GPT (ChatGPT)"
+                detected_url = "https://chatgpt.com/"
+                detection_source = "ACTIVE_OPEN_WINDOW"
+                break
+            if "gemini" in title_low or "제미나이" in title_low:
+                detected_service = "gemini"
+                detected_label = "제미나이 (Gemini)"
+                detected_url = "https://gemini.google.com/app"
+                detection_source = "ACTIVE_OPEN_WINDOW"
+                break
+            if "claude" in title_low or "클로드" in title_low:
+                detected_service = "claude"
+                detected_label = "클로드 (Claude)"
+                detected_url = "https://claude.ai/new"
+                detection_source = "ACTIVE_OPEN_WINDOW"
+                break
+    except Exception:
+        pass
+
+    # 2) 크롬 / 엣지 / 웨일 History SQLite DB에서 최근 방문 시각(last_visit_time) 1위 조회
+    if detection_source == "DEFAULT_GEMINI_FALLBACK":
+        history_paths = [
+            LOCAL_APPDATA / "Google" / "Chrome" / "User Data" / "Default" / "History",
+            LOCAL_APPDATA / "Microsoft" / "Edge" / "User Data" / "Default" / "History",
+            LOCAL_APPDATA / "Naver" / "Naver Whale" / "User Data" / "Default" / "History",
+        ]
+        best_visit_time = 0
+        for hp in history_paths:
+            if not hp.exists():
+                continue
+            tmp_db = Path(tempfile.gettempdir()) / f"zeye_hist_{os.getpid()}.db"
+            try:
+                shutil.copy2(str(hp), str(tmp_db))
+                conn = sqlite3.connect(str(tmp_db), timeout=2)
+                cur = conn.cursor()
+                rows = cur.execute(
+                    "SELECT url, last_visit_time FROM urls "
+                    "WHERE url LIKE '%gemini.google.com%' OR url LIKE '%chatgpt.com%' "
+                    "OR url LIKE '%chat.openai.com%' OR url LIKE '%claude.ai%' "
+                    "ORDER BY last_visit_time DESC LIMIT 5"
+                ).fetchall()
+                conn.close()
+                for u_str, v_time in rows:
+                    vt = int(v_time or 0)
+                    if vt > best_visit_time:
+                        best_visit_time = vt
+                        u_low = str(u_str).lower()
+                        if "chatgpt.com" in u_low or "chat.openai.com" in u_low:
+                            detected_service = "chatgpt"
+                            detected_label = "챗GPT (ChatGPT)"
+                            detected_url = "https://chatgpt.com/"
+                        elif "claude.ai" in u_low:
+                            detected_service = "claude"
+                            detected_label = "클로드 (Claude)"
+                            detected_url = "https://claude.ai/new"
+                        else:
+                            detected_service = "gemini"
+                            detected_label = "제미나이 (Gemini)"
+                            detected_url = "https://gemini.google.com/app"
+                        detection_source = f"BROWSER_HISTORY_SQLITE ({hp.parents[2].name})"
+            except Exception:
+                pass
+            finally:
+                if tmp_db.exists():
+                    try:
+                        tmp_db.unlink()
+                    except Exception:
+                        pass
+
+    combined_prompt = (
+        f"[참조 문서: {doc_title or '선택된 문서'}]\n"
+        f"{doc_text[:6000]}\n\n"
+        f"[질문 요청]\n{user_question or '이 문서에서 나에게 불리한 조항이나 핵심 주의사항을 쉽게 설명해 줘.'}"
+    ).strip()
+
+    w32.set_clipboard_unicode(combined_prompt)
+
+    hyunsu_briefing = (
+        f"깊은 분석이 필요한 질문이네요! 평소 쓰시는 {detected_label} 입력창에 이 문서와 질문을 바로 넣어 띄워드릴게요. "
+        f"[전송] 버튼을 누르신 뒤, 바로 옆 [라이브 음성] 버튼을 누르시면 말로 편하게 상담하실 수 있습니다!"
+    )
+
+    return {
+        "ok": True,
+        "detectedAiService": detected_service,
+        "detectedAiLabel": detected_label,
+        "targetUrl": detected_url,
+        "detectionSource": detection_source,
+        "defaultWhenNoHistory": "gemini (https://gemini.google.com/app)",
+        "promptStagedToInput": True,
+        "stagedPromptPreview": combined_prompt[:300],
+        "ttsVoice": "ko-KR-HyunsuNeural",
+        "ttsBriefingKo": hyunsu_briefing,
+        "twoStepFingerGuide": [
+            {"step": 1, "label": "① [전송 (↑)] 버튼 클릭", "desc": "이미 채워진 문서+질문을 즉시 전송합니다."},
+            {"step": 2, "label": "② 바로 옆 [라이브 음성 🎧] 버튼 클릭", "desc": "운전·이동 중에도 말로 편하게 심층 상담을 이어갑니다."},
+        ],
+        "floatingReturnPill": "⬅️ 대화 종료 후 제트아이 복귀",
+        "serverLlmTokenCostWon": 0,
+        "elapsedMs": round((time.perf_counter() - t0) * 1000, 2),
+    }
+
+
 def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """단일 코어 라우터(/__merlin/query 또는 /__zcore/*)에서 호출하는 표준 진입점"""
     data = payload or {}
@@ -518,6 +649,13 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
     if act in ("omni-file-trace", "trace-missing"):
         q = str(data.get("query") or data.get("q") or "").strip()
         return trace_missing_file_omni(q)
+
+    if act in ("ai-baton-touch", "baton-touch"):
+        return detect_most_recent_ai_and_baton_touch(
+            doc_title=str(data.get("docTitle") or ""),
+            doc_text=str(data.get("docText") or ""),
+            user_question=str(data.get("userQuestion") or data.get("query") or ""),
+        )
 
     if act in ("execute", "os-execute"):
         exec_action = str(data.get("action") or "inspect").strip()
