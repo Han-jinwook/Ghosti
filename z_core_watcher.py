@@ -4,9 +4,9 @@
 제트아이 (Z-Eye) 무토큰 3중 통합 점검 및 세션 창 제목 자동 각인 스크립트 (z_core_watcher.py)
 - 평상시 AI 토큰 소모: 0 (파이썬 로컬 프로세스만 동작)
 - 점검/감시 대상 3가지:
-  1. [직통 우체통 감지] D:\\Z-Eye\\universal_z_core\\inbox\\ 내 신규 피드백/요청 문서(.md) 투함 여부
+  1. [전사 중앙 우체국 감지] D:\\Secretary\\post_office\\ 내 Z-Eye / ALL 수신 문서(.md) 도착 여부 (단일 우체국 통합)
   2. [전사 강령 이식 감지] D:\\Z-Eye\\docs\\멀린코딩강령_v20261020.md 변경 여부
-  3. [노션 QA 버그 감지] 노션 칸반 보드에 알바생(테스터)이 등록한 신규 '발견된 버그' 티켓 여부
+  3. [노션 QA 버그 감지] 노션 칸반 보드에 알바생(테스터)이 등록한 신규 '발견된 버그'([제트아이]) 티켓 여부
 - 작동 방식:
   체크인 시 기본 실행(`python z_core_watcher.py`)은 세션 창 제목을 자동 각인하고 3대 항목을 즉시 점검한 뒤,
   Antigravity 채팅창의 'Queued Messages(대기열)' 걸림 현상을 100% 원천 방지하기 위해 즉시 종료(Exit 0)합니다.
@@ -14,13 +14,11 @@
 """
 
 import hashlib
-import os
 import re
 import sqlite3
 import subprocess
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Set
 
@@ -30,10 +28,9 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 ROOT_DIR = Path(__file__).resolve().parent
-INBOX_DIR = ROOT_DIR / "universal_z_core" / "inbox"
+POST_OFFICE_DIR = Path(r"D:\Secretary\post_office")
 DOCTRINE_FILE = ROOT_DIR / "docs" / "멀린코딩강령_v20261020.md"
 HANDOVER_FILE = ROOT_DIR / "docs" / "SESSION_HANDOVER.md"
-STATE_FILE = ROOT_DIR / ".watcher_state.json"
 AGY_DIR = Path.home() / ".gemini" / "antigravity"
 AGY_DB = AGY_DIR / "conversation_summaries.db"
 AGY_ANNOTATIONS = AGY_DIR / "annotations"
@@ -148,7 +145,7 @@ def sync_antigravity_session_title(explicit_title: str | None = None) -> str | N
         ).fetchall()
         for cid, cur_title, uris, raw_sum in rows:
             uris_lower = (uris or "").lower()
-            if f"/{folder_name}\"" not in uris_lower and f"/{folder_name}]" not in uris_lower:
+            if f'/{folder_name}"' not in uris_lower and f"/{folder_name}]" not in uris_lower:
                 continue
             should_replace = (
                 explicit_title is not None
@@ -191,13 +188,16 @@ def file_md5(path: Path) -> str:
         return ""
 
 
-def scan_inbox_files() -> Dict[str, str]:
-    """우체통(inbox/) 내 README.md를 제외한 모든 파일의 경로와 해시를 반환합니다."""
-    if not INBOX_DIR.exists():
+def scan_post_office_files() -> Dict[str, str]:
+    """전사 중앙 우체국(D:\\Secretary\\post_office\\) 내 Z-Eye / ALL 수신 문서의 경로와 해시를 반환합니다."""
+    if not POST_OFFICE_DIR.exists():
         return {}
     result: Dict[str, str] = {}
-    for p in INBOX_DIR.iterdir():
-        if p.is_file() and p.name.lower() not in ("readme.md", ".gitkeep"):
+    for p in sorted(POST_OFFICE_DIR.glob("*.md")):
+        if p.name.lower() in ("readme.md", ".gitkeep"):
+            continue
+        prefix = p.name.split("_", 1)[0].lower()
+        if prefix in ("z-eye", "zeye", "all"):
             result[p.name] = file_md5(p)
     return result
 
@@ -207,10 +207,7 @@ def check_notion_new_bugs(seen_bug_ids: Set[str]) -> list:
     try:
         import notion_qa
 
-        if (
-            not notion_qa.NOTION_TOKEN
-            or notion_qa.NOTION_TOKEN.startswith("[여기에")
-        ):
+        if not notion_qa.NOTION_TOKEN or notion_qa.NOTION_TOKEN.startswith("[여기에"):
             return []
         bugs = notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED)
         return [b for b in bugs if b["page_id"] not in seen_bug_ids]
@@ -231,30 +228,29 @@ def main() -> None:
     else:
         print(f"🏷️ [{ROOT_DIR.name} 세션 창 제목 확인 완료] ➔ '{derive_session_title()}'")
 
-    # 초기 스냅샷 기록 (시작 시점의 상태는 이미 확인된 것으로 간주하되, 우체통에 미처리 파일이 있으면 즉시 알림)
-    initial_inbox = scan_inbox_files()
+    initial_inbox = scan_post_office_files()
     if initial_inbox:
-        print("\n" + "📬" * 24)
+        print("\n" + "📮" * 24)
         print(
-            f"🔔 [Z-코어 우체통 자동 감지] 우체통(universal_z_core/inbox/)에 {len(initial_inbox)}건의 의견서가 도착해 있습니다!"
+            f"🔔 [전사 중앙 우체국 자동 감지] D:\\Secretary\\post_office\\ 에 Z-Eye 수신 문서 {len(initial_inbox)}건이 도착해 있습니다!"
         )
         for fname in initial_inbox:
-            fpath = INBOX_DIR / fname
+            fpath = POST_OFFICE_DIR / fname
             content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:800]
             print(f"\n📄 파일명: {fname}")
             print("-" * 60)
             print(content_preview)
             print("-" * 60)
         print(
-            "\n👉 [AI 에이전트 지시] 위 우체통 건의사항을 읽고 1) 원 코어(core_store_clean) vs 파워 코어(core_power_agent) 분류, 2) 스토어 심사 패스 안전성 여부를 판단하여 멀린님께 즉시 보고하세요!"
+            "\n👉 [AI 에이전트 지시] 위 중앙 우체국 문서를 읽고 1) 원 코어 내장 플러그인 vs 사내 파워 코어 분류, 2) 스토어 심사 안전성 여부를 판단하여 멀린님께 즉시 보고하세요! (처리 완료 후 done/ 폴더로 이동)"
         )
-        print("📬" * 24)
-        return
+        print("📮" * 24)
+    else:
+        print("📮 [전사 중앙 우체국 확인 완료] 새로 도착한 미열람 메시지가 없습니다.")
 
     baseline_inbox = initial_inbox
     baseline_doctrine_hash = file_md5(DOCTRINE_FILE)
 
-    # 초기 노션 버그 ID 스냅샷
     seen_bug_ids: Set[str] = set()
     try:
         import notion_qa
@@ -271,24 +267,9 @@ def main() -> None:
     except Exception:
         pass
 
-    # 기본 실행(체크인 시)은 Antigravity 채팅창의 'Queued Messages(대기열)' 걸림 현상을
-    # 100% 원천 방지하기 위해 제목 각인 및 우체통/노션 점검 후 즉시 종료(Exit 0)합니다.
-    # 전사 중앙 우체국 (D:\Secretary\post_office\) 새 메시지 스캔
-    post_office = Path(r"D:\Secretary\post_office")
-    if post_office.exists():
-        arrived = [
-            f.name for f in sorted(post_office.glob("*.md"))
-            if f.name.lower() != "readme.md" and f.name.split("_", 1)[0].lower() in ("z-eye", "zeye", "all")
-        ]
-        if arrived:
-            print(f"📮 [우체국 새 메시지 감지 ({len(arrived)}건)] ➔ {', '.join(arrived)}")
-            print("   👉 D:\\Secretary\\post_office\\ 내 해당 문서를 즉시 열람하고 체크인 보고에서 코멘트하세요! (처리 후 done/ 폴더로 이동)")
-        else:
-            print("📮 [우체국 확인 완료] 새로 도착한 미열람 메시지가 없습니다.")
-
     if "--watch" not in sys.argv:
         print(
-            f"✅ [Z-Eye 체크인 3중 점검 및 제목 각인 완료] (우체통 미처리 0건, 노션 발견된 버그 {len(seen_bug_ids)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
+            f"✅ [Z-Eye 체크인 3중 점검 및 제목 각인 완료] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(seen_bug_ids)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
         )
         return
 
@@ -300,9 +281,9 @@ def main() -> None:
 
     print(
         f"👀 [Z-Eye 무토큰 3중 감시병 가동] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
-        f"   1) Z-코어 직통 우체통: {INBOX_DIR}\n"
+        f"   1) 전사 중앙 우체국: {POST_OFFICE_DIR}\n"
         f"   2) 비서 전사 코딩강령 이식: {DOCTRINE_FILE.name}\n"
-        f"   3) 노션 QA 칸반 보드: '발견된 버그' 컬럼"
+        f"   3) 노션 QA 칸반 보드: '발견된 버그'([제트아이]) 컬럼"
     )
 
     tick = 0
@@ -312,32 +293,30 @@ def main() -> None:
         if tick <= 6:
             sync_antigravity_session_title()
 
-        # 1) 우체통(inbox/) 신규 파일 또는 수정 감지 (매 주기마다 즉시 체크)
-        current_inbox = scan_inbox_files()
+        current_inbox = scan_post_office_files()
         new_or_changed_inbox = [
             fname
             for fname, fhash in current_inbox.items()
             if fname not in baseline_inbox or baseline_inbox[fname] != fhash
         ]
         if new_or_changed_inbox:
-            print("\n" + "📬" * 24)
+            print("\n" + "📮" * 24)
             print(
-                f"🔔 [Z-코어 우체통 신규 도착!] 타 프로젝트 에이전트가 우체통에 {len(new_or_changed_inbox)}건의 의견을 투함했습니다!"
+                f"🔔 [전사 중앙 우체국 신규 도착!] D:\\Secretary\\post_office\\ 에 {len(new_or_changed_inbox)}건의 Z-Eye 수신 문서가 도착했습니다!"
             )
             for fname in new_or_changed_inbox:
-                fpath = INBOX_DIR / fname
+                fpath = POST_OFFICE_DIR / fname
                 content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:1000]
                 print(f"\n📄 파일명: {fname}")
                 print("-" * 60)
                 print(content_preview)
                 print("-" * 60)
             print(
-                "\n👉 [AI 에이전트 지시] 우체통 의견을 1) 원 코어 vs 파워 코어 분류, 2) 스토어 심사 리스크 검열 기준으로 분석하여 멀린님께 즉시 보고하세요!"
+                "\n👉 [AI 에이전트 지시] 중앙 우체국 문서를 1) 원 코어 내장 플러그인 vs 파워 코어 분류, 2) 스토어 심사 리스크 검열 기준으로 분석하여 멀린님께 즉시 보고하세요!"
             )
-            print("📬" * 24)
+            print("📮" * 24)
             return
 
-        # 2) 비서(Secretary)의 전사 코딩강령 외부 이식/업데이트 감지 (매 주기마다 체크)
         current_doctrine_hash = file_md5(DOCTRINE_FILE)
         if current_doctrine_hash and current_doctrine_hash != baseline_doctrine_hash:
             print("\n" + "📜" * 24)
@@ -353,7 +332,6 @@ def main() -> None:
             print("📜" * 24)
             return
 
-        # 3) 노션 칸반 보드 신규 '발견된 버그' 감지 (2틱 = 약 20초마다 체크)
         if tick % 2 == 0:
             new_bugs = check_notion_new_bugs(seen_bug_ids)
             if new_bugs:

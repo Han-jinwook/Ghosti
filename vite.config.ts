@@ -3160,6 +3160,88 @@ function zeyeLocalBridge(): Plugin {
         res.end(JSON.stringify(out));
       });
 
+      // ─────────────── [🧩 단일 표준 포트 5199 내장 소프트웨어 플러그인 브릿지: 센스톡(/api/senstalk/*) & 어그로필터(/api/aggrofilter/*)] ───────────────
+      const zcoreDaemonScriptPath = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_z_core_daemon.py');
+
+      function runBuiltinPluginPython(pluginName: string, action: string, payloadObj: any = {}): Promise<any> {
+        return new Promise((resolve) => {
+          const payloadJson = JSON.stringify(payloadObj || {}).replace(/"/g, '\\"');
+          exec(
+            `python "${zcoreDaemonScriptPath}" --plugin "${pluginName}" --action "${action}" --payload "${payloadJson}"`,
+            { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, windowsHide: true },
+            (err, stdout, stderr) => {
+              if (stdout && stdout.trim()) {
+                try {
+                  resolve(JSON.parse(stdout.trim()));
+                  return;
+                } catch {
+                  /* ignore */
+                }
+              }
+              resolve({
+                ok: !err,
+                error: err ? String(stderr || err.message) : undefined,
+              });
+            }
+          );
+        });
+      }
+
+      server.middlewares.use('/api/senstalk', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Merlin-App');
+        if (req.method === 'OPTIONS') {
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        const u = new URL(req.url || '/', 'http://localhost');
+        const sub = u.pathname.replace(/^\/+/, '') || 'health';
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const out = await runBuiltinPluginPython('senstalk', sub, body);
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/api/aggrofilter', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Merlin-App');
+        if (req.method === 'OPTIONS') {
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        const u = new URL(req.url || '/', 'http://localhost');
+        const sub = u.pathname.replace(/^\/+/, '') || 'health';
+        const body =
+          req.method === 'POST'
+            ? await readJsonBody(req)
+            : { url: u.searchParams.get('url') || u.searchParams.get('v') || '' };
+        const out = await runBuiltinPluginPython('aggrofilter', sub, body);
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/restore-points', async (_req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const out = await runBuiltinPluginPython('zeye_os', 'restore-points-list', {});
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/restore-rollback', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const out = await runBuiltinPluginPython('zeye_os', 'restore-point-rollback', body);
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/folder-tree-summary', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const out = await runBuiltinPluginPython('zeye_os', 'folder-tree-summary', body);
+        res.end(JSON.stringify(out));
+      });
+
       server.middlewares.use('/__zcore/os-execute', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
