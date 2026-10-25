@@ -3242,6 +3242,23 @@ function zeyeLocalBridge(): Plugin {
         res.end(JSON.stringify(out));
       });
 
+      server.middlewares.use('/__zcore/recycle-bin', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const u = new URL(req.url || '/', 'http://localhost');
+        const q = u.searchParams.get('q') || u.searchParams.get('query') || '';
+        const out = await runBuiltinPluginPython('zeye_os', 'recycle-bin-scan', { query: q });
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/omni-trace', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const u = new URL(req.url || '/', 'http://localhost');
+        const q = String(body?.query || u.searchParams.get('q') || '').trim();
+        const out = await runBuiltinPluginPython('zeye_os', 'omni-file-trace', { query: q });
+        res.end(JSON.stringify(out));
+      });
+
       server.middlewares.use('/__zcore/os-execute', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
