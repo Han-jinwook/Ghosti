@@ -470,107 +470,33 @@ export const LoungeView: React.FC = () => {
         </section>
       )}
 
-      {/* ─────────────── 💻 내 기기: 1단(온보딩 가로 3열 카드) ➔ 2단(이메일 로그인 즉시 Z몬스터 진단) ➔ 3단(진단 브리핑 결과 & 정리➔원복 안전 검증) ─────────────── */}
+      {/* ─────────────── 💻 내 기기: 노션 스타일 Zen 도화지 (진단 전에는 시원한 단일 시작점 ➔ 진단 클릭 시 결과·안전검증 펼침 + 하단 3대 바로가기 1세트) ─────────────── */}
       {activeLoungeType === 'personal' && (
-        <>
-          {/* 1단: 내 기기가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
-          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                  💻 내 기기 — 이메일 로그인만 하면 누구나 바로 클린몬스터 진단 &amp; 1초 투시검색
+        <div className="max-w-4xl mx-auto w-full py-4 md:py-8 flex flex-col gap-6">
+          {/* 1. 노션형 깔끔한 히어로 진단 카드 (버튼처럼 보이는 가짜 배지·중복 문구 일체 제거) */}
+          <section className="p-6 md:p-8 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[12px] font-bold text-primary-container tracking-wide">
+                  💻 내 기기 (PC · 스마트폰)
                 </span>
-                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-bold">
-                  🛂 Z-Eye 여권 (Face Passport) · 🔒 로컬 프라이빗 볼트
-                </span>
-              </div>
-              <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                내 기기 — 👁️ Z-Eye 투시검색 · 🩺 Z-Eye 클린몬스터 · 🛠️ 설정몬스터
-              </h1>
-              <p className="font-body-sm text-[13px] text-zinc-400">
-                이메일 로그인만 하면 내 기기 안에서 사진·영상·서류를 1초 만에 꿰뚫어 찾는 <strong>👁️ Z-Eye 투시검색</strong>, <strong>🧹 클린몬스터 진단·대화형 정리</strong>, 그리고 <strong>🛠️ 설정몬스터 1:1 세팅 해결사</strong>를 바로 사용할 수 있습니다.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    👁️ Z-Eye 투시검색
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  사진·동영상 프레임별, 모든 서류파일의 내용을 투시하듯 <strong>1초 만에</strong> 찾아주며, <strong>동일 내용 중복 파일 찾아 정리를 도와주며 사진 연사도 쉽게 정리</strong>할 수 있게 하는 최종 진화형 현미안 엔진입니다.
+                <h1 className="font-headline-md text-[22px] md:text-[26px] text-white font-extrabold tracking-tight">
+                  🧹 내 기기 클린몬스터 진단
+                </h1>
+                <p className="font-body-sm text-[13.5px] text-zinc-400">
+                  {personalTrialStatus === 'done'
+                    ? `내 기기 전체 파일(사진 ${totalDevicePhotos}장 · 영상 ${totalDeviceVideos}개 · 문서 ${totalDeviceDocs}건) 중 1차 샘플 진단이 완료되었습니다.`
+                    : '버튼을 누르면 내 기기 속 영상·사진·문서를 빠르게 스캔하여 정리 대상과 투시검색 준비 상태를 브리핑합니다.'}
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🧹 클린몬스터
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  {isStoreAppMode ? (
-                    <>
-                      내 사진첩 <strong>중복·유사 사진, 영수증·스크린샷·일회성 사물 메모</strong>를 클린몬스터가 정밀 투시 진단하고, <strong>대화형 상담 가이드</strong>를 통해 익숙한 <strong>OS 기본 [휴지통] 정리(+ ↩️ 1초 실행 취소)</strong> 및 PC 마스터 연동을 유저가 직접 결정합니다.
-                    </>
-                  ) : (
-                    <>
-                      모바일·PC <strong>바탕화면 정리(쓰레기 아이콘·미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일/바로가기 분리)</strong>와 <strong>전기·CPU·메모리 먹는 유령 모듈 제거</strong>를 클린몬스터가 진단하고, <strong>대화형 상담 가이드</strong>로 각 항목을 유저가 직접 결정합니다.
-                    </>
-                  )}
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🛠️ 설정몬스터
-                  </span>
-                </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  핸드폰의 특정 설정이나 앱의 어떤 기능으로 세팅하고자 할 때, 복잡한 기기 설정과 오프라인 서버 릴레이까지 <strong>AI 음성으로 직접 찾아 세팅을 도와주는 1:1 해결사</strong>입니다.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* 2단: Z몬스터 진단 (이메일 로그인만 하면 누구나 바로 실행) + 우측 [Z몬스터 진단 시작] / [완료] 버튼 */}
-          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              <div className="flex flex-col gap-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    🧹 내 기기 클린몬스터 진단
-                  </h2>
-                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold">
-                    ✉️ 이메일 로그인 시 누구나 즉시 진단 가능
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                    ⏱️ 소요 시간: 약 30초
-                  </span>
-                </div>
-
-                {/* 내 기기 전체 파일 총량 vs Z몬스터 정밀 진단 범위 */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
-                    📊 <strong>내 기기 전체 보유량:</strong> 사진 <strong>{totalDevicePhotos}장</strong> · 영상 <strong>{totalDeviceVideos}개</strong> · 문서 <strong>{totalDeviceDocs}건</strong>
-                  </span>
-                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🩺 <strong>클린몬스터 1차 진단:</strong> 🎬 영상 <strong>{trialSampleVideos}개 해부</strong> · 🖼️ 사진 <strong>{trialSamplePhotos}장 분석</strong> · 📁 문서 <strong>{trialSampleDocs}건 분석</strong>
-                  </span>
-                </div>
-              </div>
-
-              {/* 우측: 실행 전 [Z몬스터 진단 시작] ➔ 실행 후 [✓ 클린몬스터 진단 완료] + [다시 진단하기] */}
+              {/* 우측: 오직 진짜 액션 버튼 1개만 명확하게 노출 */}
               <div className="flex items-center gap-2 shrink-0">
                 {personalTrialStatus === 'idle' && (
                   <button
                     type="button"
                     onClick={handleStartPersonalTrial}
-                    className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                    className="px-6 py-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14.5px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
                     🧹 클린몬스터 진단 시작
                   </button>
@@ -580,46 +506,37 @@ export const LoungeView: React.FC = () => {
                   <button
                     type="button"
                     disabled
-                    className="px-6 py-3 rounded-xl bg-zinc-800 border border-white/15 text-zinc-300 font-headline-sm text-[14px] font-bold whitespace-nowrap cursor-wait"
+                    className="px-6 py-3.5 rounded-xl bg-zinc-800 border border-white/15 text-zinc-300 font-headline-sm text-[14px] font-bold whitespace-nowrap cursor-wait"
                   >
-                    ⏳ 클린몬스터가 영상 3개 · 사진 100장 · 문서 15건 진단 중...
+                    ⏳ 내 기기 스캔 및 해부 중...
                   </button>
                 )}
 
                 {personalTrialStatus === 'done' && (
-                  <>
-                    <button
-                      type="button"
-                      disabled
-                      className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
-                    >
-                      ✓ 클린몬스터 진단 완료
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleStartPersonalTrial}
-                      className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold whitespace-nowrap"
-                    >
-                      🔄 다시 진단하기
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={handleStartPersonalTrial}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
+                  >
+                    🔄 다시 진단하기
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* 3단: Z몬스터 진단 완료 시 열리는 브리핑 + [정리 ➔ 원복] 안전 검증 */}
-            {personalTrialStatus === 'done' ? (
-              <div className="pt-4 border-t border-white/10 flex flex-col gap-4">
+            {/* 진단 버튼을 눌렀을 때만 아래로 착 펼쳐지는 결과 & [정리 ➔ 원복] 안전 검증 */}
+            {personalTrialStatus === 'done' && (
+              <div className="pt-6 border-t border-white/10 flex flex-col gap-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15.5px] text-white font-bold">
-                    🩺 1. 클린몬스터 정밀 해부 브리핑 (클릭하여 결과 확인)
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    📊 1차 진단 완료 브리핑 (카드를 누르면 해당 검색 화면으로 이동합니다)
                   </span>
-                  <span className="font-label-mono text-[11.5px] text-emerald-400 font-bold">
-                    ✓ 외부 서버 전송 0 Byte (100% 내 기기 로컬 진단)
+                  <span className="text-[12px] text-emerald-400 font-semibold">
+                    ✓ 외부 서버 전송 없음 (100% 내 기기 안심 진단)
                   </span>
                 </div>
 
-                {/* 전체 모수 vs 1초 진단 & 공유 시작 분석 완료 3열 카드 */}
+                {/* 3열 진단 결과 카드 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                   <div
                     onClick={() => {
@@ -628,22 +545,14 @@ export const LoungeView: React.FC = () => {
                     }}
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                        🎬 영상 해부 브리핑
-                      </span>
-                      <span className="text-[11px] font-mono text-zinc-400 font-bold">
-                        전체 {totalDeviceVideos}개 중 {trialSampleVideos}개 해부
-                      </span>
+                    <span className="font-label-sm text-[12px] text-zinc-400 font-semibold">
+                      🎬 동영상 ({totalDeviceVideos}개 중)
+                    </span>
+                    <div className="font-headline-md text-[20px] text-white font-black">
+                      영상 {trialSampleVideos}개 해부 완료
                     </div>
-                    <div className="font-headline-md text-[21px] text-white font-black">
-                      영상 {trialSampleVideos}개 정밀 해부 완료
-                    </div>
-                    <p className="font-body-sm text-[12px] text-zinc-400">
-                      나머지 {totalDeviceVideos - trialSampleVideos}개 영상은 PC 마스터 연결 시 전 구간 자동 해부됩니다.
-                    </p>
-                    <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
-                      해부된 영상 장면 검색해보기 →
+                    <span className="text-primary-container font-label-sm text-[12px] font-bold pt-1">
+                      장면 검색 보러가기 →
                     </span>
                   </div>
 
@@ -654,22 +563,14 @@ export const LoungeView: React.FC = () => {
                     }}
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-label-sm text-[11.5px] text-emerald-400 font-bold">
-                        🖼️ 사진 AI 분석 브리핑
-                      </span>
-                      <span className="text-[11px] font-mono text-zinc-400 font-bold">
-                        전체 {totalDevicePhotos}장 중 {trialSamplePhotos}장 분석
-                      </span>
+                    <span className="font-label-sm text-[12px] text-zinc-400 font-semibold">
+                      🖼️ 사진 ({totalDevicePhotos}장 중)
+                    </span>
+                    <div className="font-headline-md text-[20px] text-white font-black">
+                      사진 {trialSamplePhotos}장 분석 완료
                     </div>
-                    <div className="font-headline-md text-[21px] text-white font-black">
-                      사진 {trialSamplePhotos}장 정밀 분석 완료
-                    </div>
-                    <p className="font-body-sm text-[12px] text-zinc-400">
-                      동일 내용 중복(최고화질 원본 보존) · 연사 1장 직접 선택 부가서비스 지원 (나머지 {totalDevicePhotos - trialSamplePhotos}장 대기)
-                    </p>
-                    <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
-                      분석된 사진 검색해보기 →
+                    <span className="text-primary-container font-label-sm text-[12px] font-bold pt-1">
+                      사진 검색 보러가기 →
                     </span>
                   </div>
 
@@ -680,216 +581,178 @@ export const LoungeView: React.FC = () => {
                     }}
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                        📁 문서 파일 분석 브리핑
-                      </span>
-                      <span className="text-[11px] font-mono text-zinc-400 font-bold">
-                        전체 {totalDeviceDocs}건 중 {trialSampleDocs}건 분석
-                      </span>
+                    <span className="font-label-sm text-[12px] text-zinc-400 font-semibold">
+                      📁 문서 ({totalDeviceDocs}건 중)
+                    </span>
+                    <div className="font-headline-md text-[20px] text-white font-black">
+                      문서 {trialSampleDocs}건 색인 완료
                     </div>
-                    <div className="font-headline-md text-[21px] text-white font-black">
-                      문서 {trialSampleDocs}건 본문 색인 완료
-                    </div>
-                    <p className="font-body-sm text-[12px] text-zinc-400">
-                      계약서·영수증·PDF 핵심 키워드 추출 (나머지 {totalDeviceDocs - trialSampleDocs}건 대기 중)
-                    </p>
-                    <span className="text-primary-container font-label-sm text-[11.5px] font-bold pt-1">
-                      서류함 검색해보기 →
+                    <span className="text-primary-container font-label-sm text-[12px] font-bold pt-1">
+                      서류함 보러가기 →
                     </span>
                   </div>
                 </div>
 
-                {/* 🛡️ 2. 안전 확인 필수 코스: [정리(OS 기본 휴지통 이동)] 버튼 ➔ [1초 실행 취소(Undo)] 버튼 직접 눌러보기 */}
-                <div className="p-4 md:p-5 rounded-xl bg-zinc-950 border border-white/15 flex flex-col gap-3.5">
+                {/* 🛡️ 안심 안전망 체험: ① 휴지통 이동 ➔ ② 1초 실행 취소 */}
+                <div className="p-4 md:p-5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-3">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                     <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-headline-sm text-[15px] text-white font-bold">
-                          🛡️ 2. 안심 안전망 직접 검증 — &lsquo;OS 기본 휴지통 이동&rsquo; 후 &lsquo;1초 실행 취소&rsquo;까지 눌러보세요!
-                        </span>
-                        <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-extrabold">
-                          앱 임의 삭제 0% · OS 기본 [휴지통] 직행 + ↩️ 1초 실행 취소
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-[12.5px] text-zinc-300">
-                        별도의 복잡한 보관함 없이 유저가 직접 정리한 항목은 모두 익숙한 <strong>OS 기본 [휴지통]으로 안전하게 이동</strong>하며, 하단 <strong>[↩️ 1초 실행 취소(Undo)]</strong>로 즉시 되돌릴 수 있습니다. 아래 <strong>① 정리 ➔ ② 원복</strong> 버튼을 순서대로 눌러 확인해 보세요.
+                      <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                        🛡️ 안심 정리 테스트 — 휴지통으로 보내고 1초 만에 되돌려보세요
+                      </span>
+                      <p className="font-body-sm text-[12.5px] text-zinc-400">
+                        임의로 영구 삭제하지 않고 OS 기본 [휴지통]으로 이동하며 언제든 1초 만에 복원됩니다.
                       </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      {/* 1단계: 정리(휴지통 이동) 버튼 */}
                       <button
                         type="button"
                         onClick={() => void handleTrialQuarantineSample()}
                         disabled={trialSafetyStep === 'quarantined'}
-                        className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
+                        className={`px-4 py-2 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
                           trialSafetyStep === 'quarantined'
                             ? 'bg-zinc-900 border border-white/15 text-zinc-400 cursor-not-allowed'
-                            : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 shadow-sm cursor-pointer'
+                            : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 cursor-pointer'
                         }`}
                       >
                         {trialSafetyStep === 'quarantined'
-                          ? '✓ ① OS 기본 휴지통 이동됨'
-                          : '🗑️ ① 샘플 정리(휴지통 이동) 눌러보기'}
+                          ? '✓ ① 휴지통 이동됨'
+                          : '🗑️ ① 샘플 정리 눌러보기'}
                       </button>
 
-                      {/* 2단계: 원복(되돌리기) 버튼 */}
                       <button
                         type="button"
                         onClick={() => void handleTrialRestoreSample()}
                         disabled={trialSafetyStep !== 'quarantined'}
-                        className={`px-4 py-2.5 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
+                        className={`px-4 py-2 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
                           trialSafetyStep === 'quarantined'
-                            ? 'bg-primary-container hover:opacity-95 text-zinc-950 shadow-md ring-2 ring-primary-container/50 cursor-pointer'
+                            ? 'bg-primary-container hover:opacity-95 text-zinc-950 cursor-pointer'
                             : trialSafetyStep === 'restored'
                             ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 cursor-default'
-                            : 'bg-zinc-900 border border-white/15 text-zinc-400 cursor-not-allowed opacity-70'
+                            : 'bg-zinc-900 border border-white/15 text-zinc-500 cursor-not-allowed'
                         }`}
                       >
                         {trialSafetyStep === 'restored'
-                          ? '✓ ② 1초 실행 취소 확인 완료!'
-                          : '↩️ ② 1초 실행 취소(Undo) 눌러보기'}
+                          ? '✓ ② 1초 복원 완료!'
+                          : '↩️ ② 1초 되돌리기'}
                       </button>
 
                       <button
                         type="button"
                         onClick={() => void openLocalFolder('quarantine')}
-                        className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold whitespace-nowrap"
+                        className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold whitespace-nowrap cursor-pointer"
                       >
-                        🗑️ 휴지통 확인
+                        🗑️ 휴지통 열기
                       </button>
                     </div>
                   </div>
 
                   {trialSafetyStep === 'quarantined' && (
-                    <div className="px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[12.5px] text-amber-200 flex items-center justify-between gap-2">
-                      <span>
-                        🗑️ <strong>선택한 샘플 {trialMovedIds.length}건</strong>이 <strong>OS 기본 [휴지통]</strong>으로 안전하게 이동되었습니다. 이제 우측의 <strong>[↩️ ② 1초 실행 취소 눌러보기]</strong> 버튼을 눌러보세요!
-                      </span>
+                    <div className="px-3.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[12.5px] text-amber-200">
+                      🗑️ 샘플 {trialMovedIds.length}건이 휴지통으로 이동되었습니다. 우측의 <strong>[↩️ ② 1초 되돌리기]</strong>를 눌러보세요!
                     </div>
                   )}
 
                   {trialSafetyStep === 'restored' && (
-                    <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[12.5px] text-emerald-300 flex items-center justify-between gap-2">
-                      <span>
-                        ✅ <strong>[1초 실행 취소 검증 완료!]</strong> 방금 정리했던 파일들이 원래 폴더로 100% 되돌아왔습니다. 실수로 지워질 걱정 없이 안심하고 정리하세요!
-                      </span>
+                    <div className="px-3.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[12.5px] text-emerald-300 flex items-center justify-between gap-2">
+                      <span>✅ 원래 위치로 100% 되돌아왔습니다. 이제 본격적인 정리를 시작해 보세요!</span>
                       <button
                         type="button"
                         onClick={() => {
                           setDesktopTab('trash');
                           setMobileTab('trash');
                         }}
-                        className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
+                        className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap cursor-pointer"
                       >
-                        🩺 Z-Eye 클린몬스터 이동 →
+                        🩺 클린몬스터 열기 →
                       </button>
                     </div>
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
-                <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 이메일 로그인만 하면 누구나 바로 우측의 <strong>[🧹 클린몬스터 진단 시작]</strong> 버튼을 눌러 <strong>영상 3개 해부 · 사진 100장 분석 · 문서 15건 분석</strong> 브리핑과 함께 <strong>[정리 ➔ 원복 안전 검증]</strong>을 실행할 수 있습니다.
-                </span>
-              </div>
-            )}
-
-            {/* 내 기기 하단: 무료/요금 관련 문구 없이 3대 기능 바로가기만 깔끔하게 배치 (스토어 클린 모드 시 PC 연동 패널 노출) */}
-            {isStoreAppMode ? (
-              <div className="pt-3 border-t border-white/10">
-                <PcMasterQuickSendPanel />
-              </div>
-            ) : (
-              <div className="pt-4 border-t border-white/10 flex flex-col gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    ⚡ 내 기기 투시검색 · 클린몬스터 · 설정몬스터 바로가기
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* 1. 👁️ Z-Eye 투시검색 */}
-                  <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                        👁️ Z-Eye 투시검색
-                      </span>
-                      <div className="font-headline-md text-[19px] text-white font-black">
-                        사진 · 영상 · 서류 1초 투시검색
-                      </div>
-                      <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                        사진·동영상 프레임별, 모든 서류파일의 내용을 투시하듯 <strong>1초 만에</strong> 찾아주며, <strong>동일 내용 중복 파일 및 사진 연사 정리</strong>를 지원합니다.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDesktopTab('dashboard');
-                        setMobileTab('search');
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12px] font-extrabold whitespace-nowrap cursor-pointer"
-                    >
-                      👁️ Z-Eye 투시검색 바로가기
-                    </button>
-                  </div>
-
-                  {/* 2. 🩺 Z-Eye 클린몬스터 */}
-                  <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="font-label-sm text-[11.5px] text-amber-400 font-bold">
-                        🧹 클린몬스터 — 정밀 진단 &amp; 대화형 정리
-                      </span>
-                      <div className="font-headline-md text-[19px] text-white font-black">
-                        내 기기 클린몬스터 검진 &amp; 정리
-                      </div>
-                      <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                        모바일·PC 바탕화면 정리(미사용 앱 분류/동결·어르신 큰 아이콘·PC 중복파일 및 바로가기 분리) + 전기 먹는 유령 모듈 제거 및 클린몬스터 대화형 컨설팅 (OS 기본 [휴지통] + ↩️ 1초 실행 취소 보장).
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDesktopTab('trash');
-                        setMobileTab('trash');
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12px] font-bold transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      🩺 Z-Eye 클린몬스터 바로가기
-                    </button>
-                  </div>
-
-                  {/* 3. 🛠️ 설정몬스터 */}
-                  <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="font-label-sm text-[11.5px] text-emerald-400 font-bold">
-                        🛠️ 설정몬스터 — AI 스마트폰 &amp; PC 통합 설정 해결사
-                      </span>
-                      <div className="font-headline-md text-[19px] text-white font-black">
-                        원클릭 수리 &amp; 화살표 동행 안내
-                      </div>
-                      <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
-                        일상어로 대화하면 AI가 <strong>PC·스마트폰 설정을 1초 만에 직접 고쳐주거나 화면 위 손가락 화살표(👆)를 띄워 동행 안내</strong>하고, 0.01초 전 스냅샷으로 1초 원상복구까지 보장합니다.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDesktopTab('sync');
-                        setMobileTab('settings');
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-label-md text-[12px] font-extrabold transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      🛠️ 설정몬스터 열기
-                    </button>
-                  </div>
-                </div>
-              </div>
             )}
           </section>
-        </>
+
+          {/* 2. 중복 설명 없이 깔끔하게 1세트로 정돈된 3대 핵심 메뉴 카드 (카드 전체 클릭 가능) */}
+          {isStoreAppMode ? (
+            <PcMasterQuickSendPanel />
+          ) : (
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setDesktopTab('dashboard');
+                  setMobileTab('search');
+                }}
+                className="p-5 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 text-left flex flex-col justify-between gap-4 transition-all cursor-pointer group"
+              >
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-primary-container font-bold">
+                    👁️ Z-Eye 투시검색
+                  </span>
+                  <h3 className="font-headline-sm text-[17px] text-white font-bold">
+                    사진 · 영상 · 서류 1초 검색
+                  </h3>
+                  <p className="font-body-sm text-[12.5px] text-zinc-400 leading-relaxed">
+                    말 한마디로 사진, 동영상 속 장면, 문서 내용까지 1초 만에 찾아냅니다.
+                  </p>
+                </div>
+                <span className="text-[12.5px] font-extrabold text-primary-container group-hover:translate-x-0.5 transition-transform">
+                  투시검색 열기 →
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDesktopTab('trash');
+                  setMobileTab('trash');
+                }}
+                className="p-5 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-amber-400/50 text-left flex flex-col justify-between gap-4 transition-all cursor-pointer group"
+              >
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-amber-400 font-bold">
+                    🩺 Z-Eye 클린몬스터
+                  </span>
+                  <h3 className="font-headline-sm text-[17px] text-white font-bold">
+                    중복 사진 · 바탕화면 정리
+                  </h3>
+                  <p className="font-body-sm text-[12.5px] text-zinc-400 leading-relaxed">
+                    중복·연사 사진과 어지러운 바탕화면, 느려진 보안모듈을 대화하며 정리합니다.
+                  </p>
+                </div>
+                <span className="text-[12.5px] font-extrabold text-amber-300 group-hover:translate-x-0.5 transition-transform">
+                  클린몬스터 열기 →
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDesktopTab('sync');
+                  setMobileTab('settings');
+                }}
+                className="p-5 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-emerald-400/50 text-left flex flex-col justify-between gap-4 transition-all cursor-pointer group"
+              >
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-emerald-400 font-bold">
+                    🛠️ 설정몬스터
+                  </span>
+                  <h3 className="font-headline-sm text-[17px] text-white font-bold">
+                    1:1 기기 설정 &amp; 수리 해결사
+                  </h3>
+                  <p className="font-body-sm text-[12.5px] text-zinc-400 leading-relaxed">
+                    복잡한 PC·스마트폰 설정을 1초 만에 고쳐주거나 화살표(👆)로 안내합니다.
+                  </p>
+                </div>
+                <span className="text-[12.5px] font-extrabold text-emerald-300 group-hover:translate-x-0.5 transition-transform">
+                  설정몬스터 열기 →
+                </span>
+              </button>
+            </section>
+          )}
+        </div>
       )}
 
       {/* ─────────────── 👨‍👩‍👧‍👦 패밀리 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(1초 진단 & 공유 시작 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
