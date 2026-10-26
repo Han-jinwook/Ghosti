@@ -66,12 +66,23 @@ def _http_get_text(url: str, timeout: float = 8.0) -> str:
 
 
 def _parse_timedtext_xml(xml_text: str) -> List[Dict[str, Any]]:
+    """
+    timedtext XML 파서 (2가지 포맷 모두 지원)
+    - 구형 format 1: <transcript><text start="초" dur="초">...</text></transcript>
+    - 신형 srv3   : <timedtext format="3"><body><p t="ms" d="ms"><s>..</s></p></body></timedtext>
+    """
     segments: List[Dict[str, Any]] = []
     try:
         root = ET.fromstring(xml_text)
-        for node in root.findall(".//text"):
-            start = float(node.attrib.get("start", "0") or 0.0)
-            dur = float(node.attrib.get("dur", "0") or 0.0)
+        for node in root.iter():
+            if node.tag == "text":
+                start = float(node.attrib.get("start", "0") or 0.0)
+                dur = float(node.attrib.get("dur", "0") or 0.0)
+            elif node.tag == "p":
+                start = float(node.attrib.get("t", "0") or 0.0) / 1000.0
+                dur = float(node.attrib.get("d", "0") or 0.0) / 1000.0
+            else:
+                continue
             txt = html.unescape("".join(node.itertext())).replace("\n", " ").strip()
             if txt:
                 segments.append(
@@ -111,10 +122,56 @@ def _parse_json3_captions(raw_json: str) -> List[Dict[str, Any]]:
     return segments
 
 
+INNERTUBE_ANDROID_CLIENT = {"clientName": "ANDROID", "clientVersion": "20.10.38"}
+
+
+def _http_post_json(url: str, payload: Dict[str, Any], timeout: float = 8.0) -> Dict[str, Any]:
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
+def _pick_track(tracks: List[Dict[str, Any]], langs: List[str]) -> Dict[str, Any] | None:
+    """선호 언어 순서대로, 같은 언어면 수동 자막(kind != asr)을 자동 생성 자막보다 우선."""
+    for lang in langs:
+        same = [t for t in tracks if str(t.get("languageCode", "")).startswith(lang)]
+        if same:
+            manual = [t for t in same if t.get("kind") != "asr"]
+            return (manual or same)[0]
+    return tracks[0] if tracks else None
+
+
+def _download_track_segments(base_url: str) -> List[Dict[str, Any]]:
+    """트랙 URL에서 자막 본문을 받아 파싱 (srv3/format1 XML → 실패 시 json3)."""
+    clean = re.sub(r"&fmt=[^&]*", "", base_url)
+    segments = _parse_timedtext_xml(_http_get_text(clean, timeout=8.0))
+    if not segments:
+        sep = "&" if "?" in clean else "?"
+        segments = _parse_json3_captions(_http_get_text(f"{clean}{sep}fmt=json3", timeout=8.0))
+    return segments
+
+
 def fetch_youtube_captions_via_local_ip(url_or_shared_text: str, preferred_langs: List[str] | None = None) -> Dict[str, Any]:
     """
     유저 기기(PC/모바일)의 로컬 IP로 유튜브 영상 메타데이터와 자막 트랙(TimedText)을 직접 추출합니다.
     (크롬 확장팩 불필요, 서버 IP 차단 원천 우회)
+
+    [2026-10-27 수정 — 비서실 실측 '침묵 성공' 버그 해결]
+    - 원인: 2025년 이후 유튜브는 watch 페이지(WEB 클라이언트)에 박힌 captionTracks.baseUrl에
+      PO 토큰을 요구하여, 그대로 호출하면 HTTP 200 + 본문 0바이트를 반환 → segments 0건인데 ok:true.
+    - 1차 경로: InnerTube player API(ANDROID 클라이언트)로 트랙 목록을 받아 본문 다운로드
+      (실측 4/4 영상 정상: dQw4w9WgXcQ 61줄 · jNQXAC9IVRw 6줄 · arj7oStGLkU 305줄 · IHNzOHi8sJs 62줄).
+    - 2차 경로: 기존 watch 페이지 파싱 (향후 유튜브 정책 변화 대비 폴백).
+    - 자막 0건이면 반드시 ok:false + reason 반환 (정직한 실패).
     """
     t0 = time.perf_counter()
     vid = extract_video_id(url_or_shared_text)
@@ -122,65 +179,101 @@ def fetch_youtube_captions_via_local_ip(url_or_shared_text: str, preferred_langs
         return {
             "ok": False,
             "error": "INVALID_YOUTUBE_URL",
+            "reason": "유효한 유튜브 링크를 찾지 못했습니다.",
             "message": "유효한 유튜브 링크(watch?v=, youtu.be/, shorts/)를 찾지 못했습니다.",
         }
 
     langs = preferred_langs or ["ko", "en", "ja"]
-    watch_url = f"https://www.youtube.com/watch?v={vid}&hl=ko"
-
-    try:
-        page_html = _http_get_text(watch_url, timeout=8.0)
-    except Exception as e:
-        return {
-            "ok": False,
-            "videoId": vid,
-            "error": f"FETCH_FAILED: {e}",
-        }
-
-    title_match = re.search(r'"title":"([^"]+)"', page_html)
-    author_match = re.search(r'"author":"([^"]+)"', page_html)
-    title = title_match.group(1) if title_match else ""
-    author = author_match.group(1) if author_match else ""
-
+    title, author = "", ""
     tracks: List[Dict[str, Any]] = []
-    m_tracks = re.search(r'"captionTracks":(\[.*?\]),"audioTracks"', page_html)
-    if not m_tracks:
-        m_tracks = re.search(r'"captionTracks":(\[.*?\])', page_html)
-    if m_tracks:
-        try:
-            tracks = json.loads(m_tracks.group(1))
-        except Exception:
-            tracks = []
-
-    selected_track = None
-    for lang in langs:
-        for tr in tracks:
-            if str(tr.get("languageCode", "")).startswith(lang):
-                selected_track = tr
-                break
-        if selected_track:
-            break
-    if not selected_track and tracks:
-        selected_track = tracks[0]
-
+    attempts: List[str] = []
     segments: List[Dict[str, Any]] = []
     selected_lang = ""
-    if selected_track and selected_track.get("baseUrl"):
-        base_url = str(selected_track["baseUrl"])
-        selected_lang = str(selected_track.get("languageCode", ""))
-        try:
-            sep = "&" if "?" in base_url else "?"
-            raw_json3 = _http_get_text(f"{base_url}{sep}fmt=json3", timeout=8.0)
-            segments = _parse_json3_captions(raw_json3)
-            if not segments:
-                raw_xml = _http_get_text(base_url, timeout=8.0)
-                segments = _parse_timedtext_xml(raw_xml)
-        except Exception:
-            pass
+    selected_kind = ""
+    fetched_via = ""
+
+    # ── 1차: InnerTube ANDROID player ──
+    page_html = ""
+    try:
+        page_html = _http_get_text(f"https://www.youtube.com/watch?v={vid}&hl=ko", timeout=8.0)
+    except Exception as e:
+        attempts.append(f"watch_page_fetch_failed:{e}")
+    key_m = re.search(r'"INNERTUBE_API_KEY":\s*"([a-zA-Z0-9_-]+)"', page_html)
+    player_url = "https://www.youtube.com/youtubei/v1/player" + (f"?key={key_m.group(1)}" if key_m else "")
+    try:
+        pj = _http_post_json(
+            player_url,
+            {"context": {"client": INNERTUBE_ANDROID_CLIENT}, "videoId": vid},
+        )
+        details = pj.get("videoDetails") or {}
+        title = str(details.get("title") or "")
+        author = str(details.get("author") or "")
+        status = (pj.get("playabilityStatus") or {}).get("status")
+        tracks = (
+            (pj.get("captions") or {})
+            .get("playerCaptionsTracklistRenderer", {})
+            .get("captionTracks", [])
+        ) or []
+        attempts.append(f"innertube_android:status={status},tracks={len(tracks)}")
+        tr = _pick_track(tracks, langs)
+        if tr and tr.get("baseUrl"):
+            segments = _download_track_segments(str(tr["baseUrl"]))
+            selected_lang = str(tr.get("languageCode", ""))
+            selected_kind = "auto" if tr.get("kind") == "asr" else "manual"
+            fetched_via = "INNERTUBE_ANDROID"
+            attempts.append(f"innertube_android_segments={len(segments)}")
+    except Exception as e:
+        attempts.append(f"innertube_android_failed:{e}")
+
+    # ── 2차 폴백: watch 페이지 captionTracks ──
+    if not segments and page_html:
+        if not title:
+            tm = re.search(r'"title":"([^"]+)"', page_html)
+            am = re.search(r'"author":"([^"]+)"', page_html)
+            title = tm.group(1) if tm else ""
+            author = am.group(1) if am else ""
+        m_tracks = re.search(r'"captionTracks":(\[.*?\]),"audioTracks"', page_html) or re.search(
+            r'"captionTracks":(\[.*?\])', page_html
+        )
+        web_tracks: List[Dict[str, Any]] = []
+        if m_tracks:
+            try:
+                web_tracks = json.loads(m_tracks.group(1))
+            except Exception:
+                web_tracks = []
+        if not tracks:
+            tracks = web_tracks
+        tr = _pick_track(web_tracks, langs)
+        if tr and tr.get("baseUrl"):
+            try:
+                segments = _download_track_segments(str(tr["baseUrl"]))
+                selected_lang = str(tr.get("languageCode", ""))
+                selected_kind = "auto" if tr.get("kind") == "asr" else "manual"
+                fetched_via = "WEB_WATCH_PAGE"
+            except Exception as e:
+                attempts.append(f"web_track_failed:{e}")
+        attempts.append(f"web_watch_page:tracks={len(web_tracks)},segments={len(segments)}")
+
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+    available = [t.get("languageCode", "") for t in tracks]
+
+    if not segments:
+        return {
+            "ok": False,
+            "plugin": "aggrofilter",
+            "port": 5199,
+            "videoId": vid,
+            "title": title,
+            "channelName": author,
+            "availableLanguages": available,
+            "segmentCount": 0,
+            "error": "NO_CAPTIONS" if not tracks else "CAPTION_DOWNLOAD_EMPTY",
+            "reason": "자막 데이터 없음 또는 추출 실패",
+            "attempts": attempts,
+            "elapsedMs": elapsed_ms,
+        }
 
     full_text = " ".join(s["text"] for s in segments)
-    elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
-
     return {
         "ok": True,
         "plugin": "aggrofilter",
@@ -189,18 +282,31 @@ def fetch_youtube_captions_via_local_ip(url_or_shared_text: str, preferred_langs
         "title": title,
         "channelName": author,
         "selectedLanguage": selected_lang,
-        "availableLanguages": [t.get("languageCode", "") for t in tracks],
+        "selectedKind": selected_kind,
+        "availableLanguages": available,
         "segmentCount": len(segments),
         "segments": segments[:300],
         "fullTranscript": full_text[:15000],
         "elapsedMs": elapsed_ms,
         "chromeExtensionUsed": False,
         "fetchedVia": "USER_LOCAL_RESIDENTIAL_OR_MOBILE_IP",
+        "captionSource": fetched_via,
+        "attempts": attempts,
     }
 
 
+def _normalize_sub(subpath: str, default: str) -> str:
+    """'/v1/extract-subtitles' 같은 버전·별칭 경로를 표준 액션명으로 정규화 (비서실 실측 경로 호환)."""
+    sub = (subpath or default).strip("/").lower()
+    if sub.startswith("v1/"):
+        sub = sub[3:]
+    if sub in ("extract-subtitles", "subtitles"):
+        sub = "extract"
+    return sub or default
+
+
 def handle_get(subpath: str, query_params: Dict[str, str] | None = None) -> Dict[str, Any]:
-    sub = (subpath or "health").strip("/").lower()
+    sub = _normalize_sub(subpath, "health")
     qp = query_params or {}
     if sub in ("", "health", "status"):
         return {
@@ -215,7 +321,7 @@ def handle_get(subpath: str, query_params: Dict[str, str] | None = None) -> Dict
 
 
 def handle_post(subpath: str, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    sub = (subpath or "extract").strip("/").lower()
+    sub = _normalize_sub(subpath, "extract")
     body = data or {}
     if sub in ("captions", "transcript", "extract", "share-target"):
         url_or_text = str(body.get("url") or body.get("sharedText") or body.get("videoId") or "")

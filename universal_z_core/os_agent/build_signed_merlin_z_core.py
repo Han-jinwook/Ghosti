@@ -129,9 +129,108 @@ def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
     }
 
 
+def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
+    """
+    [2026-10-27 실체화] PyInstaller --onefile 로 merlin_z_core_daemon.py + 1차 필수 플러그인 3종을
+    단일 실행파일 dist/Merlin_Z_Core_Setup.exe 로 패키징합니다.
+    - 플러그인은 데몬이 정적 import 하므로 --paths 로 자동 수집 + hidden-import 로 이중 보장
+    - 서드파티: psutil, pywin32(win32clipboard/win32con), Pillow (센스톡·클립보드 이미지)
+    """
+    work_root = Path(os.environ.get("TEMP", str(THIS_DIR))) / "merlin_z_core_build"
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--noconfirm", "--clean", "--onefile",
+        "--name", "Merlin_Z_Core_Setup",
+        "--distpath", str(DIST_DIR),
+        "--workpath", str(work_root / "work"),
+        "--specpath", str(work_root / "spec"),
+        "--paths", str(THIS_DIR),
+        "--hidden-import", "plugin_zeye_os",
+        "--hidden-import", "plugin_senstalk",
+        "--hidden-import", "plugin_aggrofilter",
+        "--hidden-import", "merlin_z_core_os",
+        "--hidden-import", "core_win32",
+        "--hidden-import", "win32clipboard",
+        "--hidden-import", "win32con",
+        "--hidden-import", "psutil",
+        "--hidden-import", "PIL.Image",
+        "--hidden-import", "PIL.ImageDraw",
+        "--console" if console else "--noconsole",
+        str(THIS_DIR / "merlin_z_core_daemon.py"),
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    exe = DIST_DIR / "Merlin_Z_Core_Setup.exe"
+    return {
+        "built": res.returncode == 0 and exe.exists(),
+        "returncode": res.returncode,
+        "exe": str(exe),
+        "sizeMB": round(exe.stat().st_size / 1024 / 1024, 1) if exe.exists() else 0,
+        "stderrTail": res.stderr.strip().splitlines()[-6:],
+    }
+
+
+def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.0) -> Dict[str, Any]:
+    """
+    빌드된 exe를 임시 포트로 기동해 헬스체크 + 1차 3대 기능(제트아이 OS · 센스톡 · 어그로필터) 응답을 실측합니다.
+    (개발 PC의 5199는 Vite 개발서버가 점유할 수 있으므로 기본 15199에서 검증 — 비서실 실측 방식과 동일)
+    """
+    import time
+    import urllib.request
+
+    if not exe_path.exists():
+        return {"ok": False, "error": f"exe 없음: {exe_path}"}
+    proc = subprocess.Popen([str(exe_path), "--port", str(port)], creationflags=0x08000000)
+    base = f"http://127.0.0.1:{port}"
+
+    def get(path: str, data: Dict[str, Any] | None = None, t: float = 20.0) -> Dict[str, Any]:
+        body = json.dumps(data).encode("utf-8") if data is not None else None
+        req = urllib.request.Request(base + path, data=body, headers={"Content-Type": "application/json"}, method="POST" if body else "GET")
+        with urllib.request.urlopen(req, timeout=t) as r:
+            return json.loads(r.read().decode("utf-8", "replace"))
+
+    report: Dict[str, Any] = {"port": port}
+    try:
+        t0 = time.time()
+        while True:  # onefile 압축해제 기상 대기
+            try:
+                report["health"] = get("/health", t=3.0)
+                break
+            except Exception:
+                if time.time() - t0 > timeout_sec:
+                    report["health"] = {"ok": False, "error": "기상 시간 초과"}
+                    break
+                time.sleep(1.0)
+        report["bootSec"] = round(time.time() - t0, 1)
+        checks = {
+            "zeyeOs": lambda: get("/api/zeye/health"),
+            "senstalk": lambda: get("/api/senstalk/health"),
+            "aggrofilterHealth": lambda: get("/api/aggrofilter/health"),
+            "aggrofilterLiveCaption": lambda: get("/aggrofilter/v1/extract-subtitles", {"url": "https://www.youtube.com/watch?v=arj7oStGLkU"}, t=30.0),
+        }
+        for name, fn in checks.items():
+            try:
+                r = fn()
+                report[name] = {"ok": r.get("ok"), **({"segmentCount": r.get("segmentCount"), "lang": r.get("selectedLanguage")} if "Caption" in name else {})}
+            except Exception as e:
+                report[name] = {"ok": False, "error": str(e)}
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
+    report["ok"] = bool((report.get("health") or {}).get("ok")) and all(
+        (report.get(k) or {}).get("ok") for k in ("zeyeOs", "senstalk", "aggrofilterHealth", "aggrofilterLiveCaption")
+    )
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build & MS Code-Sign Merlin_Z_Core_Setup.exe")
     parser.add_argument("--check", action="store_true", help="MS 서명 도구(signtool) 및 플러그인 패키징 준비 상태 점검")
+    parser.add_argument("--build", action="store_true", help="PyInstaller 단일 exe 빌드 → 실행 검증 → (인증서 환경 시) 서명")
+    parser.add_argument("--console", action="store_true", help="디버그용 콘솔 창 표시 빌드")
+    parser.add_argument("--verify-port", type=int, default=15199, help="빌드 검증용 임시 포트 (기본 15199)")
     args = parser.parse_args()
 
     try:
@@ -139,6 +238,17 @@ def main() -> None:
             sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
+
+    if args.build:
+        out: Dict[str, Any] = {"build": build_with_pyinstaller(console=args.console)}
+        exe = DIST_DIR / "Merlin_Z_Core_Setup.exe"
+        if out["build"]["built"]:
+            out["verify"] = verify_built_exe(exe, port=args.verify_port)
+            out["sign"] = sign_binary_with_ms_codesign(exe)
+            out["authenticode"] = verify_authenticode_signature(exe)
+        out["ok"] = bool(out["build"]["built"] and (out.get("verify") or {}).get("ok"))
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        sys.exit(0 if out["ok"] else 1)
 
     signtool = find_signtool()
     daemon_py = THIS_DIR / "merlin_z_core_daemon.py"

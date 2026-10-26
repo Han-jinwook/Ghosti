@@ -124,8 +124,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_senstalk.handle_get(sub))
             return
 
-        if path.startswith("/api/aggrofilter"):
-            sub = path[len("/api/aggrofilter") :].strip("/") or "health"
+        if path.startswith("/api/aggrofilter") or path.startswith("/aggrofilter"):
+            prefix = "/api/aggrofilter" if path.startswith("/api/aggrofilter") else "/aggrofilter"
+            sub = path[len(prefix) :].strip("/") or "health"
             self._send_json(plugin_aggrofilter.handle_get(sub, qp))
             return
 
@@ -153,8 +154,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_senstalk.handle_post(sub, body))
             return
 
-        if path.startswith("/api/aggrofilter"):
-            sub = path[len("/api/aggrofilter") :].strip("/") or "extract"
+        if path.startswith("/api/aggrofilter") or path.startswith("/aggrofilter"):
+            prefix = "/api/aggrofilter" if path.startswith("/api/aggrofilter") else "/aggrofilter"
+            sub = path[len(prefix) :].strip("/") or "extract"
             self._send_json(plugin_aggrofilter.handle_post(sub, body))
             return
 
@@ -166,7 +168,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         self._send_json({"ok": False, "error": f"Not Found: {path}"}, status=404)
 
 
-def run_selftest() -> Dict[str, Any]:
+def run_selftest(live: bool = False) -> Dict[str, Any]:
     """내장 플러그인 3종(zeye_os, senstalk, aggrofilter) 및 [복원 기록] Pre-Check 통합 자가진단"""
     h = get_unified_health()
     st_sync = plugin_senstalk.handle_post(
@@ -179,13 +181,32 @@ def run_selftest() -> Dict[str, Any]:
         },
     )
     ag_vid = plugin_aggrofilter.extract_video_id("https://youtu.be/dQw4w9WgXcQ?si=test")
+    # [2026-10-27] 비서실 지적: 정규식만 검사해 '자막 0건 침묵 성공'을 못 잡던 selftest 보강
+    srv3_sample = '<timedtext format="3"><body><p t="1000" d="2000"><s>안녕</s><s> 하세요</s></p><p t="3500" d="1000">둘째 줄</p></body></timedtext>'
+    fmt1_sample = '<transcript><text start="0.5" dur="1.2">first &amp; line</text></transcript>'
+    ag_srv3 = plugin_aggrofilter._parse_timedtext_xml(srv3_sample)
+    ag_fmt1 = plugin_aggrofilter._parse_timedtext_xml(fmt1_sample)
+    ag_invalid = plugin_aggrofilter.handle_post("v1/extract-subtitles", {"url": "not a youtube link"})
+    ag_parser_ok = (
+        len(ag_srv3) == 2 and ag_srv3[0]["text"] == "안녕 하세요" and ag_srv3[0]["startSec"] == 1.0
+        and len(ag_fmt1) == 1 and ag_fmt1[0]["text"] == "first & line"
+        and ag_invalid.get("ok") is False
+    )
+    ag_live: Dict[str, Any] = {"skipped": True, "hint": "--selftest-live 로 실제 유튜브 4종 실측"}
+    if live:
+        live_rows = []
+        for v in ("dQw4w9WgXcQ", "jNQXAC9IVRw", "arj7oStGLkU", "IHNzOHi8sJs"):
+            r = plugin_aggrofilter.fetch_youtube_captions_via_local_ip(v)
+            live_rows.append({"videoId": v, "ok": r.get("ok"), "segmentCount": r.get("segmentCount"), "lang": r.get("selectedLanguage"), "reason": r.get("reason")})
+        ag_live = {"skipped": False, "results": live_rows, "allOk": all(x["ok"] and (x["segmentCount"] or 0) > 0 for x in live_rows)}
     zeye_status = plugin_zeye_os.handle_request("health")
     restore_precheck = plugin_zeye_os.handle_request("restore-points-list")
     rollback_res = plugin_zeye_os.handle_request("restore-point-rollback", {"restoreId": "#104"})
     tree_summary = plugin_zeye_os.handle_request("folder-tree-summary")
+    all_ok = bool(ag_vid == "dQw4w9WgXcQ" and ag_parser_ok and (ag_live.get("skipped") or ag_live.get("allOk")))
     return {
-        "ok": True,
-        "selftest": "PASSED",
+        "ok": all_ok,
+        "selftest": "PASSED" if all_ok else "FAILED",
         "unifiedHealth": h,
         "zeyePluginHealth": zeye_status,
         "restorePointsPrecheck": {
@@ -209,12 +230,20 @@ def run_selftest() -> Dict[str, Any]:
             "sampleUrl": "https://youtu.be/dQw4w9WgXcQ?si=test",
             "extractedVideoId": ag_vid,
         },
+        "aggrofilterCaptionParserCheck": {
+            "ok": ag_parser_ok,
+            "srv3Segments": len(ag_srv3),
+            "format1Segments": len(ag_fmt1),
+            "invalidUrlHonestFailure": ag_invalid.get("ok") is False,
+        },
+        "aggrofilterLiveCaptionCheck": ag_live,
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Merlin_Z_Core Unified PC Daemon (Port 5199)")
     parser.add_argument("--selftest", action="store_true", help="내장 소프트웨어 플러그인 3종 통합 자가진단")
+    parser.add_argument("--selftest-live", action="store_true", help="자가진단 + 실제 유튜브 4종 자막 실측(네트워크 필요)")
     parser.add_argument("--plugin", type=str, default="", help="단발 실행할 내장 플러그인명 (zeye|senstalk|aggrofilter)")
     parser.add_argument("--action", type=str, default="health", help="플러그인 액션명")
     parser.add_argument("--payload", type=str, default="{}", help="JSON 페이로드 문자열")
@@ -225,9 +254,10 @@ def main() -> None:
     if args.enable_autostart:
         w32.set_autostart_enabled(True)
 
-    if args.selftest:
-        print(json.dumps(run_selftest(), ensure_ascii=False, indent=2))
-        return
+    if args.selftest or args.selftest_live:
+        result = run_selftest(live=args.selftest_live)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        sys.exit(0 if result.get("ok") else 1)
 
     if args.plugin:
         try:
