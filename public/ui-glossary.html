@@ -3,21 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Z-Eye 테스터(QA) 전용 UI/UX 그림 용어사전</title>
+  <title>🎨 Z-Eye & 멀린패밀리 앱 테스터(QA) UI/UX 그림 용어사전 (30선)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     body {
       font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-      background-color: #0f172a;
-      color: #f8fafc;
+      background-color: #f8fafc;
+      color: #0f172a;
     }
     .demo-box {
-      background: linear-gradient(145deg, #1e293b, #0f172a);
-      border: 1px solid #334155;
-      height: 150px;
+      background: linear-gradient(145deg, #f1f5f9, #e2e8f0);
+      border-bottom: 1px solid #e2e8f0;
+      height: 158px;
       position: relative;
       overflow: hidden;
+    }
+    .demo-box-zeye {
+      background: linear-gradient(145deg, #fffbeb, #fef3c7);
+      border-bottom: 1px solid #fde68a;
     }
     @keyframes pulse-fast {
       0%, 100% { opacity: 1; }
@@ -49,7 +53,7 @@
     .drawer-anim { animation: drawer-slide 4s ease-in-out infinite; }
     @keyframes wave-bar {
       0%, 100% { height: 6px; }
-      50% { height: 24px; }
+      50% { height: 22px; }
     }
     .wave-1 { animation: wave-bar 0.7s ease-in-out infinite; }
     .wave-2 { animation: wave-bar 0.5s ease-in-out infinite 0.1s; }
@@ -59,58 +63,78 @@
 </head>
 <body class="min-h-screen pb-20">
   <!-- 상단 복사 알림 토스트 -->
-  <div id="copyToast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden bg-emerald-500 text-slate-950 font-bold px-5 py-2.5 rounded-full shadow-2xl text-sm transition-all">
+  <div id="copyToast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden bg-indigo-600 text-white font-bold px-6 py-3 rounded-full shadow-2xl text-sm transition-all border border-indigo-400">
     ✅ 복사 완료! 노션 버그 카드에 Ctrl+V로 붙여넣으세요.
   </div>
 
-  <!-- 헤더 -->
-  <header class="sticky top-0 z-40 backdrop-blur-md bg-slate-900/95 border-b border-slate-800 px-6 py-3.5">
+  <!-- 상단 고정 헤더 (화이트 글래스) -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-white/95 border-b border-slate-200 shadow-sm px-6 py-4">
     <div class="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
       <div>
-        <h1 class="text-lg md:text-xl font-extrabold text-white">
-          ⚡ Z-Eye 앱 테스터용 <span class="text-indigo-400">전수 UI/UX 그림 용어사전 (24선)</span>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-2.5 py-0.5 text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">Z-Eye & 멀린패밀리 QA 공식 표준</span>
+          <span class="text-xs text-slate-500 font-medium">초보자도 그림만 보고 1초 만에 찾는 친절한 가이드</span>
+        </div>
+        <h1 class="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
+          🎨 앱 테스터용 <span class="text-indigo-600">전수 UI/UX 그림 용어사전 (30선)</span>
         </h1>
-        <p class="text-xs text-slate-400 mt-0.5">듀얼 모니터에 띄워두고 [예시 문장 복사] 버튼을 눌러 노션에 바로 붙여넣으세요!</p>
       </div>
 
       <!-- 검색 & 카테고리 필터 -->
       <div class="flex flex-wrap items-center gap-1.5">
-        <input id="searchInput" type="text" placeholder="🔍 검색 (예: 여권, 라운지, 팝업, 여백...)" 
-          class="bg-slate-800 border border-slate-700 text-xs text-white rounded-xl px-3.5 py-2 w-56 focus:outline-none focus:border-indigo-500" />
-        <button onclick="filterCategory('all')" class="cat-btn active px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white" data-cat="all">전체 (24)</button>
-        <button onclick="filterCategory('zeye')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30" data-cat="zeye">★ Z-Eye 전용 (8)</button>
-        <button onclick="filterCategory('popup')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="popup">창·팝업 (5)</button>
-        <button onclick="filterCategory('control')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="control">버튼·조작 (6)</button>
-        <button onclick="filterCategory('layout')" class="cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" data-cat="layout">화면·여백·로딩 (5)</button>
-        <a href="/family-apps.html" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition">🌌 전사 패밀리 앱 소개서 (24선) ↗</a>
+        <div class="relative">
+          <input id="searchInput" type="text" placeholder="🔍 검색 (예: 상단바, 팝업, 체크박스, 여백...)" 
+            class="bg-slate-50 border border-slate-300 text-xs text-slate-900 placeholder-slate-400 rounded-xl px-3.5 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
+        </div>
+        <button onclick="filterCategory('all')" class="cat-btn active px-3 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-sm" data-cat="all">전체 (30)</button>
+        <button onclick="filterCategory('zeye')" class="cat-btn px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100" data-cat="zeye">★ Z-Eye 전용 (8)</button>
+        <button onclick="filterCategory('popup')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100" data-cat="popup">창·팝업 (5)</button>
+        <button onclick="filterCategory('control')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100" data-cat="control">버튼·입력·조작 (9)</button>
+        <button onclick="filterCategory('layout')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100" data-cat="layout">화면·여백·로딩 (8)</button>
+        <a href="/family-apps.html" class="px-3 py-2 rounded-xl text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 transition">🌌 전사 패밀리 앱 소개서 ↗</a>
       </div>
     </div>
   </header>
 
+  <!-- 초보자 친절 안내 배너 -->
+  <section class="max-w-7xl mx-auto px-6 mt-5">
+    <div class="bg-gradient-to-r from-indigo-50 via-white to-amber-50 border border-indigo-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="text-xs md:text-sm text-slate-700 leading-relaxed">
+        💡 <b class="text-indigo-700">초보 테스터 꿀팁:</b> "거기 밑에서 올라오는 네모난 창이 이상해요" 대신, 아래 그림에서 똑같이 생긴 카드를 찾아 <b class="text-indigo-700">[📋 예시 문장 복사]</b> 버튼을 누르면 개발팀과 AI가 0.1초 만에 정확히 알아듣고 고쳐줍니다!
+      </div>
+      <div class="text-xs bg-white px-3 py-1.5 rounded-full border border-indigo-200 text-indigo-700 font-bold shrink-0 shadow-xs">
+        ✨ 모든 그림은 실제 움직이는 라이브 화면입니다
+      </div>
+    </div>
+  </section>
+
   <!-- 카드 그리드 -->
-  <main id="glossaryGrid" class="max-w-7xl mx-auto px-6 mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <main id="glossaryGrid" class="max-w-7xl mx-auto px-6 mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
   </main>
 
   <script>
     const terms = [
-      // ★ Z-Eye 전용 핵심 요소 8선 (전수 반영)
+      // ==========================================
+      // ★ 1. Z-Eye 전용 핵심 요소 (8선)
+      // ==========================================
       {
         id: 1,
         cat: 'zeye',
         catName: '★ Z-Eye 전용',
-        ko: '5대 라운지 트리 & 방 전환',
-        en: 'Lounge Tree (개인/패밀리/클럽/스쿨)',
-        desc: '좌측 사이드바(모바일은 상단 탭)에서 개인·패밀리(우리집/본가/처가)·클럽·스쿨 라운지를 오가는 메뉴 트리입니다.',
-        example: '[패밀리 라운지 트리]에서 처가 방을 눌렀는데 사진 목록이 안 바뀌어요.',
+        ko: '3대 메뉴 트리 & 방 전환',
+        en: 'Lounge Tree (내 기기 / 사진 공유 / 업무 공유)',
+        desc: '좌측 메뉴(모바일은 상단 탭)에서 [내 기기], [사진 공유(패밀리·동호회·동창회)], [업무 공유] 방을 오가는 메뉴 트리입니다.',
+        example: '[사진 공유 트리]에서 동창회 방을 눌렀는데 사진 목록이 안 바뀌어요.',
         demo: `
           <div class="w-full h-full flex items-center justify-center p-2">
-            <div class="bg-slate-800 border border-amber-400/50 rounded-xl p-2.5 w-48 text-[11px] space-y-1">
-              <div class="text-slate-400">👤 개인 라운지</div>
-              <div class="font-bold text-amber-300">👨‍👩‍👧 패밀리 라운지 ▾</div>
-              <div class="pl-3 space-y-0.5 text-[10px] border-l border-slate-600 ml-2">
-                <div class="text-white font-bold">• 우리집 ✓</div>
-                <div class="text-slate-400">• 본가 / 처가</div>
+            <div class="bg-white border-2 border-amber-400 rounded-xl p-2.5 w-52 text-[11px] space-y-1 shadow-md">
+              <div class="text-slate-500 font-medium">💻 내 기기 (PC·모바일)</div>
+              <div class="font-extrabold text-amber-700">📸 사진 공유 ▾</div>
+              <div class="pl-3 space-y-0.5 text-[10px] border-l-2 border-amber-300 ml-2">
+                <div class="text-indigo-700 font-extrabold">• 패밀리 (우리집) ✓</div>
+                <div class="text-slate-500">• 동호회 / 동창회</div>
               </div>
+              <div class="text-slate-500 font-medium">💼 업무 공유 (소호·기업)</div>
             </div>
           </div>`
       },
@@ -120,16 +144,16 @@
         catName: '★ Z-Eye 전용',
         ko: '현재 위치 경로 (브레드크럼)',
         en: 'Breadcrumb (상단 경로 표시줄)',
-        desc: '화면 왼쪽 위에 "패밀리 라운지 > 처가 > 2026년"처럼 지금 내가 어디에 있는지 화살표(>)로 보여주는 경로줄입니다.',
-        example: '방을 이동했는데도 상단 [브레드크럼(현재 위치 경로)] 글씨가 이전 방 이름으로 남아 있어요.',
+        desc: '화면 왼쪽 위에 "사진 공유 > 패밀리 > 우리집"처럼 지금 내가 어느 방에 들어와 있는지 화살표(>)로 보여주는 길잡이입니다.',
+        example: '다른 방으로 이동했는데도 상단 [브레드크럼(현재 위치 경로)] 글씨가 이전 방 이름으로 남아 있어요.',
         demo: `
           <div class="w-full h-full flex items-center justify-center px-3">
-            <div class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs flex items-center gap-1.5">
-              <span class="text-slate-400">패밀리</span>
-              <span class="text-slate-500">&gt;</span>
-              <span class="text-slate-300">우리집</span>
-              <span class="text-slate-500">&gt;</span>
-              <span class="text-indigo-400 font-bold">📸 사진첩</span>
+            <div class="bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs flex items-center gap-1.5 shadow-sm">
+              <span class="text-slate-500">사진 공유</span>
+              <span class="text-slate-400 font-bold">&gt;</span>
+              <span class="text-slate-600">패밀리</span>
+              <span class="text-slate-400 font-bold">&gt;</span>
+              <span class="text-indigo-600 font-extrabold bg-indigo-50 px-2 py-0.5 rounded">📸 우리집</span>
             </div>
           </div>`
       },
@@ -139,15 +163,15 @@
         catName: '★ Z-Eye 전용',
         ko: '우상단 여권 문패 & 앵커 바',
         en: 'Top-Right Passport Anchor',
-        desc: '오른쪽 맨 위에 항상 고정된 얼굴 사진(여권 문패), 설정몬스터(🛠️), 잔여 크레딧, 다크/라이트 테마 버튼 묶음입니다.',
-        example: '오른쪽 위 [여권 문패] 얼굴 사진을 눌렀는데 스타일 변경 팝업이 안 떠요.',
+        desc: '오른쪽 맨 위에 항상 고정된 얼굴 사진(여권 문패), 설정몬스터(🛠️), 잔여 크레딧, 테마 버튼 묶음입니다.',
+        example: '오른쪽 위 [여권 문패] 얼굴 사진을 눌렀는데 프로필 변경 창이 안 떠요.',
         demo: `
           <div class="w-full h-full flex items-center justify-center px-2">
-            <div class="bg-slate-900 border border-indigo-500/50 rounded-full px-3 py-1.5 flex items-center gap-2 shadow-lg">
-              <div class="w-6 h-6 rounded-full bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center">😊</div>
-              <span class="text-[11px] font-bold text-white">멀린님</span>
-              <span class="px-1.5 py-0.5 bg-indigo-600/40 text-indigo-300 rounded text-[10px]">1,200 C</span>
-              <span class="text-xs">🛠️</span>
+            <div class="bg-white border-2 border-indigo-200 rounded-full px-3.5 py-1.5 flex items-center gap-2 shadow-md">
+              <div class="w-6 h-6 rounded-full bg-amber-400 text-slate-900 font-bold text-xs flex items-center justify-center shadow-xs">😊</div>
+              <span class="text-xs font-extrabold text-slate-800">멀린님</span>
+              <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 font-bold rounded-full text-[10px]">1,200 C</span>
+              <span class="text-sm bg-slate-100 p-1 rounded-full">🛠️</span>
             </div>
           </div>`
       },
@@ -158,21 +182,21 @@
         ko: '음성 파형 검색창 & 캡슐 탭',
         en: 'Voice Search Bar & Capsule Tabs',
         desc: '마이크 음성 인식 파형이 움직이는 자연어 검색창과 그 아래 [동영상 | 사진 | 문서] 3대 전환 캡슐 탭입니다.',
-        example: '검색창 아래 [동영상 | 사진 | 문서 캡슐 탭]에서 문서를 눌러도 사진이 그대로 나와요.',
+        example: '검색창 아래 [동영상 | 사진 | 문서 캡슐 탭]에서 문서를 눌러도 사진 목록이 그대로 나와요.',
         demo: `
           <div class="w-full h-full flex flex-col items-center justify-center gap-2 px-3">
-            <div class="w-full bg-slate-800 border border-indigo-400 rounded-xl px-3 py-1.5 flex items-center justify-between">
-              <span class="text-[11px] text-slate-300">🎤 "작년 제주도 바다 사진"</span>
+            <div class="w-full bg-white border-2 border-indigo-400 rounded-xl px-3 py-1.5 flex items-center justify-between shadow-sm">
+              <span class="text-[11px] font-bold text-slate-700">🎤 "작년 제주도 가족 사진"</span>
               <div class="flex items-center gap-0.5 h-5">
-                <div class="wave-1 w-1 bg-indigo-400 rounded"></div>
-                <div class="wave-2 w-1 bg-indigo-400 rounded"></div>
-                <div class="wave-3 w-1 bg-indigo-400 rounded"></div>
+                <div class="wave-1 w-1 bg-indigo-600 rounded"></div>
+                <div class="wave-2 w-1 bg-indigo-600 rounded"></div>
+                <div class="wave-3 w-1 bg-indigo-600 rounded"></div>
               </div>
             </div>
-            <div class="flex bg-slate-900 p-0.5 rounded-full border border-slate-700 text-[10px]">
-              <span class="px-2.5 py-0.5 text-slate-400">동영상</span>
-              <span class="px-2.5 py-0.5 bg-indigo-600 text-white rounded-full font-bold">사진</span>
-              <span class="px-2.5 py-0.5 text-slate-400">문서</span>
+            <div class="flex bg-white p-0.5 rounded-full border border-slate-300 text-[10px] shadow-xs">
+              <span class="px-2.5 py-0.5 text-slate-500">동영상</span>
+              <span class="px-2.5 py-0.5 bg-indigo-600 text-white rounded-full font-extrabold">사진</span>
+              <span class="px-2.5 py-0.5 text-slate-500">문서</span>
             </div>
           </div>`
       },
@@ -182,17 +206,17 @@
         catName: '★ Z-Eye 전용',
         ko: '얼굴 자동 매칭 확인 카드',
         en: 'Face Crop Registry Card',
-        desc: '새 인물 사진이 발견됐을 때 얼굴만 네모낳게 잘라서 "[⭕ 맞아요! 등록] / [그냥 넘어가기]"를 물어보는 상단 확인 카드입니다.',
+        desc: '새 인물 사진이 발견됐을 때 얼굴만 네모낳게 잘라서 "[⭕ 맞아요! 등록] / [패스]"를 물어보는 상단 확인 카드입니다.',
         example: '[얼굴 자동 매칭 카드]에서 "맞아요! 등록"을 눌렀는데도 카드가 안 사라져요.',
         demo: `
           <div class="w-full h-full flex items-center justify-center px-3">
-            <div class="bg-slate-800 border border-emerald-400/50 rounded-xl p-2.5 flex items-center gap-3 w-52">
-              <div class="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-lg shrink-0">👦</div>
+            <div class="bg-white border-2 border-emerald-400 rounded-xl p-2.5 flex items-center gap-3 w-56 shadow-md">
+              <div class="w-10 h-10 rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center text-lg shrink-0">👦</div>
               <div class="text-[10px] space-y-1">
-                <div class="font-bold text-white">이 얼굴이 '아들' 맞나요?</div>
+                <div class="font-extrabold text-slate-800">이 얼굴이 '아들' 맞나요?</div>
                 <div class="flex gap-1">
-                  <span class="px-1.5 py-0.5 bg-emerald-500 text-slate-950 font-bold rounded">⭕ 맞아요</span>
-                  <span class="px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded">패스</span>
+                  <span class="px-2 py-0.5 bg-emerald-600 text-white font-bold rounded">⭕ 맞아요</span>
+                  <span class="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-300 rounded">패스</span>
                 </div>
               </div>
             </div>
@@ -204,13 +228,13 @@
         catName: '★ Z-Eye 전용',
         ko: '연사 묶음 배지 & 비교 Pick',
         en: 'Burst Badge ([❐ N장 연사])',
-        desc: '비슷한 연속 촬영 사진을 1장으로 겹쳐서 [❐ 4장 연사] 배지로 보여주고, 클릭 시 베스트 컷 1장을 고르는 화면입니다.',
+        desc: '비슷한 연속 촬영 사진을 1장으로 겹쳐서 [❐ 5장 연사] 배지로 보여주고, 클릭 시 베스트 컷 1장을 고르는 화면입니다.',
         example: '썸네일 우측 상단 [❐ 연사 묶음 배지] 숫자가 실제 사진 개수랑 달라요.',
         demo: `
           <div class="w-full h-full flex items-center justify-center">
-            <div class="relative w-32 h-24 bg-slate-800 border-2 border-indigo-400 rounded-xl flex items-center justify-center shadow-lg">
-              <span class="text-2xl">🏖️</span>
-              <span class="absolute top-1.5 right-1.5 bg-slate-950/90 text-amber-300 border border-amber-400/50 px-1.5 py-0.5 rounded text-[10px] font-extrabold">
+            <div class="relative w-36 h-24 bg-white border-2 border-indigo-400 rounded-xl flex items-center justify-center shadow-md">
+              <span class="text-3xl">🏖️</span>
+              <span class="absolute top-1.5 right-1.5 bg-amber-500 text-white px-2 py-0.5 rounded-md text-[10px] font-extrabold shadow">
                 ❐ 5장 연사
               </span>
             </div>
@@ -223,11 +247,11 @@
         ko: '타임머신 되돌리기 바 (Undo)',
         en: 'Floating Undo Bar (즉시 복구)',
         desc: '사진이나 중복 파일을 정리 대기함으로 보낸 직후 하단에 뜨는 "[↩ 방금 정리한 항목 즉시 되돌리기]" 안전망 바입니다.',
-        example: '사진을 삭제했는데 하단에 [타임머신 되돌리기(Undo) 바]가 안 나타나요.',
+        example: '사진을 정리 대기함으로 보냈는데 하단에 [타임머신 되돌리기(Undo) 바]가 안 나타나요.',
         demo: `
           <div class="w-full h-full flex items-end justify-center pb-3 px-3">
-            <div class="bg-slate-900 border border-amber-400/60 rounded-full px-3.5 py-1.5 flex items-center gap-3 shadow-2xl text-[11px]">
-              <span class="text-slate-200">3장 정리 대기함 이동됨</span>
+            <div class="bg-slate-900 text-white rounded-full px-4 py-2 flex items-center gap-3 shadow-xl text-[11px]">
+              <span>3장 정리 대기함 이동됨</span>
               <span class="text-amber-300 font-extrabold underline cursor-pointer">↩ 즉시 되돌리기</span>
             </div>
           </div>`
@@ -238,35 +262,37 @@
         catName: '★ Z-Eye 전용',
         ko: '설정몬스터 손가락 오버레이',
         en: 'Setup Monster Glass Overlay (👆)',
-        desc: '화면 위에 투명 유리판을 씌우고 빨간 손가락 화살표(👆)와 번호로 클릭할 위치를 콕 집어 안내하는 수리 도우미입니다.',
-        example: '[설정몬스터 손가락 화살표(👆)] 위치가 실제 버튼보다 아래쪽에 어긋나서 떠요.',
+        desc: '화면 위에 투명 안내판을 씌우고 빨간 손가락 화살표(👆)와 음성으로 클릭할 위치를 콕 집어 알려주는 도우미입니다.',
+        example: '[설정몬스터 손가락 화살표(👆)] 위치가 실제 설정 버튼보다 아래쪽에 어긋나서 떠요.',
         demo: `
           <div class="w-full h-full flex flex-col items-center justify-center relative">
-            <div class="px-3 py-1 bg-slate-700 rounded text-xs text-slate-300 border border-slate-500">실제 설정 버튼</div>
+            <div class="px-3.5 py-1 bg-white rounded-lg text-xs font-bold text-slate-700 border-2 border-slate-400 shadow-xs">⚙️ 기기 설정 버튼</div>
             <div class="fab-anim mt-1 flex flex-col items-center">
               <span class="text-xl">👆</span>
-              <span class="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">여기를 누르세요!</span>
+              <span class="bg-rose-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-md">1번: 여기를 누르세요!</span>
             </div>
           </div>`
       },
 
+      // ==========================================
       // 2. 창·팝업 (popup) - 5선
+      // ==========================================
       {
         id: 9,
         cat: 'popup',
         catName: '창·팝업',
         ko: '모달 (Modal / 중앙 팝업창)',
         en: 'Modal Dialog',
-        desc: '화면 정중앙에 뜨면서 뒷배경이 어두워지는 창(사진 상세 모달, 요금제 모달, 서류 열람 모달 등)입니다.',
-        example: '사진을 클릭해서 [상세 모달]을 띄웠는데 닫기(X) 버튼을 눌러도 안 닫혀요.',
+        desc: '화면 정중앙에 뜨면서 뒷배경이 살짝 어두워지는 확인 창입니다. 닫기(X)나 확인을 눌러야 뒷화면을 만질 수 있습니다.',
+        example: '사진을 클릭해서 [상세 모달(팝업창)]을 띄웠는데 닫기(X) 버튼을 눌러도 안 닫혀요.',
         demo: `
-          <div class="w-full h-full bg-slate-950/75 flex items-center justify-center p-3">
-            <div class="bg-slate-800 border border-indigo-400/50 rounded-xl p-3 w-44 shadow-2xl text-center">
-              <div class="text-xs font-bold text-white mb-1">상세 확인 모달</div>
-              <div class="text-[10px] text-slate-400 mb-2">뒷배경이 어두워집니다</div>
+          <div class="w-full h-full bg-slate-900/35 flex items-center justify-center p-3">
+            <div class="bg-white border-2 border-indigo-400 rounded-xl p-3 w-44 shadow-xl text-center">
+              <div class="text-xs font-extrabold text-slate-900 mb-0.5">삭제하시겠습니까?</div>
+              <div class="text-[10px] text-slate-500 mb-2">휴지통으로 이동합니다</div>
               <div class="flex gap-1.5 justify-center">
-                <span class="px-2 py-0.5 bg-slate-700 rounded text-[10px]">닫기</span>
-                <span class="px-2 py-0.5 bg-indigo-500 text-white rounded text-[10px] font-bold">확인</span>
+                <span class="px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-300 rounded text-[10px] font-bold">취소</span>
+                <span class="px-2.5 py-0.5 bg-indigo-600 text-white rounded text-[10px] font-bold">확인</span>
               </div>
             </div>
           </div>`
@@ -276,16 +302,16 @@
         cat: 'popup',
         catName: '창·팝업',
         ko: '바텀시트 (Bottom Sheet)',
-        en: 'Bottom Sheet',
-        desc: '모바일에서 화면 맨 아래에서 위로 스르륵 올라오는 반쪽짜리 옵션/필터 창입니다.',
+        en: 'Bottom Sheet (하단 슬라이드 창)',
+        desc: '모바일에서 화면 맨 아래에서 위로 스르륵 올라오는 반쪽짜리 옵션·필터 선택 창입니다.',
         example: '[바텀시트]가 밑에서 올라올 때 위쪽 제목 글씨가 잘려서 보여요.',
         demo: `
-          <div class="w-full h-full bg-slate-950/60 flex items-end justify-center">
-            <div class="sheet-anim bg-slate-800 border-t-2 border-indigo-400 rounded-t-2xl w-full p-3 shadow-2xl">
-              <div class="w-8 h-1 bg-slate-500 rounded-full mx-auto mb-2"></div>
-              <div class="text-xs font-bold text-center text-white">옵션 선택 (바텀시트)</div>
-              <div class="mt-1.5 flex justify-around text-[10px] text-indigo-300">
-                <span>최신순 ✓</span><span>연도별</span>
+          <div class="w-full h-full bg-slate-900/25 flex items-end justify-center">
+            <div class="sheet-anim bg-white border-t-2 border-indigo-500 rounded-t-2xl w-full p-3 shadow-xl">
+              <div class="w-8 h-1 bg-slate-300 rounded-full mx-auto mb-1.5"></div>
+              <div class="text-xs font-extrabold text-center text-slate-900">정렬 기준 선택 (바텀시트)</div>
+              <div class="mt-1.5 flex justify-around text-[10px] font-bold text-indigo-600">
+                <span>최신순 ✓</span><span class="text-slate-400">오래된순</span>
               </div>
             </div>
           </div>`
@@ -296,13 +322,13 @@
         catName: '창·팝업',
         ko: '토스트 (Toast 한줄 알림)',
         en: 'Toast Message',
-        desc: '화면 위나 아래에 "저장되었습니다" 하고 2~3초 잠깐 떴다가 혼자 스르륵 사라지는 알림입니다.',
-        example: '복사 버튼을 눌렀는데 완료 [토스트 알림]이 안 뜨고 아무 반응이 없어요.',
+        desc: '화면 위나 아래에 "저장되었습니다" 하고 2~3초 잠깐 떴다가 혼자 스르륵 사라지는 알약 모양 한 줄 알림입니다.',
+        example: '저장 버튼을 눌렀는데 완료 [토스트 알림]이 안 뜨고 아무 반응이 없어요.',
         demo: `
           <div class="w-full h-full flex items-center justify-center relative">
-            <span class="text-[11px] text-slate-500">화면 작동 중</span>
-            <div class="toast-anim absolute bottom-4 left-1/2 bg-emerald-500 text-slate-950 font-bold text-[11px] px-3.5 py-1.5 rounded-full shadow-lg whitespace-nowrap">
-              ✓ 완료 토스트 알림!
+            <span class="text-[11px] text-slate-400 font-medium">배경 화면</span>
+            <div class="toast-anim absolute bottom-4 left-1/2 bg-emerald-600 text-white font-extrabold text-[11px] px-4 py-1.5 rounded-full shadow-lg whitespace-nowrap">
+              ✓ 클립보드에 복사되었습니다!
             </div>
           </div>`
       },
@@ -311,16 +337,17 @@
         cat: 'popup',
         catName: '창·팝업',
         ko: '드로어 / 사이드바 (Drawer)',
-        en: 'Side Drawer / Collapsible Sidebar',
-        desc: 'PC 좌측 접이식 사이드바(244px) 또는 모바일에서 좌상단 ☰ 버튼을 누르면 옆에서 밀려 나오는 메뉴판입니다.',
-        example: '모바일에서 왼쪽 위 ☰ 버튼을 눌렀는데 [사이드 드로어] 메뉴가 안 열려요.',
+        en: 'Side Drawer / Sidebar',
+        desc: 'PC 왼쪽 메뉴판이나 모바일에서 햄버거 버튼(☰)을 눌렀을 때 서랍처럼 옆에서 밀려 나오는 메뉴 창입니다.',
+        example: '모바일에서 왼쪽 위 ☰ 버튼을 눌렀는데 [사이드바(드로어)] 메뉴가 안 열려요.',
         demo: `
-          <div class="w-full h-full relative bg-slate-950 flex items-center justify-end pr-6">
-            <span class="text-[10px] text-slate-500">메인 캔버스</span>
-            <div class="drawer-anim absolute top-0 left-0 bottom-0 w-28 bg-slate-800 border-r border-indigo-500/40 p-2.5 flex flex-col gap-1.5">
-              <div class="text-[10px] font-bold text-indigo-400">☰ 사이드바</div>
-              <div class="h-2 bg-slate-700 rounded w-16"></div>
-              <div class="h-2 bg-slate-700 rounded w-20"></div>
+          <div class="w-full h-full relative bg-slate-100 flex items-center justify-end pr-6">
+            <span class="text-[10px] text-slate-400 font-bold">메인 화면</span>
+            <div class="drawer-anim absolute top-0 left-0 bottom-0 w-32 bg-white border-r-2 border-indigo-400 p-2.5 flex flex-col gap-1.5 shadow-lg">
+              <div class="text-[10px] font-extrabold text-indigo-600">☰ 사이드바 메뉴</div>
+              <div class="h-2.5 bg-slate-200 rounded w-20"></div>
+              <div class="h-2.5 bg-indigo-100 rounded w-24"></div>
+              <div class="h-2.5 bg-slate-200 rounded w-16"></div>
             </div>
           </div>`
       },
@@ -328,208 +355,331 @@
         id: 13,
         cat: 'popup',
         catName: '창·팝업',
-        ko: '툴팁 (Tooltip 설명 풍선)',
+        ko: '툴팁 (Tooltip 설명 말풍선)',
         en: 'Tooltip',
-        desc: '아이콘이나 버튼 위에 마우스를 올렸을 때 작게 뜨는 도움말 말풍선입니다.',
+        desc: '아이콘이나 물음표(?) 위에 마우스를 살짝 올렸을 때 작게 뜨는 도움말 설명 말풍선입니다.',
         example: '아이콘에 마우스를 올리면 뜨는 [툴팁] 말풍선이 화면 밖으로 잘려서 보여요.',
         demo: `
           <div class="w-full h-full flex flex-col items-center justify-center gap-1">
-            <div class="bg-indigo-600 text-white text-[10px] px-2.5 py-1 rounded-lg shadow relative">
-              클릭 시 설정몬스터가 열립니다
-              <div class="w-2 h-2 bg-indigo-600 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2"></div>
+            <div class="bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-lg shadow-md relative">
+              클릭하면 AI 도우미가 열립니다!
+              <div class="w-2 h-2 bg-slate-900 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2"></div>
             </div>
-            <div class="mt-1 w-7 h-7 rounded-full bg-slate-700 text-xs flex items-center justify-center font-bold border border-slate-500">?</div>
+            <div class="mt-1 w-7 h-7 rounded-full bg-white text-slate-700 text-xs flex items-center justify-center font-extrabold border-2 border-slate-400 shadow-xs">?</div>
           </div>`
       },
 
-      // 3. 버튼·조작 (control) - 6선
+      // ==========================================
+      // 3. 버튼·입력·조작 (control) - 9선 (기초 대폭 보강)
+      // ==========================================
       {
         id: 14,
         cat: 'control',
-        catName: '버튼·조작',
-        ko: '칩 / 캡슐 태그 (Chip)',
-        en: 'Recommendation / Persona Chip',
-        desc: '검색창 아래 추천 검색어나 인물별 별명(예: #우리딸, #제주도)이 알약 모양으로 나열된 작은 버튼들입니다.',
-        example: '추천 검색어 [캡슐 칩]이 가로로 스크롤되지 않고 두 줄로 겹쳐서 깨져요.',
+        catName: '버튼·입력·조작',
+        ko: '햄버거 버튼 (☰ 메뉴 아이콘)',
+        en: 'Hamburger Menu Icon (☰)',
+        desc: '모바일 화면 구석에 가로줄 3개(☰)가 겹쳐 있는 전체 메뉴 열기 버튼입니다. 빵 사이에 패티가 낀 모양이라 햄버거 버튼이라 부릅니다.',
+        example: '모바일 왼쪽 위 [햄버거 버튼(☰)]을 눌러도 전체 메뉴가 안 나와요.',
         demo: `
-          <div class="w-full h-full flex items-center justify-center gap-1.5 px-2 flex-wrap">
-            <span class="px-3 py-1 rounded-full text-xs font-bold bg-indigo-500 text-white">#우리딸 ✓</span>
-            <span class="px-3 py-1 rounded-full text-xs bg-slate-800 text-slate-300 border border-slate-600">#가족여행</span>
-            <span class="px-3 py-1 rounded-full text-xs bg-slate-800 text-slate-300 border border-slate-600">#계약서</span>
+          <div class="w-full h-full flex items-center justify-center gap-3">
+            <div class="w-11 h-11 rounded-xl bg-white border-2 border-indigo-500 shadow-md flex flex-col items-center justify-center gap-1 cursor-pointer">
+              <span class="w-5 h-0.5 bg-slate-800 rounded"></span>
+              <span class="w-5 h-0.5 bg-slate-800 rounded"></span>
+              <span class="w-5 h-0.5 bg-slate-800 rounded"></span>
+            </div>
+            <div class="text-xs text-slate-700 font-bold">가로줄 3개 = <span class="text-indigo-600">햄버거 버튼(☰)</span></div>
           </div>`
       },
       {
         id: 15,
         cat: 'control',
-        catName: '버튼·조작',
-        ko: '토글 스위치 (Toggle)',
-        en: 'Toggle Switch (ON/OFF)',
-        desc: '전등 스위치처럼 딸깍 눌러서 켜기(ON) / 끄기(OFF)나 다크/라이트 테마를 바꾸는 스위치입니다.',
-        example: '설정에서 [토글 스위치]를 켰는데 새로고침하면 다시 꺼져 있어요.',
+        catName: '버튼·입력·조작',
+        ko: '점 3개 더보기 버튼 (⋮ / ⋯)',
+        en: 'More Menu (케밥 ⋮ / 미트볼 ⋯)',
+        desc: '점 3개가 세로(⋮)나 가로(⋯)로 찍힌 [더보기] 아이콘입니다. 수정·삭제·공유 같은 숨은 메뉴를 열 때 씁니다.',
+        example: '사진 카드 오른쪽 위 [점 3개(더보기) 버튼]을 눌러도 삭제 메뉴가 안 떠요.',
         demo: `
-          <div class="w-full h-full flex items-center justify-center gap-3" onclick="this.querySelector('.knob').classList.toggle('translate-x-6'); this.querySelector('.track').classList.toggle('bg-indigo-500'); this.querySelector('.track').classList.toggle('bg-slate-600');">
-            <span class="text-xs text-slate-300">눌러보세요 👉</span>
-            <div class="track w-12 h-6 bg-indigo-500 rounded-full p-1 cursor-pointer transition-colors">
-              <div class="knob w-4 h-4 bg-white rounded-full shadow-md transform translate-x-6 transition-transform"></div>
+          <div class="w-full h-full flex items-center justify-center gap-6">
+            <div class="flex flex-col items-center gap-1">
+              <div class="w-9 h-9 rounded-lg bg-white border-2 border-indigo-400 shadow-xs flex items-center justify-center text-lg font-extrabold text-slate-800">⋮</div>
+              <span class="text-[10px] font-bold text-slate-600">세로 점 3개 (케밥)</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <div class="w-9 h-9 rounded-lg bg-white border-2 border-indigo-400 shadow-xs flex items-center justify-center text-lg font-extrabold text-slate-800">⋯</div>
+              <span class="text-[10px] font-bold text-slate-600">가로 점 3개 (미트볼)</span>
             </div>
           </div>`
       },
       {
         id: 16,
         cat: 'control',
-        catName: '버튼·조작',
-        ko: '아코디언 / 접기·펼치기 토글',
-        en: 'Accordion (간판·상세 펼치기)',
-        desc: '[🏫 추억 간판·초대장 열기 ▾]처럼 제목을 누르면 아래 숨겨진 영역이 펼쳐지고 다시 누르면 접히는 UI입니다.',
-        example: '[추억 간판 열기 아코디언]을 눌렀는데 아래 내용이 안 펼쳐져요.',
+        catName: '버튼·입력·조작',
+        ko: '체크박스 vs 라디오 버튼',
+        en: 'Checkbox (☑ 다중) vs Radio (◉ 단일)',
+        desc: '네모난 [체크박스 ☑]는 여러 개를 동시에 고를 때 쓰고, 동그란 [라디오 버튼 ◉]은 둘 중 딱 하나만 고를 때 씁니다.',
+        example: '사진 여러 장을 고르려고 [체크박스(☑)]를 눌렀는데 체크 표시가 안 돼요.',
         demo: `
-          <div class="w-full h-full flex flex-col justify-center px-4">
-            <div class="bg-slate-800 border border-slate-700 rounded-lg p-2">
-              <div class="flex justify-between text-xs font-bold text-indigo-300">
-                <span>🏫 추억 간판·초대장 열기</span><span>▾</span>
-              </div>
-              <div class="mt-1.5 pt-1.5 border-t border-slate-700 text-[10px] text-slate-300">
-                클릭하면 숨겨진 간판과 초대 코드가 펼쳐집니다.
-              </div>
+          <div class="w-full h-full flex items-center justify-center gap-4 px-2">
+            <div class="bg-white border border-slate-300 rounded-lg p-2 text-[11px] shadow-xs">
+              <div class="font-extrabold text-indigo-600 mb-1">☑ 체크박스 (여러개)</div>
+              <div>☑ 사진 A  ☑ 사진 B</div>
+            </div>
+            <div class="bg-white border border-slate-300 rounded-lg p-2 text-[11px] shadow-xs">
+              <div class="font-extrabold text-emerald-600 mb-1">◉ 라디오 (하나만)</div>
+              <div>◉ 공개  ○ 비공개</div>
             </div>
           </div>`
       },
       {
         id: 17,
         cat: 'control',
-        catName: '버튼·조작',
-        ko: '플로팅 버튼 (FAB)',
-        en: 'Floating Action Button',
-        desc: '화면 오른쪽 아래 모서리에 둥둥 떠 있는 동그란 버튼입니다.',
-        example: '모바일 화면에서 오른쪽 아래 [플로팅 버튼]이 다른 글씨를 가려요.',
+        catName: '버튼·입력·조작',
+        ko: '입력창 & 플레이스홀더 (안내글씨)',
+        en: 'Input Box & Placeholder',
+        desc: '글씨를 치는 네모 칸이 [입력창(인풋)]이고, 글씨를 치기 전에 연한 회색으로 적혀 있는 예시 문구가 [플레이스홀더]입니다.',
+        example: '[검색 입력창]에 안내 글씨([플레이스홀더])가 너무 길어서 오른쪽이 잘려 보여요.',
         demo: `
-          <div class="w-full h-full p-3 relative bg-slate-950/50">
-            <button class="fab-anim absolute bottom-3 right-3 w-11 h-11 rounded-full bg-indigo-500 text-white font-bold text-lg shadow-xl flex items-center justify-center border-2 border-indigo-300">
-              +
-            </button>
+          <div class="w-full h-full flex flex-col items-center justify-center px-4 gap-1.5">
+            <div class="w-full bg-white border-2 border-indigo-400 rounded-lg px-3 py-2 text-xs text-slate-400 shadow-xs">
+              이름을 입력하세요 (← 플레이스홀더)
+            </div>
+            <span class="text-[10px] text-slate-600 font-bold">글씨를 치면 사라지는 연한 회색 안내 문구!</span>
           </div>`
       },
       {
         id: 18,
         cat: 'control',
-        catName: '버튼·조작',
-        ko: '드롭다운 / 셀렉트 박스',
-        en: 'Dropdown / Select',
-        desc: '클릭하면 아래로 선택 목록이 펼쳐져서 연도나 조건을 고를 수 있는 상자입니다.',
-        example: '연도 선택 [드롭다운]을 눌렀는데 목록이 다른 카드 밑에 가려져서 안 보여요.',
+        catName: '버튼·입력·조작',
+        ko: '토글 스위치 (Toggle ON/OFF)',
+        en: 'Toggle Switch',
+        desc: '방 불 켜는 스위치처럼 좌우로 딸깍 밀어서 켜기(ON) / 끄기(OFF) 상태를 즉시 바꾸는 스위치입니다.',
+        example: '설정에서 알림 [토글 스위치]를 켰는데 다시 들어오면 꺼져 있어요.',
         demo: `
-          <div class="w-full h-full flex flex-col items-center justify-center p-2">
-            <div class="w-36 bg-slate-800 border border-indigo-400 rounded-lg px-3 py-1 text-xs flex justify-between items-center">
-              <span>2026년</span><span>▼</span>
-            </div>
-            <div class="w-36 bg-slate-900 border border-slate-700 rounded-lg mt-1 text-[10px]">
-              <div class="px-3 py-1 bg-indigo-600/30 text-indigo-300">2026년 ✓</div>
-              <div class="px-3 py-1 text-slate-400">2025년</div>
+          <div class="w-full h-full flex items-center justify-center gap-3" onclick="this.querySelector('.knob').classList.toggle('translate-x-6'); this.querySelector('.track').classList.toggle('bg-indigo-600'); this.querySelector('.track').classList.toggle('bg-slate-300');">
+            <span class="text-xs font-bold text-slate-700">클릭해 보세요 👉</span>
+            <div class="track w-12 h-6 bg-indigo-600 rounded-full p-1 cursor-pointer transition-colors shadow-inner">
+              <div class="knob w-4 h-4 bg-white rounded-full shadow transform translate-x-6 transition-transform"></div>
             </div>
           </div>`
       },
       {
         id: 19,
         cat: 'control',
-        catName: '버튼·조작',
-        ko: '점 3개 더보기 버튼 (⋮ / ⋯)',
-        en: 'More Menu (케밥/미트볼 아이콘)',
-        desc: '카드 구석에 점 3개가 세로(⋮)나 가로(⋯)로 찍힌 [더보기] 메뉴 아이콘입니다.',
-        example: '사진 카드 우측 상단 [점 3개(더보기) 버튼]을 눌러도 메뉴가 안 떠요.',
+        catName: '버튼·입력·조작',
+        ko: '칩 / 캡슐 태그 (Chip)',
+        en: 'Filter Chip / Tag',
+        desc: '검색창 아래 추천 키워드나 인물 태그(예: #전체, #우리딸, #제주도)가 알약 모양으로 나열된 작은 버튼들입니다.',
+        example: '상단 카테고리 [캡슐 칩] 버튼을 눌러도 선택된 색깔로 안 바뀌어요.',
         demo: `
-          <div class="w-full h-full flex items-center justify-center gap-6">
-            <div class="w-9 h-9 rounded-lg bg-slate-800 border border-indigo-400 flex items-center justify-center text-lg font-extrabold text-white">⋮</div>
-            <div class="w-9 h-9 rounded-lg bg-slate-800 border border-indigo-400 flex items-center justify-center text-lg font-extrabold text-white">⋯</div>
+          <div class="w-full h-full flex items-center justify-center gap-1.5 px-2 flex-wrap">
+            <span class="px-3 py-1 rounded-full text-xs font-extrabold bg-indigo-600 text-white shadow-xs">#전체 ✓</span>
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-white text-slate-700 border border-slate-300">#우리딸</span>
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-white text-slate-700 border border-slate-300">#가족여행</span>
           </div>`
       },
-
-      // 4. 화면·여백·로딩 (layout) - 5선
       {
         id: 20,
-        cat: 'layout',
-        catName: '화면·여백·로딩',
-        ko: '패딩(안쪽 여백) vs 마진(바깥 간격)',
-        en: 'Padding vs Margin',
-        desc: '패딩(Padding)은 박스 안쪽 테두리와 글씨 사이의 여백이고, 마진(Margin)은 박스와 옆 박스 사이의 간격입니다.',
-        example: '버튼 안쪽 여백([패딩])이 너무 좁아서 글씨가 테두리에 꽉 끼어 보여요.',
+        cat: 'control',
+        catName: '버튼·입력·조작',
+        ko: '드롭다운 / 셀렉트 박스',
+        en: 'Dropdown / Select Box',
+        desc: '네모 상자(▼)를 누르면 아래로 선택 목록이 주르륵 펼쳐져서 연도나 조건을 하나 고를 수 있는 상자입니다.',
+        example: '연도 선택 [드롭다운]을 눌렀는데 목록이 아래 카드에 가려져서 안 보여요.',
         demo: `
-          <div class="w-full h-full flex items-center justify-center p-2">
-            <div class="border-2 border-dashed border-amber-400/70 p-2 rounded-lg text-center">
-              <div class="text-[9px] text-amber-300 mb-1">바깥 간격 = 마진(Margin)</div>
-              <div class="bg-indigo-600/30 border border-indigo-400 p-2 rounded text-[10px] text-white font-bold">
-                안쪽 여백 = 패딩(Padding)
-              </div>
+          <div class="w-full h-full flex flex-col items-center justify-center p-2">
+            <div class="w-40 bg-white border-2 border-indigo-400 rounded-lg px-3 py-1 text-xs font-bold text-slate-800 flex justify-between items-center shadow-xs">
+              <span>2026년</span><span class="text-indigo-600">▼</span>
+            </div>
+            <div class="w-40 bg-white border border-slate-300 rounded-lg mt-1 text-[10px] shadow-md overflow-hidden">
+              <div class="px-3 py-1 bg-indigo-50 text-indigo-700 font-bold">2026년 ✓</div>
+              <div class="px-3 py-1 text-slate-600">2025년</div>
             </div>
           </div>`
       },
       {
         id: 21,
-        cat: 'layout',
-        catName: '화면·여백·로딩',
-        ko: '바둑판 그리드 & 썸네일 카드',
-        en: 'Photo Grid & Thumbnail Card',
-        desc: '사진이나 문서들이 바둑판 모양(Grid)으로 정렬된 네모 카드 목록입니다.',
-        example: '모바일에서 사진 [그리드 카드] 가로 크기가 안 맞고 오른쪽이 잘려요.',
+        cat: 'control',
+        catName: '버튼·입력·조작',
+        ko: '아코디언 (접기/펼치기)',
+        en: 'Accordion UI',
+        desc: '제목을 누르면 아래 숨겨진 상세 내용이 악기 아코디언처럼 주르륵 펼쳐지고, 다시 누르면 접히는 구조입니다.',
+        example: '[자주 묻는 질문 아코디언] 제목을 눌렀는데 아래 답변이 안 펼쳐져요.',
         demo: `
-          <div class="w-full h-full flex items-center justify-center gap-2 px-3">
-            <div class="bg-slate-800 border border-slate-600 rounded-xl p-2 w-24 text-center">
-              <div class="w-full h-10 bg-indigo-500/30 rounded mb-1"></div>
-              <div class="text-[9px] text-white">썸네일 1</div>
-            </div>
-            <div class="bg-slate-800 border border-slate-600 rounded-xl p-2 w-24 text-center">
-              <div class="w-full h-10 bg-emerald-500/30 rounded mb-1"></div>
-              <div class="text-[9px] text-white">썸네일 2</div>
+          <div class="w-full h-full flex flex-col justify-center px-4">
+            <div class="bg-white border border-slate-300 rounded-xl p-2.5 shadow-xs">
+              <div class="flex justify-between text-xs font-extrabold text-indigo-700">
+                <span>🏫 추억 간판·초대장 열기</span><span>▾</span>
+              </div>
+              <div class="mt-1.5 pt-1.5 border-t border-slate-200 text-[10px] text-slate-600">
+                제목을 누르면 숨겨진 상세 내용이 펼쳐집니다.
+              </div>
             </div>
           </div>`
       },
       {
         id: 22,
-        cat: 'layout',
-        catName: '화면·여백·로딩',
-        ko: '말줄임표(...) & 글씨 넘침(Overflow)',
-        en: 'Text Overflow / Ellipsis',
-        desc: '파일명이나 제목이 길 때 상자 밖으로 삐져나가지 않고 "..."으로 줄여주는 처리입니다.',
-        example: '문서 파일 이름이 길 때 "..." 처리가 안 되고 박스 밖으로 글씨가 [삐져나가요(Overflow)].',
+        cat: 'control',
+        catName: '버튼·입력·조작',
+        ko: '플로팅 버튼 (우하단 둥둥 버튼)',
+        en: 'Floating Action Button (FAB)',
+        desc: '스크롤을 내려도 화면 오른쪽 아래 모서리에 항상 둥둥 떠 있는 동그란 핵심 버튼(예: + 사진 올리기, 챗봇)입니다.',
+        example: '모바일 화면에서 오른쪽 아래 [플로팅 버튼]이 아래쪽 글씨를 가려서 누르기 불편해요.',
         demo: `
-          <div class="w-full h-full flex flex-col items-center justify-center gap-2 px-4">
-            <div class="w-44 bg-rose-950/60 border border-rose-500/60 rounded px-2 py-1 text-[10px] whitespace-nowrap">
-              ❌ 글씨가 박스 밖으로 막 삐져나감!!
+          <div class="w-full h-full p-3 relative bg-slate-100">
+            <div class="space-y-1.5">
+              <div class="h-3 bg-white border border-slate-200 rounded w-3/4"></div>
+              <div class="h-3 bg-white border border-slate-200 rounded w-1/2"></div>
             </div>
-            <div class="w-44 bg-emerald-950/60 border border-emerald-500/60 rounded px-2 py-1 text-[10px] truncate">
-              ⭕ 긴 제목은 말줄임표로 깔끔하게...
-            </div>
+            <button class="fab-anim absolute bottom-3 right-3 w-11 h-11 rounded-full bg-indigo-600 text-white font-extrabold text-lg shadow-lg flex items-center justify-center border-2 border-white">
+              +
+            </button>
           </div>`
       },
+
+      // ==========================================
+      // 4. 화면·여백·로딩 (layout) - 8선 (기초 대폭 보강)
+      // ==========================================
       {
         id: 23,
         cat: 'layout',
         catName: '화면·여백·로딩',
-        ko: '스켈레톤 & 스피너 (무한 로딩)',
-        en: 'Skeleton UI & Loading Spinner',
-        desc: '사진이나 검색 결과를 불러올 때 반짝이는 회색 뼈대(스켈레톤)나 빙글빙글 도는 원(스피너)입니다.',
-        example: '검색어를 치고 엔터를 눌렀는데 [로딩 스피너]만 계속 돌고 결과가 안 나와요(무한 로딩).',
+        ko: '헤더 / 상단바 (Header / GNB)',
+        en: 'Top Header Bar',
+        desc: '화면 맨 꼭대기에 항상 고정되어 로고, 뒤로가기(←), 내 프로필이 들어있는 상단 머리글 영역입니다.',
+        example: '화면을 아래로 스크롤할 때 맨 위 [헤더(상단바)]가 본문 사진이랑 겹쳐서 깨져 보여요.',
         demo: `
-          <div class="w-full h-full flex items-center justify-center gap-4 px-4">
-            <div class="w-7 h-7 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
-            <div class="flex-1 space-y-2">
-              <div class="skeleton-anim h-3 bg-slate-600 rounded w-full"></div>
-              <div class="skeleton-anim h-2.5 bg-slate-700 rounded w-2/3"></div>
+          <div class="w-full h-full flex flex-col bg-white">
+            <div class="bg-indigo-600 text-white px-3 py-2 flex justify-between items-center shadow">
+              <span class="text-xs font-extrabold">← 상단 헤더 (Header)</span>
+              <span class="text-[10px] bg-white text-indigo-700 font-bold px-2 py-0.5 rounded-full">내정보</span>
             </div>
+            <div class="flex-1 flex items-center justify-center text-[11px] text-slate-400 font-medium bg-slate-50">아래 본문 화면 영역</div>
           </div>`
       },
       {
         id: 24,
         cat: 'layout',
         catName: '화면·여백·로딩',
+        ko: '하단 탭바 (모바일 아래 메뉴바)',
+        en: 'Bottom Navigation Bar',
+        desc: '스마트폰 앱 맨 바닥에 고정된 4~5개 핵심 메뉴 아이콘 바(홈, 검색, 사진첩, 내정보 등)입니다.',
+        example: '모바일 화면에서 맨 아래 [하단 탭바] 글씨가 두 줄로 줄바꿈돼서 찌그러져요.',
+        demo: `
+          <div class="w-full h-full flex flex-col justify-end bg-slate-50">
+            <div class="flex-1 flex items-center justify-center text-[11px] text-slate-400">모바일 본문 영역</div>
+            <div class="bg-white border-t-2 border-indigo-200 py-2 flex justify-around text-[10px] shadow-md">
+              <span class="text-indigo-600 font-extrabold">🏠 홈</span>
+              <span class="text-slate-500 font-medium">🔍 검색</span>
+              <span class="text-slate-500 font-medium">📸 사진첩</span>
+              <span class="text-slate-500 font-medium">👤 내정보</span>
+            </div>
+          </div>`
+      },
+      {
+        id: 25,
+        cat: 'layout',
+        catName: '화면·여백·로딩',
+        ko: '뱃지 / 알림 빨간 점 (Badge)',
+        en: 'Notification Badge',
+        desc: '종 모양(🔔)이나 메뉴 아이콘 어깨 위에 안 읽은 알림 개수를 빨간 숫자(3)나 점(•)으로 표시하는 동그라미입니다.',
+        example: '알림을 다 확인했는데도 아이콘 위에 빨간 숫자 [뱃지]가 안 사라져요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-4">
+            <div class="relative bg-white p-3 rounded-xl border-2 border-slate-300 shadow-sm">
+              <span class="text-xl">🔔</span>
+              <span class="absolute -top-2 -right-2 bg-rose-600 text-white text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shadow">3</span>
+            </div>
+            <span class="text-xs text-slate-700 font-bold">아이콘 어깨 위 빨간 숫자 = <b class="text-rose-600">뱃지</b></span>
+          </div>`
+      },
+      {
+        id: 26,
+        cat: 'layout',
+        catName: '화면·여백·로딩',
+        ko: '패딩(안쪽 여백) vs 마진(바깥 간격)',
+        en: 'Padding (안) vs Margin (밖)',
+        desc: '패딩(Padding)은 상자 안쪽 테두리와 글씨 사이의 여백이고, 마진(Margin)은 상자와 옆 상자 사이의 바깥 거리입니다.',
+        example: '버튼 안쪽 여백([패딩])이 너무 좁아서 글씨가 버튼 테두리에 꽉 끼어 보여요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center p-2">
+            <div class="border-2 border-dashed border-amber-500 bg-amber-50/70 p-2 rounded-xl text-center">
+              <div class="text-[9px] font-extrabold text-amber-800 mb-1">바깥 간격 = 마진(Margin)</div>
+              <div class="bg-indigo-600 text-white p-2 rounded-lg text-[10px] font-extrabold shadow-xs">
+                안쪽 여백 = 패딩(Padding)
+              </div>
+            </div>
+          </div>`
+      },
+      {
+        id: 27,
+        cat: 'layout',
+        catName: '화면·여백·로딩',
+        ko: '바둑판 그리드 & 썸네일 카드',
+        en: 'Grid Layout & Thumbnail Card',
+        desc: '작은 미리보기 사진(썸네일)이나 문서 박스를 바둑판 모양(그리드)으로 줄 맞춰 나열한 네모 카드 목록입니다.',
+        example: '모바일에서 사진 [썸네일 그리드 카드]들의 높이가 서로 안 맞고 삐뚤빼뚤해요.',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-2 px-3">
+            <div class="bg-white border border-slate-300 rounded-xl p-2 w-24 text-center shadow-xs">
+              <div class="w-full h-10 bg-indigo-100 rounded mb-1 flex items-center justify-center text-sm">🏞️</div>
+              <div class="text-[9px] font-bold text-slate-700">썸네일 카드 1</div>
+            </div>
+            <div class="bg-white border border-slate-300 rounded-xl p-2 w-24 text-center shadow-xs">
+              <div class="w-full h-10 bg-emerald-100 rounded mb-1 flex items-center justify-center text-sm">👨‍👩‍👧</div>
+              <div class="text-[9px] font-bold text-slate-700">썸네일 카드 2</div>
+            </div>
+          </div>`
+      },
+      {
+        id: 28,
+        cat: 'layout',
+        catName: '화면·여백·로딩',
+        ko: '말줄임표(...) & 글씨 넘침(Overflow)',
+        en: 'Text Overflow / Ellipsis',
+        desc: '제목이 길 때 상자 밖으로 글씨가 삐져나가지(Overflow) 않게 끝을 "..."(말줄임표)으로 깔끔하게 줄여주는 처리입니다.',
+        example: '파일 이름이 길 때 "..." 처리가 안 되고 카드 밖으로 글씨가 [삐져나가요(Overflow)].',
+        demo: `
+          <div class="w-full h-full flex flex-col items-center justify-center gap-2 px-4">
+            <div class="w-44 bg-rose-50 border border-rose-400 text-rose-800 font-bold rounded px-2 py-1 text-[10px] whitespace-nowrap">
+              ❌ 글씨가 상자 밖으로 막 삐져나감!!
+            </div>
+            <div class="w-44 bg-emerald-50 border border-emerald-400 text-emerald-800 font-bold rounded px-2 py-1 text-[10px] truncate">
+              ⭕ 긴 제목은 말줄임표로 깔끔하게...
+            </div>
+          </div>`
+      },
+      {
+        id: 29,
+        cat: 'layout',
+        catName: '화면·여백·로딩',
+        ko: '스켈레톤 & 스피너 (무한 로딩)',
+        en: 'Skeleton UI & Loading Spinner',
+        desc: '화면을 불러올 때 반짝이는 회색 뼈대(스켈레톤)나 빙글빙글 도는 동그라미(스피너)입니다. 계속 안 끝나면 무한 로딩 버그입니다.',
+        example: '검색 버튼을 눌렀는데 [로딩 스피너]만 계속 돌고 결과 화면이 안 나와요(무한 로딩).',
+        demo: `
+          <div class="w-full h-full flex items-center justify-center gap-4 px-4">
+            <div class="w-7 h-7 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin shrink-0"></div>
+            <div class="flex-1 bg-white p-2.5 rounded-xl border border-slate-200 space-y-2 shadow-xs">
+              <div class="skeleton-anim h-3 bg-slate-300 rounded w-full"></div>
+              <div class="skeleton-anim h-2.5 bg-slate-200 rounded w-2/3"></div>
+            </div>
+          </div>`
+      },
+      {
+        id: 30,
+        cat: 'layout',
+        catName: '화면·여백·로딩',
         ko: '빈 상태 안내 화면 (Empty State)',
         en: 'Empty State',
-        desc: '검색 결과나 사진이 0장일 때 빈 화면 대신 "일치하는 사진이 없습니다"라고 안내하는 화면입니다.',
-        example: '사진이 없는 방에 들어갔을 때 안내 문구([빈 상태 화면]) 없이 그냥 하얀 백지만 나와요.',
+        desc: '사진이나 검색 결과가 0건일 때 하얀 백지 대신 "아직 등록된 사진이 없습니다"라고 친절히 안내하는 화면입니다.',
+        example: '사진이 없는 방에 들어갔을 때 안내 문구([빈 상태 화면]) 없이 그냥 하얀 백지만 나와서 고장 난 줄 알았어요.',
         demo: `
           <div class="w-full h-full flex flex-col items-center justify-center text-center p-2">
-            <div class="text-xl mb-1">📭</div>
-            <div class="text-xs font-bold text-slate-300">일치하는 사진이 없습니다</div>
-            <div class="text-[10px] text-slate-500">다른 검색어를 입력해 보세요</div>
+            <div class="bg-white border border-slate-200 rounded-xl px-5 py-2.5 shadow-xs">
+              <div class="text-xl mb-0.5">📭</div>
+              <div class="text-xs font-extrabold text-slate-700">일치하는 사진이 없습니다</div>
+              <div class="text-[10px] text-slate-400">다른 검색어를 입력해 보세요</div>
+            </div>
           </div>`
       }
     ];
@@ -551,29 +701,29 @@
       });
 
       grid.innerHTML = filtered.map(t => `
-        <article class="bg-slate-900 border ${t.cat === 'zeye' ? 'border-amber-500/40' : 'border-slate-800'} hover:border-indigo-500 rounded-2xl overflow-hidden flex flex-col justify-between transition-all shadow-lg">
+        <article class="bg-white border-2 ${t.cat === 'zeye' ? 'border-amber-300 hover:border-amber-500' : 'border-slate-200 hover:border-indigo-500'} rounded-2xl overflow-hidden flex flex-col justify-between transition-all shadow-sm hover:shadow-md">
           <div>
-            <div class="demo-box">
+            <div class="demo-box ${t.cat === 'zeye' ? 'demo-box-zeye' : ''}">
               ${t.demo}
-              <span class="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-bold ${t.cat === 'zeye' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900/90 text-indigo-300 border border-slate-700'} rounded">
+              <span class="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-extrabold ${t.cat === 'zeye' ? 'bg-amber-500 text-white shadow-xs' : 'bg-white/95 text-indigo-700 border border-indigo-200 shadow-xs'} rounded-md">
                 #${t.id} ${t.catName}
               </span>
             </div>
-            <div class="p-3.5">
-              <h2 class="text-sm font-extrabold text-white">${t.ko}</h2>
-              <p class="text-[10px] text-indigo-400 font-medium mb-1.5">${t.en}</p>
-              <p class="text-xs text-slate-300 leading-relaxed">${t.desc}</p>
+            <div class="p-4">
+              <h2 class="text-sm md:text-[15px] font-extrabold text-slate-900">${t.ko}</h2>
+              <p class="text-[11px] text-indigo-600 font-semibold mb-1.5">${t.en}</p>
+              <p class="text-xs text-slate-600 leading-relaxed">${t.desc}</p>
             </div>
           </div>
-          <div class="px-3.5 pb-3.5 pt-2 border-t border-slate-800/80 bg-slate-950/40">
-            <div class="text-[11px] text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-lg p-2 mb-2 leading-snug">
-              🗣️ <b>노션 제보 예시:</b><br/>"${t.example}"
+          <div class="px-4 pb-4 pt-2.5 border-t border-slate-100 bg-slate-50/70">
+            <div class="text-[11px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 mb-2.5 leading-snug">
+              🗣️ <b class="text-emerald-700">노션 제보 예시:</b><br/>"${t.example}"
             </div>
             <div class="flex gap-1.5">
-              <button onclick="copyText('${t.ko}')" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition">
-                📌 명칭 복사
+              <button onclick="copyText('${t.ko}')" class="flex-1 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-extrabold transition shadow-2xs">
+                📌 용어만 복사
               </button>
-              <button onclick="copyText('${t.example}')" class="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+              <button onclick="copyText('${t.example}')" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs">
                 📋 예시 문장 복사
               </button>
             </div>
@@ -586,11 +736,11 @@
       currentCategory = cat;
       document.querySelectorAll('.cat-btn').forEach(btn => {
         if (btn.dataset.cat === cat) {
-          btn.className = 'cat-btn active px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white';
+          btn.className = 'cat-btn active px-3 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-sm';
         } else if (btn.dataset.cat === 'zeye') {
-          btn.className = 'cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30';
+          btn.className = 'cat-btn px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100';
         } else {
-          btn.className = 'cat-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700';
+          btn.className = 'cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100';
         }
       });
       renderCards();
