@@ -765,15 +765,15 @@ export const MobileAppView: React.FC = () => {
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-zinc-400 text-[12px] font-mono select-none">
-                  {showPrivateSyncSection ? '▼' : '▶'}
+                  {showPrivateSyncSection ? '▾' : '▸'}
                 </span>
                 <div className="flex flex-col min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <h2 className="font-headline-sm text-[14.5px] text-white font-bold">
-                      🔄 폰↔PC 프라이빗 싱크 &amp; 로컬 폴더
+                      🔄 폰↔PC 프라이빗 싱크 &amp; 로컬 폴더 관리
                     </h2>
                     <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[10.5px] font-bold">
-                      {syncState.privateSyncStrategy === 'mirror' ? '모드 A · 100% 미러링' : '모드 B · 13KB 섀도우'}
+                      {syncState.privateSyncStrategy === 'mirror' ? '모드 A · 100% 원본 미러링' : '모드 B · 폰 용량 99.4% 절약'}
                     </span>
                   </div>
                   <p className="font-body-sm text-[11.5px] text-zinc-400 truncate mt-0.5">
@@ -887,12 +887,12 @@ export const MobileAppView: React.FC = () => {
             >
               <div className="flex items-center gap-2">
                 <span className="text-zinc-400 text-[12px] font-mono select-none">
-                  {showPolicyAndStoreSection ? '▼' : '▶'}
+                  {showPolicyAndStoreSection ? '▾' : '▸'}
                 </span>
                 <div className="flex flex-col">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <h2 className="font-headline-sm text-[14.5px] text-white font-bold">
-                      🛡️ 데스크톱 연동 · 탈퇴 원칙 &amp; 스토어 심사 모드
+                      🛡️ 데스크톱 연동 · 탈퇴 데이터 보호 원칙 &amp; 스토어 심사 모드
                     </h2>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[10.5px] font-bold">
                       {isStoreAppMode ? '📱 스토어 클린 ON' : '💻 PC 마스터 모드'}
@@ -904,7 +904,7 @@ export const MobileAppView: React.FC = () => {
                 </div>
               </div>
               <span className="text-[11.5px] font-bold text-zinc-400 shrink-0">
-                {showPolicyAndStoreSection ? '접기 ▲' : '펼치기 ▼'}
+                {showPolicyAndStoreSection ? '접기 ▴' : '펼치기 ▾'}
               </span>
             </div>
 

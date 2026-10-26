@@ -934,7 +934,7 @@ export const SetupMonsterContent: React.FC = () => {
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-zinc-400 text-[12px] font-mono select-none">
-                {showRealOsPanel ? '▼' : '▶'}
+                {showRealOsPanel ? '▾' : '▸'}
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-zinc-950 font-label-sm text-[11px] font-extrabold">
                 🟢 Z-코어 실물 OS 직결됨 (가짜 프리셋 0% · 100% 내 PC 실측)
@@ -958,7 +958,7 @@ export const SetupMonsterContent: React.FC = () => {
                 {loadingRealPc ? '⏳ 스캔 중...' : '🔄 내 PC 실측 새로고침'}
               </button>
               <span className="text-[11.5px] font-bold text-zinc-400">
-                {showRealOsPanel ? '접기 ▲' : '펼치기 ▼'}
+                {showRealOsPanel ? '접기 ▴' : '펼치기 ▾'}
               </span>
             </div>
           </div>

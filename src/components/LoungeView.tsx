@@ -792,7 +792,7 @@ export const LoungeView: React.FC = () => {
                   onClick={() => setShowLoungeFeatures((prev) => !prev)}
                   className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold"
                 >
-                  {showLoungeFeatures ? '핵심 기능 접기 ▲' : '핵심 기능 펼치기 ▼'}
+                  {showLoungeFeatures ? '핵심 기능 접기 ▴' : '핵심 기능 펼치기 ▾'}
                 </button>
               </div>
             </div>
@@ -978,14 +978,14 @@ export const LoungeView: React.FC = () => {
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-zinc-400 text-[12px] font-mono">
-                      {showLoungePricing ? '▼' : '▶'}
+                      {showLoungePricing ? '▾' : '▸'}
                     </span>
                     <span className="font-headline-sm text-[14.5px] text-white font-bold">
                       💳 패밀리 라운지 방장 요금제 (우리집 단독 5,900원 / 양가 3방 통합 8,900원)
                     </span>
                   </div>
                   <span className="text-[11.5px] font-bold text-zinc-400">
-                    {showLoungePricing ? '요금제 접기 ▲' : '요금제 펼치기 ▼'}
+                    {showLoungePricing ? '요금제 접기 ▴' : '요금제 펼치기 ▾'}
                   </span>
                 </div>
 
@@ -1103,7 +1103,7 @@ export const LoungeView: React.FC = () => {
                 onClick={() => setShowLoungeFeatures((prev) => !prev)}
                 className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold shrink-0"
               >
-                {showLoungeFeatures ? '핵심 기능 접기 ▲' : '핵심 기능 펼치기 ▼'}
+                {showLoungeFeatures ? '핵심 기능 접기 ▴' : '핵심 기능 펼치기 ▾'}
               </button>
             </div>
 
@@ -1288,14 +1288,14 @@ export const LoungeView: React.FC = () => {
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-zinc-400 text-[12px] font-mono">
-                      {showLoungePricing ? '▼' : '▶'}
+                      {showLoungePricing ? '▾' : '▸'}
                     </span>
                     <span className="font-headline-sm text-[14.5px] text-white font-bold">
                       💳 동호회 · 동창회 인원 무제한 단일가 요금제 (월 4,900원 / 10년권 49,000원)
                     </span>
                   </div>
                   <span className="text-[11.5px] font-bold text-zinc-400">
-                    {showLoungePricing ? '요금제 접기 ▲' : '요금제 펼치기 ▼'}
+                    {showLoungePricing ? '요금제 접기 ▴' : '요금제 펼치기 ▾'}
                   </span>
                 </div>
 
@@ -1433,7 +1433,7 @@ export const LoungeView: React.FC = () => {
                 onClick={() => setShowLoungeFeatures((prev) => !prev)}
                 className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold shrink-0"
               >
-                {showLoungeFeatures ? '핵심 기능 접기 ▲' : '핵심 기능 펼치기 ▼'}
+                {showLoungeFeatures ? '핵심 기능 접기 ▴' : '핵심 기능 펼치기 ▾'}
               </button>
             </div>
 
@@ -3372,7 +3372,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
         >
           <div className="flex items-start gap-2.5">
             <span className="text-zinc-400 text-[12px] font-mono select-none mt-1">
-              {showAnalogStickSection ? '▼' : '▶'}
+              {showAnalogStickSection ? '▾' : '▸'}
             </span>
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -3403,7 +3403,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               </button>
             )}
             <span className="text-[12px] font-bold text-zinc-400">
-              {showAnalogStickSection ? '접기 ▲' : '펼치기 ▼'}
+              {showAnalogStickSection ? '접기 ▴' : '펼치기 ▾'}
             </span>
           </div>
         </div>
