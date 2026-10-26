@@ -1,4 +1,4 @@
-# 🛡️ 제트아이 (Z-Eye) 허브 SDK v2.17.0 인프라 이식 및 자체 점검 가이드
+# 🛡️ 제트아이 (Z-Eye) 허브 SDK v2.19.0 인프라 이식 및 자체 점검 가이드
 
 - **작성일**: 2026-10-27
 - **작성자**: `MerlinFamilyOS` (허브 총괄 에이전트)
@@ -15,8 +15,9 @@
      - `Auth/` (`HubAuthModal.tsx` v2.1.1 — 일반 패밀리 앱 단일 이메일 6자리 OTP 표준)
      - `Session/` (`HubProfileWidget.tsx` 3D 곰발바닥 아바타, `HubProfileCards.tsx` 내 선물함·알림·로그아웃)
      - `CoreLogic/` (`HubProvider.tsx` v2.10.0 인앱 브라우저 0.1초 자동 탈출, `.sundreamer.app` 30일 공용 루트 쿠키 & 자가 치유)
+     - `Navigation/` (`HubAppSwitcher.tsx` v2.8.0 노션형 좌측 사이드바 하단 모드 `variant="sidebar"`, `placement="bottom-up"` 및 5대 패밀리 공식 로고 번들 내장)
      - `Wallet/` (`HubPurchaseWidget.tsx` 3몬스터 패밀리 코인 충전소 v1.4.0, `HubGiftBoxModal.tsx` 패밀리 선물함 v2.3.0)
-     - `Referral/` (`HubShareSquare.tsx` v2.0.0 순수 공유 체제 — `?ref=` 추천코드 완전 배제)
+     - `Referral/` & `Ads/` (`HubShareSquare.tsx` v3.0.0, `HubResponsiveWing.tsx` v3.0.0 — 전사 정책에 따라 PC 우측 공유 카드·모바일 1분 플로팅 구슬·`?ref=` 추천코드 영구 폐지, 100% 기능 기반 공유 체제)
      - `Support/` (`HubErrorBoundary.tsx`, `HubBugReporter.tsx` 1초 오류신고, `HubSupportLink.tsx` 스튜디오 1:1 문의방 직결)
    - **전사 가이드 문서 일체 (`src/services/merlin-hub-sdk/guides/`)**:
      - `라이브러리_대장.md`, `라이브러리_활용가이드.md`, `작업_강령.md`, `허브_DB_스키마.md`, `3몬스터_고객센터_자율버그수리_연동가이드.md`, `개별앱주도_개별앱_UI_UX가이드2.md` 외 전수 포함.
@@ -26,8 +27,8 @@
 2. **제트아이 전용 브릿지 컴포넌트 (`src/components/ZEyeHubInfraBridge.tsx`)**:
    - **`ZEyeHubRootProvider`**: `src/App.tsx` 최상위를 `<HubErrorBoundary appId="ZEye">` 및 `<HubProvider appId="ZEye">`로 감싸고 전역 모달(로그인, 프로필 설정, 3몬스터 충전소, 선물함, 1초 오류신고, 토스트)을 자동 마운트합니다.
    - **`ZEyeTopRightHubAnchor`**: `DesktopDashboard.tsx` 우측 상단 헤더에 배치되어 **`🪙 코인 지갑` 버튼 + `🐾 3D 곰발바닥 프로필 위젯`**을 렌더링합니다.
-     - ⚠️ **기존 기능 100% 보존**: 좌측의 `👑 Z-Eye 여권 문패`, `🛠️ 설정몬스터` 버튼과 우측의 `공유` 버튼, `🌙 다크/라이트 테마 토글`은 단 1픽셀도 건드리지 않고 그대로 보존했습니다.
-   - **`ZEyeSidebarBottomFamilyLauncher`**: `DesktopDashboard.tsx` 좌측 노션 스타일 세로 사이드바 최하단의 **`[F] 멀린 패밀리 앱`** 디자인을 그대로 유지하면서, 클릭 시 현재 보유한 `merlin_session_token`을 `?sso_token=`으로 자동 부착해 썬드리머·센스톡·어그로필터·오늘뭐먹지로 무로그인 점핑하도록 연결했습니다.
+     - ⚠️ **공유 아이콘 전사 표준(A안) 반영**: 우상단 헤더의 표준 공유(`share`) 아이콘은 **PC 화면에서만 노출(`hidden lg:flex`)**되며, 클릭 시 별도 팝업 없이 **제트아이 순수 링크(`?ref=` 없음)를 1클릭 클립보드 복사 + 토스트 안내**로 처리합니다. 모바일에서는 일반 공유 아이콘을 숨기고 100% 기능 기반 공유(방 초대, 파일 공유 등)만 사용합니다.
+   - **`ZEyeSidebarBottomFamilyLauncher`**: `DesktopDashboard.tsx` 좌측 노션 스타일 세로 사이드바 최하단에서 허브 공식 SDK `<HubAppSwitcher currentAppId="zeye" variant="sidebar" placement="bottom-up" />`를 렌더링하여, 클릭 시 화이트 카드 팝업(가입된 앱 3열 그리드 + 미가입 앱 상세 리스트)이 펼쳐지고 `?sso_token=` 무로그인 점핑을 지원합니다.
 
 ---
 

@@ -644,9 +644,7 @@ export const DesktopDashboard: React.FC = () => {
                   onClick={() => {
                     const shareText =
                       '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 투시검색 — 내 폰·PC 속 투시검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
-                    if (typeof navigator !== 'undefined' && navigator.share) {
-                      void navigator.share({ title: '제트아이 (Z-Eye)', text: shareText, url: 'https://z-eye.sundreamer.app' });
-                    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
                       void navigator.clipboard.writeText(shareText);
                     }
                     useSaySeeStore.setState({
@@ -654,7 +652,7 @@ export const DesktopDashboard: React.FC = () => {
                     });
                   }}
                   title="지인·가족에게 앱 공유하기 (초대받은 가족·회원·직원은 언제나 무료)"
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+                  className={`hidden lg:flex w-8 h-8 rounded-xl items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
                     themeMode === 'light'
                       ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
                       : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
@@ -666,7 +664,7 @@ export const DesktopDashboard: React.FC = () => {
                   type="button"
                   onClick={toggleThemeMode}
                   title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+                  className={`flex w-8 h-8 rounded-xl items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
                     themeMode === 'light'
                       ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
                       : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
