@@ -428,9 +428,6 @@ export const PricingModal: React.FC = () => {
         <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                혼자 쓸 땐 언제나 0원 · 함께 쓸 땐 방장 한 분만
-              </span>
               <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px] font-bold">
                 현재 상태: {PLAN_LABELS[activePricingPlan]}
               </span>
@@ -464,30 +461,17 @@ export const PricingModal: React.FC = () => {
           </button>
         </div>
 
-        {/* 📢 핵심 선언 배너: 대표 슬로건 + 1차 혜택 1줄 깔끔 어필 */}
+        {/* 📢 1차 혜택 1줄 안내띠 (대표 슬로건은 위 제목에서 1회만 노출) */}
         <div
           data-keep-dark="true"
-          className="p-4 md:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-teal-950/85 to-zinc-950 border-2 border-emerald-400/60 shadow-[0_0_24px_rgba(16,185,129,0.18)] flex flex-col gap-2"
+          className="px-4 py-3 md:px-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-teal-950/85 to-zinc-950 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2"
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-black">
-              개인 (기본) : 언제나 0원
-            </span>
-            <p className="font-headline-sm text-[15.5px] md:text-[18px] text-white font-black leading-snug">
-              &ldquo;혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만&rdquo;
-            </p>
-          </div>
-          <p className="font-body-sm text-[12.5px] md:text-[13px] text-emerald-200 font-bold">
-            *신용카드 등록도, 광고도 없습니다. 초대받은 가족·회원·직원은 전원 무료입니다.
+          <p className="font-body-sm text-[13px] md:text-[13.5px] text-amber-200 font-extrabold leading-relaxed">
+            🎁 <strong className="underline decoration-amber-300 text-amber-300">{activeMasterTier.bannerHeadline}</strong>
           </p>
-          <div className="pt-2 mt-0.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
-            <p className="font-body-sm text-[13px] md:text-[13.5px] text-amber-200 font-extrabold leading-relaxed">
-              🎁 <strong className="underline decoration-amber-300 text-amber-300">{activeMasterTier.bannerHeadline}</strong>
-            </p>
-            <span className="px-2.5 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/50 text-amber-200 font-label-mono text-[11px] font-extrabold">
-              🔥 1차 100명 중 87석 완료 (잔여 13석)
-            </span>
-          </div>
+          <span className="px-2.5 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/50 text-amber-200 font-label-mono text-[11px] font-extrabold">
+            🔥 1차 100명 중 87석 완료 (잔여 13석)
+          </span>
         </div>
 
         {/* 모바일 접속자 편의: 검색 없이 내 이메일/카톡으로 PC 마스터 접속 주소 보내기 */}

@@ -3056,7 +3056,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const [batchApprovedBanner, setBatchApprovedBanner] = useState<string | null>(null);
   const [deletedLoungePhotoIds, setDeletedLoungePhotoIds] = useState<string[]>([]);
   const [lastDeletedPhotoId, setLastDeletedPhotoId] = useState<string | null>(null);
-  const [showAnalogStickSection, setShowAnalogStickSection] = useState(true);
+  const [showAnalogStickSection, setShowAnalogStickSection] = useState(false);
 
   const memberActiveHints = swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue);
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
@@ -3390,6 +3390,11 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {analogScannedPhotos.filter((ap) => ap.unknownDatePlace).length > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 font-label-sm text-[11.5px] font-extrabold">
+                ❓ 연도 미분류 {analogScannedPhotos.filter((ap) => ap.unknownDatePlace).length}장
+              </span>
+            )}
             {pendingAnalogProposals.length > 0 && (
               <button
                 type="button"
@@ -3483,8 +3488,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         </div>
 
-        {/* 스캔된 옛날 사진 카드 그리드 (1초 스틱 부착 & [❓ 언제/어디인가요?] 댓글 제보) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* 스캔된 옛날 사진 카드 그리드 (1초 스틱 부착 & [❓ 언제/어디인가요?] 댓글 제보) — 길어지면 내부 스크롤 */}
+        <div className="max-h-[640px] overflow-y-auto pr-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {analogScannedPhotos.map((ap, index) => {
             const photoProposals = analogYearProposals.filter(
               (p) => p.targetAnalogPhotoId === ap.id

@@ -99,7 +99,7 @@ export const SmartTrashView: React.FC = () => {
 
   const [gridColumns, setGridColumns] = useState<3 | 4>(3);
   const [showSystemConsult, setShowSystemConsult] = useState<boolean>(true);
-  const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(true);
+  const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
 
   // 클린몬스터 종합건강검진 항목별 유저 직접 결정 상태
   const [decisions, setDecisions] = useState<{
@@ -933,7 +933,7 @@ export const SmartTrashView: React.FC = () => {
         {showQuarantineDrawer && (
           <div className="px-5 pb-5 pt-2 border-t border-white/10">
             {quarantinedPhotos.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+              <div className="max-h-[420px] overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
                 {quarantinedPhotos.map((p) => (
                   <div
                     key={p.id}
