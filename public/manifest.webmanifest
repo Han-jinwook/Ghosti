@@ -1,7 +1,7 @@
 {
-  "name": "제트아이 (Z-Eye) — The Ultimate All-Seeing AI & Zero-Cloud Lounge",
+  "name": "Z-Eye (제트아이) — AI 투시검색 & No-클라우드 라운지",
   "short_name": "Z-Eye",
-  "description": "만물을 꿰뚫어 보는 궁극의 AI 투시 엔진 & 무클라우드 시크릿 라운지 (The Ultimate All-Seeing AI & Zero-Cloud Lounge)",
+  "description": "사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 AI 투시검색 & No-클라우드 라운지",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#121318",
@@ -9,10 +9,22 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

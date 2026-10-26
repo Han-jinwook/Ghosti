@@ -46,6 +46,8 @@ import plugin_aggrofilter  # noqa: E402
 
 CORE_VERSION = "2.1.0"
 STANDARD_PORT = 5199
+TRAY_ICON_ICO = THIS_DIR / "favicon.ico"
+TRAY_LOGO_PNG = THIS_DIR / "logo-symbol.png"
 
 
 def get_unified_health() -> Dict[str, Any]:
@@ -54,6 +56,12 @@ def get_unified_health() -> Dict[str, Any]:
         "coreName": "Merlin_Z_Core",
         "version": CORE_VERSION,
         "standardPort": STANDARD_PORT,
+        "brandAssets": {
+            "trayIconIco": str(TRAY_ICON_ICO),
+            "logoSymbolPng": str(TRAY_LOGO_PNG),
+            "webPublicLogo": "/logo-symbol.png",
+            "webFavicon": "/favicon.ico",
+        },
         "architecture": "ONE_CORE_BUILTIN_SOFTWARE_PLUGINS",
         "extraInstallRequired": False,
         "chromeExtensionRequired": False,

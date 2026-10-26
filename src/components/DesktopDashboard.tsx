@@ -12,6 +12,7 @@ import {
 } from './LoungeView';
 import { PcMasterQuickSendPanel } from './PricingModal';
 import { ZEyeTopRightHubAnchor, ZEyeSidebarBottomFamilyLauncher } from './ZEyeHubInfraBridge';
+import { ZEyeBrandLogo } from './ZEyeBrandLogo';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -331,42 +332,18 @@ export const DesktopDashboard: React.FC = () => {
       }`}
     >
       <div className="flex flex-col gap-4 overflow-y-auto no-scrollbar">
-        {/* 1. 사이드바 최상단: Z-Eye 로고 & 사이드바 접기 버튼 */}
-        <div className="flex items-center justify-between px-1.5 py-1">
-          <div
+        {/* 1. 사이드바 최상단: 공식 스타일 A 브랜드 로고 (Z-Eye + [👁️ AI 투시검색]) & 사이드바 접기 버튼 */}
+        <div className="flex items-center justify-between px-1.5 py-1 gap-1.5">
+          <ZEyeBrandLogo
+            size="desktop"
+            themeMode={themeMode}
+            showBadge={true}
             onClick={() => {
               setDesktopTab('dashboard');
               resetToZenCanvas();
               if (isMobileDrawer) setIsMobileDrawerOpen(false);
             }}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <div
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${
-                themeMode === 'light'
-                  ? 'bg-white border-[#E5E0D5] text-[#0D9488]'
-                  : 'bg-zinc-900 border-white/15 text-primary-container'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px] font-bold">graphic_eq</span>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span
-                className={`font-headline-sm text-[15.5px] font-extrabold tracking-tight ${
-                  themeMode === 'light' ? 'text-slate-900' : 'text-white'
-                }`}
-              >
-                제트아이
-              </span>
-              <span
-                className={`text-[11px] font-extrabold ${
-                  themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
-                }`}
-              >
-                Z-Eye
-              </span>
-            </div>
-          </div>
+          />
 
           <button
             type="button"
@@ -566,16 +543,38 @@ export const DesktopDashboard: React.FC = () => {
                 </button>
 
                 {isSidebarCollapsed && (
-                  <button
-                    type="button"
-                    onClick={() => setIsSidebarCollapsed(false)}
-                    title="좌측 사이드바 펼치기"
-                    className="hidden lg:flex px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 text-[12px] font-bold items-center gap-1 cursor-pointer shrink-0"
-                  >
-                    <span>☰</span>
-                    <span>메뉴</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsSidebarCollapsed(false)}
+                      title="좌측 사이드바 펼치기"
+                      className="hidden lg:flex px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 text-[12px] font-bold items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      <span>☰</span>
+                      <span>메뉴</span>
+                    </button>
+                    <ZEyeBrandLogo
+                      size="desktop"
+                      themeMode={themeMode}
+                      showBadge={true}
+                      onClick={() => {
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                      }}
+                      className="hidden lg:inline-flex mr-1"
+                    />
+                  </>
                 )}
+                <ZEyeBrandLogo
+                  size="mobile"
+                  themeMode={themeMode}
+                  showBadge={true}
+                  onClick={() => {
+                    setDesktopTab('dashboard');
+                    resetToZenCanvas();
+                  }}
+                  className="lg:hidden mr-1"
+                />
 
                 {/* 노션 스타일 상단 경로(Breadcrumb) 표시 */}
                 <div className="flex items-center gap-1.5 text-[13px] truncate">

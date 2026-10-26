@@ -8,6 +8,7 @@ import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeSt
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../types/saysee';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { PcMasterQuickSendPanel } from './PricingModal';
+import { ZEyeBrandLogo } from './ZEyeBrandLogo';
 import { SetupMonsterContent } from './SetupMonsterModal';
 
 const LOUNGE_TABS: Array<{
@@ -3158,7 +3159,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       {/* 상단 대기실 개념 설명 & 즉시 처리 컨트롤 */}
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
             <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
               {currentMeta.badge}
             </span>
@@ -3889,11 +3891,14 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
+            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+              <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
               {isStoreAppMode
                 ? '👑 가족 초대 & 양가 방 분리 관리 (가족 전원 100% 무료 열람)'
                 : '👑 가족 초대 & 양가 통합권 관리 (마스터 1인 결제 ➔ 가족 전원 무료)'}
-            </span>
+              </span>
+            </div>
             <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
               가족 무수락 카톡 초대 링크/QR &amp; 방장 즉시 강퇴권 관리
             </h2>
@@ -4060,9 +4065,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-              👥 동호회 · 동창회 라운지 관리 &amp; 회원 초대/강퇴 (방 1개 기준 · 인원수 무제한)
-            </span>
+            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+              <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
+                👥 동호회 · 동창회 라운지 관리 &amp; 회원 초대/강퇴 (방 1개 기준 · 인원수 무제한)
+              </span>
+            </div>
             <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
               ⛳ 동호회 · 🎓 동창회 인원 무제한 월 4,900원 (10년 마스터권 49,000원) 단일가 &amp; 회원 관리
             </h2>

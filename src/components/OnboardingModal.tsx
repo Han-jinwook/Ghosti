@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { ZEyeBrandLogo } from './ZEyeBrandLogo';
 
 /**
  * 실시간 QR 코드 SVG (내 PC 에이전트 ↔ 스마트폰 1MB 앱 Zero-Code 동시 페어링용)
@@ -211,7 +212,8 @@ export const OnboardingModal: React.FC = () => {
         {/* 1) 상단 헤더 & 원클릭 자동 연결(Zero-Code Pairing) 배지 */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <ZEyeBrandLogo size="desktop" themeMode="dark" showBadge={true} />
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-mono text-[11px] font-black">
                 💻 내 PC 우선 구동 (외부 서버 전송 0%) + 📱 실시간 QR 코드 모바일 동시 페어링
               </span>

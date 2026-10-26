@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
 import { ZEyeTopRightHubAnchor } from './ZEyeHubInfraBridge';
+import { ZEyeBrandLogo } from './ZEyeBrandLogo';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
@@ -271,58 +272,13 @@ export const MobileAppView: React.FC = () => {
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div
+              <ZEyeBrandLogo
+                size="mobile"
+                themeMode={themeMode}
+                showBadge={true}
                 onClick={() => setMobileTab('search')}
-                className="flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <div
-                  className={`w-7 h-7 rounded-lg border flex items-center justify-center ${
-                    themeMode === 'light'
-                      ? 'bg-[#F8F7F4] border-[#E5E0D5] text-[#0D9488]'
-                      : 'bg-zinc-900 border-white/15 text-primary-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px] font-bold">
-                    graphic_eq
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span
-                    className={`font-headline-sm text-[15px] tracking-tight font-extrabold leading-none whitespace-nowrap ${
-                      themeMode === 'light' ? 'text-slate-900' : 'text-white'
-                    }`}
-                  >
-                    제트아이{' '}
-                    <span
-                      className={`font-extrabold text-[11px] ${
-                        themeMode === 'light' ? 'text-teal-700' : 'text-primary-container'
-                      }`}
-                    >
-                      Z-Eye
-                    </span>
-                  </span>
-                  <span
-                    className={`text-[9.5px] leading-tight mt-0.5 truncate flex items-center gap-1 ${
-                      themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
-                    }`}
-                  >
-                    <svg
-                      className="w-2.5 h-2.5 shrink-0"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <rect x="4" y="11" width="16" height="10" rx="2" />
-                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                    </svg>
-                    <span>Zero-Cloud 시크릿 라운지</span>
-                  </span>
-                </div>
-              </div>
+                className="shrink-0"
+              />
             </div>
 
             {/* 우상단: Z-Eye 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}

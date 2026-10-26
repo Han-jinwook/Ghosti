@@ -137,6 +137,8 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
     - 서드파티: psutil, pywin32(win32clipboard/win32con), Pillow (센스톡·클립보드 이미지)
     """
     work_root = Path(os.environ.get("TEMP", str(THIS_DIR))) / "merlin_z_core_build"
+    icon_file = THIS_DIR / "favicon.ico"
+    logo_png = THIS_DIR / "logo-symbol.png"
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile",
@@ -145,6 +147,9 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         "--workpath", str(work_root / "work"),
         "--specpath", str(work_root / "spec"),
         "--paths", str(THIS_DIR),
+        *(["--icon", str(icon_file)] if icon_file.exists() else []),
+        *(["--add-data", f"{icon_file};."] if icon_file.exists() else []),
+        *(["--add-data", f"{logo_png};."] if logo_png.exists() else []),
         "--hidden-import", "plugin_zeye_os",
         "--hidden-import", "plugin_senstalk",
         "--hidden-import", "plugin_aggrofilter",
