@@ -7,9 +7,16 @@
 -- 2. WebRTC 시그널링(SDP/ICE)은 테이블 INSERT 없이 Supabase Realtime Broadcast(메모리 패스스루)만 사용.
 --    (채널 토픽 규칙: `zeye:room:<room_id>` / `zeye:pair:<owner_email>` — 하단 9번 Realtime 인가 정책 참조)
 -- 3. 계정·로그인·코인 지갑은 Z-Eye가 따로 만들지 않고 멀린허브OS(os.sundreamer.app) SSO 단일 원장을 따름.
---    ➔ 본 스키마의 모든 RLS는 허브 SSO 세션 JWT의 이메일 클레임(`auth.jwt() ->> 'email'`) 하나로 판별하며,
---      코인 잔액·결제 테이블은 본 스키마에 절대 두지 않음 (중복 원장 금지).
+--    ➔ 본 스키마는 Z-Eye 단독 Supabase 프로젝트에 설치하며, 허브 SDK 표준(CoreLogic/가이드.md)에 따라
+--      로컬 `users` 테이블의 id = 허브 `family_users.id`(UUID)를 그대로 연동 키로 사용함.
+--    ➔ [인증 브릿지] 허브 JWT(merlin_session_token)는 우리 프로젝트가 직접 검증할 수 없으므로,
+--      Z-Eye 서버 함수(Netlify Function)가 ① 허브 `GET /api/auth/me`로 토큰을 검증하고
+--      ② service_role로 `users`를 Upsert한 뒤 ③ 우리 프로젝트 JWT 시크릿으로 단기(1시간) 토큰을 발급함
+--      (클레임: sub = 허브 userId, email, role = 'authenticated').
+--    ➔ 본 스키마의 모든 RLS는 이 단기 토큰의 이메일 클레임(`auth.jwt() ->> 'email'`) 하나로 판별하며,
+--      코인 잔액·결제 테이블은 본 스키마에 절대 두지 않음 (허브 family_wallet_balances 단일 원장, 중복 원장 금지).
 -- 4. 본 스키마에는 오직 아래 초경량 메타데이터만 저장하여 평생권 회원 1만 명 유입 시에도 유지비 0원 달성:
+--    ⓪ users                     : 허브 계정 연동 로컬 유저 (id = 허브 family_users.id, 앱 전용 설정만)
 --    ① zeye_face_passports       : 이메일 귀속 만국공통 Z-Eye 여권 안면 시드 (1인당 5슬롯 × 768d ≈ 15KB)
 --    ② zeye_devices              : 내 기기 등록부 (PC 마스터 1 + 모바일 1 무료) & PC 아웃바운드 터널 주소
 --    ③ zeye_pairing_codes        : PC ↔ 폰 1회용 연결 코드(QR/6자리, 10분 만료)
@@ -47,6 +54,26 @@ begin
   return new;
 end;
 $$;
+
+-- ----------------------------------------------------------------------------
+-- 0-1. 허브 계정 연동 로컬 유저 (허브 SDK CoreLogic 표준: 테이블 users / 연동 컬럼 id)
+--      - 쓰기: Z-Eye 서버 함수(service_role)가 허브 토큰 검증 후 Upsert
+--      - 읽기: 본인 행만 (RLS 12-0)
+-- ----------------------------------------------------------------------------
+create table if not exists public.users (
+  id uuid primary key,                    -- 허브 family_users.id 그대로 저장
+  email text not null unique,
+  nickname text,
+  app_settings jsonb not null default '{}'::jsonb,
+  last_login_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_users_touch on public.users;
+create trigger trg_users_touch
+  before update on public.users
+  for each row execute function public.zeye_touch_updated_at();
 
 -- ----------------------------------------------------------------------------
 -- 1. 만국공통 Z-Eye 여권 (Face Passport) — 1인당 약 15KB 고정
@@ -442,6 +469,7 @@ $$;
 -- ============================================================================
 -- 12. RLS (Row Level Security) — 허브 SSO 이메일 기준 최소 권한
 -- ============================================================================
+alter table public.users                    enable row level security;
 alter table public.zeye_face_passports      enable row level security;
 alter table public.zeye_devices             enable row level security;
 alter table public.zeye_pairing_codes       enable row level security;
@@ -451,6 +479,16 @@ alter table public.zeye_room_invites        enable row level security;
 alter table public.zeye_room_shared_folders enable row level security;
 alter table public.zeye_setup_playbooks     enable row level security;
 alter table public.zeye_setup_audit_logs    enable row level security;
+
+-- 12-0. 로컬 유저: 본인 행만 읽기 / 앱 설정만 본인 수정 (생성·이메일 변경은 서버 함수 전용)
+drop policy if exists users_self_read on public.users;
+create policy users_self_read on public.users
+  for select using (lower(email) = public.zeye_current_email());
+
+drop policy if exists users_self_update on public.users;
+create policy users_self_update on public.users
+  for update using (lower(email) = public.zeye_current_email())
+  with check (lower(email) = public.zeye_current_email());
 
 -- 12-1. 여권: 본인 것만 읽기/쓰기 (같은 방 멤버의 시드 조회는 추후 RPC로 별도 제공)
 drop policy if exists zeye_passports_own on public.zeye_face_passports;

@@ -98,7 +98,7 @@ export interface SiblingAgentBootstrapResult {
 export interface MerlinUniversalQueryRequest {
   /** 호출한 패밀리 웹앱 ID (예: 'z-eye' | 'momeokji' | 'sensetalk' | 'aggrofilter' 등) */
   callerAppId: string;
-  /** 호출 웹앱의 Origin (예: 'https://zeye.sundreamer.app', 'https://eat.sundreamer.app') */
+  /** 호출 웹앱의 Origin (예: 'https://z-eye.sundreamer.app', 'https://eat.sundreamer.app') */
   callerOrigin?: string;
   /** 타겟 로컬 리소스 도메인 */
   targetResource: MerlinQueryTargetResource;
@@ -211,7 +211,7 @@ export const WEBRTC_HOLE_PUNCH_TIMEOUT_MS = 3500;
 export function isTrustedMerlinFamilyOrigin(originOrUrl?: string): boolean {
   const raw =
     originOrUrl ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://zeye.sundreamer.app');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://z-eye.sundreamer.app');
   try {
     const u = new URL(raw);
     const host = u.hostname.toLowerCase();
@@ -242,7 +242,7 @@ export async function executeMerlinQuery<T = unknown>(
   const startedAt = performance.now();
   const origin =
     request.callerOrigin ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://zeye.sundreamer.app');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://z-eye.sundreamer.app');
 
   if (!isTrustedMerlinFamilyOrigin(origin)) {
     return {

@@ -136,6 +136,36 @@ const MAIN_LOUNGE_MENUS: Array<{
   },
 ];
 
+/**
+ * [1차 출시 3대 메뉴 체계 — 모바일 빠른 전환 바] 내 기기 / 사진 공유 / 업무 공유
+ * - 데스크톱 사이드바는 섹션 헤더(💻 내 기기 / 📸 사진 공유 / 💼 업무 공유)로 이미 3대 구조이므로 그대로 유지
+ * - 모바일에서는 '사진 공유' 1칸으로 묶고 하위에서 패밀리 ↔ 동호회·동창회를 선택 전환
+ */
+type QuickMenuId = 'personal' | 'photo_share' | 'work';
+
+const MOBILE_QUICK_MENUS: Array<{
+  id: QuickMenuId;
+  label: string;
+  iconId: LoungeType;
+  defaultLounge: LoungeType;
+}> = [
+  { id: 'personal', label: '내 기기', iconId: 'personal', defaultLounge: 'personal' },
+  { id: 'photo_share', label: '사진 공유', iconId: 'family', defaultLounge: 'family' },
+  { id: 'work', label: '업무 공유', iconId: 'work', defaultLounge: 'work' },
+];
+
+const PHOTO_SHARE_GROUPS: Array<{ id: LoungeType; label: string }> = [
+  { id: 'family', label: '패밀리 (우리집·본가·처가)' },
+  { id: 'club', label: '동호회·동창회' },
+];
+
+const resolveQuickMenuId = (lounge: LoungeType): QuickMenuId =>
+  lounge === 'family' || lounge === 'club' || lounge === 'student'
+    ? 'photo_share'
+    : lounge === 'work'
+    ? 'work'
+    : 'personal';
+
 const LOUNGE_SUBMENU_CONFIG: Record<
   LoungeType,
   Array<{ id: DesktopTab; label: string; showTrashCount?: boolean }>
@@ -706,16 +736,17 @@ export const DesktopDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* 모바일(lg 미만, 360px 포함) 전용 1줄 라운지 빠른 전환 바 */}
-            <nav className="grid grid-cols-4 lg:hidden gap-1">
-              {MAIN_LOUNGE_MENUS.map((menu) => {
-                const active = activeLoungeType === menu.id;
+            {/* 모바일(lg 미만, 360px 포함) 전용 1줄 라운지 빠른 전환 바 — 1차 출시 3대 메뉴(내 기기 / 사진 공유 / 업무 공유) */}
+            <nav className="grid grid-cols-3 lg:hidden gap-1">
+              {MOBILE_QUICK_MENUS.map((menu) => {
+                const active = resolveQuickMenuId(activeLoungeType) === menu.id;
                 return (
                   <button
                     key={menu.id}
                     type="button"
                     onClick={() => {
-                      setActiveLoungeType(menu.id);
+                      // 이미 사진 공유(패밀리/동호회·동창회) 안에 있으면 현재 하위 선택 유지
+                      if (!active) setActiveLoungeType(menu.defaultLounge);
                       setDesktopTab('dashboard');
                       resetToZenCanvas();
                     }}
@@ -729,12 +760,46 @@ export const DesktopDashboard: React.FC = () => {
                         : 'bg-zinc-900/80 text-zinc-400 font-bold'
                     }`}
                   >
-                    <MainLoungeMonoIcon id={menu.id} className="w-[12px] h-[12px] shrink-0" />
-                    <span>{menu.shortLabel}</span>
+                    <MainLoungeMonoIcon id={menu.iconId} className="w-[12px] h-[12px] shrink-0" />
+                    <span>{menu.label}</span>
                   </button>
                 );
               })}
             </nav>
+
+            {/* 모바일 전용: 사진 공유 하위 선택 (패밀리 ↔ 동호회·동창회) */}
+            {resolveQuickMenuId(activeLoungeType) === 'photo_share' && (
+              <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {PHOTO_SHARE_GROUPS.map((group) => {
+                  const groupActive =
+                    activeLoungeType === group.id ||
+                    (group.id === 'club' && activeLoungeType === 'student');
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => {
+                        if (groupActive) return;
+                        setActiveLoungeType(group.id);
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                      }}
+                      className={`px-2.5 py-1 rounded-lg border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                        groupActive
+                          ? themeMode === 'light'
+                            ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
+                            : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
+                          : themeMode === 'light'
+                          ? 'bg-transparent border-[#E5E0D5] text-slate-500 font-bold'
+                          : 'bg-transparent border-white/10 text-zinc-400 font-bold'
+                      }`}
+                    >
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </header>
 

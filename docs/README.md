@@ -39,7 +39,7 @@
 | 번호 | 문서명 | 분량 | 핵심 내용 및 역할 |
 | :---: | :--- | :---: | :--- |
 | **09** | [`Z-Eye_마케팅_및_바이럴_기획서.md`](./Z-Eye_마케팅_및_바이럴_기획서.md) | 280줄 | **[마케팅 & 숏폼 큐레이션 기획서]** 바이럴 루프 상세 퍼널, 맥락 맞춤 1분 활용팁 숏폼 큐레이션 3대 원칙(`2회당 1번`, `구독방 제외`, `영구 잠금 해제`), `studio` 합의 프린터 복잡 기능 과장 방지 소통 기준 전문 통합 |
-| **10** | [`앱_출시_최종점검_체크리스트.md`](./앱_출시_최종점검_체크리스트.md) | 468줄 | **[스토어 정식 출시 · 코드 서명 원장 · 8대 점검 마스터]** 동적 라우팅 푸시(`target_url`), 모바일➔PC Anti-steering 3중 방어, iOS 2.5.2 분기, **MS Artifact Signing(월 \$9.99) 원장 표(`sundreamer`, 테넌트/구독 ID, `admin@beakessundreamer.onmicrosoft.com` InPrivate 경고)**, 8대 출시 점검 리스트 전문 통합 |
+| **10** | [`앱_출시_최종점검_체크리스트.md`](./앱_출시_최종점검_체크리스트.md) | 468줄 | **[스토어 정식 출시 · 코드 서명 원장 · 8대 점검 마스터]** Capacitor 네이티브 래퍼(`capacitor.config.ts` · 한/영 권한 사유) · 패밀리 공용 동적 라우팅 푸시(`target_url` 화이트리스트 · 서비스별 알림 채널, `nativePushRouter.ts`) · 모바일 3대 메뉴 정렬, 모바일➔PC Anti-steering 3중 방어, iOS 2.5.2 분기, **MS Artifact Signing(월 \$9.99) 원장 표(`sundreamer`, 테넌트/구독 ID, `admin@beakessundreamer.onmicrosoft.com` InPrivate 경고)**, 8대 출시 점검 리스트 전문 통합 |
 | **11** | [`SESSION_HANDOVER.md`](./SESSION_HANDOVER.md) | 89줄 | **[세션 체크아웃 인계장]** 세션 간 핵심 작업 이력 및 체크인/체크아웃 릴레이 인계서 |
 
 ---

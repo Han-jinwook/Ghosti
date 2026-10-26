@@ -3964,8 +3964,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   setShowProModal: (showProModal) => set({ showProModal }),
 
-  setActiveLoungeType: (activeLoungeType) =>
+  setActiveLoungeType: (requestedLoungeType) =>
     set((state) => {
+      // [1차 출시 3대 메뉴 체계] 구버전 'student(스쿨)' 진입은 '사진 공유 › 동호회·동창회(club)'로 일원화
+      // (스쿨 화면 코드는 추후 동창회 '우리반 타임캡슐' 메뉴 이식용 자산으로 보존, 라우팅만 차단)
+      const activeLoungeType: LoungeType =
+        requestedLoungeType === 'student' ? 'club' : requestedLoungeType;
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
       return {
         activeLoungeType,
@@ -4072,7 +4076,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         : planId.startsWith('club_')
         ? 'club'
         : planId.startsWith('student_')
-        ? 'student'
+        ? 'club' // [3대 메뉴 체계] 구버전 스쿨 요금제도 '사진 공유 › 동호회·동창회'로 일원화
         : planId.startsWith('work_')
         ? 'work'
         : state.activeLoungeType;

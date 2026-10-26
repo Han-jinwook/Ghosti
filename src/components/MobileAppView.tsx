@@ -103,15 +103,33 @@ const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   }
 };
 
+/**
+ * [1차 출시 3대 메뉴 체계] 내 기기 / 사진 공유 / 업무 공유
+ * - '사진 공유'는 하위에서 패밀리(우리집·본가·처가) ↔ 동호회·동창회를 선택 전환 (데스크톱 섹션 구조와 동일)
+ * - 구버전 'student(스쿨)'은 메뉴에서 제외 (스토어 setActiveLoungeType에서 club으로 일원화)
+ */
+type MainMenuId = 'personal' | 'photo_share' | 'work';
+
+const PHOTO_SHARE_LOUNGES: LoungeType[] = ['family', 'club', 'student'];
+
 const MAIN_LOUNGE_MENUS: Array<{
-  id: LoungeType;
+  id: MainMenuId;
   label: string;
+  iconId: LoungeType;
+  defaultLounge: LoungeType;
 }> = [
-  { id: 'personal', label: '내 기기' },
-  { id: 'family', label: '패밀리 공유' },
-  { id: 'club', label: '동호·동창회' },
-  { id: 'work', label: '업무 공유(S:)' },
+  { id: 'personal', label: '내 기기', iconId: 'personal', defaultLounge: 'personal' },
+  { id: 'photo_share', label: '사진 공유', iconId: 'family', defaultLounge: 'family' },
+  { id: 'work', label: '업무 공유(S:)', iconId: 'work', defaultLounge: 'work' },
 ];
+
+const PHOTO_SHARE_GROUPS: Array<{ id: LoungeType; label: string }> = [
+  { id: 'family', label: '패밀리 (우리집·본가·처가)' },
+  { id: 'club', label: '동호회·동창회' },
+];
+
+const resolveMainMenuId = (lounge: LoungeType): MainMenuId =>
+  PHOTO_SHARE_LOUNGES.includes(lounge) ? 'photo_share' : lounge === 'work' ? 'work' : 'personal';
 
 const MOBILE_LOUNGE_SUBMENUS: Record<
   LoungeType,
@@ -385,15 +403,19 @@ export const MobileAppView: React.FC = () => {
             </div>
           </div>
 
-          {/* 1단 메인메뉴 4개: 흑백 라인 아이콘 + 캡슐 스타일 */}
+          {/* 1단 메인메뉴 3개 (내 기기 / 사진 공유 / 업무 공유): 흑백 라인 아이콘 + 캡슐 스타일 */}
           <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {MAIN_LOUNGE_MENUS.map((menu) => {
-              const active = activeLoungeType === menu.id;
+              const active = resolveMainMenuId(activeLoungeType) === menu.id;
               return (
                 <button
                   key={menu.id}
                   type="button"
-                  onClick={() => setActiveLoungeType(menu.id)}
+                  onClick={() => {
+                    // 이미 사진 공유(패밀리/동호회·동창회) 안에 있으면 현재 하위 선택 유지
+                    if (active) return;
+                    setActiveLoungeType(menu.defaultLounge);
+                  }}
                   className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
                     active
                       ? themeMode === 'light'
@@ -404,12 +426,43 @@ export const MobileAppView: React.FC = () => {
                       : 'text-zinc-400 hover:text-white font-bold'
                   }`}
                 >
-                  <MainLoungeMonoIcon id={menu.id} className="w-[14px] h-[14px] shrink-0" />
+                  <MainLoungeMonoIcon id={menu.iconId} className="w-[14px] h-[14px] shrink-0" />
                   <span>{menu.label}</span>
                 </button>
               );
             })}
           </nav>
+
+          {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·동창회 */}
+          {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
+            <div className="flex items-center gap-1.5 -mt-0.5 overflow-x-auto no-scrollbar">
+              {PHOTO_SHARE_GROUPS.map((group) => {
+                const groupActive =
+                  activeLoungeType === group.id ||
+                  (group.id === 'club' && activeLoungeType === 'student');
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => {
+                      if (!groupActive) setActiveLoungeType(group.id);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none ${
+                      groupActive
+                        ? themeMode === 'light'
+                          ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
+                          : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
+                        : themeMode === 'light'
+                        ? 'bg-transparent border-[#E5E0D5] text-slate-500 hover:text-slate-900 font-bold'
+                        : 'bg-transparent border-white/10 text-zinc-400 hover:text-white font-bold'
+                    }`}
+                  >
+                    {group.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* 2단 서브메뉴 바: 이모지 없는 깔끔한 언더라인 탭 */}
