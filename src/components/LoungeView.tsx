@@ -347,6 +347,9 @@ export const LoungeView: React.FC = () => {
   // 1초 진단 & 공유 시작 내 안전 검증(정리 대기함 이동 -> 원복 직접 눌러보기) 상태
   const [trialSafetyStep, setTrialSafetyStep] = useState<'ready' | 'quarantined' | 'restored'>('ready');
   const [trialMovedIds, setTrialMovedIds] = useState<string[]>([]);
+  // 노션 스타일 동적 토글: 공유방 3대 핵심 기능 안내 & 요금제 플랜 접기/펼치기
+  const [showLoungeFeatures, setShowLoungeFeatures] = useState(true);
+  const [showLoungePricing, setShowLoungePricing] = useState(true);
 
   const handleStartPersonalTrial = () => {
     setPersonalTrialStatus('running');
@@ -441,29 +444,27 @@ export const LoungeView: React.FC = () => {
 
   return (
     <main className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5">
-      {/* 📢 공유 라운지 핵심 선언 배너: 내 기기(personal) 내에서는 무료/요금 배너를 띄우지 않음 */}
+      {/* 📢 공유 라운지 핵심 선언 콜아웃 (노션 스타일 미니멀 배너): 내 기기(personal) 내에서는 무료/요금 배너를 띄우지 않음 */}
       {!isStoreAppMode && activeLoungeType !== 'personal' && (
-        <section className="p-4 md:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-teal-950/85 to-zinc-950 border-2 border-emerald-400/60 shadow-[0_0_24px_rgba(16,185,129,0.16)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-black">
-                개인 (기본) : 언제나 0원
+        <section className="px-4 py-3.5 rounded-2xl bg-[#18181B] border border-emerald-500/30 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="px-2.5 py-0.5 rounded-md bg-emerald-400/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+              개인 (기본) : 언제나 0원
+            </span>
+            <p className="font-body-sm text-[13px] text-zinc-200 font-bold">
+              📢 &ldquo;혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만&rdquo;{' '}
+              <span className="text-zinc-400 text-[12px] font-normal">
+                (신용카드 등록·광고 없음 · 초대받은 가족·회원·직원 전원 무료)
               </span>
-              <p className="font-headline-sm text-[14.5px] md:text-[16.5px] text-white font-black">
-                📢 &ldquo;혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만&rdquo;{' '}
-                <span className="text-emerald-300 text-[12.5px] font-bold">
-                  (*신용카드 등록도, 광고도 없습니다. 초대받은 가족·회원·직원은 전원 무료입니다.)
-                </span>
-              </p>
-            </div>
-            <p className="font-body-sm text-[12.5px] md:text-[13px] text-amber-200 font-extrabold">
-              🎁 <strong className="underline decoration-amber-300 text-amber-300">선착순 100명, 10년 방장 마스터권 (월 구독료 10개월 치로 10년 보장)</strong>
             </p>
+            <span className="text-[12px] text-amber-300 font-extrabold">
+              🎁 선착순 100명, 10년 방장 마스터권 (월 구독료 10개월 치로 10년 보장)
+            </span>
           </div>
           <button
             type="button"
             onClick={() => setShowProModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer whitespace-nowrap"
+            className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer whitespace-nowrap"
           >
             🔥 선착순 100명, 10년 방장 마스터권 보기 →
           </button>
@@ -755,12 +756,12 @@ export const LoungeView: React.FC = () => {
         </div>
       )}
 
-      {/* ─────────────── 👨‍👩‍👧‍👦 패밀리 라운지: 1단(온보딩 가로 3열 카드) ➔ 2단(1초 진단 & 공유 시작 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
+      {/* ─────────────── 👨‍👩‍👧‍👦 패밀리 라운지: 노션 스타일 동적 토글 + 1초 진단 & 공유 시작 ─────────────── */}
       {activeLoungeType === 'family' && (
         <>
-          {/* 1단: 패밀리 라운지가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
-          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* 1단: 패밀리 라운지 헤더 + 노션 스타일 3대 핵심 기능 동적 토글 */}
+          <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
+            <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
                   👨‍👩‍👧‍👦 패밀리 라운지 — 양가 분리 가족 사진관 (마스터 1인 결제 ➔ 가족 전원 무료)
@@ -769,91 +770,95 @@ export const LoungeView: React.FC = () => {
                   사생활 혼선 없이 <strong>[우리집] · [본가(친가)] · [처가(친정)]</strong> 방을 분리하고, 카톡 링크 하나로 가족 스마트폰에서 함께 찍힌 사진만 3초 만에 자동 수합합니다.
                 </p>
               </div>
-              <div className="flex items-center gap-1.5">
-                {FAMILY_ROOMS.map((room) => (
-                  <button
-                    key={room}
-                    type="button"
-                    onClick={() => setActiveFamilyRoom(room)}
-                    className={`px-3 py-1 rounded-lg font-label-sm text-[11.5px] font-bold border transition-all ${
-                      activeFamilyRoom === room
-                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                        : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                    }`}
-                  >
-                    {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  {FAMILY_ROOMS.map((room) => (
+                    <button
+                      key={room}
+                      type="button"
+                      onClick={() => setActiveFamilyRoom(room)}
+                      className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold border transition-all ${
+                        activeFamilyRoom === room
+                          ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                          : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                      }`}
+                    >
+                      {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLoungeFeatures((prev) => !prev)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold"
+                >
+                  {showLoungeFeatures ? '핵심 기능 접기 ▲' : '핵심 기능 펼치기 ▼'}
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🏠🏡🌸 양가 3방 완벽 분리
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    프라이버시 보장
-                  </span>
+            {showLoungeFeatures && (
+              <div className="px-5 md:px-6 pb-5 md:pb-6 pt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      🏠🏡🌸 양가 3방 완벽 분리
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                      프라이버시 보장
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    <strong>[우리집] · [본가(친가)] · [처가(친정)]</strong> 3개 방을 독립 분리하여, 친가·외가 어르신께는 손주·가족 사진만 원하는 방으로 깔끔하게 자동 배포합니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  <strong>[우리집] · [본가(친가)] · [처가(친정)]</strong> 3개 방을 독립 분리하여, 친가·외가 어르신께는 손주·가족 사진만 원하는 방으로 깔끔하게 자동 배포합니다.
-                </p>
-              </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🛂 가족 얼굴 여권 &amp; 1초 실명 검색
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    호칭·실명 자동 매칭
-                  </span>
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      🛂 가족 얼굴 여권 &amp; 1초 실명 검색
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                      호칭·실명 자동 매칭
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    가족 단체 사진에서 얼굴을 자동 추출해 이름·호칭(할머니, 큰삼촌 등)만 적어두면 온 가족 스마트폰에서 이름으로 1초 만에 찾습니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  가족 단체 사진에서 얼굴을 자동 추출해 이름·호칭(할머니, 큰삼촌 등)만 적어두면 온 가족 스마트폰에서 이름으로 1초 만에 찾습니다.
-                </p>
-              </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    📡 카톡 초대 &amp; 3초 레이더 수합
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    방장 1인 결제 ➔ 전원 무료
-                  </span>
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      📡 카톡 초대 &amp; 3초 레이더 수합
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
+                      방장 1인 결제 ➔ 전원 무료
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    명절·가족여행 후 카톡 초대 링크만 보내면 가족들의 아이폰·갤럭시에서 우리 가족이 함께 찍힌 사진만 3초 만에 골라 대기실로 모읍니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  명절·가족여행 후 카톡 초대 링크만 보내면 가족들의 아이폰·갤럭시에서 우리 가족이 함께 찍힌 사진만 3초 만에 골라 대기실로 모읍니다.
-                </p>
               </div>
-            </div>
+            )}
           </section>
 
           {/* 2단: 패밀리 라운지 1초 진단 & 공유 시작 안내 + 우측 [공유방 시작하기] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 패밀리 라운지 1초 진단 & 공유 시작 — 가족 얼굴 여권 &amp; 3초 레이더 수합
+                    ✨ 패밀리 라운지 1초 진단 &amp; 공유 시작 — 가족 얼굴 여권 &amp; 3초 레이더 수합
                   </h2>
-                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                    ⏱️ 소요 시간: 약 20초
+                  <span className="text-[12px] text-zinc-400 font-mono">
+                    · 소요 시간 약 20초 · 감지된 가족 {activeClusters.length}명 (이름 등록 {namedClusters.length}명)
                   </span>
                 </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
-                    📊 <strong>감지된 가족 인물:</strong> 전체 <strong>{activeClusters.length}명</strong> (이름 등록 <strong>{namedClusters.length}명</strong>)
-                  </span>
-                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🔬 <strong>초기 수합 범위:</strong> 🛂 가족 얼굴 여권 등록 · 📡 가족 폰 3초 레이더 스캔 <strong>최대 10장 수합 맛보기</strong>
-                  </span>
-                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-400">
+                  가족 얼굴 여권을 등록하고 가족 스마트폰 3초 레이더 스캔(최대 10장 무료 수합 맛보기)을 바로 체험합니다.
+                </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -878,28 +883,19 @@ export const LoungeView: React.FC = () => {
                 )}
 
                 {groupTrialStatus.family === 'done' && (
-                  <>
-                    <button
-                      type="button"
-                      disabled
-                      className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
-                    >
-                      ✓ 초기 설정 완료
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStartGroupTrial('family')}
-                      className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold whitespace-nowrap"
-                    >
-                      🔄 다시 체험하기
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => handleStartGroupTrial('family')}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
+                  >
+                    🔄 다시 체험하기
+                  </button>
                 )}
               </div>
             </div>
 
             {/* 3단: 초기 설정 완료 시 열리는 가족 여권 등록 & 3초 레이더 수합 보드 */}
-            {groupTrialStatus.family === 'done' ? (
+            {groupTrialStatus.family === 'done' && (
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
@@ -967,193 +963,212 @@ export const LoungeView: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
-                <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 우측의 <strong>[🚀 공유방 시작하기]</strong> 버튼을 누르면 가족 대표 사진에서 얼굴을 추출해 이름을 붙이고, 카톡 초대 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
-                </span>
-              </div>
             )}
 
-            {/* 패밀리 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노출 */}
+            {/* 패밀리 라운지 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 요금제 노션 토글 노출 */}
             {isStoreAppMode ? (
               <div className="pt-3 border-t border-white/10">
                 <PcMasterQuickSendPanel />
               </div>
             ) : (
               <div className="flex flex-col gap-3.5 pt-3 border-t border-white/10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="font-label-sm text-[11.5px] text-zinc-300 font-bold">
-                        🏠 우리집 단독 — 우리집 전용 시크릿 라운지 (방 1개 · 가족 인원 무제한)
-                      </span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-headline-md text-[24px] text-white font-black">
-                          월 5,900원
-                        </span>
-                        <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                          (10년 마스터권 59,000원)
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-[12px] text-zinc-400">
-                        부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 1초 실명 검색
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('family_home_5900')}
-                        className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold cursor-pointer"
-                      >
-                        월 5,900원 시작
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('family_home_year_59000')}
-                        className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
-                      >
-                        10년권 59,000원
-                      </button>
-                    </div>
+                <div
+                  onClick={() => setShowLoungePricing((prev) => !prev)}
+                  className="flex items-center justify-between gap-2 cursor-pointer select-none py-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-400 text-[12px] font-mono">
+                      {showLoungePricing ? '▼' : '▶'}
+                    </span>
+                    <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                      💳 패밀리 라운지 방장 요금제 (우리집 단독 5,900원 / 양가 3방 통합 8,900원)
+                    </span>
                   </div>
-
-                  <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                        👨‍👩‍👧‍👦 양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
-                      </span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-headline-md text-[24px] text-white font-black">
-                          월 8,900원
-                        </span>
-                        <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                          (10년 마스터권 89,000원)
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-[12px] text-zinc-300">
-                        사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 손주·가족 사진을 원하는 방에만 자동 배포합니다.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('family_three_8900')}
-                        className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
-                      >
-                        양가 3방 월 8,900원
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('family_three_year_89000')}
-                        className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
-                      >
-                        10년권 89,000원
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 가족 라운지 연 구독(마스터권) 특전: 모임 라운지 3개월 무료 구독권 1장 */}
-                <div className="p-3.5 rounded-xl bg-primary-container/10 border border-primary-container/35 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[12px] text-emerald-200 font-medium">
-                    🎁 <strong>[가족방 연 구독 특전]</strong> 패밀리 연 구독(10년 마스터권 59,000원 / 89,000원) 결제 시 <strong>[모임(동호회·동창회) 라운지 3개월 무료 구독권 1장]</strong>을 증정합니다!
+                  <span className="text-[11.5px] font-bold text-zinc-400">
+                    {showLoungePricing ? '요금제 접기 ▲' : '요금제 펼치기 ▼'}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowProModal(true)}
-                    className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
-                  >
-                    💌 모임 3개월 무료권 안내 보기
-                  </button>
                 </div>
+
+                {showLoungePricing && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-5 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="font-label-sm text-[11.5px] text-zinc-300 font-bold">
+                            🏠 우리집 단독 — 우리집 전용 시크릿 라운지 (방 1개 · 가족 인원 무제한)
+                          </span>
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-headline-md text-[24px] text-white font-black">
+                              월 5,900원
+                            </span>
+                            <span className="font-label-mono text-[13px] text-amber-300 font-bold">
+                              (10년 마스터권 59,000원)
+                            </span>
+                          </div>
+                          <p className="font-body-sm text-[12px] text-zinc-400">
+                            부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 1초 실명 검색
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('family_home_5900')}
+                            className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold cursor-pointer"
+                          >
+                            월 5,900원 시작
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('family_home_year_59000')}
+                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          >
+                            10년권 59,000원
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
+                            👨‍👩‍👧‍👦 양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
+                          </span>
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-headline-md text-[24px] text-white font-black">
+                              월 8,900원
+                            </span>
+                            <span className="font-label-mono text-[13px] text-amber-300 font-bold">
+                              (10년 마스터권 89,000원)
+                            </span>
+                          </div>
+                          <p className="font-body-sm text-[12px] text-zinc-300">
+                            사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 손주·가족 사진을 원하는 방에만 자동 배포합니다.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('family_three_8900')}
+                            className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          >
+                            양가 3방 월 8,900원
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('family_three_year_89000')}
+                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          >
+                            10년권 89,000원
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 가족 라운지 연 구독(마스터권) 특전: 모임 라운지 3개월 무료 구독권 1장 */}
+                    <div className="p-3.5 rounded-xl bg-primary-container/10 border border-primary-container/35 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[12px] text-emerald-200 font-medium">
+                        🎁 <strong>[가족방 연 구독 특전]</strong> 패밀리 연 구독(10년 마스터권 59,000원 / 89,000원) 결제 시 <strong>[모임(동호회·동창회) 라운지 3개월 무료 구독권 1장]</strong>을 증정합니다!
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowProModal(true)}
+                        className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
+                      >
+                        💌 모임 3개월 무료권 안내 보기
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </section>
         </>
       )}
 
-      {/* ─────────────── ⛳ 동호회 · 동창회 (사진 공유): 1단(온보딩 가로 3열 카드) ➔ 2단(1초 진단 & 공유 시작 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
+      {/* ─────────────── ⛳ 동호회 · 동창회 (사진 공유): 노션 스타일 동적 토글 + 1초 진단 & 공유 시작 ─────────────── */}
       {activeLoungeType === 'club' && (
         <>
-          {/* 1단: 동호회 · 동창회 공유방가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
-          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-            <div>
-              <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                ⛳ 동호회 · 동창회 (사진 공유) — 4050 동창회 · 골프 · 산악회 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(총무 1인 결제 ➔ 전 회원 무료)'}
-              </h1>
-              <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                동창회·모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 썸네일 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
-              </p>
+          {/* 1단: 동호회 · 동창회 공유방 헤더 + 3대 핵심 기능 노션 토글 */}
+          <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
+            <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
+                  ⛳ 동호회 · 동창회 (사진 공유) — 4050 동창회 · 골프 · 산악회 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(총무 1인 결제 ➔ 전 회원 무료)'}
+                </h1>
+                <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
+                  동창회·모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 썸네일 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLoungeFeatures((prev) => !prev)}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold shrink-0"
+              >
+                {showLoungeFeatures ? '핵심 기능 접기 ▲' : '핵심 기능 펼치기 ▼'}
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🏫 8090 응답하라 투트랙 앨범
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    4050 동창회 특화
-                  </span>
+            {showLoungeFeatures && (
+              <div className="px-5 md:px-6 pb-5 md:pb-6 pt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      🏫 8090 응답하라 투트랙 앨범
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                      4050 동창회 특화
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    방 개설 즉시 복고풍 간판이 장착되며, <strong>[🏫 학창시절 (아날로그 복원)]</strong>과 <strong>[🥂 최근 모임]</strong> 투트랙으로 졸업앨범·필름 사진과 현재 모임 사진을 함께 관리합니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  방 개설 즉시 복고풍 간판이 장착되며, <strong>[🏫 학창시절 (아날로그 복원)]</strong>과 <strong>[🥂 최근 모임]</strong> 투트랙으로 졸업앨범·필름 사진과 현재 모임 사진을 함께 관리합니다.
-                </p>
-              </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🏷️ 스틱 태깅 &amp; 계절↔월 양방향 검색
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    검색 누락 0%
-                  </span>
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      🏷️ 스틱 태깅 &amp; 계절↔월 양방향 검색
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                      검색 누락 0%
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    스캔 사진에 <strong>1989년 · 봄 · 수학여행</strong> 스틱만 톡톡 눌러도, 친구가 <strong>&ldquo;89년 5월&rdquo;</strong>이나 별명으로 검색할 때 100% 매칭됩니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  스캔 사진에 <strong>1989년 · 봄 · 수학여행</strong> 스틱만 톡톡 눌러도, 친구가 <strong>&ldquo;89년 5월&rdquo;</strong>이나 별명으로 검색할 때 100% 매칭됩니다.
-                </p>
-              </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🔄 13KB 썸네일 DB &amp; 내 기기 원본 동기화
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    전 회원 무료 열람
-                  </span>
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      🔄 13KB 썸네일 DB &amp; 내 기기 원본 동기화
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
+                      전 회원 무료 열람
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    평소엔 보이지 않는 곳에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 0.01초 만에 검색하며, <strong>[🔄 원본 동기화]</strong>를 켜면 지정한 내 폴더에 원본이 복제되어 자체 해결합니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  평소엔 보이지 않는 곳에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 0.01초 만에 검색하며, <strong>[🔄 원본 동기화]</strong>를 켜면 지정한 내 폴더에 원본이 복제되어 자체 해결합니다.
-                </p>
               </div>
-            </div>
+            )}
           </section>
 
           {/* 2단: 동호회 · 동창회 공유방 1초 진단 & 공유 시작 안내 + 우측 [공유방 시작하기] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 동호회 · 동창회 공유방 1초 진단 & 공유 시작 — 동창·회원 얼굴 여권 &amp; 3초 레이더 수합
+                    ✨ 동호회 · 동창회 공유방 1초 진단 &amp; 공유 시작 — 동창·회원 얼굴 여권 &amp; 3초 레이더 수합
                   </h2>
-                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                    ⏱️ 소요 시간: 약 20초
+                  <span className="text-[12px] text-zinc-400 font-mono">
+                    · 소요 시간 약 20초 · 감지된 회원 {activeClusters.length}명 (실명·별명 등록 {namedClusters.length}명)
                   </span>
                 </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
-                    📊 <strong>감지된 모임 회원:</strong> 전체 <strong>{activeClusters.length}명</strong> (실명·별명 등록 <strong>{namedClusters.length}명</strong>)
-                  </span>
-                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🔬 <strong>초기 수합 범위:</strong> 🛂 회원 얼굴 여권 등록 · 📡 총무 카톡 초대 <strong>3초 레이더 10장 수합 맛보기</strong>
-                  </span>
-                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-400">
+                  단체 사진에서 회원 얼굴 여권을 등록하고 단톡방 3초 레이더 스캔(최대 10장 무료 수합 맛보기)을 바로 체험합니다.
+                </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -1178,28 +1193,19 @@ export const LoungeView: React.FC = () => {
                 )}
 
                 {groupTrialStatus.club === 'done' && (
-                  <>
-                    <button
-                      type="button"
-                      disabled
-                      className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
-                    >
-                      ✓ 초기 설정 완료
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStartGroupTrial('club')}
-                      className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold whitespace-nowrap"
-                    >
-                      🔄 다시 체험하기
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => handleStartGroupTrial('club')}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
+                  >
+                    🔄 다시 체험하기
+                  </button>
                 )}
               </div>
             </div>
 
             {/* 3단: 초기 설정 완료 시 열리는 회원 여권 등록 & 3초 레이더 수합 보드 */}
-            {groupTrialStatus.club === 'done' ? (
+            {groupTrialStatus.club === 'done' && (
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
@@ -1267,215 +1273,234 @@ export const LoungeView: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
-                <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 우측의 <strong>[🚀 공유방 시작하기]</strong> 버튼을 누르면 단체 사진에서 회원 얼굴을 추출해 실명·별명을 등록하고, 단톡방 <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
-                </span>
-              </div>
             )}
 
-            {/* 동호회 · 동창회 공유방 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 4,900원 단일가 요금제 노출 */}
+            {/* 동호회 · 동창회 공유방 하단: 스토어 클린 모드 시 [내 이메일/카톡으로 PC 마스터 주소 보내기] 노출 / PC 마스터 모드 시 4,900원 단일가 요금제 노션 토글 노출 */}
             {isStoreAppMode ? (
               <div className="pt-3 border-t border-white/10">
                 <PcMasterQuickSendPanel />
               </div>
             ) : (
               <div className="flex flex-col gap-3.5 pt-3 border-t border-white/10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 동호회·소모임 단일가 */}
-                  <div className="p-5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-label-sm text-[12px] text-primary-container font-extrabold">
-                          ⛳ 동호회 · 소모임 (모임 이름 문패)
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10.5px] font-bold">
-                          인원수 무제한 · 회원 전원 무료
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-2 mt-0.5">
-                        <span className="font-headline-md text-[24px] text-white font-black">
-                          월 4,900원
-                        </span>
-                        <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                          (10년 마스터권 49,000원)
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-[12px] text-zinc-300">
-                        골프·산악회·독서·조기축구 등 모임 인원이 10명이든 500명이든 추가 요금 없이 월 4,900원 단일가!
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('club_small_4900')}
-                        className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
-                      >
-                        월 4,900원 개설
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('club_small_year_49000')}
-                        className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
-                      >
-                        10년권 49,000원
-                      </button>
-                    </div>
+                <div
+                  onClick={() => setShowLoungePricing((prev) => !prev)}
+                  className="flex items-center justify-between gap-2 cursor-pointer select-none py-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-400 text-[12px] font-mono">
+                      {showLoungePricing ? '▼' : '▶'}
+                    </span>
+                    <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                      💳 동호회 · 동창회 인원 무제한 단일가 요금제 (월 4,900원 / 10년권 49,000원)
+                    </span>
                   </div>
-
-                  {/* 동창회·반창회 단일가 */}
-                  <div className="p-5 rounded-xl bg-zinc-900 border border-amber-400/50 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-label-sm text-[12px] text-amber-300 font-extrabold">
-                          🎓 동창회 · 반창회 (학교/학년/반 문패)
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10.5px] font-bold">
-                          인원수 무제한 · 동창 전원 무료
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-2 mt-0.5">
-                        <span className="font-headline-md text-[24px] text-white font-black">
-                          월 4,900원
-                        </span>
-                        <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                          (10년 마스터권 49,000원)
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-[12px] text-zinc-300">
-                        졸업앨범 아날로그 스캔 사진 복원 + 학창시절 내 얼굴 1초 찾기 &amp; 총무 명예의 전당 헌정 배지!
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('club_small_4900')}
-                        className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold cursor-pointer"
-                      >
-                        월 4,900원 개설
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => activatePricingPlan('club_small_year_49000')}
-                        className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
-                      >
-                        10년권 49,000원
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 모임 라운지 연 구독(마스터권) 특전: 가족 라운지 1개월 무료 구독권 3장 */}
-                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/35 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[12px] text-amber-200 font-medium">
-                    🎁 <strong>[모임방 연 구독 특전]</strong> 동호회·동창회 연 구독(10년 마스터권 49,000원) 결제 시 총무님께 <strong>[가족 라운지 1개월 무료 구독권 3장]</strong>을 즉시 증정합니다!
+                  <span className="text-[11.5px] font-bold text-zinc-400">
+                    {showLoungePricing ? '요금제 접기 ▲' : '요금제 펼치기 ▼'}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowProModal(true)}
-                    className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
-                  >
-                    💌 가족방 1개월권 3장 안내 보기
-                  </button>
                 </div>
+
+                {showLoungePricing && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* 동호회·소모임 단일가 */}
+                      <div className="p-5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-label-sm text-[12px] text-primary-container font-extrabold">
+                              ⛳ 동호회 · 소모임 (모임 이름 문패)
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10.5px] font-bold">
+                              인원수 무제한 · 회원 전원 무료
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-2 mt-0.5">
+                            <span className="font-headline-md text-[24px] text-white font-black">
+                              월 4,900원
+                            </span>
+                            <span className="font-label-mono text-[13px] text-amber-300 font-bold">
+                              (10년 마스터권 49,000원)
+                            </span>
+                          </div>
+                          <p className="font-body-sm text-[12px] text-zinc-300">
+                            골프·산악회·독서·조기축구 등 모임 인원이 10명이든 500명이든 추가 요금 없이 월 4,900원 단일가!
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('club_small_4900')}
+                            className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          >
+                            월 4,900원 개설
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('club_small_year_49000')}
+                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          >
+                            10년권 49,000원
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 동창회·반창회 단일가 */}
+                      <div className="p-5 rounded-xl bg-zinc-900 border border-amber-400/50 flex flex-col justify-between gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-label-sm text-[12px] text-amber-300 font-extrabold">
+                              🎓 동창회 · 반창회 (학교/학년/반 문패)
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10.5px] font-bold">
+                              인원수 무제한 · 동창 전원 무료
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-2 mt-0.5">
+                            <span className="font-headline-md text-[24px] text-white font-black">
+                              월 4,900원
+                            </span>
+                            <span className="font-label-mono text-[13px] text-amber-300 font-bold">
+                              (10년 마스터권 49,000원)
+                            </span>
+                          </div>
+                          <p className="font-body-sm text-[12px] text-zinc-300">
+                            졸업앨범 아날로그 스캔 사진 복원 + 학창시절 내 얼굴 1초 찾기 &amp; 총무 명예의 전당 헌정 배지!
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('club_small_4900')}
+                            className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold cursor-pointer"
+                          >
+                            월 4,900원 개설
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('club_small_year_49000')}
+                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          >
+                            10년권 49,000원
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 모임 라운지 연 구독(마스터권) 특전: 가족 라운지 1개월 무료 구독권 3장 */}
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/35 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[12px] text-amber-200 font-medium">
+                        🎁 <strong>[모임방 연 구독 특전]</strong> 동호회·동창회 연 구독(10년 마스터권 49,000원) 결제 시 총무님께 <strong>[가족 라운지 1개월 무료 구독권 3장]</strong>을 즉시 증정합니다!
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowProModal(true)}
+                        className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
+                      >
+                        💌 가족방 1개월권 3장 안내 보기
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </section>
         </>
       )}
 
-      {/* ─────────────── ⛳ 동호회 · 동창회 (사진 공유): 1단(온보딩 가로 3열 카드) ➔ 2단(1초 진단 & 공유 시작 안내 + 시작/완료 버튼) ➔ 3단(얼굴 여권 & 3초 레이더 수합 체험 + 요금제) ─────────────── */}
+      {/* ─────────────── ⛳ 학급 · 동아리 (student): 노션 스타일 동적 토글 + 1초 진단 & 공유 시작 ─────────────── */}
       {activeLoungeType === 'student' && (
         <>
-          {/* 1단: 동호회 · 동창회 공유방가 무엇을 하는 곳인지 한눈에 보여주는 가로형 온보딩 카드 */}
-          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-            <div>
-              <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                ⛳ 동호회 · 동창회 (사진 공유) — 초·중·고 학급 · 동아리 · 체육대회 {isStoreAppMode ? '(우리 반 전원 무료 타임캡슐)' : '(월 900원 단일 특가)'}
-              </h1>
-              <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                {isStoreAppMode ? (
-                  <>
-                    학생증 로컬 0.1초 인증과 방장 집 게이밍 PC 연동만으로 반 친구들 전원이 무료로 수련회·체육대회·축제 사진을 1초 만에 찾습니다.
-                  </>
-                ) : (
-                  <>
-                    학생증 로컬 0.1초 인증만으로 학급·동아리 인원수 상관없이 <strong>월 900원(연 9,000원)</strong>! 반 친구들 전원이 무료로 수련회·축제 사진을 1초 만에 찾습니다.
-                  </>
-                )}
-              </p>
+          {/* 1단: 학급 · 동아리 공유방 헤더 + 3대 핵심 기능 노션 토글 */}
+          <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
+            <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
+                  ⛳ 동호회 · 동창회 (사진 공유) — 초·중·고 학급 · 동아리 · 체육대회 {isStoreAppMode ? '(우리 반 전원 무료 타임캡슐)' : '(월 900원 단일 특가)'}
+                </h1>
+                <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
+                  {isStoreAppMode ? (
+                    <>
+                      학생증 로컬 0.1초 인증과 방장 집 게이밍 PC 연동만으로 반 친구들 전원이 무료로 수련회·체육대회·축제 사진을 1초 만에 찾습니다.
+                    </>
+                  ) : (
+                    <>
+                      학생증 로컬 0.1초 인증만으로 학급·동아리 인원수 상관없이 <strong>월 900원(연 9,000원)</strong>! 반 친구들 전원이 무료로 수련회·축제 사진을 1초 만에 찾습니다.
+                    </>
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLoungeFeatures((prev) => !prev)}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold shrink-0"
+              >
+                {showLoungeFeatures ? '핵심 기능 접기 ▲' : '핵심 기능 펼치기 ▼'}
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🪪 학생증 로컬 OCR 0.1초 인증
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10.5px] font-extrabold">
-                    외부 전송 0 Byte
-                  </span>
+            {showLoungeFeatures && (
+              <div className="px-5 md:px-6 pb-5 md:pb-6 pt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      🪪 학생증 로컬 OCR 0.1초 인증
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10.5px] font-extrabold">
+                      외부 전송 0 Byte
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    학생증 사진 1장을 내 기기 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정 없이 학생 전용 라운지를 즉시 인증합니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  학생증 사진 1장을 내 기기 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정 없이 학생 전용 라운지를 즉시 인증합니다.
-                </p>
-              </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    🏃 수련회·체육대회·축제 3초 수합
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
-                    우리 반 전원 무료
-                  </span>
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      🏃 수련회·체육대회·축제 3초 수합
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
+                      우리 반 전원 무료
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    반장·동아리 기장이 반 단톡방에 초대 링크만 올리면, 친구들 아이폰·갤럭시에서 우리 반 사진만 3초 레이더로 자동 수합합니다.
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  반장·동아리 기장이 반 단톡방에 초대 링크만 올리면, 친구들 아이폰·갤럭시에서 우리 반 사진만 3초 레이더로 자동 수합합니다.
-                </p>
-              </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    {isStoreAppMode ? '🎮 방장 게이밍 PC 연동 부스트' : '🪙 인원 무제한 월 900원 단일 특가'}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                    방장 PC 콕 찌르기
-                  </span>
+                <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline-sm text-[15px] text-white font-bold">
+                      {isStoreAppMode ? '🎮 방장 게이밍 PC 연동 부스트' : '🪙 인원 무제한 월 900원 단일 특가'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
+                      방장 PC 콕 찌르기
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+                    {isStoreAppMode
+                      ? '30명 학급이든 100명 동아리든 인원 제한 없이 연결! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'
+                      : '30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'}
+                  </p>
                 </div>
-                <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                  {isStoreAppMode
-                    ? '30명 학급이든 100명 동아리든 인원 제한 없이 연결! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'
-                    : '30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'}
-                </p>
               </div>
-            </div>
+            )}
           </section>
 
-          {/* 2단: 동호회 · 동창회 공유방 1초 진단 & 공유 시작 안내 + 우측 [공유방 시작하기] / [완료] 버튼 */}
+          {/* 2단: 학급 · 동아리 공유방 1초 진단 & 공유 시작 안내 + 우측 [공유방 시작하기] / [완료] 버튼 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 동호회 · 동창회 공유방 1초 진단 & 공유 시작 — 우리 반 얼굴 여권 &amp; 10장 레이더 수합
+                    ✨ 동호회 · 동창회 공유방 1초 진단 &amp; 공유 시작 — 우리 반 얼굴 여권 &amp; 10장 레이더 수합
                   </h2>
-                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                    ⏱️ 소요 시간: 약 20초
+                  <span className="text-[12px] text-zinc-400 font-mono">
+                    · 소요 시간 약 20초 · 감지된 우리 반 친구 {activeClusters.length}명 (이름·별명 등록 {namedClusters.length}명)
                   </span>
                 </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[12.5px]">
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-zinc-200 whitespace-nowrap">
-                    📊 <strong>감지된 우리 반 친구:</strong> 전체 <strong>{activeClusters.length}명</strong> (이름·별명 등록 <strong>{namedClusters.length}명</strong>)
-                  </span>
-                  <span className="hidden sm:inline text-zinc-400 font-bold">➔</span>
-                  <span className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-primary-container/40 text-white whitespace-nowrap">
-                    🔬 <strong>초기 수합 범위:</strong> 🛂 친구 얼굴 여권 등록 · 📡 반 단톡방 <strong>3초 레이더 10장 수합 &amp; 방장 콕 찌르기</strong>
-                  </span>
-                </div>
+                <p className="font-body-sm text-[12.5px] text-zinc-400">
+                  우리 반 친구 얼굴 여권을 등록하고 반 단톡방 3초 레이더 10장 수합 및 방장 콕 찌르기를 바로 체험합니다.
+                </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -1500,28 +1525,19 @@ export const LoungeView: React.FC = () => {
                 )}
 
                 {groupTrialStatus.student === 'done' && (
-                  <>
-                    <button
-                      type="button"
-                      disabled
-                      className="px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-400 font-label-md text-[13px] font-extrabold whitespace-nowrap cursor-not-allowed opacity-75"
-                    >
-                      ✓ 초기 설정 완료
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStartGroupTrial('student')}
-                      className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/15 text-primary-container font-label-sm text-[12px] font-bold whitespace-nowrap"
-                    >
-                      🔄 다시 체험하기
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => handleStartGroupTrial('student')}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
+                  >
+                    🔄 다시 체험하기
+                  </button>
                 )}
               </div>
             </div>
 
             {/* 3단: 초기 설정 완료 시 열리는 반 친구 여권 등록 & 3초 레이더 수합 보드 */}
-            {groupTrialStatus.student === 'done' ? (
+            {groupTrialStatus.student === 'done' && (
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
@@ -1603,12 +1619,6 @@ export const LoungeView: React.FC = () => {
                     })}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="px-4 py-3 rounded-xl bg-zinc-950/70 border border-white/10 flex items-center justify-between gap-2">
-                <span className="font-body-sm text-[12.5px] text-zinc-400">
-                  💡 우측의 <strong>[🚀 공유방 시작하기]</strong> 버튼을 누르면 우리 반 단체 사진에서 친구 얼굴을 추출해 이름·별명을 등록하고, <strong>3초 레이더 스캔(10장 무료 수합)</strong>을 바로 체험해 보실 수 있습니다.
-                </span>
               </div>
             )}
 
@@ -3046,6 +3056,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const [batchApprovedBanner, setBatchApprovedBanner] = useState<string | null>(null);
   const [deletedLoungePhotoIds, setDeletedLoungePhotoIds] = useState<string[]>([]);
   const [lastDeletedPhotoId, setLastDeletedPhotoId] = useState<string | null>(null);
+  const [showAnalogStickSection, setShowAnalogStickSection] = useState(true);
 
   const memberActiveHints = swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue);
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
@@ -3352,35 +3363,53 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
         )}
       </section>
 
-      {/* 3 & 4. 옛날 스캔 사진용 '연도·장소 스티커' & [❓ 언제/어디인가요?] 동기 제보 ➔ 👑 방장 일괄 승인 (업무 공유 제외) */}
+      {/* 3 & 4. 옛날 스캔 사진용 '연도·장소 스티커' & [❓ 언제/어디인가요?] 동기 제보 ➔ 👑 방장 일괄 승인 (노션 스타일 동적 토글 · 업무 공유 제외) */}
       {activeLoungeType !== 'work' && (
-      <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-amber-400/35 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                🎞️ 촬영 날짜 없는 옛날 종이 사진 · 연도·장소 스티커 붙이기
-              </span>
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold">
-                🛂 연도 입력 시 [1980년대 앨범]으로 자동 분류
-              </span>
+      <section className="rounded-2xl bg-[#18181B] border border-amber-400/35 overflow-hidden transition-all">
+        <div
+          onClick={() => setShowAnalogStickSection((prev) => !prev)}
+          className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-zinc-900/50 transition-colors"
+        >
+          <div className="flex items-start gap-2.5">
+            <span className="text-zinc-400 text-[12px] font-mono select-none mt-1">
+              {showAnalogStickSection ? '▼' : '▶'}
+            </span>
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                  🎞️ 촬영 날짜 없는 옛날 종이 사진 · 연도·장소 스티커 붙이기
+                </span>
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold">
+                  🛂 연도 입력 시 [1980년대 앨범]으로 자동 분류
+                </span>
+              </div>
+              <h2 className="font-headline-sm text-[16px] md:text-[17.5px] text-white font-bold mt-0.5">
+                첫 번째 스캔 사진에 연도·장소·계절을 한 번만 적으면 [🏷️ 스티커]가 만들어져, 다음 사진부터는 클릭 한 번으로 바로 붙일 수 있습니다
+              </h2>
             </div>
-            <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold mt-0.5">
-              첫 번째 스캔 사진에 연도·장소·계절을 한 번만 적으면 [🏷️ 스티커]가 만들어져, 다음 사진부터는 클릭 한 번으로 바로 붙일 수 있습니다
-            </h2>
           </div>
 
-          {pendingAnalogProposals.length > 0 && (
-            <button
-              type="button"
-              onClick={handleApproveAllAnalog}
-              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shadow-[0_0_20px_rgba(251,191,36,0.3)] shrink-0"
-            >
-              👑 방장 뒷정리: [✓ 멤버 연도 제보 일괄 승인 ({pendingAnalogProposals.length}건)]
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {pendingAnalogProposals.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleApproveAllAnalog();
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shadow-[0_0_20px_rgba(251,191,36,0.3)] shrink-0"
+              >
+                👑 방장 뒷정리: [✓ 멤버 연도 제보 일괄 승인 ({pendingAnalogProposals.length}건)]
+              </button>
+            )}
+            <span className="text-[12px] font-bold text-zinc-400">
+              {showAnalogStickSection ? '접기 ▲' : '펼치기 ▼'}
+            </span>
+          </div>
         </div>
 
+        {showAnalogStickSection && (
+        <div className="px-5 md:px-6 pb-5 md:pb-6 pt-3 border-t border-white/10 flex flex-col gap-4">
         {/* 스틱(Chip) 생성 입력 바 & 생성된 스틱 팔레트 */}
         <div className="p-4 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3">
           <form
@@ -3600,6 +3629,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             );
           })}
         </div>
+        </div>
+        )}
       </section>
       )}
 

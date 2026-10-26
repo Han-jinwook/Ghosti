@@ -239,6 +239,7 @@ export const SetupMonsterContent: React.FC = () => {
   const [inputQuery, setInputQuery] = useState('');
   const [isListeningVoice, setIsListeningVoice] = useState(false);
   const [showBlackboxPanel, setShowBlackboxPanel] = useState(false);
+  const [showRealOsPanel, setShowRealOsPanel] = useState(true);
 
   const [realPcState, setRealPcState] = useState<RealPcOsInspectionData | null>(null);
   const [loadingRealPc, setLoadingRealPc] = useState(false);
@@ -924,11 +925,17 @@ export const SetupMonsterContent: React.FC = () => {
         })}
       </div>
 
-      {/* 3-B. 💻 PC판 전용: Z-코어 실물 OS 3대 검증 패널 (시뮬레이션 0% · 내 PC 100% 실측) */}
+      {/* 3-B. 💻 PC판 전용: Z-코어 실물 OS 3대 검증 패널 (시뮬레이션 0% · 내 PC 100% 실측 · 노션 스타일 동적 토글) */}
       {setupMonsterPlatform === 'pc' && (
-        <div className="p-4 rounded-2xl bg-zinc-950/95 border border-emerald-500/35 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
+        <div className="rounded-2xl bg-zinc-950/95 border border-emerald-500/35 overflow-hidden transition-all">
+          <div
+            onClick={() => setShowRealOsPanel((prev) => !prev)}
+            className="p-4 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/50 transition-colors"
+          >
             <div className="flex flex-wrap items-center gap-2">
+              <span className="text-zinc-400 text-[12px] font-mono select-none">
+                {showRealOsPanel ? '▼' : '▶'}
+              </span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-zinc-950 font-label-sm text-[11px] font-extrabold">
                 🟢 Z-코어 실물 OS 직결됨 (가짜 프리셋 0% · 100% 내 PC 실측)
               </span>
@@ -941,164 +948,174 @@ export const SetupMonsterContent: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleRefreshRealPcState}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleRefreshRealPcState();
+                }}
                 disabled={loadingRealPc}
                 className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
               >
                 {loadingRealPc ? '⏳ 스캔 중...' : '🔄 내 PC 실측 새로고침'}
               </button>
+              <span className="text-[11.5px] font-bold text-zinc-400">
+                {showRealOsPanel ? '접기 ▲' : '펼치기 ▼'}
+              </span>
             </div>
           </div>
 
-          {/* 실측 요약 카드 3종: 시작프로그램/보안모듈, 프린터/스풀러, 디스크/PC Git Diff */}
-          {realPcState && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5">
-                <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
-                  ① 내 PC 실제 시작프로그램 ({realPcState.startupPrograms.length}개) & 보안모듈 ({realPcState.spoolerAndSecurity.activeSecurityPluginsCount}종)
-                </span>
-                <p className="font-body-sm text-[11.5px] text-zinc-300 leading-snug">
-                  • <strong>보안/알림 감지:</strong>{' '}
-                  {realPcState.spoolerAndSecurity.activeSecurityPlugins
-                    .map((p) => p.label)
-                    .join(', ') || '없음'}
-                </p>
-                <p className="font-mono text-[10.5px] text-zinc-400 line-clamp-2">
-                  • 레지스트리 Run:{' '}
-                  {realPcState.startupPrograms.map((s) => s.name).join(', ')}
-                </p>
-              </div>
+          {showRealOsPanel && (
+            <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-4">
+              {/* 실측 요약 카드 3종: 시작프로그램/보안모듈, 프린터/스풀러, 디스크/PC Git Diff */}
+              {realPcState && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5">
+                    <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
+                      ① 내 PC 실제 시작프로그램 ({realPcState.startupPrograms.length}개) & 보안모듈 ({realPcState.spoolerAndSecurity.activeSecurityPluginsCount}종)
+                    </span>
+                    <p className="font-body-sm text-[11.5px] text-zinc-300 leading-snug">
+                      • <strong>보안/알림 감지:</strong>{' '}
+                      {realPcState.spoolerAndSecurity.activeSecurityPlugins
+                        .map((p) => p.label)
+                        .join(', ') || '없음'}
+                    </p>
+                    <p className="font-mono text-[10.5px] text-zinc-400 line-clamp-2">
+                      • 레지스트리 Run:{' '}
+                      {realPcState.startupPrograms.map((s) => s.name).join(', ')}
+                    </p>
+                  </div>
 
-              <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5">
-                <span className="font-label-sm text-[11px] text-amber-300 font-extrabold">
-                  ② 내 PC 실제 프린터 ({realPcState.spoolerAndSecurity.installedPrinters.length}대) & 인쇄 스풀러
-                </span>
-                <p className="font-body-sm text-[11.5px] text-zinc-300">
-                  • Spooler 상태: <strong>{realPcState.spoolerAndSecurity.spoolerServiceStatus}</strong> (멈춘 인쇄 파일: <strong>{realPcState.spoolerAndSecurity.stuckSpoolQueueFiles}건</strong>)
-                </p>
-                <p className="font-mono text-[10.5px] text-zinc-400 line-clamp-2">
-                  • 설치 프린터: {realPcState.spoolerAndSecurity.installedPrinters.join(', ')}
-                </p>
-              </div>
+                  <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5">
+                    <span className="font-label-sm text-[11px] text-amber-300 font-extrabold">
+                      ② 내 PC 실제 프린터 ({realPcState.spoolerAndSecurity.installedPrinters.length}대) & 인쇄 스풀러
+                    </span>
+                    <p className="font-body-sm text-[11.5px] text-zinc-300">
+                      • Spooler 상태: <strong>{realPcState.spoolerAndSecurity.spoolerServiceStatus}</strong> (멈춘 인쇄 파일: <strong>{realPcState.spoolerAndSecurity.stuckSpoolQueueFiles}건</strong>)
+                    </p>
+                    <p className="font-mono text-[10.5px] text-zinc-400 line-clamp-2">
+                      • 설치 프린터: {realPcState.spoolerAndSecurity.installedPrinters.join(', ')}
+                    </p>
+                  </div>
 
-              <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5">
-                <span className="font-label-sm text-[11px] text-cyan-300 font-extrabold">
-                  ③ 내 PC 디스크 실측 & PC Git 타임머신 Diff
-                </span>
-                <p className="font-body-sm text-[11.5px] text-zinc-300">
-                  • C: 잔여 <strong>{realPcState.disks.C?.freeGb}GB</strong> (사용률 {realPcState.disks.C?.usedPercent}%) / D: 잔여 <strong>{realPcState.disks.D?.freeGb}GB</strong> / S: {realPcState.disks.S?.mounted ? '🟢 마운트됨' : '⚪ 미연결'}
-                </p>
-                <p className="font-mono text-[10.5px] text-amber-200 line-clamp-2">
-                  • Git Diff: {realPcState.systemGit.latestCommit.diffs.join(' | ')}
-                </p>
+                  <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5">
+                    <span className="font-label-sm text-[11px] text-cyan-300 font-extrabold">
+                      ③ 내 PC 디스크 실측 & PC Git 타임머신 Diff
+                    </span>
+                    <p className="font-body-sm text-[11.5px] text-zinc-300">
+                      • C: 잔여 <strong>{realPcState.disks.C?.freeGb}GB</strong> (사용률 {realPcState.disks.C?.usedPercent}%) / D: 잔여 <strong>{realPcState.disks.D?.freeGb}GB</strong> / S: {realPcState.disks.S?.mounted ? '🟢 마운트됨' : '⚪ 미연결'}
+                    </p>
+                    <p className="font-mono text-[10.5px] text-amber-200 line-clamp-2">
+                      • Git Diff: {realPcState.systemGit.latestCommit.diffs.join(' | ')}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* 3초 결정론적 오피스/문서 포렌식 + 내부 5줄 실물 증거 미리보기 */}
+              <div className="p-3.5 rounded-xl bg-zinc-900/95 border border-emerald-500/30 flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="font-label-sm text-[12px] text-emerald-300 font-extrabold">
+                      🕵️‍♂️ [제1·2원칙 실물 검증] 내 PC 5대 은닉 금고 3초 결정론적 포렌식 & 내부 텍스트 5줄 실물 증거
+                    </span>
+                    <span className="font-body-sm text-[11px] text-zinc-400">
+                      Excel·Word·한글 자동복구 폴더, 문서(Documents), 다운로드, ShadowVault를 실제로 뒤져 파일 내부 5줄을 먼저 보여줍니다.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={forensicQuery}
+                      onChange={(e) => setForensicQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void handleRunForensicScan();
+                      }}
+                      placeholder="찾을 문서 키워드 (예: 계약서, 정산, 견적)"
+                      className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-white/15 text-white text-[12px] w-52 focus:outline-none focus:border-emerald-400"
+                    />
+                    <button
+                      id="zcore-target-btn-scan"
+                      type="button"
+                      onClick={() => void handleRunForensicScan()}
+                      disabled={loadingForensic}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                    >
+                      {loadingForensic ? '스캔 중...' : '🔍 3초 실물 스캔'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForensicQuery('');
+                        void handleRunForensicScan('');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[11px] font-bold cursor-pointer"
+                    >
+                      전체 최근 문서
+                    </button>
+                  </div>
+                </div>
+
+                {forensicResult && (
+                  <div className="flex flex-col gap-2">
+                    <div className="text-[11.5px] text-emerald-200 font-bold">
+                      {forensicResult.honestCutoffMessage}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                      {forensicResult.files.slice(0, 6).map((f, idx) => (
+                        <div
+                          key={`${f.fullPath}_${idx}`}
+                          className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col justify-between gap-2"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-headline-sm text-[12.5px] text-white font-bold truncate">
+                                📄 {f.fileName}
+                              </span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {typeof f.folderFileCount === 'number' && f.folderFileCount > 1 && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${
+                                      f.folderFileCount >= 30
+                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
+                                        : 'bg-zinc-800 text-zinc-300'
+                                    }`}
+                                  >
+                                    폴더 내 {f.folderFileCount}개 항목
+                                  </span>
+                                )}
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-mono text-[10px]">
+                                  {f.sizeFormatted} · {f.modifiedAt}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="font-mono text-[10px] text-zinc-400 truncate">
+                              {f.vaultLabel} ➔ {f.fullPath}
+                            </span>
+                            <div className="mt-1 p-2 rounded bg-zinc-900 border border-white/5 font-mono text-[10.5px] text-zinc-200 flex flex-col gap-0.5">
+                              {f.preview5Lines.slice(0, 5).map((ln, lIdx) => (
+                                <div key={lIdx} className="truncate">
+                                  {ln}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="relative flex justify-end pt-1">
+                            <button
+                              id={idx === 0 ? 'zcore-target-btn-open-0' : undefined}
+                              type="button"
+                              onClick={() => void handleOpenRealFileLocation(f.fullPath)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-label-sm text-[11.5px] font-extrabold shadow cursor-pointer"
+                            >
+                              🔍 탐색기 검색창에 파일명 넣어 이 파일만 바로 띄우기
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
-
-          {/* 3초 결정론적 오피스/문서 포렌식 + 내부 5줄 실물 증거 미리보기 */}
-          <div className="p-3.5 rounded-xl bg-zinc-900/95 border border-emerald-500/30 flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-col">
-                <span className="font-label-sm text-[12px] text-emerald-300 font-extrabold">
-                  🕵️‍♂️ [제1·2원칙 실물 검증] 내 PC 5대 은닉 금고 3초 결정론적 포렌식 & 내부 텍스트 5줄 실물 증거
-                </span>
-                <span className="font-body-sm text-[11px] text-zinc-400">
-                  Excel·Word·한글 자동복구 폴더, 문서(Documents), 다운로드, ShadowVault를 실제로 뒤져 파일 내부 5줄을 먼저 보여줍니다.
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={forensicQuery}
-                  onChange={(e) => setForensicQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void handleRunForensicScan();
-                  }}
-                  placeholder="찾을 문서 키워드 (예: 계약서, 정산, 견적)"
-                  className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-white/15 text-white text-[12px] w-52 focus:outline-none focus:border-emerald-400"
-                />
-                <button
-                  id="zcore-target-btn-scan"
-                  type="button"
-                  onClick={() => void handleRunForensicScan()}
-                  disabled={loadingForensic}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-                >
-                  {loadingForensic ? '스캔 중...' : '🔍 3초 실물 스캔'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForensicQuery('');
-                    void handleRunForensicScan('');
-                  }}
-                  className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[11px] font-bold cursor-pointer"
-                >
-                  전체 최근 문서
-                </button>
-              </div>
-            </div>
-
-            {forensicResult && (
-              <div className="flex flex-col gap-2">
-                <div className="text-[11.5px] text-emerald-200 font-bold">
-                  {forensicResult.honestCutoffMessage}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                  {forensicResult.files.slice(0, 6).map((f, idx) => (
-                    <div
-                      key={`${f.fullPath}_${idx}`}
-                      className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col justify-between gap-2"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-headline-sm text-[12.5px] text-white font-bold truncate">
-                            📄 {f.fileName}
-                          </span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {typeof f.folderFileCount === 'number' && f.folderFileCount > 1 && (
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${
-                                  f.folderFileCount >= 30
-                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
-                                    : 'bg-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                폴더 내 {f.folderFileCount}개 항목
-                              </span>
-                            )}
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-mono text-[10px]">
-                              {f.sizeFormatted} · {f.modifiedAt}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="font-mono text-[10px] text-zinc-400 truncate">
-                          {f.vaultLabel} ➔ {f.fullPath}
-                        </span>
-                        <div className="mt-1 p-2 rounded bg-zinc-900 border border-white/5 font-mono text-[10.5px] text-zinc-200 flex flex-col gap-0.5">
-                          {f.preview5Lines.slice(0, 5).map((ln, lIdx) => (
-                            <div key={lIdx} className="truncate">
-                              {ln}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="relative flex justify-end pt-1">
-                        <button
-                          id={idx === 0 ? 'zcore-target-btn-open-0' : undefined}
-                          type="button"
-                          onClick={() => void handleOpenRealFileLocation(f.fullPath)}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-label-sm text-[11.5px] font-extrabold shadow cursor-pointer"
-                        >
-                          🔍 탐색기 검색창에 파일명 넣어 이 파일만 바로 띄우기
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       )}
 
