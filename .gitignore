@@ -48,6 +48,10 @@ poc/cloudflared.exe
 poc/audio/*.wav
 poc/results/*_vectors.json
 poc/results/gemma2_*.json
+scripts/
+*.mjs.bak
+*migration*
+*seed*
 *.log
 .DS_Store
 Thumbs.db
