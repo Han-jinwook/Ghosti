@@ -3300,6 +3300,11 @@ function zeyeLocalBridge(): Plugin {
 
 export default defineConfig({
   plugins: [ ...(process.env.VITE_HTTPS === '1' ? [basicSsl()] : []), zeyeLocalBridge()],
+  // 허브 SDK(CoreLogic/config.ts)가 Next.js식 process.env.* 를 참조 → Vite dev 브라우저 ReferenceError(흰 화면) 방지
+  // (빌드 모드는 Vite가 자동 치환하지만 dev 모드는 미치환이므로 빈 객체 명시 주입. SDK 원본 무수정 원칙)
+  define: {
+    'process.env': '{}',
+  },
   server: {
     host: true,
     port: 5199,

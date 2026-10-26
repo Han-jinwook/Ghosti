@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
+import { ZEyeTopRightHubAnchor } from './ZEyeHubInfraBridge';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
@@ -348,27 +349,16 @@ export const MobileAppView: React.FC = () => {
                 </button>
               )}
               {(!isStoreAppMode || enableSetupMonster) && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowSetupMonsterModal(true, 'mobile')}
-                    className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-extrabold"
-                  >
-                    🛠️ 설정몬스터
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowProModal(true)}
-                    className={`px-2.5 py-1 rounded-full font-label-mono text-[10.5px] font-extrabold border flex items-center gap-1 ${
-                      themeMode === 'light'
-                        ? 'bg-amber-50 border-amber-200 text-amber-800'
-                        : 'bg-zinc-900 border-amber-400/35 text-amber-300'
-                    }`}
-                  >
-                    <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()}</span>
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => setShowSetupMonsterModal(true, 'mobile')}
+                  className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-extrabold"
+                >
+                  🛠️ 설정몬스터
+                </button>
               )}
+              {/* 허브 SDK 표준 앵커 (PC 헤더와 동일): 🪙 코인(스토어 심사 모드·네이티브 앱에서는 DOM 원천 비노출) + 🐾 곰발바닥 OTP 로그인/통합 프로필 */}
+              <ZEyeTopRightHubAnchor themeMode={themeMode} />
               <button
                 type="button"
                 onClick={toggleThemeMode}

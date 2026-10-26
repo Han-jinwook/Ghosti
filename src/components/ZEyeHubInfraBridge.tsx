@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import {
   HubProvider,
@@ -16,7 +16,7 @@ import {
   HubNotifier,
 } from '../services/merlin-hub-sdk/react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { syncHubUserToLocalSupabase } from '../services/supabaseClient';
+import { syncHubUserToLocalSupabase, clearZeyeSupabaseSession } from '../services/supabaseClient';
 
 /**
  * [스토어 심사 방어 감지 헬퍼]
@@ -218,6 +218,7 @@ const ZEyeHubGlobalModals: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
+  const wasLoggedInRef = useRef(false);
 
   // 허브 인증/잔액 변화 시 Z-Eye 내부 스토어(merlinAuth) 및 단독 Supabase(`public.users.id = family_users.id`) 자동 동기화
   useEffect(() => {
@@ -242,6 +243,8 @@ const ZEyeHubGlobalModals: React.FC = () => {
         hubToken: token,
       });
     } else if (!isLoggedIn) {
+      // 로그아웃(로그인 → 게스트 전환) 시에만 제트아이 Supabase 단기 토큰 폐기 (최초 세션 복원 대기 중 오삭제 방지)
+      if (wasLoggedInRef.current) clearZeyeSupabaseSession();
       // 비로그인 게스트 상태에서는 코인 오표시(5,200C 등) 원천 차단 -> 0 C 고정
       useSaySeeStore.setState((state) => ({
         merlinAuth: {
@@ -253,6 +256,7 @@ const ZEyeHubGlobalModals: React.FC = () => {
         },
       }));
     }
+    wasLoggedInRef.current = isLoggedIn;
   }, [isLoggedIn, user?.id, user?.email, user?.nickname, balance]);
 
   // 전역 모달 오픈 이벤트 리스너

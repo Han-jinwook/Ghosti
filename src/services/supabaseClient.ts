@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -13,11 +13,51 @@ export const supabase = supabaseUrl && supabaseAnonKey
     })
   : null;
 
+/** 브릿지가 발급한 단기(1시간) Supabase 토큰 보관 키 */
+const ZEYE_SB_TOKEN_KEY = 'zeye_supabase_access_token';
+const ZEYE_SB_TOKEN_EXP_KEY = 'zeye_supabase_access_token_exp';
+
+let authedClient: SupabaseClient | null = null;
+let authedClientToken = '';
+
+/** 브릿지 단기 토큰(만료 전)만 반환 */
+export function getZeyeSupabaseAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const token = localStorage.getItem(ZEYE_SB_TOKEN_KEY);
+  const exp = Number(localStorage.getItem(ZEYE_SB_TOKEN_EXP_KEY) || 0);
+  if (!token || !exp || Date.now() > exp - 60_000) return null;
+  return token;
+}
+
+/**
+ * RLS 보호 테이블(라운지 방·기기·페어링 코드·여권 등)용 클라이언트.
+ * - 브릿지 단기 토큰이 있으면 그 토큰을 Authorization 헤더로 실은 클라이언트를 반환 (auth.jwt() ->> 'email' 판별 가능)
+ * - 토큰이 없거나 만료되면 null (호출부에서 syncHubUserToLocalSupabase 재호출 필요)
+ */
+export function getZeyeAuthedSupabase(): SupabaseClient | null {
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  const token = getZeyeSupabaseAccessToken();
+  if (!token) return null;
+  if (authedClient && authedClientToken === token) return authedClient;
+  authedClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    realtime: { params: { eventsPerSecond: 10 } },
+  });
+  authedClient.realtime.setAuth(token);
+  authedClientToken = token;
+  return authedClient;
+}
+
 /**
  * [허브 SDK ↔ 제트아이 단독 Supabase SSOT 계정 매핑 브릿지]
  * - 허브(os.sundreamer.app) 이메일 6자리 OTP 인증 완료 시 확정된 `family_users.id`(UUID)를
  *   제트아이 단독 Supabase `public.users.id`와 1:1 동일 키로 동기화합니다.
  * - 코인/결제 테이블은 제트아이 DB에 두지 않으며, 오직 허브 중앙 지갑 원장만 참조합니다.
+ * - [2026-10-27 Z-Eye 보완] 스키마 RLS상 브라우저(anon)는 users INSERT가 불가하므로
+ *   서버 함수(`/.netlify/functions/hub-supabase-bridge`)를 1차 경로로 호출합니다.
+ *   서버가 허브 토큰을 검증 → service_role Upsert → 1시간 단기 토큰 발급.
+ *   실패 시 `ok: false` + 사유를 정직하게 반환합니다 (침묵 성공 금지).
  */
 export async function syncHubUserToLocalSupabase(params: {
   userId: string;
@@ -41,51 +81,46 @@ export async function syncHubUserToLocalSupabase(params: {
       }
     }
 
-    // 2. Z-Eye 단독 Supabase가 연결된 경우 public.users (id = 허브 family_users.id) 동기화 시도
-    if (supabase) {
-      const nativePushToken =
-        typeof window !== 'undefined' ? localStorage.getItem('zeye_native_push_token') : null;
-      const appSettings: Record<string, unknown> = {};
-      if (nativePushToken) {
-        appSettings.native_push_token = nativePushToken;
-        appSettings.push_channel_id = 'zeye';
-      }
+    // 이미 유효한 단기 토큰이 있으면 재호출 생략 (허브/서버 호출 최소화)
+    if (getZeyeSupabaseAccessToken()) {
+      return { ok: true, syncedUserId: cleanUserId };
+    }
 
-      const { error } = await supabase.from('users').upsert(
-        {
-          id: cleanUserId,
-          email: cleanEmail,
-          nickname: params.nickname || cleanEmail.split('@')[0],
-          app_settings: appSettings,
-          last_login_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      );
+    const token =
+      params.hubToken ||
+      (typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') : null);
+    if (!token) {
+      return { ok: false, error: '허브 로그인 토큰 없음' };
+    }
 
-      if (error) {
-        // RLS가 서버 함수(service_role) 전용으로 잠겨 있는 경우 Netlify 브릿지 함수로 폴백
-        const token =
-          params.hubToken ||
-          (typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') : null);
-        if (token && typeof fetch !== 'undefined') {
-          await fetch('/.netlify/functions/hub-supabase-bridge', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              userId: cleanUserId,
-              email: cleanEmail,
-              nickname: params.nickname || cleanEmail.split('@')[0],
-              nativePushToken,
-            }),
-          }).catch(() => {});
-        }
-      }
+    const nativePushToken =
+      typeof window !== 'undefined' ? localStorage.getItem('zeye_native_push_token') : null;
+
+    // 2. 서버 브릿지 호출 (허브 토큰 검증 → service_role Upsert → 단기 토큰 발급)
+    const res = await fetch('/.netlify/functions/hub-supabase-bridge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        userId: cleanUserId,
+        email: cleanEmail,
+        nickname: params.nickname || cleanEmail.split('@')[0],
+        nativePushToken,
+      }),
+    });
+    const data = await res.json().catch(() => ({} as any));
+
+    if (!res.ok || !data?.ok || !data?.supabaseAccessToken) {
+      const reason = data?.reason || `브릿지 응답 오류 (HTTP ${res.status})`;
+      console.warn('[Z-Eye] 허브↔Supabase 계정 동기화 실패:', reason);
+      return { ok: false, error: reason };
     }
 
     if (typeof window !== 'undefined') {
+      localStorage.setItem(ZEYE_SB_TOKEN_KEY, data.supabaseAccessToken);
+      localStorage.setItem(ZEYE_SB_TOKEN_EXP_KEY, String(data.expiresAt || 0));
       window.dispatchEvent(
         new CustomEvent('zeyeSupabaseUserSynced', {
           detail: { userId: cleanUserId, email: cleanEmail, nickname: params.nickname },
@@ -97,4 +132,13 @@ export async function syncHubUserToLocalSupabase(params: {
   } catch (err: any) {
     return { ok: false, error: err?.message || 'Supabase sync error' };
   }
+}
+
+/** 로그아웃 시 단기 토큰 폐기 */
+export function clearZeyeSupabaseSession(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(ZEYE_SB_TOKEN_KEY);
+  localStorage.removeItem(ZEYE_SB_TOKEN_EXP_KEY);
+  authedClient = null;
+  authedClientToken = '';
 }
