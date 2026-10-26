@@ -1,0 +1,449 @@
+/**
+ * Version: v1.2.0
+ * Last Updated: 2026-10-24
+ * Merlin Hub SDK — HTTP Client
+ * - 모든 허브 통신에 CLIENT_ID/SECRET 헤더를 자동 부착
+ * - 네트워크 실패 시 지수 백오프 재시도 (최대 3회)
+ * - JWT 401 만료 감지 → 자동 세션 클리어 + 이벤트 발행
+ * - Local Token Shield: 개별 앱 독립 로그아웃 및 공용 쿠키 자가 치유(Self-Healing)
+ */
+
+import { getConfig } from './config';
+
+const SESSION_TOKEN_KEY = 'merlin_session_token';
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 500;
+
+// KCP 심사관용 테스트 세션 식별자
+export const TEST_SESSION_TOKEN = 'test-session-token';
+export const TEST_USER_ID = '00000000-0000-4000-8000-000000000001';
+export const TEST_EMAIL = 'test@aggrofilter.com';
+export const TEST_NICKNAME = 'KCP심사관';
+
+/** 현재 localStorage 세션이 KCP 심사용 테스트 세션인지 (사용 안 함 - 정석대로 허브 호출하도록 수정) */
+export function isTestSession(): boolean {
+  return false;
+}
+
+// ── 세션 토큰 관리 (LocalStorage + *.sundreamer.app 서브도메인 공용 쿠키 30일 보장) ──
+
+const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60; // 2,592,000s
+
+function getCookieDomain(): string {
+  if (typeof window === 'undefined') return '';
+  const hostname = window.location.hostname;
+  if (hostname.endsWith('sundreamer.app')) {
+    return '; domain=.sundreamer.app';
+  }
+  return '';
+}
+
+export const SESSION_LOGGED_OUT_KEY = 'merlin_logged_out';
+
+export function getSessionToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  
+  // 1. localStorage 우선 확인
+  const localToken = localStorage.getItem(SESSION_TOKEN_KEY);
+  if (localToken) {
+    // 도메인 쿠키가 유실되었거나 비어있는 경우 유효한 로컬 토큰으로 공용 쿠키 자가 치유(Self-Healing)
+    try {
+      const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + SESSION_TOKEN_KEY + '=([^;]+)'));
+      if (!match || !match[1]) {
+        const domainPart = getCookieDomain();
+        if (domainPart) {
+          const securePart = window.location.protocol === 'https:' ? '; Secure; SameSite=Lax' : '; SameSite=Lax';
+          document.cookie = `${SESSION_TOKEN_KEY}=${encodeURIComponent(localToken)}; path=/; max-age=${THIRTY_DAYS_SECONDS}${domainPart}${securePart}`;
+        }
+      }
+    } catch {}
+    return localToken;
+  }
+
+  // 2. 이 앱에서 명시적으로 로그아웃한 상태라면 공용 쿠키로부터 자동 복원 금지 (게스트 유지)
+  if (localStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1') {
+    return null;
+  }
+
+  // 3. localStorage에 없고 명시적 로그아웃도 아니라면 공용 쿠키(.sundreamer.app) 탐색 (SSO Handoff)
+  try {
+    const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + SESSION_TOKEN_KEY + '=([^;]+)'));
+    if (match && match[1]) {
+      const cookieToken = decodeURIComponent(match[1]);
+      if (cookieToken) {
+        localStorage.setItem(SESSION_TOKEN_KEY, cookieToken); // 로컬에도 자동 복원
+        return cookieToken;
+      }
+    }
+  } catch (e) {
+    console.warn('[MerlinHub] Failed to read session cookie:', e);
+  }
+
+  return null;
+}
+
+export function setSessionToken(token: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
+    localStorage.removeItem(SESSION_LOGGED_OUT_KEY); // 로그인 시 개별 앱 로그아웃 플래그 즉시 해제
+    const domainPart = getCookieDomain();
+    const securePart = window.location.protocol === 'https:' ? '; Secure; SameSite=Lax' : '; SameSite=Lax';
+    document.cookie = `${SESSION_TOKEN_KEY}=${encodeURIComponent(token)}; path=/; max-age=${THIRTY_DAYS_SECONDS}${domainPart}${securePart}`;
+  } catch (e) {
+    console.warn('[MerlinHub] Failed to set session token/cookie:', e);
+  }
+}
+
+export function clearSessionToken(scope: 'local' | 'global' = 'local') {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem('merlin_cached_user');
+    localStorage.removeItem('merlin_cached_balance');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userNickname');
+    localStorage.removeItem('userProfileImage');
+    sessionStorage.clear();
+
+    const expireStr = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0';
+    
+    // 1. 현재 호스트의 쿠키는 언제나 소멸
+    document.cookie = `${SESSION_TOKEN_KEY}${expireStr}; SameSite=Lax; Secure`;
+    document.cookie = `${SESSION_TOKEN_KEY}${expireStr}`;
+
+    if (scope === 'local') {
+      // 로컬 로그아웃: 이 앱에서 명시적으로 로그아웃했음을 기록하여 공용 쿠키로부터 자동 복원을 차단
+      // 🚨 타 패밀리 앱의 세션을 보존하기 위해 .sundreamer.app 최상위 공용 쿠키는 절대 삭제하지 않음!
+      localStorage.setItem(SESSION_LOGGED_OUT_KEY, '1');
+    } else if (scope === 'global') {
+      // 전체 로그아웃: 패밀리 도메인 공용 쿠키까지 완벽 소멸
+      localStorage.removeItem(SESSION_LOGGED_OUT_KEY);
+      const domainPart = getCookieDomain();
+      if (domainPart) {
+        document.cookie = `${SESSION_TOKEN_KEY}${expireStr}${domainPart}; SameSite=Lax; Secure`;
+        document.cookie = `${SESSION_TOKEN_KEY}${expireStr}${domainPart}`;
+      }
+    }
+  } catch (e) {
+    console.warn('[MerlinHub] Failed to clear session token/cookie:', e);
+  }
+}
+
+/**
+ * JWT가 만료(exp) 임박한지 확인 — 만료 60초 전부터 true
+ */
+export function isTokenExpired(): boolean {
+  const token = getSessionToken();
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now() + 60_000;
+  } catch {
+    return true;
+  }
+}
+
+// ── 재시도 유틸 ──
+
+function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ── 핵심 Fetch ──
+
+export interface HubFetchResult<T> {
+  ok: boolean;
+  status: number;
+  data: T;
+}
+
+async function getTestSessionMock<T>(path: string, options: RequestInit): Promise<HubFetchResult<T> | null> {
+  if (!isTestSession()) return null;
+
+  const method = (options.method || 'GET').toUpperCase();
+
+  // /api/auth/me — 세션 검증
+  if (path === '/api/auth/me') {
+    return {
+      ok: true,
+      status: 200,
+      data: {
+        success: true,
+        user: {
+          email: TEST_EMAIL,
+          userId: TEST_USER_ID,
+          id: TEST_USER_ID,
+          nickname: TEST_NICKNAME,
+          avatar_url: '',
+        },
+      } as T,
+    };
+  }
+
+  // /api/wallet/balance — 로컬 잔액 동기화
+  if (path.startsWith('/api/wallet/balance')) {
+    try {
+      // 심사관의 실제 로컬 크레딧을 가져온다 (9999 고정 아님)
+      const res = await fetch(`/api/user/credits?userId=${TEST_USER_ID}`, { cache: 'no-store' });
+      const data = await res.json();
+      return {
+        ok: true,
+        status: 200,
+        data: { balance: typeof data.credits === 'number' ? data.credits : 0, userId: TEST_USER_ID } as T,
+      };
+    } catch {
+      return {
+        ok: true,
+        status: 200,
+        data: { balance: 0, userId: TEST_USER_ID } as T,
+      };
+    }
+  }
+
+  // /api/wallet/history — 이용 내역 (로컬 API가 이미 Hub 연동형으로 바뀌었으므로, 직접 호출 시에도 로컬 연동 유지)
+  if (path.startsWith('/api/wallet/history')) {
+    try {
+      const appId = getConfig().appId;
+      if (!appId) {
+        throw new Error('[MerlinHubSDK] appId is not configured. Run configureMerlinHub({ appId: "..." }) first.');
+      }
+      const res = await fetch(`/api/user/credit-history?userId=${TEST_USER_ID}`, { cache: 'no-store' });
+      const data = await res.json();
+      return {
+        ok: true,
+        status: 200,
+        data: {
+          history: data,
+          app_id: appId
+        } as T,
+      };
+    } catch {
+      return { ok: true, status: 200, data: { history: [] } as T };
+    }
+  }
+
+  // /api/wallet/use 또는 /api/wallet/transaction/dynamic — 차감
+  if ((path === '/api/wallet/use' || path.startsWith('/api/wallet/transaction')) && method === 'POST') {
+    // 테스트 세션에서는 실제 차감 대신 성공 응답만 반환 (또는 필요시 로컬 API 호출)
+    return {
+      ok: true,
+      status: 200,
+      data: { success: true, balance: 9999 } as T,
+    };
+  }
+
+  // /api/auth/profile — 프로필 갱신
+  if (path === '/api/auth/profile') {
+    return {
+      ok: true,
+      status: 200,
+      data: {
+        success: true,
+        nickname: TEST_NICKNAME,
+        avatar_url: '',
+      } as T,
+    };
+  }
+
+  // 그 외 허브 API (결제 관련 /api/payment 등은 실제 서버로 통과시킴)
+  return null;
+}
+
+export async function hubFetch<T = any>(
+  path: string,
+  options: RequestInit = {},
+  retries = MAX_RETRIES
+): Promise<HubFetchResult<T>> {
+  // KCP 심사관 테스트 세션 차단 — 허브 호출 우회
+  const mock = await getTestSessionMock<T>(path, options);
+  if (mock) return mock;
+
+  const config = getConfig();
+  const url = `${config.hubUrl}${path}`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Client-Id': config.clientId,
+    'X-Client-Secret': config.clientSecret,
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  // 세션 토큰이 있으면 Authorization 헤더 추가
+  const token = getSessionToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(url, { ...options, headers });
+      const data = await res.json().catch(() => ({}));
+
+      // 401 → JWT 만료 — 세션 클리어 후 이벤트 발행
+      if (res.status === 401) {
+        clearSessionToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
+        }
+        return { ok: false, status: 401, data: data as T };
+      }
+
+      // 5xx 서버 오류 → 재시도 대상
+      if (res.status >= 500 && attempt < retries - 1) {
+        await wait(RETRY_BASE_MS * Math.pow(2, attempt));
+        continue;
+      }
+
+      return { ok: res.ok, status: res.status, data: data as T };
+    } catch (err) {
+      lastError = err as Error;
+      // 네트워크 오류(ECONNREFUSED 등) → 재시도
+      if (attempt < retries - 1) {
+        await wait(RETRY_BASE_MS * Math.pow(2, attempt));
+        continue;
+      }
+    }
+  }
+
+  console.error('[MerlinHub] hubFetch failed after retries:', path, lastError);
+  return { ok: false, status: 0, data: { error: '허브 서버 연결 실패' } as any };
+}
+
+/**
+ * [Compatibility] 클래스 기반 SDK 클라이언트
+ * 기존 컴포넌트들과의 호환성을 위해 유지합니다.
+ */
+export class MerlinHubClient {
+  async getProfile() {
+    const { getProfile } = await import('../Auth/auth');
+    return getProfile();
+  }
+
+  async sendOtp(email: string) {
+    // 앱별 인증 컨텍스트를 주입하여 인증 메일을 올바르게 전송합니다
+    const { requestOTP } = await import('../Auth/auth');
+    const { getConfig } = await import('./config');
+    return requestOTP(email, getConfig().appId);
+  }
+
+  async verifyOtp(email: string, code: string) {
+    const { verifyOTP } = await import('../Auth/auth');
+    const { getConfig } = await import('./config');
+    
+    // 로컬스토리지에서 가불 정보 조회 후 파라미터 전달 (추천코드 ?ref= 정책 폐지)
+    const referralCode = undefined;
+    let pendingUsageFee = undefined;
+    let pendingVideoId = undefined;
+    if (typeof window !== 'undefined') {
+      const pendingUsageFeeStr = localStorage.getItem('pending_usage_fee');
+      pendingUsageFee = pendingUsageFeeStr ? parseInt(pendingUsageFeeStr, 10) : undefined;
+      pendingVideoId = localStorage.getItem('pending_video_id') || undefined;
+    }
+    
+    const result = await verifyOTP(email, code, getConfig().appId, referralCode, pendingUsageFee, pendingVideoId);
+    
+    // 인증 성공 시 비회원 시절 데이터 마이그레이션 실행 및 로컬스토리지 정리
+    if (result.success && typeof window !== 'undefined') {
+      const resolvedUserId = result.userId || result.familyUid;
+      if (pendingVideoId && resolvedUserId) {
+        try {
+          await fetch('/api/analysis/link-guest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId: pendingVideoId, userId: resolvedUserId })
+          });
+          console.log(`[Success] Guest analysis ${pendingVideoId} linked to User ${resolvedUserId}`);
+        } catch (linkErr) {
+          console.error('[Error] Failed to link guest analysis:', linkErr);
+        }
+      }
+      localStorage.removeItem('pending_usage_fee');
+      localStorage.removeItem('pending_video_id');
+    }
+    
+    return result;
+  }
+
+  async preparePayment(params: {
+    amount: number;
+    coinAmount: number;
+    payMethodType: 'card' | 'phone';
+    returnUrl: string;
+  }) {
+    const { requestKcpPayment } = await import('../Wallet/wallet');
+    return requestKcpPayment(params);
+  }
+
+  async sendNotification(params: {
+    userId?: string;
+    email?: string;
+    title?: string;
+    content?: string;
+    type?: string;
+    templateId?: string;
+    data?: any;
+    link?: string;
+    link_text?: string;
+    link2?: string;
+    link2_text?: string;
+    link3?: string;
+    link3_text?: string;
+    link4?: string;
+    link4_text?: string;
+    sub_content_html?: string;
+    hide_common_links?: boolean;
+  }) {
+    const { getConfig } = await import('./config');
+    const config = getConfig();
+    const res = await hubFetch<{ success: boolean; email?: boolean }>('/api/notification/send', {
+      method: 'POST',
+      headers: {
+        'x-app-secret': config.clientSecret
+      },
+      body: JSON.stringify({
+        userId: params.userId,
+        email: params.email,
+        app_id: config.appId,
+        title: params.title,
+        content: params.content,
+        type: params.type,
+        templateId: params.templateId,
+        data: params.data,
+        link: params.link,
+        link_text: params.link_text,
+        link2: params.link2,
+        link2_text: params.link2_text,
+        link3: params.link3,
+        link3_text: params.link3_text,
+        link4: params.link4,
+        link4_text: params.link4_text,
+        sub_content_html: params.sub_content_html,
+        hide_common_links: params.hide_common_links,
+        channels: ['email'] // 이메일 단독 발송
+      })
+    });
+    return res.ok && res.data ? res.data : { success: false };
+  }
+
+  async updateProfile(params: any) {
+    const { updateProfile } = await import('../Auth/auth');
+    return updateProfile(params);
+  }
+
+  async registerReferrer(code: string) {
+    // 임시 구현: 실제 구현 시에는 auth.ts에 별도 함수를 만들거나 서버 호출
+    console.log('[MerlinHubClient] registerReferrer requested:', code);
+    return { success: true };
+  }
+
+  async getReferrals() {
+    const res = await hubFetch<{ success: boolean; referrals: any[] }>('/api/auth/referrals');
+    if (res.ok && res.data.success) {
+      return res.data.referrals;
+    }
+    return [];
+  }
+}

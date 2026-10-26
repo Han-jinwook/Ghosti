@@ -1,0 +1,86 @@
+'use client';
+
+/**
+ * Merlin Hub SDK v2.17.0
+ * ─────────────────────────────────────────────
+ * [CLIENT ONLY] 리액트 전용 엔트리
+ * 이 파일은 클라이언트 컴포넌트에서만 임포트해야 합니다.
+ */
+
+// 1. Core Hooks (비즈니스 로직)
+export { HubProvider, useHub } from './HubProvider';
+export { useHubSession } from './Session/useHubSession';
+export { useHubAuth } from './Auth/useHubAuth';
+export { useHubPayment } from './Wallet/useHubPayment';
+export { useHubReferral } from './Referral/useHubReferral';
+
+// 2. Core 로직 (클라이언트에서도 자주 쓰는 함수들)
+export { 
+  checkSession, 
+  logout, 
+  getProfile, 
+  requestOTP, 
+  verifyOTP,
+  getBalance,
+  getUserId,
+  useCredit,
+  getGiftList,
+  sendGift,
+  claimGift,
+  cancelGift,
+  nudgeGift,
+  MerlinHubClient
+} from './CoreLogic';
+export type { GiftItem, GiftContact } from './CoreLogic';
+
+// 3. Custom UI Components (표준 UI 부품)
+export { HubProfileWidget, HubAvatar } from './Session/HubProfileWidget';
+export { HubProfileCard, HubNotificationCard, HubLogoutCard } from './Session/HubProfileCards';
+export { HubAuthModal } from './Auth/HubAuthModal';
+export { HubRegisterNudge } from './UI/HubRegisterNudge';
+export { HubPaymentTrigger } from './Wallet/HubPaymentTrigger';
+export { HubPurchaseWidget } from './Wallet/HubPurchaseWidget';
+export { HubGiftBoxModal, AGGRO_GIFT_PRODUCTS } from './Wallet/HubGiftBoxModal';
+export type { GiftProductItem } from './Wallet/HubGiftBoxModal';
+export { HubNotifier, showToast } from './CoreLogic/HubNotifier';
+export { HubReferralWidget } from './Referral/HubReferralWidget';
+export { HubHistoryList } from './Referral/HubHistoryList';
+export { HubShareButton } from './Referral/HubShareButton';
+export { HubShareSquare } from './Referral/HubShareSquare';
+export { HubWelcomeNudge } from './UI/HubWelcomeNudge';
+export { HubPWAInstallPrompt, HubPWAInstallButton } from './UI/HubPWAInstallPrompt';
+export { HubAppSwitcher } from './Navigation/HubAppSwitcher';
+export { HubResponsiveWing } from './Ads/HubResponsiveWing';
+export { HubGoogleAd } from './Ads/HubGoogleAd';
+export { HubOfflineBanner } from './UI/HubOfflineBanner';
+export * from './Auth/HubBenefitModal';
+export { markFreeTrialCompleted, useBenefitTrigger } from './Auth/useBenefitTrigger';
+
+// 4. Support & Blackbox (1:1 문의방 직행 + 1초 오류 접수 + 블랙박스 에러 바운더리)
+export {
+  HubErrorBoundary,
+  HubBugReporter,
+  HubSupportLink,
+  initBlackbox,
+  addBreadcrumb,
+  getBreadcrumbs,
+  openBugReporter,
+  submitStudioSupportTicket,
+  buildStudioSupportJumpUrl,
+} from './Support';
+export type {
+  HubErrorBoundaryProps,
+  HubBugReporterProps,
+  HubSupportLinkProps,
+  HubBreadcrumb,
+  HubDeviceContext,
+  HubErrorMetadata,
+  HubBugReportPayload,
+} from './Support';
+
+// 5. Client Utilities (공통 클라이언트 엔진)
+export { triggerHaptic } from './CoreLogic/haptic';
+export type { HapticType } from './CoreLogic/haptic';
+export { compressImage } from './CoreLogic/imageCompressor';
+export type { ImageCompressionOptions, CompressedImageResult } from './CoreLogic/imageCompressor';
+export { handleCursorToEnd, setCursorToEnd } from './CoreLogic/inputUtils';

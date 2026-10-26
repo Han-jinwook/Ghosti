@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useSaySeeStore } from './store/useSaySeeStore';
 import { DesktopDashboard } from './components/DesktopDashboard';
+import { ZEyeHubRootProvider } from './components/ZEyeHubInfraBridge';
 import { MobileAppView } from './components/MobileAppView';
 import { OnboardingModal } from './components/OnboardingModal';
 import { PhotoDetailModal } from './components/PhotoDetailModal';
@@ -41,7 +42,7 @@ export const App: React.FC = () => {
   }, [lastQuarantineToast, dismissQuarantineToast]);
 
   return (
-    <>
+    <ZEyeHubRootProvider>
       {layout === 'desktop' ? <DesktopDashboard /> : <MobileAppView />}
 
       {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 */}
@@ -120,7 +121,7 @@ export const App: React.FC = () => {
           </button>
         </div>
       )}
-    </>
+    </ZEyeHubRootProvider>
   );
 };
 

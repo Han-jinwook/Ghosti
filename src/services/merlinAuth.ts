@@ -1,20 +1,19 @@
 /**
- * Merlin Hub Mock Auth & License Bridge (D-06, D-09)
+ * Merlin Hub SSO Auth & Wallet Bridge (v2.17.0)
  *
- * 결제·인증은 최종적으로 '멀린 패밀리 허브(Merlin Family Hub)'가 담당하며,
- * 제트아이(Z-Eye)는 Mock Token 인터페이스로 라이선스 등급(FREE / PRO_LIFETIME)과
- * 상위 Bes2 프로페셔널 에디션 업셀 브릿지만 제공.
+ * 결제·인증은 '멀린 패밀리 허브(Merlin Family Hub, os.sundreamer.app)'가 단일 SSOT로 담당하며,
+ * 비로그인(게스트) 상태에서는 코인 오표시를 방지하기 위해 0 코인으로 초기화합니다.
  */
 import type { MerlinAuthState } from '../types/saysee';
 
 const STORAGE_KEY = 'zeye_merlin_mock_token';
 
 export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
-  token: 'DEMO_PRO_SESSION', // ggignore
-  tier: 'PRO_LIFETIME',
-  userId: 'merlin-user-01',
-  email: 'beakes@sundreamer.app',
-  coinBalance: 5200,
+  token: '',
+  tier: 'FREE',
+  userId: 'guest',
+  email: '',
+  coinBalance: 0,
   maxFreePhotos: 300,
   hubUrl: 'https://os.sundreamer.app',
   pcMasterUrl: 'https://z-eye.sundreamer.app',
@@ -23,8 +22,26 @@ export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
 
 export function loadMerlinAuth(): MerlinAuthState {
   try {
+    if (typeof window === 'undefined') return DEFAULT_MERLIN_AUTH;
+    const hubToken = localStorage.getItem('merlin_session_token');
+    const hubEmail = localStorage.getItem('userEmail') || '';
+    const hubUserId = localStorage.getItem('zeye_hub_user_id') || '';
+
+    // 비로그인 게스트 상태에서는 과거 캐시로 인한 코인 오염을 차단하고 0 코인 고정
+    if (!hubToken) {
+      return DEFAULT_MERLIN_AUTH;
+    }
+
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_MERLIN_AUTH, ...JSON.parse(raw) };
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      ...DEFAULT_MERLIN_AUTH,
+      ...parsed,
+      token: hubToken,
+      userId: hubUserId || parsed.userId || 'merlin-user',
+      email: hubEmail || parsed.email || '',
+      coinBalance: typeof parsed.coinBalance === 'number' ? parsed.coinBalance : 0,
+    };
   } catch {
     /* ignore */
   }
@@ -35,10 +52,6 @@ export function toggleMerlinTier(current: MerlinAuthState): MerlinAuthState {
   const next: MerlinAuthState = {
     ...current,
     tier: current.tier === 'PRO_LIFETIME' ? 'FREE' : 'PRO_LIFETIME',
-    token:
-      current.tier === 'PRO_LIFETIME'
-        ? 'DEMO_FREE_SESSION' // ggignore
-        : 'DEMO_PRO_SESSION', // ggignore
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));

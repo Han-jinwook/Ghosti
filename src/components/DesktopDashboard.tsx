@@ -11,6 +11,7 @@ import {
   LoungeView,
 } from './LoungeView';
 import { PcMasterQuickSendPanel } from './PricingModal';
+import { ZEyeTopRightHubAnchor, ZEyeSidebarBottomFamilyLauncher } from './ZEyeHubInfraBridge';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -511,43 +512,11 @@ export const DesktopDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. 사이드바 하단: 멀린 패밀리 생태계 앱 런처 (확장성 대응) */}
-      <div className="pt-3 border-t border-white/10 flex flex-col gap-1">
-        <button
-          type="button"
-          onClick={() => setShowFamilyAppsInSidebar((v) => !v)}
-          className="w-full px-2.5 py-2 rounded-xl hover:bg-white/5 flex items-center justify-between text-[12px] font-extrabold text-zinc-400 hover:text-white cursor-pointer"
-        >
-          <span className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-md bg-primary-container/20 text-primary-container flex items-center justify-center text-[11px] font-black">
-              F
-            </span>
-            <span>멀린 패밀리 앱</span>
-          </span>
-          <span className="text-[10px]">{showFamilyAppsInSidebar ? '▾' : '▸'}</span>
-        </button>
-
-        {showFamilyAppsInSidebar && (
-          <div className="px-2 py-1.5 rounded-xl bg-zinc-950/70 border border-white/5 flex flex-col gap-1 text-[11.5px] text-zinc-400">
-            <div className="px-2 py-1 rounded hover:bg-white/5 text-primary-container font-bold flex items-center justify-between">
-              <span>⚡ 제트아이 (Z-Eye)</span>
-              <span className="text-[9.5px]">현재 앱</span>
-            </div>
-            <div className="px-2 py-1 rounded hover:bg-white/5 flex items-center justify-between">
-              <span>☀️ 썬드리머 (SunDreamer)</span>
-              <span className="text-[9.5px] text-zinc-500">SSO 연동</span>
-            </div>
-            <div className="px-2 py-1 rounded hover:bg-white/5 flex items-center justify-between">
-              <span>📝 루미노트 (LumiNote)</span>
-              <span className="text-[9.5px] text-zinc-500">SSO 연동</span>
-            </div>
-            <div className="px-2 py-1 rounded hover:bg-white/5 flex items-center justify-between">
-              <span>🍽️ 오늘뭐먹지</span>
-              <span className="text-[9.5px] text-zinc-500">SSO 연동</span>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* 3. 사이드바 하단: 멀린 패밀리 생태계 앱 런처 (허브 SSO 연동) */}
+      <ZEyeSidebarBottomFamilyLauncher
+        isOpen={showFamilyAppsInSidebar}
+        onToggle={() => setShowFamilyAppsInSidebar((v) => !v)}
+      />
     </div>
   );
 
@@ -667,20 +636,9 @@ export const DesktopDashboard: React.FC = () => {
                     >
                       <span>🛠️ 설정몬스터</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowProModal(true)}
-                      title="내 멀린 코인 지갑 & 요금 안내"
-                      className={`px-2.5 py-1 rounded-full font-label-mono text-[11px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
-                        themeMode === 'light'
-                          ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
-                          : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <span>🪙 {(merlinAuth.coinBalance ?? 5200).toLocaleString()}</span>
-                    </button>
                   </>
                 )}
+                <ZEyeTopRightHubAnchor themeMode={themeMode} />
                 <button
                   type="button"
                   onClick={() => {
