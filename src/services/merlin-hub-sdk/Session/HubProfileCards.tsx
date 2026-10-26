@@ -267,6 +267,8 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
             isOpen={isGiftBoxOpen}
             onClose={() => setIsGiftBoxOpen(false)}
             initialTab={giftInitialTab}
+            customProducts={customGiftProducts}
+            minCustomCoin={minCustomCoin}
           />
         </div>
       )}

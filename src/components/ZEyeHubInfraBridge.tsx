@@ -17,6 +17,27 @@ import {
 } from '../services/merlin-hub-sdk/react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { syncHubUserToLocalSupabase, clearZeyeSupabaseSession } from '../services/supabaseClient';
+import type { GiftProductItem } from '../services/merlin-hub-sdk/react';
+
+/**
+ * [제트아이 선물함 상품]
+ * - SDK 기본값(미전달 시)은 어그로필터 '영상 분석 N회' 묶음이 노출되므로 제트아이 화면에 부적합.
+ * - 제트아이 전용 앱 아이템(예: 방장 구독권) 선물 상품은 가격표 확정 전까지 만들지 않고,
+ *   전 패밀리 공통 '자유 코인 선물' 1종만 노출합니다.
+ */
+const ZEYE_GIFT_PRODUCTS: GiftProductItem[] = [
+  {
+    id: 'custom_coin',
+    title: '🎀 자유 코인 선물',
+    subtitle: '1,000C 이상 직접 입력',
+    fullTitle: '🎀 패밀리 코인 자유 선물',
+    amount: 1000,
+    category: 'COIN',
+    emoji: '🎀',
+    defaultMessage: '마음을 담아 준비한 패밀리 코인 선물입니다! 반갑게 열어보세요 🎁',
+    isCustom: true,
+  },
+];
 
 /**
  * [스토어 심사 방어 감지 헬퍼]
@@ -291,6 +312,9 @@ const ZEyeHubGlobalModals: React.FC = () => {
         onClose={() => setIsLoginOpen(false)}
         appName="제트아이"
         appLogoUrl="/icon.svg"
+        // 제트아이는 웰컴 코인 비지급 앱(허브 정책: 웰컴 100코인은 SenseTalk 최초 진입 시에만) →
+        // 기본값 'coin'이면 첫 방문자에게 "무료 코인 받으세요!" 오안내 + 스토어 심사 리스크 → 'none' 고정
+        rewardType="none"
         onSuccess={(email, userId) => {
           setIsLoginOpen(false);
           void refreshSession();
@@ -326,6 +350,7 @@ const ZEyeHubGlobalModals: React.FC = () => {
 
             <HubProfileCard
               hideCoinSection={hideCoin}
+              customGiftProducts={ZEYE_GIFT_PRODUCTS}
               onOpenPurchase={() => {
                 setIsProfileOpen(false);
                 if (!hideCoin) setIsPurchaseOpen(true);
@@ -360,6 +385,8 @@ const ZEyeHubGlobalModals: React.FC = () => {
         <HubGiftBoxModal
           isOpen={isGiftBoxOpen}
           onClose={() => setIsGiftBoxOpen(false)}
+          appName="제트아이"
+          customProducts={ZEYE_GIFT_PRODUCTS}
         />
       )}
 
