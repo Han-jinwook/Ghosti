@@ -1,5 +1,5 @@
 /**
- * Version: v2.3.1
+ * Version: v2.3.2
  * Last Updated: 2026-10-24
  * Merlin Hub SDK — 프로필/선물함/알림/로그아웃 카드
  */

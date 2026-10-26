@@ -1,5 +1,5 @@
 /**
- * Version: v2.1.1
+ * Version: v2.1.2
  * Last Updated: 2026-10-23
  * Description: 일반 패밀리 앱(어그로필터·뭐먹지·센스톡 외 20개 앱 공통 표준 단일 이메일 모달)과 썬드리머(듀얼 탭 & 5,000P 안내) 100% 엄격 분리
  */
@@ -30,7 +30,7 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
   appLogoUrl,
   title = "시작하기",
   subtitleActionText = "",
-  rewardType = 'coin',
+  rewardType = 'none',
   onSuccess,
 }) => {
   const { status, sendOtp, verifyOtp, timer, formatTimer, error, reset } = useHubAuth();
