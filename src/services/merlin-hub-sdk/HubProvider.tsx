@@ -170,13 +170,14 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
       const urlParams = new URLSearchParams(window.location.search);
 
       // SSO (Single Sign-On) 토큰 파싱: F 아이콘 앱 스위처를 통해 넘어올 때 로그인 상태 유지
-      const ssoToken = urlParams.get('token');
+      const ssoToken = urlParams.get('token') || urlParams.get('sso_token');
       if (ssoToken) {
         setSessionToken(ssoToken);
         console.log('[HubProvider] Detected SSO token, saving to session and domain cookie');
         
         // 보안 및 깔끔한 URL을 위해 주소창에서 token 파라미터 제거
         urlParams.delete('token');
+        urlParams.delete('sso_token');
         const searchStr = urlParams.toString();
         const newUrl = window.location.pathname + (searchStr ? '?' + searchStr : '') + window.location.hash;
         window.history.replaceState({}, '', newUrl);

@@ -10,6 +10,7 @@ import {
   HubAuthModal,
   HubPurchaseWidget,
   HubGiftBoxModal,
+  HubAppSwitcher,
   HubErrorBoundary,
   HubBugReporter,
   HubSupportLink,
@@ -115,115 +116,17 @@ export const ZEyeTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> = 
 };
 
 /**
- * [2. 좌측 하단 노션형 사이드바 패밀리 앱 런처 (SSO 핸드오프 연동)]
- * - 제트아이의 노션 스타일 세로 사이드바 하단 `[F] 멀린 패밀리 앱` 디자인을 100% 보존하면서,
- *   클릭 시 `?sso_token=` 무로그인 자동 점핑이 작동하도록 연결합니다.
+ * [2. 좌측 하단 노션형 사이드바 패밀리 앱 런처 (허브 공식 SDK `HubAppSwitcher` v2.8.0 정품 연동)]
+ * - 임의의 수동 아코디언 코드를 전량 폐기하고, 허브 공식 SDK `<HubAppSwitcher variant="sidebar" placement="bottom-up" />`를 그대로 렌더링합니다.
+ * - 클릭 시 가입된 앱(3열 공식 로고 그리드)과 미가입 앱(`썬드리머 패밀리 앱 New` 상세 리스트)이 담긴 정품 화이트 카드 팝업이 사이드바 위로 펼쳐집니다.
  */
 export const ZEyeSidebarBottomFamilyLauncher: React.FC<{
-  isOpen: boolean;
-  onToggle: () => void;
-}> = ({ isOpen, onToggle }) => {
-  const { user, isLoggedIn } = useHub();
-  const joinedApps = (user?.registered_apps || []).map((a) => a.toLowerCase());
-
-  const openFamilyAppWithSso = (baseUrl: string) => {
-    try {
-      const token =
-        typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') : null;
-      const targetUrl = new URL(baseUrl);
-      if (isLoggedIn && token) {
-        targetUrl.searchParams.set('sso_token', token);
-      }
-      window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
-    } catch {
-      window.open(baseUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const familyItems = [
-    {
-      id: 'zeye',
-      label: '⚡ 제트아이 (Z-Eye)',
-      url: 'https://z-eye.sundreamer.app',
-      isCurrent: true,
-    },
-    {
-      id: 'sundreamer',
-      label: '☀️ 썬드리머 (SunDreamer)',
-      url: 'https://sundreamer.app',
-      isCurrent: false,
-    },
-    {
-      id: 'sensetalk',
-      label: '💬 센스톡 (SenseTalk)',
-      url: 'https://sensetalk.netlify.app',
-      isCurrent: false,
-    },
-    {
-      id: 'aggrofilter',
-      label: '🛡️ 어그로필터 (AggroFilter)',
-      url: 'https://aggrofilter.com',
-      isCurrent: false,
-    },
-    {
-      id: 'whateat',
-      label: '🍽️ 오늘뭐먹지 (WhatEat)',
-      url: 'https://whateat.sundreamer.app',
-      isCurrent: false,
-    },
-  ];
-
+  isOpen?: boolean;
+  onToggle?: () => void;
+}> = () => {
   return (
-    <div className="pt-3 border-t border-white/10 flex flex-col gap-1">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full px-2.5 py-2 rounded-xl hover:bg-white/5 flex items-center justify-between text-[12px] font-extrabold text-zinc-400 hover:text-white cursor-pointer"
-      >
-        <span className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded-md bg-primary-container/20 text-primary-container flex items-center justify-center text-[11px] font-black">
-            F
-          </span>
-          <span>멀린 패밀리 앱</span>
-        </span>
-        <span className="text-[10px]">{isOpen ? '▾' : '▸'}</span>
-      </button>
-
-      {isOpen && (
-        <div className="px-2 py-1.5 rounded-xl bg-zinc-950/70 border border-white/5 flex flex-col gap-1 text-[11.5px] text-zinc-400">
-          {familyItems.map((item) => {
-            if (item.isCurrent) {
-              return (
-                <div
-                  key={item.id}
-                  className="px-2 py-1 rounded bg-white/5 text-primary-container font-bold flex items-center justify-between"
-                >
-                  <span>{item.label}</span>
-                  <span className="text-[9.5px]">현재 앱</span>
-                </div>
-              );
-            }
-            const isJoined = joinedApps.includes(item.id);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => openFamilyAppWithSso(item.url)}
-                className="w-full text-left px-2 py-1 rounded hover:bg-white/10 hover:text-white flex items-center justify-between transition-colors cursor-pointer"
-              >
-                <span className="truncate">{item.label}</span>
-                <span
-                  className={`text-[9.5px] shrink-0 ${
-                    isJoined ? 'text-emerald-400 font-bold' : 'text-zinc-500'
-                  }`}
-                >
-                  {isJoined ? '가입됨 · SSO' : 'SSO 연동'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+    <div className="pt-3 border-t border-black/10 dark:border-white/10">
+      <HubAppSwitcher currentAppId="zeye" variant="sidebar" placement="bottom-up" />
     </div>
   );
 };
