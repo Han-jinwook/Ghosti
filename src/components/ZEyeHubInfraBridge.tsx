@@ -274,13 +274,25 @@ const ZEyeHubGlobalModals: React.FC = () => {
       )}
 
       {/* 3. 3몬스터 패밀리 코인 충전소 모달 (스토어 심사 모드에서는 아예 렌더링하지 않음) */}
-      {!hideCoin && (
-        <HubPurchaseWidget
-          isModal
-          isOpen={isPurchaseOpen}
-          onClose={() => setIsPurchaseOpen(false)}
-          appName="제트아이"
-        />
+      {!hideCoin && isPurchaseOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl p-4 sm:p-6 text-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsPurchaseOpen(false)}
+              className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-slate-600 font-bold transition-colors cursor-pointer"
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+            <HubPurchaseWidget
+              isModal
+              isOpen={isPurchaseOpen}
+              onClose={() => setIsPurchaseOpen(false)}
+              appName="제트아이"
+            />
+          </div>
+        </div>
       )}
 
       {/* 4. 패밀리 선물함 단독 모달 (스토어 심사 모드에서는 아예 렌더링하지 않음) */}
