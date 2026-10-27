@@ -142,7 +142,7 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
 > = {
   personal: [
 
-    { id: 'search', label: '🎯 AI 내용검색' },
+    { id: 'search', label: '🎯 귀신같이 찾기' },
     { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
     { id: 'settings', label: '🛠️ 설정몬스터' },
   ],
@@ -166,7 +166,7 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   ],
   work: [
     { id: 'trial', label: '💼 업무 공유(S:) 시작' },
-    { id: 'search', label: '내용검색 & 폴더 트리(S:)' },
+    { id: 'search', label: '귀신같이 찾기 & 폴더 트리(S:)' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
     { id: 'settings', label: '팀원 권한 & S: 드라이브' },
   ],

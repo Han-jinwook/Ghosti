@@ -177,7 +177,7 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 > = {
   personal: [
 
-    { id: 'dashboard', label: '🎯 AI 내용검색' },
+    { id: 'dashboard', label: '🎯 귀신같이 찾기' },
     { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
     { id: 'sync', label: '🛠️ 설정몬스터' },
   ],
@@ -362,7 +362,7 @@ export const DesktopDashboard: React.FC = () => {
   const activeLoungeLabel =
     MAIN_LOUNGE_MENUS.find((m) => m.id === activeLoungeType)?.label || '개인 라운지';
   const activeSubmenuLabel =
-    (activeLoungeType === 'personal' && desktopTab === 'trial' ? '🧹 클린몬스터 진단' : currentSubmenus.find((s) => s.id === desktopTab)?.label) || '내용검색';
+    (activeLoungeType === 'personal' && desktopTab === 'trial' ? '🧹 클린몬스터 진단' : currentSubmenus.find((s) => s.id === desktopTab)?.label) || '귀신같이 찾기';
 
   const renderSidebarNavigationContent = (isMobileDrawer = false) => (
     <div
@@ -429,7 +429,7 @@ export const DesktopDashboard: React.FC = () => {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <MainLoungeMonoIcon id={menu.id} className="w-[15px] h-[15px] shrink-0" />
-                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 클린·설정몬스터 진단과 1초 AI 내용검색' : undefined}>{menu.label}</span>
+                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 클린·설정몬스터와 귀신같이 찾기' : undefined}>{menu.label}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {menu.freeBadge && !isLoungeSub && (
@@ -821,7 +821,7 @@ export const DesktopDashboard: React.FC = () => {
                     <div className="flex items-center gap-2.5">
                       <h1 className="font-headline-md text-[22px] md:text-[26px] text-white font-extrabold tracking-tight">
                         {activeLoungeType === 'personal'
-                          ? '🎯 내 기기 내용 검색'
+                          ? '🎯 내 기기 귀신같이 찾기'
                           : activeLoungeType === 'family'
                           ? `👨‍👩‍👧‍👦 ${activeFamilyRoom} 패밀리 앨범`
                           : activeLoungeType === 'club'
@@ -862,7 +862,7 @@ export const DesktopDashboard: React.FC = () => {
                             <span className="text-2xl shrink-0">⚡</span>
                             <div>
                               <div className="text-[13px] font-black text-slate-900 dark:text-white">
-                                내 컴퓨터 사진·문서 1초 AI 내용검색 시작하기 (언제나 0원)
+                                내 컴퓨터 사진·문서 1초 만에 귀신같이 찾기 시작하기 (언제나 0원)
                               </div>
                               <div className="text-[11.5px] text-slate-600 dark:text-zinc-300 mt-0.5">
                                 한 번의 [OK]로 초경량 로컬 엔진 연결부터 AI 내용검색 인덱싱까지 자동 진행됩니다.
@@ -874,7 +874,7 @@ export const DesktopDashboard: React.FC = () => {
                             onClick={() => setShowZCoreGuideModal(true)}
                             className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap shadow-md shadow-teal-500/20 transition-all cursor-pointer shrink-0"
                           >
-                            ⭕ OK! 내용검색 시작하기
+                            ⭕ OK! 귀신같이 찾기 시작하기
                           </button>
                         </div>
                       )}

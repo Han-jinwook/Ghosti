@@ -149,7 +149,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     resetSearchSpaceToAll('gallery');
     useSaySeeStore.setState({
       hasUserSelectedSearchTab: true,
-      lastQuarantineToast: `🎉 내 컴퓨터 사진 ${totalPhotoCount}장 AI 내용검색 인덱싱 완료! 모든 사진이 화면에 딱 펼쳐졌습니다.`,
+      lastQuarantineToast: `🎉 내 컴퓨터 사진 ${totalPhotoCount}장 귀신같이 찾기 인덱싱 완료! 모든 사진이 화면에 딱 펼쳐졌습니다.`,
     });
     onClose();
     if (typeof document !== 'undefined') {
@@ -219,7 +219,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       : progress < 88
       ? '📄 서류(PDF·워드·한글·엑셀·영수증·계약서) 전문 OCR 텍스트 색인 중...'
       : progress < 100
-      ? '⚡ 내 PC [사진 · 동영상 · 서류] 통합 1초 내용검색 인덱스 최종 조립 중...'
+      ? '⚡ 내 PC [사진 · 동영상 · 서류] 통합 1초 귀신같이 찾기 인덱스 최종 조립 중...'
       : '✨ 전수 인덱싱 완료! 내 PC 사진·영상·서류를 화면에 바로 펼칩니다!';
 
   const previewSliceStart = Math.floor((progress / 100) * Math.max(0, activePhotos.length - 5));
@@ -321,7 +321,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     3. 진행바가 끝나면 내 컴퓨터 사진이 화면에 딱! 펼쳐집니다
                   </div>
                   <p className="text-[11.5px] opacity-85 mt-0.5">
-                    추가 클릭 없이 완료 즉시 모든 사진이 열리며 0.1초 만에 내용검색을 쓸 수 있습니다.
+                    추가 클릭 없이 완료 즉시 모든 사진이 열리며 0.1초 만에 귀신같이 찾기를 쓸 수 있습니다.
                   </p>
                 </div>
               </div>
@@ -445,7 +445,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
           </>
         )}
 
-        {/* ─────────────── [3단계: AI 내용검색 인덱싱 진행 시간표시바 -> 100% 완료 시 사진 딱!] ─────────────── */}
+        {/* ─────────────── [3단계: 귀신같이 찾기 인덱싱 진행 시간표시바 -> 100% 완료 시 사진 딱!] ─────────────── */}
         {step === 'indexing' && (
           <>
             <div className="flex items-start justify-between gap-3 mb-4">
@@ -463,7 +463,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     </span>
                   </div>
                   <h3 className="text-lg font-black tracking-tight">
-                    내 컴퓨터 사진 AI 내용검색 인덱싱 중...
+                    내 컴퓨터 사진 귀신같이 찾기 인덱싱 중...
                   </h3>
                 </div>
               </div>
@@ -509,7 +509,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             {previewThumbs.length > 0 && (
               <div className="mb-5">
                 <div className="text-[11px] font-bold text-zinc-400 mb-2 flex items-center justify-between">
-                  <span>⚡ 실시간 AI 내용검색 스캔 중인 사진</span>
+                  <span>⚡ 실시간 귀신같이 인덱싱 중인 사진</span>
                   <span>끝나면 자동으로 전체 사진이 펼쳐집니다</span>
                 </div>
                 <div className="grid grid-cols-5 gap-2">
