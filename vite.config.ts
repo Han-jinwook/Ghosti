@@ -296,11 +296,54 @@ async function embedQueryVector768(query: string): Promise<number[] | null> {
 }
 
 async function transcribeAudioToKoreanQuery(audioBase64: string, mimeType: string): Promise<string | null> {
+  if (!audioBase64) return null;
+  const promptText =
+    '사용자가 사진을 찾기 위해 말한 음성입니다. 들리는 한국어(또는 영어) 검색어 문장만 정확히 그대로 텍스트로 출력하세요. 설명이나 따옴표 없이 발화 내용만 출력하세요.';
+
+  // 1순위: 중앙 Render AI 게이트웨이 (os.sundreamer.app/api/ai/gemini - beakes 풀)
+  try {
+    const hubRes = await fetch(
+      process.env.MERLIN_AI_HUB_URL || 'https://os.sundreamer.app/api/ai/gemini',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-id': 'z-eye',
+          'x-ai-account': 'beakes',
+        },
+        body: JSON.stringify({
+          prompt: promptText,
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType || 'audio/webm',
+                data: audioBase64,
+              },
+            },
+          ],
+          model: 'gemini-flash-lite-latest',
+          temperature: 0.1,
+          appId: 'z-eye',
+          account: 'beakes',
+        }),
+      }
+    );
+    if (hubRes.ok) {
+      const hubData: any = await hubRes.json();
+      if (hubData?.success && hubData?.text) {
+        return String(hubData.text).trim().replace(/^["'“”]|["'“”]$/g, '');
+      }
+    }
+  } catch {
+    /* fallback to local key */
+  }
+
+  // 2순위: 로컬 키 폴백
   const apiKey = resolveGeminiApiKey();
-  if (!apiKey || !audioBase64) return null;
+  if (!apiKey) return null;
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -309,7 +352,7 @@ async function transcribeAudioToKoreanQuery(audioBase64: string, mimeType: strin
             {
               parts: [
                 {
-                  text: '사용자가 사진을 찾기 위해 말한 음성입니다. 들리는 한국어(또는 영어) 검색어 문장만 정확히 그대로 텍스트로 출력하세요. 설명이나 따옴표 없이 발화 내용만 출력하세요.',
+                  text: promptText,
                 },
                 {
                   inlineData: {
