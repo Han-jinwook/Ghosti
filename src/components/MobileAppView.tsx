@@ -270,25 +270,26 @@ export const MobileAppView: React.FC = () => {
               : 'bg-[#09090B]/95 border-white/10'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center justify-between gap-1.5 overflow-hidden">
+            <div className="flex items-center gap-1 min-w-0 shrink">
               <ZEyeBrandLogo
                 size="mobile"
                 themeMode={themeMode}
-                showBadge={true}
+                showBadge={false}
+                subtitle=""
                 onClick={() => setMobileTab('search')}
-                className="shrink-0"
+                className="shrink-0 scale-90 sm:scale-100 origin-left"
               />
             </div>
 
-            {/* 우상단: Z-Eye 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액(모바일 스토어 심사 모드 isStoreAppMode=true && !enableSetupMonster 시 자동 숨김) + 심플 아이콘 테마 토글 */}
-            <div className="flex items-center gap-1.5 shrink-0" aria-label="화면 테마 영역">
+            {/* 우상단: Z-Eye 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액 + 심플 아이콘 테마 토글 */}
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" aria-label="화면 테마 영역">
               {myPassportCluster && activeLoungeType !== 'work' && (
                 <button
                   type="button"
                   onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
                   title="🛂 Z-Eye 여권 최신 연도 정면 얼굴 자동 문패 (5대 스타일 슬롯 원터치 변경)"
-                  className={`pl-1 pr-2 py-0.5 rounded-full border flex items-center gap-1 transition-all cursor-pointer ${
+                  className={`pl-1 pr-1.5 py-0.5 rounded-full border flex items-center gap-1 transition-all cursor-pointer ${
                     themeMode === 'light'
                       ? 'bg-teal-50/90 border-teal-300 text-teal-900'
                       : 'bg-zinc-900 border-primary-container/45 text-white'
@@ -297,9 +298,9 @@ export const MobileAppView: React.FC = () => {
                   <img
                     src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
                     alt={myDoorplatePersona}
-                    className="w-5 h-5 rounded-full object-cover border border-primary-container shrink-0"
+                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full object-cover border border-primary-container shrink-0"
                   />
-                  <span className="font-label-sm text-[10.5px] font-extrabold whitespace-nowrap">
+                  <span className="font-label-sm text-[10px] sm:text-[10.5px] font-extrabold whitespace-nowrap">
                     👑 {myDoorplatePersona}
                   </span>
                 </button>
@@ -308,9 +309,9 @@ export const MobileAppView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowSetupMonsterModal(true, 'mobile')}
-                  className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-extrabold"
+                  className="hidden md:inline-flex px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10px] font-extrabold"
                 >
-                  🛠️ 설정몬스터
+                  🛠️ 설정
                 </button>
               )}
               {/* 허브 SDK 표준 앵커 (PC 헤더와 동일): 🪙 코인(스토어 심사 모드·네이티브 앱에서는 DOM 원천 비노출) + 🐾 곰발바닥 OTP 로그인/통합 프로필 */}
