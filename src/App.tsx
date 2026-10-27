@@ -105,19 +105,20 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* 글로벌 액션 피드백 토스트 */}
+      {/* 글로벌 액션 피드백 토스트 (라이트/다크 테마 적응형 고명도 스타일) */}
       {lastQuarantineToast && (
         <div
           className={`fixed ${
             lastUndoBatch ? 'bottom-24' : 'bottom-16'
-          } left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-full bg-surface-container-highest/95 backdrop-blur-xl border border-primary-container/40 text-on-surface font-label-md text-label-md font-bold shadow-[0_0_32px_rgba(0,229,255,0.3)] flex items-center gap-2 max-w-[92vw]`}
+          } left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-teal-500/40 text-slate-800 dark:text-zinc-100 font-label-md text-[13px] font-bold shadow-[0_10px_30px_rgba(13,148,136,0.25)] flex items-center gap-2.5 max-w-[92vw]`}
         >
           <span className="truncate">{lastQuarantineToast}</span>
           <button
             onClick={dismissQuarantineToast}
-            className="text-on-surface-variant hover:text-on-surface shrink-0"
+            className="text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white shrink-0 cursor-pointer"
+            aria-label="닫기"
           >
-            <span className="material-symbols-outlined text-[16px]">close</span>
+            ✕
           </button>
         </div>
       )}
