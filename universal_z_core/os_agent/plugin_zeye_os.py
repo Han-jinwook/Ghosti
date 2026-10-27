@@ -795,7 +795,10 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         p = Path(extra_path)
         if p.exists() and p.is_dir():
             roots.append(p)
+    exe_dir = Path(sys.executable).resolve().parent
     candidates = [
+        exe_dir / "sample_photos_301",
+        THIS_DIR / "sample_photos_301",
         THIS_DIR.parents[1] / "test_photos",
         THIS_DIR.parents[1] / "test_docs",
         Path("D:/Z-Eye/test_photos"),
@@ -873,7 +876,7 @@ def resolve_active_photo_dir(custom_path: str = "") -> Path:
     return pic if pic.exists() else Path.home()
 
 
-_LEGACY_PERSONAL_RX = re.compile(r"^(1721\d+|2024\d+_\d+|2026\d+_\d+|Screenshot_2026|Gemini_Generated_Image_|image-178558)", re.IGNORECASE)
+_LEGACY_PERSONAL_RX = re.compile(r"^(1721\d+|2024\d+_\d+|2026\d+_\d+|Screenshot_2026|Gemini_Generated_Image_|image-178558|stock_photo_\d+)", re.IGNORECASE)
 
 
 def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:

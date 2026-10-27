@@ -53,6 +53,11 @@ exit
             add_file_to_zip(z, "Merlin_Z_Core_Setup.exe", f.read())
         add_file_to_zip(z, "Merlin_Z_Core_실행.bat", bat_content.encode("utf-8"))
         add_file_to_zip(z, "안내_README.txt", readme_content.encode("utf-8"))
+        test_photos_dir = ROOT / "test_photos"
+        if test_photos_dir.exists():
+            for img_p in sorted(test_photos_dir.iterdir()):
+                if img_p.is_file() and img_p.suffix.lower() in (".jpg", ".jpeg", ".png"):
+                    add_file_to_zip(z, f"sample_photos_301/{img_p.name}", img_p.read_bytes())
 
     size_mb = round(PUBLIC_ZIP.stat().st_size / 1024 / 1024, 2)
     print(f"✅ Merlin_Z_Core.zip created successfully in public/! Size: {size_mb} MB")

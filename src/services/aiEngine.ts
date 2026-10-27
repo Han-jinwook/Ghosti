@@ -1392,7 +1392,7 @@ export async function executeTextSearch(
       score = photo.presetScores[preset.id];
     } else if (preset && photo.tags.includes(preset.categoryTag)) {
       score = 0.68;
-    } else if (photo.name.toLowerCase().includes(qLower)) {
+    } else if ((`${photo.tags.join(' ')} ${photo.captionKo || ''} ${photo.locationKo || ''} ${photo.vaultCategoryLabel || ''} ${photo.name}`).toLowerCase().includes(qLower) || extractKoStems(qLower).filter((t) => t.length >= 1 && !['사진', '찾아줘', '보여줘'].includes(t)).every((tk) => matchKoTokenInStems(tk, extractKoStems(`${photo.tags.join(' ')} ${photo.captionKo || ''} ${photo.locationKo || ''} ${photo.vaultCategoryLabel || ''} ${photo.name}`), `${photo.tags.join(' ')} ${photo.captionKo || ''} ${photo.name}`.toLowerCase()))) {
       score = 0.72;
     }
 
