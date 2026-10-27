@@ -1,5 +1,5 @@
 /**
- * 🎬 제트아이 Z몬스터 — 맥락 맞춤 '1분 활용팁 숏폼' 큐레이션 & 무토큰(Zero-LLM) 투시검색 라우팅 엔진
+ * 🎬 제트아이 Z몬스터 — 맥락 맞춤 '1분 활용팁 숏폼' 큐레이션 & 무토큰(Zero-LLM) 내용검색 라우팅 엔진
  *
  * [멀린님 확정 3대 원칙]
  * 1. 노출 빈도 (2회당 1번): 매번 나오면 반감이 생기므로 Z몬스터 작업 완료 2회당 1번(짝수 회차)에만 노출합니다.
@@ -46,7 +46,7 @@ export const ZEYE_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
     targetLounge: 'work',
     contextTags: ['cleanup', 'doc', 'os_repair'],
     shortUrl: 'https://youtube.com/shorts/zeye-work-sdrive-tip01',
-    summaryText: '구글 드라이브/마이박스 폴더 그대로 연결해 1초 만에 계약서 본문까지 투시 검색하기',
+    summaryText: '구글 드라이브/마이박스 폴더 그대로 연결해 1초 만에 계약서 본문까지 내용검색하기',
   },
   {
     id: 'sf_work_02',

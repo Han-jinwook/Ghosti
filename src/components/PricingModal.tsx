@@ -324,7 +324,7 @@ export const PricingModal: React.FC = () => {
 
   const handleShareApp = async () => {
     const shareText =
-      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 투시검색 — 내 폰·PC 속 투시검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
+      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
@@ -500,7 +500,7 @@ export const PricingModal: React.FC = () => {
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                🆓 내 기기 (투시검색 · 클린 · 설정몬스터)
+                🆓 내 기기 (내용검색 · 클린 · 설정몬스터)
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/35 flex flex-col justify-between gap-2.5">
@@ -513,10 +513,10 @@ export const PricingModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12px] text-emerald-200/95 font-bold">
-                  &ldquo;내 폰·PC 속 클린·설정몬스터와 1초 투시검색 — 기간 제한 없이 언제나 0원&rdquo;
+                  &ldquo;내 폰·PC 속 클린·설정몬스터와 1초 AI 내용검색 — 기간 제한 없이 언제나 0원&rdquo;
                 </p>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  • 👁️ <strong>Z-Eye 투시검색</strong> (내 사진·영상·서류 1초 검색 · 언제나 0원)<br />
+                  • 👁️ <strong>Z-Eye 내용검색</strong> (내 사진·영상·서류 1초 검색 · 언제나 0원)<br />
                   • 🩺 <strong>Z-Eye 클린몬스터</strong> (중복·스크린샷·바탕화면 정리 · 언제나 0원)<br />
                   • 🛠️ <strong>Z-Eye 설정몬스터</strong> (원클릭 수리 &amp; 1초 원상복구 · 비용 없이 제한 없이)
                 </p>

@@ -3,7 +3,7 @@
  *    실제 카톡 대화방 직행 장전 · 고난도 질문 시 단골 AI(기본값: 제미나이) 라이브 음성 바톤터치 엔진
  *
  * - 유료 Typecast 전면 배제 -> 100% 무료 MS 신경망(edge-tts) '현수(ko-KR-HyunsuNeural) & 선희(ko-KR-SunHiNeural)' 투톱 일원화
- * - 일일 10회 제한 등 횟수 제한 전면 폐지 ("내 폰·PC 속 투시검색·Z몬스터는 언제나 0원")
+ * - 일일 10회 제한 등 횟수 제한 전면 폐지 ("내 폰·PC 속 내용검색·Z몬스터는 언제나 0원")
  * - 최근 열어본 AI 기록이 0건인 초기 유저는 기본값으로 '제미나이(Gemini, https://gemini.google.com/app)' 오픈
  */
 
@@ -13,7 +13,7 @@ export const ZEYE_VOICE_ACTORS = {
   hyunsu_briefing: {
     voiceId: 'ko-KR-HyunsuNeural',
     nameKo: '현수',
-    roleDesc: '설정몬스터·클린몬스터 안내, Z몬스터 브리핑, 투시검색 짧은 결과 답변, AI 바톤터치 안내',
+    roleDesc: '설정몬스터·클린몬스터 안내, Z몬스터 브리핑, 내용검색 짧은 결과 답변, AI 바톤터치 안내',
   },
   sunhi_doc_reader: {
     voiceId: 'ko-KR-SunHiNeural',

@@ -23,7 +23,7 @@ const LOUNGE_TABS: Array<{
     icon: '💻',
     label: '내 기기',
     shortPrice: '이메일 로그인 즉시 사용',
-    desc: '내 폰·PC 속 클린·설정몬스터 진단과 1초 투시검색',
+    desc: '내 폰·PC 속 클린·설정몬스터 진단과 1초 AI 내용검색',
   },
   {
     id: 'family',
@@ -488,7 +488,7 @@ export const LoungeView: React.FC = () => {
                 <p className="font-body-sm text-[13.5px] text-zinc-400">
                   {personalTrialStatus === 'done'
                     ? `내 기기 전체 파일(사진 ${totalDevicePhotos}장 · 영상 ${totalDeviceVideos}개 · 문서 ${totalDeviceDocs}건) 중 1차 샘플 진단이 완료되었습니다.`
-                    : '버튼을 누르면 내 기기 속 영상·사진·문서를 빠르게 스캔하여 정리 대상과 투시검색 준비 상태를 브리핑합니다.'}
+                    : '버튼을 누르면 내 기기 속 영상·사진·문서를 빠르게 스캔하여 정리 대상과 내용검색 준비 상태를 브리핑합니다.'}
                 </p>
               </div>
 
@@ -691,7 +691,7 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-primary-container font-bold">
-                    👁️ Z-Eye 투시검색
+                    🔍 Z-Eye AI 내용검색
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     사진 · 영상 · 서류 1초 검색
@@ -701,7 +701,7 @@ export const LoungeView: React.FC = () => {
                   </p>
                 </div>
                 <span className="text-[12.5px] font-extrabold text-primary-container group-hover:translate-x-0.5 transition-transform">
-                  투시검색 열기 →
+                  내용검색 열기 →
                 </span>
               </button>
 
@@ -1740,7 +1740,7 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
     author: '박과장 (공무팀)',
     lockedBy: '박과장',
     cacheSizeLabel: '29.4 KB 선행 캐싱됨',
-    summaryTitle: '[엑셀 시트 1~3 통합 투시 요약] 을지로 오피스 리모델링 철거·목공·전기 공정별 일위대가 및 협력사 네고 단가표',
+    summaryTitle: '[엑셀 시트 1~3 통합 내용 요약] 을지로 오피스 리모델링 철거·목공·전기 공정별 일위대가 및 협력사 네고 단가표',
     matchedSnippet:
       '표(Sheet2_철거단가) C14셀: "야간 방음 가설벽 설치 및 폐기물 반출 일식 — 단가 4,850,000원 (부자재 포함, 안전관리비 8% 별도)"',
     tableHeaders: ['공종 코드', '세부 내역 (규격)', '단위', '2026 표준 단가', '비고 / 협력사'],
@@ -1764,7 +1764,7 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
     author: '이팀장 (전략기획)',
     lockedBy: '이팀장',
     cacheSizeLabel: '28.1 KB 선행 캐싱됨',
-    summaryTitle: '[계약서 본문 + 별첨 과업지시서 투시 요약] 제14조 지체상금(1일 0.15%) 및 제19조 지식재산권 공동귀속 특약 조항',
+    summaryTitle: '[계약서 본문 + 별첨 과업지시서 내용 요약] 제14조 지체상금(1일 0.15%) 및 제19조 지식재산권 공동귀속 특약 조항',
     matchedSnippet:
       '본문 제14조(지체상금 및 위약금) 제2항: "을이 정당한 사유 없이 납기를 지연할 경우 매 지체일수당 계약금액의 1,000분의 1.5(0.15%)를 공제하며, 최대 한도는 총 계약금액의 10%로 한다."',
     tableHeaders: ['조항', '핵심 규정 항목', '적용 기준 / 비율', '법무 검토 의견'],
@@ -1787,7 +1787,7 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
     author: '정실장 (재무회계)',
     lockedBy: null,
     cacheSizeLabel: '30.0 KB 선행 캐싱됨',
-    summaryTitle: '[회계원장 시트 투시 요약] 3분기 전자세금계산서 발행분 18건 중 미수금 2건(한빛테크·청담디자인) 입금 독촉 일정',
+    summaryTitle: '[회계원장 시트 내용 요약] 3분기 전자세금계산서 발행분 18건 중 미수금 2건(한빛테크·청담디자인) 입금 독촉 일정',
     matchedSnippet:
       '표(3Q_미수금현황) 행 8~9: "(주)한빛테크 잔금 13,200,000원 (세금계산서 09/25 발행, 입금약정일 10/25) · 청담디자인스튜디오 5,500,000원 (10/20 입금예정)"',
     tableHeaders: ['거래처명', '품목 / 프로젝트', '공급가액 (VAT포함)', '계산서 발행일', '수금 상태'],
@@ -1810,7 +1810,7 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
     author: '정실장 (인사총무)',
     lockedBy: null,
     cacheSizeLabel: '26.8 KB 선행 캐싱됨',
-    summaryTitle: '[한글(HWP) 본문 투시 요약] 포괄산정 연장근로수당 기준, 식대 비과세 20만 원 항목 및 영업비밀 보호 특약',
+    summaryTitle: '[한글(HWP) 본문 내용 요약] 포괄산정 연장근로수당 기준, 식대 비과세 20만 원 항목 및 영업비밀 보호 특약',
     matchedSnippet:
       '제6조(임금의 구성항목) 표2: "기본급 및 직무수당 외 식대 월 200,000원(비과세)을 별도 지급하며, 퇴직금 산정 기준은 근로기준법 제34조를 따른다."',
     tableHeaders: ['급여 항목', '산정 기준', '과세 여부', '지급일'],
@@ -1833,7 +1833,7 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
     author: '최대리 (공간기획)',
     lockedBy: null,
     cacheSizeLabel: '29.9 KB 선행 캐싱됨',
-    summaryTitle: '[스캔 PDF OCR + 표 투시 요약] A사(다온팩토리) vs B사(성수목공) vs C사(아크릴랩) 쇼케이스 제작 단가 및 납기 비교표',
+    summaryTitle: '[스캔 PDF OCR + 표 내용 요약] A사(다온팩토리) vs B사(성수목공) vs C사(아크릴랩) 쇼케이스 제작 단가 및 납기 비교표',
     matchedSnippet:
       '비교표 4행: "B사(성수목공) — SUS 헤어라인 쇼케이스 + LED 간접조명 일체형 1,280만 원 (납기 10일, 무상 A/S 1년) ★최종 선정 추천"',
     tableHeaders: ['비교 항목', 'A사 (다온팩토리)', 'B사 (성수목공 ★추천)', 'C사 (아크릴랩)'],
@@ -1856,7 +1856,7 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
     author: '강사원 (현장감리)',
     lockedBy: null,
     cacheSizeLabel: '27.5 KB 선행 캐싱됨',
-    summaryTitle: '[도면 주기(Note) & 레이어 텍스트 투시 요약] 메인 분전반(MCCB 100A) 증설 위치 및 에스프레소 머신 전용 단독 회로(30A) 배선 지시',
+    summaryTitle: '[도면 주기(Note) & 레이어 텍스트 내용 요약] 메인 분전반(MCCB 100A) 증설 위치 및 에스프레소 머신 전용 단독 회로(30A) 배선 지시',
     matchedSnippet:
       '도면 우측 하단 특기시방 주기(Note #4): "바리스타 바(Bar) 하부 에스프레소 머신(7.2kW) 및 제빙기는 반드시 30A 누전차단기 단독 회로로 직결 시공할 것 (타 콘센트 분기 절대 금지)"',
     tableHeaders: ['회로 번호', '부하 명칭', '차단기 용량', '전선 규격 / 배관'],

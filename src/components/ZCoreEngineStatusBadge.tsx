@@ -29,7 +29,7 @@ export const ZCoreEngineStatusBadge: React.FC<ZCoreEngineStatusBadgeProps> = ({
       title={
         isConnected
           ? `🟢 멀린 Z-코어 정상 연결됨 (Port ${Z_CORE_PORT}) - 클릭 시 상태 안내`
-          : `🟡 멀린 Z-코어 미실행 (내 컴퓨터 투시 대기) - 클릭 시 다운로드 및 연결 안내`
+          : `🟡 멀린 Z-코어 미실행 (내 컴퓨터 내용검색 대기) - 클릭 시 다운로드 및 연결 안내`
       }
       className={`px-2.5 py-1 rounded-full font-label-mono text-[11px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
         isConnected

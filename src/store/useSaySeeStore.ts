@@ -4050,7 +4050,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       const labelMap: Record<PricingPlanId, string> = {
         free_trial: '✨ 개인 (기본) : 언제나 0원 ("혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다.")',
         personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 Z-Eye 클린몬스터',
-        personal_sub_3900: '개인 라운지 • 1초 투시검색 몬스터 (월 1,900원 • 월 1회 클린몬스터 청소 포함)',
+        personal_sub_3900: '개인 라운지 • 1초 AI 내용검색 몬스터 (월 1,900원 • 월 1회 클린몬스터 청소 포함)',
         personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 • 선착순 100명 10년 마스터권)',
         family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
         family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',

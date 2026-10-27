@@ -373,7 +373,7 @@ export const DesktopDashboard: React.FC = () => {
       }`}
     >
       <div className="flex flex-col gap-4 overflow-y-auto no-scrollbar">
-        {/* 1. 사이드바 최상단: 공식 스타일 A 브랜드 로고 (Z-Eye + [👁️ AI 투시검색]) & 사이드바 접기 버튼 */}
+        {/* 1. 사이드바 최상단: 공식 스타일 A 브랜드 로고 (Z-Eye + [👁️ AI 내용검색]) & 사이드바 접기 버튼 */}
         <div className="flex items-center justify-between px-1.5 py-1 gap-1.5">
           <ZEyeBrandLogo
             size="desktop"
@@ -684,7 +684,7 @@ export const DesktopDashboard: React.FC = () => {
                   type="button"
                   onClick={() => {
                     const shareText =
-                      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 투시검색 — 내 폰·PC 속 투시검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
+                      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
                       void navigator.clipboard.writeText(shareText);
                     }
