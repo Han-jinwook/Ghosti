@@ -9,7 +9,7 @@ export interface ZEyeBrandLogoProps {
   showBadge?: boolean;
   /** 호환성 유지용 배지 텍스트 */
   badgeText?: string;
-  /** 서브 타이틀 문구 (기본: '1초 AI 내용검색') */
+  /** 서브 타이틀 문구 (기본: '1초 AI 파일·영상 내용검색') */
   subtitle?: string;
   onClick?: () => void;
   className?: string;
@@ -20,7 +20,7 @@ export interface ZEyeBrandLogoProps {
  * - 좌측: 36x36px (w-9 h-9) 스쿼클 3D 민트·블루 Z 렌즈 심볼 (`/logo-symbol.png`), rounded-xl, shadow-md
  * - 우측 텍스트 블록: flex flex-col justify-center
  *   - 1단 (메인 브랜드명): Z-Eye (두께감 있는 text-[22px] font-black tracking-tighter leading-none, Z는 선명한 text-teal-600 또는 네온 그라데이션)
- *   - 2단 (마이크로 서브 슬로건): 1초 AI 내용검색 (text-[11px] font-bold tracking-tight text-teal-600/90 leading-none mt-1)
+ *   - 2단 (마이크로 서브 슬로건): 1초 AI 파일·영상 내용검색 (text-[11px] font-bold tracking-tight text-teal-600/90 leading-none mt-1)
  * - 전체 높이와 36px 심볼이 하나의 그래픽 로고처럼 일체화
  */
 export const ZEyeBrandLogo: React.FC<ZEyeBrandLogoProps> = ({
@@ -28,7 +28,7 @@ export const ZEyeBrandLogo: React.FC<ZEyeBrandLogoProps> = ({
   themeMode,
   showBadge: _showBadge,
   badgeText: _badgeText,
-  subtitle = '1초 AI 내용검색',
+  subtitle = '1초 AI 파일·영상 내용검색',
   onClick,
   className = '',
 }) => {
@@ -54,7 +54,7 @@ export const ZEyeBrandLogo: React.FC<ZEyeBrandLogoProps> = ({
   return (
     <div
       onClick={onClick}
-      title="제트아이 (Z-Eye) — 1초 AI 내용검색"
+      title="제트아이 (Z-Eye) — 1초 AI 파일·영상 내용검색"
       className={`inline-flex items-center gap-3 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
