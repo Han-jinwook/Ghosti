@@ -1,7 +1,7 @@
 {
-  "name": "Z-Eye (제트아이) — AI 투시검색 & No-클라우드 라운지",
+  "name": "제트아이(Z-Eye) — 1초 AI 파일·영상 내용검색",
   "short_name": "Z-Eye",
-  "description": "사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 AI 투시검색 & No-클라우드 라운지",
+  "description": "사진·영상·서류 속 내용까지 1초 만에 찾아주는 AI 내용검색 & No-클라우드 라운지",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#121318",
