@@ -139,8 +139,8 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
 > = {
   personal: [
     { id: 'trial', label: '🧹 클린몬스터 진단' },
-    { id: 'search', label: '👁️ Z-Eye 투시검색' },
-    { id: 'trash', label: '🩺 Z-Eye 클린몬스터', showTrashCount: true },
+    { id: 'search', label: '🎯 AI 투시검색' },
+    { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
     { id: 'settings', label: '🛠️ 설정몬스터' },
   ],
   family: [

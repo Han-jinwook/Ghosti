@@ -174,8 +174,8 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 > = {
   personal: [
     { id: 'trial', label: '🧹 클린몬스터 진단' },
-    { id: 'dashboard', label: '👁️ Z-Eye 투시검색' },
-    { id: 'trash', label: '🩺 Z-Eye 클린몬스터', showTrashCount: true },
+    { id: 'dashboard', label: '🎯 AI 투시검색' },
+    { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
     { id: 'sync', label: '🛠️ 설정몬스터' },
   ],
   family: [
@@ -779,7 +779,7 @@ export const DesktopDashboard: React.FC = () => {
                     <div className="flex items-center gap-2.5">
                       <h1 className="font-headline-md text-[22px] md:text-[26px] text-white font-extrabold tracking-tight">
                         {activeLoungeType === 'personal'
-                          ? '👤 내 기기 투시 검색'
+                          ? '🎯 내 기기 투시 검색'
                           : activeLoungeType === 'family'
                           ? `👨‍👩‍👧‍👦 ${activeFamilyRoom} 패밀리 앨범`
                           : activeLoungeType === 'club'
@@ -821,7 +821,7 @@ export const DesktopDashboard: React.FC = () => {
                             setSearchSpace('video');
                             setIsCanvasExpanded(true);
                           }}
-                          className="px-4 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
+                          className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
                         >
                           <span>🎬 동영상 전체 펼치기 ({videoSceneItems.length}개)</span>
                           <span className="text-zinc-500">▾</span>
@@ -833,7 +833,7 @@ export const DesktopDashboard: React.FC = () => {
                             setSearchSpace('gallery');
                             setIsCanvasExpanded(true);
                           }}
-                          className="px-4 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
+                          className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
                         >
                           <span>🖼️ 사진 전체 펼치기 ({activePhotos.length}장)</span>
                           <span className="text-zinc-500">▾</span>
@@ -845,7 +845,7 @@ export const DesktopDashboard: React.FC = () => {
                             setSearchSpace('vault');
                             setIsCanvasExpanded(true);
                           }}
-                          className="px-4 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
+                          className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
                         >
                           <span>
                             📄 서류 전체 펼치기 ({matchedLocalDocs.length + matchedVaultPhotos.length}건)

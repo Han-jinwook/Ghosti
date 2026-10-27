@@ -1,38 +1,41 @@
 import React from 'react';
 
 export interface ZEyeBrandLogoProps {
-  /** 'desktop' (기본: w-8 h-8, text-xl) | 'mobile' (w-7 h-7, text-lg) | 'modal' (모달 상단용 컴팩트/강조) */
+  /** 'desktop' (기본: 36x36px 아이콘) | 'mobile' (32x32px 아이콘) | 'modal' (모달 상단용) */
   size?: 'desktop' | 'mobile' | 'modal';
-  /** 'light' | 'dark' 테마 (미지정 시 다크모드/라이트모드 클래스 자동 대응) */
+  /** 'light' | 'dark' 테마 (미지정 시 테마 자동 적응) */
   themeMode?: 'light' | 'dark';
-  /** 우측 시그니처 캡슐 배지 ([👁️ AI 투시검색]) 표시 여부 (기본 true) */
+  /** 호환성 유지용 (새 디자인에서는 알약 배지를 일체형 서브타이틀로 자동 통합) */
   showBadge?: boolean;
-  /** 배지 커스텀 문구 (기본 '👁️ AI 투시검색') */
+  /** 호환성 유지용 배지 텍스트 */
   badgeText?: string;
-  /** 모바일 등에서 하단 서브 캡션 노출 여부 */
+  /** 서브 타이틀 문구 (기본: '제트아이 · AI 투시엔진') */
   subtitle?: string;
   onClick?: () => void;
   className?: string;
 }
 
 /**
- * 제트아이(Z-Eye) 공식 ‘스타일 A (글로벌 테크 정석)’ 마스터 브랜드 로고 컴포넌트
- * - 좌측 끝: 다크 네이비 스쿼클 안의 3D 민트·블루 글래스모피즘 Z + 조리개 렌즈 심볼 (`/logo-symbol.png`)
- * - 중앙: 영문 워드마크 **Z-Eye** (앞글자 Z는 네온 민트·블루 그라데이션, 뒤의 -Eye는 차콜/화이트 마감)
- * - 우측: 시그니처 캡슐 배지 (`👁️ AI 투시검색`, 툴팁 `제트아이 (Z-Eye) — AI 투시검색`)
+ * 제트아이(Z-Eye) 공식 마스터 브랜드 로고 컴포넌트
+ * - 좌측: 36x36px (w-9 h-9) 스쿼클 3D 민트·블루 Z 렌즈 심볼 (`/logo-symbol.png`), rounded-xl, shadow-md
+ * - 우측 텍스트 블록: flex flex-col justify-center
+ *   - 1단 (메인 브랜드명): Z-Eye (두께감 있는 text-[22px] font-black tracking-tighter leading-none, Z는 선명한 text-teal-600 또는 네온 그라데이션)
+ *   - 2단 (마이크로 서브 슬로건): text-[11px] font-bold tracking-tight text-teal-600/90 leading-none mt-1 (어색한 알약/눈알 이모지 완전 삭제)
+ * - 전체 높이와 36px 심볼이 하나의 그래픽 로고처럼 일체화
  */
 export const ZEyeBrandLogo: React.FC<ZEyeBrandLogoProps> = ({
   size = 'desktop',
   themeMode,
-  showBadge = true,
-  badgeText = '👁️ AI 투시검색',
-  subtitle,
+  showBadge: _showBadge,
+  badgeText: _badgeText,
+  subtitle = '제트아이 · AI 투시엔진',
   onClick,
   className = '',
 }) => {
   const isMobile = size === 'mobile';
-  const symbolSizeClass = isMobile ? 'w-7 h-7' : 'w-8 h-8';
-  const wordmarkSizeClass = isMobile ? 'text-lg' : 'text-xl';
+  const symbolSizeClass = isMobile ? 'w-8 h-8' : 'w-9 h-9';
+  const wordmarkSizeClass = isMobile ? 'text-[19px]' : 'text-[22px]';
+  const subtitleSizeClass = isMobile ? 'text-[10px]' : 'text-[11px]';
 
   const eyeColorClass =
     themeMode === 'light'
@@ -41,48 +44,44 @@ export const ZEyeBrandLogo: React.FC<ZEyeBrandLogoProps> = ({
       ? 'text-white'
       : 'text-slate-900 dark:text-white';
 
+  const subColorClass =
+    themeMode === 'light'
+      ? 'text-teal-600/95'
+      : themeMode === 'dark'
+      ? 'text-teal-400/95'
+      : 'text-teal-600/95 dark:text-teal-400/95';
+
   return (
     <div
       onClick={onClick}
-      title="제트아이 (Z-Eye) — AI 투시검색 & No-클라우드 라운지"
-      className={`inline-flex items-center gap-2 select-none ${
+      title="제트아이 (Z-Eye) — AI 투시엔진"
+      className={`inline-flex items-center gap-3 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
     >
       <img
         src="/logo-symbol.png"
         alt="Z-Eye (제트아이)"
-        className={`${symbolSizeClass} rounded-xl shadow-sm border border-slate-200/20 object-cover shrink-0 transition-transform ${
+        className={`${symbolSizeClass} rounded-xl shadow-md border border-teal-500/20 object-cover shrink-0 transition-transform ${
           onClick ? 'group-hover:scale-[1.03]' : ''
         }`}
       />
 
-      <div className="flex flex-col min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex flex-col justify-center min-w-0">
+        <div className="flex items-center leading-none">
           <span
-            className={`font-extrabold tracking-tight ${wordmarkSizeClass} leading-none whitespace-nowrap`}
+            className={`font-black tracking-tighter ${wordmarkSizeClass} leading-none whitespace-nowrap`}
           >
-            <span className="bg-gradient-to-r from-teal-500 to-blue-600 bg-clip-text text-transparent">
+            <span className="text-teal-500 dark:text-teal-400">
               Z
             </span>
             <span className={eyeColorClass}>-Eye</span>
           </span>
-
-          {showBadge && (
-            <span
-              title="제트아이 (Z-Eye) — AI 투시검색"
-              className="bg-teal-50 text-teal-700 border border-teal-200/80 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap leading-tight shadow-2xs"
-            >
-              {badgeText}
-            </span>
-          )}
         </div>
 
         {subtitle && (
           <span
-            className={`text-[9.5px] leading-tight mt-0.5 truncate ${
-              themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
-            }`}
+            className={`${subtitleSizeClass} font-bold tracking-tight ${subColorClass} leading-none mt-1 whitespace-nowrap truncate`}
           >
             {subtitle}
           </span>
