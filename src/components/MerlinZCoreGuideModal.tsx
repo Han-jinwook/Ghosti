@@ -506,7 +506,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                       className="aspect-square rounded-xl overflow-hidden border border-teal-500/30 bg-zinc-900 relative"
                     >
                       <img
-                        src={item.thumbUrl || item.previewUrl}
+                        src={item.thumbUrl || item.fullUrl}
                         alt={item.name}
                         className="w-full h-full object-cover"
                         loading="eager"
