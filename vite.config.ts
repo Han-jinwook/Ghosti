@@ -9,7 +9,7 @@ import sharp from 'sharp';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PHOTO_DIR = path.resolve(ROOT, 'test_photos');
-const QUARANTINE_DIR = path.resolve(ROOT, 'Z-Eye_정리대기함');
+const QUARANTINE_DIR = path.resolve(ROOT, '귀신같이_정리대기함');
 const AUDIO_DIR = path.resolve(ROOT, 'poc/audio_queries');
 const POC_RESULTS_DIR = path.resolve(ROOT, 'poc/results');
 const PHYSICAL_AUDIT_FILE = path.resolve(POC_RESULTS_DIR, 'corpus_physical_audit.json');
@@ -308,7 +308,7 @@ async function transcribeAudioToKoreanQuery(audioBase64: string, mimeType: strin
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-client-id': 'z-eye',
+          'x-client-id': 'ghosti',
           'x-ai-account': 'beakes',
         },
         body: JSON.stringify({
@@ -323,7 +323,7 @@ async function transcribeAudioToKoreanQuery(audioBase64: string, mimeType: strin
           ],
           model: 'gemini-flash-lite-latest',
           temperature: 0.1,
-          appId: 'z-eye',
+          appId: 'ghosti',
           account: 'beakes',
         }),
       }
@@ -476,9 +476,9 @@ function isTrustedMerlinBridgeOrigin(originHeader?: string): boolean {
   }
 }
 
-function zeyeLocalBridge(): Plugin {
+function ghostiLocalBridge(): Plugin {
   return {
-    name: 'zeye-local-bridge',
+    name: 'ghosti-local-bridge',
     apply: 'serve',
     configureServer(server) {
       // Ensure quarantine folder exists
@@ -2199,8 +2199,8 @@ function zeyeLocalBridge(): Plugin {
         }
       });
 
-      // ─────────────── [🛠️ Z-Eye 설정 몬스터 (Setup Monster) 백엔드 브릿지 & JSON 스냅샷 블랙박스] ───────────────
-      const SETUP_BLACKBOX_FILE = path.resolve(POC_RESULTS_DIR, 'z_eye_setup_blackbox.json');
+      // ─────────────── [🛠️ Ghosti 설정 몬스터 (Setup Monster) 백엔드 브릿지 & JSON 스냅샷 블랙박스] ───────────────
+      const SETUP_BLACKBOX_FILE = path.resolve(POC_RESULTS_DIR, 'ghosti_setup_blackbox.json');
 
       function loadSetupBlackbox(): {
         auditLogs: any[];
@@ -2262,7 +2262,7 @@ function zeyeLocalBridge(): Plugin {
           JSON.stringify({
             ok: true,
             pcDaemonStatus: 'Merlin_Z_Core_Setup.exe (v1.5 · PowerShell/Registry/UIAutomation Ready)',
-            mobileApkStatus: 'Z-Eye_Mobile_1MB.apk (v1.5 · UsageStats/WRITE_SETTINGS/Overlay Ready)',
+            mobileApkStatus: 'Ghosti_Mobile_1MB.apk (v1.5 · UsageStats/WRITE_SETTINGS/Overlay Ready)',
             auditLogs: box.auditLogs,
             failureTelemetryQueue: box.failureTelemetryQueue,
             selfHealingOtaQueue: box.selfHealingOtaQueue,
@@ -2292,7 +2292,7 @@ function zeyeLocalBridge(): Plugin {
             backtrackCount: typeof body.backtrackCount === 'number' ? body.backtrackCount : 0,
             trajectoryGrade: body.trajectoryGrade || 'GRADE_0_EXPRESS',
             symptomQuery: body.symptomQuery || '',
-            title: body.title || 'Z-Eye 설정 몬스터 자동 처치',
+            title: body.title || 'Ghosti 설정 몬스터 자동 처치',
             agentModuleName: body.agentModuleName || 'Merlin_Z_Core_Setup.exe',
             systemCommandOrApi: body.systemCommandOrApi || '',
             beforeSnapshot: body.beforeSnapshot || {},
@@ -2530,7 +2530,7 @@ function zeyeLocalBridge(): Plugin {
                 signalingMethod: 'SUPABASE_REALTIME_BROADCAST_ZERO_DB',
                 webrtcState: simulateBlock ? 'symmetric_nat_blocked' : 'connected',
                 outboundTunnelState: 'active',
-                outboundTunnelUrl: `https://${roomId}.tunnel.z-eye.sundreamer.app`,
+                outboundTunnelUrl: `https://${roomId}.tunnel.ghosti.sundreamer.app`,
                 turnRelayCostKrw: 0,
                 dbStorageUsedBytesForMediaIndex: 0,
                 roundTripLatencyMs: simulateBlock ? 38 : 11,
@@ -2824,9 +2824,9 @@ function zeyeLocalBridge(): Plugin {
         }
         try {
           const body = req.method === 'POST' ? await readJsonBody(req) : {};
-          const callerAppId = String(body.callerAppId || 'z-eye');
+          const callerAppId = String(body.callerAppId || 'ghosti');
           const callerOrigin = String(
-            body.callerOrigin || req.headers.origin || 'https://zeye.sundreamer.app'
+            body.callerOrigin || req.headers.origin || 'https://ghosti.sundreamer.app'
           );
           const targetResource = String(body.targetResource || 'LOCAL_PHOTO_INDEX_DB');
           const queryOrCommand = body.queryOrCommand || {};
@@ -3274,21 +3274,21 @@ function zeyeLocalBridge(): Plugin {
 
       server.middlewares.use('/__zcore/restore-points', async (_req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        const out = await runBuiltinPluginPython('zeye_os', 'restore-points-list', {});
+        const out = await runBuiltinPluginPython('ghosti_os', 'restore-points-list', {});
         res.end(JSON.stringify(out));
       });
 
       server.middlewares.use('/__zcore/restore-rollback', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
-        const out = await runBuiltinPluginPython('zeye_os', 'restore-point-rollback', body);
+        const out = await runBuiltinPluginPython('ghosti_os', 'restore-point-rollback', body);
         res.end(JSON.stringify(out));
       });
 
       server.middlewares.use('/__zcore/folder-tree-summary', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
-        const out = await runBuiltinPluginPython('zeye_os', 'folder-tree-summary', body);
+        const out = await runBuiltinPluginPython('ghosti_os', 'folder-tree-summary', body);
         res.end(JSON.stringify(out));
       });
 
@@ -3296,7 +3296,7 @@ function zeyeLocalBridge(): Plugin {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const u = new URL(req.url || '/', 'http://localhost');
         const q = u.searchParams.get('q') || u.searchParams.get('query') || '';
-        const out = await runBuiltinPluginPython('zeye_os', 'recycle-bin-scan', { query: q });
+        const out = await runBuiltinPluginPython('ghosti_os', 'recycle-bin-scan', { query: q });
         res.end(JSON.stringify(out));
       });
 
@@ -3305,14 +3305,14 @@ function zeyeLocalBridge(): Plugin {
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
         const u = new URL(req.url || '/', 'http://localhost');
         const q = String(body?.query || u.searchParams.get('q') || '').trim();
-        const out = await runBuiltinPluginPython('zeye_os', 'omni-file-trace', { query: q });
+        const out = await runBuiltinPluginPython('ghosti_os', 'omni-file-trace', { query: q });
         res.end(JSON.stringify(out));
       });
 
       server.middlewares.use('/__zcore/ai-baton-touch', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
-        const out = await runBuiltinPluginPython('zeye_os', 'ai-baton-touch', body);
+        const out = await runBuiltinPluginPython('ghosti_os', 'ai-baton-touch', body);
         res.end(JSON.stringify(out));
       });
 
@@ -3321,7 +3321,7 @@ function zeyeLocalBridge(): Plugin {
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
         const u = new URL(req.url || '/', 'http://localhost');
         const q = String(body?.query || u.searchParams.get('q') || '').trim();
-        const out = await runBuiltinPluginPython('zeye_os', 'gdrive-smart-scan', { query: q });
+        const out = await runBuiltinPluginPython('ghosti_os', 'gdrive-smart-scan', { query: q });
         res.end(JSON.stringify(out));
       });
 
@@ -3342,7 +3342,7 @@ function zeyeLocalBridge(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [ ...(process.env.VITE_HTTPS === '1' ? [basicSsl()] : []), zeyeLocalBridge()],
+  plugins: [ ...(process.env.VITE_HTTPS === '1' ? [basicSsl()] : []), ghostiLocalBridge()],
   // 허브 SDK(CoreLogic/config.ts)가 Next.js식 process.env.* 를 참조 → Vite dev 브라우저 ReferenceError(흰 화면) 방지
   // (빌드 모드는 Vite가 자동 치환하지만 dev 모드는 미치환이므로 빈 객체 명시 주입. SDK 원본 무수정 원칙)
   define: {

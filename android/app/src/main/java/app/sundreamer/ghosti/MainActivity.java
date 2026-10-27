@@ -1,4 +1,4 @@
-package app.sundreamer.zeye;
+package app.sundreamer.ghosti;
 
 import com.getcapacitor.BridgeActivity;
 

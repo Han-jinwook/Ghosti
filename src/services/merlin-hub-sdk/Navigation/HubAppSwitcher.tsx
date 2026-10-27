@@ -6,14 +6,14 @@ import sundreamerLogo from '../assets/logos/sundreamer.png';
 import whateatLogo from '../assets/logos/whateat.png';
 import aggrofilterLogo from '../assets/logos/aggrofilter.png';
 import sensetalkLogo from '../assets/logos/sensetalk.png';
-import zeyeLogo from '../assets/logos/zeye.svg';
+import ghostiLogo from '../assets/logos/ghosti.png';
 
 const LOCAL_LOGOS: Record<string, any> = {
   sundreamer: sundreamerLogo,
   whateat: whateatLogo,
   aggrofilter: aggrofilterLogo,
   sensetalk: sensetalkLogo,
-  zeye: zeyeLogo
+  ghosti: ghostiLogo
 };
 
 import { getConfig } from '../CoreLogic/config';
@@ -39,7 +39,7 @@ export interface FamilyConfig {
 }
 
 export interface HubAppSwitcherProps {
-  currentAppId?: string; // 현재 실행중인 앱의 ID (예: 'aggrofilter', 'zeye', 'sundreamer')
+  currentAppId?: string; // 현재 실행중인 앱의 ID (예: 'aggrofilter', 'ghosti', 'sundreamer')
   joinedAppIds?: string[]; // 유저가 가입한 패밀리 앱 ID 목록 (명시적 전달용)
   variant?: 'icon' | 'sidebar'; // 'icon'(헤더 원형 아이콘, 기본값) | 'sidebar'(노션형 좌측 사이드바 하단 버튼)
   placement?: 'top-down' | 'bottom-up'; // 'top-down'(아래로 펼침, 기본값) | 'bottom-up'(사이드바 하단에서 위로 펼침)
@@ -89,9 +89,9 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       sortOrder: 4
     },
     {
-      id: 'zeye',
-      name: '제트아이',
-      url: 'https://z-eye.sundreamer.app',
+      id: 'ghosti',
+      name: '귀신같이',
+      url: 'https://ghosti.sundreamer.app',
       icon: '👁️',
       description: '1초 투시검색 · 클린몬스터 · 패밀리 사진/업무 공유',
       isActive: true,

@@ -14,17 +14,17 @@ export const supabase = supabaseUrl && supabaseAnonKey
   : null;
 
 /** 브릿지가 발급한 단기(1시간) Supabase 토큰 보관 키 */
-const ZEYE_SB_TOKEN_KEY = 'zeye_supabase_access_token';
-const ZEYE_SB_TOKEN_EXP_KEY = 'zeye_supabase_access_token_exp';
+const GHOSTI_SB_TOKEN_KEY = 'ghosti_supabase_access_token';
+const GHOSTI_SB_TOKEN_EXP_KEY = 'ghosti_supabase_access_token_exp';
 
 let authedClient: SupabaseClient | null = null;
 let authedClientToken = '';
 
 /** 브릿지 단기 토큰(만료 전)만 반환 */
-export function getZeyeSupabaseAccessToken(): string | null {
+export function getGhostiSupabaseAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
-  const token = localStorage.getItem(ZEYE_SB_TOKEN_KEY);
-  const exp = Number(localStorage.getItem(ZEYE_SB_TOKEN_EXP_KEY) || 0);
+  const token = localStorage.getItem(GHOSTI_SB_TOKEN_KEY);
+  const exp = Number(localStorage.getItem(GHOSTI_SB_TOKEN_EXP_KEY) || 0);
   if (!token || !exp || Date.now() > exp - 60_000) return null;
   return token;
 }
@@ -34,9 +34,9 @@ export function getZeyeSupabaseAccessToken(): string | null {
  * - 브릿지 단기 토큰이 있으면 그 토큰을 Authorization 헤더로 실은 클라이언트를 반환 (auth.jwt() ->> 'email' 판별 가능)
  * - 토큰이 없거나 만료되면 null (호출부에서 syncHubUserToLocalSupabase 재호출 필요)
  */
-export function getZeyeAuthedSupabase(): SupabaseClient | null {
+export function getGhostiAuthedSupabase(): SupabaseClient | null {
   if (!supabaseUrl || !supabaseAnonKey) return null;
-  const token = getZeyeSupabaseAccessToken();
+  const token = getGhostiSupabaseAccessToken();
   if (!token) return null;
   if (authedClient && authedClientToken === token) return authedClient;
   authedClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -50,11 +50,11 @@ export function getZeyeAuthedSupabase(): SupabaseClient | null {
 }
 
 /**
- * [허브 SDK ↔ 제트아이 단독 Supabase SSOT 계정 매핑 브릿지]
+ * [허브 SDK ↔ 귀신같이 단독 Supabase SSOT 계정 매핑 브릿지]
  * - 허브(os.sundreamer.app) 이메일 6자리 OTP 인증 완료 시 확정된 `family_users.id`(UUID)를
- *   제트아이 단독 Supabase `public.users.id`와 1:1 동일 키로 동기화합니다.
- * - 코인/결제 테이블은 제트아이 DB에 두지 않으며, 오직 허브 중앙 지갑 원장만 참조합니다.
- * - [2026-10-27 Z-Eye 보완] 스키마 RLS상 브라우저(anon)는 users INSERT가 불가하므로
+ *   귀신같이 단독 Supabase `public.users.id`와 1:1 동일 키로 동기화합니다.
+ * - 코인/결제 테이블은 귀신같이 DB에 두지 않으며, 오직 허브 중앙 지갑 원장만 참조합니다.
+ * - [2026-10-27 Ghosti 보완] 스키마 RLS상 브라우저(anon)는 users INSERT가 불가하므로
  *   서버 함수(`/.netlify/functions/hub-supabase-bridge`)를 1차 경로로 호출합니다.
  *   서버가 허브 토큰을 검증 → service_role Upsert → 1시간 단기 토큰 발급.
  *   실패 시 `ok: false` + 사유를 정직하게 반환합니다 (침묵 성공 금지).
@@ -74,15 +74,15 @@ export async function syncHubUserToLocalSupabase(params: {
   try {
     // 1. 로컬 캐시에 허브 SSOT 매핑 정보 보존
     if (typeof window !== 'undefined') {
-      localStorage.setItem('zeye_hub_user_id', cleanUserId);
-      localStorage.setItem('zeye_hub_user_email', cleanEmail);
+      localStorage.setItem('ghosti_hub_user_id', cleanUserId);
+      localStorage.setItem('ghosti_hub_user_email', cleanEmail);
       if (params.nickname) {
-        localStorage.setItem('zeye_hub_user_nickname', params.nickname);
+        localStorage.setItem('ghosti_hub_user_nickname', params.nickname);
       }
     }
 
     // 이미 유효한 단기 토큰이 있으면 재호출 생략 (허브/서버 호출 최소화)
-    if (getZeyeSupabaseAccessToken()) {
+    if (getGhostiSupabaseAccessToken()) {
       return { ok: true, syncedUserId: cleanUserId };
     }
 
@@ -94,7 +94,7 @@ export async function syncHubUserToLocalSupabase(params: {
     }
 
     const nativePushToken =
-      typeof window !== 'undefined' ? localStorage.getItem('zeye_native_push_token') : null;
+      typeof window !== 'undefined' ? localStorage.getItem('ghosti_native_push_token') : null;
 
     // 2. 서버 브릿지 호출 (허브 토큰 검증 → service_role Upsert → 단기 토큰 발급)
     const res = await fetch('/.netlify/functions/hub-supabase-bridge', {
@@ -114,15 +114,15 @@ export async function syncHubUserToLocalSupabase(params: {
 
     if (!res.ok || !data?.ok || !data?.supabaseAccessToken) {
       const reason = data?.reason || `브릿지 응답 오류 (HTTP ${res.status})`;
-      console.warn('[Z-Eye] 허브↔Supabase 계정 동기화 실패:', reason);
+      console.warn('[Ghosti] 허브↔Supabase 계정 동기화 실패:', reason);
       return { ok: false, error: reason };
     }
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(ZEYE_SB_TOKEN_KEY, data.supabaseAccessToken);
-      localStorage.setItem(ZEYE_SB_TOKEN_EXP_KEY, String(data.expiresAt || 0));
+      localStorage.setItem(GHOSTI_SB_TOKEN_KEY, data.supabaseAccessToken);
+      localStorage.setItem(GHOSTI_SB_TOKEN_EXP_KEY, String(data.expiresAt || 0));
       window.dispatchEvent(
-        new CustomEvent('zeyeSupabaseUserSynced', {
+        new CustomEvent('ghostiSupabaseUserSynced', {
           detail: { userId: cleanUserId, email: cleanEmail, nickname: params.nickname },
         })
       );
@@ -135,10 +135,10 @@ export async function syncHubUserToLocalSupabase(params: {
 }
 
 /** 로그아웃 시 단기 토큰 폐기 */
-export function clearZeyeSupabaseSession(): void {
+export function clearGhostiSupabaseSession(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(ZEYE_SB_TOKEN_KEY);
-  localStorage.removeItem(ZEYE_SB_TOKEN_EXP_KEY);
+  localStorage.removeItem(GHOSTI_SB_TOKEN_KEY);
+  localStorage.removeItem(GHOSTI_SB_TOKEN_EXP_KEY);
   authedClient = null;
   authedClientToken = '';
 }

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[🎙️ Z-Eye 전 영역 무료 무제한 Neural TTS 엔진 — MS 신경망 '현수(Hyunsu) & 선희(SunHi)' 투톱 체제]
+[🎙️ Ghosti 전 영역 무료 무제한 Neural TTS 엔진 — MS 신경망 '현수(Hyunsu) & 선희(SunHi)' 투톱 체제]
 - 유료 Typecast(필재/유진) 전면 배제 -> 실시간 합성 시에도 API 과금 평생 0원 & 일일 횟수 제한(10회 제한) 전면 폐지!
 - 2대 전속 성우 역할 분담:
   1. 기본 브리핑 성우 (`ko-KR-HyunsuNeural` — 남성 중저음 '현수'):

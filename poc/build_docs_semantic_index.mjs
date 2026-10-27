@@ -1,5 +1,5 @@
 /**
- * Z-Eye (제트아이) — 100% 자율 로컬 서류함(test_docs) 파서 및 768차원 EmbeddingGemma 2 벡터 인덱서
+ * 귀신같이 (Ghosti) — 100% 자율 로컬 서류함(test_docs) 파서 및 768차원 EmbeddingGemma 2 벡터 인덱서
  * - 수동 하드코딩 배열(LOCAL_DOCUMENT_FILES) 완전 폐기!
  * - 디스크의 test_docs/ 폴더에 존재하는 실제 파일(.pdf, .txt, .docx, .md, .csv, .html)을 스캔하여
  *   바이트 스트림에서 직접 본문 텍스트·제목·날짜·핵심 키워드를 추출하고,

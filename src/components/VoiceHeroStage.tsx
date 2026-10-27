@@ -105,7 +105,7 @@ export const VoiceHeroStage: React.FC = () => {
   const scrollToResults = () => {
     if (typeof document !== 'undefined') {
       window.setTimeout(() => {
-        document.getElementById('zeye-search-results')?.scrollIntoView({
+        document.getElementById('ghosti-search-results')?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });

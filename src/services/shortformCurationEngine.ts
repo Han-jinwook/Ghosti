@@ -1,5 +1,5 @@
 /**
- * 🎬 제트아이 Z몬스터 — 맥락 맞춤 '1분 활용팁 숏폼' 큐레이션 & 무토큰(Zero-LLM) 내용검색 라우팅 엔진
+ * 🎬 귀신같이 Z몬스터 — 맥락 맞춤 '1분 활용팁 숏폼' 큐레이션 & 무토큰(Zero-LLM) 내용검색 라우팅 엔진
  *
  * [멀린님 확정 3대 원칙]
  * 1. 노출 빈도 (2회당 1번): 매번 나오면 반감이 생기므로 Z몬스터 작업 완료 2회당 1번(짝수 회차)에만 노출합니다.
@@ -27,7 +27,7 @@ export const ZEYE_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
     durationLabel: '0:55',
     targetLounge: 'family',
     contextTags: ['cleanup', 'photo'],
-    shortUrl: 'https://youtube.com/shorts/zeye-family-sync-tip01',
+    shortUrl: 'https://youtube.com/shorts/ghosti-family-sync-tip01',
     summaryText: 'AI 얼굴 여권으로 우리 가족 사진만 0.01초 만에 모아 패밀리 라운지에 올리는 꿀팁',
   },
   {
@@ -36,7 +36,7 @@ export const ZEYE_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
     durationLabel: '0:48',
     targetLounge: 'family',
     contextTags: ['cleanup', 'restore', 'photo'],
-    shortUrl: 'https://youtube.com/shorts/zeye-family-backup-tip02',
+    shortUrl: 'https://youtube.com/shorts/ghosti-family-backup-tip02',
     summaryText: '13KB 초경량 썸네일만 남기고 원본은 방장 PC에 영구 보존하는 비결',
   },
   {
@@ -45,16 +45,16 @@ export const ZEYE_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
     durationLabel: '0:58',
     targetLounge: 'work',
     contextTags: ['cleanup', 'doc', 'os_repair'],
-    shortUrl: 'https://youtube.com/shorts/zeye-work-sdrive-tip01',
+    shortUrl: 'https://youtube.com/shorts/ghosti-work-sdrive-tip01',
     summaryText: '구글 드라이브/마이박스 폴더 그대로 연결해 1초 만에 계약서 본문까지 내용검색하기',
   },
   {
     id: 'sf_work_02',
-    title: '🎬 [1분 활용팁] 실수로 덮어쓴 엑셀·한글 문서, 제트아이 [복원 기록] 타임머신으로 1초 만에 살리는 법',
+    title: '🎬 [1분 활용팁] 실수로 덮어쓴 엑셀·한글 문서, 귀신같이 [복원 기록] 타임머신으로 1초 만에 살리는 법',
     durationLabel: '0:52',
     targetLounge: 'work',
     contextTags: ['restore', 'doc', 'os_repair'],
-    shortUrl: 'https://youtube.com/shorts/zeye-work-restore-tip02',
+    shortUrl: 'https://youtube.com/shorts/ghosti-work-restore-tip02',
     summaryText: '랜섬웨어 서킷브레이커와 직전 5버전 타임머신 100% 활용 가이드',
   },
   {
@@ -63,13 +63,13 @@ export const ZEYE_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
     durationLabel: '0:50',
     targetLounge: 'club',
     contextTags: ['photo', 'cleanup'],
-    shortUrl: 'https://youtube.com/shorts/zeye-club-dhash-tip01',
+    shortUrl: 'https://youtube.com/shorts/ghosti-club-dhash-tip01',
     summaryText: '64-bit 픽셀 뼈대(dHash) 대조로 이미 올라간 단체사진은 알아서 빼주는 모임방 기능',
   },
 ];
 
-const STORAGE_KEY_COMPLETION_COUNT = 'zeye_doctor_completion_count_v1';
-const STORAGE_KEY_SHOWN_MAP = 'zeye_shortform_shown_map_v1';
+const STORAGE_KEY_COMPLETION_COUNT = 'ghosti_doctor_completion_count_v1';
+const STORAGE_KEY_SHOWN_MAP = 'ghosti_shortform_shown_map_v1';
 
 interface ShownRecord {
   count: number;

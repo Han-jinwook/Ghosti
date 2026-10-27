@@ -115,7 +115,7 @@ export interface PersonTimelineBucketInfo {
 
 /**
  * [방별 독립 별명(Persona) 매핑]
- * 시드(768차원 벡터 + 연도 바구니)는 이메일 기반 'Z-Eye 여권'으로 100% 공유하되,
+ * 시드(768차원 벡터 + 연도 바구니)는 이메일 기반 '귀신같이 여권'으로 100% 공유하되,
  * 화면 표시 및 자연어 검색에 쓰이는 호칭/별명만 각 방(우리집 / 처가 / 본가 / 동호회·동창회)에 맞게 독립 매핑!
  */
 export interface RoomPersonaMap {
@@ -128,11 +128,11 @@ export interface RoomPersonaMap {
   work?: string;
 }
 
-/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 만국공통 Z-Eye 여권(Z-Eye Face Passport) 클러스터 */
+/** [라운지 마스터 스펙] 자율 얼굴 검출(Bounding Box Crop) & 만국공통 귀신같이 여권(Ghosti Face Passport) 클러스터 */
 export interface FaceMemberCluster {
   clusterId: string;
   personKey: string;
-  /** 이메일(Email ID) 기반 만국공통 Z-Eye 여권 계정 (예: merlin@z-eye.ai, jiwoo@z-eye.ai) */
+  /** 이메일(Email ID) 기반 만국공통 귀신같이 여권 계정 (예: merlin@ghosti.ai, jiwoo@ghosti.ai) */
   passportEmail?: string;
   /** 인물별 독립 타임라인 바구니 (기준 연도 귀속 + 미래 바구니 자동 확장 + 5대 스타일 슬롯) */
   timelineBucket?: PersonTimelineBucketInfo;
@@ -389,7 +389,7 @@ export interface PhotoItem {
   opticalSharpness?: number;
   /** 64-bit Perceptual dHash (16진수) */
   dhash?: string;
-  /** Z-Eye_정리대기함 폴더로 물리 격리되었는지 여부 */
+  /** 귀신같이_정리대기함 폴더로 물리 격리되었는지 여부 */
   quarantined?: boolean;
   /** 모바일에서 정리 예약(Queue) 상태인지 여부 */
   queuedForQuarantine?: boolean;
@@ -534,7 +534,7 @@ export interface SetupOsSecuritySpec {
   windowsAuthenticodeSigned?: boolean;
   windowsJeaLeastPrivilegePolicy?: string;
   windowsPreBackupRegistryJsonPath?: string;
-  // 📱 Android APK (Z-Eye_Agent.apk): SDK 35 (Android 15) Edge-to-Edge WindowInsets 좌표 보정 & RECEIVER_NOT_EXPORTED
+  // 📱 Android APK (Ghosti_Agent.apk): SDK 35 (Android 15) Edge-to-Edge WindowInsets 좌표 보정 & RECEIVER_NOT_EXPORTED
   androidTargetSdk?: number;
   androidStatusBarInsetPx?: number;
   androidNavigationBarInsetPx?: number;

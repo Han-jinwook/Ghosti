@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { PhotoItem, TrashCategory } from '../types/saysee';
 
-const DB_NAME = 'zeye-local-vault-v1';
+const DB_NAME = 'ghosti-local-vault-v1';
 const STORE_PHOTOS = 'photos';
 const STORE_META = 'meta';
 

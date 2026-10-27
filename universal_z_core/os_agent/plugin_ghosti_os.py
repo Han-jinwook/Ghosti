@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[내장 소프트웨어 플러그인 1] plugin_zeye_os.py
-- 제트아이(Z-Eye) 및 3몬스터(설치·수리·정리) 전용 OS 제어·3초 포렌식·[복원 기록](restore_points.json)·TopMost 오버레이 플러그인
+[내장 소프트웨어 플러그인 1] plugin_ghosti_os.py
+- 귀신같이(Ghosti) 및 3몬스터(설치·수리·정리) 전용 OS 제어·3초 포렌식·[복원 기록](restore_points.json)·TopMost 오버레이 플러그인
 - 별도 프로세스 생성 없이 단일 코어(Merlin_Z_Core, 127.0.0.1:5199) 내부에서 소프트웨어적으로 직결 호출됩니다.
 - 핵심 탑재 기능:
   1. 설정몬스터/클린몬스터 '대화형 폴더·파일 정리 & [복원 기록] 3단계 무결성 사전 검진(Pre-Check) 타임머신 원복'
@@ -33,14 +33,14 @@ import merlin_z_core_os as zos  # noqa: E402
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 MERLIN_DIR = LOCAL_APPDATA / "Merlin"
 RESTORE_POINTS_FILE = MERLIN_DIR / "restore_points.json"
-QUARANTINE_DIR = THIS_DIR.parents[1] / "Z-Eye_정리대기함"
+QUARANTINE_DIR = THIS_DIR.parents[1] / "귀신같이_정리대기함"
 
 FILE_ATTRIBUTE_HIDDEN = 0x02
 FILE_ATTRIBUTE_NORMAL = 0x80
 
 PLUGIN_METADATA = {
-    "pluginId": "zeye_os",
-    "pluginName": "Z-Eye & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
+    "pluginId": "ghosti_os",
+    "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
     "version": "2.3.0",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
@@ -278,7 +278,7 @@ def list_restore_points_with_precheck() -> Dict[str, Any]:
     """
     [최근 한 달 [복원 기록] 조회 & 0.01초 3단계 무결성 사전 검진(Pre-Check)]
     - 🟢 FULL_RESTORABLE    : [100% 완벽 복원 가능]
-    - 🟡 PARTIAL_RESTORABLE : [부분 복원 가능 (총 M건 중 N건)] (윈도우 휴지통 및 Z-Eye 격리함까지 교차 탐색)
+    - 🟡 PARTIAL_RESTORABLE : [부분 복원 가능 (총 M건 중 N건)] (윈도우 휴지통 및 Ghosti 격리함까지 교차 탐색)
     - 🔴 UNRESTORABLE       : [복원 불가 (원본 삭제됨)]
     """
     t0 = time.perf_counter()
@@ -343,11 +343,11 @@ def list_restore_points_with_precheck() -> Dict[str, Any]:
 
 def trace_missing_file_omni(query: str) -> Dict[str, Any]:
     """
-    [초월적 눈(Z-Eye) 0.01초 전수 수색 & 블랙박스 1초 소명 엔진]
+    [초월적 눈(Ghosti) 0.01초 전수 수색 & 블랙박스 1초 소명 엔진]
     '~뒤져봐 드릴까요?' 같은 수동적 질문 없이, 답변을 띄우기 전에 이미:
       ① [복원 기록] 블랙박스 (유저 승인 정리 이력)
       ② 윈도우 휴지통 ($Recycle.Bin $I 메타파일 해독)
-      ③ Z-Eye 안전 보관함 (Z-Eye_정리대기함)
+      ③ Ghosti 안전 보관함 (귀신같이_정리대기함)
       ④ 타 폴더 직접 이동 여부
     를 0.01초 만에 전부 뒤져서 찾은 결론을 즉시 반환합니다. (주치의 & 1초 투시검색 공통 사용)
     """
@@ -393,12 +393,12 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
             "deletedAt": top_rb["deletedAt"],
             "elapsedMs": round((time.perf_counter() - t0) * 1000, 2),
             "briefingKo": (
-                f"제트아이는 파일을 임의로 영구 삭제하지 않습니다. 블랙박스 대조 결과 윈도우 탐색기에서 직접 삭제된 파일(`{top_rb['originalName']}`)이며, "
+                f"귀신같이는 파일을 임의로 영구 삭제하지 않습니다. 블랙박스 대조 결과 윈도우 탐색기에서 직접 삭제된 파일(`{top_rb['originalName']}`)이며, "
                 f"현재 윈도우 휴지통에 살아있는 것까지 찾아두었습니다(삭제 시각: {top_rb['deletedAt']}). 지금 바로 원래 위치(`{top_rb['originalPath']}`)로 복구해 드릴까요?"
             ),
         }
 
-    # 3) Z-Eye 안전 보관함(Z-Eye_정리대기함) 스캔
+    # 3) Ghosti 안전 보관함(귀신같이_정리대기함) 스캔
     if QUARANTINE_DIR.exists() and q_low:
         for qp in QUARANTINE_DIR.iterdir():
             if q_low in qp.name.lower():
@@ -419,7 +419,7 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
         "query": q,
         "elapsedMs": round((time.perf_counter() - t0) * 1000, 2),
         "briefingKo": (
-            "제트아이 블랙박스 및 윈도우 휴지통($Recycle.Bin)을 0.01초 전수 대조한 결과, 제트아이가 이동·삭제한 이력이 없으며 현재 윈도우 휴지통 비우기까지 실행되어 디스크에서 소멸된 상태입니다."
+            "귀신같이 블랙박스 및 윈도우 휴지통($Recycle.Bin)을 0.01초 전수 대조한 결과, 귀신같이가 이동·삭제한 이력이 없으며 현재 윈도우 휴지통 비우기까지 실행되어 디스크에서 소멸된 상태입니다."
         ),
     }
 
@@ -533,7 +533,7 @@ def detect_most_recent_ai_and_baton_touch(
         for hp in history_paths:
             if not hp.exists():
                 continue
-            tmp_db = Path(tempfile.gettempdir()) / f"zeye_hist_{os.getpid()}.db"
+            tmp_db = Path(tempfile.gettempdir()) / f"ghosti_hist_{os.getpid()}.db"
             try:
                 shutil.copy2(str(hp), str(tmp_db))
                 conn = sqlite3.connect(str(tmp_db), timeout=2)
@@ -600,7 +600,7 @@ def detect_most_recent_ai_and_baton_touch(
             {"step": 1, "label": "① [전송 (↑)] 버튼 클릭", "desc": "이미 채워진 문서+질문을 즉시 전송합니다."},
             {"step": 2, "label": "② 바로 옆 [라이브 음성 🎧] 버튼 클릭", "desc": "운전·이동 중에도 말로 편하게 심층 상담을 이어갑니다."},
         ],
-        "floatingReturnPill": "⬅️ 대화 종료 후 제트아이 복귀",
+        "floatingReturnPill": "⬅️ 대화 종료 후 귀신같이 복귀",
         "serverLlmTokenCostWon": 0,
         "elapsedMs": round((time.perf_counter() - t0) * 1000, 2),
     }
@@ -801,8 +801,8 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         THIS_DIR / "sample_photos_301",
         THIS_DIR.parents[1] / "test_photos",
         THIS_DIR.parents[1] / "test_docs",
-        Path("D:/Z-Eye/test_photos"),
-        Path("D:/Z-Eye/test_docs"),
+        Path("D:/Ghosti/test_photos"),
+        Path("D:/Ghosti/test_docs"),
         home / "Pictures",
         home / "Videos",
         home / "Documents",

@@ -7,8 +7,8 @@
  * - navigator.storage.persist()로 브라우저의 자동 삭제(eviction) 방지
  */
 
-const DIR_NAME = 'zeye-model-cache';
-const FALLBACK_CACHE = 'zeye-model-cache-fallback';
+const DIR_NAME = 'ghosti-model-cache';
+const FALLBACK_CACHE = 'ghosti-model-cache-fallback';
 
 export interface CacheStats {
   backend: 'opfs' | 'cache-api';

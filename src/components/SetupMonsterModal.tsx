@@ -12,7 +12,7 @@ import {
 import { dispatchAndroidOverlayArrowViaBridge } from '../services/p2pHybridBridge';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { SetupDiagnosisPlan } from '../types/saysee';
-import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { GhostiBrandLogo } from './GhostiBrandLogo';
 
 /**
  * [Track B & 모바일 타사 앱 내부 설정용 실시간 플로팅 오버레이 가이드 (SYSTEM_ALERT_WINDOW / UI Automation)]
@@ -1250,7 +1250,7 @@ export const SetupMonsterContent: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-col">
                 <span className="font-label-sm text-[11.5px] text-amber-300 font-extrabold">
-                  🛡️ 분쟁 예방 감사 로그 (Audit Log 로컬 블랙박스 · poc/results/z_eye_setup_blackbox.json)
+                  🛡️ 분쟁 예방 감사 로그 (Audit Log 로컬 블랙박스 · poc/results/ghosti_setup_blackbox.json)
                 </span>
                 <span className="font-body-sm text-[11.5px] text-zinc-400">
                   [대화 전문 + 변경 전후 JSON 스냅샷 + 유저 승인 타임스탬프 + 화면 DOM 캡처 해시]를 영구 보존합니다.
@@ -1426,7 +1426,7 @@ export const SetupMonsterModal: React.FC = () => {
     <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div className="relative w-full max-w-5xl my-auto">
         <div className="flex items-center justify-between mb-2 px-1">
-          <ZEyeBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+          <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
           <button
             type="button"
             onClick={() => setShowSetupMonsterModal(false)}

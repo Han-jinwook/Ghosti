@@ -929,7 +929,7 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
 
 def bring_window_to_front_immediately(hw_int: int) -> None:
     """
-    멀린님이 현재 보고 계신 '제트아이 (Z-Eye)' 브라우저가 있는 모니터 한가운데 맨 앞으로
+    멀린님이 현재 보고 계신 '귀신같이 (Ghosti)' 브라우저가 있는 모니터 한가운데 맨 앞으로
     작업표시줄에 가려지지 않는 넉넉한 크기로 탐색기 창을 즉시 끌어올립니다.
     """
     user32 = ctypes.windll.user32
@@ -942,8 +942,8 @@ def bring_window_to_front_immediately(hw_int: int) -> None:
     target_x = rc.left
     target_y = rc.top
 
-    # '제트아이 (Z-Eye)' 브라우저 창이 있는 모니터 위치를 찾아 동일한 모니터 중앙(작업표시줄 위쪽 안전 영역)으로 이동
-    z_win = find_window_on_default_desktop("제트아이") or find_window_on_default_desktop("Z-Eye")
+    # '귀신같이 (Ghosti)' 브라우저 창이 있는 모니터 위치를 찾아 동일한 모니터 중앙(작업표시줄 위쪽 안전 영역)으로 이동
+    z_win = find_window_on_default_desktop("귀신같이") or find_window_on_default_desktop("Ghosti")
     if z_win and z_win.get("rect"):
         zx, zy, zw, zh = z_win["rect"]
         w = min(max(1180, w), max(1000, zw - 120))
@@ -1174,7 +1174,7 @@ def open_file_location_on_interactive_desktop(
     mode: str = "open_file_location",
 ) -> Dict[str, Any]:
     """
-    중복 창이나 작업줄 깜빡임 없이, 멀린님이 보고 계신 '제트아이 (Z-Eye)' 모니터 한가운데 맨 앞으로
+    중복 창이나 작업줄 깜빡임 없이, 멀린님이 보고 계신 '귀신같이 (Ghosti)' 모니터 한가운데 맨 앞으로
     단 1개의 큰 Windows 탐색기 창만 즉시 열고 해당 파일을 중앙 스크롤 + 화살표 지시 또는 검색창 단독 필터로 띄웁니다.
     """
     t0 = time.perf_counter()

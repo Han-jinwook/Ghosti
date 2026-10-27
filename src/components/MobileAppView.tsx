@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
-import { ZEyeTopRightHubAnchor } from './ZEyeHubInfraBridge';
-import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { GhostiTopRightHubAnchor } from './GhostiHubInfraBridge';
+import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
@@ -180,7 +180,7 @@ export const MobileAppView: React.FC = () => {
       if (
         conn &&
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('zeye_initial_indexing_done') !== '1'
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1'
       ) {
         setShowZCoreGuideModal(true);
       }
@@ -289,7 +289,7 @@ export const MobileAppView: React.FC = () => {
         >
           <div className="flex items-center justify-between gap-1.5 overflow-hidden">
             <div className="flex items-center gap-1 min-w-0 shrink">
-              <ZEyeBrandLogo
+              <GhostiBrandLogo
                 size="mobile"
                 themeMode={themeMode}
                 showBadge={false}
@@ -299,13 +299,13 @@ export const MobileAppView: React.FC = () => {
               />
             </div>
 
-            {/* 우상단: Z-Eye 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액 + 심플 아이콘 테마 토글 */}
+            {/* 우상단: 귀신같이 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액 + 심플 아이콘 테마 토글 */}
             <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" aria-label="화면 테마 영역">
               {myPassportCluster && activeLoungeType !== 'work' && (
                 <button
                   type="button"
                   onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
-                  title="🛂 Z-Eye 여권 최신 연도 정면 얼굴 자동 문패 (5대 스타일 슬롯 원터치 변경)"
+                  title="🛂 귀신같이 여권 최신 연도 정면 얼굴 자동 문패 (5대 스타일 슬롯 원터치 변경)"
                   className={`pl-1 pr-1.5 py-0.5 rounded-full border flex items-center gap-1 transition-all cursor-pointer ${
                     themeMode === 'light'
                       ? 'bg-teal-50/90 border-teal-300 text-teal-900'
@@ -333,7 +333,7 @@ export const MobileAppView: React.FC = () => {
               )}
               {/* 허브 SDK 표준 앵커 (PC 헤더와 동일): 🪙 코인(스토어 심사 모드·네이티브 앱에서는 DOM 원천 비노출) + 🐾 곰발바닥 OTP 로그인/통합 프로필 */}
               <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} />
-              <ZEyeTopRightHubAnchor themeMode={themeMode} />
+              <GhostiTopRightHubAnchor themeMode={themeMode} />
               <button
                 type="button"
                 onClick={toggleThemeMode}
@@ -500,7 +500,7 @@ export const MobileAppView: React.FC = () => {
           <VoiceHeroStage />
 
           {/* 검색 결과 영역 */}
-          <div id="zeye-search-results" className="scroll-mt-16">
+          <div id="ghosti-search-results" className="scroll-mt-16">
             {searchSpace === 'video' ? (
               <section className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between px-0.5">
@@ -819,7 +819,7 @@ export const MobileAppView: React.FC = () => {
                     🔋 배터리 · OS 제재 방어 원칙
                   </span>
                   <p className="font-body-sm text-[11.5px] text-zinc-300 leading-relaxed">
-                    제트아이(Z-Eye) 정식 모바일 앱(Google Play / App Store)은 배터리를 소모하는 상시 통신을 하지 않으며,{' '}
+                    귀신같이(Ghosti) 정식 모바일 앱(Google Play / App Store)은 배터리를 소모하는 상시 통신을 하지 않으며,{' '}
                     <strong className="text-white">[집 Wi-Fi 연결 + 충전 중]</strong>이거나{' '}
                     <strong className="text-primary-container">[지금 일치시키기]</strong> 버튼을 누를 때만 작동합니다.
                   </p>
@@ -942,7 +942,7 @@ export const MobileAppView: React.FC = () => {
                   <p className="font-body-sm text-[11.5px] text-zinc-200 leading-relaxed bg-zinc-900/80 p-3 rounded-xl border border-white/10">
                     • <strong>평소(기본):</strong> 기기 내 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 썸네일 DB</strong>만 보관하여 0.01초 만에 검색합니다.<br />
                     • <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 충분할 때 지정한 내 폴더로 원본을 자동 복제해 내 기기에서 100% 자체 해결합니다.<br />
-                    • <strong>탈퇴(자퇴 · 강퇴 동일):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역의 <strong>그 공유방 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다 (※ 내 PC·계정의 ‘나 자신의 Z-Eye 여권’ 및 ‘내 기기 개인 인덱스’는 100% 보존되며, 기동기화된 원본 폴더도 각자 자율 관리).
+                    • <strong>탈퇴(자퇴 · 강퇴 동일):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역의 <strong>그 공유방 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다 (※ 내 PC·계정의 ‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 100% 보존되며, 기동기화된 원본 폴더도 각자 자율 관리).
                   </p>
                 </div>
 

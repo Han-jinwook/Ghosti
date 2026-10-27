@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { GpuHelperTierId, PricingPlanId } from '../types/saysee';
 import { LoungeModeSwitcherBar } from './LoungeView';
-import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { GhostiBrandLogo } from './GhostiBrandLogo';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 개인 (기본) : 언제나 0원 (혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다)',
-  personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 Z-Eye 클린몬스터',
+  personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 귀신같이 클린몬스터',
   personal_sub_3900: '💻 업무 입문 • 1인 멀티PC (월 1,900원)',
   personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 · 선착순 100명 10년 마스터권)',
   family_home_5900: '🏠 패밀리 공유 • 우리집 단독 (월 5,900원)',
@@ -96,7 +96,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+          <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
           <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
             💻 데스크톱(PC) 기기 연동 안내
           </span>
@@ -124,7 +124,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
             <span>💬 카톡(나에게)으로 ‘내 PC 연동 시작 가이드’ 보내두기</span>
           </button>
 
-          {/* 보조 버튼 (이메일 2순위): 가입된 Z-Eye 여권 이메일로 PC 연동 안내서 발송 */}
+          {/* 보조 버튼 (이메일 2순위): 가입된 귀신같이 여권 이메일로 PC 연동 안내서 발송 */}
           <button
             type="button"
             onClick={() => void sendPcMasterUrlToEmail()}
@@ -135,7 +135,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
         </div>
       ) : (
         <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 text-zinc-300 font-body-sm text-[12px]">
-          💡 데스크톱(Windows / Mac) 환경에서 제트아이(Z-Eye) 마스터 엔진을 실행한 뒤 동일한 여권 계정({merlinAuth.email})으로 로그인하시면 즉시 연동됩니다.
+          💡 데스크톱(Windows / Mac) 환경에서 귀신같이(Ghosti) 마스터 엔진을 실행한 뒤 동일한 여권 계정({merlinAuth.email})으로 로그인하시면 즉시 연동됩니다.
         </div>
       )}
 
@@ -174,7 +174,7 @@ export const MobileMasterPcIntroModal: React.FC = () => {
         <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <ZEyeBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
               <span className="px-3 py-1 rounded-full bg-amber-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold w-fit">
                 💻 이 페이지는 PC 화면 전용 마스터 세팅 페이지입니다
               </span>
@@ -310,7 +310,7 @@ export const PricingModal: React.FC = () => {
 
   const handleCopyInviteCard = async () => {
     const inviteCopy =
-      '[제트아이 라운지 초대장] 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://z-eye.sundreamer.app';
+      '[귀신같이 라운지 초대장] 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);
@@ -324,13 +324,13 @@ export const PricingModal: React.FC = () => {
 
   const handleShareApp = async () => {
     const shareText =
-      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
+      '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
-          title: '제트아이 (Z-Eye)',
+          title: '귀신같이 (Ghosti)',
           text: shareText,
-          url: 'https://z-eye.sundreamer.app',
+          url: 'https://ghosti.sundreamer.app',
         });
       } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(shareText);
@@ -363,7 +363,7 @@ export const PricingModal: React.FC = () => {
           <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2.5">
-                <ZEyeBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+                <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
                 <span className="px-3 py-1 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold w-fit">
                   📱 모바일 뷰어 ➔ 💻 데스크톱(PC) 대화면 작업 이어가기
                 </span>
@@ -436,7 +436,7 @@ export const PricingModal: React.FC = () => {
         <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <ZEyeBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
               <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px] font-bold">
                 현재 상태: {PLAN_LABELS[activePricingPlan]}
               </span>
@@ -516,9 +516,9 @@ export const PricingModal: React.FC = () => {
                   &ldquo;내 폰·PC 속 클린·설정몬스터와 1초 AI 내용검색 — 기간 제한 없이 언제나 0원&rdquo;
                 </p>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  • 👁️ <strong>Z-Eye 내용검색</strong> (내 사진·영상·서류 1초 검색 · 언제나 0원)<br />
-                  • 🩺 <strong>Z-Eye 클린몬스터</strong> (중복·스크린샷·바탕화면 정리 · 언제나 0원)<br />
-                  • 🛠️ <strong>Z-Eye 설정몬스터</strong> (원클릭 수리 &amp; 1초 원상복구 · 비용 없이 제한 없이)
+                  • 👁️ <strong>귀신같이 내용찾기</strong> (내 사진·영상·서류 1초 검색 · 언제나 0원)<br />
+                  • 🩺 <strong>귀신같이 클린몬스터</strong> (중복·스크린샷·바탕화면 정리 · 언제나 0원)<br />
+                  • 🛠️ <strong>Ghosti 설정몬스터</strong> (원클릭 수리 &amp; 1초 원상복구 · 비용 없이 제한 없이)
                 </p>
                 <div className="pt-1 border-t border-white/10 text-[11px] text-zinc-400">
                   ※ 기기 3대째(집 PC + 회사 PC 등 PC 2대 연결)부터는 아래 <strong>[💼 업무 공유 — 1인 멀티PC (월 1,900원)]</strong>으로 전환됩니다.
@@ -957,7 +957,7 @@ export const PricingModal: React.FC = () => {
               </div>
             </div>
             <div className="pt-2 border-t border-white/10 text-[11px] text-zinc-400">
-              🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 안내 (약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다. (※ 유저가 자기 PC에 인덱싱한 <strong>‘나 자신의 Z-Eye 여권’과 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리합니다.)
+              🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 안내 (약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다. (※ 유저가 자기 PC에 인덱싱한 <strong>‘나 자신의 귀신같이 여권’과 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리합니다.)
             </div>
           </div>
 
@@ -1009,7 +1009,7 @@ export const PricingModal: React.FC = () => {
         <div className="p-5 rounded-2xl bg-[#18181B] border border-primary-container/35 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2.5">
-              <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
                 💌 라운지 초대장 카드 &amp; 앱 공유
               </span>

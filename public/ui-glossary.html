@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🎨 Z-Eye & 멀린패밀리 앱 테스터(QA) UI/UX 그림 용어사전 (30선)</title>
+  <title>🎨 Ghosti & 멀린패밀리 앱 테스터(QA) UI/UX 그림 용어사전 (30선)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -19,7 +19,7 @@
       position: relative;
       overflow: hidden;
     }
-    .demo-box-zeye {
+    .demo-box-ghosti {
       background: linear-gradient(145deg, #fffbeb, #fef3c7);
       border-bottom: 1px solid #fde68a;
     }
@@ -72,7 +72,7 @@
     <div class="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span class="px-2.5 py-0.5 text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">Z-Eye & 멀린패밀리 QA 공식 표준</span>
+          <span class="px-2.5 py-0.5 text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">Ghosti & 멀린패밀리 QA 공식 표준</span>
           <span class="text-xs text-slate-500 font-medium">초보자도 그림만 보고 1초 만에 찾는 친절한 가이드</span>
         </div>
         <h1 class="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -87,7 +87,7 @@
             class="bg-slate-50 border border-slate-300 text-xs text-slate-900 placeholder-slate-400 rounded-xl px-3.5 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
         </div>
         <button onclick="filterCategory('all')" class="cat-btn active px-3 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-sm" data-cat="all">전체 (30)</button>
-        <button onclick="filterCategory('zeye')" class="cat-btn px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100" data-cat="zeye">★ Z-Eye 전용 (8)</button>
+        <button onclick="filterCategory('ghosti')" class="cat-btn px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100" data-cat="ghosti">★ Ghosti 전용 (8)</button>
         <button onclick="filterCategory('popup')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100" data-cat="popup">창·팝업 (5)</button>
         <button onclick="filterCategory('control')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100" data-cat="control">버튼·입력·조작 (9)</button>
         <button onclick="filterCategory('layout')" class="cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100" data-cat="layout">화면·여백·로딩 (8)</button>
@@ -115,12 +115,12 @@
   <script>
     const terms = [
       // ==========================================
-      // ★ 1. Z-Eye 전용 핵심 요소 (8선)
+      // ★ 1. Ghosti 전용 핵심 요소 (8선)
       // ==========================================
       {
         id: 1,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '3대 메뉴 트리 & 방 전환',
         en: 'Lounge Tree (내 기기 / 사진 공유 / 업무 공유)',
         desc: '좌측 메뉴(모바일은 상단 탭)에서 [내 기기], [사진 공유(패밀리·동호회·동창회)], [업무 공유] 방을 오가는 메뉴 트리입니다.',
@@ -140,8 +140,8 @@
       },
       {
         id: 2,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '현재 위치 경로 (브레드크럼)',
         en: 'Breadcrumb (상단 경로 표시줄)',
         desc: '화면 왼쪽 위에 "사진 공유 > 패밀리 > 우리집"처럼 지금 내가 어느 방에 들어와 있는지 화살표(>)로 보여주는 길잡이입니다.',
@@ -159,8 +159,8 @@
       },
       {
         id: 3,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '우상단 여권 문패 & 앵커 바',
         en: 'Top-Right Passport Anchor',
         desc: '오른쪽 맨 위에 항상 고정된 얼굴 사진(여권 문패), 설정몬스터(🛠️), 잔여 크레딧, 테마 버튼 묶음입니다.',
@@ -177,8 +177,8 @@
       },
       {
         id: 4,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '음성 파형 검색창 & 캡슐 탭',
         en: 'Voice Search Bar & Capsule Tabs',
         desc: '마이크 음성 인식 파형이 움직이는 자연어 검색창과 그 아래 [동영상 | 사진 | 문서] 3대 전환 캡슐 탭입니다.',
@@ -202,8 +202,8 @@
       },
       {
         id: 5,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '얼굴 자동 매칭 확인 카드',
         en: 'Face Crop Registry Card',
         desc: '새 인물 사진이 발견됐을 때 얼굴만 네모낳게 잘라서 "[⭕ 맞아요! 등록] / [패스]"를 물어보는 상단 확인 카드입니다.',
@@ -224,8 +224,8 @@
       },
       {
         id: 6,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '연사 묶음 배지 & 비교 Pick',
         en: 'Burst Badge ([❐ N장 연사])',
         desc: '비슷한 연속 촬영 사진을 1장으로 겹쳐서 [❐ 5장 연사] 배지로 보여주고, 클릭 시 베스트 컷 1장을 고르는 화면입니다.',
@@ -242,8 +242,8 @@
       },
       {
         id: 7,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '타임머신 되돌리기 바 (Undo)',
         en: 'Floating Undo Bar (즉시 복구)',
         desc: '사진이나 중복 파일을 정리 대기함으로 보낸 직후 하단에 뜨는 "[↩ 방금 정리한 항목 즉시 되돌리기]" 안전망 바입니다.',
@@ -258,8 +258,8 @@
       },
       {
         id: 8,
-        cat: 'zeye',
-        catName: '★ Z-Eye 전용',
+        cat: 'ghosti',
+        catName: '★ Ghosti 전용',
         ko: '설정몬스터 손가락 오버레이',
         en: 'Setup Monster Glass Overlay (👆)',
         desc: '화면 위에 투명 안내판을 씌우고 빨간 손가락 화살표(👆)와 음성으로 클릭할 위치를 콕 집어 알려주는 도우미입니다.',
@@ -701,11 +701,11 @@
       });
 
       grid.innerHTML = filtered.map(t => `
-        <article class="bg-white border-2 ${t.cat === 'zeye' ? 'border-amber-300 hover:border-amber-500' : 'border-slate-200 hover:border-indigo-500'} rounded-2xl overflow-hidden flex flex-col justify-between transition-all shadow-sm hover:shadow-md">
+        <article class="bg-white border-2 ${t.cat === 'ghosti' ? 'border-amber-300 hover:border-amber-500' : 'border-slate-200 hover:border-indigo-500'} rounded-2xl overflow-hidden flex flex-col justify-between transition-all shadow-sm hover:shadow-md">
           <div>
-            <div class="demo-box ${t.cat === 'zeye' ? 'demo-box-zeye' : ''}">
+            <div class="demo-box ${t.cat === 'ghosti' ? 'demo-box-ghosti' : ''}">
               ${t.demo}
-              <span class="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-extrabold ${t.cat === 'zeye' ? 'bg-amber-500 text-white shadow-xs' : 'bg-white/95 text-indigo-700 border border-indigo-200 shadow-xs'} rounded-md">
+              <span class="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-extrabold ${t.cat === 'ghosti' ? 'bg-amber-500 text-white shadow-xs' : 'bg-white/95 text-indigo-700 border border-indigo-200 shadow-xs'} rounded-md">
                 #${t.id} ${t.catName}
               </span>
             </div>
@@ -737,7 +737,7 @@
       document.querySelectorAll('.cat-btn').forEach(btn => {
         if (btn.dataset.cat === cat) {
           btn.className = 'cat-btn active px-3 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-sm';
-        } else if (btn.dataset.cat === 'zeye') {
+        } else if (btn.dataset.cat === 'ghosti') {
           btn.className = 'cat-btn px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100';
         } else {
           btn.className = 'cat-btn px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100';

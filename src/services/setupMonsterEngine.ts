@@ -197,7 +197,7 @@ export function buildOsSecuritySpec(
       windowsAuthenticodeSigned: true,
       windowsJeaLeastPrivilegePolicy:
         'app.manifest uiAccess="true" (Authenticode EV 서명 · 관리자/타사 창 UIPI 장벽 관통) + PowerShell JEA(Just Enough Administration) 최소 권한 제어로 백신(V3/Defender) 오탐 원천 차단',
-      windowsPreBackupRegistryJsonPath: `poc/results/z_eye_setup_blackbox.json#${presetId}_beforeSnapshot (0.01초 전 타겟 레지스트리/서비스 노드 JSON 직렬화 백업)`,
+      windowsPreBackupRegistryJsonPath: `poc/results/ghosti_setup_blackbox.json#${presetId}_beforeSnapshot (0.01초 전 타겟 레지스트리/서비스 노드 JSON 직렬화 백업)`,
     };
   }
   return {
@@ -698,7 +698,7 @@ export function buildSetupPreTriageQuestion(
       `내 PC 레지스트리에 실제 등록된 시작프로그램 ${realStartups.length}개가 확인되었습니다. 어떻게 정리해 드릴까요?`,
     options: [
       {
-        label: '① 카톡·Z-Eye·드라이브 등 필수 앱만 남기고 불필요한 보안/알림 시작프로그램 정리 (권장)',
+        label: '① 카톡·Ghosti·드라이브 등 필수 앱만 남기고 불필요한 보안/알림 시작프로그램 정리 (권장)',
         detailAnswer: '필수 앱만 남기고 불필요한 시작프로그램을 정리해 주세요',
       },
       {
@@ -794,7 +794,7 @@ function buildSetupDiagnosisPlanBase(
         '업무용 폴더(S: 드라이브) 연결이 풀려서 내 컴퓨터에서 보이지 않는 상태입니다. 아래 버튼을 누르시면 바로 다시 연결해 드립니다.',
       agentModuleName: 'Merlin_Z_Core_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)',
       systemCommandOrApi:
-        '[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters" -Name "AllowInsecureGuestAuth" -Value 1; [Stage 3] net use S: "\\\\127.0.0.1\\Z-Eye_Work_Vault" /persistent:yes',
+        '[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters" -Name "AllowInsecureGuestAuth" -Value 1; [Stage 3] net use S: "\\\\127.0.0.1\\Ghosti_Work_Vault" /persistent:yes',
       beforeSnapshot: {
         driveLetter: 'S:',
         mounted: false,
@@ -982,7 +982,7 @@ function buildSetupDiagnosisPlanBase(
       symptomQuery: q,
       title: '🔋 [Level 1 단순 설정] 노트북 덮개(Lid) 닫음 시 절전 진입 방지 & 24시간 마스터 서버 유지',
       rootCause:
-        '눈(Eye) 스캔 결과: 현재 Windows 전원 옵션(SUB_BUTTONS -> LIDACTION)이 AC 전원 연결 시에도 "절전(Sleep=1)"으로 설정되어 덮개를 닫으면 Z-Eye 서버가 중단됩니다.',
+        '눈(Eye) 스캔 결과: 현재 Windows 전원 옵션(SUB_BUTTONS -> LIDACTION)이 AC 전원 연결 시에도 "절전(Sleep=1)"으로 설정되어 덮개를 닫으면 Ghosti 서버가 중단됩니다.',
       agentModuleName: 'Merlin_Z_Core_Setup.exe (Windows PowerCfg Engine)',
       systemCommandOrApi:
         'powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0; powercfg /setactive SCHEME_CURRENT',
@@ -992,12 +992,12 @@ function buildSetupDiagnosisPlanBase(
         acLidCloseLabel: '절전(Sleep)',
       },
       afterSnapshot: {
-        powerScheme: 'Z-Eye_Master_AlwaysOn',
+        powerScheme: 'Ghosti_Master_AlwaysOn',
         acLidCloseAction: 0,
         acLidCloseLabel: '아무 작업도 안 함 (서버 상시 가동)',
       },
       completionMessage:
-        '✅ [Level 1 수리 완료] 노트북 덮개를 덮어도 전원이 꺼지거나 절전 모드로 들어가지 않고 Z-Eye 마스터 PC 서버가 24시간 내내 돌아가도록 설정했습니다.',
+        '✅ [Level 1 수리 완료] 노트북 덮개를 덮어도 전원이 꺼지거나 절전 모드로 들어가지 않고 Ghosti 마스터 PC 서버가 24시간 내내 돌아가도록 설정했습니다.',
       voiceTtsSummary:
         '노트북 뚜껑을 덮어도 꺼지지 않고 계속 작동하도록 전원 설정을 변경했습니다.',
       creditCost: 100,
@@ -1104,12 +1104,12 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · SDK 35 WindowInsets 보정)',
       feasibilityCheckKo:
-        '✅ Z-Eye_Agent.apk (Target SDK 35 · RECEIVER_NOT_EXPORTED · WindowInsets Edge-to-Edge 오프셋 동적 보정) 완료: 타사 앱 Deep Link 이동 및 최상단 손가락 화살표 오버레이 가이드가 밀림 오차 0px로 작동합니다.',
+        '✅ Ghosti_Agent.apk (Target SDK 35 · RECEIVER_NOT_EXPORTED · WindowInsets Edge-to-Edge 오프셋 동적 보정) 완료: 타사 앱 Deep Link 이동 및 최상단 손가락 화살표 오버레이 가이드가 밀림 오차 0px로 작동합니다.',
       symptomQuery: q,
       title: '👆 타사 앱(카카오톡·유튜브) 딥링크 순간이동 + SDK 35 Edge-to-Edge 보정 손가락 가이드',
       rootCause:
         'Android 15(SDK 35) 강제 Edge-to-Edge 레이아웃에서 상태바(112px)·내비바(144px)만큼 밀리는 현상을 WindowInsets 실시간 가감 보정으로 해결하여, 최상단 투명 유리판(SYSTEM_ALERT_WINDOW) 정확한 물리 좌표에 손가락 화살표를 띄웁니다.',
-      agentModuleName: 'Z-Eye_Agent.apk (SDK 35 WindowInsets Calibrated Overlay + RECEIVER_NOT_EXPORTED)',
+      agentModuleName: 'Ghosti_Agent.apk (SDK 35 WindowInsets Calibrated Overlay + RECEIVER_NOT_EXPORTED)',
       systemCommandOrApi:
         'Intent.ACTION_VIEW("kakaotalk://settings/notifications") + WindowManager.addView(FloatingFingerOverlay, calibratedY = logicalY - statusBarInset[112px])',
       beforeSnapshot: {
@@ -1177,7 +1177,7 @@ function buildSetupDiagnosisPlanBase(
       title: '🔕 저녁 7시~8시 운동 시간대 자동 방해금지(DND) 스케줄 백그라운드 직접 세팅',
       rootCause:
         '눈(Eye) 진단 결과: 현재 스마트폰 NotificationPolicy에 저녁 운동 시간대 자동 무음 규칙(AutomaticZenRule)이 등록되어 있지 않아 운동 중 단체방·스팸 알림이 계속 울립니다.',
-      agentModuleName: 'Z-Eye_Agent.apk (SDK 35 NotificationManager Policy API)',
+      agentModuleName: 'Ghosti_Agent.apk (SDK 35 NotificationManager Policy API)',
       systemCommandOrApi:
         'NotificationManager.addAutomaticZenRule(ZenRule(name="저녁 운동 집중", time="19:00-20:00", allowStarredFamily=true))',
       beforeSnapshot: {
@@ -1212,7 +1212,7 @@ function buildSetupDiagnosisPlanBase(
       title: '🔋 배터리를 20% 갉아먹는 미사용 유령앱 15개 초절전(Deep Sleep) 일괄 격리',
       rootCause:
         '눈(Eye) UsageStatsManager 분석 결과: 최근 30일 동안 한 번도 열지 않은 앱 15개가 백그라운드에서 위치·네트워크 WakeLock을 잡고 배터리의 20.4%를 소모 중입니다.',
-      agentModuleName: 'Z-Eye_Agent.apk (SDK 35 UsageStats & AppStandby Controller)',
+      agentModuleName: 'Ghosti_Agent.apk (SDK 35 UsageStats & AppStandby Controller)',
       systemCommandOrApi:
         'UsageStatsManager.setAppStandbyBuckets(unused15Packages, STANDBY_BUCKET_RESTRICTED)',
       beforeSnapshot: {
@@ -1246,7 +1246,7 @@ function buildSetupDiagnosisPlanBase(
     title: '👀 스마트폰 시스템 글자 크기 135% 확대 & 야간 블루라이트 차단 직접 세팅',
     rootCause:
       '눈(Eye) 진단 결과: 시스템 글자 배율(FONT_SCALE=1.0)이 작게 설정되어 있고 야간 눈 보호 모드가 꺼져 있어 야간 유튜브·카톡 열람 시 시력 피로가 발생합니다.',
-    agentModuleName: 'Z-Eye_Agent.apk (SDK 35 Settings.System.WRITE_SETTINGS)',
+    agentModuleName: 'Ghosti_Agent.apk (SDK 35 Settings.System.WRITE_SETTINGS)',
     systemCommandOrApi:
       'Settings.System.putFloat(FONT_SCALE, 1.35f); Settings.Secure.putInt(NIGHT_DISPLAY_ACTIVATED, 1)',
     beforeSnapshot: {

@@ -1,6 +1,6 @@
 import React from 'react';
 
-export interface ZEyeBrandLogoProps {
+export interface GhostiBrandLogoProps {
   /** 'desktop' (기본: 36x36px 아이콘) | 'mobile' (32x32px 아이콘) | 'modal' (모달 상단용) */
   size?: 'desktop' | 'mobile' | 'modal';
   /** 'light' | 'dark' 테마 (미지정 시 테마 자동 적응) */
@@ -23,7 +23,7 @@ export interface ZEyeBrandLogoProps {
  *   - 다크 모드: `/gwisinkachi_smoke_wordmark_light.png`
  * - 2단 (서브 슬로건): 1초 AI 파일·영상 내용찾기 (text-[11px] font-bold tracking-tight text-teal-600/95 dark:text-teal-400/95)
  */
-export const ZEyeBrandLogo: React.FC<ZEyeBrandLogoProps> = ({
+export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   size = 'desktop',
   themeMode,
   showBadge: _showBadge,

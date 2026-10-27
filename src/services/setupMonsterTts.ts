@@ -1,5 +1,5 @@
 /**
- * [🛠️ Z-Eye 설정몬스터 Neural TTS 클라이언트 & 무지연 캐시 재생기]
+ * [🛠️ Ghosti 설정몬스터 Neural TTS 클라이언트 & 무지연 캐시 재생기]
  * 1. 기본 성우: typecast_piljae (MS 신경망 남성 성우 '현수(ko-KR-HyunsuNeural)')
  * 2. 보조 성우: typecast_yujin (Typecast 전속 여성 성우 '유진')
  * 3. 3단 무지연 무과금 캐시 재생 구조:

@@ -6,7 +6,7 @@
  */
 import type { PrivateSyncStrategy, SyncMode, SyncState } from '../types/saysee';
 
-const SYNC_STORAGE_KEY = 'zeye_sync_prefs';
+const SYNC_STORAGE_KEY = 'ghosti_sync_prefs';
 
 export function loadSyncState(photoCount: number, totalBytes: number): SyncState {
   let saved: Partial<SyncState> = {};

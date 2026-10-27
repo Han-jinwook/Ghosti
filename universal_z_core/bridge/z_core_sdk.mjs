@@ -1,8 +1,8 @@
 /**
  * 멀린 Z 코어 (Universal Merlin Z-Core) 전사 Node.js 공용 SDK (z_core_sdk.mjs)
- * - 고정 위치: D:\Z-Eye\universal_z_core\bridge\z_core_sdk.mjs
+ * - 고정 위치: D:\Ghosti\universal_z_core\bridge\z_core_sdk.mjs
  * - 사용법 (타 프로젝트에서 파일 복사 없이 바로 import):
- *   import { ZCore } from 'file:///D:/Z-Eye/universal_z_core/bridge/z_core_sdk.mjs';
+ *   import { ZCore } from 'file:///D:/Ghosti/universal_z_core/bridge/z_core_sdk.mjs';
  *   await ZCore.trustedClick({ selector: 'button.publish' });
  */
 

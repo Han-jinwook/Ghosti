@@ -117,7 +117,7 @@ export const zCoreBridge = ZCoreBridgeManager.getInstance();
 
 /**
  * [로컬 Z-코어 URL 라우팅 헬퍼]
- * - 브라우저 웹(`z-eye-app.netlify.app` 등)이거나 로컬 개발 시 5199 포트로 직결 연결합니다.
+ * - 브라우저 웹(`ghosti-app.netlify.app` 등)이거나 로컬 개발 시 5199 포트로 직결 연결합니다.
  */
 export function getZCoreUrl(path: string): string {
   if (!path) return '';
@@ -143,7 +143,7 @@ export function getZCoreUrl(path: string): string {
     cleanPath.startsWith('/__docs/') ||
     cleanPath.startsWith('/__quarantine/') ||
     cleanPath.startsWith('/__zcore/') ||
-    cleanPath.startsWith('/api/zeye/')
+    cleanPath.startsWith('/api/ghosti/')
   ) {
     return `${Z_CORE_ORIGIN}${cleanPath}`;
   }

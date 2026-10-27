@@ -1,7 +1,7 @@
 /**
- * [Z-Eye] 허브 SSO ↔ 제트아이 단독 Supabase 인증 브릿지 (Netlify Function)
+ * [Ghosti] 허브 SSO ↔ 귀신같이 단독 Supabase 인증 브릿지 (Netlify Function)
  *
- * 스키마(supabase/z_eye_zero_cloud_schema.sql 상단 [인증 브릿지] 주석) 설계 그대로 구현:
+ * 스키마(supabase/ghosti_zero_cloud_schema.sql 상단 [인증 브릿지] 주석) 설계 그대로 구현:
  *   ① 허브 `GET /api/auth/me`로 브라우저가 보낸 허브 토큰(merlin_session_token)을 서버에서 검증
  *   ② service_role로 public.users(id = 허브 family_users.id) Upsert  (RLS상 브라우저 직접 INSERT 불가)
  *   ③ 우리 프로젝트 JWT 시크릿으로 단기(1시간) 토큰 발급 (sub = 허브 userId, email, role = authenticated)
@@ -39,7 +39,7 @@ function signSupabaseJwt({ userId, email }, secret) {
     email,
     role: 'authenticated',
     aud: 'authenticated',
-    iss: 'z-eye-hub-bridge',
+    iss: 'ghosti-hub-bridge',
     iat: now,
     exp: now + TOKEN_TTL_SEC,
   });
@@ -104,7 +104,7 @@ export default async (req) => {
   const appSettings = {};
   if (body.nativePushToken) {
     appSettings.native_push_token = String(body.nativePushToken);
-    appSettings.push_channel_id = 'zeye';
+    appSettings.push_channel_id = 'ghosti';
   }
   const row = {
     id: userId,

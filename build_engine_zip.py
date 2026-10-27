@@ -29,11 +29,11 @@ def main():
     bat_content = """@echo off
 chcp 65001 > nul
 echo ========================================================
-echo  [Merlin Z-Core] 제트아이 만능 PC 상주 엔진 기동 중...
+echo  [Merlin Z-Core] 귀신같이 만능 PC 상주 엔진 기동 중...
 echo ========================================================
 start "" "Merlin_Z_Core_Setup.exe"
 echo  성공! 윈도우 시계 옆 트레이 및 로컬 포트 5199에서 실행 중입니다.
-echo  제트아이 웹 브라우저 창으로 돌아가시면 1초 만에 자동 연결됩니다.
+echo  귀신같이 웹 브라우저 창으로 돌아가시면 1초 만에 자동 연결됩니다.
 timeout /t 3 > nul
 exit
 """
@@ -41,8 +41,8 @@ exit
     readme_content = """❖ 멀린 Z-코어 (Merlin Z-Core) 사용 안내
 
 1. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다.
-2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 Z-Eye 아이콘이 생성됩니다.
-3. 제트아이 웹 브라우저(https://z-eye-app.netlify.app) 화면에서 
+2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 Ghosti 아이콘이 생성됩니다.
+3. 귀신같이 웹 브라우저(https://ghosti-app.netlify.app) 화면에서 
    우측 상단 배지가 [🟢 Z-코어 5199]로 바뀌며,
    내 컴퓨터 속 사진(301장 등) 및 문서가 0.1초 만에 안전하게 투시 검색됩니다!
 """

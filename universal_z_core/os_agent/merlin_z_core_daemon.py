@@ -2,16 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 ❖ Merlin_Z_Core Unified PC Daemon (merlin_z_core_daemon.py)
-- 멀린 패밀리 16개 웹앱(제트아이·3몬스터·센스톡·어그로필터·썬드리머 등)을 단일 표준 포트(127.0.0.1:5199)와
+- 멀린 패밀리 16개 웹앱(귀신같이·3몬스터·센스톡·어그로필터·썬드리머 등)을 단일 표준 포트(127.0.0.1:5199)와
   '내장 소프트웨어 플러그인(Built-in Software Plugins)' 아키텍처로 통합 구동하는 마스터 PC 상주 데몬입니다.
 - 유저는 오직 [Merlin_Z_Core_Setup.exe] 단 1개만 설치하면 되며, 추가 설치파일(0개)이나 크롬 확장팩(0개)이 필요 없습니다.
 - 제공 기능:
   1. 시계 옆 시스템 트레이 상주 (pystray 지원 시 자동 활성화, 미설치 시 백그라운드 데몬 동작)
   2. 윈도우 시작 시 자동 실행 (HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\Merlin_Z_Core)
   3. 단일 표준 포트 127.0.0.1:5199 HTTP/JSON 브릿지:
-     - GET  /__merlin/health        : 코어 버전, 자동실행 상태, 내장 플러그인 3종(zeye_os, senstalk, aggrofilter) 상태 반환
-     - POST /__merlin/query         : 단일 표준 게이트웨이 (plugin: "zeye" | "senstalk" | "aggrofilter")
-     - GET/POST /__zcore/*          : 제트아이 & 3몬스터 OS 제어/포렌식/오버레이 플러그인 직결
+     - GET  /__merlin/health        : 코어 버전, 자동실행 상태, 내장 플러그인 3종(ghosti_os, senstalk, aggrofilter) 상태 반환
+     - POST /__merlin/query         : 단일 표준 게이트웨이 (plugin: "ghosti" | "senstalk" | "aggrofilter")
+     - GET/POST /__zcore/*          : 귀신같이 & 3몬스터 OS 제어/포렌식/오버레이 플러그인 직결
      - GET/POST /api/senstalk/*     : 센스톡 6대 메신저 릴레이 발송 플러그인 직결 (구 28888 포트 완전 폐기 ➔ 5199 단일화)
      - GET/POST /api/aggrofilter/*  : 어그로필터 로컬 IP 유튜브 자막 추출 플러그인 직결 (크롬 확장팩 불필요)
 """
@@ -39,7 +39,7 @@ except Exception:
     pass
 
 import core_win32 as w32  # noqa: E402
-import plugin_zeye_os  # noqa: E402
+import plugin_ghosti_os  # noqa: E402
 import plugin_senstalk  # noqa: E402
 import plugin_aggrofilter  # noqa: E402
 
@@ -66,7 +66,7 @@ def get_unified_health() -> Dict[str, Any]:
         "chromeExtensionRequired": False,
         "autostartEnabled": w32.is_autostart_enabled(),
         "builtinPlugins": {
-            "zeye_os": plugin_zeye_os.PLUGIN_METADATA,
+            "ghosti_os": plugin_ghosti_os.PLUGIN_METADATA,
             "senstalk": plugin_senstalk.PLUGIN_METADATA,
             "aggrofilter": plugin_aggrofilter.PLUGIN_METADATA,
         },
@@ -74,10 +74,10 @@ def get_unified_health() -> Dict[str, Any]:
 
 
 def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    p = (plugin_name or "zeye").strip().lower()
+    p = (plugin_name or "ghosti").strip().lower()
     data = payload or {}
-    if p in ("zeye", "zeye_os", "os", "monster"):
-        return plugin_zeye_os.handle_request(action, data)
+    if p in ("ghosti", "ghosti_os", "os", "monster"):
+        return plugin_ghosti_os.handle_request(action, data)
     if p in ("senstalk", "sensebot", "messenger"):
         return plugin_senstalk.handle_request(action, data)
     if p in ("aggrofilter", "youtube", "caption"):
@@ -85,7 +85,7 @@ def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] 
     return {
         "ok": False,
         "error": f"UNKNOWN_BUILTIN_PLUGIN: {plugin_name}",
-        "availablePlugins": ["zeye_os", "senstalk", "aggrofilter"],
+        "availablePlugins": ["ghosti_os", "senstalk", "aggrofilter"],
     }
 
 
@@ -143,25 +143,25 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(get_unified_health())
             return
 
-        # [제트아이 내 PC 전수 인덱싱 API: 사진 / 서류 / 동영상]
-        if path in ("/__photos/list", "/api/zeye/photos/list"):
-            self._send_json(plugin_zeye_os.list_local_photos(qp))
+        # [귀신같이 내 PC 전수 인덱싱 API: 사진 / 서류 / 동영상]
+        if path in ("/__photos/list", "/api/ghosti/photos/list"):
+            self._send_json(plugin_ghosti_os.list_local_photos(qp))
             return
 
-        if path in ("/__photos/file", "/api/zeye/photos/file"):
-            content, mime, status = plugin_zeye_os.read_local_photo_file(qp)
+        if path in ("/__photos/file", "/api/ghosti/photos/file"):
+            content, mime, status = plugin_ghosti_os.read_local_photo_file(qp)
             if content is not None:
                 self._send_bytes(content, content_type=mime, status=status)
             else:
                 self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=status)
             return
 
-        if path in ("/__docs/list", "/api/zeye/docs/list"):
-            self._send_json(plugin_zeye_os.list_local_docs(qp))
+        if path in ("/__docs/list", "/api/ghosti/docs/list"):
+            self._send_json(plugin_ghosti_os.list_local_docs(qp))
             return
 
-        if path in ("/__videos/list", "/__videos/index", "/api/zeye/videos/list"):
-            self._send_json(plugin_zeye_os.list_local_videos(qp))
+        if path in ("/__videos/list", "/__videos/index", "/api/ghosti/videos/list"):
+            self._send_json(plugin_ghosti_os.list_local_videos(qp))
             return
 
         if path.startswith("/api/senstalk"):
@@ -175,9 +175,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_aggrofilter.handle_get(sub, qp))
             return
 
-        if path.startswith("/__zcore/") or path.startswith("/api/zeye/"):
+        if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
-            self._send_json(plugin_zeye_os.handle_request(act, qp))
+            self._send_json(plugin_ghosti_os.handle_request(act, qp))
             return
 
         self._send_json({"ok": False, "error": f"Not Found: {path}"}, status=404)
@@ -187,14 +187,14 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         body = self._read_body()
 
-        # [제트아이 윈도우 휴지통 / 격리 / 폴더열기]
+        # [귀신같이 윈도우 휴지통 / 격리 / 폴더열기]
         if path.startswith("/__quarantine/"):
             sub = path[len("/__quarantine/") :].strip("/")
-            self._send_json(plugin_zeye_os.handle_quarantine(sub, body))
+            self._send_json(plugin_ghosti_os.handle_quarantine(sub, body))
             return
 
         if path == "/__merlin/query":
-            plugin_name = str(body.get("plugin") or body.get("callerAppId") or "zeye")
+            plugin_name = str(body.get("plugin") or body.get("callerAppId") or "ghosti")
             action = str(body.get("action") or body.get("targetResource") or "health")
             payload = body.get("payload") if isinstance(body.get("payload"), dict) else body
             self._send_json(dispatch_plugin_call(plugin_name, action, payload))
@@ -211,16 +211,16 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_aggrofilter.handle_post(sub, body))
             return
 
-        if path.startswith("/__zcore/") or path.startswith("/api/zeye/"):
+        if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
-            self._send_json(plugin_zeye_os.handle_request(act, body))
+            self._send_json(plugin_ghosti_os.handle_request(act, body))
             return
 
         self._send_json({"ok": False, "error": f"Not Found: {path}"}, status=404)
 
 
 def run_selftest(live: bool = False) -> Dict[str, Any]:
-    """내장 플러그인 3종(zeye_os, senstalk, aggrofilter) 및 [복원 기록] Pre-Check 통합 자가진단"""
+    """내장 플러그인 3종(ghosti_os, senstalk, aggrofilter) 및 [복원 기록] Pre-Check 통합 자가진단"""
     h = get_unified_health()
     st_sync = plugin_senstalk.handle_post(
         "sync",
@@ -249,16 +249,16 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
             r = plugin_aggrofilter.fetch_youtube_captions_via_local_ip(v)
             live_rows.append({"videoId": v, "ok": r.get("ok"), "segmentCount": r.get("segmentCount"), "lang": r.get("selectedLanguage"), "reason": r.get("reason")})
         ag_live = {"skipped": False, "results": live_rows, "allOk": all(x["ok"] and (x["segmentCount"] or 0) > 0 for x in live_rows)}
-    zeye_status = plugin_zeye_os.handle_request("health")
-    restore_precheck = plugin_zeye_os.handle_request("restore-points-list")
-    rollback_res = plugin_zeye_os.handle_request("restore-point-rollback", {"restoreId": "#104"})
-    tree_summary = plugin_zeye_os.handle_request("folder-tree-summary")
+    ghosti_status = plugin_ghosti_os.handle_request("health")
+    restore_precheck = plugin_ghosti_os.handle_request("restore-points-list")
+    rollback_res = plugin_ghosti_os.handle_request("restore-point-rollback", {"restoreId": "#104"})
+    tree_summary = plugin_ghosti_os.handle_request("folder-tree-summary")
     all_ok = bool(ag_vid == "dQw4w9WgXcQ" and ag_parser_ok and (ag_live.get("skipped") or ag_live.get("allOk")))
     return {
         "ok": all_ok,
         "selftest": "PASSED" if all_ok else "FAILED",
         "unifiedHealth": h,
-        "zeyePluginHealth": zeye_status,
+        "ghostiPluginHealth": ghosti_status,
         "restorePointsPrecheck": {
             "officialTerm": restore_precheck.get("officialTerm"),
             "precheckElapsedMs": restore_precheck.get("precheckElapsedMs"),
@@ -294,7 +294,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Merlin_Z_Core Unified PC Daemon (Port 5199)")
     parser.add_argument("--selftest", action="store_true", help="내장 소프트웨어 플러그인 3종 통합 자가진단")
     parser.add_argument("--selftest-live", action="store_true", help="자가진단 + 실제 유튜브 4종 자막 실측(네트워크 필요)")
-    parser.add_argument("--plugin", type=str, default="", help="단발 실행할 내장 플러그인명 (zeye|senstalk|aggrofilter)")
+    parser.add_argument("--plugin", type=str, default="", help="단발 실행할 내장 플러그인명 (ghosti|senstalk|aggrofilter)")
     parser.add_argument("--action", type=str, default="health", help="플러그인 액션명")
     parser.add_argument("--payload", type=str, default="{}", help="JSON 페이로드 문자열")
     parser.add_argument("--port", type=int, default=STANDARD_PORT, help="단일 표준 포트 (기본 5199)")
@@ -325,7 +325,7 @@ def main() -> None:
                 "ok": True,
                 "status": "LISTENING",
                 "endpoint": f"http://127.0.0.1:{args.port}",
-                "plugins": ["zeye_os", "senstalk", "aggrofilter"],
+                "plugins": ["ghosti_os", "senstalk", "aggrofilter"],
             },
             ensure_ascii=False,
         ),

@@ -2,21 +2,21 @@
 
 > **문서 버전:** v2.2 (SSOT 통합 정본)  
 > **최종 업데이트:** 2026-10-26 (인수인계장 및 구형 강령 풀칠 제거, 원 코어+내장 플러그인 단일 포트 5199 표준 통합)  
-> **공식 마스터 고정 경로:** `D:\Z-Eye\universal_z_core\`  
+> **공식 마스터 고정 경로:** `D:\Ghosti\universal_z_core\`  
 > **전사 통합 중앙 우체국:** `D:\Secretary\post_office\`  
 > **단일 표준 로컬 포트:** `http://127.0.0.1:5199`  
-> **적용 범위:** 멀린 패밀리 16개 전 프로젝트 (`Z-Eye`, `Secretary`, `CafeBreaker`, `SensTalk`, `AggroFilter`, `Vaulter` 등)
+> **적용 범위:** 멀린 패밀리 16개 전 프로젝트 (`Ghosti`, `Secretary`, `CafeBreaker`, `SensTalk`, `AggroFilter`, `Vaulter` 등)
 
 ---
 
 ## 1. 전사 Z 코어 통합 아키텍처 및 4대 운영 원칙
 
-1. **복사 배포 금지 ➔ 단일 경로(`D:\Z-Eye\universal_z_core\`) 및 단일 포트(`127.0.0.1:5199`) 직결:**
+1. **복사 배포 금지 ➔ 단일 경로(`D:\Ghosti\universal_z_core\`) 및 단일 포트(`127.0.0.1:5199`) 직결:**
    - 프로젝트마다 코어를 복사해 배포하거나 별도 포트(`28888` 등)를 운영하지 않습니다.
    - 모든 앱은 단일 로컬 포트 `http://127.0.0.1:5199`로 통신하여 리소스 점유율 0.1% 미만을 달성합니다.
 2. **원 코어(`Merlin_Z_Core_Setup.exe`) + 내장 소프트웨어 플러그인 아키텍처:**
    - 단 1개의 설치 파일 내부에 핵심 서비스 플러그인을 탑재하여 단일 포트에서 직결 작동합니다:
-     - **`plugin_zeye_os.py` (`/__zcore/*`, `/api/zeye/*`)**: 제트아이 OS 제어, 5대 은닉 금고 3초 포렌식, 윈도우 휴지통 `$I` 바이너리 해독, `[복원 기록]` 3단계 사전 검진 및 1초 원복, TopMost 손가락(`👆`) 오버레이.
+     - **`plugin_ghosti_os.py` (`/__zcore/*`, `/api/ghosti/*`)**: 귀신같이 OS 제어, 5대 은닉 금고 3초 포렌식, 윈도우 휴지통 `$I` 바이너리 해독, `[복원 기록]` 3단계 사전 검진 및 1초 원복, TopMost 손가락(`👆`) 오버레이.
      - **`plugin_senstalk.py` (`/api/senstalk/*`)**: 6대 메신저 릴레이 발송 엔진 (평소 CPU 0.0%, 필요 시에만 발송 큐 가동).
      - **`plugin_aggrofilter.py` (`/api/aggrofilter/*`)**: 크롬 확장팩 없이 유저 로컬 IP로 유튜브 자막 트랙(`TimedText`) 직접 추출.
 3. **PC vs 모바일 스토어 심사 100% 프리패스 분리 원칙:**
@@ -32,7 +32,7 @@
 | 내장 플러그인 | HTTP 엔드포인트 (`127.0.0.1:5199`) | 상세 기능 및 스펙 |
 |---|---|---|
 | **통합 코어 게이트웨이** | `GET /__merlin/health`<br>`POST /__merlin/query` | 코어 버전, 자동실행 상태, 내장 플러그인 3종 상태 확인 및 단일 진입점 라우팅 |
-| **제트아이 OS 제어 (`plugin_zeye_os`)** | `GET /__zcore/os-inspect`<br>`POST /__zcore/forensic-scan`<br>`POST /__zcore/os-overlay`<br>`GET /__zcore/restore-points`<br>`POST /__zcore/restore-rollback`<br>`POST /__zcore/gdrive-smart-scan`<br>`POST /__zcore/ai-baton-touch` | 실물 Windows OS 진단, 3초 오피스 포렌식, TopMost 손가락 오버레이, 최근 1달 `[복원 기록]` 3단계 사전 검진(`🟢 100% 복원 가능` / `🟡 부분 복원 가능` / `🔴 복원 불가`), `G:` 드라이브 무설정 스마트 색인, 최근 사용 AI 감지 및 제미나이 기본 바톤터치 |
+| **귀신같이 OS 제어 (`plugin_ghosti_os`)** | `GET /__zcore/os-inspect`<br>`POST /__zcore/forensic-scan`<br>`POST /__zcore/os-overlay`<br>`GET /__zcore/restore-points`<br>`POST /__zcore/restore-rollback`<br>`POST /__zcore/gdrive-smart-scan`<br>`POST /__zcore/ai-baton-touch` | 실물 Windows OS 진단, 3초 오피스 포렌식, TopMost 손가락 오버레이, 최근 1달 `[복원 기록]` 3단계 사전 검진(`🟢 100% 복원 가능` / `🟡 부분 복원 가능` / `🔴 복원 불가`), `G:` 드라이브 무설정 스마트 색인, 최근 사용 AI 감지 및 제미나이 기본 바톤터치 |
 | **센스톡 (`plugin_senstalk`)** | `GET /api/senstalk/health`<br>`POST /api/senstalk/sync`<br>`POST /api/senstalk/dispatch` | 6대 메신저 발송 대기열 동기화, `CF_DIB` 클립보드 장전 및 `[Enter]` 연속 발송 제어 |
 | **어그로필터 (`plugin_aggrofilter`)** | `GET /api/aggrofilter/health`<br>`POST /api/aggrofilter/extract` | 유저 로컬 IP 기반 유튜브 자막 트랙(`TimedText`) 및 메타데이터 추출 |
 

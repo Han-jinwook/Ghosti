@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ❖ Merlin_Z_Core PC 버전 단일 실행파일 빌드 & MS 코드 서명(Code Signing) 자동화 파이프라인
-- 대상: universal_z_core/os_agent/merlin_z_core_daemon.py (내장 소프트웨어 플러그인 3종 포함: zeye_os, senstalk, aggrofilter)
+- 대상: universal_z_core/os_agent/merlin_z_core_daemon.py (내장 소프트웨어 플러그인 3종 포함: ghosti_os, senstalk, aggrofilter)
 - 목적:
   1. PyInstaller 기반 무콘솔 단일 실행파일 `Merlin_Z_Core_Setup.exe` 패키징
   2. Windows SmartScreen("Windows의 PC 보호" 파란 경고창) 100% 해소를 위한
@@ -150,7 +150,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         *(["--icon", str(icon_file)] if icon_file.exists() else []),
         *(["--add-data", f"{icon_file};."] if icon_file.exists() else []),
         *(["--add-data", f"{logo_png};."] if logo_png.exists() else []),
-        "--hidden-import", "plugin_zeye_os",
+        "--hidden-import", "plugin_ghosti_os",
         "--hidden-import", "plugin_senstalk",
         "--hidden-import", "plugin_aggrofilter",
         "--hidden-import", "merlin_z_core_os",
@@ -176,7 +176,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
 
 def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.0) -> Dict[str, Any]:
     """
-    빌드된 exe를 임시 포트로 기동해 헬스체크 + 1차 3대 기능(제트아이 OS · 센스톡 · 어그로필터) 응답을 실측합니다.
+    빌드된 exe를 임시 포트로 기동해 헬스체크 + 1차 3대 기능(귀신같이 OS · 센스톡 · 어그로필터) 응답을 실측합니다.
     (개발 PC의 5199는 Vite 개발서버가 점유할 수 있으므로 기본 15199에서 검증 — 비서실 실측 방식과 동일)
     """
     import time
@@ -207,7 +207,7 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
                 time.sleep(1.0)
         report["bootSec"] = round(time.time() - t0, 1)
         checks = {
-            "zeyeOs": lambda: get("/api/zeye/health"),
+            "ghostiOs": lambda: get("/api/ghosti/health"),
             "senstalk": lambda: get("/api/senstalk/health"),
             "aggrofilterHealth": lambda: get("/api/aggrofilter/health"),
             "aggrofilterLiveCaption": lambda: get("/aggrofilter/v1/extract-subtitles", {"url": "https://www.youtube.com/watch?v=arj7oStGLkU"}, t=30.0),
@@ -225,7 +225,7 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
         except Exception:
             proc.kill()
     report["ok"] = bool((report.get("health") or {}).get("ok")) and all(
-        (report.get(k) or {}).get("ok") for k in ("zeyeOs", "senstalk", "aggrofilterHealth", "aggrofilterLiveCaption")
+        (report.get(k) or {}).get("ok") for k in ("ghostiOs", "senstalk", "aggrofilterHealth", "aggrofilterLiveCaption")
     )
     return report
 
@@ -259,7 +259,7 @@ def main() -> None:
     daemon_py = THIS_DIR / "merlin_z_core_daemon.py"
     plugins = [
         THIS_DIR / "core_win32.py",
-        THIS_DIR / "plugin_zeye_os.py",
+        THIS_DIR / "plugin_ghosti_os.py",
         THIS_DIR / "plugin_senstalk.py",
         THIS_DIR / "plugin_aggrofilter.py",
         THIS_DIR / "merlin_z_core_os.py",

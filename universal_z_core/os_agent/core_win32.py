@@ -3,7 +3,7 @@
 Merlin Z-Core (범용 만능 멀린 Z-코어) — 공통 Win32 네이티브 제어 코어 (core_win32.py)
 ========================================================================================
 - 역할:
-  제트아이(plugin_zeye_os), 센스톡(plugin_senstalk), 루미노트(plugin_lumisender) 등
+  귀신같이(plugin_ghosti_os), 센스톡(plugin_senstalk), 루미노트(plugin_lumisender) 등
   모든 내장 소프트웨어 플러그인이 공통으로 사용하는 순수 Win32 ctypes 제어 모듈입니다.
 - 주요 기능:
   1. WinSta0\\Default 대화형 데스크톱 강제 바인딩 (백그라운드/트레이 스레드 키보드·창 제어 보장)

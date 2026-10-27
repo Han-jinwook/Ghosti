@@ -192,7 +192,7 @@ export const SmartTrashView: React.FC = () => {
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[12px] font-bold text-primary-container tracking-wide">
-                🩺 Z-Eye 클린몬스터
+                🩺 귀신같이 클린몬스터
               </span>
               <span className="text-zinc-600">·</span>
               <span className="text-[12px] text-zinc-400 font-medium">

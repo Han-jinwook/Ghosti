@@ -130,7 +130,7 @@ interface SaySeeStore {
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
 
-  // [라운지 마스터 스펙 & 만국공통 Z-Eye 여권(Z-Eye Face Passport)]
+  // [라운지 마스터 스펙 & 만국공통 귀신같이 여권(Ghosti Face Passport)]
   faceClusters: FaceMemberCluster[];
   latestCorpusYear: number;
   showFaceRegistryModal: boolean;
@@ -396,7 +396,7 @@ const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   currentPhotoName: '로컬 서류함 및 동영상 전 구간 타임라인 프레임 자율 색인 완료',
   currentPhotoThumb: '',
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
-  modelStatusText: '내 PC 직접 구동(Z-Eye_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
+  modelStatusText: '내 PC 직접 구동(Ghosti_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
 };
 
 /**
@@ -510,7 +510,7 @@ export function buildBidirectionalStickKeywords(params: {
 
 /**
  * [방별 별명(Persona) 리졸버]
- * 동일한 이메일 기반 'Z-Eye 여권(Z-Eye Face Passport)'을 쓰지만,
+ * 동일한 이메일 기반 '귀신같이 여권(Ghosti Face Passport)'을 쓰지만,
  * 현재 라운지/방(우리집 / 처가(친정) / 본가(친가) / 동호회·동창회)에 따라 화면 표시 및 검색에 쓰이는 호칭을 반환합니다.
  */
 export function getActivePersonaForCluster(
@@ -565,10 +565,10 @@ export function getActivePersonaForCluster(
 }
 
 /**
- * [만국공통 Z-Eye 여권(Z-Eye Face Passport) & 인물별 독립 타임라인 바구니 + 다년도·다각도 자동 추출]
+ * [만국공통 귀신같이 여권(Ghosti Face Passport) & 인물별 독립 타임라인 바구니 + 다년도·다각도 자동 추출]
  * 1. 바구니 기준 연도(anchorCreationYear)는 방(Room)이 아닌 각 인물의 시드 최초 생성 연도(예: 기존 가족 2026년 vs 신규 합류 처가 식구 2029년)에 귀속!
  * 2. 성인 10년(2026~2017, 미래 2027~2036) / 미성년 5년(2026~2022, 미래 2027~2031) 바구니 자동 구성
- * 3. 이메일(Email ID) 기반 Z-Eye 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 방별 별명(우리집 '멀린' ↔ 처가방 '둘째사위' ↔ 학생방 '지우짱')만 독립 매핑!
+ * 3. 이메일(Email ID) 기반 귀신같이 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 방별 별명(우리집 '멀린' ↔ 처가방 '둘째사위' ↔ 학생방 '지우짱')만 독립 매핑!
  */
 function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): FaceMemberCluster[] {
   const enriched = rawClusters.map((c) => {
@@ -599,7 +599,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
           ];
 
     const extraCuts: YearlyFaceBestCut[] = [];
-    let passportEmail = c.passportEmail || 'member@z-eye.ai';
+    let passportEmail = c.passportEmail || 'member@ghosti.ai';
     let timelineBucket: PersonTimelineBucketInfo = c.timelineBucket || {
       anchorCreationYear: 2026,
       bucketSpanYears: 10,
@@ -616,7 +616,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
 
     if (c.clusterId === 'face_member_3' || c.personKey === 'person_adult_female_partner') {
       // 은숙 (성인 10년 주기: 기준 2026년 -> 2026~2017 + 미래 바구니 2027~2036)
-      passportEmail = 'eunsook@z-eye.ai';
+      passportEmail = 'eunsook@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 10,
@@ -655,7 +655,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_5' || c.personKey === 'person_adult_male_host') {
       // 멀린 (방장·대표님: 우리집='멀린', 처가(친정)='둘째사위', 동호회='멀린프로')
-      passportEmail = 'merlin@z-eye.ai';
+      passportEmail = 'merlin@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 10,
@@ -694,7 +694,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_1' || c.personKey === 'person_youth_glasses_2') {
       // 치우 (미성년/청년 5년 주기: 기준 2026년 -> 2026~2022 + 미래 바구니 2027~2031)
-      passportEmail = 'chiwoo@z-eye.ai';
+      passportEmail = 'chiwoo@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 5,
@@ -733,7 +733,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_4') {
       // 지우 (미성년 5년 주기: 친구 모임방에서 진화해 우리집 가족방으로 역전파되는 대표 사례!)
-      passportEmail = 'jiwoo@z-eye.ai';
+      passportEmail = 'jiwoo@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 5,
@@ -772,7 +772,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       }
     } else if (c.clusterId === 'face_member_2') {
       // 천우 (미성년 5년 주기: 기준 2026년 -> 2026~2022)
-      passportEmail = 'cheonwoo@z-eye.ai';
+      passportEmail = 'cheonwoo@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
         bucketSpanYears: 5,
@@ -823,7 +823,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       boundingBox: c.boundingBox,
       conditionTag: '정면·선명' as const,
       conditionShortKo: '① 정면',
-      sourceDeviceKo: 'Z-Eye 여권 최신 기준컷',
+      sourceDeviceKo: '귀신같이 여권 최신 기준컷',
     };
 
     const secondCut = mergedYearlyRaw[1] || slot1Anchor;
@@ -872,7 +872,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
     try {
       const rawPrefs =
         typeof localStorage !== 'undefined'
-          ? localStorage.getItem('zeye_doorplate_slot_prefs')
+          ? localStorage.getItem('ghosti_doorplate_slot_prefs')
           : null;
       if (rawPrefs) {
         const parsed = JSON.parse(rawPrefs);
@@ -910,7 +910,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
     enriched.push({
       clusterId: 'face_companion_auto_6',
       personKey: 'person_companion_discovered_6',
-      passportEmail: 'inlaw2029@z-eye.ai',
+      passportEmail: 'inlaw2029@ghosti.ai',
       timelineBucket: {
         anchorCreationYear: 2029,
         bucketSpanYears: 10,
@@ -1188,7 +1188,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }
     } else if (typeof document !== 'undefined') {
       window.setTimeout(() => {
-        document.getElementById('zeye-search-results')?.scrollIntoView({
+        document.getElementById('ghosti-search-results')?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });
@@ -1309,10 +1309,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const slotLabel = chosenSlot.conditionShortKo || '① 정면';
 
     try {
-      const rawPrefs = localStorage.getItem('zeye_doorplate_slot_prefs');
+      const rawPrefs = localStorage.getItem('ghosti_doorplate_slot_prefs');
       const prefs = rawPrefs ? JSON.parse(rawPrefs) : {};
       prefs[clusterId] = clampedIdx;
-      localStorage.setItem('zeye_doorplate_slot_prefs', JSON.stringify(prefs));
+      localStorage.setItem('ghosti_doorplate_slot_prefs', JSON.stringify(prefs));
     } catch {
       /* ignore */
     }
@@ -1465,7 +1465,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       ? {
           seedVersion: nextSeedVer,
           triggerTitle: isSecondaryRoom
-            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (Z-Eye 여권 시드 공유 · 1초 만에 역스캔)`
+            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (귀신같이 여권 시드 공유 · 1초 만에 역스캔)`
             : `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 1초 만에 역스캔 완결`,
           rescuedHostPhotos: (targetCluster?.matchedPhotoCount ?? 18) + extraRescuedHost,
           rescuedMemberPhonePhotos:
@@ -1538,7 +1538,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `🛂 Z-Eye 여권(${target.passportEmail}) 시드 100% 공유 + [${roomKey}] 방 전용 호칭 ‘${cleanPersona}’ 즉시 매핑`,
+        triggerTitle: `🛂 귀신같이 여권(${target.passportEmail}) 시드 100% 공유 + [${roomKey}] 방 전용 호칭 ‘${cleanPersona}’ 즉시 매핑`,
         rescuedHostPhotos: target.matchedPhotoCount,
         rescuedMemberPhonePhotos: Math.max(14, Math.round(target.matchedPhotoCount * 0.45)),
         rescuedVideoSegments: target.matchedVideoSegmentCount,
@@ -2041,7 +2041,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     const isWorkLounge = activeLoungeType === 'work';
 
-    // 업무 공유(work)에서는 Z-Eye 인물 여권 발동 및 여권 인물 검색 매칭을 제외하고, 일반 사진(현장·자재·제품·서류) 시각 분석만 수행
+    // 업무 공유(work)에서는 귀신같이 인물 여권 발동 및 여권 인물 검색 매칭을 제외하고, 일반 사진(현장·자재·제품·서류) 시각 분석만 수행
     const passportTagSet = new Set<string>();
     for (const fc of faceClusters) {
       if (fc.registeredName?.trim()) {
@@ -2057,7 +2057,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }
     }
 
-    // [1단계: 방별 별명(Room Persona) ➔ Z-Eye 여권(Z-Eye Face Passport) 자동 번역 (업무 공유 제외)]
+    // [1단계: 방별 별명(Room Persona) ➔ 귀신같이 여권(Ghosti Face Passport) 자동 번역 (업무 공유 제외)]
     let resolvedQuery = query;
     if (!isWorkLounge) {
       for (const fc of faceClusters) {
@@ -2118,7 +2118,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         cleanedSearchQuery = cleanedSearchQuery.split(noun).join(' ');
       }
     } else {
-      // 업무 공유(work)에서는 Z-Eye 여권 인물명/별명을 검색 대상에서 완전 제외
+      // 업무 공유(work)에서는 귀신같이 여권 인물명/별명을 검색 대상에서 완전 제외
       for (const tag of passportTagSet) {
         const rawName = tag.slice(1);
         if (rawName && cleanedSearchQuery.includes(rawName)) {
@@ -2128,7 +2128,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
     cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, ' ').trim();
 
-    // 업무 공유(work)에서는 사진의 일반 시각/문서 분석 태그만 유지하고 Z-Eye 여권 인물 태그는 검색 대상에서 제외
+    // 업무 공유(work)에서는 사진의 일반 시각/문서 분석 태그만 유지하고 귀신같이 여권 인물 태그는 검색 대상에서 제외
     const photosForSearch = isWorkLounge
       ? photos.map((p) => ({
           ...p,
@@ -2869,7 +2869,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       enableMobileCoinDisplay: enableSetupMonster,
       showCoinBalanceInApp: enableSetupMonster,
       lastQuarantineToast: enableSetupMonster
-        ? '🛠️ [원격 토글 enableSetupMonster=true] Z-Eye 설정몬스터(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
+        ? '🛠️ [원격 토글 enableSetupMonster=true] Ghosti 설정몬스터(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
         : '🔒 [1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 설정몬스터와 크레딧 잔액을 잠시 숨김 처리했습니다.',
     }),
 
@@ -3674,7 +3674,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const windowsBuildEnv =
       (targetAudit?.platform ?? state.setupMonsterPlatform) === 'pc'
         ? 'Windows 11 Pro 23H2 (Build 22631.4317) · x64 · Merlin_Z_Core_Setup.exe v2.4'
-        : 'Android 15 (One UI 7.0) · Z-Eye_Mobile_1MB.apk v2.4';
+        : 'Android 15 (One UI 7.0) · Ghosti_Mobile_1MB.apk v2.4';
 
     const nowIso = new Date().toISOString();
     const nowLabel = new Date().toLocaleTimeString('ko-KR', {
@@ -3898,10 +3898,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   sharePcMasterUrlToKakao: async () => {
     const { merlinAuth } = get();
-    const baseMasterDomain = merlinAuth.pcMasterUrl || 'https://z-eye.sundreamer.app';
+    const baseMasterDomain = merlinAuth.pcMasterUrl || 'https://ghosti.sundreamer.app';
     const masterPcLink = `${baseMasterDomain.replace(/\/$/, '')}/?master=pc`;
-    const shareTitle = '💻 제트아이(Z-Eye) PC 마스터 시작하기 — 클릭 시 바로 이동';
-    const shareText = `[💻 제트아이(Z-Eye) 내 PC 연동 시작 가이드]\n수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 환경에서 작동합니다.\nPC 카카오톡에서 아래 가이드를 클릭해 대화면 작업을 바로 이어가세요!\n👉 ${masterPcLink}`;
+    const shareTitle = '💻 귀신같이(Ghosti) PC 마스터 시작하기 — 클릭 시 바로 이동';
+    const shareText = `[💻 귀신같이(Ghosti) 내 PC 연동 시작 가이드]\n수만 장의 원본 사진·영상 고속 인덱싱과 라운지 마스터 관리는 데스크톱(PC) 환경에서 작동합니다.\nPC 카카오톡에서 아래 가이드를 클릭해 대화면 작업을 바로 이어가세요!\n👉 ${masterPcLink}`;
 
     try {
       // 방법 2 대응: 카카오 공식 무료 SDK(Kakao.Share.sendDefault)가 로드된 환경이면 우선 호출
@@ -4049,7 +4049,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set((state) => {
       const labelMap: Record<PricingPlanId, string> = {
         free_trial: '✨ 개인 (기본) : 언제나 0원 ("혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다.")',
-        personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 Z-Eye 클린몬스터',
+        personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 귀신같이 클린몬스터',
         personal_sub_3900: '개인 라운지 • 1초 AI 내용검색 몬스터 (월 1,900원 • 월 1회 클린몬스터 청소 포함)',
         personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 • 선착순 100명 10년 마스터권)',
         family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
@@ -4253,7 +4253,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       unknownDatePlace: false,
       appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
       looseTimelineGroup: '1989년 봄',
-      mappedPassportBucketLabel: '🛂 Z-Eye 여권 1980년대 바구니(1989~1980) 자동 매핑',
+      mappedPassportBucketLabel: '🛂 귀신같이 여권 1980년대 바구니(1989~1980) 자동 매핑',
       detectedMemberNames: ['👑 멀린프로(18세)', '박회장(18세)', '김총무(18세)'],
       captionKo: '1989년 봄 제주도 수학여행 나무 다리 단체컷 (아날로그 인화 사진 스캔본)',
       expandedSearchKeywords: buildBidirectionalStickKeywords({
@@ -4273,7 +4273,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       unknownDatePlace: false,
       appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
       looseTimelineGroup: '1989년 봄',
-      mappedPassportBucketLabel: '🛂 Z-Eye 여권 1980년대 바구니(1989~1980) 자동 매핑',
+      mappedPassportBucketLabel: '🛂 귀신같이 여권 1980년대 바구니(1989~1980) 자동 매핑',
       detectedMemberNames: ['👑 멀린프로(18세)', '이프로(18세)'],
       captionKo: '1989년 봄 제주도 수학여행 성산일출봉 앞 추억 스캔본',
       expandedSearchKeywords: buildBidirectionalStickKeywords({
@@ -4490,7 +4490,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
       return {
         alumniStickChips: newChips,
-        lastQuarantineToast: `🏷️ [스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [🏷️ ${numYear}] [🏷️ ${cleanPlace}] [🏷️ ${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · Z-Eye 여권 ${decadeStart}년대 바구니 직결)`,
+        lastQuarantineToast: `🏷️ [스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [🏷️ ${numYear}] [🏷️ ${cleanPlace}] [🏷️ ${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · 귀신같이 여권 ${decadeStart}년대 바구니 직결)`,
       };
     });
   },
@@ -4532,7 +4532,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           mappedPassportBucketLabel:
             nextSticks.length === 0
               ? '⏳ 연도 제보 대기 중'
-              : `🛂 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+              : `🛂 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo:
             nextSticks.length === 0
               ? item.captionKo
@@ -4545,7 +4545,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         analogScannedPhotos: nextPhotos,
         lastQuarantineToast: `🏷️ [1초 스틱 태깅 & 월(Month) 양방향 인덱싱] ‘${effectiveLabel}’ 스틱이 적용되어 [${
           chipObj?.looseTimelineGroup ?? `${targetYear}년 봄`
-        }] 타임라인 및 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart})에 즉시 매핑되었습니다!`,
+        }] 타임라인 및 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart})에 즉시 매핑되었습니다!`,
       };
     });
   },
@@ -4575,7 +4575,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           unknownDatePlace: false,
           appliedSticks: mergedSticks,
           looseTimelineGroup: groupName,
-          mappedPassportBucketLabel: `🛂 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          mappedPassportBucketLabel: `🛂 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo: item.captionKo.replace('[❓ 언제/어디인가요?] ', ''),
           expandedSearchKeywords: nextExpanded,
         };
@@ -4657,7 +4657,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           unknownDatePlace: false,
           appliedSticks: nextSticks,
           looseTimelineGroup: prop.proposedTimelineGroup,
-          mappedPassportBucketLabel: `🛂 Z-Eye 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          mappedPassportBucketLabel: `🛂 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo: `✓ [제보 반영됨: ${prop.proposedTimelineGroup} · ${prop.proposedPlaceTag}] ${item.captionKo.replace(
             '[❓ 언제/어디인가요?] ',
             ''
@@ -4675,7 +4675,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         analogScannedPhotos: nextAnalogPhotos,
         analogYearProposals: nextProposals,
         globalSeedVersion: state.globalSeedVersion + 1,
-        lastQuarantineToast: `👑 [방장 원터치 일괄 결재 완료] 멤버들이 제보한 연도·장소 ${pendingProposals.length}건이 느슨한 타임라인(1989년 봄/가을) · 계절↔월(Month) 양방향 인덱스 · Z-Eye 여권 1980년대 바구니에 100% 반영되었습니다!`,
+        lastQuarantineToast: `👑 [방장 원터치 일괄 결재 완료] 멤버들이 제보한 연도·장소 ${pendingProposals.length}건이 느슨한 타임라인(1989년 봄/가을) · 계절↔월(Month) 양방향 인덱스 · 귀신같이 여권 1980년대 바구니에 100% 반영되었습니다!`,
       };
     });
   },
@@ -4719,11 +4719,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         '#1980년대여권바구니',
       ],
       searchResults: matchedSchoolPhotos,
-      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 1초 만에 찾기 완료] Z-Eye 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 1초 만에 모두 찾았습니다!`,
+      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 1초 만에 찾기 완료] 귀신같이 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 1초 만에 모두 찾았습니다!`,
     });
   },
   };
 });
 
-export const useZEyeStore = useSaySeeStore;
+export const useGhostiStore = useSaySeeStore;
 

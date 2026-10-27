@@ -8,7 +8,7 @@ import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeSt
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../types/saysee';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { PcMasterQuickSendPanel } from './PricingModal';
-import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { SetupMonsterContent } from './SetupMonsterModal';
 
 const LOUNGE_TABS: Array<{
@@ -50,7 +50,7 @@ const LOUNGE_TABS: Array<{
 
 const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   free_trial: '✨ 개인 (기본) : 언제나 0원',
-  personal_single_2900: '🩺 Z-Eye 클린몬스터 (개인 기본 : 언제나 0원)',
+  personal_single_2900: '🩺 귀신같이 클린몬스터 (개인 기본 : 언제나 0원)',
   personal_sub_3900: '💻 업무 입문 • 1인 멀티PC (월 1,900원)',
   personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 · 10년 마스터권)',
   family_home_5900: '🏠 패밀리 우리집 단독 (월 5,900원)',
@@ -691,7 +691,7 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-primary-container font-bold">
-                    🔍 Z-Eye AI 내용검색
+                    🔍 귀신같이 AI 내용찾기
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     사진 · 영상 · 서류 1초 검색
@@ -715,7 +715,7 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-amber-400 font-bold">
-                    🩺 Z-Eye 클린몬스터
+                    🩺 귀신같이 클린몬스터
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     중복 사진 · 바탕화면 정리
@@ -1889,7 +1889,7 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
       ['인물 여권 보호 정책', '업무 공유방 내 인물 얼굴 여권 미발동 (검색 대상 제외)', '적용됨'],
     ],
     fullTextPreview:
-      '업무 공유방 사진 분석 리포트: 현장 시공 사진, 자재 명판, 영수증·증빙 사진의 사물 및 텍스트(OCR)는 100% 시각 분석되어 검색되지만, Z-Eye 인물 여권(얼굴 클러스터링·인물 바구니)은 업무 프라이버시 원칙에 따라 발동하지 않으며 검색 대상에서도 제외됩니다.',
+      '업무 공유방 사진 분석 리포트: 현장 시공 사진, 자재 명판, 영수증·증빙 사진의 사물 및 텍스트(OCR)는 100% 시각 분석되어 검색되지만, 귀신같이 인물 여권(얼굴 클러스터링·인물 바구니)은 업무 프라이버시 원칙에 따라 발동하지 않으며 검색 대상에서도 제외됩니다.',
   },
 ];
 
@@ -1897,7 +1897,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const { isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges, faceClusters } =
     useSaySeeStore();
   const [viewMode, setViewMode] = useState<'semantic' | 'explorer'>('semantic');
-  const [driveTargetPath, setDriveTargetPath] = useState('D:\\Z-Eye\\업무공유폴더_S');
+  const [driveTargetPath, setDriveTargetPath] = useState('D:\\Ghosti\\업무공유폴더_S');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [docs, setDocs] = useState<WorkLoungeDocItem[]>(INITIAL_WORK_DOCS);
@@ -1911,20 +1911,20 @@ export const WorkLoungeB2BHub: React.FC = () => {
     {
       id: 'backup-1',
       name: '대표님 집 데스크탑 (백업 1호)',
-      mirrorPath: 'D:\\Z-Eye_업무백업_원본미러',
+      mirrorPath: 'D:\\Ghosti_업무백업_원본미러',
       status: '✓ 원본 100% 실시간 동기화됨',
       active: true,
     },
     {
       id: 'backup-2',
       name: '정실장 재무회계 PC (백업 2호)',
-      mirrorPath: 'E:\\Z-Eye_안전백업_금고',
+      mirrorPath: 'E:\\Ghosti_안전백업_금고',
       status: '✓ 원본 100% 실시간 동기화됨',
       active: true,
     },
   ]);
   const [newBackupPcName, setNewBackupPcName] = useState<string>('');
-  const [newBackupPcPath, setNewBackupPcPath] = useState<string>('D:\\Z-Eye_추가백업_폴더');
+  const [newBackupPcPath, setNewBackupPcPath] = useState<string>('D:\\Ghosti_추가백업_폴더');
   const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
 
   const triggerNightSleepMode = () => {
@@ -2038,7 +2038,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // 업무 공유(work)에서는 Z-Eye 인물 여권(얼굴 클러스터링·인물 별명)이 발동하지 않으며 검색 대상에서도 제외됨
+  // 업무 공유(work)에서는 귀신같이 인물 여권(얼굴 클러스터링·인물 별명)이 발동하지 않으며 검색 대상에서도 제외됨
   const passportPersonTokens = React.useMemo(() => {
     const s = new Set<string>();
     for (const fc of faceClusters) {
@@ -2158,7 +2158,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           >
             <div className="flex flex-col gap-1">
               <span className="font-headline-sm text-[15px] text-indigo-200 font-black">
-                🌙 Z-Eye 초절전·무소음 야간모드가 가동되었습니다 — 편히 퇴근·취침하세요!
+                🌙 Ghosti 초절전·무소음 야간모드가 가동되었습니다 — 편히 퇴근·취침하세요!
               </span>
               <span className="text-[12px] text-zinc-300">
                 ✓ 램(RAM) 찌꺼기 청소 완료 · ✓ CPU 15W 초저전력 대기 전환(한 달 전기요금 약 1,800원) · <strong className="text-amber-300">이 안내 메시지는 서서히 사라진 뒤 모니터 전원이 꺼집니다...</strong>
@@ -2273,14 +2273,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     type="text"
                     value={newBackupPcPath}
                     onChange={(e) => setNewBackupPcPath(e.target.value)}
-                    placeholder="백업 저장 폴더 경로 (예: D:\Z-Eye_원본백업)"
+                    placeholder="백업 저장 폴더 경로 (예: D:\Ghosti_원본백업)"
                     className="flex-1 min-w-[180px] px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[11.5px] font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => {
                       const name = newBackupPcName.trim() || `추가 백업 PC ${backupPcNodes.length + 1}호`;
-                      const path = newBackupPcPath.trim() || 'D:\\Z-Eye_추가백업_폴더';
+                      const path = newBackupPcPath.trim() || 'D:\\Ghosti_추가백업_폴더';
                       setBackupPcNodes((prev) => [
                         ...prev,
                         {
@@ -2697,7 +2697,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(true);
   const [showStorageCheckBanner, setShowStorageCheckBanner] = useState(false);
   const [simulateLowStorage, setSimulateLowStorage] = useState(false);
-  const [downloadDirPath, setDownloadDirPath] = useState('D:\\Z-Eye\\다운로드_원본');
+  const [downloadDirPath, setDownloadDirPath] = useState('D:\\Ghosti\\다운로드_원본');
   const [monthlyReportDismissed, setMonthlyReportDismissed] = useState(false);
 
   const renderOriginalAutoSyncControl = () => (
@@ -2906,7 +2906,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
           type="button"
           onClick={() => setDoorplatePickerClusterId('face_member_5')}
           className="px-2.5 py-1.5 rounded-full bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-extrabold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
-          title="Z-Eye 여권 5대 스타일 슬롯(①정면/②미소/③측면/④선글라스/⑤야외) 원터치 문패 사진 교체"
+          title="귀신같이 여권 5대 스타일 슬롯(①정면/②미소/③측면/④선글라스/⑤야외) 원터치 문패 사진 교체"
         >
           🎨 내 문패 사진 변경
         </button>
@@ -3137,7 +3137,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     const count = pendingAnalogProposals.length;
     approveAllAnalogYearProposals();
     setBatchApprovedBanner(
-      `✓ 동기들이 제보한 옛날 사진 연도/장소 ${count}건이 👑 방장 일괄 결재로 느슨한 타임라인 · 계절↔월(Month) 양방향 인덱스 · Z-Eye 여권 1980년대 바구니(1989~1980)에 즉시 반영되었습니다!`
+      `✓ 동기들이 제보한 옛날 사진 연도/장소 ${count}건이 👑 방장 일괄 결재로 느슨한 타임라인 · 계절↔월(Month) 양방향 인덱스 · 귀신같이 여권 1980년대 바구니(1989~1980)에 즉시 반영되었습니다!`
     );
   };
 
@@ -3164,7 +3164,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+            <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
             <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
               {currentMeta.badge}
             </span>
@@ -3243,7 +3243,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 📸 업무 사진·서류 시각 분석 가동 중
               </span>
               <span className="font-bold">
-                현장 시공 사진, 자재 라벨, 촬영 서류의 사물·텍스트(OCR)만 자동 분석합니다 (🛂 Z-Eye 인물 여권은 업무 공유에서 미발동 · 검색 제외)
+                현장 시공 사진, 자재 라벨, 촬영 서류의 사물·텍스트(OCR)만 자동 분석합니다 (🛂 귀신같이 인물 여권은 업무 공유에서 미발동 · 검색 제외)
               </span>
             </div>
           </div>
@@ -3817,7 +3817,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
       <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-400">
         <span>
-          🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 기기 내 숨김 영역에 저장된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다. (※ 유저가 내 PC에 무료 서비스로 인덱싱해 둔 <strong>‘나 자신의 Z-Eye 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리합니다.)
+          🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 기기 내 숨김 영역에 저장된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다. (※ 유저가 내 PC에 무료 서비스로 인덱싱해 둔 <strong>‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리합니다.)
         </span>
       </div>
     </div>
@@ -3838,7 +3838,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
   const copyInviteLink = async () => {
     const inviteCopy =
-      '[제트아이 라운지 초대장] 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://z-eye.sundreamer.app';
+      '[귀신같이 라운지 초대장] 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);
@@ -3880,7 +3880,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
   const triggerShortsWatermarkPreview = (label: string) => {
     setShortsExportToast(
-      `🎬 변천사 쇼츠 우측 하단 워터마크가 [Z-Eye] 대신 [${label}]로 적용되어 카톡·인스타 공유용 MP4에 각인되었습니다!`
+      `🎬 변천사 쇼츠 우측 하단 워터마크가 [Ghosti] 대신 [${label}]로 적용되어 카톡·인스타 공유용 MP4에 각인되었습니다!`
     );
     setTimeout(() => setShortsExportToast(null), 3200);
   };
@@ -3896,7 +3896,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
-              <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
               {isStoreAppMode
                 ? '👑 가족 초대 & 양가 방 분리 관리 (가족 전원 100% 무료 열람)'
@@ -4012,7 +4012,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               </span>
             </div>
             <p className="font-body-sm text-[12px] text-zinc-300">
-              기본 <code>[Z-Eye]</code> 로고 대신 <strong>[{familyShortsWatermark}]</strong> 워터마크를 박아 카톡·인스타로 공유하면 다른 가족 모임의 연쇄 유입이 일어납니다.
+              기본 <code>[Ghosti]</code> 로고 대신 <strong>[{familyShortsWatermark}]</strong> 워터마크를 박아 카톡·인스타로 공유하면 다른 가족 모임의 연쇄 유입이 일어납니다.
             </p>
           </div>
 
@@ -4070,7 +4070,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
-              <ZEyeBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
                 👥 동호회 · 동창회 라운지 관리 &amp; 회원 초대/강퇴 (방 1개 기준 · 인원수 무제한)
               </span>
@@ -4158,7 +4158,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 </span>
               </div>
               <p className="font-body-sm text-[12px] text-zinc-300">
-                자동 렌더링 변천사 쇼츠 우측 하단에 <code>[Z-Eye]</code> 대신 <strong>[{clubShortsWatermark}]</strong>를 박아 카톡·인스타로 공유하면 타 동창회·모임의 꼬리물기 유입이 일어납니다.
+                자동 렌더링 변천사 쇼츠 우측 하단에 <code>[Ghosti]</code> 대신 <strong>[{clubShortsWatermark}]</strong>를 박아 카톡·인스타로 공유하면 타 동창회·모임의 꼬리물기 유입이 일어납니다.
               </p>
             </div>
 
@@ -4245,7 +4245,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               사무실 PC 업무 폴더가 전 직원의 문서 검색창과 윈도우 탐색기(S:)에 자동으로 연결됩니다
             </h2>
             <p className="font-body-sm text-[12.5px] text-zinc-300">
-              따로 연결 버튼을 누를 필요 없이 <strong>[윈도우 탐색기 ➔ 내 PC ➔ S: 드라이브]</strong>(`D:\Z-Eye\업무공유폴더_S`)에서 계약서·견적서·세금계산서·도면 폴더를 일반 폴더처럼 바로 열어 쓰고, 외근 중인 직원은 스마트폰 LTE/5G로 들어와도 자동으로 외부 접속 모드로 연결됩니다.
+              따로 연결 버튼을 누를 필요 없이 <strong>[윈도우 탐색기 ➔ 내 PC ➔ S: 드라이브]</strong>(`D:\Ghosti\업무공유폴더_S`)에서 계약서·견적서·세금계산서·도면 폴더를 일반 폴더처럼 바로 열어 쓰고, 외근 중인 직원은 스마트폰 LTE/5G로 들어와도 자동으로 외부 접속 모드로 연결됩니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

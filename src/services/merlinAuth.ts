@@ -6,7 +6,7 @@
  */
 import type { MerlinAuthState } from '../types/saysee';
 
-const STORAGE_KEY = 'zeye_merlin_mock_token';
+const STORAGE_KEY = 'ghosti_merlin_mock_token';
 
 export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
   token: '',
@@ -16,7 +16,7 @@ export const DEFAULT_MERLIN_AUTH: MerlinAuthState = {
   coinBalance: 0,
   maxFreePhotos: 300,
   hubUrl: 'https://os.sundreamer.app',
-  pcMasterUrl: 'https://z-eye.sundreamer.app',
+  pcMasterUrl: 'https://ghosti.sundreamer.app',
   studioUrl: 'https://studio.sundreamer.app',
 };
 
@@ -25,7 +25,7 @@ export function loadMerlinAuth(): MerlinAuthState {
     if (typeof window === 'undefined') return DEFAULT_MERLIN_AUTH;
     const hubToken = localStorage.getItem('merlin_session_token');
     const hubEmail = localStorage.getItem('userEmail') || '';
-    const hubUserId = localStorage.getItem('zeye_hub_user_id') || '';
+    const hubUserId = localStorage.getItem('ghosti_hub_user_id') || '';
 
     // 비로그인 게스트 상태에서는 과거 캐시로 인한 코인 오염을 차단하고 0 코인 고정
     if (!hubToken) {

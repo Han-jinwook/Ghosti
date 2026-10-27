@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 멀린 Z 코어 (Universal Merlin Z-Core) 전사 파이썬 공용 SDK (z_core_sdk.py)
-- 고정 위치: D:\\Z-Eye\\universal_z_core\\bridge\\z_core_sdk.py
+- 고정 위치: D:\\Ghosti\\universal_z_core\\bridge\\z_core_sdk.py
 - 사용법 (타 프로젝트에서 파일 복사 없이 바로 참조):
     import sys
-    sys.path.append(r"D:\\Z-Eye\\universal_z_core\\bridge")
+    sys.path.append(r"D:\\Ghosti\\universal_z_core\\bridge")
     from z_core_sdk import ZCore
 
     ZCore.trusted_click(selector="button.se-publish-btn")

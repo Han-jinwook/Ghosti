@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { GhostiBrandLogo } from './GhostiBrandLogo';
 
 /**
  * 실시간 QR 코드 SVG (내 PC 에이전트 ↔ 스마트폰 1MB 앱 Zero-Code 동시 페어링용)
@@ -213,7 +213,7 @@ export const OnboardingModal: React.FC = () => {
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <ZEyeBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-mono text-[11px] font-black">
                 💻 내 PC 우선 구동 (외부 서버 전송 0%) + 📱 실시간 QR 코드 모바일 동시 페어링
               </span>
@@ -227,7 +227,7 @@ export const OnboardingModal: React.FC = () => {
             <p className="font-body-sm text-[12.5px] text-on-surface-variant leading-relaxed">
               집이나 사무실 PC 앞이라면 파일이 외부로 단 1바이트도 나가지 않는{' '}
               <strong className="text-emerald-300">‘내 PC 직접 구동(Track A)’</strong>을 기본 코스로 강력 추천하며, 밖에서 스마트폰만 들고 계실 때만{' '}
-              <strong className="text-primary-container">‘Z-Eye 초고속 GPU 서버 무료 대여(Track B)’</strong>를 지원합니다.
+              <strong className="text-primary-container">‘Ghosti 초고속 GPU 서버 무료 대여(Track B)’</strong>를 지원합니다.
             </p>
           </div>
           <button
@@ -322,7 +322,7 @@ export const OnboardingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Track B: 밖에서 스마트폰만 들고 있을 때 — Z-Eye 초고속 GPU 서버 무료 대여 */}
+          {/* Track B: 밖에서 스마트폰만 들고 있을 때 — Ghosti 초고속 GPU 서버 무료 대여 */}
           <div
             onClick={() => setOnboardingTrackMode('cloud_rental')}
             className={`lg:col-span-4 p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
@@ -342,12 +342,12 @@ export const OnboardingModal: React.FC = () => {
               </div>
 
               <h3 className="font-headline-sm text-[15px] text-white font-extrabold">
-                📱 밖에서 스마트폰만 들고 있을 때 — Z-Eye 초고속 GPU 서버 무료 대여
+                📱 밖에서 스마트폰만 들고 있을 때 — Ghosti 초고속 GPU 서버 무료 대여
               </h3>
 
               <p className="font-body-sm text-[11.5px] text-on-surface-variant leading-relaxed">
                 “현재 PC 앞이 아니신가요? 스마트폰 발열과 배터리 소모를 막기 위해{' '}
-                <strong className="text-primary-container">제트아이(Z-Eye)의 초고속 클라우드 PC(GPU 서버)를 잠시 무료로 빌려드립니다!</strong>{' '}
+                <strong className="text-primary-container">귀신같이(Ghosti)의 초고속 클라우드 PC(GPU 서버)를 잠시 무료로 빌려드립니다!</strong>{' '}
                 (무거운 원본 미전송 / 서버 RAM에서 0.1초 연산 후 즉시 자동 소각되므로 안심하셔도 됩니다)”
               </p>
             </div>
@@ -379,7 +379,7 @@ export const OnboardingModal: React.FC = () => {
             <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
               {onboardingTrackMode === 'pc_local'
                 ? '🔒 현재 모드: Track A 내 PC 직접 구동 (외부 서버 전송 0%)'
-                : '⚡ 현재 모드: Track B Z-Eye GPU 서버 무료 대여 (원본 미전송 · 0.1초 RAM 즉시 소각)'}
+                : '⚡ 현재 모드: Track B Ghosti GPU 서버 무료 대여 (원본 미전송 · 0.1초 RAM 즉시 소각)'}
             </span>
           </div>
 
@@ -511,7 +511,7 @@ export const OnboardingModal: React.FC = () => {
               <span className="font-label-mono text-[10.5px] text-primary-container font-bold">
                 {onboardingTrackMode === 'pc_local'
                   ? `내 PC 로컬 구동(Merlin_Z_Core_Setup.exe) 768D 벡터 변환 중 (${percent.toFixed(0)}%) • 외부 전송 0 Byte`
-                  : `Z-Eye 초고속 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 자동 소각 (${percent.toFixed(0)}%)`}
+                  : `Ghosti 초고속 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 자동 소각 (${percent.toFixed(0)}%)`}
               </span>
               <span className="font-label-md text-[12px] text-on-surface font-bold truncate">
                 {currentPhotoName}

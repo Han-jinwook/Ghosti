@@ -63,7 +63,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     if (connectedNow) {
       const alreadyIndexed =
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('zeye_initial_indexing_done') === '1';
+        sessionStorage.getItem('ghosti_initial_indexing_done') === '1';
       if (!alreadyIndexed) {
         setProgress(0);
         setStep('indexing');
@@ -73,7 +73,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     } else {
       const agreedBefore =
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('zeye_one_stop_agreed') === '1';
+        sessionStorage.getItem('ghosti_one_stop_agreed') === '1';
       setStep(agreedBefore ? 'waiting_engine' : 'intro');
     }
   }, [isOpen, initialStep]);
@@ -141,7 +141,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   const finishAndPopOpenPhotos = () => {
     if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('zeye_initial_indexing_done', '1');
+      sessionStorage.setItem('ghosti_initial_indexing_done', '1');
     }
     setDesktopTab('dashboard');
     setMobileTab('search');
@@ -154,7 +154,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     onClose();
     if (typeof document !== 'undefined') {
       window.setTimeout(() => {
-        document.getElementById('zeye-search-results')?.scrollIntoView({
+        document.getElementById('ghosti-search-results')?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });
@@ -164,7 +164,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   const handleOneStopAgreeAndDownload = () => {
     if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('zeye_one_stop_agreed', '1');
+      sessionStorage.setItem('ghosti_one_stop_agreed', '1');
     }
     // 다운로드 트리거
     const link = document.createElement('a');

@@ -5,7 +5,7 @@
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>사진·영상을 내 휴대폰 안에서 AI로 정리하고 찾기 위해 보관함에 접근합니다. 원본은 외부 서버로 전송되지 않습니다. (Z-Eye accesses your photo library to organize and search photos and videos on-device with AI. Originals are never uploaded to external servers.)</string>
+	<string>사진·영상을 내 휴대폰 안에서 AI로 정리하고 찾기 위해 보관함에 접근합니다. 원본은 외부 서버로 전송되지 않습니다. (Ghosti accesses your photo library to organize and search photos and videos on-device with AI. Originals are never uploaded to external servers.)</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>정리하거나 가족방에서 받은 사진·영상을 내 보관함에 저장하기 위해 필요합니다. (Needed to save organized photos and videos, or those received from your family room, to your library.)</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -17,7 +17,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Z-Eye</string>
+        <string>Ghosti</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

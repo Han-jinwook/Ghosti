@@ -39,14 +39,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- [Z-Eye] 온디바이스 AI 사진·영상 정리·투시검색 (원본 외부 서버 무단 전송 없음 · Non-Custodial) -->
+    <!-- [Ghosti] 온디바이스 AI 사진·영상 정리·투시검색 (원본 외부 서버 무단 전송 없음 · Non-Custodial) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <!-- [Z-Eye] 음성 투시검색 (말로 사진 찾기) -->
+    <!-- [Ghosti] 음성 투시검색 (말로 사진 찾기) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- [Z-Eye] 패밀리 공용 푸시 알림 (Android 13+) -->
+    <!-- [Ghosti] 패밀리 공용 푸시 알림 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

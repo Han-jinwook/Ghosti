@@ -133,7 +133,7 @@ class ZCoreBridgeHandler(BaseHTTPRequestHandler):
                         "ok": False,
                         "error": (
                             f"Z-Core 응답 시간 초과 ({timeout_sec}초). "
-                            "브라우저에 D:\\Z-Eye\\universal_z_core\\core_power_agent 확장팩이 켜져 있는지 확인해 주세요."
+                            "브라우저에 D:\\Ghosti\\universal_z_core\\core_power_agent 확장팩이 켜져 있는지 확인해 주세요."
                         ),
                     },
                 )

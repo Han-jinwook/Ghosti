@@ -12,8 +12,8 @@ import {
   LoungeView,
 } from './LoungeView';
 import { PcMasterQuickSendPanel } from './PricingModal';
-import { ZEyeTopRightHubAnchor, ZEyeSidebarBottomFamilyLauncher } from './ZEyeHubInfraBridge';
-import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { GhostiTopRightHubAnchor, GhostiSidebarBottomFamilyLauncher } from './GhostiHubInfraBridge';
+import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 
@@ -218,7 +218,7 @@ export const DesktopDashboard: React.FC = () => {
       if (
         conn &&
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('zeye_initial_indexing_done') !== '1'
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1'
       ) {
         setShowZCoreGuideModal(true);
       }
@@ -229,13 +229,13 @@ export const DesktopDashboard: React.FC = () => {
       if (!ok) {
         if (
           typeof sessionStorage !== 'undefined' &&
-          sessionStorage.getItem('zeye_zcore_prompt_dismissed') !== '1'
+          sessionStorage.getItem('ghosti_zcore_prompt_dismissed') !== '1'
         ) {
           setShowZCoreGuideModal(true);
         }
       } else if (
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('zeye_initial_indexing_done') !== '1'
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1'
       ) {
         setShowZCoreGuideModal(true);
       }
@@ -373,9 +373,9 @@ export const DesktopDashboard: React.FC = () => {
       }`}
     >
       <div className="flex flex-col gap-4 overflow-y-auto no-scrollbar">
-        {/* 1. 사이드바 최상단: 공식 스타일 A 브랜드 로고 (Z-Eye + [👁️ AI 내용검색]) & 사이드바 접기 버튼 */}
+        {/* 1. 사이드바 최상단: 공식 스타일 A 브랜드 로고 (Ghosti + [👁️ AI 내용검색]) & 사이드바 접기 버튼 */}
         <div className="flex items-center justify-between px-1.5 py-1 gap-1.5">
-          <ZEyeBrandLogo
+          <GhostiBrandLogo
             size="desktop"
             themeMode={themeMode}
             showBadge={true}
@@ -531,7 +531,7 @@ export const DesktopDashboard: React.FC = () => {
       </div>
 
       {/* 3. 사이드바 하단: 멀린 패밀리 생태계 앱 런처 (허브 SSO 연동) */}
-      <ZEyeSidebarBottomFamilyLauncher
+      <GhostiSidebarBottomFamilyLauncher
         isOpen={showFamilyAppsInSidebar}
         onToggle={() => setShowFamilyAppsInSidebar((v) => !v)}
       />
@@ -594,7 +594,7 @@ export const DesktopDashboard: React.FC = () => {
                       <span>☰</span>
                       <span>메뉴</span>
                     </button>
-                    <ZEyeBrandLogo
+                    <GhostiBrandLogo
                       size="desktop"
                       themeMode={themeMode}
                       showBadge={true}
@@ -606,7 +606,7 @@ export const DesktopDashboard: React.FC = () => {
                     />
                   </>
                 )}
-                <ZEyeBrandLogo
+                <GhostiBrandLogo
                   size="mobile"
                   themeMode={themeMode}
                   showBadge={true}
@@ -643,13 +643,13 @@ export const DesktopDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 우측 상단 불변의 생태계 앵커: Z-Eye 여권 문패(업무 공유 제외) + 설정몬스터 + 크레딧 + 테마 토글 */}
+              {/* 우측 상단 불변의 생태계 앵커: 귀신같이 여권 문패(업무 공유 제외) + 설정몬스터 + 크레딧 + 테마 토글 */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
                 {myPassportCluster && activeLoungeType !== 'work' && (
                   <button
                     type="button"
                     onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
-                    title="🛂 Z-Eye 여권 문패 사진 변경"
+                    title="🛂 귀신같이 여권 문패 사진 변경"
                     className={`pl-1 pr-2.5 py-1 rounded-full border flex items-center gap-1.5 transition-all cursor-pointer ${
                       themeMode === 'light'
                         ? 'bg-teal-50/90 hover:bg-teal-100/80 border-teal-300 text-teal-900 shadow-xs'
@@ -679,12 +679,12 @@ export const DesktopDashboard: React.FC = () => {
                   </>
                 )}
                 <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} />
-                <ZEyeTopRightHubAnchor themeMode={themeMode} />
+                <GhostiTopRightHubAnchor themeMode={themeMode} />
                 <button
                   type="button"
                   onClick={() => {
                     const shareText =
-                      '제트아이(Z-Eye) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://z-eye.sundreamer.app';
+                      '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
                       void navigator.clipboard.writeText(shareText);
                     }
@@ -923,7 +923,7 @@ export const DesktopDashboard: React.FC = () => {
 
                 {/* 검색을 실행했거나 [전체 펼치기]를 눌렀을 때만 도화지 아래로 채워지는 결과 영역 */}
                 {showCanvasResults && (
-                  <div id="zeye-search-results" className="scroll-mt-20">
+                  <div id="ghosti-search-results" className="scroll-mt-20">
                     {searchSpace === 'video' ? (
               <section className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
@@ -1358,7 +1358,7 @@ export const DesktopDashboard: React.FC = () => {
                     battery_charging_full
                   </span>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                    <strong>배터리 · OS 제재 방어 원칙:</strong> 제트아이(Z-Eye) 정식 모바일 앱(Google Play / App Store)은 상시 백그라운드 통신을 하지 않으며,{' '}
+                    <strong>배터리 · OS 제재 방어 원칙:</strong> 귀신같이(Ghosti) 정식 모바일 앱(Google Play / App Store)은 상시 백그라운드 통신을 하지 않으며,{' '}
                     <strong className="text-white">[집 Wi-Fi 연결 + 충전 중]</strong>이거나{' '}
                     <strong className="text-primary-container">[지금 일치시키기]</strong> 버튼을 누를 때만 작동합니다.
                   </p>
@@ -1590,8 +1590,8 @@ export const DesktopDashboard: React.FC = () => {
                   </div>
                   <div className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed flex flex-col gap-1">
                     <p>• <strong>평소(기본):</strong> 멤버 기기에는 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 용량 부담 없이 0.01초 만에 검색합니다.</p>
-                    <p>• <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 넉넉할 때 지정한 내 폴더 경로(예: <code>D:\Z-Eye\다운로드_원본</code>)로 원본 사진이 자동 복제되어, 방장 PC를 따로 호출할 필요 없이 내 기기에서 자체 해결합니다.</p>
-                    <p>• <strong>탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준:</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 0.1초 만에 자동 삭제</strong>됩니다 (※ 유저가 자기 PC에 인덱싱한 <strong>‘나 자신의 Z-Eye 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리).</p>
+                    <p>• <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 넉넉할 때 지정한 내 폴더 경로(예: <code>D:\Ghosti\다운로드_원본</code>)로 원본 사진이 자동 복제되어, 방장 PC를 따로 호출할 필요 없이 내 기기에서 자체 해결합니다.</p>
+                    <p>• <strong>탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준:</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 0.1초 만에 자동 삭제</strong>됩니다 (※ 유저가 자기 PC에 인덱싱한 <strong>‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리).</p>
                   </div>
                 </div>
 
@@ -1685,7 +1685,7 @@ export const DesktopDashboard: React.FC = () => {
         isOpen={showZCoreGuideModal}
         onClose={() => {
           if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem('zeye_zcore_prompt_dismissed', '1');
+            sessionStorage.setItem('ghosti_zcore_prompt_dismissed', '1');
           }
           setShowZCoreGuideModal(false);
         }}

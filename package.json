@@ -1,9 +1,9 @@
 {
-  "name": "z-eye-pwa",
+  "name": "ghosti-pwa",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Z-Eye (제트아이) - The Ultimate All-Seeing AI & Zero-Cloud Lounge",
+  "description": "귀신같이 (Ghosti) - The Ultimate All-Seeing AI & Zero-Cloud Lounge",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

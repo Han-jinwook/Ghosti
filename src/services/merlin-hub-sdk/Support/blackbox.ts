@@ -530,7 +530,7 @@ export function normalizeStudioProductId(appId?: string): string {
   if (lower === 'saysee' || lower === '세이씨') return 'SaySee';
   if (lower === 'whateat' || lower === '뭐먹지' || lower === '뭐먹지?') return 'WhatEat';
   if (lower === 'senstalk' || lower === 'sensetalk' || lower === '센스톡') return 'SenseTalk';
-  if (lower === 'zeye' || lower === 'z-eye' || lower === '제트아이') return 'ZEye';
+  if (lower === 'ghosti' || lower === 'ghosti' || lower === '귀신같이') return 'Ghosti';
   return appId.trim();
 }
 

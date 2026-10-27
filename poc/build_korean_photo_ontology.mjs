@@ -1,5 +1,5 @@
 /**
- * Z-Eye (제트아이) 한국어 시각 개념 족보 트리 (Korean Visual Photo Ontology Tree) 빌더 및 인덱서
+ * 귀신같이 (Ghosti) 한국어 시각 개념 족보 트리 (Korean Visual Photo Ontology Tree) 빌더 및 인덱서
  * - 기반: Open Multilingual WordNet (OMW-ko) + Google Open Images V7 Hierarchy + 한국인 일상 갤러리 어휘
  * - 핵심 원칙 (Is-A 단방향 상향 상속):
  *   1) 시각 필드(primaryTag, keywordsKo, caption)와 지리 필드(EXIF GPS location)를 분리 스캔하여 지명이 시각 사물을 오염시키지 않음.

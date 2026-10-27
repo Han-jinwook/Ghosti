@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-제트아이 (Z-Eye) 비동기 노션 QA 자동화 파이프라인 CLI & 무토큰 감시 데몬 (notion_qa.py)
+귀신같이 (Ghosti) 비동기 노션 QA 자동화 파이프라인 CLI & 무토큰 감시 데몬 (notion_qa.py)
 - 핵심 기능:
   1. fetch_bugs(): 노션 칸반 보드에서 상태가 '발견된 버그'인 티켓의 ID, 제목, 본문 내용을 조회하여 출력
   2. complete_bug(page_id, guide_text):
@@ -295,7 +295,7 @@ def fetch_bugs(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str]]:
     bugs = query_bugs_raw(target_status)
 
     print("\n" + "=" * 72)
-    print(f"🐛 [Z-Eye 노션 QA 보드] '{target_status}' 티켓 목록 (총 {len(bugs)}건)")
+    print(f"🐛 [Ghosti 노션 QA 보드] '{target_status}' 티켓 목록 (총 {len(bugs)}건)")
     print("=" * 72)
 
     if not bugs:
@@ -448,10 +448,10 @@ def create_mission(
 
     clean_title = title.strip()
     if not clean_title.startswith("🎯"):
-        if "[제트아이]" in clean_title:
+        if "[귀신같이]" in clean_title:
             clean_title = f"🎯 {clean_title}"
         else:
-            clean_title = f"🎯 [제트아이] {clean_title}"
+            clean_title = f"🎯 [귀신같이] {clean_title}"
 
     if SCHEMA.status_prop_type == "status":
         status_prop = {"status": {"name": initial_status}}
@@ -526,7 +526,7 @@ def create_mission(
                 "title": [{"type": "text", "text": {"content": clean_title}}]
             },
             SCHEMA.status_prop_name: status_prop,
-            "앱": {"select": {"name": "제트아이"}},
+            "앱": {"select": {"name": "귀신같이"}},
         },
         "children": children_blocks,
     }
@@ -651,7 +651,7 @@ def resolve_target_bug(
 
 def run_cli() -> None:
     print("\n" + "━" * 72)
-    print("🤖 Z-Eye × Notion 무인 QA 파이프라인 CLI 가동")
+    print("🤖 Ghosti × Notion 무인 QA 파이프라인 CLI 가동")
     print(f"   • 연동 Database ID: {DATABASE_ID}")
     print("━" * 72)
 
@@ -671,7 +671,7 @@ def run_cli() -> None:
             continue
 
         if cmd_raw.lower() in ("q", "quit", "exit"):
-            print("👋 Z-Eye 노션 QA CLI를 종료합니다.")
+            print("👋 Ghosti 노션 QA CLI를 종료합니다.")
             break
 
         if cmd_raw.lower() in ("w", "watch"):

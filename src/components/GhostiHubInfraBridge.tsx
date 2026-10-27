@@ -17,16 +17,16 @@ import {
   HubNotifier,
 } from '../services/merlin-hub-sdk/react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { syncHubUserToLocalSupabase, clearZeyeSupabaseSession } from '../services/supabaseClient';
+import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
 import type { GiftProductItem } from '../services/merlin-hub-sdk/react';
 
 /**
- * [제트아이 선물함 상품]
- * - SDK 기본값(미전달 시)은 어그로필터 '영상 분석 N회' 묶음이 노출되므로 제트아이 화면에 부적합.
- * - 제트아이 전용 앱 아이템(예: 방장 구독권) 선물 상품은 가격표 확정 전까지 만들지 않고,
+ * [귀신같이 선물함 상품]
+ * - SDK 기본값(미전달 시)은 어그로필터 '영상 분석 N회' 묶음이 노출되므로 귀신같이 화면에 부적합.
+ * - 귀신같이 전용 앱 아이템(예: 방장 구독권) 선물 상품은 가격표 확정 전까지 만들지 않고,
  *   전 패밀리 공통 '자유 코인 선물' 1종만 노출합니다.
  */
-const ZEYE_GIFT_PRODUCTS: GiftProductItem[] = [
+const GHOSTI_GIFT_PRODUCTS: GiftProductItem[] = [
   {
     id: 'custom_coin',
     title: '🎀 자유 코인 선물',
@@ -58,10 +58,10 @@ export function useIsCoinHiddenInStore(): boolean {
 
 /**
  * [1. 우측 상단 헤더 허브 앵커 (곰발바닥 프로필 + 코인 지갑)]
- * - 제트아이 고유 기능(`👑 여권 문패`, `🛠️ 설정몬스터`, `공유`, `🌙 테마 토글`)은 건드리지 않고,
+ * - 귀신같이 고유 기능(`👑 여권 문패`, `🛠️ 설정몬스터`, `공유`, `🌙 테마 토글`)은 건드리지 않고,
  *   우상단 프로필과 코인 위치를 허브 표준으로 연결합니다.
  */
-export const ZEyeTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> = ({
+export const GhostiTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> = ({
   themeMode,
 }) => {
   const { isLoggedIn, balance } = useHub();
@@ -120,21 +120,21 @@ export const ZEyeTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> = 
  * - 임의의 수동 아코디언 코드를 전량 폐기하고, 허브 공식 SDK `<HubAppSwitcher variant="sidebar" placement="bottom-up" />`를 그대로 렌더링합니다.
  * - 클릭 시 가입된 앱(3열 공식 로고 그리드)과 미가입 앱(`썬드리머 패밀리 앱 New` 상세 리스트)이 담긴 정품 화이트 카드 팝업이 사이드바 위로 펼쳐집니다.
  */
-export const ZEyeSidebarBottomFamilyLauncher: React.FC<{
+export const GhostiSidebarBottomFamilyLauncher: React.FC<{
   isOpen?: boolean;
   onToggle?: () => void;
 }> = () => {
   return (
     <div className="pt-3 border-t border-black/10 dark:border-white/10">
-      <HubAppSwitcher currentAppId="zeye" variant="sidebar" placement="bottom-up" />
+      <HubAppSwitcher currentAppId="ghosti" variant="sidebar" placement="bottom-up" />
     </div>
   );
 };
 
 /**
- * [3. 허브 전역 모달 & 제트아이 스토어/수파베이스 자동 동기화 엔진]
+ * [3. 허브 전역 모달 & 귀신같이 스토어/수파베이스 자동 동기화 엔진]
  */
-const ZEyeHubGlobalModals: React.FC = () => {
+const GhostiHubGlobalModals: React.FC = () => {
   const { user, isLoggedIn, balance, refreshSession, refreshBalance } = useHub();
   const hideCoin = useIsCoinHiddenInStore();
 
@@ -144,7 +144,7 @@ const ZEyeHubGlobalModals: React.FC = () => {
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
   const wasLoggedInRef = useRef(false);
 
-  // 허브 인증/잔액 변화 시 Z-Eye 내부 스토어(merlinAuth) 및 단독 Supabase(`public.users.id = family_users.id`) 자동 동기화
+  // 허브 인증/잔액 변화 시 Ghosti 내부 스토어(merlinAuth) 및 단독 Supabase(`public.users.id = family_users.id`) 자동 동기화
   useEffect(() => {
     const token =
       typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') || '' : '';
@@ -167,8 +167,8 @@ const ZEyeHubGlobalModals: React.FC = () => {
         hubToken: token,
       });
     } else if (!isLoggedIn) {
-      // 로그아웃(로그인 → 게스트 전환) 시에만 제트아이 Supabase 단기 토큰 폐기 (최초 세션 복원 대기 중 오삭제 방지)
-      if (wasLoggedInRef.current) clearZeyeSupabaseSession();
+      // 로그아웃(로그인 → 게스트 전환) 시에만 귀신같이 Supabase 단기 토큰 폐기 (최초 세션 복원 대기 중 오삭제 방지)
+      if (wasLoggedInRef.current) clearGhostiSupabaseSession();
       // 비로그인 게스트 상태에서는 코인 오표시(5,200C 등) 원천 차단 -> 0 C 고정
       useSaySeeStore.setState((state) => ({
         merlinAuth: {
@@ -213,9 +213,9 @@ const ZEyeHubGlobalModals: React.FC = () => {
       <HubAuthModal
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
-        appName="제트아이"
+        appName="귀신같이"
         appLogoUrl="/icon.svg"
-        // 제트아이는 웰컴 코인 비지급 앱(허브 정책: 웰컴 100코인은 SenseTalk 최초 진입 시에만) →
+        // 귀신같이는 웰컴 코인 비지급 앱(허브 정책: 웰컴 100코인은 SenseTalk 최초 진입 시에만) →
         // 기본값 'coin'이면 첫 방문자에게 "무료 코인 받으세요!" 오안내 + 스토어 심사 리스크 → 'none' 고정
         rewardType="none"
         onSuccess={(email, userId) => {
@@ -253,7 +253,7 @@ const ZEyeHubGlobalModals: React.FC = () => {
 
             <HubProfileCard
               hideCoinSection={hideCoin}
-              customGiftProducts={ZEYE_GIFT_PRODUCTS}
+              customGiftProducts={GHOSTI_GIFT_PRODUCTS}
               onOpenPurchase={() => {
                 setIsProfileOpen(false);
                 if (!hideCoin) setIsPurchaseOpen(true);
@@ -262,7 +262,7 @@ const ZEyeHubGlobalModals: React.FC = () => {
 
             <HubNotificationCard />
 
-            <HubSupportLink appId="ZEye" />
+            <HubSupportLink appId="Ghosti" />
 
             <HubLogoutCard
               onLogout={() => {
@@ -289,7 +289,7 @@ const ZEyeHubGlobalModals: React.FC = () => {
               isModal
               isOpen={isPurchaseOpen}
               onClose={() => setIsPurchaseOpen(false)}
-              appName="제트아이"
+              appName="귀신같이"
             />
           </div>
         </div>
@@ -300,13 +300,13 @@ const ZEyeHubGlobalModals: React.FC = () => {
         <HubGiftBoxModal
           isOpen={isGiftBoxOpen}
           onClose={() => setIsGiftBoxOpen(false)}
-          appName="제트아이"
-          customProducts={ZEYE_GIFT_PRODUCTS}
+          appName="귀신같이"
+          customProducts={GHOSTI_GIFT_PRODUCTS}
         />
       )}
 
       {/* 5. 1초 미니 오류·불편 즉시 신고 모달 & 전역 토스트 */}
-      <HubBugReporter appId="ZEye" appVersion="v1.0.0" />
+      <HubBugReporter appId="Ghosti" appVersion="v1.0.0" />
       <HubNotifier />
     </>
   );
@@ -315,14 +315,14 @@ const ZEyeHubGlobalModals: React.FC = () => {
 /**
  * [4. 최상위 HubProvider + HubErrorBoundary 래퍼]
  */
-export const ZEyeHubRootProvider: React.FC<{ children: React.ReactNode }> = ({
+export const GhostiHubRootProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   return (
-    <HubErrorBoundary appId="ZEye">
-      <HubProvider appId="ZEye">
+    <HubErrorBoundary appId="Ghosti">
+      <HubProvider appId="Ghosti">
         {children}
-        <ZEyeHubGlobalModals />
+        <GhostiHubGlobalModals />
       </HubProvider>
     </HubErrorBoundary>
   );

@@ -1,5 +1,5 @@
 /**
- * 🎙️ 제트아이(Z-Eye) 전 영역 무료 무제한 TTS ('현수 & 선희' 투톱) · 무토큰 문서 요약/키워드 발췌 낭독 ·
+ * 🎙️ 귀신같이(Ghosti) 전 영역 무료 무제한 TTS ('현수 & 선희' 투톱) · 무토큰 문서 요약/키워드 발췌 낭독 ·
  *    실제 카톡 대화방 직행 장전 · 고난도 질문 시 단골 AI(기본값: 제미나이) 라이브 음성 바톤터치 엔진
  *
  * - 유료 Typecast 전면 배제 -> 100% 무료 MS 신경망(edge-tts) '현수(ko-KR-HyunsuNeural) & 선희(ko-KR-SunHiNeural)' 투톱 일원화
@@ -7,7 +7,7 @@
  * - 최근 열어본 AI 기록이 0건인 초기 유저는 기본값으로 '제미나이(Gemini, https://gemini.google.com/app)' 오픈
  */
 
-export type ZEyeNeuralVoiceRole = 'hyunsu_briefing' | 'sunhi_doc_reader';
+export type GhostiNeuralVoiceRole = 'hyunsu_briefing' | 'sunhi_doc_reader';
 
 export const ZEYE_VOICE_ACTORS = {
   hyunsu_briefing: {
@@ -169,7 +169,7 @@ export function extractKeywordSentencesZeroLlm(
  */
 export async function speakWithHyunsuOrSunhi(
   text: string,
-  role: ZEyeNeuralVoiceRole = 'hyunsu_briefing',
+  role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
   rate = '+0%'
 ): Promise<{ ok: boolean; voiceId: string; audioUrl?: string }> {
   const voiceId = ZEYE_VOICE_ACTORS[role].voiceId;
@@ -202,7 +202,7 @@ export async function speakWithHyunsuOrSunhi(
 }
 
 /**
- * "계약서 찾아서 카톡 '이쁜이'에게 전달해줘" — 실제 카카오톡 대화방 직행 장전 & 전송 후 제트아이 복귀
+ * "계약서 찾아서 카톡 '이쁜이'에게 전달해줘" — 실제 카카오톡 대화방 직행 장전 & 전송 후 귀신같이 복귀
  */
 export async function dispatchFileToKakaoRealChatroom(params: {
   recipientName: string;
@@ -215,7 +215,7 @@ export async function dispatchFileToKakaoRealChatroom(params: {
   hyunsuAnnouncement: string;
   floatingReturnPillLabel: string;
 }> {
-  const announcement = `찾으신 '${params.fileName}' 파일을 카카오톡 '${params.recipientName}' 대화방에 바로 올려두었습니다. 실제 카톡 화면에서 대화방을 눈으로 확인하신 뒤 엔터만 한 번 눌러주세요! 전송이 확인되면 1초 뒤 제트아이 화면으로 자동 복귀합니다.`;
+  const announcement = `찾으신 '${params.fileName}' 파일을 카카오톡 '${params.recipientName}' 대화방에 바로 올려두었습니다. 실제 카톡 화면에서 대화방을 눈으로 확인하신 뒤 엔터만 한 번 눌러주세요! 전송이 확인되면 1초 뒤 귀신같이 화면으로 자동 복귀합니다.`;
   void speakWithHyunsuOrSunhi(announcement, 'hyunsu_briefing');
 
   try {
@@ -225,7 +225,7 @@ export async function dispatchFileToKakaoRealChatroom(params: {
       body: JSON.stringify({
         name: params.recipientName,
         channel: 'kakao',
-        msg: `[제트아이 파일 전달] ${params.fileName}${params.filePath ? `\n경로: ${params.filePath}` : ''}`,
+        msg: `[귀신같이 파일 전달] ${params.fileName}${params.filePath ? `\n경로: ${params.filePath}` : ''}`,
       }),
     });
   } catch {
@@ -237,7 +237,7 @@ export async function dispatchFileToKakaoRealChatroom(params: {
     recipientName: params.recipientName,
     fileName: params.fileName,
     hyunsuAnnouncement: announcement,
-    floatingReturnPillLabel: '⬅️ 전송 완료 후 제트아이 화면으로 즉시 복귀',
+    floatingReturnPillLabel: '⬅️ 전송 완료 후 귀신같이 화면으로 즉시 복귀',
   };
 }
 
@@ -289,6 +289,6 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
       { step: 1, label: '① [전송 (↑)] 버튼 클릭', desc: '이미 채워진 문서+질문을 즉시 전송합니다.' },
       { step: 2, label: '② 바로 옆 [라이브 음성 🎧] 버튼 클릭', desc: '운전·이동 중에도 말로 편하게 심층 상담을 이어갑니다.' },
     ],
-    floatingReturnPill: '⬅️ 대화 종료 후 제트아이 복귀',
+    floatingReturnPill: '⬅️ 대화 종료 후 귀신같이 복귀',
   };
 }

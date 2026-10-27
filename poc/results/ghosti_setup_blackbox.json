@@ -13,14 +13,14 @@
       "symptomQuery": "윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘",
       "title": "💽 끊어진 업무용 폴더(S: 드라이브) 다시 연결하기",
       "agentModuleName": "Merlin_Z_Core_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)",
-      "systemCommandOrApi": "[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes",
+      "systemCommandOrApi": "[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Ghosti_Work_Vault\" /persistent:yes",
       "beforeSnapshot": {
         "sDriveMounted": false,
-        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+        "targetFolder": "D:\\Ghosti\\업무공유폴더_S"
       },
       "afterSnapshot": {
         "sDriveMounted": true,
-        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+        "targetFolder": "D:\\Ghosti\\업무공유폴더_S"
       },
       "creditDeducted": 500,
       "domCaptureHash": "dom_1a168582329",
@@ -47,14 +47,14 @@
       "symptomQuery": "윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘",
       "title": "💽 끊어진 업무용 폴더(S: 드라이브) 다시 연결하기",
       "agentModuleName": "Merlin_Z_Core_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)",
-      "systemCommandOrApi": "[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes",
+      "systemCommandOrApi": "[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Ghosti_Work_Vault\" /persistent:yes",
       "beforeSnapshot": {
         "sDriveMounted": false,
-        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+        "targetFolder": "D:\\Ghosti\\업무공유폴더_S"
       },
       "afterSnapshot": {
         "sDriveMounted": true,
-        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+        "targetFolder": "D:\\Ghosti\\업무공유폴더_S"
       },
       "creditDeducted": 500,
       "domCaptureHash": "dom_1a1679a11fe",
@@ -81,14 +81,14 @@
       "symptomQuery": "윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘",
       "title": "💽 [Level 3 복합 수리] 업무 드라이브(S:) 레지스트리·SMB 자격증명·권한 3단계 완전 복구",
       "agentModuleName": "Merlin_Z_Core_Setup.exe (JEA 최소권한 + 3-Stage Registry/SMB Engine)",
-      "systemCommandOrApi": "[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes",
+      "systemCommandOrApi": "[JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Ghosti_Work_Vault\" /persistent:yes",
       "beforeSnapshot": {
         "sDriveMounted": false,
-        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+        "targetFolder": "D:\\Ghosti\\업무공유폴더_S"
       },
       "afterSnapshot": {
         "sDriveMounted": true,
-        "targetFolder": "D:\\Z-Eye\\업무공유폴더_S"
+        "targetFolder": "D:\\Ghosti\\업무공유폴더_S"
       },
       "creditDeducted": 500,
       "domCaptureHash": "dom_1a16784f15c",
@@ -113,8 +113,8 @@
       "backtrackCount": 2,
       "trajectoryGrade": "GRADE_0_EXPRESS",
       "symptomQuery": "",
-      "title": "Z-Eye 설정 몬스터 자동 처치",
-      "agentModuleName": "Z-Eye_PC_Setup.exe",
+      "title": "Ghosti 설정 몬스터 자동 처치",
+      "agentModuleName": "Ghosti_PC_Setup.exe",
       "systemCommandOrApi": "",
       "beforeSnapshot": {},
       "afterSnapshot": {},
@@ -144,7 +144,7 @@
         "[직행 완료] 뒤로 가기(Back) 0회 · 최단 경로 완주"
       ],
       "prunedShortestPathSteps": [
-        "[최적 경로 유지] [JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes"
+        "[최적 경로 유지] [JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Ghosti_Work_Vault\" /persistent:yes"
       ],
       "otaBroadcastStatus": "OPTIMAL_ROUTE_VERIFIED",
       "refundedCoins": 0
@@ -166,7 +166,7 @@
         "[직행 완료] 뒤로 가기(Back) 0회 · 최단 경로 완주"
       ],
       "prunedShortestPathSteps": [
-        "[최적 경로 유지] [JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes"
+        "[최적 경로 유지] [JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Ghosti_Work_Vault\" /persistent:yes"
       ],
       "otaBroadcastStatus": "OPTIMAL_ROUTE_VERIFIED",
       "refundedCoins": 0
@@ -188,7 +188,7 @@
         "[직행 완료] 뒤로 가기(Back) 0회 · 최단 경로 완주"
       ],
       "prunedShortestPathSteps": [
-        "[최적 경로 유지] [JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Z-Eye_Work_Vault\" /persistent:yes"
+        "[최적 경로 유지] [JEA Session · 0.01s JSON Backup] [Stage 1] cmdkey /delete:127.0.0.1 && net use S: /delete /y; [Stage 2] Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\" -Name \"AllowInsecureGuestAuth\" -Value 1; [Stage 3] net use S: \"\\\\127.0.0.1\\Ghosti_Work_Vault\" /persistent:yes"
       ],
       "otaBroadcastStatus": "OPTIMAL_ROUTE_VERIFIED",
       "refundedCoins": 0

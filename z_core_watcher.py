@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-제트아이 (Z-Eye) 무토큰 3중 통합 점검 및 세션 창 제목 자동 각인 스크립트 (z_core_watcher.py)
+귀신같이 (Ghosti) 무토큰 3중 통합 점검 및 세션 창 제목 자동 각인 스크립트 (z_core_watcher.py)
 - 평상시 AI 토큰 소모: 0 (파이썬 로컬 프로세스만 동작)
 - 점검/감시 대상 3가지:
-  1. [전사 중앙 우체국 감지] D:\\Secretary\\post_office\\ 내 Z-Eye / ALL 수신 문서(.md) 도착 여부 (단일 우체국 통합)
-  2. [전사 강령 이식 감지] D:\\Z-Eye\\docs\\멀린코딩강령_v20261020.md 변경 여부
-  3. [노션 QA 버그 감지] 노션 칸반 보드에 알바생(테스터)이 등록한 신규 '발견된 버그'([제트아이]) 티켓 여부
+  1. [전사 중앙 우체국 감지] D:\\Secretary\\post_office\\ 내 Ghosti / ALL 수신 문서(.md) 도착 여부 (단일 우체국 통합)
+  2. [전사 강령 이식 감지] D:\\Ghosti\\docs\\멀린코딩강령_v20261020.md 변경 여부
+  3. [노션 QA 버그 감지] 노션 칸반 보드에 알바생(테스터)이 등록한 신규 '발견된 버그'([귀신같이]) 티켓 여부
 - 작동 방식:
   체크인 시 기본 실행(`python z_core_watcher.py`)은 세션 창 제목을 자동 각인하고 3대 항목을 즉시 점검한 뒤,
   Antigravity 채팅창의 'Queued Messages(대기열)' 걸림 현상을 100% 원천 방지하기 위해 즉시 종료(Exit 0)합니다.
@@ -189,7 +189,7 @@ def file_md5(path: Path) -> str:
 
 
 def scan_post_office_files() -> Dict[str, str]:
-    """전사 중앙 우체국(D:\\Secretary\\post_office\\) 내 Z-Eye / ALL 수신 문서의 경로와 해시를 반환합니다."""
+    """전사 중앙 우체국(D:\\Secretary\\post_office\\) 내 Ghosti / ALL 수신 문서의 경로와 해시를 반환합니다."""
     if not POST_OFFICE_DIR.exists():
         return {}
     result: Dict[str, str] = {}
@@ -197,7 +197,7 @@ def scan_post_office_files() -> Dict[str, str]:
         if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
             continue
         prefix = p.name.split("_", 1)[0].lower()
-        if prefix in ("z-eye", "zeye", "all"):
+        if prefix in ("ghosti", "ghosti", "all"):
             result[p.name] = file_md5(p)
     return result
 
@@ -232,7 +232,7 @@ def main() -> None:
     if initial_inbox:
         print("\n" + "📮" * 24)
         print(
-            f"🔔 [전사 중앙 우체국 자동 감지] D:\\Secretary\\post_office\\ 에 Z-Eye 수신 문서 {len(initial_inbox)}건이 도착해 있습니다!"
+            f"🔔 [전사 중앙 우체국 자동 감지] D:\\Secretary\\post_office\\ 에 Ghosti 수신 문서 {len(initial_inbox)}건이 도착해 있습니다!"
         )
         for fname in initial_inbox:
             fpath = POST_OFFICE_DIR / fname
@@ -269,7 +269,7 @@ def main() -> None:
 
     if "--watch" not in sys.argv:
         print(
-            f"✅ [Z-Eye 체크인 3중 점검 및 제목 각인 완료] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(seen_bug_ids)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
+            f"✅ [Ghosti 체크인 3중 점검 및 제목 각인 완료] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(seen_bug_ids)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
         )
         return
 
@@ -280,10 +280,10 @@ def main() -> None:
             break
 
     print(
-        f"👀 [Z-Eye 무토큰 3중 감시병 가동] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
+        f"👀 [Ghosti 무토큰 3중 감시병 가동] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
         f"   1) 전사 중앙 우체국: {POST_OFFICE_DIR}\n"
         f"   2) 비서 전사 코딩강령 이식: {DOCTRINE_FILE.name}\n"
-        f"   3) 노션 QA 칸반 보드: '발견된 버그'([제트아이]) 컬럼"
+        f"   3) 노션 QA 칸반 보드: '발견된 버그'([귀신같이]) 컬럼"
     )
 
     tick = 0
@@ -302,7 +302,7 @@ def main() -> None:
         if new_or_changed_inbox:
             print("\n" + "📮" * 24)
             print(
-                f"🔔 [전사 중앙 우체국 신규 도착!] D:\\Secretary\\post_office\\ 에 {len(new_or_changed_inbox)}건의 Z-Eye 수신 문서가 도착했습니다!"
+                f"🔔 [전사 중앙 우체국 신규 도착!] D:\\Secretary\\post_office\\ 에 {len(new_or_changed_inbox)}건의 Ghosti 수신 문서가 도착했습니다!"
             )
             for fname in new_or_changed_inbox:
                 fpath = POST_OFFICE_DIR / fname

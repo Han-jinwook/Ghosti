@@ -46,12 +46,12 @@ export type P2PTransportMode =
   | 'LOCAL_HTTPS_LOOPBACK';
 
 export type MerlinQueryTargetResource =
-  | 'LOCAL_PHOTO_INDEX_DB' // 제트아이(Z-Eye) 및 뭐먹지?(갤러리 음식 태그·날짜·EXIF GPS 조회)
-  | 'LOCAL_VIDEO_INDEX_DB' // 제트아이 동영상 타임라인 장면 검색
-  | 'LOCAL_DOC_INDEX_DB' // 제트아이 스마트 서류함 PDF/DOCX/TXT 조회
+  | 'LOCAL_PHOTO_INDEX_DB' // 귀신같이(Ghosti) 및 뭐먹지?(갤러리 음식 태그·날짜·EXIF GPS 조회)
+  | 'LOCAL_VIDEO_INDEX_DB' // 귀신같이 동영상 타임라인 장면 검색
+  | 'LOCAL_DOC_INDEX_DB' // 귀신같이 스마트 서류함 PDF/DOCX/TXT 조회
   | 'LOCAL_SPREADSHEET_LEDGER_DB' // 센스톡(로컬 엑셀·CSV 조건부 고객 명단·VIP 장부 파싱)
   | 'BROWSER_HISTORY_SQLITE_DB' // 어그로필터(유튜브 화면 텍스트·알림 및 크롬/엣지 History SQLite 조회)
-  | 'FACE_PASSPORT_SEED_DB' // Z-Eye 여권 768D 안면 시드 & 최신 연도 정면 얼굴 자동 문패
+  | 'FACE_PASSPORT_SEED_DB' // 귀신같이 여권 768D 안면 시드 & 최신 연도 정면 얼굴 자동 문패
   | 'UI_ACCESSIBILITY_TREE' // 설정몬스터 & 어그로필터 화면 UI 트리 스캔
   | 'OS_FLOATING_OVERLAY' // 최상단 투명 화살표 오버레이 투사
   | 'OS_SYSTEM_SCRIPT' // OS 시스템 제어/가상 드라이브(S:) 마운트 스크립트
@@ -65,7 +65,7 @@ export interface SiblingAgentBootstrapRequest {
   hostAgentBinary: MerlinSiblingAgentBinary;
   /** 필요한 형제 에이전트 실행 파일명 (예: 'SenseTalk.exe' 또는 'Merlin_Z_Core.exe') */
   targetSiblingBinary: MerlinSiblingAgentBinary;
-  /** 호출한 패밀리 웹앱 ID (예: 'sensetalk' | 'z-eye' | 'momeokji' | 'aggrofilter') */
+  /** 호출한 패밀리 웹앱 ID (예: 'sensetalk' | 'ghosti' | 'momeokji' | 'aggrofilter') */
   callerAppId: string;
   /** 소환 직후 형제 에이전트에 즉시 전달할 후속 작업 (예: 'EXTRACT_EXCEL_VIP_LIST' | 'DISPATCH_SENSETALK_BATCH') */
   immediateTaskCommand?: string;
@@ -96,9 +96,9 @@ export interface SiblingAgentBootstrapResult {
  * - 네이티브(APK/.exe) 재빌드나 스토어 재심사 없이 웹 쪽에서 조건식만 바꿔 무한 확장
  */
 export interface MerlinUniversalQueryRequest {
-  /** 호출한 패밀리 웹앱 ID (예: 'z-eye' | 'momeokji' | 'sensetalk' | 'aggrofilter' 등) */
+  /** 호출한 패밀리 웹앱 ID (예: 'ghosti' | 'momeokji' | 'sensetalk' | 'aggrofilter' 등) */
   callerAppId: string;
-  /** 호출 웹앱의 Origin (예: 'https://z-eye.sundreamer.app', 'https://eat.sundreamer.app') */
+  /** 호출 웹앱의 Origin (예: 'https://ghosti.sundreamer.app', 'https://eat.sundreamer.app') */
   callerOrigin?: string;
   /** 타겟 로컬 리소스 도메인 */
   targetResource: MerlinQueryTargetResource;
@@ -192,7 +192,7 @@ declare global {
   interface Window {
     MerlinZCoreBridge?: UniversalNativeAgentBridge;
     MerlinNativeBridge?: UniversalNativeAgentBridge;
-    ZEyeNativeBridge?: UniversalNativeAgentBridge;
+    GhostiNativeBridge?: UniversalNativeAgentBridge;
   }
 }
 
@@ -211,7 +211,7 @@ export const WEBRTC_HOLE_PUNCH_TIMEOUT_MS = 3500;
 export function isTrustedMerlinFamilyOrigin(originOrUrl?: string): boolean {
   const raw =
     originOrUrl ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://z-eye.sundreamer.app');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://ghosti.sundreamer.app');
   try {
     const u = new URL(raw);
     const host = u.hostname.toLowerCase();
@@ -233,7 +233,7 @@ export function isTrustedMerlinFamilyOrigin(originOrUrl?: string): boolean {
 
 /**
  * [핵심] 스토어 재심사 0회 범용 쿼리 실행기 (`executeMerlinQuery`)
- * - `뭐먹지?`, `센스톡`, `어그로필터`, `Z-Eye` 등 모든 `*.sundreamer.app` 웹앱이
+ * - `뭐먹지?`, `센스톡`, `어그로필터`, `Ghosti` 등 모든 `*.sundreamer.app` 웹앱이
  *   단일 인터페이스로 로컬 인덱스 DB 조회·UI 트리 스캔·오버레이 화살표·스크립트 명령을 수행합니다.
  */
 export async function executeMerlinQuery<T = unknown>(
@@ -242,7 +242,7 @@ export async function executeMerlinQuery<T = unknown>(
   const startedAt = performance.now();
   const origin =
     request.callerOrigin ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://z-eye.sundreamer.app');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://ghosti.sundreamer.app');
 
   if (!isTrustedMerlinFamilyOrigin(origin)) {
     return {
@@ -266,7 +266,7 @@ export async function executeMerlinQuery<T = unknown>(
   // 1순위: 실물 Merlin_Z_Core.apk / Merlin_Z_Core_Setup.exe WebView에 주입된 단일 범용 네이티브 브릿지 호출
   const nativeBridge =
     typeof window !== 'undefined'
-      ? window.MerlinZCoreBridge || window.MerlinNativeBridge || window.ZEyeNativeBridge
+      ? window.MerlinZCoreBridge || window.MerlinNativeBridge || window.GhostiNativeBridge
       : undefined;
 
   if (nativeBridge?.executeMerlinQuery) {
@@ -405,7 +405,7 @@ export function buildWindowsNativeWebDavMountCommand(
     unmountCmd: `net use ${cleanDrive} /delete /yes`,
     driverRequired: false,
     universalQuerySpec: {
-      callerAppId: 'z-eye',
+      callerAppId: 'ghosti',
       targetResource: 'OS_SYSTEM_SCRIPT',
       queryOrCommand: {
         scriptCommand: mountCmd,
@@ -439,7 +439,7 @@ export function dispatchAndroidOverlayArrowViaBridge(params: {
 
   const nativeBridge =
     typeof window !== 'undefined'
-      ? window.MerlinZCoreBridge || window.MerlinNativeBridge || window.ZEyeNativeBridge
+      ? window.MerlinZCoreBridge || window.MerlinNativeBridge || window.GhostiNativeBridge
       : undefined;
 
   if (nativeBridge?.getDeviceWindowInsetsJson) {
@@ -459,7 +459,7 @@ export function dispatchAndroidOverlayArrowViaBridge(params: {
   );
 
   const universalPayload: MerlinUniversalQueryRequest = {
-    callerAppId: params.callerAppId || 'z-eye',
+    callerAppId: params.callerAppId || 'ghosti',
     targetResource: 'OS_FLOATING_OVERLAY',
     queryOrCommand: {
       overlayLogicalRect: calibratedPhysicalRect,
@@ -527,7 +527,7 @@ export async function verifyHybridP2PBridgeConnection(options?: {
   const webdav = buildWindowsNativeWebDavMountCommand('S:');
   const hasAndroidBridge =
     typeof window !== 'undefined' &&
-    Boolean(window.MerlinZCoreBridge || window.MerlinNativeBridge || window.ZEyeNativeBridge);
+    Boolean(window.MerlinZCoreBridge || window.MerlinNativeBridge || window.GhostiNativeBridge);
 
   return {
     roomId,
@@ -537,7 +537,7 @@ export async function verifyHybridP2PBridgeConnection(options?: {
     signalingMethod: 'SUPABASE_REALTIME_BROADCAST_ZERO_DB',
     webrtcState: simulateBlock ? 'symmetric_nat_blocked' : 'connected',
     outboundTunnelState: 'active',
-    outboundTunnelUrl: `https://${roomId}.tunnel.z-eye.sundreamer.app`,
+    outboundTunnelUrl: `https://${roomId}.tunnel.ghosti.sundreamer.app`,
     turnRelayCostKrw: 0,
     dbStorageUsedBytesForMediaIndex: 0,
     roundTripLatencyMs: simulateBlock ? 38 : 11,
