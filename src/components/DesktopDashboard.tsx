@@ -176,7 +176,7 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   Array<{ id: DesktopTab; label: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'trial', label: '🧹 클린몬스터 진단' },
+
     { id: 'dashboard', label: '🎯 AI 투시검색' },
     { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
     { id: 'sync', label: '🛠️ 설정몬스터' },

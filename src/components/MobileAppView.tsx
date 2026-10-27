@@ -141,7 +141,7 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   Array<{ id: MobileTab; label: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'trial', label: '🧹 클린몬스터 진단' },
+
     { id: 'search', label: '🎯 AI 투시검색' },
     { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
     { id: 'settings', label: '🛠️ 설정몬스터' },

@@ -23,7 +23,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sys
-import threading
 import urllib.parse
 from typing import Any, Dict
 
@@ -44,7 +43,7 @@ import plugin_zeye_os  # noqa: E402
 import plugin_senstalk  # noqa: E402
 import plugin_aggrofilter  # noqa: E402
 
-CORE_VERSION = "2.1.0"
+CORE_VERSION = "2.2.0"
 STANDARD_PORT = 5199
 TRAY_ICON_ICO = THIS_DIR / "favicon.ico"
 TRAY_LOGO_PNG = THIS_DIR / "logo-symbol.png"
@@ -144,7 +143,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(get_unified_health())
             return
 
-        # [제트아이 0.1초 로컬 사진 투시 API]
+        # [제트아이 내 PC 전수 인덱싱 API: 사진 / 서류 / 동영상]
         if path in ("/__photos/list", "/api/zeye/photos/list"):
             self._send_json(plugin_zeye_os.list_local_photos(qp))
             return
@@ -157,9 +156,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=status)
             return
 
-        # [제트아이 서류 투시 API]
         if path in ("/__docs/list", "/api/zeye/docs/list"):
             self._send_json(plugin_zeye_os.list_local_docs(qp))
+            return
+
+        if path in ("/__videos/list", "/__videos/index", "/api/zeye/videos/list"):
+            self._send_json(plugin_zeye_os.list_local_videos(qp))
             return
 
         if path.startswith("/api/senstalk"):
@@ -230,7 +232,6 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
         },
     )
     ag_vid = plugin_aggrofilter.extract_video_id("https://youtu.be/dQw4w9WgXcQ?si=test")
-    # [2026-10-27] 비서실 지적: 정규식만 검사해 '자막 0건 침묵 성공'을 못 잡던 selftest 보강
     srv3_sample = '<timedtext format="3"><body><p t="1000" d="2000"><s>안녕</s><s> 하세요</s></p><p t="3500" d="1000">둘째 줄</p></body></timedtext>'
     fmt1_sample = '<transcript><text start="0.5" dur="1.2">first &amp; line</text></transcript>'
     ag_srv3 = plugin_aggrofilter._parse_timedtext_xml(srv3_sample)

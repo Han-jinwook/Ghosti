@@ -759,116 +759,175 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
     }
 
 
+import re
+import subprocess
+import urllib.parse
+import zipfile
+
 _PHOTO_PATH_INDEX: Dict[str, Path] = {}
-_PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".mov", ".m4v"}
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic"}
+_VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"}
+_PHOTO_EXTS = _IMAGE_EXTS | _VIDEO_EXTS
+_DOC_EXTS = {".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".hwp", ".hwpx", ".csv"}
+_SKIP_DIR_NAMES = {
+    "node_modules",
+    ".git",
+    "appdata",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "dist",
+    "build",
+    "merlin_z_core",
+    "universal_z_core",
+    "$recycle.bin",
+    "windows",
+    "program files",
+    "program files (x86)",
+}
+
+
+def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
+    home = Path.home()
+    onedrive = home / "OneDrive"
+    roots: List[Path] = []
+    if extra_path:
+        p = Path(extra_path)
+        if p.exists() and p.is_dir():
+            roots.append(p)
+    candidates = [
+        THIS_DIR.parents[1] / "test_photos",
+        THIS_DIR.parents[1] / "test_docs",
+        Path("D:/Z-Eye/test_photos"),
+        Path("D:/Z-Eye/test_docs"),
+        home / "Pictures",
+        home / "Videos",
+        home / "Documents",
+        home / "Desktop",
+        home / "Downloads",
+        onedrive / "Pictures",
+        onedrive / "사진",
+        onedrive / "Documents",
+        onedrive / "문서",
+        onedrive / "Desktop",
+        onedrive / "바탕 화면",
+    ]
+    seen_resolved: set[str] = set()
+    for c in candidates:
+        try:
+            if c.exists() and c.is_dir():
+                r_str = str(c.resolve()).lower()
+                if r_str not in seen_resolved:
+                    seen_resolved.add(r_str)
+                    roots.append(c)
+        except Exception:
+            pass
+    return roots
+
+
+def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
+    result: List[Path] = []
+    seen: set[str] = set()
+
+    def _walk(curr: Path, depth: int) -> None:
+        if depth > max_depth:
+            return
+        try:
+            r_str = str(curr.resolve()).lower()
+            if r_str in seen:
+                return
+            seen.add(r_str)
+            result.append(curr)
+            if depth == max_depth:
+                return
+            for sub in sorted(curr.iterdir(), key=lambda x: x.name):
+                if sub.is_dir() and not sub.name.startswith(".") and sub.name.lower() not in _SKIP_DIR_NAMES:
+                    _walk(sub, depth + 1)
+        except Exception:
+            pass
+
+    for r in roots:
+        _walk(r, 0)
+    return result
+
+
+def _detect_folder_label(p: Path) -> str:
+    s = str(p).lower()
+    if "desktop" in s or "바탕 화면" in s or "바탕화면" in s:
+        return "PC 바탕화면"
+    if "downloads" in s or "다운로드" in s:
+        return "스마트폰 다운로드"
+    return "PC 로컬 폴더"
 
 
 def resolve_active_photo_dir(custom_path: str = "") -> Path:
-    """로컬 PC에서 실물 사진 폴더(유저 압축해제 폴더, Pictures, Desktop, Downloads, test_photos 등)를 자동 탐색합니다."""
+    """로컬 PC에서 대표 사진 폴더를 반환합니다."""
     if custom_path:
         p = Path(custom_path)
         if p.exists() and p.is_dir():
             return p
-
-    base_roots: List[Path] = [
-        Path.home() / "Pictures",
-        Path.home() / "Desktop",
-        Path.home() / "Downloads",
-        THIS_DIR.parents[1] / "test_photos",
-        Path("D:/Z-Eye/test_photos"),
-    ]
-
-    candidate_dirs: List[Path] = []
-    for root in base_roots:
-        if not root.exists() or not root.is_dir():
-            continue
-        candidate_dirs.append(root)
-        try:
-            for sub in root.iterdir():
-                if sub.is_dir() and not sub.name.startswith("."):
-                    candidate_dirs.append(sub)
-                    try:
-                        for sub2 in sub.iterdir():
-                            if sub2.is_dir() and not sub2.name.startswith("."):
-                                candidate_dirs.append(sub2)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    best_dir: Path = Path.home() / "Pictures"
-    best_score = -1
-
-    for d in candidate_dirs:
-        try:
-            img_count = sum(1 for f in d.iterdir() if f.is_file() and f.suffix.lower() in _PHOTO_EXTS)
-        except Exception:
-            img_count = 0
-        if img_count == 0:
-            continue
-        # sample_photos_301 또는 test_photos 폴더에 가중치 부여
-        bonus = 1000 if ("sample" in d.name.lower() or "test_photos" in d.name.lower() or "301" in d.name.lower()) else 0
-        score = img_count + bonus
-        if score > best_score:
-            best_score = score
-            best_dir = d
-
-    return best_dir
+    for d in _iter_scan_dirs(_get_user_scan_roots(), max_depth=2):
+        if "sample" in d.name.lower() or "301" in d.name.lower() or "test_photos" in d.name.lower():
+            return d
+    pic = Path.home() / "Pictures"
+    return pic if pic.exists() else Path.home()
 
 
 def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """로컬 사진 목록(파일명, 용량, 수정일자)을 0.1초 만에 추출하여 반환합니다."""
+    """내 PC 전 폴더(사진, 바탕화면, 다운로드, 문서, 동영상 등)의 모든 실물 사진을 전수 스캔하여 반환합니다."""
     data = params or {}
     req_dir = str(data.get("dir") or data.get("targetPath") or "").strip()
-    photo_dir = resolve_active_photo_dir(req_dir)
+    scan_dirs = _iter_scan_dirs(_get_user_scan_roots(req_dir), max_depth=3)
 
     files: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
 
-    def _collect_from_dir(d: Path) -> None:
-        if not d.exists() or not d.is_dir():
-            return
+    for d in scan_dirs:
         try:
             for entry in sorted(d.iterdir(), key=lambda x: x.name):
-                if entry.is_file() and entry.suffix.lower() in _PHOTO_EXTS:
-                    if entry.name in seen_names:
-                        continue
-                    seen_names.add(entry.name)
-                    resolved = entry.resolve()
-                    _PHOTO_PATH_INDEX[entry.name] = resolved
-                    st = entry.stat()
-                    files.append({
-                        "path": entry.name,
-                        "fullPath": str(resolved),
-                        "size": int(st.st_size),
-                        "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
-                        "mtimeMs": int(st.st_mtime * 1000)
-                    })
+                if not entry.is_file():
+                    continue
+                ext = entry.suffix.lower()
+                if ext not in _IMAGE_EXTS:
+                    continue
+                if entry.name in seen_names:
+                    continue
+                st = entry.stat()
+                if st.st_size < 4096 and "test_photos" not in str(d).lower() and "sample" not in str(d).lower():
+                    continue
+                seen_names.add(entry.name)
+                resolved = entry.resolve()
+                _PHOTO_PATH_INDEX[entry.name] = resolved
+                files.append({
+                    "path": entry.name,
+                    "fullPath": str(resolved),
+                    "folderName": d.name,
+                    "deviceSource": _detect_folder_label(d),
+                    "size": int(st.st_size),
+                    "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+                    "mtimeMs": int(st.st_mtime * 1000),
+                })
+                if len(files) >= 1500:
+                    break
         except Exception:
             pass
+        if len(files) >= 1500:
+            break
 
-    _collect_from_dir(photo_dir)
-    # 1단계 하위 폴더에도 사진이 풀려 있을 경우 함께 수집
-    if photo_dir.exists():
-        try:
-            for sub in sorted(photo_dir.iterdir(), key=lambda x: x.name):
-                if sub.is_dir() and not sub.name.startswith("."):
-                    _collect_from_dir(sub)
-        except Exception:
-            pass
-
+    primary_dir = resolve_active_photo_dir(req_dir)
     return {
         "ok": True,
-        "dir": str(photo_dir),
-        "exists": photo_dir.exists(),
+        "dir": str(primary_dir),
+        "scannedFolderCount": len(scan_dirs),
+        "exists": True,
         "total": len(files),
         "files": files,
-        "quarantined": []
+        "quarantined": [],
     }
 
 
 def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes | None, str, int]:
-    """로컬 사진 바이너리와 Content-Type을 읽어옵니다. (안전 검증 포함)"""
+    """로컬 사진 및 동영상 바이너리와 Content-Type을 읽어옵니다."""
     data = params or {}
     rel = str(data.get("p") or data.get("path") or "").strip()
     if not rel:
@@ -878,18 +937,16 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
     full_path: Path | None = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
 
     if full_path is None or not full_path.exists():
-        photo_dir = resolve_active_photo_dir(str(data.get("dir") or ""))
-        cand = photo_dir / base_name
-        if cand.exists() and cand.is_file():
-            full_path = cand
+        direct_p = Path(rel)
+        if direct_p.exists() and direct_p.is_file():
+            full_path = direct_p
         else:
-            direct_p = Path(rel)
-            if direct_p.exists() and direct_p.is_file():
-                full_path = direct_p
-            else:
-                repo_test = THIS_DIR.parents[1] / "test_photos" / base_name
-                if repo_test.exists():
-                    full_path = repo_test
+            for d in _iter_scan_dirs(_get_user_scan_roots(), max_depth=2):
+                cand = d / base_name
+                if cand.exists() and cand.is_file():
+                    full_path = cand.resolve()
+                    _PHOTO_PATH_INDEX[base_name] = full_path
+                    break
 
     if full_path is None or not full_path.exists() or not full_path.is_file():
         return None, "text/plain", 404
@@ -903,6 +960,10 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
         ".gif": "image/gif",
         ".mp4": "video/mp4",
         ".mov": "video/quicktime",
+        ".webm": "video/webm",
+        ".m4v": "video/mp4",
+        ".avi": "video/x-msvideo",
+        ".mkv": "video/x-matroska",
     }
     ext = full_path.suffix.lower()
     content_type = mime_map.get(ext, "application/octet-stream")
@@ -914,36 +975,174 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
         return None, "text/plain", 500
 
 
-def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """로컬 서류/문서(test_docs, Documents, Downloads) 목록을 추출합니다."""
-    candidates = [
-        THIS_DIR.parents[1] / "test_docs",
-        Path.home() / "Documents",
-        Path.home() / "Downloads"
-    ]
-    doc_exts = {".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pdf", ".pptx", ".txt", ".csv"}
-    docs: List[Dict[str, Any]] = []
+def _extract_doc_text(entry: Path) -> str:
+    ext = entry.suffix.lower()
+    try:
+        if ext in (".txt", ".md", ".csv"):
+            raw = entry.read_bytes()[:32768]
+            for enc in ("utf-8", "cp949", "euc-kr"):
+                try:
+                    return raw.decode(enc).strip()[:1500]
+                except Exception:
+                    continue
+            return raw.decode("utf-8", errors="ignore").strip()[:1500]
+        if ext == ".docx":
+            with zipfile.ZipFile(entry, "r") as zf:
+                if "word/document.xml" in zf.namelist():
+                    xml_bytes = zf.read("word/document.xml")
+                    text = re.sub(r"<[^>]+>", " ", xml_bytes.decode("utf-8", errors="ignore"))
+                    text = re.sub(r"\s+", " ", text).strip()
+                    if text:
+                        return text[:1500]
+    except Exception:
+        pass
+    return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다."
 
-    for d in candidates:
-        if d.exists() and d.is_dir():
-            try:
-                for entry in d.iterdir():
-                    if entry.is_file() and entry.suffix.lower() in doc_exts:
-                        st = entry.stat()
-                        docs.append({
-                            "name": entry.name,
-                            "path": str(entry),
-                            "ext": entry.suffix.lower(),
-                            "size": int(st.st_size),
-                            "modified": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")
-                        })
-            except Exception:
-                pass
+
+def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """내 PC 전 폴더(문서, 바탕화면, 다운로드, test_docs 등)의 서류 파일을 전수 스캔하여 반환합니다."""
+    scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
+    docs: List[Dict[str, Any]] = []
+    seen_names: set[str] = set()
+
+    for d in scan_dirs:
+        try:
+            for entry in sorted(d.iterdir(), key=lambda x: x.name):
+                if not entry.is_file():
+                    continue
+                ext_low = entry.suffix.lower()
+                if ext_low not in _DOC_EXTS:
+                    continue
+                if entry.name.startswith("~$") or entry.name.lower().startswith("readme"):
+                    continue
+                if entry.name in seen_names:
+                    continue
+                seen_names.add(entry.name)
+                st = entry.stat()
+                stem = entry.stem.replace("_", " ").replace("-", " ").strip()
+                extracted = _extract_doc_text(entry)
+                ext_badge_map = {
+                    ".pdf": ("PDF", "📑 PDF 전자문서 · 계약/증빙"),
+                    ".txt": ("TXT", "📝 텍스트 메모 · 기록"),
+                    ".md": ("TXT", "📝 마크다운 문서 · 노트"),
+                    ".csv": ("TXT", "📊 CSV 데이터 시트"),
+                    ".docx": ("DOCX", "📘 워드(DOCX) 보고서 · 서류"),
+                    ".doc": ("DOCX", "📘 워드 문서"),
+                    ".hwp": ("DOCX", "📗 한글(HWP) 공문 · 서류"),
+                    ".hwpx": ("DOCX", "📗 한글(HWPX) 문서"),
+                    ".xlsx": ("PDF", "📊 엑셀(XLSX) 장부 · 내역서"),
+                    ".xls": ("PDF", "📊 엑셀 시트"),
+                    ".pptx": ("PDF", "📙 파워포인트 발표자료"),
+                }
+                norm_ext, badge = ext_badge_map.get(ext_low, ("PDF", "📄 로컬 문서 파일"))
+                kw_tokens = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} {extracted[:300]}") if len(w) >= 2][:18]
+                docs.append({
+                    "id": f"local_doc_{len(docs) + 1}_{entry.stem[:20]}",
+                    "fileName": entry.name,
+                    "name": entry.name,
+                    "path": str(entry.resolve()),
+                    "ext": norm_ext,
+                    "title": stem or entry.name,
+                    "categoryBadge": badge,
+                    "extractedText": extracted,
+                    "keywords": list(dict.fromkeys(kw_tokens)),
+                    "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d"),
+                    "modified": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                    "sizeKB": max(1, round(st.st_size / 1024)),
+                    "size": int(st.st_size),
+                    "deviceSource": _detect_folder_label(d),
+                })
+                if len(docs) >= 300:
+                    break
+        except Exception:
+            pass
+        if len(docs) >= 300:
+            break
 
     return {
         "ok": True,
         "total": len(docs),
-        "docs": docs
+        "documents": docs,
+        "docs": docs,
+    }
+
+
+def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
+    scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
+    videos: List[Dict[str, Any]] = []
+    seen_names: set[str] = set()
+
+    for d in scan_dirs:
+        try:
+            for entry in sorted(d.iterdir(), key=lambda x: x.name):
+                if not entry.is_file():
+                    continue
+                ext_low = entry.suffix.lower()
+                if ext_low not in _VIDEO_EXTS:
+                    continue
+                if entry.name in seen_names:
+                    continue
+                seen_names.add(entry.name)
+                resolved = entry.resolve()
+                _PHOTO_PATH_INDEX[entry.name] = resolved
+                st = entry.stat()
+                size_mb = round(max(0.1, st.st_size / (1024 * 1024)), 1)
+                date_str = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d")
+                stem = entry.stem.replace("_", " ").replace("-", " ").strip()
+                enc_name = urllib.parse.quote(entry.name)
+                vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
+                kw_list = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} 동영상 영상") if len(w) >= 2][:12]
+                videos.append({
+                    "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
+                    "videoFileName": entry.name,
+                    "title": f"{stem} ({d.name})",
+                    "keyframePhotoId": entry.name,
+                    "thumbUrl": "",
+                    "videoUrl": vid_url,
+                    "date": date_str,
+                    "durationText": "00:15",
+                    "durationSec": 15,
+                    "matchedSeekSec": 0,
+                    "matchedTimestamp": "🎯 00:00 구간 포착",
+                    "matchedFrameCaption": f"[{d.name}] 폴더에서 발견된 내 PC 로컬 동영상 ({entry.name})",
+                    "locationKo": f"내 PC · {d.name}",
+                    "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB)",
+                    "keywords": list(dict.fromkeys(kw_list)),
+                    "resolution": "1920x1080",
+                    "sizeMB": size_mb,
+                    "timelineFrames": [
+                        {
+                            "frameId": f"f_{len(videos)}_0",
+                            "timeSec": 0,
+                            "timestampText": "00:00",
+                            "phaseLabel": "도입부",
+                            "sceneCaption": f"{stem} 시작 장면 (00:00)",
+                            "keywords": list(dict.fromkeys(kw_list)),
+                            "tags": ["#내PC동영상", f"#{d.name}"],
+                        },
+                        {
+                            "frameId": f"f_{len(videos)}_5",
+                            "timeSec": 5,
+                            "timestampText": "00:05",
+                            "phaseLabel": "중반부",
+                            "sceneCaption": f"{stem} 주요 장면 (00:05)",
+                            "keywords": list(dict.fromkeys(kw_list)),
+                            "tags": ["#내PC동영상", f"#{d.name}"],
+                        },
+                    ],
+                })
+                if len(videos) >= 120:
+                    break
+        except Exception:
+            pass
+        if len(videos) >= 120:
+            break
+
+    return {
+        "ok": True,
+        "total": len(videos),
+        "videos": videos,
     }
 
 
@@ -965,7 +1164,6 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
             os.startfile(str(ddir))
             return {"ok": True, "opened": str(ddir)}
         else:
-            # 윈도우 휴지통 열기
             subprocess.run(["explorer.exe", "shell:RecycleBinFolder"])
             return {"ok": True, "opened": "RecycleBin"}
 

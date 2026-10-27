@@ -42,6 +42,79 @@ export const VIDEO_SCENE_ITEMS: VideoSceneItem[] = [];
 
 export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
   try {
+    const [zRes, sRes] = await Promise.allSettled([
+      fetch(getZCoreUrl('/__docs/list')),
+      fetch('/poc/results/docs_semantic_index.json'),
+    ]);
+    const merged = new Map<string, LocalDocumentFile>();
+    if (sRes.status === 'fulfilled' && sRes.value.ok) {
+      const sJson = await sRes.value.json();
+      const sDocs: LocalDocumentFile[] = Array.isArray(sJson.documents)
+        ? sJson.documents
+        : Array.isArray(sJson.docs)
+        ? sJson.docs
+        : [];
+      for (const d of sDocs) {
+        if (d && d.fileName) merged.set(d.fileName, d);
+      }
+    }
+    if (zRes.status === 'fulfilled' && zRes.value.ok) {
+      const zJson = await zRes.value.json();
+      const zDocs: LocalDocumentFile[] = Array.isArray(zJson.documents)
+        ? zJson.documents
+        : Array.isArray(zJson.docs)
+        ? zJson.docs
+        : [];
+      for (const d of zDocs) {
+        const fname = d.fileName || (d as any).name;
+        if (!fname) continue;
+        if (!merged.has(fname)) {
+          merged.set(fname, d);
+        }
+      }
+    }
+    return Array.from(merged.values());
+  } catch {
+    return [];
+  }
+}
+
+export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
+  try {
+    const [sRes, zRes] = await Promise.allSettled([
+      fetch('/poc/results/video_timeline_index.json'),
+      fetch(getZCoreUrl('/__videos/list')),
+    ]);
+    const merged = new Map<string, VideoSceneItem>();
+    if (sRes.status === 'fulfilled' && sRes.value.ok) {
+      const sJson = await sRes.value.json();
+      const sVids: VideoSceneItem[] = Array.isArray(sJson.videos) ? sJson.videos : [];
+      for (const v of sVids) {
+        if (v && v.videoFileName) {
+          merged.set(v.videoFileName, {
+            ...v,
+            videoUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`),
+          });
+        }
+      }
+    }
+    if (zRes.status === 'fulfilled' && zRes.value.ok) {
+      const zJson = await zRes.value.json();
+      const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
+      for (const v of zVids) {
+        if (v && v.videoFileName && !merged.has(v.videoFileName)) {
+          merged.set(v.videoFileName, v);
+        }
+      }
+    }
+    return Array.from(merged.values());
+  } catch {
+    return [];
+  }
+}
+
+async function _unusedOldFetchDocs(): Promise<LocalDocumentFile[]> {
+  try {
     const res = await fetch(getZCoreUrl('/__docs/list')).catch(() =>
       fetch('/poc/results/docs_semantic_index.json')
     );
@@ -57,7 +130,8 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
   }
 }
 
-export async function fetchIndexedVideos(): Promise<VideoSceneItem[]> {
+export const fetchIndexedVideos = _fetchIndexedVideosMerged;
+async function _unusedOldFetchVideos(): Promise<VideoSceneItem[]> {
   try {
     const res = await fetch('/poc/results/video_timeline_index.json').catch(() =>
       fetch(getZCoreUrl('/__videos/index'))

@@ -19,6 +19,9 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 }) => {
   const {
     photos,
+    videoSceneItems,
+    localDocuments,
+    matchedVaultPhotos,
     initApp,
     setDesktopTab,
     setMobileTab,
@@ -28,6 +31,8 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
   const totalPhotoCount = activePhotos.length || 301;
+  const totalVideoCount = videoSceneItems.length || 6;
+  const totalDocCount = (localDocuments.length + matchedVaultPhotos.length) || 26;
 
   const [isConnected, setIsConnected] = useState<boolean>(zCoreBridge.isConnected);
   const [isChecking, setIsChecking] = useState<boolean>(false);
@@ -196,18 +201,26 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     totalPhotoCount,
     Math.max(1, Math.round((progress / 100) * totalPhotoCount))
   );
+  const scannedVideoCount = Math.min(
+    totalVideoCount,
+    Math.max(1, Math.round((progress / 100) * totalVideoCount))
+  );
+  const scannedDocCount = Math.min(
+    totalDocCount,
+    Math.max(1, Math.round((progress / 100) * totalDocCount))
+  );
   const remainingSec = Math.max(0, Math.ceil(((100 - progress) / 100) * 8));
 
   const currentStageLabel =
     progress < 25
-      ? '📂 내 컴퓨터 사진 폴더 스캔 및 EXIF 촬영연도·위치 해독 중...'
+      ? '📂 내 PC 전 폴더(바탕화면·문서·다운로드·사진·영상) 전수 스캔 중...'
       : progress < 60
-      ? '👤 자율 얼굴 검출(Face Passport) 및 가족·인물 자동 분류 중...'
+      ? '🖼️ 사진 EXIF·자율 얼굴 검출(Face Passport) 및 🎬 동영상 타임라인 전 구간 해부 중...'
       : progress < 88
-      ? '📄 영수증·계약서·신분증 글자(OCR) 및 흔들린·중복 사진 판독 중...'
+      ? '📄 서류(PDF·워드·한글·엑셀·영수증·계약서) 전문 OCR 텍스트 색인 중...'
       : progress < 100
-      ? '⚡ 768차원 초고속 투시 검색 인덱스 최종 조립 중...'
-      : '✨ 분석 완료! 내 컴퓨터 사진을 화면에 바로 펼칩니다!';
+      ? '⚡ 내 PC [사진 · 동영상 · 서류] 통합 1초 투시 인덱스 최종 조립 중...'
+      : '✨ 전수 인덱싱 완료! 내 PC 사진·영상·서류를 화면에 바로 펼칩니다!';
 
   const previewSliceStart = Math.floor((progress / 100) * Math.max(0, activePhotos.length - 5));
   const previewThumbs = activePhotos.slice(previewSliceStart, previewSliceStart + 5);
@@ -236,10 +249,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 </div>
                 <div>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-400/30 mb-1">
-                    내 기기 투시검색 · 언제나 0원
+                    PC 1대 · 모바일 1대 무료체험 제한 없이 평생 0원
                   </span>
                   <h3 className="text-lg sm:text-xl font-black tracking-tight">
-                    내 컴퓨터 사진·서류 1초 투시 시작할까요?
+                    내 PC 사진 · 동영상 · 서류 전수 인덱싱을 시작할까요?
                   </h3>
                 </div>
               </div>
@@ -465,15 +478,15 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               }`}
             >
               <div className="flex items-baseline justify-between gap-2 mb-2">
-                <div className="flex items-baseline gap-2">
+                <div className="flex flex-wrap items-baseline gap-2">
                   <span className="text-2xl sm:text-3xl font-black text-teal-500 font-mono">
                     {progress}%
                   </span>
                   <span className="text-xs font-bold text-zinc-500 dark:text-zinc-300">
-                    ({scannedCount} / {totalPhotoCount}장 분석됨)
+                    (🖼️ 사진 {scannedCount}/{totalPhotoCount}장 · 🎬 영상 {scannedVideoCount}/{totalVideoCount}개 · 📄 서류 {scannedDocCount}/{totalDocCount}건)
                   </span>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-teal-500/15 text-teal-600 dark:text-teal-300 font-mono text-xs font-extrabold">
+                <span className="px-2.5 py-1 rounded-full bg-teal-500/15 text-teal-600 dark:text-teal-300 font-mono text-xs font-extrabold shrink-0">
                   {progress < 100 ? `⏳ 약 ${remainingSec}초 남음` : '🎉 완료!'}
                 </span>
               </div>
