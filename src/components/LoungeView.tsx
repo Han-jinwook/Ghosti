@@ -2109,7 +2109,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight">
+            <h2 className="font-headline-sm text-[20px] md:text-[22px] text-slate-900 dark:text-white font-extrabold tracking-tight">
               💼 사무실 업무 문서·현장사진함 (S:\)
             </h2>
             {workPlan && (
@@ -2365,7 +2365,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-zinc-400">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-slate-500 dark:text-zinc-400">
               <span>빠른 검색:</span>
               {QUICK_WORK_QUERIES.map((q) => (
                 <button
@@ -2396,7 +2396,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     }
                   }}
                   className={`underline cursor-pointer transition-colors ${
-                    searchQuery === q ? 'text-cyan-300 font-extrabold' : 'hover:text-zinc-200'
+                    searchQuery === q
+                      ? 'text-teal-600 dark:text-cyan-300 font-extrabold'
+                      : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
                   }`}
                 >
                   {q}
@@ -2410,9 +2412,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
       {/* 2. 노션 데이터베이스형 깔끔한 리스트 + 파일 클릭 시 우측에서 열리는 Side Peek 프리뷰 */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         <div className={`${isSidePeekOpen ? 'xl:col-span-7' : 'xl:col-span-12'} flex flex-col transition-all`}>
-          <div className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden">
+          <div className="rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden">
             {/* 테이블 헤더 */}
-            <div className="px-4 py-2.5 bg-zinc-950/70 border-b border-white/10 flex items-center justify-between text-[11.5px] text-zinc-400 font-bold">
+            <div className="px-4 py-2.5 bg-slate-50 dark:bg-zinc-950/70 border-b border-slate-200 dark:border-white/10 flex items-center justify-between text-[11.5px] text-slate-600 dark:text-zinc-400 font-bold">
               <span>
                 문서 및 미디어 ({filteredDocs.length}건) · 항목을 클릭하면 우측에 상세 표·미리보기가 열립니다
               </span>
@@ -2420,7 +2422,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsSidePeekOpen(false)}
-                  className="text-zinc-400 hover:text-white text-[11px] font-bold cursor-pointer"
+                  className="text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white text-[11px] font-bold cursor-pointer"
                 >
                   우측 미리보기 닫기 ✕
                 </button>
@@ -2428,7 +2430,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
 
             {/* 노션 데이터베이스 행(Row) 리스트 */}
-            <div className="flex flex-col divide-y divide-white/8">
+            <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/8">
               {filteredDocs.map((doc) => {
                 const isSelected = isSidePeekOpen && doc.id === selectedDoc.id;
                 return (
@@ -2443,7 +2445,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
                       }
                     }}
                     className={`px-4 py-3 flex flex-col gap-1.5 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-cyan-950/35' : 'hover:bg-zinc-900/70'
+                      isSelected
+                        ? 'bg-teal-50/80 dark:bg-cyan-950/35'
+                        : 'hover:bg-slate-50 dark:hover:bg-zinc-900/70'
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2461,16 +2465,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
                         >
                           {doc.ext}
                         </span>
-                        <span className="font-label-md text-[13.5px] text-white font-bold truncate">
+                        <span className="font-label-md text-[13.5px] text-slate-900 dark:text-white font-bold truncate">
                           {doc.fileName}
                         </span>
-                        <span className="hidden md:inline text-[11.5px] text-zinc-400 truncate">
+                        <span className="hidden md:inline text-[11.5px] text-slate-500 dark:text-zinc-400 truncate">
                           · {doc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">
-                        <span className="hidden sm:inline text-[11px] text-zinc-400">
+                        <span className="hidden sm:inline text-[11px] text-slate-500 dark:text-zinc-400">
                           {doc.folderPath} · {doc.sizeLabel} · {doc.updatedAt}
                         </span>
                         {doc.lockedBy ? (

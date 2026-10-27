@@ -254,14 +254,14 @@ export const FaceMemberInlineBar: React.FC<{
 
   if (!isCalloutExpanded) {
     return (
-      <div className="w-full rounded-xl bg-zinc-900/60 hover:bg-zinc-900/90 border border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 transition-all">
+      <div className="w-full rounded-xl bg-amber-50/80 dark:bg-zinc-900/60 hover:bg-amber-100/80 dark:hover:bg-zinc-900/90 border border-amber-200/80 dark:border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 transition-all shadow-xs">
         <div
           onClick={() => setIsCalloutExpanded(true)}
           className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
         >
           <span className="text-[14px] shrink-0">💡</span>
-          <span className="font-label-sm text-[12.5px] text-zinc-300 truncate">
-            새 얼굴 확인 대기 <strong className="text-amber-300 font-extrabold">{remainingCount}건</strong>이 있습니다
+          <span className="font-label-sm text-[12.5px] text-slate-800 dark:text-zinc-300 truncate">
+            새 얼굴 확인 대기 <strong className="text-amber-700 dark:text-amber-300 font-extrabold">{remainingCount}건</strong>이 있습니다
             {currentItem.kind === 'candidate'
               ? ` (${currentItem.headlinePrefix} [${currentItem.targetDisplayName}]님 맞죠?)`
               : ' (새로 등장한 인물 별명 등록)'}
@@ -274,7 +274,7 @@ export const FaceMemberInlineBar: React.FC<{
               type="button"
               disabled={retroScanRunning}
               onClick={() => void runGlobalSwarmRetroScanAll()}
-              className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/35 text-amber-300 font-label-sm text-[11px] font-bold transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-800 dark:text-amber-300 font-label-sm text-[11px] font-extrabold transition-colors cursor-pointer"
             >
               ⚡ 한 번에 등록
             </button>
@@ -282,7 +282,7 @@ export const FaceMemberInlineBar: React.FC<{
           <button
             type="button"
             onClick={() => setIsCalloutExpanded(true)}
-            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[11px] font-bold cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-200 dark:border-transparent text-slate-700 dark:text-zinc-200 font-label-sm text-[11px] font-bold cursor-pointer shadow-xs"
           >
             열어보기 ▾
           </button>
