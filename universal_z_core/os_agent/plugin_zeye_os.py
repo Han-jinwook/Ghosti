@@ -759,38 +759,61 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
     }
 
 
+_PHOTO_PATH_INDEX: Dict[str, Path] = {}
+_PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".mov", ".m4v"}
+
+
 def resolve_active_photo_dir(custom_path: str = "") -> Path:
-    """로컬 PC에서 실물 사진 폴더(유저 압축해제 폴더, Pictures, test_photos 등)를 자동 탐색합니다."""
+    """로컬 PC에서 실물 사진 폴더(유저 압축해제 폴더, Pictures, Desktop, Downloads, test_photos 등)를 자동 탐색합니다."""
     if custom_path:
         p = Path(custom_path)
         if p.exists() and p.is_dir():
             return p
 
-    candidates: List[Path] = [
-        Path.home() / "Pictures" / "sample_photos_301",
-        Path.home() / "Desktop" / "sample_photos_301",
-        Path.home() / "Downloads" / "sample_photos_301",
+    base_roots: List[Path] = [
         Path.home() / "Pictures",
+        Path.home() / "Desktop",
+        Path.home() / "Downloads",
         THIS_DIR.parents[1] / "test_photos",
+        Path("D:/Z-Eye/test_photos"),
     ]
-    # Pictures 하위의 폴더 검색
-    pic_home = Path.home() / "Pictures"
-    if pic_home.exists():
-        for sub in pic_home.iterdir():
-            if sub.is_dir() and "sample" in sub.name.lower():
-                candidates.insert(0, sub)
 
-    for c in candidates:
-        if c.exists() and c.is_dir():
-            # 이미지가 1장 이상 있는지 확인
-            try:
-                for f in c.iterdir():
-                    if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
-                        return c
-            except Exception:
-                pass
+    candidate_dirs: List[Path] = []
+    for root in base_roots:
+        if not root.exists() or not root.is_dir():
+            continue
+        candidate_dirs.append(root)
+        try:
+            for sub in root.iterdir():
+                if sub.is_dir() and not sub.name.startswith("."):
+                    candidate_dirs.append(sub)
+                    try:
+                        for sub2 in sub.iterdir():
+                            if sub2.is_dir() and not sub2.name.startswith("."):
+                                candidate_dirs.append(sub2)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
-    return Path.home() / "Pictures"
+    best_dir: Path = Path.home() / "Pictures"
+    best_score = -1
+
+    for d in candidate_dirs:
+        try:
+            img_count = sum(1 for f in d.iterdir() if f.is_file() and f.suffix.lower() in _PHOTO_EXTS)
+        except Exception:
+            img_count = 0
+        if img_count == 0:
+            continue
+        # sample_photos_301 또는 test_photos 폴더에 가중치 부여
+        bonus = 1000 if ("sample" in d.name.lower() or "test_photos" in d.name.lower() or "301" in d.name.lower()) else 0
+        score = img_count + bonus
+        if score > best_score:
+            best_score = score
+            best_dir = d
+
+    return best_dir
 
 
 def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -799,23 +822,40 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     req_dir = str(data.get("dir") or data.get("targetPath") or "").strip()
     photo_dir = resolve_active_photo_dir(req_dir)
 
-    exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".mov", ".m4v"}
     files: List[Dict[str, Any]] = []
+    seen_names: set[str] = set()
 
-    if photo_dir.exists():
+    def _collect_from_dir(d: Path) -> None:
+        if not d.exists() or not d.is_dir():
+            return
         try:
-            for entry in sorted(photo_dir.iterdir(), key=lambda x: x.name):
-                if entry.is_file() and entry.suffix.lower() in exts:
+            for entry in sorted(d.iterdir(), key=lambda x: x.name):
+                if entry.is_file() and entry.suffix.lower() in _PHOTO_EXTS:
+                    if entry.name in seen_names:
+                        continue
+                    seen_names.add(entry.name)
+                    resolved = entry.resolve()
+                    _PHOTO_PATH_INDEX[entry.name] = resolved
                     st = entry.stat()
                     files.append({
                         "path": entry.name,
-                        "fullPath": str(entry),
+                        "fullPath": str(resolved),
                         "size": int(st.st_size),
                         "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
                         "mtimeMs": int(st.st_mtime * 1000)
                     })
-        except Exception as e:
-            return {"ok": False, "error": str(e), "files": [], "dir": str(photo_dir)}
+        except Exception:
+            pass
+
+    _collect_from_dir(photo_dir)
+    # 1단계 하위 폴더에도 사진이 풀려 있을 경우 함께 수집
+    if photo_dir.exists():
+        try:
+            for sub in sorted(photo_dir.iterdir(), key=lambda x: x.name):
+                if sub.is_dir() and not sub.name.startswith("."):
+                    _collect_from_dir(sub)
+        except Exception:
+            pass
 
     return {
         "ok": True,
@@ -834,20 +874,24 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
     if not rel:
         return None, "text/plain", 400
 
-    photo_dir = resolve_active_photo_dir(str(data.get("dir") or ""))
-    full_path = photo_dir / rel
-    if not full_path.exists():
-        # 혹시 직접 전체 경로가 들어왔는지 확인
-        direct_p = Path(rel)
-        if direct_p.exists() and direct_p.is_file():
-            full_path = direct_p
-        else:
-            # test_photos 폴더도 확인
-            repo_test = THIS_DIR.parents[1] / "test_photos" / rel
-            if repo_test.exists():
-                full_path = repo_test
+    base_name = Path(rel).name
+    full_path: Path | None = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
 
-    if not full_path.exists() or not full_path.is_file():
+    if full_path is None or not full_path.exists():
+        photo_dir = resolve_active_photo_dir(str(data.get("dir") or ""))
+        cand = photo_dir / base_name
+        if cand.exists() and cand.is_file():
+            full_path = cand
+        else:
+            direct_p = Path(rel)
+            if direct_p.exists() and direct_p.is_file():
+                full_path = direct_p
+            else:
+                repo_test = THIS_DIR.parents[1] / "test_photos" / base_name
+                if repo_test.exists():
+                    full_path = repo_test
+
+    if full_path is None or not full_path.exists() or not full_path.is_file():
         return None, "text/plain", 404
 
     mime_map = {

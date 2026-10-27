@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
 import { ZEyeTopRightHubAnchor } from './ZEyeHubInfraBridge';
 import { ZEyeBrandLogo } from './ZEyeBrandLogo';
@@ -173,6 +174,19 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
 
 export const MobileAppView: React.FC = () => {
   const [showZCoreGuideModal, setShowZCoreGuideModal] = useState(false);
+
+  useEffect(() => {
+    const unsub = zCoreBridge.subscribe((conn) => {
+      if (
+        conn &&
+        typeof sessionStorage !== 'undefined' &&
+        sessionStorage.getItem('zeye_initial_indexing_done') !== '1'
+      ) {
+        setShowZCoreGuideModal(true);
+      }
+    });
+    return () => unsub();
+  }, []);
   const {
     mobileTab,
     setMobileTab,

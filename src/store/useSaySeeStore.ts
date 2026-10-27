@@ -1120,7 +1120,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     } else {
       const galleryPhotos = photos
         .filter((p) => !p.quarantined)
-        .slice(0, 60)
+        .slice(0, 350)
         .map((photo) => ({
           photo,
           score: 0.95,
@@ -1149,7 +1149,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }));
     const galleryPhotos = photos
       .filter((p) => !p.quarantined)
-      .slice(0, 60)
+      .slice(0, 350)
       .map((photo) => ({
         photo,
         score: 0.95,
@@ -1923,7 +1923,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }));
     const initialGalleryPhotos = enrichedPhotos
       .filter((p) => !p.quarantined)
-      .slice(0, 60)
+      .slice(0, 350)
       .map((photo) => ({
         photo,
         score: 0.95,
@@ -4380,7 +4380,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const { photos, alumniGradYear } = get();
     const allGallery = photos
       .filter((p) => !p.quarantined)
-      .slice(0, 60)
+      .slice(0, 350)
       .map((photo, idx) => ({
         photo,
         score: 0.96,

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
@@ -208,6 +209,43 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 
 export const DesktopDashboard: React.FC = () => {
   const [showZCoreGuideModal, setShowZCoreGuideModal] = useState(false);
+  const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
+
+  useEffect(() => {
+    setIsZCoreConnected(zCoreBridge.isConnected);
+    const unsub = zCoreBridge.subscribe((conn) => {
+      setIsZCoreConnected(conn);
+      if (
+        conn &&
+        typeof sessionStorage !== 'undefined' &&
+        sessionStorage.getItem('zeye_initial_indexing_done') !== '1'
+      ) {
+        setShowZCoreGuideModal(true);
+      }
+    });
+
+    const timer = window.setTimeout(async () => {
+      const ok = await zCoreBridge.checkHealth();
+      if (!ok) {
+        if (
+          typeof sessionStorage !== 'undefined' &&
+          sessionStorage.getItem('zeye_zcore_prompt_dismissed') !== '1'
+        ) {
+          setShowZCoreGuideModal(true);
+        }
+      } else if (
+        typeof sessionStorage !== 'undefined' &&
+        sessionStorage.getItem('zeye_initial_indexing_done') !== '1'
+      ) {
+        setShowZCoreGuideModal(true);
+      }
+    }, 850);
+
+    return () => {
+      unsub();
+      clearTimeout(timer);
+    };
+  }, []);
   const {
     desktopTab,
     setDesktopTab,
@@ -818,6 +856,28 @@ export const DesktopDashboard: React.FC = () => {
                   {/* [Zero-State 도화지 안내]: 아직 검색 전일 때는 무거운 카드 덤프 대신 깔끔한 펼치기 블록만 노출 */}
                   {!showCanvasResults && (
                     <div className="pt-4 flex flex-col items-center gap-3 text-center">
+                      {!isZCoreConnected && (
+                        <div className="w-full max-w-xl p-4 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-left mb-1 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl shrink-0">⚡</span>
+                            <div>
+                              <div className="text-[13px] font-black text-slate-900 dark:text-white">
+                                내 컴퓨터 사진·문서 1초 투시 시작하기 (언제나 0원)
+                              </div>
+                              <div className="text-[11.5px] text-slate-600 dark:text-zinc-300 mt-0.5">
+                                한 번의 [OK]로 초경량 로컬 엔진 연결부터 AI 투시 인덱싱까지 자동 진행됩니다.
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowZCoreGuideModal(true)}
+                            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap shadow-md shadow-teal-500/20 transition-all cursor-pointer shrink-0"
+                          >
+                            ⭕ OK! 투시 시작하기
+                          </button>
+                        </div>
+                      )}
                       <div className="flex flex-wrap items-center justify-center gap-2">
                         <button
                           type="button"
@@ -1621,7 +1681,16 @@ export const DesktopDashboard: React.FC = () => {
         </main>
       )}
       </div>
-      <MerlinZCoreGuideModal isOpen={showZCoreGuideModal} onClose={() => setShowZCoreGuideModal(false)} themeMode={themeMode} />
+      <MerlinZCoreGuideModal
+        isOpen={showZCoreGuideModal}
+        onClose={() => {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('zeye_zcore_prompt_dismissed', '1');
+          }
+          setShowZCoreGuideModal(false);
+        }}
+        themeMode={themeMode}
+      />
     </div>
   );
 };
