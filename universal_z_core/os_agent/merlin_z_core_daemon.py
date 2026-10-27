@@ -101,9 +101,21 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
         self.wfile.write(raw)
+
+    def _send_bytes(self, data: bytes, content_type: str = "application/octet-stream", status: int = 200) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.end_headers()
+        self.wfile.write(data)
 
     def _read_body(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or 0)
@@ -116,7 +128,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return {}
 
     def do_OPTIONS(self) -> None:
-        self._send_json({"ok": True})
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.end_headers()
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -125,6 +142,24 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/", "/health", "/__merlin/health"):
             self._send_json(get_unified_health())
+            return
+
+        # [제트아이 0.1초 로컬 사진 투시 API]
+        if path in ("/__photos/list", "/api/zeye/photos/list"):
+            self._send_json(plugin_zeye_os.list_local_photos(qp))
+            return
+
+        if path in ("/__photos/file", "/api/zeye/photos/file"):
+            content, mime, status = plugin_zeye_os.read_local_photo_file(qp)
+            if content is not None:
+                self._send_bytes(content, content_type=mime, status=status)
+            else:
+                self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=status)
+            return
+
+        # [제트아이 서류 투시 API]
+        if path in ("/__docs/list", "/api/zeye/docs/list"):
+            self._send_json(plugin_zeye_os.list_local_docs(qp))
             return
 
         if path.startswith("/api/senstalk"):
@@ -149,6 +184,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         body = self._read_body()
+
+        # [제트아이 윈도우 휴지통 / 격리 / 폴더열기]
+        if path.startswith("/__quarantine/"):
+            sub = path[len("/__quarantine/") :].strip("/")
+            self._send_json(plugin_zeye_os.handle_quarantine(sub, body))
+            return
 
         if path == "/__merlin/query":
             plugin_name = str(body.get("plugin") or body.get("callerAppId") or "zeye")

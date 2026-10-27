@@ -13,6 +13,8 @@ import {
 import { PcMasterQuickSendPanel } from './PricingModal';
 import { ZEyeTopRightHubAnchor, ZEyeSidebarBottomFamilyLauncher } from './ZEyeHubInfraBridge';
 import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
+import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -205,6 +207,7 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 };
 
 export const DesktopDashboard: React.FC = () => {
+  const [showZCoreGuideModal, setShowZCoreGuideModal] = useState(false);
   const {
     desktopTab,
     setDesktopTab,
@@ -637,6 +640,7 @@ export const DesktopDashboard: React.FC = () => {
                     </button>
                   </>
                 )}
+                <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} />
                 <ZEyeTopRightHubAnchor themeMode={themeMode} />
                 <button
                   type="button"
@@ -1617,6 +1621,7 @@ export const DesktopDashboard: React.FC = () => {
         </main>
       )}
       </div>
+      <MerlinZCoreGuideModal isOpen={showZCoreGuideModal} onClose={() => setShowZCoreGuideModal(false)} themeMode={themeMode} />
     </div>
   );
 };

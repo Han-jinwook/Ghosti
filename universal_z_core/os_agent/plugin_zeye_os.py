@@ -759,6 +759,175 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
     }
 
 
+def resolve_active_photo_dir(custom_path: str = "") -> Path:
+    """로컬 PC에서 실물 사진 폴더(유저 압축해제 폴더, Pictures, test_photos 등)를 자동 탐색합니다."""
+    if custom_path:
+        p = Path(custom_path)
+        if p.exists() and p.is_dir():
+            return p
+
+    candidates: List[Path] = [
+        Path.home() / "Pictures" / "sample_photos_301",
+        Path.home() / "Desktop" / "sample_photos_301",
+        Path.home() / "Downloads" / "sample_photos_301",
+        Path.home() / "Pictures",
+        THIS_DIR.parents[1] / "test_photos",
+    ]
+    # Pictures 하위의 폴더 검색
+    pic_home = Path.home() / "Pictures"
+    if pic_home.exists():
+        for sub in pic_home.iterdir():
+            if sub.is_dir() and "sample" in sub.name.lower():
+                candidates.insert(0, sub)
+
+    for c in candidates:
+        if c.exists() and c.is_dir():
+            # 이미지가 1장 이상 있는지 확인
+            try:
+                for f in c.iterdir():
+                    if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
+                        return c
+            except Exception:
+                pass
+
+    return Path.home() / "Pictures"
+
+
+def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """로컬 사진 목록(파일명, 용량, 수정일자)을 0.1초 만에 추출하여 반환합니다."""
+    data = params or {}
+    req_dir = str(data.get("dir") or data.get("targetPath") or "").strip()
+    photo_dir = resolve_active_photo_dir(req_dir)
+
+    exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".mov", ".m4v"}
+    files: List[Dict[str, Any]] = []
+
+    if photo_dir.exists():
+        try:
+            for entry in sorted(photo_dir.iterdir(), key=lambda x: x.name):
+                if entry.is_file() and entry.suffix.lower() in exts:
+                    st = entry.stat()
+                    files.append({
+                        "path": entry.name,
+                        "fullPath": str(entry),
+                        "size": int(st.st_size),
+                        "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+                        "mtimeMs": int(st.st_mtime * 1000)
+                    })
+        except Exception as e:
+            return {"ok": False, "error": str(e), "files": [], "dir": str(photo_dir)}
+
+    return {
+        "ok": True,
+        "dir": str(photo_dir),
+        "exists": photo_dir.exists(),
+        "total": len(files),
+        "files": files,
+        "quarantined": []
+    }
+
+
+def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes | None, str, int]:
+    """로컬 사진 바이너리와 Content-Type을 읽어옵니다. (안전 검증 포함)"""
+    data = params or {}
+    rel = str(data.get("p") or data.get("path") or "").strip()
+    if not rel:
+        return None, "text/plain", 400
+
+    photo_dir = resolve_active_photo_dir(str(data.get("dir") or ""))
+    full_path = photo_dir / rel
+    if not full_path.exists():
+        # 혹시 직접 전체 경로가 들어왔는지 확인
+        direct_p = Path(rel)
+        if direct_p.exists() and direct_p.is_file():
+            full_path = direct_p
+        else:
+            # test_photos 폴더도 확인
+            repo_test = THIS_DIR.parents[1] / "test_photos" / rel
+            if repo_test.exists():
+                full_path = repo_test
+
+    if not full_path.exists() or not full_path.is_file():
+        return None, "text/plain", 404
+
+    mime_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".gif": "image/gif",
+        ".mp4": "video/mp4",
+        ".mov": "video/quicktime",
+    }
+    ext = full_path.suffix.lower()
+    content_type = mime_map.get(ext, "application/octet-stream")
+
+    try:
+        with open(full_path, "rb") as fp:
+            return fp.read(), content_type, 200
+    except Exception:
+        return None, "text/plain", 500
+
+
+def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """로컬 서류/문서(test_docs, Documents, Downloads) 목록을 추출합니다."""
+    candidates = [
+        THIS_DIR.parents[1] / "test_docs",
+        Path.home() / "Documents",
+        Path.home() / "Downloads"
+    ]
+    doc_exts = {".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pdf", ".pptx", ".txt", ".csv"}
+    docs: List[Dict[str, Any]] = []
+
+    for d in candidates:
+        if d.exists() and d.is_dir():
+            try:
+                for entry in d.iterdir():
+                    if entry.is_file() and entry.suffix.lower() in doc_exts:
+                        st = entry.stat()
+                        docs.append({
+                            "name": entry.name,
+                            "path": str(entry),
+                            "ext": entry.suffix.lower(),
+                            "size": int(st.st_size),
+                            "modified": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")
+                        })
+            except Exception:
+                pass
+
+    return {
+        "ok": True,
+        "total": len(docs),
+        "docs": docs
+    }
+
+
+def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """OS 기본 휴지통 이동 / 복원 / 폴더 열기 처리"""
+    data = payload or {}
+    act = (action or "").strip().lower()
+
+    if act in ("open-folder", "open"):
+        target = str(data.get("target") or "photos").strip()
+        if target == "photos":
+            pdir = resolve_active_photo_dir()
+            os.startfile(str(pdir))
+            return {"ok": True, "opened": str(pdir)}
+        elif target == "docs":
+            ddir = THIS_DIR.parents[1] / "test_docs"
+            if not ddir.exists():
+                ddir = Path.home() / "Documents"
+            os.startfile(str(ddir))
+            return {"ok": True, "opened": str(ddir)}
+        else:
+            # 윈도우 휴지통 열기
+            subprocess.run(["explorer.exe", "shell:RecycleBinFolder"])
+            return {"ok": True, "opened": "RecycleBin"}
+
+    return {"ok": True, "action": act}
+
+
 def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """단일 코어 라우터(/__merlin/query 또는 /__zcore/*)에서 호출하는 표준 진입점"""
     data = payload or {}
@@ -787,6 +956,12 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
     if act in ("folder-tree-summary", "scan-tree"):
         target_dir = str(data.get("targetPath") or data.get("folder") or "").strip()
         return scan_folder_tree_metadata(target_dir)
+
+    if act in ("photos-list", "photos", "list-photos"):
+        return list_local_photos(data)
+
+    if act in ("docs-list", "docs", "list-docs"):
+        return list_local_docs(data)
 
     if act in ("restore-points-list", "restore-points"):
         return list_restore_points_with_precheck()

@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
 import { ZEyeTopRightHubAnchor } from './ZEyeHubInfraBridge';
 import { ZEyeBrandLogo } from './ZEyeBrandLogo';
+import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
+import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
@@ -170,6 +172,7 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
 };
 
 export const MobileAppView: React.FC = () => {
+  const [showZCoreGuideModal, setShowZCoreGuideModal] = useState(false);
   const {
     mobileTab,
     setMobileTab,
@@ -315,6 +318,7 @@ export const MobileAppView: React.FC = () => {
                 </button>
               )}
               {/* 허브 SDK 표준 앵커 (PC 헤더와 동일): 🪙 코인(스토어 심사 모드·네이티브 앱에서는 DOM 원천 비노출) + 🐾 곰발바닥 OTP 로그인/통합 프로필 */}
+              <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} />
               <ZEyeTopRightHubAnchor themeMode={themeMode} />
               <button
                 type="button"
@@ -1031,6 +1035,7 @@ export const MobileAppView: React.FC = () => {
           );
         })}
       </nav>
+      <MerlinZCoreGuideModal isOpen={showZCoreGuideModal} onClose={() => setShowZCoreGuideModal(false)} themeMode={themeMode} />
     </div>
   );
 };

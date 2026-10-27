@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getZCoreUrl } from '../services/zCoreBridge';
 import {
   speakSetupMonsterTts,
   triggerSetupMonsterTtsPrewarm,
@@ -166,7 +167,7 @@ interface SaySeeStore {
   duplicateGroups: DuplicateGroup[];
   initialized: boolean;
   initializing: boolean;
-  initApp: () => Promise<void>;
+  initApp: (force?: boolean) => Promise<void>;
 
   // 100% 로컬 팩트 기반 문장형 추천 칩 (외부 LLM 의존도 0%)
   conceptLexiconCount: number;
@@ -1853,8 +1854,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }));
   },
 
-  initApp: async () => {
-    if (get().initialized || get().initializing) return;
+  initApp: async (force?: boolean) => {
+    if (!force && (get().initialized || get().initializing)) return;
     set({ initializing: true });
 
     const [dataset, telemetry, indexedDocs, indexedVideos, faceData] = await Promise.all([
@@ -2561,7 +2562,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (quarantineRestImmediately && redundantIds.length > 0) {
       set({ quarantineMoving: true });
       try {
-        const res = await fetch('/__quarantine/move', {
+        const res = await fetch(getZCoreUrl('/__quarantine/move'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ files: redundantIds }),
@@ -2579,8 +2580,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
               ? {
                   ...p,
                   quarantined: true,
-                  thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`,
-                  fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
+                  thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`),
+                  fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`),
                 }
               : p
           );
@@ -2623,7 +2624,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     set({ quarantineMoving: true });
     try {
-      const res = await fetch('/__quarantine/move', {
+      const res = await fetch(getZCoreUrl('/__quarantine/move'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: redundantIds }),
@@ -2641,8 +2642,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             ? {
                 ...p,
                 quarantined: true,
-                thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`,
-                fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
+                thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`),
+                fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`),
               }
             : p
         );
@@ -2679,7 +2680,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     set({ quarantineMoving: true });
     try {
-      const res = await fetch('/__quarantine/move', {
+      const res = await fetch(getZCoreUrl('/__quarantine/move'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: targetNames }),
@@ -2696,8 +2697,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? {
               ...p,
               quarantined: true,
-              thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`,
-              fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`,
+              thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`),
+              fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`),
             }
           : p
       );
@@ -2740,7 +2741,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (names.length === 0) return;
     set({ quarantineMoving: true });
     try {
-      const res = await fetch('/__quarantine/restore', {
+      const res = await fetch(getZCoreUrl('/__quarantine/restore'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: names }),
@@ -2754,8 +2755,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             ? {
                 ...p,
                 quarantined: false,
-                thumbUrl: `/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1`,
-                fullUrl: `/__photos/file?p=${encodeURIComponent(p.name)}`,
+                thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1`),
+                fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}`),
               }
             : p
         ),
@@ -2782,7 +2783,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   openLocalFolder: async (target: 'quarantine' | 'photos' | 'docs') => {
     try {
-      await fetch('/__quarantine/open-folder', {
+      await fetch(getZCoreUrl('/__quarantine/open-folder'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target }),
@@ -4246,7 +4247,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     {
       id: 'analog_scan_1',
       photoFile: '20260926_160221.jpg',
-      thumbUrl: '/__photos/file?p=20260926_160221.jpg&thumb=1',
+      thumbUrl: getZCoreUrl('/__photos/file?p=20260926_160221.jpg&thumb=1'),
       uploaderLabel: '📸 김총무 스캔 업로드 (EXIF 없음)',
       hasExif: false,
       unknownDatePlace: false,
@@ -4266,7 +4267,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     {
       id: 'analog_scan_2',
       photoFile: '20260926_131225.jpg',
-      thumbUrl: '/__photos/file?p=20260926_131225.jpg&thumb=1',
+      thumbUrl: getZCoreUrl('/__photos/file?p=20260926_131225.jpg&thumb=1'),
       uploaderLabel: '📸 박회장 스캔 업로드 (EXIF 없음)',
       hasExif: false,
       unknownDatePlace: false,
@@ -4286,7 +4287,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     {
       id: 'analog_scan_3',
       photoFile: '20240720_182301.jpg',
-      thumbUrl: '/__photos/file?p=20240720_182301.jpg&thumb=1',
+      thumbUrl: getZCoreUrl('/__photos/file?p=20240720_182301.jpg&thumb=1'),
       uploaderLabel: '📸 최회원 스캔 업로드 (연도·장소 미상)',
       hasExif: false,
       unknownDatePlace: true,
@@ -4306,7 +4307,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     {
       id: 'analog_scan_4',
       photoFile: '20240721_183234.jpg',
-      thumbUrl: '/__photos/file?p=20240721_183234.jpg&thumb=1',
+      thumbUrl: getZCoreUrl('/__photos/file?p=20240721_183234.jpg&thumb=1'),
       uploaderLabel: '📸 이프로 스캔 업로드 (연도·장소 미상)',
       hasExif: false,
       unknownDatePlace: true,
@@ -4329,7 +4330,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       proposalId: 'prop_1989_autumn_picnic',
       targetAnalogPhotoId: 'analog_scan_3',
       photoFile: '20240720_182301.jpg',
-      thumbUrl: '/__photos/file?p=20240720_182301.jpg&thumb=1',
+      thumbUrl: getZCoreUrl('/__photos/file?p=20240720_182301.jpg&thumb=1'),
       proposerName: '박회장 (3학년 4반 반장)',
       proposedTimelineGroup: '1989년 가을',
       proposedPlaceTag: '1989년 가을 소풍',
@@ -4341,7 +4342,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       proposalId: 'prop_1989_spring_jeju',
       targetAnalogPhotoId: 'analog_scan_4',
       photoFile: '20240721_183234.jpg',
-      thumbUrl: '/__photos/file?p=20240721_183234.jpg&thumb=1',
+      thumbUrl: getZCoreUrl('/__photos/file?p=20240721_183234.jpg&thumb=1'),
       proposerName: '김총무 (89회 동창총무)',
       proposedTimelineGroup: '1989년 봄',
       proposedPlaceTag: '제주도 수학여행 (중문해수욕장)',

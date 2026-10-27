@@ -33,6 +33,14 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     void initApp();
+    const handleZCoreConnected = () => {
+      useSaySeeStore.setState({
+        lastQuarantineToast: '🎉 멀린 Z-코어(Port 5199) 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
+      });
+      void initApp(true);
+    };
+    window.addEventListener('zCoreConnected', handleZCoreConnected);
+    return () => window.removeEventListener('zCoreConnected', handleZCoreConnected);
   }, [initApp]);
 
   useEffect(() => {

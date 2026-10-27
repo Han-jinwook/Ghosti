@@ -18,6 +18,7 @@ import {
   load_audio,
 } from '@huggingface/transformers';
 import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, storageInfo } from './opfsCache';
+import { getZCoreUrl } from './zCoreBridge';
 import type {
   DuplicateGroup,
   FaceMemberCluster,
@@ -41,10 +42,16 @@ export const VIDEO_SCENE_ITEMS: VideoSceneItem[] = [];
 
 export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
   try {
-    const res = await fetch('/__docs/list');
+    const res = await fetch(getZCoreUrl('/__docs/list')).catch(() =>
+      fetch('/poc/results/docs_semantic_index.json')
+    );
     if (!res.ok) return [];
     const json = await res.json();
-    return Array.isArray(json.documents) ? json.documents : [];
+    return Array.isArray(json.documents)
+      ? json.documents
+      : Array.isArray(json.docs)
+      ? json.docs
+      : [];
   } catch {
     return [];
   }
@@ -52,7 +59,9 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
 
 export async function fetchIndexedVideos(): Promise<VideoSceneItem[]> {
   try {
-    const res = await fetch('/__videos/index');
+    const res = await fetch('/poc/results/video_timeline_index.json').catch(() =>
+      fetch(getZCoreUrl('/__videos/index'))
+    );
     if (!res.ok) return [];
     const json = await res.json();
     return Array.isArray(json.videos) ? json.videos : [];
@@ -66,7 +75,9 @@ export async function fetchAutonomousFaceClusters(): Promise<{
   clusters: FaceMemberCluster[];
 }> {
   try {
-    const res = await fetch('/__faces/index');
+    const res = await fetch('/poc/results/face_clusters_index.json').catch(() =>
+      fetch(getZCoreUrl('/__faces/index'))
+    );
     if (!res.ok) return { latestCorpusYear: 2026, clusters: [] };
     const json = await res.json();
     return {
@@ -683,7 +694,7 @@ export async function loadInitialPhotoDataset(): Promise<{
   const auditByPhoto = new Map<string, PhysicalAuditRecord>();
 
   try {
-    const res = await fetch('/__photos/list');
+    const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch('/__photos/list'));
     const json = await res.json();
     fileList = json.files ?? [];
     quarantinedList = json.quarantined ?? [];
@@ -698,9 +709,9 @@ export async function loadInitialPhotoDataset(): Promise<{
 
   try {
     const [pocRes, auditRes, semRes] = await Promise.all([
-      fetch('/__poc/precomputed'),
-      fetch('/__photos/physical-audit'),
-      fetch('/__photos/semantic-index'),
+      fetch('/poc/results/precomputed.json').catch(() => fetch(getZCoreUrl('/__poc/precomputed'))),
+      fetch('/poc/results/corpus_physical_audit.json').catch(() => fetch(getZCoreUrl('/__photos/physical-audit'))),
+      fetch('/poc/results/corpus_550_semantic_index.json').catch(() => fetch(getZCoreUrl('/__photos/semantic-index'))),
     ]);
     const pocJson = await pocRes.json();
     if (pocJson.ok && pocJson.data) {
@@ -783,9 +794,26 @@ export async function loadInitialPhotoDataset(): Promise<{
   ]);
   const vaultDocByPhoto = new Map<string, string>();
 
-  const activeAudits = fileList
-    .map((f) => auditByPhoto.get(f.path))
-    .filter((a): a is PhysicalAuditRecord => !!a);
+  const activeAudits = fileList.map((f) => {
+    const a = auditByPhoto.get(f.path);
+    if (a) return a;
+    return {
+      f: f.path,
+      md5: '',
+      w: 1920,
+      h: 1080,
+      aspect: 1.77,
+      exif: false,
+      dhash: '0',
+      avgB: 120,
+      meanCellLap: 50,
+      maxCellLap: 100,
+      lapVar: 10,
+      skinPct: 0,
+      edgeDensity: 0.1,
+      ts: f.mtimeMs || Date.now(),
+    } as unknown as PhysicalAuditRecord;
+  });
 
   const visitedDup = new Set<string>();
   const duplicateGroups: DuplicateGroup[] = [];
@@ -1013,7 +1041,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     const audit = auditByPhoto.get(f.path);
     const vaultLabel = vaultDocByPhoto.get(f.path);
     const locParam = isQuarantined ? '&loc=quarantine' : '';
-    const fullUrl = `/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`;
+    const fullUrl = getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
     const thumbUrl = `${fullUrl}&thumb=1`;
 
     return {
