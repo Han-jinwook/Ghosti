@@ -1115,8 +1115,9 @@ export async function loadInitialPhotoDataset(): Promise<{
     const audit = auditByPhoto.get(f.path);
     const vaultLabel = vaultDocByPhoto.get(f.path);
     const locParam = isQuarantined ? '&loc=quarantine' : '';
-    const fullUrl = getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
-    const thumbUrl = `${fullUrl}&thumb=1`;
+    const isLegacyPersonalDump = /^(1721\d+|2024\d+_\d+|2026\d+_\d+|Screenshot_2026|Gemini_Generated_Image_|image-178558)/i.test(f.path);
+    const fullUrl = isLegacyPersonalDump ? `https://picsum.photos/seed/${encodeURIComponent(f.path)}/800/600` : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
+    const thumbUrl = isLegacyPersonalDump ? `https://picsum.photos/seed/${encodeURIComponent(f.path)}/400/300` : `${fullUrl}&thumb=1`;
 
     return {
       id: f.path,
