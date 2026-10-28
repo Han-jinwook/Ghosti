@@ -138,13 +138,14 @@ const resolveMainMenuId = (lounge: LoungeType): MainMenuId =>
 
 const MOBILE_LOUNGE_SUBMENUS: Record<
   LoungeType,
-  Array<{ id: MobileTab; label: string; showTrashCount?: boolean }>
+  Array<{ id: MobileTab; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
 
-    { id: 'search', label: '🎯 찾기' },
-    { id: 'trash', label: '🧹 치우기', showTrashCount: true },
-    { id: 'settings', label: '⚙️ 고치기' },
+    { id: 'search', label: '🎯 찾기', subcaption: '제목 몰라도 귀신같이 찾고' },
+    { id: 'trash', label: '🧹 치우기', subcaption: '중복 사진 귀신같이 치우고', showTrashCount: true },
+    { id: 'settings', label: '⚙️ 고치기', subcaption: '먹통 설정 귀신같이 고치고' },
+    { id: 'share', label: '👨‍👩‍👧‍👦 공유', subcaption: '가족·팀과 함께 쓸 땐 귀신같이 공유하고' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },
@@ -368,6 +369,20 @@ export const MobileAppView: React.FC = () => {
             </div>
           </div>
 
+          {/* 모바일 공식 마스터 슬로건 한 줄 띠 */}
+          <div
+            className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
+              themeMode === 'light'
+                ? 'bg-teal-50/80 border-teal-200 text-teal-950'
+                : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
+            }`}
+            title="혼자 쓸 땐 귀신같이 찾고 치우고 고치고! 가족·팀과 함께 쓸 땐 귀신같이 공유하고!"
+          >
+            <span className="text-teal-600 dark:text-teal-400">혼자 쓸 땐 찾고 치우고 고치고!</span>{' '}
+            <span className="opacity-30">|</span>{' '}
+            <span className="text-emerald-600 dark:text-emerald-400">가족·팀과 함께 쓸 땐 귀신같이 공유하고!</span>
+          </div>
+
           {/* 1단 메인메뉴 3개 (내 기기 / 사진 공유 / 업무 공유): 흑백 라인 아이콘 + 캡슐 스타일 */}
           <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {MAIN_LOUNGE_MENUS.map((menu) => {
@@ -455,7 +470,15 @@ export const MobileAppView: React.FC = () => {
               <button
                 key={sub.id}
                 type="button"
-                onClick={() => setMobileTab(sub.id)}
+                onClick={() => {
+                  if (sub.id === 'share') {
+                    setActiveLoungeType('family');
+                    setMobileTab('search');
+                  } else {
+                    setMobileTab(sub.id);
+                  }
+                }}
+                title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
                 className={`px-3.5 py-2 rounded-t-xl border-b-[3px] font-label-sm text-[12.5px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
                   isSubActive
                     ? themeMode === 'light'
@@ -466,7 +489,14 @@ export const MobileAppView: React.FC = () => {
                     : 'border-transparent text-zinc-400 hover:text-white font-bold'
                 }`}
               >
-                <span>{sub.label}</span>
+                <div className="flex flex-col items-center">
+                  <span>{sub.label}</span>
+                  {sub.subcaption && (
+                    <span className="text-[9px] opacity-60 font-normal">
+                      {sub.subcaption}
+                    </span>
+                  )}
+                </div>
                 {sub.showTrashCount && (
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
@@ -1030,7 +1060,15 @@ export const MobileAppView: React.FC = () => {
           return (
             <button
               key={sub.id}
-              onClick={() => setMobileTab(sub.id)}
+              onClick={() => {
+                if (sub.id === 'share') {
+                  setActiveLoungeType('family');
+                  setMobileTab('search');
+                } else {
+                  setMobileTab(sub.id);
+                }
+              }}
+              title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
               className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
                 isSubActive
                   ? 'text-primary-container font-bold'
@@ -1038,13 +1076,18 @@ export const MobileAppView: React.FC = () => {
               }`}
             >
               <div className="flex items-center gap-1">
-                <span className="text-[11px] truncate max-w-[96px]">{sub.label}</span>
+                <span className="text-[11px] font-bold truncate max-w-[96px]">{sub.label}</span>
                 {sub.showTrashCount && (
                   <span className="px-1.5 py-0.2 rounded-md bg-zinc-800 border border-white/10 text-zinc-300 text-[9.5px] font-mono font-bold">
                     {activeTrashCount}
                   </span>
                 )}
               </div>
+              {sub.subcaption && (
+                <span className="text-[9px] opacity-60 truncate max-w-[96px]">
+                  {sub.subcaption}
+                </span>
+              )}
             </button>
           );
         })}

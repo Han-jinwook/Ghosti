@@ -11,7 +11,7 @@ export interface GhostiBrandLogoProps {
   badgeText?: string;
   /** 하위 호환성용 subtitle 프로퍼티 (전달 시 sloganText로 사용) */
   subtitle?: string;
-  /** 서브 슬로건 문구 (10초 교체 타이머 시 표출할 문구, 기본: '1초 AI 파일·영상 내용찾기') */
+  /** 서브 슬로건 문구 (10초 교체 타이머 시 표출할 문구, 기본: '혼자 쓸 땐 귀신같이 찾고 치우고 고치고! 가족·팀과 함께 쓸 땐 귀신같이 공유하고!') */
   sloganText?: string;
   /** 슬로건 자동 롤링 활성화 여부 (기본 true) */
   autoCycle?: boolean;
@@ -33,7 +33,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   showBadge: _showBadge,
   badgeText: _badgeText,
   subtitle,
-  sloganText = '1초 AI 파일·영상 내용찾기',
+  sloganText = '혼자 쓸 땐 귀신같이 찾고 치우고 고치고! 가족·팀과 함께 쓸 땐 귀신같이 공유하고!',
   autoCycle = true,
   cycleIntervalMs = 10000,
   onClick,
@@ -75,7 +75,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   return (
     <div
       onClick={onClick}
-      title="귀신같이 — 1초 AI 파일·영상 내용찾기"
+      title="귀신같이 — 혼자 쓸 땐 귀신같이 찾고 치우고 고치고! 가족·팀과 함께 쓸 땐 귀신같이 공유하고!"
       className={`inline-flex items-center gap-2.5 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}

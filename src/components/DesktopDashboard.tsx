@@ -173,13 +173,14 @@ const resolveQuickMenuId = (lounge: LoungeType): QuickMenuId =>
 
 const LOUNGE_SUBMENU_CONFIG: Record<
   LoungeType,
-  Array<{ id: DesktopTab; label: string; showTrashCount?: boolean }>
+  Array<{ id: DesktopTab; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
 
-    { id: 'dashboard', label: '🎯 찾기' },
-    { id: 'trash', label: '🧹 치우기', showTrashCount: true },
-    { id: 'sync', label: '⚙️ 고치기' },
+    { id: 'dashboard', label: '🎯 찾기', subcaption: '제목 몰라도 귀신같이 찾고' },
+    { id: 'trash', label: '🧹 치우기', subcaption: '중복 사진 귀신같이 치우고', showTrashCount: true },
+    { id: 'sync', label: '⚙️ 고치기', subcaption: '먹통 설정 귀신같이 고치고' },
+    { id: 'share', label: '👨‍👩‍👧‍👦 공유', subcaption: '가족·팀과 함께 쓸 땐 귀신같이 공유하고' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },
@@ -500,9 +501,15 @@ export const DesktopDashboard: React.FC = () => {
                           key={sub.id}
                           type="button"
                           onClick={() => {
-                            setDesktopTab(sub.id);
+                            if (sub.id === 'share') {
+                              setActiveLoungeType('family');
+                              setDesktopTab('dashboard');
+                            } else {
+                              setDesktopTab(sub.id);
+                            }
                             if (isMobileDrawer) setIsMobileDrawerOpen(false);
                           }}
+                          title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[12px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
                             isSubActive
                               ? themeMode === 'light'
@@ -513,7 +520,14 @@ export const DesktopDashboard: React.FC = () => {
                               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
                           }`}
                         >
-                          <span className="truncate">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🧹 귀신같이 청소 진단' : sub.label}</span>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="truncate font-bold">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🧹 귀신같이 청소 진단' : sub.label}</span>
+                            {sub.subcaption && (
+                              <span className="text-[10px] opacity-60 font-normal truncate">
+                                {sub.subcaption}
+                              </span>
+                            )}
+                          </div>
                           {sub.showTrashCount && (
                             <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-mono font-bold shrink-0">
                               {activeTrashCount}
@@ -719,6 +733,29 @@ export const DesktopDashboard: React.FC = () => {
                   )}
                 </button>
               </div>
+            </div>
+
+            {/* 공식 마스터 슬로건 카피 띠 (혼자 쓸 땐 찾고 치우고 고치고! | 가족·팀과 함께 쓸 땐 귀신같이 공유하고!) */}
+            <div
+              className={`hidden sm:flex items-center justify-between px-3.5 py-1.5 rounded-xl border text-[12px] transition-colors ${
+                themeMode === 'light'
+                  ? 'bg-teal-50/70 border-teal-200/70 text-slate-800'
+                  : 'bg-zinc-900/60 border-teal-500/20 text-zinc-300'
+              }`}
+              title="Ghosti: Find, Clean, and Fix when alone — Share scary fast with Family & Team!"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-extrabold text-teal-600 dark:text-teal-400 shrink-0">
+                  혼자 쓸 땐 귀신같이 찾고 치우고 고치고!
+                </span>
+                <span className="opacity-30 shrink-0">|</span>
+                <span className="font-extrabold text-emerald-600 dark:text-emerald-400 shrink-0">
+                  가족·팀과 함께 쓸 땐 귀신같이 공유하고!
+                </span>
+              </div>
+              <span className="hidden xl:inline text-[11px] opacity-60 font-mono tracking-tight">
+                Ghosti: Find, Clean, Fix &amp; Share
+              </span>
             </div>
 
             {/* 모바일(lg 미만, 360px 포함) 전용 1줄 라운지 빠른 전환 바 — 1차 출시 3대 메뉴(내 기기 / 사진 공유 / 업무 공유) */}

@@ -83,8 +83,8 @@ import { loadMerlinAuth, toggleMerlinTier } from '../services/merlinAuth';
 import { loadSyncState, saveSyncPrefs } from '../services/syncEngine';
 
 export type ViewportLayout = 'mobile' | 'desktop';
-export type MobileTab = 'trial' | 'search' | 'trash' | 'settings';
-export type DesktopTab = 'trial' | 'dashboard' | 'trash' | 'sync';
+export type MobileTab = 'trial' | 'search' | 'trash' | 'settings' | 'share';
+export type DesktopTab = 'trial' | 'dashboard' | 'trash' | 'sync' | 'share';
 export type ThemeMode = 'light' | 'dark';
 
 function applyHtmlThemeClass(mode: ThemeMode): void {
@@ -1017,6 +1017,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? 'dashboard'
           : mobileTab === 'trash'
           ? 'trash'
+          : mobileTab === 'share'
+          ? 'share'
           : 'sync',
     }),
   setDesktopTab: (desktopTab) =>
@@ -1029,6 +1031,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? 'search'
           : desktopTab === 'trash'
           ? 'trash'
+          : desktopTab === 'share'
+          ? 'share'
           : 'settings',
     }),
 
