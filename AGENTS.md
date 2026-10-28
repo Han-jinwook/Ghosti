@@ -261,6 +261,11 @@
 
 
 
+11. **완료(Done) 컬럼 최신 7건 상시 유지 & 초과분 자동 안전 보관(`archived: true`) 원칙 (에이전트 자립 실행 의무):**
+    - 완료 컬럼이 길어져 보드 가독성이 저하되는 것을 막기 위해, `notion_qa.py fetch` 시 완료 카드는 항상 최신 7건만 화면에 유지하고 8건째부터는 `archived: true`로 자동 안전 숨김 보관합니다.
+    - 영구 삭제가 아니므로 `poc/results/archived_done_cards_backup.json`에 원장 메타데이터를 자동 백업하며, 필요 시 `python restore_archived_done_cards.py`로 즉시 원상복구합니다.
+    - 에이전트는 세션 체크인 또는 노션 작업 시 이 도구(`notion_qa.py`)가 항상 완료 카드를 7건으로 쾌적하게 자동 정돈함을 기억하고 능동적으로 운영합니다.
+
    - 상세 가이드: [`docs/노션_무인QA_전사확장_가이드.md`](file:///d:/Ghosti/docs/노션_무인QA_전사확장_가이드.md)
 
 
