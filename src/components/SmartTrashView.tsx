@@ -331,7 +331,7 @@ export const SmartTrashView: React.FC = () => {
               </span>
             )}
           </div>
-          <span className="text-[11.5px] text-zinc-400 font-bold">
+          <span className="text-[13px] text-zinc-100 hover:text-white font-extrabold px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 select-none shadow-sm transition-colors">
             {showSystemConsult ? '접기 ▴' : '검진 항목 펼치기 ▾'}
           </span>
         </div>
@@ -342,12 +342,12 @@ export const SmartTrashView: React.FC = () => {
               {/* ① 모바일 바탕화면·앨범 분류 & 어르신 큰 카드/아이콘 */}
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="font-headline-sm text-[14px] text-white font-bold">
+                  <span className="font-headline-sm text-[15px] !text-white font-extrabold tracking-wide">
                     {isStoreAppMode
                       ? '📱 모바일 갤러리·캡처 분류 & 큰 화면'
                       : '📱 모바일 바탕화면 & 미사용 앱 분류'}
                   </span>
-                  <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+                  <p className="font-body-sm text-[12.5px] !text-zinc-200 font-medium leading-relaxed">
                     {isStoreAppMode
                       ? '일회성 영수증·스크린샷을 분리하고 어르신용 큰 카드(3×4) 배치 또는 별도 보관함 모아놓기를 선택하세요.'
                       : '6개월 이상 안 쓴 앱(42개)과 웹 링크를 구분했습니다. 어르신용 큰 아이콘(3×4) 또는 별도 보관함을 선택하세요.'}
@@ -388,10 +388,10 @@ export const SmartTrashView: React.FC = () => {
               {/* ② PC 바탕화면 중복파일 & 바로가기(.lnk) 뒤섞임 정리 */}
               <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="font-headline-sm text-[14px] text-white font-bold">
+                  <span className="font-headline-sm text-[15px] !text-white font-extrabold tracking-wide">
                     💻 PC 바탕화면 중복파일 · 바로가기 분리
                   </span>
-                  <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+                  <p className="font-body-sm text-[12.5px] !text-zinc-200 font-medium leading-relaxed">
                     바탕화면에 문서·폴더와 바로가기(<code>.lnk</code>)가 뒤섞여 있습니다. 핵심 아이콘만 남기고 아카이브 폴더로 분류할까요?
                   </p>
                 </div>
@@ -923,7 +923,7 @@ export const SmartTrashView: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowQuarantineDrawer((v) => !v)}
-              className="text-[11.5px] text-zinc-400 hover:text-white font-bold px-1.5 cursor-pointer"
+              className="text-[13px] text-zinc-100 hover:text-white font-extrabold px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 select-none shadow-sm cursor-pointer transition-colors"
             >
               {showQuarantineDrawer ? '접기 ▴' : '펼치기 ▾'}
             </button>

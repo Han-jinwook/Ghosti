@@ -1344,7 +1344,7 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPrivateSyncSection((v) => !v)}
-                  className="text-[11.5px] text-zinc-400 hover:text-white font-bold px-2 cursor-pointer"
+                  className="text-[13px] text-zinc-100 hover:text-white font-extrabold px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 select-none shadow-sm cursor-pointer transition-colors"
                 >
                   {showPrivateSyncSection ? '접기 ▴' : '설정 펼치기 ▾'}
                 </button>
@@ -1568,7 +1568,7 @@ export const DesktopDashboard: React.FC = () => {
                   13KB 썸네일 DB 자체 해결 · 탈퇴 시 내 여권 100% 보존 · Anti-steering 3중 방어
                 </span>
               </div>
-              <span className="text-[11.5px] text-zinc-400 font-bold">
+              <span className="text-[13px] text-zinc-100 hover:text-white font-extrabold px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 select-none shadow-sm transition-colors">
                 {showPolicyAndStoreSection ? '접기 ▴' : '펼치기 ▾'}
               </span>
             </div>

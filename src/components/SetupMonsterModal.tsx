@@ -429,11 +429,11 @@ export const SetupMonsterContent: React.FC = () => {
           </span>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <h4 className="font-headline-sm text-[15px] text-white font-bold">
+        <div className="flex flex-col gap-1.5">
+          <h4 className="font-headline-sm text-[16px] !text-white font-extrabold tracking-wide drop-shadow-sm">
             {plan.title}
           </h4>
-          <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
+          <p className="font-body-sm text-[13px] !text-zinc-100 font-medium leading-relaxed">
             {plan.rootCause}
           </p>
         </div>
@@ -912,7 +912,7 @@ export const SetupMonsterContent: React.FC = () => {
                   {turn.timestamp}
                 </span>
               </div>
-              <p className="font-body-sm text-[12.5px] text-zinc-200 whitespace-pre-line leading-relaxed">
+              <p className="font-body-sm text-[13px] !text-zinc-100 font-medium whitespace-pre-line leading-relaxed">
                 {turn.text}
               </p>
               {turn.diagnosisPlan &&
@@ -958,7 +958,7 @@ export const SetupMonsterContent: React.FC = () => {
               >
                 {loadingRealPc ? '⏳ 스캔 중...' : '🔄 내 PC 실측 새로고침'}
               </button>
-              <span className="text-[11.5px] font-bold text-zinc-400">
+              <span className="px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 text-zinc-100 hover:text-white text-[13px] font-extrabold select-none shadow-sm transition-colors">
                 {showRealOsPanel ? '접기 ▴' : '펼치기 ▾'}
               </span>
             </div>
@@ -1018,7 +1018,7 @@ export const SetupMonsterContent: React.FC = () => {
                     <span className="font-label-sm text-[12px] text-emerald-300 font-extrabold">
                       🕵️‍♂️ [제1·2원칙 실물 검증] 내 PC 5대 은닉 금고 3초 결정론적 포렌식 & 내부 텍스트 5줄 실물 증거
                     </span>
-                    <span className="font-body-sm text-[11px] text-zinc-400">
+                    <span className="font-body-sm text-[12px] !text-zinc-200 font-medium">
                       Excel·Word·한글 자동복구 폴더, 문서(Documents), 다운로드, ShadowVault를 실제로 뒤져 파일 내부 5줄을 먼저 보여줍니다.
                     </span>
                   </div>

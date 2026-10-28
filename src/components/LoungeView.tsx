@@ -791,7 +791,7 @@ export const LoungeView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowLoungeFeatures((prev) => !prev)}
-                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold"
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-white/20 text-zinc-100 font-label-sm text-[13px] font-extrabold select-none shadow-sm transition-all"
                 >
                   {showLoungeFeatures ? '핵심 기능 접기 ▴' : '핵심 기능 펼치기 ▾'}
                 </button>
@@ -985,7 +985,7 @@ export const LoungeView: React.FC = () => {
                       💳 패밀리 라운지 방장 요금제 (우리집 단독 5,900원 / 양가 3방 통합 8,900원)
                     </span>
                   </div>
-                  <span className="text-[11.5px] font-bold text-zinc-400">
+                  <span className="px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 text-zinc-100 text-[13px] font-extrabold select-none shadow-sm transition-colors">
                     {showLoungePricing ? '요금제 접기 ▴' : '요금제 펼치기 ▾'}
                   </span>
                 </div>
@@ -1102,7 +1102,7 @@ export const LoungeView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowLoungeFeatures((prev) => !prev)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold shrink-0"
+                className="px-3 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-white/20 text-zinc-100 font-label-sm text-[13px] font-extrabold select-none shadow-sm shrink-0 transition-all"
               >
                 {showLoungeFeatures ? '핵심 기능 접기 ▴' : '핵심 기능 펼치기 ▾'}
               </button>
@@ -1295,7 +1295,7 @@ export const LoungeView: React.FC = () => {
                       💳 동호회 · 동창회 인원 무제한 단일가 요금제 (월 4,900원 / 10년권 49,000원)
                     </span>
                   </div>
-                  <span className="text-[11.5px] font-bold text-zinc-400">
+                  <span className="px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 text-zinc-100 text-[13px] font-extrabold select-none shadow-sm transition-colors">
                     {showLoungePricing ? '요금제 접기 ▴' : '요금제 펼치기 ▾'}
                   </span>
                 </div>
@@ -1432,7 +1432,7 @@ export const LoungeView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowLoungeFeatures((prev) => !prev)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold shrink-0"
+                className="px-3 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-white/20 text-zinc-100 font-label-sm text-[13px] font-extrabold select-none shadow-sm shrink-0 transition-all"
               >
                 {showLoungeFeatures ? '핵심 기능 접기 ▴' : '핵심 기능 펼치기 ▾'}
               </button>
@@ -3413,7 +3413,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 👑 방장 뒷정리: [✓ 멤버 연도 제보 일괄 승인 ({pendingAnalogProposals.length}건)]
               </button>
             )}
-            <span className="text-[12px] font-bold text-zinc-400">
+            <span className="px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 text-zinc-100 text-[13px] font-extrabold select-none shadow-sm transition-colors">
               {showAnalogStickSection ? '접기 ▴' : '펼치기 ▾'}
             </span>
           </div>
