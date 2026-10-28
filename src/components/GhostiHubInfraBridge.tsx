@@ -93,7 +93,10 @@ export const GhostiTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> 
               : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
           }`}
         >
-          <span>🪙 {displayBalance.toLocaleString()} C</span>
+          <span className="flex items-center gap-1">
+            <img src="/hub_assets/coin_icon.svg" alt="Coin" className="w-3.5 h-3.5 inline-block" />
+            <span>{displayBalance.toLocaleString()} C</span>
+          </span>
         </button>
       )}
 
