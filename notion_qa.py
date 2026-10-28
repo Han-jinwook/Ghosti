@@ -66,10 +66,10 @@ NOTION_TOKEN: str = os.getenv(
 NOTION_VERSION: str = "2022-06-28"
 NOTION_API_BASE: str = "https://api.notion.com/v1"
 
-# 칸반 보드 상태 컬럼값 정의 (좌 -> 우 순서: 테스트 미션 -> 발견된 버그 -> 수정 중 -> 재테스트 대기 -> 완료)
+# 칸반 보드 4단계 상태 컬럼값 정의 (좌 -> 우 순서: 테스트 미션 -> 발견된 버그 -> 재테스트 대기 -> 완료)
+# ⚠️ '수정 중' 컬럼은 영구 삭제·폐지됨 (절대 사용 금지)
 STATUS_MISSION = "테스트 미션"
 STATUS_DISCOVERED = "발견된 버그"
-STATUS_IN_PROGRESS = "수정 중"
 STATUS_READY_FOR_QA = "재테스트 대기"
 STATUS_DONE = "완료"
 
@@ -289,15 +289,9 @@ def query_bugs_raw(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str
 
 
 def fetch_bugs(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str]]:
-    # 완료 컬럼이 길어지지 않도록 최신 7건 자동 유지 (초과분 안전 보관)
-    try:
-        trim_done_cards(7)
-    except Exception:
-        pass
-
     """
     상태가 '발견된 버그'(기본값)인 카드를 조회하여
-    터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다.
+    터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다. (100% 읽기 전용)
     """
     bugs = query_bugs_raw(target_status)
 
@@ -555,7 +549,7 @@ def archive_done(page_id: str, memo_text: str = "") -> bool:
 
 
 def update_bug_status(page_id: str, new_status: str) -> bool:
-    """카드의 상태만 원하는 단계(예: '수정 중', '발견된 버그')로 빠르게 변경합니다."""
+    """카드의 상태만 원하는 단계(예: '재테스트 대기', '발견된 버그')로 빠르게 변경합니다."""
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     page_url = f"{NOTION_API_BASE}/pages/{page_id.strip()}"
@@ -803,7 +797,6 @@ def run_cli() -> None:
         print("  • r 또는 Enter : '발견된 버그' 목록 새로고침 (fetch_bugs)")
         print("  • c [번호/ID]  : 수정 완료 처리 -> '재테스트 대기' 변경 + 쉬운 재테스트 안내 추가")
         print("  • w            : 무토큰 실시간 감시 모드 켜기 (새 버그 등록 시 즉시 알림)")
-        print("  • p [번호/ID]  : 해당 카드를 '수정 중' 상태로 변경")
         print("  • q            : 종료")
 
         cmd_raw = input("\n👉 명령 입력: ").strip()
@@ -853,15 +846,6 @@ def run_cli() -> None:
             if complete_bug(page_id, guide_text):
                 current_bugs = fetch_bugs(STATUS_DISCOVERED)
 
-        elif action in ("p", "progress", "start"):
-            if not target_arg:
-                target_arg = input("   🔢 '수정 중'으로 바꿀 카드의 [목록 번호] 또는 [카드 ID] 입력: ").strip()
-            page_id, title = resolve_target_bug(target_arg, current_bugs)
-            if not page_id:
-                print("   ⚠️ 해당하는 카드를 찾지 못했습니다.")
-                continue
-            update_bug_status(page_id, STATUS_IN_PROGRESS)
-
         else:
             page_id, title = resolve_target_bug(cmd_raw, current_bugs)
             if page_id:
@@ -871,7 +855,7 @@ def run_cli() -> None:
                     if complete_bug(page_id, guide_text):
                         current_bugs = fetch_bugs(STATUS_DISCOVERED)
             else:
-                print("   ❓ 알 수 없는 명령어입니다. ('r', 'c 1', 'w', 'p 1', 'q' 중 입력)")
+                print("   ❓ 알 수 없는 명령어입니다. ('r', 'c 1', 'w', 'q' 중 입력)")
 
 
 if __name__ == "__main__":
