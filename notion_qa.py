@@ -66,11 +66,11 @@ NOTION_TOKEN: str = os.getenv(
 NOTION_VERSION: str = "2022-06-28"
 NOTION_API_BASE: str = "https://api.notion.com/v1"
 
-# 칸반 보드 4단계 상태 컬럼값 정의 (좌 -> 우 순서: 미션 -> 발견 버그 -> 재테스트 -> 완료)
+# 칸반 보드 4단계 상태 컬럼값 정의 (좌 -> 우 순서: 테스트 미션 -> 발견된 버그 -> 재테스트 대기 -> 완료)
 # ⚠️ '수정 중' 컬럼은 영구 삭제·폐지됨 (절대 사용 금지)
-STATUS_MISSION = "미션"
-STATUS_DISCOVERED = "발견 버그"
-STATUS_READY_FOR_QA = "재테스트"
+STATUS_MISSION = "테스트 미션"
+STATUS_DISCOVERED = "발견된 버그"
+STATUS_READY_FOR_QA = "재테스트 대기"
 STATUS_DONE = "완료"
 
 
