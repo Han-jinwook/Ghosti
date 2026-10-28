@@ -1,0 +1,5 @@
+{
+  "Endpoint": "https://koreacentral.codesigning.azure.net/",
+  "CodeSigningAccountName": "sundreamer",
+  "CertificateProfileName": "sundream-public-cert"
+}

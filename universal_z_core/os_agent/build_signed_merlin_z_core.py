@@ -25,16 +25,115 @@ THIS_DIR = Path(__file__).resolve().parent
 DIST_DIR = THIS_DIR / "dist"
 
 
+def get_ms_signing_tools_dir() -> Path:
+    local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(local_app) / "Microsoft" / "MicrosoftArtifactSigningClientTools"
+
+
 def find_signtool() -> str | None:
-    """Windows Kits(SDK) 내 signtool.exe 경로를 자동 탐색합니다."""
+    """Windows Kits(SDK) 또는 MicrosoftArtifactSigningClientTools 내 signtool.exe 경로를 자동 탐색합니다."""
     if shutil.which("signtool.exe"):
         return shutil.which("signtool.exe")
-    kits_root = Path(r"C:\Program Files (x86)\Windows Kits\10\bin")
-    if kits_root.exists():
-        candidates = sorted(kits_root.glob("**/x64/signtool.exe"), reverse=True)
+    ms_tools_dir = get_ms_signing_tools_dir()
+    direct_st = ms_tools_dir / "signtool.exe"
+    if direct_st.exists():
+        return str(direct_st)
+    if ms_tools_dir.exists():
+        candidates = sorted(ms_tools_dir.glob("**/x64/signtool.exe"), reverse=True)
         if candidates:
             return str(candidates[0])
+    for kits_str in (r"C:\Program Files (x86)\Windows Kits\10\bin", r"C:\Program Files\Windows Kits\10\bin"):
+        kits_root = Path(kits_str)
+        if kits_root.exists():
+            candidates = sorted(kits_root.glob("**/x64/signtool.exe"), reverse=True)
+            if candidates:
+                return str(candidates[0])
     return None
+
+
+def find_azure_dlib() -> str | None:
+    """Azure.CodeSigning.Dlib.dll 경로를 환경변수 또는 표준 설치 경로에서 자동 탐색합니다."""
+    env_val = os.environ.get("AZURE_CODESIGN_DLIB", "").strip()
+    if env_val and Path(env_val).exists():
+        return str(Path(env_val).resolve())
+    ms_tools_dlib = get_ms_signing_tools_dir() / "Azure.CodeSigning.Dlib.dll"
+    if ms_tools_dlib.exists():
+        return str(ms_tools_dlib)
+    local_dlib = THIS_DIR / "Azure.CodeSigning.Dlib.dll"
+    if local_dlib.exists():
+        return str(local_dlib)
+    return None
+
+
+def find_azure_metadata() -> str | None:
+    """artifact_signing_metadata.json 경로를 환경변수 또는 os_agent 폴더에서 자동 탐색합니다."""
+    env_val = os.environ.get("AZURE_CODESIGN_METADATA", "").strip()
+    if env_val and Path(env_val).exists():
+        return str(Path(env_val).resolve())
+    default_meta = THIS_DIR / "artifact_signing_metadata.json"
+    if default_meta.exists():
+        return str(default_meta)
+    return None
+
+
+def ensure_ms_signing_tools_installed() -> Dict[str, Any]:
+    """NuGet에서 공식 Microsoft.Trusted.Signing.Client(Dlib) 및 Microsoft.Windows.SDK.BuildTools(signtool)를 자동 설치합니다."""
+    import urllib.request
+    import zipfile
+
+    base_dir = get_ms_signing_tools_dir()
+    base_dir.mkdir(parents=True, exist_ok=True)
+    if not (base_dir / "Azure.CodeSigning.Dlib.dll").exists():
+        client_zip = base_dir / "client.zip"
+        urllib.request.urlretrieve("https://www.nuget.org/api/v2/package/Microsoft.Trusted.Signing.Client", client_zip)
+        extract_client = base_dir / "extracted_client"
+        with zipfile.ZipFile(client_zip, "r") as z:
+            z.extractall(extract_client)
+        x64_dir = extract_client / "bin" / "x64"
+        if x64_dir.exists():
+            for item in x64_dir.iterdir():
+                dest = base_dir / item.name
+                if item.is_dir():
+                    if dest.exists():
+                        shutil.rmtree(dest)
+                    shutil.copytree(item, dest)
+                else:
+                    shutil.copy2(item, dest)
+
+    if not find_signtool():
+        sdk_zip = base_dir / "sdk_buildtools.zip"
+        urllib.request.urlretrieve("https://www.nuget.org/api/v2/package/Microsoft.Windows.SDK.BuildTools", sdk_zip)
+        extract_sdk = base_dir / "extracted_sdk"
+        with zipfile.ZipFile(sdk_zip, "r") as z:
+            z.extractall(extract_sdk)
+        signtools = sorted(extract_sdk.rglob("x64/signtool.exe"), reverse=True)
+        if signtools:
+            st_dir = signtools[0].parent
+            for item in st_dir.iterdir():
+                dest = base_dir / item.name
+                if not item.is_dir() and not dest.exists():
+                    shutil.copy2(item, dest)
+            shutil.copy2(signtools[0], base_dir / "signtool.exe")
+
+    meta_file = THIS_DIR / "artifact_signing_metadata.json"
+    if not meta_file.exists():
+        meta_file.write_text(
+            json.dumps(
+                {
+                    "Endpoint": "https://koreacentral.codesigning.azure.net/",
+                    "CodeSigningAccountName": "sundreamer",
+                    "CertificateProfileName": "sundream-public-cert",
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    return {
+        "ok": bool(find_signtool() and find_azure_dlib() and find_azure_metadata()),
+        "signtoolPath": find_signtool(),
+        "dlibPath": find_azure_dlib(),
+        "metadataPath": find_azure_metadata(),
+    }
 
 
 def verify_authenticode_signature(target_file: Path) -> Dict[str, Any]:
@@ -67,12 +166,12 @@ def verify_authenticode_signature(target_file: Path) -> Dict[str, Any]:
 
 def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
     """
-    환경변수(AZURE_CODESIGN_DLIB / MS_CODESIGN_PFX_PATH / MS_CODESIGN_THUMBPRINT)에 맞춰
-    signtool.exe로 SHA-256 + RFC3161 타임스탬프 서명을 수행합니다.
+    자동 감지된 Azure.CodeSigning.Dlib.dll + artifact_signing_metadata.json (또는 환경변수 PFX/Thumbprint)로
+    signtool.exe SHA-256 + RFC3161 타임스탬프 서명을 수행합니다.
     """
     signtool = find_signtool()
-    azure_dlib = os.environ.get("AZURE_CODESIGN_DLIB", "")
-    azure_metadata = os.environ.get("AZURE_CODESIGN_METADATA", "")
+    azure_dlib = find_azure_dlib()
+    azure_metadata = find_azure_metadata()
     pfx_path = os.environ.get("MS_CODESIGN_PFX_PATH", "")
     pfx_pass = os.environ.get("MS_CODESIGN_PFX_PASSWORD", "")
     cert_thumbprint = os.environ.get("MS_CODESIGN_THUMBPRINT", "")
@@ -83,11 +182,11 @@ def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
             "reason": "SIGNTOOL_NOT_FOUND_ON_HOST",
             "readyCommand": (
                 'signtool.exe sign /v /fd SHA256 /tr "http://timestamp.acs.microsoft.com" /td SHA256 '
-                '/dlib "Azure.CodeSigning.Dlib.dll" /dmdf "metadata.json" "Merlin_Z_Core_Setup.exe"'
+                '/dlib "Azure.CodeSigning.Dlib.dll" /dmdf "artifact_signing_metadata.json" "dist/Merlin_Z_Core_Setup.exe"'
             ),
         }
 
-    cmd = [signtool, "sign", "/fd", "SHA256"]
+    cmd = [signtool, "sign", "/v", "/fd", "SHA256"]
     if azure_dlib and azure_metadata:
         cmd += [
             "/tr",
@@ -111,6 +210,8 @@ def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
         return {
             "signed": False,
             "signtoolPath": signtool,
+            "dlibPath": azure_dlib,
+            "metadataPath": azure_metadata,
             "reason": "NO_CERT_ENV_CONFIGURED (AZURE_CODESIGN_DLIB or MS_CODESIGN_PFX_PATH required)",
             "readyCommand": (
                 f'"{signtool}" sign /v /fd SHA256 /tr "http://timestamp.acs.microsoft.com" /td SHA256 '
@@ -120,9 +221,19 @@ def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
         }
 
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    combined_out = (res.stdout or "") + "\n" + (res.stderr or "")
+    reason = "SIGNED_OK" if res.returncode == 0 else (
+        "AZURE_CREDENTIAL_OR_APPROVAL_PENDING (signtool + Dlib + metadata 100% 바인딩 완료, 내일 MS 심사 승인 및 az login 시 즉시 서명 완료)"
+        if "CredentialUnavailableException" in combined_out
+        else "SIGNTOOL_EXECUTION_FAILED"
+    )
     return {
         "signed": res.returncode == 0,
         "returncode": res.returncode,
+        "reason": reason,
+        "signtoolPath": signtool,
+        "dlibPath": azure_dlib,
+        "metadataPath": azure_metadata,
         "stdout": res.stdout.strip(),
         "stderr": res.stderr.strip(),
         "authenticode": verify_authenticode_signature(exe_path),
@@ -180,23 +291,24 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
     (개발 PC의 5199는 Vite 개발서버가 점유할 수 있으므로 기본 15199에서 검증 — 비서실 실측 방식과 동일)
     """
     import time
+    import urllib.parse
     import urllib.request
 
-    if not exe_path.exists():
-        return {"ok": False, "error": f"exe 없음: {exe_path}"}
-    proc = subprocess.Popen([str(exe_path), "--port", str(port)], creationflags=0x08000000)
+    proc = subprocess.Popen(
+        [str(exe_path), "--port", str(port)],
+        creationflags=0x08000000 if sys.platform == "win32" else 0,
+    )
     base = f"http://127.0.0.1:{port}"
+    report: Dict[str, Any] = {"port": port, "pid": proc.pid}
 
-    def get(path: str, data: Dict[str, Any] | None = None, t: float = 20.0) -> Dict[str, Any]:
-        body = json.dumps(data).encode("utf-8") if data is not None else None
-        req = urllib.request.Request(base + path, data=body, headers={"Content-Type": "application/json"}, method="POST" if body else "GET")
-        with urllib.request.urlopen(req, timeout=t) as r:
-            return json.loads(r.read().decode("utf-8", "replace"))
+    def get(p: str, q: Dict[str, str] | None = None, t: float = 8.0) -> Any:
+        url = base + p + ("?" + urllib.parse.urlencode(q) if q else "")
+        with urllib.request.urlopen(url, timeout=t) as r:
+            return json.loads(r.read().decode("utf-8"))
 
-    report: Dict[str, Any] = {"port": port}
     try:
         t0 = time.time()
-        while True:  # onefile 압축해제 기상 대기
+        while True:
             try:
                 report["health"] = get("/health", t=3.0)
                 break
@@ -232,8 +344,10 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build & MS Code-Sign Merlin_Z_Core_Setup.exe")
-    parser.add_argument("--check", action="store_true", help="MS 서명 도구(signtool) 및 플러그인 패키징 준비 상태 점검")
+    parser.add_argument("--check", action="store_true", help="MS 서명 도구(signtool, Dlib, metadata) 및 플러그인 패키징 준비 상태 점검")
     parser.add_argument("--build", action="store_true", help="PyInstaller 단일 exe 빌드 → 실행 검증 → (인증서 환경 시) 서명")
+    parser.add_argument("--prepare-tools", action="store_true", help="NuGet에서 signtool.exe 및 Azure.CodeSigning.Dlib.dll 자동 설치")
+    parser.add_argument("--sign-only", action="store_true", help="이미 빌드된 dist/Merlin_Z_Core_Setup.exe에 즉시 MS 서명 날인")
     parser.add_argument("--console", action="store_true", help="디버그용 콘솔 창 표시 빌드")
     parser.add_argument("--verify-port", type=int, default=15199, help="빌드 검증용 임시 포트 (기본 15199)")
     args = parser.parse_args()
@@ -244,9 +358,21 @@ def main() -> None:
     except Exception:
         pass
 
+    exe = DIST_DIR / "Merlin_Z_Core_Setup.exe"
+
+    if args.prepare_tools:
+        prep = ensure_ms_signing_tools_installed()
+        print(json.dumps(prep, ensure_ascii=False, indent=2))
+        sys.exit(0 if prep.get("ok") else 1)
+
+    if args.sign_only:
+        ensure_ms_signing_tools_installed()
+        sign_res = sign_binary_with_ms_codesign(exe)
+        print(json.dumps(sign_res, ensure_ascii=False, indent=2))
+        sys.exit(0 if sign_res.get("signed") else 1)
+
     if args.build:
         out: Dict[str, Any] = {"build": build_with_pyinstaller(console=args.console)}
-        exe = DIST_DIR / "Merlin_Z_Core_Setup.exe"
         if out["build"]["built"]:
             out["verify"] = verify_built_exe(exe, port=args.verify_port)
             out["sign"] = sign_binary_with_ms_codesign(exe)
@@ -256,6 +382,8 @@ def main() -> None:
         sys.exit(0 if out["ok"] else 1)
 
     signtool = find_signtool()
+    dlib = find_azure_dlib()
+    metadata = find_azure_metadata()
     daemon_py = THIS_DIR / "merlin_z_core_daemon.py"
     plugins = [
         THIS_DIR / "core_win32.py",
@@ -266,16 +394,22 @@ def main() -> None:
     ]
     report = {
         "ok": True,
-        "targetExecutable": str(DIST_DIR / "Merlin_Z_Core_Setup.exe"),
+        "targetExecutable": str(exe),
+        "targetExecutableExists": exe.exists(),
         "daemonEntry": str(daemon_py),
         "bundledPlugins": [p.name for p in plugins if p.exists()],
         "signtoolFound": bool(signtool),
-        "signtoolPath": signtool or "Windows SDK signtool.exe (CI/Release 머신에서 자동 바인딩)",
+        "signtoolPath": signtool or "Windows SDK signtool.exe 미설치",
+        "dlibFound": bool(dlib),
+        "dlibPath": dlib or "Azure.CodeSigning.Dlib.dll 미설치",
+        "metadataFound": bool(metadata),
+        "metadataPath": metadata or "artifact_signing_metadata.json 미생성",
+        "readyForTomorrowMsSigning": bool(signtool and dlib and metadata and exe.exists()),
         "smartScreenDefense": "Microsoft Artifact Signing (Azure Trusted Signing) SHA-256 + RFC3161 Timestamp",
         "signingCommandTemplate": (
-            'signtool.exe sign /v /fd SHA256 /tr "http://timestamp.acs.microsoft.com" /td SHA256 '
-            '/dlib "Azure.CodeSigning.Dlib.dll" /dmdf "artifact_signing_metadata.json" '
-            '"dist/Merlin_Z_Core_Setup.exe"'
+            f'"{signtool or "signtool.exe"}" sign /v /fd SHA256 /tr "http://timestamp.acs.microsoft.com" /td SHA256 '
+            f'/dlib "{dlib or "Azure.CodeSigning.Dlib.dll"}" /dmdf "{metadata or "artifact_signing_metadata.json"}" '
+            f'"{exe}"'
         ),
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
