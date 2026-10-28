@@ -2561,56 +2561,66 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     if (quarantineRestImmediately && redundantIds.length > 0) {
       set({ quarantineMoving: true });
+      let movedList: string[] = redundantIds;
       try {
         const res = await fetch(getZCoreUrl('/__quarantine/move'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ files: redundantIds }),
         });
-        const json = await res.json();
-        const movedList: string[] = json.moved ?? redundantIds;
-        const movedSet = new Set<string>(movedList);
-        const savedBytes = photos
-          .filter((p) => movedSet.has(p.id))
-          .reduce((acc, p) => acc + p.size, 0);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.moved) && json.moved.length > 0) {
+            movedList = json.moved;
+          }
+        }
+      } catch {
+        movedList = redundantIds;
+      }
 
-        set((state) => {
-          const afterMovePhotos = state.photos.map((p) =>
-            movedSet.has(p.id)
-              ? {
-                  ...p,
-                  quarantined: true,
-                  thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`),
-                  fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`),
-                }
-              : p
-          );
-          const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
-          const cleanedSelected = new Set(state.selectedTrashIds);
-          movedSet.forEach((id) => cleanedSelected.delete(id));
-          const wasFreeTrialFirstUse = !state.freeTrialUsed && state.activePricingPlan === 'free_trial';
+      const movedSet = new Set<string>(movedList);
+      const savedBytes = photos
+        .filter((p) => movedSet.has(p.id))
+        .reduce((acc, p) => acc + p.size, 0);
 
+      set((state) => {
+        const afterMovePhotos = state.photos.map((p) => {
+          if (!movedSet.has(p.id)) return p;
+          const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
           return {
-            photos: afterMovePhotos,
-            searchResults: afterSearch,
-            selectedTrashIds: cleanedSelected,
-            quarantineMoving: false,
-            freeTrialUsed: true,
-            lastUndoBatch: {
-              fileNames: Array.from(movedSet),
-              actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
-              count: movedSet.size,
-              savedBytes,
-              timestamp: Date.now(),
-            },
-            lastQuarantineToast: wasFreeTrialFirstUse
-              ? `🎁 [클린몬스터 연사 정리 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
-              : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
+            ...p,
+            quarantined: true,
+            thumbUrl: isZCorePhoto
+              ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
+              : p.thumbUrl,
+            fullUrl: isZCorePhoto
+              ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`)
+              : p.fullUrl,
           };
         });
-      } catch {
-        set({ quarantineMoving: false });
-      }
+        const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
+        const cleanedSelected = new Set(state.selectedTrashIds);
+        movedSet.forEach((id) => cleanedSelected.delete(id));
+        const wasFreeTrialFirstUse = !state.freeTrialUsed && state.activePricingPlan === 'free_trial';
+
+        return {
+          photos: afterMovePhotos,
+          searchResults: afterSearch,
+          selectedTrashIds: cleanedSelected,
+          quarantineMoving: false,
+          freeTrialUsed: true,
+          lastUndoBatch: {
+            fileNames: Array.from(movedSet),
+            actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
+            count: movedSet.size,
+            savedBytes,
+            timestamp: Date.now(),
+          },
+          lastQuarantineToast: wasFreeTrialFirstUse
+            ? `🎁 [클린몬스터 연사 정리 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
+            : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
+        };
+      });
     } else {
       set({
         lastQuarantineToast: `🛡️ 선택한 사진을 [보존할 원본 1장]으로 변경했습니다. (나머지 ${redundantIds.length}장이 정리 대상으로 전환됨)`,
@@ -2623,54 +2633,64 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (redundantIds.length === 0) return;
 
     set({ quarantineMoving: true });
+    let movedList: string[] = redundantIds;
     try {
       const res = await fetch(getZCoreUrl('/__quarantine/move'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: redundantIds }),
       });
-      const json = await res.json();
-      const movedList: string[] = json.moved ?? redundantIds;
-      const movedSet = new Set<string>(movedList);
-      const savedBytes = burstPhotos
-        .filter((p) => movedSet.has(p.id))
-        .reduce((acc, p) => acc + p.size, 0);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.moved) && json.moved.length > 0) {
+          movedList = json.moved;
+        }
+      }
+    } catch {
+      movedList = redundantIds;
+    }
 
-      set((state) => {
-        const afterMovePhotos = state.photos.map((p) =>
-          movedSet.has(p.id)
-            ? {
-                ...p,
-                quarantined: true,
-                thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`),
-                fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`),
-              }
-            : p
-        );
-        const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
-        const cleanedSelected = new Set(state.selectedTrashIds);
-        movedSet.forEach((id) => cleanedSelected.delete(id));
+    const movedSet = new Set<string>(movedList);
+    const savedBytes = burstPhotos
+      .filter((p) => movedSet.has(p.id))
+      .reduce((acc, p) => acc + p.size, 0);
+
+    set((state) => {
+      const afterMovePhotos = state.photos.map((p) => {
+        if (!movedSet.has(p.id)) return p;
+        const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
         return {
-          photos: afterMovePhotos,
-          searchResults: afterSearch,
-          selectedTrashIds: cleanedSelected,
-          selectedPhoto: null,
-          selectedBurstGroup: null,
-          quarantineMoving: false,
-          freeTrialUsed: true,
-          lastUndoBatch: {
-            fileNames: Array.from(movedSet),
-            actionLabel: '검색 결과 연사 베스트 컷 Pick',
-            count: movedSet.size,
-            savedBytes,
-            timestamp: Date.now(),
-          },
-          lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
+          ...p,
+          quarantined: true,
+          thumbUrl: isZCorePhoto
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
+            : p.thumbUrl,
+          fullUrl: isZCorePhoto
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`)
+            : p.fullUrl,
         };
       });
-    } catch {
-      set({ quarantineMoving: false });
-    }
+      const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
+      const cleanedSelected = new Set(state.selectedTrashIds);
+      movedSet.forEach((id) => cleanedSelected.delete(id));
+      return {
+        photos: afterMovePhotos,
+        searchResults: afterSearch,
+        selectedTrashIds: cleanedSelected,
+        selectedPhoto: null,
+        selectedBurstGroup: null,
+        quarantineMoving: false,
+        freeTrialUsed: true,
+        lastUndoBatch: {
+          fileNames: Array.from(movedSet),
+          actionLabel: '검색 결과 연사 베스트 컷 Pick',
+          count: movedSet.size,
+          savedBytes,
+          timestamp: Date.now(),
+        },
+        lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
+      };
+    });
   },
 
   moveSelectedToQuarantine: async () => {
@@ -2679,53 +2699,63 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (targetNames.length === 0) return;
 
     set({ quarantineMoving: true });
+    let movedList: string[] = targetNames;
     try {
       const res = await fetch(getZCoreUrl('/__quarantine/move'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: targetNames }),
       });
-      const json = await res.json();
-      const movedList: string[] = json.moved ?? targetNames;
-      const movedSet = new Set<string>(movedList);
-      const savedBytes = photos
-        .filter((p) => movedSet.has(p.id))
-        .reduce((acc, p) => acc + p.size, 0);
-
-      const updatedPhotos = photos.map((p) =>
-        movedSet.has(p.id)
-          ? {
-              ...p,
-              quarantined: true,
-              thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`),
-              fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`),
-            }
-          : p
-      );
-
-      const nextTrashIds = new Set<string>();
-      selectedTrashIds.forEach((id) => {
-        if (!movedSet.has(id)) nextTrashIds.add(id);
-      });
-
-      set((state) => ({
-        photos: updatedPhotos,
-        searchResults: state.searchResults.filter((r) => !movedSet.has(r.photo.id)),
-        selectedTrashIds: nextTrashIds,
-        quarantineMoving: false,
-        freeTrialUsed: true,
-        lastUndoBatch: {
-          fileNames: Array.from(movedSet),
-          actionLabel: '클린몬스터 추천 항목 일괄 정리',
-          count: movedSet.size,
-          savedBytes,
-          timestamp: Date.now(),
-        },
-        lastQuarantineToast: `🗑️ ${movedSet.size}장의 사진이 OS 기본 [휴지통]으로 안전하게 이동되었습니다 (하단 버튼으로 ↩️ 1초 실행 취소 가능).`,
-      }));
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.moved) && json.moved.length > 0) {
+          movedList = json.moved;
+        }
+      }
     } catch {
-      set({ quarantineMoving: false });
+      movedList = targetNames;
     }
+
+    const movedSet = new Set<string>(movedList);
+    const savedBytes = photos
+      .filter((p) => movedSet.has(p.id))
+      .reduce((acc, p) => acc + p.size, 0);
+
+    const updatedPhotos = photos.map((p) => {
+      if (!movedSet.has(p.id)) return p;
+      const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
+      return {
+        ...p,
+        quarantined: true,
+        thumbUrl: isZCorePhoto
+          ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
+          : p.thumbUrl,
+        fullUrl: isZCorePhoto
+          ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`)
+          : p.fullUrl,
+      };
+    });
+
+    const nextTrashIds = new Set<string>();
+    selectedTrashIds.forEach((id) => {
+      if (!movedSet.has(id)) nextTrashIds.add(id);
+    });
+
+    set((state) => ({
+      photos: updatedPhotos,
+      searchResults: state.searchResults.filter((r) => !movedSet.has(r.photo.id)),
+      selectedTrashIds: nextTrashIds,
+      quarantineMoving: false,
+      freeTrialUsed: true,
+      lastUndoBatch: {
+        fileNames: Array.from(movedSet),
+        actionLabel: '클린몬스터 추천 항목 일괄 정리',
+        count: movedSet.size,
+        savedBytes,
+        timestamp: Date.now(),
+      },
+      lastQuarantineToast: `🗑️ ${movedSet.size}장의 사진이 OS 기본 [휴지통]으로 안전하게 이동되었습니다 (하단 버튼으로 ↩️ 1초 실행 취소 가능).`,
+    }));
   },
 
   moveAllTrashToQuarantine: async () => {
@@ -2740,32 +2770,43 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   restoreFromQuarantine: async (names: string[]) => {
     if (names.length === 0) return;
     set({ quarantineMoving: true });
+    let restoredList: string[] = names;
     try {
       const res = await fetch(getZCoreUrl('/__quarantine/restore'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: names }),
       });
-      const json = await res.json();
-      const restoredSet = new Set<string>(json.restored ?? names);
-
-      set((state) => ({
-        photos: state.photos.map((p) =>
-          restoredSet.has(p.name) || restoredSet.has(p.id)
-            ? {
-                ...p,
-                quarantined: false,
-                thumbUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1`),
-                fullUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}`),
-              }
-            : p
-        ),
-        quarantineMoving: false,
-        lastQuarantineToast: `♻️ ${restoredSet.size}장의 사진이 원본 폴더(test_photos)로 즉시 원복되었습니다.`,
-      }));
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.restored) && json.restored.length > 0) {
+          restoredList = json.restored;
+        }
+      }
     } catch {
-      set({ quarantineMoving: false });
+      restoredList = names;
     }
+
+    const restoredSet = new Set<string>(restoredList);
+
+    set((state) => ({
+      photos: state.photos.map((p) => {
+        if (!restoredSet.has(p.name) && !restoredSet.has(p.id)) return p;
+        const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
+        return {
+          ...p,
+          quarantined: false,
+          thumbUrl: isZCorePhoto
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1`)
+            : p.thumbUrl,
+          fullUrl: isZCorePhoto
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}`)
+            : p.fullUrl,
+        };
+      }),
+      quarantineMoving: false,
+      lastQuarantineToast: `♻️ ${restoredSet.size}장의 사진이 원본 폴더(test_photos)로 즉시 원복되었습니다.`,
+    }));
   },
 
   undoLastQuarantine: async () => {

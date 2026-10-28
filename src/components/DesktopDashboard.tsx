@@ -666,18 +666,6 @@ export const DesktopDashboard: React.FC = () => {
                     </span>
                   </button>
                 )}
-                {(!isStoreAppMode || enableSetupMonster) && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setShowSetupMonsterModal(true, 'pc')}
-                      title="🛠️ 설정몬스터"
-                      className="px-2.5 py-1 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-600 dark:text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
-                    >
-                      <span>🛠️ 설정몬스터</span>
-                    </button>
-                  </>
-                )}
                 <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} />
                 <GhostiTopRightHubAnchor themeMode={themeMode} />
                 <button

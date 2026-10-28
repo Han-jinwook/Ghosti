@@ -99,7 +99,8 @@ export const SmartTrashView: React.FC = () => {
 
   const [gridColumns, setGridColumns] = useState<3 | 4>(3);
   const [showSystemConsult, setShowSystemConsult] = useState<boolean>(true);
-  const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
+  const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(true);
+  const [isTrashBinTabActive, setIsTrashBinTabActive] = useState<boolean>(false);
 
   // 클린몬스터 종합건강검진 항목별 유저 직접 결정 상태
   const [decisions, setDecisions] = useState<{
@@ -182,7 +183,9 @@ export const SmartTrashView: React.FC = () => {
   );
 
   const showDuplicatePickSection =
-    (currentTab === 'duplicate' || currentTab === 'all') && activeDuplicateGroups.length > 0;
+    !isTrashBinTabActive &&
+    (currentTab === 'duplicate' || currentTab === 'all') &&
+    activeDuplicateGroups.length > 0;
 
   return (
     <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 flex flex-col gap-5 pb-24">
@@ -190,35 +193,34 @@ export const SmartTrashView: React.FC = () => {
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[12px] font-bold text-primary-container tracking-wide">
-                🩺 귀신같이 클린몬스터
-              </span>
-              <span className="text-zinc-600">·</span>
-              <span className="text-[12px] text-zinc-400 font-medium">
-                임의 영구 삭제 0% · OS 기본 [휴지통] 이동 &amp; 1초 실행 취소 보장
+            <div className="flex flex-col gap-0.5">
+              <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2">
+                <span>🩺 귀신같이 클린몬스터</span>
+              </h1>
+              <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
+                임의 영구 삭제 0% · OS 기본 [휴지통] 이동 &amp; 언제든 1초 원상복구 보장
               </span>
             </div>
 
-            <h1 className="font-headline-md text-[20px] md:text-[24px] text-white font-extrabold tracking-tight leading-snug">
+            <div className="pt-1 font-headline-md text-[17px] md:text-[19px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">
               {activeTrash.length > 0 ? (
                 <>
                   정리 후보 <span className="text-primary-container">{activeTrash.length}장</span>{' '}
-                  <span className="text-zinc-400 font-normal text-[16px]">
+                  <span className="text-zinc-500 dark:text-zinc-400 font-normal text-[14.5px]">
                     ({fmtMB(totalTrashBytes)})
                   </span>{' '}
-                  — 중복·연사 <span className="text-white">{dupCount}장</span> · 메모·캡처{' '}
-                  <span className="text-white">{memoAndScreenCount}장</span> · 흔들림{' '}
-                  <span className="text-white">{blurryCount}장</span>
+                  — 중복·연사 <span className="text-zinc-900 dark:text-white">{dupCount}장</span> · 메모·캡처{' '}
+                  <span className="text-zinc-900 dark:text-white">{memoAndScreenCount}장</span> · 흔들림{' '}
+                  <span className="text-zinc-900 dark:text-white">{blurryCount}장</span>
                 </>
               ) : (
                 <span className="text-primary-container">
                   ✨ 모든 중복·연사 사본({quarantinedPhotos.length}장) 정리가 완료되어 가장 쾌적한 상태입니다
                 </span>
               )}
-            </h1>
+            </div>
 
-            <p className="font-body-sm text-[12.5px] text-zinc-400">
+            <p className="font-body-sm text-[12.5px] text-zinc-500 dark:text-zinc-400">
               동일 내용 중복 사진은 최고화질 원본 1장만 남기고, 연사는 마음에 드는 1장을 직접 선택(Pick)해 나머지를 정리합니다.
             </p>
           </div>
@@ -261,10 +263,17 @@ export const SmartTrashView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => void openLocalFolder('quarantine')}
-                className="px-3 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10 font-label-sm text-[12px] font-bold cursor-pointer whitespace-nowrap"
+                onClick={() => {
+                  setIsTrashBinTabActive(true);
+                  setShowQuarantineDrawer(true);
+                }}
+                className={`px-3 py-2.5 rounded-xl border font-label-sm text-[12px] font-bold cursor-pointer whitespace-nowrap transition-all ${
+                  isTrashBinTabActive
+                    ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
+                }`}
               >
-                🗑️ 휴지통 열기
+                🗑️ 휴지통 보관함 ({quarantinedPhotos.length}장)
               </button>
 
               <button
@@ -470,43 +479,48 @@ export const SmartTrashView: React.FC = () => {
               </div>
             </div>
 
-            {/* 1:1 대화형 클린몬스터 질문 바 */}
-            <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2">
-              <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
-                {doctorChatReply}
-              </p>
+            {/* 1:1 대화형 클린몬스터 질문 바 (질문 입력창이 위, 답변 박스가 아래에 큼직하게 표시) */}
+            <div className="p-3.5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2.5">
               <form onSubmit={handleAskDoctor} className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   value={doctorChatInput}
                   onChange={(e) => setDoctorChatInput(e.target.value)}
                   placeholder="클린몬스터에게 질문하기 (예: 바탕화면 바로가기 지워도 돼? / 어르신 큰 아이콘은 어떻게 해? / 보안모듈이 뭐야?)"
-                  className="flex-1 min-w-[220px] px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] focus:outline-none focus:border-primary-container"
+                  className="flex-1 min-w-[220px] px-3.5 py-2 rounded-lg bg-zinc-900 border border-white/15 text-zinc-900 dark:text-white text-[13px] font-medium focus:outline-none focus:border-primary-container"
                 />
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap cursor-pointer"
                 >
                   💬 물어보기
                 </button>
               </form>
+              <div className="p-3 rounded-lg bg-zinc-900/90 border border-primary-container/30">
+                <p className="font-body-sm text-[13.5px] md:text-[14.5px] font-semibold text-zinc-900 dark:text-zinc-100 leading-relaxed">
+                  {doctorChatReply}
+                </p>
+              </div>
             </div>
           </div>
         )}
       </section>
 
-      {/* ─────────────── 3. 노션 데이터베이스형 4대 카테고리 뷰 탭 (중복 탭 바 제거 & 단일 통합) ─────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* ─────────────── 3. 노션 데이터베이스형 4대 카테고리 + 독립 [🗑️ 휴지통 보관함] 뷰 탭 ─────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {TRASH_TABS.map((tab) => {
           const items = activeTrash.filter((p) => matchesTrashTab(p, tab.key));
           const bytes = items.reduce((a, p) => a + p.size, 0);
-          const isSelected = currentTab === tab.key;
+          const isSelected = !isTrashBinTabActive && currentTab === tab.key;
 
           return (
             <button
               key={tab.key}
               type="button"
-              onClick={() => setActiveTrashCategoryFilter(tab.key as TrashCategory)}
+              onClick={() => {
+                setIsTrashBinTabActive(false);
+                setActiveTrashCategoryFilter(tab.key as TrashCategory);
+              }}
               className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border ${
                 isSelected
                   ? 'bg-zinc-900 border-primary-container shadow-xs'
@@ -564,7 +578,150 @@ export const SmartTrashView: React.FC = () => {
             </button>
           );
         })}
+
+        {/* ⑤ 독립 분리된 [🗑️ 휴지통 보관함 (1초 복원)] 전용 탭 카드 */}
+        <button
+          type="button"
+          onClick={() => {
+            setIsTrashBinTabActive(true);
+            setShowQuarantineDrawer(true);
+          }}
+          className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border ${
+            isTrashBinTabActive
+              ? 'bg-zinc-900 border-primary-container shadow-xs ring-1 ring-primary-container'
+              : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2 w-full">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-headline-sm text-[13.5px] text-amber-400 font-bold">
+                  🗑️
+                </span>
+                <span className="font-headline-sm text-[14.5px] text-white font-bold truncate">
+                  휴지통 보관함
+                </span>
+              </div>
+              <span className="font-body-sm text-[11px] text-zinc-400 line-clamp-1">
+                정리된 사진 확인 &amp; 1초 즉시 원상복구
+              </span>
+            </div>
+            <span className="material-symbols-outlined text-[17px] text-amber-400 shrink-0">
+              restore_from_trash
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-white/10 w-full">
+            <div className="flex items-baseline gap-1">
+              <span className="font-headline-md text-[18px] text-amber-400 font-extrabold">
+                {quarantinedPhotos.length}
+              </span>
+              <span className="font-label-sm text-[11.5px] text-zinc-400">장 보관 중</span>
+            </div>
+            <span className="font-label-mono text-[11px] text-primary-container font-bold">
+              ↩️ 1초 복원
+            </span>
+          </div>
+        </button>
       </div>
+
+      {/* ─────────────── 3-B. [🗑️ 휴지통 보관함] 탭 선택 시 상단에 바로 열리는 전용 복원 뷰 ─────────────── */}
+      {isTrashBinTabActive && (
+        <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
+            <div className="flex flex-col gap-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-zinc-900 dark:text-white font-extrabold flex items-center gap-1.5">
+                  <span>🗑️ 휴지통 보관함 (OS 기본 휴지통 이동 내역)</span>
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-primary-container/40 text-primary-container font-label-sm text-[12px] font-bold">
+                  총 {quarantinedPhotos.length}장 보관 중
+                </span>
+              </div>
+              <p className="font-body-sm text-[12.5px] text-zinc-500 dark:text-zinc-400">
+                정리한 사진은 영구 삭제되지 않고 이곳에 안전하게 보관됩니다. 원하는 사진의 [↩️ 1초 복원] 또는 우측 [↩️ 전체 복원]을 누르면 즉시 원래 자리로 돌아갑니다.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void openLocalFolder('quarantine')}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-bold cursor-pointer"
+              >
+                📂 실제 휴지통 폴더 열기
+              </button>
+              {quarantinedPhotos.length > 0 && (
+                <button
+                  type="button"
+                  disabled={quarantineMoving}
+                  onClick={() =>
+                    void restoreFromQuarantine(quarantinedPhotos.map((p) => p.name))
+                  }
+                  className="px-4 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">restore_from_trash</span>
+                  <span>↩️ 전체 복원 ({quarantinedPhotos.length}장)</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsTrashBinTabActive(false)}
+                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
+              >
+                ← 정리 목록으로 돌아가기
+              </button>
+            </div>
+          </div>
+
+          {quarantinedPhotos.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {quarantinedPhotos.map((p) => (
+                <div
+                  key={p.id}
+                  className="group relative rounded-xl overflow-hidden bg-zinc-950 border border-white/10 flex flex-col justify-between"
+                >
+                  <div className="relative aspect-square w-full overflow-hidden">
+                    <img src={p.thumbUrl} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhoto(p)}
+                      title="크게 보기"
+                      className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">zoom_in</span>
+                    </button>
+                  </div>
+                  <div className="p-2.5 flex flex-col gap-1.5 bg-zinc-900">
+                    <span className="font-label-sm text-[11.5px] text-zinc-200 font-semibold truncate">
+                      {p.tags[0] || '#휴지통이동'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void restoreFromQuarantine([p.name])}
+                      className="w-full py-1.5 rounded-lg bg-primary-container/20 hover:bg-primary-container text-primary-container hover:text-zinc-950 border border-primary-container/40 font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer"
+                    >
+                      ↩️ 1초 복원
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center flex flex-col items-center gap-2">
+              <span className="material-symbols-outlined text-zinc-500 text-[32px]">
+                delete_sweep
+              </span>
+              <span className="font-headline-sm text-[15px] text-zinc-300 font-bold">
+                현재 휴지통 보관함이 비어 있습니다.
+              </span>
+              <span className="font-body-sm text-[12.5px] text-zinc-400">
+                ①~④번 카테고리에서 중복·연사나 불필요한 사진을 정리하면 이곳으로 안전하게 이동됩니다.
+              </span>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ─────────────── 4-A. ① 동일 내용 중복(최고화질 원본 보존) · 연사(유저 1장 직접 선택) 바둑판 Pick 뷰 ─────────────── */}
       {showDuplicatePickSection && (
@@ -695,7 +852,7 @@ export const SmartTrashView: React.FC = () => {
                         <div
                           key={ph.id}
                           onClick={() =>
-                            void pickBestInDuplicateGroup(group.groupId, ph.id, true)
+                            void pickBestInDuplicateGroup(group.groupId, ph.id, false)
                           }
                           className={`group/card relative aspect-[4/5] rounded-xl overflow-hidden cursor-pointer transition-all ${
                             isBestOriginal
@@ -718,14 +875,14 @@ export const SmartTrashView: React.FC = () => {
                               </span>
                               <span>
                                 {isExactDuplicateGroup
-                                  ? '보존할 최고화질 원본'
-                                  : '현재 선택된 1장 (추천)'}
+                                  ? '👑 보존할 최고화질 원본 (선택됨)'
+                                  : '👑 현재 선택된 1장 보존'}
                               </span>
                             </div>
                           ) : (
                             <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/80 backdrop-blur-md border border-white/15 text-zinc-300 font-label-sm text-[11px] font-medium">
                               {isExactDuplicateGroup
-                                ? `동일 사본 #${idx + 1} · 정리 후보`
+                                ? `동일 사본 #${idx + 1} · 클릭 시 이 1장 보존`
                                 : `연사 #${idx + 1} · 클릭 시 이 1장 보존`}
                             </div>
                           )}
@@ -752,8 +909,8 @@ export const SmartTrashView: React.FC = () => {
                             }`}
                           >
                             {isBestOriginal
-                              ? '✓ 현재 보존 중인 베스트 컷 (클릭 시 사본 격리)'
-                              : '👆 클릭 시 이 사진을 베스트 컷으로 변경'}
+                              ? '✓ 현재 보존할 1장으로 선택됨 (우측 상단 [정리] 클릭 시 사본 이동)'
+                              : '👆 클릭 시 이 사진을 보존할 1장으로 변경'}
                           </div>
                         </div>
                       );
@@ -767,7 +924,7 @@ export const SmartTrashView: React.FC = () => {
       )}
 
       {/* ─────────────── 4-B. 탭 ②·③·④ 및 전체 보기 개별 선택 그리드 (중복 탭 바 없이 깔끔한 액션 헤더만 배치) ─────────────── */}
-      {currentTab !== 'duplicate' && (
+      {!isTrashBinTabActive && currentTab !== 'duplicate' && (
         <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
             <div className="flex flex-wrap items-center gap-2">
