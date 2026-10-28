@@ -322,7 +322,7 @@ export const SmartTrashView: React.FC = () => {
             <span className="text-[12px] text-amber-400 font-bold">
               {showSystemConsult ? '▾' : '▸'} 💬 기기 종합검진 &amp; 대화형 맞춤 정리
             </span>
-            <span className="text-[12.5px] text-zinc-300 font-medium">
+            <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
               모바일 홈 · PC 바탕화면 · 상주 보안모듈을 상담 후 항목별로 직접 결정하세요
             </span>
             {decidedCount > 0 && (
@@ -331,7 +331,7 @@ export const SmartTrashView: React.FC = () => {
               </span>
             )}
           </div>
-          <span className="text-[13px] text-zinc-100 hover:text-white font-extrabold px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 select-none shadow-sm transition-colors">
+          <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all">
             {showSystemConsult ? '접기 ▴' : '검진 항목 펼치기 ▾'}
           </span>
         </div>
@@ -923,7 +923,7 @@ export const SmartTrashView: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowQuarantineDrawer((v) => !v)}
-              className="text-[13px] text-zinc-100 hover:text-white font-extrabold px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 select-none shadow-sm cursor-pointer transition-colors"
+              className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
             >
               {showQuarantineDrawer ? '접기 ▴' : '펼치기 ▾'}
             </button>

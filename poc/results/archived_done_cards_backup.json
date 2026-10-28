@@ -1,6 +1,5 @@
 {
-  "archived_at": "2026-10-28T13:34:33.001366",
-  "total_archived": 14,
+  "updated_at": "2026-10-28T14:07:12.329899",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -99,6 +98,14 @@
       "app": "썬드리머",
       "last_edited_time": "2026-10-26T01:57:00.000Z",
       "url": "https://app.notion.com/p/1-11-403f9ffd2c1d81709f62fffc695086f9"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-8154-a595-f6fd7b132d0b",
+      "title": "🎯 [제트아이] [허브 공통기능 ①] 우측 위 곰발바닥 로그인 · 내 프로필 창 · 로그아웃 연동 점검 (PC 화면)",
+      "app": "제트아이",
+      "last_edited_time": "2026-10-28T00:58:00.000Z",
+      "url": "https://app.notion.com/p/PC-405f9ffd2c1d8154a595f6fd7b132d0b",
+      "archived_at": "2026-10-28T14:07:12.329593"
     }
   ]
 }
