@@ -62,8 +62,8 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
 
   const isMobile = size === 'mobile';
   const symbolSizeClass = isMobile ? 'w-8 h-8' : 'w-9 h-9';
-  const wordmarkHeightClass = isMobile ? 'h-[24px]' : 'h-[28px]';
-  const sloganTextClass = isMobile ? 'text-[11.5px]' : 'text-[13px]';
+  const wordmarkHeightClass = isMobile ? 'h-[22px]' : 'h-[28px]';
+  const sloganTextClass = isMobile ? 'text-[11px]' : 'text-[13px]';
 
   const sloganColorClass =
     themeMode === 'light'

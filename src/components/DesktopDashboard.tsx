@@ -177,9 +177,9 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 > = {
   personal: [
 
-    { id: 'dashboard', label: '🎯 귀신같이 찾기' },
-    { id: 'trash', label: '🧹 귀신같이 청소', showTrashCount: true },
-    { id: 'sync', label: '🛠️ 귀신같이 수리' },
+    { id: 'dashboard', label: '🎯 찾기' },
+    { id: 'trash', label: '🧹 치우기', showTrashCount: true },
+    { id: 'sync', label: '⚙️ 고치기' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },

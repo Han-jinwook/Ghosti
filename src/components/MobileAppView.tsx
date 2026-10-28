@@ -142,9 +142,9 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
 > = {
   personal: [
 
-    { id: 'search', label: '🎯 귀신같이 찾기' },
-    { id: 'trash', label: '🧹 귀신같이 청소', showTrashCount: true },
-    { id: 'settings', label: '🛠️ 귀신같이 수리' },
+    { id: 'search', label: '🎯 찾기' },
+    { id: 'trash', label: '🧹 치우기', showTrashCount: true },
+    { id: 'settings', label: '⚙️ 고치기' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },
@@ -288,25 +288,25 @@ export const MobileAppView: React.FC = () => {
           }`}
         >
           <div className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1 shrink-0 min-w-0 max-w-[48%]">
               <GhostiBrandLogo
                 size="mobile"
                 themeMode={themeMode}
                 showBadge={false}
                 subtitle=""
                 onClick={() => setMobileTab('search')}
-                className="shrink-0"
+                className="shrink-0 max-w-full"
               />
             </div>
 
-            {/* 우상단: 귀신같이 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액 + 심플 아이콘 테마 토글 */}
+            {/* 우상단: 귀신같이 여권 자동 문패(업무 공유 제외) + 설정(모바일 상시 노출) + 크레딧 잔액 + 심플 아이콘 테마 토글 */}
             <div className="flex items-center gap-1 shrink-0" aria-label="화면 테마 영역">
               {myPassportCluster && activeLoungeType !== 'work' && (
                 <button
                   type="button"
                   onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
                   title="🛂 귀신같이 여권 최신 연도 정면 얼굴 자동 문패 (5대 스타일 슬롯 원터치 변경)"
-                  className={`pl-1 pr-1.5 py-0.5 rounded-full border flex items-center gap-1 transition-all cursor-pointer ${
+                  className={`pl-1 pr-1 py-0.5 rounded-full border flex items-center gap-0.5 transition-all cursor-pointer ${
                     themeMode === 'light'
                       ? 'bg-teal-50/90 border-teal-300 text-teal-900'
                       : 'bg-zinc-900 border-primary-container/45 text-white'
@@ -315,22 +315,22 @@ export const MobileAppView: React.FC = () => {
                   <img
                     src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
                     alt={myDoorplatePersona}
-                    className="w-4 h-4 rounded-full object-cover border border-primary-container shrink-0"
+                    className="w-3.5 h-3.5 rounded-full object-cover border border-primary-container shrink-0"
                   />
-                  <span className="font-label-sm text-[10px] font-extrabold whitespace-nowrap hidden min-[410px]:inline">
+                  <span className="font-label-sm text-[9.5px] font-extrabold whitespace-nowrap hidden min-[460px]:inline">
                     👑 {myDoorplatePersona}
                   </span>
                 </button>
               )}
-              {(!isStoreAppMode || enableSetupMonster) && (
-                <button
-                  type="button"
-                  onClick={() => setShowSetupMonsterModal(true, 'mobile')}
-                  className="hidden md:inline-flex px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10px] font-extrabold"
-                >
-                  🛠️ 설정
-                </button>
-              )}
+              {/* 🛠️ 설정 버튼: 모바일에서도 상시 정상 노출 (스토어 심사 리젝 대상 아님) */}
+              <button
+                type="button"
+                onClick={() => setShowSetupMonsterModal(true, 'mobile')}
+                title="기기 설정 및 고치기"
+                className="px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10px] font-extrabold shrink-0"
+              >
+                ⚙️
+              </button>
               {/* 허브 SDK 표준 앵커 (PC 헤더와 동일): 🪙 코인(스토어 심사 모드·네이티브 앱에서는 DOM 원천 비노출) + 🐾 곰발바닥 OTP 로그인/통합 프로필 */}
               <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} compact={true} />
               <GhostiTopRightHubAnchor themeMode={themeMode} />

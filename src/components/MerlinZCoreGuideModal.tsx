@@ -227,13 +227,13 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget && step !== 'indexing') onClose();
       }}
     >
       <div
-        className={`w-full max-w-lg rounded-3xl p-6 sm:p-7 shadow-2xl border transition-all ${
+        className={`w-full max-w-lg rounded-3xl p-5 sm:p-7 shadow-2xl border transition-all max-h-[92vh] overflow-y-auto no-scrollbar ${
           isLight
             ? 'bg-white border-slate-200 text-slate-800'
             : 'bg-zinc-950 border-white/15 text-zinc-100'
