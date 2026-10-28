@@ -200,6 +200,7 @@ export const MobileAppView: React.FC = () => {
     matchedLocalDocs,
     matchedVaultPhotos,
     setSelectedDocModal,
+    videoSceneItems,
     matchedVideoScenes,
     setSelectedVideoModal,
     activeQuery,
@@ -537,12 +538,12 @@ export const MobileAppView: React.FC = () => {
                   <span className="font-headline-sm text-[14.5px] text-white font-bold">
                     🎬 동영상 구간 포착 ({matchedVideoScenes.length}개 · 좌우 스와이프)
                   </span>
-                  {matchedVideoScenes.length < 3 && (
+                  {matchedVideoScenes.length < videoSceneItems.length && (
                     <button
                       onClick={() => resetSearchSpaceToAll('video')}
                       className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold"
                     >
-                      🔄 3개 전체 보기
+                      🔄 {videoSceneItems.length}개 전체 보기
                     </button>
                   )}
                 </div>

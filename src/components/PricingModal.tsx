@@ -453,10 +453,10 @@ export const PricingModal: React.FC = () => {
                 </button>
               )}
             </div>
-            <h2 className="font-headline-lg text-[22px] md:text-[26px] !text-white font-black tracking-tight mt-1">
+            <h2 className="font-headline-lg text-[22px] md:text-[26px] text-white font-black tracking-tight mt-1">
               혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만
             </h2>
-            <p className="font-body-sm text-[13px] !text-zinc-200 font-medium">
+            <p className="font-body-sm text-[13px] text-zinc-200 font-medium">
               • 신용카드 등록도, 광고도 없습니다. 초대받은 가족·회원·직원은 전원 무료입니다.
             </p>
           </div>
