@@ -17,6 +17,7 @@
 import os
 import sys
 import time
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -288,6 +289,12 @@ def query_bugs_raw(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str
 
 
 def fetch_bugs(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str]]:
+    # 완료 컬럼이 길어지지 않도록 최신 7건 자동 유지 (초과분 안전 보관)
+    try:
+        trim_done_cards(7)
+    except Exception:
+        pass
+
     """
     상태가 '발견된 버그'(기본값)인 카드를 조회하여
     터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다.
@@ -411,6 +418,93 @@ def complete_bug(page_id: str, guide_text: str) -> bool:
         print("\n🎉 현재 '발견된 버그' 컬럼의 모든 티켓 처리가 끝났습니다!")
 
     return True
+
+
+def trim_done_cards(keep_count: int = 7) -> int:
+    """
+    '완료' 컬럼의 카드가 무한정 쌓여 보드가 길어지는 문제를 방지하기 위해,
+    최신 N개만 남기고 이전 완료 카드들을 노션 보관함(archived: True)으로 안전하게 이동합니다.
+    """
+    ensure_valid_token()
+    SCHEMA.detect(DATABASE_ID)
+
+    url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
+    filter_payload = {
+        "property": SCHEMA.status_prop_name,
+        "status" if SCHEMA.status_prop_type == "status" else "select": {"equals": STATUS_DONE},
+    }
+    payload = {
+        "filter": filter_payload,
+        "sorts": [{"timestamp": "last_edited_time", "direction": "descending"}],
+        "page_size": 100,
+    }
+
+    try:
+        res = requests.post(url, headers=get_headers(), json=payload, timeout=15)
+        if res.status_code != 200:
+            return 0
+    except Exception:
+        return 0
+
+    results = res.json().get("results", [])
+    if len(results) <= keep_count:
+        return 0
+
+    to_archive = results[keep_count:]
+    backup_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc", "results", "archived_done_cards_backup.json")
+    os.makedirs(os.path.dirname(backup_file), exist_ok=True)
+
+    existing_cards = []
+    if os.path.exists(backup_file):
+        try:
+            with open(backup_file, "r", encoding="utf-8") as f:
+                existing_cards = json.load(f).get("cards", [])
+        except Exception:
+            existing_cards = []
+
+    existing_ids = {c.get("page_id") for c in existing_cards}
+    new_archived = []
+    for p in to_archive:
+        pid = p["id"]
+        props = p.get("properties", {})
+        t = extract_plain_text(props.get(SCHEMA.title_prop_name, {}).get("title", []))
+        app_val = props.get("앱", {}).get("select", {})
+        app_name = app_val.get("name", "") if app_val else ""
+        card_meta = {
+            "page_id": pid,
+            "title": t,
+            "app": app_name,
+            "last_edited_time": p.get("last_edited_time"),
+            "url": p.get("url"),
+            "archived_at": datetime.now().isoformat(),
+        }
+        if pid not in existing_ids:
+            existing_cards.append(card_meta)
+        new_archived.append(pid)
+
+    try:
+        with open(backup_file, "w", encoding="utf-8") as f:
+            json.dump({"updated_at": datetime.now().isoformat(), "cards": existing_cards}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+    archived_count = 0
+    for pid in new_archived:
+        try:
+            p_res = requests.patch(
+                f"{NOTION_API_BASE}/pages/{pid}",
+                headers=get_headers(),
+                json={"archived": True},
+                timeout=15,
+            )
+            if p_res.status_code == 200:
+                archived_count += 1
+        except Exception:
+            pass
+
+    if archived_count > 0:
+        print(f"📦 [완료 컬럼 자동 정돈] 초과된 이전 완료 카드 {archived_count}건을 안전 보관(archived: true) 처리했습니다. (최신 {keep_count}건 유지)")
+    return archived_count
 
 
 def archive_done(page_id: str, memo_text: str = "") -> bool:
@@ -792,6 +886,10 @@ if __name__ == "__main__":
             sys.exit(0)
         elif subcmd == "status" and len(sys.argv) >= 4:
             update_bug_status(sys.argv[2], sys.argv[3])
+            sys.exit(0)
+        elif subcmd in ("trim-done", "trim") and len(sys.argv) >= 2:
+            keep = int(sys.argv[2]) if len(sys.argv) >= 3 else 7
+            trim_done_cards(keep)
             sys.exit(0)
         elif subcmd == "done" and len(sys.argv) >= 3:
             target_id = sys.argv[2]

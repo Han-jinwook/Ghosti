@@ -340,14 +340,14 @@ export const SmartTrashView: React.FC = () => {
           <div className="px-5 pb-5 pt-2 border-t border-white/10 flex flex-col gap-3.5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* ① 모바일 바탕화면·앨범 분류 & 어르신 큰 카드/아이콘 */}
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="font-headline-sm text-[15px] !text-white font-extrabold tracking-wide">
+              <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                     {isStoreAppMode
                       ? '📱 모바일 갤러리·캡처 분류 & 큰 화면'
                       : '📱 모바일 바탕화면 & 미사용 앱 분류'}
                   </span>
-                  <p className="font-body-sm text-[12.5px] !text-zinc-200 font-medium leading-relaxed">
+                  <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
                     {isStoreAppMode
                       ? '일회성 영수증·스크린샷을 분리하고 어르신용 큰 카드(3×4) 배치 또는 별도 보관함 모아놓기를 선택하세요.'
                       : '6개월 이상 안 쓴 앱(42개)과 웹 링크를 구분했습니다. 어르신용 큰 아이콘(3×4) 또는 별도 보관함을 선택하세요.'}
@@ -386,12 +386,12 @@ export const SmartTrashView: React.FC = () => {
               </div>
 
               {/* ② PC 바탕화면 중복파일 & 바로가기(.lnk) 뒤섞임 정리 */}
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="font-headline-sm text-[15px] !text-white font-extrabold tracking-wide">
+              <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                     💻 PC 바탕화면 중복파일 · 바로가기 분리
                   </span>
-                  <p className="font-body-sm text-[12.5px] !text-zinc-200 font-medium leading-relaxed">
+                  <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
                     바탕화면에 문서·폴더와 바로가기(<code>.lnk</code>)가 뒤섞여 있습니다. 핵심 아이콘만 남기고 아카이브 폴더로 분류할까요?
                   </p>
                 </div>
@@ -424,14 +424,14 @@ export const SmartTrashView: React.FC = () => {
               </div>
 
               {/* ③ PC 원본 이관 13KB 섀도우 다이어트 / 전기 먹는 상주 이슈 제거 */}
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="font-headline-sm text-[14px] text-white font-bold">
+              <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                     {isStoreAppMode
                       ? '⚡ 원본 PC 이관 & 13KB 섀도우 다이어트'
                       : '⚡ 상주 보안모듈 동결 (속도 향상)'}
                   </span>
-                  <p className="font-body-sm text-[12px] text-zinc-400 leading-relaxed">
+                  <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
                     {isStoreAppMode
                       ? '대용량 4K 영상과 원본을 내 PC로 안전 이관하고 폰에는 13KB 초경량 캐시만 남겨 저장공간을 확보할까요?'
                       : '은행·관공서 상주 보안모듈(MagicLine 등)이 메모리(420MB)를 상시 점유 중입니다. 안전 동결로 속도를 높일까요?'}

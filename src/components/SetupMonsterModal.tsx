@@ -928,10 +928,10 @@ export const SetupMonsterContent: React.FC = () => {
 
       {/* 3-B. 💻 PC판 전용: Z-코어 실물 OS 3대 검증 패널 (시뮬레이션 0% · 내 PC 100% 실측 · 노션 스타일 동적 토글) */}
       {setupMonsterPlatform === 'pc' && (
-        <div className="rounded-2xl bg-zinc-950/95 border border-emerald-500/35 overflow-hidden transition-all">
+        <div className="rounded-2xl bg-white dark:bg-zinc-950/95 border border-zinc-200 dark:border-emerald-500/35 overflow-hidden transition-all shadow-sm">
           <div
             onClick={() => setShowRealOsPanel((prev) => !prev)}
-            className="p-4 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/50 transition-colors"
+            className="p-4 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-zinc-400 text-[12px] font-mono select-none">
@@ -941,7 +941,7 @@ export const SetupMonsterContent: React.FC = () => {
                 🟢 Z-코어 실물 OS 직결됨 (가짜 프리셋 0% · 100% 내 PC 실측)
               </span>
               {realPcState && (
-                <span className="font-mono text-[11px] text-zinc-300">
+                <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
                   {realPcState.osPlatform} · Git Commit #{realPcState.systemGit.latestCommit.commitHash} ({realPcState.elapsedMs}ms)
                 </span>
               )}
@@ -954,11 +954,11 @@ export const SetupMonsterContent: React.FC = () => {
                   void handleRefreshRealPcState();
                 }}
                 disabled={loadingRealPc}
-                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:border-white/15 dark:text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer transition-colors"
               >
                 {loadingRealPc ? '⏳ 스캔 중...' : '🔄 내 PC 실측 새로고침'}
               </button>
-              <span className="px-3 py-1.5 rounded-xl bg-zinc-800/90 border border-white/20 text-zinc-100 hover:text-white text-[13px] font-extrabold select-none shadow-sm transition-colors">
+              <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-zinc-800 dark:bg-zinc-800/90 dark:border-white/20 dark:text-zinc-100 dark:hover:text-white text-[13px] font-extrabold select-none shadow-sm transition-colors">
                 {showRealOsPanel ? '접기 ▴' : '펼치기 ▾'}
               </span>
             </div>
@@ -1012,13 +1012,13 @@ export const SetupMonsterContent: React.FC = () => {
               )}
 
               {/* 3초 결정론적 오피스/문서 포렌식 + 내부 5줄 실물 증거 미리보기 */}
-              <div className="p-3.5 rounded-xl bg-zinc-900/95 border border-emerald-500/30 flex flex-col gap-2.5">
+              <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/95 border border-zinc-200 dark:border-emerald-500/30 flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-col">
                     <span className="font-label-sm text-[12px] text-emerald-300 font-extrabold">
                       🕵️‍♂️ [제1·2원칙 실물 검증] 내 PC 5대 은닉 금고 3초 결정론적 포렌식 & 내부 텍스트 5줄 실물 증거
                     </span>
-                    <span className="font-body-sm text-[12px] !text-zinc-200 font-medium">
+                    <span className="font-body-sm text-[12px] text-zinc-600 dark:text-zinc-300 font-medium">
                       Excel·Word·한글 자동복구 폴더, 문서(Documents), 다운로드, ShadowVault를 실제로 뒤져 파일 내부 5줄을 먼저 보여줍니다.
                     </span>
                   </div>
@@ -1031,7 +1031,7 @@ export const SetupMonsterContent: React.FC = () => {
                         if (e.key === 'Enter') void handleRunForensicScan();
                       }}
                       placeholder="찾을 문서 키워드 (예: 계약서, 정산, 견적)"
-                      className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-white/15 text-white text-[12px] w-52 focus:outline-none focus:border-emerald-400"
+                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/15 text-zinc-900 dark:text-white text-[12px] w-52 focus:outline-none focus:border-emerald-500"
                     />
                     <button
                       id="zcore-target-btn-scan"
