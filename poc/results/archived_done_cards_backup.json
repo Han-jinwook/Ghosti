@@ -1,0 +1,104 @@
+{
+  "archived_at": "2026-10-28T13:34:33.001366",
+  "total_archived": 14,
+  "cards": [
+    {
+      "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
+      "title": "🎯 [제트아이] [QA 미션] 공유방 v2.1 데이터 흐름(원본 동기화·업로더 삭제·업무방 문서 읽기전용 잠금·OS 기본 휴지통) 점검",
+      "app": "제트아이",
+      "last_edited_time": "2026-10-28T00:53:00.000Z",
+      "url": "https://app.notion.com/p/QA-v2-1-OS-403f9ffd2c1d8112b8a7dad38dfe09df"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-8193-833c-c34575f85608",
+      "title": "🎯 [제트아이] [허브 공통기능 ③] 1초 오류 신고 · 1:1 문의방 · 왼쪽 아래 [F 멀린 패밀리 앱] 이동 · 기존 버튼 그대로인지 점검",
+      "app": "제트아이",
+      "last_edited_time": "2026-10-28T00:18:00.000Z",
+      "url": "https://app.notion.com/p/1-1-1-F-405f9ffd2c1d8193833cc34575f85608"
+    },
+    {
+      "page_id": "406f9ffd-2c1d-8029-b527-f39450be8c3e",
+      "title": "🎯 [제트아이] 색상 변경 관련",
+      "app": "",
+      "last_edited_time": "2026-10-28T00:16:00.000Z",
+      "url": "https://app.notion.com/p/406f9ffd2c1d8029b527f39450be8c3e"
+    },
+    {
+      "page_id": "401f9ffd-2c1d-818a-a5e1-e9104eb4ac21",
+      "title": "🎯 [제트아이] 왼쪽 메뉴 4종 & 백지 도화지 투시검색 · 연관 화면 반응 점검 (실제 버튼명 기준)",
+      "app": "제트아이",
+      "last_edited_time": "2026-10-27T04:45:00.000Z",
+      "url": "https://app.notion.com/p/4-401f9ffd2c1d818aa5e1e9104eb4ac21"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-81b3-a6aa-ec62c18ab1cb",
+      "title": "🎯 [루미노트] 1. 스마트스토어 2분 무인 수집·CJ 송장 합본 다운 & 고객·포인트 원장 연동 점검",
+      "app": "루미노트",
+      "last_edited_time": "2026-10-27T02:00:00.000Z",
+      "url": "https://app.notion.com/p/1-2-CJ-405f9ffd2c1d81b3a6aaec62c18ab1cb"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-81cb-9919-c3881c09c778",
+      "title": "🎯 [썬드리머] 5. [모바일 환경] PWA 홈 화면 추가 배너(아이폰/안드로이드) & 하단 탭 터치감 점검",
+      "app": "썬드리머",
+      "last_edited_time": "2026-10-27T01:58:00.000Z",
+      "url": "https://app.notion.com/p/5-PWA-405f9ffd2c1d81cb9919c3881c09c778"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-8137-a102-c8c3f320d0b5",
+      "title": "🎯 [센스톡] 4. 내 선물함(선물 보내기/받기) & 1:1 고객문의·1초 오류 신고 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-10-27T01:52:00.000Z",
+      "url": "https://app.notion.com/p/4-1-1-1-403f9ffd2c1d8137a102c8c3f320d0b5"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-81ed-aa69-d8074f1b983e",
+      "title": "🎯 [썬드리머] 4. [PC 환경] 네이버 카페 로그인 & 램프 수명 계산기(1600h)·스토어 장바구니 점검",
+      "app": "썬드리머",
+      "last_edited_time": "2026-10-27T00:29:00.000Z",
+      "url": "https://app.notion.com/p/4-PC-1600h-405f9ffd2c1d81edaa69d8074f1b983e"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-8124-af20-dbdc12974f68",
+      "title": "🎯 [센스톡] 3. 동료에게 내 템플릿·명단·상용구 복사본 넘겨주기 보드 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-10-26T05:43:00.000Z",
+      "url": "https://app.notion.com/p/3-403f9ffd2c1d8124af20dbdc12974f68"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-812b-ba1e-fae48dfc717e",
+      "title": "🎯 [센스톡] 2. 신입 노란 샘플 표시(SAMPLE) 자동 사라짐 & 계정별 데이터 분리 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-10-26T03:26:00.000Z",
+      "url": "https://app.notion.com/p/2-SAMPLE-403f9ffd2c1d812bba1efae48dfc717e"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-8161-9f6f-e25998c0d321",
+      "title": "🎯 [센스톡] 1. 이메일 6자리 로그인 & 내 정보·알림·패밀리 앱 이동 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-10-26T02:18:00.000Z",
+      "url": "https://app.notion.com/p/1-6-403f9ffd2c1d81619f6fe25998c0d321"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-81bd-8eec-d34903e5811b",
+      "title": "🎯 [썬드리머] 3. 설정 탭 [앱 초대 List] 삭제 & 포인트 선물하기 별명 검색 확인",
+      "app": "썬드리머",
+      "last_edited_time": "2026-10-26T02:16:00.000Z",
+      "url": "https://app.notion.com/p/3-List-403f9ffd2c1d81bd8eecd34903e5811b"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-81e6-ba68-fc26cc34fc6f",
+      "title": "🎯 [썬드리머] 2. 새로 바뀐 공유 카드 문구(주변에 알려주기) & 공유 링크 확인",
+      "app": "썬드리머",
+      "last_edited_time": "2026-10-26T02:06:00.000Z",
+      "url": "https://app.notion.com/p/2-403f9ffd2c1d81e6ba68fc26cc34fc6f"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-8170-9f62-fffc695086f9",
+      "title": "🎯 [썬드리머] 1. 로그인 시 옛날 11년 포인트 팝업 안 뜨는지 & 초대 영상 버튼 삭제 확인",
+      "app": "썬드리머",
+      "last_edited_time": "2026-10-26T01:57:00.000Z",
+      "url": "https://app.notion.com/p/1-11-403f9ffd2c1d81709f62fffc695086f9"
+    }
+  ]
+}
