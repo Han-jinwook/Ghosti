@@ -4,11 +4,13 @@ import { zCoreBridge, Z_CORE_PORT } from '../services/zCoreBridge';
 interface ZCoreEngineStatusBadgeProps {
   themeMode?: 'light' | 'dark';
   onClickGuide: () => void;
+  compact?: boolean;
 }
 
 export const ZCoreEngineStatusBadge: React.FC<ZCoreEngineStatusBadgeProps> = ({
   themeMode = 'dark',
   onClickGuide,
+  compact = false,
 }) => {
   const [isConnected, setIsConnected] = useState<boolean>(zCoreBridge.isConnected);
 
@@ -46,8 +48,8 @@ export const ZCoreEngineStatusBadge: React.FC<ZCoreEngineStatusBadgeProps> = ({
           isConnected ? 'bg-emerald-500 shadow-[0_0_6px_#10B981]' : 'bg-amber-500'
         }`}
       />
-      <span className="whitespace-nowrap">
-        {isConnected ? `Z-코어 ${Z_CORE_PORT}` : 'Z-코어 연결 필요'}
+      <span className={`whitespace-nowrap ${compact ? 'hidden sm:inline' : ''}`}>
+        {isConnected ? `Z-코어 ${Z_CORE_PORT}` : 'Z-코어'}
       </span>
     </button>
   );

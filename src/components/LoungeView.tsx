@@ -3067,9 +3067,9 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
   const pendingAnalogProposals = analogYearProposals.filter((p) => !p.approvedByHost);
 
-  const queuePhotos = photos
-    .filter((p) => !p.quarantined && !deletedLoungePhotoIds.includes(p.id))
-    .slice(0, 8);
+  const basePhotos = photos
+    .filter((p) => !p.quarantined && !deletedLoungePhotoIds.includes(p.id));
+  const queuePhotos = basePhotos.slice(0, Math.max(0, 8 - deletedLoungePhotoIds.length));
 
   const metaByLounge: Record<
     Exclude<LoungeType, 'personal'>,

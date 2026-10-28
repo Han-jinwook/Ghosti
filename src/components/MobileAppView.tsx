@@ -287,20 +287,20 @@ export const MobileAppView: React.FC = () => {
               : 'bg-[#09090B]/95 border-white/10'
           }`}
         >
-          <div className="flex items-center justify-between gap-1.5 overflow-hidden">
-            <div className="flex items-center gap-1 min-w-0 shrink">
+          <div className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1 shrink-0">
               <GhostiBrandLogo
                 size="mobile"
                 themeMode={themeMode}
                 showBadge={false}
                 subtitle=""
                 onClick={() => setMobileTab('search')}
-                className="shrink-0 scale-90 sm:scale-100 origin-left"
+                className="shrink-0"
               />
             </div>
 
             {/* 우상단: 귀신같이 여권 자동 문패(업무 공유 제외) + 설정몬스터 + 크레딧 잔액 + 심플 아이콘 테마 토글 */}
-            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" aria-label="화면 테마 영역">
+            <div className="flex items-center gap-1 shrink-0" aria-label="화면 테마 영역">
               {myPassportCluster && activeLoungeType !== 'work' && (
                 <button
                   type="button"
@@ -315,9 +315,9 @@ export const MobileAppView: React.FC = () => {
                   <img
                     src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
                     alt={myDoorplatePersona}
-                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full object-cover border border-primary-container shrink-0"
+                    className="w-4 h-4 rounded-full object-cover border border-primary-container shrink-0"
                   />
-                  <span className="font-label-sm text-[10px] sm:text-[10.5px] font-extrabold whitespace-nowrap">
+                  <span className="font-label-sm text-[10px] font-extrabold whitespace-nowrap hidden min-[410px]:inline">
                     👑 {myDoorplatePersona}
                   </span>
                 </button>
@@ -332,7 +332,7 @@ export const MobileAppView: React.FC = () => {
                 </button>
               )}
               {/* 허브 SDK 표준 앵커 (PC 헤더와 동일): 🪙 코인(스토어 심사 모드·네이티브 앱에서는 DOM 원천 비노출) + 🐾 곰발바닥 OTP 로그인/통합 프로필 */}
-              <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} />
+              <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} compact={true} />
               <GhostiTopRightHubAnchor themeMode={themeMode} />
               <button
                 type="button"
