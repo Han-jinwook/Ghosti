@@ -178,8 +178,8 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   personal: [
 
     { id: 'dashboard', label: '🎯 귀신같이 찾기' },
-    { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
-    { id: 'sync', label: '🛠️ 설정몬스터' },
+    { id: 'trash', label: '🧹 귀신같이 청소', showTrashCount: true },
+    { id: 'sync', label: '🛠️ 귀신같이 수리' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },
@@ -362,7 +362,7 @@ export const DesktopDashboard: React.FC = () => {
   const activeLoungeLabel =
     MAIN_LOUNGE_MENUS.find((m) => m.id === activeLoungeType)?.label || '개인 라운지';
   const activeSubmenuLabel =
-    (activeLoungeType === 'personal' && desktopTab === 'trial' ? '🧹 클린몬스터 진단' : currentSubmenus.find((s) => s.id === desktopTab)?.label) || '귀신같이 찾기';
+    (activeLoungeType === 'personal' && desktopTab === 'trial' ? '🧹 귀신같이 청소 진단' : currentSubmenus.find((s) => s.id === desktopTab)?.label) || '귀신같이 찾기';
 
   const renderSidebarNavigationContent = (isMobileDrawer = false) => (
     <div
@@ -513,7 +513,7 @@ export const DesktopDashboard: React.FC = () => {
                               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
                           }`}
                         >
-                          <span className="truncate">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🧹 클린몬스터 진단' : sub.label}</span>
+                          <span className="truncate">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🧹 귀신같이 청소 진단' : sub.label}</span>
                           {sub.showTrashCount && (
                             <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-mono font-bold shrink-0">
                               {activeTrashCount}

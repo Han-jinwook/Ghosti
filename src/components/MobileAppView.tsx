@@ -143,8 +143,8 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   personal: [
 
     { id: 'search', label: '🎯 귀신같이 찾기' },
-    { id: 'trash', label: '🩺 클린몬스터', showTrashCount: true },
-    { id: 'settings', label: '🛠️ 설정몬스터' },
+    { id: 'trash', label: '🧹 귀신같이 청소', showTrashCount: true },
+    { id: 'settings', label: '🛠️ 귀신같이 수리' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },
