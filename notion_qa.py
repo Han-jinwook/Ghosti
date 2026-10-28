@@ -66,11 +66,11 @@ NOTION_TOKEN: str = os.getenv(
 NOTION_VERSION: str = "2022-06-28"
 NOTION_API_BASE: str = "https://api.notion.com/v1"
 
-# 칸반 보드 4단계 상태 컬럼값 정의 (좌 -> 우 순서: 테스트 미션 -> 발견된 버그 -> 재테스트 대기 -> 완료)
+# 칸반 보드 4단계 상태 컬럼값 정의 (좌 -> 우 순서: 미션 -> 발견 버그 -> 재테스트 -> 완료)
 # ⚠️ '수정 중' 컬럼은 영구 삭제·폐지됨 (절대 사용 금지)
-STATUS_MISSION = "테스트 미션"
-STATUS_DISCOVERED = "발견된 버그"
-STATUS_READY_FOR_QA = "재테스트 대기"
+STATUS_MISSION = "미션"
+STATUS_DISCOVERED = "발견 버그"
+STATUS_READY_FOR_QA = "재테스트"
 STATUS_DONE = "완료"
 
 
@@ -172,6 +172,32 @@ class NotionKanbanSchema:
                     found_status = True
                     break
 
+        # 실제 노션 DB에 등록된 상태 옵션명을 자동 감지하여 호환 바인딩 (미션 / 발견 버그 / 재테스트 / 완료)
+        global STATUS_MISSION, STATUS_DISCOVERED, STATUS_READY_FOR_QA, STATUS_DONE
+        status_meta = props.get(self.status_prop_name, {})
+        raw_opts = (
+            status_meta.get(self.status_prop_type, {}).get("options", [])
+            if self.status_prop_type in ("status", "select")
+            else []
+        )
+        opt_names = {o.get("name", "") for o in raw_opts if o.get("name")}
+        for cand in ("미션", "테스트 미션"):
+            if cand in opt_names:
+                STATUS_MISSION = cand
+                break
+        for cand in ("발견 버그", "발견된 버그", "버그/요청"):
+            if cand in opt_names:
+                STATUS_DISCOVERED = cand
+                break
+        for cand in ("재테스트", "재테스트 대기"):
+            if cand in opt_names:
+                STATUS_READY_FOR_QA = cand
+                break
+        for cand in ("완료", "Done"):
+            if cand in opt_names:
+                STATUS_DONE = cand
+                break
+
         self._loaded = True
 
 
@@ -236,21 +262,22 @@ def fetch_page_body_text(page_id: str) -> str:
 # =====================================================================
 # 3. 핵심 요청 함수 1: fetch_bugs()
 # =====================================================================
-def query_bugs_raw(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str]]:
-    """출력 없이指定된 상태의 카드 배열만 조용히 반환합니다 (감시 데몬 겸용)."""
+def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
+    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (감시 데몬 겸용)."""
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
+    resolved_status = target_status or STATUS_DISCOVERED
 
     url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
     if SCHEMA.status_prop_type == "status":
         filter_payload = {
             "property": SCHEMA.status_prop_name,
-            "status": {"equals": target_status},
+            "status": {"equals": resolved_status},
         }
     else:
         filter_payload = {
             "property": SCHEMA.status_prop_name,
-            "select": {"equals": target_status},
+            "select": {"equals": resolved_status},
         }
 
     payload = {
@@ -288,19 +315,20 @@ def query_bugs_raw(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str
     return bugs
 
 
-def fetch_bugs(target_status: str = STATUS_DISCOVERED) -> List[Dict[str, str]]:
+def fetch_bugs(target_status: Optional[str] = None) -> List[Dict[str, str]]:
     """
-    상태가 '발견된 버그'(기본값)인 카드를 조회하여
+    상태가 '발견 버그'(기본값)인 카드를 조회하여
     터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다. (100% 읽기 전용)
     """
     bugs = query_bugs_raw(target_status)
+    resolved_status = target_status or STATUS_DISCOVERED
 
     print("\n" + "=" * 72)
-    print(f"🐛 [Ghosti 노션 QA 보드] '{target_status}' 티켓 목록 (총 {len(bugs)}건)")
+    print(f"🐛 [Ghosti 노션 QA 보드] '{resolved_status}' 티켓 목록 (총 {len(bugs)}건)")
     print("=" * 72)
 
     if not bugs:
-        print(f"✨ 현재 '{target_status}' 상태인 카드가 없습니다!")
+        print(f"✨ 현재 '{resolved_status}' 상태인 카드가 없습니다!")
         print("=" * 72)
         return []
 
@@ -396,8 +424,8 @@ def complete_bug(page_id: str, guide_text: str) -> bool:
     print(f"   • 상태 변경: '{STATUS_READY_FOR_QA}' 🚀")
     print(f"   • 테스터 안내문:\n     {full_instruction_text.replace(chr(10), chr(10) + '     ')}")
 
-    # 3단계: 남은 '발견된 버그' 자동 확인 후 다음 작업 제안 (추가 토큰 0)
-    remaining_bugs = query_bugs_raw(STATUS_DISCOVERED)
+    # 3단계: 남은 '발견 버그' 자동 확인 후 다음 작업 제안 (추가 토큰 0)
+    remaining_bugs = query_bugs_raw()
     if remaining_bugs:
         next_bug = remaining_bugs[0]
         print("\n" + "🔔" * 24)
@@ -409,7 +437,7 @@ def complete_bug(page_id: str, guide_text: str) -> bool:
         print("   💬 이어서 이 버그도 바로 수정할까요?")
         print("🔔" * 24)
     else:
-        print("\n🎉 현재 '발견된 버그' 컬럼의 모든 티켓 처리가 끝났습니다!")
+        print(f"\n🎉 현재 '{STATUS_DISCOVERED}' 컬럼의 모든 티켓 처리가 끝났습니다!")
 
     return True
 
@@ -571,15 +599,16 @@ def update_bug_status(page_id: str, new_status: str) -> bool:
 def create_mission(
     title: str,
     steps_text: str,
-    initial_status: str = STATUS_MISSION,
+    initial_status: Optional[str] = None,
 ) -> Optional[str]:
     """
     멀린님과 AI가 새 기능/UI를 만든 직후, 비개발자 알바생(테스터)이
-    '오늘 뭐 테스트할까요?'라고 물어보지 않도록 노션 보드 맨 앞 '테스트 미션' 칸에
+    '오늘 뭐 테스트할까요?'라고 물어보지 않도록 노션 보드 맨 앞 '미션' 칸에
     친절한 체크리스트 미션 카드를 자동 생성합니다.
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
+    resolved_status = initial_status or STATUS_MISSION
 
     clean_title = title.strip()
     if not clean_title.startswith("🎯"):
@@ -589,9 +618,9 @@ def create_mission(
             clean_title = f"🎯 [귀신같이] {clean_title}"
 
     if SCHEMA.status_prop_type == "status":
-        status_prop = {"status": {"name": initial_status}}
+        status_prop = {"status": {"name": resolved_status}}
     else:
-        status_prop = {"select": {"name": initial_status}}
+        status_prop = {"select": {"name": resolved_status}}
 
     # 줄바꿈 또는 번호로 구분된 체크리스트 블록 생성
     raw_lines = [
@@ -644,7 +673,7 @@ def create_mission(
                         {
                             "type": "text",
                             "text": {
-                                "content": "✅ 모두 잘 작동하면: 이 카드를 [완료] 칸으로 옮겨주세요!\n🚨 안 되거나 어색한 부분이 있으면: 이 글 맨 아래에 어떤 점이 이상한지(가능하면 캡처 사진과 함께) 적어주시고, 카드를 [발견된 버그] 칸으로 옮겨주시면 AI가 자동으로 감지해 바로 고치겠습니다. 감사합니다!"
+                                "content": "✅ 모두 잘 작동하면: 이 카드를 [완료] 칸으로 옮겨주세요!\n🚨 안 되거나 어색한 부분이 있으면: 이 글 맨 아래에 어떤 점이 이상한지(가능하면 캡처 사진과 함께) 적어주시고, 카드를 [발견 버그] 칸으로 옮겨주시면 AI가 자동으로 감지해 바로 고치겠습니다. 감사합니다!"
                             },
                             "annotations": {"color": "gray"},
                         }
@@ -680,7 +709,7 @@ def create_mission(
     new_page_id = res.json().get("id", "")
     print("\n🎯 [알바생용 노션 테스트 미션 카드 생성 완료!]")
     print(f"   • 미션 제목: {clean_title}")
-    print(f"   • 배치 컬럼: '{initial_status}'")
+    print(f"   • 배치 컬럼: '{resolved_status}'")
     print(f"   • 카드 ID  : {new_page_id}")
     return new_page_id
 
@@ -729,18 +758,18 @@ def watch_bugs(interval_sec: int = 15) -> None:
     SCHEMA.detect(DATABASE_ID)
 
     print(
-        f"👀 [무토큰 파이썬 감시병 가동] {interval_sec}초 간격으로 노션 '발견된 버그' 컬럼을 감시합니다 (평상시 AI 토큰 소모 0)..."
+        f"👀 [무토큰 파이썬 감시병 가동] {interval_sec}초 간격으로 노션 '{STATUS_DISCOVERED}' 컬럼을 감시합니다 (평상시 AI 토큰 소모 0)..."
     )
     seen_ids: Set[str] = set()
 
     while True:
         try:
-            bugs = query_bugs_raw(STATUS_DISCOVERED)
+            bugs = query_bugs_raw()
             new_bugs = [b for b in bugs if b["page_id"] not in seen_ids]
             if new_bugs:
                 print("\n" + "🚨" * 24)
                 print(
-                    f"🔔 [새 버그 자동 감지!] 노션 보드에 '발견된 버그' {len(new_bugs)}건이 확인되었습니다!"
+                    f"🔔 [새 버그 자동 감지!] 노션 보드에 '{STATUS_DISCOVERED}' {len(new_bugs)}건이 확인되었습니다!"
                 )
                 for idx, b in enumerate(new_bugs, start=1):
                     print(f"\n[{idx}] 📌 제목: {b['title']}")
@@ -790,18 +819,18 @@ def run_cli() -> None:
     print(f"   • 연동 Database ID: {DATABASE_ID}")
     print("━" * 72)
 
-    current_bugs = fetch_bugs(STATUS_DISCOVERED)
+    current_bugs = fetch_bugs()
 
     while True:
         print("\n[명령어 안내]")
-        print("  • r 또는 Enter : '발견된 버그' 목록 새로고침 (fetch_bugs)")
-        print("  • c [번호/ID]  : 수정 완료 처리 -> '재테스트 대기' 변경 + 쉬운 재테스트 안내 추가")
+        print(f"  • r 또는 Enter : '{STATUS_DISCOVERED}' 목록 새로고침 (fetch_bugs)")
+        print(f"  • c [번호/ID]  : 수정 완료 처리 -> '{STATUS_READY_FOR_QA}' 변경 + 쉬운 재테스트 안내 추가")
         print("  • w            : 무토큰 실시간 감시 모드 켜기 (새 버그 등록 시 즉시 알림)")
         print("  • q            : 종료")
 
         cmd_raw = input("\n👉 명령 입력: ").strip()
         if not cmd_raw or cmd_raw.lower() == "r":
-            current_bugs = fetch_bugs(STATUS_DISCOVERED)
+            current_bugs = fetch_bugs()
             continue
 
         if cmd_raw.lower() in ("q", "quit", "exit"):
@@ -810,7 +839,7 @@ def run_cli() -> None:
 
         if cmd_raw.lower() in ("w", "watch"):
             watch_bugs(15)
-            current_bugs = fetch_bugs(STATUS_DISCOVERED)
+            current_bugs = fetch_bugs()
             continue
 
         parts = cmd_raw.split(maxsplit=1)
@@ -844,7 +873,7 @@ def run_cli() -> None:
                 continue
 
             if complete_bug(page_id, guide_text):
-                current_bugs = fetch_bugs(STATUS_DISCOVERED)
+                current_bugs = fetch_bugs()
 
         else:
             page_id, title = resolve_target_bug(cmd_raw, current_bugs)
@@ -853,7 +882,7 @@ def run_cli() -> None:
                 guide_text = input("   💬 쉬운 재테스트 안내문 입력 (1줄): ").strip()
                 if guide_text:
                     if complete_bug(page_id, guide_text):
-                        current_bugs = fetch_bugs(STATUS_DISCOVERED)
+                        current_bugs = fetch_bugs()
             else:
                 print("   ❓ 알 수 없는 명령어입니다. ('r', 'c 1', 'w', 'q' 중 입력)")
 
@@ -862,7 +891,7 @@ if __name__ == "__main__":
     if len(sys.argv) >= 2:
         subcmd = sys.argv[1].lower()
         if subcmd == "fetch":
-            fetch_bugs(STATUS_DISCOVERED)
+            fetch_bugs()
             sys.exit(0)
         elif subcmd == "watch":
             interval = int(sys.argv[2]) if len(sys.argv) >= 3 else 15
