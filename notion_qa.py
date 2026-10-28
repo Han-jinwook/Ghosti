@@ -413,6 +413,53 @@ def complete_bug(page_id: str, guide_text: str) -> bool:
     return True
 
 
+def archive_done(page_id: str, memo_text: str = "") -> bool:
+    """
+    알바생(테스터)이 메시지 작성 후 '발견된 버그'로 넘긴 카드를
+    AI가 확인/킵한 뒤 '완료' 상태로 넘기는 함수입니다.
+    """
+    ensure_valid_token()
+    SCHEMA.detect(DATABASE_ID)
+
+    clean_page_id = page_id.strip()
+
+    # 1단계: 카드 본문 맨 아래에 "[AI 확인 및 완료 처리]" 블록 추가
+    if memo_text.strip():
+        blocks_url = f"{NOTION_API_BASE}/blocks/{clean_page_id}/children"
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        children_payload = [
+            {"object": "block", "type": "divider", "divider": {}},
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": f"[AI 확인 및 완료 처리] ({timestamp_str})\n"
+                            },
+                            "annotations": {"bold": True, "color": "blue"},
+                        },
+                        {
+                            "type": "text",
+                            "text": {"content": memo_text.strip()},
+                        },
+                    ]
+                },
+            },
+        ]
+        requests.patch(
+            blocks_url,
+            headers=get_headers(),
+            json={"children": children_payload},
+            timeout=15,
+        )
+
+    # 2단계: 카드의 상태를 '완료'로 변경
+    return update_bug_status(clean_page_id, STATUS_DONE)
+
+
 def update_bug_status(page_id: str, new_status: str) -> bool:
     """카드의 상태만 원하는 단계(예: '수정 중', '발견된 버그')로 빠르게 변경합니다."""
     ensure_valid_token()
@@ -746,6 +793,11 @@ if __name__ == "__main__":
         elif subcmd == "status" and len(sys.argv) >= 4:
             update_bug_status(sys.argv[2], sys.argv[3])
             sys.exit(0)
+        elif subcmd == "done" and len(sys.argv) >= 3:
+            target_id = sys.argv[2]
+            memo = " ".join(sys.argv[3:]) if len(sys.argv) >= 4 else "확인 및 완료 처리"
+            ok = archive_done(target_id, memo)
+            sys.exit(0 if ok else 1)
         elif subcmd == "complete" and len(sys.argv) >= 4:
             target_id = sys.argv[2]
             guide = " ".join(sys.argv[3:])
