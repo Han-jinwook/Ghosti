@@ -30,6 +30,6 @@
 | **양대 스토어 타이틀 (30자 이내)** | **`귀신같이 - 1초 AI 파일·영상 찾기 & 용량청소`** *(25자)* | **`Ghosti AI: Scary Fast Finder`** *(28자)* |
 | **iOS 서브타이틀 (30자 이내)** | **`동영상 장면·엑셀 표 찾기부터 용량 청소·직결 공유방`** *(29자)* | **`Spot Video Scenes, Docs, Clean`** *(30자)* |
 | **Google Play 짧은 설명 (80자 이내)** | `파일 이름 몰라도 동영상 속 장면·엑셀 글자를 1초 만에 귀신같이 찾아주는 무료 AI! 중복 사진 청소와 서버 없는 가족 공유방까지` *(73자)* | `Find exact video scenes & Excel text in 1 sec. Clean duplicate photos privately!` *(80자)* |
-| **좌측 상단 헤더 로고 (`GhostiBrandLogo`)** | [아기귀신 심볼] + `귀신같이` 붓글씨 워드마크 (1단) + `1초 AI 파일·영상 내용찾기` (2단) | [아기귀신 심볼] + `Ghosti AI` (1단) + `Scary Fast AI File & Video Finder` (2단) |
-| **사이드바 3대 핵심 메뉴** | **`[ 🎯 귀신같이 찾기 \| 🧹 클린몬스터 \| ⚙️ 설정몬스터 ]`** | **`[ 🎯 Ghosti Finder \| 🧹 Clean Monster \| ⚙️ Setup Monster ]`** |
+| **좌측 상단 헤더 로고 (`GhostiBrandLogo`)** | [아기귀신 심볼] + `귀신같이` 붓글씨 워드마크 (1단 단독 노출 후 10초 롤링으로 `[AI] 1초 AI 파일·영상 내용찾기` 크로스페이드) | [아기귀신 심볼] + `Ghosti AI` (1단 단독 노출 후 10초 롤링으로 `[AI] Scary Fast AI File & Video Finder` 크로스페이드) |
+| **사이드바 3대 핵심 메뉴** | **`[ 🎯 찾기 \| 🧹 치우기 \| ⚙️ 고치기 ]`** *(서브 리듬: 찾고, 치우고, 고치고)* | **`[ 🎯 Find \| 🧹 Clean \| ⚙️ Fix ]`** *(Sub: Find, Clean, and Fix in 1 Sec)* |
 | **숏폼 엔딩 키 카피 (CTA)** | *"지금 스토어에 한글로 **『귀신같이』** 네 글자만 치세요!"* | *"Don't open files. Just ask **Ghosti AI** — It's **Scary Fast**, **Dead-On**, and 100% On-Device!"* |
