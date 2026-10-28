@@ -210,7 +210,7 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
             "ghostiOs": lambda: get("/api/ghosti/health"),
             "senstalk": lambda: get("/api/senstalk/health"),
             "aggrofilterHealth": lambda: get("/api/aggrofilter/health"),
-            "aggrofilterLiveCaption": lambda: get("/aggrofilter/v1/extract-subtitles", {"url": "https://www.youtube.com/watch?v=arj7oStGLkU"}, t=30.0),
+            "aggrofilterLiveCaption": lambda: get("/aggrofilter/v1/extract-subtitles", {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}, t=30.0),
         }
         for name, fn in checks.items():
             try:

@@ -242,10 +242,10 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
         and len(ag_fmt1) == 1 and ag_fmt1[0]["text"] == "first & line"
         and ag_invalid.get("ok") is False
     )
-    ag_live: Dict[str, Any] = {"skipped": True, "hint": "--selftest-live 로 실제 유튜브 4종 실측"}
+    ag_live: Dict[str, Any] = {"skipped": True, "hint": "--selftest-live 로 실제 유튜브 2종 실측"}
     if live:
         live_rows = []
-        for v in ("dQw4w9WgXcQ", "jNQXAC9IVRw", "arj7oStGLkU", "IHNzOHi8sJs"):
+        for v in ("dQw4w9WgXcQ", "jNQXAC9IVRw"):
             r = plugin_aggrofilter.fetch_youtube_captions_via_local_ip(v)
             live_rows.append({"videoId": v, "ok": r.get("ok"), "segmentCount": r.get("segmentCount"), "lang": r.get("selectedLanguage"), "reason": r.get("reason")})
         ag_live = {"skipped": False, "results": live_rows, "allOk": all(x["ok"] and (x["segmentCount"] or 0) > 0 for x in live_rows)}

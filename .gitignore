@@ -1,6 +1,7 @@
 # Dependencies & build output
 node_modules/
-dist/
+/dist/
+!universal_z_core/os_agent/dist/Merlin_Z_Core_Setup.exe
 .vite/
 
 # Environment variables & secrets (NEVER commit API keys or credentials)
