@@ -2951,7 +2951,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: 'welcome_setup_monster',
       role: 'assistant_triage',
       timestamp: '방금',
-      text: '안녕하세요! 🛠️ 설정몬스터(멀린코인 에스크로 기반 무위험 1:1 AI 수리기사)입니다.\n• 🔍 선(先) 무료 문진 & .exe 백그라운드 사태 파악은 지갑 잔액이 0 코인이어도 100% 무료로 진행됩니다.\n• 🪙 후(後) 난이도별 견적(🟢 Level 1: 100 코인 / 🟡 Level 2: 300 코인 / 🔴 Level 3: 500 코인) 제시 시 멀린허브 통합 지갑 잔액을 즉시 조회(Pre-Check)하며, 잔액 부족 시 원클릭 1초 충전 브릿지를 통해 충전 즉시 에스크로 홀딩 후 수리에 돌입합니다.\n• 🛡️ 수리 실패 또는 [👎 아직 해결 안 됨] 클릭 시 1초 원상복구 + 에스크로 홀딩 코인 100% 즉시 반환 + 본사 실패 블랙박스 로그 자동 전송이 보장됩니다.',
+      text: '안녕하세요! 🩺 귀신같이 1:1 주치의(치우기 × 고치기 통합 대화형 엔진)입니다.\n• 🆓 [내 기기]의 모든 치우기·고치기·파일 복구·내 PC 사양 상담·바탕화면 바로가기 생성은 코인 차감 없이 언제나 0원(100% 무료)입니다.\n• 🛡️ 모든 실행 전 [실물 증거 미리보기 게이트(Zero-Auto-Action)]를 먼저 보여드리며, 유저님이 [⭕ 확인 완료]를 누르시기 전에는 절대 임의로 실행하지 않습니다.\n• 🕰️ 모든 변경 0.01초 전 [복원 기록]을 남기며, 🟢[100% 완벽 복원 가능] / 🟡[부분 복원 가능] / 🔴[복원 불가] 3단계 무결성 사전 검진(Pre-Check) 후 1초 만에 원래 상태로 되돌릴 수 있습니다.',
       triageQuestion: buildSetupPreTriageQuestion(
         'pc',
         '부팅 시 뜨는 광고/유령앱 차단',
@@ -3281,24 +3281,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   approveAndExecuteSetupPlan: async (plan, simulatedBacktrackCount) => {
     const state = get();
-    const currentCredits = state.merlinAuth.coinBalance;
-    const cost = plan.creditCost ?? 100;
-
-    // [사전 잔액 검증 (Pre-Check) ➔ 부족 시 원클릭 충전 브릿지 모달 자동 오픈!]
-    if (currentCredits < cost) {
-      const deficit = cost - currentCredits;
-      set({
-        merlinCoinTopupBridge: {
-          open: true,
-          targetPlan: plan,
-          requiredCoins: cost,
-          currentCoins: currentCredits,
-          deficitCoins: deficit,
-        },
-        lastQuarantineToast: `🪙 멀린코인 ${deficit}개가 부족합니다 (보유 ${currentCredits}C / 필요 ${cost}C) — 멀린허브 1초 원클릭 충전 브릿지를 열었습니다!`,
-      });
-      return;
-    }
+    const cost = 0; // [멀린님 확정 A1]: [내 기기] 치우기·고치기는 코인 차감 없이 언제나 0원(무료)!
 
     const effectiveBacktrack = Math.max(0, Math.floor(simulatedBacktrackCount ?? 0));
     const nowIso = new Date().toISOString();
@@ -3473,8 +3456,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       lastQuarantineToast: isEmpathyRefund
         ? evalResult.empathyApologyToastKo
         : effectiveBacktrack === 1
-        ? `🟡 [1회 뒤로 가기 인간적 허용 · ${cost} 코인 에스크로 홀딩] 1회 우회 갈림길 로그를 본사로 전송해 0회 직행 코스로 미세 교정(OTA)했습니다!`
-        : `🔒 [${cost} 멀린코인 에스크로 홀딩 & 1초 수리 완료] 완치 확인 전까지 에스크로에 안전하게 보관되며, 실패 또는 2회 이상 헤맴 시 100% 즉시 반환됩니다!`,
+        ? `🟡 [1회 뒤로 가기 인간적 허용 · 언제나 0원] 1회 우회 갈림길 로그를 본사로 전송해 0회 직행 코스로 미세 교정(OTA)했습니다!`
+        : `✅ [내 기기 1초 수리 완료 — 언제나 0원 · [복원 기록] 자동 저장] 언제든 1초 만에 원래 상태로 되돌릴 수 있습니다!`,
     }));
   },
 

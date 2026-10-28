@@ -3325,6 +3325,20 @@ function ghostiLocalBridge(): Plugin {
         res.end(JSON.stringify(out));
       });
 
+      server.middlewares.use('/__zcore/create-shortcut', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const out = await runBuiltinPluginPython('ghosti_os', 'create-desktop-shortcut', body);
+        res.end(JSON.stringify(out));
+      });
+
+      server.middlewares.use('/__zcore/record-cleanup', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const out = await runBuiltinPluginPython('ghosti_os', 'record-cleanup-restore', body);
+        res.end(JSON.stringify(out));
+      });
+
       server.middlewares.use('/__zcore/os-execute', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};

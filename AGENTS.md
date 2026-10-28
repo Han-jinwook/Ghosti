@@ -331,7 +331,7 @@
 
 
 
-   - 상세 명세: [`docs/Z-코어_오피스증발_3초포렌식_및_무할루시네이션_3대원칙.md`](file:///d:/Ghosti/docs/Z-코어_오피스증발_3초포렌식_및_무할루시네이션_3대원칙.md)
+   - 상세 명세: [`docs/치우기&고치기_최종기획안.md`](file:///d:/Ghosti/docs/%EC%B9%98%EC%9A%B0%EA%B8%B0&%EA%B3%A0%EC%B9%98%EA%B8%B0_%EC%B5%9C%EC%A2%85%EA%B8%B0%ED%9A%8D%EC%95%88.md)
 
 
 

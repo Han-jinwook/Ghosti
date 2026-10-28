@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { PhotoItem, TrashCategory } from '../types/saysee';
+import {
+  processUnifiedMonsterChatQuery,
+  loadLocalHealthCheckHistory,
+  executeRestorePointRollback,
+  type MonsterChatMessage,
+  type MonsterLiteracyLevel,
+  type DigitalHealthCheckRecord,
+} from '../services/monsterChatRouter';
+import {
+  MonsterInteractiveCardView,
+  PersonalHealthCheckHistoryDrawer,
+} from './MonsterInteractiveCards';
 
 const TRASH_TABS: {
   key: 'duplicate' | 'memo' | 'screenshot' | 'blurry';
@@ -94,6 +106,7 @@ export const SmartTrashView: React.FC = () => {
     setDesktopTab,
     setMobileTab,
     setSearchSpace,
+    runTextQuery,
     isStoreAppMode,
   } = useSaySeeStore();
 
@@ -101,44 +114,64 @@ export const SmartTrashView: React.FC = () => {
   const [showSystemConsult, setShowSystemConsult] = useState<boolean>(true);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(true);
   const [isTrashBinTabActive, setIsTrashBinTabActive] = useState<boolean>(false);
+  const [showHealthHistoryDrawer, setShowHealthHistoryDrawer] = useState<boolean>(false);
+  const [healthHistoryRecords, setHealthHistoryRecords] = useState<DigitalHealthCheckRecord[]>(() =>
+    loadLocalHealthCheckHistory()
+  );
+  const [literacyLevel, setLiteracyLevel] = useState<MonsterLiteracyLevel>('normal');
+  const [ttsEnabled, setTtsEnabled] = useState<boolean>(true);
+  const [monsterMessages, setMonsterMessages] = useState<MonsterChatMessage[]>([]);
+  const [monsterBusy, setMonsterBusy] = useState<boolean>(false);
 
-  // 클린몬스터 종합건강검진 항목별 유저 직접 결정 상태
+  // 클린몬스터 종합건강검진 항목별 유저 직접 결정 상태 (노인 별도 안 없이 기본 귀신같이 직관 기능 통합)
   const [decisions, setDecisions] = useState<{
-    mobileHome: 'pending' | 'separate_folder' | 'senior_big_icon';
+    downloadInstallers: 'pending' | 'clean_installers' | 'keep';
     pcDesktop: 'pending' | 'archive_move' | 'keep';
     powerDrain: 'pending' | 'freeze_remove' | 'keep';
   }>({
-    mobileHome: 'pending',
+    downloadInstallers: 'pending',
     pcDesktop: 'pending',
     powerDrain: 'pending',
   });
   const [doctorChatInput, setDoctorChatInput] = useState('');
   const [doctorChatReply, setDoctorChatReply] = useState<string>(
-    '💬 클린몬스터 컨설턴트: "기계적으로 일괄 삭제하지 않습니다. 검진 항목을 보시고 궁금한 점을 물어보시면 왜 용량을 차지하는지·어떻게 정리하면 안전한지 친절히 안내해 드립니다."'
+    '💬 클린몬스터 × 설정몬스터 통합 주치의 (언제나 0원): "임의로 파일을 영구 삭제하지 않습니다. 바탕화면·다운로드 정리, 방치 설치파일(.exe/.apk) 청소, 보안모듈 동결, 자주 가는 사이트 바로가기 만들기, 사라진 파일 1초 복구까지 채팅창에 편하게 말씀해 주세요!"'
   );
+
+  const triggerMonsterQuery = async (rawQuery: string) => {
+    const q = rawQuery.trim();
+    if (!q) return;
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const userMsg: MonsterChatMessage = {
+      id: `user_${Date.now()}`,
+      role: 'user',
+      timestamp: nowLabel,
+      text: q,
+      sourceTab: 'trash',
+    };
+    setMonsterMessages((prev) => [...prev, userMsg]);
+    setMonsterBusy(true);
+    const aiMsg = await processUnifiedMonsterChatQuery({
+      query: q,
+      sourceTab: 'trash',
+      literacyLevel,
+      ttsEnabled,
+    });
+    setMonsterBusy(false);
+    setDoctorChatReply(aiMsg.text);
+    setMonsterMessages((prev) => [...prev, aiMsg]);
+  };
 
   const handleAskDoctor = (e: React.FormEvent) => {
     e.preventDefault();
     const q = doctorChatInput.trim();
     if (!q) return;
-    if (q.includes('바탕화면') || q.includes('바로가기') || q.includes('중복')) {
-      setDoctorChatReply(
-        `💬 클린몬스터 답변 ("${q}"): PC 바탕화면에 작업 문서와 바로가기(.lnk), 중복 사본이 뒤섞여 있으면 탐색기 부하가 커집니다. Chrome 등 핵심 아이콘만 남기고 나머지는 [D:\\_바탕화면_정리자료_아카이브]로 안전하게 모아두시길 권합니다.`
-      );
-    } else if (q.includes('어르신') || q.includes('아이콘') || q.includes('앱') || q.includes('앨범')) {
-      setDoctorChatReply(
-        isStoreAppMode
-          ? `💬 클린몬스터 답변 ("${q}"): 어르신들이 자주 찾으시는 손주·가족 앨범과 중요 문서는 큰 카드 레이아웃으로 첫 화면에 모아드리고, 중복 사본·스크린샷은 OS 기본 [휴지통]으로 안전하게 정리해 드릴까요?`
-          : `💬 클린몬스터 답변 ("${q}"): 6개월 이상 안 쓴 앱 42개는 지우지 않고 [별도 보관함]으로 모아두거나 [안전 동결]하면 배터리를 아낄 수 있습니다. 자주 쓰시는 카톡·유튜브·단골 카페는 어르신용 큰 아이콘으로 첫 화면에 배치해 드릴까요?`
-      );
-    } else {
-      setDoctorChatReply(
-        isStoreAppMode
-          ? `💬 클린몬스터 답변 ("${q}"): 고화질 원본 영상·사진 사본을 내 PC 마스터 볼트로 안전하게 이관하고 폰에는 13KB 섀도우 캐시만 남기면 스마트폰 저장공간이 넉넉해지고 1초 검색이 유지됩니다.`
-          : `💬 클린몬스터 답변 ("${q}"): 현재 백그라운드에서 은행·관공서 보안모듈(MagicLine, AnySign 등)이 전기와 CPU·메모리(약 420MB)를 상시 점유 중입니다. 은행 접속 시에만 켜지도록 안전 동결하시면 체감 속도가 확 올라갑니다.`
-      );
-    }
     setDoctorChatInput('');
+    void triggerMonsterQuery(q);
   };
 
   const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
@@ -155,9 +188,11 @@ export const SmartTrashView: React.FC = () => {
   const expectedSpeedBoostPct = Math.max(14, Math.min(38, Math.round(12 + activeTrash.length * 0.72)));
   const currentHealthScore = Math.max(68, 98 - activeTrash.length);
 
-  const decidedCount = [decisions.mobileHome, decisions.pcDesktop, decisions.powerDrain].filter(
-    (v) => v !== 'pending'
-  ).length;
+  const decidedCount = [
+    decisions.downloadInstallers,
+    decisions.pcDesktop,
+    decisions.powerDrain,
+  ].filter((v) => v !== 'pending').length;
 
   const currentTab =
     activeTrashCategoryFilter === 'object' ||
@@ -194,11 +229,16 @@ export const SmartTrashView: React.FC = () => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-col gap-0.5">
-              <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2">
-                <span>🩺 귀신같이 클린몬스터</span>
-              </h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2">
+                  <span>🩺 귀신같이 클린몬스터</span>
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold">
+                  🆓 내 기기 치우기 · 언제나 0원
+                </span>
+              </div>
               <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-                임의 영구 삭제 0% · OS 기본 [휴지통] 이동 &amp; 언제든 1초 원상복구 보장
+                임의 영구 삭제 0% · OS 기본 [휴지통] 직행 &amp; [복원 기록] 3단계 사전 검진 후 1초 원상복구 보장
               </span>
             </div>
 
@@ -251,6 +291,25 @@ export const SmartTrashView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={() => setShowHealthHistoryDrawer((v) => !v)}
+                className="px-3 py-2.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                📋 내 기기 건강검진 기록함 ({healthHistoryRecords.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSystemConsult(true);
+                  void triggerMonsterQuery('최근 [복원 기록] 보여줘');
+                }}
+                className="px-3 py-2.5 rounded-xl bg-violet-950/80 hover:bg-violet-900/80 border border-violet-500/40 text-violet-300 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                🕰️ [복원 기록] 타임머신
+              </button>
+
+              <button
+                type="button"
                 onClick={() => {
                   setSearchSpace('vault');
                   if (layout === 'mobile') setMobileTab('search');
@@ -287,6 +346,18 @@ export const SmartTrashView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {showHealthHistoryDrawer && (
+          <PersonalHealthCheckHistoryDrawer
+            records={healthHistoryRecords}
+            onClose={() => setShowHealthHistoryDrawer(false)}
+            onRollbackRestoreId={(rid) => {
+              void executeRestorePointRollback(rid).then((res) => {
+                setDoctorChatReply(res.message);
+              });
+            }}
+          />
+        )}
 
         {/* 인라인 1초 되돌리기(Undo) 알림 콜아웃 */}
         {lastUndoBatch && (
@@ -329,10 +400,10 @@ export const SmartTrashView: React.FC = () => {
         >
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-[12px] text-amber-400 font-bold">
-              {showSystemConsult ? '▾' : '▸'} 💬 기기 종합검진 &amp; 대화형 맞춤 정리
+              {showSystemConsult ? '▾' : '▸'} 💬 기기 종합검진 &amp; 대화형 맞춤 정리 (치우기 × 고치기 통합 주치의)
             </span>
             <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-              모바일 홈 · PC 바탕화면 · 상주 보안모듈을 상담 후 항목별로 직접 결정하세요
+              다운로드 설치파일(.exe/.apk) · PC 바탕화면 · 상주 보안모듈 · 사이트 바로가기 · 사라진 파일 복구까지 대화로 해결하세요
             </span>
             {decidedCount > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-primary-container/15 text-primary-container text-[11px] font-extrabold">
@@ -348,48 +419,43 @@ export const SmartTrashView: React.FC = () => {
         {showSystemConsult && (
           <div className="px-5 pb-5 pt-2 border-t border-white/10 flex flex-col gap-3.5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* ① 모바일 바탕화면·앨범 분류 & 어르신 큰 카드/아이콘 */}
+              {/* ① 다운로드 폴더 방치 설치파일(.exe/.apk/.msi) & 중복 압축파일 청소 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-1.5">
                   <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                    {isStoreAppMode
-                      ? '📱 모바일 갤러리·캡처 분류 & 큰 화면'
-                      : '📱 모바일 바탕화면 & 미사용 앱 분류'}
+                    📦 다운로드 방치 설치파일(.exe·.apk) 정리
                   </span>
                   <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
-                    {isStoreAppMode
-                      ? '일회성 영수증·스크린샷을 분리하고 어르신용 큰 카드(3×4) 배치 또는 별도 보관함 모아놓기를 선택하세요.'
-                      : '6개월 이상 안 쓴 앱(42개)과 웹 링크를 구분했습니다. 어르신용 큰 아이콘(3×4) 또는 별도 보관함을 선택하세요.'}
+                    이미 설치가 끝난 구버전 설치파일(<code>.exe</code>, <code>.msi</code>, <code>.apk</code>)과 중복 압축 사본을 미리 확인하고 정리합니다.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
-                    onClick={() => setDecisions((d) => ({ ...d, mobileHome: 'separate_folder' }))}
+                    onClick={() => {
+                      setDecisions((d) => ({ ...d, downloadInstallers: 'clean_installers' }));
+                      void triggerMonsterQuery('다운로드 폴더 방치된 설치파일(.exe/.apk) 미리보고 정리해 줘');
+                    }}
                     className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
-                      decisions.mobileHome === 'separate_folder'
+                      decisions.downloadInstallers === 'clean_installers'
                         ? 'bg-primary-container text-zinc-950 font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
                     }`}
                   >
-                    {decisions.mobileHome === 'separate_folder'
-                      ? '✓ 별도 보관함 선택됨'
-                      : isStoreAppMode
-                      ? '📦 캡처 별도 모아놓기'
-                      : '📦 미사용 앱 모아놓기'}
+                    {decisions.downloadInstallers === 'clean_installers'
+                      ? '✓ 설치파일 정리 미리보기 열림'
+                      : '📦 설치파일·중복사본 미리보고 정리'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDecisions((d) => ({ ...d, mobileHome: 'senior_big_icon' }))}
+                    onClick={() => setDecisions((d) => ({ ...d, downloadInstallers: 'keep' }))}
                     className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
-                      decisions.mobileHome === 'senior_big_icon'
-                        ? 'bg-amber-400 text-zinc-950 font-extrabold'
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                      decisions.downloadInstallers === 'keep'
+                        ? 'bg-zinc-700 text-white font-extrabold'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
                     }`}
                   >
-                    {decisions.mobileHome === 'senior_big_icon'
-                      ? '✓ 큰 아이콘 정리 선택됨'
-                      : '👵 어르신 큰 아이콘'}
+                    그대로 두기
                   </button>
                 </div>
               </div>
@@ -398,16 +464,21 @@ export const SmartTrashView: React.FC = () => {
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-1.5">
                   <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                    💻 PC 바탕화면 중복파일 · 바로가기 분리
+                    💻 PC 바탕화면 잡파일 · 구형 폴더 정리
                   </span>
                   <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
-                    바탕화면에 문서·폴더와 바로가기(<code>.lnk</code>)가 뒤섞여 있습니다. 핵심 아이콘만 남기고 아카이브 폴더로 분류할까요?
+                    바탕화면에 업무와 무관한 잡파일과 옛날 폴더가 뒤섞여 있습니다. 핵심 아이콘만 남기고 안전 정리함으로 모을까요?
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
-                    onClick={() => setDecisions((d) => ({ ...d, pcDesktop: 'archive_move' }))}
+                    onClick={() => {
+                      setDecisions((d) => ({ ...d, pcDesktop: 'archive_move' }));
+                      void triggerMonsterQuery(
+                        "바탕화면이랑 다운로드 폴더에서 잡파일은 '기타_정리함'으로 모으고 옛날 폴더는 숨겨줘"
+                      );
+                    }}
                     className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
                       decisions.pcDesktop === 'archive_move'
                         ? 'bg-primary-container text-zinc-950 font-extrabold'
@@ -415,8 +486,8 @@ export const SmartTrashView: React.FC = () => {
                     }`}
                   >
                     {decisions.pcDesktop === 'archive_move'
-                      ? '✓ 바탕화면 아카이브 선택됨'
-                      : '🗂️ 중복·바로가기 분리 정리'}
+                      ? '✓ 바탕화면 정리 미리보기 열림'
+                      : '🗂️ 잡파일 이동 · 옛날폴더 숨김'}
                   </button>
                   <button
                     type="button"
@@ -432,24 +503,29 @@ export const SmartTrashView: React.FC = () => {
                 </div>
               </div>
 
-              {/* ③ PC 원본 이관 13KB 섀도우 다이어트 / 전기 먹는 상주 이슈 제거 */}
+              {/* ③ 전기·메모리 먹는 상주 보안모듈 동결 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-1.5">
                   <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                     {isStoreAppMode
                       ? '⚡ 원본 PC 이관 & 13KB 섀도우 다이어트'
-                      : '⚡ 상주 보안모듈 동결 (속도 향상)'}
+                      : '⚡ 은행·관공서 상주 보안모듈 동결'}
                   </span>
                   <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
                     {isStoreAppMode
                       ? '대용량 4K 영상과 원본을 내 PC로 안전 이관하고 폰에는 13KB 초경량 캐시만 남겨 저장공간을 확보할까요?'
-                      : '은행·관공서 상주 보안모듈(MagicLine 등)이 메모리(420MB)를 상시 점유 중입니다. 안전 동결로 속도를 높일까요?'}
+                      : '은행·관공서 상주 보안모듈(AnySign, MagicLine, Veraport, TouchEn)이 메모리를 점유 중입니다. 안전 동결할까요?'}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
-                    onClick={() => setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }))}
+                    onClick={() => {
+                      setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }));
+                      void triggerMonsterQuery(
+                        '은행 관공서 상주 보안 프로그램(AnySign, MagicLine, TouchEn) 동결해서 부팅 속도 높여줘'
+                      );
+                    }}
                     className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
                       decisions.powerDrain === 'freeze_remove'
                         ? 'bg-primary-container text-zinc-950 font-extrabold'
@@ -459,7 +535,7 @@ export const SmartTrashView: React.FC = () => {
                     {decisions.powerDrain === 'freeze_remove'
                       ? isStoreAppMode
                         ? '✓ PC 원본 이관 선택됨'
-                        : '✓ 상주 모듈 동결 선택됨'
+                        : '✓ 상주 모듈 동결 미리보기 열림'
                       : isStoreAppMode
                       ? '⚡ PC 원본 이관 & 용량 확보'
                       : '⚡ 상주 모듈 동결 & 속도 향상'}
@@ -479,28 +555,128 @@ export const SmartTrashView: React.FC = () => {
               </div>
             </div>
 
-            {/* 1:1 대화형 클린몬스터 질문 바 (질문 입력창이 위, 답변 박스가 아래에 큼직하게 표시) */}
-            <div className="p-3.5 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2.5">
+            {/* 1:1 대화형 통합 주치의 채팅 & 액션 센터 (치우기 × 고치기 공통 엔진) */}
+            <div className="p-4 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-extrabold text-amber-400">
+                    💡 원클릭 대화 예시:
+                  </span>
+                  {[
+                    {
+                      label: '🔗 자주 가는 카페 바탕화면에 바로가기 만들어줘',
+                      q: '내가 자주 가는 네이버 카페 바탕화면에 바로가기 만들어줘',
+                    },
+                    {
+                      label: '🕵️ 어제 바탕화면 영수증 파일 어디 갔어?',
+                      q: '어제 바탕화면에 있던 카톡받은_영수증캡처_01.jpg 파일이 사라졌어 찾아줘',
+                    },
+                    {
+                      label: '📄 저장 안 하고 꺼진 워드 단가표 복구해 줘',
+                      q: '방금 워드 작업하다가 저장 안 하고 꺼졌는데 단가표 문서 복구해 줘',
+                    },
+                    {
+                      label: '💻 내 컴퓨터 사양으로 포토샵·배그 돌아가?',
+                      q: '내 컴퓨터 실시간 사양으로 포토샵이랑 배그 잘 돌아가?',
+                    },
+                    {
+                      label: '🕰️ 최근 [복원 기록] 보여줘',
+                      q: '최근 [복원 기록] 조회해서 1초 만에 원래대로 되돌려줘',
+                    },
+                  ].map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => void triggerMonsterQuery(chip.q)}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 text-[11px] font-bold transition cursor-pointer"
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTtsEnabled((v) => !v)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border ${
+                      ttsEnabled
+                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                        : 'bg-zinc-900 border-white/10 text-zinc-400'
+                    }`}
+                  >
+                    {ttsEnabled ? '🔊 현수 음성 안내 ON' : '🔇 음성 안내 OFF'}
+                  </button>
+                </div>
+              </div>
+
               <form onSubmit={handleAskDoctor} className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   value={doctorChatInput}
                   onChange={(e) => setDoctorChatInput(e.target.value)}
-                  placeholder="클린몬스터에게 질문하기 (예: 바탕화면 바로가기 지워도 돼? / 어르신 큰 아이콘은 어떻게 해? / 보안모듈이 뭐야?)"
-                  className="flex-1 min-w-[220px] px-3.5 py-2 rounded-lg bg-zinc-900 border border-white/15 text-zinc-900 dark:text-white text-[13px] font-medium focus:outline-none focus:border-primary-container"
+                  placeholder="무엇이든 말만 하세요! (예: 바탕화면 정리해줘 / 자주 가는 카페 바탕화면에 바로가기 만들어줘 / 영수증 파일 어디 갔어? / 내 PC로 배그 돌아가?)"
+                  className="flex-1 min-w-[220px] px-3.5 py-2.5 rounded-lg bg-zinc-900 border border-white/15 text-zinc-900 dark:text-white text-[13px] font-medium focus:outline-none focus:border-primary-container"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap cursor-pointer"
+                  disabled={monsterBusy}
+                  className="px-4 py-2.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap cursor-pointer"
                 >
-                  💬 물어보기
+                  {monsterBusy ? '🔍 0.01초 분석 중...' : '💬 주치의에게 말하기 (0원)'}
                 </button>
               </form>
-              <div className="p-3 rounded-lg bg-zinc-900/90 border border-primary-container/30">
-                <p className="font-body-sm text-[13.5px] md:text-[14.5px] font-semibold text-zinc-900 dark:text-zinc-100 leading-relaxed">
-                  {doctorChatReply}
-                </p>
-              </div>
+
+              {monsterMessages.length === 0 ? (
+                <div className="p-3 rounded-lg bg-zinc-900/90 border border-primary-container/30">
+                  <p className="font-body-sm text-[13.5px] font-semibold text-zinc-900 dark:text-zinc-100 leading-relaxed">
+                    {doctorChatReply}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                  {monsterMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`p-3.5 rounded-xl border ${
+                        msg.role === 'user'
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-100 ml-8'
+                          : 'bg-zinc-900/95 border-primary-container/40 text-zinc-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1">
+                        <span className="font-extrabold">
+                          {msg.role === 'user' ? '🙋‍♂️ 나의 요청' : '🩺 귀신같이 주치의 (언제나 0원)'}
+                        </span>
+                        <span>{msg.timestamp}</span>
+                      </div>
+                      <p className="text-[13px] leading-relaxed whitespace-pre-line font-semibold">
+                        {msg.text}
+                      </p>
+                      {msg.role === 'assistant' && (
+                        <MonsterInteractiveCardView
+                          message={msg}
+                          literacyLevel={literacyLevel}
+                          onChangeLiteracyLevel={setLiteracyLevel}
+                          onUpdateMessage={(updated) =>
+                            setMonsterMessages((prev) =>
+                              prev.map((m) => (m.id === updated.id ? updated : m))
+                            )
+                          }
+                          onHealthRecordAdded={(rec) =>
+                            setHealthHistoryRecords((prev) => [rec, ...prev])
+                          }
+                          onJumpToSearch={(kw) => {
+                            void runTextQuery(kw);
+                            if (layout === 'mobile') setMobileTab('search');
+                            else setDesktopTab('dashboard');
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

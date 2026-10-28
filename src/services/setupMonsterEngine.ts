@@ -396,7 +396,7 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'pc',
     label: '🚀 부팅 시 뜨는 광고/유령앱 차단',
     trackBadge: 'Track A · 1단계 제어',
-    levelBadge: '🟢 Level 1 · 100 코인',
+    levelBadge: '🟢 Level 1 · 언제나 0원 (무료)',
     query: '부팅할 때마다 뜨는 광고 팝업이랑 느려지게 만드는 유령 시작프로그램 싹 차단해줘',
   },
   {
@@ -404,7 +404,7 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'pc',
     label: '🔋 노트북 덮어도 안 꺼지게 설정',
     trackBadge: 'Track A · 1단계 제어',
-    levelBadge: '🟢 Level 1 · 100 코인',
+    levelBadge: '🟢 Level 1 · 언제나 0원 (무료)',
     query: '노트북 뚜껑 덮어도 절전으로 안 꺼지고 마스터 서버 계속 돌아가게 설정해줘',
   },
   {
@@ -412,7 +412,7 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'pc',
     label: '👀 부모님용 큰 글씨/야간모드',
     trackBadge: 'Track A · 1단계 제어',
-    levelBadge: '🟢 Level 1 · 100 코인',
+    levelBadge: '🟢 Level 1 · 언제나 0원 (무료)',
     query: '부모님 보시기 편하게 PC 화면 글씨 크기 키우고 눈 안 부시게 야간모드 켜줘',
   },
   {
@@ -420,7 +420,7 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'pc',
     label: '🖨️ 프린터 인쇄 먹통 1초 해결',
     trackBadge: 'Track A · 중급 장치/포트',
-    levelBadge: '🟡 Level 2 · 300 코인',
+    levelBadge: '🟡 Level 2 · 언제나 0원 (무료)',
     query: '프린터가 대기 중으로만 뜨고 인쇄가 먹통인데 1초 만에 고쳐줘',
   },
   {
@@ -428,7 +428,7 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'pc',
     label: '👆 엑셀·PC카톡 내부 기능 (손가락 가이드)',
     trackBadge: 'Track B · 다단계 오버레이',
-    levelBadge: '🟡 Level 2 · 300 코인',
+    levelBadge: '🟡 Level 2 · 언제나 0원 (무료)',
     query: '엑셀에서 스크롤 내려도 첫 줄 고정하는 거랑 PC카톡 알림 끄는 위치 손가락 화살표로 짚어줘',
   },
   {
@@ -436,7 +436,7 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'pc',
     label: '💽 업무 라운지 S: 드라이브 복합 복구',
     trackBadge: 'Track A · 고난도 3단계 수리',
-    levelBadge: '🔴 Level 3 · 500 코인',
+    levelBadge: '🔴 Level 3 · 언제나 0원 (무료)',
     query: '윈도우 탐색기에서 업무 라운지 S: 드라이브 연결이 풀리고 권한 오류가 뜨는데 복합 복구해줘',
   },
   {
@@ -444,7 +444,7 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'pc',
     label: '🏦 관공서·금융 보안 플러그인 충돌 정리',
     trackBadge: 'Track A · 고난도 3단계 수리',
-    levelBadge: '🔴 Level 3 · 500 코인',
+    levelBadge: '🔴 Level 3 · 언제나 0원 (무료)',
     query: '은행이랑 홈택스 들어갔다 나온 뒤로 PC가 버벅거리고 키보드 충돌이 나는데 보안 플러그인 정리해줘',
   },
 ];
@@ -455,7 +455,7 @@ export const MOBILE_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'mobile',
     label: '🔕 저녁 7~8시 운동 시간 무음 스케줄',
     trackBadge: '시스템 직접 변경',
-    levelBadge: '🟢 단일 100 코인',
+    levelBadge: '🟢 단일 언제나 0원 (무료)',
     query: '운동하는 저녁 7~8시엔 카톡이나 전화 소리 안 나게 해줘',
   },
   {
@@ -463,7 +463,7 @@ export const MOBILE_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'mobile',
     label: '👀 침침한 눈 큰 글씨 & 블루라이트 차단',
     trackBadge: '시스템 직접 변경',
-    levelBadge: '🟢 단일 100 코인',
+    levelBadge: '🟢 단일 언제나 0원 (무료)',
     query: '글씨가 너무 작아서 눈이 침침해, 글씨 키우고 눈 보호 모드 켜줘',
   },
   {
@@ -471,7 +471,7 @@ export const MOBILE_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'mobile',
     label: '🔋 미사용 앱 15개 배터리 소모 차단',
     trackBadge: '시스템 직접 변경',
-    levelBadge: '🟢 단일 100 코인',
+    levelBadge: '🟢 단일 언제나 0원 (무료)',
     query: '안 쓰는 앱 15개 배터리 빨리 안 닳게 초절전으로 묶어줘',
   },
   {
@@ -479,7 +479,7 @@ export const MOBILE_SYMPTOM_CHIPS: SetupSymptomChip[] = [
     platform: 'mobile',
     label: '👆 카톡·유튜브 앱 내부 설정 (손가락 동행 가이드)',
     trackBadge: '실시간 오버레이 👆',
-    levelBadge: '🟢 단일 100 코인',
+    levelBadge: '🟢 단일 언제나 0원 (무료)',
     query: '카톡 앱 안에서 알림 소리 끄는 버튼 위치를 화면 위 손가락 화살표로 직접 짚어줘',
   },
 ];
@@ -777,7 +777,7 @@ function buildSetupDiagnosisPlanBase(
   const resolvedId = resolvePresetIdFromQuery(platform, q, presetIdHint);
   const planId = `plan_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-  // ─────────────── [PC Level 3 (고난도 복합 수리 - 500 코인)] ───────────────
+  // ─────────────── [PC Level 3 (고난도 복합 수리 - 언제나 0원 (무료))] ───────────────
   if (resolvedId === 'pc_work_s_drive') {
     return {
       planId,
@@ -785,7 +785,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'pc',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_3_ADVANCED_500',
-      difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 500 코인)',
+      difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 언제나 0원 (무료))',
       feasibilityCheckKo:
         '✅ 바로 해결 가능: 끊어진 업무용 폴더(S: 드라이브)를 즉시 다시 연결할 수 있습니다.',
       symptomQuery: q,
@@ -813,7 +813,7 @@ function buildSetupDiagnosisPlanBase(
         '✅ 해결 완료! 끊어졌던 업무용 폴더(S: 드라이브)를 다시 연결하고 폴더 창을 열어 드렸습니다.',
       voiceTtsSummary:
         '끊어졌던 업무용 S 드라이브를 다시 연결하고 폴더 창을 열어 드렸습니다.',
-      creditCost: 500,
+      creditCost: 0,
     };
   }
 
@@ -833,7 +833,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'pc',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_3_ADVANCED_500',
-      difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 500 코인)',
+      difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 언제나 0원 (무료))',
       feasibilityCheckKo:
         `✅ Z-코어 실물 OS 진단 완료: 내 PC에서 실제 감지된 보안/알림 모듈 ${realPlugins.length}종(${realPlugins.join(', ')})을 JEA 최소 권한으로 안전 제어 가능합니다.`,
       symptomQuery: q,
@@ -857,11 +857,11 @@ function buildSetupDiagnosisPlanBase(
         `✅ [Level 3 실물 수리 완료] 내 PC에 상주하던 보안/알림 모듈 ${realPlugins.length}종(${realPlugins.join(', ')})을 은행 접속 시에만 작동하도록 전환 완료했습니다!`,
       voiceTtsSummary:
         '컴퓨터 뒤에서 계속 돌아가던 보안 프로그램들을 은행을 쓸 때만 켜지도록 정리했습니다.',
-      creditCost: 500,
+      creditCost: 0,
     };
   }
 
-  // ─────────────── [PC Level 2 (중급 장치·네트워크·앱 가이드 - 300 코인)] ───────────────
+  // ─────────────── [PC Level 2 (중급 장치·네트워크·앱 가이드 - 언제나 0원 (무료))] ───────────────
   if (resolvedId === 'pc_printer_spooler') {
     const realPrinters = latestRealPcState?.spoolerAndSecurity.installedPrinters || [
       'HP595370 (HP OfficeJet Pro 8210)',
@@ -876,7 +876,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'pc',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
-      difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 300 코인)',
+      difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 언제나 0원 (무료))',
       feasibilityCheckKo:
         `✅ Z-코어 실물 OS 진단 완료: 현재 Spooler 서비스(${realSpoolStatus}), 대기열 문서(${realStuckJobs}건), 연결된 프린터(${realPrinters.slice(0, 3).join(', ')}) 실측 확인 완료.`,
       symptomQuery: q,
@@ -902,7 +902,7 @@ function buildSetupDiagnosisPlanBase(
         `✅ [Level 2 실물 점검/수리 완료] 내 PC 프린터(${realPrinters[0] || '기본 프린터'} 외 ${Math.max(0, realPrinters.length - 1)}대)의 인쇄 스풀러 큐 및 포트 상태를 정상화했습니다.`,
       voiceTtsSummary:
         '막혀 있던 프린터 인쇄 대기 목록을 비우고 바로 인쇄가 되도록 다시 연결했습니다.',
-      creditCost: 300,
+      creditCost: 0,
     };
   }
 
@@ -913,7 +913,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'pc',
       track: 'TRACK_B_OVERLAY_GUIDE',
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
-      difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 300 코인)',
+      difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 언제나 0원 (무료))',
       feasibilityCheckKo:
         '✅ Z-코어 실물 TopMost 오버레이 엔진 준비 완료: 브라우저 창 바깥 실제 Windows 모니터 화면 맨 위에 빨간 손가락 화살표 창(👆)을 직접 띄워 안내합니다.',
       symptomQuery: q,
@@ -935,7 +935,7 @@ function buildSetupDiagnosisPlanBase(
         '✅ [실물 OS 오버레이 가동] 브라우저 안뿐만 아니라 실제 Windows 모니터 화면 최상단(TopMost)에 진짜 손가락 화살표 창(👆)을 띄웠습니다!',
       voiceTtsSummary:
         '모니터 화면 맨 위에 실제 손가락 화살표 창을 띄워 드렸습니다.',
-      creditCost: 300,
+      creditCost: 0,
       overlaySteps: [
         {
           step: 1,
@@ -968,7 +968,7 @@ function buildSetupDiagnosisPlanBase(
     };
   }
 
-  // ─────────────── [PC Level 1 (단순 OS 설정 변경 - 100 코인)] ───────────────
+  // ─────────────── [PC Level 1 (단순 OS 설정 변경 - 언제나 0원 (무료))] ───────────────
   if (resolvedId === 'pc_laptop_lid') {
     return {
       planId,
@@ -976,7 +976,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'pc',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
-      difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 100 코인)',
+      difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 언제나 0원 (무료))',
       feasibilityCheckKo:
         '✅ Merlin_Z_Core_Setup.exe 진단 완료: Windows PowerCfg 전원 구성표 1단계 명령으로 즉시 설정 변경 가능합니다.',
       symptomQuery: q,
@@ -1000,7 +1000,7 @@ function buildSetupDiagnosisPlanBase(
         '✅ [Level 1 수리 완료] 노트북 덮개를 덮어도 전원이 꺼지거나 절전 모드로 들어가지 않고 Ghosti 마스터 PC 서버가 24시간 내내 돌아가도록 설정했습니다.',
       voiceTtsSummary:
         '노트북 뚜껑을 덮어도 꺼지지 않고 계속 작동하도록 전원 설정을 변경했습니다.',
-      creditCost: 100,
+      creditCost: 0,
     };
   }
 
@@ -1011,7 +1011,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'pc',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
-      difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 100 코인)',
+      difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 언제나 0원 (무료))',
       feasibilityCheckKo:
         '✅ Merlin_Z_Core_Setup.exe 진단 완료: 디스플레이 가독성 배율 및 청색광 필터 1단계 제어로 즉시 적용 가능합니다.',
       symptomQuery: q,
@@ -1037,7 +1037,7 @@ function buildSetupDiagnosisPlanBase(
         '✅ [Level 1 수리 완료] 부모님께서 돋보기 없이도 시원하게 보실 수 있도록 화면 글자 크기를 키우고 따뜻한 색감의 야간 눈 보호 모드를 켰습니다.',
       voiceTtsSummary:
         '어르신께서 보시기 편하도록 글자 크기를 시원하게 키우고 눈 보호 모드를 켰습니다.',
-      creditCost: 100,
+      creditCost: 0,
     };
   }
 
@@ -1066,7 +1066,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'pc',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
-      difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 100 코인)',
+      difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 언제나 0원 (무료))',
       feasibilityCheckKo:
         `✅ Z-코어 실물 레지스트리 스캔 완료: 내 PC HKCU/HKLM\\Run에서 실제 등록된 시작프로그램 ${realStartups.length}개 중 부팅 지연/보안·알림 항목 ${nonEssentialStartups.length}종(${nonEssentialStartups.join(', ')})을 실측 식별했습니다.`,
       symptomQuery: q || '부팅 시 뜨는 광고/불필요 시작프로그램 점검 및 PC 속도 최적화',
@@ -1090,11 +1090,11 @@ function buildSetupDiagnosisPlanBase(
         `✅ [Level 1 실물 진단/처치 완료] 내 PC의 실제 시작프로그램 ${realStartups.length}개 중 필수 앱(KakaoTalk, SensTalk_Engine, GoogleDriveFS 등)은 보호하고 불필요 자동실행 ${nonEssentialStartups.length}종(${nonEssentialStartups.join(', ')})을 식별·정리했습니다.`,
       voiceTtsSummary:
         '내 컴퓨터 시작프로그램 중 부팅을 느리게 하던 불필요한 항목을 정리했습니다.',
-      creditCost: 100,
+      creditCost: 0,
     };
   }
 
-  // ─────────────── [모바일 설정몬스터 (단일 요금 100 코인 · Android 15 SDK 35 대응)] ───────────────
+  // ─────────────── [모바일 설정몬스터 (단일 요금 언제나 0원 (무료) · Android 15 SDK 35 대응)] ───────────────
   if (resolvedId === 'mobile_kakao_overlay') {
     return {
       planId,
@@ -1102,7 +1102,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'mobile',
       track: 'TRACK_B_OVERLAY_GUIDE',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
-      difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · SDK 35 WindowInsets 보정)',
+      difficultyBadgeKo: '🟢 모바일 단일 요금 (언제나 0원 (무료) · SDK 35 WindowInsets 보정)',
       feasibilityCheckKo:
         '✅ Ghosti_Agent.apk (Target SDK 35 · RECEIVER_NOT_EXPORTED · WindowInsets Edge-to-Edge 오프셋 동적 보정) 완료: 타사 앱 Deep Link 이동 및 최상단 손가락 화살표 오버레이 가이드가 밀림 오차 0px로 작동합니다.',
       symptomQuery: q,
@@ -1131,7 +1131,7 @@ function buildSetupDiagnosisPlanBase(
         '✅ 카카오톡 설정 화면으로 순간이동 후, Android 15(SDK 35) WindowInsets 상태바/내비바 오프셋을 실시간 보정한 최상단 투명 유리판(Overlay)에 빨간 손가락 화살표(👆)와 음성 안내를 띄웠습니다!',
       voiceTtsSummary:
         '카카오톡 화면 오른쪽 위 톱니바퀴를 누르신 뒤, 세 번째 알림 스위치를 꺼주세요.',
-      creditCost: 100,
+      creditCost: 0,
       overlaySteps: [
         {
           step: 1,
@@ -1170,7 +1170,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'mobile',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
-      difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · 실패 시 100% 환불)',
+      difficultyBadgeKo: '🟢 모바일 단일 요금 (언제나 0원 (무료) · 실패 시 100% 환불)',
       feasibilityCheckKo:
         '✅ 1MB APK (SDK 35 · RECEIVER_NOT_EXPORTED) 진단 완료: NotificationPolicy API를 통해 저녁 운동 시간대 자동 무음 규칙을 직접 세팅할 수 있습니다.',
       symptomQuery: q,
@@ -1194,7 +1194,7 @@ function buildSetupDiagnosisPlanBase(
         '✅ 처치 완료! 매일 저녁 7시~8시 운동 시간에는 카톡·쇼핑앱·일반 전화 소리가 자동으로 울리지 않도록 스마트폰 시스템 방해금지 스케줄을 직접 세팅했습니다 (긴급 가족 연락처만 예외 허용).',
       voiceTtsSummary:
         '운동하시는 저녁 일곱 시부터 여덟 시까지는 카톡과 일반 전화 소리가 나지 않도록 스마트폰 설정을 직접 바꿔 드렸습니다.',
-      creditCost: 100,
+      creditCost: 0,
     };
   }
 
@@ -1205,7 +1205,7 @@ function buildSetupDiagnosisPlanBase(
       platform: 'mobile',
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
-      difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · 실패 시 100% 환불)',
+      difficultyBadgeKo: '🟢 모바일 단일 요금 (언제나 0원 (무료) · 실패 시 100% 환불)',
       feasibilityCheckKo:
         '✅ 1MB APK (SDK 35 · RECEIVER_NOT_EXPORTED) 진단 완료: UsageStatsManager 미사용 앱 15개를 초절전 버킷으로 즉시 격리 가능합니다.',
       symptomQuery: q,
@@ -1229,7 +1229,7 @@ function buildSetupDiagnosisPlanBase(
         '✅ 처치 완료! 안 쓰는 앱 15개의 백그라운드 배터리 소모를 즉시 차단하여 하루 배터리 지속 시간을 약 3시간 40분 늘렸습니다.',
       voiceTtsSummary:
         '뒤에서 몰래 배터리를 쓰던 안 쓰는 앱 열다섯 개를 모두 절전 상태로 묶어 배터리가 오래 가도록 조치했습니다.',
-      creditCost: 100,
+      creditCost: 0,
     };
   }
 
@@ -1239,7 +1239,7 @@ function buildSetupDiagnosisPlanBase(
     platform: 'mobile',
     track: 'TRACK_A_DIRECT_REPAIR',
     difficultyLevel: 'LEVEL_1_SIMPLE_100',
-    difficultyBadgeKo: '🟢 모바일 단일 요금 (100 코인 · 실패 시 100% 환불)',
+    difficultyBadgeKo: '🟢 모바일 단일 요금 (언제나 0원 (무료) · 실패 시 100% 환불)',
     feasibilityCheckKo:
       '✅ 1MB APK (SDK 35 · RECEIVER_NOT_EXPORTED) 진단 완료: 시스템 글자 배율(FONT_SCALE) 및 블루라이트 차단 필터를 백그라운드에서 즉시 적용할 수 있습니다.',
     symptomQuery: q || '글씨가 너무 작아서 눈이 침침해, 글씨 키우고 눈 보호 모드 켜줘',
@@ -1265,6 +1265,6 @@ function buildSetupDiagnosisPlanBase(
       '✅ 처치 완료! 스마트폰 시스템 글자 크기를 135%로 시원하게 키우고 눈이 침침하지 않도록 블루라이트 차단 눈 보호 모드를 즉시 켰습니다.',
     voiceTtsSummary:
       '눈이 편하시도록 스마트폰 글자 크기를 시원하게 키우고 눈 보호 모드를 바로 켜 드렸습니다.',
-    creditCost: 100,
+    creditCost: 0,
   };
 }

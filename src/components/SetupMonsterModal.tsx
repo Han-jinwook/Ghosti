@@ -13,6 +13,18 @@ import { dispatchAndroidOverlayArrowViaBridge } from '../services/p2pHybridBridg
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { SetupDiagnosisPlan } from '../types/saysee';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
+import {
+  processUnifiedMonsterChatQuery,
+  loadLocalHealthCheckHistory,
+  executeRestorePointRollback,
+  type MonsterChatMessage,
+  type MonsterLiteracyLevel,
+  type DigitalHealthCheckRecord,
+} from '../services/monsterChatRouter';
+import {
+  MonsterInteractiveCardView,
+  PersonalHealthCheckHistoryDrawer,
+} from './MonsterInteractiveCards';
 
 /**
  * [Track B & 모바일 타사 앱 내부 설정용 실시간 플로팅 오버레이 가이드 (SYSTEM_ALERT_WINDOW / UI Automation)]
@@ -235,12 +247,47 @@ export const SetupMonsterContent: React.FC = () => {
     undoSetupMonsterRepair,
     reportUnresolvedAndRefundSetup,
     openSetupOverlayGuide,
+    runTextQuery,
+    setDesktopTab,
+    setMobileTab,
+    layout,
   } = useSaySeeStore();
 
   const [inputQuery, setInputQuery] = useState('');
   const [isListeningVoice, setIsListeningVoice] = useState(false);
   const [showBlackboxPanel, setShowBlackboxPanel] = useState(false);
   const [showRealOsPanel, setShowRealOsPanel] = useState(true);
+  const [showHealthHistoryDrawer, setShowHealthHistoryDrawer] = useState(false);
+  const [healthHistoryRecords, setHealthHistoryRecords] = useState<DigitalHealthCheckRecord[]>(() =>
+    loadLocalHealthCheckHistory()
+  );
+  const [literacyLevel, setLiteracyLevel] = useState<MonsterLiteracyLevel>('normal');
+  const [monsterMessages, setMonsterMessages] = useState<MonsterChatMessage[]>([]);
+
+  const triggerMonsterQuery = async (rawQuery: string) => {
+    const q = rawQuery.trim();
+    if (!q) return;
+    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const userMsg: MonsterChatMessage = {
+      id: `user_rep_${Date.now()}`,
+      role: 'user',
+      timestamp: nowLabel,
+      text: q,
+      sourceTab: 'repair',
+    };
+    setMonsterMessages((prev) => [...prev, userMsg]);
+    const aiMsg = await processUnifiedMonsterChatQuery({
+      query: q,
+      sourceTab: 'repair',
+      literacyLevel,
+      ttsEnabled: true,
+    });
+    setMonsterMessages((prev) => [...prev, aiMsg]);
+  };
 
   const [realPcState, setRealPcState] = useState<RealPcOsInspectionData | null>(null);
   const [loadingRealPc, setLoadingRealPc] = useState(false);
@@ -341,6 +388,14 @@ export const SetupMonsterContent: React.FC = () => {
     const clean = inputQuery.trim();
     if (!clean) return;
     setInputQuery('');
+    if (
+      /복원\s*기록|없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|바로가기|바탕화면|다운로드|설치\s*파일|apk|exe|msi|보안\s*프로그램|anysign|magicline|touchen|사양|스펙|돌아가|배그|포토샵|독소\s*조항|법률|세금/i.test(
+        clean
+      )
+    ) {
+      await triggerMonsterQuery(clean);
+      return;
+    }
     await submitSetupMonsterQuery(clean);
   };
 
@@ -395,10 +450,7 @@ export const SetupMonsterContent: React.FC = () => {
     turnRefunded?: boolean
   ) => {
     const isTrackA = plan.track === 'TRACK_A_DIRECT_REPAIR';
-    const currentCoins = merlinAuth.coinBalance;
-    const requiredCoins = plan.creditCost ?? 100;
-    const deficitCoins = Math.max(0, requiredCoins - currentCoins);
-    const hasEnoughCoins = deficitCoins === 0;
+    const hasEnoughCoins = true; // [멀린님 확정 A1]: 언제나 0원 무료!
 
     return (
       <div className="mt-3 p-4 rounded-2xl bg-zinc-950/95 border border-primary-container/40 flex flex-col gap-3">
@@ -442,7 +494,7 @@ export const SetupMonsterContent: React.FC = () => {
         <div className="flex flex-col gap-2 pt-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              {hasEnoughCoins ? (
+              {hasEnoughCoins && (
                 <div className="relative inline-flex items-center">
                   <button
                     id="zcore-step2-execute-btn"
@@ -455,7 +507,7 @@ export const SetupMonsterContent: React.FC = () => {
                       buttonGuideStep === 5 ? 'ring-2 ring-yellow-300' : ''
                     }`}
                   >
-                    ⚡ 바로 해결하기 (무료)
+                    ⚡ 바로 해결하기 (언제나 0원)
                   </button>
                   {buttonGuideStep === 5 && (
                     <span className="ml-2 text-[28px] leading-none select-none pointer-events-none animate-bounce">
@@ -463,14 +515,6 @@ export const SetupMonsterContent: React.FC = () => {
                     </span>
                   )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => openMerlinCoinTopupBridge(plan)}
-                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold shadow-[0_0_25px_rgba(251,191,36,0.35)] cursor-pointer animate-pulse"
-                >
-                  🪙 코인 충전 후 바로 고치기
-                </button>
               )}
 
               {plan.overlaySteps && plan.overlaySteps.length > 0 && (
@@ -483,13 +527,9 @@ export const SetupMonsterContent: React.FC = () => {
                 </button>
               )}
             </div>
-            {turnRefunded ? (
-              <span className="font-label-sm text-[11px] text-pink-300 font-extrabold">
-                💖 {requiredCoins} 코인 100% 환불 완료
-              </span>
-            ) : turnUndone ? (
+            {turnRefunded || turnUndone ? (
               <span className="font-label-sm text-[11px] text-amber-300 font-bold">
-                ↩️ 원래 설정으로 복구됨
+                ↩️ 원래 설정으로 1초 원상복구됨 (0원)
               </span>
             ) : null}
           </div>
@@ -545,10 +585,27 @@ export const SetupMonsterContent: React.FC = () => {
           </div>
         </div>
 
-        {/* 우측: 지갑 상태(순수 텍스트 위계) + 꼭 필요한 버튼만 배치 */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* 우측: 언제나 0원 배지 + 건강검진 기록함 + 복원 기록 타임머신 */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
+            🆓 개인 (기본) : 언제나 0원
+          </span>
 
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">🆓 개인 (기본) : 언제나 0원</span>
+          <button
+            type="button"
+            onClick={() => setShowHealthHistoryDrawer((v) => !v)}
+            className="px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+          >
+            📋 내 기기 건강검진 기록함 ({healthHistoryRecords.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void triggerMonsterQuery('최근 [복원 기록] 보여줘')}
+            className="px-3 py-2 rounded-xl bg-violet-950/80 hover:bg-violet-900/80 border border-violet-500/40 text-violet-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+          >
+            🕰️ [복원 기록] 타임머신
+          </button>
 
           {hasActiveUndoableAudit && (
             <button
@@ -565,10 +622,20 @@ export const SetupMonsterContent: React.FC = () => {
             onClick={() => setShowBlackboxPanel((prev) => !prev)}
             className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
           >
-            📋 기록 ({setupAuditLogs.length})
+            📋 감사로그 ({setupAuditLogs.length})
           </button>
         </div>
       </div>
+
+      {showHealthHistoryDrawer && (
+        <PersonalHealthCheckHistoryDrawer
+          records={healthHistoryRecords}
+          onClose={() => setShowHealthHistoryDrawer(false)}
+          onRollbackRestoreId={(rid) => {
+            void executeRestorePointRollback(rid);
+          }}
+        />
+      )}
 
       {/* 3. 📱 모바일판 전용: 선제적 맞춤 진단 카드 */}
       {setupMonsterPlatform === 'mobile' && (
@@ -1120,42 +1187,137 @@ export const SetupMonsterContent: React.FC = () => {
         </div>
       )}
 
-      {/* 6. 하단 자연어 멀티턴 입력 바 (타이핑 + 음성 마이크 + "2번 헤맸어" / "아직 해결 안 됨" / "원래대로 해줘" 자동 인식) */}
-      <div className="p-3.5 rounded-2xl bg-zinc-950 border border-primary-container/40 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-        <button
-          type="button"
-          onClick={handleVoiceMicInput}
-          className={`px-3.5 py-2.5 rounded-xl font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer ${
-            isListeningVoice
-              ? 'bg-rose-500 text-white animate-pulse'
-              : 'bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container'
-          }`}
-        >
-          {isListeningVoice ? '🎙️ 듣는 중...' : '🎙️ 음성으로 말하기'}
-        </button>
-        <input
-          type="text"
-          value={inputQuery}
-          onChange={(e) => setInputQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSendQuery();
-          }}
-          placeholder={
-            pendingTriageQuestion
-              ? `문진 답변 입력 (예: ${pendingTriageQuestion.options[0]?.label ?? '윈도우 기본에서 먹통이에요'}) 또는 새로운 증상 입력`
-              : setupMonsterPlatform === 'pc'
-              ? '예: 프린터 먹통 고쳐줘 / 초행길에 2번 헤맸어 / 아직 해결 안 됨 환불해줘'
-              : '예: 저녁 7~8시엔 카톡 소리 안 나게 해줘 / 2번 헤맸어 / 원래대로 해줘'
-          }
-          className="flex-1 px-3 py-2 bg-transparent text-white text-[13px] placeholder:text-zinc-500 focus:outline-none"
-        />
-        <button
-          type="button"
-          onClick={handleSendQuery}
-          className="px-5 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap cursor-pointer"
-        >
-          {pendingTriageQuestion ? '💬 문진 답변 제출 (0 코인 무료)' : '🔍 무료 사전 문진 요청 (0 코인)'}
-        </button>
+      {/* 5-B. 치우기 × 고치기 통합 주치의 대화 카드 (사라진 파일 1초 소명, 사이트 바로가기 생성, PC 사양 상담, 복원 기록 등) */}
+      {monsterMessages.length > 0 && (
+        <div className="p-4 rounded-2xl bg-zinc-950 border border-primary-container/40 space-y-3">
+          <div className="flex items-center justify-between text-xs font-extrabold text-primary-container">
+            <span>🩺 치우기 × 고치기 통합 주치의 실행 게이트 (Zero-Auto-Action · 언제나 0원)</span>
+            <button
+              type="button"
+              onClick={() => setMonsterMessages([])}
+              className="text-[11px] text-zinc-400 hover:text-white"
+            >
+              대화 접기 ✕
+            </button>
+          </div>
+          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+            {monsterMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`p-3.5 rounded-xl border ${
+                  msg.role === 'user'
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-100 ml-8'
+                    : 'bg-zinc-900/95 border-primary-container/40 text-zinc-100'
+                }`}
+              >
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1">
+                  <span className="font-extrabold">
+                    {msg.role === 'user' ? '🙋‍♂️ 나의 요청' : '🩺 귀신같이 주치의 (언제나 0원)'}
+                  </span>
+                  <span>{msg.timestamp}</span>
+                </div>
+                <p className="text-[13px] leading-relaxed whitespace-pre-line font-semibold">
+                  {msg.text}
+                </p>
+                {msg.role === 'assistant' && (
+                  <MonsterInteractiveCardView
+                    message={msg}
+                    literacyLevel={literacyLevel}
+                    onChangeLiteracyLevel={setLiteracyLevel}
+                    onUpdateMessage={(updated) =>
+                      setMonsterMessages((prev) =>
+                        prev.map((m) => (m.id === updated.id ? updated : m))
+                      )
+                    }
+                    onHealthRecordAdded={(rec) =>
+                      setHealthHistoryRecords((prev) => [rec, ...prev])
+                    }
+                    onJumpToSearch={(kw) => {
+                      void runTextQuery(kw);
+                      if (layout === 'mobile') setMobileTab('search');
+                      else setDesktopTab('dashboard');
+                    }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 6. 하단 자연어 멀티턴 입력 바 (타이핑 + 음성 마이크 + 치우기/고치기/사양상담/바로가기/복원기록 통합 인식) */}
+      <div className="p-3.5 rounded-2xl bg-zinc-950 border border-primary-container/40 flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-extrabold text-amber-400">💡 통합 대화 칩:</span>
+          {[
+            {
+              label: '🔗 자주 가는 사이트 바탕화면 바로가기 만들기',
+              q: '내가 자주 가는 네이버 카페 바탕화면에 바로가기 만들어줘',
+            },
+            {
+              label: '💻 내 PC 사양으로 포토샵·배그 돌아가?',
+              q: '내 컴퓨터 실시간 사양으로 포토샵이랑 배그 잘 돌아가?',
+            },
+            {
+              label: '🕵️ 사라진 파일 1초 추적·복구',
+              q: '어제 바탕화면에 있던 카톡받은_영수증캡처_01.jpg 파일이 사라졌어 찾아줘',
+            },
+            {
+              label: '⚡ 상주 보안모듈(AnySign/TouchEn) 동결',
+              q: '은행 관공서 상주 보안 프로그램(AnySign, MagicLine, TouchEn) 동결해서 부팅 속도 높여줘',
+            },
+            {
+              label: '🕰️ [복원 기록] 1초 타임머신',
+              q: '최근 [복원 기록] 보여줘',
+            },
+          ].map((c) => (
+            <button
+              key={c.label}
+              type="button"
+              onClick={() => void triggerMonsterQuery(c.q)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 text-[11px] font-bold transition cursor-pointer"
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleVoiceMicInput}
+            className={`px-3.5 py-2.5 rounded-xl font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer ${
+              isListeningVoice
+                ? 'bg-rose-500 text-white animate-pulse'
+                : 'bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container'
+            }`}
+          >
+            {isListeningVoice ? '🎙️ 듣는 중...' : '🎙️ 음성으로 말하기'}
+          </button>
+          <input
+            type="text"
+            value={inputQuery}
+            onChange={(e) => setInputQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSendQuery();
+            }}
+            placeholder={
+              pendingTriageQuestion
+                ? `문진 답변 입력 (예: ${pendingTriageQuestion.options[0]?.label ?? '윈도우 기본에서 먹통이에요'}) 또는 새로운 증상/정리 요청 입력`
+                : setupMonsterPlatform === 'pc'
+                ? '예: 프린터 먹통 고쳐줘 / 자주 가는 카페 바탕화면 바로가기 만들어줘 / 내 PC로 배그 돌아가? / 원래대로 해줘'
+                : '예: 저녁 7~8시엔 카톡 소리 안 나게 해줘 / 다운로드 폴더 설치파일 치워줘 / 원래대로 해줘'
+            }
+            className="flex-1 px-3 py-2 bg-transparent text-white text-[13px] placeholder:text-zinc-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleSendQuery}
+            className="px-5 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold whitespace-nowrap cursor-pointer"
+          >
+            {pendingTriageQuestion ? '💬 문진 답변 제출 (언제나 0원)' : '🔍 주치의에게 요청하기 (언제나 0원)'}
+          </button>
+        </div>
       </div>
 
       {/* 7. 🌍 본사 Multi-LLM 최단 직행 지름길 OTA 큐 & 📡 실패 분석 큐 & 🛡️ 분쟁 예방 감사 로그 */}
@@ -1174,7 +1336,7 @@ export const SetupMonsterContent: React.FC = () => {
 
             {setupSelfHealingOtaQueue.length === 0 ? (
               <p className="font-body-sm text-[11.5px] text-zinc-400 py-1">
-                아직 수집된 초행길 우회 학습 궤적이 없습니다. 견적 카드에서 [💖 2회 헤맨 성공 시뮬레이션] 또는 [🟡 1회 우회 성공]을 누르면 즉시 전 세계 OTA 지름길 자산화 내역이 이곳에 기록됩니다.
+                아직 수집된 초행길 우회 학습 궤적이 없습니다.
               </p>
             ) : (
               <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
@@ -1185,7 +1347,7 @@ export const SetupMonsterContent: React.FC = () => {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-label-sm text-[11.5px] text-pink-200 font-extrabold">
-                        [{ota.trajectoryGradeBadgeKo}] {ota.title} · {ota.escrowSettlementKo}
+                        [{ota.trajectoryGradeBadgeKo}] {ota.title} (언제나 0원)
                       </span>
                       <span className="font-mono text-[10.5px] text-zinc-400">
                         {ota.otaId} · {ota.createdAt}
@@ -1196,48 +1358,6 @@ export const SetupMonsterContent: React.FC = () => {
                     </p>
                     <p className="font-mono text-[10.5px] text-zinc-300 break-all">
                       • {ota.multiLlmActionKo}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 7-A. 본사 실패 블랙박스 로그 큐 (Failure Telemetry) */}
-          <div className="flex flex-col gap-2 pt-3 border-t border-white/10">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-label-sm text-[12px] text-rose-300 font-extrabold">
-                📡 본사 어드민 ‘실패 분석 큐 (Failure Telemetry)’ 자동 전송 내역 ({setupFailureTelemetryQueue.length}건)
-              </span>
-              <span className="font-mono text-[10.5px] text-zinc-400">
-                패킷 구조: &#123; 증상 대화 내역 + Windows 빌드/환경 정보 + 실행 시도 스크립트 + Error Code &#125;
-              </span>
-            </div>
-
-            {setupFailureTelemetryQueue.length === 0 ? (
-              <p className="font-body-sm text-[11.5px] text-zinc-400 py-1">
-                아직 발생한 수리 실패·환불 로그가 없습니다. 수리 완료 후 [👎 아직 해결 안 됨 (원상복구 및 100% 즉시 반환)] 버튼을 누르면 즉시 에스크로 100% 반환과 함께 이곳에 본사 전송 패킷이 기록됩니다.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
-                {setupFailureTelemetryQueue.map((fp) => (
-                  <div
-                    key={fp.failureId}
-                    className="p-3 rounded-xl bg-rose-950/25 border border-rose-400/40 flex flex-col gap-1"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-label-sm text-[11.5px] text-rose-200 font-extrabold">
-                        [{fp.hqQueueStatus}] {fp.symptomQuery} (+{fp.refundedCoins} 코인 100% 반환됨)
-                      </span>
-                      <span className="font-mono text-[10.5px] text-zinc-400">
-                        {fp.failureId} · {fp.reportedAt}
-                      </span>
-                    </div>
-                    <p className="font-mono text-[10.5px] text-zinc-300 break-all">
-                      • 환경: {fp.windowsBuildEnv} | Error Code: {fp.errorCode}
-                    </p>
-                    <p className="font-mono text-[10.5px] text-amber-200 break-all">
-                      • 실행 시도 스크립트: {fp.attemptedScript}
                     </p>
                   </div>
                 ))}
@@ -1271,50 +1391,24 @@ export const SetupMonsterContent: React.FC = () => {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-label-sm text-[12px] text-white font-bold">
-                        [{log.platform.toUpperCase()} · {log.creditDeducted} 코인 · Back {log.backtrackCount ?? 0}회] {log.title}
+                        [{log.platform.toUpperCase()} · 언제나 0원 · Back {log.backtrackCount ?? 0}회] {log.title}
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[10.5px] text-zinc-400">
                           승인: {log.userApprovedAt} · DOM: {log.domCaptureHash}
                         </span>
-                        {log.escrowStatus === 'RELEASED_EMPATHY_REFUND' ? (
-                          <span className="px-2 py-0.5 rounded bg-pink-500/20 text-pink-200 font-label-sm text-[10.5px] font-extrabold">
-                            💖 수리 유지 & +{log.creditDeducted}C 100% 쿨 환불
-                          </span>
-                        ) : log.refunded ? (
-                          <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-label-sm text-[10.5px] font-extrabold">
-                            💸 원복 & +{log.creditDeducted} 코인 100% 반환됨
-                          </span>
-                        ) : log.undone ? (
+                        {log.undone ? (
                           <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-label-sm text-[10.5px] font-bold">
                             ↩️ 원복됨 ({log.undoneAt})
                           </span>
                         ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                triggerEmpathyRefundForCompletedRepair(log.auditId, 2)
-                              }
-                              className="px-2.5 py-1 rounded bg-pink-500 text-white font-label-sm text-[10.5px] font-extrabold cursor-pointer"
-                            >
-                              💖 2회 헤맴 100% 쿨 환불
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => reportUnresolvedAndRefundSetup(log.auditId)}
-                              className="px-2.5 py-1 rounded bg-rose-500 text-white font-label-sm text-[10.5px] font-extrabold cursor-pointer"
-                            >
-                              👎 미해결 100% 반환
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => undoSetupMonsterRepair(log.auditId)}
-                              className="px-2.5 py-1 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold cursor-pointer"
-                            >
-                              ↩️ 1초 원상복구
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            onClick={() => undoSetupMonsterRepair(log.auditId)}
+                            className="px-2.5 py-1 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold cursor-pointer"
+                          >
+                            ↩️ 1초 원상복구
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1326,91 +1420,6 @@ export const SetupMonsterContent: React.FC = () => {
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* 8. 🪙 멀린허브(Merlin Hub) 원클릭 1초 충전 브릿지 모달 (잔액 부족 Pre-Check 시 직결) */}
-      {merlinCoinTopupBridge.open && (
-        <div className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-zinc-950 border-2 border-amber-400/70 shadow-[0_0_50px_rgba(251,191,36,0.3)] p-6 flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex flex-col gap-1">
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-                  🪙 멀린허브(Merlin Hub) 통합 지갑 · 원클릭 1초 충전 브릿지
-                </span>
-                <h3 className="font-headline-sm text-[18px] text-white font-extrabold mt-1">
-                  멀린코인 {merlinCoinTopupBridge.deficitCoins.toLocaleString()}개가 부족합니다 — 1초 충전 후 바로 고치기
-                </h3>
-                <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  충전이 완료되는 즉시 <strong className="text-amber-300">{merlinCoinTopupBridge.requiredCoins} 코인 에스크로 홀딩(완치 후 정산)</strong>을 걸고 1초 자동 수리에 돌입합니다. (실패 시 100% 즉시 반환 보장)
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeMerlinCoinTopupBridge}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-bold cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* 사전 잔액 검증(Pre-Check) 계산 내역 */}
-            <div className="p-4 rounded-2xl bg-zinc-900/90 border border-white/10 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-[12.5px]">
-                <span className="text-zinc-400">대상 수리 작업</span>
-                <span className="text-white font-bold">
-                  {merlinCoinTopupBridge.targetPlan?.title} ({merlinCoinTopupBridge.targetPlan?.difficultyBadgeKo})
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[12.5px]">
-                <span className="text-zinc-400">필요 에스크로 홀딩 코인</span>
-                <span className="text-white font-extrabold">
-                  {merlinCoinTopupBridge.requiredCoins.toLocaleString()} 코인
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[12.5px]">
-                <span className="text-zinc-400">현재 멀린허브 보유 잔액</span>
-                <span className="text-zinc-200 font-bold">
-                  {merlinCoinTopupBridge.currentCoins.toLocaleString()} 코인
-                </span>
-              </div>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[13.5px]">
-                <span className="text-amber-300 font-extrabold">부족한 멀린코인</span>
-                <span className="text-amber-300 font-extrabold">
-                  {merlinCoinTopupBridge.deficitCoins.toLocaleString()} 코인 부족
-                </span>
-              </div>
-            </div>
-
-            {/* 원클릭 충전 & 즉시 수리 시작 버튼 3종 */}
-            <div className="flex flex-col gap-2.5">
-              <button
-                type="button"
-                onClick={() =>
-                  topupMerlinCoinAndStartEscrowRepair(merlinCoinTopupBridge.deficitCoins)
-                }
-                className="w-full py-3 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-extrabold shadow-lg cursor-pointer"
-              >
-                ⚡ 부족한 +{merlinCoinTopupBridge.deficitCoins.toLocaleString()} 코인만 1초 충전 후 바로 고치기 (추천)
-              </button>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => topupMerlinCoinAndStartEscrowRepair(500)}
-                  className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-sm text-[12px] font-extrabold cursor-pointer"
-                >
-                  🪙 +500 멀린코인 충전 후 바로 고치기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => topupMerlinCoinAndStartEscrowRepair(1000)}
-                  className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/50 text-emerald-300 font-label-sm text-[12px] font-extrabold cursor-pointer"
-                >
-                  💎 +1,000 멀린코인 충전 후 바로 고치기
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
