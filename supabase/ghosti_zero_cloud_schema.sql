@@ -37,6 +37,48 @@ create extension if not exists "vector";
 -- ----------------------------------------------------------------------------
 -- 0. 공통 헬퍼: 허브 SSO JWT 이메일 & updated_at 자동 갱신
 -- ----------------------------------------------------------------------------
+-- ============================================================================
+-- 0-A. [레거시 Z-Eye -> Ghosti 완벽 전환] 기존 zeye_* 테이블 및 함수를 ghosti_*로 자동 전환
+-- ============================================================================
+do $$
+begin
+  if to_regclass('public.zeye_face_passports') is not null and to_regclass('public.ghosti_face_passports') is null then
+    alter table public.zeye_face_passports rename to ghosti_face_passports;
+  end if;
+  if to_regclass('public.zeye_devices') is not null and to_regclass('public.ghosti_devices') is null then
+    alter table public.zeye_devices rename to ghosti_devices;
+  end if;
+  if to_regclass('public.zeye_pairing_codes') is not null and to_regclass('public.ghosti_pairing_codes') is null then
+    alter table public.zeye_pairing_codes rename to ghosti_pairing_codes;
+  end if;
+  if to_regclass('public.zeye_lounge_rooms') is not null and to_regclass('public.ghosti_lounge_rooms') is null then
+    alter table public.zeye_lounge_rooms rename to ghosti_lounge_rooms;
+  end if;
+  if to_regclass('public.zeye_lounge_members') is not null and to_regclass('public.ghosti_lounge_members') is null then
+    alter table public.zeye_lounge_members rename to ghosti_lounge_members;
+  end if;
+  if to_regclass('public.zeye_room_invites') is not null and to_regclass('public.ghosti_room_invites') is null then
+    alter table public.zeye_room_invites rename to ghosti_room_invites;
+  end if;
+  if to_regclass('public.zeye_room_shared_folders') is not null and to_regclass('public.ghosti_room_shared_folders') is null then
+    alter table public.zeye_room_shared_folders rename to ghosti_room_shared_folders;
+  end if;
+  if to_regclass('public.zeye_setup_playbooks') is not null and to_regclass('public.ghosti_setup_playbooks') is null then
+    alter table public.zeye_setup_playbooks rename to ghosti_setup_playbooks;
+  end if;
+  if to_regclass('public.zeye_setup_audit_logs') is not null and to_regclass('public.ghosti_setup_audit_logs') is null then
+    alter table public.zeye_setup_audit_logs rename to ghosti_setup_audit_logs;
+  end if;
+end $$;
+
+drop function if exists public.zeye_accept_room_invite(text, text) cascade;
+drop function if exists public.zeye_consume_pairing_code(text, text, text) cascade;
+drop function if exists public.zeye_create_room(text, text, text, text, text, uuid) cascade;
+drop function if exists public.zeye_is_room_admin(text) cascade;
+drop function if exists public.zeye_is_room_member(text) cascade;
+drop function if exists public.zeye_current_email() cascade;
+drop function if exists public.zeye_touch_updated_at() cascade;
+
 create or replace function public.ghosti_current_email()
 returns text
 language sql
@@ -344,7 +386,7 @@ declare
   v_room public.ghosti_lounge_rooms;
 begin
   if v_email = '' then
-    raise exception 'ZEYE_AUTH_REQUIRED';
+    raise exception 'GHOSTI_AUTH_REQUIRED';
   end if;
   if p_master_pc_device_id is not null and not exists (
     select 1 from public.ghosti_devices d
@@ -353,7 +395,7 @@ begin
       and d.device_kind = 'pc_master'
       and d.revoked_at is null
   ) then
-    raise exception 'ZEYE_PC_NOT_OWNED';
+    raise exception 'GHOSTI_PC_NOT_OWNED';
   end if;
 
   insert into public.ghosti_lounge_rooms (
@@ -389,7 +431,7 @@ declare
   v_mobile_id uuid;
 begin
   if v_email = '' then
-    raise exception 'ZEYE_AUTH_REQUIRED';
+    raise exception 'GHOSTI_AUTH_REQUIRED';
   end if;
 
   update public.ghosti_pairing_codes c
@@ -401,7 +443,7 @@ begin
   returning c.pc_device_id into v_pc_id;
 
   if v_pc_id is null then
-    raise exception 'ZEYE_PAIRING_CODE_INVALID_OR_EXPIRED';
+    raise exception 'GHOSTI_PAIRING_CODE_INVALID_OR_EXPIRED';
   end if;
 
   insert into public.ghosti_devices (owner_email, device_kind, display_name, platform)
@@ -433,7 +475,7 @@ declare
   v_member public.ghosti_lounge_members;
 begin
   if v_email = '' then
-    raise exception 'ZEYE_AUTH_REQUIRED';
+    raise exception 'GHOSTI_AUTH_REQUIRED';
   end if;
 
   select * into v_invite
@@ -445,7 +487,7 @@ begin
      or v_invite.revoked_at is not null
      or v_invite.expires_at <= now()
      or v_invite.used_count >= v_invite.max_uses then
-    raise exception 'ZEYE_INVITE_INVALID_OR_EXPIRED';
+    raise exception 'GHOSTI_INVITE_INVALID_OR_EXPIRED';
   end if;
 
   select * into v_member

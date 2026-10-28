@@ -9,7 +9,7 @@
 
 export type GhostiNeuralVoiceRole = 'hyunsu_briefing' | 'sunhi_doc_reader';
 
-export const ZEYE_VOICE_ACTORS = {
+export const GHOSTI_VOICE_ACTORS = {
   hyunsu_briefing: {
     voiceId: 'ko-KR-HyunsuNeural',
     nameKo: '현수',
@@ -172,7 +172,7 @@ export async function speakWithHyunsuOrSunhi(
   role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
   rate = '+0%'
 ): Promise<{ ok: boolean; voiceId: string; audioUrl?: string }> {
-  const voiceId = ZEYE_VOICE_ACTORS[role].voiceId;
+  const voiceId = GHOSTI_VOICE_ACTORS[role].voiceId;
   try {
     const res = await fetch('/__setup-monster/tts', {
       method: 'POST',

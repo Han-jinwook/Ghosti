@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Version: v1.4.0
  * Last Updated: 2026-10-26
  */
@@ -45,7 +45,7 @@ const getAppDisplayName = (appId?: string) => {
   if (id === 'SUNDREAMER' || id === 'SUNDREAM') {
     return '썬드리머';
   }
-  if (id === 'ZEYE' || id === 'Z-EYE' || id === 'SAYSEE') {
+  if (id === 'GHOSTI' || id === 'ZEYE' || id === 'Z-EYE' || id === 'SAYSEE') {
     return '귀신같이';
   }
   return appId;

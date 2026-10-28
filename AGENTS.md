@@ -1,4 +1,4 @@
-# 🤖 AI Agent Instructions (Z-Eye - 멀린 패밀리 생태계)
+# 🤖 AI Agent Instructions (Ghosti - 멀린 패밀리 생태계)
 
 <!-- [MERLIN_GLOBAL_HEADER_START] -->
 > ⚠️ **[전사 필독 절대 헌법 & AGENTS.md 이원화 관리 철칙]**:

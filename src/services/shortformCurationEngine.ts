@@ -20,7 +20,7 @@ export interface ShortformTipItem {
   summaryText: string;
 }
 
-export const ZEYE_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
+export const GHOSTI_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
   {
     id: 'sf_family_01',
     title: '🎬 [1분 활용팁] 방금 정리한 가족사진, 카톡 압축 없이 원본 화질 그대로 가족들과 자동 공유하는 법',
@@ -95,7 +95,7 @@ export function pickNextShortformTipOnCompletion(params: {
 
     // 2) 이미 구독 중인 라운지 주제는 제외 (미구독 라운지만 필터링)
     const subscribedSet = new Set(params.subscribedLounges || []);
-    let candidates = ZEYE_SHORTFORM_TIPS_CATALOG.filter(
+    let candidates = GHOSTI_SHORTFORM_TIPS_CATALOG.filter(
       (item) => item.targetLounge === 'general' || !subscribedSet.has(item.targetLounge)
     );
 
