@@ -58,11 +58,11 @@ except ImportError:
     win32clipboard = None
     win32con = None
 
-SENSEBOT_VERSION = "3.0"
+SENSEBOT_VERSION = "3.1"
 
 PLUGIN_METADATA = {
     "pluginId": "senstalk",
-    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v3.0)",
+    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v3.1)",
     "version": SENSEBOT_VERSION,
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
@@ -350,7 +350,8 @@ def paste_message_to_chat(chat_hwnd, message: str):
         time.sleep(random.uniform(0.04, 0.08))
 
         # 4. 키보드 Ctrl + V로 메시지 붙여넣기 (카카오톡 EVA 프레임워크가 텍스트 입력을 인지하여 '전송' 버튼을 노란색으로 활성화!)
-        press_hotkey(VK_CONTROL, VK_V)
+        if message:
+            press_hotkey(VK_CONTROL, VK_V)
         time.sleep(random.uniform(0.14, 0.24))
 
         # 5. 혹시 모를 시스템 메뉴 상태 완벽 취소
