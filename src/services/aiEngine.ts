@@ -670,6 +670,10 @@ function parseFilenameTimestampSec(name: string, fallbackMs: number): number {
   if (m) {
     return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000;
   }
+  const msMatch = name.match(/(?:^|[_/-])(1[5-9]\d{11})(?:[_.-]|$)/);
+  if (msMatch) {
+    return Number(msMatch[1]) / 1000;
+  }
   return fallbackMs ? fallbackMs / 1000 : 0;
 }
 
@@ -698,7 +702,18 @@ export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSea
   );
 
   const clusters: (typeof withTs)[] = [];
+  const dupClusterMap = new Map<string, typeof withTs>();
+
   for (const entry of sortedByTime) {
+    const dupId = entry.item.photo.duplicateGroupId;
+    if (dupId) {
+      const existingDupCluster = dupClusterMap.get(dupId);
+      if (existingDupCluster) {
+        existingDupCluster.push(entry);
+        continue;
+      }
+    }
+
     const prevCluster = clusters[clusters.length - 1];
     if (prevCluster) {
       const last = prevCluster[prevCluster.length - 1];
@@ -719,10 +734,17 @@ export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSea
         (sameSceneCluster && dhashDist <= 12 && dt <= 3 && entry.tsSec > 0)
       ) {
         prevCluster.push(entry);
+        if (dupId && !dupClusterMap.has(dupId)) {
+          dupClusterMap.set(dupId, prevCluster);
+        }
         continue;
       }
     }
-    clusters.push([entry]);
+    const newCluster = [entry];
+    clusters.push(newCluster);
+    if (dupId) {
+      dupClusterMap.set(dupId, newCluster);
+    }
   }
 
   // 각 연사 클러스터에서 가장 점수가 높거나 선명한 대표 1장을 선정하고 원래 검색 랭킹 순서로 정렬

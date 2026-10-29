@@ -347,15 +347,27 @@ export const DesktopDashboard: React.FC = () => {
 
   // 검색 결과에서 동일 연사(dHash/연속촬영) 그룹을 1장으로 겹쳐서 [❐ N장 연사] 배지로 묶기
   const groupedResults = useMemo(() => {
+    const allGrouped = groupBurstSearchResults(searchResults);
+    const orderedGroups = !hasExecutedUserSearch
+      ? [...allGrouped].sort((a, b) => (b.burstCount > 1 ? 1 : 0) - (a.burstCount > 1 ? 1 : 0))
+      : allGrouped;
+
     if (!groupBurstsInSearch || searchSpace === 'vault') {
-      return searchResults.map((item) => ({
-        representative: item,
-        burstPhotos: [item.photo],
-        burstCount: 1,
-      }));
+      return orderedGroups.flatMap((g) =>
+        g.burstPhotos.map((photo) => ({
+          representative: {
+            photo,
+            score: g.representative.score,
+            matchPercentage: g.representative.matchPercentage,
+            matchedBy: g.representative.matchedBy,
+          },
+          burstPhotos: [photo],
+          burstCount: 1,
+        }))
+      );
     }
-    return groupBurstSearchResults(searchResults);
-  }, [searchResults, groupBurstsInSearch, searchSpace]);
+    return orderedGroups;
+  }, [searchResults, groupBurstsInSearch, searchSpace, hasExecutedUserSearch]);
 
   const collapsedBurstCount = searchResults.length - groupedResults.length;
   const currentSubmenus = LOUNGE_SUBMENU_CONFIG[activeLoungeType] || LOUNGE_SUBMENU_CONFIG.personal;
