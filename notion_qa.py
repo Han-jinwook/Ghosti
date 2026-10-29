@@ -69,7 +69,9 @@ NOTION_API_BASE: str = "https://api.notion.com/v1"
 # 칸반 보드 4단계 상태 컬럼값 정의 (좌 -> 우 순서: 테스트 미션 -> 발견된 버그 -> 재테스트 대기 -> 완료)
 # ⚠️ '수정 중' 컬럼은 영구 삭제·폐지됨 (절대 사용 금지)
 STATUS_MISSION = "테스트 미션"
+STATUS_IN_TEST = "테스트 중"
 STATUS_DISCOVERED = "발견된 버그"
+STATUS_FIXING = "버그 수정중"
 STATUS_READY_FOR_QA = "재테스트 대기"
 STATUS_DONE = "완료"
 
@@ -173,7 +175,7 @@ class NotionKanbanSchema:
                     break
 
         # 실제 노션 DB에 등록된 상태 옵션명을 자동 감지하여 호환 바인딩 (미션 / 발견 버그 / 재테스트 / 완료)
-        global STATUS_MISSION, STATUS_DISCOVERED, STATUS_READY_FOR_QA, STATUS_DONE
+        global STATUS_MISSION, STATUS_IN_TEST, STATUS_DISCOVERED, STATUS_FIXING, STATUS_READY_FOR_QA, STATUS_DONE
         status_meta = props.get(self.status_prop_name, {})
         raw_opts = (
             status_meta.get(self.status_prop_type, {}).get("options", [])
@@ -192,6 +194,10 @@ class NotionKanbanSchema:
         for cand in ("재테스트", "재테스트 대기"):
             if cand in opt_names:
                 STATUS_READY_FOR_QA = cand
+                break
+        for cand in ("버그 수정중", "수정 중", "수정중"):
+            if cand in opt_names:
+                STATUS_FIXING = cand
                 break
         for cand in ("완료", "Done"):
             if cand in opt_names:
@@ -375,6 +381,14 @@ def fetch_bugs(target_status: Optional[str] = None) -> List[Dict[str, str]]:
 # 4. 핵심 요청 함수 2: complete_bug(page_id, guide_text)
 #    (비개발자 테스터 눈높이 맞춤 문구 + 다음 대기 버그 자동 제안)
 # =====================================================================
+def mark_fixing(page_id: str) -> bool:
+    """
+    에이전트가 처리할 버그 카드를 발견하자마자, 알바생이 기다리며 답답해하지 않도록
+    우선 '버그 수정중' 컬럼으로 즉시 이동시켜 작업 착수를 알립니다.
+    """
+    return update_bug_status(page_id, STATUS_FIXING)
+
+
 def complete_bug(page_id: str, guide_text: str) -> bool:
     """
     1) 해당 카드의 상태를 '재테스트 대기'로 변경하고,
