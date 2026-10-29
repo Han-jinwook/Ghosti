@@ -1404,8 +1404,16 @@ export async function executeTextSearch(
   const scored: { photo: PhotoItem; score: number }[] = [];
   const qLower = query.trim().toLowerCase();
 
+  const isGroupQuery = /단체|모임|여럿|함께|가족|친구들/.test(qLower);
   for (const photo of activePhotos) {
     let score = 0;
+    // 단체 쿼리 시 1인 단독 사진 감점/제외
+    if (isGroupQuery) {
+      const cap = (photo.captionKo || '').toLowerCase();
+      if ((cap.includes('1명') || cap.includes('단독') || cap.includes('남성의 정면') || cap.includes('여성의 정면') || cap.includes('혼자')) && !cap.includes('가족') && !cap.includes('친구') && !cap.includes('함께') && !cap.includes('단체')) {
+        continue;
+      }
+    }
     if (queryVec && photo.vec) {
       score = cosineSimilarity(queryVec, photo.vec);
     } else if (photo.tags.some((t) => t.toLowerCase().includes(qLower))) {
