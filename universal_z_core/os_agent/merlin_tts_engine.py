@@ -22,8 +22,12 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-TTS_CACHE_DIR = ROOT_DIR / "tts_cache"
+if getattr(sys, "frozen", False):
+    ROOT_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Merlin"
+    TTS_CACHE_DIR = ROOT_DIR / "tts_cache"
+else:
+    ROOT_DIR = Path(__file__).resolve().parents[2]
+    TTS_CACHE_DIR = ROOT_DIR / "tts_cache"
 TTS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 VOICE_EDGE_HYUNSU = "ko-KR-HyunsuNeural"

@@ -214,3 +214,187 @@ def tts_prewarm(body: Dict[str, Any] | None) -> Dict[str, Any]:
 
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "status": "PREWARM_QUEUED", "voice": voice, "rate": rate}
+
+
+# ---------------------------------------------------------------------------
+# 로컬 서류·영상 검색 & 자율 얼굴 여권 인덱스 (단일 데몬 5199 직접 응답)
+# ---------------------------------------------------------------------------
+
+FACE_REGISTRY_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_face_clusters.json"
+_STOP_WORDS_KO = {
+    "찾아줘", "보여줘", "사진", "문서", "파일", "서류", "서류함", "영상", "동영상", "장면", "모습", "및", "사본",
+}
+_PARTICLE_TAIL_RE = re.compile(
+    r"(에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도|이|가|로|만)$"
+)
+
+
+def _tokenize_ko_query(q: str) -> list[str]:
+    cleaned = re.sub(r"[.,!?'\"“”‘’()\[\]{}]", " ", (q or "").lower())
+    out: list[str] = []
+    for raw in cleaned.split():
+        if raw in _STOP_WORDS_KO:
+            continue
+        stem = _PARTICLE_TAIL_RE.sub("", raw)
+        tok = stem if len(stem) >= 1 else raw
+        if tok and tok not in _STOP_WORDS_KO:
+            out.append(tok)
+    return out
+
+
+def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
+    import plugin_ghosti_os
+
+    q = str((body or {}).get("query") or "").strip()
+    listed = plugin_ghosti_os.list_local_docs({})
+    docs = list(listed.get("documents") or [])
+    if not q or "최근 서류" in q:
+        return {"ok": True, "documents": docs}
+
+    tokens = _tokenize_ko_query(q)
+    if not tokens:
+        return {"ok": True, "documents": docs}
+
+    req_hits = len(tokens) if len(tokens) <= 2 else max(2, int((len(tokens) * 0.6) + 0.999))
+    scored: list[tuple[int, Dict[str, Any]]] = []
+    for d in docs:
+        kws = " ".join(str(x) for x in (d.get("keywords") or []))
+        corpus = f"{d.get('fileName', '')} {d.get('title', '')} {d.get('categoryBadge', '')} {d.get('extractedText', '')} {kws}".lower()
+        corpus_nospace = re.sub(r"\s+", "", corpus)
+        hits = 0
+        for tk in tokens:
+            if tk in corpus or (len(tk) >= 2 and tk in corpus_nospace):
+                hits += 1
+        if hits >= req_hits:
+            scored.append((hits, d))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return {"ok": True, "documents": [d for _, d in scored]}
+
+
+def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
+    import plugin_ghosti_os
+
+    q = str((body or {}).get("query") or "").strip()
+    listed = plugin_ghosti_os.list_local_videos({})
+    videos = list(listed.get("videos") or [])
+    if not q or "전 구간" in q:
+        return {"ok": True, "videos": videos}
+
+    tokens = _tokenize_ko_query(q)
+    if not tokens:
+        return {"ok": True, "videos": videos}
+
+    req_hits = len(tokens) if len(tokens) <= 2 else max(2, int((len(tokens) * 0.6) + 0.999))
+    scored: list[tuple[int, Dict[str, Any]]] = []
+    for v in videos:
+        vkws = " ".join(str(x) for x in (v.get("keywords") or []))
+        vbase = f"{v.get('title', '')} {v.get('summaryCaption', '')} {v.get('locationTag', '')} {vkws}".lower()
+        frames = list(v.get("timelineFrames") or [])
+        best_frame = frames[0] if frames else None
+        best_frame_hits = 0
+        for fr in frames:
+            fkws = " ".join(str(x) for x in (fr.get("keywords") or []))
+            fcorpus = f"{fr.get('sceneCaption', '')} {fkws}".lower()
+            fhits = sum(1 for tk in tokens if tk in fcorpus)
+            if fhits > best_frame_hits:
+                best_frame_hits = fhits
+                best_frame = fr
+        full_corpus = vbase + " " + " ".join(
+            f"{fr.get('sceneCaption', '')} {' '.join(str(x) for x in (fr.get('keywords') or []))}".lower()
+            for fr in frames
+        )
+        matched_tokens = sum(1 for tk in tokens if tk in full_corpus)
+        if matched_tokens >= req_hits:
+            vid_out = dict(v)
+            if best_frame and best_frame_hits > 0:
+                vid_out["matchedSeekSec"] = best_frame.get("timeSec", 0)
+                vid_out["matchedTimestamp"] = f"🎯 {best_frame.get('timestampText', '00:00')} 구간 포착"
+                vid_out["matchedFrameCaption"] = best_frame.get("sceneCaption", "")
+            scored.append((matched_tokens * 5 + best_frame_hits * 3, vid_out))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return {"ok": True, "videos": [v for _, v in scored]}
+
+
+def _load_face_clusters() -> Dict[str, Any]:
+    candidates = [FACE_REGISTRY_FILE]
+    if not getattr(os.sys, "frozen", False):
+        repo_root = Path(__file__).resolve().parents[2]
+        candidates.append(repo_root / "poc" / "results" / "face_clusters_index.json")
+        candidates.append(repo_root / "public" / "poc" / "results" / "face_clusters_index.json")
+    for p in candidates:
+        try:
+            if p.exists():
+                raw = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(raw, dict) and isinstance(raw.get("clusters"), list):
+                    return {
+                        "latestCorpusYear": int(raw.get("latestCorpusYear") or 2026),
+                        "clusters": list(raw.get("clusters") or []),
+                    }
+        except Exception:
+            pass
+    return {"latestCorpusYear": 2026, "clusters": []}
+
+
+def _strip_face_vecs(clusters: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    out: list[Dict[str, Any]] = []
+    for c in clusters:
+        item = dict(c)
+        seed_vec = item.pop("seedVec", None)
+        item["seedVecPreview"] = seed_vec[:8] if isinstance(seed_vec, list) else []
+        out.append(item)
+    return out
+
+
+def faces_index() -> Dict[str, Any]:
+    with _LOCK:
+        data = _load_face_clusters()
+        clusters = _strip_face_vecs(data["clusters"])
+        return {
+            "ok": True,
+            "latestCorpusYear": data["latestCorpusYear"],
+            "clusterCount": len(clusters),
+            "clusters": clusters,
+        }
+
+
+def faces_register(body: Dict[str, Any] | None) -> Dict[str, Any]:
+    payload = body or {}
+    with _LOCK:
+        data = _load_face_clusters()
+        clusters = data["clusters"]
+        action = str(payload.get("action") or "update").strip()
+        if action == "restore_excluded":
+            for c in clusters:
+                c["excludedAsPasserby"] = False
+        else:
+            cid = str(payload.get("clusterId") or "").strip()
+            for c in clusters:
+                if c.get("clusterId") == cid:
+                    if isinstance(payload.get("registeredName"), str):
+                        c["registeredName"] = payload["registeredName"].strip()
+                    if isinstance(payload.get("relationshipTag"), str):
+                        c["relationshipTag"] = payload["relationshipTag"].strip()
+                    if isinstance(payload.get("excludedAsPasserby"), bool):
+                        c["excludedAsPasserby"] = payload["excludedAsPasserby"]
+                    break
+        FACE_REGISTRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        FACE_REGISTRY_FILE.write_text(
+            json.dumps(
+                {
+                    "createdAt": _now_iso(),
+                    "latestCorpusYear": data["latestCorpusYear"],
+                    "clusterCount": len(clusters),
+                    "clusters": clusters,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return {
+            "ok": True,
+            "latestCorpusYear": data["latestCorpusYear"],
+            "clusters": _strip_face_vecs(clusters),
+        }

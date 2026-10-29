@@ -201,6 +201,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_os.list_local_videos(qp))
             return
 
+        if path in ("/__faces/index", "/api/ghosti/faces/index"):
+            self._send_json(ghosti_setup_parity.faces_index())
+            return
+
         if path.startswith("/api/senstalk"):
             sub = path[len("/api/senstalk") :].strip("/") or "health"
             self._send_json(plugin_senstalk.handle_get(sub))
@@ -276,6 +280,20 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             if act.lower() in plugin_ghosti_os.MUTATING_ACTIONS and self._reject_untrusted():
                 return
             self._send_json(plugin_ghosti_os.handle_request(act, body))
+            return
+
+        if path in ("/__docs/search", "/api/ghosti/docs/search"):
+            self._send_json(ghosti_setup_parity.docs_search(body))
+            return
+
+        if path in ("/__videos/search", "/api/ghosti/videos/search"):
+            self._send_json(ghosti_setup_parity.videos_search(body))
+            return
+
+        if path in ("/__faces/register", "/api/ghosti/faces/register"):
+            if self._reject_untrusted():
+                return
+            self._send_json(ghosti_setup_parity.faces_register(body))
             return
 
         # [고치기 보조 API — 개발서버 전용이던 기능 데몬 이관]

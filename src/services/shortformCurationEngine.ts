@@ -173,5 +173,5 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
 export const DOCTOR_3_RED_LINES_NOTICE = [
   '🛡️ 영구 삭제(포맷/와이핑) 불가: Z몬스터는 이동·분류·숨김·휴지통 보호만 수행하며 파일을 영구 삭제(Shift+Del)하지 않습니다.',
   '🔒 OS 시스템 폴더 개조 불가: C:\\Windows, Program Files 등 시스템 안정성 영역은 절대 건드리지 않습니다.',
-  '👆 금융·메신저 대리 전송 불가 (Zero-Auto-Action): 홈택스 제출·계좌이체·메신저 발송은 화살표 안내와 입력칸 세팅까지만 돕고 최종 실행은 유저가 직접 누릅니다.',
+  '🚫 무단 대리 실행·외부 전송 불가 (Zero-Auto-Action): 미리보기 확인([⭕ 확인 완료]) 없이는 파일을 임의로 옮기거나 설정을 바꾸지 않으며, 외부 서버로 원본을 전송하지 않습니다.',
 ];
