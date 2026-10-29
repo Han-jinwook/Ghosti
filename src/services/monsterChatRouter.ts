@@ -261,7 +261,7 @@ export async function executeMonsterCleanupApproval(
   message: string;
   healthRecord: DigitalHealthCheckRecord;
 }> {
-  let restoreId = `#${105 + Math.floor(Math.random() * 15)}`;
+  let restoreId = '#105';
   let message = `✅ [${preview.summaryTitle}] 정리가 완료되었으며 [복원 기록]에 안전하게 저장되었습니다!`;
 
   try {
@@ -310,7 +310,7 @@ export async function executeMonsterShortcutApproval(
   message: string;
   healthRecord: DigitalHealthCheckRecord;
 }> {
-  let restoreId = `#${105 + Math.floor(Math.random() * 15)}`;
+  let restoreId = '#105';
   let message = `✅ 바탕화면에 [${preview.shortcutFileName}] 아이콘을 생성했으며, [${restoreId} 복원 기록]에 등재했습니다!`;
 
   try {

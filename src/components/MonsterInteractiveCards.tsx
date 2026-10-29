@@ -267,7 +267,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             {message.cleanupPreview.approved ? (
               <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
-                실행 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId || '#105'}] 등재됨
+                실행 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId || '#105'}] 등재됨 (1초 되돌리기 영수증 번호)
               </span>
             ) : (
               <button
@@ -326,7 +326,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
       {message.cardKind === 'RESTORE_POINTS_LIST' && message.restorePoints && (
         <div className="rounded-xl border border-violet-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
           <div className="text-xs font-extrabold text-violet-200 flex items-center justify-between">
-            <span>🕰️ 최근 [복원 기록] 타임머신 (0.01초 무결성 사전 검진 완료)</span>
+            <span>🕰️ 최근 [복원 기록] 타임머신 (#번호 = 작업별 1초 되돌리기 영수증 번호 · 0.01초 사전 검진 완료)</span>
             <span className="text-[11px] text-emerald-400">1초 원복 · 언제나 0원</span>
           </div>
           <div className="space-y-2">
@@ -507,7 +507,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             {message.healthRecordIssued.restoreId})
           </div>
           <div className="text-[10px] text-slate-400">
-            * 발급된 건강검진표는 상단 [📋 내 기기 건강검진 기록함]에 영구 보관되어 언제든 기기 상태 변화를 확인할 수 있습니다.
+            * 발급된 건강검진표는 상단 [📋 내 기기 건강검진 기록함]에 영구 보관되며, [복원 기록 #105] 같은 번호는 작업 순서대로 부여되는 '1초 되돌리기 고유 영수증 번호'입니다 (언제든 해당 번호로 1초 원상복구 가능).
           </div>
         </div>
       )}
