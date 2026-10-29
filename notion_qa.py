@@ -232,7 +232,7 @@ def _format_blocks_recursive(blocks: List[Dict[str, Any]], indent: str = "") -> 
     for blk in blocks:
         btype = blk.get("type", "")
         bdata = blk.get(btype, {})
-        red_prefix = "🔴 [테스터 붉은색 코멘트] " if is_red_annotated(bdata) else ""
+        red_prefix = "🔴 [해나라님 붉은색 코멘트] " if is_red_annotated(bdata) else ""
 
         if btype in (
             "paragraph",
@@ -464,7 +464,7 @@ def complete_bug(page_id: str, guide_text: str) -> bool:
     print("\n✅ [노션 자동 반영 완료!]")
     print(f"   • 카드 ID : {clean_page_id}")
     print(f"   • 상태 변경: '{STATUS_READY_FOR_QA}' 🚀")
-    print(f"   • 테스터 안내문:\n     {full_instruction_text.replace(chr(10), chr(10) + '     ')}")
+    print(f"   • 해나라님 안내문:\n     {full_instruction_text.replace(chr(10), chr(10) + '     ')}")
 
     # 3단계: 남은 '발견 버그' 자동 확인 후 다음 작업 제안 (추가 토큰 0)
     remaining_bugs = query_bugs_raw()
@@ -574,7 +574,7 @@ def trim_done_cards(keep_count: int = 7) -> int:
 
 def archive_done(page_id: str, memo_text: str = "") -> bool:
     """
-    알바생(테스터)이 메시지 작성 후 '발견된 버그'로 넘긴 카드를
+    해나라님이 메시지 작성 후 '발견된 버그'로 넘긴 카드를
     AI가 확인/킵한 뒤 '완료' 상태로 넘기는 함수입니다.
     """
     ensure_valid_token()
@@ -647,7 +647,7 @@ def create_mission(
     initial_status: Optional[str] = None,
 ) -> Optional[str]:
     """
-    멀린님과 AI가 새 기능/UI를 만든 직후, 비개발자 알바생(테스터)이
+    멀린님과 AI가 새 기능/UI를 만든 직후, 비개발자 해나라님이
     '오늘 뭐 테스트할까요?'라고 물어보지 않도록 노션 보드 맨 앞 '미션' 칸에
     친절한 체크리스트 미션 카드를 자동 생성합니다.
     """
@@ -882,7 +882,7 @@ def run_cli() -> None:
                 continue
 
             print(f"\n   🎯 선택된 카드: {title} ({page_id})")
-            print("   💬 테스터(알바생)에게 전달할 쉬운 [재테스트 안내문]을 입력하세요.")
+            print("   💬 해나라님에게 전달할 쉬운 [재테스트 안내문]을 입력하세요.")
             print("      (여러 줄 입력 가능 — 입력을 마치려면 빈 줄에서 Enter)")
 
             guide_lines: List[str] = []
