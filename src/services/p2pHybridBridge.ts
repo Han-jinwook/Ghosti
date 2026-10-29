@@ -20,6 +20,7 @@
  */
 
 import { calibrateAndroidSdk35EdgeToEdgeOverlayRect } from './setupMonsterEngine';
+import { getZCoreUrl } from './zCoreBridge';
 
 /** 공식 설치 에이전트 명칭, PC 공용 디렉토리(%LOCALAPPDATA%\Merlin\) 및 UI 무소음 정책 상수 */
 export const MERLIN_Z_CORE_SPEC = {
@@ -290,7 +291,7 @@ export async function executeMerlinQuery<T = unknown>(
 
   // 2순위: 로컬 서버 범용 쿼리 게이트웨이 (`POST /__merlin/query`) 호출
   try {
-    const res = await fetch('/__merlin/query', {
+    const res = await fetch(getZCoreUrl('/__merlin/query'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(normalizedRequest),

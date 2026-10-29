@@ -3110,7 +3110,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   loadSetupMonsterState: async () => {
     triggerSetupMonsterTtsPrewarm();
     try {
-      const res = await fetch('/__setup-monster/state');
+      const res = await fetch(getZCoreUrl('/__setup-monster/state'));
       const data = await res.json();
       if (data?.ok) {
         set((state) => ({
@@ -3352,23 +3352,33 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       refundedAt: isEmpathyRefund ? nowIso : undefined,
     };
 
-    if (plan.platform === 'pc') {
+    // [정직 원칙] 실제로 실행되고 Z-코어가 성공을 확인한 항목만 '완료'로 표시한다.
+    // 현재 자동 실행을 지원하는 항목은 S: 업무 드라이브 연결뿐이며, 나머지는 설정을 바꾸지 않고 안내만 한다.
+    let realExecution: { ok: boolean; message: string } | null = null;
+    if (plan.platform === 'pc' && plan.presetId === 'pc_work_s_drive') {
       try {
-        if (plan.presetId === 'pc_work_s_drive') {
-          const osRes = await executeRealOsAction('s_drive_mount');
-          if (osRes?.beforeSnapshot) savedAudit.beforeSnapshot = osRes.beforeSnapshot as Record<string, unknown>;
-          if (osRes?.afterSnapshot) savedAudit.afterSnapshot = osRes.afterSnapshot as Record<string, unknown>;
+        const osRes = await executeRealOsAction('s_drive_mount');
+        if (osRes?.ok) {
+          if (osRes.beforeSnapshot) savedAudit.beforeSnapshot = osRes.beforeSnapshot as Record<string, unknown>;
+          if (osRes.afterSnapshot) savedAudit.afterSnapshot = osRes.afterSnapshot as Record<string, unknown>;
+          realExecution = { ok: true, message: plan.completionMessage };
         } else {
-          await executeRealOsAction('shadow_backup');
+          realExecution = {
+            ok: false,
+            message: `⚠️ S: 드라이브를 연결하지 못했습니다: ${String(osRes?.message || osRes?.error || '멀린 Z-코어 연결을 확인해 주세요')}`,
+          };
         }
         await fetchRealPcOsInspection();
       } catch {
-        /* ignore */
+        realExecution = { ok: false, message: '⚠️ 멀린 Z-코어에 연결되지 않아 실행하지 못했습니다. (아무 설정도 바뀌지 않았습니다)' };
       }
     }
+    const honestCompletionMessage = realExecution
+      ? realExecution.message
+      : '⚠️ 이 항목은 아직 귀신같이가 자동으로 실행하지 않습니다. PC 설정을 바꾸지 않았으니, 위 진단 내용과 안내 단계를 보고 직접 진행해 주세요.';
 
     try {
-      const res = await fetch('/__setup-monster/execute', {
+      const res = await fetch(getZCoreUrl('/__setup-monster/execute'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3394,9 +3404,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const ttsText = isEmpathyRefund
-          ? '두 번 이상 길을 헤매게 해드려 죄송합니다. 이번 수리비는 받지 않고 전액 환불해 드렸습니다.'
-          : plan.voiceTtsSummary;
+        const ttsText = realExecution?.ok ? plan.voiceTtsSummary : honestCompletionMessage.replace(/^⚠️\s*/, '');
         const utter = new SpeechSynthesisUtterance(ttsText);
         utter.lang = 'ko-KR';
         utter.rate = 1.02;
@@ -3410,10 +3418,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `repair_${Date.now()}`,
       role: 'system_repair',
       timestamp: nowLabel,
-      text:
-        effectiveBacktrack === 1
-          ? `${plan.completionMessage}\n\n🟡 [1회 뒤로 가기(Back) 인간적 허용 · 정상 정산 + 경로 미세 교정 OTA] 초행길 화면에서 딱 1번 뒤로 갔다가 바로 찾아가셨네요! 수리비(${cost} 코인)는 정상 에스크로 처리되며, 방금 1회 우회한 갈림길 로그는 본사 Multi-LLM으로 전송되어 다음번엔 0회 직행 코스로 미세 교정되었습니다.`
-          : plan.completionMessage,
+      text: honestCompletionMessage,
       diagnosisPlan: plan,
       auditId: savedAudit.auditId,
       escrowStatus: isEmpathyRefund ? 'RELEASED_EMPATHY_REFUND' : 'ESCROW_HOLDING',
@@ -3531,7 +3536,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     });
 
     try {
-      await fetch('/__setup-monster/self-healing-ota', {
+      await fetch(getZCoreUrl('/__setup-monster/self-healing-ota'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3630,11 +3635,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         ? state.setupAuditLogs.find((a) => a.auditId === auditId)
         : state.setupAuditLogs.find((a) => !a.undone)) ?? null;
 
+    // [정직 원칙] 실제로 되돌린 것만 되돌렸다고 알린다. (자동 실행을 지원하는 항목은 S: 드라이브 연결뿐)
+    let undoMessage = '↩️ 귀신같이가 자동으로 바꾼 PC 설정이 없어 되돌릴 것이 없습니다. (화면 기록만 정리했습니다)';
     if (targetAudit?.platform === 'pc') {
-      try {
-        if (targetAudit.title.includes('S:') || targetAudit.symptomQuery.includes('S:')) {
-          await executeRealOsAction('s_drive_unmount');
+      if (targetAudit.title.includes('S:') || targetAudit.symptomQuery.includes('S:')) {
+        try {
+          const r = await executeRealOsAction('s_drive_unmount');
+          undoMessage = r?.ok
+            ? '↩️ 연결했던 S: 업무 드라이브를 해제해 원래 상태로 되돌렸습니다.'
+            : `⚠️ S: 드라이브를 해제하지 못했습니다: ${String(r?.message || r?.error || '멀린 Z-코어 연결을 확인해 주세요')}`;
+        } catch {
+          undoMessage = '⚠️ 멀린 Z-코어에 연결되지 않아 되돌리지 못했습니다.';
         }
+      }
+      try {
         await fetchRealPcOsInspection();
       } catch {
         /* ignore */
@@ -3642,7 +3656,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
 
     try {
-      await fetch('/__setup-monster/undo', {
+      await fetch(getZCoreUrl('/__setup-monster/undo'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ auditId: targetAudit?.auditId }),
@@ -3661,9 +3675,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(
-          '수리하기 전 원래 설정 상태로 깔끔하게 되돌렸습니다.'
-        );
+        const utter = new SpeechSynthesisUtterance(undoMessage.replace(/^[↩️⚠️\s]+/u, ''));
         utter.lang = 'ko-KR';
         void speakSetupMonsterTts(utter.text);
       }
@@ -3675,11 +3687,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `undo_${Date.now()}`,
       role: 'system_undo',
       timestamp: nowLabel,
-      text: targetAudit
-        ? `↩️ 수리하기 전 원래 설정 상태로 깔끔하게 되돌렸습니다! (무료 · 0 코인${
-            ''
-          })`
-        : '↩️ 수리하기 전 원래 상태로 깔끔하게 되돌렸습니다! (무료 · 0 코인)',
+      text: undoMessage,
       auditId: targetAudit?.auditId,
       undone: true,
     };
@@ -3699,8 +3707,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       uiNightEyeProtection: false,
       activeOverlayPlan: null,
       activeOverlayBacktrackCount: 0,
-      lastQuarantineToast:
-        '↩️ [1초 셀프 원복(Undo) 완료] 상담원 개입 없이 0.01초 전 JSON 스냅샷으로 즉시 원상복구되었습니다! (무료 · 0 코인)',
+      lastQuarantineToast: undoMessage,
     }));
   },
 
@@ -3754,7 +3761,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     };
 
     try {
-      const res = await fetch('/__setup-monster/report-failure', {
+      const res = await fetch(getZCoreUrl('/__setup-monster/report-failure'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

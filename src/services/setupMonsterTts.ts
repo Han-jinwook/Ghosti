@@ -1,3 +1,4 @@
+import { getZCoreUrl } from './zCoreBridge';
 /**
  * [🛠️ Ghosti 설정몬스터 Neural TTS 클라이언트 & 무지연 캐시 재생기]
  * 1. 기본 성우: typecast_piljae (MS 신경망 남성 성우 '현수(ko-KR-HyunsuNeural)')
@@ -168,7 +169,7 @@ export async function speakSetupMonsterTts(
 
   // 1·2단계: 로컬 tts_cache 조회(Cache Hit 시 0.001초) 또는 Typecast 실시간 합성 + Write-Through 캐싱(Cache Miss)
   try {
-    const res = await fetch('/__setup-monster/tts', {
+    const res = await fetch(getZCoreUrl('/__setup-monster/tts'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: cleanText, voice, rate }),
@@ -220,7 +221,7 @@ export function triggerSetupMonsterTtsPrewarm(
   if (typeof window === 'undefined') return;
 
   window.setTimeout(() => {
-    fetch('/__setup-monster/tts-prewarm', {
+    fetch(getZCoreUrl('/__setup-monster/tts-prewarm'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

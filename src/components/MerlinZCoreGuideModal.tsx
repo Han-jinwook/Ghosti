@@ -39,12 +39,15 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   const [version, setVersion] = useState<string | null>(zCoreBridge.version);
   const [step, setStep] = useState<ZCoreModalStep>('intro');
   const [progress, setProgress] = useState<number>(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const hasTriggeredInitRef = useRef<boolean>(false);
+  const initPromiseRef = useRef<Promise<void> | null>(null);
 
   // 모달 열릴 때 초기 단계 결정
   useEffect(() => {
     if (!isOpen) {
       hasTriggeredInitRef.current = false;
+      initPromiseRef.current = null;
       return;
     }
 
@@ -106,36 +109,36 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     };
   }, [isOpen]);
 
-  // 'indexing' 단계 진입 시: 실물 사진 데이터셋 로드 + 진행 시간표시바(0% -> 100%) 자동 가동 -> 완료 시 사진 딱! 펼침
+  // 'indexing' 단계: 실제 사진·서류 목록 로딩(initApp)이 끝났을 때만 완료로 전환한다.
+  // (정직 원칙: 실제 진행과 무관한 시간 기반 가짜 게이지·가짜 처리 건수를 표시하지 않음)
   useEffect(() => {
     if (!isOpen || step !== 'indexing') return;
+    let cancelled = false;
+    setLoadError(null);
+    setProgress(0);
 
-    if (!hasTriggeredInitRef.current) {
+    if (!hasTriggeredInitRef.current || !initPromiseRef.current) {
       hasTriggeredInitRef.current = true;
-      void initApp(true);
+      initPromiseRef.current = Promise.resolve(initApp(true)).then(() => undefined);
     }
 
-    const durationMs = 7200; // 약 7.2초 동안 실감나는 인덱싱 게이지 진행
-    const intervalMs = 80;
-    const startTime = Date.now();
+    initPromiseRef.current
+      .then(() => {
+        if (cancelled) return;
+        setProgress(100);
+        window.setTimeout(() => {
+          if (!cancelled) finishAndPopOpenPhotos();
+        }, 400);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadError('사진 목록을 불러오지 못했습니다. 멀린 Z-코어가 켜져 있는지 확인한 뒤 다시 시도해 주세요.');
+        }
+      });
 
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const ratio = Math.min(1, elapsed / durationMs);
-      // 부드러운 가감속 커브
-      const eased = ratio < 0.5 ? 2 * ratio * ratio : 1 - Math.pow(-2 * ratio + 2, 2) / 2;
-      const nextPct = Math.min(100, Math.round(eased * 100));
-      setProgress(nextPct);
-
-      if (nextPct >= 100) {
-        clearInterval(timer);
-        setTimeout(() => {
-          finishAndPopOpenPhotos();
-        }, 550);
-      }
-    }, intervalMs);
-
-    return () => clearInterval(timer);
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, step]);
 
@@ -149,7 +152,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     resetSearchSpaceToAll('gallery');
     useSaySeeStore.setState({
       hasUserSelectedSearchTab: true,
-      lastQuarantineToast: `🎉 내 컴퓨터 사진 ${totalPhotoCount}장 귀신같이 찾기 인덱싱 완료! 모든 사진이 화면에 딱 펼쳐졌습니다.`,
+      lastQuarantineToast: `🎉 내 컴퓨터 사진 ${totalPhotoCount}장 목록을 불러왔습니다.`,
     });
     onClose();
     if (typeof document !== 'undefined') {
@@ -197,33 +200,12 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   if (!isOpen) return null;
 
   const isLight = themeMode === 'light';
-  const scannedCount = Math.min(
-    totalPhotoCount,
-    Math.max(1, Math.round((progress / 100) * totalPhotoCount))
-  );
-  const scannedVideoCount = Math.min(
-    totalVideoCount,
-    Math.max(1, Math.round((progress / 100) * totalVideoCount))
-  );
-  const scannedDocCount = Math.min(
-    totalDocCount,
-    Math.max(1, Math.round((progress / 100) * totalDocCount))
-  );
-  const remainingSec = Math.max(0, Math.ceil(((100 - progress) / 100) * 8));
-
-  const currentStageLabel =
-    progress < 25
-      ? '📂 내 PC 전 폴더(바탕화면·문서·다운로드·사진·영상) 전수 스캔 중...'
-      : progress < 60
-      ? '🖼️ 사진 EXIF·자율 얼굴 검출(Face Passport) 및 🎬 동영상 타임라인 전 구간 해부 중...'
-      : progress < 88
-      ? '📄 서류(PDF·워드·한글·엑셀·영수증·계약서) 전문 OCR 텍스트 색인 중...'
-      : progress < 100
-      ? '⚡ 내 PC [사진 · 동영상 · 서류] 통합 1초 귀신같이 찾기 인덱스 최종 조립 중...'
-      : '✨ 전수 인덱싱 완료! 내 PC 사진·영상·서류를 화면에 바로 펼칩니다!';
-
-  const previewSliceStart = Math.floor((progress / 100) * Math.max(0, activePhotos.length - 5));
-  const previewThumbs = activePhotos.slice(previewSliceStart, previewSliceStart + 5);
+  const loadDone = progress >= 100;
+  const currentStageLabel = loadError
+    ? loadError
+    : loadDone
+    ? `✨ 불러오기 완료: 사진 ${totalPhotoCount}장 · 영상 ${totalVideoCount}개 · 서류 ${totalDocCount}건`
+    : '📂 멀린 Z-코어에서 내 PC 사진·영상·서류 목록을 불러오는 중...';
 
   return (
     <div
@@ -252,7 +234,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     PC 1대 · 모바일 1대 무료체험 제한 없이 평생 0원
                   </span>
                   <h3 className="text-lg sm:text-xl font-black tracking-tight">
-                    내 PC 사진 · 동영상 · 서류 전수 인덱싱을 시작할까요?
+                    내 PC 사진 · 동영상 · 서류를 연결할까요?
                   </h3>
                 </div>
               </div>
@@ -268,7 +250,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
             <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
               두 번 번거롭게 누르실 필요 없이, 아래 <strong>[OK! 시작하기]</strong> 한 번만 누르시면{' '}
-              <strong>엔진 연결부터 첫 사진 내용 분석까지 한 번에 자동 진행</strong>됩니다.
+              <strong>엔진 연결부터 내 PC 사진·서류 목록 불러오기까지 한 번에 진행</strong>됩니다.
             </p>
 
             <div className="space-y-2.5 mb-6">
@@ -300,10 +282,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 <span className="text-lg shrink-0">⏳</span>
                 <div>
                   <div className="font-black text-[13px] text-slate-900 dark:text-white">
-                    2. 연결 즉시 AI 인덱싱 진행 시간표시바가 작동합니다 (잠시 대기)
+                    2. 연결되면 내 PC 사진·서류 목록을 불러옵니다 (잠시 대기)
                   </div>
                   <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    처음 한 번만 내 사진 속 인물·장소·서류 글자를 읽는 대기 시간(수십 초~몇 분)이 소요됩니다.
+                    사진·서류 수가 많으면 목록을 읽는 데 시간이 걸릴 수 있습니다.
                   </p>
                 </div>
               </div>
@@ -318,10 +300,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 <span className="text-lg shrink-0">🖼️</span>
                 <div>
                   <div className="font-black text-[13px]">
-                    3. 진행바가 끝나면 내 컴퓨터 사진이 화면에 딱! 펼쳐집니다
+                    3. 불러오기가 끝나면 내 컴퓨터 사진이 화면에 펼쳐집니다
                   </div>
                   <p className="text-[11.5px] opacity-85 mt-0.5">
-                    추가 클릭 없이 완료 즉시 모든 사진이 열리며 0.1초 만에 귀신같이 찾기를 쓸 수 있습니다.
+                    추가 클릭 없이 완료 즉시 사진이 열리고 바로 검색할 수 있습니다.
                   </p>
                 </div>
               </div>
@@ -334,7 +316,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 className="w-full flex-1 py-3.5 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>⭕</span>
-                <span>OK! 엔진 다운로드 & 자동 인덱싱 시작하기</span>
+                <span>OK! 엔진 다운로드 & 연결 시작하기</span>
               </button>
 
               <button
@@ -388,7 +370,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             >
               <div className="flex items-center gap-2.5 font-black text-[13.5px]">
                 <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping shrink-0" />
-                <span>프로그램을 켜시는 순간 자동으로 사진 인덱싱이 시작됩니다!</span>
+                <span>프로그램을 켜시는 순간 자동으로 사진 목록을 불러옵니다!</span>
               </div>
               <p className="text-xs opacity-85 mt-1.5 leading-relaxed">
                 방금 다운로드된 <strong>Merlin_Z_Core.zip</strong> 압축을 풀고{' '}
@@ -414,7 +396,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-600 dark:text-teal-300 font-black text-[10.5px]">
                   TIP 2
                 </span>
-                <span>켜지는 즉시 이 창이 AI 인덱싱 진행 시간표시바로 자동 전환됩니다.</span>
+                <span>켜지는 즉시 이 창이 불러오기 화면으로 자동 전환됩니다.</span>
               </div>
             </div>
 
@@ -459,11 +441,11 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                       🟢 엔진 연결됨 (Port {Z_CORE_PORT})
                     </span>
                     <span className="text-[11px] font-bold text-teal-500">
-                      단계 2/2 · AI 인덱싱 진행 중
+                      단계 2/2 · 목록 불러오는 중
                     </span>
                   </div>
                   <h3 className="text-lg font-black tracking-tight">
-                    내 컴퓨터 사진 귀신같이 찾기 인덱싱 중...
+                    {loadDone ? '불러오기 완료!' : loadError ? '불러오기 실패' : '내 컴퓨터 사진 목록 불러오는 중...'}
                   </h3>
                 </div>
               </div>
@@ -477,25 +459,13 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   : 'bg-zinc-900/90 border-teal-500/30 shadow-[0_0_25px_rgba(20,184,166,0.12)]'
               }`}
             >
-              <div className="flex items-baseline justify-between gap-2 mb-2">
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-2xl sm:text-3xl font-black text-teal-500 font-mono">
-                    {progress}%
-                  </span>
-                  <span className="text-xs font-bold text-zinc-500 dark:text-zinc-300">
-                    (🖼️ 사진 {scannedCount}/{totalPhotoCount}장 · 🎬 영상 {scannedVideoCount}/{totalVideoCount}개 · 📄 서류 {scannedDocCount}/{totalDocCount}건)
-                  </span>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-teal-500/15 text-teal-600 dark:text-teal-300 font-mono text-xs font-extrabold shrink-0">
-                  {progress < 100 ? `⏳ 약 ${remainingSec}초 남음` : '🎉 완료!'}
-                </span>
-              </div>
-
-              {/* 진행 시간표시바 (Progress Bar) */}
+              {/* 진행 표시: 실제 완료 전에는 진행률(%)·남은 시간을 지어내지 않고 '불러오는 중' 상태만 표시 */}
               <div className="w-full h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 mb-3">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-cyan-400 transition-all duration-150"
-                  style={{ width: `${progress}%` }}
+                  className={`h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-cyan-400 transition-all duration-300 ${
+                    loadDone || loadError ? '' : 'animate-pulse'
+                  }`}
+                  style={{ width: loadDone ? '100%' : loadError ? '0%' : '100%', opacity: loadDone ? 1 : 0.45 }}
                 />
               </div>
 
@@ -505,31 +475,21 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               </div>
             </div>
 
-            {/* 실시간 스캔 중인 내 사진 미니 썸네일 스트립 */}
-            {previewThumbs.length > 0 && (
-              <div className="mb-5">
-                <div className="text-[11px] font-bold text-zinc-400 mb-2 flex items-center justify-between">
-                  <span>⚡ 실시간 귀신같이 인덱싱 중인 사진</span>
-                  <span>끝나면 자동으로 전체 사진이 펼쳐집니다</span>
-                </div>
-                <div className="grid grid-cols-5 gap-2">
-                  {previewThumbs.map((item) => (
-                    <div
-                      key={item.id}
-                      className="aspect-square rounded-xl overflow-hidden border border-teal-500/30 bg-zinc-900 relative"
-                    >
-                      <img
-                        src={item.thumbUrl || item.fullUrl}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                        loading="eager"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/65 text-[9px] text-teal-300 font-mono px-1 py-0.5 truncate text-center">
-                        AI 스캔됨
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {loadError && (
+              <div className="mb-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    hasTriggeredInitRef.current = false;
+                    initPromiseRef.current = null;
+                    setLoadError(null);
+                    setStep('ready');
+                    window.setTimeout(() => setStep('indexing'), 0);
+                  }}
+                  className="py-2 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs cursor-pointer"
+                >
+                  🔄 다시 시도
+                </button>
               </div>
             )}
 
@@ -561,7 +521,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     Port {Z_CORE_PORT} · v{version || '2.1.0'} 정상 가동 중
                   </span>
                   <h3 className="text-lg font-black tracking-tight">
-                    멀린 Z-코어 연결 및 인덱싱 완료!
+                    멀린 Z-코어 연결 완료!
                   </h3>
                 </div>
               </div>
@@ -598,6 +558,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 type="button"
                 onClick={() => {
                   hasTriggeredInitRef.current = false;
+                  initPromiseRef.current = null;
                   setProgress(0);
                   setStep('indexing');
                 }}
@@ -607,7 +568,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     : 'bg-zinc-900 border-white/15 text-zinc-300 hover:bg-zinc-800'
                 }`}
               >
-                🔄 다시 인덱싱
+                🔄 목록 다시 불러오기
               </button>
             </div>
           </>

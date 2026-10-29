@@ -6,6 +6,7 @@ import type {
   SetupProactiveHint,
   SetupSmartUiScanTelemetry,
 } from '../types/saysee';
+import { getZCoreUrl } from './zCoreBridge';
 
 export interface RealPcOsInspectionData {
   ok: boolean;
@@ -96,13 +97,17 @@ export interface RealForensicScanResult {
 
 let latestRealPcState: RealPcOsInspectionData | null = null;
 
+/** Z-코어 미연결로 실측하지 못했을 때의 정직 안내 (예시 데이터로 대체 금지) */
+const NOT_MEASURED_NOTE =
+  '⚠️ 멀린 Z-코어에 연결되지 않아 내 PC 상태를 실측하지 못했습니다. 아래는 일반 안내이며, 실제 상태는 Z-코어 연결 후 다시 확인해 주세요.';
+
 export function getLatestRealPcState(): RealPcOsInspectionData | null {
   return latestRealPcState;
 }
 
 export async function fetchRealPcOsInspection(): Promise<RealPcOsInspectionData | null> {
   try {
-    const res = await fetch('/__zcore/os-inspect');
+    const res = await fetch(getZCoreUrl('/__zcore/os-inspect'));
     if (!res.ok) return null;
     const data = await res.json();
     if (data?.ok) {
@@ -117,7 +122,7 @@ export async function fetchRealPcOsInspection(): Promise<RealPcOsInspectionData 
 
 export async function runRealForensicScan(query: string = ''): Promise<RealForensicScanResult | null> {
   try {
-    const res = await fetch('/__zcore/forensic-scan', {
+    const res = await fetch(getZCoreUrl('/__zcore/forensic-scan'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query }),
@@ -137,7 +142,7 @@ export async function launchRealOsTopmostOverlay(params: {
   durationSec?: number;
 }): Promise<{ ok: boolean; pid?: number; message?: string }> {
   try {
-    const res = await fetch('/__zcore/os-overlay', {
+    const res = await fetch(getZCoreUrl('/__zcore/os-overlay'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
@@ -154,7 +159,7 @@ export async function executeRealOsAction(
   targetPath?: string
 ): Promise<{ ok: boolean; message?: string; [k: string]: unknown }> {
   try {
-    const res = await fetch('/__zcore/os-execute', {
+    const res = await fetch(getZCoreUrl('/__zcore/os-execute'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, targetPath }),
@@ -523,15 +528,15 @@ export function buildSetupPreTriageQuestion(
   const real = latestRealPcState;
 
   if (resolvedId === 'pc_printer_spooler') {
-    const prnList = real?.spoolerAndSecurity.installedPrinters?.slice(0, 3).join(', ') || 'HP OfficeJet Pro 8210, Hancom PDF';
-    const spoolSt = real?.spoolerAndSecurity.spoolerServiceStatus || 'Running';
+    const prnList = real?.spoolerAndSecurity.installedPrinters?.slice(0, 3).join(', ') || '확인 불가';
+    const spoolSt = real?.spoolerAndSecurity.spoolerServiceStatus || '확인 불가';
     const stuckCnt = real?.spoolerAndSecurity.stuckSpoolQueueFiles ?? 0;
     return {
       questionId: qId,
       presetId: 'pc_printer_spooler',
       platform: 'pc',
       symptomQuery: rawQuery,
-      exeBackgroundScanNote:
+      exeBackgroundScanNote: !real ? NOT_MEASURED_NOTE :
         `🔍 Z-코어 실물 OS 스캔(무료): 현재 Spooler 서비스 상태 [${spoolSt}], 멈춘 스풀 파일 [${stuckCnt}건], 설치된 프린터 [${prnList}] 실측 확인됨`,
       questionText:
         '정확한 수리 레시피 선택을 위해 한 가지만 여쭤볼게요! 현재 프린터 증상이 아래 중 어느 쪽에 가장 가까운가요?',
@@ -559,7 +564,7 @@ export function buildSetupPreTriageQuestion(
       presetId: 'pc_work_s_drive',
       platform: 'pc',
       symptomQuery: rawQuery,
-      exeBackgroundScanNote:
+      exeBackgroundScanNote: !real ? NOT_MEASURED_NOTE :
         `🔍 Z-코어 실물 OS 스캔(무료): 현재 내 PC S: 드라이브 마운트 상태 [${isMounted ? '연결됨(Mounted)' : '미연결(Unmounted)'}] 실측 확인됨 (즉시 실물 마운트 가능)`,
       questionText:
         '업무 라운지 S: 드라이브 복구를 위해 현재 탐색기 상태를 확인해 주세요 (선택 즉시 맞춤형 견적 카드가 생성됩니다):',
@@ -581,26 +586,20 @@ export function buildSetupPreTriageQuestion(
   }
 
   if (resolvedId === 'pc_security_plugin') {
-    const secPlugins = real?.spoolerAndSecurity.activeSecurityPlugins?.map((p) => p.label) || [
-      'Veraport (위즈베라 통합설치)',
-      'Wizvera Delfino (위즈베라 전자서명)',
-      'iniLINE CrossEX (이니텍 브라우저 인증/보안)',
-      'nProtect Starter (nosstarter.npe)',
-      'ALTools 알림/광고 도우미 (alnotify)',
-    ];
+    const secPlugins = real?.spoolerAndSecurity.activeSecurityPlugins?.map((p) => p.label) || [];
     return {
       questionId: qId,
       presetId: 'pc_security_plugin',
       platform: 'pc',
       symptomQuery: rawQuery,
-      exeBackgroundScanNote:
+      exeBackgroundScanNote: !real ? NOT_MEASURED_NOTE :
         `🔍 Z-코어 실물 OS 스캔(무료): 내 PC에서 실제 상주 중인 관공서·금융 보안/알림 모듈 ${secPlugins.length}종(${secPlugins.join(', ')}) 실측 감지됨`,
       questionText:
         '은행·관공서 이용 후 언제부터 불편하셨나요? 원하시는 정리 범위를 선택해 주세요:',
       options: [
         {
-          label: `① 평소엔 실측 감지된 보안/알림 모듈 ${secPlugins.length}종을 꺼두고 은행 쓸 때만 켜고 싶어요`,
-          detailAnswer: `평소엔 보안 플러그인 ${secPlugins.length}종 백그라운드 자동실행을 끄고 키보드 충돌을 잡아주세요`,
+          label: '① 평소엔 보안/알림 모듈을 꺼두고 은행 쓸 때만 켜고 싶어요',
+          detailAnswer: '평소엔 보안 플러그인 백그라운드 자동실행을 끄고 키보드 충돌을 잡아주세요',
         },
         {
           label: '② 인터넷 창이 버벅거리고 한글/영문 키보드 입력이 자꾸 씹혀요',
@@ -640,7 +639,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-코어 실물 OS 스캔(무료): Windows PowerCfg 전원 정책 점검 완료 (Level 1 단순 OS 설정)',
+        'ℹ️ Level 1 단순 OS 설정 안내 (현재 전원 설정은 실측하지 않았습니다)',
       questionText:
         '노트북 덮개를 닫았을 때 어떤 상태로 작동하길 원하시나요?',
       options: [
@@ -663,7 +662,7 @@ export function buildSetupPreTriageQuestion(
       platform: 'pc',
       symptomQuery: rawQuery,
       exeBackgroundScanNote:
-        '🔍 Z-코어 실물 OS 스캔(무료): 현재 디스플레이 배율 및 야간 모드 설정 상태 확인됨 (Level 1 단순 OS 설정)',
+        'ℹ️ Level 1 단순 OS 설정 안내 (현재 배율·야간 모드는 실측하지 않았습니다)',
       questionText:
         '부모님(또는 사용자분) 눈이 가장 편안하시도록 어느 정도로 맞춰 드릴까요?',
       options: [
@@ -679,20 +678,14 @@ export function buildSetupPreTriageQuestion(
     };
   }
 
-  const realStartups = real?.startupPrograms?.map((s) => `${s.name} (${s.location})`) || [
-    'CrossEXService (HKCU\\Run)',
-    'wizvera-veraport-x64 (HKLM\\Run)',
-    'ALNotify (HKLM\\Run)',
-    'Weixin (HKCU\\Run)',
-    'iTunesHelper (HKLM\\Run)',
-  ];
+  const realStartups = real?.startupPrograms?.map((s) => `${s.name} (${s.location})`) || [];
 
   return {
     questionId: qId,
     presetId: 'pc_boot_ads',
     platform: 'pc',
     symptomQuery: rawQuery,
-    exeBackgroundScanNote:
+    exeBackgroundScanNote: !real ? NOT_MEASURED_NOTE :
       `🔍 Z-코어 실물 레지스트리 스캔(무료): 내 PC HKCU/HKLM\\Run 및 Startup 폴더에서 실제 자동실행 항목 총 ${realStartups.length}개(${realStartups.slice(0, 6).join(', ')}) 실측 확인됨`,
     questionText:
       `내 PC 레지스트리에 실제 등록된 시작프로그램 ${realStartups.length}개가 확인되었습니다. 어떻게 정리해 드릴까요?`,
@@ -820,13 +813,7 @@ function buildSetupDiagnosisPlanBase(
   if (resolvedId === 'pc_security_plugin') {
     const realPlugins = latestRealPcState?.spoolerAndSecurity.activeSecurityPlugins?.map(
       (p) => `${p.label} (${p.matchedProcessOrService})`
-    ) || [
-      'Veraport (veraport-x64)',
-      'Wizvera Delfino (wizverapmsvc)',
-      'iniLINE CrossEX (CrossEXService)',
-      'nProtect Starter (nosstarter.npe)',
-      'ALTools 알림 도우미 (alnotify)',
-    ];
+    ) || [];
     return {
       planId,
       presetId: 'pc_security_plugin',
@@ -834,11 +821,11 @@ function buildSetupDiagnosisPlanBase(
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_3_ADVANCED_500',
       difficultyBadgeKo: '🔴 Level 3 (고난도 복합 수리 - 언제나 0원 (무료))',
-      feasibilityCheckKo:
+      feasibilityCheckKo: !latestRealPcState ? NOT_MEASURED_NOTE :
         `✅ Z-코어 실물 OS 진단 완료: 내 PC에서 실제 감지된 보안/알림 모듈 ${realPlugins.length}종(${realPlugins.join(', ')})을 JEA 최소 권한으로 안전 제어 가능합니다.`,
       symptomQuery: q,
       title: `🏦 [Level 3 실물 수리] 내 PC 실제 상주 관공서·금융 보안 모듈 ${realPlugins.length}종 충돌 제어`,
-      rootCause:
+      rootCause: !latestRealPcState ? '실측하지 못해 원인을 단정할 수 없습니다.' :
         `실측 스캔 결과: 내 PC 백그라운드 및 시작 레지스트리에 [${realPlugins.join(', ')}] 등 총 ${realPlugins.length}종의 보안/알림 모듈이 상주하고 있습니다.`,
       agentModuleName: 'Merlin_Z_Core (merlin_z_core_os.py · 실물 서비스/레지스트리 제어)',
       systemCommandOrApi:
@@ -863,12 +850,8 @@ function buildSetupDiagnosisPlanBase(
 
   // ─────────────── [PC Level 2 (중급 장치·네트워크·앱 가이드 - 언제나 0원 (무료))] ───────────────
   if (resolvedId === 'pc_printer_spooler') {
-    const realPrinters = latestRealPcState?.spoolerAndSecurity.installedPrinters || [
-      'HP595370 (HP OfficeJet Pro 8210)',
-      'Hancom PDF',
-      'Microsoft Print to PDF',
-    ];
-    const realSpoolStatus = latestRealPcState?.spoolerAndSecurity.spoolerServiceStatus || 'Running';
+    const realPrinters = latestRealPcState?.spoolerAndSecurity.installedPrinters || [];
+    const realSpoolStatus = latestRealPcState?.spoolerAndSecurity.spoolerServiceStatus || '확인 불가';
     const realStuckJobs = latestRealPcState?.spoolerAndSecurity.stuckSpoolQueueFiles ?? 0;
     return {
       planId,
@@ -877,11 +860,11 @@ function buildSetupDiagnosisPlanBase(
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
       difficultyBadgeKo: '🟡 Level 2 (중급 장치·네트워크·앱 가이드 - 언제나 0원 (무료))',
-      feasibilityCheckKo:
+      feasibilityCheckKo: !latestRealPcState ? NOT_MEASURED_NOTE :
         `✅ Z-코어 실물 OS 진단 완료: 현재 Spooler 서비스(${realSpoolStatus}), 대기열 문서(${realStuckJobs}건), 연결된 프린터(${realPrinters.slice(0, 3).join(', ')}) 실측 확인 완료.`,
       symptomQuery: q,
       title: '🖨️ [Level 2 실물 수리] 내 PC 인쇄 스풀러(Spooler) 큐 점검 및 프린터 포트 재기동',
-      rootCause:
+      rootCause: !latestRealPcState ? '실측하지 못해 원인을 단정할 수 없습니다.' :
         `실측 스캔 결과: 내 PC에 설치된 프린터 총 ${realPrinters.length}대(${realPrinters.slice(0, 4).join(', ')}) 및 Spooler 서비스(${realSpoolStatus}, 대기 문서 ${realStuckJobs}건) 상태를 직접 점검했습니다.`,
       agentModuleName: 'Merlin_Z_Core (merlin_z_core_os.py · Spooler & Printer Engine)',
       systemCommandOrApi:
@@ -978,11 +961,11 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 언제나 0원 (무료))',
       feasibilityCheckKo:
-        '✅ Merlin_Z_Core_Setup.exe 진단 완료: Windows PowerCfg 전원 구성표 1단계 명령으로 즉시 설정 변경 가능합니다.',
+        'ℹ️ 현재 전원 설정은 실측하지 않았고, 귀신같이가 자동으로 바꾸지도 않습니다. 아래 안내대로 [제어판 › 전원 옵션 › 덮개를 닫으면 수행할 작업]에서 직접 바꾸실 수 있습니다.',
       symptomQuery: q,
       title: '🔋 [Level 1 단순 설정] 노트북 덮개(Lid) 닫음 시 절전 진입 방지 & 24시간 마스터 서버 유지',
       rootCause:
-        '눈(Eye) 스캔 결과: 현재 Windows 전원 옵션(SUB_BUTTONS -> LIDACTION)이 AC 전원 연결 시에도 "절전(Sleep=1)"으로 설정되어 덮개를 닫으면 Ghosti 서버가 중단됩니다.',
+        '일반적인 원인: Windows 전원 옵션의 "덮개를 닫으면" 항목이 "절전"으로 되어 있으면 덮개를 닫을 때 PC가 잠듭니다. (이 PC의 현재 값은 실측하지 않았습니다)',
       agentModuleName: 'Merlin_Z_Core_Setup.exe (Windows PowerCfg Engine)',
       systemCommandOrApi:
         'powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0; powercfg /setactive SCHEME_CURRENT',
@@ -1013,11 +996,11 @@ function buildSetupDiagnosisPlanBase(
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 언제나 0원 (무료))',
       feasibilityCheckKo:
-        '✅ Merlin_Z_Core_Setup.exe 진단 완료: 디스플레이 가독성 배율 및 청색광 필터 1단계 제어로 즉시 적용 가능합니다.',
+        'ℹ️ 현재 배율·야간 모드는 실측하지 않았고, 귀신같이가 자동으로 바꾸지도 않습니다. [설정 › 디스플레이]에서 배율과 야간 모드를 직접 바꾸실 수 있습니다.',
       symptomQuery: q,
       title: '👀 [Level 1 단순 설정] 부모님 맞춤형 큰 글씨 배율(125%) & 청색광 차단 야간 보호 모드',
       rootCause:
-        '눈(Eye) 스캔 결과: 모니터 DPI 텍스트 배율이 기본 100%(작은 글씨)로 되어 있고 야간 청색광 필터가 비활성화되어 눈 피로도가 높습니다.',
+        '일반적인 원인: 화면 배율이 100%(작은 글씨)이고 야간 모드가 꺼져 있으면 글씨가 작고 눈이 쉽게 피로합니다. (이 PC의 현재 값은 실측하지 않았습니다)',
       agentModuleName: 'Merlin_Z_Core_Setup.exe (Display DPI & Night Light Registry)',
       systemCommandOrApi:
         'Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop" -Name "LogPixels" -Value 120; Enable-NightLight -ColorTemp 3800K',
@@ -1044,19 +1027,7 @@ function buildSetupDiagnosisPlanBase(
   if (platform === 'pc') {
     const realStartups = latestRealPcState?.startupPrograms?.map(
       (s) => `${s.name} [${s.location}]`
-    ) || [
-      'CrossEXService [HKCU\\Run]',
-      'wizvera-veraport-x64 [HKLM\\Run]',
-      'ALNotify [HKLM\\Run]',
-      'MYBOX [HKCU\\Run]',
-      'KakaoTalk [HKCU\\Run]',
-      'GoogleDriveFS [HKCU\\Run]',
-      'Adobe Acrobat Synchronizer [HKCU\\Run]',
-      'Weixin [HKCU\\Run]',
-      'SensTalk_Engine [HKCU\\Run]',
-      'iTunesHelper [HKLM\\Run]',
-      'Telegram [StartupFolder]',
-    ];
+    ) || [];
     const nonEssentialStartups = realStartups.filter((n) =>
       /crossex|veraport|alnotify|itunes|acrobat|weixin/i.test(n)
     );
@@ -1067,12 +1038,12 @@ function buildSetupDiagnosisPlanBase(
       track: 'TRACK_A_DIRECT_REPAIR',
       difficultyLevel: 'LEVEL_1_SIMPLE_100',
       difficultyBadgeKo: '🟢 Level 1 (단순 OS 설정 변경 - 언제나 0원 (무료))',
-      feasibilityCheckKo:
+      feasibilityCheckKo: !latestRealPcState ? NOT_MEASURED_NOTE :
         `✅ Z-코어 실물 레지스트리 스캔 완료: 내 PC HKCU/HKLM\\Run에서 실제 등록된 시작프로그램 ${realStartups.length}개 중 부팅 지연/보안·알림 항목 ${nonEssentialStartups.length}종(${nonEssentialStartups.join(', ')})을 실측 식별했습니다.`,
       symptomQuery: q || '부팅 시 뜨는 광고/불필요 시작프로그램 점검 및 PC 속도 최적화',
       title: `🚀 [Level 1 실물 진단] 내 PC 실제 시작프로그램 ${realStartups.length}개 중 불필요 자동실행 ${nonEssentialStartups.length}종 정리`,
-      rootCause:
-        `실측 스캔 결과: 가짜 예시 데이터가 아니라 현재 내 PC 레지스트리에 실제로 등록된 ${realStartups.length}개 시작프로그램 중 [${nonEssentialStartups.join(', ')}] 항목이 부팅 시 자동 실행되고 있습니다.`,
+      rootCause: !latestRealPcState ? '실측하지 못해 원인을 단정할 수 없습니다.' :
+        `실측 스캔 결과: 현재 내 PC 레지스트리에 실제로 등록된 ${realStartups.length}개 시작프로그램 중 [${nonEssentialStartups.join(', ')}] 항목이 부팅 시 자동 실행되고 있습니다.`,
       agentModuleName: 'Merlin_Z_Core (merlin_z_core_os.py · Real WinReg HKCU/HKLM Run Inspector)',
       systemCommandOrApi:
         'Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"',

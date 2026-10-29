@@ -1,3 +1,4 @@
+import { getZCoreUrl } from './zCoreBridge';
 /**
  * 🎙️ 귀신같이(Ghosti) 전 영역 무료 무제한 TTS ('현수 & 선희' 투톱) · 무토큰 문서 요약/키워드 발췌 낭독 ·
  *    실제 카톡 대화방 직행 장전 · 고난도 질문 시 단골 AI(기본값: 제미나이) 라이브 음성 바톤터치 엔진
@@ -174,7 +175,7 @@ export async function speakWithHyunsuOrSunhi(
 ): Promise<{ ok: boolean; voiceId: string; audioUrl?: string }> {
   const voiceId = GHOSTI_VOICE_ACTORS[role].voiceId;
   try {
-    const res = await fetch('/__setup-monster/tts', {
+    const res = await fetch(getZCoreUrl('/__setup-monster/tts'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, voice: voiceId, rate }),
@@ -260,7 +261,7 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
   floatingReturnPill: string;
 }> {
   try {
-    const res = await fetch('/__zcore/ai-baton-touch', {
+    const res = await fetch(getZCoreUrl('/__zcore/ai-baton-touch'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),

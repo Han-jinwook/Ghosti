@@ -171,7 +171,7 @@ export async function updateFaceClusterRegistry(payload: {
   excludedAsPasserby?: boolean;
 }): Promise<FaceMemberCluster[] | null> {
   try {
-    const res = await fetch('/__faces/register', {
+    const res = await fetch(getZCoreUrl('/__faces/register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -188,7 +188,7 @@ export async function detectLiveFacesFromPhoto(
   fileName: string
 ): Promise<{ detectedCount: number; clusters: FaceMemberCluster[] } | null> {
   try {
-    const res = await fetch('/__faces/detect', {
+    const res = await fetch(getZCoreUrl('/__faces/detect'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fileName }),
@@ -214,7 +214,7 @@ export async function searchVideoSceneItemsAsync(
   const q = query.trim();
   if (!q || q.includes('전 구간')) return fallbackVideos;
   try {
-    const res = await fetch('/__videos/search', {
+    const res = await fetch(getZCoreUrl('/__videos/search'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: q }),
@@ -238,7 +238,7 @@ export async function searchLocalDocumentFilesAsync(
   const q = query.trim();
   if (!q || q.includes('최근 서류')) return fallbackDocs;
   try {
-    const res = await fetch('/__docs/search', {
+    const res = await fetch(getZCoreUrl('/__docs/search'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: q }),
@@ -790,7 +790,7 @@ export async function loadInitialPhotoDataset(): Promise<{
   const auditByPhoto = new Map<string, PhysicalAuditRecord>();
 
   try {
-    const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch('/__photos/list'));
+    const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch(getZCoreUrl('/__photos/list')));
     const json = await res.json();
     fileList = json.files ?? [];
     quarantinedList = json.quarantined ?? [];
@@ -1706,7 +1706,7 @@ export async function executeZeroSttVoiceSearch(params: {
     try {
       const audioBase64 = params.audioBlob.size > 0 ? await blobToBase64(params.audioBlob) : '';
 
-      const res = await fetch('/__search/voice', {
+      const res = await fetch(getZCoreUrl('/__search/voice'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
