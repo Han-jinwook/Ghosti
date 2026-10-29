@@ -224,127 +224,130 @@ export const SmartTrashView: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 flex flex-col gap-5 pb-24">
-      {/* ─────────────── 1. 노션 스타일 페이지 헤더 & 원클릭 정리 컨트롤 바 ─────────────── */}
+      {/* ─────────────── 1. 노션 스타일 페이지 헤더 & 원클릭 정리 컨트롤 바 (고치기 페이지와 100% 대칭 구조) ─────────────── */}
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2">
+        {/* 상단 1열 & 2열: 고치기(SetupMonsterModal)와 동일한 타이틀 + 우측 상태박스 + 하단 액션 배지 줄 */}
+        <div className="flex flex-col gap-3.5 pb-4 border-b border-white/10">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-col gap-0.5">
+                <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
                   <span>🩺 귀신같이 클린몬스터</span>
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold">
-                  🆓 내 기기 치우기 · 언제나 0원
+                <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
+                  임의 영구 삭제 0% · OS 기본 [휴지통] 직행 &amp; [복원 기록] 3단계 사전 검진 후 1초 원상복구 보장
                 </span>
               </div>
-              <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-                임의 영구 삭제 0% · OS 기본 [휴지통] 직행 &amp; [복원 기록] 3단계 사전 검진 후 1초 원상복구 보장
-              </span>
-            </div>
 
-            <div className="pt-1 font-headline-md text-[17px] md:text-[19px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">
-              {activeTrash.length > 0 ? (
-                <>
-                  정리 후보 <span className="text-primary-container">{activeTrash.length}장</span>{' '}
-                  <span className="text-zinc-500 dark:text-zinc-400 font-normal text-[14.5px]">
-                    ({fmtMB(totalTrashBytes)})
-                  </span>{' '}
-                  — 중복·연사 <span className="text-zinc-900 dark:text-white">{dupCount}장</span> · 메모·캡처{' '}
-                  <span className="text-zinc-900 dark:text-white">{memoAndScreenCount}장</span> · 흔들림{' '}
-                  <span className="text-zinc-900 dark:text-white">{blurryCount}장</span>
-                </>
-              ) : (
-                <span className="text-primary-container">
-                  ✨ 모든 중복·연사 사본({quarantinedPhotos.length}장) 정리가 완료되어 가장 쾌적한 상태입니다
-                </span>
-              )}
-            </div>
-
-            <p className="font-body-sm text-[12.5px] text-zinc-500 dark:text-zinc-400">
-              동일 내용 중복 사진은 최고화질 원본 1장만 남기고, 연사는 마음에 드는 1장을 직접 선택(Pick)해 나머지를 정리합니다.
-            </p>
-          </div>
-
-          {/* 우측: 속도 상태 요약 & 일괄 정리 액션 */}
-          <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            <div className="px-3.5 py-2 rounded-xl bg-zinc-950/90 border border-white/10 flex items-center gap-3">
-              <div className="flex flex-col">
-                <span className="text-[11px] text-zinc-400 font-medium">탐색 반응 속도</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-label-mono text-[12.5px] text-white font-bold">
-                    {currentHealthScore}점
-                  </span>
-                  <span className="text-zinc-500 text-[11px]">→</span>
-                  <span className="font-label-mono text-[12px] text-primary-container font-extrabold">
-                    {activeTrash.length > 0 ? `+${expectedSpeedBoostPct}% 향상` : '98점 쾌적'}
-                  </span>
+              {/* 탐색 반응 속도 상태 박스 (고치기의 PC/스마트폰 스위처 위치와 대칭) */}
+              <div className="px-3.5 py-2 rounded-xl bg-zinc-950/90 border border-white/10 flex items-center gap-3">
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-zinc-400 font-medium">탐색 반응 속도</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-label-mono text-[12.5px] text-white font-bold">
+                      {currentHealthScore}점
+                    </span>
+                    <span className="text-zinc-500 text-[11px]">→</span>
+                    <span className="font-label-mono text-[12px] text-primary-container font-extrabold">
+                      {activeTrash.length > 0 ? `+${expectedSpeedBoostPct}% 향상` : '98점 쾌적'}
+                    </span>
+                  </div>
+                </div>
+                <div className="w-16 h-2 rounded-full bg-zinc-900 overflow-hidden flex border border-white/10">
+                  <div
+                    style={{ width: `${currentHealthScore}%` }}
+                    className="h-full bg-primary-container transition-all duration-500"
+                  />
                 </div>
               </div>
-              <div className="w-16 h-2 rounded-full bg-zinc-900 overflow-hidden flex border border-white/10">
-                <div
-                  style={{ width: `${currentHealthScore}%` }}
-                  className="h-full bg-primary-container transition-all duration-500"
-                />
-              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowHealthHistoryDrawer((v) => !v)}
-                className="px-3 py-2.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
-              >
-                📋 내 기기 건강검진 기록함 ({healthHistoryRecords.length})
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSystemConsult(true);
-                  void triggerMonsterQuery('최근 [복원 기록] 보여줘');
-                }}
-                className="px-3 py-2.5 rounded-xl bg-violet-950/80 hover:bg-violet-900/80 border border-violet-500/40 text-violet-300 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
-              >
-                🕰️ [복원 기록] 타임머신
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchSpace('vault');
-                  if (layout === 'mobile') setMobileTab('search');
-                  else setDesktopTab('dashboard');
-                }}
-                className="px-3 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white font-label-sm text-[12px] font-bold transition-colors cursor-pointer whitespace-nowrap"
-              >
-                📁 서류함 분리 확인
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsTrashBinTabActive(true);
-                  setShowQuarantineDrawer(true);
-                }}
-                className={`px-3 py-2.5 rounded-xl border font-label-sm text-[12px] font-bold cursor-pointer whitespace-nowrap transition-all ${
-                  isTrashBinTabActive
-                    ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
-                }`}
-              >
-                🗑️ 휴지통 보관함 ({quarantinedPhotos.length}장)
-              </button>
-
-              <button
-                type="button"
-                disabled={activeTrash.length === 0 || quarantineMoving}
-                onClick={() => void moveAllTrashToQuarantine()}
-                className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap"
-              >
-                <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 처치</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={activeTrash.length === 0 || quarantineMoving}
+              onClick={() => void moveAllTrashToQuarantine()}
+              className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
+            >
+              <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 처치</span>
+            </button>
           </div>
+
+          {/* 2열: 언제나 0원 배지 + 건강검진 기록함 + 복원 기록 타임머신 + 서류함 + 휴지통 보관함 (고치기 상단 버튼 줄과 100% 동일 배치) */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
+              🆓 개인 (기본) : 언제나 0원
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setShowHealthHistoryDrawer((v) => !v)}
+              className="px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+            >
+              📋 내 기기 건강검진 기록함 ({healthHistoryRecords.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowSystemConsult(true);
+                void triggerMonsterQuery('최근 [복원 기록] 보여줘');
+              }}
+              className="px-3 py-2 rounded-xl bg-violet-950/80 hover:bg-violet-900/80 border border-violet-500/40 text-violet-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+            >
+              🕰️ [복원 기록] 타임머신
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSearchSpace('vault');
+                if (layout === 'mobile') setMobileTab('search');
+                else setDesktopTab('dashboard');
+              }}
+              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 hover:text-white font-label-sm text-[11.5px] font-bold transition-colors cursor-pointer whitespace-nowrap"
+            >
+              📁 서류함 분리 확인
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsTrashBinTabActive(true);
+                setShowQuarantineDrawer(true);
+              }}
+              className={`px-3 py-2 rounded-xl border font-label-sm text-[11.5px] font-bold cursor-pointer whitespace-nowrap transition-all ${
+                isTrashBinTabActive
+                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/15'
+              }`}
+            >
+              🗑️ 휴지통 보관함 ({quarantinedPhotos.length}장)
+            </button>
+          </div>
+        </div>
+
+        {/* 구분선 아래: 정리 후보 요약 문구 (줄바꿈 찌그러짐 없이 가로 전체 폭 시원하게 사용) */}
+        <div className="flex flex-col gap-1">
+          <div className="font-headline-md text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">
+            {activeTrash.length > 0 ? (
+              <>
+                정리 후보 <span className="text-primary-container">{activeTrash.length}장</span>{' '}
+                <span className="text-zinc-500 dark:text-zinc-400 font-normal text-[14px]">
+                  ({fmtMB(totalTrashBytes)})
+                </span>{' '}
+                — 중복·연사 <span className="text-zinc-900 dark:text-white">{dupCount}장</span> · 메모·캡처{' '}
+                <span className="text-zinc-900 dark:text-white">{memoAndScreenCount}장</span> · 흔들림{' '}
+                <span className="text-zinc-900 dark:text-white">{blurryCount}장</span>
+              </>
+            ) : (
+              <span className="text-primary-container">
+                ✨ 모든 중복·연사 사본({quarantinedPhotos.length}장) 정리가 완료되어 가장 쾌적한 상태입니다
+              </span>
+            )}
+          </div>
+          <p className="font-body-sm text-[12.5px] text-zinc-500 dark:text-zinc-400">
+            동일 내용 중복 사진은 최고화질 원본 1장만 남기고, 연사는 마음에 드는 1장을 직접 선택(Pick)해 나머지를 정리합니다.
+          </p>
         </div>
 
         {showHealthHistoryDrawer && (
