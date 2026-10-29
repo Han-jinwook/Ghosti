@@ -209,19 +209,24 @@ def extract_plain_text(rich_text_list: List[Dict[str, Any]]) -> str:
     return "".join(item.get("plain_text", "") for item in (rich_text_list or []))
 
 
-def fetch_page_body_text(page_id: str) -> str:
-    """카드(Page) 내부의 본문 블록(children)을 조회하여 읽기 좋은 텍스트로 변환합니다."""
-    url = f"{NOTION_API_BASE}/blocks/{page_id}/children?page_size=100"
-    res = requests.get(url, headers=get_headers(), timeout=15)
-    if res.status_code != 200:
-        return "(본문 블록 조회 실패)"
+def is_red_annotated(bdata: Dict[str, Any]) -> bool:
+    """블록 자체 색상이나 내부 rich_text 중 붉은색(red) 글씨가 포함되어 있는지 감지합니다."""
+    blk_color = str(bdata.get("color", "")).lower()
+    if "red" in blk_color:
+        return True
+    for rt in bdata.get("rich_text", []) or []:
+        ann_color = str((rt.get("annotations") or {}).get("color", "")).lower()
+        if "red" in ann_color:
+            return True
+    return False
 
-    blocks = res.json().get("results", [])
+
+def _format_blocks_recursive(blocks: List[Dict[str, Any]], indent: str = "") -> List[str]:
     lines: List[str] = []
-
     for blk in blocks:
         btype = blk.get("type", "")
         bdata = blk.get(btype, {})
+        red_prefix = "🔴 [테스터 붉은색 코멘트] " if is_red_annotated(bdata) else ""
 
         if btype in (
             "paragraph",
@@ -233,29 +238,51 @@ def fetch_page_body_text(page_id: str) -> str:
         ):
             text = extract_plain_text(bdata.get("rich_text", []))
             if text.strip():
-                lines.append(text)
+                lines.append(f"{indent}{red_prefix}{text}")
         elif btype in ("bulleted_list_item", "numbered_list_item"):
             text = extract_plain_text(bdata.get("rich_text", []))
             if text.strip():
-                lines.append(f"• {text}")
+                lines.append(f"{indent}{red_prefix}• {text}")
         elif btype == "to_do":
             text = extract_plain_text(bdata.get("rich_text", []))
             checked = "☑" if bdata.get("checked") else "☐"
             if text.strip():
-                lines.append(f"{checked} {text}")
+                lines.append(f"{indent}{checked} {red_prefix}{text}")
         elif btype == "code":
             text = extract_plain_text(bdata.get("rich_text", []))
             if text.strip():
-                lines.append(f"[코드] {text}")
+                lines.append(f"{indent}[코드] {text}")
         elif btype == "image":
             img_info = bdata.get("file") or bdata.get("external") or {}
             img_url = img_info.get("url", "")
             caption = extract_plain_text(bdata.get("caption", []))
             label = f"[첨부 이미지{': ' + caption if caption else ''}]"
-            lines.append(f"{label} {img_url[:70]}..." if img_url else label)
+            lines.append(f"{indent}{label} {img_url[:70]}..." if img_url else f"{indent}{label}")
         elif btype == "divider":
-            lines.append("----------------------------------------")
+            lines.append(f"{indent}----------------------------------------")
 
+        # 항목 바로 아래 들여쓰기(하위 블록)된 코멘트·이미지도 재귀 조회
+        if blk.get("has_children"):
+            child_url = f"{NOTION_API_BASE}/blocks/{blk['id']}/children?page_size=100"
+            try:
+                c_res = requests.get(child_url, headers=get_headers(), timeout=10)
+                if c_res.status_code == 200:
+                    c_blocks = c_res.json().get("results", [])
+                    lines.extend(_format_blocks_recursive(c_blocks, indent + "   ↳ "))
+            except Exception:
+                pass
+    return lines
+
+
+def fetch_page_body_text(page_id: str) -> str:
+    """카드(Page) 내부의 본문 블록(children)을 조회하여 읽기 좋은 텍스트로 변환합니다 (붉은색 인라인 코멘트 자동 감지)."""
+    url = f"{NOTION_API_BASE}/blocks/{page_id}/children?page_size=100"
+    res = requests.get(url, headers=get_headers(), timeout=15)
+    if res.status_code != 200:
+        return "(본문 블록 조회 실패)"
+
+    blocks = res.json().get("results", [])
+    lines = _format_blocks_recursive(blocks)
     return "\n".join(lines).strip() if lines else "(본문 내용 없음)"
 
 
@@ -662,26 +689,7 @@ def create_mission(
             }
         )
 
-    children_blocks.extend(
-        [
-            {"object": "block", "type": "divider", "divider": {}},
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": "✅ 모두 잘 작동하면: 이 카드를 [완료] 칸으로 옮겨주세요!\n🚨 안 되거나 어색한 부분이 있으면: 이 글 맨 아래에 어떤 점이 이상한지(가능하면 캡처 사진과 함께) 적어주시고, 카드를 [발견 버그] 칸으로 옮겨주시면 AI가 자동으로 감지해 바로 고치겠습니다. 감사합니다!"
-                            },
-                            "annotations": {"color": "gray"},
-                        }
-                    ]
-                },
-            },
-        ]
-    )
+    # 하단 고정 안내 문구 폐지 (테스터는 각 항목 바로 아래에 붉은색 글씨로 인라인 코멘트 작성)
 
     payload = {
         "parent": {"database_id": DATABASE_ID},
