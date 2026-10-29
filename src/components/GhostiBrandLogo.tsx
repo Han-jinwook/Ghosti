@@ -33,7 +33,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   showBadge: _showBadge,
   badgeText: _badgeText,
   subtitle,
-  sloganText = '혼자 쓸 땐 귀신같이 찾고 치우고 고치고! 가족·팀과 함께 쓸 땐 귀신같이 공유하고!',
+  sloganText = '1초 AI 파일·영상 내용찾기',
   autoCycle = true,
   cycleIntervalMs = 10000,
   onClick,
@@ -75,7 +75,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   return (
     <div
       onClick={onClick}
-      title="귀신같이 — 혼자 쓸 땐 귀신같이 찾고 치우고 고치고! 가족·팀과 함께 쓸 땐 귀신같이 공유하고!"
+      title="귀신같이 — 1초 AI 파일·영상 내용찾기"
       className={`inline-flex items-center gap-2.5 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
@@ -97,7 +97,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
           {showSlogan && activeSlogan ? (
             <div className="flex items-center gap-1.5 py-0.5">
               <span className="text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
-                AI
+                내용검색
               </span>
               <span
                 className={`${sloganTextClass} font-extrabold tracking-tight ${sloganColorClass} whitespace-nowrap leading-none`}

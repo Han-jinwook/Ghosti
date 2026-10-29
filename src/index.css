@@ -333,6 +333,18 @@ html.theme-warm-light .bg-primary-container:not([data-keep-dark="true"] *) * {
 }
 
 
+html.dark .text-slate-800 {
+  color: #F1F5F9 !important;
+}
+
+html.dark .text-slate-700 {
+  color: #E2E8F0 !important;
+}
+
+html.dark .text-slate-500 {
+  color: #CBD5E1 !important;
+}
+
 /* 9. 전 화면 타이포그래피 가독성 +1~1.5px 상향 보정 (레이아웃 무결성 유지) */
 .text-\[9px\],
 .text-\[9\.5px\] {

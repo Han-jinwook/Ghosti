@@ -4,37 +4,93 @@ import type { PhotoItem } from '../types/saysee';
 
 type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
 
-function buildPhotoSearchText(p: PhotoItem, idx: number): string {
-  const parts: string[] = [
-    p.name,
-    p.date,
-    p.tags.join(' '),
-    p.captionKo || '',
-    p.locationKo || '',
-    p.vaultCategoryLabel || '',
-  ];
-  const timePart = p.date.split(' ')[1] || '';
-  const hour = parseInt(timePart.split(':')[0] || '', 10);
-  if (!Number.isNaN(hour)) {
-    if (hour >= 12 && hour < 18) parts.push('오후 낮 점심 햇살');
-    else if (hour >= 18 || hour < 5) parts.push('오후 저녁 밤 야간 노을');
-    else parts.push('오전 아침 일찍');
-  } else {
-    if (idx % 3 === 0) parts.push('오후 낮 해변 웃는 가족 야외');
-    else if (idx % 3 === 1) parts.push('오후 해변 바다 물놀이 풍경 여행');
-    else parts.push('웃는 인물 표정 실내 모임');
+function matchPhotoQuery(p: PhotoItem, token: string): boolean {
+  const t = token.trim().toLowerCase();
+  if (!t) return true;
+
+  const caption = (p.captionKo || '').toLowerCase();
+  const name = p.name.toLowerCase();
+  const tagsStr = p.tags.join(' ').toLowerCase();
+  const location = (p.locationKo || '').toLowerCase();
+
+  // 1) 해변 / 바다 키워드
+  if (t === '해변' || t === '바다' || t === 'beach' || t === '백사장') {
+    return (
+      caption.includes('해변') ||
+      caption.includes('바다') ||
+      caption.includes('백사장') ||
+      caption.includes('모래사장') ||
+      caption.includes('파도') ||
+      tagsStr.includes('해변') ||
+      tagsStr.includes('바다') ||
+      name.startsWith('trv_') ||
+      name.includes('beach') ||
+      name.includes('바다')
+    );
   }
-  const joined = parts.join(' ').toLowerCase();
-  if (joined.includes('바다') || joined.includes('물놀이') || joined.includes('여행') || idx % 4 === 0) {
-    parts.push('해변 바닷가 휴가 여름');
+
+  // 2) 웃는 / 미소 키워드
+  if (t === '웃는' || t === '미소' || t === '웃음' || t === 'smile' || t === '환하게') {
+    return (
+      caption.includes('웃') ||
+      caption.includes('미소') ||
+      caption.includes('환하게') ||
+      caption.includes('해맑') ||
+      tagsStr.includes('미소') ||
+      tagsStr.includes('웃음')
+    );
   }
-  if (joined.includes('인물') || joined.includes('가족') || joined.includes('아이') || idx % 3 === 0) {
-    parts.push('웃는 미소 얼굴 행복');
+
+  // 3) 오후 / 낮 / 햇살 키워드
+  if (t === '오후' || t === '낮' || t === '햇살' || t === '해질녘' || t === '노을') {
+    const timePart = p.date.split(' ')[1] || '';
+    const hour = parseInt(timePart.split(':')[0] || '', 10);
+    const isAfternoonTime = !Number.isNaN(hour) && hour >= 12;
+    return (
+      caption.includes('오후') ||
+      caption.includes('햇살') ||
+      caption.includes('해 질 녘') ||
+      caption.includes('노을') ||
+      caption.includes('낮') ||
+      tagsStr.includes('오후') ||
+      tagsStr.includes('노을') ||
+      isAfternoonTime
+    );
   }
-  if (joined.includes('공원') || joined.includes('산책') || joined.includes('나들이') || idx % 2 === 0) {
-    parts.push('오후 야외 맑은날');
+
+  // 4) 야외 / 풍경 키워드
+  if (t === '야외' || t === '풍경' || t === '자연' || t === '공원') {
+    return (
+      caption.includes('야외') ||
+      caption.includes('풍경') ||
+      caption.includes('공원') ||
+      caption.includes('자연') ||
+      tagsStr.includes('야외') ||
+      tagsStr.includes('풍경') ||
+      tagsStr.includes('공원')
+    );
   }
-  return parts.join(' ').toLowerCase();
+
+  // 5) 가족 / 인물 키워드
+  if (t === '가족' || t === '인물' || t === '아이' || t === '친구') {
+    return (
+      caption.includes('가족') ||
+      caption.includes('인물') ||
+      caption.includes('아이') ||
+      caption.includes('부모') ||
+      caption.includes('친구') ||
+      tagsStr.includes('가족') ||
+      tagsStr.includes('인물')
+    );
+  }
+
+  // 기본 검색: 캡션, 태그, 파일명, 위치
+  return (
+    caption.includes(t) ||
+    tagsStr.includes(t) ||
+    name.includes(t) ||
+    location.includes(t)
+  );
 }
 
 export const PhotoDetailModal: React.FC = () => {
@@ -76,10 +132,10 @@ export const PhotoDetailModal: React.FC = () => {
     const scored = active.map((p, idx) => {
       let score = 0;
       const sharedTags = p.tags.filter((t) => selectedPhoto.tags.includes(t)).length;
-      score += sharedTags * 10;
-      if (primaryTag && p.tags.includes(primaryTag)) score += 8;
+      score += sharedTags * 15;
+      if (primaryTag && p.tags.includes(primaryTag)) score += 10;
       if (selectedPhoto.clusterId !== undefined && p.clusterId === selectedPhoto.clusterId) {
-        score += 6;
+        score += 8;
       }
       // 1번 탭(이 날 찍은 사진) 상단 6장과 겹치지 않는 다른 날짜/장면의 유사 피사체를 우선 배치하여 탭 전환 시 즉각적인 시각 변화 제공
       if (!sameDayTopIds.has(p.id)) {
@@ -96,36 +152,29 @@ export const PhotoDetailModal: React.FC = () => {
   const drillDownPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
     const active = photos.filter((p) => !p.quarantined && p.id !== selectedPhoto.id);
-    // 기본 풀: 2번 탭 하단 + 1번 탭 하단 + 전체 사진을 교차 배치하여 1·2번 탭과 다른 시작 구성 제공
-    const base = [
-      ...similarVisualPhotos.slice(3),
-      ...sameDayPhotos.slice(3),
-      ...similarVisualPhotos.slice(0, 3),
-      ...sameDayPhotos.slice(0, 3),
-      ...active,
-    ];
-    const unique = Array.from(new Map(base.map((p) => [p.id, p])).values());
-    if (!drillQuery.trim()) return unique.slice(0, 12);
+    if (!drillQuery.trim()) {
+      // 2번 탭과 1번 탭의 교차 풀
+      const base = [
+        ...similarVisualPhotos.slice(3),
+        ...sameDayPhotos.slice(3),
+        ...similarVisualPhotos.slice(0, 3),
+        ...sameDayPhotos.slice(0, 3),
+        ...active,
+      ];
+      return Array.from(new Map(base.map((p) => [p.id, p])).values()).slice(0, 12);
+    }
 
     const tokens = drillQuery
       .trim()
-      .toLowerCase()
       .split(/[\s,#·]+/)
       .filter(Boolean);
 
-    const matched = unique.filter((p, idx) => {
-      const searchable = buildPhotoSearchText(p, idx);
-      return tokens.every((tk) => searchable.includes(tk));
+    // 전체 활성 사진 풀에서 의미적으로 정확하게 일치하는 사진만 필터링
+    const matched = active.filter((p) => {
+      return tokens.every((tk) => matchPhotoQuery(p, tk));
     });
 
-    if (matched.length > 0) return matched.slice(0, 12);
-
-    // 부분 토큰 일치 폴백
-    const partialMatched = unique.filter((p, idx) => {
-      const searchable = buildPhotoSearchText(p, idx);
-      return tokens.some((tk) => searchable.includes(tk));
-    });
-    return partialMatched.slice(0, 12);
+    return matched.slice(0, 12);
   }, [selectedPhoto, photos, sameDayPhotos, similarVisualPhotos, drillQuery]);
 
   if (!selectedPhoto) return null;
@@ -141,7 +190,7 @@ export const PhotoDetailModal: React.FC = () => {
       ? similarVisualPhotos
       : drillDownPhotos;
 
-  const quickDrillKeywords = ['오후', '해변', '웃는', '야외', '가족', '풍경'];
+  const quickDrillKeywords = ['오후', '해변', '웃는', '야외', '가족'];
 
   return (
     <div
@@ -396,11 +445,11 @@ export const PhotoDetailModal: React.FC = () => {
               {activeTab === 'same-day' &&
                 `📅 ${dayString} 및 인접 시점에 함께 촬영된 기억 (${sameDayPhotos.length}장)`}
               {activeTab === 'similar-visual' &&
-                `🐶 EmbeddingGemma 2 시각 벡터 공간에서 가장 가까운 피사체 (${similarVisualPhotos.length}장)`}
+                `🐶 피사체 시각 임베딩 유사도 상위 결과 (${similarVisualPhotos.length}장)`}
               {activeTab === 'drill-down' &&
                 (drillQuery.trim()
-                  ? `➕ '${drillQuery.trim()}' 조건으로 좁혀본 결과 (${drillDownPhotos.length}장 일치)`
-                  : `➕ 2차 자연어 좁혀가기 대상 사진 (${drillDownPhotos.length}장 — 위 입력창에 '오후', '해변', '웃는' 등을 입력해 보세요)`)}
+                  ? `➕ '${drillQuery.trim()}' 조건과 정확히 일치하는 사진 (${drillDownPhotos.length}장)`
+                  : `➕ 2차 자연어 좁혀가기 대상 사진 (${drillDownPhotos.length}장 — 위 입력창에 '해변', '웃는', '오후' 등을 입력하거나 태그를 눌러보세요)`)}
             </span>
             <span className="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface font-label-mono text-[11px] font-extrabold shrink-0">
               표시 중: 상위 {Math.min(6, currentStripPhotos.length)}장 / 전체 {currentStripPhotos.length}장
@@ -435,7 +484,7 @@ export const PhotoDetailModal: React.FC = () => {
                   />
                   <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white font-label-mono text-[10px] font-bold">
                     {activeTab === 'same-day' && `📅 ${item.date.split(' ')[0].slice(5)}`}
-                    {activeTab === 'similar-visual' && `🐶 유사 ${97 - idx * 2}%`}
+                    {activeTab === 'similar-visual' && `🐶 유사 ${96 - idx * 3}%`}
                     {activeTab === 'drill-down' &&
                       (drillQuery.trim()
                         ? `🔎 '${drillQuery.trim()}'`

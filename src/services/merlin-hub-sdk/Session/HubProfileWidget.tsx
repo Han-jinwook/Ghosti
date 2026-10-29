@@ -120,7 +120,7 @@ export const HubProfileWidget: React.FC<HubProfileWidgetProps> = ({
       >
         <HubAvatar isLoggedIn={false} size="sm" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full group-hover:scale-105 transition-transform" />
         {showNickname && (
-          <span className={`hidden sm:block ${isRow ? 'text-[13px] sm:text-[14px] font-bold text-slate-500 pr-1' : 'text-[10px] sm:text-xs font-bold text-slate-400'} group-hover:text-blue-600 transition-colors`}>
+          <span className={`hidden sm:block ${isRow ? 'text-[13px] sm:text-[14px] font-bold text-slate-400 dark:text-zinc-300 pr-1' : 'text-[10px] sm:text-xs font-bold text-slate-400'} group-hover:text-blue-400 transition-colors`}>
             게스트
           </span>
         )}
@@ -146,7 +146,7 @@ export const HubProfileWidget: React.FC<HubProfileWidgetProps> = ({
         className="w-7 h-7 sm:w-8 sm:h-8 rounded-full group-hover:scale-105 transition-transform" 
       />
       {showNickname && (
-        <span className={`hidden sm:block ${isRow ? 'text-[13px] sm:text-[14px] font-bold text-slate-800 pr-1' : 'text-[10px] sm:text-xs font-semibold text-gray-700'} group-hover:text-blue-600 transition-colors truncate max-w-[100px] sm:max-w-[130px]`}>
+        <span className={`hidden sm:block ${isRow ? 'text-[13px] sm:text-[14px] font-bold text-slate-800 dark:text-zinc-100 pr-1' : 'text-[10px] sm:text-xs font-semibold text-gray-700 dark:text-zinc-200'} group-hover:text-blue-400 transition-colors truncate max-w-[100px] sm:max-w-[130px]`}>
           {displayId}
         </span>
       )}
