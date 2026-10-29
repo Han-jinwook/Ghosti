@@ -182,7 +182,7 @@ export async function speakWithHyunsuOrSunhi(
     });
     const data = await res.json();
     if (data?.ok && data?.audioUrl) {
-      const audio = new Audio(data.audioUrl);
+      const audio = new Audio(getZCoreUrl(String(data.audioUrl)));
       await audio.play().catch(() => {});
       return { ok: true, voiceId, audioUrl: data.audioUrl };
     }

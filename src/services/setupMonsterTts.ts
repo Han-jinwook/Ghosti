@@ -177,8 +177,9 @@ export async function speakSetupMonsterTts(
     if (res.ok) {
       const data = await res.json();
       if (data?.ok && data.audioUrl && typeof Audio !== 'undefined') {
-        memoryAudioUrlCache.set(cacheKey, data.audioUrl);
-        const audio = new Audio(data.audioUrl);
+        const playableUrl = getZCoreUrl(String(data.audioUrl));
+        memoryAudioUrlCache.set(cacheKey, playableUrl);
+        const audio = new Audio(playableUrl);
         activeAudioElement = audio;
         await audio.play().catch(() => {});
         return {

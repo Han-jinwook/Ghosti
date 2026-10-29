@@ -42,6 +42,7 @@ import core_win32 as w32  # noqa: E402
 import plugin_ghosti_os  # noqa: E402
 import plugin_senstalk  # noqa: E402
 import plugin_aggrofilter  # noqa: E402
+import ghosti_setup_parity  # noqa: E402
 
 CORE_VERSION = "2.2.0"
 STANDARD_PORT = 5199
@@ -218,6 +219,19 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_os.handle_request(act, qp))
             return
 
+        # [고치기 보조 API — 개발서버 전용이던 기능 데몬 이관]
+        if path == "/__setup-monster/tts-audio":
+            audio, status = ghosti_setup_parity.tts_audio(qp.get("hash", ""))
+            if audio is not None:
+                self._send_bytes(audio, content_type="audio/mpeg", status=200)
+            else:
+                self._send_json({"ok": False, "error": "NOT_FOUND"}, status=status)
+            return
+
+        if path == "/__setup-monster/state":
+            self._send_json(ghosti_setup_parity.handle_setup_monster("state", {}))
+            return
+
         self._send_json({"ok": False, "error": f"Not Found: {path}"}, status=404)
 
     def do_POST(self) -> None:
@@ -262,6 +276,17 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             if act.lower() in plugin_ghosti_os.MUTATING_ACTIONS and self._reject_untrusted():
                 return
             self._send_json(plugin_ghosti_os.handle_request(act, body))
+            return
+
+        # [고치기 보조 API — 개발서버 전용이던 기능 데몬 이관]
+        if path.startswith("/__setup-monster/"):
+            sub = path[len("/__setup-monster/") :].strip("/").lower()
+            if sub == "tts":
+                self._send_json(ghosti_setup_parity.tts_speak(body))
+            elif sub == "tts-prewarm":
+                self._send_json(ghosti_setup_parity.tts_prewarm(body))
+            else:
+                self._send_json(ghosti_setup_parity.handle_setup_monster(sub, body))
             return
 
         self._send_json({"ok": False, "error": f"Not Found: {path}"}, status=404)
