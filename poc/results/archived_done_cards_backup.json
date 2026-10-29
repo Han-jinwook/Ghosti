@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-28T14:07:12.329899",
+  "updated_at": "2026-10-29T11:03:06.970968",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -106,6 +106,62 @@
       "last_edited_time": "2026-10-28T00:58:00.000Z",
       "url": "https://app.notion.com/p/PC-405f9ffd2c1d8154a595f6fd7b132d0b",
       "archived_at": "2026-10-28T14:07:12.329593"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-8177-a129-f839e6d2452c",
+      "title": "🎯 [귀신같이] 휴대폰 상단 메뉴 3칸(내 기기 / 사진 공유 / 업무 공유) 정리 · 사진 공유 하위 선택 반응 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-28T08:12:00.000Z",
+      "url": "https://app.notion.com/p/3-405f9ffd2c1d8177a129f839e6d2452c",
+      "archived_at": "2026-10-29T11:03:06.970675"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-8153-bb76-cf9bf496ffe8",
+      "title": "🎯 [귀신같이] [허브 공통기능 ②] 코인 충전소 · 패밀리 선물함 · 휴대폰 앱 모드에서 코인 숨김 점검 (결제 금지)",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-28T08:12:00.000Z",
+      "url": "https://app.notion.com/p/405f9ffd2c1d8153bb76cf9bf496ffe8",
+      "archived_at": "2026-10-29T11:03:06.970706"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-80ee-9d1c-fa667fce0a16",
+      "title": "🎯[센스톡] 고객 정보 포인트, 명단 관련 오류",
+      "app": "",
+      "last_edited_time": "2026-10-28T05:37:00.000Z",
+      "url": "https://app.notion.com/p/407f9ffd2c1d80ee9d1cfa667fce0a16",
+      "archived_at": "2026-10-29T11:03:06.970716"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-8023-b48d-d0b3f0e2a196",
+      "title": "🎯[센스톡] 로고 관련",
+      "app": "",
+      "last_edited_time": "2026-10-28T05:34:00.000Z",
+      "url": "https://app.notion.com/p/407f9ffd2c1d8023b48dd0b3f0e2a196",
+      "archived_at": "2026-10-29T11:03:06.970720"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-8130-88ca-d24c5753d1bd",
+      "title": "급(센스톡) 각 보관함(템플릿·명단·상용구) 상단 직접 공유하기 기능 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-10-28T04:15:00.000Z",
+      "url": "https://app.notion.com/p/407f9ffd2c1d813088cad24c5753d1bd",
+      "archived_at": "2026-10-29T11:03:06.970724"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-8136-81ea-d45a70121c84",
+      "title": "🎯 [스튜디오] 통합 고객센터(AS) 테스트 스탭 검증 가이드",
+      "app": "썬드리머 스튜디오",
+      "last_edited_time": "2026-10-28T03:54:00.000Z",
+      "url": "https://app.notion.com/p/AS-405f9ffd2c1d813681ead45a70121c84",
+      "archived_at": "2026-10-29T11:03:06.970729"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-801e-b6d4-cdb251854275",
+      "title": "🎯 [썬드리머] 6. 모바일 영상 화면 배열 관련",
+      "app": "",
+      "last_edited_time": "2026-10-28T01:27:00.000Z",
+      "url": "https://app.notion.com/p/6-407f9ffd2c1d801eb6d4cdb251854275",
+      "archived_at": "2026-10-29T11:03:06.970733"
     }
   ]
 }

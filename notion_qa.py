@@ -347,6 +347,7 @@ def fetch_bugs(target_status: Optional[str] = None) -> List[Dict[str, str]]:
     상태가 '발견 버그'(기본값)인 카드를 조회하여
     터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다. (100% 읽기 전용)
     """
+    trim_done_cards(7)
     bugs = query_bugs_raw(target_status)
     resolved_status = target_status or STATUS_DISCOVERED
 
@@ -465,6 +466,7 @@ def complete_bug(page_id: str, guide_text: str) -> bool:
         print("🔔" * 24)
     else:
         print(f"\n🎉 현재 '{STATUS_DISCOVERED}' 컬럼의 모든 티켓 처리가 끝났습니다!")
+    trim_done_cards(7)
 
     return True
 
@@ -600,7 +602,9 @@ def archive_done(page_id: str, memo_text: str = "") -> bool:
         )
 
     # 2단계: 카드의 상태를 '완료'로 변경
-    return update_bug_status(clean_page_id, STATUS_DONE)
+    ok = update_bug_status(clean_page_id, STATUS_DONE)
+    trim_done_cards(7)
+    return ok
 
 
 def update_bug_status(page_id: str, new_status: str) -> bool:

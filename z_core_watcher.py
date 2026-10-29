@@ -262,6 +262,7 @@ def main() -> None:
         ):
             pass
         else:
+            notion_qa.trim_done_cards(7)
             for b in notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED):
                 seen_bug_ids.add(b["page_id"])
     except Exception:
