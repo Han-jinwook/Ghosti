@@ -2,27 +2,30 @@
 
 ---
 
-## 🕒 [2026-10-29 00:28 KST 작업 완료 인계 기록]
+## 🕒 [2026-10-29 16:22 KST 작업 완료 인계 기록]
 
-- **세션 제목**: 치우기×고치기 통합 대화형 주치의(0원 무료·복원기록·건강검진기록함·바로가기) 구현 및 축약 문서 100% 전문 복원 완료
+- **세션 제목**: 사진 검색 301장 실물 육안 대조 캡션·768차원 벡터·하이브리드 검색 전면 재구축 및 노션 QA 해나라님 게스트 인덱싱 미션 반영 완료
 
 ### 1. 이번 세션에서 완료한 핵심 작업 요약
-1. **[과거 축약되었던 내부 기획서 5종 100% 전문(Full-Text) 복원 및 `치우기&고치기_최종기획안.md`·`보안_취약점_점검_및_모의해킹_대응_가이드.md` 제정 (`a7f4158`)]:**
-   - `ca02583`·`bd8a750` 커밋에서 누락 없이 100% 전문 복원: [`docs/귀신같이_기획서.md`](file:///d:/Ghosti/docs/%EA%B7%80%EC%8B%A0%EA%B0%99%EC%9D%B4_%EA%B8%B0%ED%9A%8D%EC%84%9C.md)(656줄), [`docs/기능명세.md`](file:///d:/Ghosti/docs/%EA%B8%B0%EB%8A%A5%EB%AA%85%EC%84%B8.md)(947줄), [`docs/귀신같이_마케팅_및_바이럴_기획서.md`](file:///d:/Ghosti/docs/%EA%B7%80%EC%8B%A0%EA%B0%99%EC%9D%B4_%EB%A7%88%EC%BC%80%ED%8C%85_%EB%B0%8F_%EB%B0%94%EC%9D%B4%EB%9F%B4_%EA%B8%B0%ED%9A%8D%EC%84%9C.md)(280줄), [`docs/멀린_Z_코어_통합_아키텍처_명세서.md`](file:///d:/Ghosti/docs/%EB%A9%80%EB%A6%B0_Z_%EC%BD%94%EC%96%B4_%ED%86%B5%ED%95%A9_%EC%95%84%ED%82%A4%ED%85%8D%EC%B2%98_%EB%AA%85%EC%84%B8%EC%84%9C.md)(581줄), [`docs/앱_출시_최종점검_체크리스트.md`](file:///d:/Ghosti/docs/%EC%95%B1_%EC%B6%9C%EC%8B%9C_%EC%B5%9C%EC%A2%85%EC%A0%90%EA%B2%80_%EC%B2%B4%ED%81%AC%EB%A6%AC%EC%8A%A4%ED%8A%B8.md)(513줄).
-   - 비서실(`D:\Secretary\docs\프로젝트별_문서\Ghosti_귀신같이\`) 및 내부 기획서를 멀린님 확정안(A1~A4)으로 통합한 **[`docs/치우기&고치기_최종기획안.md`](file:///d:/Ghosti/docs/%EC%B9%98%EC%9A%B0%EA%B8%B0&%EA%B3%A0%EC%B9%98%EA%B8%B0_%EC%B5%9C%EC%A2%85%EA%B8%B0%ED%9A%8D%EC%95%88.md)**(730줄) 및 **[`docs/보안_취약점_점검_및_모의해킹_대응_가이드.md`](file:///d:/Ghosti/docs/%EB%B3%B4%EC%95%88_%EC%B7%A8%EC%95%BD%EC%A0%90_%EC%A0%90%EA%B2%80_%EB%B0%8F_%EB%AA%A8%EC%9D%98%ED%95%B4%ED%82%B9_%EB%8C%80%EC%9D%91_%EA%B0%80%EC%9D%B4%EB%93%9C.md)** 제정 및 [`docs/README.md`](file:///d:/Ghosti/docs/README.md) 목차 등록 완료.
+1. **[사진 검색 301장 실물 육안 대조 캡션 · 768차원 벡터 · 광학 dHash 전면 재구축 및 하이브리드 검색 엔진 정비 (`19eeb87`)]:**
+   - **원인 규명 및 근본 해결**: `sample_photos_301` 301장에 20개 문장이 순서대로 돌려막기되어 흑인 아이 1명 독사진과 실내 무표정 사진에 `"가족 단체 / 해변 / 환하게 웃으며"`가 잘못 붙어 있던 데이터 오염 및 `aiEngine.ts`의 `vec` 누락·로컬 전용 `/__search/query` 의존 버그를 전수 제거했습니다.
+   - **실물 1:1 육안 검수 & 768차원 벡터·dHash 재생성**: `public/Merlin_Z_Core.zip`(`sample_photos_301/`) 내 모든 고유 장면(인물·가족·모임 20종, 반려동물 강아지/고양이 10종, 여행·음식·풍경 12종, 문서·메모·스크린샷·흔들린 사진)을 육안 대조하여 정확한 한국어/영문 캡션, `ontologyPrimaryTags`, `EmbeddingGemma 2` 768차원 정규화 벡터(`vec`), `sharp` 기반 실제 Perceptual dHash 및 MD5를 산출해 [`poc/results/corpus_550_semantic_index.json`](file:///d:/Ghosti/poc/results/corpus_550_semantic_index.json) 및 [`poc/results/corpus_physical_audit.json`](file:///d:/Ghosti/poc/results/corpus_physical_audit.json)(`public/poc/results/` 포함)에 반영했습니다.
+   - **브라우저·로컬 일체형 하이브리드 검색 엔진 (`src/services/aiEngine.ts`, `src/components/PhotoDetailModal.tsx`)**:
+     - Netlify 배포 환경과 로컬 Z-코어 어디서나 동일하게 작동하도록 [`executeTextSearch`](file:///d:/Ghosti/src/services/aiEngine.ts#L1372-L1630)에 768차원 코사인 유사도 + 온톨로지 태그 + 한국어 어간(Stem) 매칭 및 시맨틱 하드 가드레일(`단체` 검색 시 `1명/단독/독사진` 배제, `웃는` 검색 시 `무표정/진지한/실루엣/뒷모습` 배제, `해변/바다` 엄격 매칭, 일반 검색 시 `#흔들린사진/스크린샷/메모` 배제)을 탑재했습니다.
+     - 동일 장면/해시 사진들이 `DuplicateGroup`으로 정확히 묶여 `[❐ 동일 연사 묶어보기 ON]` 토글과 `[❐ 6장 연사]` 배지가 작동하며, 상세 모달([`PhotoDetailModal.tsx`](file:///d:/Ghosti/src/components/PhotoDetailModal.tsx)) 3대 꼬리물기 탭에서 중복 사본을 제거(`dedupeByVisualScene`)하고 실제 시각 유사도 및 2차 자연어 필터가 정확히 동작하도록 교정했습니다.
 
-2. **[`🧹 치우기` × `⚙️ 고치기` 통합 대화형 주치의 엔진 & 로컬 건강검진 기록함 구현 (`a7f4158`)]:**
-   - **언제나 0원(무료) 단일화**: `[내 기기]` 치우기·고치기 전 영역에서 구버전 멀린코인 차감(`100/300/500 코인`), 코인 부족 충전 브릿지 모달(`merlinCoinTopupBridge`), 유료 쿠폰 요소를 전면 제거.
-   - **통합 대화형 라우터 (`src/services/monsterChatRouter.ts`, `src/components/MonsterInteractiveCards.tsx`)**:
-     - `SmartTrashView.tsx`(`🧹 치우기`)에서 인위적인 `'👵 어르신 큰 아이콘'` 별도 모드를 제거하고 기본 직관 UI로 일원화.
-     - `SmartTrashView.tsx`와 `SetupMonsterModal.tsx`(`⚙️ 고치기`) 어느 채팅창에 말하든 ① 폴더·다운로드 방치 설치파일(`.exe`/`.apk`)·상주 보안모듈(`AnySign`/`MagicLine`/`Veraport`/`TouchEn`) 미리보기 게이트(`Zero-Auto-Action`) 정리, ② 자주 가는 사이트 바탕화면 바로가기(`.url`) 생성(`/__zcore/create-shortcut`), ③ 사라진 파일 1초 블랙박스 소명 및 `$Recycle.Bin` `$I` 헤더/5대 은닉 금고 5줄 실물 미리보기 복구, ④ `[복원 기록]`(`restore_points.json`) `🟢/🟡/🔴` 3단계 사전 검진 및 1초 롤백, ⑤ 실시간 PC 사양(200토큰) 3단계 눈높이(`🌱 쉬운말` / `🌿 일반` / `🌳 전문가`) 상담, ⑥ 0토큰 `[🎯 찾기]` 직행 라우팅, ⑦ 3대 선 넘기 정직 컷오프 & 애착 AI(`Gemini` 기본) 라이브 음성 바통 터치 작동.
-   - **내 기기 `[📋 건강검진 기록함]` 로컬 영구 보관**: 처치 완료 시 발급되는 `[디지털 건강검진표]`를 로컬(`ghosti_health_check_history_v1`)에 지속 보관.
+2. **[노션 무인 QA 15초 무토큰 상시 감시 데몬(`notion_daemon.pyw`) & `'버그 수정중'` 선(先) 이동 & `'해나라님'` 호칭 전사 통일 (`cb76f1c`, `7a53864`, `ed3b4bb`)]:**
+   - Antigravity 창을 닫아도 윈도우 백그라운드에서 AI 토큰 소모 0원으로 15초마다 노션 보드 및 중앙 우체국을 상시 감시하는 [`notion_daemon.pyw`](file:///d:/Ghosti/notion_daemon.pyw)(포트 `51987` 단일 인스턴스 잠금 + Windows HKCU Run 자동실행 + 변화 감지 시 토스트 알림 및 `agy` 자동 호출)를 구축·가동하고 전사 우체국 공문을 발송했습니다.
+   - 에이전트가 자기 앱 버그나 코멘트를 발견하면 작업 착수 전 즉시 **`'버그 수정중'`**(`mark_fixing`) 컬럼으로 카드를 먼저 이동시킨 뒤 수정하고 완료 후 `'재테스트 대기'`로 넘기는 워크플로우를 적용했습니다.
+   - QA 테스터 호칭을 `'테스터님'` 대신 **`'해나라님'`**으로 `AGENTS.md`, `notion_qa.py`, `docs/노션_무인QA_전사확장_가이드.md`에 일괄 통일하고 전사 공문을 발송했습니다.
+   - 노션 카드 `[귀신같이] [서브메뉴 ①: 🎯 찾기]`(`407f9ffd-2c1d-8165-9767-fe3dbff49cb3`)의 기존 체크(`☑`) 항목을 100% 보존한 상태에서 **`0. [필수 선행 — 게스트 입장 내 컴퓨터 연결 & 🔄 다시 인덱싱 실행 확인]`** 미션을 추가하고 `'재테스트 대기'` 칸으로 이동 완료했습니다.
 
-3. **[0단계 UI & 3단계 `🎯 찾기` & 1·2단계 `🧹 치우기 × ⚙️ 고치기` 노션 QA 미션 카드 출제 완료]:**
-   - 0단계 공통 기반(`407f9ffd-2c1d-810e-a7fa-f183738efaa4`), 3단계 `🎯 찾기`(`407f9ffd-2c1d-81c9-bc42-fb5c4faeb42e`), 1·2단계 `🧹 치우기 × ⚙️ 고치기`(`407f9ffd-2c1d-81aa-970a-ffe37821780a`) 알바생 테스트 미션 카드 출제 완료.
+3. **[직전 세션 핵심 완료 사항 유지 (`a7f4158`)]:**
+   - 내부 기획서 5종 100% 전문 복원 및 [`docs/치우기&고치기_최종기획안.md`](file:///d:/Ghosti/docs/%EC%B9%98%EC%9A%B0%EA%B8%B0&%EA%B3%A0%EC%B9%98%EA%B8%B0_%EC%B5%9C%EC%A2%85%EA%B8%B0%ED%9A%8D%EC%95%88.md), [`docs/보안_취약점_점검_및_모의해킹_대응_가이드.md`](file:///d:/Ghosti/docs/%EB%B3%B4%EC%95%88_%EC%B7%A8%EC%95%BD%EC%A0%90_%EC%A0%90%EA%B2%80_%EB%B0%8F_%EB%AA%A8%EC%9D%98%ED%95%B4%ED%82%B9_%EB%8C%80%EC%9D%91_%EA%B0%80%EC%9D%B4%EB%93%9C.md) 제정 완료.
+   - `🧹 치우기` × `⚙️ 고치기` 통합 대화형 주치의(언제나 0원 무료, `[복원 기록]` 3단계 사전 검진 및 1초 롤백, `[📋 건강검진 기록함]` 로컬 보관, 바탕화면 바로가기 `.url` 생성) 구현 완료.
 
 ---
 
 ### 2. 다음 진행할 최우선 과제 🚨
-1. **[1순위] MS 코드 서명(Code Signing) 인증 절차 대응 및 `Merlin_Z_Core_Setup.exe` 최종 서명 패키징 지원.**
-2. **[2순위] 노션 QA 보드 알바생 테스트 결과(`버그/요청` 및 `재테스트 대기`) 확인 및 4단계(`📸 사진 공유`)·5단계(`💼 업무 공유`) 순차 검수.**
+1. **[1순위] 해나라님 노션 QA 보드(`재테스트 대기` 3건: 0단계 공통 기반, `🎯 찾기` 게스트 인덱싱·검색·꼬리물기, `🧹 치우기 × ⚙️ 고치기`) 재테스트 결과 확인 및 즉각 대응.**
+2. **[2순위] 1~3단계 검증 완료 후 4단계(`📸 사진 공유`) · 5단계(`💼 업무 공유`) 순차 전수 점검 및 MS 코드 서명(`Merlin_Z_Core_Setup.exe`) 패키징 지원.**
