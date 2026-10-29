@@ -11,7 +11,7 @@ export interface GhostiBrandLogoProps {
   badgeText?: string;
   /** 하위 호환성용 subtitle 프로퍼티 (전달 시 sloganText로 사용) */
   subtitle?: string;
-  /** 서브 슬로건 문구 (10초 교체 타이머 시 표출할 문구, 기본: '혼자 쓸 땐 귀신같이 찾고 치우고 고치고! 가족·팀과 함께 쓸 땐 귀신같이 공유하고!') */
+  /** 서브 슬로건 문구 (기본: 2줄 깔끔 줄바꿈) */
   sloganText?: string;
   /** 슬로건 자동 롤링 활성화 여부 (기본 true) */
   autoCycle?: boolean;
@@ -25,7 +25,7 @@ export interface GhostiBrandLogoProps {
  * 『귀신같이』 공식 마스터 브랜드 로고 컴포넌트
  * - 심볼: 검정 갓+구슬 갓끈 아기귀신 앱 아이콘 (`/gwisinkachi_app_icon_512.png`), rounded-xl, shadow-md
  * - 메인 배치: 로고 심볼과 『귀신같이』 워드마크를 1단으로 시원하고 임팩트 있게 정렬
- * - 인터랙션: 10초 후 부드러운 페이드(Fade) 효과와 함께 '1초 AI 파일·영상 내용찾기' 슬로건으로 교체 표출
+ * - 인터랙션: 10초 후 부드러운 페이드(Fade) 효과와 함께 2줄 미니 슬로건으로 교체 표출 (너비 초과 잘림 100% 방지)
  */
 export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   size = 'desktop',
@@ -33,7 +33,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   showBadge: _showBadge,
   badgeText: _badgeText,
   subtitle,
-  sloganText = '1초 AI 파일·영상 내용찾기',
+  sloganText = '1초 AI\n파일·영상 내용찾기',
   autoCycle = true,
   cycleIntervalMs = 10000,
   onClick,
@@ -63,7 +63,6 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   const isMobile = size === 'mobile';
   const symbolSizeClass = isMobile ? 'w-8 h-8' : 'w-9 h-9';
   const wordmarkHeightClass = isMobile ? 'h-[22px]' : 'h-[28px]';
-  const sloganTextClass = isMobile ? 'text-[11px]' : 'text-[13px]';
 
   const sloganColorClass =
     themeMode === 'light'
@@ -72,11 +71,13 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
       ? 'text-teal-300'
       : 'text-teal-700 dark:text-teal-300';
 
+  const sloganLines = activeSlogan.split('\n');
+
   return (
     <div
       onClick={onClick}
       title="귀신같이 — 1초 AI 파일·영상 내용찾기"
-      className={`inline-flex items-center gap-2.5 select-none ${
+      className={`inline-flex items-center gap-2 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
     >
@@ -88,22 +89,27 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
         }`}
       />
 
-      <div className="flex items-center h-9 min-w-0">
+      <div className="flex items-center min-h-[36px] min-w-0">
         <div
           className={`flex items-center transition-all duration-300 ease-in-out ${
             isFading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
           }`}
         >
           {showSlogan && activeSlogan ? (
-            <div className="flex items-center gap-1.5 py-0.5">
-              <span className="text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
-                내용검색
-              </span>
-              <span
-                className={`${sloganTextClass} font-extrabold tracking-tight ${sloganColorClass} whitespace-nowrap leading-none`}
-              >
-                {activeSlogan}
-              </span>
+            <div className="flex flex-col justify-center gap-0.5 leading-tight">
+              <div className="flex items-center gap-1">
+                <span className="text-[9.5px] font-extrabold px-1 py-0.2 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
+                  내용검색
+                </span>
+                <span className={`text-[11px] font-extrabold tracking-tight ${sloganColorClass} whitespace-nowrap`}>
+                  {sloganLines[0]}
+                </span>
+              </div>
+              {sloganLines[1] && (
+                <span className={`text-[10.5px] font-bold tracking-tight opacity-80 ${sloganColorClass} whitespace-nowrap pl-0.5`}>
+                  {sloganLines[1]}
+                </span>
+              )}
             </div>
           ) : (
             <div className="flex items-center leading-none">
@@ -121,7 +127,6 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
                 />
               ) : (
                 <>
-                  {/* 시스템/테마 자동 적응: 라이트/다크 분기 */}
                   <img
                     src="/gwisinkachi_smoke_wordmark_dark.png"
                     alt="귀신같이"
