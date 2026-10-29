@@ -1167,9 +1167,9 @@ export async function loadInitialPhotoDataset(): Promise<{
     const audit = auditByPhoto.get(f.path);
     const vaultLabel = vaultDocByPhoto.get(f.path);
     const locParam = isQuarantined ? '&loc=quarantine' : '';
-    const isLegacyPersonalDump = /^(1721\d+|2024\d+_\d+|2026\d+_\d+|Screenshot_2026|Gemini_Generated_Image_|image-178558)/i.test(f.path);
-    const fullUrl = isLegacyPersonalDump ? `https://picsum.photos/seed/${encodeURIComponent(f.path)}/800/600` : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
-    const thumbUrl = isLegacyPersonalDump ? `https://picsum.photos/seed/${encodeURIComponent(f.path)}/400/300` : `${fullUrl}&thumb=1`;
+    // 유저 PC의 실물 사진은 항상 로컬 Z-코어에서 원본 그대로 표시합니다 (외부 임의 이미지 대체 금지).
+    const fullUrl = getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
+    const thumbUrl = `${fullUrl}&thumb=1`;
 
     return {
       id: f.path,

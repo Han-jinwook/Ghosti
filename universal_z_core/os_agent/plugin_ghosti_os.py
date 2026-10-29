@@ -1024,13 +1024,10 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             for entry in sorted(d.iterdir(), key=lambda x: x.name):
                 if not entry.is_file():
                     continue
-                if _LEGACY_PERSONAL_RX.match(entry.name):
-                    # 구버전 샘플 압축파일에서 풀린 개인 사진은 즉시 자동 영구 삭제 및 노출 차단
-                    if "sample" in str(d).lower() or "301" in str(d).lower() or "pictures" in str(d).lower() or "downloads" in str(d).lower() or "desktop" in str(d).lower():
-                        try:
-                            entry.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+                # [데이터 보호 철칙] 유저 파일은 어떤 경우에도 자동 삭제하지 않습니다.
+                # 구버전 샘플 압축파일(sample_photos_*) 폴더 안에 섞여 있던 개인 사진만 '목록 노출'에서 제외하며,
+                # 사진·바탕화면·다운로드 등 유저 폴더의 파일(예: 삼성폰 기본 파일명 20241029_123456.jpg)은 정상 사진으로 취급합니다.
+                if _LEGACY_PERSONAL_RX.match(entry.name) and "sample_photos" in d.name.lower():
                     continue
                 ext = entry.suffix.lower()
                 if ext not in _IMAGE_EXTS:
