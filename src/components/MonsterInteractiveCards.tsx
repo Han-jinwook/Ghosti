@@ -21,6 +21,8 @@ import {
   executeMonsterCleanupApproval,
   executeMonsterShortcutApproval,
   executeRestorePointRollback,
+  executeMissingFileRecovery,
+  formatBytes,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
 } from '../services/monsterChatRouter';
 import { speakWithHyunsuOrSunhi } from '../services/voiceSearchAndAiBatonEngine';
@@ -51,7 +53,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
     setBusyId('cleanup');
     const res = await executeMonsterCleanupApproval(message.cleanupPreview);
     setBusyId(null);
-    onHealthRecordAdded(res.healthRecord);
+    if (!res.ok) {
+      onUpdateMessage({
+        ...message,
+        cleanupPreview: { ...message.cleanupPreview, executionError: res.message },
+      });
+      onToast?.(res.message);
+      return;
+    }
+    if (res.healthRecord) onHealthRecordAdded(res.healthRecord);
     onUpdateMessage({
       ...message,
       text: `${message.text}\n\n${res.message}`,
@@ -59,6 +69,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         ...message.cleanupPreview,
         approved: true,
         createdRestoreId: res.restoreId,
+        executionError: undefined,
       },
       healthRecordIssued: res.healthRecord,
     });
@@ -70,7 +81,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
     setBusyId('shortcut');
     const res = await executeMonsterShortcutApproval(message.shortcutPreview);
     setBusyId(null);
-    onHealthRecordAdded(res.healthRecord);
+    if (!res.ok) {
+      onUpdateMessage({
+        ...message,
+        shortcutPreview: { ...message.shortcutPreview, executionError: res.message },
+      });
+      onToast?.(res.message);
+      return;
+    }
+    if (res.healthRecord) onHealthRecordAdded(res.healthRecord);
     onUpdateMessage({
       ...message,
       text: `${message.text}\n\n${res.message}`,
@@ -78,6 +97,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         ...message.shortcutPreview,
         approved: true,
         createdRestoreId: res.restoreId,
+        executionError: undefined,
       },
       healthRecordIssued: res.healthRecord,
     });
@@ -87,29 +107,25 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   const handleRestoreMissingFile = async () => {
     if (!message.missingFilePayload || message.missingFilePayload.restored) return;
     setBusyId('missing');
-    if (message.missingFilePayload.restoreId) {
-      await executeRestorePointRollback(message.missingFilePayload.restoreId);
-    }
+    const res = await executeMissingFileRecovery(message.missingFilePayload);
     setBusyId(null);
-    const fileName = message.missingFilePayload.fileName;
-    const orig = message.missingFilePayload.originalLocation;
-    const msg = `✅ [${fileName}] 파일을 원래 위치(${orig})로 1초 만에 완벽히 복원했습니다! (언제나 0원)`;
     onUpdateMessage({
       ...message,
-      text: `${message.text}\n\n${msg}`,
+      text: `${message.text}\n\n${res.message}`,
       missingFilePayload: {
         ...message.missingFilePayload,
-        restored: true,
+        restored: res.ok,
+        restoreError: res.ok ? undefined : res.message,
       },
     });
-    onToast?.(msg);
+    onToast?.(res.message);
   };
 
   const handleRollbackPoint = async (restoreId: string) => {
     setBusyId(restoreId);
     const res = await executeRestorePointRollback(restoreId);
     setBusyId(null);
-    if (message.restorePoints) {
+    if (res.ok && message.restorePoints) {
       onUpdateMessage({
         ...message,
         restorePoints: message.restorePoints.map((pt) =>
@@ -165,7 +181,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold">
               <ShieldCheck className="w-3.5 h-3.5" />
-              실물 증거 5줄 미리보기 게이트 (Zero-Auto-Action)
+              실물 증거 미리보기 (Zero-Auto-Action)
             </span>
             <span className="text-[11px] text-slate-400 font-semibold">
               {message.missingFilePayload.deletedAtOrSavedAt}
@@ -198,7 +214,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             {message.missingFilePayload.restored ? (
               <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
-                원래 위치로 100% 복원 완료 (0원)
+                복구 완료 (Z-코어 실행 확인됨)
               </span>
             ) : (
               <button
@@ -208,10 +224,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                ⭕ 확인 완료 · 원래 위치로 1초 복구하기 (0원)
+                {message.missingFilePayload.caseType === 'CASE_C_OFFICE_AUTORECOVER'
+                  ? '⭕ 확인 완료 · 바탕화면에 복구본 만들기'
+                  : '⭕ 확인 완료 · 원래 위치로 복구하기'}
               </button>
             )}
           </div>
+          {message.missingFilePayload.restoreError && (
+            <div className="text-[11px] font-bold text-rose-300">{message.missingFilePayload.restoreError}</div>
+          )}
         </div>
       )}
 
@@ -232,29 +253,23 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             {message.cleanupPreview.previewDescriptionKo}
           </p>
 
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-2 gap-2 text-center">
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">안전 폴더 이동</div>
+              <div className="text-[10px] text-slate-400">'기타_정리함'으로 이동 (실측)</div>
               <div className="text-sm font-black text-amber-300">
                 {message.cleanupPreview.moveCount}건
               </div>
             </div>
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">구형 폴더 숨김</div>
+              <div className="text-[10px] text-slate-400">대상 파일 합계</div>
               <div className="text-sm font-black text-sky-300">
-                {message.cleanupPreview.hideCount}건
-              </div>
-            </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">보안 플러그인 동결</div>
-              <div className="text-sm font-black text-emerald-300">
-                {message.cleanupPreview.freezeCount}종
+                {formatBytes(message.cleanupPreview.totalBytes)}
               </div>
             </div>
           </div>
 
           <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5 text-[11px] text-slate-300 space-y-1">
-            <div className="font-bold text-slate-400">📋 대상 항목 미리보기:</div>
+            <div className="font-bold text-slate-400">📋 옮길 파일 전체 목록 ({message.cleanupPreview.sampleFiles.length}건):</div>
             {message.cleanupPreview.sampleFiles.map((f, idx) => (
               <div key={idx} className="flex items-center gap-1.5">
                 <span className="text-amber-400">•</span>
@@ -263,11 +278,14 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             ))}
           </div>
 
+          {message.cleanupPreview.executionError && (
+            <div className="text-[11px] font-bold text-rose-300">{message.cleanupPreview.executionError}</div>
+          )}
           <div className="flex items-center justify-end gap-2 pt-1">
             {message.cleanupPreview.approved ? (
               <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
-                실행 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId || '#105'}] 등재됨 (1초 되돌리기 영수증 번호)
+                실행 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId}] 등재됨 (되돌리기 번호)
               </span>
             ) : (
               <button
@@ -301,6 +319,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               🌐 연결 주소: {message.shortcutPreview.targetUrl}
             </div>
           </div>
+          {message.shortcutPreview.executionError && (
+            <div className="text-[11px] font-bold text-rose-300">{message.shortcutPreview.executionError}</div>
+          )}
           <div className="flex justify-end">
             {message.shortcutPreview.approved ? (
               <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
@@ -385,7 +406,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-cyan-300">
               <Cpu className="w-4 h-4" />
-              내 PC 실시간 하드웨어 스냅샷 (200토큰 초경량 진단)
+              내 PC 실측 하드웨어 사양 (Z-코어 측정값)
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold">
               {message.pcSpecPayload.verdictBadge}
@@ -402,7 +423,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
               <div className="text-slate-400">작업대 (RAM)</div>
               <div className="font-bold text-emerald-300">
-                {message.pcSpecPayload.ramTotalGb}GB (사용 {message.pcSpecPayload.ramUsedPercent}%)
+                {message.pcSpecPayload.ramTotalGb ?? '확인 불가'}
+                {message.pcSpecPayload.ramTotalGb !== null ? 'GB' : ''}
+                {message.pcSpecPayload.ramUsedPercent !== null ? ` (사용 ${message.pcSpecPayload.ramUsedPercent}%)` : ''}
               </div>
             </div>
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
@@ -415,7 +438,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               <div className="text-slate-400">여유 공간 (SSD)</div>
               <div className="font-bold text-amber-300 flex items-center gap-1">
                 <HardDrive className="w-3 h-3" />
-                {message.pcSpecPayload.diskFreeGb} GB 여유
+                {message.pcSpecPayload.diskFreeGb !== null ? `${message.pcSpecPayload.diskFreeGb} GB 여유` : '확인 불가'}
               </div>
             </div>
           </div>
@@ -495,19 +518,18 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               🩺 [내 기기 디지털 건강검진표 발급 완료] (내 기기 로컬 기록함 자동 보관)
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 text-[11px] font-extrabold">
-              건강점수 {message.healthRecordIssued.healthScoreBefore}점 ➔{' '}
-              {message.healthRecordIssued.healthScoreAfter}점
+              {message.healthRecordIssued.reclaimedSizeLabel}
             </span>
           </div>
           <div className="text-xs text-slate-200 font-bold">
             • 조치 항목: {message.healthRecordIssued.title}
           </div>
           <div className="text-[11px] text-emerald-200">
-            • 개선 효과: {message.healthRecordIssued.speedUpSummary} (복원 기록{' '}
+            • 실행 내용: {message.healthRecordIssued.speedUpSummary} (복원 기록{' '}
             {message.healthRecordIssued.restoreId})
           </div>
           <div className="text-[10px] text-slate-400">
-            * 발급된 건강검진표는 상단 [📋 내 기기 건강검진 기록함]에 영구 보관되며, [복원 기록 #105] 같은 번호는 작업 순서대로 부여되는 '1초 되돌리기 고유 영수증 번호'입니다 (언제든 해당 번호로 1초 원상복구 가능).
+            * 이 기록은 상단 [📋 내 기기 건강검진 기록함]에 보관되며, [복원 기록] 번호로 언제든 되돌릴 수 있습니다.
           </div>
         </div>
       )}
@@ -571,9 +593,7 @@ export const PersonalHealthCheckHistoryDrawer: React.FC<{
                   {rec.category}
                 </span>
                 <span className="text-xs font-extrabold text-white">{rec.title}</span>
-                <span className="text-[11px] text-emerald-400 font-bold">
-                  ({rec.healthScoreBefore}점 ➔ {rec.healthScoreAfter}점)
-                </span>
+                <span className="text-[11px] text-emerald-400 font-bold">({rec.reclaimedSizeLabel})</span>
               </div>
               <div className="text-[11px] text-slate-300">{rec.speedUpSummary}</div>
               <div className="text-[10px] text-slate-500">

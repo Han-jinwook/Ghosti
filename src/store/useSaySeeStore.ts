@@ -1,5 +1,59 @@
 import { create } from 'zustand';
-import { getZCoreUrl } from '../services/zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
+
+/**
+ * [사진 정리 휴지통 이동/복원 — 정직 처리]
+ * - Z-코어 연결 시: 실제 윈도우 휴지통 이동/복원 결과(moved/restored)만 화면에 반영한다. 실패·미응답이면 아무것도 바꾸지 않는다.
+ * - Z-코어 미연결 시: '🧪 체험 모드'로 화면에서만 정리하고, 실제 파일은 그대로라고 명시한다.
+ */
+type QuarantineOpResult = {
+  done: string[];
+  errors: { file: string; error: string }[];
+  demo: boolean;
+  offline: boolean;
+};
+
+async function requestQuarantineOp(kind: 'move' | 'restore', names: string[]): Promise<QuarantineOpResult> {
+  if (!zCoreBridge.isConnected) {
+    return { done: names, errors: [], demo: true, offline: false };
+  }
+  try {
+    const res = await fetch(getZCoreUrl(`/__quarantine/${kind}`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: names }),
+    });
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) return { done: [], errors: [], demo: false, offline: true };
+    const json = await res.json();
+    const list = kind === 'move' ? json?.moved : json?.restored;
+    const errors = Array.isArray(json?.errors)
+      ? json.errors
+      : json?.error
+      ? [{ file: '', error: String(json.error) }]
+      : [];
+    return { done: Array.isArray(list) ? list.map(String) : [], errors, demo: false, offline: false };
+  } catch {
+    return { done: [], errors: [], demo: false, offline: true };
+  }
+}
+
+function quarantineFailureToast(kind: 'move' | 'restore', r: QuarantineOpResult): string {
+  const verb = kind === 'move' ? '휴지통으로 옮기지' : '되돌리지';
+  if (r.offline) return `⚠️ 멀린 Z-코어에 연결되지 않아 사진을 ${verb} 못했습니다. (아무 파일도 바뀌지 않았습니다)`;
+  const first = r.errors[0];
+  return `⚠️ 사진을 ${verb} 못했습니다${first ? `: ${first.error}` : '.'}`;
+}
+
+function quarantineResultNote(kind: 'move' | 'restore', r: QuarantineOpResult): string {
+  const fail = r.errors.length ? ` (실패 ${r.errors.length}건: ${r.errors[0].error})` : '';
+  if (r.demo) {
+    return kind === 'move'
+      ? '정리 목록에서 뺐습니다. 🧪 체험 모드(Z-코어 미연결)라 실제 파일은 그대로입니다.'
+      : '목록으로 되돌렸습니다. 🧪 체험 모드(Z-코어 미연결)라 실제 파일은 바뀌지 않았습니다.';
+  }
+  return kind === 'move' ? `윈도우 휴지통으로 옮겼습니다 (↩️ 되돌리기 가능)${fail}` : `원래 폴더로 되돌렸습니다${fail}`;
+}
 import {
   speakSetupMonsterTts,
   triggerSetupMonsterTtsPrewarm,
@@ -2565,22 +2619,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     if (quarantineRestImmediately && redundantIds.length > 0) {
       set({ quarantineMoving: true });
-      let movedList: string[] = redundantIds;
-      try {
-        const res = await fetch(getZCoreUrl('/__quarantine/move'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: redundantIds }),
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (Array.isArray(json.moved) && json.moved.length > 0) {
-            movedList = json.moved;
-          }
-        }
-      } catch {
-        movedList = redundantIds;
+      const moveRes = await requestQuarantineOp('move', redundantIds);
+      if (moveRes.done.length === 0) {
+        set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
+        return;
       }
+      const movedList: string[] = moveRes.done;
+      const moveNote = quarantineResultNote('move', moveRes);
 
       const movedSet = new Set<string>(movedList);
       const savedBytes = photos
@@ -2619,10 +2664,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             count: movedSet.size,
             savedBytes,
             timestamp: Date.now(),
+            demo: moveRes.demo,
           },
-          lastQuarantineToast: wasFreeTrialFirstUse
-            ? `🎁 [클린몬스터 연사 정리 1묶음 완료] 베스트 1장을 남기고 연사 ${movedSet.size}장을 격리했습니다! (하단 버튼으로 1초 되돌리기 가능)`
-            : `✨ 선택한 베스트 원본 1장을 안전하게 남기고, 나머지 연사·사본 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
+          lastQuarantineToast: `${wasFreeTrialFirstUse ? '🎁 첫 정리 완료! ' : '✨ '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
         };
       });
     } else {
@@ -2637,22 +2681,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (redundantIds.length === 0) return;
 
     set({ quarantineMoving: true });
-    let movedList: string[] = redundantIds;
-    try {
-      const res = await fetch(getZCoreUrl('/__quarantine/move'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: redundantIds }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json.moved) && json.moved.length > 0) {
-          movedList = json.moved;
-        }
-      }
-    } catch {
-      movedList = redundantIds;
+    const moveRes = await requestQuarantineOp('move', redundantIds);
+    if (moveRes.done.length === 0) {
+      set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
+      return;
     }
+    const movedList: string[] = moveRes.done;
+    const moveNote = quarantineResultNote('move', moveRes);
 
     const movedSet = new Set<string>(movedList);
     const savedBytes = burstPhotos
@@ -2691,8 +2726,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           count: movedSet.size,
           savedBytes,
           timestamp: Date.now(),
+          demo: moveRes.demo,
         },
-        lastQuarantineToast: `✨ 선택한 베스트 컷 1장을 남기고, 나머지 연사 ${movedSet.size}장을 OS 기본 [휴지통]으로 안전하게 이동했습니다 (↩️ 1초 실행 취소 가능).`,
+        lastQuarantineToast: `✨ 베스트 컷 1장을 남기고 나머지 연사 ${movedSet.size}장을 ${moveNote}`,
       };
     });
   },
@@ -2703,22 +2739,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (targetNames.length === 0) return;
 
     set({ quarantineMoving: true });
-    let movedList: string[] = targetNames;
-    try {
-      const res = await fetch(getZCoreUrl('/__quarantine/move'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: targetNames }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json.moved) && json.moved.length > 0) {
-          movedList = json.moved;
-        }
-      }
-    } catch {
-      movedList = targetNames;
+    const moveRes = await requestQuarantineOp('move', targetNames);
+    if (moveRes.done.length === 0) {
+      set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
+      return;
     }
+    const movedList: string[] = moveRes.done;
+    const moveNote = quarantineResultNote('move', moveRes);
 
     const movedSet = new Set<string>(movedList);
     const savedBytes = photos
@@ -2757,8 +2784,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         count: movedSet.size,
         savedBytes,
         timestamp: Date.now(),
+        demo: moveRes.demo,
       },
-      lastQuarantineToast: `🗑️ ${movedSet.size}장의 사진이 OS 기본 [휴지통]으로 안전하게 이동되었습니다 (하단 버튼으로 ↩️ 1초 실행 취소 가능).`,
+      lastQuarantineToast: `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
     }));
   },
 
@@ -2774,24 +2802,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   restoreFromQuarantine: async (names: string[]) => {
     if (names.length === 0) return;
     set({ quarantineMoving: true });
-    let restoredList: string[] = names;
-    try {
-      const res = await fetch(getZCoreUrl('/__quarantine/restore'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: names }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json.restored) && json.restored.length > 0) {
-          restoredList = json.restored;
-        }
-      }
-    } catch {
-      restoredList = names;
+    const restoreRes = await requestQuarantineOp('restore', names);
+    if (restoreRes.done.length === 0) {
+      set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
+      return;
     }
-
-    const restoredSet = new Set<string>(restoredList);
+    const restoredSet = new Set<string>(restoreRes.done);
 
     set((state) => ({
       photos: state.photos.map((p) => {
@@ -2809,7 +2825,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         };
       }),
       quarantineMoving: false,
-      lastQuarantineToast: `♻️ ${restoredSet.size}장의 사진이 원본 폴더(test_photos)로 즉시 원복되었습니다.`,
+      lastQuarantineToast: `♻️ 사진 ${restoredSet.size}장을 ${quarantineResultNote('restore', restoreRes)}`,
     }));
   },
 
@@ -2817,10 +2833,19 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const { lastUndoBatch } = get();
     if (!lastUndoBatch || lastUndoBatch.fileNames.length === 0) return;
     const names = lastUndoBatch.fileNames;
-    set({ lastUndoBatch: null });
     await get().restoreFromQuarantine(names);
+    // 실제로 되돌아온 사진만 Undo 목록에서 지우고, 실패한 사진은 다시 시도할 수 있게 남긴다
+    const remaining = get().photos.filter((p) => names.includes(p.id) && p.quarantined);
     set({
-      lastQuarantineToast: `↩️ [타임머신 1초 Undo 완료] 방금 정리했던 ${names.length}장을 원래 갤러리 위치로 완벽히 되돌렸습니다!`,
+      lastUndoBatch:
+        remaining.length === 0
+          ? null
+          : {
+              ...lastUndoBatch,
+              fileNames: remaining.map((p) => p.id),
+              count: remaining.length,
+              savedBytes: remaining.reduce((acc, p) => acc + p.size, 0),
+            },
     });
   },
 

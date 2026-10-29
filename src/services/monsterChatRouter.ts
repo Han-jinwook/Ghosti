@@ -8,6 +8,16 @@ import {
   speakWithHyunsuOrSunhi,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
 } from './voiceSearchAndAiBatonEngine';
+import { getZCoreUrl } from './zCoreBridge';
+
+/**
+ * 🧹 치우기 × ⚙️ 고치기 공용 몬스터 대화 라우터
+ *
+ * [정직 원칙 — AGENTS.md 수칙 3]
+ * - 화면에 보여주는 파일명·건수·용량·사양·복구 결과는 전부 멀린 Z-코어(127.0.0.1:5199)의 실측 응답에서만 가져옵니다.
+ * - Z-코어 미연결·실패·미발견이면 "연결 필요 / 못 찾았습니다 / 실패했습니다"로 그대로 알립니다. 가짜 성공·예시 데이터로 대체하지 않습니다.
+ * - 파일을 옮기거나 만드는 동작은 미리보기 카드의 [⭕ 확인 완료]를 누른 뒤에만, 미리보기에 실린 정확한 경로로만 실행됩니다.
+ */
 
 export type BatonTouchResult = Awaited<
   ReturnType<typeof triggerUserFavoriteAiLiveVoiceBatonTouch>
@@ -25,19 +35,28 @@ export type MonsterCardKind =
   | 'DEVICE_REPAIR_GATE'
   | 'BATON_TOUCH_CUTOFF';
 
+export interface MonsterCleanupItem {
+  name: string;
+  fullPath: string;
+  folderLabel: string;
+  sizeBytes: number;
+  ageDays: number;
+}
+
 export interface MonsterCleanupPreviewPayload {
-  cleanupType: 'FOLDER_REORG' | 'DOWNLOAD_INSTALLERS' | 'SECURITY_PLUGINS';
+  cleanupType: 'FOLDER_REORG' | 'DOWNLOAD_INSTALLERS';
   summaryTitle: string;
   userPrompt: string;
   targetFolderLabel: string;
   moveCount: number;
-  hideCount: number;
-  freezeCount: number;
+  totalBytes: number;
   reclaimSizeLabel: string;
+  items: MonsterCleanupItem[];
   sampleFiles: string[];
   previewDescriptionKo: string;
   approved?: boolean;
   createdRestoreId?: string;
+  executionError?: string;
 }
 
 export interface MonsterShortcutPreviewPayload {
@@ -47,6 +66,7 @@ export interface MonsterShortcutPreviewPayload {
   userPrompt: string;
   approved?: boolean;
   createdRestoreId?: string;
+  executionError?: string;
 }
 
 export interface MonsterMissingFilePayload {
@@ -54,16 +74,18 @@ export interface MonsterMissingFilePayload {
   caseType:
     | 'CASE_A_USER_APPROVED_RESTORE_POINT'
     | 'CASE_B_FOUND_IN_RECYCLE_BIN'
-    | 'CASE_B_FOUND_IN_QUARANTINE'
     | 'CASE_C_OFFICE_AUTORECOVER';
   fileName: string;
   currentLocation: string;
   originalLocation: string;
   deletedAtOrSavedAt: string;
   restoreId?: string;
+  recycleMetaFile?: string;
+  recoverFullPath?: string;
   fiveLinePreview: string[];
   briefingKo: string;
   restored?: boolean;
+  restoreError?: string;
 }
 
 export interface MonsterRestorePointItem {
@@ -82,12 +104,12 @@ export interface MonsterRestorePointItem {
 
 export interface MonsterPcSpecPayload {
   cpuModel: string;
-  ramTotalGb: number;
-  ramUsedPercent: number;
+  ramTotalGb: number | null;
+  ramUsedPercent: number | null;
   gpuModel: string;
   osVersion: string;
-  diskFreeGb: number;
-  displayHz: number;
+  diskFreeGb: number | null;
+  displayHz: number | null;
   verdictBadge: string;
   easyAnswerKo: string;
   normalAnswerKo: string;
@@ -104,8 +126,9 @@ export interface DigitalHealthCheckRecord {
   securityPluginsFrozen: number;
   speedUpSummary: string;
   restoreId?: string;
-  healthScoreBefore: number;
-  healthScoreAfter: number;
+  /** 과거 버전 호환용(현재는 근거 없는 점수를 만들지 않으므로 기록하지 않음) */
+  healthScoreBefore?: number;
+  healthScoreAfter?: number;
 }
 
 export interface MonsterChatMessage {
@@ -131,39 +154,74 @@ export interface MonsterChatMessage {
   healthRecordIssued?: DigitalHealthCheckRecord;
 }
 
-const HEALTH_HISTORY_STORAGE_KEY = 'ghosti_health_check_history_v1';
+// ---------------------------------------------------------------------------
+// Z-코어 통신 (실패는 실패로 돌려줌)
+// ---------------------------------------------------------------------------
 
-const DEFAULT_SEED_HEALTH_HISTORY: DigitalHealthCheckRecord[] = [
-  {
-    recordId: 'hc_seed_1',
-    issuedAt: '2026-10-28 09:30',
-    category: '🧹 치우기',
-    title: '다운로드 폴더 구버전 설치파일(.exe/.apk) 및 중복 캐시 정리',
-    reclaimedSizeLabel: '1.84 GB 확보',
-    cleanedItemCount: 14,
-    securityPluginsFrozen: 4,
-    speedUpSummary: '부팅 속도 +34% 개선 · 백그라운드 보안 플러그인 4종 동결',
-    restoreId: '#104',
-    healthScoreBefore: 72,
-    healthScoreAfter: 96,
-  },
-];
+export const ZCORE_OFFLINE_MESSAGE =
+  '멀린 Z-코어에 연결되어 있지 않아 내 PC를 확인할 수 없습니다. Z-코어를 실행한 뒤 다시 말씀해 주세요. (아무 파일도 건드리지 않았습니다)';
+
+type ZResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+async function zcoreJson<T = any>(path: string, init?: RequestInit, timeoutMs = 20000): Promise<ZResult<T>> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(getZCoreUrl(path), { ...init, signal: controller.signal });
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
+    }
+    const data = (await res.json()) as T;
+    if (res.status === 403) {
+      return { ok: false, error: '허용되지 않은 화면에서 요청되어 Z-코어가 실행을 거절했습니다.' };
+    }
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function postJson(body: unknown): RequestInit {
+  return {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  };
+}
+
+export function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0 KB';
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+// ---------------------------------------------------------------------------
+// 📋 내 기기 건강검진 기록함 (실제로 실행된 작업만 기록)
+// ---------------------------------------------------------------------------
+
+const HEALTH_HISTORY_STORAGE_KEY = 'ghosti_health_check_history_v1';
 
 export function loadLocalHealthCheckHistory(): DigitalHealthCheckRecord[] {
   try {
-    if (typeof window === 'undefined') return DEFAULT_SEED_HEALTH_HISTORY;
+    if (typeof window === 'undefined') return [];
     const raw = window.localStorage.getItem(HEALTH_HISTORY_STORAGE_KEY);
-    if (!raw) {
-      window.localStorage.setItem(
-        HEALTH_HISTORY_STORAGE_KEY,
-        JSON.stringify(DEFAULT_SEED_HEALTH_HISTORY)
-      );
-      return DEFAULT_SEED_HEALTH_HISTORY;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SEED_HEALTH_HISTORY;
+    if (!Array.isArray(parsed)) return [];
+    // 과거 버전이 자동으로 심어 둔 예시 기록(hc_seed_*)은 실제 이력이 아니므로 제외
+    const real = parsed.filter(
+      (r: DigitalHealthCheckRecord) => r && typeof r.recordId === 'string' && !r.recordId.startsWith('hc_seed')
+    );
+    if (real.length !== parsed.length) {
+      window.localStorage.setItem(HEALTH_HISTORY_STORAGE_KEY, JSON.stringify(real));
+    }
+    return real;
   } catch {
-    return DEFAULT_SEED_HEALTH_HISTORY;
+    return [];
   }
 }
 
@@ -195,32 +253,22 @@ export function appendLocalHealthCheckRecord(
   return record;
 }
 
-export async function fetchRestorePointsWithPrecheck(): Promise<MonsterRestorePointItem[]> {
-  try {
-    const res = await fetch('/__zcore/restore-points');
-    const data = await res.json();
-    if (data?.ok && Array.isArray(data.restorePoints)) {
-      return data.restorePoints as MonsterRestorePointItem[];
-    }
-  } catch {
-    /* fallback below */
+// ---------------------------------------------------------------------------
+// [복원 기록]
+// ---------------------------------------------------------------------------
+
+export async function fetchRestorePointsWithPrecheck(): Promise<{
+  points: MonsterRestorePointItem[];
+  error?: string;
+}> {
+  const r = await zcoreJson<{ ok: boolean; restorePoints?: MonsterRestorePointItem[]; error?: string }>(
+    '/__zcore/restore-points'
+  );
+  if (!r.ok) return { points: [], error: r.error };
+  if (!r.data?.ok || !Array.isArray(r.data.restorePoints)) {
+    return { points: [], error: r.data?.error || '복원 기록을 불러오지 못했습니다.' };
   }
-  return [
-    {
-      restoreId: '#104',
-      createdAt: '2026-10-28 09:30:00',
-      summary: "바탕화면·다운로드 잡파일 '기타_정리함' 이동 및 구형 폴더 숨김 정리",
-      userPrompt:
-        "바탕화면이랑 다운로드 폴더에서 업무랑 상관없는 잡파일은 '기타' 폴더 만들어 다 집어넣고, 옛날 폴더들은 안 보이게 숨겨줘",
-      integrityStatus: 'FULL_RESTORABLE',
-      statusBadge: '🟢 [100% 완벽 복원 가능]',
-      totalItems: 2,
-      restorableItems: 2,
-      missingFiles: [],
-      precheckGuideMessage:
-        '이동·숨김했던 파일 2건이 모두 온전히 존재합니다. 클릭 시 1초 만에 원래 위치로 100% 되돌립니다.',
-    },
-  ];
+  return { points: r.data.restorePoints };
 }
 
 export async function executeRestorePointRollback(restoreId: string): Promise<{
@@ -228,148 +276,188 @@ export async function executeRestorePointRollback(restoreId: string): Promise<{
   message: string;
   restoredCount: number;
 }> {
-  try {
-    const res = await fetch('/__zcore/restore-rollback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ restoreId }),
-    });
-    const data = await res.json();
-    if (data?.ok) {
-      return {
-        ok: true,
-        message:
-          data.message ||
-          `✅ [${restoreId} 복원 기록] 원래 위치로 1초 만에 완벽히 되돌렸습니다! (언제나 0원)`,
-        restoredCount: Number(data.restoredCount ?? 2),
-      };
-    }
-  } catch {
-    /* fallback */
+  const r = await zcoreJson<{ ok: boolean; message?: string; error?: string; restoredCount?: number }>(
+    '/__zcore/restore-rollback',
+    postJson({ restoreId })
+  );
+  if (!r.ok) return { ok: false, message: `⚠️ ${r.error}`, restoredCount: 0 };
+  const d = r.data;
+  if (d?.ok) {
+    return {
+      ok: true,
+      message: `✅ ${d.message || `[${restoreId} 복원 기록]을 되돌렸습니다.`}`,
+      restoredCount: Number(d.restoredCount ?? 0),
+    };
   }
   return {
-    ok: true,
-    message: `✅ [${restoreId} 복원 기록] 원래 위치로 1초 만에 완벽히 되돌렸습니다! (언제나 0원)`,
-    restoredCount: 2,
+    ok: false,
+    message: `⚠️ 되돌리지 못했습니다: ${d?.error || d?.message || '알 수 없는 오류'}`,
+    restoredCount: 0,
   };
 }
 
-export async function executeMonsterCleanupApproval(
-  preview: MonsterCleanupPreviewPayload
-): Promise<{
-  restoreId: string;
+// ---------------------------------------------------------------------------
+// 🧹 대화형 폴더 정리 실행 (미리보기에 실린 실물 경로만)
+// ---------------------------------------------------------------------------
+
+export async function executeMonsterCleanupApproval(preview: MonsterCleanupPreviewPayload): Promise<{
+  ok: boolean;
+  restoreId?: string;
   message: string;
-  healthRecord: DigitalHealthCheckRecord;
+  healthRecord?: DigitalHealthCheckRecord;
 }> {
-  let restoreId = '#105';
-  let message = `✅ [${preview.summaryTitle}] 정리가 완료되었으며 [복원 기록]에 안전하게 저장되었습니다!`;
-
-  try {
-    const res = await fetch('/__zcore/record-cleanup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        summary: preview.summaryTitle,
-        userPrompt: preview.userPrompt,
-        previewPresented: preview.previewDescriptionKo,
-        fileNames: preview.sampleFiles,
-      }),
-    });
-    const data = await res.json();
-    if (data?.ok && data.restoreId) {
-      restoreId = String(data.restoreId);
-      message = String(data.message || message);
-    }
-  } catch {
-    /* fallback */
+  const r = await zcoreJson<{
+    ok: boolean;
+    restoreId?: string;
+    movedCount?: number;
+    movedBytes?: number;
+    message?: string;
+    error?: string;
+    errors?: { file: string; error: string }[];
+  }>(
+    '/__zcore/record-cleanup',
+    postJson({
+      summary: preview.summaryTitle,
+      userPrompt: preview.userPrompt,
+      previewPresented: preview.previewDescriptionKo,
+      fullPaths: preview.items.map((i) => i.fullPath),
+    })
+  );
+  if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
+  const d = r.data;
+  if (!d?.ok || !d.restoreId) {
+    const detail = d?.errors?.length ? ` (${d.errors.slice(0, 2).map((e) => `${e.file}: ${e.error}`).join(', ')})` : '';
+    return { ok: false, message: `⚠️ 정리하지 못했습니다: ${d?.error || '알 수 없는 오류'}${detail}` };
   }
-
-  const totalItems = preview.moveCount + preview.hideCount + preview.freezeCount;
+  const moved = Number(d.movedCount ?? 0);
+  const failNote = d.errors?.length ? ` · 실패 ${d.errors.length}건` : '';
   const healthRecord = appendLocalHealthCheckRecord({
-    category: preview.cleanupType === 'SECURITY_PLUGINS' ? '⚙️ 고치기' : '🧹 치우기',
+    category: '🧹 치우기',
     title: preview.summaryTitle,
-    reclaimedSizeLabel: preview.reclaimSizeLabel,
-    cleanedItemCount: totalItems,
-    securityPluginsFrozen: preview.freezeCount,
-    speedUpSummary:
-      preview.freezeCount > 0
-        ? `상주 보안 플러그인 ${preview.freezeCount}종 동결 · 부팅/반응 속도 +32% 개선`
-        : `${preview.targetFolderLabel} 정돈 완료 (${totalItems}건 · ${preview.reclaimSizeLabel} 절약)`,
-    restoreId,
-    healthScoreBefore: 74,
-    healthScoreAfter: 98,
+    reclaimedSizeLabel: `${formatBytes(Number(d.movedBytes ?? 0))} 정돈`,
+    cleanedItemCount: moved,
+    securityPluginsFrozen: 0,
+    speedUpSummary: `${preview.targetFolderLabel}에서 ${moved}건을 '기타_정리함'으로 이동${failNote}`,
+    restoreId: d.restoreId,
   });
-
-  return { restoreId, message, healthRecord };
+  return { ok: true, restoreId: d.restoreId, message: `✅ ${d.message || `${moved}건을 정리했습니다.`}`, healthRecord };
 }
 
-export async function executeMonsterShortcutApproval(
-  preview: MonsterShortcutPreviewPayload
-): Promise<{
-  restoreId: string;
+export async function executeMonsterShortcutApproval(preview: MonsterShortcutPreviewPayload): Promise<{
+  ok: boolean;
+  restoreId?: string;
   message: string;
-  healthRecord: DigitalHealthCheckRecord;
+  healthRecord?: DigitalHealthCheckRecord;
 }> {
-  let restoreId = '#105';
-  let message = `✅ 바탕화면에 [${preview.shortcutFileName}] 아이콘을 생성했으며, [${restoreId} 복원 기록]에 등재했습니다!`;
-
-  try {
-    const res = await fetch('/__zcore/create-shortcut', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        siteName: preview.siteName,
-        targetUrl: preview.targetUrl,
-        userPrompt: preview.userPrompt,
-      }),
-    });
-    const data = await res.json();
-    if (data?.ok && data.restoreId) {
-      restoreId = String(data.restoreId);
-      message = String(data.message || message);
-    }
-  } catch {
-    /* fallback */
+  const r = await zcoreJson<{ ok: boolean; restoreId?: string; fileName?: string; message?: string; error?: string }>(
+    '/__zcore/create-shortcut',
+    postJson({
+      siteName: preview.siteName,
+      targetUrl: preview.targetUrl,
+      userPrompt: preview.userPrompt,
+    })
+  );
+  if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
+  const d = r.data;
+  if (!d?.ok || !d.restoreId) {
+    return { ok: false, message: `⚠️ 바로가기를 만들지 못했습니다: ${d?.error || '알 수 없는 오류'}` };
   }
-
   const healthRecord = appendLocalHealthCheckRecord({
     category: '🔗 바로가기',
-    title: `바탕화면 '${preview.siteName}' 원클릭 바로가기(${preview.shortcutFileName}) 생성`,
-    reclaimedSizeLabel: '바탕화면 직행 연결',
+    title: `바탕화면 '${preview.siteName}' 바로가기(${d.fileName || preview.shortcutFileName}) 생성`,
+    reclaimedSizeLabel: '바탕화면 바로가기',
     cleanedItemCount: 1,
     securityPluginsFrozen: 0,
-    speedUpSummary: `주소창 검색 없이 바탕화면 더블클릭 1초 접속 (${preview.targetUrl})`,
-    restoreId,
-    healthScoreBefore: 90,
-    healthScoreAfter: 98,
+    speedUpSummary: `바탕화면에서 더블클릭으로 ${preview.targetUrl} 열기`,
+    restoreId: d.restoreId,
   });
-
-  return { restoreId, message, healthRecord };
+  return { ok: true, restoreId: d.restoreId, message: `✅ ${d.message || '바로가기를 만들었습니다.'}`, healthRecord };
 }
 
-function parseShortcutSiteFromQuery(query: string): { siteName: string; targetUrl: string } {
+// ---------------------------------------------------------------------------
+// 사라진 파일 복구 실행 (찾은 경로 유형별 실제 복구)
+// ---------------------------------------------------------------------------
+
+export async function executeMissingFileRecovery(payload: MonsterMissingFilePayload): Promise<{
+  ok: boolean;
+  message: string;
+}> {
+  if (payload.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT' && payload.restoreId) {
+    const res = await executeRestorePointRollback(payload.restoreId);
+    return { ok: res.ok, message: res.message };
+  }
+  if (payload.caseType === 'CASE_B_FOUND_IN_RECYCLE_BIN' && payload.recycleMetaFile) {
+    const r = await zcoreJson<{ ok: boolean; restoredPath?: string; renamed?: boolean; error?: string }>(
+      '/__zcore/recycle-restore',
+      postJson({ recycleMetaFile: payload.recycleMetaFile })
+    );
+    if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
+    if (!r.data?.ok) return { ok: false, message: `⚠️ 복원하지 못했습니다: ${r.data?.error || '알 수 없는 오류'}` };
+    const renamedNote = r.data.renamed ? ' (같은 이름 파일이 있어 새 이름으로 복원)' : '';
+    return { ok: true, message: `✅ 휴지통에서 [${r.data.restoredPath}]로 복원했습니다${renamedNote}.` };
+  }
+  if (payload.caseType === 'CASE_C_OFFICE_AUTORECOVER' && payload.recoverFullPath) {
+    const r = await zcoreJson<{ ok: boolean; recoveredPath?: string; message?: string; error?: string }>(
+      '/__zcore/recover-copy',
+      postJson({ fullPath: payload.recoverFullPath, userPrompt: payload.query })
+    );
+    if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
+    if (!r.data?.ok) return { ok: false, message: `⚠️ 복구본을 만들지 못했습니다: ${r.data?.error || '알 수 없는 오류'}` };
+    return { ok: true, message: `✅ ${r.data.message || `바탕화면에 복구본을 만들었습니다: ${r.data.recoveredPath}`}` };
+  }
+  return { ok: false, message: '⚠️ 이 항목은 자동 복구 경로 정보가 없어 복구할 수 없습니다.' };
+}
+
+// ---------------------------------------------------------------------------
+// 바로가기 대상 해석 (모르면 추측하지 않고 주소를 물어봄)
+// ---------------------------------------------------------------------------
+
+function parseShortcutSiteFromQuery(query: string): { siteName: string; targetUrl: string } | null {
   const q = query.trim();
   const urlMatch = q.match(/https?:\/\/[^\s"'<>]+/i);
   if (urlMatch) {
     const url = urlMatch[0];
-    if (url.includes('cafe.naver')) return { siteName: '자주가는_네이버카페', targetUrl: url };
-    if (url.includes('youtube')) return { siteName: '유튜브_즐겨찾기', targetUrl: url };
-    return { siteName: '즐겨찾는_웹사이트', targetUrl: url };
+    let host = '즐겨찾는_웹사이트';
+    try {
+      host = new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      /* keep default */
+    }
+    return { siteName: host, targetUrl: url };
   }
-  if (/카페|동호회|산악회|골프모임/i.test(q)) {
-    return { siteName: '자주가는_네이버카페', targetUrl: 'https://section.cafe.naver.com' };
-  }
-  if (/유튜브|트로트|뉴스|방송/i.test(q)) {
-    return { siteName: '유튜브_바로가기', targetUrl: 'https://www.youtube.com' };
-  }
-  if (/국민은행|신한은행|농협|은행|인터넷뱅킹/i.test(q)) {
-    return { siteName: '주거래_인터넷뱅킹', targetUrl: 'https://www.kbstar.com' };
-  }
-  if (/정부24|민원|등본|홈택스/i.test(q)) {
-    return { siteName: '정부24_민원발급', targetUrl: 'https://www.gov.kr' };
-  }
-  return { siteName: '자주가는_포털사이트', targetUrl: 'https://www.naver.com' };
+  if (/유튜브|youtube/i.test(q)) return { siteName: '유튜브', targetUrl: 'https://www.youtube.com' };
+  if (/네이버\s*카페/i.test(q)) return { siteName: '네이버카페', targetUrl: 'https://section.cafe.naver.com' };
+  if (/네이버/i.test(q)) return { siteName: '네이버', targetUrl: 'https://www.naver.com' };
+  if (/정부24|등본|민원/i.test(q)) return { siteName: '정부24', targetUrl: 'https://www.gov.kr' };
+  if (/홈택스/i.test(q)) return { siteName: '홈택스', targetUrl: 'https://www.hometax.go.kr' };
+  if (/다음|daum/i.test(q)) return { siteName: '다음', targetUrl: 'https://www.daum.net' };
+  return null;
 }
+
+function nowLabel(): string {
+  return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function reply(
+  sourceTab: 'trash' | 'repair',
+  text: string,
+  extra: Partial<MonsterChatMessage> = {}
+): MonsterChatMessage {
+  return {
+    id: `monster_${Date.now()}`,
+    role: 'assistant',
+    timestamp: nowLabel(),
+    text,
+    sourceTab,
+    ...extra,
+  };
+}
+
+const RED_LINES_TEXT = DOCTOR_3_RED_LINES_NOTICE.join('\n');
+
+// ---------------------------------------------------------------------------
+// 메인 라우터
+// ---------------------------------------------------------------------------
 
 export async function processUnifiedMonsterChatQuery(params: {
   query: string;
@@ -379,370 +467,315 @@ export async function processUnifiedMonsterChatQuery(params: {
 }): Promise<MonsterChatMessage> {
   const { query, sourceTab, literacyLevel, ttsEnabled } = params;
   const clean = query.trim();
-  const nowLabel = new Date().toLocaleTimeString('ko-KR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  const speak = (text: string) => {
+    if (ttsEnabled) void speakWithHyunsuOrSunhi(text, 'hyunsu_briefing');
+  };
 
-  // 1) [복원 기록] 조회 및 타임머신 되돌리기 의도
-  if (/복원\s*기록|히스토리|되돌려|원래대로|타임머신|정리한\s*거\s*취소|#10/i.test(clean)) {
-    const points = await fetchRestorePointsWithPrecheck();
-    const replyText =
-      '🕰️ **최근 [복원 기록] 3단계 무결성 사전 검진(Pre-Check: 0.01초) 결과입니다.**\n현재 파일이 디스크에 온전히 남아 있는지 먼저 대조했습니다. 원하시는 기록의 **[↩️ 1초 만에 원래대로 복원]** 버튼을 누르면 즉시 원래 폴더와 상태로 되돌립니다. (언제나 0원)';
-    if (ttsEnabled) {
-      void speakWithHyunsuOrSunhi(
-        '최근 복원 기록을 조회했습니다. 원하시는 기록의 복원 버튼을 누르면 1초 만에 원래 자리로 되돌려 드립니다.',
-        'hyunsu_briefing'
+  // 1) [복원 기록] 조회
+  if (/복원\s*기록|히스토리|되돌려|원래대로|타임머신|정리한\s*거\s*취소|#\d+/i.test(clean)) {
+    const { points, error } = await fetchRestorePointsWithPrecheck();
+    if (error) {
+      speak('Z-코어에 연결되지 않아 복원 기록을 불러오지 못했습니다.');
+      return reply(sourceTab, `⚠️ ${error}`);
+    }
+    if (points.length === 0) {
+      speak('아직 복원 기록이 없습니다.');
+      return reply(
+        sourceTab,
+        '🕰️ 아직 [복원 기록]이 없습니다. 귀신같이로 정리·바로가기·복구를 실행하면 그때마다 되돌리기용 번호가 여기에 남습니다.'
       );
     }
-    return {
-      id: `monster_${Date.now()}`,
-      role: 'assistant',
-      timestamp: nowLabel,
-      text: replyText,
+    speak('복원 기록을 조회했습니다. 되돌릴 기록의 복원 버튼을 눌러 주세요.');
+    return reply(
       sourceTab,
-      cardKind: 'RESTORE_POINTS_LIST',
-      restorePoints: points,
-    };
+      `🕰️ **최근 [복원 기록] ${points.length}건 — 사전 검진 결과**\n지금 디스크에 되돌릴 대상이 실제로 있는지 대조했습니다. 원하는 기록의 **[↩️ 원래대로 복원]**을 누르면 기록된 경로로 되돌립니다.`,
+      { cardKind: 'RESTORE_POINTS_LIST', restorePoints: points }
+    );
   }
 
-  // 2) 파일 증발 / "니가 지웠지?" 1초 블랙박스 소명 & 5대 은닉 금고 + $Recycle.Bin $I 포렌식
-  if (
-    /없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(
-      clean
-    )
-  ) {
-    let omniData: Record<string, unknown> | null = null;
-    try {
-      const res = await fetch('/__zcore/omni-trace', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: clean }),
-      });
-      omniData = await res.json();
-    } catch {
-      /* fallback below */
-    }
-
+  // 2) 사라진 파일 / 저장 안 하고 끈 문서
+  if (/없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean)) {
     const isOfficeCrash = /엑셀|워드|한글|파워포인트|ppt|xlsx|docx|hwp|저장\s*안/i.test(clean);
-    const payload: MonsterMissingFilePayload = isOfficeCrash
-      ? {
-          query: clean,
-          caseType: 'CASE_C_OFFICE_AUTORECOVER',
-          fileName: '2026년_거래처_단가표_최종(AutoRecover).asd',
-          currentLocation: 'C:\\Users\\User\\AppData\\Roaming\\Microsoft\\Word\\AutoRecover',
-          originalLocation: 'C:\\Users\\User\\Desktop\\2026년_거래처_단가표_최종.docx',
-          deletedAtOrSavedAt: '방금 전 (비정상 종료 직전 자동 백업본)',
-          fiveLinePreview: [
-            '1행: [2026년도 4분기 납품 단가 및 정산 내역서]',
-            '2행: 거래처명: (주)한빛정밀 / 담당자: 김철수 부장',
-            '3행: 품목 A-102 단가: 45,000원 × 120EA = 5,400,000원',
-            '4행: 지체상금 특약 조항: 일 0.15% 적용 합의',
-            '5행: 최종 수정 시각: 2026-10-28 17:42:19 (저장 전 크래시 스냅샷)',
-          ],
-          briefingKo:
-            '🔍 **[3초 결정론적 포렌식 — 5대 은닉 금고 스캔 완료]**\n프로그램이 강제 종료되기 직전 Windows 은닉 금고(`AppData\\Roaming\\Microsoft\\AutoRecover`)에 살아남은 임시 스냅샷을 0.4초 만에 찾았습니다! 거짓 복구를 막기 위해 **실제 파일 내부 첫 5줄 미리보기**를 먼저 보여드립니다. 찾으시던 문서가 맞다면 아래 **[⭕ 확인 완료 · 바탕화면으로 즉시 복구]**를 눌러주세요.',
-        }
-      : omniData &&
-        typeof omniData.caseType === 'string' &&
-        omniData.caseType !== 'CASE_B_NOT_IN_RECYCLE_OR_RESTORE'
-      ? {
-          query: clean,
-          caseType: omniData.caseType as MonsterMissingFilePayload['caseType'],
-          fileName: String(omniData.fileName || '카톡받은_영수증캡처_01.jpg'),
-          currentLocation: String(
-            omniData.currentLocation || 'C:\\$Recycle.Bin\\$R8F29A1.jpg ($I 헤더 해독)'
-          ),
-          originalLocation: String(
-            omniData.originalLocation || 'C:\\Users\\User\\Desktop\\카톡받은_영수증캡처_01.jpg'
-          ),
-          deletedAtOrSavedAt: String(omniData.deletedAt || '2026-10-28 09:30:00'),
-          restoreId: omniData.restoreId ? String(omniData.restoreId) : '#104',
-          fiveLinePreview: [
-            `파일명: ${String(omniData.fileName || '카톡받은_영수증캡처_01.jpg')}`,
-            `현재 보관 위치: ${String(omniData.currentLocation || '기타_정리함 / $Recycle.Bin')}`,
-            `원래 있던 위치: ${String(omniData.originalLocation || '바탕화면(Desktop)')}`,
-            `블랙박스 기록: ${String(omniData.restoreId || '윈도우 $Recycle.Bin $I 바이너리 헤더 역추적 완료')}`,
-            `무결성 검증: 🟢 원본 손상 0 Byte (100% 즉시 원복 가능)`,
-          ],
-          briefingKo: String(omniData.briefingKo || ''),
-        }
-      : {
-          query: clean,
-          caseType: 'CASE_A_USER_APPROVED_RESTORE_POINT',
-          fileName: '카톡받은_영수증캡처_01.jpg',
-          currentLocation: 'C:\\Users\\User\\Desktop\\기타_정리함\\카톡받은_영수증캡처_01.jpg',
-          originalLocation: 'C:\\Users\\User\\Desktop\\카톡받은_영수증캡처_01.jpg',
-          deletedAtOrSavedAt: '2026-10-28 09:30 ([복원 기록 #104] 승인 이력)',
-          restoreId: '#104',
-          fiveLinePreview: [
-            '파일명: 카톡받은_영수증캡처_01.jpg (영수증/정산 증빙)',
-            '블랙박스: [복원 기록 #104] 유저 직접 [⭕ 확인 완료] 승인 하에 이동됨',
-            '원래 위치: 바탕화면 (Desktop)',
-            '현재 위치: 바탕화면 › 기타_정리함 (안전 보관 중)',
-            '윈도우 휴지통($Recycle.Bin $I 헤더) 교차 검증: 삭제된 적 없음 (🟢 100% 보존)',
-          ],
-          briefingKo:
-            '🛡️ **[1초 블랙박스 소명 & 윈도우 휴지통 `$I` 헤더 동시 대조 완료]**\n귀신같이는 유저님의 파일을 절대 임의로 영구 삭제하지 않습니다! 확인 결과 **[복원 기록 #104]**에서 유저님 승인 하에 `기타_정리함` 폴더로 안전하게 이동해 둔 상태입니다. 지금 바로 원래 자리로 꺼내드릴까요?',
-        };
 
-    if (ttsEnabled) {
-      void speakWithHyunsuOrSunhi(
-        '파일이 삭제되지 않고 안전하게 보관되어 있는 위치를 1초 만에 찾았습니다. 실물 미리보기를 확인하시고 복구 버튼을 눌러주세요.',
-        'hyunsu_briefing'
-      );
+    if (isOfficeCrash) {
+      const r = await zcoreJson<{
+        ok: boolean;
+        elapsedMs?: number;
+        files?: Array<{
+          fileName: string;
+          fullPath: string;
+          vaultLabel: string;
+          modifiedAt: string;
+          sizeFormatted: string;
+          preview5Lines: string[];
+        }>;
+      }>('/__zcore/forensic-scan', postJson({ query: '' }));
+      if (!r.ok) return reply(sourceTab, `⚠️ ${r.error}`);
+      const autoRecover = (r.data.files || []).filter((f) => f.vaultLabel.startsWith('1순위'));
+      if (autoRecover.length === 0) {
+        speak('오피스 자동복구 폴더에서 남아 있는 파일을 찾지 못했습니다.');
+        return reply(
+          sourceTab,
+          `🔍 **[자동복구 금고 실측 결과]** 엑셀·워드·한글 자동복구 폴더를 확인했지만 남아 있는 임시 저장 파일이 없습니다 (${r.data.elapsedMs ?? '-'}ms).\n해당 프로그램을 다시 열었을 때 왼쪽에 '복구된 파일' 창이 뜨는지 먼저 확인해 보세요. 추측으로 다른 곳을 뒤지지 않고 여기서 정직하게 마칩니다.\n\n${RED_LINES_TEXT}`
+        );
+      }
+      const top = autoRecover[0];
+      const payload: MonsterMissingFilePayload = {
+        query: clean,
+        caseType: 'CASE_C_OFFICE_AUTORECOVER',
+        fileName: top.fileName,
+        currentLocation: top.fullPath,
+        originalLocation: '바탕화면에 "(복구본)"으로 복사 (자동복구 원본은 그대로 둠)',
+        deletedAtOrSavedAt: `마지막 저장 ${top.modifiedAt} · ${top.sizeFormatted}`,
+        recoverFullPath: top.fullPath,
+        fiveLinePreview: (top.preview5Lines || []).slice(0, 5),
+        briefingKo: `🔍 **[자동복구 금고 실측 — ${top.vaultLabel}]**\n자동복구 폴더에서 **${top.fileName}** (${top.modifiedAt})을 찾았습니다${
+          autoRecover.length > 1 ? ` (후보 ${autoRecover.length}건 중 가장 최근 파일)` : ''
+        }. 아래는 파일 안에서 실제로 읽은 내용입니다. 찾던 문서가 맞으면 **[⭕ 확인 완료 · 복구하기]**를 눌러 주세요.`,
+      };
+      speak('자동복구 폴더에서 파일을 찾았습니다. 미리보기를 확인하시고 복구 버튼을 눌러 주세요.');
+      return reply(sourceTab, payload.briefingKo, { cardKind: 'MISSING_FILE_EXONERATION', missingFilePayload: payload });
     }
 
-    return {
-      id: `monster_${Date.now()}`,
-      role: 'assistant',
-      timestamp: nowLabel,
-      text: payload.briefingKo,
+    const r = await zcoreJson<{
+      ok: boolean;
+      caseType?: string;
+      fileName?: string;
+      currentLocation?: string;
+      originalLocation?: string;
+      deletedAt?: string;
+      restoreId?: string;
+      recycleMetaFile?: string;
+      briefingKo?: string;
+      keywords?: string[];
+    }>('/__zcore/omni-trace', postJson({ query: clean }));
+    if (!r.ok) return reply(sourceTab, `⚠️ ${r.error}`);
+    const d = r.data;
+    if (
+      d?.ok &&
+      (d.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT' || d.caseType === 'CASE_B_FOUND_IN_RECYCLE_BIN') &&
+      d.fileName
+    ) {
+      const payload: MonsterMissingFilePayload = {
+        query: clean,
+        caseType: d.caseType,
+        fileName: d.fileName,
+        currentLocation: d.currentLocation || '',
+        originalLocation: d.originalLocation || '',
+        deletedAtOrSavedAt: d.deletedAt || '',
+        restoreId: d.restoreId,
+        recycleMetaFile: d.recycleMetaFile,
+        fiveLinePreview: [
+          `파일명: ${d.fileName}`,
+          `현재 위치: ${d.currentLocation || '-'}`,
+          `원래 위치: ${d.originalLocation || '-'}`,
+          d.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT'
+            ? `근거: [${d.restoreId} 복원 기록] (유저 승인 이력)`
+            : `근거: 내 휴지통 $I 기록 해독 (삭제 시각 ${d.deletedAt || '-'})`,
+        ],
+        briefingKo: d.briefingKo || '',
+      };
+      speak('파일이 있는 위치를 찾았습니다. 확인하시고 복구 버튼을 눌러 주세요.');
+      return reply(sourceTab, payload.briefingKo, { cardKind: 'MISSING_FILE_EXONERATION', missingFilePayload: payload });
+    }
+    speak('복원 기록과 휴지통에서 찾지 못했습니다.');
+    return reply(
       sourceTab,
-      cardKind: 'MISSING_FILE_EXONERATION',
-      missingFilePayload: payload,
-    };
+      `🔍 ${d?.briefingKo || '복원 기록과 휴지통에서 찾지 못했습니다.'}${
+        d?.keywords?.length ? '' : ''
+      }\n\n${RED_LINES_TEXT}`,
+      d?.keywords?.length ? { cardKind: 'SEARCH_ROUTING', searchKeyword: d.keywords[0] } : {}
+    );
   }
 
-  // 3) 자주 가는 사이트 바탕화면 바로가기(.url) 생성 요청 (멀린님 확정 A4 기본 채팅 기능!)
+  // 3) 바탕화면 바로가기(.url) 생성 미리보기
   if (/바로가기|바탕화면에\s*꺼내|아이콘\s*만들|자주\s*가는\s*(카페|사이트|유튜브|은행)/i.test(clean)) {
     const parsed = parseShortcutSiteFromQuery(clean);
+    if (!parsed) {
+      return reply(
+        sourceTab,
+        '🔗 어떤 사이트의 바로가기를 만들까요? 주소(예: https://cafe.naver.com/내카페)를 함께 말씀해 주시면 미리보기를 보여드리고, 확인을 누르신 뒤에만 바탕화면에 만듭니다.'
+      );
+    }
     const shortcutPreview: MonsterShortcutPreviewPayload = {
       siteName: parsed.siteName,
       targetUrl: parsed.targetUrl,
-      shortcutFileName: `${parsed.siteName}_바로가기.url`,
+      shortcutFileName: `${parsed.siteName}.url`,
       userPrompt: clean,
       approved: false,
     };
-    const replyText = `🔗 **[자주 가는 사이트 바탕화면 바로가기 생성 미리보기 (Zero-Auto-Action)]**\n유저님께서 말씀하신 **'${parsed.siteName}'**를 매번 검색하실 필요 없이 바탕화면에서 더블클릭 한 번으로 바로 열 수 있도록 바로가기 아이콘을 준비했습니다.\n아래 미리보기를 확인하시고 **[⭕ 확인 완료 · 바탕화면에 바로가기 만들기]**를 누르시면 즉시 생성되며 **[복원 기록]**에도 안전하게 기록됩니다!`;
-    if (ttsEnabled) {
-      void speakWithHyunsuOrSunhi(
-        '자주 가시는 사이트를 바탕화면에서 한 번에 열 수 있도록 바로가기 아이콘을 준비했습니다. 확인 버튼을 누르시면 바로 생성됩니다.',
-        'hyunsu_briefing'
-      );
-    }
-    return {
-      id: `monster_${Date.now()}`,
-      role: 'assistant',
-      timestamp: nowLabel,
-      text: replyText,
+    speak('바로가기 미리보기를 준비했습니다. 확인 버튼을 누르시면 바탕화면에 만듭니다.');
+    return reply(
       sourceTab,
-      cardKind: 'DESKTOP_SHORTCUT_GATE',
-      shortcutPreview,
-    };
+      `🔗 **[바탕화면 바로가기 미리보기]**\n'${parsed.siteName}' (${parsed.targetUrl}) 바로가기를 바탕화면에 만들 준비가 됐습니다. **[⭕ 확인 완료]**를 누르시면 생성되고 [복원 기록]에도 남습니다.`,
+      { cardKind: 'DESKTOP_SHORTCUT_GATE', shortcutPreview }
+    );
   }
 
-  // 4) 대화형 폴더 정리 / 다운로드 폴더 수상한 .apk·.exe 설치파일 청소 / 상주 보안 플러그인 동결
+  // 4) 대화형 폴더 정리 / 다운로드 설치파일 / (보안 프로그램은 자동 실행하지 않음)
   if (
     /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|느려졌|무거워/i.test(
       clean
     )
   ) {
-    const isSecurityPlugin = /보안|구라|anysign|magicline|veraport|touchen|은행\s*깔린|부팅\s*느려/i.test(
-      clean
-    );
-    const isDownloadInstaller = /다운로드|설치\s*파일|apk|exe|msi|찌꺼기|수상한/i.test(clean);
-
-    const cleanupPreview: MonsterCleanupPreviewPayload = isSecurityPlugin
-      ? {
-          cleanupType: 'SECURITY_PLUGINS',
-          summaryTitle: '관공서·은행 상주 보안 플러그인 4종 동결 및 부팅 최적화',
-          userPrompt: clean,
-          targetFolderLabel: 'Windows 시작프로그램 & 백그라운드 서비스',
-          moveCount: 2,
-          hideCount: 0,
-          freezeCount: 4,
-          reclaimSizeLabel: 'RAM 680 MB 즉시 확보 · 부팅 +34% 가속',
-          sampleFiles: [
-            'AnySign4PC_Service (상주 동결)',
-            'MagicLine4NX_Daemon (상주 동결)',
-            'Veraport_Handler (상주 동결)',
-            'TouchEn_nxKey (상주 동결)',
-          ],
-          previewDescriptionKo:
-            '뱅킹·관공서 이용 후 백그라운드에 상주하며 메모리를 점유하던 보안 플러그인 4종을 안전 동결(수동 전환)하고 임시 캐시 2건을 정리합니다. (은행 접속 시에는 자동 재가동되어 안전합니다)',
-        }
-      : isDownloadInstaller
-      ? {
-          cleanupType: 'DOWNLOAD_INSTALLERS',
-          summaryTitle: '다운로드 폴더 방치 설치파일(.exe/.msi/.apk) 및 중복 사본 일괄 정리',
-          userPrompt: clean,
-          targetFolderLabel: '내 PC › 다운로드 (Downloads)',
-          moveCount: 9,
-          hideCount: 2,
-          freezeCount: 0,
-          reclaimSizeLabel: '1.42 GB 용량 확보',
-          sampleFiles: [
-            'ChromeSetup_old(1).exe',
-            'HwpViewer_2022_installer.msi',
-            'unknown_cleaner_ad.apk',
-            '카카오톡_받은파일_중복사본(2).zip',
-          ],
-          previewDescriptionKo:
-            '이미 설치가 끝났거나 출처가 불분명한 다운로드 폴더의 구버전 설치파일(.exe/.msi/.apk) 9건을 안전 정리함으로 이동하고 옛날 임시 폴더 2건을 숨김 처리합니다.',
-        }
-      : {
-          cleanupType: 'FOLDER_REORG',
-          summaryTitle: "바탕화면·다운로드 잡파일 '기타_정리함' 이동 및 구형 폴더 숨김 정리",
-          userPrompt: clean,
-          targetFolderLabel: '내 PC › 바탕화면 & 다운로드',
-          moveCount: 7,
-          hideCount: 3,
-          freezeCount: 0,
-          reclaimSizeLabel: '890 MB 정돈 · 바탕화면 아이콘 70% 감소',
-          sampleFiles: [
-            '카톡받은_영수증캡처_01.jpg',
-            '설치파일_구버전_setup.tmp',
-            '2023_옛날참고자료_폴더 (숨김)',
-            '임시메모_복사본(3).txt',
-          ],
-          previewDescriptionKo:
-            "업무와 무관한 바탕화면·다운로드 잡파일 7건을 '기타_정리함' 폴더로 깔끔하게 모으고, 오래된 폴더 3건을 숨김(Hidden) 속성으로 전환합니다.",
-        };
-
-    const tipRes = pickNextShortformTipOnCompletion({
-      contextTag: 'cleanup',
-      subscribedLounges: [],
-    });
-    const replyText = `🧹 **[실물 증거 미리보기 게이트 (Zero-Auto-Action) — 언제나 0원]**\n귀신같이는 절대 유저님 몰래 먼저 파일을 옮기거나 지우지 않습니다. 아래 정리 내역 미리보기(**이동 ${cleanupPreview.moveCount}건 / 숨김 ${cleanupPreview.hideCount}건 / 보안동결 ${cleanupPreview.freezeCount}건**)를 확인하시고 **[⭕ 확인 완료 · 그대로 실행해 줘]** 버튼을 누르시면 1초 만에 실행되며 **[복원 기록]**과 **[디지털 건강검진표]**가 함께 발급됩니다!`;
-
-    if (ttsEnabled) {
-      void speakWithHyunsuOrSunhi(
-        '정리할 파일 목록을 먼저 준비했습니다. 내역을 확인하시고 확인 완료 버튼을 누르시면 1초 만에 정리해 드립니다.',
-        'hyunsu_briefing'
+    const isSecurityPlugin = /보안|구라|anysign|magicline|veraport|touchen|은행\s*깔린|부팅\s*느려/i.test(clean);
+    if (isSecurityPlugin) {
+      const r = await zcoreJson<{ ok: boolean; startupPrograms?: Array<{ name?: string; command?: string }> }>(
+        '/__zcore/os-inspect'
+      );
+      if (!r.ok) return reply(sourceTab, `⚠️ ${r.error}`);
+      const names = (r.data.startupPrograms || [])
+        .map((s) => String(s?.name || '').trim())
+        .filter(Boolean)
+        .slice(0, 12);
+      return reply(
+        sourceTab,
+        `⚙️ **[시작프로그램 실측 목록]** ${names.length ? names.map((n) => `• ${n}`).join('\n') : '(확인된 시작프로그램이 없습니다)'}\n\n은행·관공서 보안 프로그램 동결은 관리자 권한이 필요하고 잘못 멈추면 인터넷뱅킹 접속이 막힐 수 있어, 현재 버전에서는 **자동으로 실행하지 않습니다.** 윈도우 [설정 › 앱 › 시작프로그램]에서 직접 끄실 수 있습니다.`
       );
     }
 
-    return {
-      id: `monster_${Date.now()}`,
-      role: 'assistant',
-      timestamp: nowLabel,
-      text: replyText,
-      sourceTab,
-      cardKind: 'CLEANUP_PREVIEW_GATE',
-      cleanupPreview,
-      shortformTip: tipRes.tip,
+    const kind: MonsterCleanupPreviewPayload['cleanupType'] = /다운로드|설치\s*파일|apk|exe|msi|찌꺼기|수상한/i.test(clean)
+      ? 'DOWNLOAD_INSTALLERS'
+      : 'FOLDER_REORG';
+    const r = await zcoreJson<{ ok: boolean; items?: MonsterCleanupItem[]; totalBytes?: number; minAgeDays?: number; error?: string }>(
+      '/__zcore/cleanup-scan',
+      postJson({ kind })
+    );
+    if (!r.ok) return reply(sourceTab, `⚠️ ${r.error}`);
+    if (!r.data?.ok) return reply(sourceTab, `⚠️ 폴더를 확인하지 못했습니다: ${r.data?.error || '알 수 없는 오류'}`);
+    const items = r.data.items || [];
+    const folderLabel = kind === 'DOWNLOAD_INSTALLERS' ? '다운로드 폴더' : '바탕화면·다운로드 폴더';
+    const ruleText =
+      kind === 'DOWNLOAD_INSTALLERS'
+        ? `${r.data.minAgeDays ?? 3}일 이상 지난 설치파일(.exe/.msi/.apk)과 받다 만 파일`
+        : `${r.data.minAgeDays ?? 3}일 이상 지난 임시·압축·설치 파일(.tmp/.bak/.log/.zip/.exe 등)`;
+    if (items.length === 0) {
+      speak('정리할 후보 파일이 없습니다.');
+      return reply(sourceTab, `🧹 ${folderLabel}를 실측했지만 정리 후보(${ruleText})가 없습니다. 아무 파일도 옮기지 않았습니다.`);
+    }
+    const totalBytes = Number(r.data.totalBytes ?? 0);
+    const cleanupPreview: MonsterCleanupPreviewPayload = {
+      cleanupType: kind,
+      summaryTitle:
+        kind === 'DOWNLOAD_INSTALLERS' ? '다운로드 폴더 오래된 설치파일 정리' : '바탕화면·다운로드 잡파일 정리',
+      userPrompt: clean,
+      targetFolderLabel: folderLabel,
+      moveCount: items.length,
+      totalBytes,
+      reclaimSizeLabel: `총 ${formatBytes(totalBytes)}`,
+      items,
+      sampleFiles: items.map((i) => `${i.name} (${i.folderLabel} · ${formatBytes(i.sizeBytes)} · ${i.ageDays}일 전)`),
+      previewDescriptionKo: `${folderLabel}에서 ${ruleText} ${items.length}건을 찾았습니다. 확인을 누르면 각 폴더 안의 '기타_정리함'으로 옮깁니다 (삭제 아님 · [복원 기록]으로 되돌리기 가능).`,
     };
+    const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'cleanup', subscribedLounges: [] });
+    speak('정리할 파일 목록을 실제로 확인했습니다. 내역을 보시고 확인 버튼을 눌러 주세요.');
+    return reply(
+      sourceTab,
+      `🧹 **[실물 미리보기 게이트 (Zero-Auto-Action)]**\n귀신같이는 먼저 파일을 옮기지 않습니다. 실제로 찾은 **${items.length}건 (${formatBytes(totalBytes)})**을 확인하시고 **[⭕ 확인 완료 · 그대로 실행해 줘]**를 누르시면 그때 옮깁니다.`,
+      { cardKind: 'CLEANUP_PREVIEW_GATE', cleanupPreview, shortformTip: tipRes.tip }
+    );
   }
 
-  // 5) 내 PC 사양 실시간 스캔(200토큰) 기반 1:1 눈높이 맞춤 상담
+  // 5) 내 PC 실측 사양 상담
   if (
     /사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드/i.test(
       clean
     )
   ) {
-    let osInfo: Record<string, unknown> | null = null;
-    try {
-      const res = await fetch('/__zcore/os-inspect');
-      osInfo = await res.json();
-    } catch {
-      /* ignore */
-    }
-
-    const ramTotalGb = Number((osInfo as any)?.memory?.totalGb || 16);
-    const ramUsedPercent = Number((osInfo as any)?.memory?.usedPercent || 64);
-    const diskFreeGb = Number((osInfo as any)?.disk?.freeGb || 148.5);
-    const cpuModel = String(
-      (osInfo as any)?.cpu?.name || 'Intel Core i5-13400F (10코어 16스레드)'
-    );
-    const gpuModel = 'NVIDIA GeForce RTX 3060 (VRAM 12GB)';
-    const osVersion = String((osInfo as any)?.os?.caption || 'Windows 11 Pro 23H2 (64-bit)');
-
+    const r = await zcoreJson<{
+      ok: boolean;
+      cpuModel?: string | null;
+      cpuLogicalCores?: number | null;
+      ramTotalGb?: number | null;
+      ramUsedPercent?: number | null;
+      gpuModel?: string | null;
+      osVersion?: string | null;
+      diskFreeGb?: number | null;
+      diskTotalGb?: number | null;
+      displayHz?: number | null;
+    }>('/__zcore/pc-spec');
+    if (!r.ok) return reply(sourceTab, `⚠️ ${r.error}`);
+    const s = r.data;
+    const unknown = '확인 불가';
+    const ram = typeof s.ramTotalGb === 'number' ? s.ramTotalGb : null;
+    const disk = typeof s.diskFreeGb === 'number' ? s.diskFreeGb : null;
+    const verdictBadge =
+      ram === null
+        ? '⚪ 메모리 확인 불가'
+        : ram >= 16 && (disk === null || disk >= 30)
+        ? '🟢 일반 작업 여유 있음'
+        : ram >= 8
+        ? '🟡 일반 작업 가능 · 무거운 편집은 버거울 수 있음'
+        : '🔴 메모리 부족 가능성';
+    const lowDisk = disk !== null && disk < 20 ? ` 저장 공간이 ${disk}GB밖에 남지 않아 정리가 필요합니다.` : '';
+    const cpu = s.cpuModel || unknown;
+    const gpu = s.gpuModel || unknown;
+    const hzText = typeof s.displayHz === 'number' ? `${s.displayHz}Hz` : unknown;
+    const limitNote = '※ 특정 게임·프로그램의 권장 사양 비교는 아직 지원하지 않아, 실측한 내 PC 사양만 알려드립니다.';
     const pcSpecPayload: MonsterPcSpecPayload = {
-      cpuModel,
-      ramTotalGb,
-      ramUsedPercent,
-      gpuModel,
-      osVersion,
-      diskFreeGb,
-      displayHz: 60,
-      verdictBadge: '🟢 상급 쾌적 구동 가능 (추가 비용 지출 불필요)',
-      easyAnswerKo: `🌱 **[쉬운말 요약]** 현재 컴퓨터 힘이 아주 넉넉합니다(메모리 ${ramTotalGb}GB, 여유 공간 ${diskFreeGb}GB)! 비싼 돈 들여 부품을 새로 사지 않으셔도 사진 정리, 유튜브 고화질 시청, 웬만한 게임과 편집 프로그램 모두 거뜬히 잘 돌아갑니다.`,
-      normalAnswerKo: `🌿 **[일반 눈높이 진단]** 현재 장착된 CPU(${cpuModel})와 그래픽카드(${gpuModel}), 메모리(${ramTotalGb}GB) 사양이면 포토샵·프리미어 4K 컷편집 및 배틀그라운드(국민옵션 100프레임+) 구동에 충분합니다. 다만 모니터 주사율이 60Hz로 설정되어 있다면 디스플레이 고급 설정에서 144Hz로 올려주시면 훨씬 부드러워집니다.`,
-      expertAnswerKo: `🌳 **[전문가 스펙 리포트]** CPU: ${cpuModel} | GPU: ${gpuModel} | RAM: ${ramTotalGb}GB (현재 점유율 ${ramUsedPercent}%) | NVMe 여유: ${diskFreeGb}GB | OS: ${osVersion}. 하드웨어 병목은 없으며, 백그라운드 보안 프로세스(AnySign/TouchEn) 동결 시 유휴 워크셋 메모리를 약 680MB 추가 확보할 수 있습니다.`,
+      cpuModel: cpu,
+      ramTotalGb: ram,
+      ramUsedPercent: typeof s.ramUsedPercent === 'number' ? s.ramUsedPercent : null,
+      gpuModel: gpu,
+      osVersion: s.osVersion || unknown,
+      diskFreeGb: disk,
+      displayHz: typeof s.displayHz === 'number' ? s.displayHz : null,
+      verdictBadge,
+      easyAnswerKo: `🌱 **[쉬운말]** 이 컴퓨터의 작업대(메모리)는 ${ram ?? unknown}GB, 남은 저장 공간은 ${disk ?? unknown}GB입니다. ${
+        ram !== null && ram >= 8 ? '인터넷·문서·사진 정리 같은 일상 작업은 무리 없는 편입니다.' : ''
+      }${lowDisk} ${limitNote}`,
+      normalAnswerKo: `🌿 **[일반]** CPU ${cpu}, 그래픽 ${gpu}, 메모리 ${ram ?? unknown}GB(현재 사용 ${
+        s.ramUsedPercent ?? unknown
+      }%), 저장 공간 여유 ${disk ?? unknown}GB, 모니터 주사율 ${hzText}입니다.${lowDisk} ${limitNote}`,
+      expertAnswerKo: `🌳 **[전문가]** CPU: ${cpu} (논리 ${s.cpuLogicalCores ?? unknown}코어) | GPU: ${gpu} | RAM: ${
+        ram ?? unknown
+      }GB (점유 ${s.ramUsedPercent ?? unknown}%) | 시스템 드라이브 여유: ${disk ?? unknown}/${s.diskTotalGb ?? unknown}GB | 주사율: ${hzText} | OS: ${
+        s.osVersion || unknown
+      }. ${limitNote}`,
     };
-
     const selectedAnswer =
       literacyLevel === 'easy'
         ? pcSpecPayload.easyAnswerKo
         : literacyLevel === 'expert'
         ? pcSpecPayload.expertAnswerKo
         : pcSpecPayload.normalAnswerKo;
-
-    if (ttsEnabled) {
-      void speakWithHyunsuOrSunhi(
-        '내 피씨의 실시간 부품 사양을 점검했습니다. 현재 사양으로도 충분히 쾌적하게 작동합니다.',
-        'hyunsu_briefing'
-      );
-    }
-
-    return {
-      id: `monster_${Date.now()}`,
-      role: 'assistant',
-      timestamp: nowLabel,
-      text: `💻 **[내 PC 실시간 사양 스캔(200토큰) 1:1 맞춤 진단 — 언제나 0원]**\n${selectedAnswer}`,
-      sourceTab,
+    speak('내 피씨 사양을 실제로 측정했습니다.');
+    return reply(sourceTab, `💻 **[내 PC 실측 사양]**\n${selectedAnswer}`, {
       cardKind: 'PC_SPEC_CONSULTATION',
       pcSpecPayload,
-    };
+    });
   }
 
-  // 6) 3대 선 넘기(장문 계약서 심층 독해 / 세무·법률 자문 / 물리적 고장) 정직 컷오프 & 애착 AI(Gemini 기본) 바통 터치
-  if (
-    /독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(
-      clean
-    )
-  ) {
-    const replyText = `${DOCTOR_3_RED_LINES_NOTICE}\n\n🤝 대신 유저님이 찾으신 문서 본문을 클립보드에 자동 복사하고, 평소 즐겨 쓰시는 **애착 AI(기본: Google Gemini)** 라이브 음성 상담 창으로 1초 만에 바통을 넘겨드릴 수 있습니다!`;
-    return {
-      id: `monster_${Date.now()}`,
-      role: 'assistant',
-      timestamp: nowLabel,
-      text: replyText,
+  // 6) 3대 선 넘기 정직 컷오프 & 애착 AI 바통 터치 (유저 질문 원문만 전달)
+  if (/독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean)) {
+    return reply(
       sourceTab,
-      cardKind: 'BATON_TOUCH_CUTOFF',
-      batonTouchPayload: {
-        docTitle: '2026_표준하도급계약서_최종.pdf',
-        docText:
-          '제14조(지체상금) 수급사업자가 계약 기간 내에 납품을 완료하지 못한 경우 매 지체일수당 계약금액의 0.15%를 지체상금으로 부과한다.',
-        userQuestion: clean,
-      },
-    };
+      `${RED_LINES_TEXT}\n\n🤝 이 질문은 귀신같이가 정확히 답할 수 있는 범위를 넘습니다. 질문 내용을 클립보드에 복사하고, 평소 쓰시는 **애착 AI(기본: Google Gemini)** 창을 열어 드릴 수 있습니다.`,
+      {
+        cardKind: 'BATON_TOUCH_CUTOFF',
+        batonTouchPayload: { docTitle: '질문 내용', docText: clean, userQuestion: clean },
+      }
+    );
   }
 
-  // 7) 단순 파일·사진·문서 찾기 의도 ➔ 0토큰으로 [🎯 찾기(1초 투시검색)] 직행 연결
+  // 7) 단순 찾기 의도 ➔ [🎯 찾기] 직행
   const searchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
-  if (
-    searchIntent.isSimpleSearchIntent &&
-    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐/i.test(clean)
-  ) {
+  if (searchIntent.isSimpleSearchIntent && !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐/i.test(clean)) {
     const kw = searchIntent.extractedKeyword || clean;
-    return {
-      id: `monster_${Date.now()}`,
-      role: 'assistant',
-      timestamp: nowLabel,
-      text: `🎯 **[0토큰 1초 투시검색 직행 안내]**\n말씀하신 **"${kw}"** 찾기는 대화형 AI 토큰을 소모할 필요 없이, 귀신같이의 **[🎯 찾기 (1초 투시검색)]** 엔진에서 사진·동영상·문서 본문까지 0.01초 만에 찾아드립니다! 아래 버튼을 누르면 바로 검색 결과로 이동합니다.`,
+    return reply(
       sourceTab,
-      cardKind: 'SEARCH_ROUTING',
-      searchKeyword: kw,
-    };
+      `🎯 **[찾기 바로가기]**\n"${kw}" 찾기는 **[🎯 찾기]** 검색에서 사진·문서를 바로 찾아드립니다. 아래 버튼을 누르면 검색 결과로 이동합니다.`,
+      { cardKind: 'SEARCH_ROUTING', searchKeyword: kw }
+    );
   }
 
-  // 8) 그 외 모든 기기 설정/수리 요청 (프린터, 소리, 글씨 크기, 광고 차단 등) ➔ 언제나 0원 무료 진단 카드 안내
-  const tipRes = pickNextShortformTipOnCompletion({
-    contextTag: 'os_repair',
-    subscribedLounges: [],
-  });
-  return {
-    id: `monster_${Date.now()}`,
-    role: 'assistant',
-    timestamp: nowLabel,
-    text: `🩺 **[내 기기 1:1 주치의 무료 진단 완료 — 언제나 0원]**\n말씀하신 **"${clean}"** 증상의 원인을 파악했습니다. 귀신같이의 모든 **[내 기기 치우기·고치기]** 기능은 코인 차감 없이 **언제나 0원**으로 작동하며, 실행 0.01초 전 **[복원 기록]**을 남겨 언제든 1초 만에 원래 상태로 되돌릴 수 있습니다.`,
+  // 8) 그 외 증상 — 자동 진단 항목이 아님을 정직하게 안내
+  const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
+  return reply(
     sourceTab,
-    cardKind: 'DEVICE_REPAIR_GATE',
-    shortformTip: tipRes.tip,
-  };
+    `🩺 말씀하신 **"${clean}"** 증상은 아직 귀신같이가 자동으로 진단·수리하는 항목이 아닙니다. 원인을 확인하지 않은 채 해결됐다고 말씀드리지 않겠습니다.\n지금 바로 도와드릴 수 있는 것: **사라진 파일 찾기 · 다운로드/바탕화면 정리 · 바탕화면 바로가기 · 복원 기록 되돌리기 · 내 PC 사양 확인**`,
+    { cardKind: 'DEVICE_REPAIR_GATE', shortformTip: tipRes.tip }
+  );
 }
 
 export { triggerUserFavoriteAiLiveVoiceBatonTouch };

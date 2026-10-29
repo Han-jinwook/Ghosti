@@ -370,7 +370,9 @@ export const SmartTrashView: React.FC = () => {
                 history
               </span>
               <span className="font-label-md text-[13px] text-zinc-100 font-semibold">
-                방금 정리한 {lastUndoBatch.count}장 ({fmtMB(lastUndoBatch.savedBytes)})이 OS 기본 [휴지통]으로 안전하게 이동되었습니다.
+                {lastUndoBatch.demo
+                  ? `방금 정리한 ${lastUndoBatch.count}장은 🧪 체험 모드(Z-코어 미연결)라 화면에서만 정리되었고 실제 파일은 그대로입니다.`
+                  : `방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 윈도우 휴지통으로 이동되었습니다.`}
               </span>
             </div>
 

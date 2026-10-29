@@ -253,6 +253,8 @@ export interface UndoQuarantineBatch {
   count: number;
   savedBytes: number;
   timestamp: number;
+  /** Z-코어 미연결 체험 모드: 화면에서만 정리되고 실제 파일은 그대로임 */
+  demo?: boolean;
 }
 
 /** [스펙 3] 클라우드 대체 프라이빗 싱크 2-Track 모드 */

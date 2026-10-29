@@ -632,7 +632,18 @@ export const SetupMonsterContent: React.FC = () => {
           records={healthHistoryRecords}
           onClose={() => setShowHealthHistoryDrawer(false)}
           onRollbackRestoreId={(rid) => {
-            void executeRestorePointRollback(rid);
+            void executeRestorePointRollback(rid).then((res) => {
+              setMonsterMessages((prev) => [
+                ...prev,
+                {
+                  id: `monster_${Date.now()}`,
+                  role: 'assistant',
+                  timestamp: new Date().toLocaleTimeString('ko-KR'),
+                  text: res.message,
+                  sourceTab: 'repair',
+                },
+              ]);
+            });
           }}
         />
       )}
