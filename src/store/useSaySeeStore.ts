@@ -117,6 +117,7 @@ import {
   VIDEO_SCENE_ITEMS,
   detectHardwareTelemetry,
   detectLiveFacesFromPhoto,
+  ensureTextQueryEncoderLoaded,
   executeTextSearch,
   executeZeroSttVoiceSearch,
   fetchAutonomousFaceClusters,
@@ -2018,6 +2019,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       initialized: true,
       initializing: false,
     });
+
+    // [의미 검색 엔진 준비] 데스크톱에서만, 앱이 뜬 뒤 백그라운드로 검색어 인코더(약 166MB, 최초 1회 후 OPFS 캐시)를 불러온다.
+    // 준비 전·실패 시에는 기존 키워드·태그 검색으로 그대로 동작한다. (모바일·데이터 절약 모드는 자동 다운로드하지 않음)
+    try {
+      const hasVectors = enrichedPhotos.some((p) => p.vec && p.vec.length > 0);
+      const isCoarsePointer =
+        typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+      const saveData = typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
+      if (hasVectors && !isCoarsePointer && !saveData && typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          void ensureTextQueryEncoderLoaded();
+        }, 4000);
+      }
+    } catch {
+      /* 키워드 검색으로 계속 동작 */
+    }
   },
 
   applyAhaRecommendation: async (item: OnboardingAhaItem) => {

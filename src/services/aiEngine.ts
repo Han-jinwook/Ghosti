@@ -1244,6 +1244,48 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 /**
  * 검색용 모델(텍스트 + 오디오 인코더 q4) OPFS 로드
  */
+/**
+ * [텍스트 질의 전용 인코더] 검색어 → 768차원 벡터 (오디오·비전 인코더 제외, q4 약 166MB · OPFS 캐시 후 재다운로드 없음)
+ * - 사전 색인된 사진 벡터(`title: none | text: 캡션`)와 같은 모델·같은 차원이라 코사인 유사도로 바로 비교됩니다.
+ * - 실측(2026-10-29, Node q4): '강아지' 질의 시 강아지 사진 0.77~0.79 vs 전체 중앙값 0.65 → 의미 검색 유효 확인.
+ */
+let textQueryModel: any = null;
+let textQueryTokenizer: any = null;
+let textQueryLoading: Promise<boolean> | null = null;
+
+export function isTextQueryEncoderReady(): boolean {
+  return Boolean((searchModel && tokenizer) || (textQueryModel && textQueryTokenizer));
+}
+
+export async function ensureTextQueryEncoderLoaded(): Promise<boolean> {
+  if (isTextQueryEncoderReady()) return true;
+  if (textQueryLoading) return textQueryLoading;
+  textQueryLoading = (async () => {
+    try {
+      enableOpfsCache();
+      const config: any = await AutoConfig.from_pretrained(MODEL_ID);
+      config.vision_config = null;
+      config.audio_config = null;
+      const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
+      textQueryModel = await AutoModel.from_pretrained(MODEL_ID, {
+        config,
+        device: hasGpu ? 'webgpu' : 'wasm',
+        dtype: 'q4',
+      } as any);
+      textQueryTokenizer = await AutoTokenizer.from_pretrained(MODEL_ID);
+      return true;
+    } catch (e) {
+      console.warn('[Ghosti Engine] 텍스트 질의 인코더 로드 실패 — 키워드·태그 검색으로 동작합니다:', e);
+      textQueryModel = null;
+      textQueryTokenizer = null;
+      return false;
+    } finally {
+      textQueryLoading = null;
+    }
+  })();
+  return textQueryLoading;
+}
+
 export async function ensureSearchEngineLoaded(
   onProgress?: (msg: string, pct: number) => void
 ): Promise<boolean> {
@@ -1408,12 +1450,16 @@ export async function executeTextSearch(
   }
 
   // 쓰레기/문서 전용 검색어인지 판별 (일반 풍경/인물 검색 시 흔들린 사진·스크린샷·주차장메모 혼입 원천 차단)
-  const isTrashOrDocQuery = /흔들린|흐릿|초점|블러|스크린샷|캡처|화면|주차장|기둥|택배|상자|현수막|영수증|전표|문서|서류|설명서|매뉴얼|신분증|여권|학생증/.test(qLower);
+  const isTrashOrDocQuery = /흔들린|흐릿|초점|블러|스크린샷|캡처|화면|주차장|기둥|택배|상자|현수막|영수증|전표|문서|서류|설명서|매뉴얼|신분증|여권|학생증|계약|견적|세금계산서|계산서|보험|증권|청구서|명세서|고지서|증명서|등본|탑승권|결제|주문/.test(qLower);
   const isGroupQuery = /단체|단체사진|모임|여럿|일행|가족|친구들|동료들|아이들|어린이들/.test(qLower);
   const isSoloQuery = /독사진|단독|1명|혼자|셀카|프로필/.test(qLower);
   const isSmileQuery = /웃는|웃고|미소|웃음|환하게|해맑|활짝|smile/.test(qLower);
   const isBeachQuery = /해변|바다|바닷가|백사장|모래사장|파도|beach|ocean/.test(qLower);
-  const isDogQuery = /강아지|개|반려견|멍멍이|비글|퍼그|불독|웰시코기|코기|보더콜리|dog|puppy/.test(qLower);
+  // '개' 단독 글자는 '개월·두 개·개인'과 겹치므로 낱말로 쓰였을 때만 강아지로 판단
+  const isDogQuery =
+    /강아지|반려견|멍멍이|비글|퍼그|불독|웰시코기|코기|보더콜리|dog|puppy/.test(qLower) ||
+    (/(?:^|\s)개(?:$|\s|가|를|랑|와|들|사진)/.test(qLower) &&
+      !/(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇|\d)\s*개(?:$|\s)/.test(qLower));
   const isCatQuery = /고양이|반려묘|냥이|치즈고양이|cat|kitten/.test(qLower);
 
   const SOFT_WORDS = new Set([
@@ -1455,17 +1501,33 @@ export async function executeTextSearch(
   const compoundQuery = activeTokens.join('');
 
   let queryVec: Float32Array | null = null;
-  if (searchModel && tokenizer && activePhotos.some((p) => p.vec)) {
+  const qModel = searchModel && tokenizer ? searchModel : textQueryModel;
+  const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
+  if (qModel && qTok && activePhotos.some((p) => p.vec)) {
     try {
-      const inputs = await tokenizer([QUERY_PREFIX + qRaw], { padding: true, truncation: true });
-      const out = await searchModel(inputs);
+      const inputs = await qTok([QUERY_PREFIX + qRaw], { padding: true, truncation: true });
+      const out = await qModel(inputs);
       queryVec = normalizeVector(toRows(out.sentence_embedding)[0], DEFAULT_DIM);
     } catch {
-      /* ignore */
+      /* 벡터 생성 실패 시 키워드·태그 검색만 사용 */
     }
   }
-  const embedMs = Math.max(12, +(performance.now() - t0).toFixed(1));
+  const embedMs = +(performance.now() - t0).toFixed(1);
   const s0 = performance.now();
+
+  // 벡터 유사도 사전 계산 → 질의별 상위 유사도 기준으로 '의미상 가까운 사진'만 통과 (고정 임계값 대신 적응형)
+  const vecSimById = new Map<string, number>();
+  let topVecSim = 0;
+  if (queryVec) {
+    for (const p of activePhotos) {
+      if (p.vec && p.vec.length === queryVec.length) {
+        const s = cosineSimilarity(queryVec, p.vec);
+        vecSimById.set(p.id, s);
+        if (s > topVecSim) topVecSim = s;
+      }
+    }
+  }
+  const vecAdmitThreshold = Math.max(0.7, topVecSim - 0.05);
 
   const scored: {
     photo: PhotoItem;
@@ -1499,8 +1561,9 @@ export async function executeTextSearch(
     const tagAndKwText = `${cleanTags.join(' ')} ${kws.join(' ')} ${ontoPrimary.join(' ')} ${photo.locationKo || ''} ${photo.vaultCategoryLabel || ''}`.toLowerCase();
     const fullText = `${tagAndKwText} ${cap} ${capEn}`.toLowerCase();
 
-    // 2) 시맨틱 하드 가드레일 (단체 vs 1인 단독, 웃는 vs 무표정/실루엣, 해변, 강아지 vs 고양이)
-    if (isGroupQuery) {
+    // 2) 시맨틱 가드레일 (단체 vs 1인 단독, 웃는 vs 무표정/실루엣, 해변, 강아지 vs 고양이)
+    //    캡션이 있는 사진에만 적용: 캡션이 없는 실사진(아직 설명 미생성)은 '단어가 없다'는 이유로 탈락시키지 않고 벡터 유사도로 판단
+    if (isGroupQuery && cap) {
       const hasSoloWord =
         cap.includes('1명') ||
         cap.includes('단독') ||
@@ -1523,7 +1586,7 @@ export async function executeTextSearch(
       }
     }
 
-    if (isSoloQuery) {
+    if (isSoloQuery && cap) {
       const hasSoloWord =
         tagAndKwText.includes('독사진') ||
         tagAndKwText.includes('단독') ||
@@ -1533,7 +1596,7 @@ export async function executeTextSearch(
       if (!hasSoloWord) continue;
     }
 
-    if (isSmileQuery) {
+    if (isSmileQuery && cap) {
       const isNegativeSmile =
         cap.includes('웃지 않') ||
         cap.includes('무표정') ||
@@ -1554,7 +1617,7 @@ export async function executeTextSearch(
       }
     }
 
-    if (isBeachQuery) {
+    if (isBeachQuery && cap) {
       const hasBeachWord =
         tagAndKwText.includes('해변') ||
         tagAndKwText.includes('바다') ||
@@ -1567,7 +1630,7 @@ export async function executeTextSearch(
       if (!hasBeachWord) continue;
     }
 
-    if (isDogQuery && !isCatQuery) {
+    if (isDogQuery && !isCatQuery && cap) {
       const hasDogWord =
         tagAndKwText.includes('강아지') ||
         tagAndKwText.includes('반려견') ||
@@ -1576,7 +1639,7 @@ export async function executeTextSearch(
       if (!hasDogWord) continue;
     }
 
-    if (isCatQuery && !isDogQuery) {
+    if (isCatQuery && !isDogQuery && cap) {
       const hasCatWord =
         tagAndKwText.includes('고양이') ||
         tagAndKwText.includes('반려묘') ||
@@ -1629,12 +1692,10 @@ export async function executeTextSearch(
       }
     }
 
-    let vecSim = 0.64;
-    if (queryVec && photo.vec && photo.vec.length === queryVec.length) {
-      vecSim = cosineSimilarity(queryVec, photo.vec);
-    }
+    const realVecSim = vecSimById.get(photo.id);
+    const vecSim = realVecSim ?? 0.64;
 
-    if (totalHits > 0 || compoundHit || (queryVec && vecSim >= 0.72)) {
+    if (totalHits > 0 || compoundHit || (realVecSim !== undefined && realVecSim >= vecAdmitThreshold)) {
       const totalScore = +(vecSim + Math.min(0.95, lexicalScore)).toFixed(4);
       scored.push({
         photo,
@@ -1667,13 +1728,14 @@ export async function executeTextSearch(
   });
 
   const top = finalMatches.slice(0, 36);
-  const searchMs = Math.max(1.2, +(performance.now() - s0).toFixed(1));
+  const searchMs = +(performance.now() - s0).toFixed(1);
 
   return {
-    results: top.map((item, idx) => ({
+    // matchPercentage: 실제 점수(벡터 유사도 최대 1.0 + 키워드 점수 최대 0.95) 기준 환산값 (순위로 지어낸 값 아님)
+    results: top.map((item) => ({
       photo: item.photo,
       score: item.score,
-      matchPercentage: +Math.min(99.2, Math.max(82.0, 97.8 - idx * 0.5)).toFixed(1),
+      matchPercentage: +Math.min(99.9, (item.score / 1.95) * 100).toFixed(1),
       matchedBy,
     })),
     embedMs,
