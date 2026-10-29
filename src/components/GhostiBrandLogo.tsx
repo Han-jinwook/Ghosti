@@ -62,7 +62,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
 
   const isMobile = size === 'mobile';
   const symbolSizeClass = isMobile ? 'w-8 h-8' : 'w-9 h-9';
-  const wordmarkHeightClass = isMobile ? 'h-[22px]' : 'h-[28px]';
+  const wordmarkHeightClass = isMobile ? 'h-[24px]' : 'h-[30px]';
 
   const sloganColorClass =
     themeMode === 'light'
@@ -115,27 +115,27 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
             <div className="flex items-center leading-none">
               {themeMode === 'light' ? (
                 <img
-                  src="/gwisinkachi_smoke_wordmark_dark.png"
+                  src="/gwisinkachi_3d_wordmark_dark.png"
                   alt="귀신같이"
-                  className={`${wordmarkHeightClass} w-auto object-contain`}
+                  className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm`}
                 />
               ) : themeMode === 'dark' ? (
                 <img
-                  src="/gwisinkachi_smoke_wordmark_light.png"
+                  src="/gwisinkachi_3d_wordmark_light.png"
                   alt="귀신같이"
-                  className={`${wordmarkHeightClass} w-auto object-contain`}
+                  className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm`}
                 />
               ) : (
                 <>
                   <img
-                    src="/gwisinkachi_smoke_wordmark_dark.png"
+                    src="/gwisinkachi_3d_wordmark_dark.png"
                     alt="귀신같이"
-                    className={`${wordmarkHeightClass} w-auto object-contain block dark:hidden`}
+                    className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm block dark:hidden`}
                   />
                   <img
-                    src="/gwisinkachi_smoke_wordmark_light.png"
+                    src="/gwisinkachi_3d_wordmark_light.png"
                     alt="귀신같이"
-                    className={`${wordmarkHeightClass} w-auto object-contain hidden dark:block`}
+                    className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm hidden dark:block`}
                   />
                 </>
               )}

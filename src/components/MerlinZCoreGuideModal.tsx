@@ -122,13 +122,23 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       initPromiseRef.current = Promise.resolve(initApp(true)).then(() => undefined);
     }
 
-    initPromiseRef.current
+    const stepTimer1 = window.setTimeout(() => {
+      if (!cancelled) setProgress((p) => (p < 45 ? 45 : p));
+    }, 220);
+    const stepTimer2 = window.setTimeout(() => {
+      if (!cancelled) setProgress((p) => (p < 82 ? 82 : p));
+    }, 520);
+
+    Promise.all([
+      initPromiseRef.current,
+      new Promise((resolve) => window.setTimeout(resolve, 850)),
+    ])
       .then(() => {
         if (cancelled) return;
         setProgress(100);
         window.setTimeout(() => {
           if (!cancelled) finishAndPopOpenPhotos();
-        }, 400);
+        }, 420);
       })
       .catch(() => {
         if (!cancelled) {
@@ -138,6 +148,8 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
     return () => {
       cancelled = true;
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, step]);
@@ -152,7 +164,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     resetSearchSpaceToAll('gallery');
     useSaySeeStore.setState({
       hasUserSelectedSearchTab: true,
-      lastQuarantineToast: `🎉 내 컴퓨터 사진 ${totalPhotoCount}장 목록을 불러왔습니다.`,
+      lastQuarantineToast: `🎉 내 컴퓨터 사진 ${totalPhotoCount}장 귀신같이 찾기 인덱싱 완료! 모든 사진이 화면에 딱 펼쳐졌습니다.`,
     });
     onClose();
     if (typeof document !== 'undefined') {

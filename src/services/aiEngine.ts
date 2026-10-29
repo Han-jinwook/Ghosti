@@ -1566,6 +1566,9 @@ export async function executeTextSearch(
     if (isGroupQuery && cap) {
       const hasSoloWord =
         cap.includes('1명') ||
+        cap.includes('한 명') ||
+        cap.includes('한명') ||
+        cap.includes('혼자') ||
         cap.includes('단독') ||
         cap.includes('독사진') ||
         cap.includes('셀카') ||

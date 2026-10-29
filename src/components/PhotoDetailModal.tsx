@@ -29,6 +29,9 @@ function isSoloPortraitPhoto(p: PhotoItem): boolean {
   const text = `${p.tags.join(' ')} ${(p.keywordsKo ?? []).join(' ')} ${p.captionKo || ''}`.toLowerCase();
   const hasSoloIndicator =
     text.includes('1명') ||
+    text.includes('한 명') ||
+    text.includes('한명') ||
+    text.includes('혼자') ||
     text.includes('단독') ||
     text.includes('독사진') ||
     text.includes('셀카') ||
@@ -103,7 +106,10 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
       combined.includes('모임') ||
       combined.includes('친구들') ||
       combined.includes('동료들') ||
-      combined.includes('가족')
+      combined.includes('대가족') ||
+      combined.includes('식구') ||
+      combined.includes('어린이들이') ||
+      combined.includes('남매')
     );
   }
 
