@@ -89,9 +89,45 @@ def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] 
     }
 
 
+_ALLOWED_ORIGIN_EXACT = {
+    "https://sundreamer.app",
+    "https://ghosti-app.netlify.app",
+    "capacitor://localhost",
+    "ionic://localhost",
+}
+
+
+def is_trusted_origin(origin: str | None) -> bool:
+    """파일을 옮기거나 만드는 요청은 멀린 패밀리 공식 도메인·로컬 개발 화면에서만 허용한다.
+    (Origin 헤더가 없는 요청은 브라우저가 아닌 로컬 프로그램이므로 허용)"""
+    if not origin:
+        return True
+    o = origin.strip().lower().rstrip("/")
+    if o in _ALLOWED_ORIGIN_EXACT:
+        return True
+    try:
+        u = urllib.parse.urlparse(o)
+    except Exception:
+        return False
+    host = (u.hostname or "").lower()
+    if u.scheme in ("http", "https") and host in ("localhost", "127.0.0.1"):
+        return True
+    if u.scheme == "https" and host.endswith(".sundreamer.app"):
+        return True
+    return False
+
+
 class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         return
+
+    def _reject_untrusted(self) -> bool:
+        """신뢰할 수 없는 출처면 403 응답 후 True 반환"""
+        origin = self.headers.get("Origin")
+        if is_trusted_origin(origin):
+            return False
+        self._send_json({"ok": False, "error": "UNTRUSTED_ORIGIN", "origin": origin}, status=403)
+        return True
 
     def _send_json(self, data: Dict[str, Any], status: int = 200) -> None:
         raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -177,6 +213,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
+            if act.lower() in plugin_ghosti_os.MUTATING_ACTIONS and self._reject_untrusted():
+                return
             self._send_json(plugin_ghosti_os.handle_request(act, qp))
             return
 
@@ -190,6 +228,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         # [귀신같이 윈도우 휴지통 / 격리 / 폴더열기]
         if path.startswith("/__quarantine/"):
             sub = path[len("/__quarantine/") :].strip("/")
+            if sub.lower() in ("move", "restore") and self._reject_untrusted():
+                return
             self._send_json(plugin_ghosti_os.handle_quarantine(sub, body))
             return
 
@@ -197,6 +237,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             plugin_name = str(body.get("plugin") or body.get("callerAppId") or "ghosti")
             action = str(body.get("action") or body.get("targetResource") or "health")
             payload = body.get("payload") if isinstance(body.get("payload"), dict) else body
+            if (
+                plugin_name.strip().lower() in ("ghosti", "ghosti_os", "os", "monster")
+                and action.strip().lower() in plugin_ghosti_os.MUTATING_ACTIONS
+                and self._reject_untrusted()
+            ):
+                return
             self._send_json(dispatch_plugin_call(plugin_name, action, payload))
             return
 
@@ -213,6 +259,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
+            if act.lower() in plugin_ghosti_os.MUTATING_ACTIONS and self._reject_untrusted():
+                return
             self._send_json(plugin_ghosti_os.handle_request(act, body))
             return
 
@@ -251,7 +299,8 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
         ag_live = {"skipped": False, "results": live_rows, "allOk": all(x["ok"] and (x["segmentCount"] or 0) > 0 for x in live_rows)}
     ghosti_status = plugin_ghosti_os.handle_request("health")
     restore_precheck = plugin_ghosti_os.handle_request("restore-points-list")
-    rollback_res = plugin_ghosti_os.handle_request("restore-point-rollback", {"restoreId": "#104"})
+    # 자가진단에서는 실제 파일을 되돌리는 롤백을 실행하지 않는다 (유저 파일 보호)
+    rollback_res = {"message": "자가진단에서는 실제 롤백을 실행하지 않습니다 (유저 파일 보호)"}
     tree_summary = plugin_ghosti_os.handle_request("folder-tree-summary")
     all_ok = bool(ag_vid == "dQw4w9WgXcQ" and ag_parser_ok and (ag_live.get("skipped") or ag_live.get("allOk")))
     return {
@@ -266,8 +315,8 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
             "rollbackVerified": rollback_res.get("message"),
         },
         "zeroLlmTreeSummaryCheck": {
-            "scannedCount": tree_summary.get("scannedCount"),
-            "estimatedPromptTokens": tree_summary.get("estimatedPromptTokens"),
+            "scannedCount": tree_summary.get("count"),
+            "estimatedPromptTokens": None,
             "elapsedMs": tree_summary.get("elapsedMs"),
         },
         "senstalkPluginSyncCheck": {
