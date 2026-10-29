@@ -3,7 +3,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
@@ -2973,10 +2973,21 @@ function ghostiLocalBridge(): Plugin {
             );
             const osScript = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_z_core_os.py');
             const outJson = await new Promise<any>((resolve) => {
-              exec(
-                `python "${osScript}" overlay --x ${Math.round(Number(rect[0]) || 420)} --y ${Math.round(
-                  Number(rect[1]) || 160
-                )} --text "${instruction.replace(/"/g, '\\"')}" --duration 10`,
+              // 셸을 거치지 않는 execFile: 유저 문구(instruction)에 특수문자가 있어도 명령으로 해석되지 않음
+              execFile(
+                'python',
+                [
+                  osScript,
+                  'overlay',
+                  '--x',
+                  String(Math.round(Number(rect[0]) || 420)),
+                  '--y',
+                  String(Math.round(Number(rect[1]) || 160)),
+                  '--text',
+                  instruction,
+                  '--duration',
+                  '10',
+                ],
                 { encoding: 'utf8' },
                 (_err, stdout) => {
                   try {
@@ -3034,9 +3045,10 @@ function ghostiLocalBridge(): Plugin {
 
       function runZCorePython(args: string[]): Promise<any> {
         return new Promise((resolve) => {
-          const escapedArgs = args.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(' ');
-          exec(
-            `python "${zcoreOsScriptPath}" ${escapedArgs}`,
+          // 셸을 거치지 않는 execFile (명령 주입 차단)
+          execFile(
+            'python',
+            [zcoreOsScriptPath, ...args.map((a) => String(a))],
             { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, windowsHide: true },
             (err, stdout, stderr) => {
               if (stdout && stdout.trim()) {
@@ -3132,11 +3144,7 @@ function ghostiLocalBridge(): Plugin {
         const rawVoice = String(body?.voice || 'ko-KR-HyunsuNeural').toLowerCase();
         const voice = rawVoice.includes('sunhi') || rawVoice.includes('female') || rawVoice.includes('doc') ? 'ko-KR-SunHiNeural' : 'ko-KR-HyunsuNeural';
         const rate = String(body?.rate || '+0%');
-        exec(
-          `python "${ttsScriptPath}" prewarm "${voice}" "${rate}"`,
-          { encoding: 'utf8', windowsHide: true },
-          () => {}
-        );
+        execFile('python', [ttsScriptPath, 'prewarm', voice, rate], { encoding: 'utf8', windowsHide: true }, () => {});
         res.end(JSON.stringify({ ok: true, status: 'PREWARM_QUEUED', voice, rate }));
       });
 
@@ -3189,9 +3197,10 @@ function ghostiLocalBridge(): Plugin {
         let job = ttsInFlightMap.get(hash);
         if (!job) {
           job = new Promise<any>((resolve) => {
-            const escapedText = rawText.replace(/"/g, '\\"');
-            exec(
-              `python "${ttsScriptPath}" speak "${escapedText}" "${voice}" "${rate}"`,
+            // 셸을 거치지 않는 execFile: 낭독 문장에 따옴표·&·| 등이 있어도 명령으로 해석되지 않음
+            execFile(
+              'python',
+              [ttsScriptPath, 'speak', rawText, voice, rate],
               { encoding: 'utf8', windowsHide: true },
               (_err, stdout) => {
                 try {
@@ -3215,9 +3224,10 @@ function ghostiLocalBridge(): Plugin {
 
       function runBuiltinPluginPython(pluginName: string, action: string, payloadObj: any = {}): Promise<any> {
         return new Promise((resolve) => {
-          const payloadJson = JSON.stringify(payloadObj || {}).replace(/"/g, '\\"');
-          exec(
-            `python "${zcoreDaemonScriptPath}" --plugin "${pluginName}" --action "${action}" --payload "${payloadJson}"`,
+          // 셸을 거치지 않는 execFile (JSON 페이로드 안의 특수문자로 인한 명령 주입 차단)
+          execFile(
+            'python',
+            [zcoreDaemonScriptPath, '--plugin', pluginName, '--action', action, '--payload', JSON.stringify(payloadObj || {})],
             { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, windowsHide: true },
             (err, stdout, stderr) => {
               if (stdout && stdout.trim()) {

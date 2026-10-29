@@ -82,9 +82,9 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
               }`}
             >
               {activeOverlayBacktrackCount >= 2
-                ? `💖 뒤로 가기(Back) ${activeOverlayBacktrackCount}회 — 완료 즉시 100% 쿨 환불(수업료 면제) 발동!`
+                ? `💦 뒤로 가기(Back) ${activeOverlayBacktrackCount}회 — 헤맨 단계는 내 PC 기록에 남깁니다`
                 : activeOverlayBacktrackCount === 1
-                ? '🟡 뒤로 가기(Back) 1회 — 인간적 허용 (1회 더 헤매면 100% 환불!)'
+                ? '🟡 뒤로 가기(Back) 1회'
                 : '🟢 뒤로 가기(Back) 0회 — 쾌속 완주 코스'}
             </span>
           </div>
@@ -201,7 +201,7 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
                 {activeOverlayStepIndex + 1 < steps.length
                   ? '👆 화살표 위치 눌렀어요 (다음 단계 ➔)'
                   : activeOverlayBacktrackCount >= 2
-                  ? '💖 설정 완료! (2회+ 헤맴 감지 ➔ 100% 쿨 환불 & 최단 지름길 OTA 받기)'
+                  ? '✅ 설정 완료 (가이드 종료)'
                   : '✅ 설정 완료 (가이드 종료)'}
               </button>
             </div>
@@ -846,11 +846,13 @@ export const SetupMonsterContent: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-                      {isEmpathyRefund || turn.refunded
-                        ? `💸 ${cost} 코인 100% 환불 완료`
+                      {turn.refunded
+                        ? '📝 미해결 신고됨'
                         : isSettled
-                        ? `✅ 수리 완료 확정 (${cost} 코인)`
-                        : `✓ 수리 조치 완료 — 잘 해결되었는지 확인해 주세요`}
+                        ? '✅ 해결 확인됨 (0원)'
+                        : isEmpathyRefund
+                        ? '💦 안내 중 헤맴 기록됨 (0원)'
+                        : '📋 진단 결과 — 아래 내용을 확인해 주세요'}
                     </span>
                   </div>
                   <span className="font-mono text-[10.5px] text-zinc-400">
@@ -858,14 +860,12 @@ export const SetupMonsterContent: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[13px] text-white font-bold whitespace-pre-line leading-relaxed">
-                  {turn.diagnosisPlan?.presetId === 'pc_work_s_drive'
-                    ? '✅ 해결 완료! 끊어졌던 업무용 폴더(S: 드라이브)를 다시 연결하고 폴더 창을 열어 드렸습니다.'
-                    : turn.text}
+                  {turn.text}
                 </p>
 
                 <div className="p-3 rounded-xl bg-zinc-950/85 border border-white/10 flex flex-wrap items-center justify-between gap-2">
                   <span className="font-body-sm text-[11.5px] text-zinc-300">
-                    문제가 잘 해결되었나요? 언제든 원하실 때 클릭 한 번으로 수리 전 원래 설정으로 되돌릴 수 있습니다.
+                    귀신같이가 자동으로 바꾼 설정이 있으면 아래 버튼으로 원래대로 되돌릴 수 있습니다.
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     {turn.diagnosisPlan?.overlaySteps?.length ? (
@@ -932,7 +932,7 @@ export const SetupMonsterContent: React.FC = () => {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="px-2.5 py-0.5 rounded-md bg-pink-500 text-white font-label-sm text-[11px] font-extrabold">
-                    💖 +{refundedCoins} 코인 100% 환불 완료 (수리된 설정은 그대로 유지됩니다)
+                    💦 길 안내가 헤매게 해 드려 죄송합니다 (0원 · 내 PC 기록만 저장)
                   </span>
                   <span className="font-mono text-[10.5px] text-pink-200">
                     {turn.timestamp}
@@ -953,7 +953,7 @@ export const SetupMonsterContent: React.FC = () => {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="px-2.5 py-0.5 rounded-md bg-rose-500 text-white font-label-sm text-[11px] font-extrabold">
-                    💸 원래 설정 복구 & +{turn.refundedAmount ?? 100} 코인 100% 환불 완료
+                    📝 미해결 신고 기록됨 (0원)
                   </span>
                   <span className="font-mono text-[10.5px] text-rose-200">
                     {turn.timestamp}

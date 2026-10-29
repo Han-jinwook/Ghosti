@@ -3737,7 +3737,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     if (targetAudit?.refunded) {
       set({
-        lastQuarantineToast: '이미 에스크로 홀딩 코인 100% 반환 및 원상복구가 완료된 수리 내역입니다.',
+        lastQuarantineToast: '이미 미해결 신고가 접수된 내역입니다.',
       });
       return;
     }
@@ -3748,10 +3748,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const conversationTranscript = state.setupChatTurns
       .slice(-6)
       .map((t) => `[${t.role}] ${t.text}`);
+    // 실측하지 않은 OS 버전을 지어내지 않고 브라우저가 알려주는 정보만 기록
     const windowsBuildEnv =
-      (targetAudit?.platform ?? state.setupMonsterPlatform) === 'pc'
-        ? 'Windows 11 Pro 23H2 (Build 22631.4317) · x64 · Merlin_Z_Core_Setup.exe v2.4'
-        : 'Android 15 (One UI 7.0) · Ghosti_Mobile_1MB.apk v2.4';
+      typeof navigator !== 'undefined' ? navigator.userAgent : (targetAudit?.platform ?? state.setupMonsterPlatform);
 
     const nowIso = new Date().toISOString();
     const nowLabel = new Date().toLocaleTimeString('ko-KR', {
@@ -3805,7 +3804,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(
-          '문제가 해결되지 않아 원래 설정으로 되돌리고 코인을 전액 환불해 드렸습니다.'
+          '해결되지 않았다는 신고를 기록했습니다. 자동으로 바꾼 설정이 있었다면 되돌리기 버튼으로 원래대로 돌릴 수 있습니다.'
         );
         utter.lang = 'ko-KR';
         void speakSetupMonsterTts(utter.text);
@@ -3818,11 +3817,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: `refund_${Date.now()}`,
       role: 'system_refund',
       timestamp: nowLabel,
-      text: `💸 [무위험(Zero-Risk) 1초 원상복구 + 에스크로 홀딩 +${refundCoins} 멀린코인 100% 즉시 반환 완료]\n① 백업해 둔 0.01초 전 JSON 스냅샷(${JSON.stringify(
-        targetAudit?.beforeSnapshot ?? { state: 'restored_initial' }
-      )})으로 기기 설정을 1초 만에 완벽히 원상복구했습니다.\n② 에스크로에 홀딩되어 있던 +${refundCoins} 멀린코인을 멀린허브 통합 지갑에 100% 즉시 반환(환불)했습니다.\n③ 📡 본사 실패 분석 큐(Failure Telemetry: ${
-        failurePacket.failureId
-      })로 [대화 내역 + ${windowsBuildEnv} + 실행 스크립트 + ${effectiveErrorCode}] 패킷을 자동 전송하여 수리 스크립트를 즉시 업데이트합니다.`,
+      text: `📝 [미해결 신고 기록 완료]\n① 해결되지 않았다는 신고를 내 PC 로컬 기록(${failurePacket.failureId})에 남겼습니다. (외부 전송 없음)\n② 귀신같이가 자동으로 바꾼 설정이 있었다면 위 [↩️ 원래 설정으로 되돌리기]로 돌릴 수 있습니다.\n③ 내 기기 고치기는 항상 0원이라 환불할 비용은 없습니다.`,
       auditId: targetAudit?.auditId,
       escrowStatus: 'RELEASED_REFUNDED',
       trajectoryGrade: 'GRADE_FAIL_ABORTED',

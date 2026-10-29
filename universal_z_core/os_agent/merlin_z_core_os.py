@@ -584,8 +584,15 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
     found_files: List[Dict[str, Any]] = []
     seen_paths = set()
     folder_count_cache: Dict[str, int] = {}
+    deadline_sec = 3.0  # 3초 결정론적 스캔: 넘으면 남은 금고는 확인하지 않았다고 정직하게 보고
+    timed_out = False
+    skipped_vaults: List[str] = []
 
     for vault_label, folder in vault_locations:
+        if time.perf_counter() - t0 > deadline_sec:
+            timed_out = True
+            skipped_vaults.append(vault_label)
+            continue
         exists = folder.exists()
         matched_in_dir = 0
         if exists:
@@ -603,7 +610,8 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
                             pass
 
                 for fpath in candidates:
-                    if time.perf_counter() - t0 > 3.0:
+                    if time.perf_counter() - t0 > deadline_sec:
+                        timed_out = True
                         break
                     ext = fpath.suffix.lower()
                     if ext not in target_exts and not fpath.name.startswith("~$"):
@@ -658,14 +666,19 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
         "isRealForensicScan": True,
         "query": query,
         "elapsedMs": elapsed_ms,
-        "cutoffGuaranteeSec": 3.0,
+        "cutoffGuaranteeSec": deadline_sec,
+        "timedOut": timed_out,
+        "skippedVaults": skipped_vaults,
         "scannedVaults": scanned_dirs_report,
         "totalFoundCount": len(found_files),
         "files": top_files,
         "honestCutoffMessage": (
-            f"✅ {elapsed_ms}ms 만에 10개 실제 금고 폴더를 스캔하여 실존 문서 {len(found_files)}건을 찾았습니다 (내부 5줄 실물 증거 포함)."
-            if found_files
-            else f"⚠️ {elapsed_ms}ms 동안 5대 은닉 금고를 정밀 스캔했으나 '{query}' 조건과 일치하는 문서 흔적이 디스크에 남아있지 않습니다. (추측 수색 없이 0원 정직 종료)"
+            (
+                f"✅ {elapsed_ms}ms 동안 금고 폴더 {len(scanned_dirs_report)}곳을 확인해 실존 문서 {len(found_files)}건을 찾았습니다 (내부 5줄 실물 증거 포함)."
+                if found_files
+                else f"⚠️ {elapsed_ms}ms 동안 금고 폴더 {len(scanned_dirs_report)}곳을 확인했지만 '{query}' 조건과 일치하는 문서를 찾지 못했습니다. (추측 수색 없이 정직 종료)"
+            )
+            + (f" ⏱️ 시간 제한({deadline_sec:.0f}초)으로 확인하지 못한 곳: {', '.join(skipped_vaults)}" if timed_out and skipped_vaults else (" ⏱️ 시간 제한으로 일부 파일은 확인하지 못했습니다." if timed_out else ""))
         ),
     }
 
