@@ -87,7 +87,7 @@ export const GhostiTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> 
               ? '3몬스터 패밀리 코인 충전소 & 선물함 열기'
               : '로그인 후 코인 지갑 및 선물함 이용'
           }
-          className={`px-2.5 py-1 rounded-full font-label-mono text-[11px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
+          className={`px-2.5 py-1 rounded-full font-label-mono text-[12px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
             themeMode === 'light'
               ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
               : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'

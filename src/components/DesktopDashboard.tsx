@@ -419,7 +419,7 @@ export const DesktopDashboard: React.FC = () => {
             return (
               <div key={menu.id} className="flex flex-col gap-0.5">
                 {menu.sectionHeader && (
-                  <span className="px-2 pt-2 pb-0.5 text-[10.5px] font-extrabold uppercase tracking-wider text-zinc-500">
+                  <span className="px-2 pt-2 pb-0.5 text-[12px] font-extrabold uppercase tracking-wider text-zinc-500">
                     {menu.sectionHeader}
                   </span>
                 )}
@@ -430,7 +430,7 @@ export const DesktopDashboard: React.FC = () => {
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
                   }}
-                  className={`w-full px-2.5 py-2 rounded-xl font-label-md text-[13px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                  className={`w-full px-2.5 py-2 rounded-xl font-label-md text-[14.5px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
                     active
                       ? themeMode === 'light'
                         ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
@@ -477,7 +477,7 @@ export const DesktopDashboard: React.FC = () => {
                                 setDesktopTab('dashboard');
                                 if (isMobileDrawer) setIsMobileDrawerOpen(false);
                               }}
-                              className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[12px] flex items-center justify-between transition-colors cursor-pointer ${
+                              className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between transition-colors cursor-pointer ${
                                 roomActive
                                   ? 'bg-primary-container/15 text-primary-container font-extrabold'
                                   : 'text-zinc-400 hover:text-white hover:bg-white/5 font-medium'
@@ -522,7 +522,7 @@ export const DesktopDashboard: React.FC = () => {
                             if (isMobileDrawer) setIsMobileDrawerOpen(false);
                           }}
                           title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[12px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
                             isSubActive
                               ? themeMode === 'light'
                                 ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
@@ -535,7 +535,7 @@ export const DesktopDashboard: React.FC = () => {
                           <div className="flex flex-col min-w-0 flex-1">
                             <span className="truncate font-bold">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🧹 귀신같이 청소 진단' : sub.label}</span>
                             {sub.subcaption && (
-                              <span className="text-[10px] opacity-60 font-normal truncate">
+                              <span className="text-[11.5px] opacity-75 font-normal truncate">
                                 {sub.subcaption}
                               </span>
                             )}
@@ -568,7 +568,7 @@ export const DesktopDashboard: React.FC = () => {
     <div className="min-h-screen flex bg-[#09090B] text-zinc-100">
       {/* ─────────────── [PC/데스크톱 lg+] 노션형 좌측 접이식 사이드바 (244px) ─────────────── */}
       {!isSidebarCollapsed && (
-        <aside className="hidden lg:block w-[244px] shrink-0 sticky top-0 h-screen z-40">
+        <aside className="hidden lg:block w-[258px] shrink-0 sticky top-0 h-screen z-40">
           {renderSidebarNavigationContent(false)}
         </aside>
       )}
@@ -644,7 +644,7 @@ export const DesktopDashboard: React.FC = () => {
                 />
 
                 {/* 노션 스타일 상단 경로(Breadcrumb) 표시 */}
-                <div className="flex items-center gap-1.5 text-[13px] truncate">
+                <div className="flex items-center gap-1.5 text-[14.5px] truncate">
                   <span
                     onClick={() => {
                       setDesktopTab('dashboard');
@@ -687,7 +687,7 @@ export const DesktopDashboard: React.FC = () => {
                       alt={myDoorplatePersona}
                       className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover border border-primary-container shrink-0"
                     />
-                    <span className="font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
+                    <span className="font-label-sm text-[12.5px] font-extrabold whitespace-nowrap">
                       👑 {myDoorplatePersona}
                     </span>
                   </button>

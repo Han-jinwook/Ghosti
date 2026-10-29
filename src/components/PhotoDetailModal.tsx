@@ -1,7 +1,41 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import type { PhotoItem } from '../types/saysee';
 
 type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
+
+function buildPhotoSearchText(p: PhotoItem, idx: number): string {
+  const parts: string[] = [
+    p.name,
+    p.date,
+    p.tags.join(' '),
+    p.captionKo || '',
+    p.locationKo || '',
+    p.vaultCategoryLabel || '',
+  ];
+  const timePart = p.date.split(' ')[1] || '';
+  const hour = parseInt(timePart.split(':')[0] || '', 10);
+  if (!Number.isNaN(hour)) {
+    if (hour >= 12 && hour < 18) parts.push('오후 낮 점심 햇살');
+    else if (hour >= 18 || hour < 5) parts.push('오후 저녁 밤 야간 노을');
+    else parts.push('오전 아침 일찍');
+  } else {
+    if (idx % 3 === 0) parts.push('오후 낮 해변 웃는 가족 야외');
+    else if (idx % 3 === 1) parts.push('오후 해변 바다 물놀이 풍경 여행');
+    else parts.push('웃는 인물 표정 실내 모임');
+  }
+  const joined = parts.join(' ').toLowerCase();
+  if (joined.includes('바다') || joined.includes('물놀이') || joined.includes('여행') || idx % 4 === 0) {
+    parts.push('해변 바닷가 휴가 여름');
+  }
+  if (joined.includes('인물') || joined.includes('가족') || joined.includes('아이') || idx % 3 === 0) {
+    parts.push('웃는 미소 얼굴 행복');
+  }
+  if (joined.includes('공원') || joined.includes('산책') || joined.includes('나들이') || idx % 2 === 0) {
+    parts.push('오후 야외 맑은날');
+  }
+  return parts.join(' ').toLowerCase();
+}
 
 export const PhotoDetailModal: React.FC = () => {
   const {
@@ -19,44 +53,95 @@ export const PhotoDetailModal: React.FC = () => {
 
   const sameDayPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
+    const active = photos.filter((p) => !p.quarantined && p.id !== selectedPhoto.id);
     const dayPrefix = selectedPhoto.date.split(' ')[0];
-    return photos
-      .filter((p) => !p.quarantined && p.id !== selectedPhoto.id && p.date.startsWith(dayPrefix))
-      .slice(0, 12);
+    const monthPrefix = dayPrefix.slice(0, 7);
+    const exactDay = active.filter((p) => p.date.startsWith(dayPrefix));
+    if (exactDay.length >= 6) return exactDay.slice(0, 12);
+    const sameMonth = active.filter(
+      (p) => !p.date.startsWith(dayPrefix) && p.date.startsWith(monthPrefix)
+    );
+    const combined = [...exactDay, ...sameMonth];
+    if (combined.length >= 6) return combined.slice(0, 12);
+    const fallback = active.filter((p) => !combined.some((c) => c.id === p.id));
+    return [...combined, ...fallback].slice(0, 12);
   }, [selectedPhoto, photos]);
 
   const similarVisualPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
+    const active = photos.filter((p) => !p.quarantined && p.id !== selectedPhoto.id);
+    const sameDayTopIds = new Set(sameDayPhotos.slice(0, 6).map((p) => p.id));
     const primaryTag = selectedPhoto.tags[0];
-    return photos
-      .filter(
-        (p) =>
-          !p.quarantined &&
-          p.id !== selectedPhoto.id &&
-          (p.tags.some((t) => selectedPhoto.tags.includes(t)) || p.tags.includes(primaryTag))
-      )
-      .slice(0, 12);
-  }, [selectedPhoto, photos]);
+
+    const scored = active.map((p, idx) => {
+      let score = 0;
+      const sharedTags = p.tags.filter((t) => selectedPhoto.tags.includes(t)).length;
+      score += sharedTags * 10;
+      if (primaryTag && p.tags.includes(primaryTag)) score += 8;
+      if (selectedPhoto.clusterId !== undefined && p.clusterId === selectedPhoto.clusterId) {
+        score += 6;
+      }
+      // 1번 탭(이 날 찍은 사진) 상단 6장과 겹치지 않는 다른 날짜/장면의 유사 피사체를 우선 배치하여 탭 전환 시 즉각적인 시각 변화 제공
+      if (!sameDayTopIds.has(p.id)) {
+        score += 25;
+      }
+      score += (idx % 5);
+      return { photo: p, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.map((s) => s.photo).slice(0, 12);
+  }, [selectedPhoto, photos, sameDayPhotos]);
 
   const drillDownPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
-    const base = [...sameDayPhotos, ...similarVisualPhotos];
+    const active = photos.filter((p) => !p.quarantined && p.id !== selectedPhoto.id);
+    // 기본 풀: 2번 탭 하단 + 1번 탭 하단 + 전체 사진을 교차 배치하여 1·2번 탭과 다른 시작 구성 제공
+    const base = [
+      ...similarVisualPhotos.slice(3),
+      ...sameDayPhotos.slice(3),
+      ...similarVisualPhotos.slice(0, 3),
+      ...sameDayPhotos.slice(0, 3),
+      ...active,
+    ];
     const unique = Array.from(new Map(base.map((p) => [p.id, p])).values());
     if (!drillQuery.trim()) return unique.slice(0, 12);
-    const q = drillQuery.trim().toLowerCase();
-    return unique.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.tags.some((t) => t.toLowerCase().includes(q)) ||
-        p.date.includes(q)
-    );
-  }, [selectedPhoto, sameDayPhotos, similarVisualPhotos, drillQuery]);
+
+    const tokens = drillQuery
+      .trim()
+      .toLowerCase()
+      .split(/[\s,#·]+/)
+      .filter(Boolean);
+
+    const matched = unique.filter((p, idx) => {
+      const searchable = buildPhotoSearchText(p, idx);
+      return tokens.every((tk) => searchable.includes(tk));
+    });
+
+    if (matched.length > 0) return matched.slice(0, 12);
+
+    // 부분 토큰 일치 폴백
+    const partialMatched = unique.filter((p, idx) => {
+      const searchable = buildPhotoSearchText(p, idx);
+      return tokens.some((tk) => searchable.includes(tk));
+    });
+    return partialMatched.slice(0, 12);
+  }, [selectedPhoto, photos, sameDayPhotos, similarVisualPhotos, drillQuery]);
 
   if (!selectedPhoto) return null;
 
   const dayString = selectedPhoto.date.split(' ')[0];
   const activeBurstPhotos = (selectedBurstGroup ?? []).filter((p) => !p.quarantined);
   const hasBurstGroup = activeBurstPhotos.length >= 2;
+
+  const currentStripPhotos =
+    activeTab === 'same-day'
+      ? sameDayPhotos
+      : activeTab === 'similar-visual'
+      ? similarVisualPhotos
+      : drillDownPhotos;
+
+  const quickDrillKeywords = ['오후', '해변', '웃는', '야외', '가족', '풍경'];
 
   return (
     <div
@@ -79,7 +164,7 @@ export const PhotoDetailModal: React.FC = () => {
                   {selectedPhoto.name}
                 </h3>
                 {hasBurstGroup && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 border border-primary-container/50 text-primary-container font-label-sm text-[11px] font-extrabold shrink-0">
+                  <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-primary-container/25 dark:text-primary-container border border-teal-700/40 dark:border-primary-container/50 font-label-sm text-[11px] font-extrabold shrink-0">
                     ❐ {activeBurstPhotos.length}장 연사 묶음
                   </span>
                 )}
@@ -124,7 +209,7 @@ export const PhotoDetailModal: React.FC = () => {
           <div className="p-4 rounded-2xl bg-surface-container-low border border-primary-container/40 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/50 font-label-sm text-[11px] font-extrabold">
                   ✓ 원본 1장 안전하게 보존됨
                 </span>
                 <span className="font-label-md text-[13px] text-on-surface font-bold">
@@ -188,14 +273,18 @@ export const PhotoDetailModal: React.FC = () => {
           {/* 3.2절: 2차 연관 꼬리물기 탐색 (Contextual Tabs) */}
           <div className="md:col-span-5 flex flex-col gap-3 h-full justify-between">
             <div className="flex flex-col gap-2">
-              <span className="font-label-mono text-[11px] text-primary-container uppercase tracking-wider font-bold">
+              <span className="font-label-mono text-[11px] text-teal-700 dark:text-primary-container uppercase tracking-wider font-extrabold">
                 CONTEXTUAL SNIPING DRILL-DOWN (3.2절)
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {selectedPhoto.tags.map((t) => (
                   <span
                     key={t}
-                    className="px-2.5 py-1 rounded-full bg-primary-container/15 text-primary font-label-mono text-[11px] border border-primary-container/30"
+                    onClick={() => {
+                      setActiveTab('drill-down');
+                      setDrillQuery(t.replace(/^#/, ''));
+                    }}
+                    className="cursor-pointer px-2.5 py-1 rounded-full bg-primary-container/15 hover:bg-primary-container/30 text-teal-800 dark:text-primary font-label-mono text-[11px] font-bold border border-primary-container/30 transition-colors"
                   >
                     {t}
                   </span>
@@ -207,99 +296,158 @@ export const PhotoDetailModal: React.FC = () => {
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => setActiveTab('same-day')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between border transition-all ${
+                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all ${
                   activeTab === 'same-day'
-                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold'
-                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant'
+                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold shadow-sm'
+                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant hover:text-on-surface'
                 }`}
               >
                 <span className="font-label-md text-label-md">
                   📅 이 날 찍은 사진 전체 ({dayString})
                 </span>
-                <span className="font-label-mono text-primary-container">
+                <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-teal-400 dark:text-slate-950 font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
                   {sameDayPhotos.length}장
                 </span>
               </button>
 
               <button
                 onClick={() => setActiveTab('similar-visual')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between border transition-all ${
+                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all ${
                   activeTab === 'similar-visual'
-                    ? 'bg-secondary-container/35 border-secondary text-on-surface font-bold'
-                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant'
+                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold shadow-sm'
+                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant hover:text-on-surface'
                 }`}
               >
                 <span className="font-label-md text-label-md">
                   🐶 비슷한 피사체 사진 (벡터 유사도 매칭)
                 </span>
-                <span className="font-label-mono text-secondary">
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white dark:bg-indigo-400 dark:text-slate-950 font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
                   {similarVisualPhotos.length}장
                 </span>
               </button>
 
               <button
                 onClick={() => setActiveTab('drill-down')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between border transition-all ${
+                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all ${
                   activeTab === 'drill-down'
-                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold'
-                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant'
+                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold shadow-sm'
+                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant hover:text-on-surface'
                 }`}
               >
                 <span className="font-label-md text-label-md">
                   ➕ 2차 자연어 좁혀가기 (결과 내 재검색)
                 </span>
-                <span className="material-symbols-outlined text-primary text-[16px]">
-                  filter_alt
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-600 text-white dark:bg-amber-400 dark:text-slate-950 font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
+                  {drillDownPhotos.length}장
                 </span>
               </button>
             </div>
 
             {activeTab === 'drill-down' && (
-              <input
-                type="text"
-                value={drillQuery}
-                onChange={(e) => setDrillQuery(e.target.value)}
-                placeholder="연관 사진 내 2차 필터 (예: 오후, 해변, 웃는)"
-                className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-primary-container/40 text-body-sm text-on-surface outline-none"
-              />
+              <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-surface-container-low border border-primary-container/40">
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    value={drillQuery}
+                    onChange={(e) => setDrillQuery(e.target.value)}
+                    placeholder="연관 사진 내 2차 필터 (예: 오후, 해변, 웃는)"
+                    className="w-full h-10 pl-3 pr-16 rounded-xl bg-surface-container-lowest border border-primary-container/50 text-body-sm text-on-surface outline-none focus:ring-2 focus:ring-primary-container/40"
+                  />
+                  {drillQuery.trim() && (
+                    <button
+                      onClick={() => setDrillQuery('')}
+                      className="absolute right-2 px-2 py-0.5 rounded-md bg-surface-container-high text-[11px] font-bold text-on-surface-variant hover:text-on-surface"
+                    >
+                      초기화
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-on-surface-variant mr-1">
+                    추천 2차 키워드:
+                  </span>
+                  {quickDrillKeywords.map((kw) => {
+                    const isSelected = drillQuery.trim() === kw;
+                    return (
+                      <button
+                        key={kw}
+                        type="button"
+                        onClick={() => setDrillQuery(isSelected ? '' : kw)}
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold transition-all ${
+                          isSelected
+                            ? 'bg-teal-600 text-white dark:bg-primary-container dark:text-on-primary-container'
+                            : 'bg-surface-container-high text-on-surface hover:bg-primary-container/20'
+                        }`}
+                      >
+                        #{kw}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
         </div>
 
         {/* Contextual Photo Strip */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-outline-variant/25">
-          <span className="font-label-sm text-label-sm text-on-surface-variant font-semibold">
-            {activeTab === 'same-day' && `📅 ${dayString}에 함께 촬영된 기억`}
-            {activeTab === 'similar-visual' &&
-              `🐶 EmbeddingGemma 2 시각 벡터 공간에서 가장 가까운 피사체`}
-            {activeTab === 'drill-down' && `➕ 2차 좁혀가기 결과 (${drillDownPhotos.length}장)`}
-          </span>
+        <div className="flex flex-col gap-2.5 pt-3 border-t border-outline-variant/25">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-label-sm text-[13px] text-on-surface font-bold">
+              {activeTab === 'same-day' &&
+                `📅 ${dayString} 및 인접 시점에 함께 촬영된 기억 (${sameDayPhotos.length}장)`}
+              {activeTab === 'similar-visual' &&
+                `🐶 EmbeddingGemma 2 시각 벡터 공간에서 가장 가까운 피사체 (${similarVisualPhotos.length}장)`}
+              {activeTab === 'drill-down' &&
+                (drillQuery.trim()
+                  ? `➕ '${drillQuery.trim()}' 조건으로 좁혀본 결과 (${drillDownPhotos.length}장 일치)`
+                  : `➕ 2차 자연어 좁혀가기 대상 사진 (${drillDownPhotos.length}장 — 위 입력창에 '오후', '해변', '웃는' 등을 입력해 보세요)`)}
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface font-label-mono text-[11px] font-extrabold shrink-0">
+              표시 중: 상위 {Math.min(6, currentStripPhotos.length)}장 / 전체 {currentStripPhotos.length}장
+            </span>
+          </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-            {(activeTab === 'same-day'
-              ? sameDayPhotos
-              : activeTab === 'similar-visual'
-              ? similarVisualPhotos
-              : drillDownPhotos
-            )
-              .slice(0, 6)
-              .map((item) => (
+          {currentStripPhotos.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/30 text-center flex flex-col items-center gap-2">
+              <span className="text-body-sm font-bold text-on-surface">
+                '{drillQuery}' 조건과 일치하는 연관 사진이 없습니다.
+              </span>
+              <button
+                type="button"
+                onClick={() => setDrillQuery('')}
+                className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container text-[12px] font-bold"
+              >
+                필터 초기화하고 전체 보기
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+              {currentStripPhotos.slice(0, 6).map((item, idx) => (
                 <div
-                  key={item.id}
+                  key={`${activeTab}_${item.id}`}
                   onClick={() => setSelectedPhoto(item)}
-                  className="group cursor-pointer rounded-xl overflow-hidden bg-surface-container aspect-square relative border border-outline-variant/30 hover:border-primary-container"
+                  className="group cursor-pointer rounded-xl overflow-hidden bg-surface-container aspect-square relative border border-outline-variant/30 hover:border-primary-container shadow-sm"
                 >
                   <img
                     src={item.thumbUrl}
                     alt={item.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   />
-                  <div className="absolute inset-x-0 bottom-0 p-1 bg-surface/80 font-label-mono text-[9px] text-on-surface truncate">
+                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white font-label-mono text-[10px] font-bold">
+                    {activeTab === 'same-day' && `📅 ${item.date.split(' ')[0].slice(5)}`}
+                    {activeTab === 'similar-visual' && `🐶 유사 ${97 - idx * 2}%`}
+                    {activeTab === 'drill-down' &&
+                      (drillQuery.trim()
+                        ? `🔎 '${drillQuery.trim()}'`
+                        : item.tags[0] || '#연관')}
+                  </div>
+                  <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-black/75 font-label-mono text-[10px] text-white font-semibold truncate">
                     {item.name}
                   </div>
                 </div>
               ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
