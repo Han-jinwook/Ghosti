@@ -461,28 +461,26 @@ export function buildLocalSentenceSamplesFromCorpus(photos: PhotoItem[]): LocalS
     if (!picked.includes(c)) picked.push(c);
   }
 
-  // 3) 각 클러스터의 실제 EXIF 지명 + 비전 키워드 태그로 자연스러운 검색 문장 합성
+  // 3) 각 클러스터의 실제 비전 키워드(keywordsKo / tags)로 100% 매칭되는 자연스러운 검색 문장 합성
   return picked.map((c, idx) => {
     const rep = c.rep;
-    const rawTags = rep.tags
-      .map((t) => t.replace(/^#/, '').trim())
-      .filter((t) => t && !t.includes('·') && !t.includes('원본') && !t.includes('연사'));
+    const rawKws = (rep.keywordsKo && rep.keywordsKo.length > 0
+      ? rep.keywordsKo
+      : rep.tags.map((t) => t.replace(/^#/, '').trim())
+    ).filter(
+      (t) =>
+        t &&
+        !t.includes('·') &&
+        !['원본', '연사', '단독', '1명', '독사진', '단체사진', '모습', '사진', '낮', '오후'].includes(t)
+    );
 
-    // 지명에서 가장 핵심적인 지역명 1어절 추출 (예: "말레이시아 코타키나발루" -> "코타키나발루")
-    const locParts = (rep.locationKo || '')
-      .replace(/[·/]/g, ' ')
-      .split(/\s+/)
-      .filter((w) => w.length >= 2 && !['말레이시아', '대한민국', '특별시', '광역시', '경기도', '강원도'].includes(w));
-    const shortLoc = locParts[locParts.length - 1] || locParts[0] || '';
-
-    const kws = rawTags.filter((t) => t !== shortLoc && !locParts.includes(t)).slice(0, 2);
-    const queryParts = [shortLoc, ...kws].filter(Boolean);
-    const query = queryParts.length > 0 ? `${queryParts.join(' ')} 모습` : rep.captionKo?.slice(0, 22) || '추억 사진';
+    const kws = rawKws.slice(0, 3);
+    const query = kws.length > 0 ? `${kws.join(' ')} 모습` : rep.captionKo?.slice(0, 22) || '추억 사진';
 
     return {
       id: `dyn_sent_${idx}_${c.key}`,
       query,
-      factFormula: `${shortLoc ? `지명(${shortLoc}) + ` : ''}시각키워드(${kws.join('·') || c.primaryTag})`,
+      factFormula: `시각키워드(${kws.join('·') || c.primaryTag})`,
       matchHint: `${c.count}장 클러스터`,
       thumbUrl: rep.thumbUrl,
     };

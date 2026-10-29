@@ -373,6 +373,14 @@ export interface PhotoItem {
   locationKo?: string;
   /** 로컬 시맨틱 캡션 (로컬 문장 조합기 팩트 원천) */
   captionKo?: string;
+  /** 영문 시맨틱 캡션 */
+  captionEn?: string;
+  /** 한국어 핵심 시각 키워드 배열 */
+  keywordsKo?: string[];
+  /** 온톨로지 핵심 태그 배열 */
+  ontologyPrimaryTags?: string[];
+  /** 온톨로지 보조 캡션 태그 배열 */
+  ontologyCaptionTags?: string[];
   /** [스펙 1] 지울 쓰레기가 아니라 [📁 스마트 서류함]으로 격상된 핵심 정보 자산(설명서·신분증·계약서·영수증 등) 여부 */
   isVaultDocument?: boolean;
   /** [스펙 1] 스마트 서류함 분류 라벨 (예: '조립 설명서·매뉴얼', '신분증·여권 사본', '결제·심사 문자 캡처') */

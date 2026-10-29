@@ -1,96 +1,159 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { cosineSimilarity } from '../services/aiEngine';
 import type { PhotoItem } from '../types/saysee';
 
 type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
 
-function matchPhotoQuery(p: PhotoItem, token: string): boolean {
-  const t = token.trim().toLowerCase();
+function dedupeByVisualScene(items: PhotoItem[], currentId?: string): PhotoItem[] {
+  const out: PhotoItem[] = [];
+  const seenKeys = new Set<string>();
+  for (const p of items) {
+    if (currentId && p.id === currentId) continue;
+    const key =
+      p.clusterId !== undefined
+        ? `cluster_${p.clusterId}`
+        : p.duplicateGroupId
+        ? `dup_${p.duplicateGroupId}`
+        : p.dhash && p.dhash !== '0'
+        ? `dhash_${p.dhash}`
+        : `id_${p.id}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+function isSoloPortraitPhoto(p: PhotoItem): boolean {
+  const text = `${p.tags.join(' ')} ${(p.keywordsKo ?? []).join(' ')} ${p.captionKo || ''}`.toLowerCase();
+  const hasSoloIndicator =
+    text.includes('1명') ||
+    text.includes('단독') ||
+    text.includes('독사진') ||
+    text.includes('셀카') ||
+    text.includes('프로필');
+  const hasGroupIndicator =
+    text.includes('단체') ||
+    text.includes('모임') ||
+    text.includes('대가족') ||
+    text.includes('친구들') ||
+    text.includes('동료들') ||
+    text.includes('어린이들이') ||
+    text.includes('식구가');
+  return hasSoloIndicator && !hasGroupIndicator;
+}
+
+function isNonSmilingPhoto(p: PhotoItem): boolean {
+  const cap = (p.captionKo || '').toLowerCase();
+  return (
+    cap.includes('웃지 않') ||
+    cap.includes('무표정') ||
+    cap.includes('진지한') ||
+    cap.includes('실루엣') ||
+    cap.includes('뒷모습')
+  );
+}
+
+export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
+  const t = token.trim().toLowerCase().replace(/^#/, '');
   if (!t) return true;
+  if (p.trashCategory === 'blurry' || p.trashCategory === 'screenshot' || p.trashCategory === 'memo') {
+    return false;
+  }
 
   const caption = (p.captionKo || '').toLowerCase();
-  const name = p.name.toLowerCase();
   const tagsStr = p.tags.join(' ').toLowerCase();
+  const kwStr = (p.keywordsKo ?? []).join(' ').toLowerCase();
+  const ontoStr = (p.ontologyPrimaryTags ?? []).join(' ').toLowerCase();
   const location = (p.locationKo || '').toLowerCase();
+  const combined = `${tagsStr} ${kwStr} ${ontoStr} ${caption} ${location}`;
 
-  // 1) 해변 / 바다 키워드
-  if (t === '해변' || t === '바다' || t === 'beach' || t === '백사장') {
+  // 1) 해변 / 바다 키워드 (실제 바다·해변·백사장·파도 장면만 엄격 매칭)
+  if (t === '해변' || t === '바다' || t === '바닷가' || t === 'beach' || t === '백사장' || t === '모래사장') {
     return (
-      caption.includes('해변') ||
-      caption.includes('바다') ||
-      caption.includes('백사장') ||
-      caption.includes('모래사장') ||
-      caption.includes('파도') ||
-      tagsStr.includes('해변') ||
-      tagsStr.includes('바다') ||
-      name.startsWith('trv_') ||
-      name.includes('beach') ||
-      name.includes('바다')
+      combined.includes('해변') ||
+      combined.includes('바다') ||
+      combined.includes('바닷가') ||
+      combined.includes('백사장') ||
+      combined.includes('모래사장') ||
+      combined.includes('파도')
     );
   }
 
-  // 2) 웃는 / 미소 키워드
-  if (t === '웃는' || t === '미소' || t === '웃음' || t === 'smile' || t === '환하게') {
+  // 2) 웃는 / 미소 키워드 (진지한 표정·무표정·실루엣·뒷모습 원천 배제)
+  if (t === '웃는' || t === '미소' || t === '웃음' || t === 'smile' || t === '환하게' || t === '해맑게') {
+    if (isNonSmilingPhoto(p)) return false;
     return (
-      caption.includes('웃') ||
-      caption.includes('미소') ||
-      caption.includes('환하게') ||
-      caption.includes('해맑') ||
-      tagsStr.includes('미소') ||
-      tagsStr.includes('웃음')
+      combined.includes('웃는') ||
+      combined.includes('웃고') ||
+      combined.includes('미소') ||
+      combined.includes('웃음') ||
+      combined.includes('환하게') ||
+      combined.includes('해맑게') ||
+      combined.includes('활짝 웃')
     );
   }
 
-  // 3) 오후 / 낮 / 햇살 키워드
-  if (t === '오후' || t === '낮' || t === '햇살' || t === '해질녘' || t === '노을') {
-    const timePart = p.date.split(' ')[1] || '';
-    const hour = parseInt(timePart.split(':')[0] || '', 10);
-    const isAfternoonTime = !Number.isNaN(hour) && hour >= 12;
+  // 3) 단체 / 모임 키워드 (1인 단독 사진 원천 배제)
+  if (t === '단체' || t === '단체사진' || t === '모임' || t === '일행' || t === '여럿') {
+    if (isSoloPortraitPhoto(p)) return false;
     return (
-      caption.includes('오후') ||
-      caption.includes('햇살') ||
-      caption.includes('해 질 녘') ||
-      caption.includes('노을') ||
-      caption.includes('낮') ||
-      tagsStr.includes('오후') ||
-      tagsStr.includes('노을') ||
-      isAfternoonTime
+      combined.includes('단체') ||
+      combined.includes('모임') ||
+      combined.includes('친구들') ||
+      combined.includes('동료들') ||
+      combined.includes('가족')
     );
   }
 
-  // 4) 야외 / 풍경 키워드
+  // 4) 오후 / 낮 / 햇살 / 노을 키워드
+  if (t === '오후' || t === '낮' || t === '햇살' || t === '해질녘' || t === '노을' || t === '일몰') {
+    if (t === '노을' || t === '일몰' || t === '해질녘') {
+      return combined.includes('노을') || combined.includes('일몰') || combined.includes('석양') || combined.includes('해질녘');
+    }
+    return (
+      combined.includes('오후') ||
+      combined.includes('햇살') ||
+      combined.includes('화창한') ||
+      combined.includes('해질녘') ||
+      combined.includes('노을') ||
+      combined.includes('낮') ||
+      combined.includes('야외')
+    );
+  }
+
+  // 5) 야외 / 풍경 / 자연 / 공원 키워드 (실내 스튜디오/거실/사무실 제외)
   if (t === '야외' || t === '풍경' || t === '자연' || t === '공원') {
+    if (combined.includes('실내') && !combined.includes('야외')) return false;
+    if (t === '공원') {
+      return combined.includes('공원') || combined.includes('잔디밭') || combined.includes('정원') || combined.includes('들판');
+    }
     return (
-      caption.includes('야외') ||
-      caption.includes('풍경') ||
-      caption.includes('공원') ||
-      caption.includes('자연') ||
-      tagsStr.includes('야외') ||
-      tagsStr.includes('풍경') ||
-      tagsStr.includes('공원')
+      combined.includes('야외') ||
+      combined.includes('풍경') ||
+      combined.includes('공원') ||
+      combined.includes('자연') ||
+      combined.includes('해변') ||
+      combined.includes('산') ||
+      combined.includes('호수')
     );
   }
 
-  // 5) 가족 / 인물 키워드
-  if (t === '가족' || t === '인물' || t === '아이' || t === '친구') {
+  // 6) 가족 키워드 (실제 가족·아이·부모·아기 사진만 매칭)
+  if (t === '가족') {
     return (
-      caption.includes('가족') ||
-      caption.includes('인물') ||
-      caption.includes('아이') ||
-      caption.includes('부모') ||
-      caption.includes('친구') ||
-      tagsStr.includes('가족') ||
-      tagsStr.includes('인물')
+      combined.includes('가족') ||
+      combined.includes('부모') ||
+      combined.includes('엄마') ||
+      combined.includes('아빠') ||
+      combined.includes('남매') ||
+      combined.includes('식구')
     );
   }
 
-  // 기본 검색: 캡션, 태그, 파일명, 위치
-  return (
-    caption.includes(t) ||
-    tagsStr.includes(t) ||
-    name.includes(t) ||
-    location.includes(t)
-  );
+  // 기본 키워드 검색: 시맨틱 태그·키워드·캡션·위치 일치
+  return combined.includes(t);
 }
 
 export const PhotoDetailModal: React.FC = () => {
@@ -99,6 +162,7 @@ export const PhotoDetailModal: React.FC = () => {
     selectedBurstGroup,
     setSelectedPhoto,
     photos,
+    duplicateGroups,
     toggleBookmark,
     openLocalFolder,
     pickBestInBurstPhotos,
@@ -107,61 +171,117 @@ export const PhotoDetailModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
   const [drillQuery, setDrillQuery] = useState('');
 
+  // 선택된 사진이 속한 실제 연사/중복 그룹 전체 조회
+  const resolvedBurstPhotos = useMemo(() => {
+    if (!selectedPhoto) return [];
+    if (selectedBurstGroup && selectedBurstGroup.length >= 2) {
+      return selectedBurstGroup.filter((p) => !p.quarantined);
+    }
+    if (selectedPhoto.duplicateGroupId) {
+      const grp = duplicateGroups.find((g) => g.groupId === selectedPhoto.duplicateGroupId);
+      if (grp) {
+        const map = new Map(photos.map((p) => [p.id, p]));
+        return grp.photoIds
+          .map((id) => map.get(id))
+          .filter((p): p is PhotoItem => Boolean(p && !p.quarantined));
+      }
+    }
+    if (selectedPhoto.clusterId !== undefined) {
+      const sameCluster = photos.filter(
+        (p) => !p.quarantined && p.clusterId === selectedPhoto.clusterId
+      );
+      if (sameCluster.length >= 2) return sameCluster;
+    }
+    return [selectedPhoto];
+  }, [selectedPhoto, selectedBurstGroup, duplicateGroups, photos]);
+
+  // 1번 탭: 이 날 찍은 사진 전체 (동일 장면 중복 사본은 대표 1장만 남겨 다양한 장면 노출)
   const sameDayPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
-    const active = photos.filter((p) => !p.quarantined && p.id !== selectedPhoto.id);
+    const active = photos.filter(
+      (p) =>
+        !p.quarantined &&
+        p.id !== selectedPhoto.id &&
+        p.trashCategory !== 'blurry' &&
+        p.trashCategory !== 'screenshot' &&
+        p.trashCategory !== 'memo'
+    );
+    const dedupedActive = dedupeByVisualScene(active, selectedPhoto.id).filter(
+      (p) => p.clusterId === undefined || p.clusterId !== selectedPhoto.clusterId
+    );
     const dayPrefix = selectedPhoto.date.split(' ')[0];
     const monthPrefix = dayPrefix.slice(0, 7);
-    const exactDay = active.filter((p) => p.date.startsWith(dayPrefix));
+    const exactDay = dedupedActive.filter((p) => p.date.startsWith(dayPrefix));
     if (exactDay.length >= 6) return exactDay.slice(0, 12);
-    const sameMonth = active.filter(
+    const sameMonth = dedupedActive.filter(
       (p) => !p.date.startsWith(dayPrefix) && p.date.startsWith(monthPrefix)
     );
     const combined = [...exactDay, ...sameMonth];
     if (combined.length >= 6) return combined.slice(0, 12);
-    const fallback = active.filter((p) => !combined.some((c) => c.id === p.id));
+    const fallback = dedupedActive.filter((p) => !combined.some((c) => c.id === p.id));
     return [...combined, ...fallback].slice(0, 12);
   }, [selectedPhoto, photos]);
 
-  const similarVisualPhotos = useMemo(() => {
+  // 2번 탭: 비슷한 피사체 사진 (768차원 벡터 코사인 유사도 + 핵심 피사체 카테고리 매칭)
+  const similarVisualWithScores = useMemo(() => {
     if (!selectedPhoto) return [];
-    const active = photos.filter((p) => !p.quarantined && p.id !== selectedPhoto.id);
-    const sameDayTopIds = new Set(sameDayPhotos.slice(0, 6).map((p) => p.id));
-    const primaryTag = selectedPhoto.tags[0];
+    const active = photos.filter(
+      (p) =>
+        !p.quarantined &&
+        p.id !== selectedPhoto.id &&
+        p.trashCategory !== 'blurry' &&
+        p.trashCategory !== 'screenshot' &&
+        p.trashCategory !== 'memo' &&
+        (selectedPhoto.clusterId === undefined || p.clusterId !== selectedPhoto.clusterId)
+    );
+    const deduped = dedupeByVisualScene(active, selectedPhoto.id);
+    const primaryTag = selectedPhoto.tags[0] || '';
+    const selKwSet = new Set((selectedPhoto.keywordsKo ?? []).map((k) => k.toLowerCase()));
 
-    const scored = active.map((p, idx) => {
-      let score = 0;
+    const scored = deduped.map((p) => {
+      let vecSim = 0.68;
+      if (selectedPhoto.vec && p.vec && selectedPhoto.vec.length === p.vec.length) {
+        vecSim = cosineSimilarity(selectedPhoto.vec, p.vec);
+      }
+      const pPrimary = p.tags[0] || '';
+      const samePrimary = primaryTag && pPrimary === primaryTag ? 0.14 : 0;
       const sharedTags = p.tags.filter((t) => selectedPhoto.tags.includes(t)).length;
-      score += sharedTags * 15;
-      if (primaryTag && p.tags.includes(primaryTag)) score += 10;
-      if (selectedPhoto.clusterId !== undefined && p.clusterId === selectedPhoto.clusterId) {
-        score += 8;
-      }
-      // 1번 탭(이 날 찍은 사진) 상단 6장과 겹치지 않는 다른 날짜/장면의 유사 피사체를 우선 배치하여 탭 전환 시 즉각적인 시각 변화 제공
-      if (!sameDayTopIds.has(p.id)) {
-        score += 25;
-      }
-      score += (idx % 5);
-      return { photo: p, score };
+      const sharedKws = (p.keywordsKo ?? []).filter((k) => selKwSet.has(k.toLowerCase())).length;
+
+      const totalScore = vecSim + samePrimary + sharedTags * 0.04 + sharedKws * 0.03;
+      const pct = Math.min(98, Math.max(82, Math.round(78 + totalScore * 18)));
+      return { photo: p, score: totalScore, simPct: pct };
     });
 
     scored.sort((a, b) => b.score - a.score);
-    return scored.map((s) => s.photo).slice(0, 12);
-  }, [selectedPhoto, photos, sameDayPhotos]);
+    return scored.slice(0, 12);
+  }, [selectedPhoto, photos]);
 
+  const similarVisualPhotos = useMemo(
+    () => similarVisualWithScores.map((s) => s.photo),
+    [similarVisualWithScores]
+  );
+
+  // 3번 탭: 2차 자연어 좁혀가기 (결과 내 재검색)
   const drillDownPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
-    const active = photos.filter((p) => !p.quarantined && p.id !== selectedPhoto.id);
+    const active = photos.filter(
+      (p) =>
+        !p.quarantined &&
+        p.id !== selectedPhoto.id &&
+        p.trashCategory !== 'blurry' &&
+        p.trashCategory !== 'screenshot' &&
+        p.trashCategory !== 'memo'
+    );
+    const dedupedActive = dedupeByVisualScene(active, selectedPhoto.id);
+
     if (!drillQuery.trim()) {
-      // 2번 탭과 1번 탭의 교차 풀
       const base = [
-        ...similarVisualPhotos.slice(3),
-        ...sameDayPhotos.slice(3),
-        ...similarVisualPhotos.slice(0, 3),
-        ...sameDayPhotos.slice(0, 3),
-        ...active,
+        ...similarVisualPhotos,
+        ...sameDayPhotos,
+        ...dedupedActive,
       ];
-      return Array.from(new Map(base.map((p) => [p.id, p])).values()).slice(0, 12);
+      return dedupeByVisualScene(base, selectedPhoto.id).slice(0, 12);
     }
 
     const tokens = drillQuery
@@ -169,19 +289,14 @@ export const PhotoDetailModal: React.FC = () => {
       .split(/[\s,#·]+/)
       .filter(Boolean);
 
-    // 전체 활성 사진 풀에서 의미적으로 정확하게 일치하는 사진만 필터링
-    const matched = active.filter((p) => {
-      return tokens.every((tk) => matchPhotoQuery(p, tk));
-    });
-
+    const matched = dedupedActive.filter((p) => tokens.every((tk) => matchPhotoQuery(p, tk)));
     return matched.slice(0, 12);
   }, [selectedPhoto, photos, sameDayPhotos, similarVisualPhotos, drillQuery]);
 
   if (!selectedPhoto) return null;
 
   const dayString = selectedPhoto.date.split(' ')[0];
-  const activeBurstPhotos = (selectedBurstGroup ?? []).filter((p) => !p.quarantined);
-  const hasBurstGroup = activeBurstPhotos.length >= 2;
+  const hasBurstGroup = resolvedBurstPhotos.length >= 2;
 
   const currentStripPhotos =
     activeTab === 'same-day'
@@ -214,7 +329,7 @@ export const PhotoDetailModal: React.FC = () => {
                 </h3>
                 {hasBurstGroup && (
                   <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-primary-container/25 dark:text-primary-container border border-teal-700/40 dark:border-primary-container/50 font-label-sm text-[11px] font-extrabold shrink-0">
-                    ❐ {activeBurstPhotos.length}장 연사 묶음
+                    ❐ {resolvedBurstPhotos.length}장 연사 묶음
                   </span>
                 )}
               </div>
@@ -262,31 +377,31 @@ export const PhotoDetailModal: React.FC = () => {
                   ✓ 원본 1장 안전하게 보존됨
                 </span>
                 <span className="font-label-md text-[13px] text-on-surface font-bold">
-                  함께 묶인 연사 {activeBurstPhotos.length}장 비교 — 마음에 드는 1장을 골라보세요
+                  함께 묶인 연사 {resolvedBurstPhotos.length}장 비교 — 마음에 드는 1장을 골라보세요
                 </span>
               </div>
 
               <button
                 onClick={() => {
-                  void pickBestInBurstPhotos(activeBurstPhotos, selectedPhoto.id);
+                  void pickBestInBurstPhotos(resolvedBurstPhotos, selectedPhoto.id);
                   setSelectedPhoto(selectedPhoto, null);
                 }}
                 className="px-3.5 py-1.5 rounded-full bg-primary-container text-on-primary-container font-label-sm text-[12px] font-extrabold flex items-center gap-1 shadow-[0_0_14px_rgba(0,229,255,0.35)] hover:opacity-95 transition-all"
               >
                 <span className="material-symbols-outlined text-[15px]">check_circle</span>
                 <span>
-                  현재 사진 1장만 남기고 나머지 {activeBurstPhotos.length - 1}장 OS 기본 [휴지통] 정리 (Pick)
+                  현재 사진 1장만 남기고 나머지 {resolvedBurstPhotos.length - 1}장 OS 기본 [휴지통] 정리 (Pick)
                 </span>
               </button>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-              {activeBurstPhotos.map((bp, idx) => {
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+              {resolvedBurstPhotos.slice(0, 6).map((bp, idx) => {
                 const isCurrent = bp.id === selectedPhoto.id;
                 return (
                   <div
                     key={bp.id}
-                    onClick={() => setSelectedPhoto(bp, activeBurstPhotos)}
+                    onClick={() => setSelectedPhoto(bp, resolvedBurstPhotos)}
                     className={`relative rounded-xl overflow-hidden aspect-[4/3] cursor-pointer border-2 transition-all ${
                       isCurrent
                         ? 'border-primary-container ring-2 ring-primary-container/40 scale-[1.02]'
@@ -325,19 +440,26 @@ export const PhotoDetailModal: React.FC = () => {
               <span className="font-label-mono text-[11px] text-teal-700 dark:text-primary-container uppercase tracking-wider font-extrabold">
                 CONTEXTUAL SNIPING DRILL-DOWN (3.2절)
               </span>
+              {selectedPhoto.captionKo && (
+                <p className="text-[12px] text-on-surface-variant leading-snug bg-surface-container/60 px-3 py-2 rounded-xl border border-outline-variant/20">
+                  {selectedPhoto.captionKo}
+                </p>
+              )}
               <div className="flex flex-wrap gap-1.5">
-                {selectedPhoto.tags.map((t) => (
-                  <span
-                    key={t}
-                    onClick={() => {
-                      setActiveTab('drill-down');
-                      setDrillQuery(t.replace(/^#/, ''));
-                    }}
-                    className="cursor-pointer px-2.5 py-1 rounded-full bg-primary-container/15 hover:bg-primary-container/30 text-teal-800 dark:text-primary font-label-mono text-[11px] font-bold border border-primary-container/30 transition-colors"
-                  >
-                    {t}
-                  </span>
-                ))}
+                {selectedPhoto.tags
+                  .filter((t) => !t.includes('원본보존') && !t.includes('연사·중복'))
+                  .map((t) => (
+                    <span
+                      key={t}
+                      onClick={() => {
+                        setActiveTab('drill-down');
+                        setDrillQuery(t.replace(/^#/, ''));
+                      }}
+                      className="cursor-pointer px-2.5 py-1 rounded-full bg-primary-container/15 hover:bg-primary-container/30 text-teal-800 dark:text-primary font-label-mono text-[11px] font-bold border border-primary-container/30 transition-colors"
+                    >
+                      {t}
+                    </span>
+                  ))}
               </div>
             </div>
 
@@ -471,30 +593,36 @@ export const PhotoDetailModal: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-              {currentStripPhotos.slice(0, 6).map((item, idx) => (
-                <div
-                  key={`${activeTab}_${item.id}`}
-                  onClick={() => setSelectedPhoto(item)}
-                  className="group cursor-pointer rounded-xl overflow-hidden bg-surface-container aspect-square relative border border-outline-variant/30 hover:border-primary-container shadow-sm"
-                >
-                  <img
-                    src={item.thumbUrl}
-                    alt={item.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
-                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white font-label-mono text-[10px] font-bold">
-                    {activeTab === 'same-day' && `📅 ${item.date.split(' ')[0].slice(5)}`}
-                    {activeTab === 'similar-visual' && `🐶 유사 ${96 - idx * 3}%`}
-                    {activeTab === 'drill-down' &&
-                      (drillQuery.trim()
-                        ? `🔎 '${drillQuery.trim()}'`
-                        : item.tags[0] || '#연관')}
+              {currentStripPhotos.slice(0, 6).map((item, idx) => {
+                const simPct =
+                  activeTab === 'similar-visual'
+                    ? similarVisualWithScores[idx]?.simPct ?? 95 - idx * 2
+                    : 95;
+                return (
+                  <div
+                    key={`${activeTab}_${item.id}`}
+                    onClick={() => setSelectedPhoto(item)}
+                    className="group cursor-pointer rounded-xl overflow-hidden bg-surface-container aspect-square relative border border-outline-variant/30 hover:border-primary-container shadow-sm"
+                  >
+                    <img
+                      src={item.thumbUrl}
+                      alt={item.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white font-label-mono text-[10px] font-bold">
+                      {activeTab === 'same-day' && `📅 ${item.date.split(' ')[0].slice(5)}`}
+                      {activeTab === 'similar-visual' && `🐶 유사 ${simPct}%`}
+                      {activeTab === 'drill-down' &&
+                        (drillQuery.trim()
+                          ? `🔎 '${drillQuery.trim()}'`
+                          : item.tags[0] || '#연관')}
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-black/75 font-label-mono text-[10px] text-white font-semibold truncate">
+                      {item.name}
+                    </div>
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-black/75 font-label-mono text-[10px] text-white font-semibold truncate">
-                    {item.name}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
