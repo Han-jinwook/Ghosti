@@ -338,6 +338,16 @@ export const MobileAppView: React.FC = () => {
               <GhostiTopRightHubAnchor themeMode={themeMode} />
               <button
                 type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
+                }}
+                title="공식 쇼룸 대문으로 이동"
+                className="px-2 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-sm text-[10px] font-extrabold shrink-0"
+              >
+                🏠 대문
+              </button>
+              <button
+                type="button"
                 onClick={toggleThemeMode}
                 title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
                 aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}

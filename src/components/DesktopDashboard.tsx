@@ -697,6 +697,21 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
+                  }}
+                  title="검색어 빌드업용 공식 쇼룸 및 다운로드 대문 페이지로 이동"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-extrabold text-[12px] transition-all cursor-pointer ${
+                    themeMode === 'light'
+                      ? 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
+                      : 'bg-teal-950/80 text-[#00F0B5] border border-teal-500/40 hover:bg-teal-900/60 shadow-[0_0_15px_rgba(0,240,181,0.2)]'
+                  }`}
+                >
+                  <span>🏠</span>
+                  <span className="hidden sm:inline">공식 쇼룸 대문</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     const shareText =
                       '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
