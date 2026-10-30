@@ -10,7 +10,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 exe 버전과 반드시 일치시킬 것) */
-export const LATEST_Z_CORE_VERSION = '2.3.2';
+export const LATEST_Z_CORE_VERSION = '2.3.3';
 
 /** 연결된 Z-코어가 최신 배포 버전보다 낮은지 판정 (버전 정보가 없으면 구버전으로 간주) */
 export function isZCoreOutdated(version: string | null | undefined): boolean {

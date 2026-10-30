@@ -1360,7 +1360,7 @@ export const DesktopDashboard: React.FC = () => {
 
       {/* ─────────────── 서브메뉴 4번: AI 설정몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 ─────────────── */}
       {desktopTab === 'sync' && (
-        <main className="flex-1 w-full max-w-[1280px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
+        <main className="flex-1 w-full max-w-[1640px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
           {/* 라운지별 전용 상단 설정 섹션 (AI 설정몬스터 / 가족 무수락 초대·강퇴 / 동호·동창회 관리 / 업무 공유(S:) 관리) */}
           <LoungeCustomSettingsHeader />
 

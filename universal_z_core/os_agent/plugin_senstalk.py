@@ -1,17 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[내장 소프트웨어 플러그인 2] plugin_senstalk.py (v3.0 — sensebot.py 2,757줄 원본 100% 무손실 이식판)
+[내장 소프트웨어 플러그인 2] plugin_senstalk.py (v3.3 — sensebot.py v3.3 100% 무손실 동기화판)
 - 센스톡(SensTalk) 6대 메신저(카카오톡·라인·텔레그램·왓츠앱·위챗) 엔터 1회 연속 발송 엔진
 - 귀신같이 단일 표준 포트(127.0.0.1:5199)의 Merlin_Z_Core 내부에서 직결 작동합니다.
-- 이식된 핵심 기능 (누락 0%):
-  1. 카카오톡 친구 탭 강제 전환(Alt+1 / ContactListView) + Ctrl+F 자동 검색 + GDI 픽셀 분석 동명이인(2명 이상) 감지 안전 대기
-  2. 1차 검색어('/' 앞 별명+연월) 실패 시 2차 순수 별명 자동 폴백 검색 및 1:1 대화방(RICHEDIT50W) 자동 오픈·포커스
-  3. 다중 블록(B1 텍스트 + B2 사진 CF_DIB 비트맵 클립보드 팝업 + B3 카톡 이모티콘 플러스 SendInput 추천창 방향키 ↑→↓ 매크로) 순차 장전
-  4. 유저 [Enter] Key-Up 0.01초 감지 -> 다음 블록 연속 장전 -> 최종 블록 전송 시 0.35~0.75초 휴먼 지터 후 ESC 창 닫기 -> 다음 수신자 자동 장전
-  5. 글로벌 5대 메신저(라인·텔레그램·왓츠앱·위챗) 딥링크 및 데스크톱/웹 창 핸들 제어
-  6. 범용 타겟팅 조건식(is_recipient_match_condition) 및 개인화 변수(#{이름}, #{직함} 등) 동적 치환
-  7. 유휴 시 CPU 점유율 0.0% 유지: /sync, /start, /dispatch 호출 시 On-Demand로 [Enter]/[F8]/[F9] 리스너 스레드 기동
 """
 
 from __future__ import annotations
@@ -58,11 +50,11 @@ except ImportError:
     win32clipboard = None
     win32con = None
 
-SENSEBOT_VERSION = "3.1"
+SENSEBOT_VERSION = "3.3"
 
 PLUGIN_METADATA = {
     "pluginId": "senstalk",
-    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v3.1)",
+    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v3.3)",
     "version": SENSEBOT_VERSION,
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
@@ -173,6 +165,41 @@ CURRENT_CHAT_HWND = None         # 현재 대상의 카카오톡 1:1 대화방 H
 CURRENT_POPUP_HWND = None        # 카카오톡 [클립보드 이미지 전송] 팝업 모달 HWND
 LAST_EVENT = None
 STATE_LOCK = threading.Lock()
+_DISPATCH_SEQ_ID = 0             # 장전 세대(Generation) 시퀀스 번호 (중복/구세대 스레드 즉시 폐기용)
+_DISPATCH_LOCK = threading.Lock() # load_and_dispatch_next 단일 스레드 직렬화 뮤텍스
+_PASTE_LOCK = threading.Lock()   # 입력창 붙여넣기(WM_PASTE) 직렬화 뮤텍스
+_LAST_PASTED_INFO = {"hwnd": 0, "msg": "", "time": 0.0}
+
+def _pause_other_local_engine():
+    """동일 PC에서 포트 5199(Merlin_Z_Core 내장 플러그인)가 동시 가동 중일 때 중복 엔터 감지/붙여넣기 원천 차단을 위해 즉시 일시정지 신호 전송"""
+    def _task():
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "http://127.0.0.1:28888/pause",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=0.25) as _:
+                pass
+        except Exception:
+            pass
+    threading.Thread(target=_task, daemon=True).start()
+
+def _get_richedit_text(re_hwnd) -> str:
+    """카카오톡 대화창 RICHEDIT50W 내부의 현재 텍스트를 64비트 안전 방식으로 조회"""
+    try:
+        if not re_hwnd or not user32.IsWindow(re_hwnd):
+            return ""
+        length = user32.SendMessageW(wintypes.HWND(re_hwnd), 0x000E, wintypes.WPARAM(0), wintypes.LPARAM(0))
+        if not length or length <= 0:
+            return ""
+        buf = ctypes.create_unicode_buffer(int(length) + 8)
+        user32.SendMessageW(wintypes.HWND(re_hwnd), 0x000D, wintypes.WPARAM(int(length) + 4), buf)
+        return buf.value or ""
+    except Exception:
+        return ""
 
 # ==========================================
 # 3. 윈도우 OS 데스크톱 및 포커스 헬퍼
@@ -303,63 +330,109 @@ def ensure_friends_tab(kakao_hwnd):
 
     return search_edit_hwnd
 
-def paste_message_to_chat(chat_hwnd, message: str):
-    """카카오톡 대화방 입력창(RICHEDIT50W)에 메시지를 100% 확실하게 복사/주입하고 입력 포커스 활성화"""
-    force_foreground(chat_hwnd)
-    time.sleep(random.uniform(0.09, 0.16))
-    set_clipboard_text(message)
-    time.sleep(random.uniform(0.04, 0.08))
+def paste_message_to_chat(chat_hwnd, message: str, expected_seq_id: int = None):
+    """카카오톡 대화방 입력창(RICHEDIT50W)에 메시지를 100% 확실하게 복사/주입하고 입력 포커스 활성화 (동시 호출 직렬화 및 중복 붙여넣기 원천 차단)"""
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+        return
+    with _PASTE_LOCK:
+        if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+            return
+        now_ts = time.time()
+        if message and _LAST_PASTED_INFO["hwnd"] == chat_hwnd and _LAST_PASTED_INFO["msg"] == message and (now_ts - _LAST_PASTED_INFO["time"] < 12.0):
+            print("   [중복 입력 방지] 동일 대화창에 동일한 메시지가 이미 장전되어 중복 붙여넣기를 건너뜁니다.")
+            return
 
-    # 대화창 내부의 RICHEDIT50W 컨트롤 탐색
-    re_hwnds = []
-    def find_re(h, lp):
-        c = ctypes.create_unicode_buffer(256)
-        user32.GetClassNameW(h, c, 256)
-        if 'RICHEDIT' in c.value:
-            re_hwnds.append(h)
-        return True
+        # 대화창 내부의 RICHEDIT50W 컨트롤 탐색
+        re_hwnds = []
+        def find_re(h, lp):
+            c = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(h, c, 256)
+            if 'RICHEDIT' in c.value:
+                re_hwnds.append(h)
+            return True
 
-    WNDENUM = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    user32.EnumChildWindows(chat_hwnd, WNDENUM(find_re), 0)
+        WNDENUM = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        user32.EnumChildWindows(chat_hwnd, WNDENUM(find_re), 0)
 
-    if re_hwnds:
-        re_hwnd = re_hwnds[0]
-        # 1. 입력창 내부를 클릭하여 키보드 포커스를 100% 안착시키고 시스템 메뉴 모드 원천 해제
-        rect_re = wintypes.RECT()
-        user32.GetWindowRect(re_hwnd, ctypes.byref(rect_re))
-        click_x = rect_re.left + 35
-        click_y = rect_re.top + 15
-        user32.SetCursorPos(click_x, click_y)
-        time.sleep(random.uniform(0.015, 0.035))
-        user32.mouse_event(0x0002, 0, 0, 0, 0) # LEFTDOWN
-        time.sleep(random.uniform(0.015, 0.035))
-        user32.mouse_event(0x0004, 0, 0, 0, 0) # LEFTUP
-        time.sleep(random.uniform(0.04, 0.08))
+        norm_msg = (message or "").replace('\r\n', '\n').replace('\r', '\n').strip()
+        if re_hwnds and norm_msg:
+            existing_txt = _get_richedit_text(re_hwnds[0]).replace('\r\n', '\n').replace('\r', '\n').strip()
+            if existing_txt == norm_msg:
+                print("   [중복 입력 방지] 대화창 입력란에 이미 동일한 메시지가 입력되어 있어 재붙여넣기를 건너뜁니다.")
+                force_foreground(chat_hwnd)
+                _LAST_PASTED_INFO["hwnd"] = chat_hwnd
+                _LAST_PASTED_INFO["msg"] = message
+                _LAST_PASTED_INFO["time"] = time.time()
+                return
 
-        # 2. AttachThreadInput으로 SetFocus 명시
-        cur_tid = kernel32.GetCurrentThreadId()
-        chat_tid = user32.GetWindowThreadProcessId(chat_hwnd, None)
-        user32.AttachThreadInput(cur_tid, chat_tid, True)
-        user32.SetFocus(re_hwnd)
-        user32.AttachThreadInput(cur_tid, chat_tid, False)
+        force_foreground(chat_hwnd)
+        time.sleep(random.uniform(0.08, 0.14))
+        if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+            return
+        set_clipboard_text(message)
+        time.sleep(random.uniform(0.04, 0.07))
 
-        # 3. Ctrl+A ➔ Delete로 혹시 남아있을 수 있는 placeholder 텍스트 비우기
-        press_hotkey(VK_CONTROL, 0x41) # Ctrl + A
-        time.sleep(random.uniform(0.03, 0.06))
-        press_key(0x2E) # Delete
-        time.sleep(random.uniform(0.04, 0.08))
+        if re_hwnds:
+            re_hwnd = re_hwnds[0]
+            # 1. 입력창 내부를 클릭하여 키보드 포커스를 100% 안착시키고 시스템 메뉴 모드 원천 해제
+            rect_re = wintypes.RECT()
+            user32.GetWindowRect(re_hwnd, ctypes.byref(rect_re))
+            click_x = rect_re.left + 35
+            click_y = rect_re.top + 15
+            user32.SetCursorPos(click_x, click_y)
+            time.sleep(random.uniform(0.015, 0.035))
+            user32.mouse_event(0x0002, 0, 0, 0, 0) # LEFTDOWN
+            time.sleep(random.uniform(0.015, 0.035))
+            user32.mouse_event(0x0004, 0, 0, 0, 0) # LEFTUP
+            time.sleep(random.uniform(0.04, 0.07))
 
-        # 4. 키보드 Ctrl + V로 메시지 붙여넣기 (카카오톡 EVA 프레임워크가 텍스트 입력을 인지하여 '전송' 버튼을 노란색으로 활성화!)
-        if message:
+            # 2. AttachThreadInput으로 SetFocus 명시
+            cur_tid = kernel32.GetCurrentThreadId()
+            chat_tid = user32.GetWindowThreadProcessId(chat_hwnd, None)
+            user32.AttachThreadInput(cur_tid, chat_tid, True)
+            user32.SetFocus(re_hwnd)
+            user32.AttachThreadInput(cur_tid, chat_tid, False)
+
+            if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+                return
+
+            # 3. 64비트 안전 WM_SETTEXT('') + EM_SETSEL(0, -1) + WM_CLEAR 및 Backspace/Delete로 잔여 텍스트 100% 완전 소거
+            empty_buf = ctypes.create_unicode_buffer("")
+            user32.SendMessageW(wintypes.HWND(re_hwnd), 0x000C, wintypes.WPARAM(0), empty_buf)          # WM_SETTEXT ''
+            user32.SendMessageW(wintypes.HWND(re_hwnd), 0x00B1, wintypes.WPARAM(0), wintypes.LPARAM(-1)) # EM_SETSEL all (64-bit -1)
+            user32.SendMessageW(wintypes.HWND(re_hwnd), 0x0303, wintypes.WPARAM(0), wintypes.LPARAM(0))  # WM_CLEAR
+            press_key(0x08) # Backspace
+            time.sleep(random.uniform(0.025, 0.05))
+            press_key(0x2E) # Delete
+            time.sleep(random.uniform(0.03, 0.06))
+
+            if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+                return
+
+            # 4. WM_PASTE(0x0302) 메시지로 한/영 및 Ctrl 키 상태와 무관하게 100% 무결점 단일 붙여넣기
+            if message:
+                user32.SendMessageW(wintypes.HWND(re_hwnd), 0x0302, wintypes.WPARAM(0), wintypes.LPARAM(0)) # WM_PASTE
+                time.sleep(random.uniform(0.09, 0.15))
+                # 5. 사후 무결성 검증: 혹시라도 기존 텍스트와 합쳐져 2회 중복 입력되었는지 즉시 확인 후 1회분으로 강제 교정!
+                after_txt = _get_richedit_text(re_hwnd).replace('\r\n', '\n').replace('\r', '\n').strip()
+                if norm_msg and len(after_txt) > len(norm_msg) + 4:
+                    msg_buf = ctypes.create_unicode_buffer(message)
+                    user32.SendMessageW(wintypes.HWND(re_hwnd), 0x000C, wintypes.WPARAM(0), msg_buf)
+                    user32.SendMessageW(wintypes.HWND(re_hwnd), 0x00B1, wintypes.WPARAM(len(message)), wintypes.LPARAM(len(message)))
+                    print("   [무결성 자동 교정] 입력창 중복 텍스트 감지 즉시 1회분 단일 본문으로 교정 완료!")
+                _LAST_PASTED_INFO["hwnd"] = chat_hwnd
+                _LAST_PASTED_INFO["msg"] = message
+                _LAST_PASTED_INFO["time"] = time.time()
+
+            # 6. 혹시 모를 시스템 메뉴 상태 완벽 취소
+            user32.SendMessageW(wintypes.HWND(chat_hwnd), 0x001F, wintypes.WPARAM(0), wintypes.LPARAM(0)) # WM_CANCELMODE
+        elif message:
+            # 보조: 키보드 Ctrl + V
             press_hotkey(VK_CONTROL, VK_V)
-        time.sleep(random.uniform(0.14, 0.24))
-
-        # 5. 혹시 모를 시스템 메뉴 상태 완벽 취소
-        user32.SendMessageW(chat_hwnd, 0x001F, 0, 0) # WM_CANCELMODE
-    else:
-        # 보조: 키보드 Ctrl + V
-        press_hotkey(VK_CONTROL, VK_V)
-        time.sleep(random.uniform(0.12, 0.20))
+            time.sleep(random.uniform(0.12, 0.20))
+            _LAST_PASTED_INFO["hwnd"] = chat_hwnd
+            _LAST_PASTED_INFO["msg"] = message
+            _LAST_PASTED_INFO["time"] = time.time()
 
 def set_clipboard_text(text: str) -> bool:
     CF_UNICODETEXT = 13
@@ -791,7 +864,7 @@ def find_whatsapp_window():
         user32.EnumWindows(WNDENUM(cb), 0)
     return w_hwnd
 
-def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
+def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict, expected_seq_id: int = None):
     """
     채널별 최적화된 방식으로 대화방을 열고 첫 번째 블록(텍스트/사진)을 장전
     """
@@ -802,9 +875,11 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
     b_type = first_block.get("type", "text")
 
     if channel == "kakao":
-        chat_hwnd, pre_opened = open_or_focus_chat_window(name, fallback_nickname=nickname)
+        chat_hwnd, pre_opened = open_or_focus_chat_window(name, fallback_nickname=nickname, expected_seq_id=expected_seq_id)
+        if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+            return None, False
         if chat_hwnd:
-            dispatch_single_block(chat_hwnd, first_block)
+            dispatch_single_block(chat_hwnd, first_block, expected_seq_id=expected_seq_id)
         return chat_hwnd, pre_opened
 
     elif channel == "telegram":
@@ -1144,7 +1219,7 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
 # ==========================================
 # 4. 일일 발송 카운트 관리
 # ==========================================
-STATS_FILE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Merlin", "senstalk_bot_stats.json")
+STATS_FILE = os.path.join(os.path.dirname(__file__), "bot_stats.json")
 DAILY_LIMIT = 500
 
 def get_today_stats():
@@ -1330,31 +1405,37 @@ def check_kakao_search_result_count(kakao_hwnd):
         except Exception:
             scale = 1.0
 
-        r1_top = int(35 * scale)
-        r1_bottom = int(80 * scale)
-        r2_top = int(90 * scale)
-        r2_bottom = int(135 * scale)
-        col_right = min(w, int(200 * scale))
+        r1_top = int(28 * scale)
+        r1_bottom = min(h, int(80 * scale))
+        r2_top = int(88 * scale)
+        r2_bottom = min(h, int(140 * scale))
+        col_right = min(w, int(220 * scale))
         col_left = int(20 * scale)
 
-        # 1번째 행 영역 (프로필/이름 픽셀 검사)
+        # 텍스트/프로필 진한 픽셀(< 185) 검사: 첫 번째 행의 선택 하이라이트 회색 배경(RGB 237,237,237) 오탐지 원천 차단!
         crop1 = img.crop((col_left, r1_top, col_right, r1_bottom))
-        non_white1 = sum(1 for pix in crop1.getdata() if pix[0] < 235 or pix[1] < 235 or pix[2] < 235)
+        dark1 = sum(1 for pix in crop1.getdata() if pix[0] < 185 or pix[1] < 185 or pix[2] < 185)
 
-        # 2번째 행 영역 (두 번째 친구 존재 여부 검사)
-        crop2 = img.crop((col_left, r2_top, col_right, r2_bottom))
-        non_white2 = sum(1 for pix in crop2.getdata() if pix[0] < 235 or pix[1] < 235 or pix[2] < 235)
-
-        if non_white1 < 50:
+        if dark1 < 25:
             return 0
-        if non_white2 < 50:
+
+        # 2번째 행 영역 검사 (이름 텍스트의 진한 글자 픽셀 < 130 및 프로필/상태메시지 픽셀 < 185 동시 검증)
+        if r2_top >= h - 10:
+            return 1
+        crop2 = img.crop((col_left, r2_top, col_right, r2_bottom))
+        dark2 = sum(1 for pix in crop2.getdata() if pix[0] < 185 or pix[1] < 185 or pix[2] < 185)
+        text_col_left = min(w - 1, int(75 * scale))
+        crop2_text = img.crop((text_col_left, r2_top, col_right, r2_bottom))
+        bold_text2 = sum(1 for pix in crop2_text.getdata() if pix[0] < 125 and pix[1] < 125 and pix[2] < 125)
+
+        if dark2 < 35 or bold_text2 < 15:
             return 1
         return 2
     except Exception as e:
         print(f"[카카오톡 친구 검색 분석 경고] {e}")
         return -1
 
-def wait_for_user_to_open_chat(kakao_hwnd, target_name: str, timeout_sec: float = 180.0):
+def wait_for_user_to_open_chat(kakao_hwnd, target_name: str, timeout_sec: float = 180.0, expected_seq_id: int = None):
     """
     친구 검색 결과가 복수(동명이인/유사명단)일 때 봇이 임의로 첫 번째 방을 열지 않고
     유저가 마우스로 직접 원하는 대화방을 열 때까지 멈추고 안전 대기.
@@ -1388,14 +1469,16 @@ def wait_for_user_to_open_chat(kakao_hwnd, target_name: str, timeout_sec: float 
     last_print = 0
 
     while time.time() - start_wait < timeout_sec:
-        # 유저가 웹 UI 등에서 일시정지(Pause) 또는 리셋(Reset)한 경우
-        if not BOT_RUNNING:
-            print("⏹️ 발송 엔진이 정지되어 대기를 종료합니다.")
+        # 유저가 웹 UI 등에서 일시정지(Pause), 패스(Skip) 또는 리셋(Reset)한 경우 즉시 대기 종료
+        if not BOT_RUNNING or (expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID):
+            print("⏹️ 발송 엔진 상태가 변경(정지/패스)되어 이전 선택 대기를 종료합니다.")
             return None
 
         # 유저가 카카오톡에서 대화방을 열었는지 감지 (전면 창이 1:1 대화방인지)
         fg_hwnd = GetForegroundWindow()
         if fg_hwnd and fg_hwnd != kakao_hwnd and is_chat_window(fg_hwnd):
+            if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+                return None
             t = ctypes.create_unicode_buffer(512)
             user32.GetWindowTextW(fg_hwnd, t, 512)
             opened_title = t.value.strip()
@@ -1428,7 +1511,7 @@ def wait_for_user_to_open_chat(kakao_hwnd, target_name: str, timeout_sec: float 
         }
     return None
 
-def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str = ""):
+def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str = "", expected_seq_id: int = None):
     """
     카카오톡 친구 탭에서 특정 키워드로 검색 후 1:1 대화방 오픈 시도
     - 단일 결과(1명): 자동으로 [Enter] 타건하여 1:1 대화방 즉시 오픈
@@ -1438,9 +1521,13 @@ def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str 
     clean_kw = search_keyword.strip()
     if not clean_kw:
         return None
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+        return None
 
     # 친구 탭 보장 및 이전 검색어 초기화 (ESC x 2 포함)
     search_edit = ensure_friends_tab(kakao_hwnd)
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+        return None
     force_foreground(kakao_hwnd)
     time.sleep(random.uniform(0.06, 0.12))
 
@@ -1452,11 +1539,18 @@ def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str 
     press_hotkey(VK_CONTROL, VK_F)
     time.sleep(random.uniform(0.08, 0.14))
 
-    # 검색어 입력 (Ctrl+V 1회)
+    # 검색어 입력 (WM_PASTE 또는 Ctrl+V 1회)
     set_clipboard_text(clean_kw)
     time.sleep(random.uniform(0.04, 0.08))
-    press_hotkey(VK_CONTROL, VK_V)
+    if search_edit and user32.IsWindow(search_edit):
+        user32.SendMessageW(search_edit, 0x000C, 0, '') # WM_SETTEXT ''
+        user32.SendMessageW(search_edit, 0x0302, 0, 0)  # WM_PASTE
+    else:
+        press_hotkey(VK_CONTROL, VK_V)
     time.sleep(random.uniform(0.40, 0.50)) # 카카오톡 검색 결과 렌더링 대기
+
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+        return None
 
     # ⭐️ [핵심] 검색 결과 개수 정밀 판별 (0건 vs 1건 vs 2건 이상 복수)
     result_count = check_kakao_search_result_count(kakao_hwnd)
@@ -1465,11 +1559,14 @@ def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str 
         # ⚠️ 복수(2명 이상) 검색 결과 감지!
         # 첫 번째 친구를 무자비하게 열지 않고, 유저가 마우스로 직접 선택할 때까지 선택 대기!
         target_disp = full_name_ref or clean_kw
-        chat_hwnd = wait_for_user_to_open_chat(kakao_hwnd, target_disp)
+        chat_hwnd = wait_for_user_to_open_chat(kakao_hwnd, target_disp, expected_seq_id=expected_seq_id)
         return chat_hwnd
     elif result_count == 0:
         # 검색 결과 0건 -> 불필요한 엔터 타건을 방지하고 즉시 None 반환
         print(f"[카카오톡 친구 검색] '{clean_kw}' 검색 결과 0건 (목록 없음)")
+        return None
+
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
         return None
 
     # result_count == 1 (단일 결과) 또는 -1 (판별 불가 fallback)인 경우:
@@ -1481,6 +1578,8 @@ def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str 
     chat_hwnd = None
     start_wait = time.time()
     while time.time() - start_wait < 1.3:
+        if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+            return None
         chat_hwnd = find_open_chat_window(clean_kw) or (find_open_chat_window(full_name_ref) if full_name_ref else None)
         if chat_hwnd:
             break
@@ -1498,6 +1597,8 @@ def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str 
         time.sleep(random.uniform(0.06, 0.12))
 
     if not chat_hwnd:
+        if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+            return None
         # 보조 시도: 방향키 아래(Down) ➔ Enter (검색 결과 목록 첫 번째 친구 진입)
         press_key(VK_DOWN)
         time.sleep(random.uniform(0.06, 0.12))
@@ -1511,7 +1612,7 @@ def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str 
 
     return chat_hwnd
 
-def open_or_focus_chat_window(target_name: str, fallback_nickname: str = ""):
+def open_or_focus_chat_window(target_name: str, fallback_nickname: str = "", expected_seq_id: int = None):
     """
     대상 친구와의 1:1 대화방을 찾거나 검색하여 열고 포커스 활성화
     - 1차: target_name (최대 20자 규격)으로 친구 검색 및 대화방 오픈 시도
@@ -1519,6 +1620,8 @@ def open_or_focus_chat_window(target_name: str, fallback_nickname: str = ""):
     반환: (chat_hwnd, pre_opened)
     """
     time.sleep(random.uniform(0.08, 0.15))
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+        return None, False
 
     target_name = (target_name or "").strip()
     fallback_nickname = (fallback_nickname or "").strip()
@@ -1553,19 +1656,23 @@ def open_or_focus_chat_window(target_name: str, fallback_nickname: str = ""):
         return None, False
 
     # 3. 1차 시도: 20자 규격 이름으로 검색
-    chat_hwnd = _try_search_friend_chat(kakao_hwnd, primary_query, target_name)
+    chat_hwnd = _try_search_friend_chat(kakao_hwnd, primary_query, target_name, expected_seq_id=expected_seq_id)
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+        return None, False
     if chat_hwnd:
         force_foreground(chat_hwnd)
         return chat_hwnd, False
 
-    # ⭐️ 유저가 복수 선택 대기 중 중지(Stop/Pause)를 눌렀으면 2차 시도를 건너뜀
-    if not BOT_RUNNING:
+    # ⭐️ 유저가 복수 선택 대기 중 중지(Stop/Pause) 또는 패스(Skip)를 눌렀으면 2차 시도를 건너뜀
+    if not BOT_RUNNING or (expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID):
         return None, False
 
     # 4. 2차 시도: 1차 실패 시 별명(또는 접두어)으로 스마트 폴백 검색
     if fallback_query and fallback_query != primary_query:
         print(f"[카카오톡 친구 검색] 1차 실패('{primary_query}') -> 2차 별명 검색 시도: '{fallback_query}'")
-        chat_hwnd = _try_search_friend_chat(kakao_hwnd, fallback_query, target_name)
+        chat_hwnd = _try_search_friend_chat(kakao_hwnd, fallback_query, target_name, expected_seq_id=expected_seq_id)
+        if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+            return None, False
         if chat_hwnd:
             print(f"[카카오톡 친구 검색] 2차 별명 검색 성공: '{fallback_query}' (대상: '{target_name}')")
             force_foreground(chat_hwnd)
@@ -1648,7 +1755,7 @@ def execute_dispatch(target_name: str, message: str = "", mode: str = "classic",
             "timestamp": time.time()
         }
 
-    b_type_kr = "사진(이미지)" if first_block["type"] == "image" else "텍스트"
+    b_type_kr = "사진(이미지)" if first_block["type"] == "image" else ("이모티콘" if first_block["type"] == "emoticon" else "텍스트")
     print(f"\n[🧪 1:1 테스트 발송] '{target_name}' [{ch_kr}] 대화방에 [1/{total_b} {b_type_kr}] 장전 완료!")
     if total_b > 1:
         print(f"   👉 메신저 창에서 [Enter]를 누르면 1번 블록이 발송되고, 2번 블록이 연속 자동 장전됩니다!")
@@ -1699,7 +1806,7 @@ def get_blocks_for_recipient(blocks, rec, condition=None, channel=None):
     - 범용 조건부 발송: 조건 만족 시 지정된 블록(기본 B2) 자동 제외/패스
     """
     valid_blocks = []
-    name_val = str(rec.get("name") or rec.get("이름") or "")
+    name_val = str(rec.get("name") or rec.get("이름") or rec.get("별명") or rec.get("닉네임") or rec.get("고객명") or "")
     title_val = str(rec.get("title") or rec.get("직함") or rec.get("직책") or "")
     org_val = str(rec.get("org") or rec.get("소속") or rec.get("회사") or "")
     phone_val = str(rec.get("phone") or rec.get("전화번호") or rec.get("연락처") or rec.get("휴대폰") or "")
@@ -1738,6 +1845,9 @@ def get_blocks_for_recipient(blocks, rec, condition=None, channel=None):
                     continue
                 # 개인화 동적 변수 치환
                 txt = txt.replace("#{이름}", name_val)
+                txt = txt.replace("#{별명}", str(rec.get("별명") or name_val))
+                txt = txt.replace("#{닉네임}", str(rec.get("닉네임") or name_val))
+                txt = txt.replace("#{고객명}", str(rec.get("고객명") or name_val))
                 txt = txt.replace("#{직함}", title_val)
                 txt = txt.replace("#{소속}", org_val)
                 txt = txt.replace("#{전화번호}", phone_val)
@@ -1850,10 +1960,7 @@ def load_emoticon_to_chat(chat_hwnd, block):
 
     # 입력창 포커스 및 비우기 (텍스트 장전과 동일한 방식) 후 빈 상태에서 키워드를 직접 타이핑
     paste_message_to_chat(chat_hwnd, "")
-    press_hotkey(VK_CONTROL, 0x41)  # Ctrl + A
-    time.sleep(0.04)
-    press_key(0x2E)  # Delete
-    time.sleep(0.06)
+    time.sleep(0.05)
 
     _type_unicode_text(keyword)
     time.sleep(random.uniform(0.65, 0.85))  # 추천창 렌더링 대기
@@ -1872,131 +1979,150 @@ def load_emoticon_to_chat(chat_hwnd, block):
     print(f"   [😊 이모티콘 장전] '{keyword}' 추천창 {row}줄 {col}번째 → 미리보기 완료. 확인 후 [Enter]를 치세요.")
     return True
 
-def dispatch_single_block(chat_hwnd, block):
+def dispatch_single_block(chat_hwnd, block, expected_seq_id: int = None):
     """대화방에 단일 블록(텍스트 / 사진 / 카톡 이모티콘)을 장전"""
+    if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+        return False
     b_type = block.get("type", "text")
     if b_type == "image":
         return paste_image_to_chat(chat_hwnd, block.get("dataUrl", ""))
     elif b_type == "emoticon":
         return load_emoticon_to_chat(chat_hwnd, block)
     else:
-        paste_message_to_chat(chat_hwnd, block.get("content", ""))
+        paste_message_to_chat(chat_hwnd, block.get("content", ""), expected_seq_id=expected_seq_id)
         return True
 
-def load_and_dispatch_next():
+def load_and_dispatch_next(expected_seq_id: int = None):
     """다음 대기자를 카카오톡에 장전하고 유저의 엔터 대기 상태로 전환"""
     global WAITING_FOR_USER_ENTER, BOT_RUNNING, CURRENT_TARGET_REC, LAST_EVENT
     global CURRENT_REC_BLOCKS, CURRENT_BLOCK_INDEX, CURRENT_CHAT_HWND, CURRENT_POPUP_HWND
+    global _DISPATCH_SEQ_ID
 
-    today_count = get_today_stats()
-    if today_count >= DAILY_LIMIT:
+    with _DISPATCH_LOCK:
+        if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+            return False
+
+        today_count = get_today_stats()
+        if today_count >= DAILY_LIMIT:
+            with STATE_LOCK:
+                BOT_RUNNING = False
+                WAITING_FOR_USER_ENTER = False
+                LAST_EVENT = {
+                    "type": "paused",
+                    "message": f"1일 최대 안전 발송량({DAILY_LIMIT}건) 도달로 중단되었습니다.",
+                    "timestamp": time.time()
+                }
+            return False
+
         with STATE_LOCK:
-            BOT_RUNNING = False
-            WAITING_FOR_USER_ENTER = False
-            LAST_EVENT = {
-                "type": "paused",
-                "message": f"1일 최대 안전 발송량({DAILY_LIMIT}건) 도달로 중단되었습니다.",
-                "timestamp": time.time()
-            }
-        return False
+            if expected_seq_id is not None and expected_seq_id != _DISPATCH_SEQ_ID:
+                return False
+            if expected_seq_id is None:
+                _DISPATCH_SEQ_ID += 1
+                my_seq_id = _DISPATCH_SEQ_ID
+            else:
+                my_seq_id = expected_seq_id
 
-    with STATE_LOCK:
-        recipients = SYNCED_STATE.get("recipients", [])
-        blocks = SYNCED_STATE.get("blocks", [])
-        curr_idx = SYNCED_STATE.get("currentIndex", 0)
+            recipients = SYNCED_STATE.get("recipients", [])
+            blocks = SYNCED_STATE.get("blocks", [])
+            curr_idx = SYNCED_STATE.get("currentIndex", 0)
 
-        target_rec = None
-        target_idx = -1
+            target_rec = None
+            target_idx = -1
 
-        # 현재 인덱스부터 대기자(pending) 탐색
-        for i in range(curr_idx, len(recipients)):
-            if recipients[i].get("status") == "pending":
-                target_rec = recipients[i]
-                target_idx = i
-                break
-
-        # 없으면 0번부터 다시 탐색
-        if not target_rec:
-            for i in range(0, curr_idx):
+            # 현재 인덱스부터 대기자(pending) 탐색
+            for i in range(curr_idx, len(recipients)):
                 if recipients[i].get("status") == "pending":
                     target_rec = recipients[i]
                     target_idx = i
                     break
 
-        if not target_rec:
-            BOT_RUNNING = False
-            WAITING_FOR_USER_ENTER = False
-            CURRENT_TARGET_REC = None
-            CURRENT_REC_BLOCKS = []
+            # 없으면 0번부터 다시 탐색
+            if not target_rec:
+                for i in range(0, curr_idx):
+                    if recipients[i].get("status") == "pending":
+                        target_rec = recipients[i]
+                        target_idx = i
+                        break
+
+            if not target_rec:
+                BOT_RUNNING = False
+                WAITING_FOR_USER_ENTER = False
+                CURRENT_TARGET_REC = None
+                CURRENT_REC_BLOCKS = []
+                CURRENT_BLOCK_INDEX = 0
+                CURRENT_POPUP_HWND = None
+                print("\n" + "=" * 60)
+                print("   🎉 [축하] 모든 수신자에게 발송이 완료되었습니다!")
+                print("=" * 60)
+                LAST_EVENT = {
+                    "type": "all_completed",
+                    "timestamp": time.time()
+                }
+                return False
+
+            SYNCED_STATE["currentIndex"] = target_idx
+            CURRENT_TARGET_REC = target_rec
+            name = target_rec.get("name", "")
+            CURRENT_REC_BLOCKS = get_blocks_for_recipient(blocks, target_rec)
             CURRENT_BLOCK_INDEX = 0
             CURRENT_POPUP_HWND = None
-            print("\n" + "=" * 60)
-            print("   🎉 [축하] 모든 수신자에게 발송이 완료되었습니다!")
-            print("=" * 60)
-            LAST_EVENT = {
-                "type": "all_completed",
-                "timestamp": time.time()
-            }
+
+        if not CURRENT_REC_BLOCKS:
+            print(f"⚠️ '{name}' 대상에게 보낼 블록(메시지)이 없습니다. 완료 처리합니다.")
+            with STATE_LOCK:
+                target_rec["status"] = "done"
+            return load_and_dispatch_next(expected_seq_id=my_seq_id)
+
+        channel = SYNCED_STATE.get("channel", "kakao")
+        total_b = len(CURRENT_REC_BLOCKS)
+        print(f"\n[🚀 장전 시작] {target_idx + 1}번째 대상: '{name}' (총 {total_b}개 블록) [{channel.upper()}] 호출 중...")
+
+        # 1:1 대화방 열기 or 딥링크 호출 및 첫 블록 장전
+        chat_hwnd, pre_opened = open_channel_chat_or_link(channel, target_rec, CURRENT_REC_BLOCKS[0], expected_seq_id=my_seq_id)
+        if my_seq_id != _DISPATCH_SEQ_ID:
+            return False
+        if not chat_hwnd:
+            ch_kr = "카카오톡" if channel == "kakao" else ("텔레그램" if channel == "telegram" else channel.upper())
+            print(f"⚠️ {ch_kr}에서 '{name}' 대화방을 찾지 못했습니다.")
+            with STATE_LOCK:
+                if my_seq_id != _DISPATCH_SEQ_ID:
+                    return False
+                BOT_RUNNING = False
+                WAITING_FOR_USER_ENTER = False
+                LAST_EVENT = {
+                    "type": "paused",
+                    "reason": "not_found",
+                    "targetId": target_rec.get("id"),
+                    "name": name,
+                    "message": f"{ch_kr}에서 '{name}' 님을 찾지 못했습니다. (대화방/연락처 없음)",
+                    "timestamp": time.time()
+                }
             return False
 
-        SYNCED_STATE["currentIndex"] = target_idx
-        CURRENT_TARGET_REC = target_rec
-        name = target_rec.get("name", "")
-        CURRENT_REC_BLOCKS = get_blocks_for_recipient(blocks, target_rec)
-        CURRENT_BLOCK_INDEX = 0
-        CURRENT_POPUP_HWND = None
-
-    if not CURRENT_REC_BLOCKS:
-        print(f"⚠️ '{name}' 대상에게 보낼 블록(메시지)이 없습니다. 완료 처리합니다.")
         with STATE_LOCK:
-            target_rec["status"] = "done"
-        load_and_dispatch_next()
-        return False
-
-    channel = SYNCED_STATE.get("channel", "kakao")
-    total_b = len(CURRENT_REC_BLOCKS)
-    print(f"\n[🚀 장전 시작] {target_idx + 1}번째 대상: '{name}' (총 {total_b}개 블록) [{channel.upper()}] 호출 중...")
-
-    # 1:1 대화방 열기 or 딥링크 호출 및 첫 블록 장전
-    chat_hwnd, pre_opened = open_channel_chat_or_link(channel, target_rec, CURRENT_REC_BLOCKS[0])
-    if not chat_hwnd:
-        ch_kr = "카카오톡" if channel == "kakao" else ("텔레그램" if channel == "telegram" else channel.upper())
-        print(f"⚠️ {ch_kr}에서 '{name}' 대화방을 찾지 못했습니다.")
-        with STATE_LOCK:
-            BOT_RUNNING = False
-            WAITING_FOR_USER_ENTER = False
+            if my_seq_id != _DISPATCH_SEQ_ID:
+                return False
+            target_rec["_pre_opened"] = pre_opened
+            CURRENT_CHAT_HWND = chat_hwnd
+            WAITING_FOR_USER_ENTER = True
+            first_block = CURRENT_REC_BLOCKS[0]
             LAST_EVENT = {
-                "type": "paused",
-                "reason": "not_found",
-                "targetId": target_rec.get("id"),
+                "type": "loaded_waiting_enter",
+                "id": target_rec.get("id"),
                 "name": name,
-                "message": f"{ch_kr}에서 '{name}' 님을 찾지 못했습니다. (대화방/연락처 없음)",
+                "currentIndex": target_idx,
+                "blockIndex": 0,
+                "totalBlocks": total_b,
+                "blockType": first_block["type"],
+                "channel": channel,
                 "timestamp": time.time()
             }
-        return False
 
-    target_rec["_pre_opened"] = pre_opened
-    CURRENT_CHAT_HWND = chat_hwnd
-
-    WAITING_FOR_USER_ENTER = True
-    first_block = CURRENT_REC_BLOCKS[0]
-    with STATE_LOCK:
-        LAST_EVENT = {
-            "type": "loaded_waiting_enter",
-            "id": target_rec.get("id"),
-            "name": name,
-            "currentIndex": target_idx,
-            "blockIndex": 0,
-            "totalBlocks": total_b,
-            "blockType": first_block["type"],
-            "channel": channel,
-            "timestamp": time.time()
-        }
-
-    b_type_kr = "사진(이미지)" if first_block["type"] == "image" else "텍스트"
-    print(f"👉 [입력 대기] '{name}' 대화방에 [1/{total_b} {b_type_kr}] 장전 완료!")
-    print(f"   메신저 화면을 보며 [Enter]만 치세요! (다중 블록인 경우 엔터 시 다음 블록이 연속 자동 붙여넣기됩니다)")
-    return True
+        b_type_kr = "사진(이미지)" if first_block["type"] == "image" else ("이모티콘" if first_block["type"] == "emoticon" else "텍스트")
+        print(f"👉 [입력 대기] '{name}' 대화방에 [1/{total_b} {b_type_kr}] 장전 완료!")
+        print(f"   메신저 화면을 보며 [Enter]만 치세요! (다중 블록인 경우 엔터 시 다음 블록이 연속 자동 붙여넣기됩니다)")
+        return True
 
 def enter_listener_loop():
     """
@@ -2048,7 +2174,7 @@ def enter_listener_loop():
             total_b = len(CURRENT_REC_BLOCKS)
             curr_b_idx = CURRENT_BLOCK_INDEX
 
-            b_type_kr = "사진" if (curr_b_idx < total_b and CURRENT_REC_BLOCKS[curr_b_idx]["type"] == "image") else "텍스트"
+            b_type_kr = "사진" if (curr_b_idx < total_b and CURRENT_REC_BLOCKS[curr_b_idx]["type"] == "image") else ("이모티콘" if (curr_b_idx < total_b and CURRENT_REC_BLOCKS[curr_b_idx]["type"] == "emoticon") else "텍스트")
             print(f"   [타건 감지] '{name}'님 [{curr_b_idx + 1}/{total_b} {b_type_kr}] 전송 확정! ({channel})")
 
             # 1. 다음 블록이 더 남아있는 경우: 동일 대화방에서 다음 블록(사진 등) 연속 장전!
@@ -2056,7 +2182,7 @@ def enter_listener_loop():
                 CURRENT_BLOCK_INDEX += 1
                 next_b_idx = CURRENT_BLOCK_INDEX
                 next_block = CURRENT_REC_BLOCKS[next_b_idx]
-                next_b_kr = "사진(이미지)" if next_block["type"] == "image" else "텍스트"
+                next_b_kr = "사진(이미지)" if next_block["type"] == "image" else ("이모티콘" if next_block["type"] == "emoticon" else "텍스트")
 
                 # 이전 말풍선 전송 안정화 및 어뷰징 패턴 탐지 방어 지터 (0.4 ~ 1.0초 무작위 지연)
                 block_delay = random.uniform(0.4, 1.0)
@@ -2116,29 +2242,54 @@ def enter_listener_loop():
                 print(f"\n🎉 [✅ 1:1 테스트 발송 성공] '{name}' 님께 모든 블록({total_b}개) 전송이 완료되었습니다!\n")
                 continue
 
-            # 정규 배치 발송인 경우 수신자 완료 처리 및 다음 대상 전진
-            new_count = increment_today_stats()
-            print(f"[✅ 발송 완료] '{name}' 님께 모든 블록({total_b}개) 발송 완료! (금일 {new_count}/{DAILY_LIMIT}건)")
-
+            # 정규 배치 발송인 경우 수신자 완료 처리 및 다음 대상 전진을 디스크 I/O보다 최우선으로 즉시 반영!
             with STATE_LOCK:
+                _DISPATCH_SEQ_ID += 1
+                enter_seq_id = _DISPATCH_SEQ_ID
+                _LAST_PASTED_INFO["hwnd"] = 0
+                _LAST_PASTED_INFO["msg"] = ""
+                _LAST_PASTED_INFO["time"] = 0.0
                 if rec:
                     rec["status"] = "done"
                 rec_id = rec.get("id") if rec else ""
-                # SYNCED_STATE 명단 배열 내 해당 수신자 완료 처리 (ID 및 이름 매칭으로 완벽 동기화)
-                for r in SYNCED_STATE.get("recipients", []):
+                # SYNCED_STATE 명단 배열 내 해당 수신자 완료 처리 및 다음 대기자 인덱스로 즉시 선제 전진
+                recs_list = SYNCED_STATE.get("recipients", [])
+                done_idx = SYNCED_STATE.get("currentIndex", 0)
+                for idx_r, r in enumerate(recs_list):
                     if (rec_id and r.get("id") == rec_id) or (name and r.get("name") == name):
                         r["status"] = "done"
+                        done_idx = idx_r
+
+                next_pending_idx = -1
+                for idx_r in range(done_idx + 1, len(recs_list)):
+                    if recs_list[idx_r].get("status") == "pending":
+                        next_pending_idx = idx_r
+                        break
+                if next_pending_idx == -1:
+                    for idx_r in range(0, done_idx):
+                        if recs_list[idx_r].get("status") == "pending":
+                            next_pending_idx = idx_r
+                            break
+                if next_pending_idx != -1:
+                    SYNCED_STATE["currentIndex"] = next_pending_idx
 
                 LAST_EVENT = {
                     "type": "sent_and_advancing",
                     "id": rec_id,
                     "name": name,
+                    "nextIndex": SYNCED_STATE.get("currentIndex", 0),
                     "channel": channel,
                     "timestamp": time.time()
                 }
 
+            new_count = increment_today_stats()
+            print(f"[✅ 발송 완료] '{name}' 님께 모든 블록({total_b}개) 발송 완료! (금일 {new_count}/{DAILY_LIMIT}건)")
+
             # 메시지 전송 완료 및 어뷰징 방어 자연스러운 지터 (0.35 ~ 0.75초 무작위 지연)
             time.sleep(random.uniform(0.35, 0.75))
+
+            if _DISPATCH_SEQ_ID != enter_seq_id:
+                continue
 
             has_more = False
             with STATE_LOCK:
@@ -2147,13 +2298,14 @@ def enter_listener_loop():
 
             pre_opened = rec.get("_pre_opened", False) if rec else False
             if channel == "kakao" and not pre_opened and has_more:
-                press_key(VK_ESCAPE)
-                time.sleep(random.uniform(0.18, 0.35))
+                if _DISPATCH_SEQ_ID == enter_seq_id:
+                    press_key(VK_ESCAPE)
+                    time.sleep(random.uniform(0.18, 0.35))
 
-            # 다음 대기자 즉시 자동 장전!
-            if BOT_RUNNING:
+            # 다음 대기자 즉시 자동 장전! (대기 중 패스/정지/재시작 등으로 세대 번호가 바뀐 경우 중복 호출 원천 차단)
+            if BOT_RUNNING and _DISPATCH_SEQ_ID == enter_seq_id:
                 if has_more:
-                    load_and_dispatch_next()
+                    load_and_dispatch_next(expected_seq_id=enter_seq_id)
                 else:
                     time.sleep(0.5)
                     with STATE_LOCK:
@@ -2176,7 +2328,7 @@ def enter_listener_loop():
 
 def hotkey_listener_thread():
     """Windows 메시지 루프를 돌며 F8 전역 핫키 감지 (수동 시작/재개용)"""
-    global BOT_RUNNING
+    global BOT_RUNNING, _DISPATCH_SEQ_ID
     ensure_desktop_attached()
     if not RegisterHotKey(None, HOTKEY_ID_F8, 0, VK_F8):
         print(f"[경고] F8 전역 핫키 등록 실패. 관리자 권한이나 충돌 여부를 확인하세요.")
@@ -2186,16 +2338,15 @@ def hotkey_listener_thread():
     while GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
         if msg.message == WM_HOTKEY:
             if msg.wParam == HOTKEY_ID_F8:
-                if not BOT_RUNNING:
-                    print("\n[⚡ F8 감지] 센스봇 엔터 발송 모드를 시작합니다!")
-                    BOT_RUNNING = True
-                    threading.Thread(target=load_and_dispatch_next, daemon=True).start()
-                else:
-                    # 이미 실행 중이면 다음 대상으로 강제 전진
-                    threading.Thread(target=load_and_dispatch_next, daemon=True).start()
+                with STATE_LOCK:
+                    _DISPATCH_SEQ_ID += 1
+                    seq_id = _DISPATCH_SEQ_ID
+                    if not BOT_RUNNING:
+                        print("\n[⚡ F8 감지] 센스봇 엔터 발송 모드를 시작합니다!")
+                        BOT_RUNNING = True
+                threading.Thread(target=load_and_dispatch_next, args=(seq_id,), daemon=True).start()
 
     UnregisterHotKey(None, HOTKEY_ID_F8)
-
 
 
 # ==========================================
@@ -2277,7 +2428,7 @@ def handle_get(subpath: str) -> Dict[str, Any]:
                 "today_sent": get_today_stats(),
                 "daily_limit": DAILY_LIMIT,
                 "autostart": w32.is_autostart_enabled(),
-                "status_msg": f"대기열 {len(recs)}건 동기화 완료 (포트 5199 내장 플러그인)",
+                "status_msg": f"대기열 {len(recs)}건 동기화 완료 (포트 5199 내장 플러그인 v{SENSEBOT_VERSION})",
             }
 
     return {"ok": False, "error": f"Unknown GET endpoint: /api/senstalk/{sub}"}
@@ -2285,7 +2436,7 @@ def handle_get(subpath: str) -> Dict[str, Any]:
 
 def handle_post(subpath: str, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     global BOT_RUNNING, WAITING_FOR_USER_ENTER, IS_TEST_MODE
-    global CURRENT_TARGET_REC, CURRENT_REC_BLOCKS, CURRENT_BLOCK_INDEX, LAST_EVENT
+    global CURRENT_TARGET_REC, CURRENT_REC_BLOCKS, CURRENT_BLOCK_INDEX, LAST_EVENT, _DISPATCH_SEQ_ID
 
     sub = (subpath or "").strip("/").lower()
     body = data or {}
@@ -2307,7 +2458,6 @@ def handle_post(subpath: str, data: Dict[str, Any] | None = None) -> Dict[str, A
             if not BOT_RUNNING and LAST_EVENT and LAST_EVENT.get("type") == "paused":
                 LAST_EVENT = None
 
-            # ui/app.js 표준 'recipients' 및 selftest 호환용 'queue'/'items' 동시 수용
             incoming_recs = body.get("recipients")
             if incoming_recs is None:
                 incoming_recs = body.get("queue") or body.get("items")
@@ -2326,6 +2476,7 @@ def handle_post(subpath: str, data: Dict[str, Any] | None = None) -> Dict[str, A
 
                 old_recs = SYNCED_STATE.get("recipients", [])
                 if is_reset:
+                    _DISPATCH_SEQ_ID += 1
                     for nr in new_recs:
                         nr["status"] = "pending"
                     BOT_RUNNING = False
@@ -2359,36 +2510,63 @@ def handle_post(subpath: str, data: Dict[str, Any] | None = None) -> Dict[str, A
                 "port": 5199,
                 "count": cnt,
                 "total": cnt,
-                "status_msg": f"📥 발송 대기열 {cnt}건 동기화 완료 (포트 5199 내장 플러그인)",
+                "status_msg": f"📥 발송 대기열 {cnt}건 동기화 완료 (포트 5199 내장 플러그인 v{SENSEBOT_VERSION})",
             }
 
     if sub == "start":
         ensure_listeners_started()
-        BOT_RUNNING = True
-        threading.Thread(target=load_and_dispatch_next, daemon=True).start()
+        _pause_other_local_engine()
+        with STATE_LOCK:
+            _DISPATCH_SEQ_ID += 1
+            seq_id = _DISPATCH_SEQ_ID
+            BOT_RUNNING = True
+        threading.Thread(target=load_and_dispatch_next, args=(seq_id,), daemon=True).start()
         return {"ok": True, "status": "started", "port": 5199}
 
     if sub == "pause":
-        BOT_RUNNING = False
-        WAITING_FOR_USER_ENTER = False
-        IS_TEST_MODE = False
         with STATE_LOCK:
+            _DISPATCH_SEQ_ID += 1
+            BOT_RUNNING = False
+            WAITING_FOR_USER_ENTER = False
+            IS_TEST_MODE = False
             LAST_EVENT = {"type": "paused", "timestamp": time.time()}
         return {"ok": True, "status": "paused", "port": 5199}
 
     if sub == "skip":
         ensure_listeners_started()
+        _pause_other_local_engine()
+        skipped_id = body.get("skippedId")
+        skipped_name = body.get("skippedName")
+        skipped_idx = body.get("skippedIndex")
+        next_idx = body.get("nextIndex")
+
         with STATE_LOCK:
+            _DISPATCH_SEQ_ID += 1
+            seq_id = _DISPATCH_SEQ_ID
+            recs = SYNCED_STATE.get("recipients", [])
+            if isinstance(skipped_idx, int) and 0 <= skipped_idx < len(recs):
+                if recs[skipped_idx].get("status") != "done":
+                    recs[skipped_idx]["status"] = "skipped"
+            if skipped_id or skipped_name:
+                for r in recs:
+                    if (skipped_id and r.get("id") == skipped_id) or (skipped_name and r.get("name") == skipped_name):
+                        if r.get("status") != "done":
+                            r["status"] = "skipped"
             if CURRENT_TARGET_REC:
-                CURRENT_TARGET_REC["status"] = "skipped"
+                if CURRENT_TARGET_REC.get("status") != "done":
+                    CURRENT_TARGET_REC["status"] = "skipped"
                 rec_id = CURRENT_TARGET_REC.get("id")
-                for r in SYNCED_STATE.get("recipients", []):
+                for r in recs:
                     if (rec_id and r.get("id") == rec_id) or (r.get("name") == CURRENT_TARGET_REC.get("name")):
-                        r["status"] = "skipped"
+                        if r.get("status") != "done":
+                            r["status"] = "skipped"
+            if isinstance(next_idx, int) and 0 <= next_idx < len(recs):
+                SYNCED_STATE["currentIndex"] = next_idx
+
             WAITING_FOR_USER_ENTER = False
             BOT_RUNNING = True
 
-        threading.Thread(target=load_and_dispatch_next, daemon=True).start()
+        threading.Thread(target=load_and_dispatch_next, args=(seq_id,), daemon=True).start()
         return {"ok": True, "status": "skipped_and_resumed", "port": 5199}
 
     if sub == "dispatch":

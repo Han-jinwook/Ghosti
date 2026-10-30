@@ -2,17 +2,18 @@ import React, { useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { PhotoItem, TrashCategory } from '../types/saysee';
 import {
-  processUnifiedMonsterChatQuery,
   loadLocalHealthCheckHistory,
   executeRestorePointRollback,
-  type MonsterChatMessage,
-  type MonsterLiteracyLevel,
   type DigitalHealthCheckRecord,
 } from '../services/monsterChatRouter';
+import { PersonalHealthCheckHistoryDrawer } from './MonsterInteractiveCards';
+import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
 import {
-  MonsterInteractiveCardView,
-  PersonalHealthCheckHistoryDrawer,
-} from './MonsterInteractiveCards';
+  zCoreBridge,
+  isZCoreOutdated,
+  LATEST_Z_CORE_VERSION,
+  Z_CORE_ZIP_URL,
+} from '../services/zCoreBridge';
 
 const TRASH_TABS: {
   key: 'duplicate' | 'memo' | 'screenshot' | 'blurry';
@@ -118,10 +119,10 @@ export const SmartTrashView: React.FC = () => {
   const [healthHistoryRecords, setHealthHistoryRecords] = useState<DigitalHealthCheckRecord[]>(() =>
     loadLocalHealthCheckHistory()
   );
-  const [literacyLevel, setLiteracyLevel] = useState<MonsterLiteracyLevel>('normal');
-  const [ttsEnabled, setTtsEnabled] = useState<boolean>(true);
-  const [monsterMessages, setMonsterMessages] = useState<MonsterChatMessage[]>([]);
-  const [monsterBusy, setMonsterBusy] = useState<boolean>(false);
+  const [externalQueryTrigger, setExternalQueryTrigger] = useState<{
+    id: number;
+    query: string;
+  } | null>(null);
 
   // 클린몬스터 종합건강검진 항목별 유저 직접 결정 상태 (노인 별도 안 없이 기본 귀신같이 직관 기능 통합)
   const [decisions, setDecisions] = useState<{
@@ -133,45 +134,11 @@ export const SmartTrashView: React.FC = () => {
     pcDesktop: 'pending',
     powerDrain: 'pending',
   });
-  const [doctorChatInput, setDoctorChatInput] = useState('');
-  const [doctorChatReply, setDoctorChatReply] = useState<string>(
-    '💬 클린몬스터 × 설정몬스터 통합 주치의 (언제나 0원): "임의로 파일을 영구 삭제하지 않습니다. 바탕화면·다운로드 정리, 방치 설치파일(.exe/.apk) 청소, 보안모듈 동결, 자주 가는 사이트 바로가기 만들기, 사라진 파일 1초 복구까지 채팅창에 편하게 말씀해 주세요!"'
-  );
 
-  const triggerMonsterQuery = async (rawQuery: string) => {
+  const triggerMonsterQuery = (rawQuery: string) => {
     const q = rawQuery.trim();
     if (!q) return;
-    const nowLabel = new Date().toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    const userMsg: MonsterChatMessage = {
-      id: `user_${Date.now()}`,
-      role: 'user',
-      timestamp: nowLabel,
-      text: q,
-      sourceTab: 'trash',
-    };
-    setMonsterMessages((prev) => [...prev, userMsg]);
-    setMonsterBusy(true);
-    const aiMsg = await processUnifiedMonsterChatQuery({
-      query: q,
-      sourceTab: 'trash',
-      literacyLevel,
-      ttsEnabled,
-    });
-    setMonsterBusy(false);
-    setDoctorChatReply(aiMsg.text);
-    setMonsterMessages((prev) => [...prev, aiMsg]);
-  };
-
-  const handleAskDoctor = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = doctorChatInput.trim();
-    if (!q) return;
-    setDoctorChatInput('');
-    void triggerMonsterQuery(q);
+    setExternalQueryTrigger({ id: Date.now() + Math.random(), query: q });
   };
 
   const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
@@ -222,8 +189,37 @@ export const SmartTrashView: React.FC = () => {
     (currentTab === 'duplicate' || currentTab === 'all') &&
     activeDuplicateGroups.length > 0;
 
+  const zCoreOutdated =
+    zCoreBridge.isConnected && isZCoreOutdated(zCoreBridge.version);
+
   return (
-    <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 flex flex-col gap-5 pb-24">
+    <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
+      {zCoreOutdated && (
+        <div className="p-3.5 rounded-2xl bg-amber-950/80 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[18px]">⚠️</span>
+            <div className="flex flex-col">
+              <span className="text-[13px] text-amber-200 font-extrabold">
+                현재 실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 한글 폴더(다운로드·문서·바탕 화면) 정밀 매칭 엔진(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요!
+              </span>
+              <span className="text-[11.5px] text-amber-100/80">
+                구버전 Z-코어가 켜져 있으면 탐색기 파일 하이라이트가 어긋날 수 있습니다. 우측 버튼을 눌러 최신 설치파일을 받아 실행해 주세요.
+              </span>
+            </div>
+          </div>
+          <a
+            href={Z_CORE_ZIP_URL}
+            download="Merlin_Z_Core.zip"
+            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap shadow cursor-pointer"
+          >
+            ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
+          </a>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+        {/* ═══════════════ [좌측 열] 클린몬스터 정리·검진 워크스페이스 ═══════════════ */}
+        <div className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0">
       {/* ─────────────── 1. 노션 스타일 페이지 헤더 & 원클릭 정리 컨트롤 바 (고치기 페이지와 100% 대칭 구조) ─────────────── */}
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         {/* 상단 1열 & 2열: 고치기(SetupMonsterModal)와 동일한 타이틀 + 우측 상태박스 + 하단 액션 배지 줄 */}
@@ -356,7 +352,7 @@ export const SmartTrashView: React.FC = () => {
             onClose={() => setShowHealthHistoryDrawer(false)}
             onRollbackRestoreId={(rid) => {
               void executeRestorePointRollback(rid).then((res) => {
-                setDoctorChatReply(res.message);
+                useSaySeeStore.setState({ lastQuarantineToast: res.message });
               });
             }}
           />
@@ -405,10 +401,10 @@ export const SmartTrashView: React.FC = () => {
         >
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-[12px] text-amber-400 font-bold">
-              {showSystemConsult ? '▾' : '▸'} 💬 기기 종합검진 &amp; 대화형 맞춤 정리 (치우기 × 고치기 통합 주치의)
+              {showSystemConsult ? '▾' : '▸'} 💬 기기 3대 핵심 건강검진 (클린몬스터 × 설정몬스터 · 클릭 시 우측 채팅창에서 즉시 검진)
             </span>
             <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-              다운로드 설치파일(.exe/.apk) · PC 바탕화면 · 상주 보안모듈 · 사이트 바로가기 · 사라진 파일 복구까지 대화로 해결하세요
+              다운로드 설치파일(.exe/.apk) · PC 바탕화면 · 상주 보안모듈을 미리 확인하고 우측 채팅창의 AI와 대화로 정리하세요
             </span>
             {decidedCount > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-primary-container/15 text-primary-container text-[11px] font-extrabold">
@@ -558,130 +554,6 @@ export const SmartTrashView: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
-
-            {/* 1:1 대화형 통합 주치의 채팅 & 액션 센터 (치우기 × 고치기 공통 엔진) */}
-            <div className="p-4 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-extrabold text-amber-400">
-                    💡 원클릭 대화 예시:
-                  </span>
-                  {[
-                    {
-                      label: '🔗 자주 가는 카페 바탕화면에 바로가기 만들어줘',
-                      q: '내가 자주 가는 네이버 카페 바탕화면에 바로가기 만들어줘',
-                    },
-                    {
-                      label: '🕵️ 어제 바탕화면 영수증 파일 어디 갔어?',
-                      q: '어제 바탕화면에 있던 카톡받은_영수증캡처_01.jpg 파일이 사라졌어 찾아줘',
-                    },
-                    {
-                      label: '📄 저장 안 하고 꺼진 워드 단가표 복구해 줘',
-                      q: '방금 워드 작업하다가 저장 안 하고 꺼졌는데 단가표 문서 복구해 줘',
-                    },
-                    {
-                      label: '💻 내 컴퓨터 사양으로 포토샵·배그 돌아가?',
-                      q: '내 컴퓨터 실시간 사양으로 포토샵이랑 배그 잘 돌아가?',
-                    },
-                    {
-                      label: '🕰️ 최근 [복원 기록] 보여줘',
-                      q: '최근 [복원 기록] 조회해서 1초 만에 원래대로 되돌려줘',
-                    },
-                  ].map((chip) => (
-                    <button
-                      key={chip.label}
-                      type="button"
-                      onClick={() => void triggerMonsterQuery(chip.q)}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 text-[11px] font-bold transition cursor-pointer"
-                    >
-                      {chip.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setTtsEnabled((v) => !v)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border ${
-                      ttsEnabled
-                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                        : 'bg-zinc-900 border-white/10 text-zinc-400'
-                    }`}
-                  >
-                    {ttsEnabled ? '🔊 현수 음성 안내 ON' : '🔇 음성 안내 OFF'}
-                  </button>
-                </div>
-              </div>
-
-              <form onSubmit={handleAskDoctor} className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={doctorChatInput}
-                  onChange={(e) => setDoctorChatInput(e.target.value)}
-                  placeholder="무엇이든 말만 하세요! (예: 바탕화면 정리해줘 / 자주 가는 카페 바탕화면에 바로가기 만들어줘 / 영수증 파일 어디 갔어? / 내 PC로 배그 돌아가?)"
-                  className="flex-1 min-w-[220px] px-3.5 py-2.5 rounded-lg bg-zinc-900 border border-white/15 text-zinc-900 dark:text-white text-[13px] font-medium focus:outline-none focus:border-primary-container"
-                />
-                <button
-                  type="submit"
-                  disabled={monsterBusy}
-                  className="px-4 py-2.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap cursor-pointer"
-                >
-                  {monsterBusy ? '🔍 0.01초 분석 중...' : '💬 주치의에게 말하기 (0원)'}
-                </button>
-              </form>
-
-              {monsterMessages.length === 0 ? (
-                <div className="p-3 rounded-lg bg-zinc-900/90 border border-primary-container/30">
-                  <p className="font-body-sm text-[13.5px] font-semibold text-zinc-900 dark:text-zinc-100 leading-relaxed">
-                    {doctorChatReply}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-                  {monsterMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`p-3.5 rounded-xl border ${
-                        msg.role === 'user'
-                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-100 ml-8'
-                          : 'bg-zinc-900/95 border-primary-container/40 text-zinc-100'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1">
-                        <span className="font-extrabold">
-                          {msg.role === 'user' ? '🙋‍♂️ 나의 요청' : '🩺 귀신같이 주치의 (언제나 0원)'}
-                        </span>
-                        <span>{msg.timestamp}</span>
-                      </div>
-                      <p className="text-[13px] leading-relaxed whitespace-pre-line font-semibold">
-                        {msg.text}
-                      </p>
-                      {msg.role === 'assistant' && (
-                        <MonsterInteractiveCardView
-                          message={msg}
-                          literacyLevel={literacyLevel}
-                          onChangeLiteracyLevel={setLiteracyLevel}
-                          onUpdateMessage={(updated) =>
-                            setMonsterMessages((prev) =>
-                              prev.map((m) => (m.id === updated.id ? updated : m))
-                            )
-                          }
-                          onHealthRecordAdded={(rec) =>
-                            setHealthHistoryRecords((prev) => [rec, ...prev])
-                          }
-                          onJumpToSearch={(kw) => {
-                            void runTextQuery(kw);
-                            if (layout === 'mobile') setMobileTab('search');
-                            else setDesktopTab('dashboard');
-                          }}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -1303,6 +1175,32 @@ export const SmartTrashView: React.FC = () => {
           </div>
         )}
       </section>
+        </div>
+
+        {/* ═══════════════ [우측 1열] 통상의 채팅창 (클린몬스터 × 설정몬스터 · Gemini Flash AI + JSON 코어 위임) ═══════════════ */}
+        <div className="xl:col-span-5 2xl:col-span-4 w-full">
+          <MonsterStandardChatColumn
+            sourceTab="trash"
+            externalQueryTrigger={externalQueryTrigger}
+            onHealthRecordAdded={(rec) =>
+              setHealthHistoryRecords((prev) => [rec, ...prev])
+            }
+            onJumpToSearch={(kw) => {
+              void runTextQuery(kw);
+              if (layout === 'mobile') setMobileTab('search');
+              else setDesktopTab('dashboard');
+            }}
+            onTriggerOsRepair={(symptomQuery) => {
+              void useSaySeeStore.getState().submitSetupMonsterQuery(symptomQuery);
+              if (layout === 'mobile') {
+                useSaySeeStore.getState().setShowSetupMonsterModal(true);
+              } else {
+                setDesktopTab('sync');
+              }
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 };

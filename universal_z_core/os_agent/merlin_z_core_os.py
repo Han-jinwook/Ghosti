@@ -947,6 +947,27 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
         return False
 
 
+def get_explorer_folder_title_candidates(folder_path: Path) -> List[str]:
+    """
+    한국어/영어 Windows 10·11에서 표준 시스템 폴더(Downloads ➔ '다운로드', Documents ➔ '문서', Desktop ➔ '바탕 화면' 등)의
+    실제 탐색기 창 제목 후보 리스트를 반환하여 한글 윈도우에서도 100% 창 매칭 및 전면 포커스를 보장합니다.
+    """
+    raw_name = folder_path.name
+    lower_name = raw_name.lower()
+    mapping = {
+        "downloads": ["Downloads", "다운로드"],
+        "documents": ["Documents", "문서", "내 문서"],
+        "desktop": ["Desktop", "바탕 화면", "바탕화면"],
+        "pictures": ["Pictures", "사진", "내 사진"],
+        "videos": ["Videos", "동영상", "내 비디오"],
+        "music": ["Music", "음악", "내 음악"],
+    }
+    cands = list(mapping.get(lower_name, [raw_name]))
+    if raw_name and raw_name not in cands:
+        cands.insert(0, raw_name)
+    return cands
+
+
 def bring_window_to_front_immediately(hw_int: int) -> None:
     """
     멀린님이 현재 보고 계신 '귀신같이 (Ghosti)' 브라우저가 있는 모니터 한가운데 맨 앞으로
@@ -1093,10 +1114,10 @@ def run_gui_task_runner() -> None:
             return
 
         folder_path = target_file.parent
-        folder_name = folder_path.name
+        folder_titles = get_explorer_folder_title_candidates(folder_path)
 
         # 기존에 같은 폴더나 검색 결과로 열려 있던 탐색기 창이 있으면 먼저 닫아 단일 창만 깔끔하게 표시
-        old_same_wins = find_explorer_windows_on_default_desktop([folder_name, "검색 결과", target_file.stem])
+        old_same_wins = find_explorer_windows_on_default_desktop(folder_titles + ["검색 결과", target_file.stem])
         for old_w in old_same_wins:
             try:
                 user32.PostMessageW(wintypes.HWND(old_w["rawHwnd"]), 0x0010, 0, 0)
@@ -1113,11 +1134,11 @@ def run_gui_task_runner() -> None:
         os.startfile(str(folder_path))
 
         primary_win: Dict[str, Any] = {}
-        for _ in range(50):
+        for tick in range(50):
             time.sleep(0.05)
             candidates = find_explorer_windows_on_default_desktop(
-                [folder_name, "검색 결과", target_file.stem],
-                exclude_hwnds=existing_other_explorers,
+                folder_titles + ["검색 결과", target_file.stem],
+                exclude_hwnds=existing_other_explorers if tick < 15 else None,
             )
             if candidates:
                 primary_win = candidates[0]
@@ -1220,7 +1241,7 @@ def open_file_location_on_interactive_desktop(
     attach_thread_to_interactive_desktop()
 
     folder_path = target_file.parent
-    folder_name = folder_path.name
+    folder_titles = get_explorer_folder_title_candidates(folder_path)
 
     script_path = str(Path(__file__).resolve())
     pyw_exe = get_pythonw_executable()
@@ -1235,7 +1256,7 @@ def open_file_location_on_interactive_desktop(
     time.sleep(0.18)
     for _ in range(35):
         time.sleep(0.05)
-        found = find_explorer_windows_on_default_desktop([folder_name, "검색 결과", target_file.stem])
+        found = find_explorer_windows_on_default_desktop(folder_titles + ["검색 결과", target_file.stem])
         if found:
             opened_win = found[0]
             break
@@ -1290,7 +1311,13 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
             except Exception:
                 pass
             user32 = ctypes.windll.user32
-            old_same_wins = find_explorer_windows_on_default_desktop([resolved_p.parent.name])
+            folder_titles = get_explorer_folder_title_candidates(resolved_p.parent)
+            close_targets = list(folder_titles)
+            if resolved_p.parent.name.lower() != "documents":
+                for doc_title in ("Documents", "문서", "내 문서"):
+                    if doc_title not in close_targets:
+                        close_targets.append(doc_title)
+            old_same_wins = find_explorer_windows_on_default_desktop(close_targets)
             for old_w in old_same_wins:
                 try:
                     user32.PostMessageW(wintypes.HWND(old_w["rawHwnd"]), 0x0010, 0, 0)
@@ -1309,11 +1336,12 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 except Exception:
                     pass
             opened_win: Dict[str, Any] = {}
-            for _ in range(28):
+            search_titles = folder_titles + [resolved_p.stem, resolved_p.name]
+            for tick in range(28):
                 time.sleep(0.08)
                 found = find_explorer_windows_on_default_desktop(
-                    [resolved_p.parent.name, resolved_p.stem, resolved_p.name],
-                    exclude_hwnds=existing_explorers,
+                    search_titles,
+                    exclude_hwnds=existing_explorers if tick < 10 else None,
                 )
                 if found:
                     opened_win = found[0]
