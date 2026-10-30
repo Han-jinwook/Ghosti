@@ -1,0 +1,89 @@
+{
+  "appId": "ghosti",
+  "channelHandle": "@gwisinkachi",
+  "updatedAt": "2026-10-30T20:00:00+09:00",
+  "description": "카페브레이커(CafeBreaker) / 썬드리머 스튜디오(studio) 무인 쇼츠 업로더가 유튜브 업로드 직후 자동 갱신하는 『귀신같이』 공식 쇼룸 영상 피드입니다. youtubeId가 채워지면 대문 쇼룸에서 실제 유튜브 쇼츠 임베드 플레이어로 즉시 자동 배치·재생됩니다.",
+  "items": [
+    {
+      "id": "video-1",
+      "category": "video",
+      "title": "동영상 속 \"아기 첫 걸음마\" 몇 분 몇 초에 찍었지?",
+      "hookTime": "00:00 ~ 00:03 (훅)",
+      "hookLine": "“10분짜리 가족 영상에서 아기 걸음마 장면 찾느라 타임라인 일일이 땡기셨죠?”",
+      "solutionLine": "『귀신같이』에 \"걸음마\" 세 글자만 치면 03분 12초로 1초 만에 즉시 점프!",
+      "recommendedKeyword": "아기 걸음마 / 촛불 끄기 / 제주 바다",
+      "tag": "🎬 비디오 1초 타임스탬프 점프",
+      "thumbnailBg": "from-cyan-950 via-teal-900 to-slate-900",
+      "youtubeId": "",
+      "publishedAt": "2026-10-30",
+      "isNew": true
+    },
+    {
+      "id": "doc-1",
+      "category": "doc",
+      "title": "“최종_진짜최종_수정3.xlsx... 파일 열지 마세요”",
+      "hookTime": "00:00 ~ 00:03 (훅)",
+      "hookLine": "“엑셀 파일 수십 개 하나씩 열어서 Ctrl+F 누르다가 컴퓨터 멈춘 적 있으시죠?”",
+      "solutionLine": "파일을 안 열어도 표 안의 숫자와 글자를 0.01초 만에 엑스레이처럼 투시합니다.",
+      "recommendedKeyword": "지체상금 0.15% / 계약금 잔금 / 소득공제",
+      "tag": "📊 무설정 스마트 서류 투시 검색",
+      "thumbnailBg": "from-blue-950 via-indigo-950 to-slate-900",
+      "youtubeId": "",
+      "publishedAt": "2026-10-30",
+      "isNew": true
+    },
+    {
+      "id": "clean-1",
+      "category": "clean",
+      "title": "“비슷한 연사 사진 50장... 가장 잘 나온 1장만 남기기”",
+      "hookTime": "00:00 ~ 00:03 (훅)",
+      "hookLine": "“눈 감은 사진, 흔들린 사진 지우느라 주말 반나절을 사진첩 정리에 버리셨나요?”",
+      "solutionLine": "클린몬스터가 눈 뜬 베스트 1장만 추천하고, 나머지는 윈도우 휴지통으로 안전하게 정리!",
+      "recommendedKeyword": "연사 묶음 Pick / 눈 감은 사진 정리",
+      "tag": "🧹 클린몬스터 연사 Pick 엔진",
+      "thumbnailBg": "from-amber-950 via-teal-950 to-slate-900",
+      "youtubeId": "",
+      "publishedAt": "2026-10-30",
+      "isNew": true
+    },
+    {
+      "id": "video-2",
+      "category": "video",
+      "title": "“작년 제주도 여행에서 먹은 갈치조림 영상 어딨지?”",
+      "hookTime": "00:00 ~ 00:03 (훅)",
+      "hookLine": "“휴대폰에 쌓인 수백 개 동영상, 파일 이름이 전부 VID_2023... 이라 못 찾겠다면?”",
+      "solutionLine": "AI가 영상 속 간판과 음성을 자동 분석해 원하는 순간만 콕 찍어 재생해 줍니다.",
+      "recommendedKeyword": "제주 갈치조림 / 생일파티 케이크",
+      "tag": "🎯 영상 속 간판·대사 인식",
+      "thumbnailBg": "from-emerald-950 via-slate-900 to-teal-950",
+      "youtubeId": "",
+      "publishedAt": "2026-10-29"
+    },
+    {
+      "id": "doc-2",
+      "category": "doc",
+      "title": "“스캔한 영수증·계약서 PDF, 글자 복사도 안 되는데?”",
+      "hookTime": "00:00 ~ 00:03 (훅)",
+      "hookLine": "“이미지로 된 서류는 검색도 안 돼서 눈 빠지게 찾고 계셨나요?”",
+      "solutionLine": "OCR AI 엔진이 이미지 속 작은 글씨까지 읽어내어 파일 제목 상관없이 바로 찾습니다.",
+      "recommendedKeyword": "사업자등록증 / 법인인감 / 부가세 영수증",
+      "tag": "📄 이미지 PDF 본문 고속 색인",
+      "thumbnailBg": "from-slate-950 via-blue-900 to-slate-900",
+      "youtubeId": "",
+      "publishedAt": "2026-10-29"
+    },
+    {
+      "id": "clean-2",
+      "category": "clean",
+      "title": "“방금 지운 파일 실수로 날렸다고요? 1초 타임머신 복원!”",
+      "hookTime": "00:00 ~ 00:03 (훅)",
+      "hookLine": "“다른 청소 앱들은 잘못 지우면 영구 삭제되어 복구업체에 수십만 원 줘야 합니다.”",
+      "solutionLine": "『귀신같이』는 윈도우 정식 휴지통($Recycle.Bin) 연동으로 1초 만에 원래 폴더로 완벽 복원!",
+      "recommendedKeyword": "1초 실행취소 / 휴지통 안전 타임머신",
+      "tag": "🛡️ Windows 정식 휴지통 직결",
+      "thumbnailBg": "from-rose-950 via-slate-900 to-teal-950",
+      "youtubeId": "",
+      "publishedAt": "2026-10-29"
+    }
+  ]
+}

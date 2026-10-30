@@ -3,7 +3,7 @@ import { useSaySeeStore } from './store/useSaySeeStore';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
-import { GhostiShowroomLanding } from './components/GhostiShowroomLanding';
+import { GhostiShowroomLanding, OFFICIAL_LAUNCH_LIVE } from './components/GhostiShowroomLanding';
 import { MobileAppView } from './components/MobileAppView';
 import { OnboardingModal } from './components/OnboardingModal';
 import { PhotoDetailModal } from './components/PhotoDetailModal';
@@ -33,21 +33,65 @@ export const App: React.FC = () => {
     dismissUndoBatch,
   } = useSaySeeStore();
 
-  // 검색어(SEO) 빌드업용 공식 쇼룸 대문 vs 내부 개발 워크스페이스 뷰 모드
-  // 일반 도메인 접속 시 개발 중인 미완성 본진 화면 비노출 잠금 (공식 쇼룸 대문 표출)
+  // 개발자 / QA 테스터 시크릿 권한 판별:
+  // 일반 외부 방문자(유튜브·네이버·구글 검색 유입)에게는 개발 중인 본진 워크스페이스 및 QA 버튼을 100% 비노출 잠금합니다.
+  const [isDevAuthorized, setIsDevAuthorized] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('visitor') === 'true' || params.get('lock') === 'true') {
+        localStorage.removeItem('ghosti_dev_qa_unlocked');
+        localStorage.removeItem('ghosti_view_mode');
+        return false;
+      }
+      if (
+        params.get('dev') === 'true' ||
+        params.get('qa') === 'true' ||
+        params.get('app') === 'true' ||
+        params.get('workspace') === 'true' ||
+        params.get('mode') === 'app'
+      ) {
+        localStorage.setItem('ghosti_dev_qa_unlocked', 'true');
+        return true;
+      }
+      if (
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
+      ) {
+        return true;
+      }
+      return localStorage.getItem('ghosti_dev_qa_unlocked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // 검색어(SEO) 빌드업 & 하이브리드 온보딩 대문('showroom') vs 본진 앱 워크스페이스('workspace') 뷰 모드
   const [viewMode, setViewMode] = useState<'showroom' | 'workspace'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (
+        params.get('showroom') === 'true' ||
+        params.get('mode') === 'showroom' ||
+        params.get('visitor') === 'true' ||
+        params.get('lock') === 'true'
+      ) {
+        return 'showroom';
+      }
+      const hasDevParam =
         params.get('app') === 'true' ||
         params.get('mode') === 'app' ||
         params.get('workspace') === 'true' ||
         params.get('qa') === 'true' ||
-        params.get('dev') === 'true'
-      ) {
+        params.get('dev') === 'true';
+      if (hasDevParam) {
         return 'workspace';
       }
-      if (params.get('showroom') === 'true' || params.get('mode') === 'showroom') {
+      // 정식 출시 전(!OFFICIAL_LAUNCH_LIVE)에는 일반 방문자가 워크스페이스로 절대 진입할 수 없도록 원천 잠금
+      const unlocked =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        localStorage.getItem('ghosti_dev_qa_unlocked') === 'true';
+      if (!OFFICIAL_LAUNCH_LIVE && !unlocked) {
         return 'showroom';
       }
       const saved = localStorage.getItem('ghosti_view_mode');
@@ -58,7 +102,17 @@ export const App: React.FC = () => {
     return 'showroom';
   });
 
-  const handleEnterWorkspace = () => {
+  const handleUnlockDevMode = () => {
+    try {
+      localStorage.setItem('ghosti_dev_qa_unlocked', 'true');
+    } catch {}
+    setIsDevAuthorized(true);
+  };
+
+  const handleEnterWorkspace = (forceAllow = false) => {
+    if (!OFFICIAL_LAUNCH_LIVE && !isDevAuthorized && !forceAllow) {
+      return;
+    }
     try {
       localStorage.setItem('ghosti_view_mode', 'workspace');
     } catch {}
@@ -81,7 +135,7 @@ export const App: React.FC = () => {
       window.removeEventListener('ghosti_navigate_showroom', onGoShowroom);
       window.removeEventListener('ghosti_navigate_workspace', onGoWorkspace);
     };
-  }, []);
+  }, [isDevAuthorized]);
 
   useEffect(() => {
     void initApp();
@@ -106,9 +160,13 @@ export const App: React.FC = () => {
       {/* 앱/웹 첫 실행 시 『귀신같이』 마스터 로딩 스플래시 화면 */}
       <GhostiLoadingSplash />
 
-      {/* 공식 쇼룸 대문 vs 내부 개발 워크스페이스 분기 */}
+      {/* 공식 쇼룸 & 하이브리드 온보딩 대문 vs 내부 개발 워크스페이스 분기 */}
       {viewMode === 'showroom' ? (
-        <GhostiShowroomLanding onEnterWorkspace={handleEnterWorkspace} />
+        <GhostiShowroomLanding
+          onEnterWorkspace={handleEnterWorkspace}
+          isDevAuthorized={isDevAuthorized}
+          onUnlockDevMode={handleUnlockDevMode}
+        />
       ) : (
         <>
           {layout === 'desktop' ? <DesktopDashboard /> : <MobileAppView />}
