@@ -397,6 +397,14 @@ export interface SetupSymptomChip {
 
 export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
   {
+    id: 'pc_laptop_noise_overlay',
+    platform: 'pc',
+    label: '🔥 노트북 소음·발열 조용하게',
+    trackBadge: 'Track B · 다단계 오버레이',
+    levelBadge: '🟡 Level 2 · 언제나 0원 (무료)',
+    query: '노트북 팬 소음이랑 발열이 너무 심한데 전원 및 배터리 설정에서 조용하게 낮추는 위치 손가락 화살표로 짚어줘',
+  },
+  {
     id: 'pc_boot_ads',
     platform: 'pc',
     label: '🚀 부팅 시 뜨는 광고/유령앱 차단',
@@ -502,6 +510,7 @@ export function resolvePresetIdFromQuery(
     if (/s:|드라이브|탐색기|마운트|업무|공유폴더/.test(lower)) return 'pc_work_s_drive';
     if (/프린터|인쇄|스풀러|출력|먹통/.test(lower)) return 'pc_printer_spooler';
     if (/엑셀|한글|카톡|카카오톡|틀고정|손가락|어디/.test(lower)) return 'pc_excel_overlay';
+    if (/소음|발열|팬|시끄러|뜨거|쿨러/.test(lower)) return 'pc_laptop_noise_overlay';
     if (/노트북|뚜껑|덮개|덮어도|절전/.test(lower)) return 'pc_laptop_lid';
     if (/글씨|크게|부모님|야간|눈/.test(lower)) return 'pc_parent_display';
     return 'pc_boot_ads';
@@ -609,6 +618,29 @@ export function buildSetupPreTriageQuestion(
     };
   }
 
+  if (resolvedId === 'pc_laptop_noise_overlay') {
+    return {
+      questionId: qId,
+      presetId: 'pc_laptop_noise_overlay',
+      platform: 'pc',
+      symptomQuery: rawQuery,
+      exeBackgroundScanNote:
+        'ℹ️ Level 2 실물 오버레이 (Windows 전원 및 배터리 설정 안내)',
+      questionText:
+        '노트북 팬 소음과 발열을 줄이기 위해 전원 설정을 어떻게 조정해 드릴까요?',
+      options: [
+        {
+          label: '① 전원 모드를 [최고의 전력 효율(조용하게)]로 안내해 주세요 (권장)',
+          detailAnswer: '전원 모드를 최고의 전력 효율로 변경해 팬 소음과 발열을 즉시 줄여주세요',
+        },
+        {
+          label: '② 배터리 절약 모드를 켜는 위치를 손가락 화살표로 짚어주세요',
+          detailAnswer: 'Windows 전원 설정에서 배터리 절약 모드를 켜는 위치를 안내해 주세요',
+        },
+      ],
+    };
+  }
+
   if (resolvedId === 'pc_excel_overlay') {
     return {
       questionId: qId,
@@ -627,6 +659,29 @@ export function buildSetupPreTriageQuestion(
         {
           label: '② PC카톡 부팅 자동실행 및 알림 팝업 끄는 위치를 찾고 싶어요',
           detailAnswer: 'PC카톡 설정과 알림 끄는 위치를 손가락 화살표로 차례대로 알려주세요',
+        },
+      ],
+    };
+  }
+
+  if (resolvedId === 'pc_laptop_noise_overlay') {
+    return {
+      questionId: qId,
+      presetId: 'pc_laptop_noise_overlay',
+      platform: 'pc',
+      symptomQuery: rawQuery,
+      exeBackgroundScanNote:
+        'ℹ️ Level 2 실물 오버레이 (Windows 전원 및 배터리 설정 안내)',
+      questionText:
+        '노트북 팬 소음과 발열을 줄이기 위해 전원 설정을 어떻게 조정해 드릴까요?',
+      options: [
+        {
+          label: '① 전원 모드를 [최고의 전력 효율(조용하게)]로 안내해 주세요 (권장)',
+          detailAnswer: '전원 모드를 최고의 전력 효율로 변경해 팬 소음과 발열을 즉시 줄여주세요',
+        },
+        {
+          label: '② 배터리 절약 모드를 켜는 위치를 손가락 화살표로 짚어주세요',
+          detailAnswer: 'Windows 전원 설정에서 배터리 절약 모드를 켜는 위치를 안내해 주세요',
         },
       ],
     };

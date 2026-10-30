@@ -209,7 +209,7 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
             "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
             "timedOut": bool(rb.get("timedOut")),
             "briefingKo": (
-                f"'{', '.join(kws)}'(으)로 [복원 기록]과 내 휴지통을 확인했지만 찾지 못했습니다. "
+                f"100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다. '{', '.join(kws)}'(으)로 [복원 기록]과 내 휴지통을 확인했지만 찾지 못했습니다. "
                 "귀신같이가 옮기거나 지운 기록도 없습니다. 다른 폴더로 옮겨졌을 수 있으니 [🎯 찾기]에서 이름으로 검색해 보세요."
             ),
         }

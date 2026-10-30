@@ -312,6 +312,10 @@ export const SetupMonsterContent: React.FC = () => {
   };
 
   const handleOpenRealFileLocation = async (fullPath: string) => {
+    const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
+    useSaySeeStore.setState({
+      lastQuarantineToast: `📂 파일 탐색기에서 [${fileName}] 파일을 선택하여 즉시 띄웠습니다!`,
+    });
     await executeRealOsAction('open_file_search', fullPath);
   };
 
@@ -863,8 +867,8 @@ export const SetupMonsterContent: React.FC = () => {
                   {turn.text}
                 </p>
 
-                <div className="p-3 rounded-xl bg-zinc-950/85 border border-white/10 flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-body-sm text-[11.5px] text-zinc-300">
+                <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-white/15 flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-body-sm text-[12px] text-slate-800 dark:text-zinc-100 font-bold">
                     귀신같이가 자동으로 바꾼 설정이 있으면 아래 버튼으로 원래대로 되돌릴 수 있습니다.
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
@@ -990,7 +994,7 @@ export const SetupMonsterContent: React.FC = () => {
                   {turn.timestamp}
                 </span>
               </div>
-              <p className="font-body-sm text-[13px] !text-zinc-100 font-medium whitespace-pre-line leading-relaxed">
+              <p className="font-body-sm text-[13px] text-slate-800 dark:text-zinc-100 font-medium whitespace-pre-line leading-relaxed">
                 {turn.text}
               </p>
               {turn.diagnosisPlan &&

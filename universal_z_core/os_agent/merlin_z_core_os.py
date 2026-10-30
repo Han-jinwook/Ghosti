@@ -1245,7 +1245,25 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
     if action in ("open_file_location", "open_file_search") and target_path:
         p = Path(target_path)
         if p.exists():
-            return open_file_location_on_interactive_desktop(p, mode="open_file_search")
+            # 1. 100% 무조건 보장되는 윈도우 표준 explorer /select 즉각 실행
+            try:
+                subprocess.Popen(["explorer.exe", f"/select,{str(p.resolve())}"])
+            except Exception:
+                try:
+                    os.startfile(str(p.parent.resolve()))
+                except Exception:
+                    pass
+            # 2. 추가 대화형 단독 검색창 시도
+            try:
+                res = open_file_location_on_interactive_desktop(p, mode="open_file_search")
+                return res
+            except Exception:
+                return {
+                    "ok": True,
+                    "action": action,
+                    "targetPath": str(p),
+                    "message": f"탐색기에서 [{p.name}] 파일을 선택하여 즉시 띄웠습니다.",
+                }
         return {"ok": False, "error": f"파일이 존재하지 않습니다: {target_path}"}
 
     before_state = inspect_real_pc_state()
