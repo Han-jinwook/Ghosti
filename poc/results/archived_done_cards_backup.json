@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-29T11:03:06.970968",
+  "updated_at": "2026-10-30T09:13:02.159990",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -162,6 +162,102 @@
       "last_edited_time": "2026-10-28T01:27:00.000Z",
       "url": "https://app.notion.com/p/6-407f9ffd2c1d801eb6d4cdb251854275",
       "archived_at": "2026-10-29T11:03:06.970733"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-81e9-af8b-f6e130429bae",
+      "title": "🎯 [귀신같이] [신규 미션] 전 메뉴 노션 스타일 접기/펼치기(토글) 반응 & 클린몬스터·대기실·설정몬스터 연관 숫자 변화 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-28T08:12:00.000Z",
+      "url": "https://app.notion.com/p/405f9ffd2c1d81e9af8bf6e130429bae",
+      "archived_at": "2026-10-29T11:23:31.015082"
+    },
+    {
+      "page_id": "403f9ffd-2c1d-8179-a3ac-d49c55648bf2",
+      "title": "🎯 [귀신같이] [요금제·라운지] 새 대표 슬로건(언제나 0원) 및 초대·공유 버튼 확인",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-28T08:12:00.000Z",
+      "url": "https://app.notion.com/p/0-403f9ffd2c1d8179a3acd49c55648bf2",
+      "archived_at": "2026-10-29T12:29:48.033672"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-80f8-903f-d5b8d90e2b07",
+      "title": "🎯 [귀신같이] UI 관련",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-29T00:38:00.000Z",
+      "url": "https://app.notion.com/p/UI-407f9ffd2c1d80f8903fd5b8d90e2b07",
+      "archived_at": "2026-10-29T12:58:06.126842"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-814d-aa60-fb53064bfb00",
+      "title": "🎯 [썬드리머] 스토어 구매·결제수단 선택 UX 개편 & 무통장 오주문 방지·즉시취소 종합 테스트",
+      "app": "썬드리머",
+      "last_edited_time": "2026-10-29T00:54:00.000Z",
+      "url": "https://app.notion.com/p/UX-407f9ffd2c1d814daa60fb53064bfb00",
+      "archived_at": "2026-10-29T14:02:53.840489"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-8104-909a-c4110f3fd1dd",
+      "title": "🎯 [귀신같이] [서브메뉴 ①: 🧹 치우기] 사진·쓰레기 정리 & 연사·중복 묶음 Pick & 1초 원상복구 마스터 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-29T01:19:00.000Z",
+      "url": "https://app.notion.com/p/Pick-1-407f9ffd2c1d8104909ac4110f3fd1dd",
+      "archived_at": "2026-10-29T14:07:58.013051"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-81aa-970a-ffe37821780a",
+      "title": "🎯 [귀신같이] [1·2단계 🧹치우기 × ⚙️고치기] 통합 대화형 주치의 · 0원 무료 · [복원 기록] 3단계 사전검진 · 로컬 건강검진 기록함 검증",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-29T01:25:00.000Z",
+      "url": "https://app.notion.com/p/1-2-0-3-407f9ffd2c1d81aa970affe37821780a",
+      "archived_at": "2026-10-29T14:14:03.388828"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-81ed-bfcf-e72d64dce54b",
+      "title": "🎯 [썬드리머] 스토어 실제 카드결제(KCP) & 네이버페이 연동 실전 테스트 (실결제 1~2회 포함)",
+      "app": "썬드리머",
+      "last_edited_time": "2026-10-29T01:59:00.000Z",
+      "url": "https://app.notion.com/p/KCP-1-2-407f9ffd2c1d81edbfcfe72d64dce54b",
+      "archived_at": "2026-10-29T14:16:05.485057"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-806c-acc4-f85442dc75fb",
+      "title": "🎯[귀신같이] 화면 전체적인 글자 크기",
+      "app": "",
+      "last_edited_time": "2026-10-29T02:15:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d806cacc4f85442dc75fb",
+      "archived_at": "2026-10-29T14:28:14.737310"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-800c-9b6d-e4d63fc0161a",
+      "title": "🎯[썬드리머] 포인트 내역",
+      "app": "",
+      "last_edited_time": "2026-10-29T03:28:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d800c9b6de4d63fc0161a",
+      "archived_at": "2026-10-29T14:30:17.159450"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-80bb-88fd-f0728e2e750f",
+      "title": "🎯[센스톡] 카톡 전송시 닉네임 반영 안되는 건",
+      "app": "",
+      "last_edited_time": "2026-10-29T03:56:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d80bb88fdf0728e2e750f",
+      "archived_at": "2026-10-29T14:58:40.962375"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-802c-a03c-fe8c5945fe18",
+      "title": "🎯[센스톡] 수신자 명단 숫자 오류",
+      "app": "",
+      "last_edited_time": "2026-10-29T05:01:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d802ca03cfe8c5945fe18",
+      "archived_at": "2026-10-29T15:00:44.377474"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-80c1-bd8a-f8aac5d794cb",
+      "title": "🎯[센스톡] 카톡 이모티콘 전송 오류 ",
+      "app": "",
+      "last_edited_time": "2026-10-29T05:06:00.000Z",
+      "url": "https://app.notion.com/p/407f9ffd2c1d80c1bd8af8aac5d794cb",
+      "archived_at": "2026-10-30T09:13:02.159732"
     }
   ]
 }
