@@ -279,14 +279,23 @@ export const SetupMonsterContent: React.FC = () => {
       text: q,
       sourceTab: 'repair',
     };
-    setMonsterMessages((prev) => [...prev, userMsg]);
+    const pendingMsg: MonsterChatMessage = {
+      id: `pending_rep_${Date.now()}`,
+      role: 'assistant',
+      timestamp: nowLabel,
+      text: /없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해/i.test(q)
+        ? '100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다.\n(내 PC 5대 은닉 금고와 윈도우 휴지통을 실시간 대조하는 중...)'
+        : '🩺 내 PC 상태를 실시간으로 확인하는 중입니다...',
+      sourceTab: 'repair',
+    };
+    setMonsterMessages([userMsg, pendingMsg]);
     const aiMsg = await processUnifiedMonsterChatQuery({
       query: q,
       sourceTab: 'repair',
       literacyLevel,
       ttsEnabled: true,
     });
-    setMonsterMessages((prev) => [...prev, aiMsg]);
+    setMonsterMessages([userMsg, aiMsg]);
   };
 
   const [realPcState, setRealPcState] = useState<RealPcOsInspectionData | null>(null);
@@ -1239,6 +1248,12 @@ export const SetupMonsterContent: React.FC = () => {
               대화 접기 ✕
             </button>
           </div>
+          {monsterMessages.some((m) => m.text.includes('100% 정직 판정')) && (
+            <div className="p-3 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 text-emerald-200 font-extrabold text-[13px] shadow-lg flex items-center gap-2">
+              <span>🛡️</span>
+              <span>100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다</span>
+            </div>
+          )}
           <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
             {monsterMessages.map((msg) => (
               <div

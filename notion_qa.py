@@ -389,10 +389,158 @@ def mark_fixing(page_id: str) -> bool:
     return update_bug_status(page_id, STATUS_FIXING)
 
 
-def complete_bug(page_id: str, guide_text: str) -> bool:
+def _fetch_page_top_blocks(page_id: str) -> List[Dict[str, Any]]:
+    url = f"{NOTION_API_BASE}/blocks/{page_id.strip()}/children?page_size=100"
+    res = requests.get(url, headers=get_headers(), timeout=15)
+    if res.status_code != 200:
+        return []
+    return res.json().get("results", [])
+
+
+def find_inline_target_block_id(
+    blocks: List[Dict[str, Any]],
+    step_num: Optional[str] = None,
+) -> Optional[str]:
+    """
+    미션 카드 내부에서 AI 피드백을 맨 밑이 아니라 '해당 단계(to_do) 또는 테스터 붉은색 코멘트(및 첨부 이미지) 바로 밑'에
+    기록하기 위해 Notion API의 `after` 기준 블록 ID를 탐색합니다.
+    """
+    import re
+
+    if not blocks:
+        return None
+
+    # 1) 특정 단계 번호(예: '0', '1', '2', '4')가 지정된 경우 해당 to_do 섹션의 마지막 테스터 블록(붉은 코멘트/이미지) 반환
+    if step_num is not None:
+        target_todo_idx: Optional[int] = None
+        for idx, blk in enumerate(blocks):
+            if blk.get("type") == "to_do":
+                txt = extract_plain_text(blk.get("to_do", {}).get("rich_text", [])).strip()
+                m = re.match(r"^(\d+)[.)\s]", txt)
+                if m and m.group(1) == str(step_num):
+                    target_todo_idx = idx
+                    break
+        if target_todo_idx is not None:
+            last_id = blocks[target_todo_idx]["id"]
+            for j in range(target_todo_idx + 1, len(blocks)):
+                nb = blocks[j]
+                ntype = nb.get("type", "")
+                if ntype in ("to_do", "divider"):
+                    break
+                ndata = nb.get(ntype, {})
+                ntxt = extract_plain_text(ndata.get("rich_text", [])).strip()
+                if is_red_annotated(ndata) or ntype == "image" or (ntxt and not ntxt.startswith("[AI ")):
+                    last_id = nb["id"]
+                elif ntxt.startswith("[AI ") or "AI 수정 완료" in ntxt:
+                    last_id = nb["id"]
+            return last_id
+
+    # 2) 단계 번호 미지정 시: 카드 내 마지막 붉은색(red) 테스터 코멘트 블록(및 바로 아래 첨부된 이미지 블록) 탐색
+    last_red_idx: Optional[int] = None
+    for idx, blk in enumerate(blocks):
+        btype = blk.get("type", "")
+        bdata = blk.get(btype, {})
+        if is_red_annotated(bdata):
+            last_red_idx = idx
+
+    if last_red_idx is not None:
+        target_idx = last_red_idx
+        while target_idx + 1 < len(blocks) and blocks[target_idx + 1].get("type") == "image":
+            target_idx += 1
+        return blocks[target_idx]["id"]
+
+    # 3) 붉은색 코멘트가 없으면 마지막 미체크(checked=False) to_do 블록 바로 아래에 배치
+    for idx in range(len(blocks) - 1, -1, -1):
+        blk = blocks[idx]
+        if blk.get("type") == "to_do" and not blk.get("to_do", {}).get("checked", False):
+            return blk["id"]
+
+    # 4) 그 외 일반 텍스트 카드는 빈 줄을 제외한 마지막 본문 블록 바로 아래에 배치
+    for idx in range(len(blocks) - 1, -1, -1):
+        blk = blocks[idx]
+        btype = blk.get("type", "")
+        bdata = blk.get(btype, {})
+        txt = extract_plain_text(bdata.get("rich_text", [])).strip()
+        if txt or btype == "image":
+            return blk["id"]
+
+    return None
+
+
+def insert_inline_ai_feedback(
+    page_id: str,
+    guide_text: str,
+    header_label: str = "↳ 🛠️ [AI 수정 완료 및 재테스트 안내]",
+    header_color: str = "green",
+    after_block_id: Optional[str] = None,
+    step_num: Optional[str] = None,
+) -> bool:
+    """
+    카드 맨 밑에 구분선(divider)과 함께 누적시키는 대신,
+    해당 단계(to_do) 또는 테스터의 붉은색 코멘트 바로 아래(`after: target_block_id`)에 인라인으로 기록합니다.
+    """
+    clean_page_id = page_id.strip()
+    blocks_url = f"{NOTION_API_BASE}/blocks/{clean_page_id}/children"
+    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    target_after_id = after_block_id
+    if not target_after_id:
+        blocks = _fetch_page_top_blocks(clean_page_id)
+        target_after_id = find_inline_target_block_id(blocks, step_num=step_num)
+
+    children_payload = [
+        {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": f"{header_label} ({timestamp_str})\n"
+                        },
+                        "annotations": {"bold": True, "color": header_color},
+                    },
+                    {
+                        "type": "text",
+                        "text": {"content": guide_text.strip()[:1900]},
+                    },
+                ]
+            },
+        }
+    ]
+
+    req_body: Dict[str, Any] = {"children": children_payload}
+    if target_after_id:
+        req_body["after"] = target_after_id
+
+    block_res = requests.patch(
+        blocks_url,
+        headers=get_headers(),
+        json=req_body,
+        timeout=15,
+    )
+    if block_res.status_code != 200 and "after" in req_body:
+        # fallback if target_after_id was archived/nested
+        req_body.pop("after", None)
+        block_res = requests.patch(
+            blocks_url,
+            headers=get_headers(),
+            json=req_body,
+            timeout=15,
+        )
+    return block_res.status_code == 200
+
+
+def complete_bug(
+    page_id: str,
+    guide_text: str,
+    after_block_id: Optional[str] = None,
+    step_num: Optional[str] = None,
+) -> bool:
     """
     1) 해당 카드의 상태를 '재테스트 대기'로 변경하고,
-    2) 카드 본문 맨 아래에 "[AI 수정 완료 및 재테스트 지시]\\n" + guide_text 내용을 블록으로 추가하며,
+    2) 카드 맨 밑이 아닌 '해당 단계(리스트) 또는 테스터 코멘트 바로 밑'에 인라인으로 AI 피드백 블록을 추가하며,
     3) 남은 '발견된 버그'가 있으면 다음 번호 버그를 이어서 수정할지 자동으로 브리핑합니다.
     """
     ensure_valid_token()
@@ -420,51 +568,27 @@ def complete_bug(page_id: str, guide_text: str) -> bool:
         )
         return False
 
-    # 2단계: 카드 본문 맨 아래에 "[AI 수정 완료 및 재테스트 지시]\n" + guide_text 블록 추가
-    blocks_url = f"{NOTION_API_BASE}/blocks/{clean_page_id}/children"
-    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    full_instruction_text = f"[AI 수정 완료 및 재테스트 지시]\n{guide_text.strip()}"
-
-    children_payload = [
-        {"object": "block", "type": "divider", "divider": {}},
-        {
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {
-                            "content": f"[AI 수정 완료 및 재테스트 지시] ({timestamp_str})\n"
-                        },
-                        "annotations": {"bold": True, "color": "green"},
-                    },
-                    {
-                        "type": "text",
-                        "text": {"content": guide_text.strip()[:1900]},
-                    },
-                ]
-            },
-        },
-    ]
-
-    block_res = requests.patch(
-        blocks_url,
-        headers=get_headers(),
-        json={"children": children_payload},
-        timeout=15,
+    # 2단계: 해당 단계/붉은 코멘트 바로 아래에 인라인으로 "[AI 수정 완료 및 재테스트 안내]" 추가
+    full_instruction_text = f"↳ 🛠️ [AI 수정 완료 및 재테스트 안내]\n{guide_text.strip()}"
+    ok_block = insert_inline_ai_feedback(
+        clean_page_id,
+        guide_text,
+        header_label="↳ 🛠️ [AI 수정 완료 및 재테스트 안내]",
+        header_color="green",
+        after_block_id=after_block_id,
+        step_num=step_num,
     )
 
-    if block_res.status_code != 200:
+    if not ok_block:
         print(
-            f"⚠️ 상태는 '{STATUS_READY_FOR_QA}'로 변경되었으나 본문 블록 추가에 실패했습니다 (HTTP {block_res.status_code}): {block_res.text}"
+            f"⚠️ 상태는 '{STATUS_READY_FOR_QA}'로 변경되었으나 인라인 본문 블록 추가에 실패했습니다."
         )
         return False
 
-    print("\n✅ [노션 자동 반영 완료!]")
+    print("\n✅ [노션 인라인 피드백 자동 반영 완료!]")
     print(f"   • 카드 ID : {clean_page_id}")
     print(f"   • 상태 변경: '{STATUS_READY_FOR_QA}' 🚀")
-    print(f"   • 해나라님 안내문:\n     {full_instruction_text.replace(chr(10), chr(10) + '     ')}")
+    print(f"   • 해나라님 인라인 안내문:\n     {full_instruction_text.replace(chr(10), chr(10) + '     ')}")
 
     # 3단계: 남은 '발견 버그' 자동 확인 후 다음 작업 제안 (추가 토큰 0)
     remaining_bugs = query_bugs_raw()
@@ -572,47 +696,30 @@ def trim_done_cards(keep_count: int = 7) -> int:
     return archived_count
 
 
-def archive_done(page_id: str, memo_text: str = "") -> bool:
+def archive_done(
+    page_id: str,
+    memo_text: str = "",
+    after_block_id: Optional[str] = None,
+    step_num: Optional[str] = None,
+) -> bool:
     """
     해나라님이 메시지 작성 후 '발견된 버그'로 넘긴 카드를
-    AI가 확인/킵한 뒤 '완료' 상태로 넘기는 함수입니다.
+    AI가 확인/반영한 뒤 해당 코멘트 바로 아래에 인라인 피드백을 기록하고 '완료' 상태로 넘기는 함수입니다.
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
 
     clean_page_id = page_id.strip()
 
-    # 1단계: 카드 본문 맨 아래에 "[AI 확인 및 완료 처리]" 블록 추가
+    # 1단계: 해당 코멘트/단계 바로 아래에 인라인으로 "[AI 확인 및 반영 완료]" 블록 추가
     if memo_text.strip():
-        blocks_url = f"{NOTION_API_BASE}/blocks/{clean_page_id}/children"
-        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        children_payload = [
-            {"object": "block", "type": "divider", "divider": {}},
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": f"[AI 확인 및 완료 처리] ({timestamp_str})\n"
-                            },
-                            "annotations": {"bold": True, "color": "blue"},
-                        },
-                        {
-                            "type": "text",
-                            "text": {"content": memo_text.strip()},
-                        },
-                    ]
-                },
-            },
-        ]
-        requests.patch(
-            blocks_url,
-            headers=get_headers(),
-            json={"children": children_payload},
-            timeout=15,
+        insert_inline_ai_feedback(
+            clean_page_id,
+            memo_text,
+            header_label="↳ ✅ [AI 확인 및 반영 완료]",
+            header_color="blue",
+            after_block_id=after_block_id,
+            step_num=step_num,
         )
 
     # 2단계: 카드의 상태를 '완료'로 변경
