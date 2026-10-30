@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 
+// 특허 출원번호(10-2026-XXXXXXX) 확보 전까지 허위표시 리스크 및 출원 전 공지(신규성 상실) 방지를 위해 false 유지
+export const PATENTS_FILED = false;
+
 interface GhostiShowroomLandingProps {
   onEnterWorkspace: () => void;
 }
@@ -27,7 +30,7 @@ const SHORTS_DATA: ShortsItem[] = [
     hookLine: '“10분짜리 가족 영상에서 아기 걸음마 장면 찾느라 타임라인 일일이 땡기셨죠?”',
     solutionLine: '『귀신같이』에 "걸음마" 세 글자만 치면 03분 12초로 1초 만에 즉시 점프!',
     recommendedKeyword: '아기 걸음마 / 촛불 끄기 / 제주 바다',
-    tag: '🎬 비디오 1초 타임스탬프 특허',
+    tag: PATENTS_FILED ? '🎬 비디오 1초 타임스탬프 특허' : '🎬 비디오 1초 타임스탬프 점프',
     thumbnailBg: 'from-cyan-950 via-teal-900 to-slate-900',
   },
   {
@@ -50,7 +53,7 @@ const SHORTS_DATA: ShortsItem[] = [
     hookLine: '“엑셀 파일 수십 개 하나씩 열어서 Ctrl+F 누르다가 컴퓨터 멈춘 적 있으시죠?”',
     solutionLine: '파일을 안 열어도 표 안의 숫자와 글자를 0.01초 만에 엑스레이처럼 투시합니다.',
     recommendedKeyword: '지체상금 0.15% / 계약금 잔금 / 소득공제',
-    tag: '📊 무설정 스마트 서류 투시 특허',
+    tag: PATENTS_FILED ? '📊 무설정 스마트 서류 투시 특허' : '📊 무설정 스마트 서류 투시 검색',
     thumbnailBg: 'from-blue-950 via-indigo-950 to-slate-900',
   },
   {
@@ -129,7 +132,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <nav className="hidden md:flex items-center gap-6 text-[14px] font-semibold text-zinc-300">
             <a href="#features" className="hover:text-[#00F0B5] transition-colors">핵심 기능</a>
             <a href="#shorts" className="hover:text-[#00F0B5] transition-colors">15초 영상 쇼룸</a>
-            <a href="#patents" className="hover:text-[#00F0B5] transition-colors">6대 특허 기술</a>
+            {PATENTS_FILED && (
+              <a href="#patents" className="hover:text-[#00F0B5] transition-colors">6대 특허 기술</a>
+            )}
             <a href="#security" className="hover:text-[#00F0B5] transition-colors">Zero-Server 보안</a>
           </nav>
 
@@ -164,7 +169,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           {/* 상단 인증 태그 */}
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[12px] sm:text-[13px] font-black mb-6">
             <span className="animate-pulse">●</span>
-            <span>대한민국 6대 특허출원 · 개인 평생 무료 국민앱 · Zero-Server 로컬 프라이버시</span>
+            <span>{PATENTS_FILED ? '대한민국 6대 특허출원' : '특허 출원 진행 중'} · 개인 평생 무료 국민앱 · Zero-Server 로컬 프라이버시</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.18] mb-6">
@@ -321,7 +326,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     말 한마디로 1초 만에 포착! 황금 돋보기 스캔 광선으로 즉시 투시
                   </h3>
                   <p className="text-teal-200/80 text-xs sm:text-sm mt-1">
-                    대한민국 6대 특허출원 엔진 탑재. 파일·영상·사진이 있는 그 자리에서 1초 만에 찾아냅니다.
+                    {PATENTS_FILED ? '대한민국 6대 특허출원 엔진 탑재.' : '100% 로컬 온디바이스 AI 엔진 탑재.'} 파일·영상·사진이 있는 그 자리에서 1초 만에 찾아냅니다.
                   </p>
                 </div>
               </div>
@@ -441,7 +446,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         </div>
       </section>
 
-      {/* 5. 6대 특허출원 기술 & Zero-Server 프라이버시 */}
+      {/* 5. 6대 특허출원 기술 & Zero-Server 프라이버시 (출원번호 확보 시 PATENTS_FILED = true 로 즉시 활성화) */}
+      {PATENTS_FILED && (
       <section id="patents" className="py-20 px-4 sm:px-6 max-w-7xl mx-auto border-t border-white/5 bg-gradient-to-b from-transparent via-teal-950/10 to-transparent">
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-300 text-xs font-bold mb-3">
@@ -515,6 +521,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           ))}
         </div>
       </section>
+      )}
 
       {/* 6. 네이버 블로그 & 유튜브 공식 채널 안내 배너 */}
       <section className="py-14 px-4 sm:px-6 max-w-7xl mx-auto">
@@ -567,7 +574,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 (주)썬드림스튜디오 · 멀린패밀리 생태계 제1호 플래그십 『귀신같이(Ghosti)』
               </p>
               <p className="mt-0.5">
-                상표출원 제40-2026-0229386호 · 대한민국 6대 특허출원 · Zero-Server 프라이버시 엔진 탑재
+                상표출원 제40-2026-0229386호 · {PATENTS_FILED ? '대한민국 6대 특허출원' : '특허 출원 진행 중'} · Zero-Server 프라이버시 엔진 탑재
               </p>
             </div>
           </div>
