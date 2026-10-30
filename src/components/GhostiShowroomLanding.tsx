@@ -13,7 +13,6 @@ export const OFFICIAL_LAUNCH_LIVE = false;
 interface GhostiShowroomLandingProps {
   onEnterWorkspace: (forceAllow?: boolean) => void;
   isDevAuthorized?: boolean;
-  onUnlockDevMode?: () => void;
 }
 
 export interface ShortsItem {
@@ -165,12 +164,11 @@ const QUICK_EMAIL_DOMAINS = ['@naver.com', '@gmail.com', '@daum.net', '@kakao.co
 export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   onEnterWorkspace,
   isDevAuthorized = false,
-  onUnlockDevMode,
 }) => {
   const { user, isLoggedIn, refreshSession } = useHub();
   const { status: otpStatus, sendOtp, verifyOtp, timer, formatTimer, error: otpError, reset: resetOtp } = useHubAuth();
 
-  // 출시 모드 상태: 기본값은 OFFICIAL_LAUNCH_LIVE(false), 개발자/QA 권한이 있을 때만 출시 후 온보딩 모드로 미리보기 전환 가능
+  // 출시 모드 상태: 기본값은 OFFICIAL_LAUNCH_LIVE(false), ?dev=true 권한이 있을 때만 테스트용 온보딩뷰 전환 가능
   const [isLaunched, setIsLaunched] = useState<boolean>(OFFICIAL_LAUNCH_LIVE);
   const [shortsList, setShortsList] = useState<ShortsItem[]>(DEFAULT_SHORTS_DATA);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'video' | 'doc' | 'clean'>('all');
@@ -201,9 +199,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   const heroCtaRef = useRef<HTMLDivElement | null>(null);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  // 시크릿 개발자/QA 잠금 해제용 푸터 클릭 카운터 (일반 방문자는 절대 모르고 관리자만 5연타로 해제 가능)
-  const [secretClickCount, setSecretClickCount] = useState(0);
 
   const verifiedUserEmail = (isLoggedIn && user?.email) ? user.email : localVerifiedEmail;
 
@@ -330,15 +325,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     }
   };
 
-  const handleFooterSecretClick = () => {
-    const next = secretClickCount + 1;
-    setSecretClickCount(next);
-    if (next >= 5 && onUnlockDevMode) {
-      onUnlockDevMode();
-      setSecretClickCount(0);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#070B11] text-zinc-100 font-sans selection:bg-[#00F0B5]/30 selection:text-[#00F0B5] relative overflow-x-hidden">
       {/* 백그라운드 앰비언트 글로우 */}
@@ -414,13 +400,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               </button>
             )}
 
-            {/* ⚠️ 관리자/QA 시크릿 컨트롤: 일반 외부 방문자(isDevAuthorized === false)에게는 DOM에서 100% 숨김 */}
+            {/* ⚠️ ?dev=true 접속 시에만 나타나는 개발자 컨트롤 */}
             {isDevAuthorized && (
               <div className="flex items-center gap-1.5 pl-2 border-l border-white/15">
                 <button
                   type="button"
                   onClick={() => setIsLaunched(!isLaunched)}
-                  title="관리자 전용: 출시 전(사전 알림) 대문과 출시 후(온보딩 본앱 진입) 대문을 전환해 확인합니다."
+                  title="?dev=true 전용: 출시 전(사전 알림) 대문과 출시 후(온보딩 본앱 진입) 대문을 전환해 확인합니다."
                   className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30 text-[11px] font-bold transition-all cursor-pointer"
                 >
                   {isLaunched ? '🚀 출시 후 온보딩뷰' : '⏳ 출시 전 사전뷰'}
@@ -428,7 +414,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <button
                   type="button"
                   onClick={() => onEnterWorkspace(true)}
-                  title="관리자/QA 전용: 개발 중인 내부 워크스페이스로 진입합니다."
+                  title="?dev=true 전용: 개발 중인 내부 워크스페이스로 진입합니다."
                   className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-teal-300 border border-teal-500/40 text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1"
                 >
                   <span>🧪</span>
@@ -1278,10 +1264,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <span>·</span>
               </>
             )}
-            <span
-              onClick={handleFooterSecretClick}
-              className="select-none cursor-default"
-            >
+            <span className="select-none">
               © 2026 Sundreamer Studio. All rights reserved.
             </span>
           </div>

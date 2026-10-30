@@ -33,24 +33,13 @@ export const App: React.FC = () => {
     dismissUndoBatch,
   } = useSaySeeStore();
 
-  // 개발자 / QA 테스터 시크릿 권한 판별:
-  // 일반 외부 방문자(유튜브·네이버·구글 검색 유입)에게는 개발 중인 본진 워크스페이스 및 QA 버튼을 100% 비노출 잠금합니다.
+  // 오직 URL 뒤에 `?dev=true`가 붙어 있을 때만 개발자/QA 전용 내부 워크스페이스 권한 부여
+  // 그 외 일반 외부 방문자에게는 개발 중인 본진 워크스페이스를 100% 비노출 잠금합니다.
   const [isDevAuthorized, setIsDevAuthorized] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('visitor') === 'true' || params.get('lock') === 'true') {
-        localStorage.removeItem('ghosti_dev_qa_unlocked');
-        localStorage.removeItem('ghosti_view_mode');
-        return false;
-      }
-      if (
-        params.get('dev') === 'true' ||
-        params.get('qa') === 'true' ||
-        params.get('app') === 'true' ||
-        params.get('workspace') === 'true' ||
-        params.get('mode') === 'app'
-      ) {
-        localStorage.setItem('ghosti_dev_qa_unlocked', 'true');
+      if (params.get('dev') === 'true') {
+        localStorage.setItem('ghosti_dev_unlocked', 'true');
         return true;
       }
       if (
@@ -59,7 +48,7 @@ export const App: React.FC = () => {
       ) {
         return true;
       }
-      return localStorage.getItem('ghosti_dev_qa_unlocked') === 'true';
+      return localStorage.getItem('ghosti_dev_unlocked') === 'true';
     } catch {
       return false;
     }
@@ -69,28 +58,15 @@ export const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'showroom' | 'workspace'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (
-        params.get('showroom') === 'true' ||
-        params.get('mode') === 'showroom' ||
-        params.get('visitor') === 'true' ||
-        params.get('lock') === 'true'
-      ) {
-        return 'showroom';
-      }
-      const hasDevParam =
-        params.get('app') === 'true' ||
-        params.get('mode') === 'app' ||
-        params.get('workspace') === 'true' ||
-        params.get('qa') === 'true' ||
-        params.get('dev') === 'true';
-      if (hasDevParam) {
+      // ?dev=true 로 접속 시 즉시 본진 워크스페이스로 열림
+      if (params.get('dev') === 'true') {
         return 'workspace';
       }
-      // 정식 출시 전(!OFFICIAL_LAUNCH_LIVE)에는 일반 방문자가 워크스페이스로 절대 진입할 수 없도록 원천 잠금
+      // 정식 출시 전(!OFFICIAL_LAUNCH_LIVE)에는 ?dev=true 권한이 없는 일반 방문자는 무조건 대문 고정
       const unlocked =
         window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1' ||
-        localStorage.getItem('ghosti_dev_qa_unlocked') === 'true';
+        localStorage.getItem('ghosti_dev_unlocked') === 'true';
       if (!OFFICIAL_LAUNCH_LIVE && !unlocked) {
         return 'showroom';
       }
@@ -101,13 +77,6 @@ export const App: React.FC = () => {
     }
     return 'showroom';
   });
-
-  const handleUnlockDevMode = () => {
-    try {
-      localStorage.setItem('ghosti_dev_qa_unlocked', 'true');
-    } catch {}
-    setIsDevAuthorized(true);
-  };
 
   const handleEnterWorkspace = (forceAllow = false) => {
     if (!OFFICIAL_LAUNCH_LIVE && !isDevAuthorized && !forceAllow) {
@@ -165,7 +134,6 @@ export const App: React.FC = () => {
         <GhostiShowroomLanding
           onEnterWorkspace={handleEnterWorkspace}
           isDevAuthorized={isDevAuthorized}
-          onUnlockDevMode={handleUnlockDevMode}
         />
       ) : (
         <>
