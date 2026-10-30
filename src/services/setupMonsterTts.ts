@@ -1,19 +1,20 @@
 import { getZCoreUrl } from './zCoreBridge';
 /**
  * [🛠️ Ghosti 설정몬스터 Neural TTS 클라이언트 & 무지연 캐시 재생기]
- * 1. 기본 성우: typecast_piljae (MS 신경망 남성 성우 '현수(ko-KR-HyunsuNeural)')
- * 2. 보조 성우: typecast_yujin (Typecast 전속 여성 성우 '유진')
+ * 1. 기본 성우: typecast_piljae / ko-KR-HyunsuNeural (MS 신경망 남성 성우 '현수')
+ * 2. 문서 낭독 성우: ko-KR-SunHiNeural (MS 신경망 여성 성우 '선희')
  * 3. 3단 무지연 무과금 캐시 재생 구조:
  *    - ① Cache Hit: 로컬 tts_cache/{hash}.mp3 즉시 0.001초 재생 (메모리 ObjectURL 2차 캐싱 포함, 비용 0원)
- *    - ② Cache Miss: MS 신경망 현수 성우 최초 1회 실시간 합성 재생 + 백그라운드 Write-Through 캐시 영구 저장
+ *    - ② Cache Miss: MS 신경망 현수/선희 성우 최초 1회 실시간 합성 재생 + 백그라운드 Write-Through 캐시 영구 저장
  *    - ③ Pre-warming: 앱 시작 시 고정 안내 멘트 13종 백그라운드 일괄 사전 합성 (이후 영구 무과금 재활용)
  * 4. 오프라인/비상 폴백 방어:
- *    - Typecast API 장애/크레딧 부족 시 edge-tts (ko-KR-InJoonNeural) 자동 대체
  *    - 네트워크 완전 단절 시 speechSynthesis (Microsoft InJoon Natural -> Google 한국의) 폴백
- *    - 'Heami' 등 구형 데스크톱 기계음은 원천 차단
+ *    - 'Heami' 등 구형 데스크톱 기계음은 100% 원천 차단
  */
 
 export const SETUP_MONSTER_TTS_VOICE_PILJAE = 'typecast_piljae' as const; // MS 신경망 성우 '현수(ko-KR-HyunsuNeural)'
+export const SETUP_MONSTER_TTS_VOICE_HYUNSU = 'ko-KR-HyunsuNeural' as const;
+export const SETUP_MONSTER_TTS_VOICE_SUNHI = 'ko-KR-SunHiNeural' as const;
 export const SETUP_MONSTER_TTS_VOICE_YUJIN = 'typecast_yujin' as const;
 export const SETUP_MONSTER_TTS_VOICE_EDGE = 'ko-KR-InJoonNeural' as const;
 
@@ -22,10 +23,12 @@ export const SETUP_MONSTER_TTS_VOICE_ALT = SETUP_MONSTER_TTS_VOICE_YUJIN;
 
 export type SetupMonsterTtsVoice =
   | typeof SETUP_MONSTER_TTS_VOICE_PILJAE
+  | typeof SETUP_MONSTER_TTS_VOICE_HYUNSU
+  | typeof SETUP_MONSTER_TTS_VOICE_SUNHI
   | typeof SETUP_MONSTER_TTS_VOICE_YUJIN
   | typeof SETUP_MONSTER_TTS_VOICE_EDGE;
 
-export const SETUP_MONSTER_TTS_RATE_DEFAULT = '+0%' as const;
+export const SETUP_MONSTER_TTS_RATE_DEFAULT = '+15%' as const;
 
 export const SETUP_MONSTER_PREWARM_PHRASES: readonly string[] = [
   '끊어졌던 업무용 S 드라이브를 다시 연결하고 폴더 창을 열어 드렸습니다.',
@@ -93,9 +96,9 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
 
     const preferredVoice =
       nonRoboticVoices.find((v) =>
-        /Microsoft\s+InJoon\s+Online\s*\(Natural\)/i.test(v.name)
+        /Microsoft\s+(InJoon|Hyunsu|SunHi)\s+Online\s*\(Natural\)/i.test(v.name)
       ) ||
-      nonRoboticVoices.find((v) => /InJoon|Hyunsu/i.test(v.name)) ||
+      nonRoboticVoices.find((v) => /InJoon|Hyunsu|SunHi/i.test(v.name)) ||
       nonRoboticVoices.find((v) => /Google\s*한국의/i.test(v.name)) ||
       nonRoboticVoices.find((v) => /Google/i.test(v.name) && /ko/i.test(v.lang));
 
@@ -107,7 +110,7 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     const utter = new SpeechSynthesisUtterance(text);
     utter.voice = preferredVoice;
     utter.lang = 'ko-KR';
-    utter.rate = 1.0;
+    utter.rate = 1.15;
     window.speechSynthesis.speak(utter);
     return true;
   } catch {
@@ -116,12 +119,12 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
 }
 
 /**
- * [MS 신경망 성우 '현수(ko-KR-HyunsuNeural)' 무지연 재생 & Write-Through 캐싱]
+ * [MS 신경망 성우 '현수(ko-KR-HyunsuNeural)' / '선희(ko-KR-SunHiNeural)' 무지연 재생 & Write-Through 캐싱]
  */
 export async function speakSetupMonsterTts(
   rawText: string,
   options?: {
-    voice?: SetupMonsterTtsVoice;
+    voice?: SetupMonsterTtsVoice | string;
     rate?: string;
   }
 ): Promise<{
@@ -129,6 +132,7 @@ export async function speakSetupMonsterTts(
   cacheStatus: 'MEMORY_HIT' | 'HIT' | 'MISS' | 'FALLBACK_NATURAL' | 'SKIPPED';
   voice: string;
   voiceActor?: string;
+  audioUrl?: string;
   elapsedMs: number;
 }> {
   const cleanText = normalizeTtsText(rawText);
@@ -159,7 +163,8 @@ export async function speakSetupMonsterTts(
         ok: true,
         cacheStatus: 'MEMORY_HIT',
         voice,
-        voiceActor: '현수 (MS Neural 무료 무제한)',
+        voiceActor: voice.includes('SunHi') ? '선희 (MS Neural 무료 무제한)' : '현수 (MS Neural 무료 무제한)',
+        audioUrl: cachedUrl,
         elapsedMs: Math.round((performance.now() - t0) * 100) / 100,
       };
     } catch {
@@ -167,7 +172,7 @@ export async function speakSetupMonsterTts(
     }
   }
 
-  // 1·2단계: 로컬 tts_cache 조회(Cache Hit 시 0.001초) 또는 Typecast 실시간 합성 + Write-Through 캐싱(Cache Miss)
+  // 1·2단계: 로컬 Z-코어 tts_cache 조회(Cache Hit 시 0.001초) 또는 MS 신경망 실시간 합성 + Write-Through 캐싱(Cache Miss)
   try {
     const res = await fetch(getZCoreUrl('/__setup-monster/tts'), {
       method: 'POST',
@@ -187,6 +192,7 @@ export async function speakSetupMonsterTts(
           cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',
           voice: data.voice || voice,
           voiceActor: data.voiceActor || '현수 (MS Neural 무료 무제한)',
+          audioUrl: playableUrl,
           elapsedMs:
             typeof data.elapsedMs === 'number'
               ? data.elapsedMs

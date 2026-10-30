@@ -34,8 +34,8 @@ export const App: React.FC = () => {
   } = useSaySeeStore();
 
   // 오직 URL 뒤에 `?dev=true`가 붙어 있을 때만 개발자/QA 전용 내부 워크스페이스 권한 부여
-  // 그 외 일반 외부 방문자에게는 개발 중인 본진 워크스페이스를 100% 비노출 잠금합니다.
-  const [isDevAuthorized, setIsDevAuthorized] = useState<boolean>(() => {
+  // 그 외 일반 외부 방문자에게는 정식 출시 전까지 개발 중인 본진 워크스페이스를 100% 비노출 잠금합니다.
+  const [isDevAuthorized] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('dev') === 'true') {
@@ -54,24 +54,40 @@ export const App: React.FC = () => {
     }
   });
 
-  // 검색어(SEO) 빌드업 & 하이브리드 온보딩 대문('showroom') vs 본진 앱 워크스페이스('workspace') 뷰 모드
+  // [기능명세 12.1절 확정] 세션 감지형 자동 패스스루 (Seamless Auto-Bypass):
+  // 1) 정식 출시 전(!OFFICIAL_LAUNCH_LIVE): ?dev=true 권한이 없는 일반 방문자는 무조건 온보딩 대문('showroom') 고정.
+  // 2) 정식 출시 후(OFFICIAL_LAUNCH_LIVE === true) 또는 개발자(?dev=true):
+  //    - 이미 로그인 세션(merlin_session_token)이 있거나 온보딩을 거쳐 진입한 이력(ghosti_onboarding_completed === 'true')이 있는 기존 회원은
+  //      재방문 시 온보딩 대문을 다시 거치거나 버튼을 누르지 않고 0.001초 만에 본진 워크스페이스('workspace')로 직행합니다.
+  //    - 오직 비로그인 첫 방문자(Guest)에게만 온보딩 대문('showroom')을 먼저 노출합니다.
   const [viewMode, setViewMode] = useState<'showroom' | 'workspace'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      // ?dev=true 로 접속 시 즉시 본진 워크스페이스로 열림
       if (params.get('dev') === 'true') {
+        localStorage.setItem('ghosti_onboarding_completed', 'true');
         return 'workspace';
       }
-      // 정식 출시 전(!OFFICIAL_LAUNCH_LIVE)에는 ?dev=true 권한이 없는 일반 방문자는 무조건 대문 고정
+
       const unlocked =
         window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1' ||
         localStorage.getItem('ghosti_dev_unlocked') === 'true';
+
+      // 정식 출시 전에는 일반 외부 방문자의 워크스페이스 진입을 원천 잠금
       if (!OFFICIAL_LAUNCH_LIVE && !unlocked) {
         return 'showroom';
       }
-      const saved = localStorage.getItem('ghosti_view_mode');
-      if (saved === 'workspace') return 'workspace';
+
+      // 세션 감지형 자동 패스스루(Seamless Auto-Bypass):
+      // 로그인 토큰(merlin_session_token) 보유 회원 또는 이미 온보딩을 완료한 기존 유저는 대문 스킵 후 즉시 본 앱 오픈
+      const hasActiveSession = Boolean(localStorage.getItem('merlin_session_token'));
+      const hasCompletedOnboarding =
+        localStorage.getItem('ghosti_onboarding_completed') === 'true' ||
+        localStorage.getItem('ghosti_view_mode') === 'workspace';
+
+      if (hasActiveSession || hasCompletedOnboarding) {
+        return 'workspace';
+      }
     } catch {
       // ignore
     }
@@ -83,26 +99,37 @@ export const App: React.FC = () => {
       return;
     }
     try {
+      localStorage.setItem('ghosti_onboarding_completed', 'true');
       localStorage.setItem('ghosti_view_mode', 'workspace');
     } catch {}
     setViewMode('workspace');
   };
 
+  // 워크스페이스 내부 상단 헤더의 [🏠 공식 쇼룸 대문] 버튼을 명시적으로 눌렀을 때만 해당 세션에서 대문 열람
+  // (단, ghosti_onboarding_completed는 유지되므로 다음 날 앱에 재접속할 때는 다시 자동으로 워크스페이스로 직행)
   const handleEnterShowroom = () => {
-    try {
-      localStorage.setItem('ghosti_view_mode', 'showroom');
-    } catch {}
     setViewMode('showroom');
   };
 
   useEffect(() => {
     const onGoShowroom = () => handleEnterShowroom();
     const onGoWorkspace = () => handleEnterWorkspace();
+    const onMerlinLoggedIn = () => {
+      try {
+        localStorage.setItem('ghosti_onboarding_completed', 'true');
+      } catch {}
+      // 정식 출시 상태이거나 개발자 권한이 있을 때 온보딩에서 로그인을 완료하면 즉시 본진 워크스페이스로 자동 진입
+      if (OFFICIAL_LAUNCH_LIVE || isDevAuthorized) {
+        setViewMode('workspace');
+      }
+    };
     window.addEventListener('ghosti_navigate_showroom', onGoShowroom);
     window.addEventListener('ghosti_navigate_workspace', onGoWorkspace);
+    window.addEventListener('merlinLoggedIn', onMerlinLoggedIn);
     return () => {
       window.removeEventListener('ghosti_navigate_showroom', onGoShowroom);
       window.removeEventListener('ghosti_navigate_workspace', onGoWorkspace);
+      window.removeEventListener('merlinLoggedIn', onMerlinLoggedIn);
     };
   }, [isDevAuthorized]);
 

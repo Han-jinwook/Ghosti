@@ -1,4 +1,5 @@
 import { getZCoreUrl } from './zCoreBridge';
+import { speakSetupMonsterTts, SETUP_MONSTER_TTS_RATE_DEFAULT } from './setupMonsterTts';
 /**
  * 🎙️ 귀신같이(Ghosti) 전 영역 무료 무제한 TTS ('현수 & 선희' 투톱) · 무토큰 문서 요약/키워드 발췌 낭독 ·
  *    실제 카톡 대화방 직행 장전 · 고난도 질문 시 단골 AI(기본값: 제미나이) 라이브 음성 바톤터치 엔진
@@ -167,39 +168,20 @@ export function extractKeywordSentencesZeroLlm(
 
 /**
  * 무료 MS 신경망 '현수(ko-KR-HyunsuNeural)' 또는 '선희(ko-KR-SunHiNeural)' 음성으로 즉시 발화 (횟수 제한 없음 · 평생 0원)
+ * - PC/모바일 공통 3단 캐시 + 구형 기계음(Microsoft Heami) 100% 원천 차단 + 경쾌한 속도(+15%)
  */
 export async function speakWithHyunsuOrSunhi(
   text: string,
   role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
-  rate = '+0%'
+  rate: string = SETUP_MONSTER_TTS_RATE_DEFAULT
 ): Promise<{ ok: boolean; voiceId: string; audioUrl?: string }> {
   const voiceId = GHOSTI_VOICE_ACTORS[role].voiceId;
-  try {
-    const res = await fetch(getZCoreUrl('/__setup-monster/tts'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice: voiceId, rate }),
-    });
-    const data = await res.json();
-    if (data?.ok && data?.audioUrl) {
-      const audio = new Audio(getZCoreUrl(String(data.audioUrl)));
-      await audio.play().catch(() => {});
-      return { ok: true, voiceId, audioUrl: data.audioUrl };
-    }
-  } catch {
-    /* Web Speech API fallback */
-  }
-  try {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ko-KR';
-      window.speechSynthesis.speak(u);
-    }
-  } catch {
-    /* ignore */
-  }
-  return { ok: true, voiceId };
+  const res = await speakSetupMonsterTts(text, { voice: voiceId, rate });
+  return {
+    ok: res.ok,
+    voiceId,
+    audioUrl: res.audioUrl,
+  };
 }
 
 /**
