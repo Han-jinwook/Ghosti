@@ -2,31 +2,36 @@
 
 ---
 
-## 🕒 [2026-10-30 00:20 KST 작업 완료 인계 기록]
+## 🕒 [2026-10-30 16:53 KST 작업 완료 인계 기록]
 
-- **세션 제목**: 3대코어안전화·스플래시탑재
+- **세션 제목**: 우측통상채팅·한글탐색기v233
 
 ### 1. 이번 세션에서 완료한 핵심 작업 요약
-1. **[귀신같이 3대 핵심 기능(🎯찾기·🧹치우기·⚙️고치기) 전수조사 및 P0~P4 안전·정직화 완결 (`fc3b190` ~ `7ef857c`, `b77fc63`)]:**
-   - **P0 데이터 보호**: 사진 목록 조회 시 `2024xxxx_xxxxxx.jpg` 패턴의 사용자 사진을 `unlink`로 자동 삭제하던 치명적 코드 영구 제거 및 단위 안전 회귀 테스트([`test_ghosti_safety.py`](file:///d:/Ghosti/universal_z_core/tests/test_ghosti_safety.py)) 구축.
-   - **P1 치우기·고치기 정직화**: 가짜 오피스 `.asd` 5줄 미리보기, 거짓 `#104` 소명, 하드코딩 정리 건수(`2/9/7건`), 가짜 건강검진 시드/점수, 가짜 `RTX 3060` 사양 제거. Z-코어 미연결 시 `🧪 체험 모드` 명시.
-   - **P2 Z-코어 실동작 & 데몬 단일화**: Windows 휴지통 실제 이동(`SHFileOperationW` `FOF_ALLOWUNDO`) 및 `$I` 헤더 역산 복원, 바탕화면 `.url` 바로가기 실제 생성, `restore_points.json` 타임머신 기록 연동, 단일 포트(`5199`) 데몬에 보조 API(`/__setup-monster/*`, TTS, 문서/영상/얼굴 검색) 완전 통합. 외부 출처(`Origin`) HTTP 403 차단 보안 적용.
-   - **P3 찾기 엔진 정밀화**: 검색어 768차원 의미 벡터 인코더 백그라운드 연동, 수량 단위 `'개'`(`두 개 케이크`, `6개월`) 강아지 오탐 제거, `'단체'` 검색 시 한글 수사(`"한 명"`, `"혼자"`) 1인 단독 사진 혼입 원천 차단.
-   - **P4 배포 패키징**: 단일 실행파일 [`Merlin_Z_Core_Setup.exe`](file:///d:/Ghosti/universal_z_core/os_agent/dist/Merlin_Z_Core_Setup.exe) 및 [`Merlin_Z_Core.zip`](file:///d:/Ghosti/public/Merlin_Z_Core.zip)(`44.59 MB`, 엄선된 301장 샘플만 수록하여 개인 사진 3GB 압축 유출 완벽 차단) 최신 재패키징.
+1. **[`🧹 치우기` & `⚙️ 고치기` 우측 1열 '통상의 메신저형 채팅창' + 저가 LLM(`Gemini 2.5 Flash`) + JSON Z-코어 위임 전면 구현 (`ea1797d`)]:**
+   - **좌우 2열 표준 레이아웃 통합 ([`SmartTrashView.tsx`](file:///d:/Ghosti/src/components/SmartTrashView.tsx), [`SetupMonsterModal.tsx`](file:///d:/Ghosti/src/components/SetupMonsterModal.tsx), [`MonsterStandardChatColumn.tsx`](file:///d:/Ghosti/src/components/MonsterStandardChatColumn.tsx))**:
+     - 기존 좁은 단발성 입력바를 제거하고, `🧹 치우기`와 `⚙️ 고치기` 모두 **좌측에는 정리/수리 워크스페이스, 우측 1열(`xl:col-span-5`)에는 카카오톡·메신저 형태의 통상 멀티턴 채팅창**을 상시 고정 배치하여 탭을 오가도 대화 히스토리가 그대로 이어지도록 구현.
+   - **내 PC 200토큰 실측 주입 + 저가 LLM(`Gemini 2.5 Flash`) + JSON 코어 위임 ([`monster-llm-chat.js`](file:///d:/Ghosti/netlify/functions/monster-llm-chat.js), [`monsterChatRouter.ts`](file:///d:/Ghosti/src/services/monsterChatRouter.ts))**:
+     - 로컬 `Merlin_Z_Core`(`127.0.0.1:5199`)에서 실시간으로 읽어온 CPU·RAM·GPU·디스크·보안모듈·스풀러 상태(~200토큰)를 시스템 프롬프트에 자동 주입하고, 중앙 허브 게이트웨이(`https://os.sundreamer.app/api/ai/gemini`)의 `gemini-2.5-flash`가 유저 눈높이(`🌱 쉬운말(어르신)` / `🌿 일반` / `🌳 전문가`)에 맞춰 따뜻하게 대화하면서 동시에 구조화된 `zCoreCommand` JSON(`MonsterLlmActionJson`)을 생성해 Z-코어에 실행을 위임.
+     - 모든 파일 이동·정리·수리는 `[⭕ 확인 완료]` 미리보기 게이트(`Zero-Auto-Action`) 및 `[복원 기록]` 1초 타임머신을 거치도록 연동 완료 (`'AI 주치의'` 표현 전수 제거 및 **`클린몬스터` · `설정몬스터`** 명칭 통일).
 
-2. **[3D 민트·골드 입체 로고 전면 교체 & 첫 실행 『로딩 스플래시 화면』 구현 (`b920e47`)]:**
-   - 멀린님 제공 신규 아트워크 기반 3D 입체 워드마크([`gwisinkachi_3d_wordmark_light.png`](file:///d:/Ghosti/public/gwisinkachi_3d_wordmark_light.png), [`gwisinkachi_3d_wordmark_dark.png`](file:///d:/Ghosti/public/gwisinkachi_3d_wordmark_dark.png))를 생성하여 상단 헤더 및 모달 로고 전면 교체.
-   - 앱/웹 최초 접속 및 새로고침 시 갓 쓴 민트 아기귀신과 입체 글씨가 은은한 네이비 광채와 함께 뜨는 [`GhostiLoadingSplash.tsx`](file:///d:/Ghosti/src/components/GhostiLoadingSplash.tsx) 컴포넌트 탑재 (엔진 초기화 완료 시 부드러운 페이드아웃).
+2. **[한글 윈도우 탐색기 폴더(`다운로드`·`문서`·`바탕 화면`) 매칭 수정 & `Merlin_Z_Core v2.3.3` 리빌드·배포 (`ea1797d`)]:**
+   - **근본 원인 해결 ([`merlin_z_core_os.py`](file:///d:/Ghosti/universal_z_core/os_agent/merlin_z_core_os.py))**:
+     - 한글 Windows 10/11에서 `Downloads`, `Documents`, `Desktop` 폴더의 탐색기 창 제목이 `"다운로드"`, `"문서"`, `"바탕 화면"`으로 표시되어 영문 폴더명(`resolved_p.parent.name`)과 매칭되지 않던 문제 해결(`get_explorer_folder_title_candidates` 도입).
+     - 기존에 열려 있던 탐색기 창이 재사용되거나 이전 `"문서"` 창이 남아 있어도 정확히 닫고 타겟 파일이 선택된 창만 화면 최전면으로 끌어올리도록 수정.
+     - 1호기(멀린님 특허 출원 작업 PC)에서는 단 하나의 로컬 탐색기 창도 띄우지 않고 **2호기(`100.88.230.16`, `DESKTOP-F8LTVPR`) 원격 SSH**에서 검증 완료.
+   - **구버전 Z-코어 자동 감지 경고 배너 ([`zCoreBridge.ts`](file:///d:/Ghosti/src/services/zCoreBridge.ts))**:
+     - `LATEST_Z_CORE_VERSION = '2.3.3'`으로 상향하고, 구버전 Z-코어 실행 시 `🧹 치우기`·`⚙️ 고치기` 상단에 노란색 업데이트 안내 배너 및 원클릭 다운로드 버튼 표시.
+   - **센스톡 내장 플러그인(`plugin_senstalk.py` `v3.3`) 무손실 동기화 및 우체국 회신 완료**:
+     - `D:\SensTalk\bot\sensebot.py` (`v3.3`)의 세대 번호(`_DISPATCH_SEQ_ID`), `RICHEDIT50W` 중복 붙여넣기 가드, `/skip` 인덱싱 패치를 [`plugin_senstalk.py`](file:///d:/Ghosti/universal_z_core/os_agent/plugin_senstalk.py)에 100% 반영 후 `Merlin_Z_Core_Setup.exe` (`v2.3.3`) 및 `public/Merlin_Z_Core.zip` 리빌드 완료.
+   - **노션 QA 카드 상태 반영**:
+     - `🎯[귀신같이] 고치기 파일 바로 띄우기` (`409f9ffd-2c1d-807f-8822-eb96b6289d8f`) 카드를 일상어 재테스트 안내문과 함께 **`'재테스트 대기'`**로 이동 완료 (현재 `'발견된 버그'` 및 `'버그 수정중'` 0건).
 
-3. **[노션 QA 보드 서브메뉴 ①·②·③ 초정밀 미션카드 최신화 및 출제]:**
-   - **서브메뉴 ① (🎯 찾기, ID: `407f9ffd-2c1d-8165-9767-fe3dbff49cb3`)**: 기존 해나라님 체크(`☑ 1, 2, 3, 4, 7`) 100% 보존, 미체크(`☐ 0, 5, 6`) 항목에 스플래시 화면 확인 + 사무실 4호 컴용 최신 Z-코어 교체 실행 + 연사 묶음 Pick/토글 + `#단체` 1인 혼입 차단 검증 안내 반영 후 `'재테스트 대기'` 유지.
-   - **서브메뉴 ② (🧹 치우기, ID: `408f9ffd-2c1d-81a8-8e87-e2bd0baea78b`)**: 4대 카테고리 정리, 3열/4열 전환, 연사 1장 Pick 후 실제 윈도우 휴지통 이동 & 1초 되돌리기(Undo), 휴지통 보관함 1초 복원 & 실제 휴지통 폴더 열기, 다운로드 설치파일 정리 실물 미리보기(`Zero-Auto-Action`), 복원 기록 타임머신 등 5단계 정밀 미션 카드 출제 완료.
-   - **서브메뉴 ③ (⚙️ 고치기, ID: `408f9ffd-2c1d-817f-bfc7-f814a9f77a7f`)**: PC/스마트폰 스위처, 1초 수리·원복, 화면 위 화살표 오버레이(`뒤로가기 Back` 카운터), Z-코어 실물 OS 3대 실측 & 5대 은닉 금고 3초 포렌식 5줄 미리보기, 사라진 파일 1초 추적 정직 판정, 바탕화면 바로가기 `.url` 생성 및 실측 사양 진단 3단계 눈높이 전환 등 5단계 정밀 미션 카드 출제 완료.
+3. **[4호기(`desktop-bps5lku`, `100.114.100.24`) 원격 SSH 개통 스크립트 배치]:**
+   - 구글 드라이브 공유 키 폴더에 [`enable_node4_ssh.bat`](file:///G:/내 드라이브/썬드림/_infra_cluster_keys/enable_node4_ssh.bat)를 생성·배치하여 4호기에서 관리자 권한 1회 실행 시 `OpenSSH Server (포트 22)` 및 `id_ai_master.pub`가 즉시 개통되도록 준비 완료.
 
 ---
 
 ### 2. 다음 세션 최우선 과제 🚨
-1. **[1순위] 노션 QA 보드 해나라님 테스트 결과 확인 및 대응:**
-   - 서브메뉴 ①(🎯 찾기, `재테스트 대기`), 서브메뉴 ②(🧹 치우기, `테스트 미션`), 서브메뉴 ③(⚙️ 고치기, `테스트 미션`)의 해나라님 체크리스트 및 붉은색 코멘트 인라인 모니터링 후 즉각 대응.
-2. **[2순위] 6대 섹터 로드맵에 따른 4단계 (`📸 사진 공유`) · 5단계 (`💼 업무 공유`) 점검 준비:**
-   - 1~3단계(찾기·치우기·고치기) 검증이 안착되는 대로 패밀리 라운지 및 협업 문서 잠금 등 다음 섹터 순차 격파 착수.
+1. **[1순위] 4호기(`desktop-bps5lku`) `enable_node4_ssh.bat` 실행 여부 확인 및 노션 QA `'재테스트 대기'`(`409f9ffd-2c1d-807f-8822-eb96b6289d8f`) 최종 완료 확인:**
+   - 4호기 SSH(포트 22)가 열리면 원격으로 `Merlin_Z_Core_Setup.exe` (`v2.3.3`)를 자동 배포·기동하고, 해나라님의 재테스트 결과를 모니터링.
+2. **[2순위] 개인 라운지 3개 섹터(`🎯 찾기` · `🧹 치우기` · `⚙️ 고치기`) 최종 완료 후 다음 섹터(`📸 사진 공유` · `💼 업무 공유`) 진행.**
