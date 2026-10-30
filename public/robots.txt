@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /__photos/
+Disallow: /__docs/
+Disallow: /__quarantine/
+Disallow: /__zcore/
+Disallow: /__setup-monster/
+Disallow: /api/
+
+Sitemap: https://ghosti.sundreamer.app/sitemap.xml

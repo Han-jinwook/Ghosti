@@ -7,6 +7,7 @@ import {
   isZCoreOutdated,
 } from '../services/zCoreBridge';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { useHub } from '../services/merlin-hub-sdk/react';
 
 export type ZCoreModalStep = 'intro' | 'waiting_engine' | 'indexing' | 'ready';
 
@@ -23,7 +24,9 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   themeMode = 'dark',
   initialStep,
 }) => {
+  const { user, isLoggedIn } = useHub();
   const {
+    layout,
     photos,
     videoSceneItems,
     localDocuments,
@@ -34,6 +37,24 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     setSearchSpace,
     resetSearchSpaceToAll,
   } = useSaySeeStore();
+
+  const isMobileEnv =
+    layout === 'mobile' ||
+    (typeof window !== 'undefined' &&
+      (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+        window.innerWidth < 860));
+
+  const verifiedEmail = useMemo(() => {
+    if (isLoggedIn && user?.email) return user.email;
+    if (typeof window !== 'undefined') {
+      return (
+        localStorage.getItem('ghosti_prelaunch_verified_email') ||
+        localStorage.getItem('userEmail') ||
+        ''
+      );
+    }
+    return '';
+  }, [isLoggedIn, user?.email]);
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
   const totalPhotoCount = activePhotos.length || 301;
@@ -46,6 +67,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   const [step, setStep] = useState<ZCoreModalStep>('intro');
   const [progress, setProgress] = useState<number>(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState<boolean>(false);
   const hasTriggeredInitRef = useRef<boolean>(false);
   const initPromiseRef = useRef<Promise<void> | null>(null);
 
@@ -86,9 +108,9 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       const agreedBefore =
         typeof sessionStorage !== 'undefined' &&
         sessionStorage.getItem('ghosti_one_stop_agreed') === '1';
-      setStep(agreedBefore ? 'waiting_engine' : 'intro');
+      setStep(agreedBefore && !isMobileEnv ? 'waiting_engine' : 'intro');
     }
-  }, [isOpen, initialStep]);
+  }, [isOpen, initialStep, isMobileEnv]);
 
   // Z-코어 연결 실시간 감지 (1초 주기 폴링)
   useEffect(() => {
@@ -119,7 +141,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   }, [isOpen]);
 
   // 'indexing' 단계: 실제 사진·서류 목록 로딩(initApp)이 끝났을 때만 완료로 전환한다.
-  // (정직 원칙: 실제 진행과 무관한 시간 기반 가짜 게이지·가짜 처리 건수를 표시하지 않음)
   useEffect(() => {
     if (!isOpen || step !== 'indexing') return;
     let cancelled = false;
@@ -173,7 +194,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     resetSearchSpaceToAll('gallery');
     useSaySeeStore.setState({
       hasUserSelectedSearchTab: true,
-      lastQuarantineToast: `🎉 내 컴퓨터 사진 ${totalPhotoCount}장 귀신같이 찾기 인덱싱 완료! 모든 사진이 화면에 딱 펼쳐졌습니다.`,
+      lastQuarantineToast: `🎉 내 기기 사진 ${totalPhotoCount}장 귀신같이 찾기 인덱싱 완료! 모든 사진이 화면에 딱 펼쳐졌습니다.`,
     });
     onClose();
     if (typeof document !== 'undefined') {
@@ -187,10 +208,24 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   };
 
   const handleOneStopAgreeAndDownload = () => {
+    // 1) 미로그인 상태라면 로그인 모달부터 먼저 띄워 이메일 인증을 완료하게 안내
+    if (!verifiedEmail) {
+      onClose();
+      window.dispatchEvent(new CustomEvent('openLoginModal'));
+      return;
+    }
+
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem('ghosti_one_stop_agreed', '1');
     }
-    // 다운로드 트리거
+
+    // 2) 모바일 브라우저 접속 시: Windows .zip을 폰에 받지 않고 모바일 시작/PC 주소 복사로 안내
+    if (isMobileEnv) {
+      finishAndPopOpenPhotos();
+      return;
+    }
+
+    // 3) PC 데스크톱 접속 시: Merlin_Z_Core.zip 다운로드 트리거
     const link = document.createElement('a');
     link.href = Z_CORE_ZIP_URL;
     link.download = 'Merlin_Z_Core.zip';
@@ -203,6 +238,15 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       setStep('indexing');
     } else {
       setStep('waiting_engine');
+    }
+  };
+
+  const handleCopyPcLinkForMobile = () => {
+    const url = 'https://ghosti.sundreamer.app/?dev=true';
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      void navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
     }
   };
 
@@ -243,8 +287,45 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             : 'bg-zinc-950 border-white/15 text-zinc-100'
         }`}
       >
+        {/* ─────────────── [상단 2단계 온보딩 진행 상태 바: ① 이메일 로그인 ➔ ② Z-코어 연결] ─────────────── */}
+        <div
+          className={`mb-4 p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs font-extrabold ${
+            isLight
+              ? 'bg-slate-50 border-slate-200 text-slate-700'
+              : 'bg-zinc-900/90 border-white/10 text-zinc-200'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
+                verifiedEmail
+                  ? 'bg-emerald-500 text-zinc-950'
+                  : 'bg-amber-400 text-zinc-950 animate-pulse'
+              }`}
+            >
+              {verifiedEmail ? '✓' : '1'}
+            </span>
+            <span className="truncate">
+              {verifiedEmail ? `1단계: ${verifiedEmail} 로그인됨` : '1단계: 이메일 무료 로그인 필요'}
+            </span>
+          </div>
+          <span className="opacity-40">➔</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span
+              className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black ${
+                isConnected
+                  ? 'bg-emerald-500 text-zinc-950'
+                  : 'bg-teal-500/20 text-teal-400 border border-teal-400/40'
+              }`}
+            >
+              {isConnected ? '✓' : '2'}
+            </span>
+            <span>{isConnected ? '2단계: 코어 연결됨' : isMobileEnv ? '2단계: 모바일·PC 연동' : '2단계: Z-코어 실행'}</span>
+          </div>
+        </div>
+
         {/* ─────────────── [구버전 Z-코어 감지 시: 어느 단계에서든 최상단 업데이트 배너] ─────────────── */}
-        {isOutdated && (
+        {isOutdated && !isMobileEnv && (
           <div
             className={`mb-4 p-4 rounded-2xl border-2 ${
               isLight
@@ -275,20 +356,24 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
           </div>
         )}
 
-        {/* ─────────────── [1단계: 한 번의 결정 (다운로드 + 인덱싱 대기 통합 동의)] ─────────────── */}
+        {/* ─────────────── [1단계: 한 번의 결정 (로그인 + 코어 다운로드/연결 통합 안내)] ─────────────── */}
         {step === 'intro' && (
           <>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-2xl">✨</span>
+                  <span className="text-2xl">{!verifiedEmail ? '🔐' : isMobileEnv ? '📱' : '✨'}</span>
                 </div>
                 <div>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-400/30 mb-1">
                     PC 1대 · 모바일 1대 무료체험 제한 없이 평생 0원
                   </span>
                   <h3 className="text-lg sm:text-xl font-black tracking-tight">
-                    내 PC 사진 · 동영상 · 서류를 연결할까요?
+                    {!verifiedEmail
+                      ? '먼저 10초 이메일 로그인으로 평생 무료 계정을 켜주세요!'
+                      : isMobileEnv
+                      ? '스마트폰 기기 탐색 & 내 PC 마스터 코어 연동'
+                      : '내 PC 사진 · 동영상 · 서류 코어를 연결할까요?'}
                   </h3>
                 </div>
               </div>
@@ -302,10 +387,22 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               </button>
             </div>
 
-            <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
-              두 번 번거롭게 누르실 필요 없이, 아래 <strong>[OK! 시작하기]</strong> 한 번만 누르시면{' '}
-              <strong>엔진 연결부터 내 PC 사진·서류 목록 불러오기까지 한 번에 진행</strong>됩니다.
-            </p>
+            {!verifiedEmail ? (
+              <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
+                『귀신같이』의 개인 라운지(찾고·치우고·고치고)는 <strong>신용카드 등록 없이 평생 0원</strong>입니다.
+                내 기기 보호와 여권 시드 보관을 위해 <strong>① 이메일 인증(로그인) ➔ ② Z-코어 실행</strong> 순서로 즉시 시작됩니다.
+              </p>
+            ) : isMobileEnv ? (
+              <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
+                <strong>{verifiedEmail}</strong> 계정이 확인되었습니다! 스마트폰에서는 바로 모바일 화면을 둘러보실 수 있으며,
+                집/사무실 PC에서 아래 주소로 접속해 <strong>Windows용 멀린 Z-코어</strong>를 켜두시면 PC 속 수만 장의 사진·문서도 폰에서 1초 만에 투시 검색됩니다.
+              </p>
+            ) : (
+              <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
+                <strong>{verifiedEmail}</strong> 로그인 완료! 이제 아래 <strong>[OK! 엔진 다운로드 & 연결 시작하기]</strong> 한 번만 누르시면{' '}
+                <strong>로컬 Z-코어 연결부터 내 PC 사진·서류 목록 불러오기까지 한 번에 진행</strong>됩니다.
+              </p>
+            )}
 
             <div className="space-y-2.5 mb-6">
               <div
@@ -318,10 +415,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 <span className="text-lg shrink-0">🔒</span>
                 <div>
                   <div className="font-black text-[13px] text-slate-900 dark:text-white">
-                    1. 안전한 초경량 로컬 엔진(Merlin Z-Core)이 설치됩니다
+                    1. Zero-Server 100% 로컬 프라이버시 엔진 (Merlin Z-Core)
                   </div>
                   <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    내 사진과 문서를 외부 클라우드 서버로 올리지 않고 내 PC 안에서만 안전하게 연결합니다.
+                    내 사진과 계약서·엑셀 문서를 외부 클라우드 서버로 올리지 않고 내 기기 안에서만 안전하게 분석합니다.
                   </p>
                 </div>
               </div>
@@ -333,34 +430,38 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     : 'bg-zinc-900/70 border-white/10 text-zinc-200'
                 }`}
               >
-                <span className="text-lg shrink-0">⏳</span>
+                <span className="text-lg shrink-0">⚡</span>
                 <div>
                   <div className="font-black text-[13px] text-slate-900 dark:text-white">
-                    2. 연결되면 내 PC 사진·서류 목록을 불러옵니다 (잠시 대기)
+                    2. 로그인 + 코어 연결 후 모든 찾기·치우기·고치기 즉시 가동
                   </div>
                   <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    사진·서류 수가 많으면 목록을 읽는 데 시간이 걸릴 수 있습니다.
+                    처음 한 번만 로그인과 코어를 연결해 두면, 다음 접속부터는 온보딩 없이 0.001초 만에 본 화면으로 직행합니다.
                   </p>
                 </div>
               </div>
 
-              <div
-                className={`p-3.5 rounded-2xl border text-xs flex items-start gap-3 ${
-                  isLight
-                    ? 'bg-teal-50/70 border-teal-200 text-teal-950'
-                    : 'bg-teal-950/30 border-teal-500/30 text-teal-100'
-                }`}
-              >
-                <span className="text-lg shrink-0">🖼️</span>
-                <div>
-                  <div className="font-black text-[13px]">
-                    3. 불러오기가 끝나면 내 컴퓨터 사진이 화면에 펼쳐집니다
+              {isMobileEnv && (
+                <div
+                  className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+                    isLight
+                      ? 'bg-teal-50/70 border-teal-200 text-teal-950'
+                      : 'bg-teal-950/30 border-teal-500/30 text-teal-100'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="font-black text-[12.5px]">💻 내 PC에서도 Z-코어 설치하기</div>
+                    <p className="text-[11px] opacity-85 truncate">https://ghosti.sundreamer.app/?dev=true</p>
                   </div>
-                  <p className="text-[11.5px] opacity-85 mt-0.5">
-                    추가 클릭 없이 완료 즉시 사진이 열리고 바로 검색할 수 있습니다.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCopyPcLinkForMobile}
+                    className="px-3 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-black text-[11.5px] shrink-0 cursor-pointer"
+                  >
+                    {linkCopied ? '✅ 복사됨' : '📋 PC 주소 복사'}
+                  </button>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-2.5">
@@ -370,7 +471,13 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 className="w-full flex-1 py-3.5 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>⭕</span>
-                <span>OK! 엔진 다운로드 & 연결 시작하기</span>
+                <span>
+                  {!verifiedEmail
+                    ? '1단계: 10초 이메일 로그인 먼저 하기'
+                    : isMobileEnv
+                    ? 'OK! 모바일 워크스페이스 바로 시작하기'
+                    : 'OK! 엔진 다운로드 & 연결 시작하기'}
+                </span>
               </button>
 
               <button
@@ -505,7 +612,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               </div>
             </div>
 
-            {/* 진행률 퍼센트 & 남은 시간 헤더 */}
             <div
               className={`p-4 rounded-2xl border mb-4 ${
                 isLight
@@ -513,7 +619,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   : 'bg-zinc-900/90 border-teal-500/30 shadow-[0_0_25px_rgba(20,184,166,0.12)]'
               }`}
             >
-              {/* 진행 표시: 실제 완료 전에는 진행률(%)·남은 시간을 지어내지 않고 '불러오는 중' 상태만 표시 */}
               <div className="w-full h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 mb-3">
                 <div
                   className={`h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-cyan-400 transition-all duration-300 ${
@@ -625,7 +730,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 🔄 목록 다시 불러오기
               </button>
             </div>
-            {!isOutdated && (
+            {!isOutdated && !isMobileEnv && (
               <div className="mt-3 text-right">
                 <a
                   href={Z_CORE_ZIP_URL}

@@ -1,9 +1,11 @@
 /**
- * ❖ 범용 멀린 Z-코어 (Universal Merlin Z-Core - Port 5199) 웹 브릿지 & 온보딩 관리자
+ * ❖ 범용 멀린 Z-코어 (Universal Merlin Z-Core - Port 5199) 웹 브릿지 & 실행 게이트 관리자
  * - 센스톡(SenseTalk)과 동일한 정공법 표준:
  *   1. 로컬 127.0.0.1:5199/__merlin/health 헬스체크 및 자동 감지
  *   2. 웹 환경에서 로컬 파일(사진/문서/포렌식/휴지통) 내용검색 엔드포인트 URL 라우팅
- *   3. 미연결 시 [Merlin_Z_Core.zip] 다운로드 & 실행 온보딩 가이드 제공
+ *   3. 미로그인 또는 Z-코어 미연결 시:
+ *      - Step 1: 이메일 6자리 OTP 로그인 모달 오픈 (`openLoginModal`)
+ *      - Step 2: 멀린 Z-코어(PC) / 기기 연동 가이드 모달 오픈 (`openZCoreGuideModal`)
  */
 
 export const Z_CORE_PORT = 5199;
@@ -134,8 +136,58 @@ class ZCoreBridgeManager {
 export const zCoreBridge = ZCoreBridgeManager.getInstance();
 
 /**
+ * [귀신같이 기본 실행 게이트 (Fundamental Execution Gate)]
+ * - 개인 라운지(찾기·치우기·고치기)의 모든 실제 실행 액션은
+ *   ① 이메일 로그인 완료(`merlin_session_token` 보유) +
+ *   ② 로컬 Z-코어(`127.0.0.1:5199`) 또는 모바일 네이티브 환경 가동이 완료된 후에만 실행됩니다.
+ * - `/?dev=true`로 접속한 개발자 PC/폰에서도 이 순차 온보딩(로그인 ➔ 코어 실행) 원칙을 동일하게 점검·안내합니다.
+ */
+export function ensureLoginAndZCoreReady(actionName = '실행'): {
+  ready: boolean;
+  missingStep?: 'login' | 'zcore';
+  noticeMessage?: string;
+} {
+  if (typeof window === 'undefined') return { ready: true };
+
+  const hasLoginToken = Boolean(
+    localStorage.getItem('merlin_session_token') ||
+      localStorage.getItem('ghosti_prelaunch_verified_email') ||
+      localStorage.getItem('userEmail')
+  );
+
+  // Step 1: 로그인 여부 점검 -> 미로그인 시 이메일 6자리 OTP 로그인 모달 즉시 호출
+  if (!hasLoginToken) {
+    window.dispatchEvent(new CustomEvent('openLoginModal'));
+    return {
+      ready: false,
+      missingStep: 'login',
+      noticeMessage: `🔐 [${actionName}] 내 기기 찾고·치우고·고치고는 평생 무료(0원)입니다! 먼저 10초 이메일 인증(로그인)을 완료해 주세요.`,
+    };
+  }
+
+  // Step 2: PC 환경에서 로컬 Z-코어(127.0.0.1:5199) 가동 여부 점검 -> 미실행 시 Z-코어 가이드 모달 즉시 호출
+  const isMobileViewportOrUA =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    window.innerWidth < 860;
+  const isCapacitorNative = Boolean(
+    (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+  );
+
+  if (!isMobileViewportOrUA && !isCapacitorNative && !zCoreBridge.isConnected) {
+    window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+    return {
+      ready: false,
+      missingStep: 'zcore',
+      noticeMessage: `⚡ [${actionName}] 로그인 확인 완료! 이제 내 컴퓨터 실물 파일을 연결하는 『멀린 Z-코어』만 켜주시면 바로 작동합니다.`,
+    };
+  }
+
+  return { ready: true };
+}
+
+/**
  * [로컬 Z-코어 URL 라우팅 헬퍼]
- * - 브라우저 웹(`ghosti-app.netlify.app` 등)이거나 로컬 개발 시 5199 포트로 직결 연결합니다.
+ * - 브라우저 웹(`ghosti.sundreamer.app` 등)이거나 로컬 개발 시 5199 포트로 직결 연결합니다.
  */
 export function getZCoreUrl(path: string): string {
   if (!path) return '';

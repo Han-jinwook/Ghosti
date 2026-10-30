@@ -196,6 +196,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     }
   });
   const [formNotice, setFormNotice] = useState<string | null>(null);
+  const [dbSyncStatus, setDbSyncStatus] = useState<'idle' | 'syncing' | 'synced'>('idle');
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   const heroCtaRef = useRef<HTMLDivElement | null>(null);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -312,15 +313,22 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       try {
         localStorage.setItem('ghosti_prelaunch_verified_email', cleanEmail);
         localStorage.setItem('userEmail', cleanEmail);
+        localStorage.setItem('ghosti_onboarding_seen_v1', 'true');
       } catch {}
       setLocalVerifiedEmail(cleanEmail);
       void refreshSession();
       if (res.userId && cleanEmail) {
-        void syncHubUserToLocalSupabase({
+        setDbSyncStatus('syncing');
+        const synced = await syncHubUserToLocalSupabase({
           userId: res.userId,
           email: cleanEmail,
           nickname: res.nickname,
+          hubToken: (res as any).token || localStorage.getItem('merlin_session_token') || '',
+          signupSource: isLaunched ? 'onboarding_showroom_launch' : 'onboarding_showroom_prelaunch',
+          launchNotifyOptIn: true,
+          forceSync: true,
         });
+        setDbSyncStatus(synced ? 'synced' : 'idle');
       }
     }
   };
@@ -476,15 +484,31 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 {verifiedUserEmail ? (
                   <div className="rounded-2xl bg-emerald-950/50 border-2 border-[#00F0B5]/60 p-5 sm:p-6 text-center">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00F0B5]/20 text-[#00F0B5] text-xs font-black mb-3">
-                      <span>🎉 사전 무료 가입 & 출시 1순위 알림 예약 완료</span>
+                      <span>
+                        {dbSyncStatus === 'syncing'
+                          ? '🔄 회원 DB 안전 등록 중...'
+                          : '🎉 1단계 이메일 무료 가입 & 출시 1순위 알림 DB 등록 완료'}
+                      </span>
                     </div>
                     <h3 className="text-lg sm:text-xl font-black text-white mb-1.5">
-                      <span className="text-[#00F0B5]">{verifiedUserEmail}</span> 님, 환영합니다!
+                      <span className="text-[#00F0B5]">{verifiedUserEmail}</span> 님, 진심으로 환영합니다!
                     </h3>
-                    <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed mb-5">
-                      이메일 인증(사전 회원가입)이 완료되었습니다.<br />
-                      정식 오픈 즉시 가장 먼저 알림 메일을 보내드리며, <b>출시 당일 별도 가입 절차 없이 이 계정으로 1초 만에 본 앱을 바로 시작</b>하실 수 있습니다.
+                    <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed mb-4">
+                      <b>썬드리머 통합 회원 DB 및 『귀신같이』 전용 DB에 안전하게 등록</b>되었습니다.<br />
+                      정식 오픈 즉시 가장 먼저 알림 메일을 보내드리며, <b>다음번 방문부터는 이 안내 페이지를 거치지 않고 1초 만에 본 앱으로 자동 직행</b>합니다!
                     </p>
+                    <div className="mb-4 rounded-xl bg-black/40 border border-teal-500/30 p-3 text-left text-[11.5px] text-teal-200 leading-relaxed">
+                      💡 <b>친절한 이용 순서 안내:</b> ① 이메일 무료 로그인(완료 ✅) ➔ ② 본 앱 입장 후 <b>『멀린 Z-코어(Merlin Z-Core)』</b> 1회 실행 ➔ ③ <b>찾기 · 치우기 · 고치기</b> 전 기능 평생 무료 작동!
+                    </div>
+                    {isDevAuthorized && (
+                      <button
+                        type="button"
+                        onClick={() => onEnterWorkspace(true)}
+                        className="w-full mb-3 py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#00F0B5] via-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black text-sm shadow-[0_0_25px_rgba(0,240,181,0.45)] transition-all cursor-pointer"
+                      >
+                        🚀 [개발/QA 모드] 인증된 계정으로 본 앱 워크스페이스 바로 입장하기 ➔
+                      </button>
+                    )}
                     <div className="flex flex-wrap items-center justify-center gap-2.5">
                       <a
                         href="#interactive-demo"
@@ -519,14 +543,15 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <span className="text-xs sm:text-sm font-extrabold text-[#00F0B5] flex items-center gap-1.5">
                         <span>📩</span>
-                        <span>{emailInput.trim().toLowerCase()}로 인증번호 6자리를 보냈습니다</span>
+                        <span>{emailInput.trim().toLowerCase()}로 인증번호 6자리를 발송했습니다!</span>
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-mono font-bold">
                         ⏱ {formatTimer()}
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400 mb-4">
-                      메일함(또는 스팸함)에서 6자리 숫자를 확인해 입력하시면 <b>사전 가입과 정식 출시 알림 신청이 동시에 완료</b>됩니다.
+                    <p className="text-xs text-zinc-300 mb-4 leading-relaxed">
+                      방금 보내드린 메일에서 <b>6자리 숫자</b>를 입력해 주세요. (메일이 안 보이면 <b>스팸메일함</b>도 꼭 확인해 주세요!)<br />
+                      번호 6자리를 모두 입력하시면 <b>자동으로 평생 무료 회원 DB에 등록</b>되며 정식 출시 알림이 예약됩니다.
                     </p>
 
                     <div className="flex items-center justify-center gap-2 sm:gap-3 mb-4" onPaste={handleOtpPaste}>
@@ -1230,6 +1255,64 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             )}
           </div>
         </div>
+      </section>
+
+      {/* 7-B. 네이버·구글 SEO 검색 노출 최적화 & 자주 묻는 질문 (#faq) */}
+      <section
+        id="faq"
+        aria-labelledby="faq-heading"
+        className="py-16 px-4 sm:px-6 max-w-5xl mx-auto border-t border-white/5"
+      >
+        <div className="text-center mb-10">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-400 text-xs font-bold mb-2">
+            <span>❓</span>
+            <span>자주 묻는 질문 (FAQ)</span>
+          </span>
+          <h2 id="faq-heading" className="text-2xl sm:text-3xl font-black text-white">
+            『귀신같이(Ghosti)』 시작 전 궁금한 점 4가지
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-400 mt-2">
+            개인 평생 무료 정책부터 로컬 프라이버시, 2단계 시작 방법까지 한눈에 확인하세요.
+          </p>
+        </div>
+
+        <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-2xl bg-zinc-900/60 border border-white/10 p-5">
+            <dt className="text-sm sm:text-base font-black text-[#00F0B5] mb-2">
+              Q1. 귀신같이(Ghosti)는 정말 개인 평생 무료인가요?
+            </dt>
+            <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+              네! 동영상 속 대사·장면 1초 점프 찾기, 엑셀·PDF·한글·스캔 이미지 안 열어보고 투시 검색(찾기), 중복·흔들린 사진 1초 용량 청소(치우기), 컴퓨터 소리·인쇄·화면 먹통 수리(고치기) 등 <b>개인 라운지 3대 핵심 기능은 신용카드 등록 없이 10초 이메일 인증(무료 회원가입)만으로 평생 무료</b>입니다.
+            </dd>
+          </div>
+
+          <div className="rounded-2xl bg-zinc-900/60 border border-white/10 p-5">
+            <dt className="text-sm sm:text-base font-black text-[#00F0B5] mb-2">
+              Q2. 내 사진이나 회사 엑셀·계약서 파일이 외부 서버로 전송되나요?
+            </dt>
+            <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+              절대 전송되지 않습니다. 『귀신같이』는 <b>Zero-Server 100% 로컬 온디바이스 프라이버시 아키텍처</b>로 설계되어, 내 기기 안의 사진·동영상·문서 원본은 단 1바이트도 외부 클라우드로 나가지 않고 오직 내 PC와 스마트폰 안에서만 안전하게 분석됩니다.
+            </dd>
+          </div>
+
+          <div className="rounded-2xl bg-zinc-900/60 border border-white/10 p-5">
+            <dt className="text-sm sm:text-base font-black text-[#00F0B5] mb-2">
+              Q3. 왜 『1단계 이메일 로그인 ➔ 2단계 멀린 Z-코어 실행』 순서로 시작하나요?
+            </dt>
+            <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+              ① <b>10초 이메일 로그인</b>으로 평생 무료 정식 회원 권한과 기기 간 태그·복원 기록을 보호하고, ② 내 PC에서 <b>『멀린 Z-코어(Merlin Z-Core)』</b>를 1회 실행하면 웹 브라우저가 할 수 없는 초고속 로컬 하드디스크 투시 검색, Windows 정식 휴지통 안전 격리, 컴퓨터 먹통 즉시 수리가 100% 활성화됩니다.
+            </dd>
+          </div>
+
+          <div className="rounded-2xl bg-zinc-900/60 border border-white/10 p-5">
+            <dt className="text-sm sm:text-base font-black text-[#00F0B5] mb-2">
+              Q4. 클린몬스터로 중복 사진을 치우면 영구 삭제되나요?
+            </dt>
+            <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+              아닙니다. 『귀신같이』는 사용자 파일을 임의로 영구 증발시키지 않습니다. 정리된 파일은 <b>Windows 정식 휴지통($Recycle.Bin)</b> 및 앱 내 <b>[복원 기록] 타임머신</b>에 안전하게 보호 격리되어 언제든 클릭 한 번으로 원래 폴더 위치 그대로 1초 복원할 수 있습니다.
+            </dd>
+          </div>
+        </dl>
       </section>
 
       {/* 8. 최하단 마스터 푸터 (일반 방문자에게는 QA 워크스페이스 버튼 100% 비노출) */}

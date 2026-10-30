@@ -54,16 +54,18 @@ export function getGhostiAuthedSupabase(): SupabaseClient | null {
  * - 허브(os.sundreamer.app) 이메일 6자리 OTP 인증 완료 시 확정된 `family_users.id`(UUID)를
  *   귀신같이 단독 Supabase `public.users.id`와 1:1 동일 키로 동기화합니다.
  * - 코인/결제 테이블은 귀신같이 DB에 두지 않으며, 오직 허브 중앙 지갑 원장만 참조합니다.
- * - [2026-10-27 Ghosti 보완] 스키마 RLS상 브라우저(anon)는 users INSERT가 불가하므로
+ * - 스키마 RLS상 브라우저(anon)는 users INSERT가 불가하므로
  *   서버 함수(`/.netlify/functions/hub-supabase-bridge`)를 1차 경로로 호출합니다.
  *   서버가 허브 토큰을 검증 → service_role Upsert → 1시간 단기 토큰 발급.
- *   실패 시 `ok: false` + 사유를 정직하게 반환합니다 (침묵 성공 금지).
  */
 export async function syncHubUserToLocalSupabase(params: {
   userId: string;
   email: string;
   nickname?: string;
   hubToken?: string | null;
+  signupSource?: string;
+  launchNotifyOptIn?: boolean;
+  forceSync?: boolean;
 }): Promise<{ ok: boolean; syncedUserId?: string; error?: string }> {
   const cleanEmail = (params.email || '').trim().toLowerCase();
   const cleanUserId = (params.userId || '').trim();
@@ -81,8 +83,8 @@ export async function syncHubUserToLocalSupabase(params: {
       }
     }
 
-    // 이미 유효한 단기 토큰이 있으면 재호출 생략 (허브/서버 호출 최소화)
-    if (getGhostiSupabaseAccessToken()) {
+    // 이미 유효한 단기 토큰이 있고 강제 동기화(forceSync)가 아니면 재호출 생략
+    if (!params.forceSync && getGhostiSupabaseAccessToken()) {
       return { ok: true, syncedUserId: cleanUserId };
     }
 
@@ -95,6 +97,18 @@ export async function syncHubUserToLocalSupabase(params: {
 
     const nativePushToken =
       typeof window !== 'undefined' ? localStorage.getItem('ghosti_native_push_token') : null;
+    const devicePlatform =
+      typeof navigator !== 'undefined'
+        ? /Android/i.test(navigator.userAgent)
+          ? 'android'
+          : /iPhone|iPad|iPod/i.test(navigator.userAgent)
+          ? 'ios'
+          : /Windows/i.test(navigator.userAgent)
+          ? 'windows'
+          : /Mac/i.test(navigator.userAgent)
+          ? 'macos'
+          : 'web'
+        : 'web';
 
     // 2. 서버 브릿지 호출 (허브 토큰 검증 → service_role Upsert → 단기 토큰 발급)
     const res = await fetch('/.netlify/functions/hub-supabase-bridge', {
@@ -108,6 +122,9 @@ export async function syncHubUserToLocalSupabase(params: {
         email: cleanEmail,
         nickname: params.nickname || cleanEmail.split('@')[0],
         nativePushToken,
+        signupSource: params.signupSource || 'ghosti_app',
+        launchNotifyOptIn: params.launchNotifyOptIn ?? true,
+        devicePlatform,
       }),
     });
     const data = await res.json().catch(() => ({} as any));

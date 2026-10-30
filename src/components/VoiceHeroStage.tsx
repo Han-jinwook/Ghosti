@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
+import { ensureLoginAndZCoreReady } from '../services/zCoreBridge';
 
 export const VoiceHeroStage: React.FC = () => {
   const {
@@ -117,16 +118,19 @@ export const VoiceHeroStage: React.FC = () => {
     e.preventDefault();
     const q = textInput.trim();
     if (!q) return;
+    if (!ensureLoginAndZCoreReady('귀신같이 찾기 검색')) return;
     await runTextQuery(q);
     scrollToResults();
   };
 
   const handleBriefingChipClick = (target: 'doc' | 'video', query: string) => {
+    if (!ensureLoginAndZCoreReady('귀신같이 찾기 검색')) return;
     setTextInput(query);
     void runBriefingHintChip(target, query);
   };
 
   const handleGalleryChipClick = (query: string) => {
+    if (!ensureLoginAndZCoreReady('귀신같이 찾기 검색')) return;
     setTextInput(query);
     setSearchSpace('gallery');
     void runTextQuery(query);
@@ -180,7 +184,10 @@ export const VoiceHeroStage: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => void toggleMicRecording()}
+            onClick={() => {
+              if (!isListening && !ensureLoginAndZCoreReady('음성 찾기 검색')) return;
+              void toggleMicRecording();
+            }}
             title="음성으로 검색"
             className={`h-12 md:h-13 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
               isListening

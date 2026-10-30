@@ -13,6 +13,7 @@ import {
   type DigitalHealthCheckRecord,
 } from '../services/monsterChatRouter';
 import { MonsterInteractiveCardView } from './MonsterInteractiveCards';
+import { ensureLoginAndZCoreReady } from '../services/zCoreBridge';
 
 interface MonsterStandardChatColumnProps {
   sourceTab: 'trash' | 'repair';
@@ -82,6 +83,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   const sendMessageToMonster = async (rawQuery: string) => {
     const q = rawQuery.trim();
     if (!q || snap.busy) return;
+    if (!ensureLoginAndZCoreReady(sourceTab === 'trash' ? '클린몬스터 치우기 대화' : '설정몬스터 고치기 대화')) return;
 
     const nowLabel = new Date().toLocaleTimeString('ko-KR', {
       hour: '2-digit',

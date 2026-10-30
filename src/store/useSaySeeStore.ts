@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
+import { getZCoreUrl, zCoreBridge, ensureLoginAndZCoreReady } from '../services/zCoreBridge';
 
 /**
  * [사진 정리 휴지통 이동/복원 — 정직 처리]
@@ -299,6 +299,7 @@ interface SaySeeStore {
   dismissUndoBatch: () => void;
   openLocalFolder: (target: 'quarantine' | 'photos' | 'docs') => Promise<void>;
   dismissQuarantineToast: () => void;
+  showToast: (msg: string) => void;
 
   // [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 스펙 + 1차 출시용 모바일 스토어 클린 모드(isStoreAppMode)]
   telemetry: HardwareTelemetry | null;
@@ -2635,6 +2636,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     });
 
     if (quarantineRestImmediately && redundantIds.length > 0) {
+      if (!ensureLoginAndZCoreReady('연사 베스트 컷 정리')) return;
       set({ quarantineMoving: true });
       const moveRes = await requestQuarantineOp('move', redundantIds);
       if (moveRes.done.length === 0) {
@@ -2751,6 +2753,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   moveSelectedToQuarantine: async () => {
+    if (!ensureLoginAndZCoreReady('클린몬스터 사진 정리')) return;
     const { selectedTrashIds, photos } = get();
     const targetNames = Array.from(selectedTrashIds);
     if (targetNames.length === 0) return;
@@ -2889,6 +2892,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   dismissQuarantineToast: () => set({ lastQuarantineToast: null }),
+  showToast: (msg: string) => set({ lastQuarantineToast: msg }),
 
   // ─────────────── [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 + 1차 출시용 모바일 클린 모드 & 이중 방어] ───────────────
   telemetry: null,
@@ -3148,6 +3152,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   submitSetupMonsterQuery: async (query, presetIdHint, platformOverride) => {
+    if (!ensureLoginAndZCoreReady('설정몬스터 고치기')) return;
     const clean = query.trim();
     if (!clean) return;
     const state = get();

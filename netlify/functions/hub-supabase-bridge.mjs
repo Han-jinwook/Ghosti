@@ -100,18 +100,29 @@ export default async (req) => {
     return json(403, { ok: false, reason: '요청 userId와 허브 검증 userId 불일치' });
   }
 
-  // ② service_role Upsert (id = 허브 family_users.id)
+  // ② service_role Upsert (id = 허브 family_users.id) + 온보딩/사전가입 메타데이터 수집
   const appSettings = {};
   if (body.nativePushToken) {
     appSettings.native_push_token = String(body.nativePushToken);
     appSettings.push_channel_id = 'ghosti';
   }
+  if (body.signupSource) {
+    appSettings.signup_source = String(body.signupSource);
+  }
+  if (typeof body.launchNotifyOptIn === 'boolean') {
+    appSettings.launch_notify_opt_in = body.launchNotifyOptIn;
+  }
+  if (body.devicePlatform) {
+    appSettings.device_platform = String(body.devicePlatform);
+  }
+  appSettings.last_synced_at = new Date().toISOString();
+
   const row = {
     id: userId,
     email,
     nickname: hubUser.nickname || body.nickname || email.split('@')[0],
     last_login_at: new Date().toISOString(),
-    ...(Object.keys(appSettings).length ? { app_settings: appSettings } : {}),
+    app_settings: appSettings,
   };
   const up = await fetch(`${supabaseUrl}/rest/v1/users?on_conflict=id`, {
     method: 'POST',
