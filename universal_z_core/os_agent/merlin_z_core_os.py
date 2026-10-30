@@ -614,8 +614,15 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
                         timed_out = True
                         break
                     ext = fpath.suffix.lower()
-                    if ext not in target_exts and not fpath.name.startswith("~$"):
+                    if ext not in target_exts or fpath.name.startswith("~$"):
                         continue
+                    try:
+                        if os.name == "nt":
+                            f_attrs = ctypes.windll.kernel32.GetFileAttributesW(str(fpath))
+                            if f_attrs != -1 and (f_attrs & 0x02):
+                                continue
+                    except Exception:
+                        pass
                     resolved_str = str(fpath.resolve())
                     if resolved_str in seen_paths:
                         continue
@@ -970,11 +977,20 @@ def bring_window_to_front_immediately(hw_int: int) -> None:
         user32.ShowWindow(hw, 5)  # SW_SHOW
 
     try:
-        user32.keybd_event(0x12, 0, 0, 0)  # VK_MENU press
+        kernel32 = ctypes.windll.kernel32
+        fg_hwnd = user32.GetForegroundWindow()
+        fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+        cur_tid = kernel32.GetCurrentThreadId()
+        attached = False
+        if fg_tid and cur_tid and fg_tid != cur_tid:
+            attached = bool(user32.AttachThreadInput(fg_tid, cur_tid, True))
         user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
+        user32.BringWindowToTop(hw)
         user32.SetForegroundWindow(hw)
-        user32.keybd_event(0x12, 0, 2, 0)  # VK_MENU release
-        user32.SwitchToThisWindow(hw, True)
+        if attached:
+            user32.AttachThreadInput(fg_tid, cur_tid, False)
+        time.sleep(0.12)
+        user32.SetWindowPos(hw, wintypes.HWND(-2), int(target_x), int(target_y), int(w), int(h), 0x0040 | 0x0010)
     except Exception:
         user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
 
@@ -1259,22 +1275,49 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 if (cand_dir / fname).exists():
                     p = cand_dir / fname
                     break
+        if p.exists() and p.name.startswith("~$"):
+            real_cand = p.with_name(p.name[2:])
+            if real_cand.exists():
+                p = real_cand
         if p.exists():
             attach_thread_to_interactive_desktop()
             resolved_p = p.resolve()
             try:
-                subprocess.Popen(["explorer.exe", f"/select,{str(resolved_p)}"])
+                if os.name == "nt":
+                    f_attrs = ctypes.windll.kernel32.GetFileAttributesW(str(resolved_p))
+                    if f_attrs != -1 and (f_attrs & 0x02):
+                        ctypes.windll.kernel32.SetFileAttributesW(str(resolved_p), f_attrs & ~0x02)
+            except Exception:
+                pass
+            user32 = ctypes.windll.user32
+            old_same_wins = find_explorer_windows_on_default_desktop([resolved_p.parent.name])
+            for old_w in old_same_wins:
+                try:
+                    user32.PostMessageW(wintypes.HWND(old_w["rawHwnd"]), 0x0010, 0, 0)
+                except Exception:
+                    pass
+            if old_same_wins:
+                time.sleep(0.15)
+            existing_explorers = {w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])}
+            try:
+                # ⚠️ 중요: 리스트로 전달하면 공백 포함 경로에서 "/select,C:\..."로 감싸져 Documents 폴더가 열리는 버그가 발생하므로
+                # 반드시 /select,"C:\..." 형태의 원시 문자열(raw command line)로 호출합니다!
+                subprocess.Popen(f'explorer.exe /select,"{str(resolved_p)}"')
             except Exception:
                 try:
                     os.startfile(str(resolved_p.parent))
                 except Exception:
                     pass
             opened_win: Dict[str, Any] = {}
-            for _ in range(16):
+            for _ in range(28):
                 time.sleep(0.08)
-                found = find_explorer_windows_on_default_desktop([resolved_p.parent.name, resolved_p.stem, resolved_p.name])
+                found = find_explorer_windows_on_default_desktop(
+                    [resolved_p.parent.name, resolved_p.stem, resolved_p.name],
+                    exclude_hwnds=existing_explorers,
+                )
                 if found:
                     opened_win = found[0]
+                    time.sleep(0.22)
                     try:
                         bring_window_to_front_immediately(opened_win["rawHwnd"])
                     except Exception:

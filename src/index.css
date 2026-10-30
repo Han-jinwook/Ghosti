@@ -273,23 +273,53 @@ html.theme-warm-light .text-emerald-400:not([data-keep-dark="true"] *) {
   color: #047857 !important;
 }
 
-html.theme-warm-light .bg-emerald-950\/80:not([data-keep-dark="true"]),
-html.theme-warm-light .bg-emerald-950\/60:not([data-keep-dark="true"]),
-html.theme-warm-light .bg-emerald-950\/50:not([data-keep-dark="true"]),
-html.theme-warm-light .bg-emerald-950\/40:not([data-keep-dark="true"]),
-html.theme-warm-light .bg-emerald-900\/80:not([data-keep-dark="true"]) {
+html.theme-warm-light [class*="bg-emerald-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-emerald-900"]:not([data-keep-dark="true"]) {
   background-color: #ECFDF5 !important;
-  border-color: #6EE7B7 !important;
-  color: #047857 !important;
+  border-color: #34D399 !important;
+  color: #065F46 !important;
 }
 
-html.theme-warm-light .bg-violet-950\/80:not([data-keep-dark="true"]),
-html.theme-warm-light .bg-violet-950\/60:not([data-keep-dark="true"]),
-html.theme-warm-light .bg-violet-950\/40:not([data-keep-dark="true"]),
-html.theme-warm-light .bg-violet-900\/80:not([data-keep-dark="true"]) {
+html.theme-warm-light [class*="bg-amber-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-amber-900"]:not([data-keep-dark="true"]) {
+  background-color: #FFFBEB !important;
+  border-color: #FBBF24 !important;
+  color: #92400E !important;
+}
+
+html.theme-warm-light [class*="bg-cyan-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-cyan-900"]:not([data-keep-dark="true"]) {
+  background-color: #ECFEFF !important;
+  border-color: #22D3EE !important;
+  color: #155E75 !important;
+}
+
+html.theme-warm-light [class*="bg-indigo-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-indigo-900"]:not([data-keep-dark="true"]) {
+  background-color: #EEF2FF !important;
+  border-color: #818CF8 !important;
+  color: #3730A3 !important;
+}
+
+html.theme-warm-light [class*="bg-violet-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-violet-900"]:not([data-keep-dark="true"]) {
   background-color: #F5F3FF !important;
-  border-color: #C4B5FD !important;
+  border-color: #A78BFA !important;
   color: #5B21B6 !important;
+}
+
+html.theme-warm-light [class*="bg-rose-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-rose-900"]:not([data-keep-dark="true"]) {
+  background-color: #FFF1F2 !important;
+  border-color: #FB7185 !important;
+  color: #9F1239 !important;
+}
+
+html.theme-warm-light [class*="bg-fuchsia-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-fuchsia-900"]:not([data-keep-dark="true"]) {
+  background-color: #FDF4FF !important;
+  border-color: #E879F9 !important;
+  color: #86198F !important;
 }
 
 html.theme-warm-light .text-violet-200:not([data-keep-dark="true"] *),
