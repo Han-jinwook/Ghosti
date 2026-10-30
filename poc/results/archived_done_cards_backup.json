@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-30T10:11:48.771641",
+  "updated_at": "2026-10-30T13:46:08.520517",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -282,6 +282,30 @@
       "last_edited_time": "2026-10-29T05:32:00.000Z",
       "url": "https://app.notion.com/p/408f9ffd2c1d8002ba7bfc1e7a62b3e8",
       "archived_at": "2026-10-30T10:11:48.771482"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-8161-987e-f94242525b7a",
+      "title": "🎯 [루미노트] 구글 주소록 모달 표시 상태 및 고객등록 화면 사전 점검",
+      "app": "루미노트",
+      "last_edited_time": "2026-10-30T00:51:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d8161987ef94242525b7a",
+      "archived_at": "2026-10-30T13:34:54.342233"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-81c0-8ce1-e02c661c8c0d",
+      "title": "🎯 [센스톡] 상단 엔진 상태 배지 팝업 유지 및 패밀리 앱 스위처·브랜드 표기 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-10-30T01:10:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d81c08ce1e02c661c8c0d",
+      "archived_at": "2026-10-30T13:36:56.968574"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-8109-a43d-c3c8a7588c4a",
+      "title": "🎯 [스튜디오] 🎬 [썬드리머 스튜디오] 귀신같이 쇼츠 샘플 2편 감상 및 배경·대사 느낌 체크",
+      "app": "스튜디오",
+      "last_edited_time": "2026-10-30T01:18:00.000Z",
+      "url": "https://app.notion.com/p/2-408f9ffd2c1d8109a43dc3c8a7588c4a",
+      "archived_at": "2026-10-30T13:46:08.520149"
     }
   ]
 }
