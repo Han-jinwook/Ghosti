@@ -50,7 +50,7 @@ import plugin_senstalk  # noqa: E402
 import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 
-CORE_VERSION = "2.3.0"
+CORE_VERSION = "2.3.1"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -418,11 +418,11 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
 
 
 def ensure_port_free(port: int) -> list[int]:
-    """??(?? 5199)? ?? ?? ??? Z-?? ????? ?? ??? ?? ???? ??? ??????."""
+    """포트(기본 5199)를 점유 중인 구버전 Z-코어 프로세스를 자동 감지해 즉시 종료하고 포트를 인계받습니다."""
     killed_pids: list[int] = []
     my_pid = os.getpid()
 
-    # 1) ??? ?? ?? ??
+    # 1) 우아한 종료 요청 시도
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/__merlin/shutdown", timeout=0.4) as _:
             pass
@@ -430,7 +430,7 @@ def ensure_port_free(port: int) -> list[int]:
     except Exception:
         pass
 
-    # 2) psutil ? netstat?? ?? ?? PID ?? ?? ? ?? ??
+    # 2) psutil 및 netstat으로 포트 점유 PID 전수 조회 후 강제 종료
     target_pids: set[int] = set()
     try:
         import psutil
@@ -481,7 +481,7 @@ def ensure_port_free(port: int) -> list[int]:
             except Exception:
                 pass
 
-    # 3) ??? ??? ??? ??? ?? 2.5? ??
+    # 3) 포트가 완전히 풀릴 때까지 최대 2.5초 대기
     for _ in range(16):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -494,7 +494,7 @@ def ensure_port_free(port: int) -> list[int]:
 
 
 def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> None:
-    """??? ?? ? ??? ???? ?? ???? ???/?? [??] ??? ??????."""
+    """윈도우 시계 옆 시스템 트레이에 귀신같이 아이콘을 표시하고 우클릭/클릭 [종료] 메뉴를 제공합니다."""
     if sys.platform != "win32":
         return
 
@@ -515,14 +515,14 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                         menu,
                         win32con.MF_STRING | win32con.MF_GRAYED,
                         1001,
-                        f"? ?? Z-?? v{CORE_VERSION} (?? {port} ?? ?)",
+                        f"[실행 중] 귀신같이 멀린 Z-코어 v{CORE_VERSION} (포트 {port})",
                     )
                     win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
                     win32gui.AppendMenu(
                         menu,
                         win32con.MF_STRING,
                         1002,
-                        "? ?? Z-?? ?? (Exit)",
+                        "[종료] 멀린 Z-코어 끝내기 (Exit)",
                     )
                     pos = win32gui.GetCursorPos()
                     win32gui.SetForegroundWindow(hwnd)
@@ -582,12 +582,12 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
             if not hicon:
                 hicon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
 
-            tip = f"? ?? Z-?? v{CORE_VERSION} (?? {port} ?? ? - ???? ??)"
+            tip = f"귀신같이 멀린 Z-코어 v{CORE_VERSION} (포트 {port} 실행 중 - 클릭 시 종료 메뉴)"
             if port == STANDARD_PORT:
                 info_msg = (
-                    f"???(PID {replaced_pids})? ?? ???? ?? v{CORE_VERSION} ???? ???????."
+                    f"구버전(PID {replaced_pids})을 자동 종료하고 최신 v{CORE_VERSION} 엔진으로 교체되었습니다."
                     if replaced_pids
-                    else f"?? ? ??? ???? ???????. (?? {port})"
+                    else f"시계 옆 트레이 아이콘에서 언제든 종료할 수 있습니다. (포트 {port})"
                 )
                 nid = (
                     hwnd,
@@ -598,7 +598,7 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                     tip,
                     info_msg,
                     4000,
-                    f"? ?? Z-?? v{CORE_VERSION} ?? ??",
+                    f"귀신같이 멀린 Z-코어 v{CORE_VERSION} 실행 완료",
                     win32gui.NIIF_INFO,
                 )
             else:
