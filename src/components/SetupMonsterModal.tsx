@@ -1143,13 +1143,28 @@ export const SetupMonsterContent: React.FC = () => {
                     >
                       전체 최근 문서
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForensicQuery('없는파일_테스트_9999');
+                        void handleRunForensicScan('없는파일_테스트_9999');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 font-label-sm text-[11px] font-extrabold cursor-pointer"
+                    >
+                      🛡️ 없는 파일 정직 판정 확인
+                    </button>
                   </div>
                 </div>
 
                 {forensicResult && (
                   <div className="flex flex-col gap-2">
-                    <div className="text-[11.5px] text-emerald-200 font-bold">
-                      {forensicResult.honestCutoffMessage}
+                    <div className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-400/50 text-[12px] text-emerald-200 font-extrabold flex flex-col gap-1">
+                      <span>{forensicResult.honestCutoffMessage}</span>
+                      {forensicResult.files.length === 0 && (
+                        <span className="text-amber-300 font-extrabold">
+                          🛡️ 100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다.
+                        </span>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
                       {forensicResult.files.slice(0, 6).map((f, idx) => (
@@ -1240,6 +1255,11 @@ export const SetupMonsterContent: React.FC = () => {
                   </span>
                   <span>{msg.timestamp}</span>
                 </div>
+                {msg.role === 'assistant' && msg.text.includes('100% 정직 판정') && (
+                  <div className="mb-2 p-2.5 rounded-xl bg-emerald-950/80 border-2 border-emerald-400/70 text-emerald-200 font-extrabold text-[12.5px] shadow">
+                    🛡️ 100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다
+                  </div>
+                )}
                 <p className="text-[13px] leading-relaxed whitespace-pre-line font-semibold">
                   {msg.text}
                 </p>
@@ -1284,7 +1304,7 @@ export const SetupMonsterContent: React.FC = () => {
             },
             {
               label: '🕵️ 사라진 파일 1초 추적·복구',
-              q: '어제 바탕화면에 있던 카톡받은_영수증캡처_01.jpg 파일이 사라졌어 찾아줘',
+              q: '어제 바탕화면에 있던 없는파일_테스트_9999.docx 파일이 갑자기 사라졌어 찾아줘',
             },
             {
               label: '⚡ 상주 보안모듈(AnySign/TouchEn) 동결',

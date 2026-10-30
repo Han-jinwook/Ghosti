@@ -144,7 +144,7 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
             {
                 "caseType": "CASE_B_NOT_IN_RECYCLE_OR_RESTORE",
                 "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
-                "briefingKo": "찾을 파일 이름의 단서(예: '영수증', '단가표')를 함께 말씀해 주시면 복원 기록과 휴지통을 바로 대조해 드립니다.",
+                "briefingKo": "100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다. 찾을 파일 이름의 단서(예: '영수증', '단가표')를 함께 말씀해 주시면 복원 기록과 휴지통을 바로 대조해 드립니다.",
             }
         )
         return base

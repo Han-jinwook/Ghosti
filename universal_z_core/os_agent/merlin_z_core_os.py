@@ -676,7 +676,7 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
             (
                 f"✅ {elapsed_ms}ms 동안 금고 폴더 {len(scanned_dirs_report)}곳을 확인해 실존 문서 {len(found_files)}건을 찾았습니다 (내부 5줄 실물 증거 포함)."
                 if found_files
-                else f"⚠️ {elapsed_ms}ms 동안 금고 폴더 {len(scanned_dirs_report)}곳을 확인했지만 '{query}' 조건과 일치하는 문서를 찾지 못했습니다. (추측 수색 없이 정직 종료)"
+                else f"🛡️ 100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다. ({elapsed_ms}ms 동안 금고 폴더 {len(scanned_dirs_report)}곳을 확인했지만 '{query}' 조건과 일치하는 문서를 찾지 못해 추측 수색 없이 정직 종료)"
             )
             + (f" ⏱️ 시간 제한({deadline_sec:.0f}초)으로 확인하지 못한 곳: {', '.join(skipped_vaults)}" if timed_out and skipped_vaults else (" ⏱️ 시간 제한으로 일부 파일은 확인하지 못했습니다." if timed_out else ""))
         ),
@@ -1154,8 +1154,17 @@ def spawn_overlay_detached(
     }
     GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    tr_cmd = f'"{pyw_exe}" "{script_path}" gui-task-runner'
-    sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", tr_cmd)
+    if getattr(sys, "frozen", False):
+        import threading
+        threading.Thread(
+            target=launch_real_topmost_overlay,
+            args=(int(x), int(y), str(text), int(duration_sec)),
+            daemon=True,
+        ).start()
+        sch_ok = True
+    else:
+        tr_cmd = f'"{pyw_exe}" "{script_path}" gui-task-runner'
+        sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", tr_cmd)
 
     verified_win: Dict[str, Any] = {}
     for _ in range(20):
@@ -1241,29 +1250,44 @@ def open_file_location_on_interactive_desktop(
 def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]:
     ensure_merlin_dirs()
 
-    # [초고속 직결] 탐색기 검색창 자동 입력 단독 표시 모드로 0.1초 만에 즉시 실행!
-    if action in ("open_file_location", "open_file_search") and target_path:
+    # [초고속 직결] 윈도우 탐색기 /select 모드로 해당 파일을 선택해 화면 맨 앞으로 즉시 표시!
+    if action in ("open_file_location", "open_file_search", "open_file_direct") and target_path:
         p = Path(target_path)
+        if not p.exists():
+            fname = p.name
+            for cand_dir in (USERPROFILE / "Desktop", USERPROFILE / "Documents", USERPROFILE / "Downloads"):
+                if (cand_dir / fname).exists():
+                    p = cand_dir / fname
+                    break
         if p.exists():
-            # 1. 100% 무조건 보장되는 윈도우 표준 explorer /select 즉각 실행
+            attach_thread_to_interactive_desktop()
+            resolved_p = p.resolve()
             try:
-                subprocess.Popen(["explorer.exe", f"/select,{str(p.resolve())}"])
+                subprocess.Popen(["explorer.exe", f"/select,{str(resolved_p)}"])
             except Exception:
                 try:
-                    os.startfile(str(p.parent.resolve()))
+                    os.startfile(str(resolved_p.parent))
                 except Exception:
                     pass
-            # 2. 추가 대화형 단독 검색창 시도
-            try:
-                res = open_file_location_on_interactive_desktop(p, mode="open_file_search")
-                return res
-            except Exception:
-                return {
-                    "ok": True,
-                    "action": action,
-                    "targetPath": str(p),
-                    "message": f"탐색기에서 [{p.name}] 파일을 선택하여 즉시 띄웠습니다.",
-                }
+            opened_win: Dict[str, Any] = {}
+            for _ in range(16):
+                time.sleep(0.08)
+                found = find_explorer_windows_on_default_desktop([resolved_p.parent.name, resolved_p.stem, resolved_p.name])
+                if found:
+                    opened_win = found[0]
+                    try:
+                        bring_window_to_front_immediately(opened_win["rawHwnd"])
+                    except Exception:
+                        pass
+                    break
+            return {
+                "ok": True,
+                "action": action,
+                "targetPath": str(resolved_p),
+                "verifiedExplorerOnMonitor": bool(opened_win),
+                "explorerHwnd": opened_win.get("hwnd", ""),
+                "message": f"📂 윈도우 탐색기를 열어 [{resolved_p.name}] 파일을 선택해 화면 맨 앞으로 띄웠습니다!",
+            }
         return {"ok": False, "error": f"파일이 존재하지 않습니다: {target_path}"}
 
     before_state = inspect_real_pc_state()

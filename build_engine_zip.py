@@ -19,8 +19,25 @@ SAMPLE_301_PATTERN = re.compile(
 )
 
 
+import json
+
+def _load_audit_ts_map() -> dict[str, int]:
+    audit_path = ROOT / "public" / "poc" / "results" / "corpus_physical_audit.json"
+    if not audit_path.exists():
+        return {}
+    try:
+        items = json.loads(audit_path.read_text(encoding="utf-8")).get("items", [])
+        return {str(x["f"]): int(x.get("ts") or 0) for x in items if x.get("f")}
+    except Exception:
+        return {}
+
+AUDIT_TS_MAP = _load_audit_ts_map()
+
 def add_file_to_zip(z: zipfile.ZipFile, arcname: str, data: bytes):
-    zinfo = zipfile.ZipInfo(arcname, date_time=time.localtime()[:6])
+    base_name = arcname.split("/")[-1]
+    ts_ms = AUDIT_TS_MAP.get(base_name, 0)
+    dt_tuple = time.localtime(ts_ms / 1000.0)[:6] if ts_ms and ts_ms > 946684800000 else time.localtime()[:6]
+    zinfo = zipfile.ZipInfo(arcname, date_time=dt_tuple)
     zinfo.flag_bits |= 0x800  # UTF-8 filename encoding
     zinfo.compress_type = zipfile.ZIP_DEFLATED
     zinfo.external_attr = 0o755 << 16

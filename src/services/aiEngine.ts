@@ -674,6 +674,13 @@ function parseFilenameTimestampSec(name: string, fallbackMs: number): number {
   if (msMatch) {
     return Number(msMatch[1]) / 1000;
   }
+  if (fallbackMs && fallbackMs > 946684800000) {
+    return fallbackMs / 1000;
+  }
+  const seqMatch = name.match(/(20\d{2})(\d{2})(\d{2})[_-](\d{4})(?:\D|$)/);
+  if (seqMatch) {
+    return Date.UTC(+seqMatch[1], +seqMatch[2] - 1, +seqMatch[3], 12, 0, 0) / 1000 + Number(seqMatch[4]);
+  }
   return fallbackMs ? fallbackMs / 1000 : 0;
 }
 
@@ -1171,12 +1178,21 @@ export async function loadInitialPhotoDataset(): Promise<{
     const fullUrl = getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
     const thumbUrl = `${fullUrl}&thumb=1`;
 
+    const dateFromFilenameMatch = f.path.match(/(20\d{2})(\d{2})(\d{2})/);
+    const canonicalDate = dateFromFilenameMatch
+      ? `${dateFromFilenameMatch[1]}-${dateFromFilenameMatch[2]}-${dateFromFilenameMatch[3]}`
+      : audit?.ts && audit.ts > 946684800000
+      ? new Date(audit.ts).toISOString().slice(0, 10)
+      : f.date;
+    const canonicalMtimeMs =
+      audit?.ts && audit.ts > 946684800000 ? audit.ts : f.mtimeMs;
+
     return {
       id: f.path,
       name: f.path,
       size: f.size,
-      date: f.date,
-      mtimeMs: f.mtimeMs,
+      date: canonicalDate,
+      mtimeMs: canonicalMtimeMs,
       thumbUrl,
       fullUrl,
       tags: Array.from(tagSet),
