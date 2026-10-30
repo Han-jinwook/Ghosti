@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-30T09:13:02.159990",
+  "updated_at": "2026-10-30T10:11:48.771641",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -258,6 +258,30 @@
       "last_edited_time": "2026-10-29T05:06:00.000Z",
       "url": "https://app.notion.com/p/407f9ffd2c1d80c1bd8af8aac5d794cb",
       "archived_at": "2026-10-30T09:13:02.159732"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-8117-ad64-df99b9af8391",
+      "title": "🎯 [귀신같이] [0단계 공통 기반 보완] 공식 마스터 슬로건 · 4대 서브메뉴 · 여권 문패 · Z-코어 · 패밀리 앱 런처 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-29T05:28:00.000Z",
+      "url": "https://app.notion.com/p/0-4-Z-407f9ffd2c1d8117ad64df99b9af8391",
+      "archived_at": "2026-10-30T09:52:31.132521"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-80b2-a257-eb08f130ea6d",
+      "title": "🎯[센스톡] 카톡 동명이인/복수 검색 관련",
+      "app": "",
+      "last_edited_time": "2026-10-29T05:32:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d80b2a257eb08f130ea6d",
+      "archived_at": "2026-10-30T09:57:36.679387"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-8002-ba7b-fc1e7a62b3e8",
+      "title": "🎯[센스톡] 카톡 단체 전송 시 추가로 붙는 글자 관련",
+      "app": "",
+      "last_edited_time": "2026-10-29T05:32:00.000Z",
+      "url": "https://app.notion.com/p/408f9ffd2c1d8002ba7bfc1e7a62b3e8",
+      "archived_at": "2026-10-30T10:11:48.771482"
     }
   ]
 }

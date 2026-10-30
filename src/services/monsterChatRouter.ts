@@ -578,12 +578,15 @@ export async function processUnifiedMonsterChatQuery(params: {
       speak('파일이 있는 위치를 찾았습니다. 확인하시고 복구 버튼을 눌러 주세요.');
       return reply(sourceTab, payload.briefingKo, { cardKind: 'MISSING_FILE_EXONERATION', missingFilePayload: payload });
     }
-    speak('복원 기록과 휴지통에서 찾지 못했습니다.');
+    const verdictHeader = '100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다.';
+    let cleanBriefing = d?.briefingKo || '복원 기록과 내 휴지통을 확인했지만 찾지 못했습니다. 귀신같이가 옮기거나 지운 기록도 없습니다. 다른 폴더로 옮겨졌을 수 있으니 [🎯 찾기]에서 이름으로 검색해 보세요.';
+    if (!cleanBriefing.includes('100% 정직 판정')) {
+      cleanBriefing = `${verdictHeader}\n${cleanBriefing}`;
+    }
+    speak('내 PC 5대 은닉 금고와 휴지통을 모두 스캔했으나 흔적이 없습니다.');
     return reply(
       sourceTab,
-      `🔍 ${d?.briefingKo || '복원 기록과 휴지통에서 찾지 못했습니다.'}${
-        d?.keywords?.length ? '' : ''
-      }\n\n${RED_LINES_TEXT}`,
+      `🔍 ${cleanBriefing}\n\n${RED_LINES_TEXT}`,
       d?.keywords?.length ? { cardKind: 'SEARCH_ROUTING', searchKeyword: d.keywords[0] } : {}
     );
   }

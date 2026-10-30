@@ -314,9 +314,18 @@ export const SetupMonsterContent: React.FC = () => {
   const handleOpenRealFileLocation = async (fullPath: string) => {
     const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
     useSaySeeStore.setState({
-      lastQuarantineToast: `📂 파일 탐색기에서 [${fileName}] 파일을 선택하여 즉시 띄웠습니다!`,
+      lastQuarantineToast: `🔍 [탐색기 실행 중] [${fileName}] 파일을 윈도우 화면 전면에 띄웁니다...`,
     });
-    await executeRealOsAction('open_file_search', fullPath);
+    const res = await executeRealOsAction('open_file_search', fullPath);
+    if (res && res.ok) {
+      useSaySeeStore.setState({
+        lastQuarantineToast: `📂 [탐색기 열림 완료] 윈도우 화면에 [${fileName}] 파일이 선택되어 나타났습니다!`,
+      });
+    } else {
+      useSaySeeStore.setState({
+        lastQuarantineToast: `⚠️ Z-코어 연결 상태를 확인해 주세요 (${res?.error || '탐색기 실행 실패'}). Z-코어를 실행해 주세요.`,
+      });
+    }
   };
 
   useEffect(() => {
