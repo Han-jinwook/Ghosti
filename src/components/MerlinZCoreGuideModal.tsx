@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { zCoreBridge, Z_CORE_PORT, Z_CORE_ZIP_URL } from '../services/zCoreBridge';
+import {
+  zCoreBridge,
+  Z_CORE_PORT,
+  Z_CORE_ZIP_URL,
+  LATEST_Z_CORE_VERSION,
+  isZCoreOutdated,
+} from '../services/zCoreBridge';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 
 export type ZCoreModalStep = 'intro' | 'waiting_engine' | 'indexing' | 'ready';
@@ -63,7 +69,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       return;
     }
 
-    if (connectedNow) {
+    if (connectedNow && isZCoreOutdated(zCoreBridge.version)) {
+      // 구버전이 켜져 있으면 목록 불러오기 대신 '최신 버전 받기' 안내가 보이는 화면으로 연다
+      setStep('ready');
+    } else if (connectedNow) {
       const alreadyIndexed =
         typeof sessionStorage !== 'undefined' &&
         sessionStorage.getItem('ghosti_initial_indexing_done') === '1';
@@ -212,6 +221,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   if (!isOpen) return null;
 
   const isLight = themeMode === 'light';
+  const isOutdated = isConnected && isZCoreOutdated(version);
   const loadDone = progress >= 100;
   const currentStageLabel = loadError
     ? loadError
@@ -233,6 +243,38 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             : 'bg-zinc-950 border-white/15 text-zinc-100'
         }`}
       >
+        {/* ─────────────── [구버전 Z-코어 감지 시: 어느 단계에서든 최상단 업데이트 배너] ─────────────── */}
+        {isOutdated && (
+          <div
+            className={`mb-4 p-4 rounded-2xl border-2 ${
+              isLight
+                ? 'bg-amber-50 border-amber-400 text-amber-950'
+                : 'bg-amber-950/45 border-amber-400/70 text-amber-100'
+            }`}
+          >
+            <div className="font-black text-[14px] mb-1">
+              ⚠️ 지금 켜져 있는 Z-코어는 구버전(v{version || '?'})입니다
+            </div>
+            <p className="text-[12px] leading-relaxed opacity-90 mb-3">
+              아래 버튼으로 최신 <strong>v{LATEST_Z_CORE_VERSION}</strong>을 받아 압축을 풀고{' '}
+              <strong>Merlin_Z_Core_Setup.exe</strong>를 더블클릭하세요. 켜져 있는 구버전은 따로 끄지 않아도
+              새 버전이 자동으로 종료시키고 교체합니다. 교체가 끝나면 이 표시가 저절로 사라집니다.
+            </p>
+            <a
+              href={Z_CORE_ZIP_URL}
+              download="Merlin_Z_Core.zip"
+              onClick={() => {
+                if (typeof sessionStorage !== 'undefined') {
+                  sessionStorage.removeItem('ghosti_initial_indexing_done');
+                }
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-[13px] no-underline cursor-pointer"
+            >
+              📥 최신 Z-코어 v{LATEST_Z_CORE_VERSION} 다운로드 (Merlin_Z_Core.zip)
+            </a>
+          </div>
+        )}
+
         {/* ─────────────── [1단계: 한 번의 결정 (다운로드 + 인덱싱 대기 통합 동의)] ─────────────── */}
         {step === 'intro' && (
           <>
@@ -530,7 +572,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 </div>
                 <div>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-400/30 mb-1">
-                    Port {Z_CORE_PORT} · v{version || '2.1.0'} 정상 가동 중
+                    Port {Z_CORE_PORT} · v{version || '?'} {isOutdated ? '구버전 가동 중' : '정상 가동 중'}
                   </span>
                   <h3 className="text-lg font-black tracking-tight">
                     멀린 Z-코어 연결 완료!
@@ -583,6 +625,17 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 🔄 목록 다시 불러오기
               </button>
             </div>
+            {!isOutdated && (
+              <div className="mt-3 text-right">
+                <a
+                  href={Z_CORE_ZIP_URL}
+                  download="Merlin_Z_Core.zip"
+                  className="text-[11px] font-bold text-zinc-400 hover:text-teal-400 underline cursor-pointer"
+                >
+                  📥 Z-코어 설치파일 다시 받기 (v{LATEST_Z_CORE_VERSION})
+                </a>
+              </div>
+            )}
           </>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { zCoreBridge, Z_CORE_PORT } from '../services/zCoreBridge';
+import { zCoreBridge, Z_CORE_PORT, LATEST_Z_CORE_VERSION, isZCoreOutdated } from '../services/zCoreBridge';
 
 interface ZCoreEngineStatusBadgeProps {
   themeMode?: 'light' | 'dark';
@@ -13,16 +13,40 @@ export const ZCoreEngineStatusBadge: React.FC<ZCoreEngineStatusBadgeProps> = ({
   compact = false,
 }) => {
   const [isConnected, setIsConnected] = useState<boolean>(zCoreBridge.isConnected);
+  const [version, setVersion] = useState<string | null>(zCoreBridge.version);
 
   useEffect(() => {
     setIsConnected(zCoreBridge.isConnected);
+    setVersion(zCoreBridge.version);
     const unsubscribe = zCoreBridge.subscribe((conn) => {
       setIsConnected(conn);
+      setVersion(zCoreBridge.version);
     });
     return () => unsubscribe();
   }, []);
 
   const isLight = themeMode === 'light';
+  const outdated = isConnected && isZCoreOutdated(version);
+
+  if (outdated) {
+    return (
+      <button
+        type="button"
+        onClick={onClickGuide}
+        title={`⚠️ 구버전 Z-코어(v${version || '?'})가 켜져 있습니다 - 클릭하면 최신 v${LATEST_Z_CORE_VERSION} 다운로드 안내`}
+        className={`px-2.5 py-1 rounded-full font-label-mono text-[12px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer animate-pulse ${
+          isLight
+            ? 'bg-amber-50 border-amber-400 text-amber-800 hover:bg-amber-100 shadow-sm'
+            : 'bg-amber-950/50 border-amber-400/60 text-amber-200 hover:bg-amber-900/50 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+        }`}
+      >
+        <span className="w-2 h-2 rounded-full shrink-0 bg-amber-400" />
+        <span className={`whitespace-nowrap ${compact ? 'hidden sm:inline' : ''}`}>
+          Z-코어 업데이트 필요 (v{version || '?'})
+        </span>
+      </button>
+    );
+  }
 
   return (
     <button

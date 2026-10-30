@@ -9,6 +9,21 @@
 export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
+/** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 exe 버전과 반드시 일치시킬 것) */
+export const LATEST_Z_CORE_VERSION = '2.3.0';
+
+/** 연결된 Z-코어가 최신 배포 버전보다 낮은지 판정 (버전 정보가 없으면 구버전으로 간주) */
+export function isZCoreOutdated(version: string | null | undefined): boolean {
+  if (!version) return true;
+  const a = version.split('.').map((n) => parseInt(n, 10) || 0);
+  const b = LATEST_Z_CORE_VERSION.split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
 
 export interface ZCoreHealthResponse {
   ok: boolean;
@@ -74,13 +89,16 @@ class ZCoreBridgeManager {
         const data: ZCoreHealthResponse = await res.json();
         if (data.ok) {
           const wasConnected = this.isConnected;
+          const prevVersion = this.version;
           this.isConnected = true;
-          this.version = data.version || '2.1.0';
+          this.version = data.version || null;
           if (!wasConnected) {
             this.notify();
             window.dispatchEvent(
               new CustomEvent('zCoreConnected', { detail: data })
             );
+          } else if (prevVersion !== this.version) {
+            this.notify();
           }
           return true;
         }
