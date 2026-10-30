@@ -944,10 +944,11 @@ function buildSetupDiagnosisPlanBase(
     };
   }
 
-  if (resolvedId === 'pc_excel_overlay') {
+  if (resolvedId === 'pc_laptop_noise_overlay' || resolvedId === 'pc_excel_overlay') {
+    const isNoise = resolvedId === 'pc_laptop_noise_overlay';
     return {
       planId,
-      presetId: 'pc_excel_overlay',
+      presetId: isNoise ? 'pc_laptop_noise_overlay' : 'pc_excel_overlay',
       platform: 'pc',
       track: 'TRACK_B_OVERLAY_GUIDE',
       difficultyLevel: 'LEVEL_2_INTERMEDIATE_300',
@@ -955,12 +956,16 @@ function buildSetupDiagnosisPlanBase(
       feasibilityCheckKo:
         '✅ Z-코어 실물 TopMost 오버레이 엔진 준비 완료: 브라우저 창 바깥 실제 Windows 모니터 화면 맨 위에 빨간 손가락 화살표 창(👆)을 직접 띄워 안내합니다.',
       symptomQuery: q,
-      title: '👆 [Level 2 실물 오버레이] 실제 Windows 모니터 최상단(TopMost) 손가락 화살표 동행 가이드',
-      rootCause:
-        'Z-코어 OS TopMost 투명 레이어(merlin_z_core_os.py overlay)를 가동하여 웹브라우저 바깥 실제 윈도우 화면 좌표 위에 손가락 화살표(👆)를 직접 표시합니다.',
+      title: isNoise
+        ? '👆 [Level 2 실물 오버레이] 노트북 팬 소음·발열 전원 모드 조용하게 동행 가이드'
+        : '👆 [Level 2 실물 오버레이] 실제 Windows 모니터 최상단(TopMost) 손가락 화살표 동행 가이드',
+      rootCause: isNoise
+        ? 'Windows 전원 및 배터리 설정에서 전원 모드를 [최고의 전력 효율]로 변경하면 CPU 발열과 쿨링팬 소음이 즉시 줄어듭니다. 손가락 화살표로 해당 위치를 짚어드립니다.'
+        : 'Z-코어 OS TopMost 투명 레이어(merlin_z_core_os.py overlay)를 가동하여 웹브라우저 바깥 실제 윈도우 화면 좌표 위에 손가락 화살표(👆)를 직접 표시합니다.',
       agentModuleName: 'Merlin_Z_Core (merlin_z_core_os.py · Win32 TopMost Transparent Overlay)',
-      systemCommandOrApi:
-        'python universal_z_core/os_agent/merlin_z_core_os.py overlay --x 240 --y 120 --text "👆 상단 [보기(V)] 메뉴를 클릭하세요!"',
+      systemCommandOrApi: isNoise
+        ? 'python universal_z_core/os_agent/merlin_z_core_os.py overlay --x 420 --y 180 --text "👆 [전원 및 배터리] 메뉴를 클릭하세요!"'
+        : 'python universal_z_core/os_agent/merlin_z_core_os.py overlay --x 240 --y 120 --text "👆 상단 [보기(V)] 메뉴를 클릭하세요!"',
       beforeSnapshot: {
         overlayActive: false,
         targetMonitorResolution: '1920x1080 (Real Windows Desktop)',
@@ -974,9 +979,47 @@ function buildSetupDiagnosisPlanBase(
       voiceTtsSummary:
         '모니터 화면 맨 위에 실제 손가락 화살표 창을 띄워 드렸습니다.',
       creditCost: 0,
-      overlaySteps: [
-        {
-          step: 1,
+      overlaySteps: isNoise
+        ? [
+            {
+              step: 1,
+              screenTitle: 'Windows 설정 › 시스템 › 전원 및 배터리 (1/3단계)',
+              scrapedElements: [
+                { text: '시스템', rect: [120, 60], role: 'Header' },
+                { text: '전원 및 배터리', rect: [420, 180], role: 'ListItem' },
+              ],
+              fingerCoordPct: [42, 28],
+              targetLabel: '설정 목록 [전원 및 배터리] (좌표 420, 180)',
+              bubbleMessage: '👆 [전원 및 배터리] 메뉴를 눌러주세요!',
+              voiceGuideText: '화면에서 전원 및 배터리 메뉴를 클릭해 주세요.',
+            },
+            {
+              step: 2,
+              screenTitle: '전원 모드 선택 (2/3단계)',
+              scrapedElements: [
+                { text: '전원 모드', rect: [420, 260], role: 'ComboBox' },
+                { text: '최고의 전력 효율(조용하게)', rect: [420, 320], role: 'MenuItem' },
+              ],
+              fingerCoordPct: [42, 42],
+              targetLabel: '전원 모드 드롭다운 ➔ [최고의 전력 효율]',
+              bubbleMessage: '👆 [최고의 전력 효율]을 선택하시면 팬 소음이 즉시 가라앉습니다!',
+              voiceGuideText: '전원 모드를 최고의 전력 효율로 바꿔주세요.',
+            },
+            {
+              step: 3,
+              screenTitle: '설정 완료 및 정상 복귀 (3/3단계)',
+              scrapedElements: [
+                { text: '적용 완료', rect: [420, 360], role: 'Button' },
+              ],
+              fingerCoordPct: [50, 50],
+              targetLabel: '전원 설정 완료',
+              bubbleMessage: '✅ 설정 완료! 이제 노트북이 조용하고 시원하게 유지됩니다.',
+              voiceGuideText: '설정이 완료되었습니다.',
+            },
+          ]
+        : [
+            {
+              step: 1,
           screenTitle: '실제 Windows 모니터 최상단(TopMost) 오버레이 투사 1단계',
           scrapedElements: [
             { text: '파일(F)', rect: [80, 48], role: 'TabItem' },
