@@ -217,12 +217,14 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
     return base
 
 
-def rollback_restore_point(restore_id: str) -> Dict[str, Any]:
-    return safe.rollback_restore_point(restore_id)
+def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dict[str, Any]:
+    return safe.rollback_restore_point(restore_id, user_rollback_text)
 
 
-def create_desktop_shortcut_with_restore_point(site_name: str, target_url: str, user_prompt: str = "") -> Dict[str, Any]:
-    return safe.create_desktop_shortcut(site_name, target_url, user_prompt)
+def create_desktop_shortcut_with_restore_point(
+    site_name: str, target_url: str, user_prompt: str = "", user_approval_text: str = ""
+) -> Dict[str, Any]:
+    return safe.create_desktop_shortcut(site_name, target_url, user_prompt, user_approval_text)
 
 
 def record_conversational_cleanup_restore_point(
@@ -230,9 +232,10 @@ def record_conversational_cleanup_restore_point(
     user_prompt: str,
     preview_presented: str,
     full_paths: List[str],
+    user_approval_text: str = "",
 ) -> Dict[str, Any]:
-    """미리보기에서 유저가 승인한 '실물 경로'만 기타_정리함으로 이동하고 [복원 기록]을 남긴다."""
-    return safe.execute_cleanup_move(full_paths, summary, user_prompt, preview_presented)
+    """미리보기에서 유저가 자연어로 타이핑 승인한 '실물 경로'만 기타_정리함으로 이동하고 [복원 기록] + 블랙박스를 남긴다."""
+    return safe.execute_cleanup_move(full_paths, summary, user_prompt, preview_presented, user_approval_text)
 
 
 def detect_most_recent_ai_and_baton_touch(
@@ -1048,7 +1051,20 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
 
     if act in ("restore-point-rollback", "rollback", "restore-rollback"):
         rid = str(data.get("restoreId") or "").strip()
-        return rollback_restore_point(rid)
+        user_rollback_text = str(data.get("userRollbackTypedText") or data.get("userApprovalTypedText") or "").strip()
+        return rollback_restore_point(rid, user_rollback_text)
+
+    if act in ("blackbox-log", "blackbox"):
+        entries = []
+        try:
+            if safe.BLACKBOX_AUDIT_FILE.exists():
+                lines = safe.BLACKBOX_AUDIT_FILE.read_text(encoding="utf-8", errors="ignore").splitlines()
+                for ln in reversed(lines[-30:]):
+                    if ln.strip():
+                        entries.append(json.loads(ln))
+        except Exception:
+            pass
+        return {"ok": True, "auditFile": str(safe.BLACKBOX_AUDIT_FILE), "entries": entries}
 
     if act in ("recycle-bin-scan", "recycle-bin"):
         q = str(data.get("query") or data.get("q") or "").strip()
@@ -1058,7 +1074,11 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
         return safe.restore_from_recycle_bin(str(data.get("recycleMetaFile") or data.get("metaFile") or ""))
 
     if act in ("recover-copy",):
-        return safe.recover_copy_to_desktop(str(data.get("fullPath") or ""), str(data.get("userPrompt") or ""))
+        return safe.recover_copy_to_desktop(
+            str(data.get("fullPath") or ""),
+            str(data.get("userPrompt") or ""),
+            str(data.get("userApprovalTypedText") or "").strip(),
+        )
 
     if act in ("omni-file-trace", "trace-missing", "omni-trace"):
         q = str(data.get("query") or data.get("q") or "").strip()
@@ -1076,6 +1096,7 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
             site_name=str(data.get("siteName") or "").strip(),
             target_url=str(data.get("targetUrl") or "").strip(),
             user_prompt=str(data.get("userPrompt") or ""),
+            user_approval_text=str(data.get("userApprovalTypedText") or "").strip(),
         )
 
     if act in ("record-cleanup-restore", "execute-monster-cleanup", "record-cleanup"):
@@ -1087,6 +1108,7 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
             user_prompt=str(data.get("userPrompt") or ""),
             preview_presented=str(data.get("previewPresented") or ""),
             full_paths=[str(x) for x in raw_paths][:200],
+            user_approval_text=str(data.get("userApprovalTypedText") or "").strip(),
         )
 
     if act in ("gdrive-smart-scan", "gdrive-scan"):

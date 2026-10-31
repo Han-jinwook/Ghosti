@@ -83,6 +83,7 @@ export interface MonsterCleanupPreviewPayload {
   sampleFiles: string[];
   previewDescriptionKo: string;
   approved?: boolean;
+  approvedTypedText?: string;
   createdRestoreId?: string;
   executionError?: string;
 }
@@ -93,6 +94,7 @@ export interface MonsterShortcutPreviewPayload {
   shortcutFileName: string;
   userPrompt: string;
   approved?: boolean;
+  approvedTypedText?: string;
   createdRestoreId?: string;
   executionError?: string;
 }
@@ -113,6 +115,7 @@ export interface MonsterMissingFilePayload {
   fiveLinePreview: string[];
   briefingKo: string;
   restored?: boolean;
+  approvedTypedText?: string;
   restoreError?: string;
 }
 
@@ -128,6 +131,7 @@ export interface MonsterRestorePointItem {
   missingFiles: string[];
   precheckGuideMessage: string;
   rolledBack?: boolean;
+  rollbackTypedText?: string;
 }
 
 export interface MonsterPcSpecPayload {
@@ -200,20 +204,8 @@ function createWelcomeMessage(): MonsterChatMessage {
     timestamp: now,
     sourceTab: 'trash',
     text:
-      '안녕하세요! 내 PC와 스마트폰을 돌보는 **클린몬스터 · 설정몬스터**입니다. 😊\n' +
-      '딱딱한 명령어를 치실 필요 없이, 평소에 말씀하시듯 편하게 이야기해 주세요!\n\n' +
-      '• **"요즘 컴퓨터가 왜 이렇게 느리고 답답할까?"**\n' +
-      '• **"내가 영상편집 배우려는데 컴퓨터 새로 사야 해?"**\n' +
-      '• **"바탕화면이랑 다운로드 폴더가 너무 지저분해"**\n' +
-      '• **"어제 보던 계약서 파일이 갑자기 안 보여 어떡하지?"**\n\n' +
-      '말씀을 들은 뒤 **AI 두뇌(Gemini Flash)**가 원인을 알기 쉽게 설명해 드리고, **JSON 명령으로 Z-코어(5199)**에게 실측 조사를 맡깁니다. 파일을 옮기거나 고치기 전에는 반드시 먼저 동의를 구하니 안심하고 말씀해 주세요!',
-    followUpSuggestions: [
-      '요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 좀 봐줄래?',
-      '바탕화면이랑 다운로드 폴더 깔끔하게 정리하고 싶어',
-      '내가 유튜브 영상편집 하려는데 이 컴퓨터로 돌아갈까?',
-      '어제 작업하던 문서가 안 보이는데 찾아줄 수 있어?',
-      '자주 가는 네이버 카페 바탕화면에 바로가기 만들어줘',
-    ],
+      '💬 **질문 가이드** — 사양·느려짐 점검, 바탕화면·설치파일 정리, 사라진 파일 찾기, 기기 수리를 편하게 말씀해 주세요.\n' +
+      '↩️ **승인·원복 가이드** — 모든 정리·설정은 미리보기 확인 후 **"응 진행해"**처럼 직접 타이핑해 승인하실 때만 실행되며, 블랙박스에 기록되어 **"방금 한 거 되돌려줘"** 한마디로 즉시 원복됩니다.',
   };
 }
 
@@ -622,36 +614,65 @@ export async function fetchRestorePointsWithPrecheck(): Promise<{
   return { points: r.data.restorePoints };
 }
 
-export async function executeRestorePointRollback(restoreId: string): Promise<{
+export async function executeRestorePointRollback(
+  restoreId: string,
+  userTypedText = '원래대로 되돌려줘'
+): Promise<{
   ok: boolean;
+  restoreId?: string;
   message: string;
   restoredCount: number;
+  userRollbackTypedText: string;
 }> {
-  const r = await zcoreJson<{ ok: boolean; message?: string; error?: string; restoredCount?: number }>(
+  const r = await zcoreJson<{
+    ok: boolean;
+    restoreId?: string;
+    message?: string;
+    error?: string;
+    restoredCount?: number;
+    userRollbackTypedText?: string;
+  }>(
     '/__zcore/restore-rollback',
-    postJson({ restoreId })
+    postJson({ restoreId: restoreId || 'LATEST', userRollbackTypedText: userTypedText })
   );
-  if (!r.ok) return { ok: false, message: `⚠️ ${r.error}`, restoredCount: 0 };
+  if (!r.ok) return { ok: false, message: `⚠️ ${r.error}`, restoredCount: 0, userRollbackTypedText: userTypedText };
   const d = r.data;
   if (d?.ok) {
+    const resolvedId = d.restoreId || restoreId;
+    const count = Number(d.restoredCount ?? 0);
+    appendLocalHealthCheckRecord({
+      category: '↩️ 복원 기록',
+      title: `[${resolvedId}] 자연어 타이핑 원복 완료 ("${userTypedText}")`,
+      reclaimedSizeLabel: `${count}건 원위치 복구`,
+      cleanedItemCount: count,
+      securityPluginsFrozen: 0,
+      speedUpSummary: `블랙박스 원복 발화 기록됨: "${userTypedText}"`,
+      restoreId: resolvedId,
+    });
     return {
       ok: true,
-      message: `✅ ${d.message || `[${restoreId} 복원 기록]을 되돌렸습니다.`}`,
-      restoredCount: Number(d.restoredCount ?? 0),
+      restoreId: resolvedId,
+      message: `✅ ${d.message || `[${resolvedId} 복원 기록]을 원래 자리로 되돌렸습니다.`}`,
+      restoredCount: count,
+      userRollbackTypedText: d.userRollbackTypedText || userTypedText,
     };
   }
   return {
     ok: false,
     message: `⚠️ 되돌리지 못했습니다: ${d?.error || d?.message || '알 수 없는 오류'}`,
     restoredCount: 0,
+    userRollbackTypedText: userTypedText,
   };
 }
 
 // ---------------------------------------------------------------------------
-// 🧹 대화형 폴더 정리 실행 (미리보기에 실린 실물 경로만)
+// 🧹 대화형 폴더 정리 실행 (유저 자연어 타이핑 승인 + 블랙박스 영구 기록)
 // ---------------------------------------------------------------------------
 
-export async function executeMonsterCleanupApproval(preview: MonsterCleanupPreviewPayload): Promise<{
+export async function executeMonsterCleanupApproval(
+  preview: MonsterCleanupPreviewPayload,
+  userTypedText = '승인 및 정리 진행'
+): Promise<{
   ok: boolean;
   restoreId?: string;
   message: string;
@@ -672,6 +693,7 @@ export async function executeMonsterCleanupApproval(preview: MonsterCleanupPrevi
       userPrompt: preview.userPrompt,
       previewPresented: preview.previewDescriptionKo,
       fullPaths: preview.items.map((i) => i.fullPath),
+      userApprovalTypedText: userTypedText,
     })
   );
   if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
@@ -684,17 +706,20 @@ export async function executeMonsterCleanupApproval(preview: MonsterCleanupPrevi
   const failNote = d.errors?.length ? ` · 실패 ${d.errors.length}건` : '';
   const healthRecord = appendLocalHealthCheckRecord({
     category: '🧹 치우기',
-    title: preview.summaryTitle,
+    title: `${preview.summaryTitle} (승인: "${userTypedText}")`,
     reclaimedSizeLabel: `${formatBytes(Number(d.movedBytes ?? 0))} 정돈`,
     cleanedItemCount: moved,
     securityPluginsFrozen: 0,
-    speedUpSummary: `${preview.targetFolderLabel}에서 ${moved}건을 '기타_정리함'으로 이동${failNote}`,
+    speedUpSummary: `${preview.targetFolderLabel}에서 ${moved}건을 '기타_정리함'으로 이동${failNote} · 블랙박스 승인 기록됨`,
     restoreId: d.restoreId,
   });
   return { ok: true, restoreId: d.restoreId, message: `✅ ${d.message || `${moved}건을 정리했습니다.`}`, healthRecord };
 }
 
-export async function executeMonsterShortcutApproval(preview: MonsterShortcutPreviewPayload): Promise<{
+export async function executeMonsterShortcutApproval(
+  preview: MonsterShortcutPreviewPayload,
+  userTypedText = '승인 및 바로가기 생성'
+): Promise<{
   ok: boolean;
   restoreId?: string;
   message: string;
@@ -706,6 +731,7 @@ export async function executeMonsterShortcutApproval(preview: MonsterShortcutPre
       siteName: preview.siteName,
       targetUrl: preview.targetUrl,
       userPrompt: preview.userPrompt,
+      userApprovalTypedText: userTypedText,
     })
   );
   if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
@@ -715,32 +741,35 @@ export async function executeMonsterShortcutApproval(preview: MonsterShortcutPre
   }
   const healthRecord = appendLocalHealthCheckRecord({
     category: '🔗 바로가기',
-    title: `바탕화면 '${preview.siteName}' 바로가기(${d.fileName || preview.shortcutFileName}) 생성`,
+    title: `바탕화면 '${preview.siteName}' 바로가기 생성 (승인: "${userTypedText}")`,
     reclaimedSizeLabel: '바탕화면 바로가기',
     cleanedItemCount: 1,
     securityPluginsFrozen: 0,
-    speedUpSummary: `바탕화면에서 더블클릭으로 ${preview.targetUrl} 열기`,
+    speedUpSummary: `바탕화면에서 더블클릭으로 ${preview.targetUrl} 열기 · 블랙박스 승인 기록됨`,
     restoreId: d.restoreId,
   });
   return { ok: true, restoreId: d.restoreId, message: `✅ ${d.message || '바로가기를 만들었습니다.'}`, healthRecord };
 }
 
 // ---------------------------------------------------------------------------
-// 사라진 파일 복구 실행 (찾은 경로 유형별 실제 복구)
+// 사라진 파일 복구 실행 (유저 자연어 타이핑 승인 + 블랙박스 영구 기록)
 // ---------------------------------------------------------------------------
 
-export async function executeMissingFileRecovery(payload: MonsterMissingFilePayload): Promise<{
+export async function executeMissingFileRecovery(
+  payload: MonsterMissingFilePayload,
+  userTypedText = '승인 및 파일 복구'
+): Promise<{
   ok: boolean;
   message: string;
 }> {
   if (payload.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT' && payload.restoreId) {
-    const res = await executeRestorePointRollback(payload.restoreId);
+    const res = await executeRestorePointRollback(payload.restoreId, userTypedText);
     return { ok: res.ok, message: res.message };
   }
   if (payload.caseType === 'CASE_B_FOUND_IN_RECYCLE_BIN' && payload.recycleMetaFile) {
     const r = await zcoreJson<{ ok: boolean; restoredPath?: string; renamed?: boolean; error?: string }>(
       '/__zcore/recycle-restore',
-      postJson({ recycleMetaFile: payload.recycleMetaFile })
+      postJson({ recycleMetaFile: payload.recycleMetaFile, userApprovalTypedText: userTypedText })
     );
     if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
     if (!r.data?.ok) return { ok: false, message: `⚠️ 복원하지 못했습니다: ${r.data?.error || '알 수 없는 오류'}` };
@@ -750,7 +779,7 @@ export async function executeMissingFileRecovery(payload: MonsterMissingFilePayl
   if (payload.caseType === 'CASE_C_OFFICE_AUTORECOVER' && payload.recoverFullPath) {
     const r = await zcoreJson<{ ok: boolean; recoveredPath?: string; message?: string; error?: string }>(
       '/__zcore/recover-copy',
-      postJson({ fullPath: payload.recoverFullPath, userPrompt: payload.query })
+      postJson({ fullPath: payload.recoverFullPath, userPrompt: payload.query, userApprovalTypedText: userTypedText })
     );
     if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
     if (!r.data?.ok) return { ok: false, message: `⚠️ 복구본을 만들지 못했습니다: ${r.data?.error || '알 수 없는 오류'}` };
@@ -828,6 +857,155 @@ export async function processUnifiedMonsterChatQuery(params: {
   const speak = (text: string) => {
     if (ttsEnabled) void speakWithHyunsuOrSunhi(text, 'hyunsu_briefing');
   };
+
+  // 0-0A) [자연어 타이핑 승인 인터셉터 (0 토큰 · 블랙박스 영구 기록)]
+  // 대기 중인 미리보기 카드(폴더 정리 / 바로가기 생성 / 사라진 파일 복구)가 있을 때 유저가 자연스러운 긍정/승인 발화를 타이핑하면 즉시 실행 후 블랙박스에 기록합니다.
+  const pendingApprovalMsg = [...sharedChatState.messages]
+    .reverse()
+    .find(
+      (m) =>
+        (m.cleanupPreview && !m.cleanupPreview.approved) ||
+        (m.shortcutPreview && !m.shortcutPreview.approved) ||
+        (m.missingFilePayload && !m.missingFilePayload.restored)
+    );
+
+  const isNegationOrRollback =
+    /아니|안\s*해|하지\s*마|취소|보류|멈춰|잠깐|그만|싫어|놔둬|나중에|되돌려|되돌리|원복|원래대로/i.test(clean);
+  const isNaturalAffirmativeConsent =
+    !isNegationOrRollback &&
+    clean.length <= 50 &&
+    (/^(응|네|예|그래|좋아|오케이|ok|okay|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|부탁|당장|바로|해\s*줘|해\s*주세요|해라|하자)(\s|$|[.!~,])/i.test(
+      clean
+    ) ||
+      /진행해|실행해|승인할|동의할|그대로\s*(해|진행|실행|부탁)|정리해\s*(줘|주세요|라)?|치워\s*(줘|주세요|라)?|옮겨\s*(줘|주세요|라)?|만들어\s*(줘|주세요|라)?|복구해\s*(줘|주세요|라)?/i.test(
+        clean
+      ));
+
+  if (pendingApprovalMsg && isNaturalAffirmativeConsent) {
+    if (pendingApprovalMsg.cleanupPreview && !pendingApprovalMsg.cleanupPreview.approved) {
+      const preview = pendingApprovalMsg.cleanupPreview;
+      const res = await executeMonsterCleanupApproval(preview, clean);
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.cleanupPreview
+            ? {
+                ...m,
+                cleanupPreview: {
+                  ...m.cleanupPreview,
+                  approved: res.ok,
+                  approvedTypedText: clean,
+                  createdRestoreId: res.restoreId,
+                  executionError: res.ok ? undefined : res.message,
+                },
+                healthRecordIssued: res.healthRecord || m.healthRecordIssued,
+              }
+            : m
+        )
+      );
+      const msgText = res.ok
+        ? `${res.message}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${res.restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 원래 위치로 1초 원복됩니다.`
+        : res.message;
+      speak(res.ok ? '승인 말씀이 블랙박스에 기록되었으며 정리를 완료했습니다.' : res.message);
+      return reply(sourceTab, msgText, {
+        healthRecordIssued: res.healthRecord,
+      });
+    }
+
+    if (pendingApprovalMsg.shortcutPreview && !pendingApprovalMsg.shortcutPreview.approved) {
+      const preview = pendingApprovalMsg.shortcutPreview;
+      const res = await executeMonsterShortcutApproval(preview, clean);
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.shortcutPreview
+            ? {
+                ...m,
+                shortcutPreview: {
+                  ...m.shortcutPreview,
+                  approved: res.ok,
+                  approvedTypedText: clean,
+                  createdRestoreId: res.restoreId,
+                  executionError: res.ok ? undefined : res.message,
+                },
+                healthRecordIssued: res.healthRecord || m.healthRecordIssued,
+              }
+            : m
+        )
+      );
+      const msgText = res.ok
+        ? `${res.message}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${res.restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 바탕화면에서 즉시 제거(원복)됩니다.`
+        : res.message;
+      speak(res.ok ? '승인 말씀이 블랙박스에 기록되었으며 바탕화면 바로가기를 만들었습니다.' : res.message);
+      return reply(sourceTab, msgText, {
+        healthRecordIssued: res.healthRecord,
+      });
+    }
+
+    if (pendingApprovalMsg.missingFilePayload && !pendingApprovalMsg.missingFilePayload.restored) {
+      const payload = pendingApprovalMsg.missingFilePayload;
+      const res = await executeMissingFileRecovery(payload, clean);
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.missingFilePayload
+            ? {
+                ...m,
+                missingFilePayload: {
+                  ...m.missingFilePayload,
+                  restored: res.ok,
+                  approvedTypedText: clean,
+                  restoreError: res.ok ? undefined : res.message,
+                },
+              }
+            : m
+        )
+      );
+      const msgText = res.ok
+        ? `${res.message}\n📋 **블랙박스 복구 승인 기록 완료** — 승인 발화: \`"${clean}"\``
+        : res.message;
+      speak(res.ok ? '승인 말씀이 블랙박스에 기록되었으며 파일을 복구했습니다.' : res.message);
+      return reply(sourceTab, msgText);
+    }
+  }
+
+  // 0-0B) [자연어 타이핑 원복(되돌리기) 인터셉터 (0 토큰 · 블랙박스 원복 영구 기록)]
+  const isPureRestoreListQuery =
+    /^(최근\s*)?\[?복원\s*기록\]?\s*(목록\s*)?(보여\s*줘|보여\s*주세요|조회|확인|알려\s*줘|있어\??)?$/i.test(clean);
+  const isNaturalRollbackCommand =
+    !isPureRestoreListQuery &&
+    /되돌려|되돌리|원복|원래대로|제자리로|(방금|아까|최근|이전).*?(취소|복원|복구|되돌|원복)|(정리한\s*거|치운\s*거|옮긴\s*거|만든\s*거).*?(취소|복원|복구|되돌|원복)|#\d+\s*(번)?\s*(복원|되돌|원복|취소)/i.test(
+      clean
+    );
+
+  if (isNaturalRollbackCommand) {
+    const idMatch = clean.match(/#\d+/);
+    const targetRestoreId = idMatch ? idMatch[0] : 'LATEST';
+    const res = await executeRestorePointRollback(targetRestoreId, clean);
+    const { points } = await fetchRestorePointsWithPrecheck();
+    if (res.ok && res.restoreId) {
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.restorePoints
+            ? {
+                ...m,
+                restorePoints: m.restorePoints.map((pt) =>
+                  pt.restoreId === res.restoreId
+                    ? { ...pt, rolledBack: true, rollbackTypedText: clean, statusBadge: '↩️ 되돌리기 완료' }
+                    : pt
+                ),
+              }
+            : m
+        )
+      );
+    }
+    const msgText = res.ok
+      ? `${res.message}\n📋 **블랙박스 원복 기록 완료** — 원복 발화: \`"${clean}"\` · 복원 번호: \`${
+          res.restoreId || targetRestoreId
+        }\` (${res.restoredCount}건 원위치 복구)`
+      : res.message;
+    speak(res.ok ? '원복 말씀이 블랙박스에 기록되었으며 원래 자리로 되돌렸습니다.' : res.message);
+    return reply(sourceTab, msgText, {
+      ...(points.length > 0 ? { cardKind: 'RESTORE_POINTS_LIST', restorePoints: points } : {}),
+    });
+  }
 
   // 0-A) 명백한 일상 잡담(PC·파일·설정 키워드 전무)은 LLM 토큰 소모(비용 낭비) 없이 0원으로 즉시 정중히 거절 안내
   const hasAnyPcOrFileCue =
@@ -922,10 +1100,10 @@ export async function processUnifiedMonsterChatQuery(params: {
         }
       );
     }
-    speak('복원 기록을 조회했습니다. 되돌릴 기록의 복원 버튼을 눌러 주세요.');
+    speak('복원 기록을 조회했습니다. 되돌리시려면 원래대로 되돌려달라고 입력해 주세요.');
     return reply(
       sourceTab,
-      `${llmIntro}🕰️ **최근 [복원 기록] ${points.length}건 — 사전 검진 결과**\n지금 디스크에 되돌릴 대상이 실제로 있는지 대조했습니다. 원하는 기록의 **[↩️ 원래대로 복원]**을 누르면 기록된 경로로 되돌립니다.`,
+      `${llmIntro}🕰️ **최근 [복원 기록] ${points.length}건 — 사전 검진 결과**\n되돌리시려면 채팅창에 **"방금 한 거 되돌려줘"** 또는 **"#1 원복해줘"**처럼 편하게 입력해 주세요 (블랙박스에 원복 발화가 기록됩니다).`,
       {
         cardKind: 'RESTORE_POINTS_LIST',
         restorePoints: points,
@@ -995,9 +1173,9 @@ export async function processUnifiedMonsterChatQuery(params: {
         fiveLinePreview: (top.preview5Lines || []).slice(0, 5),
         briefingKo: `${llmIntro}🔍 **[자동복구 금고 실측 — ${top.vaultLabel}]**\n자동복구 폴더에서 **${top.fileName}** (${top.modifiedAt})을 찾았습니다${
           autoRecover.length > 1 ? ` (후보 ${autoRecover.length}건 중 가장 최근 파일)` : ''
-        }. 아래는 파일 안에서 실제로 읽은 내용입니다. 찾던 문서가 맞으면 **[⭕ 확인 완료 · 복구하기]**를 눌러 주세요.`,
+        }. 아래는 파일 안에서 실제로 읽은 내용입니다. 찾던 문서가 맞으면 채팅창에 **"응 복구해줘"**라고 입력해 주세요.`,
       };
-      speak('자동복구 폴더에서 파일을 찾았습니다. 미리보기를 확인하시고 복구 버튼을 눌러 주세요.');
+      speak('자동복구 폴더에서 파일을 찾았습니다. 미리보기를 확인하시고 복구해달라고 입력해 주세요.');
       return reply(sourceTab, payload.briefingKo, {
         cardKind: 'MISSING_FILE_EXONERATION',
         missingFilePayload: payload,
@@ -1045,7 +1223,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         ],
         briefingKo: `${llmIntro}${d.briefingKo || ''}`,
       };
-      speak('파일이 있는 위치를 찾았습니다. 확인하시고 복구 버튼을 눌러 주세요.');
+      speak('파일이 있는 위치를 찾았습니다. 확인하시고 복구해달라고 입력해 주세요.');
       return reply(sourceTab, payload.briefingKo, {
         cardKind: 'MISSING_FILE_EXONERATION',
         missingFilePayload: payload,
@@ -1109,10 +1287,10 @@ export async function processUnifiedMonsterChatQuery(params: {
       userPrompt: clean,
       approved: false,
     };
-    speak('바로가기 미리보기를 준비했습니다. 확인 버튼을 누르시면 바탕화면에 만듭니다.');
+    speak('바로가기 미리보기를 준비했습니다. 채팅창에 응 만들어줘라고 입력하시면 바탕화면에 만듭니다.');
     return reply(
       sourceTab,
-      `${llmIntro}🔗 **[바탕화면 바로가기 미리보기]**\n'${parsed.siteName}' (${parsed.targetUrl}) 바로가기를 바탕화면에 만들 준비가 됐습니다. **[⭕ 확인 완료]**를 누르시면 생성되고 [복원 기록]에도 남습니다.`,
+      `${llmIntro}🔗 **[바탕화면 바로가기 미리보기]**\n'${parsed.siteName}' (${parsed.targetUrl}) 바로가기를 준비했습니다. 채팅창에 **"응 진행해"** 또는 **"네 만들어 주세요"**라고 입력하시면 실행되고 블랙박스·[복원 기록]에 남습니다.`,
       {
         cardKind: 'DESKTOP_SHORTCUT_GATE',
         shortcutPreview,
@@ -1235,12 +1413,10 @@ export async function processUnifiedMonsterChatQuery(params: {
       previewDescriptionKo: `${folderLabel}에서 ${ruleText} ${items.length}건을 찾았습니다. 확인을 누르면 각 폴더 안의 '기타_정리함'으로 옮깁니다 (삭제 아님 · [복원 기록]으로 되돌리기 가능).`,
     };
     const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'cleanup', subscribedLounges: [] });
-    speak('정리할 파일 목록을 실제로 확인했습니다. 내역을 보시고 확인 버튼을 눌러 주세요.');
+    speak('정리할 파일 목록을 확인했습니다. 내역을 보시고 응 정리해줘라고 입력해 주세요.');
     return reply(
       sourceTab,
-      `${llmIntro}🧹 **[실물 미리보기 게이트 (Zero-Auto-Action)]**\n클린몬스터는 먼저 파일을 옮기지 않습니다. 실제로 찾은 **${items.length}건 (${formatBytes(
-        totalBytes
-      )})**을 확인하시고 **[⭕ 확인 완료 · 그대로 실행해 줘]**를 누르시면 그때 안전하게 정리함으로 옮깁니다.`,
+      `${llmIntro}🧹 **[실물 미리보기 (${items.length}건 · ${formatBytes(totalBytes)})]**\n파일을 임의로 옮기지 않습니다. 아래 목록을 확인하시고 채팅창에 **"응 진행해"** 또는 **"네 정리해 주세요"**처럼 편하게 입력하시면 그때 정리함으로 옮기고 블랙박스에 기록합니다.`,
       {
         cardKind: 'CLEANUP_PREVIEW_GATE',
         cleanupPreview,
