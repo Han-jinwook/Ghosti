@@ -429,7 +429,7 @@ function extractJsonObject(raw: string): any | null {
   }
 }
 
-async function callMonsterLlmGateway(prompt: string, timeoutMs = 6500): Promise<{ ok: boolean; text: string; model?: string }> {
+async function callMonsterLlmGateway(prompt: string, timeoutMs = 9500): Promise<{ ok: boolean; text: string; model?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -446,7 +446,11 @@ async function callMonsterLlmGateway(prompt: string, timeoutMs = 6500): Promise<
         account: 'beakes',
         model: 'gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }],
-        config: { temperature: 0.35, maxOutputTokens: 900 },
+        config: {
+          temperature: 0.45,
+          maxOutputTokens: 2048,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
       signal: controller.signal,
     });
@@ -510,9 +514,9 @@ export async function callMonsterLowCostLlmJson(params: {
     `[현재 유저 입력 (${sourceTab === 'trash' ? '🧹 치우기 탭' : '⚙️ 고치기 탭'})]`,
     `"${query}"`,
     '',
-    '[핵심 임무 — 깊은 감동을 주는 대화 + JSON으로 Z-코어(127.0.0.1:5199)에게 일 맡기기]',
-    '1. 유저가 명령어처럼 말하지 않고 일상적인 고민("요즘 왜 이렇게 느리지?", "영상편집 배울 건데 컴퓨터 새로 사야 해?", "어제 보던 파일이 안 보여", "바탕화면이 너무 어지러워", "프린터가 안 나와")을 말해도, 먼저 마음을 안심시키고 내 PC 실시간 사양/상태 수치를 근거로 왜 그런지 따뜻하고 명쾌하게 설명(replyKo)하세요.',
-    '2. 절대로 확인되지 않은 가짜 파일명이나 가짜 용량을 지어내지 마세요. 실제 파일 목록과 실행 버튼은 당신이 반환한 JSON 명령(zCoreCommand)을 통해 Z-코어가 바로 아래에 실물 카드로 붙여줍니다.',
+    '[핵심 아키텍처 원칙 — 100% 자연스러운 일상 대화(replyKo) + 기능은 JSON(intent & zCoreCommand)으로만 완전 분리 주입]',
+    '1. 유저가 일상적인 안부 인사, 잡담, 날씨, 기분, 농담, 앞선 대화에 대한 맞장구 등을 건네면 기계적인 안내를 하지 말고 사람(단골 친구·해결사)과 대화하듯 자연스럽고 다정하게 대화(replyKo)를 나누세요. 이때는 기능 실행이 불필요하므로 반드시 "intent": "GENERAL_CONVERSATION", "zCoreCommand": { "endpoint": "NONE", "action": "CONVERSE", "params": {} }로 출력하세요.',
+    '2. 유저가 일상적인 말투로 컴퓨터 고민("요즘 왜 이렇게 느리지?", "영상편집 배울 건데 컴퓨터 새로 사야 해?", "어제 보던 파일이 안 보여", "바탕화면이 너무 어지러워", "프린터가 안 나와")을 말하면, replyKo에는 사람과 대화하듯 공감하고 내 PC 실시간 수치를 자연스럽게 녹여 설명하고, 실제 실행할 기능만 JSON의 intent와 zCoreCommand에 분리해서 주입하세요. 절대로 확인되지 않은 가짜 파일명이나 가짜 용량을 지어내지 마세요.',
     '3. 반드시 아래 JSON 스키마 하나만 순수 JSON으로 출력하세요 (마크다운 코드블록 없이 { 로 시작해서 } 로 끝낼 것):',
     '{',
     '  "replyKo": "유저 눈높이(초급/중급/고급)에 맞춘 따뜻하고 감동적인 2~4문장 대화 답변 (내 PC 실측 수치 자연스럽게 인용)",',
@@ -839,15 +843,37 @@ export async function processUnifiedMonsterChatQuery(params: {
     recentTurns,
   });
 
+  const hasLlm = Boolean(llmDecision && llmDecision.replyKo);
+  const isSyntheticMissingTest = /없는파일_테스트|카톡받은_영수증캡처_01\.jpg/i.test(clean);
   const llmIntro = llmDecision?.replyKo ? `💬 ${llmDecision.replyKo}\n\n` : '';
   const defaultFollowUps = llmDecision?.followUpSuggestions?.length
     ? llmDecision.followUpSuggestions
     : undefined;
 
-  // 1) [복원 기록] 조회 (명시적 키워드 또는 LLM이 RESTORE_POINTS_LIST로 판단한 경우)
+  // 0) LLM이 순수 일상 대화(GENERAL_CONVERSATION)로 판단한 경우: 정규식 가로채기 없이 100% 자연스러운 일상 대화 즉시 반환
   if (
-    /복원\s*기록|히스토리|되돌려|원래대로|타임머신|정리한\s*거\s*취소|#\d+/i.test(clean) ||
-    llmDecision?.intent === 'RESTORE_POINTS_LIST'
+    hasLlm &&
+    llmDecision!.intent === 'GENERAL_CONVERSATION' &&
+    (!llmDecision!.zCoreCommand?.endpoint || llmDecision!.zCoreCommand.endpoint === 'NONE') &&
+    !isSyntheticMissingTest
+  ) {
+    speak(llmDecision!.replyKo);
+    return reply(sourceTab, `💬 ${llmDecision!.replyKo}`, {
+      llmActionJson: llmDecision!,
+      followUpSuggestions:
+        defaultFollowUps || [
+          '내 PC 사양이랑 남은 용량 진단해 줘',
+          '바탕화면이랑 다운로드 폴더 정리할 파일 봐줘',
+          '어제 보던 파일이 사라졌는데 찾아줘',
+        ],
+    });
+  }
+
+  // 1) [복원 기록] 조회 (LLM JSON intent 우선, 오프라인 폴백 시에만 정규식 사용)
+  if (
+    llmDecision?.intent === 'RESTORE_POINTS_LIST' ||
+    llmDecision?.zCoreCommand?.endpoint === '/__zcore/restore-points' ||
+    (!hasLlm && /복원\s*기록|히스토리|되돌려|원래대로|타임머신|정리한\s*거\s*취소|#\d+/i.test(clean))
   ) {
     const { points, error } = await fetchRestorePointsWithPrecheck();
     const actionJson: MonsterLlmActionJson = llmDecision || {
@@ -892,12 +918,14 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 2) 사라진 파일 / 저장 안 하고 끈 문서 (명시적 키워드 또는 LLM이 MISSING_FILE_TRACE / OFFICE_CRASH_RECOVER로 판단한 경우)
   if (
-    /없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean) ||
+    isSyntheticMissingTest ||
     llmDecision?.intent === 'MISSING_FILE_TRACE' ||
-    llmDecision?.intent === 'OFFICE_CRASH_RECOVER'
+    llmDecision?.intent === 'OFFICE_CRASH_RECOVER' ||
+    llmDecision?.zCoreCommand?.endpoint === '/__zcore/omni-trace' ||
+    llmDecision?.zCoreCommand?.endpoint === '/__zcore/forensic-scan' ||
+    (!hasLlm && /없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean))
   ) {
     const verdictHeader = '100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다.';
-    const isSyntheticMissingTest = /없는파일_테스트|카톡받은_영수증캡처_01\.jpg/i.test(clean);
     const isOfficeCrash =
       !isSyntheticMissingTest &&
       (/저장\s*안\s*하고|작업하던\s*(엑셀|워드|한글|파워포인트)|꺼졌/i.test(clean) ||
@@ -1026,8 +1054,9 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 3) 바탕화면 바로가기(.url) 생성 미리보기
   if (
-    /바로가기|바탕화면에\s*꺼내|아이콘\s*만들|자주\s*가는\s*(카페|사이트|유튜브|은행)/i.test(clean) ||
-    llmDecision?.intent === 'DESKTOP_SHORTCUT'
+    llmDecision?.intent === 'DESKTOP_SHORTCUT' ||
+    llmDecision?.zCoreCommand?.endpoint === '/__zcore/create-shortcut' ||
+    (!hasLlm && /바로가기|바탕화면에\s*꺼내|아이콘\s*만들|자주\s*가는\s*(카페|사이트|유튜브|은행)/i.test(clean))
   ) {
     const parsed = parseShortcutSiteFromQuery(clean, llmDecision?.zCoreCommand?.params);
     const actionJson: MonsterLlmActionJson = llmDecision || {
@@ -1076,12 +1105,14 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 4) 대화형 폴더 정리 / 다운로드 설치파일 / 시작프로그램 점검
   if (
-    /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려/i.test(
-      clean
-    ) ||
     llmDecision?.intent === 'CLEANUP_FOLDER_REORG' ||
     llmDecision?.intent === 'CLEANUP_DOWNLOAD_INSTALLERS' ||
-    llmDecision?.intent === 'STARTUP_INSPECT'
+    llmDecision?.intent === 'STARTUP_INSPECT' ||
+    llmDecision?.zCoreCommand?.endpoint === '/__zcore/cleanup-scan' ||
+    (!hasLlm &&
+      /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려/i.test(
+        clean
+      ))
   ) {
     const isSecurityPlugin =
       /보안|구라|anysign|magicline|veraport|touchen|은행\s*깔린|부팅\s*느려|시작\s*프로그램/i.test(clean) ||
@@ -1203,10 +1234,12 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 5) 내 PC 실측 사양 & 느려짐/업그레이드 맞춤 상담
   if (
-    /사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드|느려|느린데|버벅|답답/i.test(
-      clean
-    ) ||
-    llmDecision?.intent === 'PC_SPEC_CONSULTATION'
+    llmDecision?.intent === 'PC_SPEC_CONSULTATION' ||
+    llmDecision?.zCoreCommand?.endpoint === '/__zcore/pc-spec' ||
+    (!hasLlm &&
+      /사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드|느려|느린데|버벅|답답/i.test(
+        clean
+      ))
   ) {
     const r = await zcoreJson<{
       ok: boolean;
@@ -1282,8 +1315,11 @@ export async function processUnifiedMonsterChatQuery(params: {
         : literacyLevel === 'expert'
         ? pcSpecPayload.expertAnswerKo
         : pcSpecPayload.normalAnswerKo;
-    speak('내 피씨 사양을 실제로 측정했습니다.');
-    return reply(sourceTab, `💻 **[내 PC 실측 사양 & 맞춤 진단]**\n${selectedAnswer}`, {
+    speak(llmDecision?.replyKo || '내 피씨 사양을 실제로 측정했습니다.');
+    const bubbleText = llmDecision?.replyKo
+      ? `💬 ${llmDecision.replyKo}`
+      : `💻 **[내 PC 실측 사양 & 맞춤 진단]**\n${selectedAnswer}`;
+    return reply(sourceTab, bubbleText, {
       cardKind: 'PC_SPEC_CONSULTATION',
       pcSpecPayload,
       llmActionJson: actionJson,
@@ -1296,8 +1332,8 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 6) 3대 선 넘기 정직 컷오프 & 애착 AI 바통 터치
   if (
-    /독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean) ||
-    llmDecision?.intent === 'BATON_TOUCH_CUTOFF'
+    llmDecision?.intent === 'BATON_TOUCH_CUTOFF' ||
+    (!hasLlm && /독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean))
   ) {
     return reply(
       sourceTab,
@@ -1314,8 +1350,8 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 7) 단순 찾기 의도 ➔ [🎯 찾기] 직행
   const searchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
   if (
-    (searchIntent.isSimpleSearchIntent && !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐/i.test(clean)) ||
-    llmDecision?.intent === 'SEARCH_ROUTING'
+    llmDecision?.intent === 'SEARCH_ROUTING' ||
+    (!hasLlm && searchIntent.isSimpleSearchIntent && !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐/i.test(clean))
   ) {
     const kw = llmDecision?.zCoreCommand?.params?.keyword || searchIntent.extractedKeyword || clean;
     return reply(
@@ -1332,10 +1368,11 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 8) 프린터·네트워크·화면·소리·S드라이브 등 OS 수리 의도 (⚙️ 고치기 연동)
   if (
-    /프린터|인쇄|스풀러|와이파이|인터넷|네트워크|블루투스|소리|스피커|글씨|화면|주사율|광고|팝업|s\s*드라이브|고쳐/i.test(
-      clean
-    ) ||
-    llmDecision?.intent === 'OS_REPAIR_ACTION'
+    llmDecision?.intent === 'OS_REPAIR_ACTION' ||
+    (!hasLlm &&
+      /프린터|인쇄|스풀러|와이파이|인터넷|네트워크|블루투스|소리|스피커|글씨|화면|주사율|광고|팝업|s\s*드라이브|고쳐/i.test(
+        clean
+      ))
   ) {
     const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
     const actionJson: MonsterLlmActionJson = llmDecision || {

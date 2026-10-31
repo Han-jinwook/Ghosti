@@ -51,7 +51,7 @@ export async function handler(event) {
         account: 'beakes',
         model: 'gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }],
-        config: { temperature: 0.4, maxOutputTokens: 1024 },
+        config: { temperature: 0.45, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     if (res.ok) {
@@ -103,7 +103,7 @@ export async function handler(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0.45, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
         }),
       });
       if (res.ok) {
