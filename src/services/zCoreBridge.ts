@@ -46,6 +46,7 @@ class ZCoreBridgeManager {
   public photoCount: number = 0;
   private listeners: Set<(connected: boolean) => void> = new Set();
   private pollTimer: any = null;
+  private selfUpdateRequested: boolean = false;
 
   private constructor() {
     if (typeof window !== 'undefined') {
@@ -76,6 +77,32 @@ class ZCoreBridgeManager {
     });
   }
 
+  /**
+   * [3초 무소음 자동 업데이트 (Silent Self-Update)]
+   * - 최초 1회 설치 이후 버전업이 감지되면 유저에게 다운로드/압축해제 창을 띄우지 않고,
+   *   백그라운드에서 로컬 데몬(`/__merlin/self-update`)에 자가 교체(`updater.bat` 스왑)를 지시합니다.
+   */
+  public async triggerSilentSelfUpdate(): Promise<void> {
+    if (this.selfUpdateRequested || typeof window === 'undefined') return;
+    this.selfUpdateRequested = true;
+    try {
+      const originUrl = window.location.origin.startsWith('http')
+        ? `${window.location.origin}${Z_CORE_ZIP_URL}`
+        : `https://ghosti.sundreamer.app${Z_CORE_ZIP_URL}`;
+      await fetch(`${Z_CORE_ORIGIN}/__merlin/self-update`, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetVersion: LATEST_Z_CORE_VERSION,
+          downloadUrl: originUrl,
+        }),
+      });
+    } catch {
+      /* 구버전 데몬이거나 네트워크 일시 오류 시 조용히 무시 (유저 작업 방해 금지) */
+    }
+  }
+
   public async checkHealth(): Promise<boolean> {
     try {
       const controller = new AbortController();
@@ -94,6 +121,11 @@ class ZCoreBridgeManager {
           const prevVersion = this.version;
           this.isConnected = true;
           this.version = data.version || null;
+          if (isZCoreOutdated(this.version)) {
+            void this.triggerSilentSelfUpdate();
+          } else {
+            this.selfUpdateRequested = false;
+          }
           if (!wasConnected) {
             this.notify();
             window.dispatchEvent(
@@ -166,16 +198,16 @@ export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
   );
 
   if (!isMobileViewportOrUA && !isCapacitorNative) {
+    // 이미 Z-코어가 설치·실행되어 있으면 버전과 무관하게 0.1초 무소음 통과 (버전업은 백그라운드 Silent Self-Update로 자동 처리)
     if (zCoreBridge.isConnected) {
       if (isZCoreOutdated(zCoreBridge.version)) {
-        window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
-        return false;
+        void zCoreBridge.triggerSilentSelfUpdate();
       }
       return true;
     }
-    // 아직 헬스체크 전이거나 꺼져 있으면 0.1초 즉시 확인 후 미연결/구버전일 때만 조용히 안내
+    // 아직 헬스체크 전이거나 꺼져 있으면 0.1초 즉시 확인 후 미설치/미실행일 때만 조용히 안내
     void zCoreBridge.checkHealth().then((ok) => {
-      if (!ok || isZCoreOutdated(zCoreBridge.version)) {
+      if (!ok) {
         window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
       }
     });

@@ -17,7 +17,7 @@ import {
   HubNotifier,
 } from '../services/merlin-hub-sdk/react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
+import { zCoreBridge } from '../services/zCoreBridge';
 import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
 import type { GiftProductItem } from '../services/merlin-hub-sdk/react';
 
@@ -237,7 +237,7 @@ const GhostiHubGlobalModals: React.FC = () => {
               launchNotifyOptIn: true,
               forceSync: true,
             });
-            // 로그인 직후 0.1초 헬스체크: 이미 Z-코어가 켜져 있고 최신 버전이면 아무 창도 띄우지 않고 무소음 직행
+            // 로그인 직후 0.1초 헬스체크: 이미 Z-코어가 켜져 있으면 아무 창도 띄우지 않고 무소음 직행 (버전업은 백그라운드 자동 처리)
             const isMobileEnv =
               typeof window !== 'undefined' &&
               (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
@@ -245,7 +245,7 @@ const GhostiHubGlobalModals: React.FC = () => {
             if (!isMobileEnv) {
               void (async () => {
                 const ok = zCoreBridge.isConnected || (await zCoreBridge.checkHealth());
-                if (ok && !isZCoreOutdated(zCoreBridge.version)) {
+                if (ok) {
                   void useSaySeeStore.getState().initApp(true);
                   return;
                 }

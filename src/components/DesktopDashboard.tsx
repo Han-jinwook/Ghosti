@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
+import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
@@ -218,13 +218,13 @@ export const DesktopDashboard: React.FC = () => {
     window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
     const unsub = zCoreBridge.subscribe((conn) => {
       setIsZCoreConnected(conn);
-      if (conn && !isZCoreOutdated(zCoreBridge.version)) {
+      if (conn) {
         void useSaySeeStore.getState().initApp(true);
       }
       if (
         conn &&
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && isZCoreOutdated(zCoreBridge.version)
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && false
       ) {
         setShowZCoreGuideModal(true);
       }
@@ -257,7 +257,7 @@ export const DesktopDashboard: React.FC = () => {
         }
       } else if (
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && isZCoreOutdated(zCoreBridge.version)
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && false
       ) {
         setShowZCoreGuideModal(true);
       }

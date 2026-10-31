@@ -284,6 +284,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             threading.Thread(target=lambda: (time.sleep(0.2), os._exit(0)), daemon=True).start()
             return
 
+        if path in ("/__merlin/ self-update", "/__merlin/self-update", "/__zcore/self-update"):
+            if self._reject_untrusted():
+                return
+            self._send_json(trigger_silent_self_update(body))
+            return
+
         if path == "/__merlin/query":
             plugin_name = str(body.get("plugin") or body.get("callerAppId") or "ghosti")
             action = str(body.get("action") or body.get("targetResource") or "health")
@@ -415,6 +421,107 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
     }
 
 
+
+
+import tempfile
+import zipfile
+
+_SELF_UPDATE_IN_PROGRESS = False
+
+
+def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """[화면 꺼짐 없는 3초 무소음 자동 업데이트 (Silent Self-Update)]
+    - 웹앱(PWA)이 버전 차이를 감지해 호출하면, 유저에게 다운로드/압축해제를 시키지 않고
+      백그라운드에서 최신 패키지를 받아 1줄짜리 updater.bat 스왑으로 3초 내에 자동 교체·재기동합니다."""
+    global _SELF_UPDATE_IN_PROGRESS
+    data = body or {}
+    target_version = str(data.get("targetVersion") or "").strip()
+    download_url = str(
+        data.get("downloadUrl") or "https://ghosti.sundreamer.app/Merlin_Z_Core.zip"
+    ).strip()
+
+    if target_version and target_version == CORE_VERSION:
+        return {
+            "ok": True,
+            "status": "ALREADY_UP_TO_DATE",
+            "version": CORE_VERSION,
+        }
+
+    if _SELF_UPDATE_IN_PROGRESS:
+        return {
+            "ok": True,
+            "status": "UPDATE_ALREADY_IN_PROGRESS",
+            "version": CORE_VERSION,
+            "targetVersion": target_version,
+        }
+
+    # PyInstaller 단일 실행파일(.exe)로 실행 중일 때만 바이너리 자가 교체 수행 (개발 중 python 스크립트 실행 시에는 소스 보호)
+    is_frozen_exe = bool(getattr(sys, "frozen", False))
+    if not is_frozen_exe:
+        return {
+            "ok": True,
+            "status": "DEV_SCRIPT_MODE_SKIPPED",
+            "version": CORE_VERSION,
+            "message": "개발용 Python 스크립트 모드에서는 바이너리 자가 교체를 건너뜁니다.",
+        }
+
+    _SELF_UPDATE_IN_PROGRESS = True
+
+    def _bg_swap_worker() -> None:
+        global _SELF_UPDATE_IN_PROGRESS
+        try:
+            current_exe = Path(sys.executable).resolve()
+            update_dir = Path(tempfile.gettempdir()) / "merlin_zcore_silent_update"
+            update_dir.mkdir(parents=True, exist_ok=True)
+            zip_path = update_dir / "Merlin_Z_Core_latest.zip"
+
+            req = urllib.request.Request(
+                download_url,
+                headers={"User-Agent": f"Merlin_Z_Core_Updater/{CORE_VERSION}"},
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                zip_bytes = resp.read()
+            zip_path.write_bytes(zip_bytes)
+
+            extracted_exe: Path | None = None
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                for member in zf.namelist():
+                    if member.lower().endswith(".exe"):
+                        zf.extract(member, update_dir)
+                        extracted_exe = (update_dir / member).resolve()
+                        break
+
+            if not extracted_exe or not extracted_exe.exists():
+                _SELF_UPDATE_IN_PROGRESS = False
+                return
+
+            # 1줄짜리 updater.bat 생성 후 무소음(CREATE_NO_WINDOW) 스왑 및 재실행
+            bat_path = update_dir / "updater.bat"
+            bat_content = (
+                "@echo off\r\n"
+                "timeout /t 1 /nobreak > NUL\r\n"
+                f'move /y "{extracted_exe}" "{current_exe}" > NUL\r\n'
+                f'start "" "{current_exe}"\r\n'
+                'del "%~f0"\r\n'
+            )
+            bat_path.write_text(bat_content, encoding="mbcs", errors="replace")
+            subprocess.Popen(
+                ["cmd.exe", "/c", str(bat_path)],
+                creationflags=0x08000000 if sys.platform == "win32" else 0,
+                close_fds=True,
+            )
+            time.sleep(0.2)
+            os._exit(0)
+        except Exception:
+            _SELF_UPDATE_IN_PROGRESS = False
+
+    threading.Thread(target=_bg_swap_worker, daemon=True).start()
+    return {
+        "ok": True,
+        "status": "SILENT_SELF_UPDATE_STARTED",
+        "currentVersion": CORE_VERSION,
+        "targetVersion": target_version or "latest",
+    }
 
 
 def ensure_port_free(port: int) -> list[int]:
