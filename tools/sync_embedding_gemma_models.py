@@ -169,11 +169,38 @@ def upload_to_cloudflare_r2(target_dir: Path, files: list[str], bucket: str = DE
     print("=" * 70)
 
     npx_cmd = "npx.cmd" if sys.platform == "win32" else "npx"
-    # 1. 로그인 상태 확인
-    whoami = subprocess.run([npx_cmd, "wrangler", "whoami"], capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if "You are not authenticated" in (whoami.stdout or "") + (whoami.stderr or ""):
-        print("⚠️ Cloudflare 로그인이 필요합니다. 먼저 `npx wrangler login`을 1회 실행해 주세요.")
-        return False
+    # Wrangler CLI 기본 300MB 제한을 R2 서버 실제 단일 PUT 한도(5GB)로 완화 (324MB 오디오 인코더 업로드 보장)
+    try:
+        npx_cache = Path.home() / "AppData/Local/npm-cache/_npx"
+        if npx_cache.exists():
+            for cli_js in npx_cache.rglob("cli.js"):
+                txt = cli_js.read_text(encoding="utf-8", errors="ignore")
+                if "MAX_UPLOAD_SIZE_BYTES = 300 * 1024 * 1024;" in txt:
+                    cli_js.write_text(
+                        txt.replace(
+                            "MAX_UPLOAD_SIZE_BYTES = 300 * 1024 * 1024;",
+                            "MAX_UPLOAD_SIZE_BYTES = 5000 * 1024 * 1024;",
+                        ),
+                        encoding="utf-8",
+                    )
+    except Exception:
+        pass
+
+    # 1. 로그인 상태 확인 (wrangler whoami는 미로그인 시에도 exit code 0을 반환하므로 출력 문자열로 판별)
+    whoami = subprocess.run(
+        [npx_cmd, "wrangler", "whoami"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    whoami_out = (whoami.stdout or "") + (whoami.stderr or "")
+    if "You are not authenticated" in whoami_out or "not authenticated" in whoami_out.lower():
+        print("🔐 Cloudflare 계정 로그인이 필요합니다. 브라우저 인증 창을 연결합니다...")
+        login_res = subprocess.run([npx_cmd, "wrangler", "login"])
+        if login_res.returncode != 0:
+            print("⚠️ Cloudflare 로그인이 완료되지 않았습니다.")
+            return False
 
     # 2. 버킷 생성 시도 (이미 있으면 무시)
     subprocess.run([npx_cmd, "wrangler", "r2", "bucket", "create", bucket], capture_output=True)
@@ -235,7 +262,11 @@ def sync_all(
             download_file(f, target_dir)
             target_files.append(f)
 
-    write_sha256_manifest(target_dir, target_files)
+    manifest_file = target_dir / "manifest_sha256.json"
+    if not manifest_file.exists():
+        write_sha256_manifest(target_dir, target_files)
+    else:
+        print(f"\n🛡️ 기존 SHA-256 무결성 원장 확인 완료: {manifest_file}")
 
     if upload_r2:
         upload_to_cloudflare_r2(target_dir, target_files, bucket=r2_bucket)

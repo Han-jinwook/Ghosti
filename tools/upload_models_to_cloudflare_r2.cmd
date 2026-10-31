@@ -5,13 +5,12 @@ echo ======================================================================
 echo ☁️ 멀린 AI 모델 마스터 사본 (8비트 q8 + 4비트 q4) Cloudflare R2 업로드 도구
 echo ======================================================================
 echo.
-echo [1/2] Cloudflare 계정 인증 상태를 확인합니다 (미인증 시 브라우저 로그인 창이 열립니다)...
-call npx.cmd wrangler whoami > NUL 2>&1
-if errorlevel 1 (
-    call npx.cmd wrangler login
-)
+echo [안내] Cloudflare 미로그인 시 브라우저 인증이 자동으로 실행되며,
+echo        로그인 완료 즉시 D:\Merlin_AI_Models\embeddinggemma-2 파일들을 R2에 업로드합니다.
 echo.
-echo [2/2] D:\Merlin_AI_Models\embeddinggemma-2 마스터 사본을 Cloudflare R2 버킷에 업로드합니다...
 python tools\sync_embedding_gemma_models.py --upload-r2
 echo.
-pause
+echo ======================================================================
+echo 작업이 끝났습니다. 창을 닫으시려면 이 창을 직접 닫아주세요.
+echo ======================================================================
+cmd /k
