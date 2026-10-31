@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { zCoreBridge } from '../services/zCoreBridge';
+import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
@@ -218,10 +218,13 @@ export const DesktopDashboard: React.FC = () => {
     window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
     const unsub = zCoreBridge.subscribe((conn) => {
       setIsZCoreConnected(conn);
+      if (conn && !isZCoreOutdated(zCoreBridge.version)) {
+        void useSaySeeStore.getState().initApp(true);
+      }
       if (
         conn &&
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1'
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && isZCoreOutdated(zCoreBridge.version)
       ) {
         setShowZCoreGuideModal(true);
       }
@@ -239,11 +242,6 @@ export const DesktopDashboard: React.FC = () => {
           sessionStorage.getItem('ghosti_login_prompt_shown') !== '1'
         ) {
           sessionStorage.setItem('ghosti_login_prompt_shown', '1');
-          useSaySeeStore
-            .getState()
-            .showToast(
-              '👋 환영합니다! 『귀신같이』는 [① 10초 이메일 무료 로그인 ➔ ② 멀린 Z-코어 실행] 후 찾기·치우기·고치기 모든 기능이 작동합니다.'
-            );
           window.dispatchEvent(new CustomEvent('openLoginModal'));
         }
         return;
@@ -259,7 +257,7 @@ export const DesktopDashboard: React.FC = () => {
         }
       } else if (
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1'
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && isZCoreOutdated(zCoreBridge.version)
       ) {
         setShowZCoreGuideModal(true);
       }
@@ -875,67 +873,6 @@ export const DesktopDashboard: React.FC = () => {
             )}
           </div>
         </header>
-
-        {/* [친절한 2단계 온보딩 상태 안내 바: ① 이메일 무료 로그인 ➔ ② 멀린 Z-코어 연결] */}
-        {(!merlinAuth?.token || !isZCoreConnected) && (
-          <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-3">
-            <div
-              className={`rounded-2xl border px-4 py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-xs ${
-                themeMode === 'light'
-                  ? 'bg-teal-50/90 border-teal-300 text-slate-800'
-                  : 'bg-teal-950/35 border-teal-500/35 text-zinc-200'
-              }`}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2 py-0.5 rounded-full bg-[#00F0B5]/20 text-teal-700 dark:text-[#00F0B5] font-black text-[11px]">
-                  🚀 2단계 준비 안내
-                </span>
-                <span className="font-bold">
-                  {!merlinAuth?.token
-                    ? '개인 라운지(찾기·치우기·고치기)는 [① 10초 이메일 무료 로그인 ➔ ② 멀린 Z-코어 실행] 완료 후 모든 액션이 실행됩니다.'
-                    : '✅ 1단계 로그인 완료! 이제 [② 멀린 Z-코어]만 켜시면 내 PC 찾기·치우기·고치기 모든 기능이 100% 작동합니다.'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => window.dispatchEvent(new CustomEvent('openLoginModal'))}
-                  className={`px-3 py-1.5 rounded-xl font-extrabold text-[11.5px] transition-all cursor-pointer ${
-                    merlinAuth?.token
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
-                      : 'bg-[#00F0B5] hover:bg-teal-300 text-slate-950 shadow-sm'
-                  }`}
-                >
-                  {merlinAuth?.token
-                    ? `① 로그인 완료 (${merlinAuth.email || '회원'})`
-                    : '① 10초 이메일 무료 로그인'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!merlinAuth?.token) {
-                      useSaySeeStore
-                        .getState()
-                        .showToast('먼저 1단계 [10초 이메일 무료 로그인]을 완료해 주세요!');
-                      window.dispatchEvent(new CustomEvent('openLoginModal'));
-                      return;
-                    }
-                    setShowZCoreGuideModal(true);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-extrabold text-[11.5px] transition-all cursor-pointer ${
-                    isZCoreConnected
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
-                      : merlinAuth?.token
-                      ? 'bg-[#00F0B5] hover:bg-teal-300 text-slate-950 shadow-sm'
-                      : 'bg-zinc-800/80 text-zinc-400 border border-white/10'
-                  }`}
-                >
-                  {isZCoreConnected ? '② Z-코어 연결됨' : '② 멀린 Z-코어 설치·실행'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ─────────────── 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) ─────────────── */}
         {desktopTab === 'trial' && <LoungeView />}

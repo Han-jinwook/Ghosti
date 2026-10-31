@@ -17,7 +17,7 @@ import {
   HubNotifier,
 } from '../services/merlin-hub-sdk/react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { zCoreBridge } from '../services/zCoreBridge';
+import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
 import type { GiftProductItem } from '../services/merlin-hub-sdk/react';
 
@@ -237,21 +237,20 @@ const GhostiHubGlobalModals: React.FC = () => {
               launchNotifyOptIn: true,
               forceSync: true,
             });
-            // [1단계 로그인 완료 ➔ 2단계 Z-코어 실행 자동 체이닝 안내]
-            const isZCoreConnected = zCoreBridge.isConnected;
-            if (!isZCoreConnected) {
-              useSaySeeStore
-                .getState()
-                .showToast(
-                  `🎉 ${email} 로그인 완료! 이어서 2단계 [멀린 Z-코어]만 켜시면 찾기·치우기·고치기 모든 기능이 100% 작동합니다.`
-                );
-              setTimeout(() => {
+            // 로그인 직후 0.1초 헬스체크: 이미 Z-코어가 켜져 있고 최신 버전이면 아무 창도 띄우지 않고 무소음 직행
+            const isMobileEnv =
+              typeof window !== 'undefined' &&
+              (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+                window.innerWidth < 860);
+            if (!isMobileEnv) {
+              void (async () => {
+                const ok = zCoreBridge.isConnected || (await zCoreBridge.checkHealth());
+                if (ok && !isZCoreOutdated(zCoreBridge.version)) {
+                  void useSaySeeStore.getState().initApp(true);
+                  return;
+                }
                 window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
-              }, 450);
-            } else {
-              useSaySeeStore
-                .getState()
-                .showToast(`🎉 반갑습니다, ${email} 님! 로그인 및 Z-코어 연결이 모두 준비되었습니다.`);
+              })();
             }
           }
         }}

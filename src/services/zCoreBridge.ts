@@ -79,7 +79,7 @@ class ZCoreBridgeManager {
   public async checkHealth(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 600);
       const res = await fetch(`${Z_CORE_ORIGIN}/__merlin/health`, {
         method: 'GET',
         mode: 'cors',
@@ -142,12 +142,8 @@ export const zCoreBridge = ZCoreBridgeManager.getInstance();
  *   ② 로컬 Z-코어(`127.0.0.1:5199`) 또는 모바일 네이티브 환경 가동이 완료된 후에만 실행됩니다.
  * - `/?dev=true`로 접속한 개발자 PC/폰에서도 이 순차 온보딩(로그인 ➔ 코어 실행) 원칙을 동일하게 점검·안내합니다.
  */
-export function ensureLoginAndZCoreReady(actionName = '실행'): {
-  ready: boolean;
-  missingStep?: 'login' | 'zcore';
-  noticeMessage?: string;
-} {
-  if (typeof window === 'undefined') return { ready: true };
+export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
+  if (typeof window === 'undefined') return true;
 
   const hasLoginToken = Boolean(
     localStorage.getItem('merlin_session_token') ||
@@ -155,17 +151,13 @@ export function ensureLoginAndZCoreReady(actionName = '실행'): {
       localStorage.getItem('userEmail')
   );
 
-  // Step 1: 로그인 여부 점검 -> 미로그인 시 이메일 6자리 OTP 로그인 모달 즉시 호출
+  // 미로그인 시: 무소음으로 자연스럽게 이메일 로그인 모달만 호출
   if (!hasLoginToken) {
     window.dispatchEvent(new CustomEvent('openLoginModal'));
-    return {
-      ready: false,
-      missingStep: 'login',
-      noticeMessage: `🔐 [${actionName}] 내 기기 찾고·치우고·고치고는 평생 무료(0원)입니다! 먼저 10초 이메일 인증(로그인)을 완료해 주세요.`,
-    };
+    return false;
   }
 
-  // Step 2: PC 환경에서 로컬 Z-코어(127.0.0.1:5199) 가동 여부 점검 -> 미실행 시 Z-코어 가이드 모달 즉시 호출
+  // PC 환경에서 Z-코어 점검: 이미 설치·실행되어 있고 최신 버전이면 0.1초 만에 무소음 통과
   const isMobileViewportOrUA =
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
     window.innerWidth < 860;
@@ -173,16 +165,24 @@ export function ensureLoginAndZCoreReady(actionName = '실행'): {
     (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
   );
 
-  if (!isMobileViewportOrUA && !isCapacitorNative && !zCoreBridge.isConnected) {
-    window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
-    return {
-      ready: false,
-      missingStep: 'zcore',
-      noticeMessage: `⚡ [${actionName}] 로그인 확인 완료! 이제 내 컴퓨터 실물 파일을 연결하는 『멀린 Z-코어』만 켜주시면 바로 작동합니다.`,
-    };
+  if (!isMobileViewportOrUA && !isCapacitorNative) {
+    if (zCoreBridge.isConnected) {
+      if (isZCoreOutdated(zCoreBridge.version)) {
+        window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+        return false;
+      }
+      return true;
+    }
+    // 아직 헬스체크 전이거나 꺼져 있으면 0.1초 즉시 확인 후 미연결/구버전일 때만 조용히 안내
+    void zCoreBridge.checkHealth().then((ok) => {
+      if (!ok || isZCoreOutdated(zCoreBridge.version)) {
+        window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+      }
+    });
+    return false;
   }
 
-  return { ready: true };
+  return true;
 }
 
 /**

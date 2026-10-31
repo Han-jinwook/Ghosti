@@ -120,6 +120,15 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       setIsConnected(conn);
       setVersion(zCoreBridge.version);
       if (conn) {
+        // 이미 최신 버전이 켜져 있으면 별도 로딩 창으로 붙잡지 않고 백그라운드 로드 후 0.1초 만에 자동 패스!
+        if (!isZCoreOutdated(zCoreBridge.version) && !initialStep) {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('ghosti_initial_indexing_done', '1');
+          }
+          void initApp(true);
+          onClose();
+          return;
+        }
         setStep((prev) => {
           if (prev === 'intro' || prev === 'waiting_engine') {
             setProgress(0);
@@ -287,43 +296,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             : 'bg-zinc-950 border-white/15 text-zinc-100'
         }`}
       >
-        {/* ─────────────── [상단 2단계 온보딩 진행 상태 바: ① 이메일 로그인 ➔ ② Z-코어 연결] ─────────────── */}
-        <div
-          className={`mb-4 p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs font-extrabold ${
-            isLight
-              ? 'bg-slate-50 border-slate-200 text-slate-700'
-              : 'bg-zinc-900/90 border-white/10 text-zinc-200'
-          }`}
-        >
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span
-              className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
-                verifiedEmail
-                  ? 'bg-emerald-500 text-zinc-950'
-                  : 'bg-amber-400 text-zinc-950 animate-pulse'
-              }`}
-            >
-              {verifiedEmail ? '✓' : '1'}
-            </span>
-            <span className="truncate">
-              {verifiedEmail ? `1단계: ${verifiedEmail} 로그인됨` : '1단계: 이메일 무료 로그인 필요'}
-            </span>
-          </div>
-          <span className="opacity-40">➔</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span
-              className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black ${
-                isConnected
-                  ? 'bg-emerald-500 text-zinc-950'
-                  : 'bg-teal-500/20 text-teal-400 border border-teal-400/40'
-              }`}
-            >
-              {isConnected ? '✓' : '2'}
-            </span>
-            <span>{isConnected ? '2단계: 코어 연결됨' : isMobileEnv ? '2단계: 모바일·PC 연동' : '2단계: Z-코어 실행'}</span>
-          </div>
-        </div>
-
         {/* ─────────────── [구버전 Z-코어 감지 시: 어느 단계에서든 최상단 업데이트 배너] ─────────────── */}
         {isOutdated && !isMobileEnv && (
           <div
@@ -356,24 +328,21 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
           </div>
         )}
 
-        {/* ─────────────── [1단계: 한 번의 결정 (로그인 + 코어 다운로드/연결 통합 안내)] ─────────────── */}
+        {/* ─────────────── [가벼운 1클릭 연결 안내] ─────────────── */}
         {step === 'intro' && (
           <>
-            <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-2xl">{!verifiedEmail ? '🔐' : isMobileEnv ? '📱' : '✨'}</span>
+                <div className="w-10 h-10 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center shrink-0">
+                  <span className="text-xl">{!verifiedEmail ? '🔐' : isMobileEnv ? '📱' : '✨'}</span>
                 </div>
                 <div>
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-400/30 mb-1">
-                    PC 1대 · 모바일 1대 무료체험 제한 없이 평생 0원
-                  </span>
-                  <h3 className="text-lg sm:text-xl font-black tracking-tight">
+                  <h3 className="text-base sm:text-lg font-black tracking-tight">
                     {!verifiedEmail
-                      ? '먼저 10초 이메일 로그인으로 평생 무료 계정을 켜주세요!'
+                      ? '이메일로 간편하게 시작하기'
                       : isMobileEnv
-                      ? '스마트폰 기기 탐색 & 내 PC 마스터 코어 연동'
-                      : '내 PC 사진 · 동영상 · 서류 코어를 연결할까요?'}
+                      ? '모바일 시작 & PC 폴더 연동'
+                      : '내 PC 사진 · 동영상 · 서류 연결'}
                   </h3>
                 </div>
               </div>
@@ -387,109 +356,61 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               </button>
             </div>
 
-            {!verifiedEmail ? (
-              <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
-                『귀신같이』의 개인 라운지(찾고·치우고·고치고)는 <strong>신용카드 등록 없이 평생 0원</strong>입니다.
-                내 기기 보호와 여권 시드 보관을 위해 <strong>① 이메일 인증(로그인) ➔ ② Z-코어 실행</strong> 순서로 즉시 시작됩니다.
-              </p>
-            ) : isMobileEnv ? (
-              <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
-                <strong>{verifiedEmail}</strong> 계정이 확인되었습니다! 스마트폰에서는 바로 모바일 화면을 둘러보실 수 있으며,
-                집/사무실 PC에서 아래 주소로 접속해 <strong>Windows용 멀린 Z-코어</strong>를 켜두시면 PC 속 수만 장의 사진·문서도 폰에서 1초 만에 투시 검색됩니다.
-              </p>
-            ) : (
-              <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
-                <strong>{verifiedEmail}</strong> 로그인 완료! 이제 아래 <strong>[OK! 엔진 다운로드 & 연결 시작하기]</strong> 한 번만 누르시면{' '}
-                <strong>로컬 Z-코어 연결부터 내 PC 사진·서류 목록 불러오기까지 한 번에 진행</strong>됩니다.
-              </p>
+            <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
+              {!verifiedEmail
+                ? '이메일 인증만 마치면 내 기기 찾고·치우고·고치고 모든 기능을 평생 무료로 이용하실 수 있습니다.'
+                : isMobileEnv
+                ? '스마트폰에서 바로 시작하실 수 있으며, PC에서도 아래 주소로 접속하시면 PC 속 사진·문서까지 함께 검색됩니다.'
+                : '처음 한 번만 연결해 두시면 다음부터는 이 창 없이 0.1초 만에 내 PC 파일이 자동으로 준비됩니다.'}
+            </p>
+
+            {isMobileEnv && verifiedEmail && (
+              <div
+                className={`mb-4 p-3 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+                  isLight
+                    ? 'bg-teal-50/70 border-teal-200 text-teal-950'
+                    : 'bg-teal-950/30 border-teal-500/30 text-teal-100'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="font-black text-[12px]">💻 PC 접속 주소</div>
+                  <p className="text-[11px] opacity-85 truncate">https://ghosti.sundreamer.app/?dev=true</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyPcLinkForMobile}
+                  className="px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-black text-[11px] shrink-0 cursor-pointer"
+                >
+                  {linkCopied ? '✅ 복사됨' : '📋 주소 복사'}
+                </button>
+              </div>
             )}
 
-            <div className="space-y-2.5 mb-6">
-              <div
-                className={`p-3.5 rounded-2xl border text-xs flex items-start gap-3 ${
-                  isLight
-                    ? 'bg-slate-50 border-slate-200 text-slate-700'
-                    : 'bg-zinc-900/70 border-white/10 text-zinc-200'
-                }`}
-              >
-                <span className="text-lg shrink-0">🔒</span>
-                <div>
-                  <div className="font-black text-[13px] text-slate-900 dark:text-white">
-                    1. Zero-Server 100% 로컬 프라이버시 엔진 (Merlin Z-Core)
-                  </div>
-                  <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    내 사진과 계약서·엑셀 문서를 외부 클라우드 서버로 올리지 않고 내 기기 안에서만 안전하게 분석합니다.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className={`p-3.5 rounded-2xl border text-xs flex items-start gap-3 ${
-                  isLight
-                    ? 'bg-slate-50 border-slate-200 text-slate-700'
-                    : 'bg-zinc-900/70 border-white/10 text-zinc-200'
-                }`}
-              >
-                <span className="text-lg shrink-0">⚡</span>
-                <div>
-                  <div className="font-black text-[13px] text-slate-900 dark:text-white">
-                    2. 로그인 + 코어 연결 후 모든 찾기·치우기·고치기 즉시 가동
-                  </div>
-                  <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    처음 한 번만 로그인과 코어를 연결해 두면, 다음 접속부터는 온보딩 없이 0.001초 만에 본 화면으로 직행합니다.
-                  </p>
-                </div>
-              </div>
-
-              {isMobileEnv && (
-                <div
-                  className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
-                    isLight
-                      ? 'bg-teal-50/70 border-teal-200 text-teal-950'
-                      : 'bg-teal-950/30 border-teal-500/30 text-teal-100'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="font-black text-[12.5px]">💻 내 PC에서도 Z-코어 설치하기</div>
-                    <p className="text-[11px] opacity-85 truncate">https://ghosti.sundreamer.app/?dev=true</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyPcLinkForMobile}
-                    className="px-3 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-black text-[11.5px] shrink-0 cursor-pointer"
-                  >
-                    {linkCopied ? '✅ 복사됨' : '📋 PC 주소 복사'}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-2.5">
+            <div className="flex flex-col sm:flex-row items-center gap-2">
               <button
                 type="button"
                 onClick={handleOneStopAgreeAndDownload}
-                className="w-full flex-1 py-3.5 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>⭕</span>
                 <span>
                   {!verifiedEmail
-                    ? '1단계: 10초 이메일 로그인 먼저 하기'
+                    ? '이메일로 시작하기'
                     : isMobileEnv
-                    ? 'OK! 모바일 워크스페이스 바로 시작하기'
-                    : 'OK! 엔진 다운로드 & 연결 시작하기'}
+                    ? '바로 시작하기'
+                    : '연결 시작하기'}
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={onClose}
-                className={`w-full sm:w-auto py-3.5 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
+                className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
                   isLight
                     ? 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
                     : 'bg-zinc-900 border-white/10 text-zinc-400 hover:bg-zinc-800'
                 }`}
               >
-                나중에
+                닫기
               </button>
             </div>
           </>

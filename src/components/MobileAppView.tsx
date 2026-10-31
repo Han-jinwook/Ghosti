@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { zCoreBridge } from '../services/zCoreBridge';
+import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
 import { GhostiTopRightHubAnchor } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
@@ -190,11 +190,6 @@ export const MobileAppView: React.FC = () => {
           sessionStorage.getItem('ghosti_login_prompt_shown') !== '1'
         ) {
           sessionStorage.setItem('ghosti_login_prompt_shown', '1');
-          useSaySeeStore
-            .getState()
-            .showToast(
-              '👋 환영합니다! 『귀신같이』는 먼저 [① 10초 이메일 무료 로그인] 완료 후 모든 기능을 시작합니다.'
-            );
           window.dispatchEvent(new CustomEvent('openLoginModal'));
         }
       }
@@ -203,7 +198,7 @@ export const MobileAppView: React.FC = () => {
       if (
         conn &&
         typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1'
+        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && isZCoreOutdated(zCoreBridge.version)
       ) {
         setShowZCoreGuideModal(true);
       }
@@ -554,68 +549,6 @@ export const MobileAppView: React.FC = () => {
           })}
         </div>
       </header>
-
-      {/* [모바일 친절한 2단계 온보딩 안내 배너: ① 이메일 무료 로그인 ➔ ② Z-코어 연결] */}
-      {(!merlinAuth?.token || !zCoreBridge.isConnected) && (
-        <div className="px-3.5 pt-2.5">
-          <div
-            className={`rounded-2xl border p-3 flex flex-col gap-2 text-xs ${
-              themeMode === 'light'
-                ? 'bg-teal-50/90 border-teal-300 text-slate-800'
-                : 'bg-teal-950/35 border-teal-500/35 text-zinc-200'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="px-2 py-0.5 rounded-full bg-[#00F0B5]/20 text-teal-700 dark:text-[#00F0B5] font-black text-[10.5px]">
-                🚀 2단계 준비 안내
-              </span>
-              <span className="text-[10.5px] opacity-80 font-bold">
-                ① 이메일 로그인 ➔ ② Z-코어 연결
-              </span>
-            </div>
-            <p className="text-[11.5px] leading-snug font-semibold">
-              {!merlinAuth?.token
-                ? '개인 라운지(찾기·치우기·고치기)는 [① 10초 이메일 무료 로그인] 완료 후 모든 기능이 실행됩니다.'
-                : '✅ 1단계 로그인 완료! PC 폴더 투시·수리 연동은 [② 멀린 Z-코어 안내]를 눌러 확인하세요.'}
-            </p>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent('openLoginModal'))}
-                className={`py-2 px-2.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer ${
-                  merlinAuth?.token
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
-                    : 'bg-[#00F0B5] text-slate-950 shadow-sm'
-                }`}
-              >
-                {merlinAuth?.token ? '① 로그인 완료 ✅' : '① 10초 이메일 로그인'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!merlinAuth?.token) {
-                    useSaySeeStore
-                      .getState()
-                      .showToast('먼저 1단계 [10초 이메일 무료 로그인]을 완료해 주세요!');
-                    window.dispatchEvent(new CustomEvent('openLoginModal'));
-                    return;
-                  }
-                  setShowZCoreGuideModal(true);
-                }}
-                className={`py-2 px-2.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer ${
-                  zCoreBridge.isConnected
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
-                    : merlinAuth?.token
-                    ? 'bg-[#00F0B5] text-slate-950 shadow-sm'
-                    : 'bg-zinc-800/80 text-zinc-400 border border-white/10'
-                }`}
-              >
-                {zCoreBridge.isConnected ? '② Z-코어 연결됨 ✅' : '② 멀린 Z-코어 안내'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) */}
       {mobileTab === 'trial' && <LoungeView />}

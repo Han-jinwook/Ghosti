@@ -486,27 +486,23 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00F0B5]/20 text-[#00F0B5] text-xs font-black mb-3">
                       <span>
                         {dbSyncStatus === 'syncing'
-                          ? '🔄 회원 DB 안전 등록 중...'
-                          : '🎉 1단계 이메일 무료 가입 & 출시 1순위 알림 DB 등록 완료'}
+                          ? '🔄 알림 예약 등록 중...'
+                          : '🎉 사전 무료 가입 & 출시 1순위 알림 예약 완료'}
                       </span>
                     </div>
                     <h3 className="text-lg sm:text-xl font-black text-white mb-1.5">
-                      <span className="text-[#00F0B5]">{verifiedUserEmail}</span> 님, 진심으로 환영합니다!
+                      <span className="text-[#00F0B5]">{verifiedUserEmail}</span> 님, 환영합니다!
                     </h3>
                     <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed mb-4">
-                      <b>썬드리머 통합 회원 DB 및 『귀신같이』 전용 DB에 안전하게 등록</b>되었습니다.<br />
-                      정식 오픈 즉시 가장 먼저 알림 메일을 보내드리며, <b>다음번 방문부터는 이 안내 페이지를 거치지 않고 1초 만에 본 앱으로 자동 직행</b>합니다!
+                      정식 오픈 즉시 가장 먼저 알림 메일을 보내드리며, <b>다음번 방문부터는 별도 절차 없이 1초 만에 본 앱으로 바로 입장</b>하실 수 있습니다.
                     </p>
-                    <div className="mb-4 rounded-xl bg-black/40 border border-teal-500/30 p-3 text-left text-[11.5px] text-teal-200 leading-relaxed">
-                      💡 <b>친절한 이용 순서 안내:</b> ① 이메일 무료 로그인(완료 ✅) ➔ ② 본 앱 입장 후 <b>『멀린 Z-코어(Merlin Z-Core)』</b> 1회 실행 ➔ ③ <b>찾기 · 치우기 · 고치기</b> 전 기능 평생 무료 작동!
-                    </div>
                     {isDevAuthorized && (
                       <button
                         type="button"
                         onClick={() => onEnterWorkspace(true)}
                         className="w-full mb-3 py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#00F0B5] via-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black text-sm shadow-[0_0_25px_rgba(0,240,181,0.45)] transition-all cursor-pointer"
                       >
-                        🚀 [개발/QA 모드] 인증된 계정으로 본 앱 워크스페이스 바로 입장하기 ➔
+                        🚀 본 앱 워크스페이스 바로 입장하기 ➔
                       </button>
                     )}
                     <div className="flex flex-wrap items-center justify-center gap-2.5">
@@ -1297,10 +1293,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
           <div className="rounded-2xl bg-zinc-900/60 border border-white/10 p-5">
             <dt className="text-sm sm:text-base font-black text-[#00F0B5] mb-2">
-              Q3. 왜 『1단계 이메일 로그인 ➔ 2단계 멀린 Z-코어 실행』 순서로 시작하나요?
+              Q3. 동영상 속 대사나 엑셀·계약서 안의 글자도 열지 않고 찾아주나요?
             </dt>
             <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              ① <b>10초 이메일 로그인</b>으로 평생 무료 정식 회원 권한과 기기 간 태그·복원 기록을 보호하고, ② 내 PC에서 <b>『멀린 Z-코어(Merlin Z-Core)』</b>를 1회 실행하면 웹 브라우저가 할 수 없는 초고속 로컬 하드디스크 투시 검색, Windows 정식 휴지통 안전 격리, 컴퓨터 먹통 즉시 수리가 100% 활성화됩니다.
+              네! 파일 제목을 몰라도 기억나는 대사나 장면만 말하면 동영상 속 해당 초(Sec) 구간으로 1초 만에 점프하며, 엑셀·PDF·한글·스캔 이미지도 일일이 열어보지 않고 본문 속 숫자와 조항을 즉시 투시 검색합니다.
             </dd>
           </div>
 
