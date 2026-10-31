@@ -455,12 +455,12 @@ env.allowLocalModels = false;
 /**
  * [글로벌 서빙 & 비상 Fallback 2중 안전망]
  * - 1순위: HuggingFace 글로벌 CDN (평상시 고속·무과금 서빙)
- * - 2순위: Cloudflare R2 자체 버킷 (허깅페이스 링크삭제·장애 대비 비상 마스터 사본)
+ * - 2순위: 당사 GitHub Releases 무제한 무료 CDN 미러 (/api/models-mirror/) (허깅페이스 링크삭제·장애 대비 비상 마스터 사본)
  */
 export const PRIMARY_REMOTE_HOST = 'https://huggingface.co/';
 export const FALLBACK_R2_HOST =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_R2_MODEL_CDN_URL) ||
-  'https://models.sundreamer.app/';
+  '/api/models-mirror/';
 export const FALLBACK_LOCAL_ZCORE_HOST = 'http://127.0.0.1:5199/__models/';
 
 /**
@@ -510,7 +510,7 @@ async function loadWithR2Fallback<T>(loader: () => Promise<T>): Promise<T> {
     env.remoteHost = PRIMARY_REMOTE_HOST;
     return await loader();
   } catch (err) {
-    console.warn('[Ghosti AI Engine] 허깅페이스 1차 로드 실패 ➔ Cloudflare R2 비상 마스터 사본으로 자동 전환합니다:', err);
+    console.warn('[Ghosti AI Engine] 허깅페이스 1차 로드 실패 ➔ 당사 GitHub Releases 비상 마스터 사본으로 자동 전환합니다:', err);
     try {
       env.remoteHost = FALLBACK_R2_HOST;
       return await loader();
