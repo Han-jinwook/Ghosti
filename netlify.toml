@@ -5,6 +5,10 @@
 [functions]
   directory = "netlify/functions"
 
+[[edge_functions]]
+  path = "/api/models-mirror/*"
+  function = "models-mirror"
+
 [build.environment]
   NODE_VERSION = "22"
 
