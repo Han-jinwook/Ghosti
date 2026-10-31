@@ -399,11 +399,11 @@ export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
 
 const LITERACY_TONE_PROMPT: Record<MonsterLiteracyLevel, string> = {
   easy:
-    '🌱 [초급 / 컴맹·어르신 모드]: 어려운 컴퓨터 영어/전문용어(RAM, IOPS, 프로세스, 데몬 등)를 절대 쓰지 마세요! 메모리는 "작업 책상 넓이", 하드디스크는 "서랍장 여유 공간", 상주 프로그램은 "일 안 하고 자리만 차지하는 프로그램"처럼 아주 쉽고 다정한 일상 비유로 자식이 부모님께 설명하듯 따뜻하게 말씀드리세요.',
+    '🌱 [초급 / 쉬운말 모드]: 어려운 영어/전문용어(RAM, 프로세스 등) 대신 "작업 공간(메모리)", "저장 공간" 같은 쉬운 표현을 쓰되, 과한 인사치레 없이 정중한 비서 존댓말로 핵심만 간결하게 안내하세요.',
   normal:
-    '🌿 [중급 / 일반인 모드]: 원인과 결과를 명쾌하고 친절하게 설명하고, 컴퓨터를 새로 살 필요가 없는 이유나 가성비 높은 해결 방법(예: 몇만 원대 부품 추가 또는 무료 정리)을 구체적 수치와 함께 짚어주세요.',
+    '🌿 [중급 / 일반 모드]: 정중하고 신뢰감 있는 비서 존댓말(~입니다, ~해 드리겠습니다)로 1~2단어만 짧게 공감한 뒤, 실측 수치와 해결 방법만 군더더기 없이 1~2문장으로 심플하게 안내하세요.',
   expert:
-    '🌳 [고급 / 전문가 모드]: 실측된 CPU 코어, RAM 점유율(%), 디스크 여유량(GB), 주사율(Hz), 레지스트리 시작프로그램, $Recycle.Bin $I 바이너리 헤더 등 엔지니어링 팩트와 수치를 정확히 인용하여 간결하게 브리핑하세요.',
+    '🌳 [고급 / 전문가 모드]: CPU 코어, RAM 점유율(%), 디스크 여유량(GB), 주사율(Hz) 등 엔지니어링 실측 수치를 인용하여 정중한 비서 존댓말로 1~2문장 이내로 간결하게 브리핑하세요.',
 };
 
 function extractJsonObject(raw: string): any | null {
@@ -447,8 +447,8 @@ async function callMonsterLlmGateway(prompt: string, timeoutMs = 9500): Promise<
         model: 'gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }],
         config: {
-          temperature: 0.45,
-          maxOutputTokens: 2048,
+          temperature: 0.3,
+          maxOutputTokens: 600,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
@@ -503,8 +503,7 @@ export async function callMonsterLowCostLlmJson(params: {
     .join('\n');
 
   const prompt = [
-    '당신은 『귀신같이(Ghosti)』의 내 기기 전담 해결사인 **클린몬스터(🧹 치우기) · 설정몬스터(⚙️ 고치기)**입니다.',
-    '주의: 절대로 스스로를 "AI 주치의"라고 부르지 마세요. 반드시 "클린몬스터" 또는 "설정몬스터"라고 부르세요.',
+    '당신은 『귀신같이(Ghosti)』의 내 기기 전담 비서인 **클린몬스터(🧹 치우기) · 설정몬스터(⚙️ 고치기)**입니다.',
     '',
     LITERACY_TONE_PROMPT[literacyLevel],
     '',
@@ -514,12 +513,14 @@ export async function callMonsterLowCostLlmJson(params: {
     `[현재 유저 입력 (${sourceTab === 'trash' ? '🧹 치우기 탭' : '⚙️ 고치기 탭'})]`,
     `"${query}"`,
     '',
-    '[핵심 아키텍처 원칙 — 100% 자연스러운 일상 대화(replyKo) + 기능은 JSON(intent & zCoreCommand)으로만 완전 분리 주입]',
-    '1. 유저가 일상적인 안부 인사, 잡담, 날씨, 기분, 농담, 앞선 대화에 대한 맞장구 등을 건네면 기계적인 안내를 하지 말고 사람(단골 친구·해결사)과 대화하듯 자연스럽고 다정하게 대화(replyKo)를 나누세요. 이때는 기능 실행이 불필요하므로 반드시 "intent": "GENERAL_CONVERSATION", "zCoreCommand": { "endpoint": "NONE", "action": "CONVERSE", "params": {} }로 출력하세요.',
-    '2. 유저가 일상적인 말투로 컴퓨터 고민("요즘 왜 이렇게 느리지?", "영상편집 배울 건데 컴퓨터 새로 사야 해?", "어제 보던 파일이 안 보여", "바탕화면이 너무 어지러워", "프린터가 안 나와")을 말하면, replyKo에는 사람과 대화하듯 공감하고 내 PC 실시간 수치를 자연스럽게 녹여 설명하고, 실제 실행할 기능만 JSON의 intent와 zCoreCommand에 분리해서 주입하세요. 절대로 확인되지 않은 가짜 파일명이나 가짜 용량을 지어내지 마세요.',
-    '3. 반드시 아래 JSON 스키마 하나만 순수 JSON으로 출력하세요 (마크다운 코드블록 없이 { 로 시작해서 } 로 끝낼 것):',
+    '[절대 준수 4대 화법 및 아키텍처 원칙 — 비서 존댓말 · 군더더기 0% · 잡담 정중 거절 · JSON 기능 분리]',
+    '1. [일상 잡담 정중 거절 (비용 절감)]: PC 정리(치우기)·수리(고치기)·파일 복구·사양 진단과 무관한 일상 잡담(날씨, 기분, 반려동물, 농담, 상식 등)에는 일일이 맞장구치지 마세요. 반드시 "intent": "GENERAL_CONVERSATION", "zCoreCommand": { "endpoint": "NONE", "action": "POLITE_DECLINE", "params": {} }로 설정하고, replyKo에는 "죄송합니다만 저는 PC 정리·수리 전담 비서라 일상 대화는 답변드리기 어렵습니다. 기기 정리나 수리가 필요하실 때 말씀해 주세요."라고 정중히 거절하세요.',
+    '2. [과한 인사치레·호들갑 절대 금지]: "어휴~", "정말 좋은 생각이에요!", "제가 클린몬스터인데 걱정 마세요!" 같은 수다스러운 인사치레와 자기소개를 절대 쓰지 마세요. 공감은 딱 한두 단어("충분히 가능하십니다.", "답답하셨겠습니다.", "새로 안 사셔도 됩니다.")만 하고 즉시 본론(기능 및 실측 수치)으로 들어가세요.',
+    '3. [비서 같은 신뢰감 있는 존댓말 고정]: 유저가 반말("정리해 줄래?", "고마워")로 말해도 절대 반말("응!", "해줄게")을 쓰지 말고, 항상 정중하고 간결한 비서 존댓말("~입니다", "~해 드리겠습니다")로 총 1~2문장 이내로 심플하게 답하세요.',
+    '4. [기능은 JSON으로만 완전 분리 & 임의 삭제 표현 금지]: 말풍선(replyKo)은 군더더기 없이 심플하게 끝내고, 실제 실행할 기능은 JSON의 intent와 zCoreCommand에 분리 주입하세요. 폴더·설치파일 정리 시 "자동으로 삭제해 드리겠습니다"라고 하지 말고 "정리 대상 파일 목록을 먼저 스캔해 보여드리겠습니다."라고 안내하세요.',
+    '5. 반드시 아래 JSON 스키마 하나만 순수 JSON으로 출력하세요 (마크다운 코드블록 없이 { 로 시작해서 } 로 끝낼 것):',
     '{',
-    '  "replyKo": "유저 눈높이(초급/중급/고급)에 맞춘 따뜻하고 감동적인 2~4문장 대화 답변 (내 PC 실측 수치 자연스럽게 인용)",',
+    '  "replyKo": "비서처럼 정중하고 군더더기 없는 1~2문장 존댓말 답변 (한두 단어 공감 + 실측 핵심 결론)",',
     '  "intent": "CLEANUP_FOLDER_REORG" | "CLEANUP_DOWNLOAD_INSTALLERS" | "MISSING_FILE_TRACE" | "OFFICE_CRASH_RECOVER" | "DESKTOP_SHORTCUT" | "RESTORE_POINTS_LIST" | "PC_SPEC_CONSULTATION" | "STARTUP_INSPECT" | "OS_REPAIR_ACTION" | "SEARCH_ROUTING" | "BATON_TOUCH_CUTOFF" | "GENERAL_CONVERSATION",',
     '  "zCoreCommand": {',
     '    "endpoint": "/__zcore/cleanup-scan" | "/__zcore/omni-trace" | "/__zcore/forensic-scan" | "/__zcore/create-shortcut" | "/__zcore/restore-points" | "/__zcore/pc-spec" | "/__zcore/os-inspect" | "/__zcore/execute" | "NONE",',
@@ -827,6 +828,24 @@ export async function processUnifiedMonsterChatQuery(params: {
   const speak = (text: string) => {
     if (ttsEnabled) void speakWithHyunsuOrSunhi(text, 'hyunsu_briefing');
   };
+
+  // 0-A) 명백한 일상 잡담(PC·파일·설정 키워드 전무)은 LLM 토큰 소모(비용 낭비) 없이 0원으로 즉시 정중히 거절 안내
+  const hasAnyPcOrFileCue =
+    /컴퓨터|피씨|pc|노트북|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|느려|느린|버벅|렉|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|화면|글씨|주사율|팝업|광고|보안|시작프로그램|부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|치워|정리|고쳐|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|먹통|멈춤|꺼졌/i.test(
+      clean
+    );
+  if (!hasAnyPcOrFileCue) {
+    const politeDecline =
+      '죄송합니다만 저는 PC 정리(치우기)와 수리(고치기)를 전담하는 비서라 일상 대화는 답변드리기 어렵습니다. 아래처럼 기기 점검이나 정리·복구가 필요하실 때 편하게 말씀해 주세요.';
+    speak(politeDecline);
+    return reply(sourceTab, `💬 ${politeDecline}`, {
+      followUpSuggestions: [
+        '내 컴퓨터 사양으로 영상편집이나 게임 잘 돌아가는지 봐줘',
+        '다운로드 폴더 방치된 설치파일 정리해 줘',
+        '어제 보던 파일이 사라졌는데 찾아줘',
+      ],
+    });
+  }
 
   // 내 PC 실시간 사양/상태(~200토큰) 컨텍스트 + 저가 LLM(Gemini 2.5 Flash) JSON 판단 호출
   const pcCtx = await fetchRealtimePcContextForLlm();
