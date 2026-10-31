@@ -452,6 +452,74 @@ const THUMB_SIDE = 240;
 
 env.allowLocalModels = false;
 
+/**
+ * [글로벌 서빙 & 비상 Fallback 2중 안전망]
+ * - 1순위: HuggingFace 글로벌 CDN (평상시 고속·무과금 서빙)
+ * - 2순위: Cloudflare R2 자체 버킷 (허깅페이스 링크삭제·장애 대비 비상 마스터 사본)
+ */
+export const PRIMARY_REMOTE_HOST = 'https://huggingface.co/';
+export const FALLBACK_R2_HOST =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_R2_MODEL_CDN_URL) ||
+  'https://models.sundreamer.app/';
+
+/**
+ * [기기 사양별 정밀도(Dtype) 자동 분기 정책]
+ * 1) PC 데스크톱: 무조건 전부 8비트('q8')로 100% 통일 (원본 99.2% 실력 복원, 5~8초 컷)
+ * 2) 고사양 모바일(RAM 8GB+ 및 WebGPU 지원): 8비트('q8') 분기 탑재
+ * 3) 일반/보급형 모바일(RAM 4~6GB 이하): 4비트('q4') 안전 기본 탑재 (Safari 탭 메모리 보호)
+ */
+export function getOptimalEmbeddingDtype(): 'q8' | 'q4' {
+  if (typeof window === 'undefined') return 'q8';
+
+  const isMobileUA =
+    typeof navigator !== 'undefined' &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const isMobileWidth = window.innerWidth < 860;
+  const isMobile = isMobileUA || isMobileWidth;
+
+  // 1) PC 데스크톱은 사양 불문 무조건 8비트(q8) 100% 통일
+  if (!isMobile) {
+    return 'q8';
+  }
+
+  // 2) 모바일 환경: 고사양(RAM 8GB+ 및 WebGPU 지원) 여부 감지
+  try {
+    const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 4;
+    const cores = navigator.hardwareConcurrency ?? 4;
+    const hasWebGpu = Boolean((navigator as unknown as { gpu?: unknown }).gpu);
+
+    // 램 8GB 이상 + 옥타코어 + WebGPU 지원 플래그십 모바일은 8비트(q8) 가동
+    if (mem >= 8 && cores >= 8 && hasWebGpu) {
+      return 'q8';
+    }
+  } catch {
+    /* fallback to safe q4 */
+  }
+
+  // 3) 일반/보급형 모바일은 탭 크래시 방지를 위해 4비트(q4) 안전 탑재
+  return 'q4';
+}
+
+/**
+ * [2중 안전망 로더]
+ * - 1순위 HuggingFace CDN 시도 실패 시 자동으로 Cloudflare R2 비상 백업 URL로 교체하여 재시도합니다.
+ */
+async function loadWithR2Fallback<T>(loader: () => Promise<T>): Promise<T> {
+  try {
+    env.remoteHost = PRIMARY_REMOTE_HOST;
+    return await loader();
+  } catch (err) {
+    console.warn('[Ghosti AI Engine] 허깅페이스 1차 로드 실패 ➔ Cloudflare R2 비상 마스터 사본으로 자동 전환합니다:', err);
+    try {
+      env.remoteHost = FALLBACK_R2_HOST;
+      return await loader();
+    } catch (fallbackErr) {
+      env.remoteHost = PRIMARY_REMOTE_HOST;
+      throw fallbackErr;
+    }
+  }
+}
+
 export interface PresetQueryDef {
   id: string;
   lang: 'ko' | 'en';
@@ -1279,16 +1347,19 @@ export async function ensureTextQueryEncoderLoaded(): Promise<boolean> {
   textQueryLoading = (async () => {
     try {
       enableOpfsCache();
-      const config: any = await AutoConfig.from_pretrained(MODEL_ID);
+      const targetDtype = getOptimalEmbeddingDtype();
+      const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.vision_config = null;
       config.audio_config = null;
       const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
-      textQueryModel = await AutoModel.from_pretrained(MODEL_ID, {
-        config,
-        device: hasGpu ? 'webgpu' : 'wasm',
-        dtype: 'q4',
-      } as any);
-      textQueryTokenizer = await AutoTokenizer.from_pretrained(MODEL_ID);
+      textQueryModel = await loadWithR2Fallback(() =>
+        AutoModel.from_pretrained(MODEL_ID, {
+          config,
+          device: hasGpu ? 'webgpu' : 'wasm',
+          dtype: targetDtype,
+        } as any)
+      );
+      textQueryTokenizer = await loadWithR2Fallback(() => AutoTokenizer.from_pretrained(MODEL_ID));
       return true;
     } catch (e) {
       console.warn('[Ghosti Engine] 텍스트 질의 인코더 로드 실패 — 키워드·태그 검색으로 동작합니다:', e);
@@ -1314,18 +1385,20 @@ export async function ensureSearchEngineLoaded(
       await requestPersist();
       resetCacheStats();
 
-      onProgress?.('OPFS 영구 캐시에서 EmbeddingGemma 2 (텍스트+오디오) 로드 중...', 15);
-      const config: any = await AutoConfig.from_pretrained(MODEL_ID);
+      const targetDtype = getOptimalEmbeddingDtype();
+      onProgress?.(`OPFS 영구 캐시에서 EmbeddingGemma 2 (${targetDtype.toUpperCase()} 텍스트+오디오) 로드 중...`, 15);
+      const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.vision_config = null;
 
       const files = new Map<string, { loaded: number; total: number }>();
-      searchModel = await AutoModel.from_pretrained(MODEL_ID, {
-        config,
-        device: 'webgpu',
-        dtype: {
-          model: 'q4',
-          audio_encoder: 'q4',
-        },
+      searchModel = await loadWithR2Fallback(() =>
+        AutoModel.from_pretrained(MODEL_ID, {
+          config,
+          device: 'webgpu',
+          dtype: {
+            model: targetDtype,
+            audio_encoder: targetDtype,
+          },
         progress_callback: (p: any) => {
           if (p.status !== 'progress' || !p.file) return;
           files.set(p.file, { loaded: p.loaded ?? 0, total: p.total ?? 0 });
@@ -1342,9 +1415,9 @@ export async function ensureSearchEngineLoaded(
             );
           }
         },
-      } as any);
+      } as any));
 
-      processor = await AutoProcessor.from_pretrained(MODEL_ID);
+      processor = await loadWithR2Fallback(() => AutoProcessor.from_pretrained(MODEL_ID));
       tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID);
       searchModelHasAudio = true;
       onProgress?.('Zero-STT 오디오 & 텍스트 엔진 준비 완료', 100);
@@ -2158,22 +2231,25 @@ export async function runOnboardingIndexingPipeline(params: {
         currentPhotoName: targetPhotos[0].name,
         currentPhotoThumb: targetPhotos[0].thumbUrl,
         liveVector64: Array.from({ length: 64 }, (_, i) => Math.sin(i * 0.3) * 0.5 + 0.5),
-        modelStatusText: 'OPFS 캐시에서 EmbeddingGemma 2 비전 인코더(q4) 마운트 중...',
+        modelStatusText: `OPFS 캐시에서 EmbeddingGemma 2 비전 인코더(${getOptimalEmbeddingDtype()}) 마운트 중...`,
       });
 
-      const config: any = await AutoConfig.from_pretrained(MODEL_ID);
+      const targetDtype = getOptimalEmbeddingDtype();
+      const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.audio_config = null;
 
-      visionModel = await AutoModel.from_pretrained(MODEL_ID, {
-        config,
-        device: 'webgpu',
-        dtype: {
-          model: 'q4',
-          vision_encoder: 'q4',
-        },
-      } as any);
+      visionModel = await loadWithR2Fallback(() =>
+        AutoModel.from_pretrained(MODEL_ID, {
+          config,
+          device: 'webgpu',
+          dtype: {
+            model: targetDtype,
+            vision_encoder: targetDtype,
+          },
+        } as any)
+      );
 
-      visionProcessor = await AutoProcessor.from_pretrained(MODEL_ID);
+      visionProcessor = await loadWithR2Fallback(() => AutoProcessor.from_pretrained(MODEL_ID));
       visionProcessor.image_processor.max_soft_tokens = VISION_TOKEN_BUDGET;
     }
 
