@@ -36,8 +36,18 @@ export function resetCacheStats() {
   cacheStats.writeMs = 0;
 }
 
+function normalizeCacheKey(key: string): string {
+  try {
+    const u = new URL(key);
+    return u.pathname.replace(/^\/__models\//, '/').replace(/^\/+/, '');
+  } catch {
+    return key.replace(/^https?:\/\/[^/]+\//, '').replace(/^__models\//, '');
+  }
+}
+
 async function keyName(key: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  const canonical = normalizeCacheKey(key);
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
   return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 

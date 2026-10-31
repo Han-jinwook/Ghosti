@@ -262,6 +262,24 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(ghosti_setup_parity.handle_setup_monster("state", {}))
             return
 
+        if path.startswith("/__models/"):
+            rel = path[len("/__models/") :].lstrip("/")
+            prefix = "onnx-community/embeddinggemma-2-ONNX/resolve/main/"
+            if rel.startswith(prefix):
+                rel = rel[len(prefix) :]
+            for candidate_root in (
+                Path("D:/Merlin_AI_Models/embeddinggemma-2"),
+                Path("E:/Merlin_AI_Models/embeddinggemma-2"),
+            ):
+                if candidate_root.exists():
+                    target_file = (candidate_root / rel).resolve()
+                    if str(target_file).startswith(str(candidate_root.resolve())) and target_file.is_file():
+                        mime = "application/json; charset=utf-8" if target_file.suffix.lower() == ".json" else "application/octet-stream"
+                        self._send_bytes(target_file.read_bytes(), content_type=mime, status=200)
+                        return
+            self._send_json({"ok": False, "error": f"LOCAL_MODEL_NOT_FOUND: {rel}"}, status=404)
+            return
+
         self._send_json({"ok": False, "error": f"Not Found: {path}"}, status=404)
 
     def do_POST(self) -> None:

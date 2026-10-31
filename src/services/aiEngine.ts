@@ -461,6 +461,7 @@ export const PRIMARY_REMOTE_HOST = 'https://huggingface.co/';
 export const FALLBACK_R2_HOST =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_R2_MODEL_CDN_URL) ||
   'https://models.sundreamer.app/';
+export const FALLBACK_LOCAL_ZCORE_HOST = 'http://127.0.0.1:5199/__models/';
 
 /**
  * [기기 사양별 정밀도(Dtype) 자동 분기 정책]
@@ -513,9 +514,15 @@ async function loadWithR2Fallback<T>(loader: () => Promise<T>): Promise<T> {
     try {
       env.remoteHost = FALLBACK_R2_HOST;
       return await loader();
-    } catch (fallbackErr) {
-      env.remoteHost = PRIMARY_REMOTE_HOST;
-      throw fallbackErr;
+    } catch (r2Err) {
+      console.warn('[Ghosti AI Engine] R2 2차 로드 실패 ➔ 로컬 Z-코어 오프라인 마스터 사본(127.0.0.1:5199/__models/)으로 전환합니다:', r2Err);
+      try {
+        env.remoteHost = FALLBACK_LOCAL_ZCORE_HOST;
+        return await loader();
+      } catch (localErr) {
+        env.remoteHost = PRIMARY_REMOTE_HOST;
+        throw localErr;
+      }
     }
   }
 }
