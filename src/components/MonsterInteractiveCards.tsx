@@ -251,7 +251,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           <div className="text-xs font-extrabold text-violet-200 flex items-center justify-between flex-wrap gap-2">
             <span>🕰️ 최근 [복원 기록] 타임머신 (사전 무결성 검진 완료)</span>
             <span className="text-[11px] text-violet-300 font-semibold">
-              ✍️ 채팅창에 &ldquo;방금 한 거 되돌려줘&rdquo; 또는 &ldquo;#번호 원복해줘&rdquo; 입력
+              ✍️ 채팅창에 &ldquo;1번 복원해줘&rdquo;(또는 &ldquo;#번호&rdquo;)를 타이핑해 선택
             </span>
           </div>
           <div className="space-y-2">

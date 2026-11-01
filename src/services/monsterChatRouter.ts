@@ -204,8 +204,8 @@ function createWelcomeMessage(): MonsterChatMessage {
     timestamp: now,
     sourceTab: 'trash',
     text:
-      '💬 **질문 가이드** — 사양·느려짐 점검, 바탕화면·설치파일 정리, 사라진 파일 찾기, 기기 수리를 편하게 말씀해 주세요.\n' +
-      '↩️ **승인·원복 가이드** — 모든 정리·설정은 미리보기 확인 후 **"응 진행해"**처럼 직접 타이핑해 승인하실 때만 실행되며, 블랙박스에 기록되어 **"방금 한 거 되돌려줘"** 한마디로 즉시 원복됩니다.',
+      '💬 **질문 가이드** — 사양·느려짐 점검, 폴더·설치파일 정리, 사라진 파일 찾기, 먹통 수리를 한곳에서 편하게 말씀해 주세요.\n' +
+      '↩️ **승인·원복 가이드** — 미리보기 확인 후 **"응 진행해"**처럼 직접 타이핑해 승인하실 때만 실행되며, **"복원 기록 보여줘"** 후 **"1번 복원해줘"**처럼 번호를 타이핑하면 즉시 원복되고 블랙박스에 남습니다.',
   };
 }
 
@@ -378,6 +378,12 @@ export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
     `- 모니터 주사율: ${s.displayHz ? `${s.displayHz}Hz` : '기본'} / OS: ${s.osVersion || 'Windows'}`,
     `- 시작프로그램(${startupNames.length}개): ${startupNames.join(', ') || '없음'}`,
     `- 인쇄 스풀러: ${spoolerStatus} (대기열 멈춘 인쇄물 ${stuckPrint}건)`,
+    '',
+    '[2026년 최신 PC 사양·트렌드 판정 기준표 (구형 기준 착각 금지 — 반드시 이 기준으로만 조언할 것)]',
+    '- 2026 사무·웹서핑·인강: RAM 8GB는 다중 탭에서 빠듯함(16GB 이상 권장), C드라이브 여유 20GB 이상 필수.',
+    '- 2026 영상편집(캡컷·프리미어 쇼츠/4K)·포토샵 AI: RAM 최소 16GB(4K·AI는 32GB+ 권장), 외장 GPU(RTX 3060/4060/5060급 이상 또는 최신 Arc/Radeon 내장) 권장, 여유 공간 50GB+ 필수.',
+    '- 2026 게임: 롤·발로란트(RAM 16GB, 내장/보급형 GPU 가능) / 배그·스팀 최신 3D 게임(RAM 16~32GB, RTX 3060/4060/5060 이상 외장 그래픽, 모니터 144Hz+ 권장).',
+    '- 현역 최신 세대 인식: Intel 13·14세대 및 Core Ultra(Series 1·2), AMD Ryzen 7000·8000·9000시리즈, NVIDIA RTX 40·50시리즈.',
   ];
 
   cachedPcContext = {
@@ -495,9 +501,11 @@ export async function callMonsterLowCostLlmJson(params: {
     .join('\n');
 
   const prompt = [
-    '당신은 『귀신같이(Ghosti)』의 내 기기 전담 비서인 **클린몬스터(🧹 치우기) · 설정몬스터(⚙️ 고치기)**입니다.',
+    '당신은 『귀신같이(Ghosti)』의 내 기기 전담 비서인 **손보기 비서(🪄 정리·수리·원복)**입니다.',
     '',
-    LITERACY_TONE_PROMPT[literacyLevel],
+    '[유저 질문 말투에 따른 자동 눈높이 맞춤 규칙 (추가 토큰 없이 즉시 반영)]:',
+    '- 유저 질문에 전문용어(RAM, 점유율, 클럭, 코어, 주사율, Hz, GPU 등)가 포함되어 있으면: 엔지니어링 실측 수치를 정확히 인용해 브리핑하세요.',
+    '- 유저 질문이 일상어/초보 말투("왜 이리 버벅대냐", "새로 사야 해?", "답답해")이면: 어려운 약어 대신 "작업 공간(메모리)", "저장 공간" 같은 쉬운 표현을 함께 써서 설명하세요.',
     '',
     pcContextText,
     '',
@@ -966,18 +974,29 @@ export async function processUnifiedMonsterChatQuery(params: {
     }
   }
 
-  // 0-0B) [자연어 타이핑 원복(되돌리기) 인터셉터 (0 토큰 · 블랙박스 원복 영구 기록)]
-  const isPureRestoreListQuery =
-    /^(최근\s*)?\[?복원\s*기록\]?\s*(목록\s*)?(보여\s*줘|보여\s*주세요|조회|확인|알려\s*줘|있어\??)?$/i.test(clean);
-  const isNaturalRollbackCommand =
-    !isPureRestoreListQuery &&
-    /되돌려|되돌리|원복|원래대로|제자리로|(방금|아까|최근|이전).*?(취소|복원|복구|되돌|원복)|(정리한\s*거|치운\s*거|옮긴\s*거|만든\s*거).*?(취소|복원|복구|되돌|원복)|#\d+\s*(번)?\s*(복원|되돌|원복|취소)/i.test(
+  // 0-0B) [복원 히스토리 조회 ➔ 번호 타이핑 선택 원복 인터셉터 (0 토큰 · 블랙박스 원복 영구 기록)]
+  // 직전 메시지가 복원 기록 목록(RESTORE_POINTS_LIST)일 때는 "1번", "2번 해줘", "#1"만 쳐도 즉시 해당 번호 원복으로 인식합니다.
+  const lastAssistantMsg = [...sharedChatState.messages].reverse().find((m) => m.role === 'assistant');
+  const isChoosingFromShownRestoreList =
+    lastAssistantMsg?.cardKind === 'RESTORE_POINTS_LIST' &&
+    /^\s*(#?\d+\s*(번)?|첫\s*번째|두\s*번째|세\s*번째)(\s*(복원|되돌|원복|진행|실행|취소|해\s*줘|해\s*주세요|할래|선택))?\s*[.!~]?$/i.test(
       clean
     );
 
-  if (isNaturalRollbackCommand) {
-    const idMatch = clean.match(/#\d+/);
-    const targetRestoreId = idMatch ? idMatch[0] : 'LATEST';
+  const explicitNumberRollbackMatch = clean.match(/#?(\d+)\s*번?\s*(복원|되돌|원복|취소|원래대로|진행|해\s*줘|해\s*주세요)/i) ||
+    clean.match(/(복원|되돌|원복|취소).*?#?(\d+)\s*번?/i);
+
+  if (isChoosingFromShownRestoreList || explicitNumberRollbackMatch) {
+    let numStr = '1';
+    const digitHit = clean.match(/(\d+)/);
+    if (digitHit) {
+      numStr = digitHit[1];
+    } else if (/두\s*번째/.test(clean)) {
+      numStr = '2';
+    } else if (/세\s*번째/.test(clean)) {
+      numStr = '3';
+    }
+    const targetRestoreId = `#${numStr}`;
     const res = await executeRestorePointRollback(targetRestoreId, clean);
     const { points } = await fetchRestorePointsWithPrecheck();
     if (res.ok && res.restoreId) {
@@ -997,14 +1016,45 @@ export async function processUnifiedMonsterChatQuery(params: {
       );
     }
     const msgText = res.ok
-      ? `${res.message}\n📋 **블랙박스 원복 기록 완료** — 원복 발화: \`"${clean}"\` · 복원 번호: \`${
+      ? `${res.message}\n📋 **블랙박스 원복 기록 완료** — 선택 발화: \`"${clean}"\` · 복원 지점: \`${
           res.restoreId || targetRestoreId
         }\` (${res.restoredCount}건 원위치 복구)`
       : res.message;
-    speak(res.ok ? '원복 말씀이 블랙박스에 기록되었으며 원래 자리로 되돌렸습니다.' : res.message);
+    speak(res.ok ? `${targetRestoreId} 복원 기록을 원래 자리로 되돌렸습니다.` : res.message);
     return reply(sourceTab, msgText, {
       ...(points.length > 0 ? { cardKind: 'RESTORE_POINTS_LIST', restorePoints: points } : {}),
     });
+  }
+
+  // 번호를 아직 지정하지 않고 "복원해줘", "원래대로 되돌려줘", "복원지점 보여줘"라고 말한 경우:
+  // 즉시 복원 히스토리 목록(#1, #2...)을 먼저 보여주고 몇 번을 복원할지 타이핑하게 안내합니다 (LLM 토큰 0원!).
+  const isGeneralRestoreRequest =
+    /복원\s*기록|복원\s*지점|되돌려|되돌리|원복|원래대로|(방금|아까|최근|이전).*?(취소|복원|복구|되돌|원복)|(정리한\s*거|치운\s*거|옮긴\s*거|만든\s*거).*?(취소|복원|복구|되돌|원복)/i.test(
+      clean
+    );
+
+  if (isGeneralRestoreRequest) {
+    const { points, error } = await fetchRestorePointsWithPrecheck();
+    if (error) {
+      speak('Z-코어에 연결되지 않아 복원 기록을 불러오지 못했습니다.');
+      return reply(sourceTab, `⚠️ ${error}`);
+    }
+    if (points.length === 0) {
+      speak('아직 저장된 복원 기록이 없습니다.');
+      return reply(
+        sourceTab,
+        '🕰️ 아직 저장된 [복원 기록]이 없습니다. 폴더 정리나 바로가기 생성을 승인해 실행하시면 번호별 복원 지점이 이곳에 기록됩니다.'
+      );
+    }
+    speak(`최근 복원 기록 ${points.length}건을 찾았습니다. 몇 번을 되돌릴지 번호를 입력해 주세요.`);
+    return reply(
+      sourceTab,
+      `🕰️ **최근 [복원 기록] 히스토리 (${points.length}건)**\n어느 시점으로 되돌릴까요? 아래 목록에서 번호를 확인하신 뒤 채팅창에 **"1번 복원해줘"** (또는 **"#1"**)처럼 번호를 타이핑해 주세요.`,
+      {
+        cardKind: 'RESTORE_POINTS_LIST',
+        restorePoints: points,
+      }
+    );
   }
 
   // 0-A) 명백한 일상 잡담(PC·파일·설정 키워드 전무)은 LLM 토큰 소모(비용 낭비) 없이 0원으로 즉시 정중히 거절 안내

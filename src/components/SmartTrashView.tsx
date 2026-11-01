@@ -228,10 +228,10 @@ export const SmartTrashView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-col gap-0.5">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  <span>🩺 귀신같이 클린몬스터</span>
+                  <span>🪄 귀신같이 손보기</span>
                 </h1>
                 <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-                  임의 영구 삭제 0% · OS 기본 [휴지통] 직행 &amp; [복원 기록] 3단계 사전 검진 후 1초 원상복구 보장
+                  정리(치우기)·수리(고치기)·복원을 대화창 하나로 해결 · 모든 타이핑 승인과 원복은 블랙박스에 기록됩니다
                 </span>
               </div>
 
@@ -1192,11 +1192,7 @@ export const SmartTrashView: React.FC = () => {
             }}
             onTriggerOsRepair={(symptomQuery) => {
               void useSaySeeStore.getState().submitSetupMonsterQuery(symptomQuery);
-              if (layout === 'mobile') {
-                useSaySeeStore.getState().setShowSetupMonsterModal(true);
-              } else {
-                setDesktopTab('sync');
-              }
+              useSaySeeStore.getState().setShowSetupMonsterModal(true);
             }}
           />
         </div>

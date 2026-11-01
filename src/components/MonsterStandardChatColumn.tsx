@@ -141,7 +141,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           </div>
           <div className="min-w-0">
             <span className="text-xs font-bold text-slate-100 truncate block">
-              치우기 · 고치기 대화창
+              🪄 손보기 대화창
             </span>
           </div>
         </div>
@@ -267,7 +267,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder='질문이나 승인("응 진행해") · 원복("방금 한 거 되돌려줘")을 입력해 주세요'
+            placeholder='질문이나 승인("응 진행해") · 번호 원복("1번 복원해줘")을 입력해 주세요'
             className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500/60 focus:outline-none text-xs text-white placeholder-slate-500"
           />
           <button
