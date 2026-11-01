@@ -1432,29 +1432,32 @@ export const OnboardingModal: React.FC = () => {
                 </button>
               </div>
 
-              {/* 우측: 👑 구독 회원 (2대 이상 기기 묶기 + 가족·팀 공유방 + 초능력 평생 무료) */}
+              {/* 우측: 👑 구독 회원 (1인 계정 모든 기기 통합 월 1,900원~ + 가족·팀 공유방 + 초능력 평생 무료) */}
               <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-zinc-900 to-zinc-900 border-2 border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)] flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <span className="px-3 py-1 rounded-full bg-emerald-400 text-zinc-950 text-[11.5px] font-black">
-                      👑 구독 회원 (기기 묶기 &amp; 공유방 방장)
+                      👑 1인 모든 기기 통합 (월 1,900원 · 10년권 19,000원)
                     </span>
-                    <span className="text-[12px] font-extrabold text-emerald-300">
-                      초대받은 가족·팀원은 전원 0원!
+                    <span className="text-[11.5px] font-extrabold text-emerald-300">
+                      공유방은 방장 1인만 · 멤버 전원 0원!
                     </span>
                   </div>
-                  <h3 className="text-[17px] font-extrabold text-white">
-                    2대 이상 기기를 하나로 묶고, 초능력 팩을 평생 소장하세요
+                  <h3 className="text-[17px] font-extrabold text-white leading-snug">
+                    내가 손댄 모든 기기(폰·집PC·회사PC)가 하나가 되어 내 손아귀에!
                   </h3>
                   <ul className="text-[12.5px] text-zinc-200 space-y-2 leading-relaxed pt-1">
                     <li>
-                      🚀 <strong className="text-emerald-300">내 기기 2대 이상 묶기 (Cross-Device)</strong>: 내 스마트폰 ↔ 집 PC ↔ 사무실 PC를 하나로 묶어 어디서나 내 모든 기기의 사진·문서를 1초 만에 찾고 가져옵니다.
+                      🥇 <strong className="text-emerald-300">1위. 카톡 ‘나에게 보내기’ &amp; 클라우드 월세 완전 종식</strong>: 폰으로 찍은 사진·서류가 압축 없이 내 PC로 1초 직결되고, 2TB·4TB도 클라우드 요금 0원으로 무제한 씁니다.
                     </li>
                     <li>
-                      👨‍👩‍👧‍👦 <strong className="text-emerald-300">가족·모임·업무 공유방 개설</strong>: 방장 한 분만 구독하면 초대받은 부모님·배우자·동호회원·직원은 <strong className="text-white">아무 결제 없이 100% 무료</strong>로 함께 공유합니다.
+                      🥈 <strong className="text-emerald-300">2위. 밖에서 스마트폰으로 집·회사 PC 원격 1초 투시검색</strong>: 외근 중에도 내 사무실·집 PC 하드디스크 속 계약서 본문과 영상 장면을 폰에서 1초 만에 찾아 꺼내 씁니다.
                     </li>
                     <li>
-                      👻 <strong className="text-amber-300">귀신 초능력 팩(Ctrl + 0) 전 기기 평생 무료</strong>: 7일 체험 제한이 즉시 해제되며, 집 PC와 회사 PC 모두에서 한영 오타 둔갑술과 <code className="text-white">Ctrl + 0</code> 초능력을 평생 무제한 사용합니다!
+                      🥉 <strong className="text-amber-300">3위. 귀신 초능력 팩(Ctrl + 0) 내 모든 PC 평생 무제한 해금</strong>: 7일 체험 제한이 즉시 풀리며, 집 PC·회사 PC·노트북 어디서나 9대 초능력과 <code className="text-white">F1~F5</code> 상용구가 하나로 동기화됩니다.
+                    </li>
+                    <li>
+                      👨‍👩‍👧‍👦 <strong className="text-teal-300">가족·모임·업무 공유방 (월 4,900원~)</strong>: 방장 한 분만 구독하면 초대받은 가족·동호회원·팀원은 <strong className="text-white">전원 0원(무료)</strong>으로 함께 씁니다.
                     </li>
                   </ul>
                 </div>
@@ -1468,7 +1471,7 @@ export const OnboardingModal: React.FC = () => {
                   }}
                   className="w-full py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[13px] font-black shadow-[0_0_20px_rgba(16,185,129,0.35)] cursor-pointer"
                 >
-                  👑 기기 묶기 · 공유방 요금제 보기 (구독 시 초능력 평생 무료) →
+                  👑 내 모든 기기 통합(월 1,900원) · 공유방 요금제 보기 →
                 </button>
               </div>
             </div>
