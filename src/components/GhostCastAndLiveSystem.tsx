@@ -417,7 +417,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
 
                   <div className="my-auto flex items-center justify-center py-4 overflow-hidden">
                     <img
-                      src={currentCastPhoto.thumb}
+                      src={currentCastPhoto.fullUrl || currentCastPhoto.thumbUrl}
                       alt={currentCastPhoto.name}
                       style={{
                         transform: `scale(${castState.zoom}) rotate(${castState.rotation}deg)`,
@@ -591,7 +591,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <img
-              src={currentSyncPhoto.thumb}
+              src={currentSyncPhoto.thumbUrl || currentSyncPhoto.fullUrl}
               alt={currentSyncPhoto.name}
               style={{
                 transform: `scale(${photoSyncState.zoom}) rotate(${photoSyncState.rotation}deg)`,
