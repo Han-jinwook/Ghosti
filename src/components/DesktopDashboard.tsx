@@ -16,6 +16,11 @@ import { GhostiTopRightHubAnchor, GhostiSidebarBottomFamilyLauncher } from './Gh
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
+import {
+  fetchSuperpowerStatus,
+  startSuperpowerTrialAction,
+  type SuperpowerTrialStatus,
+} from './OnboardingModal';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -332,6 +337,27 @@ export const DesktopDashboard: React.FC = () => {
   const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
+  const [superpowerStatus, setSuperpowerStatus] = useState<SuperpowerTrialStatus | null>(null);
+
+  const isAnySubscribed = useMemo(
+    () =>
+      activePricingPlan !== 'free_trial' ||
+      Object.values(subscribedLounges).some(Boolean) ||
+      Boolean(superpowerStatus?.is_subscribed),
+    [activePricingPlan, subscribedLounges, superpowerStatus?.is_subscribed]
+  );
+
+  useEffect(() => {
+    const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
+    const subFlag = activePricingPlan !== 'free_trial' || Object.values(subscribedLounges).some(Boolean);
+    void fetchSuperpowerStatus(accountId, subFlag).then(setSuperpowerStatus);
+    const onUpdated = (e: Event) => {
+      const custom = e as CustomEvent<SuperpowerTrialStatus>;
+      if (custom.detail) setSuperpowerStatus(custom.detail);
+    };
+    window.addEventListener('ghosti_superpower_status_updated', onUpdated);
+    return () => window.removeEventListener('ghosti_superpower_status_updated', onUpdated);
+  }, [merlinAuth?.email, merlinAuth?.userId, activePricingPlan, subscribedLounges]);
 
   const showCanvasResults =
     hasExecutedUserSearch || hasUserSelectedSearchTab || isCanvasExpanded;
@@ -717,6 +743,25 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_open_onboarding_tab', {
+                        detail: { tab: 'tab1_find_care' },
+                      })
+                    );
+                  }}
+                  title="3탭 심플 온보딩 및 Ctrl + 0 귀신 초능력 체험방 열기"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-extrabold text-[12px] transition-all cursor-pointer ${
+                    themeMode === 'light'
+                      ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                      : 'bg-amber-500/15 text-amber-300 border border-amber-400/40 hover:bg-amber-500/25'
+                  }`}
+                >
+                  <span>📖</span>
+                  <span className="hidden sm:inline">온보딩/가이드</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                   }}
                   title="검색어 빌드업용 공식 쇼룸 및 다운로드 대문 페이지로 이동"
@@ -924,6 +969,45 @@ export const DesktopDashboard: React.FC = () => {
 
                   {/* 보더리스 통합 검색창 + [동영상/사진/문서] 캡슐 + 추천 칩 */}
                   <VoiceHeroStage />
+
+                  {/* [골든존 배너] 귀신 초능력 팩(Ctrl + 0 & 한영 오타 둔갑술) 1주일 무료체험 — 모바일 스토어 심사 모드 및 기 구독자는 자동 숨김 */}
+                  {!isStoreAppMode && !isAnySubscribed && (
+                    <div className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500/15 via-teal-500/10 to-zinc-900/90 border border-amber-400/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_24px_rgba(251,191,36,0.12)]">
+                      <div className="flex items-center gap-2.5 text-left">
+                        <span className="text-xl shrink-0">👻</span>
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-extrabold text-white">
+                            {superpowerStatus?.trial_status === 'ACTIVE'
+                              ? `⏳ 귀신 초능력 팩 체험 중 (D-${superpowerStatus.trial_days_left}) · Ctrl + 0 & 한영 오타 둔갑술 작동 중`
+                              : '🎁 귀신 부르는 Ctrl + 0 & 2어절 한영 오타 둔갑술 (띠리링~👻)'}
+                          </span>
+                          <span className="text-[11.5px] text-zinc-300">
+                            카톡·엑셀·문서 어디서나 연속 붙여넣기, 억만금 숫자 변환, F1~F5 상용구를 바로 써보세요.
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
+                          if (!superpowerStatus || superpowerStatus.trial_status === 'NOT_STARTED') {
+                            const st = await startSuperpowerTrialAction(accountId, false);
+                            setSuperpowerStatus(st);
+                          }
+                          window.dispatchEvent(
+                            new CustomEvent('ghosti_open_onboarding_tab', {
+                              detail: { tab: 'tab2_superpower' },
+                            })
+                          );
+                        }}
+                        className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-black text-[12px] whitespace-nowrap shadow-md transition-all cursor-pointer shrink-0"
+                      >
+                        {superpowerStatus?.trial_status === 'ACTIVE'
+                          ? `⏳ 귀신 초능력 체험 중 (D-${superpowerStatus.trial_days_left}) · 체험방 열기`
+                          : '🎁 귀신 초능력 팩 사용해보기 (1주일 무료체험 · 구독 시 평생 무료)'}
+                      </button>
+                    </div>
+                  )}
 
                   {/* [Zero-State 도화지 안내]: 아직 검색 전일 때는 무거운 카드 덤프 대신 깔끔한 펼치기 블록만 노출 */}
                   {!showCanvasResults && (

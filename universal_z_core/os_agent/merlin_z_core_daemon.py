@@ -49,6 +49,7 @@ import plugin_ghosti_os  # noqa: E402
 import plugin_senstalk  # noqa: E402
 import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
+import plugin_ghosti_superpowers  # noqa: E402
 
 CORE_VERSION = "2.3.3"
 STANDARD_PORT = 5199
@@ -231,6 +232,14 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(ghosti_setup_parity.faces_index())
             return
 
+        if path == "/api/superpower/status":
+            self._send_json(plugin_ghosti_superpowers.get_superpower_status(qp))
+            return
+
+        if path == "/api/superpower/snippets":
+            self._send_json({"ok": True, "snippets": plugin_ghosti_superpowers.get_snippets()})
+            return
+
         if path.startswith("/api/senstalk"):
             sub = path[len("/api/senstalk") :].strip("/") or "health"
             self._send_json(plugin_senstalk.handle_get(sub))
@@ -319,6 +328,18 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             ):
                 return
             self._send_json(dispatch_plugin_call(plugin_name, action, payload))
+            return
+
+        if path == "/api/superpower/start-trial":
+            self._send_json(plugin_ghosti_superpowers.start_superpower_trial(body))
+            return
+
+        if path == "/api/superpower/snippets":
+            self._send_json(plugin_ghosti_superpowers.save_snippets(body))
+            return
+
+        if path == "/api/superpower/simulate":
+            self._send_json(plugin_ghosti_superpowers.simulate_superpower(body))
             return
 
         if path.startswith("/api/senstalk"):
@@ -773,6 +794,7 @@ def main() -> None:
 
     replaced_pids = ensure_port_free(args.port)
     start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
+    plugin_ghosti_superpowers.ensure_superpower_daemon_running()
 
     class ReusableThreadingHTTPServer(ThreadingHTTPServer):
         allow_reuse_address = True

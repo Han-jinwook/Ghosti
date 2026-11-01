@@ -1,12 +1,302 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { getZCoreUrl } from '../services/zCoreBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 
+export type OnboardingTabId = 'tab1_find_care' | 'tab2_superpower' | 'tab3_share_pro';
+
+export interface SuperpowerTrialStatus {
+  engine_running: boolean;
+  machine_hwid: string;
+  account_id: string;
+  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'EXPIRED' | 'SUBSCRIBED';
+  trial_days_left: number;
+  started_at: string | null;
+  expires_at: string | null;
+  is_subscribed: boolean;
+  snippets: Record<string, string>;
+}
+
+const DEFAULT_SNIPPETS: Record<string, string> = {
+  F1: '국민은행 123-45-678910 (예금주: 홍길동)',
+  F2: '서울특별시 강남구 테헤란로 123, 4층',
+  F3: 'contact@sundreamer.app',
+  F4: '안녕하세요, 확인 후 빠르게 회신드리겠습니다. 감사합니다.',
+  F5: '귀신같이(Ghosti) 1초 내용검색 https://ghosti.sundreamer.app',
+};
+
+const TRIAL_STORAGE_KEY = 'ghosti_superpower_trial_v27';
+const SNIPPETS_STORAGE_KEY = 'ghosti_superpower_snippets_v27';
+
 /**
- * 실시간 QR 코드 SVG (내 PC 에이전트 ↔ 스마트폰 1MB 앱 Zero-Code 동시 페어링용)
+ * 애기귀신 3음 상승 차임벨 (도6 -> 미6 -> 솔6, "띠리링~👻") Web Audio 합성기
+ * - 브라우저에서도 한영 오타 둔갑술 체험 시 즉시 맑고 귀여운 효과음을 들려줍니다.
  */
+export function playBabyGhostChime(): void {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const notes = [
+      { freq: 1046.5, start: 0, dur: 0.075 },
+      { freq: 1318.5, start: 0.08, dur: 0.075 },
+      { freq: 1568.0, start: 0.16, dur: 0.14 },
+    ];
+    notes.forEach(({ freq, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0.14, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur);
+    });
+  } catch {
+    // 오디오 컨텍스트 제한 시 무시
+  }
+}
+
+/**
+ * 두벌식 영->한 / 한->영 로컬 즉시 변환 폴백 (Z-코어 미연결 웹 환경에서도 0.01초 즉시 체험 보장)
+ */
+const ENG_TO_JAMO: Record<string, string> = {
+  r: 'ㄱ', R: 'ㄲ', s: 'ㄴ', e: 'ㄷ', E: 'ㄸ', f: 'ㄹ', a: 'ㅁ', q: 'ㅂ', Q: 'ㅃ',
+  t: 'ㅅ', T: 'ㅆ', d: 'ㅇ', w: 'ㅈ', W: 'ㅉ', c: 'ㅊ', z: 'ㅋ', x: 'ㅌ', v: 'ㅍ', g: 'ㅎ',
+  k: 'ㅏ', o: 'ㅐ', i: 'ㅑ', O: 'ㅒ', j: 'ㅓ', p: 'ㅔ', u: 'ㅕ', P: 'ㅖ', h: 'ㅗ', y: 'ㅛ',
+  n: 'ㅜ', b: 'ㅠ', m: 'ㅡ', l: 'ㅣ',
+};
+const CHOSEONG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const JUNGSEONG = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'];
+const JONGSEONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const COMPOUND_JUNG: Record<string, string> = {
+  'ㅗㅏ': 'ㅘ', 'ㅗㅐ': 'ㅙ', 'ㅗㅣ': 'ㅚ', 'ㅜㅓ': 'ㅝ', 'ㅜㅔ': 'ㅞ', 'ㅜㅣ': 'ㅟ', 'ㅡㅣ': 'ㅢ',
+};
+const COMPOUND_JONG: Record<string, string> = {
+  'ㄱㅅ': 'ㄳ', 'ㄴㅈ': 'ㄵ', 'ㄴㅎ': 'ㄶ', 'ㄹㄱ': 'ㄺ', 'ㄹㅁ': 'ㄻ', 'ㄹㅂ': 'ㄼ', 'ㄹㅅ': 'ㄽ', 'ㄹㅌ': 'ㄾ', 'ㄹㅍ': 'ㄿ', 'ㄹㅎ': 'ㅀ', 'ㅂㅅ': 'ㅄ',
+};
+const COMMON_ENG_ALLOW = new Set(['iphone', 'youtube', 'google', 'naver', 'kakao', 'excel', 'office', 'windows', 'ghost', 'ghosti', 'hello', 'world', 'test']);
+
+function engWordToKorLocal(word: string): string {
+  if (COMMON_ENG_ALLOW.has(word.toLowerCase())) return word;
+  const raw = Array.from(word).map((c) => ENG_TO_JAMO[c] ?? ENG_TO_JAMO[c.toLowerCase()] ?? c);
+  const merged: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const pair = raw[i] + (raw[i + 1] ?? '');
+    if (COMPOUND_JUNG[pair]) {
+      merged.push(COMPOUND_JUNG[pair]);
+      i++;
+    } else {
+      merged.push(raw[i]);
+    }
+  }
+  const out: string[] = [];
+  let i = 0;
+  while (i < merged.length) {
+    const c = merged[i];
+    const next = merged[i + 1];
+    if (CHOSEONG.includes(c) && next && JUNGSEONG.includes(next)) {
+      const cho = CHOSEONG.indexOf(c);
+      const jung = JUNGSEONG.indexOf(next);
+      let jong = 0;
+      let step = 2;
+      const m2 = merged[i + 2];
+      const m3 = merged[i + 3];
+      const m4 = merged[i + 4];
+      if (m2 && JONGSEONG.includes(m2)) {
+        if (m3 && JUNGSEONG.includes(m3)) {
+          jong = 0;
+        } else if (m3 && COMPOUND_JONG[m2 + m3]) {
+          if (m4 && JUNGSEONG.includes(m4)) {
+            jong = JONGSEONG.indexOf(m2);
+            step = 3;
+          } else {
+            jong = JONGSEONG.indexOf(COMPOUND_JONG[m2 + m3]);
+            step = 4;
+          }
+        } else {
+          jong = JONGSEONG.indexOf(m2);
+          step = 3;
+        }
+      }
+      out.push(String.fromCharCode(0xac00 + (cho * 21 + jung) * 28 + jong));
+      i += step;
+    } else {
+      out.push(c);
+      i++;
+    }
+  }
+  const res = out.join('');
+  if (res === '진자') return '진짜';
+  if (res === '어더케') return '어떻게';
+  return res;
+}
+
+export function simulateSuperpowerLocal(mode: 'typo' | 'number9' | 'extract8' | 'hyphen7', text: string): string {
+  const s = text.trim();
+  if (!s) return '';
+  if (mode === 'typo') {
+    return s
+      .split(/(\s+)/)
+      .map((tok) => (/^[A-Za-z]+$/.test(tok) ? engWordToKorLocal(tok) : tok))
+      .join('');
+  }
+  if (mode === 'hyphen7') {
+    if (/^\d{2,4}-\d{3,4}-\d{4}$/.test(s)) return s.replace(/\D/g, '');
+    return s.replace(/\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b/g, '$1-$2-$3');
+  }
+  if (mode === 'number9') {
+    const digitsOnly = s.replace(/[,\s원]/g, '');
+    if (/^\d+$/.test(digitsOnly)) {
+      const n = Number(digitsOnly);
+      if (!n) return '0';
+      const eok = Math.floor(n / 100_000_000);
+      const man = Math.floor((n % 100_000_000) / 10_000);
+      const rest = n % 10_000;
+      const parts: string[] = [];
+      if (eok > 0) parts.push(`${eok.toLocaleString()}억`);
+      if (man > 0) {
+        const cheon = Math.floor(man / 1000);
+        const baek = Math.floor((man % 1000) / 100);
+        const remMan = man % 100;
+        let manStr = '';
+        if (cheon > 0) manStr += `${cheon > 1 ? cheon : ''}천`;
+        if (baek > 0) manStr += `${baek > 1 ? baek : ''}백`;
+        if (remMan > 0) manStr += `${remMan}`;
+        parts.push(`${manStr || man}만`);
+      }
+      if (rest > 0) parts.push(`${rest.toLocaleString()}`);
+      return parts.join(' ');
+    }
+    const korDigit: Record<string, number> = { 영: 0, 공: 0, 일: 1, 이: 2, 삼: 3, 사: 4, 오: 5, 육: 6, 칠: 7, 팔: 8, 구: 9 };
+    const smallU: Record<string, number> = { 십: 10, 백: 100, 천: 1000 };
+    const largeU: Record<string, number> = { 만: 10000, 억: 100000000, 조: 1000000000000 };
+    let largeAcc = 0;
+    let smallAcc = 0;
+    let cur = 0;
+    const clean = s.replace(/[\s,원]+/g, '');
+    let i = 0;
+    while (i < clean.length) {
+      const ch = clean[i];
+      if (/\d/.test(ch)) {
+        let j = i;
+        while (j < clean.length && /\d/.test(clean[j])) j++;
+        cur = Number(clean.slice(i, j));
+        i = j;
+        continue;
+      }
+      if (korDigit[ch] !== undefined) cur = korDigit[ch];
+      else if (smallU[ch]) {
+        smallAcc += (cur || 1) * smallU[ch];
+        cur = 0;
+      } else if (largeU[ch]) {
+        largeAcc += (smallAcc + cur || 1) * largeU[ch];
+        smallAcc = 0;
+        cur = 0;
+      }
+      i++;
+    }
+    const total = largeAcc + smallAcc + cur;
+    return total > 0 ? total.toLocaleString() : s;
+  }
+  if (mode === 'extract8') {
+    const phoneM = s.match(/\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b/);
+    const acctM = s.match(/(국민|신한|우리|하나|농협|기업|카카오뱅크|토스뱅크)\s*([0-9-]{9,18})/);
+    const schedM = s.match(/(오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|[월화수목금토일]요일)\s*(오전|오후)?\s*(\d{1,2}시(\s*\d{1,2}분)?)/);
+    const nameM = s.match(/([가-힣]{2,4})\s*(팀장|대표|과장|대리|사원|입니다|드림)/);
+    const lines: string[] = [];
+    if (nameM) lines.push(`- 성함: ${nameM[1]}`);
+    if (phoneM) lines.push(`- 연락처: ${phoneM[1]}-${phoneM[2]}-${phoneM[3]}`);
+    if (acctM) lines.push(`- 계좌: ${acctM[1]} ${acctM[2]}`);
+    if (schedM) lines.push(`- 일정: ${schedM[0].trim()}`);
+    return lines.length > 0 ? lines.join('\n') : s.replace(/\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b/g, '$1-$2-$3');
+  }
+  return s;
+}
+
+export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boolean): Promise<SuperpowerTrialStatus> {
+  try {
+    const q = new URLSearchParams({ accountId, isSubscribed: String(isSubscribed) });
+    const res = await fetch(getZCoreUrl(`/api/superpower/status?${q.toString()}`), {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok) {
+        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(data));
+        return data as SuperpowerTrialStatus;
+      }
+    }
+  } catch {
+    // 로컬 폴백
+  }
+  const savedRaw = localStorage.getItem(TRIAL_STORAGE_KEY);
+  const savedSnippetsRaw = localStorage.getItem(SNIPPETS_STORAGE_KEY);
+  const snippets = savedSnippetsRaw ? { ...DEFAULT_SNIPPETS, ...JSON.parse(savedSnippetsRaw) } : DEFAULT_SNIPPETS;
+  if (savedRaw) {
+    try {
+      const parsed = JSON.parse(savedRaw) as SuperpowerTrialStatus;
+      if (isSubscribed) {
+        return { ...parsed, trial_status: 'SUBSCRIBED', trial_days_left: 9999, is_subscribed: true, snippets };
+      }
+      return { ...parsed, snippets };
+    } catch {
+      // ignore
+    }
+  }
+  return {
+    engine_running: false,
+    machine_hwid: 'sha256_local_pc_device',
+    account_id: accountId,
+    trial_status: isSubscribed ? 'SUBSCRIBED' : 'NOT_STARTED',
+    trial_days_left: isSubscribed ? 9999 : 7,
+    started_at: null,
+    expires_at: null,
+    is_subscribed: isSubscribed,
+    snippets,
+  };
+}
+
+export async function startSuperpowerTrialAction(accountId: string, isSubscribed: boolean): Promise<SuperpowerTrialStatus> {
+  try {
+    const res = await fetch(getZCoreUrl('/api/superpower/start-trial'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, isSubscribed }),
+      signal: AbortSignal.timeout(1800),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok) {
+        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(data));
+        window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: data }));
+        return data as SuperpowerTrialStatus;
+      }
+    }
+  } catch {
+    // 로컬 폴백
+  }
+  const now = new Date();
+  const exp = new Date(now.getTime() + 7 * 86400 * 1000);
+  const fallback: SuperpowerTrialStatus = {
+    engine_running: true,
+    machine_hwid: 'sha256_local_pc_device',
+    account_id: accountId,
+    trial_status: isSubscribed ? 'SUBSCRIBED' : 'ACTIVE',
+    trial_days_left: isSubscribed ? 9999 : 7,
+    started_at: now.toISOString().slice(0, 19).replace('T', ' '),
+    expires_at: exp.toISOString().slice(0, 19).replace('T', ' '),
+    is_subscribed: isSubscribed,
+    snippets: DEFAULT_SNIPPETS,
+  };
+  localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(fallback));
+  window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: fallback }));
+  return fallback;
+}
+
 const PairingQrCodeSvg: React.FC = () => {
-  // 15x15 고정밀 QR 매트릭스 패턴
   const matrix = [
     [1,1,1,1,1,1,1,0,1,0,1,1,1,1,1],
     [1,0,0,0,0,0,1,0,0,1,1,0,0,0,1],
@@ -27,7 +317,7 @@ const PairingQrCodeSvg: React.FC = () => {
   return (
     <svg
       viewBox="0 0 17 17"
-      className="w-28 h-28 md:w-32 md:h-32 rounded-xl bg-white p-1.5 shadow-[0_0_24px_rgba(0,229,255,0.35)] shrink-0"
+      className="w-24 h-24 rounded-xl bg-white p-1.5 shadow-[0_0_20px_rgba(0,229,255,0.3)] shrink-0"
       aria-label="스마트폰 즉시 연결 QR 코드"
     >
       {matrix.map((row, rIdx) =>
@@ -53,8 +343,6 @@ export const OnboardingModal: React.FC = () => {
   const {
     showOnboarding,
     setShowOnboarding,
-    onboardingRunning,
-    onboardingProgress,
     onboardingTrackMode,
     setOnboardingTrackMode,
     pcAgentPairedMobile,
@@ -62,556 +350,890 @@ export const OnboardingModal: React.FC = () => {
     startOnboardingIndexing,
     cancelOnboardingIndexing,
     photos,
-    duplicateGroups,
     localDocuments,
     videoSceneItems,
     trialScanPermissions,
     setTrialScanPermission,
     runBriefingHintChip,
     setShowProModal,
+    setDesktopTab,
+    merlinAuth,
+    activePricingPlan,
+    subscribedLounges,
   } = useSaySeeStore();
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [activeTab, setActiveTab] = useState<OnboardingTabId>('tab1_find_care');
+  const [trialStatus, setTrialStatus] = useState<SuperpowerTrialStatus | null>(null);
 
-  const activeTrashCount = photos.filter((p) => !p.quarantined && Boolean(p.trashCategory)).length;
-  const vaultPhotoCount = photos.filter((p) => !p.quarantined && p.isVaultDocument).length;
-  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
-  const totalDissectedTimelineSegments = videoSceneItems.reduce(
-    (acc, v) => acc + v.timelineFrames.length,
-    0
+  // 탭 2: 인터랙티브 체험 상태
+  const [typoInput, setTypoInput] = useState('dkssudgktpdy qksrkqtmqslek');
+  const [typoOutput, setTypoOutput] = useState('안녕하세요 반갑습니다');
+  const [typoBadge, setTypoBadge] = useState('👻 띠리링~♪ (2어절 연속 오타 감지 ➔ 한글 자동 변환 + 한/영키 자동 전환)');
+  const [showDemoStep, setShowDemoStep] = useState(0);
+
+  // 연속 복사·붙여넣기 체험 큐
+  const [pasteQueue, setPasteQueue] = useState<string[]>([
+    '홍길동 대표',
+    '010-1234-5678',
+    '서울 강남구 테헤란로 123',
+  ]);
+  const [pastedSlots, setPastedSlots] = useState<string[]>([]);
+  const [floatingWebOpenedToast, setFloatingWebOpenedToast] = useState(false);
+
+  // F1~F5 내 상용구 & 전화번호 하이픈
+  const [snippets, setSnippets] = useState<Record<string, string>>(DEFAULT_SNIPPETS);
+  const [snippetSavedMsg, setSnippetSavedMsg] = useState<string | null>(null);
+  const [hyphenInput, setHyphenInput] = useState('01012345678');
+  const [hyphenOutput, setHyphenOutput] = useState('010-1234-5678');
+
+  // 9번 억만금 숫자 변환
+  const [moneyInput, setMoneyInput] = useState('3억 5천만');
+  const [moneyOutput, setMoneyOutput] = useState('350,000,000');
+
+  // 8번 카톡 혼합 문자 구조화 추출
+  const [extractInput, setExtractInput] = useState(
+    '김철수 팀장입니다 01012345678 국민 123-45-678910 내일 오후 3시 미팅'
+  );
+  const [extractOutput, setExtractOutput] = useState(
+    '- 성함: 김철수\n- 연락처: 010-1234-5678\n- 계좌: 국민 123-45-678910\n- 일정: 내일 오후 3시'
   );
 
+  const isSubscribedUser = useMemo(
+    () =>
+      activePricingPlan !== 'free_trial' ||
+      Object.values(subscribedLounges).some(Boolean),
+    [activePricingPlan, subscribedLounges]
+  );
+
+  const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
+
+  // 외부에서 특정 탭(예: 골든존 배너 클릭 시 탭 2)으로 온보딩을 열도록 이벤트 수신
+  useEffect(() => {
+    const onOpenOnboardingTab = (e: Event) => {
+      const custom = e as CustomEvent<{ tab?: OnboardingTabId }>;
+      if (custom.detail?.tab) {
+        setActiveTab(custom.detail.tab);
+      }
+      setShowOnboarding(true);
+    };
+    window.addEventListener('ghosti_open_onboarding_tab', onOpenOnboardingTab);
+    return () => window.removeEventListener('ghosti_open_onboarding_tab', onOpenOnboardingTab);
+  }, [setShowOnboarding]);
+
+  useEffect(() => {
+    if (!showOnboarding) return;
+    void fetchSuperpowerStatus(accountId, isSubscribedUser).then((st) => {
+      setTrialStatus(st);
+      if (st.snippets) {
+        setSnippets((prev) => ({ ...prev, ...st.snippets }));
+      }
+    });
+  }, [showOnboarding, accountId, isSubscribedUser]);
+
+  // 탭 2 Show 애니메이션 루프 (3단계 자동 순환)
+  useEffect(() => {
+    if (!showOnboarding || activeTab !== 'tab2_superpower') return;
+    const timer = window.setInterval(() => {
+      setShowDemoStep((s) => (s + 1) % 3);
+    }, 2200);
+    return () => clearInterval(timer);
+  }, [showOnboarding, activeTab]);
+
+  const vaultPhotoCount = photos.filter((p) => !p.quarantined && p.isVaultDocument).length;
+  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
+
   const dynamicTrialDocHints = useMemo(
-    () => localDocuments.slice(0, 3).map((d) => d.title),
+    () => localDocuments.slice(0, 2).map((d) => d.title),
     [localDocuments]
   );
 
   const dynamicTrialVideoHints = useMemo(
     () =>
-      videoSceneItems.slice(0, 3).map((v) => {
+      videoSceneItems.slice(0, 2).map((v) => {
         const highlightFrame =
           v.timelineFrames.find((f) => f.timeSec === v.matchedSeekSec) ??
-          v.timelineFrames[Math.floor(v.timelineFrames.length / 2)] ??
           v.timelineFrames[0];
-        return highlightFrame ? highlightFrame.keywords.slice(0, 4).join(' ') : v.title;
+        return highlightFrame ? highlightFrame.keywords.slice(0, 3).join(' ') : v.title;
       }),
     [videoSceneItems]
   );
 
-  const dynamicVideoBreakdownSummary = useMemo(() => {
-    const parts = videoSceneItems.map(
-      (v) => `${v.videoFileName} ${v.timelineFrames.length}구간`
-    );
-    return `최신 서류 ${totalIndexedDocs}건 + 동영상 ${videoSceneItems.length}개(${parts.join(' · ')} = 총 ${totalDissectedTimelineSegments}구간) 해부 완료`;
-  }, [totalIndexedDocs, videoSceneItems, totalDissectedTimelineSegments]);
-
-  // 네온 블루(#00E5FF) 3D 파형 / 768차원 벡터 변환 실시간 캔버스 애니메이션
-  useEffect(() => {
-    if (!showOnboarding) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let rafId = 0;
-    let phase = 0;
-
-    const render = () => {
-      phase += 0.045;
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      if (
-        canvas.width !== Math.floor(rect.width * dpr) ||
-        canvas.height !== Math.floor(rect.height * dpr)
-      ) {
-        canvas.width = Math.floor(rect.width * dpr);
-        canvas.height = Math.floor(rect.height * dpr);
-      }
-      ctx.save();
-      ctx.scale(dpr, dpr);
-
-      const W = rect.width;
-      const H = rect.height;
-      ctx.clearRect(0, 0, W, H);
-
-      // 1) 배경 3D 원근 그리드
-      ctx.strokeStyle = 'rgba(0, 229, 255, 0.08)';
-      ctx.lineWidth = 1;
-      const horizonY = H * 0.62;
-      for (let i = -6; i <= 6; i++) {
-        ctx.beginPath();
-        ctx.moveTo(W / 2 + i * 18, horizonY - 25);
-        ctx.lineTo(W / 2 + i * 75, H);
-        ctx.stroke();
-      }
-
-      // 2) 중앙: 3D 회전 시맨틱 파형 토러스
-      const cx = W * 0.5;
-      const cy = H * 0.42;
-      for (let ring = 0; ring < 3; ring++) {
-        ctx.beginPath();
-        const points = 72;
-        for (let p = 0; p <= points; p++) {
-          const angle = (p / points) * Math.PI * 2;
-          const wave =
-            Math.sin(angle * 4 + phase * (1.5 + ring * 0.3)) * 10 +
-            Math.cos(angle * 7 - phase * 1.2) * 5;
-          const rx = (62 + ring * 20 + wave) * Math.cos(angle);
-          const ry = (24 + ring * 9 + wave * 0.45) * Math.sin(angle);
-          const x = cx + rx;
-          const y = cy + ry;
-          if (p === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.strokeStyle =
-          ring === 0
-            ? 'rgba(0, 229, 255, 0.85)'
-            : ring === 1
-            ? 'rgba(255, 171, 0, 0.65)'
-            : 'rgba(16, 185, 129, 0.4)';
-        ctx.lineWidth = ring === 0 ? 2.2 : 1.4;
-        ctx.stroke();
-      }
-
-      // 3) 하단: 768차원 벡터 변환 실시간 스펙트럼 막대
-      const vec = onboardingProgress.liveVector64;
-      const barCount = 48;
-      const totalBarWidth = W * 0.88;
-      const startX = (W - totalBarWidth) / 2;
-      const stepX = totalBarWidth / barCount;
-
-      for (let i = 0; i < barCount; i++) {
-        const v = vec[i % vec.length] ?? 0.5;
-        const dynamic = 0.2 + 0.8 * Math.abs(Math.sin(phase * 1.8 + i * 0.28) * 0.55 + v * 0.45);
-        const barH = Math.max(5, dynamic * 40);
-        const x = startX + i * stepX;
-        const y = H - 10 - barH;
-
-        ctx.fillStyle = i % 3 === 0 ? '#00E5FF' : '#9CF0FF';
-        ctx.beginPath();
-        ctx.roundRect(x, y, Math.max(2.5, stepX - 3), barH, 3);
-        ctx.fill();
-      }
-
-      ctx.restore();
-      rafId = requestAnimationFrame(render);
-    };
-
-    rafId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(rafId);
-  }, [showOnboarding, onboardingProgress.liveVector64]);
-
   if (!showOnboarding) return null;
 
-  const { percent, currentPhotoName, currentPhotoThumb } = onboardingProgress;
+  const handleStart7DayTrial = async () => {
+    const st = await startSuperpowerTrialAction(accountId, isSubscribedUser);
+    setTrialStatus(st);
+    playBabyGhostChime();
+    useSaySeeStore.setState({
+      lastQuarantineToast:
+        '🎉 [귀신 초능력 팩 1주일 무료체험 시작!] 지금부터 7일간 Ctrl + 0 및 2어절 한영 오타 둔갑술이 작동합니다.',
+    });
+  };
+
+  const handleRunTypoSimulation = async (inputVal: string) => {
+    setTypoInput(inputVal);
+    try {
+      const res = await fetch(getZCoreUrl('/api/superpower/simulate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'typo', text: inputVal }),
+        signal: AbortSignal.timeout(900),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          setTypoOutput(data.converted);
+          setTypoBadge(data.badge || '👻 띠리링~♪ (한/영키 자동 전환 완료)');
+          playBabyGhostChime();
+          return;
+        }
+      }
+    } catch {
+      // 로컬 폴백
+    }
+    const localOut = simulateSuperpowerLocal('typo', inputVal);
+    setTypoOutput(localOut);
+    setTypoBadge('👻 띠리링~♪ (2어절 연속 오타 감지 ➔ 한글 자동 변환 + 한/영키 자동 전환)');
+    playBabyGhostChime();
+  };
+
+  const handleSaveSnippets = async () => {
+    localStorage.setItem(SNIPPETS_STORAGE_KEY, JSON.stringify(snippets));
+    try {
+      const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snippets }),
+        signal: AbortSignal.timeout(1200),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          setSnippetSavedMsg(data.message || '✅ Z-코어에 F1~F5 상용구가 즉시 저장되었습니다!');
+          playBabyGhostChime();
+          setTimeout(() => setSnippetSavedMsg(null), 3500);
+          return;
+        }
+      }
+    } catch {
+      // 로컬 폴백
+    }
+    setSnippetSavedMsg('✅ F1~F5 내 상용구가 저장되었습니다! (Ctrl + 0 ➔ F1~F5로 즉시 붙여넣기)');
+    playBabyGhostChime();
+    setTimeout(() => setSnippetSavedMsg(null), 3500);
+  };
+
+  const handleMoneySimulate = async (val: string) => {
+    setMoneyInput(val);
+    try {
+      const res = await fetch(getZCoreUrl('/api/superpower/simulate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'number9', text: val }),
+        signal: AbortSignal.timeout(900),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          setMoneyOutput(data.converted);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setMoneyOutput(simulateSuperpowerLocal('number9', val));
+  };
+
+  const handleExtractSimulate = async (val: string) => {
+    setExtractInput(val);
+    try {
+      const res = await fetch(getZCoreUrl('/api/superpower/simulate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'extract8', text: val }),
+        signal: AbortSignal.timeout(900),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          setExtractOutput(data.converted);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setExtractOutput(simulateSuperpowerLocal('extract8', val));
+  };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-surface/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-y-auto">
-      <div className="relative w-full max-w-5xl rounded-3xl glass-l2 p-5 md:p-7 shadow-[0_0_64px_rgba(0,229,255,0.22)] flex flex-col gap-4 border border-primary-container/35 my-auto">
-        {/* 1) 상단 헤더 & 원클릭 자동 연결(Zero-Code Pairing) 배지 */}
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+      <div className="relative w-full max-w-4xl rounded-3xl bg-[#111114] border border-white/15 p-5 md:p-7 shadow-[0_0_60px_rgba(0,229,255,0.18)] flex flex-col gap-5 my-auto text-zinc-100">
+        {/* 1) 상단 헤더 + 닫기 버튼 */}
         <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
               <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
-              <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-mono text-[11px] font-black">
-                💻 내 PC 우선 구동 (외부 서버 전송 0%) + 📱 실시간 QR 코드 모바일 동시 페어링
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 border border-primary-container/50 text-primary-container font-label-mono text-[11px] font-bold">
-                🎬 최신 동영상 3개 전 구간(00:00~끝) 1초 단위 완전 해부
+              <span className="px-2.5 py-0.5 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-300 font-mono text-[11px] font-bold">
+                혼자 쓸 땐 귀신같이 찾고 손보고! · 함께 쓸 땐 귀신같이 공유하고!
               </span>
             </div>
-            <h2 className="font-headline-lg text-[20px] md:text-[23px] text-on-surface font-extrabold tracking-tight">
-              🚀 안심 체험판 온보딩 — 내 PC 직접 구동(권장) &amp; 모바일 QR 즉시 페어링
+            <h2 className="text-[19px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
+              📖 귀신같이 3탭 핵심 가이드 &amp; Ctrl + 0 초능력 체험방
             </h2>
-            <p className="font-body-sm text-[12.5px] text-on-surface-variant leading-relaxed">
-              집이나 사무실 PC 앞이라면 파일이 외부로 단 1바이트도 나가지 않는{' '}
-              <strong className="text-emerald-300">‘내 PC 직접 구동(Track A)’</strong>을 기본 코스로 강력 추천하며, 밖에서 스마트폰만 들고 계실 때만{' '}
-              <strong className="text-primary-container">‘Ghosti 초고속 GPU 서버 무료 대여(Track B)’</strong>를 지원합니다.
-            </p>
           </div>
+
           <button
             type="button"
             onClick={() => {
               cancelOnboardingIndexing();
               setShowOnboarding(false);
             }}
-            className="px-3.5 py-2 rounded-full bg-surface-container-highest/80 hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-sm text-[12px] font-bold flex items-center gap-1 transition-colors shrink-0"
+            className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-200 hover:text-white text-[12px] font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
           >
-            <span>브리핑 보드로</span>
-            <span className="material-symbols-outlined text-[16px]">close</span>
+            <span>워크스페이스로</span>
+            <span>✕</span>
           </button>
         </div>
 
-        {/* 2) [온보딩 프레임 대전환] Track A (내 PC 직접 구동 + QR 모바일 연결) vs Track B (모바일 단독 시 클라우드 서버 무료 대여) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
-          {/* Track A: 내 PC/노트북 앞일 때 — 강력 추천 (외부 서버 전송 0%) + 실시간 QR 코드 모바일 동시 페어링 */}
-          <div
-            onClick={() => setOnboardingTrackMode('pc_local')}
-            className={`lg:col-span-8 p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
-              onboardingTrackMode === 'pc_local'
-                ? 'bg-gradient-to-br from-emerald-950/60 via-surface-container to-surface-container-high border-emerald-400 shadow-[0_0_28px_rgba(16,185,129,0.22)]'
-                : 'bg-surface-container-low/80 border-outline-variant/35 hover:border-emerald-400/50'
+        {/* 2) 3탭 네비게이션 바 (클릭한 1개 탭만 아래에 렌더링하여 시각적 피로도 제로!) */}
+        <div
+          role="tablist"
+          aria-label="온보딩 3탭 메뉴"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 rounded-2xl bg-zinc-900/90 border border-white/10"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'tab1_find_care'}
+            onClick={() => setActiveTab('tab1_find_care')}
+            className={`py-3 px-3.5 rounded-xl text-left flex flex-col gap-0.5 transition-all cursor-pointer ${
+              activeTab === 'tab1_find_care'
+                ? 'bg-teal-500/20 border-2 border-teal-400 text-white shadow-[0_0_20px_rgba(20,184,166,0.25)]'
+                : 'bg-transparent border border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <div className="flex flex-col md:flex-row items-start justify-between gap-4">
-              {/* 좌측: 내 PC 직접 구동 설명 & 실행 버튼 */}
-              <div className="flex-1 flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-surface-container-lowest font-label-mono text-[10.5px] font-black">
-                    Track A • 강력 추천 (외부 서버 전송 0%)
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-mono text-[10px] font-bold">
-                    Windows MS 공식 인증서 서명 설치파일
-                  </span>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[13.5px] font-extrabold">탭 1. 🎯 찾기 &amp; 🪄 손보기</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 text-[10px] font-black">
+                내 기기 0원
+              </span>
+            </div>
+            <span className="text-[11px] opacity-80">
+              1초 AI 내용검색 + 치우기·고치기 통합 대화창
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'tab2_superpower'}
+            onClick={() => setActiveTab('tab2_superpower')}
+            className={`py-3 px-3.5 rounded-xl text-left flex flex-col gap-0.5 transition-all cursor-pointer ${
+              activeTab === 'tab2_superpower'
+                ? 'bg-amber-500/20 border-2 border-amber-400 text-white shadow-[0_0_20px_rgba(251,191,36,0.25)]'
+                : 'bg-transparent border border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[13.5px] font-extrabold">탭 2. 👻 귀신 부르는 Ctrl + 0 체험방</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-black">
+                1주일 무료체험
+              </span>
+            </div>
+            <span className="text-[11px] opacity-80">
+              한영 오타 둔갑술 · 연속 붙여넣기 · 상용구 실습
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'tab3_share_pro'}
+            onClick={() => setActiveTab('tab3_share_pro')}
+            className={`py-3 px-3.5 rounded-xl text-left flex flex-col gap-0.5 transition-all cursor-pointer ${
+              activeTab === 'tab3_share_pro'
+                ? 'bg-emerald-500/20 border-2 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+                : 'bg-transparent border border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[13.5px] font-extrabold">탭 3. 👨‍👩‍👧‍👦 기기 묶기 &amp; 공유방</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-black">
+                구독 시 초능력 평생무료
+              </span>
+            </div>
+            <span className="text-[11px] opacity-80">
+              폰↔PC 2대 이상 연동 &amp; 가족·팀 공유방(팀원 0원)
+            </span>
+          </button>
+        </div>
+
+        {/* ─────────────────────────────────────────────────────────────
+            [탭 1] 🎯 찾기 & 🪄 손보기 (내 기기 1대는 언제나 0원)
+           ───────────────────────────────────────────────────────────── */}
+        {activeTab === 'tab1_find_care' && (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {/* 1) 🎯 귀신같이 찾기 */}
+              <div className="p-4 rounded-2xl bg-zinc-900/90 border border-teal-500/35 flex flex-col justify-between gap-3">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 text-[11px] font-extrabold">
+                      🎯 귀신같이 찾기 (1초 AI 내용검색)
+                    </span>
+                    <span className="text-[11px] text-emerald-400 font-bold">평생 무료</span>
+                  </div>
+                  <h3 className="text-[16px] font-extrabold text-white">
+                    파일명이 기억 안 나도 내용으로 1초 만에 찾습니다
+                  </h3>
+                  <p className="text-[12.5px] text-zinc-300 leading-relaxed">
+                    사진 속 사물·얼굴, 서류(<code className="text-teal-300">PDF·DOCX·TXT</code>) 본문 텍스트, 동영상(<code className="text-teal-300">00:00~끝</code>) 장면까지 내 PC 안에서 외부 전송(0 Byte) 없이 즉시 찾아냅니다.
+                  </p>
+
+                  {/* 추천 힌트 칩 즉시 클릭 체험 */}
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <span className="text-[11px] text-zinc-400 font-bold">
+                      👇 클릭하면 바로 메인 도화지에서 검색 결과를 보여드립니다:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {dynamicTrialDocHints.map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => {
+                            cancelOnboardingIndexing();
+                            setShowOnboarding(false);
+                            setDesktopTab('dashboard');
+                            void runBriefingHintChip('doc', q);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-amber-400/40 text-[11.5px] text-amber-200 font-bold cursor-pointer"
+                        >
+                          📄 “{q}”
+                        </button>
+                      ))}
+                      {dynamicTrialVideoHints.map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => {
+                            cancelOnboardingIndexing();
+                            setShowOnboarding(false);
+                            setDesktopTab('dashboard');
+                            void runBriefingHintChip('video', q);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-teal-400/40 text-[11.5px] text-teal-200 font-bold cursor-pointer"
+                        >
+                          🎬 “{q}”
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
-                <h3 className="font-headline-sm text-[15.5px] md:text-[16.5px] text-white font-extrabold">
-                  💻 PC/노트북 앞일 때 — 내 PC로 1분 안심 체험하기 (권장)
-                </h3>
-
-                <p className="font-body-sm text-[12px] text-on-surface-variant leading-relaxed">
-                  비로그인 상태라도 아래 버튼을 누르면 MS 공식 코드사이닝 인증서가 서명된 멀린 Z 코어(
-                  <code className="text-emerald-300 font-bold">Merlin_Z_Core_Setup.exe</code>)가 조용히 작동하여, 내 사진·서류·동영상이{' '}
-                  <strong className="text-white">외부로 단 1바이트도 나가지 않고 100% 내 PC 내부에서만</strong> 초고속 분석됩니다.
-                </p>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1">
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={() => {
                       setOnboardingTrackMode('pc_local');
                       void startOnboardingIndexing();
+                      setShowOnboarding(false);
+                      setDesktopTab('dashboard');
                     }}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-surface-container-lowest font-label-md text-[12.5px] font-black shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center gap-1.5 transition-all"
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 text-[12.5px] font-black cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-[18px]">computer</span>
-                    <span>💻 내 PC로 1분 안심 체험하기 (권장)</span>
+                    🎯 내 PC 사진·문서({totalIndexedDocs}건) 바로 찾기 →
                   </button>
                 </div>
               </div>
 
-              {/* 우측: 실시간 QR 코드 모바일 동시 페어링 UI */}
-              <div className="w-full md:w-64 p-3 rounded-2xl bg-surface-container-lowest/95 border border-primary-container/45 flex flex-col items-center text-center gap-2 shrink-0">
-                <div className="flex items-center justify-between w-full">
-                  <span className="font-label-mono text-[10px] text-primary-container font-black">
-                    📱 정식 스토어 QR 모바일 페어링
-                  </span>
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPcAgentPairedMobile(!pcAgentPairedMobile);
+              {/* 2) 🪄 손보기 (🧹 치우기 + ⚙️ 고치기 통합 노션형 대화창) */}
+              <div className="p-4 rounded-2xl bg-zinc-900/90 border border-emerald-500/35 flex flex-col justify-between gap-3">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
+                      🪄 손보기 (🧹 치우기 + ⚙️ 고치기 통합)
+                    </span>
+                    <span className="text-[11px] text-emerald-400 font-bold">평생 무료</span>
+                  </div>
+                  <h3 className="text-[16px] font-extrabold text-white">
+                    탭 이동 없이 한 채팅창에서 치우고 고칩니다
+                  </h3>
+                  <ul className="text-[12px] text-zinc-300 space-y-1.5 leading-relaxed">
+                    <li>
+                      • <strong className="text-emerald-300">🧹 치우기</strong>: 중복·흔들린 사진, 바탕화면·다운로드의 어지러운 문서와 설치파일을 깔끔하게 정리합니다.
+                    </li>
+                    <li>
+                      • <strong className="text-teal-300">⚙️ 고치기</strong>: 2026 최신 기준 내 PC 사양 업그레이드 진단, 먹통 수리(화면 위 빨간 손가락 <code className="text-amber-300">👆</code> 안내), 사라진 파일 추적을 수행합니다.
+                    </li>
+                    <li>
+                      • <strong className="text-amber-300">🔒 자연어 타이핑 동의 &amp; 번호 선택 원복</strong>: 실수 클릭 방지를 위해 <code className="text-white">&quot;응 해줘&quot;</code>처럼 직접 타이핑할 때만 실행되며, <code className="text-white">&quot;복원지점 보여줘&quot; ➔ &quot;1번 복원해줘&quot;</code>로 언제든 100% 되돌립니다.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="pt-2 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelOnboardingIndexing();
+                      setShowOnboarding(false);
+                      setDesktopTab('trash');
                     }}
-                    className={`px-2 py-0.5 rounded-full font-label-mono text-[9.5px] font-bold cursor-pointer ${
-                      pcAgentPairedMobile
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                        : 'bg-surface-container-high text-on-surface-variant'
-                    }`}
+                    className="w-full py-2.5 px-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[12.5px] font-black cursor-pointer"
                   >
-                    {pcAgentPairedMobile ? '● 내 폰 연결됨' : '○ 스캔 대기 중'}
+                    🪄 손보기 대화창 바로 열기 (치우기·고치기·복원) →
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 하단: 검진 구역 3대 안전 폴더 설정 & 모바일 QR 페어링 미니 바 */}
+            <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-white/10 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex flex-col gap-2 flex-1">
+                <div className="text-[12.5px] font-extrabold text-white flex items-center gap-2">
+                  <span>🔒 내 PC 안전 검진 구역 (허용한 기본 폴더만 스캔 · 외부 전송 0%)</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <label className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center gap-2 text-[12px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={trialScanPermissions.gallery}
+                      onChange={(e) => setTrialScanPermission('gallery', e.target.checked)}
+                      className="accent-teal-400"
+                    />
+                    <span>☑️ 사진첩(갤러리)</span>
+                  </label>
+                  <label className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center gap-2 text-[12px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={trialScanPermissions.downloads}
+                      onChange={(e) => setTrialScanPermission('downloads', e.target.checked)}
+                      className="accent-amber-400"
+                    />
+                    <span>☑️ 다운로드 폴더</span>
+                  </label>
+                  <label className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center gap-2 text-[12px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={trialScanPermissions.desktop}
+                      onChange={(e) => setTrialScanPermission('desktop', e.target.checked)}
+                      className="accent-emerald-400"
+                    />
+                    <span>☑️ 바탕화면 폴더</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 bg-zinc-950/90 p-2.5 rounded-2xl border border-white/10">
+                <PairingQrCodeSvg />
+                <div className="flex flex-col gap-1 max-w-[180px]">
+                  <span className="text-[11px] font-extrabold text-teal-300">
+                    📱 스마트폰 QR 즉시 연결
+                  </span>
+                  <p className="text-[10.5px] text-zinc-400 leading-snug">
+                    폰 카메라로 스캔하면 내 폰과 PC가 즉시 연결됩니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
+                    className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer"
+                  >
+                    {pcAgentPairedMobile ? '● 내 폰 연결됨' : '○ 연결 상태 토글'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────
+            [탭 2] 👻 귀신 부르는 Ctrl + 0 체험방 (Show + Try 인터랙티브 실습)
+           ───────────────────────────────────────────────────────────── */}
+        {activeTab === 'tab2_superpower' && (
+          <div className="flex flex-col gap-4">
+            {/* 상단: 숫자 0 = 靈(귀신 영) 스토리텔링 & 1주일 무료체험 활성화 배너 */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-teal-500/10 to-zinc-900 border border-amber-400/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-zinc-950 text-[11px] font-black">
+                    0 = 靈 (귀신 영) · 귀신 부르는 단축키 Ctrl + 0
+                  </span>
+                  {trialStatus?.trial_status === 'ACTIVE' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[11px] font-extrabold">
+                      ⏳ 현재 기기 무료체험 진행 중 (D-{trialStatus.trial_days_left})
+                    </span>
+                  )}
+                  {trialStatus?.trial_status === 'SUBSCRIBED' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[11px] font-extrabold">
+                      👑 구독 회원 평생 무제한 활성화됨
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12.5px] text-zinc-200 leading-relaxed mt-0.5">
+                  윈도우 어디서나(카톡·엑셀·한글·브라우저) <strong className="text-amber-300">Ctrl + 0</strong>을 누르면 커서 바로 옆에 플로팅 바가 뜨며, 맨 앞의 <strong className="text-teal-300">[👻 귀신같이 ↗]</strong> 로고를 클릭하면 언제든 이 웹 화면이 즉시 호출됩니다!
+                </p>
+              </div>
+
+              {(!trialStatus || trialStatus.trial_status === 'NOT_STARTED') && !isSubscribedUser && (
+                <button
+                  type="button"
+                  onClick={() => void handleStart7DayTrial()}
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12.5px] font-black shadow-[0_0_20px_rgba(251,191,36,0.35)] shrink-0 cursor-pointer"
+                >
+                  🎁 이 PC에서 1주일 무료체험 즉시 켜기
+                </button>
+              )}
+            </div>
+
+            {/* 플로팅 바 실물 미리보기 & [👻 귀신같이 ↗] 클릭 시연 */}
+            <div className="p-3 rounded-2xl bg-zinc-950 border border-teal-500/35 flex flex-col gap-2">
+              <div className="flex items-center justify-between text-[11.5px] text-zinc-400">
+                <span>💡 <strong className="text-white">Ctrl + 0 커서 옆 플로팅 바 실물 미리보기</strong> (맨 앞 로고를 직접 클릭해 보세요!)</span>
+                {floatingWebOpenedToast && (
+                  <span className="text-teal-300 font-bold animate-pulse">
+                    ✨ [👻 귀신같이 ↗] 클릭 감지 ➔ https://ghosti.sundreamer.app 즉시 호출!
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 rounded-xl bg-[#111520] border border-[#2D364F] text-[12px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playBabyGhostChime();
+                    setFloatingWebOpenedToast(true);
+                    setTimeout(() => setFloatingWebOpenedToast(false), 3000);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-[#00F5D4] font-extrabold cursor-pointer"
+                >
+                  👻 귀신같이 ↗
+                </button>
+                <span className="text-zinc-600">|</span>
+                <span className="text-amber-300">★[Ctrl+V] 순차붙여넣기</span>
+                <span className="text-amber-300">★[F1~F5] 내 상용구</span>
+                <span className="text-zinc-600">|</span>
+                <span className="text-zinc-300">[2]한영 [7]전화번호 [8]계좌추출 [9]억만금숫자</span>
+              </div>
+            </div>
+
+            {/* 5대 초능력 [Show + Try] 그리드 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {/* 체험 ①: 2어절 연속 한영·영한 오타 둔갑술 + 애기귀신 소리 */}
+              <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/10 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-extrabold text-amber-300">
+                    ① 2어절 한영·영한 오타 둔갑술 (띠리링~👻)
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10.5px] text-zinc-300">
+                    Show + Try
                   </span>
                 </div>
 
-                <PairingQrCodeSvg />
+                {/* Show: 자동 애니메이션 박스 */}
+                <div className="px-3 py-2 rounded-xl bg-zinc-950 border border-white/5 text-[11.5px] flex items-center justify-between gap-2">
+                  <span className="text-zinc-400 shrink-0">🎬 자동 시연:</span>
+                  <span className="font-mono text-white truncate">
+                    {showDemoStep === 0 && '타이핑 중: dkssudgktpdy qksrkqtmqslek'}
+                    {showDemoStep === 1 && '👻 띠리링~♪ (2어절 오타 감지 + 한/영키 전환!)'}
+                    {showDemoStep === 2 && '✅ 자동 변환: 안녕하세요 반갑습니다 (iPhone 보존)'}
+                  </span>
+                </div>
 
-                <p className="font-body-sm text-[11px] text-white font-semibold leading-snug">
-                  “스마트폰 카메라로 QR을 스캔해 <strong className="text-primary-container">Google Play / 공식 APK (안드로이드)</strong> 또는 <strong className="text-primary-container">App Store / 공식 TestFlight (iOS)</strong> 앱을 실행하면, 내 폰과 PC가 그 자리에서 하나로 연결됩니다!”
-                </p>
+                {/* Try: 직접 입력해 보는 창 */}
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={typoInput}
+                    onChange={(e) => setTypoInput(e.target.value)}
+                    placeholder="예: dkssudgktpdy qksrkqtmqslek"
+                    className="flex-1 px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/15 text-[12px] text-white outline-none focus:border-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleRunTypoSimulation(typoInput)}
+                    className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-black shrink-0 cursor-pointer"
+                  >
+                    🪄 둔갑 체험
+                  </button>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-400/30 text-[12px] flex flex-col gap-0.5">
+                  <div className="text-white font-extrabold">결과: {typoOutput}</div>
+                  <div className="text-[10.5px] text-amber-300">{typoBadge}</div>
+                </div>
+              </div>
+
+              {/* 체험 ②: 연속 다중 복사·붙여넣기 (Ctrl + 0 -> Ctrl + V) */}
+              <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/10 flex flex-col justify-between gap-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-extrabold text-teal-300">
+                    ② 연속 복사 후 1번부터 순차 붙여넣기 (Ctrl+0)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPasteQueue(['홍길동 대표', '010-1234-5678', '서울 강남구 테헤란로 123']);
+                      setPastedSlots([]);
+                    }}
+                    className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    ↺ 다시 장전
+                  </button>
+                </div>
+
+                <div className="text-[11.5px] text-zinc-300">
+                  여러 개를 연달아 복사(<code className="text-teal-300">Ctrl+C</code>)한 뒤 <code className="text-amber-300">Ctrl+0</code>을 누르면, <code className="text-white">Ctrl+V</code>를 누를 때마다 1번부터 순서대로 들어갑니다.
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {pasteQueue.map((item, idx) => (
+                    <span
+                      key={`${item}-${idx}`}
+                      className="px-2 py-1 rounded-lg bg-zinc-950 border border-teal-500/40 text-[11px] text-teal-200 font-bold"
+                    >
+                      대기 {idx + 1}번: {item}
+                    </span>
+                  ))}
+                  {pasteQueue.length === 0 && (
+                    <span className="text-[11px] text-emerald-400 font-bold">
+                      🎉 3개 항목 모두 순서대로 붙여넣기 완료!
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={pasteQueue.length === 0}
+                    onClick={() => {
+                      if (pasteQueue.length === 0) return;
+                      playBabyGhostChime();
+                      const [first, ...rest] = pasteQueue;
+                      setPasteQueue(rest);
+                      setPastedSlots((prev) => [...prev, first]);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-teal-400 hover:bg-teal-300 disabled:opacity-40 text-zinc-950 text-[11.5px] font-black cursor-pointer shrink-0"
+                  >
+                    📋 Ctrl + V 순차 붙여넣기 ({pasteQueue.length}개 남음)
+                  </button>
+                  <div className="flex-1 px-2.5 py-1.5 rounded-xl bg-zinc-950 border border-white/10 text-[11.5px] text-white truncate">
+                    {pastedSlots.length > 0 ? pastedSlots.join(' ➔ ') : '버튼을 눌러 1번부터 붙여넣어 보세요'}
+                  </div>
+                </div>
+              </div>
+
+              {/* 체험 ③: 9번 억만금 한글 숫자 <-> 아라비아 숫자 양방향 변환 */}
+              <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/10 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-extrabold text-emerald-300">
+                    ③ 억만금 한글 숫자 ⇄ 아라비아 숫자 변환 (9번)
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleMoneySimulate('3억 5천만')}
+                      className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
+                    >
+                      3억 5천만
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleMoneySimulate('1285000000')}
+                      className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
+                    >
+                      1,285,000,000
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={moneyInput}
+                    onChange={(e) => void handleMoneySimulate(e.target.value)}
+                    placeholder="예: 3억 5천만 또는 350000000"
+                    className="flex-1 px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/15 text-[12px] text-white outline-none focus:border-emerald-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleMoneySimulate(moneyInput)}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-400 text-zinc-950 text-[11.5px] font-black cursor-pointer"
+                  >
+                    양방향 변환
+                  </button>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 text-[12px] text-emerald-200 font-bold">
+                  변환 결과: <span className="text-white font-mono">{moneyOutput}</span>
+                </div>
+              </div>
+
+              {/* 체험 ④: 8번 카톡 혼합 문자에서 계좌·연락처·일정 AI 구조화 추출 & 7번 전화번호 하이픈 */}
+              <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/10 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-extrabold text-cyan-300">
+                    ④ 카톡 통짜 문자 계좌·연락처·일정 추출 (8번)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = simulateSuperpowerLocal('hyphen7', hyphenInput);
+                      setHyphenInput(next);
+                      setHyphenOutput(next);
+                    }}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-[10.5px] text-cyan-300 cursor-pointer"
+                  >
+                    7번 하이픈 토글: {hyphenOutput}
+                  </button>
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={extractInput}
+                    onChange={(e) => setExtractInput(e.target.value)}
+                    className="flex-1 px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/15 text-[11.5px] text-white outline-none focus:border-cyan-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleExtractSimulate(extractInput)}
+                    className="px-3 py-1.5 rounded-xl bg-cyan-400 text-zinc-950 text-[11.5px] font-black shrink-0 cursor-pointer"
+                  >
+                    구조화 추출
+                  </button>
+                </div>
+                <pre className="px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-[11px] text-cyan-100 whitespace-pre-wrap font-sans leading-snug">
+                  {extractOutput}
+                </pre>
               </div>
             </div>
-          </div>
 
-          {/* Track B: 밖에서 스마트폰만 들고 있을 때 — Ghosti 초고속 GPU 서버 무료 대여 */}
-          <div
-            onClick={() => setOnboardingTrackMode('cloud_rental')}
-            className={`lg:col-span-4 p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
-              onboardingTrackMode === 'cloud_rental'
-                ? 'bg-gradient-to-br from-[#062c36]/90 via-surface-container to-surface-container-high border-primary-container shadow-[0_0_28px_rgba(0,229,255,0.25)]'
-                : 'bg-surface-container-low/80 border-outline-variant/35 hover:border-primary-container/50'
-            }`}
-          >
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 border border-primary-container/50 text-primary-container font-label-mono text-[10.5px] font-black">
-                  Track B • 모바일 단독 외출 시
-                </span>
-                <span className="font-label-mono text-[10px] text-emerald-300 font-bold">
-                  0.1초 연산 후 RAM 소각
-                </span>
-              </div>
-
-              <h3 className="font-headline-sm text-[15px] text-white font-extrabold">
-                📱 밖에서 스마트폰만 들고 있을 때 — Ghosti 초고속 GPU 서버 무료 대여
-              </h3>
-
-              <p className="font-body-sm text-[11.5px] text-on-surface-variant leading-relaxed">
-                “현재 PC 앞이 아니신가요? 스마트폰 발열과 배터리 소모를 막기 위해{' '}
-                <strong className="text-primary-container">귀신같이(Ghosti)의 초고속 클라우드 PC(GPU 서버)를 잠시 무료로 빌려드립니다!</strong>{' '}
-                (무거운 원본 미전송 / 서버 RAM에서 0.1초 연산 후 즉시 자동 소각되므로 안심하셔도 됩니다)”
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOnboardingTrackMode('cloud_rental');
-                void startOnboardingIndexing();
-              }}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-primary-container/20 hover:bg-primary-container/30 border border-primary-container/60 text-primary-container font-label-md text-[12px] font-black flex items-center justify-center gap-1.5 transition-all"
-            >
-              <span className="material-symbols-outlined text-[17px]">smartphone</span>
-              <span>📱 모바일 단독: 초고속 GPU 서버 무료 대여로 체험</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 3) 스캔 전 [검진 구역 직접 허용] 3대 안전 폴더 체크박스 */}
-        <div className="p-3.5 rounded-2xl bg-surface-container/90 border border-outline-variant/35 flex flex-col gap-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-headline-sm text-[13.5px] text-on-surface font-extrabold flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-primary-container text-[18px]">
-                verified_user
-              </span>
-              <span>스캔 전 [검진 구역 직접 허용] — 사용자가 허용한 기본 3대 안전 폴더만 정밀 진단합니다</span>
-            </span>
-            <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
-              {onboardingTrackMode === 'pc_local'
-                ? '🔒 현재 모드: Track A 내 PC 직접 구동 (외부 서버 전송 0%)'
-                : '⚡ 현재 모드: Track B Ghosti GPU 서버 무료 대여 (원본 미전송 · 0.1초 RAM 즉시 소각)'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <label className="p-2.5 rounded-xl bg-surface-container-lowest/90 border border-primary-container/40 flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={trialScanPermissions.gallery}
-                onChange={(e) => setTrialScanPermission('gallery', e.target.checked)}
-                className="w-4 h-4 accent-[#00E5FF] rounded"
-              />
-              <div className="flex flex-col">
-                <span className="font-label-md text-[12.5px] text-on-surface font-extrabold">
-                  ☑️ 사진첩 (갤러리)
-                </span>
-                <span className="font-body-sm text-[10.5px] text-on-surface-variant">
-                  중복·연사 진단 &amp; 최신 동영상 3개 전 구간 해부·촬영서류 8장
-                </span>
-              </div>
-            </label>
-
-            <label className="p-2.5 rounded-xl bg-surface-container-lowest/90 border border-[#FFAB00]/40 flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={trialScanPermissions.downloads}
-                onChange={(e) => setTrialScanPermission('downloads', e.target.checked)}
-                className="w-4 h-4 accent-[#FFAB00] rounded"
-              />
-              <div className="flex flex-col">
-                <span className="font-label-md text-[12.5px] text-on-surface font-extrabold">
-                  ☑️ 다운로드 폴더
-                </span>
-                <span className="font-body-sm text-[10.5px] text-on-surface-variant">
-                  영수증·바우처·청구서·건강검진 PDF 문서 역추적
-                </span>
-              </div>
-            </label>
-
-            <label className="p-2.5 rounded-xl bg-surface-container-lowest/90 border border-emerald-400/40 flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={trialScanPermissions.desktop}
-                onChange={(e) => setTrialScanPermission('desktop', e.target.checked)}
-                className="w-4 h-4 accent-emerald-400 rounded"
-              />
-              <div className="flex flex-col">
-                <span className="font-label-md text-[12.5px] text-on-surface font-extrabold">
-                  ☑️ 바탕화면 폴더
-                </span>
-                <span className="font-body-sm text-[10.5px] text-on-surface-variant">
-                  보험증권·계약서·조립설명서 PDF/DOCX/TXT 역추적
-                </span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {/* 4) [체험판 스캔 대상 혁신] 중복 진단 + 최신 서류 20건 + 최신 동영상 딱 3개 전 구간(Full-Timeline) 완전 해부 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* 타겟 1: 중복·연사(dHash) 및 흔들림 진단 */}
-          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-emerald-400/40 flex flex-col justify-between gap-2">
-            <div className="flex items-center justify-between">
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[10px] font-black">
-                기기 자체 연산 (전송 없음)
-              </span>
-              <span className="font-label-mono text-[11px] text-emerald-300 font-bold">완료</span>
-            </div>
-            <h3 className="font-headline-sm text-[14.5px] text-white font-extrabold">
-              🧹 중복·연사(dHash) 및 흔들림 진단
-            </h3>
-            <p className="font-body-sm text-[11.5px] text-on-surface-variant leading-relaxed">
-              파일명이 다른 카톡 중복 사본/연사 그룹({duplicateGroups.length}묶음)과 흔들린 사진 등 정리 대상{' '}
-              <strong className="text-emerald-300">{activeTrashCount}장</strong>을 에이전트 자체에서 초고속 산출했습니다.
-            </p>
-          </div>
-
-          {/* 타겟 2: 최신 서류/문서 역추적 */}
-          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-[#FFAB00]/45 flex flex-col justify-between gap-2">
-            <div className="flex items-center justify-between">
-              <span className="px-2.5 py-0.5 rounded-full bg-[#FFAB00]/20 text-[#FFAB00] font-label-mono text-[10px] font-black">
-                Gemma 2 정밀 인덱싱 ①
-              </span>
-              <span className="font-label-mono text-[11px] text-[#FFAB00] font-bold">
-                {totalIndexedDocs} / {totalIndexedDocs}건 완료
-              </span>
-            </div>
-            <h3 className="font-headline-sm text-[14.5px] text-white font-extrabold">
-              📄 최신 서류/문서 {totalIndexedDocs}건 역추적
-            </h3>
-            <p className="font-body-sm text-[11.5px] text-on-surface-variant leading-relaxed">
-              다운로드·바탕화면 문서(`PDF/TXT/DOCX` {localDocuments.length}건)와 갤러리 영수증·설명서·신분증({vaultPhotoCount}장) 총{' '}
-              <strong className="text-[#FFAB00]">{totalIndexedDocs}건</strong>의 본문과 표/도면을 색인했습니다.
-            </p>
-          </div>
-
-          {/* 타겟 3: 최신 동영상 00:00부터 끝까지 전 구간(Full-Timeline) 완전 해부 */}
-          <div className="p-3.5 rounded-2xl bg-surface-container-low border-2 border-primary-container/60 flex flex-col justify-between gap-2 shadow-[0_0_20px_rgba(0,229,255,0.12)]">
-            <div className="flex items-center justify-between">
-              <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-mono text-[10px] font-black">
-                Full-Timeline 완전 해부 ②
-              </span>
-              <span className="font-label-mono text-[11px] text-primary-container font-bold">
-                {videoSceneItems.length}개 영상 · 총 {totalDissectedTimelineSegments}구간 완료
-              </span>
-            </div>
-            <h3 className="font-headline-sm text-[14.5px] text-white font-extrabold">
-              🎬 최신 동영상 {videoSceneItems.length}개 전 구간(00:00~끝) 해부
-            </h3>
-            <p className="font-body-sm text-[11.5px] text-on-surface-variant leading-relaxed">
-              수박 겉핥기 대신 최신 동영상 <strong className="text-primary-container">{videoSceneItems.length}개</strong>를 선정해 처음(00:00)부터 끝까지{' '}
-              <strong className="text-emerald-300">2~3초 단위로 촘촘하게 총 {totalDissectedTimelineSegments}개 구간</strong>을 100% 완전 해부했습니다!
-            </p>
-          </div>
-        </div>
-
-        {/* 5) 실시간 벡터 변환 비주얼라이저 + 해부된 동영상 미니 요약 */}
-        <div className="relative rounded-2xl bg-surface-container-lowest/90 border border-primary-container/25 overflow-hidden h-32 flex items-center justify-center shadow-inner">
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-
-          <div className="relative z-10 flex items-center gap-3.5 px-4 py-2 rounded-2xl bg-surface-container/90 backdrop-blur-xl border border-primary-container/40 shadow-[0_0_24px_rgba(0,229,255,0.25)]">
-            <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-surface-container-highest shrink-0 border border-primary-container/50">
-              <img
-                src={currentPhotoThumb}
-                alt={currentPhotoName}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="font-label-mono text-[10.5px] text-primary-container font-bold">
-                {onboardingTrackMode === 'pc_local'
-                  ? `내 PC 로컬 구동(Merlin_Z_Core_Setup.exe) 768D 벡터 변환 중 (${percent.toFixed(0)}%) • 외부 전송 0 Byte`
-                  : `Ghosti 초고속 GPU 서버 768D 벡터화 ➔ 0.1초 내 RAM 즉시 자동 소각 (${percent.toFixed(0)}%)`}
-              </span>
-              <span className="font-label-md text-[12px] text-on-surface font-bold truncate">
-                {currentPhotoName}
-              </span>
-              <span className="font-label-mono text-[10px] text-emerald-300 truncate">
-                {dynamicVideoBreakdownSummary}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 6) 모달 내부에서 바로 눌러보는 서류 & 동영상 전 구간 힌트 칩 */}
-        <div className="p-3.5 rounded-2xl bg-surface-container-low/95 border border-outline-variant/30 flex flex-col gap-2">
-          <span className="font-headline-sm text-[13px] text-white font-extrabold">
-            👇 아래 추천 힌트를 클릭하거나, 브리핑 보드에서 영상 속 어떤 사물·행동이든 자유 검색해 보세요:
-          </span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1">
-              <span className="font-label-sm text-[11px] text-[#FFAB00] font-extrabold">
-                📄 [서류 내용 힌트 칩] (최근 서류 {totalIndexedDocs}건 중 추출)
-              </span>
-              {dynamicTrialDocHints.map((q) => (
+            {/* 체험 ⑤: F1~F5 내 상용구 실시간 저장 (Z-코어 127.0.0.1:5199 직결) */}
+            <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-amber-400/35 flex flex-col gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-extrabold text-white">
+                    ⑤ ⌨️ F1 ~ F5 내 상용구 등록 (저장 즉시 Ctrl + 0 ➔ F1~F5로 0.1초 입력)
+                  </span>
+                </div>
                 <button
-                  key={q}
+                  type="button"
+                  onClick={() => void handleSaveSnippets()}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black cursor-pointer"
+                >
+                  💾 내 PC Z-코어에 상용구 즉시 저장
+                </button>
+              </div>
+
+              {snippetSavedMsg && (
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[11.5px] font-bold">
+                  {snippetSavedMsg}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
+                {(['F1', 'F2', 'F3', 'F4', 'F5'] as const).map((key) => (
+                  <div key={key} className="flex flex-col gap-1">
+                    <span className="text-[10.5px] font-mono text-amber-300 font-bold">
+                      {key} 단축 슬롯
+                    </span>
+                    <input
+                      type="text"
+                      value={snippets[key] || ''}
+                      onChange={(e) =>
+                        setSnippets((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-950 border border-white/15 text-[11.5px] text-white outline-none focus:border-amber-400"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────
+            [탭 3] 👨‍👩‍👧‍👦 기기 묶기 & 공유방 (무료 vs 구독 혜택 1초 비교)
+           ───────────────────────────────────────────────────────────── */}
+        {activeTab === 'tab3_share_pro' && (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 좌측: 🆓 무료 회원 (내 기기 1대 평생 0원) */}
+              <div className="p-5 rounded-2xl bg-zinc-900/90 border border-white/15 flex flex-col justify-between gap-4">
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="px-3 py-1 rounded-full bg-zinc-800 text-zinc-200 text-[11.5px] font-extrabold">
+                      🆓 무료 회원 (내 기기 1대 단독 사용)
+                    </span>
+                    <span className="text-[14px] font-black text-teal-300">평생 0원</span>
+                  </div>
+                  <h3 className="text-[17px] font-extrabold text-white">
+                    혼자 쓰는 내 컴퓨터·내 폰 1대는 언제나 무료입니다
+                  </h3>
+                  <ul className="text-[12.5px] text-zinc-300 space-y-2 leading-relaxed pt-1">
+                    <li>
+                      ✅ <strong className="text-white">🎯 귀신같이 찾기</strong>: 내 기기 1대 안의 사진·서류·동영상 1초 AI 내용검색 <strong className="text-teal-300">평생 무제한 무료</strong>
+                    </li>
+                    <li>
+                      ✅ <strong className="text-white">🪄 손보기 (치우기 + 고치기)</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
+                    </li>
+                    <li>
+                      🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: 기기당 <strong className="text-amber-300">1주일(7일) 전 기능 무료체험</strong> 제공
+                    </li>
+                  </ul>
+                </div>
+
+                <button
                   type="button"
                   onClick={() => {
                     cancelOnboardingIndexing();
                     setShowOnboarding(false);
-                    void runBriefingHintChip('doc', q);
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-bright border border-[#FFAB00]/40 text-left font-label-md text-[12px] text-on-surface font-bold truncate transition-all"
+                  className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12.5px] font-bold cursor-pointer"
                 >
-                  📄 “{q}”
+                  내 기기 1대 무료 모드로 계속 쓰기
                 </button>
-              ))}
-            </div>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <span className="font-label-sm text-[11px] text-primary-container font-extrabold">
-                🎬 [동영상 {videoSceneItems.length}개 전 구간 해부 힌트 칩] (클릭 시 해당 초(Sec) 구간 포착)
-              </span>
-              {dynamicTrialVideoHints.map((q) => (
+              {/* 우측: 👑 구독 회원 (2대 이상 기기 묶기 + 가족·팀 공유방 + 초능력 평생 무료) */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-zinc-900 to-zinc-900 border-2 border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)] flex flex-col justify-between gap-4">
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="px-3 py-1 rounded-full bg-emerald-400 text-zinc-950 text-[11.5px] font-black">
+                      👑 구독 회원 (기기 묶기 &amp; 공유방 방장)
+                    </span>
+                    <span className="text-[12px] font-extrabold text-emerald-300">
+                      초대받은 가족·팀원은 전원 0원!
+                    </span>
+                  </div>
+                  <h3 className="text-[17px] font-extrabold text-white">
+                    2대 이상 기기를 하나로 묶고, 초능력 팩을 평생 소장하세요
+                  </h3>
+                  <ul className="text-[12.5px] text-zinc-200 space-y-2 leading-relaxed pt-1">
+                    <li>
+                      🚀 <strong className="text-emerald-300">내 기기 2대 이상 묶기 (Cross-Device)</strong>: 내 스마트폰 ↔ 집 PC ↔ 사무실 PC를 하나로 묶어 어디서나 내 모든 기기의 사진·문서를 1초 만에 찾고 가져옵니다.
+                    </li>
+                    <li>
+                      👨‍👩‍👧‍👦 <strong className="text-emerald-300">가족·모임·업무 공유방 개설</strong>: 방장 한 분만 구독하면 초대받은 부모님·배우자·동호회원·직원은 <strong className="text-white">아무 결제 없이 100% 무료</strong>로 함께 공유합니다.
+                    </li>
+                    <li>
+                      👻 <strong className="text-amber-300">귀신 초능력 팩(Ctrl + 0) 전 기기 평생 무료</strong>: 7일 체험 제한이 즉시 해제되며, 집 PC와 회사 PC 모두에서 한영 오타 둔갑술과 <code className="text-white">Ctrl + 0</code> 초능력을 평생 무제한 사용합니다!
+                    </li>
+                  </ul>
+                </div>
+
                 <button
-                  key={q}
                   type="button"
                   onClick={() => {
                     cancelOnboardingIndexing();
                     setShowOnboarding(false);
-                    void runBriefingHintChip('video', q);
+                    setShowProModal(true);
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-bright border border-primary-container/40 text-left font-label-md text-[12px] text-on-surface font-bold truncate transition-all"
+                  className="w-full py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[13px] font-black shadow-[0_0_20px_rgba(16,185,129,0.35)] cursor-pointer"
                 >
-                  🎬 “{q}”
+                  👑 기기 묶기 · 공유방 요금제 보기 (구독 시 초능력 평생 무료) →
                 </button>
-              ))}
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* 7) 하단 액션 & 전환 유도 */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
-          <button
-            type="button"
-            onClick={() => {
-              if (onboardingRunning) cancelOnboardingIndexing();
-              else void startOnboardingIndexing();
-            }}
-            className="px-4 py-2 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary-container font-label-md text-[12px] font-extrabold border border-primary-container/40 flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[17px]">
-              {onboardingRunning ? 'pause_circle' : 'replay'}
-            </span>
-            <span>
-              {onboardingRunning ? '고속 스캔 일시정지' : '1분 고속 체험 스캔 과정 다시 시연'}
-            </span>
-          </button>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowOnboarding(false);
-                setShowProModal(true);
-              }}
-              className="px-4 py-2 rounded-full bg-[#FFAB00] hover:bg-[#FFC400] text-surface-container-lowest font-label-md text-[12px] font-black shadow-[0_0_16px_rgba(255,171,0,0.4)]"
-            >
-              👑 나머지 10년 치 전체 연결 · 요금제 보기
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                cancelOnboardingIndexing();
-                setShowOnboarding(false);
-              }}
-              className="px-5 py-2 rounded-full bg-primary-container text-on-primary-container font-label-lg text-[12.5px] font-black shadow-[0_0_20px_rgba(0,229,255,0.4)]"
-            >
-              체험 완료 브리핑 보드에서 자유 검색하기 →
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

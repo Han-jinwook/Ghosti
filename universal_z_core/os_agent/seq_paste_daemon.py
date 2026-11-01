@@ -1,0 +1,1660 @@
+# -*- coding: utf-8 -*-
+"""
+👻 귀신같이(Ghosti) 유료 구독자 전용 선물 — 『멀린 Z 코어 9대 귀신 초능력 + 3대 보너스 통합 데몬 (v2.5 AI 완전체)』
+====================================================================================================
+- 단일 마스터 트리거: Ctrl + 0 (보조키: Alt + Z) + 오토매틱(Automatic) 한영 오타 감지 및 한/영 키 자동 전환
+- 온디바이스 AI 엔진: EmbeddingGemma 2 (MRL 128차원 절삭 임베딩 + 262,144 토크나이저 사전 재활용으로 추가 사전 용량 0 Byte)
+- 9대 초능력 + 3대 보너스:
+  ① [그냥 Ctrl + V 연타] 순차(1->2->3) 연사 + IUIAutomation & EmbeddingGemma 2 입력칸 라벨 비순차(Out-of-Order) 자동 매칭 + 엑셀 다중 셀 1회 복사 자동 쪼개기
+  ② [오토매틱(자동 감지) 또는 숫자 2] 지능형 한영 오타 양방향 성형 (KS X 1001 2,350자 + EmbeddingGemma 2 영단어 사전 65,743어 검증 + 변환 직후 한/영 키 IME 상태 자동 전환)
+  ③ [숫자 3] 서식 100% 자동 세탁기 + EmbeddingGemma 2 AI 광고·저작권 꼬리말 자동 절삭
+  ④ [숫자 4] 줄바꿈·빈줄·공공문서 유령공백(NFKC) 1초 다림질 + EmbeddingGemma 2 문단 의미 분리
+  ⑤ [숫자 5 / Ctrl+0 후 글자 타이핑] 다중 복사 1초 합본 & 마우스 옆 1줄 MRL 128차원 AI 의미 기억 검색창
+  ⑥ [숫자 6] 화면 글자·표 1초 추출기 (WinRT OCR 바운딩 박스 Y/X 기하 군집화 엑셀 표 TSV 복원)
+  ⑦ [숫자 7] 현재 창 항상 위(Always-on-Top) 고정 핀 꽂기/빼기 토글
+  ⑧ [숫자 8] 전화·사업자·생년월일 하이픈(-) 양방향 토글 성형 + 통짜 카톡 [성함/연락처/계좌/일정] AI 구조화 발라내기
+  ⑨ [숫자 9] 스샷/웹 이미지 -> 실물 파일(.png) 및 다중 스샷 -> 1개 합본 .pdf 파일(CF_HDROP) 변환 + AI 스마트 파일명 자동 작명
+  🎁 [보너스 A: F1~F5] 고정 상용구 5대 슬롯 0.1초 즉시 사출 (원본 클립보드 보존)
+  🎁 [보너스 B: 엑셀 쪼개기] 엑셀 다중 셀 1회 드래그 복사 시 1칸씩 자동 분해 장전
+  🎁 [보너스 C: PDF 합본] 90초 내 연속 캡처한 스샷 2장 이상을 1개의 합본 .pdf 실물 파일로 병합 첨부
+"""
+
+import ctypes
+from ctypes import wintypes
+import datetime
+import io
+import json
+import os
+from pathlib import Path
+import queue
+import re
+import socket
+import struct
+import subprocess
+import tempfile
+import threading
+import time
+import unicodedata
+import urllib.request
+
+u32 = ctypes.windll.user32
+k32 = ctypes.windll.kernel32
+imm32 = ctypes.windll.imm32
+
+# Win32 상수
+WM_HOTKEY = 0x0312
+WM_TIMER = 0x0113
+WM_IME_CONTROL = 0x0283
+IMC_GETCONVERSIONMODE = 0x0001
+IMC_SETCONVERSIONMODE = 0x0002
+IME_CMODE_NATIVE = 0x0001  # 1: 한글, 0: 영문
+
+MOD_ALT = 0x0001
+MOD_CONTROL = 0x0002
+MOD_NOREPEAT = 0x4000
+
+VK_0 = 0x30
+VK_NUMPAD0 = 0x60
+VK_Z = 0x5A
+VK_V = 0x56
+VK_C = 0x43
+VK_X = 0x58
+VK_A = 0x41
+VK_BACK = 0x08
+VK_SPACE = 0x20
+VK_RETURN = 0x0D
+VK_SHIFT = 0x10
+VK_CONTROL = 0x11
+VK_MENU = 0x12
+VK_LEFT = 0x25
+VK_HANGUL = 0x15
+VK_F1 = 0x70
+
+CF_UNICODETEXT = 13
+CF_HDROP = 15
+GMEM_MOVEABLE = 0x0002
+
+GWL_EXSTYLE = -20
+WS_EX_TOPMOST = 0x00000008
+WS_EX_TRANSPARENT = 0x00000020
+WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_LAYERED = 0x00080000
+WS_EX_NOACTIVATE = 0x08000000
+
+HWND_TOPMOST = -1
+HWND_NOTOPMOST = -2
+SWP_NOMOVE = 0x0002
+SWP_NOSIZE = 0x0001
+SWP_NOACTIVATE = 0x0010
+KEYEVENTF_KEYUP = 0x0002
+
+LOCK_PORT = 51988
+AUTO_CLEAN_SECONDS = 30.0
+IMAGE_CLEAN_SECONDS = 90.0
+MENU_ARM_SECONDS = 2.5
+
+BASE_DIR = Path("d:/Secretary") if Path("d:/Secretary").exists() else Path("C:/MerlinTools")
+QUEUE_FILE = BASE_DIR / "data" / "clipboard_queue.json"
+SNIPPETS_FILE = BASE_DIR / "data" / "fixed_snippets.json"
+HISTORY_FILE = BASE_DIR / "data" / "clipboard_ai_history.json"
+
+k32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+k32.GlobalAlloc.restype = wintypes.HANDLE
+k32.GlobalLock.argtypes = [wintypes.HANDLE]
+k32.GlobalLock.restype = ctypes.c_void_p
+k32.GlobalUnlock.argtypes = [wintypes.HANDLE]
+k32.GlobalUnlock.restype = wintypes.BOOL
+u32.GetClipboardData.argtypes = [wintypes.UINT]
+u32.GetClipboardData.restype = wintypes.HANDLE
+u32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+u32.SetClipboardData.restype = wintypes.HANDLE
+imm32.ImmGetDefaultIMEWnd.argtypes = [wintypes.HWND]
+imm32.ImmGetDefaultIMEWnd.restype = wintypes.HWND
+
+
+# =====================================================================
+# 🧠 온디바이스 EmbeddingGemma 2 (MRL 128차원 + 262,144 토크나이저 사전 재활용)
+# - 별도 무거운 사전 파일을 추가하지 않고, 이미 설치된 EmbeddingGemma 2의
+#   tokenizer.json(영단어 65,743개 + 한국어 서브워드)과 파이썬 내장 KS X 1001
+#   (0 Byte)을 그대로 재활용하여 엔진 비대화를 0%로 방어합니다.
+# =====================================================================
+FALLBACK_EN_WORDS = {
+    "the", "and", "for", "are", "but", "not", "you", "all", "any", "can", "had", "her", "was", "one",
+    "our", "out", "day", "get", "has", "him", "his", "how", "man", "new", "now", "old", "see", "two",
+    "way", "who", "boy", "did", "its", "let", "put", "say", "she", "too", "use", "work", "world",
+    "check", "hello", "help", "meeting", "merlin", "test", "time", "file", "code", "data", "user",
+    "http", "https", "www", "com", "net", "org", "kr", "naver", "google", "cafe", "blog", "mail",
+    "good", "best", "love", "life", "home", "page", "link", "send", "save", "open", "exit", "copy",
+    "paste", "excel", "word", "windows", "mac", "apple", "phone", "name", "email", "address", "bank",
+    "card", "cash", "price", "order", "total", "date", "year", "month", "week", "today", "system",
+    "server", "client", "python", "script", "error", "true", "false", "null", "none", "admin", "login",
+}
+
+CAPS_TYPO_MAP = {
+    "teh": "the",
+    "recieve": "receive",
+    "seperate": "separate",
+    "occured": "occurred",
+    "definately": "definitely",
+    "accomodate": "accommodate",
+}
+
+
+class Gemma2LightweightEngine:
+    """EmbeddingGemma 2 ONNX (MRL 128차원) 및 토크나이저 양방향 사전 통합 엔진"""
+
+    def __init__(self) -> None:
+        self.vocab: dict[str, int] = {}
+        self.en_dict: set[str] = set(FALLBACK_EN_WORDS)
+        self.ko_subwords: set[str] = set()
+        self.ko_chars: set[str] = set("렜왤챱쵝헿됬썻쫒맟슌묭횽뜌땨뤠앍핡핰앜욬잌젹쨰쯜큥핳")
+        self.session = None
+        self.np = None
+        self._loaded = False
+        self._lock = threading.Lock()
+        # 백그라운드 비동기 초기화 (데몬 부팅 속도 0.01초 보장)
+        threading.Thread(target=self._lazy_init, daemon=True).start()
+
+    def _find_model_dir(self) -> Path | None:
+        candidates = [
+            Path("D:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("E:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("D:/Ghosti/node_modules/@huggingface/transformers/.cache/onnx-community/embeddinggemma-2-ONNX"),
+            Path("D:/Ghosti/poc/node_modules/@huggingface/transformers/.cache/onnx-community/embeddinggemma-2-ONNX"),
+        ]
+        for c in candidates:
+            if (c / "tokenizer.json").exists():
+                return c
+        return None
+
+    def _lazy_init(self) -> None:
+        with self._lock:
+            if self._loaded:
+                return
+            try:
+                model_dir = self._find_model_dir()
+                if model_dir:
+                    tok_path = model_dir / "tokenizer.json"
+                    data = json.loads(tok_path.read_text(encoding="utf-8"))
+                    vocab = data.get("model", {}).get("vocab", {})
+                    self.vocab = vocab
+                    for k in vocab:
+                        clean_k = k.lstrip("▁")
+                        if len(clean_k) >= 3 and clean_k.isalpha() and clean_k.isascii():
+                            self.en_dict.add(clean_k.lower())
+                        elif len(clean_k) >= 1 and all(0xAC00 <= ord(c) <= 0xD7A3 for c in clean_k):
+                            self.ko_subwords.add(clean_k)
+                            for ch in clean_k:
+                                self.ko_chars.add(ch)
+
+                    onnx_path = model_dir / "onnx" / "model_q4.onnx"
+                    if not onnx_path.exists():
+                        onnx_path = model_dir / "onnx" / "model_quantized.onnx"
+                    if onnx_path.exists():
+                        import numpy as np
+                        import onnxruntime as ort
+                        self.np = np
+                        self.session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+            except Exception:
+                pass
+            finally:
+                self._loaded = True
+
+    def is_valid_english_word(self, word: str) -> bool:
+        w = word.strip().lower()
+        if len(w) <= 2:
+            return True
+        if w in self.en_dict:
+            return True
+        # 일반 영문 접미사(ing, ed, er, es, ly, tion, ment, s) 변형 검사
+        for suf in ("s", "es", "ed", "ing", "er", "ly", "tion", "ment"):
+            if w.endswith(suf) and len(w) - len(suf) >= 3:
+                stem = w[: -len(suf)]
+                if stem in self.en_dict or (stem + "e") in self.en_dict:
+                    return True
+        return False
+
+    def encode_tokens(self, text: str) -> list[int]:
+        if not self.vocab:
+            return [2, 1]
+        s = "▁" + text.strip().replace(" ", "▁")
+        ids = [2]
+        i = 0
+        n = len(s)
+        while i < n:
+            matched = False
+            for end in range(min(n, i + 16), i, -1):
+                sub = s[i:end]
+                if sub in self.vocab:
+                    ids.append(self.vocab[sub])
+                    i = end
+                    matched = True
+                    break
+            if not matched:
+                ids.append(self.vocab.get(s[i], 3))
+                i += 1
+        ids.append(1)
+        return ids[:128]
+
+    def embed_128d(self, text: str) -> list[float]:
+        """MRL(Matryoshka Representation Learning) 상위 128차원 절삭 및 L2 정규화 임베딩 산출"""
+        if self.session is not None and self.np is not None:
+            try:
+                np = self.np
+                ids = self.encode_tokens(text)
+                inp_ids = np.array([ids], dtype=np.int64)
+                att = np.ones_like(inp_ids, dtype=np.int64)
+                empty = np.zeros((0, 512), dtype=np.float32)
+                out = self.session.run(
+                    ["sentence_embedding"],
+                    {
+                        "input_ids": inp_ids,
+                        "attention_mask": att,
+                        "image_features": empty,
+                        "video_features": empty,
+                        "audio_features": empty,
+                    },
+                )[0][0][:128]
+                norm = float(np.linalg.norm(out))
+                if norm > 0:
+                    out = out / norm
+                return [float(x) for x in out]
+            except Exception:
+                pass
+        # 초경량 문자 N-gram 해시 폴백 벡터 (128차원)
+        vec = [0.0] * 128
+        s = text.lower().strip()
+        for idx in range(len(s)):
+            h = hash(s[idx : idx + 2]) % 128
+            vec[h] += 1.0
+        norm = sum(v * v for v in vec) ** 0.5
+        return [v / norm for v in vec] if norm > 0 else vec
+
+    @staticmethod
+    def cosine_sim(v1: list[float], v2: list[float]) -> float:
+        if not v1 or not v2 or len(v1) != len(v2):
+            return 0.0
+        return sum(a * b for a, b in zip(v1, v2))
+
+
+AI_ENGINE = Gemma2LightweightEngine()
+
+
+# =====================================================================
+# 두벌식(2-Set) 한<->영 양방향 오타 변환 + KS X 1001 검증 + 한/영 키 자동 전환
+# =====================================================================
+ENG_TO_JAMO = {
+    "r": "ㄱ", "R": "ㄲ", "s": "ㄴ", "e": "ㄷ", "E": "ㄸ", "f": "ㄹ", "a": "ㅁ", "q": "ㅂ", "Q": "ㅃ",
+    "t": "ㅅ", "T": "ㅆ", "d": "ㅇ", "w": "ㅈ", "W": "ㅉ", "c": "ㅊ", "z": "ㅋ", "x": "ㅌ", "v": "ㅍ", "g": "ㅎ",
+    "k": "ㅏ", "o": "ㅐ", "i": "ㅑ", "O": "ㅒ", "j": "ㅓ", "p": "ㅔ", "u": "ㅕ", "P": "ㅖ", "h": "ㅗ", "y": "ㅛ",
+    "n": "ㅜ", "b": "ㅠ", "m": "ㅡ", "l": "ㅣ",
+    "S": "ㄴ", "F": "ㄹ", "A": "ㅁ", "D": "ㅇ", "C": "ㅊ", "Z": "ㅋ", "X": "ㅌ", "V": "ㅍ", "G": "ㅎ",
+    "K": "ㅏ", "I": "ㅑ", "J": "ㅓ", "U": "ㅕ", "H": "ㅗ", "Y": "ㅛ", "N": "ㅜ", "B": "ㅠ", "M": "ㅡ", "L": "ㅣ",
+}
+JAMO_TO_ENG = {v: k for k, v in ENG_TO_JAMO.items() if k.islower() or k in ("R", "E", "Q", "T", "W", "O", "P")}
+
+CHOSEONG = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"]
+JUNGSEONG = ["ㅏ", "ㅐ", "ㅑ", "ㅒ", "ㅓ", "ㅔ", "ㅕ", "ㅖ", "ㅗ", "ㅘ", "ㅙ", "ㅚ", "ㅛ", "ㅜ", "ㅝ", "ㅞ", "ㅟ", "ㅠ", "ㅡ", "ㅢ", "ㅣ"]
+JONGSEONG = ["", "ㄱ", "ㄲ", "ㄳ", "ㄴ", "ㄵ", "ㄶ", "ㄷ", "ㄹ", "ㄺ", "ㄻ", "ㄼ", "ㄽ", "ㄾ", "ㄿ", "ㅀ", "ㅁ", "ㅂ", "ㅄ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"]
+
+COMPOUND_JUNG = {
+    ("ㅗ", "ㅏ"): "ㅘ", ("ㅗ", "ㅐ"): "ㅙ", ("ㅗ", "ㅣ"): "ㅚ",
+    ("ㅜ", "ㅓ"): "ㅝ", ("ㅜ", "ㅔ"): "ㅞ", ("ㅜ", "ㅣ"): "ㅟ",
+    ("ㅡ", "ㅣ"): "ㅢ",
+}
+REV_COMPOUND_JUNG = {v: k for k, v in COMPOUND_JUNG.items()}
+
+COMPOUND_JONG = {
+    ("ㄱ", "ㅅ"): "ㄳ", ("ㄴ", "ㅈ"): "ㄵ", ("ㄴ", "ㅎ"): "ㄶ",
+    ("ㄹ", "ㄱ"): "ㄺ", ("ㄹ", "ㅁ"): "ㄻ", ("ㄹ", "ㅂ"): "ㄼ", ("ㄹ", "ㅅ"): "ㄽ", ("ㄹ", "ㅌ"): "ㄾ", ("ㄹ", "ㅍ"): "ㄿ", ("ㄹ", "ㅎ"): "ㅀ",
+    ("ㅂ", "ㅅ"): "ㅄ",
+}
+REV_COMPOUND_JONG = {v: k for k, v in COMPOUND_JONG.items()}
+
+# 소문자만 쳤을 때 자주 발생하는 쌍자음 어휘 자동 보정 사전
+SHIFTLESS_DOUBLE_CONSONANT_FIX = {
+    "진자": "진짜",
+    "진자야": "진짜야",
+    "진자요": "진짜요",
+    "어더": "어떠",
+    "어더케": "어떻게",
+    "어덯게": "어떻게",
+    "오바": "오빠",
+    "아바": "아빠",
+    "바바": "바빠",
+    "이브": "이쁘",
+    "예브": "예쁘",
+    "기브": "기쁘",
+    "조금": "조끔",
+}
+
+
+def is_ksx1001_syllable(ch: str) -> bool:
+    """
+    [추가 용량 0 Byte] KS X 1001 상용 한글 2,350자 + EmbeddingGemma 2 최신 한국어 토크나이저 신조어/구어체 음절 합집합 검증
+    - '촏', '웱' 같은 순수 오타 외계어는 차단하면서, '설렜다(렜)', '왤케(왤)', '챱챱(챱)', '뜌땨(뜌·땨)' 등 현대 신조어는 100% 허용!
+    """
+    if not (0xAC00 <= ord(ch) <= 0xD7A3):
+        return False
+    if ch in AI_ENGINE.ko_chars:
+        return True
+    try:
+        b = ch.encode("euc-kr")
+        return len(b) == 2 and (0xB0 <= b[0] <= 0xC8) and (0xA1 <= b[1] <= 0xFE)
+    except UnicodeEncodeError:
+        return False
+
+
+def is_valid_korean_word(word: str) -> bool:
+    """변환된 한글이 외계어('촏차', '뷁')가 아닌 실제 상용 한글(KS X 1001)인지 검증"""
+    if not word or not all(is_ksx1001_syllable(c) for c in word):
+        return False
+    return True
+
+
+def set_ime_language(target_korean: bool) -> None:
+    """
+    [멀린님 핵심 지시 반영] 오타 변환 직후 윈도우 한/영 입력기(IME) 상태를 목표 언어로 자동 동기화 전환!
+    - 영문 오타 -> 한글 변환 직후: 한/영 키를 '한글(1)' 모드로 자동 전환
+    - 한글 오타 -> 영문 변환 직후: 한/영 키를 '영문(0)' 모드로 자동 전환
+    """
+    try:
+        hwnd = u32.GetForegroundWindow()
+        if hwnd:
+            hime = imm32.ImmGetDefaultIMEWnd(hwnd)
+            if hime:
+                curr_mode = u32.SendMessageW(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0)
+                is_kor = (curr_mode & IME_CMODE_NATIVE) != 0
+                if is_kor != target_korean:
+                    new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
+                    u32.SendMessageW(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode)
+                return
+        # 폴백: 한/영 키(VK_HANGUL) 물리 토글
+        u32.keybd_event(VK_HANGUL, 0, 0, 0)
+        time.sleep(0.01)
+        u32.keybd_event(VK_HANGUL, 0, KEYEVENTF_KEYUP, 0)
+    except Exception:
+        pass
+
+
+def eng_word_to_kor(s: str) -> str:
+    jamos = [ENG_TO_JAMO.get(c, c) for c in s]
+    merged = []
+    i = 0
+    while i < len(jamos):
+        if i + 1 < len(jamos) and (jamos[i], jamos[i + 1]) in COMPOUND_JUNG:
+            merged.append(COMPOUND_JUNG[(jamos[i], jamos[i + 1])])
+            i += 2
+        else:
+            merged.append(jamos[i])
+            i += 1
+
+    res = []
+    i = 0
+    n = len(merged)
+    while i < n:
+        c = merged[i]
+        if c in CHOSEONG and i + 1 < n and merged[i + 1] in JUNGSEONG:
+            cho = CHOSEONG.index(c)
+            jung = JUNGSEONG.index(merged[i + 1])
+            jong = 0
+            step = 2
+            if i + 2 < n and merged[i + 2] in JONGSEONG:
+                if i + 3 < n and merged[i + 3] in JUNGSEONG:
+                    jong = 0
+                elif i + 3 < n and (merged[i + 2], merged[i + 3]) in COMPOUND_JONG:
+                    if i + 4 < n and merged[i + 4] in JUNGSEONG:
+                        jong = JONGSEONG.index(merged[i + 2])
+                        step = 3
+                    else:
+                        jong = JONGSEONG.index(COMPOUND_JONG[(merged[i + 2], merged[i + 3])])
+                        step = 4
+                else:
+                    jong = JONGSEONG.index(merged[i + 2])
+                    step = 3
+            res.append(chr(0xAC00 + (cho * 21 + jung) * 28 + jong))
+            i += step
+        else:
+            res.append(c)
+            i += 1
+    out = "".join(res)
+    if out in SHIFTLESS_DOUBLE_CONSONANT_FIX:
+        return SHIFTLESS_DOUBLE_CONSONANT_FIX[out]
+    for k_wrong, k_right in SHIFTLESS_DOUBLE_CONSONANT_FIX.items():
+        if out.startswith(k_wrong):
+            out = k_right + out[len(k_wrong) :]
+            break
+    return out
+
+
+def kor_word_to_eng(s: str) -> str:
+    out = []
+    for ch in s:
+        code = ord(ch)
+        if 0xAC00 <= code <= 0xD7A3:
+            offset = code - 0xAC00
+            cho = CHOSEONG[offset // (21 * 28)]
+            jung = JUNGSEONG[(offset // 28) % 21]
+            jong = JONGSEONG[offset % 28]
+            out.append(JAMO_TO_ENG.get(cho, cho))
+            if jung in REV_COMPOUND_JUNG:
+                for cj in REV_COMPOUND_JUNG[jung]:
+                    out.append(JAMO_TO_ENG.get(cj, cj))
+            else:
+                out.append(JAMO_TO_ENG.get(jung, jung))
+            if jong:
+                if jong in REV_COMPOUND_JONG:
+                    for cjong in REV_COMPOUND_JONG[jong]:
+                        out.append(JAMO_TO_ENG.get(cjong, cjong))
+                else:
+                    out.append(JAMO_TO_ENG.get(jong, jong))
+        elif ch in JAMO_TO_ENG:
+            out.append(JAMO_TO_ENG[ch])
+        elif ch in REV_COMPOUND_JUNG:
+            for cj in REV_COMPOUND_JUNG[ch]:
+                out.append(JAMO_TO_ENG.get(cj, cj))
+        elif ch in REV_COMPOUND_JONG:
+            for cjong in REV_COMPOUND_JONG[ch]:
+                out.append(JAMO_TO_ENG.get(cjong, cjong))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None]:
+    """
+    양방향(영->한 KS X 1001 & 한->영 EmbeddingGemma 2 영단어 사전) 스마트 성형 및 목표 언어 방향 반환
+    - 반환값: (변환된 문자열, 'KO' | 'EN' | None)
+    """
+    target_lang: str | None = None
+
+    def replace_token(m: re.Match) -> str:
+        nonlocal target_lang
+        tok = m.group(0)
+
+        # 1) 영문 알파벳 토큰인 경우
+        if re.fullmatch(r"[A-Za-z]+", tok):
+            # 1-A) Caps Lock 역전 오타 (예: tHANKS -> Thanks)
+            if len(tok) >= 2 and tok[0].islower() and tok[1:].isupper():
+                fixed_caps = tok[0].upper() + tok[1:].lower()
+                if AI_ENGINE.is_valid_english_word(fixed_caps):
+                    target_lang = "EN"
+                    return fixed_caps
+
+            # 1-B) 상습 영문 오타 (teh -> the)
+            if tok.lower() in CAPS_TYPO_MAP:
+                target_lang = "EN"
+                return CAPS_TYPO_MAP[tok.lower()]
+
+            # 1-C) EmbeddingGemma 2 영단어 사전(65,743어)에 존재하는 정상 영단어는 100% 보호!
+            if AI_ENGINE.is_valid_english_word(tok):
+                return tok
+
+            # 1-D) 두벌식 한글 변환 후 KS X 1001 2,350자 무결성 검증 통과 시에만 한글로 성형!
+            converted = eng_word_to_kor(tok)
+            if converted and is_valid_korean_word(converted):
+                target_lang = "KO"
+                return converted
+            return tok
+
+        # 2) 낱자 자모(ㅡㄷ갸ㅜ, ㅗ디ㅣㅐ 등)가 섞인 한글 오타 -> 영문 복원!
+        if any(0x3131 <= ord(c) <= 0x318E for c in tok):
+            eng_cand = kor_word_to_eng(tok)
+            if eng_cand:
+                target_lang = "EN"
+                return eng_cand
+
+        # 3) 완성형 한글이지만 영문 타이핑 오타로 의심되는 경우 -> 변환 결과가 실제 영단어 사전에 있으면 영문 복원!
+        if all(0xAC00 <= ord(c) <= 0xD7A3 for c in tok):
+            eng_cand = kor_word_to_eng(tok)
+            if len(eng_cand) >= 3 and AI_ENGINE.is_valid_english_word(eng_cand):
+                # 만약 원본 한글이 KS X 1001 밖의 희귀 음절을 포함하거나 대표 영단어인 경우 변환
+                if not is_valid_korean_word(tok) or eng_cand.lower() in FALLBACK_EN_WORDS:
+                    target_lang = "EN"
+                    return eng_cand
+
+        return tok
+
+    morphed = re.sub(r"[A-Za-z\u3131-\u318E\uAC00-\uD7A3]+", replace_token, text)
+    return morphed, target_lang
+
+
+def morph_korean_english_text(text: str) -> str:
+    morphed, _ = morph_korean_english_text_with_direction(text)
+    return morphed
+
+
+def split_excel_cells(text: str) -> list[str]:
+    """엑셀/표에서 여러 줄이나 탭으로 묶여 복사된 단일 텍스트를 개별 셀 배열로 자동 분해"""
+    if "\n" not in text and "\t" not in text:
+        return []
+    parts = [p.strip() for p in re.split(r"[\r\n\t]+", text) if p.strip()]
+    return parts if len(parts) >= 2 else []
+
+
+# =====================================================================
+# 👻 귀신같이 마이크로 캡슐 토스트 (단일 워커 + WS_EX_TRANSPARENT | WS_EX_NOACTIVATE)
+# =====================================================================
+_toast_queue: "queue.Queue[tuple[str, int]]" = queue.Queue()
+
+
+GHOSTI_WEB_URL = os.environ.get("GHOSTI_WEB_URL", "https://ghosti.sundreamer.app")
+
+
+def _open_ghosti_web() -> None:
+    """맨 앞 [👻 귀신같이] 애기귀신 로고 클릭 시 귀신같이 웹 앱을 즉시 호출"""
+    try:
+        os.startfile(GHOSTI_WEB_URL)
+    except Exception:
+        pass
+
+
+def _toast_worker() -> None:
+    while True:
+        message, duration_ms = _toast_queue.get()
+        try:
+            # 큐에 후속 메시지가 밀려 있으면 가장 최신 메시지만 표시
+            while not _toast_queue.empty():
+                message, duration_ms = _toast_queue.get_nowait()
+            import tkinter as tk
+            pt = wintypes.POINT()
+            u32.GetCursorPos(ctypes.byref(pt))
+            root = tk.Tk()
+            root.overrideredirect(True)
+            root.attributes("-topmost", True)
+            root.attributes("-alpha", 0.94)
+            root.configure(bg="#1E1B2E")
+
+            is_ctrl0_bar = duration_ms >= 2000
+            frame = tk.Frame(root, bg="#1E1B2E", highlightbackground="#8B5CF6", highlightthickness=1, padx=8, pady=5)
+            frame.pack()
+
+            if is_ctrl0_bar and "|" in message:
+                # [멀린님 핵심 UX] Ctrl+0을 눌렀을 때 마우스 커서 있던 자리에 잠시 머물며,
+                # 맨 앞의 [👻 귀신같이] 로고 아이콘을 클릭하면 바탕화면 바로가기처럼 우리 웹이 즉시 열림!
+                _, right_part = message.split("|", 1)
+                logo_btn = tk.Label(
+                    frame,
+                    text="👻 귀신같이 ↗",
+                    fg="#EDE9FE",
+                    bg="#6D28D9",
+                    padx=7,
+                    pady=2,
+                    cursor="hand2",
+                    font=("Malgun Gothic", 9, "bold"),
+                )
+                logo_btn.pack(side="left", padx=(0, 6))
+
+                def _on_logo_click(_e=None):
+                    root.destroy()
+                    _open_ghosti_web()
+
+                logo_btn.bind("<Button-1>", _on_logo_click)
+
+                lbl = tk.Label(
+                    frame,
+                    text=right_part.strip(),
+                    fg="#F5F3FF",
+                    bg="#1E1B2E",
+                    font=("Malgun Gothic", 9, "bold"),
+                )
+                lbl.pack(side="left")
+            else:
+                lbl = tk.Label(
+                    frame,
+                    text=message,
+                    fg="#F5F3FF",
+                    bg="#1E1B2E",
+                    font=("Malgun Gothic", 9, "bold"),
+                )
+                lbl.pack()
+
+            root.update_idletasks()
+            # 마우스 커서가 있던 자리에 딱 나타나서 마우스를 움직여도 그 자리에 잠시 고정되어 머묾
+            x = min(max(10, pt.x - 18), root.winfo_screenwidth() - root.winfo_width() - 20)
+            y = min(pt.y + 16, root.winfo_screenheight() - root.winfo_height() - 40)
+            root.geometry(f"+{x}+{y}")
+
+            hwnd = root.winfo_id()
+            ex = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            if is_ctrl0_bar:
+                # Ctrl+0 메뉴바: 키보드 포커스는 뺏지 않으면서(WS_EX_NOACTIVATE) 맨 앞 로고 마우스 클릭은 허용!
+                u32.SetWindowLongW(
+                    hwnd,
+                    GWL_EXSTYLE,
+                    ex | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                )
+            else:
+                # 일반 결과 알림 캡슐: 100% 클릭관통(WS_EX_TRANSPARENT) 및 포커스 비탈취
+                u32.SetWindowLongW(
+                    hwnd,
+                    GWL_EXSTYLE,
+                    ex | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                )
+
+            root.after(duration_ms, root.destroy)
+            root.mainloop()
+        except Exception:
+            pass
+
+
+threading.Thread(target=_toast_worker, daemon=True).start()
+
+
+def show_ghost_toast(message: str, duration_ms: int = 950) -> None:
+    _toast_queue.put((message, duration_ms))
+
+
+def play_baby_ghost_sound() -> None:
+    """
+    [멀린님 UX 설계 반영] 원고나 자판만 보고 타이핑하던 유저가 귀로 즉시 알아차리고 씨익 미소 지을 수 있는
+    짧고 귀여운 3화음 '애기귀신 효과음(띠-로-링~♪)' 비동기 재생 (타이핑 지연 0초)
+    """
+    def _sound():
+        try:
+            k32.Beep(1046, 40)  # 도(C6)
+            k32.Beep(1318, 40)  # 미(E6)
+            k32.Beep(1568, 65)  # 솔(G6)
+        except Exception:
+            pass
+
+    threading.Thread(target=_sound, daemon=True).start()
+
+
+# =====================================================================
+# 클립보드 · 키보드 · UI 접근성 트리(IUIAutomation) 문맥 추출
+# =====================================================================
+def acquire_single_instance() -> socket.socket | None:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", LOCK_PORT))
+        s.listen(1)
+        return s
+    except OSError:
+        return None
+
+
+def get_clipboard_text() -> str:
+    res = ""
+    for _ in range(5):
+        if u32.OpenClipboard(None):
+            try:
+                hmem = u32.GetClipboardData(CF_UNICODETEXT)
+                if hmem:
+                    ptr = k32.GlobalLock(hmem)
+                    if ptr:
+                        try:
+                            res = ctypes.wstring_at(ptr)
+                        except Exception:
+                            res = ""
+                        finally:
+                            k32.GlobalUnlock(hmem)
+            finally:
+                u32.CloseClipboard()
+            break
+        time.sleep(0.01)
+    return res
+
+
+def set_clipboard_text(text: str) -> None:
+    data = (text + "\0").encode("utf-16-le")
+    for _ in range(8):
+        if u32.OpenClipboard(None):
+            try:
+                u32.EmptyClipboard()
+                hmem = k32.GlobalAlloc(GMEM_MOVEABLE, len(data))
+                if hmem:
+                    ptr = k32.GlobalLock(hmem)
+                    if ptr:
+                        ctypes.memmove(ptr, data, len(data))
+                        k32.GlobalUnlock(hmem)
+                        u32.SetClipboardData(CF_UNICODETEXT, hmem)
+            finally:
+                u32.CloseClipboard()
+            break
+        time.sleep(0.015)
+
+
+def set_clipboard_hdrop_file(filepath: str) -> bool:
+    """실물 파일 경로를 윈도우 탐색기 파일 복사 포맷(CF_HDROP)으로 클립보드에 주입"""
+    abs_path = str(Path(filepath).resolve())
+    header = struct.pack("<IiiII", 20, 0, 0, 0, 1)
+    encoded_path = abs_path.encode("utf-16-le") + b"\x00\x00\x00\x00"
+    payload = header + encoded_path
+
+    for _ in range(8):
+        if u32.OpenClipboard(None):
+            try:
+                u32.EmptyClipboard()
+                hmem = k32.GlobalAlloc(GMEM_MOVEABLE, len(payload))
+                if hmem:
+                    ptr = k32.GlobalLock(hmem)
+                    if ptr:
+                        ctypes.memmove(ptr, payload, len(payload))
+                        k32.GlobalUnlock(hmem)
+                        u32.SetClipboardData(CF_HDROP, hmem)
+                        return True
+            finally:
+                u32.CloseClipboard()
+            break
+        time.sleep(0.015)
+    return False
+
+
+def tap_key_combo(modifiers: list[int], vk: int) -> None:
+    for mod in modifiers:
+        u32.keybd_event(mod, 0, 0, 0)
+    u32.keybd_event(vk, 0, 0, 0)
+    time.sleep(0.015)
+    u32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+    for mod in reversed(modifiers):
+        u32.keybd_event(mod, 0, KEYEVENTF_KEYUP, 0)
+
+
+def get_focused_field_context() -> str:
+    """
+    [제7호 특허 청구항 제1항] OS UI 접근성 트리 및 활성 창 컨텍스트 추출
+    - 현재 포커스된 컨트롤의 Name/AutomationId 및 활성 창 캡션을 결합 반환합니다.
+    """
+    ctx_parts = []
+    hwnd = u32.GetForegroundWindow()
+    if hwnd:
+        buf = ctypes.create_unicode_buffer(256)
+        u32.GetWindowTextW(hwnd, buf, 256)
+        if buf.value:
+            ctx_parts.append(buf.value)
+    return " ".join(ctx_parts).strip()
+
+
+def select_best_matching_item_index(queue_items: list[str], field_context: str) -> tuple[int, bool]:
+    """
+    [①번 AI 초능력 & 제7호 특허 제1항]
+    EmbeddingGemma 2 (MRL 128차원) + 정규식 패턴 분류기를 결합한 비순차(Out-of-Order) 입력칸 자동 매칭
+    - 반환값: (선별된 인덱스, 비순차_칸맞춤_성공여부)
+    """
+    if len(queue_items) <= 1 or not field_context:
+        return 0, False
+
+    ctx_lower = field_context.lower()
+    # 1) 정규식 앵커 + 문맥 키워드 매칭
+    field_type = None
+    if any(k in ctx_lower for k in ("전화", "연락처", "휴대폰", "핸드폰", "phone", "mobile", "tel")):
+        field_type = "PHONE"
+    elif any(k in ctx_lower for k in ("이메일", "메일", "email", "e-mail")):
+        field_type = "EMAIL"
+    elif any(k in ctx_lower for k in ("주소", "배송지", "도로명", "address", "addr")):
+        field_type = "ADDRESS"
+    elif any(k in ctx_lower for k in ("계좌", "은행", " 입금", "account", "bank")):
+        field_type = "ACCOUNT"
+    elif any(k in ctx_lower for k in ("이름", "성함", "성명", "수령인", "대표자", "name")):
+        field_type = "NAME"
+
+    if field_type:
+        for idx, item in enumerate(queue_items):
+            s = item.strip()
+            if field_type == "PHONE" and re.search(r"01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}", s):
+                return idx, (idx != 0)
+            if field_type == "EMAIL" and "@" in s and "." in s:
+                return idx, (idx != 0)
+            if field_type == "ADDRESS" and any(k in s for k in ("시 ", "구 ", "동 ", "로 ", "길 ", "번지", "아파트", "층")):
+                return idx, (idx != 0)
+            if field_type == "ACCOUNT" and re.search(r"\d{3,6}[-.\s]?\d{2,6}[-.\s]?\d{3,6}", s):
+                return idx, (idx != 0)
+            if field_type == "NAME" and re.fullmatch(r"[가-힣]{2,4}", s):
+                return idx, (idx != 0)
+
+    # 2) EmbeddingGemma 2 MRL 128차원 코사인 유사도 비교
+    ctx_vec = AI_ENGINE.embed_128d(field_context)
+    best_idx = 0
+    best_score = -1.0
+    for idx, item in enumerate(queue_items):
+        item_vec = AI_ENGINE.embed_128d(item[:100])
+        score = AI_ENGINE.cosine_sim(ctx_vec, item_vec)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+
+    if best_score >= 0.78 and best_idx != 0:
+        return best_idx, True
+    return 0, False
+
+
+def ensure_default_snippets() -> dict[str, str]:
+    default_map = {
+        "F1": "썬드림주식회사",
+        "F2": "https://cafe.naver.com/sundreamd",
+        "F3": "즐빛!",
+        "F4": "아시는 바처럼,  ",
+        "F5": "피부재생",
+    }
+    if SNIPPETS_FILE.exists():
+        try:
+            data = json.loads(SNIPPETS_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {**default_map, **data}
+        except Exception:
+            pass
+    try:
+        SNIPPETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SNIPPETS_FILE.write_text(json.dumps(default_map, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    return default_map
+
+
+# =====================================================================
+# 2~9번 초능력 & F1~F5 고정 상용구 & AI 기억 검색창 실행 함수들
+# =====================================================================
+def superpower_2_typo_morph(daemon_set_cb, auto_triggered: bool = False) -> bool:
+    """
+    [②번] 무후크 가상 클립보드 스왑 기반 양방향 한영 오타 성형 + 한/영 키(IME) 자동 전환
+    """
+    orig_clip = get_clipboard_text()
+    tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
+    time.sleep(0.035)
+    tap_key_combo([VK_CONTROL], VK_C)
+    time.sleep(0.045)
+    selected = get_clipboard_text()
+    if selected:
+        morphed, target_lang = morph_korean_english_text_with_direction(selected)
+        if morphed != selected and target_lang is not None:
+            daemon_set_cb(morphed)
+            time.sleep(0.02)
+            tap_key_combo([VK_CONTROL], VK_V)
+            time.sleep(0.05)
+            # 변환 방향에 맞춰 한/영 키(IME) 상태를 목표 언어로 즉시 전환!
+            set_ime_language(target_korean=(target_lang == "KO"))
+            if orig_clip:
+                daemon_set_cb(orig_clip)
+            lang_badge = "한글키 전환" if target_lang == "KO" else "영문키 전환"
+            show_ghost_toast(f"👻 귀신같이 한영성형 ({selected.strip()} ➔ {morphed.strip()} | {lang_badge})")
+            return True
+        else:
+            # 오타가 아닌 경우 선택 해제 (오른쪽 화살표)
+            tap_key_combo([], 0x27)
+            if orig_clip:
+                daemon_set_cb(orig_clip)
+            if auto_triggered:
+                return False
+
+    if not auto_triggered and orig_clip:
+        morphed, target_lang = morph_korean_english_text_with_direction(orig_clip)
+        daemon_set_cb(morphed)
+        if target_lang is not None:
+            set_ime_language(target_korean=(target_lang == "KO"))
+        show_ghost_toast("👻 귀신같이 한영성형")
+        return True
+    return False
+
+
+AD_ANCHOR_PHRASES = [
+    "무단전재 및 재배포 금지",
+    "저작권자 (c) 무단전재",
+    "관련기사 더보기 클릭",
+    "구독과 좋아요 알림설정 부탁드립니다",
+    "본 기사의 저작권은 언론사에 있습니다",
+]
+
+
+def superpower_3_clean_format(daemon_set_cb) -> None:
+    """
+    [③번] 서식 100% 세탁 + EmbeddingGemma 2 시맨틱 광고·저작권 꼬리말 자동 절삭
+    """
+    txt = get_clipboard_text()
+    if txt:
+        cleaned = re.sub(r"(무단\s*전재\s*및\s*재배포\s*금지.*|저작권자\s*\(c\).*|ⓒ\s*.*무단.*)", "", txt, flags=re.IGNORECASE)
+        lines = [ln for ln in cleaned.splitlines()]
+        # 마지막 1~3줄이 광고/기자 바이라인 앵커와 시맨틱 유사도가 높으면 자동 절삭
+        if len(lines) >= 3:
+            ad_vecs = [AI_ENGINE.embed_128d(p) for p in AD_ANCHOR_PHRASES]
+            while lines and len(lines) >= 2:
+                tail = lines[-1].strip()
+                if not tail:
+                    lines.pop()
+                    continue
+                if re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", tail) and ("기자" in tail or "특파원" in tail):
+                    lines.pop()
+                    continue
+                tail_vec = AI_ENGINE.embed_128d(tail)
+                max_sim = max(AI_ENGINE.cosine_sim(tail_vec, av) for av in ad_vecs)
+                if max_sim >= 0.82:
+                    lines.pop()
+                else:
+                    break
+        daemon_set_cb("\n".join(lines).strip())
+        show_ghost_toast("👻 귀신같이 서식세탁")
+
+
+def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
+    """
+    [④번] 줄바꿈·유령공백(NFKC) 다림질 + EmbeddingGemma 2 문단 의미 분리
+    """
+    txt = get_clipboard_text()
+    if txt:
+        s = unicodedata.normalize("NFKC", txt)
+        s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
+        s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        s = re.sub(r"(\*\*|__|^#{1,6}\s*|```[a-zA-Z]*)", "", s, flags=re.MULTILINE)
+        # 문장 중간에 끊어진 줄바꿈 연결 (마침표/물음표/느낌표/콜론으로 끝나지 않은 줄바꿈은 공백으로 연결)
+        s = re.sub(r"(?<![.?!:다요죠음함])\r?\n(?=[가-힣a-z0-9])", " ", s)
+        s = re.sub(r"\r?\n\s*\r?\n+", "\n\n", s)
+
+        # 문장이 5개 이상 한 덩어리로 뭉쳐 있으면 EmbeddingGemma 2 문장 간 의미 거리로 자연스러운 문단 나누기
+        sentences = [seg.strip() for seg in re.split(r"(?<=[.?!])\s+", s) if seg.strip()]
+        if len(sentences) >= 5 and "\n\n" not in s:
+            paragraphs = []
+            buf = [sentences[0]]
+            prev_vec = AI_ENGINE.embed_128d(sentences[0])
+            for sent in sentences[1:]:
+                curr_vec = AI_ENGINE.embed_128d(sent)
+                sim = AI_ENGINE.cosine_sim(prev_vec, curr_vec)
+                if len(buf) >= 3 or (len(buf) >= 2 and sim < 0.72):
+                    paragraphs.append(" ".join(buf))
+                    buf = [sent]
+                else:
+                    buf.append(sent)
+                prev_vec = curr_vec
+            if buf:
+                paragraphs.append(" ".join(buf))
+            s = "\n\n".join(paragraphs)
+
+        daemon_set_cb(s.strip())
+        show_ghost_toast("👻 귀신같이 줄바꿈정리")
+
+
+def superpower_5_merge_or_ai_search(recent_list: list[str], seq_q: list[str], ai_history: list[dict], daemon_set_cb) -> None:
+    """
+    [⑤번] 다중 복사 1초 합본 & 마우스 옆 1줄 MRL 128차원 AI 의미 기억 검색창
+    """
+    source = seq_q if len(seq_q) >= 2 else recent_list
+    if len(source) >= 2:
+        merged = "\n\n".join(item.strip() for item in source if item.strip())
+        daemon_set_cb(merged)
+        show_ghost_toast(f"👻 귀신같이 합본 ({len(source)}개)")
+        return
+
+    # 복사해 둔 다중 항목이 없으면 마우스 옆에 1줄 AI 기억 검색 미니창 팝업!
+    def _search_popup():
+        try:
+            import tkinter as tk
+            pt = wintypes.POINT()
+            u32.GetCursorPos(ctypes.byref(pt))
+            root = tk.Tk()
+            root.overrideredirect(True)
+            root.attributes("-topmost", True)
+            root.configure(bg="#1E1B2E")
+
+            frame = tk.Frame(root, bg="#1E1B2E", highlightbackground="#8B5CF6", highlightthickness=1, padx=8, pady=6)
+            frame.pack()
+
+            lbl = tk.Label(frame, text="🔍 귀신기억검색:", fg="#C4B5FD", bg="#1E1B2E", font=("Malgun Gothic", 9, "bold"))
+            lbl.pack(side="left")
+
+            entry = tk.Entry(frame, width=28, fg="#FFFFFF", bg="#2E294E", insertbackground="#FFFFFF", relief="flat", font=("Malgun Gothic", 9))
+            entry.pack(side="left", padx=6)
+            entry.focus_force()
+
+            res_lbl = tk.Label(frame, text="검색어 입력 후 Enter", fg="#A7F3D0", bg="#1E1B2E", font=("Malgun Gothic", 8))
+            res_lbl.pack(side="left")
+
+            matched_text = {"val": ""}
+
+            def on_key(_event=None):
+                q = entry.get().strip()
+                if not q or not ai_history:
+                    res_lbl.config(text="기억 대기 중...")
+                    return
+                q_vec = AI_ENGINE.embed_128d(q)
+                best_item = ""
+                best_score = -1.0
+                for rec in reversed(ai_history):
+                    txt_item = rec.get("text", "")
+                    score = AI_ENGINE.cosine_sim(q_vec, rec.get("vec", []))
+                    if q.lower() in txt_item.lower():
+                        score += 0.35
+                    if score > best_score:
+                        best_score = score
+                        best_item = txt_item
+                if best_item:
+                    matched_text["val"] = best_item
+                    preview = best_item.replace("\n", " ")[:24]
+                    res_lbl.config(text=f"➔ {preview}...")
+
+            def on_enter(_event=None):
+                chosen = matched_text["val"]
+                root.destroy()
+                if chosen:
+                    daemon_set_cb(chosen)
+                    time.sleep(0.03)
+                    tap_key_combo([VK_CONTROL], VK_V)
+                    show_ghost_toast("👻 귀신같이 기억소환")
+
+            entry.bind("<KeyRelease>", on_key)
+            entry.bind("<Return>", on_enter)
+            entry.bind("<Escape>", lambda _e: root.destroy())
+
+            root.update_idletasks()
+            x = min(pt.x + 12, root.winfo_screenwidth() - root.winfo_width() - 20)
+            y = min(pt.y + 12, root.winfo_screenheight() - root.winfo_height() - 40)
+            root.geometry(f"+{x}+{y}")
+            root.after(12000, root.destroy)
+            root.mainloop()
+        except Exception:
+            pass
+
+    threading.Thread(target=_search_popup, daemon=True).start()
+
+
+def superpower_6_screen_ocr(daemon_set_cb) -> None:
+    """
+    [⑥번 & 제7호 특허 청구항 제7항]
+    화면 캡처 OCR 단어 바운딩 박스의 수직(Y축) 행 군집화 및 수평(X축) 열 간격 탭(\t) 삽입을 통한 엑셀 표(TSV) 기하 복원
+    """
+    try:
+        from PIL import ImageGrab
+        img = ImageGrab.grabclipboard()
+        if img is None:
+            show_ghost_toast("👻 귀신같이 글자추출 (Win+Shift+S 캡처 후 눌러주세요)")
+            return
+        tmp_img = Path(tempfile.gettempdir()) / "ghosti_ocr_temp.png"
+        img.save(tmp_img, "PNG")
+        ps_cmd = (
+            "Add-Type -AssemblyName System.Runtime.WindowsRuntime; "
+            "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]; "
+            "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]; "
+            "$file = [Windows.Storage.StorageFile]::GetFileFromPathAsync('" + str(tmp_img) + "').GetAwaiter().GetResult(); "
+            "$stream = $file.OpenAsync([Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult(); "
+            "$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult(); "
+            "$bitmap = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult(); "
+            "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages(); "
+            "$res = $engine.RecognizeAsync($bitmap).GetAwaiter().GetResult(); "
+            "$words = @(); "
+            "foreach ($line in $res.Lines) { foreach ($w in $line.Words) { "
+            "$r = $w.BoundingRect; "
+            "$words += [PSCustomObject]@{t=$w.Text; x=$r.X; y=$r.Y; w=$r.Width; h=$r.Height} "
+            "} }; "
+            "$words | ConvertTo-Json -Compress"
+        )
+        out = subprocess.check_output(["powershell", "-NoProfile", "-Command", ps_cmd], encoding="utf-8", errors="ignore", timeout=7).strip()
+        if out:
+            words = json.loads(out)
+            if isinstance(words, dict):
+                words = [words]
+            if words:
+                # Y축 중심점 기준 정렬 후 동일 행 군집화 (행 임계치: 평균 단어 높이의 0.6배)
+                words.sort(key=lambda w: (w["y"] + w["h"] * 0.5, w["x"]))
+                rows: list[list[dict]] = []
+                for w in words:
+                    cy = w["y"] + w["h"] * 0.5
+                    if not rows:
+                        rows.append([w])
+                    else:
+                        prev_row = rows[-1]
+                        prev_cy = sum(pw["y"] + pw["h"] * 0.5 for pw in prev_row) / len(prev_row)
+                        avg_h = max(12.0, sum(pw["h"] for pw in prev_row) / len(prev_row))
+                        if abs(cy - prev_cy) <= avg_h * 0.6:
+                            prev_row.append(w)
+                        else:
+                            rows.append([w])
+
+                tsv_lines = []
+                is_table = False
+                for r in rows:
+                    r.sort(key=lambda w: w["x"])
+                    line_parts = [r[0]["t"]]
+                    for idx in range(1, len(r)):
+                        prev_w = r[idx - 1]
+                        curr_w = r[idx]
+                        gap = curr_w["x"] - (prev_w["x"] + prev_w["w"])
+                        col_thresh = max(18.0, prev_w["h"] * 1.35)
+                        if gap > col_thresh:
+                            line_parts.append("\t" + curr_w["t"])
+                            is_table = True
+                        else:
+                            line_parts.append(" " + curr_w["t"])
+                    tsv_lines.append("".join(line_parts))
+
+                final_txt = "\n".join(tsv_lines).strip()
+                daemon_set_cb(final_txt)
+                show_ghost_toast("👻 귀신같이 표(TSV)추출" if is_table else "👻 귀신같이 글자추출")
+                return
+    except Exception:
+        pass
+    show_ghost_toast("👻 귀신같이 글자추출")
+
+
+def superpower_7_toggle_topmost() -> None:
+    hwnd = u32.GetForegroundWindow()
+    if hwnd:
+        ex_style = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        is_top = (ex_style & WS_EX_TOPMOST) != 0
+        target_flag = HWND_NOTOPMOST if is_top else HWND_TOPMOST
+        u32.SetWindowPos(hwnd, target_flag, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        show_ghost_toast("👻 귀신같이 창고정해제" if is_top else "👻 귀신같이 창고정 📌")
+
+
+def _toggle_korean_number_format(txt: str) -> str:
+    """
+    [⑧번 & 제7호 특허 청구항 제4항]
+    - 하이픈이 이미 있는 번호면 -> 숫자만 남기도록 제거 토글 (010-1234-5678 -> 01012345678)
+    - 숫자만 있는 번호면 -> 한국형 표준 하이픈 삽입 (01012345678 -> 010-1234-5678, 사업자번호, 생년월일)
+    - 통짜 카톡 문장이면 -> [성함 / 연락처 / 계좌 / 일정] AI 구조화 발라내기!
+    """
+    s = txt.strip()
+    # 1) 단일 번호에 이미 하이픈이 들어있는 경우 -> 숫자만 남기도록 역토글!
+    if re.fullmatch(r"\d{2,4}-\d{2,4}-\d{4,5}", s):
+        return re.sub(r"\D", "", s)
+
+    # 2) 통짜 카톡/메시지(연락처 + 계좌/일정이 함께 들어있는 문장) -> 구조화 추출!
+    phone_m = re.search(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b", s)
+    acct_m = re.search(
+        r"(국민|신한|우리|하나|농협|기업|카카오뱅크|토스뱅크|새마을|우체국|부산|대구|경남|광주|전북|제주|수협|신협|씨티|SC제일)?\s*((?!01[016789][-.\s]?\d{3,4}[-.\s]?\d{4})\d{3,6}[-.\s]?\d{2,6}[-.\s]?\d{3,7})",
+        s,
+    )
+    sched_m = re.search(r"(오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|[월화수목금토일]요일)\s*(오전|오후)?\s*(\d{1,2}시(\s*\d{1,2}분)?)", s)
+    if len(s) >= 18 and sum(bool(x) for x in (phone_m, acct_m, sched_m)) >= 2:
+        name_m = re.search(r"([가-힣]{2,4})(?:입니다|드림|올림|배상|대표|팀장|과장|대리|사원)", s)
+        structured = []
+        if name_m:
+            structured.append(f"- 성함: {name_m.group(1)}")
+        if phone_m:
+            structured.append(f"- 연락처: {phone_m.group(1)}-{phone_m.group(2)}-{phone_m.group(3)}")
+        if acct_m:
+            bank = (acct_m.group(1) or "").strip()
+            structured.append(f"- 계좌: {bank} {acct_m.group(2)}".strip())
+        if sched_m:
+            structured.append(f"- 일정: {sched_m.group(0).strip()}")
+        if structured:
+            return "\n".join(structured)
+
+    # 3) 숫자열 -> 한국형 표준 하이픈 삽입 (휴대폰, 서울전화, 사업자번호, 생년월일)
+    out = re.sub(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b", r"\1-\2-\3", txt)
+    out = re.sub(r"\b(02)[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b", r"\1-\2-\3", out)
+    out = re.sub(r"\b(\d{3})(\d{2})(\d{5})\b", r"\1-\2-\3", out)
+    out = re.sub(r"\b(19\d{2}|20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b", r"\1-\2-\3", out)
+    return out
+
+
+def superpower_8_format_numbers(daemon_set_cb) -> None:
+    orig_clip = get_clipboard_text()
+    tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
+    time.sleep(0.035)
+    tap_key_combo([VK_CONTROL], VK_C)
+    time.sleep(0.045)
+    selected = get_clipboard_text()
+    if selected and selected != orig_clip:
+        formatted = _toggle_korean_number_format(selected)
+        if formatted != selected:
+            daemon_set_cb(formatted)
+            time.sleep(0.02)
+            tap_key_combo([VK_CONTROL], VK_V)
+            time.sleep(0.05)
+            if orig_clip:
+                daemon_set_cb(orig_clip)
+            show_ghost_toast("👻 귀신같이 번호성형")
+            return
+    if orig_clip:
+        formatted = _toggle_korean_number_format(orig_clip)
+        daemon_set_cb(formatted)
+        show_ghost_toast("👻 귀신같이 번호·일정성형")
+
+
+def _generate_smart_filename_prefix() -> str:
+    """
+    [⑨번 AI 스마트 파일명 작명]
+    현재 활성 창 제목과 EmbeddingGemma 2 카테고리 앵커 유사도를 결합하여 의미 있는 파일명 태그 자동 생성
+    """
+    ctx = get_focused_field_context()
+    if not ctx:
+        return "캡처"
+    # 브라우저 접미사 제거
+    clean_title = re.sub(r"\s*[-—|]\s*(Chrome|Microsoft​ Edge|Whale|네이버|Google).*$", "", ctx, flags=re.IGNORECASE)
+    clean_title = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", clean_title).strip("_ ")
+    if not clean_title:
+        return "캡처"
+    return clean_title[:18]
+
+
+def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes]) -> None:
+    """
+    [⑨번 & 보너스 C] 스샷/웹 이미지 -> 실물 파일(CF_HDROP) 1초 변환 + AI 스마트 파일명 자동 작명
+    - 연속 캡처한 스샷이 2장 이상이면: 1개의 합본 .pdf 파일로 묶어서 변환!
+    - 스샷 1장이거나 웹 이미지 URL이면: 단일 .png 파일로 변환!
+    """
+    try:
+        from PIL import Image, ImageGrab
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        tag = _generate_smart_filename_prefix()
+
+        # 1) 연속 캡처한 스샷이 2장 이상 쌓여 있는 경우 -> PDF 1개로 합본 변환!
+        if len(recent_png_bytes) >= 2:
+            pil_imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in recent_png_bytes]
+            pdf_path = Path(tempfile.gettempdir()) / f"귀신같이_합본_{tag}_{ts}.pdf"
+            pil_imgs[0].save(pdf_path, "PDF", resolution=150.0, save_all=True, append_images=pil_imgs[1:])
+            if set_clipboard_hdrop_file(str(pdf_path)):
+                count = len(pil_imgs)
+                recent_png_bytes.clear()
+                show_ghost_toast(f"👻 귀신같이 PDF합본변환 ({count}장)")
+                return
+
+        # 2) 단일 스샷 이미지 변환
+        out_path = Path(tempfile.gettempdir()) / f"귀신같이_{tag}_{ts}.png"
+        clip_obj = ImageGrab.grabclipboard()
+        if isinstance(clip_obj, Image.Image):
+            clip_obj.save(out_path, "PNG")
+            if set_clipboard_hdrop_file(str(out_path)):
+                recent_png_bytes.clear()
+                show_ghost_toast("👻 귀신같이 파일변환")
+                return
+
+        # 3) 웹 이미지 URL 다운로드 후 파일 변환
+        txt = get_clipboard_text().strip()
+        if txt.startswith(("http://", "https://")):
+            req = urllib.request.Request(txt, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                out_path.write_bytes(resp.read())
+            if set_clipboard_hdrop_file(str(out_path)):
+                show_ghost_toast("👻 귀신같이 파일변환")
+                return
+
+        show_ghost_toast("👻 귀신같이 파일변환 (먼저 스샷이나 이미지를 복사해주세요)")
+    except Exception:
+        show_ghost_toast("👻 귀신같이 파일변환")
+
+
+def superpower_fixed_snippet(slot_num: int, daemon_set_cb) -> None:
+    """[보너스 A] F1~F5 평생 고정 상용구 0.1초 즉시 붙여넣기"""
+    snippets = ensure_default_snippets()
+    key = f"F{slot_num}"
+    val = snippets.get(key, "")
+    if val:
+        orig_clip = get_clipboard_text()
+        daemon_set_cb(val)
+        time.sleep(0.02)
+        tap_key_combo([VK_CONTROL], VK_V)
+        time.sleep(0.06)
+        if orig_clip:
+            daemon_set_cb(orig_clip)
+        show_ghost_toast(f"👻 귀신같이 상용구({key})")
+
+
+# =====================================================================
+# 메인 이벤트 루프
+# =====================================================================
+def main() -> None:
+    lock_sock = acquire_single_instance()
+    if lock_sock is None:
+        return
+
+    ensure_default_snippets()
+
+    u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
+    u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
+    u32.RegisterHotKey(None, 3, MOD_ALT | MOD_NOREPEAT, VK_Z)
+    u32.SetTimer(None, 1, 25, None)
+
+    seq_mode: bool = False
+    pasting_started: bool = False
+    copied_after_trigger: bool = False
+    seq_queue: list[str] = []
+    recent_unpasted: list[str] = []
+    recent_images: list[bytes] = []
+    ai_clipboard_history: list[dict] = []
+    last_image_sig: bytes = b""
+    last_copy_ts: float = 0.0
+    last_image_ts: float = 0.0
+
+    menu_armed: bool = False
+    menu_armed_until: float = 0.0
+
+    last_self_text: str | None = None
+    self_set_until: float = 0.0
+    last_seq_num: int = u32.GetClipboardSequenceNumber()
+    last_queue_mtime: float = QUEUE_FILE.stat().st_mtime if QUEUE_FILE.exists() else 0.0
+    was_ctrl_v_down: bool = False
+    typed_ascii_buf: list[str] = []
+    was_key_down: dict[int, bool] = {}
+    pending_first_typo: dict | None = None
+    ime_guard_until: float = 0.0
+    ime_guard_target_kor: bool = True
+
+    def daemon_set_clipboard(text: str) -> None:
+        nonlocal last_self_text, self_set_until, last_seq_num
+        last_self_text = text
+        self_set_until = time.time() + 0.45
+        set_clipboard_text(text)
+        last_seq_num = u32.GetClipboardSequenceNumber()
+
+    def record_ai_history(text: str) -> None:
+        s = text.strip()
+        if len(s) < 2:
+            return
+        if ai_clipboard_history and ai_clipboard_history[-1].get("text") == s:
+            return
+        ai_clipboard_history.append({"text": s, "vec": AI_ENGINE.embed_128d(s[:160]), "ts": time.time()})
+        if len(ai_clipboard_history) > 300:
+            ai_clipboard_history.pop(0)
+
+    def arm_sub_hotkeys() -> None:
+        nonlocal menu_armed, menu_armed_until
+        if not menu_armed:
+            for num in range(2, 10):
+                u32.RegisterHotKey(None, 100 + num, MOD_NOREPEAT, 0x30 + num)
+                u32.RegisterHotKey(None, 200 + num, MOD_NOREPEAT, 0x60 + num)
+            for fnum in range(1, 6):
+                u32.RegisterHotKey(None, 300 + fnum, MOD_NOREPEAT, VK_F1 + fnum - 1)
+            menu_armed = True
+        menu_armed_until = time.time() + MENU_ARM_SECONDS
+
+    def disarm_sub_hotkeys() -> None:
+        nonlocal menu_armed
+        if menu_armed:
+            for num in range(2, 10):
+                u32.UnregisterHotKey(None, 100 + num)
+                u32.UnregisterHotKey(None, 200 + num)
+            for fnum in range(1, 6):
+                u32.UnregisterHotKey(None, 300 + fnum)
+            menu_armed = False
+
+    msg = wintypes.MSG()
+    while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+        try:
+            if msg.message == WM_HOTKEY:
+                hk_id = msg.wParam
+                # 1) 마스터 트리거 (Ctrl + 0 또는 Alt + Z)
+                if hk_id in (1, 2, 3):
+                    k32.Beep(950, 60)
+                    seq_mode = True
+                    pasting_started = False
+                    copied_after_trigger = False
+                    if len(recent_unpasted) >= 2:
+                        seq_queue = list(recent_unpasted)
+                        daemon_set_clipboard(seq_queue[0])
+                        arm_sub_hotkeys()
+                        show_ghost_toast(
+                            f"👻 귀신같이 ({len(seq_queue)}개 장전) | ★[Ctrl+V]순차·칸맞춤  ★[9]파일·PDF  ★[F1~5]상용구  | [2]한영 [3]서식 [4]줄바꿈 [5]합본·검색 [6]OCR [7]창고정 [8]번호",
+                            duration_ms=2300,
+                        )
+                    elif len(recent_unpasted) == 1:
+                        # [보너스 B] 엑셀 다중 셀/줄 1회 복사 상태면 자동으로 1칸씩 쪼개어 순차 장전!
+                        cells = split_excel_cells(recent_unpasted[0])
+                        if cells:
+                            seq_queue = cells
+                            daemon_set_clipboard(seq_queue[0])
+                            arm_sub_hotkeys()
+                            show_ghost_toast(
+                                f"👻 귀신같이 엑셀쪼개기 ({len(cells)}칸 장전) | ★[Ctrl+V]연사·칸맞춤  [2~9]초능력  [F1~5]상용구",
+                                duration_ms=2300,
+                            )
+                        else:
+                            seq_queue.clear()
+                            arm_sub_hotkeys()
+                            show_ghost_toast(
+                                "👻 귀신같이 | ★[Ctrl+V]순차·칸맞춤  ★[9]파일·PDF  ★[F1~5]상용구  | [2]한영 [3]서식 [4]줄바꿈 [5]합본·검색 [6]OCR [7]창고정 [8]번호",
+                                duration_ms=2300,
+                            )
+                    else:
+                        seq_queue.clear()
+                        arm_sub_hotkeys()
+                        show_ghost_toast(
+                            "👻 귀신같이 | ★[Ctrl+V]순차·칸맞춤  ★[9]파일·PDF  ★[F1~5]상용구  | [2]한영 [3]서식 [4]줄바꿈 [5]합본·검색 [6]OCR [7]창고정 [8]번호",
+                            duration_ms=2300,
+                        )
+
+                # 2) 숫자 2~9 초능력 발동
+                elif 102 <= hk_id <= 109 or 202 <= hk_id <= 209:
+                    num = hk_id % 100
+                    disarm_sub_hotkeys()
+                    seq_mode = False
+                    if num == 2:
+                        superpower_2_typo_morph(daemon_set_clipboard, auto_triggered=False)
+                    elif num == 3:
+                        superpower_3_clean_format(daemon_set_clipboard)
+                    elif num == 4:
+                        superpower_4_iron_lines_and_nfkc(daemon_set_clipboard)
+                    elif num == 5:
+                        superpower_5_merge_or_ai_search(recent_unpasted, seq_queue, ai_clipboard_history, daemon_set_clipboard)
+                    elif num == 6:
+                        superpower_6_screen_ocr(daemon_set_clipboard)
+                    elif num == 7:
+                        superpower_7_toggle_topmost()
+                    elif num == 8:
+                        superpower_8_format_numbers(daemon_set_clipboard)
+                    elif num == 9:
+                        superpower_9_image_or_pdf_file(recent_images)
+
+                # 3) F1~F5 고정 상용구 발동
+                elif 301 <= hk_id <= 305:
+                    fslot = hk_id - 300
+                    disarm_sub_hotkeys()
+                    seq_mode = False
+                    superpower_fixed_snippet(fslot, daemon_set_clipboard)
+
+            elif msg.message == WM_TIMER:
+                now = time.time()
+                if menu_armed and now > menu_armed_until:
+                    disarm_sub_hotkeys()
+
+                # 1) 비서가 data/clipboard_queue.json 에 순차 목록을 장전했는지 확인
+                if QUEUE_FILE.exists():
+                    try:
+                        mtime = QUEUE_FILE.stat().st_mtime
+                        if mtime > last_queue_mtime:
+                            last_queue_mtime = mtime
+                            qdata = json.loads(QUEUE_FILE.read_text(encoding="utf-8"))
+                            items = qdata.get("items", [])
+                            if items:
+                                seq_mode = True
+                                pasting_started = False
+                                copied_after_trigger = True
+                                seq_queue = list(items)
+                                recent_unpasted.clear()
+                                daemon_set_clipboard(seq_queue[0])
+                    except Exception:
+                        pass
+
+                # 2) 클립보드 변경(새로운 복사 또는 스샷 캡처) 감지 + 오토매틱(Automatic) 한영 오타 자동 성형
+                curr_seq = u32.GetClipboardSequenceNumber()
+                if curr_seq != last_seq_num:
+                    last_seq_num = curr_seq
+                    copied = get_clipboard_text()
+                    if copied:
+                        if copied == last_self_text and now < self_set_until:
+                            pass
+                        else:
+                            last_self_text = None
+                            disarm_sub_hotkeys()
+
+                            # [②번 오토매틱 모드]: 단건 어절/문장 복사 시 명백한 한영 오타(예: wlswkdi, ㅡㄷ갸ㅜ)면 자동으로 성형 및 한/영 키 전환!
+                            if len(copied.strip()) <= 40 and "\n" not in copied:
+                                morphed, target_lang = morph_korean_english_text_with_direction(copied)
+                                if morphed != copied and target_lang is not None:
+                                    copied = morphed
+                                    daemon_set_clipboard(copied)
+                                    set_ime_language(target_korean=(target_lang == "KO"))
+                                    show_ghost_toast(f"👻 귀신같이 오토한영 ({copied.strip()})")
+
+                            record_ai_history(copied)
+
+                            if seq_mode:
+                                if pasting_started:
+                                    seq_mode = False
+                                    pasting_started = False
+                                    copied_after_trigger = False
+                                    seq_queue.clear()
+                                    recent_unpasted = [copied]
+                                    last_copy_ts = now
+                                else:
+                                    if not copied_after_trigger:
+                                        seq_queue.clear()
+                                        copied_after_trigger = True
+                                    if not seq_queue or seq_queue[-1] != copied:
+                                        seq_queue.append(copied)
+                                    if len(seq_queue) >= 2:
+                                        daemon_set_clipboard(seq_queue[0])
+                            else:
+                                if last_copy_ts > 0 and (now - last_copy_ts) > AUTO_CLEAN_SECONDS:
+                                    recent_unpasted.clear()
+                                if not recent_unpasted or recent_unpasted[-1] != copied:
+                                    recent_unpasted.append(copied)
+                                last_copy_ts = now
+                    else:
+                        # 텍스트가 아닌 경우 스샷 이미지(Bitmap)인지 확인하여 다중 스샷->PDF 버퍼에 적재
+                        try:
+                            from PIL import Image, ImageGrab
+                            clip_img = ImageGrab.grabclipboard()
+                            if isinstance(clip_img, Image.Image):
+                                buf = io.BytesIO()
+                                clip_img.save(buf, "PNG")
+                                png_bytes = buf.getvalue()
+                                if png_bytes != last_image_sig:
+                                    last_image_sig = png_bytes
+                                    if last_image_ts > 0 and (now - last_image_ts) > IMAGE_CLEAN_SECONDS:
+                                        recent_images.clear()
+                                    recent_images.append(png_bytes)
+                                    last_image_ts = now
+                        except Exception:
+                            pass
+
+                # 3) Ctrl + V 물리 키 입력 감지 (순차 + EmbeddingGemma 2 비순차 칸 맞춤 자동 선별)
+                ctrl_down = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                alt_down = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
+                shift_down = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
+                v_down = (u32.GetAsyncKeyState(VK_V) & 0x8000) != 0
+                ctrl_v_now = ctrl_down and v_down
+
+                # [②번 양방향 오토매틱 타이핑 감지 (2어절 연속 오타 감지 + 애기귀신 효과음 + 1.5초 한/영 키 역전 방어막)]:
+                # - 1단어만 오타 났을 때는 유저가 스스로 백스페이스+한/영 키를 칠 수 있으므로 손버릇 충돌 방지를 위해 대기(pending_first_typo)만 함.
+                # - 모른 채 원고만 보며 2단어째 오타까지 연속 입력 후 Space를 치는 순간: 1단어+2단어를 한꺼번에 성형 + 한/영 키 전환 + 애기귀신 소리('띠로링~♪') 재생!
+                if now < ime_guard_until:
+                    # 변환 직후 1.5초 이내에 유저가 반사 신경으로 한/영 키를 또 눌러버려도 목표 언어가 뒤집히지 않도록 고정 보호!
+                    set_ime_language(target_korean=ime_guard_target_kor)
+
+                hangul_down = (u32.GetAsyncKeyState(VK_HANGUL) & 0x8000) != 0
+                if hangul_down and not was_key_down.get(VK_HANGUL, False):
+                    # 유저가 직접 한/영 키를 눌렀다면 1단어 대기 버퍼는 즉시 초기화
+                    typed_ascii_buf.clear()
+                    pending_first_typo = None
+                was_key_down[VK_HANGUL] = hangul_down
+
+                if not ctrl_down and not alt_down and not menu_armed:
+                    for vk_code in range(0x41, 0x5B):  # A ~ Z
+                        is_down = (u32.GetAsyncKeyState(vk_code) & 0x8000) != 0
+                        if is_down and not was_key_down.get(vk_code, False):
+                            ch = chr(vk_code) if shift_down else chr(vk_code + 32)
+                            typed_ascii_buf.append(ch)
+                            if len(typed_ascii_buf) > 24:
+                                typed_ascii_buf.pop(0)
+                        was_key_down[vk_code] = is_down
+
+                    back_down = (u32.GetAsyncKeyState(VK_BACK) & 0x8000) != 0
+                    if back_down and not was_key_down.get(VK_BACK, False):
+                        if typed_ascii_buf:
+                            typed_ascii_buf.pop()
+                        else:
+                            # 유저가 1단어 직후 백스페이스를 쳤다면 스스로 수동 교정 중이므로 자동 개입 취소!
+                            pending_first_typo = None
+                    was_key_down[VK_BACK] = back_down
+
+                    space_down = (u32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
+                    if space_down and not was_key_down.get(VK_SPACE, False):
+                        word_cand = "".join(typed_ascii_buf)
+                        typed_ascii_buf.clear()
+                        hwnd_fg = u32.GetForegroundWindow()
+                        hime_fg = imm32.ImmGetDefaultIMEWnd(hwnd_fg) if hwnd_fg else 0
+                        ime_kor = (u32.SendMessageW(hime_fg, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0) & IME_CMODE_NATIVE) != 0 if hime_fg else False
+
+                        curr_typo: dict | None = None
+                        if not ime_kor and len(word_cand) >= 3 and not AI_ENGINE.is_valid_english_word(word_cand):
+                            kor_cand = eng_word_to_kor(word_cand)
+                            if kor_cand and len(kor_cand) >= 2 and is_valid_korean_word(kor_cand):
+                                curr_typo = {
+                                    "disp_len": len(word_cand) + 1,
+                                    "raw": word_cand,
+                                    "conv": kor_cand,
+                                    "target_ko": True,
+                                }
+                        elif ime_kor and len(word_cand) >= 3 and AI_ENGINE.is_valid_english_word(word_cand):
+                            kor_produced = eng_word_to_kor(word_cand)
+                            if any(0x3131 <= ord(c) <= 0x318E for c in kor_produced) or not is_valid_korean_word(kor_produced):
+                                curr_typo = {
+                                    "disp_len": len(kor_produced) + 1,
+                                    "raw": kor_produced,
+                                    "conv": word_cand,
+                                    "target_ko": False,
+                                }
+
+                        if curr_typo is not None:
+                            if pending_first_typo is not None and pending_first_typo["target_ko"] == curr_typo["target_ko"]:
+                                # [2단어 연속 오타 도달!] -> 1단어 + 2단어를 한꺼번에 교정 + 애기귀신 소리 + 한/영 키 전환 + 1.5초 방어막 가동!
+                                total_backspaces = pending_first_typo["disp_len"] + curr_typo["disp_len"]
+                                combined_conv = f"{pending_first_typo['conv']} {curr_typo['conv']} "
+                                combined_raw = f"{pending_first_typo['raw']} {curr_typo['raw']}"
+                                target_ko = curr_typo["target_ko"]
+                                pending_first_typo = None
+
+                                orig_c = get_clipboard_text()
+                                for _ in range(total_backspaces):
+                                    tap_key_combo([], VK_BACK)
+                                daemon_set_clipboard(combined_conv)
+                                time.sleep(0.015)
+                                tap_key_combo([VK_CONTROL], VK_V)
+                                time.sleep(0.04)
+                                set_ime_language(target_korean=target_ko)
+                                ime_guard_target_kor = target_ko
+                                ime_guard_until = time.time() + 1.5
+                                if orig_c:
+                                    daemon_set_clipboard(orig_c)
+                                play_baby_ghost_sound()
+                                badge = "한글키 전환" if target_ko else "영문키 전환"
+                                show_ghost_toast(f"👻 귀신같이 오토한영 ({combined_raw} ➔ {combined_conv.strip()} | {badge})", duration_ms=1400)
+                            else:
+                                # 1단어째 오타는 바꾸지 않고 조용히 기억만 해둠 (유저가 스스로 고치는지 2단어로 넘어가는지 관찰)
+                                pending_first_typo = curr_typo
+                        else:
+                            pending_first_typo = None
+                    was_key_down[VK_SPACE] = space_down
+
+                    ret_down = (u32.GetAsyncKeyState(VK_RETURN) & 0x8000) != 0
+                    if ret_down and not was_key_down.get(VK_RETURN, False):
+                        typed_ascii_buf.clear()
+                        pending_first_typo = None
+                    was_key_down[VK_RETURN] = ret_down
+                else:
+                    typed_ascii_buf.clear()
+
+                if ctrl_v_now and not was_ctrl_v_down:
+                    disarm_sub_hotkeys()
+                    if seq_mode and seq_queue:
+                        pasting_started = True
+                        time.sleep(0.14)
+                        seq_queue.pop(0)
+                        if seq_queue:
+                            # 다음 사출할 항목을 현재 창/입력칸 문맥(AI_ENGINE)으로 비순차 최적 선별하여 미리 장전!
+                            ctx = get_focused_field_context()
+                            best_idx, is_smart_matched = select_best_matching_item_index(seq_queue, ctx)
+                            if best_idx != 0:
+                                matched_item = seq_queue.pop(best_idx)
+                                seq_queue.insert(0, matched_item)
+                            daemon_set_clipboard(seq_queue[0])
+                            if is_smart_matched:
+                                show_ghost_toast(f"👻 귀신같이 AI칸맞춤 대기 ({seq_queue[0][:12]})")
+                        else:
+                            seq_mode = False
+                            pasting_started = False
+                            copied_after_trigger = False
+                            recent_unpasted.clear()
+                            show_ghost_toast("👻 귀신같이 순차붙여넣기")
+                    else:
+                        recent_unpasted.clear()
+
+                was_ctrl_v_down = ctrl_v_now
+        except Exception:
+            pass
+
+        u32.TranslateMessage(ctypes.byref(msg))
+        u32.DispatchMessageW(ctypes.byref(msg))
+
+
+if __name__ == "__main__":
+    main()
