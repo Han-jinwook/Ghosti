@@ -19,6 +19,7 @@ import {
 } from '@huggingface/transformers';
 import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, storageInfo } from './opfsCache';
 import { getZCoreUrl } from './zCoreBridge';
+import { silentIndexingBrake } from './silentIndexingBrake';
 import type {
   DuplicateGroup,
   FaceMemberCluster,
@@ -1545,6 +1546,9 @@ export async function executeTextSearch(
     };
   }
 
+  // [레드팀 보완 1] 유저가 과거 연도·폴더·키워드를 검색하면 대기 중인 과거 파일을 큐 맨 앞으로 새치기(On-Demand Priority Jump)
+  silentIndexingBrake.prioritizeArchiveFilesForQuery(qRaw, activePhotos);
+
   // 쓰레기/문서 전용 검색어인지 판별 (일반 풍경/인물 검색 시 흔들린 사진·스크린샷·주차장메모 혼입 원천 차단)
   const isTrashOrDocQuery = /흔들린|흐릿|초점|블러|스크린샷|캡처|화면|주차장|기둥|택배|상자|현수막|영수증|전표|문서|서류|설명서|매뉴얼|신분증|여권|학생증|계약|견적|세금계산서|계산서|보험|증권|청구서|명세서|고지서|증명서|등본|탑승권|결제|주문/.test(qLower);
   const isGroupQuery = /단체|단체사진|모임|여럿|일행|가족|친구들|동료들|아이들|어린이들/.test(qLower);
@@ -2213,7 +2217,9 @@ export async function runOnboardingIndexingPipeline(params: {
   onUpdate: (update: OnboardingProgressUpdate) => void;
   shouldCancel: () => boolean;
 }): Promise<void> {
-  const { targetPhotos, useRealWebGpuVision, onUpdate, shouldCancel } = params;
+  const { targetPhotos: rawTargetPhotos, useRealWebGpuVision, onUpdate, shouldCancel } = params;
+  // 1단계: 수정일(mtimeMs) 기준 최근 90일(3개월) 이내 파일부터 최우선 정렬
+  const targetPhotos = silentIndexingBrake.sortPhotosRecent90DaysFirst(rawTargetPhotos);
   const total = targetPhotos.length;
   if (total === 0) return;
 
@@ -2264,6 +2270,9 @@ export async function runOnboardingIndexingPipeline(params: {
 
     for (let i = 0; i < total; i++) {
       if (shouldCancel()) break;
+      // 2·3단계 & 밑바닥 4대 안전망: Active 시 250ms Yield, 20개 단위 500MB GC 릴리즈, 모바일 40℃ 쿨다운 제어
+      await silentIndexingBrake.waitForIndexingSlot(i);
+      const itemT0 = performance.now();
       const item = targetPhotos[i];
       let liveVec64: number[] = [];
 
@@ -2291,6 +2300,7 @@ export async function runOnboardingIndexingPipeline(params: {
         const norm = normalizeVector(row, DEFAULT_DIM);
         item.vec = norm;
         liveVec64 = Array.from({ length: 64 }, (_, k) => Math.min(1, Math.max(0.08, Math.abs(norm[k * 12]) * 8)));
+        silentIndexingBrake.recordInferenceLatencyMs(performance.now() - itemT0);
       } else {
         // 고속 시뮬레이션/하이드레이션 스트리밍 모드 (UI/UX 즉시 체감 및 검증용)
         await new Promise((r) => setTimeout(r, 45));

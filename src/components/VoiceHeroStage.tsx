@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { ensureLoginAndZCoreReady } from '../services/zCoreBridge';
+import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 
 export const VoiceHeroStage: React.FC = () => {
   const {
@@ -413,6 +414,8 @@ export const VoiceHeroStage: React.FC = () => {
             </>
           )}
         </div>
+        {/* 1-D. 3단 무소음 인덱싱 브레이크 & 유저 안심 상태 안내 바 (하드웨어 보호 4대 안전망 탑재) */}
+        <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
       </div>
 
       {/* ─────────────── [라운지 마스터 단일 확인 카드] 개인 라운지에서는 100% 숨김 · 사진 공유(패밀리·동호회·동창회)에서 확인 대기 건이 있을 때만 1장씩 노출 후 Auto-Hide ─────────────── */}

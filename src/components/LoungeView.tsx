@@ -11,6 +11,7 @@ import { PcMasterQuickSendPanel } from './PricingModal';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { SetupMonsterContent } from './SetupMonsterModal';
 import { GhostCastLiveToolbar } from './GhostCastAndLiveSystem';
+import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 
 const LOUNGE_TABS: Array<{
   id: LoungeType;
@@ -476,6 +477,9 @@ export const LoungeView: React.FC = () => {
       {/* ─────────────── 💻 내 기기: 노션 스타일 Zen 도화지 (진단 전에는 시원한 단일 시작점 ➔ 진단 클릭 시 결과·안전검증 펼침 + 하단 3대 바로가기 1세트) ─────────────── */}
       {activeLoungeType === 'personal' && (
         <div className="max-w-4xl mx-auto w-full py-4 md:py-8 flex flex-col gap-6">
+          {/* 0. 라운지 상단 3단 무소음 인덱싱 브레이크 & 유저 안심 상태 안내 표시줄 */}
+          <SilentIndexingStatusBar variant="lounge-top" />
+
           {/* 1. 노션형 깔끔한 히어로 진단 카드 (버튼처럼 보이는 가짜 배지·중복 문구 일체 제거) */}
           <section className="p-6 md:p-8 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
