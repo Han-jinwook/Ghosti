@@ -397,6 +397,71 @@ export const OnboardingModal: React.FC = () => {
   const [floatingWebOpenedToast, setFloatingWebOpenedToast] = useState(false);
   const [ghostMemoryQuery, setGhostMemoryQuery] = useState('');
   const [ghostMemoryResult, setGhostMemoryResult] = useState<string | null>(null);
+  const [ghostMemoryExpanded, setGhostMemoryExpanded] = useState(false);
+  const [ghostMemorySelIdx, setGhostMemorySelIdx] = useState(0);
+  const [ghostMemoryHoverIdx, setGhostMemoryHoverIdx] = useState<number | null>(null);
+
+  const ghostMemoryCandidates = useMemo(() => {
+    const baseItems = [
+      {
+        id: 'mem-1',
+        kind: 'text' as const,
+        relTime: '방금 전',
+        snippet: '국민은행 123-45-678910 (예금주: 썬드림 백은숙 대표) 월 정기 구독료 정산 계좌 안내',
+        fullText:
+          '국민은행 123-45-678910 (예금주: 썬드림 백은숙 대표)\n- 용도: 월 정기 구독료 및 거래처 대금 정산 전용 계좌\n- 세금계산서 발행 이메일: billing@sundreamer.app',
+      },
+      {
+        id: 'mem-2',
+        kind: 'image' as const,
+        relTime: '2분 전',
+        snippet: '[이미지 1280x720] 세금계산서_영수증_캡처 · 합계금액 350,000,000원 승인번호 9482-11',
+        fullText:
+          '[스샷 이미지 (1280x720) · 백그라운드 WinRT OCR 추출 원문]\n공급자: (주)썬드림 / 등록번호: 123-86-98765\n품목: 귀신같이 엔터프라이즈 10년 마스터권\n합계금액: 350,000,000원 (승인번호 9482-11)',
+      },
+      {
+        id: 'mem-3',
+        kind: 'text' as const,
+        relTime: '5분 전',
+        snippet: '서울 강남구 테헤란로 123 썬드림타워 15층 (본사 회의실 방문 안내 및 주차 등록)',
+        fullText:
+          '서울 강남구 테헤란로 123 썬드림타워 15층\n- 지하 2~4층 방문객 주차장 이용 가능 (2시간 무료 쿠폰 지급)\n- 도착 후 안내데스크에서 홍길동 대표에게 연락 부탁드립니다.',
+      },
+      {
+        id: 'mem-4',
+        kind: 'text' as const,
+        relTime: '14분 전',
+        snippet: '제3조 (납품 및 검수 조건) 본 계약의 유지보수 무상 보증 기간은 검수 완료일로부터 1년으로...',
+        fullText:
+          '제3조 (납품 및 검수 조건)\n1. 본 계약의 유지보수 무상 보증 기간은 최종 검수 완료일로부터 1년으로 한다.\n2. 납품 지연 시 지체상금은 일 1/1000로 산정하며, 천재지변 또는 발주처 사유는 제외한다.\n3. 모든 소스코드 및 산출물의 지식재산권은 잔금 지급과 동시에 이전된다.',
+      },
+      {
+        id: 'mem-5',
+        kind: 'text' as const,
+        relTime: '32분 전',
+        snippet: '김철수 팀장 010-1234-5678 / 내일 오후 3시 줌(Zoom) 화상 미팅 링크 및 아젠다 공유',
+        fullText:
+          '김철수 팀장 (010-1234-5678)\n- 일시: 내일 오후 3시 00분\n- 안건: 2026년 하반기 귀신같이 Z-코어 엔터프라이즈 도입 일정 협의',
+      },
+    ];
+    const q = ghostMemoryQuery.trim().toLowerCase();
+    if (!q) return baseItems;
+    const filtered = baseItems.filter(
+      (it) => it.snippet.toLowerCase().includes(q) || it.fullText.toLowerCase().includes(q)
+    );
+    return filtered.length > 0
+      ? filtered
+      : [
+          {
+            id: 'mem-custom',
+            kind: 'text' as const,
+            relTime: '방금 전',
+            snippet: `[${ghostMemoryQuery}] 관련 의미 유사 기억 자동 매칭 (EmbeddingGemma 2)`,
+            fullText: `검색어 "${ghostMemoryQuery}"와 의미적으로 가장 가까운 클립보드 기억 항목입니다.\n클릭 또는 Enter 입력 시 현재 커서 위치에 즉시 붙여넣기됩니다.`,
+          },
+          ...baseItems.slice(0, 4),
+        ];
+  }, [ghostMemoryQuery]);
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem('ghosti_telemetry_enabled') !== 'false';
@@ -913,11 +978,11 @@ export const OnboardingModal: React.FC = () => {
               )}
             </div>
 
-            {/* 『귀신창 (Ghost Window) v3.0』 실물 2단 미리보기 (윗단 🔍 귀신기억검색 + 아랫단 정본 3D 로고 일체형) */}
+            {/* 『귀신창 (Ghost Window) v3.2』 실물 미리보기 (윗단 기억검색 + 아랫단 정본 3D 로고 2줄 메뉴 + 클릭 시 Win+V형 5개 카드 아코디언 드롭다운) */}
             <div className="p-3.5 rounded-2xl bg-[#0B1120] border-2 border-[#2DD4BF] shadow-[0_0_24px_rgba(45,212,191,0.2)] flex flex-col gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300">
                 <span>
-                  👻 <strong className="text-white">『귀신창(Ghost Window) v3.1』 실물 미리보기</strong> (마우스 올리면 유지 · 바깥 클릭 시 0.01초 즉시 닫힘)
+                  👻 <strong className="text-white">『귀신창(Ghost Window) v3.2』 실물 미리보기</strong> (검색창 클릭 시 Win+V형 5개 카드 아코디언 펼침 · 바깥 클릭 시 즉시 닫힘)
                 </span>
                 {floatingWebOpenedToast && (
                   <span className="text-[#5EEAD4] font-extrabold animate-pulse">
@@ -926,7 +991,7 @@ export const OnboardingModal: React.FC = () => {
                 )}
               </div>
 
-              {/* [윗단] 조그마한 1줄 미니 검색창 (이모지 제거, 깔끔한 콤팩트 바) */}
+              {/* [윗단] 조그마한 1줄 미니 검색창 (클릭 또는 타이핑 시 아래로 5개 카드 아코디언 펼침) */}
               <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0F172A] border border-[#14B8A6]">
                 <span className="text-[11.5px] font-extrabold text-[#5EEAD4] shrink-0">
                   기억검색
@@ -934,31 +999,55 @@ export const OnboardingModal: React.FC = () => {
                 <input
                   type="text"
                   value={ghostMemoryQuery}
+                  onFocus={() => {
+                    setGhostMemoryExpanded(true);
+                    setGhostMemorySelIdx(0);
+                  }}
                   onChange={(e) => {
-                    const q = e.target.value;
-                    setGhostMemoryQuery(q);
-                    if (!q.trim()) {
-                      setGhostMemoryResult(null);
-                    } else if (q.includes('계좌') || q.includes('국민')) {
-                      setGhostMemoryResult('-> [국민은행 123-45-678910] (Enter 사출)');
-                    } else if (q.includes('주소') || q.includes('강남')) {
-                      setGhostMemoryResult('-> [서울 강남구 테헤란로 123] (Enter 사출)');
-                    } else {
-                      setGhostMemoryResult(`-> [${q} 관련 최근 복사 기억] (Enter 사출)`);
-                    }
+                    setGhostMemoryQuery(e.target.value);
+                    setGhostMemoryExpanded(true);
+                    setGhostMemorySelIdx(0);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && ghostMemoryQuery.trim()) {
-                      playBabyGhostChime('typo');
-                      setGhostMemoryResult(`[${ghostMemoryQuery}] 기억 소환 및 즉시 붙여넣기 완료`);
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setGhostMemoryExpanded(true);
+                      setGhostMemorySelIdx((prev) => (prev + 1) % Math.max(1, ghostMemoryCandidates.length));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setGhostMemoryExpanded(true);
+                      setGhostMemorySelIdx((prev) => (prev - 1 + Math.max(1, ghostMemoryCandidates.length)) % Math.max(1, ghostMemoryCandidates.length));
+                    } else if (e.key === 'Escape') {
+                      setGhostMemoryExpanded(false);
+                      setGhostMemoryHoverIdx(null);
+                    } else if (e.key === 'Enter') {
+                      const chosen = ghostMemoryCandidates[ghostMemorySelIdx] || ghostMemoryCandidates[0];
+                      if (chosen) {
+                        playBabyGhostChime('typo');
+                        setGhostMemoryResult(`✅ [${chosen.snippet.slice(0, 28)}...] 커서 위치에 즉시 붙여넣기 완료!`);
+                        setGhostMemoryExpanded(false);
+                        setGhostMemoryHoverIdx(null);
+                      }
                     }
                   }}
-                  placeholder="단어 입력 후 Enter..."
-                  className="w-44 sm:w-52 px-2.5 py-1 rounded-lg bg-[#1E293B] text-[11.5px] text-white outline-none border border-transparent focus:border-[#5EEAD4]"
+                  placeholder="클릭 시 최근 5건 펼침 · 단어 입력..."
+                  className="w-48 sm:w-56 px-2.5 py-1 rounded-lg bg-[#1E293B] text-[11.5px] text-white outline-none border border-transparent focus:border-[#5EEAD4]"
                 />
-                <span className="text-[11px] text-[#6EE7B7] font-bold truncate">
-                  {ghostMemoryResult || '단어 입력 후 Enter 즉시 붙여넣기 (바깥 클릭 시 닫힘)'}
+                <span className="text-[11px] text-[#6EE7B7] font-bold truncate flex-1">
+                  {ghostMemoryResult || '클릭 시 최근 목록 펼침 · 단어 입력 후 ↑↓·Enter 선택 (마우스 호버 시 전체 원문 팝업)'}
                 </span>
+                {ghostMemoryExpanded && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGhostMemoryExpanded(false);
+                      setGhostMemoryHoverIdx(null);
+                    }}
+                    className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10.5px] text-zinc-300 cursor-pointer"
+                  >
+                    접기 ▲
+                  </button>
+                )}
               </div>
 
               {/* [아랫단] 좌측 정본 마스터 로고([심볼]+[3D 워드마크], 이모지 제거) + 우측 2줄(Row 1 & Row 2) 전체 메뉴 수납 */}
@@ -993,6 +1082,79 @@ export const OnboardingModal: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* [3단: Win+V 스타일 아코디언 다중 기억검색 드롭다운 (상위 5개 후보 카드 + 44x32 스샷 썸네일 + 호버 시 전체 원문 팝업)] */}
+              {ghostMemoryExpanded && (
+                <div className="mt-1 pt-2 border-t border-[#1E293B] grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+                  <div className="lg:col-span-7 flex flex-col gap-1">
+                    {ghostMemoryCandidates.slice(0, 5).map((item, idx) => {
+                      const isSel = idx === ghostMemorySelIdx;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onMouseEnter={() => {
+                            setGhostMemorySelIdx(idx);
+                            setGhostMemoryHoverIdx(idx);
+                          }}
+                          onClick={() => {
+                            playBabyGhostChime('typo');
+                            setGhostMemoryResult(`✅ #${idx + 1} [${item.snippet.slice(0, 26)}...] 즉시 붙여넣기 완료!`);
+                            setGhostMemoryExpanded(false);
+                            setGhostMemoryHoverIdx(null);
+                          }}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center gap-2.5 transition-all cursor-pointer border ${
+                            isSel
+                              ? 'bg-[#172554] border-[#2DD4BF] text-white'
+                              : 'bg-[#0F172A] border-[#1E293B] text-zinc-200 hover:bg-[#172554]/60'
+                          }`}
+                        >
+                          <span className="text-[11px] font-extrabold text-[#5EEAD4] w-4 shrink-0">
+                            {idx + 1}
+                          </span>
+                          {item.kind === 'image' && (
+                            <div className="w-[44px] h-[32px] rounded bg-[#0B1120] border border-[#2DD4BF]/50 flex flex-col items-center justify-center shrink-0 text-[9px] text-[#5EEAD4] font-black leading-none">
+                              <span>IMG</span>
+                              <span className="text-[8px] text-zinc-400">OCR</span>
+                            </div>
+                          )}
+                          <span className="text-[11.5px] font-semibold truncate flex-1">
+                            {item.snippet}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 shrink-0">
+                            {item.relTime}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="lg:col-span-5 p-2.5 rounded-xl bg-[#0F172A] border border-[#2DD4BF]/60 flex flex-col justify-between gap-1.5">
+                    {(() => {
+                      const activeItem =
+                        ghostMemoryCandidates[ghostMemoryHoverIdx ?? ghostMemorySelIdx] ||
+                        ghostMemoryCandidates[0];
+                      return (
+                        <>
+                          <div className="flex items-center justify-between text-[10.5px] text-[#5EEAD4] font-extrabold">
+                            <span>
+                              {activeItem?.kind === 'image'
+                                ? '🖼️ 캡처 이미지 + 백그라운드 OCR 전문 미리보기'
+                                : '📄 전체 원문 미리보기 말풍선 (Hover)'}
+                            </span>
+                            <span className="text-zinc-400">{activeItem?.relTime}</span>
+                          </div>
+                          <pre className="text-[11px] text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed bg-[#0B1120] p-2 rounded-lg border border-white/5">
+                            {activeItem?.fullText}
+                          </pre>
+                          <span className="text-[10px] text-[#6EE7B7] font-bold">
+                            👉 클릭 또는 Enter 시 현재 커서 위치에 즉시 붙여넣기 (③번 결과음 재생)
+                          </span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 5대 초능력 [Show + Try] 그리드 */}

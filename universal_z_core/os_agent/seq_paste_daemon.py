@@ -575,6 +575,8 @@ def set_telemetry_enabled(enabled: bool) -> bool:
     except Exception:
         pass
     return bool(enabled)
+
+
 _toast_event = threading.Event()
 GLOBAL_AI_HISTORY: list[dict] = []
 
@@ -655,14 +657,43 @@ def _get_monitor_workarea_for_point(px: int, py: int) -> tuple[int, int, int, in
     return -3840, 0, 7680, 2160
 
 
+def _format_rel_time(ts: float) -> str:
+    diff = max(0, int(time.time() - ts))
+    if diff < 60:
+        return "방금 전"
+    if diff < 3600:
+        return f"{diff // 60}분 전"
+    if diff < 86400:
+        return f"{diff // 3600}시간 전"
+    return f"{diff // 86400}일 전"
+
+
+def _make_context_snippet(text: str, query: str, max_len: int = 54) -> str:
+    """긴 문장에서 검색어(query)가 포함된 핵심 구간 앞뒤만 쏙 뽑아 요약 표시"""
+    single = re.sub(r"\s+", " ", text).strip()
+    if len(single) <= max_len:
+        return single
+    q = query.strip().lower()
+    if q:
+        idx = single.lower().find(q)
+        if idx >= 0:
+            start = max(0, idx - 14)
+            end = min(len(single), start + max_len)
+            prefix = "..." if start > 0 else ""
+            suffix = "..." if end < len(single) else ""
+            return f"{prefix}{single[start:end]}{suffix}"
+    return single[:max_len] + "..."
+
+
 def _toast_worker() -> None:
     """
-    👻 귀신창 (Ghost Window) v3.0 마스터 워커:
-    - 정본 마스터 로고 ([갓 쓴 애기귀신 심볼] + [귀신같이 3D 민트 워드마크]) 일체형 탑재 (흰 배경 완전 제거, 시그니처 딥 나이트 네이비 #0B1120)
-    - 귀신창 상단에 조그마한 [🔍 귀신기억검색] 1줄 미니 검색창 상시 통합!
-    - 마우스를 화면의 다른 곳(창 바깥)에 클릭하면 0.01초 만에 즉시 사라짐!
-    - 마우스를 귀신창 위에 올려두면 사라지지 않고 기다림!
-    - 결과 토스트('👻 귀신같이 ...') 표출 시 자동으로 결과 효과음(③번 애기귀신 헤헤~♪) 재생!
+    👻 귀신창 (Ghost Window) v3.2 마스터 워커:
+    - 스타일 1: 시그니처 딥 나이트 네이비(#0B1120) & 민트 오로라(#2DD4BF) + 정본 3D 로고 일체형
+    - 이모지 전면 제거 & 우측 2줄 안에 모든 초능력 메뉴 수납
+    - [Win+V 스타일 아코디언 다중 기억검색 드롭다운]:
+      * 평소엔 날렵한 2줄 귀신창 -> '기억검색' 클릭 또는 타이핑 시 아래로 상위 5개 카드 리스트(텍스트+스샷 이미지) 펼침!
+      * 긴 문장: 검색어 중심 앞뒤 요약 스니펫 + 카드 위에 마우스 호버(Hover) 시 우측에 '전체 원문/큰 이미지 미리보기 팝업'!
+      * 스샷 이미지: 미니 썸네일(44x32) + 백그라운드 OCR 글자 검색 + 클릭/Enter 시 이미지 파일(CF_HDROP) 즉시 붙여넣기!
     """
     import tkinter as tk
     from PIL import Image, ImageTk
@@ -673,31 +704,54 @@ def _toast_worker() -> None:
     ghost_symbol_photo = None
     ghost_wordmark_photo = None
     try:
-        sym_path = (ASSETS_DIR / "gwisinkachi_app_icon_512.png") if (ASSETS_DIR / "gwisinkachi_app_icon_512.png").exists() else Path("D:/Ghosti/public/gwisinkachi_app_icon_512.png")
-        if sym_path.exists():
-            sym_img = Image.open(sym_path).convert("RGBA").resize((28, 28), Image.Resampling.LANCZOS)
-            ghost_symbol_photo = ImageTk.PhotoImage(sym_img, master=root)
+        sym_candidates = [
+            ASSETS_DIR / "gwisinkachi_app_icon_512.png",
+            Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_app_icon_512.png"),
+            Path("D:/Ghosti/public/gwisinkachi_app_icon_512.png"),
+        ]
+        for sc in sym_candidates:
+            if sc.exists():
+                sym_img = Image.open(sc).convert("RGBA").resize((28, 28), Image.Resampling.LANCZOS)
+                ghost_symbol_photo = ImageTk.PhotoImage(sym_img, master=root)
+                break
 
-        wm_path = (ASSETS_DIR / "gwisinkachi_3d_wordmark_dark.png") if (ASSETS_DIR / "gwisinkachi_3d_wordmark_dark.png").exists() else Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_dark.png")
-        if not wm_path.exists():
-            wm_path = (ASSETS_DIR / "gwisinkachi_3d_wordmark_light.png") if (ASSETS_DIR / "gwisinkachi_3d_wordmark_light.png").exists() else Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_light.png")
-        if wm_path.exists():
-            wm_raw = Image.open(wm_path).convert("RGBA")
-            target_h = 22
-            target_w = max(56, int(wm_raw.width * (target_h / max(1, wm_raw.height))))
-            wm_img = wm_raw.resize((target_w, target_h), Image.Resampling.LANCZOS)
-            ghost_wordmark_photo = ImageTk.PhotoImage(wm_img, master=root)
+        wm_candidates = [
+            ASSETS_DIR / "gwisinkachi_3d_wordmark_dark.png",
+            ASSETS_DIR / "gwisinkachi_3d_wordmark_light.png",
+            Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_3d_wordmark_dark.png"),
+            Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_dark.png"),
+            Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_light.png"),
+        ]
+        for wc in wm_candidates:
+            if wc.exists():
+                wm_raw = Image.open(wc).convert("RGBA")
+                target_h = 22
+                target_w = max(56, int(wm_raw.width * (target_h / max(1, wm_raw.height))))
+                wm_img = wm_raw.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                ghost_wordmark_photo = ImageTk.PhotoImage(wm_img, master=root)
+                break
     except Exception:
         pass
 
     current_win: list[tk.Toplevel | None] = [None]
+    detail_win: list[tk.Toplevel | None] = [None]
     after_id: list[str | None] = [None]
     is_hovered: list[bool] = [False]
     win_rect: list[tuple[int, int, int, int]] = [(0, 0, 0, 0)]
     was_mouse_down: list[bool] = [False]
     opened_at: list[float] = [0.0]
+    thumb_refs: list = []
+
+    def _close_detail() -> None:
+        if detail_win[0] is not None:
+            try:
+                detail_win[0].destroy()
+            except Exception:
+                pass
+            detail_win[0] = None
 
     def _close_win() -> None:
+        _close_detail()
         if after_id[0] is not None:
             try:
                 root.after_cancel(after_id[0])
@@ -711,6 +765,7 @@ def _toast_worker() -> None:
                 pass
             current_win[0] = None
         is_hovered[0] = False
+        thumb_refs.clear()
 
     def _schedule_close(ms: int) -> None:
         if after_id[0] is not None:
@@ -752,7 +807,6 @@ def _toast_worker() -> None:
                 else:
                     _close_win()
                     is_ctrl0_bar = duration_ms >= 2000
-                    # 일반 결과 토스트('👻 귀신같이 ...')가 뜰 때는 ③번 애기귀신 웃음소리('헤헤~♪') 자동 재생!
                     if not is_ctrl0_bar:
                         play_baby_ghost_sound(mode="typo")
 
@@ -773,26 +827,26 @@ def _toast_worker() -> None:
 
                     def _on_leave(_e=None):
                         is_hovered[0] = False
-                        _schedule_close(2500)
+                        _schedule_close(3000)
 
                     win.bind("<Enter>", _on_enter)
                     win.bind("<Leave>", _on_leave)
 
                     if is_ctrl0_bar and "|" in message:
-                        _, right_part = message.split("|", 1)
+                        left_tag, right_part = message.split("|", 1)
                         container = tk.Frame(win, bg="#0B1120", highlightbackground="#2DD4BF", highlightthickness=2, padx=8, pady=6)
                         container.pack(fill="both", expand=True)
 
-                        # [윗단] 조그마한 1줄 미니 검색창 (🔍 귀신기억검색)
+                        # [윗단] 1줄 미니 검색창 (클릭 또는 타이핑 시 아래로 Win+V 스타일 5개 카드 리스트 아코디언 펼침!)
                         top_search_bar = tk.Frame(container, bg="#0F172A", highlightbackground="#14B8A6", highlightthickness=1, padx=6, pady=3)
                         top_search_bar.pack(fill="x", pady=(0, 5))
 
-                        s_icon = tk.Label(top_search_bar, text="🔍 귀신기억검색", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold"))
+                        s_icon = tk.Label(top_search_bar, text="기억검색", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold"))
                         s_icon.pack(side="left", padx=(0, 6))
 
                         s_entry = tk.Entry(
                             top_search_bar,
-                            width=30,
+                            width=22,
                             fg="#F8FAFC",
                             bg="#1E293B",
                             insertbackground="#5EEAD4",
@@ -801,16 +855,196 @@ def _toast_worker() -> None:
                         )
                         s_entry.pack(side="left", padx=(0, 6))
 
+                        status_hint = "클릭 시 최근 목록 펼침 · 단어 입력 후 ↑↓·Enter 선택 (바깥 클릭 닫힘)"
+                        if "(" in left_tag and ")" in left_tag:
+                            status_hint = left_tag[left_tag.find("(") : left_tag.rfind(")") + 1] + " · " + status_hint
+
                         s_preview = tk.Label(
                             top_search_bar,
-                            text="클릭해 검색어 입력 후 Enter ➔ 즉시 붙여넣기 (바깥 클릭 시 닫힘)",
+                            text=status_hint,
                             fg="#94A3B8",
                             bg="#0F172A",
                             font=("Malgun Gothic", 8),
                         )
                         s_preview.pack(side="left")
 
-                        matched_clip = {"val": ""}
+                        # [아랫단] 좌측 정본 마스터 로고([심볼]+[3D 워드마크]) + 우측 2줄 전체 메뉴
+                        bottom_bar = tk.Frame(container, bg="#0B1120")
+                        bottom_bar.pack(fill="x")
+
+                        # [3단(평소 숨김 -> 검색창 클릭/타이핑 시 아래로 스르륵 펼쳐지는 Win+V형 카드 리스트 컨테이너)]
+                        results_box = tk.Frame(container, bg="#0B1120")
+                        results_state: dict = {"items": [], "sel_idx": 0, "expanded": False}
+
+                        def _update_window_geometry() -> None:
+                            win.update_idletasks()
+                            rw = max(win.winfo_reqwidth(), 240)
+                            rh = max(win.winfo_reqheight(), 42)
+                            curr_x = win_rect[0][0] if win_rect[0][2] > win_rect[0][0] else max(m_left + 12, min(pt.x - 20, m_right - rw - 16))
+                            curr_y = win_rect[0][1] if win_rect[0][3] > win_rect[0][1] else max(m_top + 12, min(pt.y + 16, m_bottom - rh - 16))
+                            adj_x = max(m_left + 12, min(curr_x, m_right - rw - 16))
+                            adj_y = max(m_top + 12, min(curr_y, m_bottom - rh - 16))
+                            win.geometry(f"{rw}x{rh}{adj_x:+d}{adj_y:+d}")
+                            win_rect[0] = (adj_x, adj_y, adj_x + rw, adj_y + rh)
+
+                        def _show_detail_preview(rec: dict, card_widget: tk.Widget) -> None:
+                            _close_detail()
+                            txt_full = rec.get("text", "")
+                            kind = rec.get("kind", "text")
+                            if kind == "text" and len(txt_full) <= 50 and "\n" not in txt_full:
+                                return
+                            try:
+                                dwin = tk.Toplevel(root)
+                                detail_win[0] = dwin
+                                dwin.overrideredirect(True)
+                                dwin.attributes("-topmost", True)
+                                dwin.configure(bg="#0F172A")
+                                dframe = tk.Frame(dwin, bg="#0F172A", highlightbackground="#5EEAD4", highlightthickness=1, padx=10, pady=8)
+                                dframe.pack(fill="both", expand=True)
+
+                                if kind == "image" and rec.get("png_bytes"):
+                                    tk.Label(dframe, text="[이미지 크게 보기]", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 4))
+                                    pil_im = Image.open(io.BytesIO(rec["png_bytes"])).convert("RGBA")
+                                    pil_im.thumbnail((280, 200), Image.Resampling.LANCZOS)
+                                    big_ph = ImageTk.PhotoImage(pil_im, master=root)
+                                    thumb_refs.append(big_ph)
+                                    im_lbl = tk.Label(dframe, image=big_ph, bg="#0F172A")
+                                    im_lbl.pack(pady=(0, 4))
+                                    if txt_full:
+                                        tk.Label(dframe, text=f"인식된 글자: {txt_full[:180]}", fg="#CBD5E1", bg="#0F172A", font=("Malgun Gothic", 8), justify="left", wraplength=280).pack(fill="x")
+                                else:
+                                    tk.Label(dframe, text=f"[전문 미리보기 · 총 {len(txt_full):,}자]", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 4))
+                                    preview_body = "\n".join(txt_full.splitlines()[:12])[:420]
+                                    if len(txt_full) > 420:
+                                        preview_body += "\n..."
+                                    tk.Label(dframe, text=preview_body, fg="#F8FAFC", bg="#0F172A", font=("Malgun Gothic", 9), justify="left", wraplength=340, anchor="w").pack(fill="x")
+
+                                dwin.update_idletasks()
+                                dw = dwin.winfo_reqwidth()
+                                dh = dwin.winfo_reqheight()
+                                wx1, wy1, wx2, wy2 = win_rect[0]
+                                dx = wx2 + 8 if (wx2 + 8 + dw) <= m_right else max(m_left + 8, wx1 - dw - 8)
+                                dy = max(m_top + 8, min(card_widget.winfo_rooty(), m_bottom - dh - 8))
+                                dwin.geometry(f"{dw}x{dh}{dx:+d}{dy:+d}")
+                            except Exception:
+                                pass
+
+                        def _execute_item(rec: dict) -> None:
+                            _close_win()
+                            kind = rec.get("kind", "text")
+                            if kind == "image" and rec.get("img_path"):
+                                if set_clipboard_hdrop_file(rec["img_path"]):
+                                    time.sleep(0.03)
+                                    tap_key_combo([VK_CONTROL], VK_V)
+                                    show_ghost_toast("귀신같이 이미지 기억소환 완료")
+                                    return
+                            chosen = rec.get("text", "")
+                            if chosen:
+                                set_clipboard_text(chosen)
+                                time.sleep(0.03)
+                                tap_key_combo([VK_CONTROL], VK_V)
+                                show_ghost_toast("귀신같이 기억소환 완료")
+
+                        def _render_dropdown(query: str) -> None:
+                            for child in results_box.winfo_children():
+                                child.destroy()
+                            _close_detail()
+
+                            q = query.strip()
+                            candidates: list[tuple[float, dict]] = []
+                            if not GLOBAL_AI_HISTORY:
+                                s_preview.config(text="아직 복사된 기억(텍스트/이미지)이 없습니다.", fg="#FCA5A5")
+                                return
+
+                            if not q:
+                                # 검색어가 없을 때는 최근 복사한 순서대로 상위 5개 표시 (Win+V 동일 경험)
+                                for idx_r, rec in enumerate(reversed(GLOBAL_AI_HISTORY)):
+                                    candidates.append((100.0 - idx_r, rec))
+                                    if len(candidates) >= 5:
+                                        break
+                            else:
+                                q_vec = AI_ENGINE.embed_128d(q)
+                                for rec in reversed(GLOBAL_AI_HISTORY):
+                                    t_item = rec.get("text", "")
+                                    sc = AI_ENGINE.cosine_sim(q_vec, rec.get("vec", []))
+                                    if q.lower() in t_item.lower():
+                                        sc += 0.45
+                                    candidates.append((sc, rec))
+                                candidates.sort(key=lambda x: x[0], reverse=True)
+                                candidates = candidates[:5]
+
+                            results_state["items"] = [c[1] for c in candidates]
+                            results_state["sel_idx"] = min(results_state["sel_idx"], max(0, len(candidates) - 1))
+
+                            if not results_state["expanded"]:
+                                results_box.pack(fill="x", pady=(6, 0))
+                                results_state["expanded"] = True
+
+                            for idx_c, (_, rec) in enumerate(candidates):
+                                is_sel = idx_c == results_state["sel_idx"]
+                                card_bg = "#1E293B" if is_sel else "#0F172A"
+                                border_col = "#2DD4BF" if is_sel else "#334155"
+                                card = tk.Frame(
+                                    results_box,
+                                    bg=card_bg,
+                                    highlightbackground=border_col,
+                                    highlightthickness=1,
+                                    padx=7,
+                                    pady=4,
+                                    cursor="hand2",
+                                )
+                                card.pack(fill="x", pady=2)
+
+                                num_lbl = tk.Label(
+                                    card,
+                                    text=f"[{idx_c + 1}]",
+                                    fg="#5EEAD4" if is_sel else "#94A3B8",
+                                    bg=card_bg,
+                                    font=("Malgun Gothic", 8, "bold"),
+                                )
+                                num_lbl.pack(side="left", padx=(0, 6))
+
+                                kind = rec.get("kind", "text")
+                                rel_t = _format_rel_time(rec.get("ts", time.time()))
+                                raw_txt = rec.get("text", "")
+
+                                if kind == "image" and rec.get("png_bytes"):
+                                    try:
+                                        im_pil = Image.open(io.BytesIO(rec["png_bytes"])).convert("RGBA")
+                                        im_pil.thumbnail((42, 28), Image.Resampling.LANCZOS)
+                                        th_ph = ImageTk.PhotoImage(im_pil, master=root)
+                                        thumb_refs.append(th_ph)
+                                        th_lbl = tk.Label(card, image=th_ph, bg=card_bg, bd=0)
+                                        th_lbl.pack(side="left", padx=(0, 6))
+                                    except Exception:
+                                        pass
+                                    tag_str = f"[이미지 · {rel_t}]"
+                                    snip = _make_context_snippet(raw_txt or "캡처 이미지", q, max_len=44)
+                                else:
+                                    char_cnt = len(raw_txt)
+                                    len_badge = f"장문 {char_cnt:,}자" if char_cnt >= 60 else f"{char_cnt}자"
+                                    tag_str = f"[{len_badge} · {rel_t}]"
+                                    snip = _make_context_snippet(raw_txt, q, max_len=52)
+
+                                tag_lbl = tk.Label(card, text=tag_str, fg="#38BDF8", bg=card_bg, font=("Malgun Gothic", 8, "bold"))
+                                tag_lbl.pack(side="left", padx=(0, 6))
+
+                                body_lbl = tk.Label(
+                                    card,
+                                    text=snip,
+                                    fg="#F8FAFC" if is_sel else "#CBD5E1",
+                                    bg=card_bg,
+                                    font=("Malgun Gothic", 9),
+                                    anchor="w",
+                                )
+                                body_lbl.pack(side="left", fill="x", expand=True)
+
+                                for w_item in (card, num_lbl, tag_lbl, body_lbl):
+                                    w_item.bind("<Button-1>", lambda _e, r=rec: _execute_item(r))
+                                    w_item.bind("<Enter>", lambda _e, r=rec, cw=card: _show_detail_preview(r, cw))
+                                    w_item.bind("<Leave>", lambda _e: _close_detail())
+
+                            _update_window_geometry()
 
                         def _on_entry_click(_e=None):
                             is_hovered[0] = True
@@ -819,49 +1053,46 @@ def _toast_worker() -> None:
                             except Exception:
                                 pass
                             s_entry.focus_force()
+                            results_state["sel_idx"] = 0
+                            _render_dropdown(s_entry.get())
 
-                        def _on_search_key(_e=None):
+                        def _on_search_key(event=None):
                             is_hovered[0] = True
-                            q = s_entry.get().strip()
-                            if not q:
-                                s_preview.config(text="검색어 입력 후 Enter...", fg="#94A3B8")
+                            if event and event.keysym in ("Up", "Down", "Return", "Escape"):
                                 return
-                            if not GLOBAL_AI_HISTORY:
-                                s_preview.config(text="아직 복사된 기억이 없습니다.", fg="#FCA5A5")
-                                return
-                            q_vec = AI_ENGINE.embed_128d(q)
-                            best_txt = ""
-                            best_sc = -1.0
-                            for rec in reversed(GLOBAL_AI_HISTORY):
-                                t_item = rec.get("text", "")
-                                sc = AI_ENGINE.cosine_sim(q_vec, rec.get("vec", []))
-                                if q.lower() in t_item.lower():
-                                    sc += 0.40
-                                if sc > best_sc:
-                                    best_sc = sc
-                                    best_txt = t_item
-                            if best_txt:
-                                matched_clip["val"] = best_txt
-                                prev_str = best_txt.replace("\n", " ")[:28]
-                                s_preview.config(text=f"➔ [{prev_str}] (Enter 사출!)", fg="#6EE7B7")
+                            results_state["sel_idx"] = 0
+                            _render_dropdown(s_entry.get())
+
+                        def _on_arrow_down(_e=None):
+                            if results_state["items"]:
+                                results_state["sel_idx"] = (results_state["sel_idx"] + 1) % len(results_state["items"])
+                                _render_dropdown(s_entry.get())
+                            return "break"
+
+                        def _on_arrow_up(_e=None):
+                            if results_state["items"]:
+                                results_state["sel_idx"] = (results_state["sel_idx"] - 1) % len(results_state["items"])
+                                _render_dropdown(s_entry.get())
+                            return "break"
 
                         def _on_search_enter(_e=None):
-                            chosen = matched_clip["val"] or s_entry.get().strip()
-                            _close_win()
-                            if chosen:
-                                set_clipboard_text(chosen)
-                                time.sleep(0.03)
-                                tap_key_combo([VK_CONTROL], VK_V)
-                                show_ghost_toast("👻 귀신같이 기억소환 완료!")
+                            items_now = results_state["items"]
+                            if items_now and 0 <= results_state["sel_idx"] < len(items_now):
+                                _execute_item(items_now[results_state["sel_idx"]])
+                            else:
+                                q_raw = s_entry.get().strip()
+                                _close_win()
+                                if q_raw:
+                                    set_clipboard_text(q_raw)
+                                    time.sleep(0.03)
+                                    tap_key_combo([VK_CONTROL], VK_V)
 
                         s_entry.bind("<Button-1>", _on_entry_click)
                         s_entry.bind("<KeyRelease>", _on_search_key)
+                        s_entry.bind("<Down>", _on_arrow_down)
+                        s_entry.bind("<Up>", _on_arrow_up)
                         s_entry.bind("<Return>", _on_search_enter)
                         s_entry.bind("<Escape>", lambda _e: _close_win())
-
-                        # [아랫단] 정본 마스터 로고 ([갓 쓴 애기귀신 심볼] + [귀신같이 3D 워드마크]) + 단축키 안내 바
-                        bottom_bar = tk.Frame(container, bg="#0B1120")
-                        bottom_bar.pack(fill="x")
 
                         logo_btn = tk.Frame(
                             bottom_bar,
@@ -869,10 +1100,10 @@ def _toast_worker() -> None:
                             highlightbackground="#2DD4BF",
                             highlightthickness=1,
                             padx=7,
-                            pady=3,
+                            pady=5,
                             cursor="hand2",
                         )
-                        logo_btn.pack(side="left", padx=(0, 8))
+                        logo_btn.pack(side="left", padx=(0, 8), fill="y")
 
                         logo_widgets = [logo_btn]
                         if ghost_symbol_photo is not None:
@@ -884,16 +1115,12 @@ def _toast_worker() -> None:
                         if ghost_wordmark_photo is not None:
                             wm_lbl = tk.Label(logo_btn, image=ghost_wordmark_photo, bg="#131D36", bd=0, cursor="hand2")
                             wm_lbl.image = ghost_wordmark_photo
-                            wm_lbl.pack(side="left", padx=(0, 3))
+                            wm_lbl.pack(side="left", padx=(0, 2))
                             logo_widgets.append(wm_lbl)
                         else:
                             wm_lbl = tk.Label(logo_btn, text="귀신같이", fg="#5EEAD4", bg="#131D36", font=("Malgun Gothic", 10, "bold"), cursor="hand2")
-                            wm_lbl.pack(side="left", padx=(0, 3))
+                            wm_lbl.pack(side="left", padx=(0, 2))
                             logo_widgets.append(wm_lbl)
-
-                        arr_lbl = tk.Label(logo_btn, text="↗", fg="#5EEAD4", bg="#131D36", font=("Malgun Gothic", 9, "bold"), cursor="hand2")
-                        arr_lbl.pack(side="left")
-                        logo_widgets.append(arr_lbl)
 
                         def _on_logo_click(_e=None):
                             _close_win()
@@ -902,16 +1129,36 @@ def _toast_worker() -> None:
                         for wdg in logo_widgets:
                             wdg.bind("<Button-1>", _on_logo_click)
 
-                        lbl = tk.Label(
-                            bottom_bar,
-                            text=right_part.strip(),
-                            fg="#F1F5F9",
+                        menu_box = tk.Frame(bottom_bar, bg="#0B1120")
+                        menu_box.pack(side="left", fill="both", expand=True)
+
+                        if "\n" in right_part:
+                            line1_txt, line2_txt = right_part.strip().split("\n", 1)
+                        else:
+                            line1_txt, line2_txt = right_part.strip(), ""
+
+                        lbl_r1 = tk.Label(
+                            menu_box,
+                            text=line1_txt.strip(),
+                            fg="#5EEAD4",
                             bg="#0B1120",
                             font=("Malgun Gothic", 9, "bold"),
+                            anchor="w",
                         )
-                        lbl.pack(side="left")
+                        lbl_r1.pack(fill="x", anchor="w")
+
+                        if line2_txt.strip():
+                            lbl_r2 = tk.Label(
+                                menu_box,
+                                text=line2_txt.strip(),
+                                fg="#E2E8F0",
+                                bg="#0B1120",
+                                font=("Malgun Gothic", 9, "bold"),
+                                anchor="w",
+                            )
+                            lbl_r2.pack(fill="x", anchor="w", pady=(1, 0))
                     else:
-                        # 결과 알림 캡슐 (귀신창 미니)
+                        clean_msg = re.sub(r"[👻🔍✨📌★]", "", message).strip()
                         outer = tk.Frame(
                             win,
                             bg="#0B1120",
@@ -927,7 +1174,7 @@ def _toast_worker() -> None:
                             s_lbl.pack(side="left", padx=(0, 6))
                         lbl = tk.Label(
                             outer,
-                            text=message.replace("👻 ", ""),
+                            text=clean_msg,
                             fg="#5EEAD4",
                             bg="#0B1120",
                             font=("Malgun Gothic", 9, "bold"),
@@ -957,12 +1204,17 @@ _toast_worker_started = False
 _toast_worker_lock = threading.Lock()
 
 
-def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
+def _ensure_toast_worker() -> None:
     global _toast_worker_started
-    with _toast_worker_lock:
-        if not _toast_worker_started:
-            threading.Thread(target=_toast_worker, daemon=True).start()
-            _toast_worker_started = True
+    if not _toast_worker_started:
+        with _toast_worker_lock:
+            if not _toast_worker_started:
+                threading.Thread(target=_toast_worker, daemon=True).start()
+                _toast_worker_started = True
+
+
+def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
+    _ensure_toast_worker()
     _toast_queue.put((message, duration_ms))
 
 
@@ -1655,15 +1907,79 @@ def main() -> None:
         s = text.strip()
         if len(s) < 2:
             return
-        if ai_clipboard_history and ai_clipboard_history[-1].get("text") == s:
+        if ai_clipboard_history and ai_clipboard_history[-1].get("text") == s and ai_clipboard_history[-1].get("kind") != "image":
             return
-        rec = {"text": s, "vec": AI_ENGINE.embed_128d(s[:160]), "ts": time.time()}
+        rec = {"kind": "text", "text": s, "vec": AI_ENGINE.embed_128d(s[:160]), "ts": time.time()}
         ai_clipboard_history.append(rec)
         GLOBAL_AI_HISTORY.append(rec)
         if len(ai_clipboard_history) > 300:
             ai_clipboard_history.pop(0)
         if len(GLOBAL_AI_HISTORY) > 300:
             GLOBAL_AI_HISTORY.pop(0)
+
+    def record_ai_image_history(png_bytes: bytes) -> None:
+        try:
+            ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:19]
+            tag = _generate_smart_filename_prefix()
+            img_path = Path(tempfile.gettempdir()) / f"귀신같이_캡처_{tag}_{ts_str}.png"
+            img_path.write_bytes(png_bytes)
+            init_label = f"[{tag}] 화면 캡처 이미지"
+            rec = {
+                "kind": "image",
+                "png_bytes": png_bytes,
+                "img_path": str(img_path),
+                "text": init_label,
+                "vec": AI_ENGINE.embed_128d(init_label),
+                "ts": time.time(),
+            }
+            GLOBAL_AI_HISTORY.append(rec)
+            if len(GLOBAL_AI_HISTORY) > 300:
+                GLOBAL_AI_HISTORY.pop(0)
+
+            def _async_ocr_enrich(target_rec: dict, p_str: str, base_tag: str) -> None:
+                try:
+                    ps_cmd = (
+                        "Add-Type -AssemblyName System.Runtime.WindowsRuntime; "
+                        "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]; "
+                        "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]; "
+                        "$file = [Windows.Storage.StorageFile]::GetFileFromPathAsync('" + p_str + "').GetAwaiter().GetResult(); "
+                        "$stream = $file.OpenAsync([Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult(); "
+                        "$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult(); "
+                        "$bitmap = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult(); "
+                        "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages(); "
+                        "$res = $engine.RecognizeAsync($bitmap).GetAwaiter().GetResult(); "
+                        "$res.Text"
+                    )
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    si.wShowWindow = 0
+                    ocr_txt = subprocess.check_output(
+                        ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
+                        encoding="utf-8",
+                        errors="ignore",
+                        timeout=6,
+                        startupinfo=si,
+                        creationflags=0x08000000,
+                    ).strip()
+                    if ocr_txt:
+                        clean_ocr = re.sub(r"\s+", " ", ocr_txt).strip()
+                        combined = f"[{base_tag}] {clean_ocr}"
+                        target_rec["text"] = combined
+                        target_rec["vec"] = AI_ENGINE.embed_128d(combined[:200])
+                except Exception:
+                    pass
+
+            threading.Thread(target=_async_ocr_enrich, args=(rec, str(img_path), tag), daemon=True).start()
+        except Exception:
+            pass
+
+    # 데몬 기동 직후 현재 클립보드에 들어있는 텍스트/이미지를 초기 기억 히스토리에 적재
+    try:
+        init_clip = get_clipboard_text()
+        if init_clip and len(init_clip.strip()) >= 2:
+            record_ai_history(init_clip)
+    except Exception:
+        pass
 
     def arm_sub_hotkeys() -> None:
         nonlocal menu_armed, menu_armed_until
@@ -1703,7 +2019,7 @@ def main() -> None:
                         daemon_set_clipboard(seq_queue[0])
                         arm_sub_hotkeys()
                         show_ghost_toast(
-                            f"👻 귀신같이 ({len(seq_queue)}개 장전) | ★[Ctrl+V]순차·칸맞춤  ★[9]파일·PDF  ★[F1~5]상용구  | [2]한영 [3]서식 [4]줄바꿈 [5]합본·검색 [6]OCR [7]창고정 [8]번호",
+                            f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
                             duration_ms=6500,
                         )
                     elif len(recent_unpasted) == 1:
@@ -1714,21 +2030,21 @@ def main() -> None:
                             daemon_set_clipboard(seq_queue[0])
                             arm_sub_hotkeys()
                             show_ghost_toast(
-                                f"👻 귀신같이 엑셀쪼개기 ({len(cells)}칸 장전) | ★[Ctrl+V]연사·칸맞춤  [2~9]초능력  [F1~5]상용구",
+                                f"귀신같이 (엑셀 {len(cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
                                 duration_ms=6500,
                             )
                         else:
                             seq_queue.clear()
                             arm_sub_hotkeys()
                             show_ghost_toast(
-                                "👻 귀신같이 | ★[Ctrl+V]순차·칸맞춤  ★[9]파일·PDF  ★[F1~5]상용구  | [2]한영 [3]서식 [4]줄바꿈 [5]합본·검색 [6]OCR [7]창고정 [8]번호",
+                                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
                                 duration_ms=6500,
                             )
                     else:
                         seq_queue.clear()
                         arm_sub_hotkeys()
                         show_ghost_toast(
-                            "👻 귀신같이 | ★[Ctrl+V]순차·칸맞춤  ★[9]파일·PDF  ★[F1~5]상용구  | [2]한영 [3]서식 [4]줄바꿈 [5]합본·검색 [6]OCR [7]창고정 [8]번호",
+                            "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
                             duration_ms=6500,
                         )
 
@@ -1846,6 +2162,7 @@ def main() -> None:
                                         recent_images.clear()
                                     recent_images.append(png_bytes)
                                     last_image_ts = now
+                                    record_ai_image_history(png_bytes)
                         except Exception:
                             pass
 
