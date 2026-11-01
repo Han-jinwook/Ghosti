@@ -1,8 +1,9 @@
 {
-  "name": "귀신같이 - 1초 AI 파일·영상 찾기 & 용량청소",
+  "name": "귀신같이 - 1초 AI 파일·영상 찾기 & 패밀리 공유",
   "short_name": "귀신같이",
-  "description": "파일 이름 몰라도 동영상 속 장면·엑셀 글자를 1초 만에 귀신같이 찾아주는 무료 AI! 중복 사진 청소와 서버 없는 가족 공유방까지",
+  "description": "파일 이름 몰라도 동영상 속 장면·엑셀 글자를 1초 만에 귀신같이 찾아주는 무료 AI! 내 기기 통합과 가족·동창회 공유방, 썬드리머 패밀리 런처까지",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#121318",
   "theme_color": "#121318",
@@ -25,6 +26,36 @@
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "🎯 1초 AI 찾기 & 고스트 캐스트",
+      "short_name": "1초 찾기",
+      "description": "사진·동영상 장면·엑셀 문서 1초 투시 검색 및 모니터 크게 보기",
+      "url": "/?dev=true&tab=search",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "💬 센스톡 바로가기 (패밀리 SSO)",
+      "short_name": "센스톡",
+      "description": "1:1 맞춤 감성 메시지 고속 발송 비서 센스톡으로 즉시 이동",
+      "url": "/?family_jump=sensetalk",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "🛡️ 어그로필터 바로가기 (패밀리 SSO)",
+      "short_name": "어그로필터",
+      "description": "유튜브 영상 팩트 신뢰도 분석기 어그로필터로 즉시 이동",
+      "url": "/?family_jump=aggrofilter",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "☀️ 썬드리머 · 🍱 뭐먹지? 패밀리 허브",
+      "short_name": "패밀리 허브",
+      "description": "내가 다녀간 썬드리머 패밀리 앱으로 1초 이동",
+      "url": "/?family_jump=sundreamer",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

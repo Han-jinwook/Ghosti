@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { cosineSimilarity } from '../services/aiEngine';
+import { dispatchGhostCastLiveCommand } from './GhostCastAndLiveSystem';
 import type { PhotoItem } from '../types/saysee';
 
 type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
@@ -346,7 +347,20 @@ export const PhotoDetailModal: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() =>
+                dispatchGhostCastLiveCommand({
+                  action: 'OPEN_MONITOR_CAST',
+                  photoId: selectedPhoto.id,
+                })
+              }
+              className="px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/60 text-cyan-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="연결된 내 PC/노트북 모니터에 전체화면 클린 뷰어로 띄우고 내 폰을 무선 리모컨으로 전환합니다 (카톡 알림 유출 0%)"
+            >
+              <span>💻 모니터로 크게 보기</span>
+            </button>
             <button
               onClick={() => toggleBookmark(selectedPhoto.id)}
               className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1 transition-colors ${

@@ -10,6 +10,7 @@ import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { PcMasterQuickSendPanel } from './PricingModal';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { SetupMonsterContent } from './SetupMonsterModal';
+import { GhostCastLiveToolbar } from './GhostCastAndLiveSystem';
 
 const LOUNGE_TABS: Array<{
   id: LoungeType;
@@ -2850,7 +2851,11 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const FAMILY_ROOMS: FamilyRoomId[] = ['우리집', '본가(친가)', '처가(친정)'];
 
   if (activeLoungeType === 'personal') {
-    return null;
+    return (
+      <div className="flex flex-col gap-2">
+        <GhostCastLiveToolbar loungeLabel="👑 내 기기 통합 (폰·집PC·노트북)" />
+      </div>
+    );
   }
 
   const renderMemberPersonaPills = (labelText: string) => {
@@ -2950,6 +2955,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
             {renderOriginalAutoSyncControl()}
           </div>
         </div>
+        <GhostCastLiveToolbar loungeLabel={`👨‍👩‍👧‍👦 패밀리 [${activeFamilyRoom}]`} />
         {renderStorageCheckAndSyncDetail()}
       </div>
     );
@@ -2970,6 +2976,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
           {renderMemberPersonaPills('회원별 사진 찾기:')}
           {renderOriginalAutoSyncControl()}
         </div>
+
+        <GhostCastLiveToolbar loungeLabel="⛳ 동호회 · 동창회 사진 공유방" />
 
         {/* 남은 용량 대비 가능/불가능 안내 및 내 기기 저장 폴더 열기 */}
         {renderStorageCheckAndSyncDetail()}
@@ -3011,6 +3019,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
         </span>
         {renderMemberPersonaPills('친구 이름 검색:')}
       </div>
+      <GhostCastLiveToolbar loungeLabel="⛳ 동호회 · 동창회 사진 공유방" />
     </div>
   );
 };

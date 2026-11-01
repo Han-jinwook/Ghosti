@@ -22,6 +22,7 @@ import {
   SetupFloatingOverlayGuide,
   SetupMonsterModal,
 } from './components/SetupMonsterModal';
+import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
 
 export const App: React.FC = () => {
   const {
@@ -196,6 +197,9 @@ export const App: React.FC = () => {
           {/* [🛠️ 설정몬스터] 독립 모달 & 타사 앱/프로그램 최상단 투명 유리판 손가락 화살표 가이드(👆) */}
           <SetupMonsterModal />
           <SetupFloatingOverlayGuide />
+
+          {/* [고스트 캐스트 & 라이브 3대 핵심 무기] ① PC/노트북 모니터 풀스크린 클린 뷰어 + 무선 리모컨, ② 방 전용 프라이빗 라이브 생중계 & 라이브 포토 싱크, ③ 원격 모니터링 셔터(선별/즉시 공유 선택) */}
+          <GhostCastAndLiveGlobalOverlay />
 
           {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}
           {lastUndoBatch && (
