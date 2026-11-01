@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from './store/useSaySeeStore';
+import { playAppEnterGiggleSound } from './services/babyGhostSound';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
@@ -102,6 +103,7 @@ export const App: React.FC = () => {
       localStorage.setItem('ghosti_onboarding_completed', 'true');
       localStorage.setItem('ghosti_view_mode', 'workspace');
     } catch {}
+    playAppEnterGiggleSound(true);
     setViewMode('workspace');
   };
 
@@ -134,6 +136,7 @@ export const App: React.FC = () => {
   }, [isDevAuthorized]);
 
   useEffect(() => {
+    playAppEnterGiggleSound();
     void initApp();
     const handleZCoreConnected = () => {
       useSaySeeStore.setState({

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { playAppEnterGiggleSound } from '../services/babyGhostSound';
 
 /**
  * 🌟 『귀신같이』 앱/웹 첫 실행 시 로딩 스플래시 화면
@@ -40,6 +41,7 @@ export const GhostiLoadingSplash: React.FC = () => {
 
   useEffect(() => {
     if (!dismissed) return;
+    playAppEnterGiggleSound();
     const t = window.setTimeout(() => {
       setUnmounted(true);
     }, 480);
@@ -52,7 +54,7 @@ export const GhostiLoadingSplash: React.FC = () => {
     <div
       role="status"
       aria-label="귀신같이 로딩 스플래시 화면"
-      onClick={() => setDismissed(true)}
+      onClick={() => { playAppEnterGiggleSound(); setDismissed(true); }}
       className={`fixed inset-0 z-[200] flex flex-col items-center justify-center px-4 select-none cursor-pointer transition-opacity duration-500 ease-out ${
         dismissed ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
