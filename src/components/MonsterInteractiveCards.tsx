@@ -39,6 +39,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   onToast,
 }) => {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showAllRestorePoints, setShowAllRestorePoints] = useState(false);
+  const [restoreFilterText, setRestoreFilterText] = useState('');
 
   const handleBatonTouch = async () => {
     if (!message.batonTouchPayload) return;
@@ -245,57 +247,94 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 5) [복원 기록] 3단계 무결성 사전 검진(🟢/🟡/🔴) 및 자연어 타이핑 원복 */}
-      {message.cardKind === 'RESTORE_POINTS_LIST' && message.restorePoints && (
-        <div className="rounded-xl border border-violet-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
-          <div className="text-xs font-extrabold text-violet-200 flex items-center justify-between flex-wrap gap-2">
-            <span>🕰️ 최근 [복원 기록] 타임머신 (사전 무결성 검진 완료)</span>
-            <span className="text-[11px] text-violet-300 font-semibold">
-              ✍️ 채팅창에 &ldquo;1번 복원해줘&rdquo;(또는 &ldquo;#번호&rdquo;)를 타이핑해 선택
-            </span>
-          </div>
-          <div className="space-y-2">
-            {message.restorePoints.map((pt) => (
-              <div
-                key={pt.restoreId}
-                className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 space-y-1.5"
+      {/* 5) [복원 기록] 3단계 무결성 사전 검진(🟢/🟡/🔴) 및 자연어 타이핑 원복 (수십 개여도 최근 3건 기본 + 더보기/검색) */}
+      {message.cardKind === 'RESTORE_POINTS_LIST' && message.restorePoints && (() => {
+        const q = restoreFilterText.trim().toLowerCase();
+        const filteredPts = q
+          ? message.restorePoints.filter(
+              (pt) =>
+                pt.restoreId.toLowerCase().includes(q) ||
+                pt.summary.toLowerCase().includes(q) ||
+                pt.createdAt.toLowerCase().includes(q)
+            )
+          : message.restorePoints;
+        const visiblePts = showAllRestorePoints || q ? filteredPts : filteredPts.slice(0, 3);
+        const hiddenCount = Math.max(0, filteredPts.length - visiblePts.length);
+
+        return (
+          <div className="rounded-xl border border-violet-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
+            <div className="text-xs font-extrabold text-violet-200 flex items-center justify-between flex-wrap gap-2">
+              <span>🕰️ [복원 기록] 히스토리 (총 {message.restorePoints.length}건)</span>
+              <span className="text-[11px] text-violet-300 font-semibold">
+                ✍️ 채팅창에 &ldquo;1번 복원해줘&rdquo;(또는 &ldquo;#번호&rdquo;)를 타이핑해 선택
+              </span>
+            </div>
+
+            {message.restorePoints.length > 4 && (
+              <input
+                type="text"
+                value={restoreFilterText}
+                onChange={(e) => setRestoreFilterText(e.target.value)}
+                placeholder="🔍 복원 지점이 많을 땐 번호(#12)·날짜·작업명으로 바로 검색..."
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+              />
+            )}
+
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+              {visiblePts.map((pt) => (
+                <div
+                  key={pt.restoreId}
+                  className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 space-y-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-black text-white">
+                      [{pt.restoreId}] {pt.summary}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                        pt.integrityStatus === 'FULL_RESTORABLE'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : pt.integrityStatus === 'PARTIAL_RESTORABLE'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      {pt.statusBadge}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">{pt.precheckGuideMessage}</p>
+                  <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                    <span className="text-[10px] text-slate-500">{pt.createdAt}</span>
+                    {pt.rolledBack ? (
+                      <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        원위치 복원 및 블랙박스 기록 완료
+                        {pt.rollbackTypedText ? ` · "${pt.rollbackTypedText}"` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-violet-300 font-semibold">
+                        선택 타이핑: <code>&ldquo;{pt.restoreId.replace('#', '')}번 복원해줘&rdquo;</code>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {filteredPts.length > 3 && !q && (
+              <button
+                type="button"
+                onClick={() => setShowAllRestorePoints((v) => !v)}
+                className="w-full py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] font-bold text-violet-300 transition"
               >
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-xs font-black text-white">
-                    [{pt.restoreId}] {pt.summary}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
-                      pt.integrityStatus === 'FULL_RESTORABLE'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : pt.integrityStatus === 'PARTIAL_RESTORABLE'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                    }`}
-                  >
-                    {pt.statusBadge}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400">{pt.precheckGuideMessage}</p>
-                <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-                  <span className="text-[10px] text-slate-500">{pt.createdAt}</span>
-                  {pt.rolledBack ? (
-                    <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      원위치 복원 및 블랙박스 기록 완료
-                      {pt.rollbackTypedText ? ` · "${pt.rollbackTypedText}"` : ''}
-                    </span>
-                  ) : (
-                    <span className="text-[11px] text-violet-300 font-semibold">
-                      되돌리기 명령 예시: <code>&ldquo;{pt.restoreId} 되돌려줘&rdquo;</code>
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+                {showAllRestorePoints
+                  ? '▴ 최근 3건만 심플하게 보기'
+                  : `▾ 이전 복원 기록 더 보기 (외 ${hiddenCount}건)`}
+              </button>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 6) 내 PC 실시간 사양 스캔(200토큰) 카드 (심플 노션 스타일) */}
       {message.cardKind === 'PC_SPEC_CONSULTATION' && message.pcSpecPayload && (

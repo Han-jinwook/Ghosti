@@ -378,12 +378,6 @@ export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
     `- 모니터 주사율: ${s.displayHz ? `${s.displayHz}Hz` : '기본'} / OS: ${s.osVersion || 'Windows'}`,
     `- 시작프로그램(${startupNames.length}개): ${startupNames.join(', ') || '없음'}`,
     `- 인쇄 스풀러: ${spoolerStatus} (대기열 멈춘 인쇄물 ${stuckPrint}건)`,
-    '',
-    '[2026년 최신 PC 사양·트렌드 판정 기준표 (구형 기준 착각 금지 — 반드시 이 기준으로만 조언할 것)]',
-    '- 2026 사무·웹서핑·인강: RAM 8GB는 다중 탭에서 빠듯함(16GB 이상 권장), C드라이브 여유 20GB 이상 필수.',
-    '- 2026 영상편집(캡컷·프리미어 쇼츠/4K)·포토샵 AI: RAM 최소 16GB(4K·AI는 32GB+ 권장), 외장 GPU(RTX 3060/4060/5060급 이상 또는 최신 Arc/Radeon 내장) 권장, 여유 공간 50GB+ 필수.',
-    '- 2026 게임: 롤·발로란트(RAM 16GB, 내장/보급형 GPU 가능) / 배그·스팀 최신 3D 게임(RAM 16~32GB, RTX 3060/4060/5060 이상 외장 그래픽, 모니터 144Hz+ 권장).',
-    '- 현역 최신 세대 인식: Intel 13·14세대 및 Core Ultra(Series 1·2), AMD Ryzen 7000·8000·9000시리즈, NVIDIA RTX 40·50시리즈.',
   ];
 
   cachedPcContext = {
@@ -393,6 +387,23 @@ export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
     osInspectData: o,
   };
   return cachedPcContext;
+}
+
+/**
+ * 📅 [월간 정기 업데이트 사양 기준표 (Monthly PC Spec Benchmark)]
+ * - 매번 프롬프트에 넣지 않고(평소 0토큰), 오직 유저가 '사양·게임·영상편집·느려짐·업그레이드'를 물어볼 때만 조건부로 ~45토큰만 주입합니다.
+ * - 매월 1일 정기 문서/코드 점검 시 version(YYYY-MM)과 기준치만 1줄 갱신합니다.
+ */
+export const MONTHLY_PC_SPEC_BENCHMARK = {
+  version: '2026-11',
+  compactRuleText:
+    '[2026-11월 기준 사양 판정표]: 사무·웹탭(RAM 16GB+, 여유 20GB+) | 쇼츠·4K편집·포토샵AI(RAM 16~32GB+, RTX 3060~5060급/최신Arc·Radeon, 여유 50GB+) | 롤·발로(16GB, 내장가능) | 배그·3D게임(16~32GB, RTX 3060~5060+, 144Hz+) | 최신세대(Intel 13·14·Core Ultra, Ryzen 7000~9000, RTX 40·50).',
+};
+
+export function isSpecOrPerformanceQuery(query: string): boolean {
+  return /사양|스펙|돌아가|배그|포토샵|프리미어|캡컷|영상\s*편집|롤|발로란트|게임|램|ram|메모리|글카|그래픽|gpu|cpu|주사율|hz|업그레이드|새로\s*사|느려|느린|버벅|렉|답답|용량/i.test(
+    query
+  );
 }
 
 const LITERACY_TONE_PROMPT: Record<MonsterLiteracyLevel, string> = {
@@ -508,6 +519,7 @@ export async function callMonsterLowCostLlmJson(params: {
     '- 유저 질문이 일상어/초보 말투("왜 이리 버벅대냐", "새로 사야 해?", "답답해")이면: 어려운 약어 대신 "작업 공간(메모리)", "저장 공간" 같은 쉬운 표현을 함께 써서 설명하세요.',
     '',
     pcContextText,
+    isSpecOrPerformanceQuery(query) ? MONTHLY_PC_SPEC_BENCHMARK.compactRuleText : '',
     '',
     historyBlock ? `[최근 대화 맥락]\n${historyBlock}\n` : '',
     `[현재 유저 입력 (${sourceTab === 'trash' ? '🧹 치우기 탭' : '⚙️ 고치기 탭'})]`,
@@ -1046,13 +1058,28 @@ export async function processUnifiedMonsterChatQuery(params: {
         '🕰️ 아직 저장된 [복원 기록]이 없습니다. 폴더 정리나 바로가기 생성을 승인해 실행하시면 번호별 복원 지점이 이곳에 기록됩니다.'
       );
     }
-    speak(`최근 복원 기록 ${points.length}건을 찾았습니다. 몇 번을 되돌릴지 번호를 입력해 주세요.`);
+    // 복원지점이 수십 개일 때 유저가 특정 키워드(예: "바탕화면 복원 기록", "설치파일 복원")를 언급했으면 해당 기록을 최상단으로 배치
+    const filterKwMatch = clean.replace(/최근|복원|기록|지점|히스토리|목록|보여|줘|주세요|알려|원래대로|되돌려|원복|취소|해|할래/g, '').trim();
+    const sortedPoints =
+      filterKwMatch.length >= 2
+        ? [
+            ...points.filter((p) => p.summary.includes(filterKwMatch) || p.userPrompt.includes(filterKwMatch)),
+            ...points.filter((p) => !p.summary.includes(filterKwMatch) && !p.userPrompt.includes(filterKwMatch)),
+          ]
+        : points;
+
+    const countGuide =
+      sortedPoints.length > 3
+        ? `총 ${sortedPoints.length}건 중 **가장 최근 3건**을 먼저 보여드립니다 (이전 기록은 카드 하단 **[▾ 더 보기]**로 펼칠 수 있습니다).`
+        : `총 ${sortedPoints.length}건의 복원 지점이 있습니다.`;
+
+    speak(`복원 기록 ${sortedPoints.length}건을 확인했습니다. 되돌릴 번호를 입력해 주세요.`);
     return reply(
       sourceTab,
-      `🕰️ **최근 [복원 기록] 히스토리 (${points.length}건)**\n어느 시점으로 되돌릴까요? 아래 목록에서 번호를 확인하신 뒤 채팅창에 **"1번 복원해줘"** (또는 **"#1"**)처럼 번호를 타이핑해 주세요.`,
+      `🕰️ **[복원 기록] 히스토리 조회** — ${countGuide}\n어느 시점으로 되돌릴까요? 채팅창에 **"1번 복원해줘"** (또는 **"#1"**)처럼 번호를 타이핑해 주세요.`,
       {
         cardKind: 'RESTORE_POINTS_LIST',
-        restorePoints: points,
+        restorePoints: sortedPoints,
       }
     );
   }
