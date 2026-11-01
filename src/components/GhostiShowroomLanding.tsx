@@ -1325,7 +1325,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 (주)썬드림스튜디오 · 썬드리머 패밀리 플래그십 『귀신같이(Ghosti)』
               </p>
               <p className="mt-0.5">
-                상표출원 제40-2026-0229386호 · {PATENTS_FILED ? '대한민국 6대 특허출원' : '특허 출원 진행 중'} · Zero-Server 프라이버시 엔진 탑재
+                상표출원 제40-2026-0229386호 · {PATENTS_FILED ? '대한민국 6대 특허출원' : '특허 출원 진행 중'} · Zero-Server 프라이버시 엔진 탑재 · 익명 기능 카운트 외 사용자 원문·파일 내용 0 Byte 수집 보장(환경설정 ON/OFF 제어 지원)
               </p>
             </div>
           </div>

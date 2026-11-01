@@ -32,7 +32,23 @@ const SNIPPETS_STORAGE_KEY = 'ghosti_superpower_snippets_v27';
  * 애기귀신 3음 상승 차임벨 (도6 -> 미6 -> 솔6, "띠리링~👻") Web Audio 합성기
  * - 브라우저에서도 한영 오타 둔갑술 체험 시 즉시 맑고 귀여운 효과음을 들려줍니다.
  */
-export function playBabyGhostChime(): void {
+export function playBabyGhostChime(mode: 'typo' | 'summon' = 'typo'): void {
+  try {
+    const wavUrl = mode === 'summon' ? '/sounds/active_summon_sound.wav' : '/sounds/active_typo_sound.wav';
+    const audio = new Audio(wavUrl);
+    audio.volume = 0.55;
+    void audio.play().catch(() => {
+      // 브라우저 자동재생 정책 등으로 WAV 재생 실패 시 Web Audio 차임벨 폴백
+      playWebAudioFallbackChime();
+    });
+    return;
+  } catch {
+    // ignore
+  }
+  playWebAudioFallbackChime();
+}
+
+function playWebAudioFallbackChime(): void {
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
@@ -379,6 +395,14 @@ export const OnboardingModal: React.FC = () => {
   ]);
   const [pastedSlots, setPastedSlots] = useState<string[]>([]);
   const [floatingWebOpenedToast, setFloatingWebOpenedToast] = useState(false);
+  const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ghosti_telemetry_enabled') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [showTermsClause, setShowTermsClause] = useState(false);
 
   // F1~F5 내 상용구 & 전화번호 하이픈
   const [snippets, setSnippets] = useState<Record<string, string>>(DEFAULT_SNIPPETS);
@@ -1234,6 +1258,59 @@ export const OnboardingModal: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* 하단 공통: 익명 기능 사용 통계(Zero-Content Telemetry) ON/OFF 토글 & 이용약관·개인정보처리방침 제N조 고지 */}
+        <div className="pt-3 border-t border-white/10 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+            <label className="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={telemetryEnabled}
+                onChange={async (e) => {
+                  const next = e.target.checked;
+                  setTelemetryEnabled(next);
+                  try {
+                    localStorage.setItem('ghosti_telemetry_enabled', String(next));
+                    await fetch(getZCoreUrl('/api/superpower/telemetry'), {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ enabled: next }),
+                      signal: AbortSignal.timeout(1200),
+                    });
+                  } catch {
+                    // 로컬 저장 완료
+                  }
+                }}
+                className="w-4 h-4 accent-teal-400 rounded"
+              />
+              <span className="font-bold text-zinc-200">
+                ✔ 서비스 개선을 위한 익명 사용 통계 보내기 (입력·복사 원문 텍스트 및 파일 내용 0 Byte 수집)
+              </span>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setShowTermsClause((v) => !v)}
+              className="text-teal-300 hover:text-teal-200 font-bold underline cursor-pointer"
+            >
+              {showTermsClause ? '📜 이용약관·개인정보처리방침 조항 접기 ▴' : '📜 이용약관·개인정보처리방침 익명 통계 조항 보기 ▾'}
+            </button>
+          </div>
+
+          {showTermsClause && (
+            <div className="p-3.5 rounded-xl bg-zinc-950/95 border border-white/10 text-[11.5px] text-zinc-300 leading-relaxed space-y-1">
+              <div className="font-extrabold text-teal-300">
+                제N조 (서비스 품질 개선을 위한 비식별 기능 사용 빈도 및 오류 통계 수집)
+              </div>
+              <p>
+                1. 회사는 서비스의 기능 개선, 오류 수정 및 사용자 경험 최적화를 위하여 <strong className="text-white">사용자가 입력·복사한 텍스트 원문이나 파일 내용, 암호화된 외부 메신저 DB 등은 단 0 Byte도 수집·열람·전송하지 않으며</strong>, 오직 비식별화된 <strong className="text-emerald-300">기능별 호출 횟수(익명 카운트 숫자) 및 오류 코드(error_code)</strong>만을 집계합니다.
+              </p>
+              <p>
+                2. 회원은 언제든지 환경설정의 <code className="text-amber-300">[✔ 서비스 개선을 위한 익명 사용 통계 보내기]</code> 토글(기본값 ON)을 통해 통계 전송 여부를 직접 제어할 수 있습니다.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

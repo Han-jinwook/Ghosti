@@ -240,6 +240,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "snippets": plugin_ghosti_superpowers.get_snippets()})
             return
 
+        if path == "/api/superpower/telemetry":
+            self._send_json(plugin_ghosti_superpowers.get_telemetry())
+            return
+
         if path.startswith("/api/senstalk"):
             sub = path[len("/api/senstalk") :].strip("/") or "health"
             self._send_json(plugin_senstalk.handle_get(sub))
@@ -340,6 +344,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/superpower/simulate":
             self._send_json(plugin_ghosti_superpowers.simulate_superpower(body))
+            return
+
+        if path == "/api/superpower/telemetry":
+            self._send_json(plugin_ghosti_superpowers.update_telemetry(body))
             return
 
         if path.startswith("/api/senstalk"):

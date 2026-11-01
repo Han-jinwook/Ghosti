@@ -130,7 +130,7 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     return {
         "ok": True,
         "engine_running": True,
-        "version": "2.7",
+        "version": "2.8",
         "port": 5199,
         "machine_hwid": hwid,
         "account_id": account_id,
@@ -342,3 +342,48 @@ def simulate_superpower(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
         }
 
     return {"ok": False, "error": f"UNKNOWN_SIMULATE_MODE: {mode}"}
+
+
+def get_telemetry() -> Dict[str, Any]:
+    """[100% 합법 익명 통계(Zero-Content Telemetry)] 원문 0 Byte, 기능별 호출 횟수만 반환"""
+    enabled = spd.is_telemetry_enabled()
+    data: Dict[str, Any] = {"daily": {}, "total": {}, "updated_at": None}
+    for cand in (spd.TELEMETRY_FILE, spd.TELEMETRY_SEC_MIRROR):
+        if cand.exists():
+            try:
+                loaded = json.loads(cand.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    data = loaded
+                    break
+            except Exception:
+                pass
+    wav_files = sorted(w.name for w in spd.SOUNDS_DIR.glob("*.wav")) if spd.SOUNDS_DIR.exists() else []
+    return {
+        "ok": True,
+        "version": "2.8",
+        "zero_content_guaranteed": True,
+        "collected_content_bytes": 0,
+        "telemetry_enabled": enabled,
+        "daily": data.get("daily", {}),
+        "total": data.get("total", {}),
+        "updated_at": data.get("updated_at"),
+        "sound_files": wav_files,
+    }
+
+
+def update_telemetry(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """환경설정 [익명 사용 통계 보내기] ON/OFF 토글 제어 및 익명 기능 카운트 기록"""
+    data = body or {}
+    if "enabled" in data and data["enabled"] is not None:
+        spd.set_telemetry_enabled(bool(data["enabled"]))
+    feature_key = str(data.get("feature_key") or data.get("featureKey") or "").strip()
+    if feature_key and spd.is_telemetry_enabled():
+        spd.record_feature_telemetry(feature_key)
+        time.sleep(0.03)
+    res = get_telemetry()
+    res["message"] = (
+        "✅ 익명 기능 사용 통계 수집이 활성화되었습니다 (원문 텍스트 0 Byte 수집)."
+        if res["telemetry_enabled"]
+        else "🔒 익명 기능 사용 통계 수집이 중단(OFF)되었습니다."
+    )
+    return res
