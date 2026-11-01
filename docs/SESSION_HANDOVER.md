@@ -2,36 +2,41 @@
 
 ---
 
-## 🕒 [2026-10-30 16:53 KST 작업 완료 인계 기록]
+## 🕒 [2026-11-02 00:45 KST 작업 완료 인계 기록]
 
-- **세션 제목**: 우측통상채팅·한글탐색기v233
+- **세션 제목**: 무소음인덱싱브레이크·하드웨어보호
 
 ### 1. 이번 세션에서 완료한 핵심 작업 요약
-1. **[`🧹 치우기` & `⚙️ 고치기` 우측 1열 '통상의 메신저형 채팅창' + 저가 LLM(`Gemini 2.5 Flash`) + JSON Z-코어 위임 전면 구현 (`ea1797d`)]:**
-   - **좌우 2열 표준 레이아웃 통합 ([`SmartTrashView.tsx`](file:///d:/Ghosti/src/components/SmartTrashView.tsx), [`SetupMonsterModal.tsx`](file:///d:/Ghosti/src/components/SetupMonsterModal.tsx), [`MonsterStandardChatColumn.tsx`](file:///d:/Ghosti/src/components/MonsterStandardChatColumn.tsx))**:
-     - 기존 좁은 단발성 입력바를 제거하고, `🧹 치우기`와 `⚙️ 고치기` 모두 **좌측에는 정리/수리 워크스페이스, 우측 1열(`xl:col-span-5`)에는 카카오톡·메신저 형태의 통상 멀티턴 채팅창**을 상시 고정 배치하여 탭을 오가도 대화 히스토리가 그대로 이어지도록 구현.
-   - **내 PC 200토큰 실측 주입 + 저가 LLM(`Gemini 2.5 Flash`) + JSON 코어 위임 ([`monster-llm-chat.js`](file:///d:/Ghosti/netlify/functions/monster-llm-chat.js), [`monsterChatRouter.ts`](file:///d:/Ghosti/src/services/monsterChatRouter.ts))**:
-     - 로컬 `Merlin_Z_Core`(`127.0.0.1:5199`)에서 실시간으로 읽어온 CPU·RAM·GPU·디스크·보안모듈·스풀러 상태(~200토큰)를 시스템 프롬프트에 자동 주입하고, 중앙 허브 게이트웨이(`https://os.sundreamer.app/api/ai/gemini`)의 `gemini-2.5-flash`가 유저 눈높이(`🌱 쉬운말(어르신)` / `🌿 일반` / `🌳 전문가`)에 맞춰 따뜻하게 대화하면서 동시에 구조화된 `zCoreCommand` JSON(`MonsterLlmActionJson`)을 생성해 Z-코어에 실행을 위임.
-     - 모든 파일 이동·정리·수리는 `[⭕ 확인 완료]` 미리보기 게이트(`Zero-Auto-Action`) 및 `[복원 기록]` 1초 타임머신을 거치도록 연동 완료 (`'AI 주치의'` 표현 전수 제거 및 **`클린몬스터` · `설정몬스터`** 명칭 통일).
+1. **[『3단 무소음 인덱싱 브레이크』 및 『유저 안심 상태 안내 UI』 전면 구현 및 배포 (`605050b`)]:**
+   - **엔진 로직 ([`silentIndexingBrake.ts`](file:///d:/Ghosti/src/services/silentIndexingBrake.ts), [`aiEngine.ts`](file:///d:/Ghosti/src/services/aiEngine.ts))**:
+     - **1단계 (초고속 메타 수집 + 최근 3개월 우선 인덱싱 + 과거 10년 검색어 새치기)**: 드라이브 전체 파일명·경로·수정일 메타데이터는 1초 만에 전체 개방, 딥러닝 비전/문서 임베딩은 최근 90일(3개월) 이내 파일부터 최우선 정렬·처리. 유저가 과거 연도/키워드 검색 시 대기 중인 과거 파일을 대기열 맨 앞으로 즉시 새치기(`prioritizeArchiveFilesForQuery`)하여 '옛날 파일 0건 실망' 방지.
+     - **2단계 (유휴 시간 스로틀링 & CPU 점유율 15% 제한)**: 마우스/키보드 입력 Active 상태에서는 2개 처리 후 250ms 강제 대기(Yield)로 CPU 점유율을 14~15% 이하로 제어(소음/버벅임 제로). 1분 이상 무입력(Idle) 시 완만한 가속.
+     - **3단계 (모바일 배터리/발열 방어)**: 모바일 화면 On 조작 중에는 대규모 인덱싱 자동 대기, Wi-Fi 및 충전기 연결 시 자동 진행.
+   - **유저 안심 상태 안내 UI ([`SilentIndexingStatusBar.tsx`](file:///d:/Ghosti/src/components/SilentIndexingStatusBar.tsx), [`VoiceHeroStage.tsx`](file:///d:/Ghosti/src/components/VoiceHeroStage.tsx), [`LoungeView.tsx`](file:///d:/Ghosti/src/components/LoungeView.tsx))**:
+     - 검색창 하단 및 내 기기 라운지 상단에 안심 문구(`⚡ 최근 3개월 파일 검색 준비 완료 (324개)` / `🍃 기기 발열과 배터리를 위해 이전 파일(12,400개)은 PC가 쉴 때 조용히 정리 중입니다 (15%)`) 및 실시간 진행률 게이지 노출.
+     - 우측에 **`[⚡ 지금 전체 고속 정리]` ⇄ `[🍃 무소음 모드로 전환]` 양방향 즉시 토글** 및 `[🛡️ CPU 14% · RAM 215MB]` 실시간 텔레메트리 칩 배치.
 
-2. **[한글 윈도우 탐색기 폴더(`다운로드`·`문서`·`바탕 화면`) 매칭 수정 & `Merlin_Z_Core v2.3.3` 리빌드·배포 (`ea1797d`)]:**
-   - **근본 원인 해결 ([`merlin_z_core_os.py`](file:///d:/Ghosti/universal_z_core/os_agent/merlin_z_core_os.py))**:
-     - 한글 Windows 10/11에서 `Downloads`, `Documents`, `Desktop` 폴더의 탐색기 창 제목이 `"다운로드"`, `"문서"`, `"바탕 화면"`으로 표시되어 영문 폴더명(`resolved_p.parent.name`)과 매칭되지 않던 문제 해결(`get_explorer_folder_title_candidates` 도입).
-     - 기존에 열려 있던 탐색기 창이 재사용되거나 이전 `"문서"` 창이 남아 있어도 정확히 닫고 타겟 파일이 선택된 창만 화면 최전면으로 끌어올리도록 수정.
-     - 1호기(멀린님 특허 출원 작업 PC)에서는 단 하나의 로컬 탐색기 창도 띄우지 않고 **2호기(`100.88.230.16`, `DESKTOP-F8LTVPR`) 원격 SSH**에서 검증 완료.
-   - **구버전 Z-코어 자동 감지 경고 배너 ([`zCoreBridge.ts`](file:///d:/Ghosti/src/services/zCoreBridge.ts))**:
-     - `LATEST_Z_CORE_VERSION = '2.3.3'`으로 상향하고, 구버전 Z-코어 실행 시 `🧹 치우기`·`⚙️ 고치기` 상단에 노란색 업데이트 안내 배너 및 원클릭 다운로드 버튼 표시.
-   - **센스톡 내장 플러그인(`plugin_senstalk.py` `v3.3`) 무손실 동기화 및 우체국 회신 완료**:
-     - `D:\SensTalk\bot\sensebot.py` (`v3.3`)의 세대 번호(`_DISPATCH_SEQ_ID`), `RICHEDIT50W` 중복 붙여넣기 가드, `/skip` 인덱싱 패치를 [`plugin_senstalk.py`](file:///d:/Ghosti/universal_z_core/os_agent/plugin_senstalk.py)에 100% 반영 후 `Merlin_Z_Core_Setup.exe` (`v2.3.3`) 및 `public/Merlin_Z_Core.zip` 리빌드 완료.
-   - **노션 QA 카드 상태 반영**:
-     - `🎯[귀신같이] 고치기 파일 바로 띄우기` (`409f9ffd-2c1d-807f-8822-eb96b6289d8f`) 카드를 일상어 재테스트 안내문과 함께 **`'재테스트 대기'`**로 이동 완료 (현재 `'발견된 버그'` 및 `'버그 수정중'` 0건).
+2. **[터보 모드에서도 강제 적용되는 『밑바닥 하드웨어 보호 4대 기본 알고리즘』 내장]**:
+   - **① 스레드 우선순위 최하위 고정 (`THREAD_PRIORITY_BELOW_NORMAL`)**: PC 원 코어([`plugin_ghosti_os.py`](file:///d:/Ghosti/universal_z_core/os_agent/plugin_ghosti_os.py))에서 Win32 커널 API로 인덱싱 프로세스/스레드를 최하위 우선순위(`BELOW_NORMAL_PRIORITY_CLASS`)로 강제하여 포그라운드 작업 지연 0%.
+   - **② CPU 코어 50% 상한 캡**: 고속 모드에서도 전체 논리 코어의 최대 50%(`SetProcessAffinityMask`)만 사용하여 일상 작업용 코어 50% 항상 확보.
+   - **③ 메모리 500MB 상한 강제 릴리즈 (20개 단위 GC)**: 파일 20개 단위로 임시 비트맵/캔버스 캐시 해제 및 명시적 `gc.collect()` + 워킹셋 트림(`SetProcessWorkingSetSize`) 실행.
+   - **④ 모바일 40℃ · 배터리 20% 써멀 쿨다운 (iOS/Android 하이브리드)**: 안드로이드 `getBattery()` 및 애플 정책상 배터리 API가 차단된 iOS Safari 환경을 위해 장당 추론 지연시간(1.8배 스파이크) 기반 발열 감지로 40℃ 도달 시 자동 일시정지.
 
-3. **[4호기(`desktop-bps5lku`, `100.114.100.24`) 원격 SSH 개통 스크립트 배치]:**
-   - 구글 드라이브 공유 키 폴더에 [`enable_node4_ssh.bat`](file:///G:/내 드라이브/썬드림/_infra_cluster_keys/enable_node4_ssh.bat)를 생성·배치하여 4호기에서 관리자 권한 1회 실행 시 `OpenSSH Server (포트 22)` 및 `id_ai_master.pub`가 즉시 개통되도록 준비 완료.
+3. **[대표 주력 상품명 및 기획/특허 정합성 검토 완료]**:
+   - 대표 주력 상품명: **`👑 내 기기 통합`** (월 3,900원 / 1차 5년 특판 39,000원) 원안 확정 유지.
+   - KIPO 추가 2대 특허(제7호, 제8호) 출원명세서 및 NotebookLM 분석 검토 완료:
+     - 제7호: 무후크 2어절 한영 오타 교정 단독 카피 방어를 위한 독립항 신설 및 KIPO 단일성 방어 고리(온디바이스 언어 모델 토크나이저 & 무후크 클립보드 스왑 파이프라인 공유) 정립.
+     - 제8호: 독립항 제1항·제9항에 모바일 OS 샌드박스 제약(로컬 큐 선적재 후 포그라운드/키보드 호출 시 승격 주입) 및 암호화 우체통 이원화 버퍼 반영.
+     - 모니터 캐스트 사출 방향(스마트폰 ➔ PC 모니터 클린 뷰어) 및 3단 무소음 브레이크 아키텍처 정합성 교정.
+
+4. **[마스터 문서 및 전사 중앙 우체국 100% 동기화]**:
+   - [`docs/귀신같이_기획서.md`](file:///d:/Ghosti/docs/귀신같이_기획서.md) (4.11절), [`docs/기능명세.md`](file:///d:/Ghosti/docs/기능명세.md) (14절) 최신화 완료.
+   - 비서(`Secretary`) 중앙 우체국에 답변 메일 발송 및 Git 푸시 완료.
 
 ---
 
 ### 2. 다음 세션 최우선 과제 🚨
-1. **[1순위] 4호기(`desktop-bps5lku`) `enable_node4_ssh.bat` 실행 여부 확인 및 노션 QA `'재테스트 대기'`(`409f9ffd-2c1d-807f-8822-eb96b6289d8f`) 최종 완료 확인:**
-   - 4호기 SSH(포트 22)가 열리면 원격으로 `Merlin_Z_Core_Setup.exe` (`v2.3.3`)를 자동 배포·기동하고, 해나라님의 재테스트 결과를 모니터링.
-2. **[2순위] 개인 라운지 3개 섹터(`🎯 찾기` · `🧹 치우기` · `⚙️ 고치기`) 최종 완료 후 다음 섹터(`📸 사진 공유` · `💼 업무 공유`) 진행.**
+1. **[1순위] 특허 제7호·제8호 KIPO 최종 출원 명세서 및 NotebookLM 원장 반영 확인**:
+   - 비서가 작업 중인 [`[NotebookLM_전달용]_귀신같이_추가특허_제7호_제8호_KIPO출원명세서_및_최신기획서.md`](file:///d:/Secretary/docs/프로젝트별_문서/Patent_특허상표/[NotebookLM_전달용]_귀신같이_추가특허_제7호_제8호_KIPO출원명세서_및_최신기획서.md) 최종본 동기화 상태 점검.
+2. **[2순위] 노션 QA 칸반 보드 연동 대기**:
+   - `모니터 크게 보기` / `다 같이 보기` 및 이번 `무소음 인덱싱 브레이크`는 멀린님 지침대로 노션 미등록 상태 유지 중이며, 향후 공유방 작업 시 알바생 검증 미션 카드 발행.
