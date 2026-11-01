@@ -15,10 +15,7 @@ import {
 } from './merlin-hub-sdk/Support/blackbox';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { validateClubSignboardName } from '../components/PricingModal';
-import {
-  dispatchGhostCastLiveCommand,
-  setSavedShutterShareMode,
-} from '../components/GhostCastAndLiveSystem';
+import { dispatchGhostCastLiveCommand } from '../components/GhostCastAndLiveSystem';
 
 /**
  * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
@@ -1192,7 +1189,7 @@ ${payload.summaryText}`, {
     });
   }
 
-  // 6) 『고스트 캐스트 & 라이브』 3대 핵심 무기 원격 제어 및 셔터 공유 옵션 변경
+  // 6) 『고스트 모니터 캐스트 (무선 리모컨)』 & 『다 같이 보기 (앨범 싱크)』 2대 알짜 무기 원격 제어
   if (/모니터.*?(?:크게\s*보기|팝업|캐스트|띄워|켜)|크게\s*보기.*?(?:켜|열어|띄워)|무선\s*리모컨/i.test(clean)) {
     dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' });
     const payload: MonsterAppSettingsPayload = {
@@ -1209,61 +1206,17 @@ ${payload.summaryText}`, {
     });
   }
 
-  if (/방\s*라이브|실시간\s*생중계|라이브\s*(?:방송|중계|켜)|생중계\s*(?:켜|열어)/i.test(clean)) {
-    dispatchGhostCastLiveCommand({ action: 'OPEN_ROOM_LIVE' });
-    const payload: MonsterAppSettingsPayload = {
-      settingCategory: 'GHOST_CAST_LIVE',
-      badgeText: '🔴 [무기 2] 방 전용 프라이빗 라이브 생중계 오픈',
-      summaryText:
-        '현재 선택된 공유방 멤버만 시청할 수 있는 프라이빗 WebRTC 생중계 모달을 열었습니다. 종료 시 [✨ 검토·선별 후 올리기(기본)] 또는 [⚡ 즉시 자동 저장]을 선택하실 수 있습니다.',
-      appliedValueLabel: '🔴 방 전용 프라이빗 라이브 생중계 대기/시작',
-    };
-    speak(payload.summaryText);
-    return reply(sourceTab, `🎛️ **[방 전용 프라이빗 라이브 실행]**\n${payload.summaryText}`, {
-      cardKind: 'APP_SETTINGS_CONTROL',
-      appSettingsPayload: payload,
-    });
-  }
-
-  if (/다\s*같이\s*보기|라이브\s*(?:포토\s*)?싱크|사진\s*싱크/i.test(clean)) {
+  if (/다\s*같이\s*보기|라이브\s*(?:포토\s*)?싱크|사진\s*싱크|앨범\s*싱크/i.test(clean)) {
     dispatchGhostCastLiveCommand({ action: 'TOGGLE_PHOTO_SYNC' });
     const payload: MonsterAppSettingsPayload = {
       settingCategory: 'GHOST_CAST_LIVE',
-      badgeText: '📡 [무기 2] 다 같이 보기 (라이브 포토 싱크) 가동',
+      badgeText: '📡 [무기 2] 다 같이 보기 (앨범 사진 넘김·줌 싱크) 가동',
       summaryText:
-        '내가 넘기거나 확대한 사진 화면이 방에 접속 중인 모든 가족·동창회 회원의 폰/PC 화면에서도 0.1초 만에 똑같이 넘어가는 라이브 포토 싱크를 켰습니다.',
+        '내가 넘기거나 확대한 사진 화면이 방에 접속 중인 모든 가족·동창회 회원의 폰/PC 화면에서도 0.1초 만에 똑같이 넘어가는 앨범 라이브 싱크를 켰습니다.',
       appliedValueLabel: '📡 실시간 화면 동기화 (Live Photo Sync) ON',
     };
     speak(payload.summaryText);
-    return reply(sourceTab, `🎛️ **[다 같이 보기 라이브 싱크 실행]**\n${payload.summaryText}`, {
-      cardKind: 'APP_SETTINGS_CONTROL',
-      appSettingsPayload: payload,
-    });
-  }
-
-  if (/원격\s*(?:모니터링\s*)?셔터|원격\s*촬영|미러링\s*셔터/i.test(clean)) {
-    const wantsAutoShare = /자동\s*공유|즉시\s*(?:공유|전송|올리)|바로\s*공유/i.test(clean);
-    const wantsReviewFirst = /선별\s*후|검토\s*후|골라서/i.test(clean);
-    const nextMode = wantsAutoShare ? 'auto_instant' : 'select_first';
-    if (wantsAutoShare || wantsReviewFirst) {
-      setSavedShutterShareMode(nextMode);
-    }
-    dispatchGhostCastLiveCommand({
-      action: 'OPEN_REMOTE_SHUTTER',
-      shutterShareMode: wantsAutoShare || wantsReviewFirst ? nextMode : undefined,
-    });
-    const modeLabel =
-      wantsAutoShare
-        ? '⚡ 찍는 즉시 방 전원에게 자동 공유'
-        : '✨ 내 폰에서 먼저 선별 후 올리기 (기본값 · 눈 감은 B컷 유출 방지)';
-    const payload: MonsterAppSettingsPayload = {
-      settingCategory: 'GHOST_CAST_LIVE',
-      badgeText: '📸 [무기 3] 원격 모니터링 셔터 & 공유 모드 제어 완료',
-      summaryText: `원격 모니터링 셔터를 열고 촬영 후 공유 모드를 [${modeLabel}]로 적용했습니다.`,
-      appliedValueLabel: modeLabel,
-    };
-    speak(payload.summaryText);
-    return reply(sourceTab, `🎛️ **[원격 모니터링 셔터 설정 및 실행 완료]**\n${payload.summaryText}`, {
+    return reply(sourceTab, `🎛️ **[다 같이 보기 앨범 싱크 실행]**\n${payload.summaryText}`, {
       cardKind: 'APP_SETTINGS_CONTROL',
       appSettingsPayload: payload,
     });
