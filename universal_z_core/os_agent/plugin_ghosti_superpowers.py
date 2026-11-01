@@ -130,7 +130,7 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     return {
         "ok": True,
         "engine_running": True,
-        "version": "2.8",
+        "version": "3.1",
         "port": 5199,
         "machine_hwid": hwid,
         "account_id": account_id,
@@ -360,7 +360,7 @@ def get_telemetry() -> Dict[str, Any]:
     wav_files = sorted(w.name for w in spd.SOUNDS_DIR.glob("*.wav")) if spd.SOUNDS_DIR.exists() else []
     return {
         "ok": True,
-        "version": "2.8",
+        "version": "3.1",
         "zero_content_guaranteed": True,
         "collected_content_bytes": 0,
         "telemetry_enabled": enabled,

@@ -395,6 +395,8 @@ export const OnboardingModal: React.FC = () => {
   ]);
   const [pastedSlots, setPastedSlots] = useState<string[]>([]);
   const [floatingWebOpenedToast, setFloatingWebOpenedToast] = useState(false);
+  const [ghostMemoryQuery, setGhostMemoryQuery] = useState('');
+  const [ghostMemoryResult, setGhostMemoryResult] = useState<string | null>(null);
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem('ghosti_telemetry_enabled') !== 'false';
@@ -896,7 +898,7 @@ export const OnboardingModal: React.FC = () => {
                   )}
                 </div>
                 <p className="text-[12.5px] text-zinc-200 leading-relaxed mt-0.5">
-                  윈도우 어디서나(카톡·엑셀·한글·브라우저) <strong className="text-amber-300">Ctrl + 0</strong>을 누르면 커서 바로 옆에 플로팅 바가 뜨며, 맨 앞의 <strong className="text-teal-300">[👻 귀신같이 ↗]</strong> 로고를 클릭하면 언제든 이 웹 화면이 즉시 호출됩니다!
+                  윈도우 어디서나(카톡·엑셀·한글·브라우저) <strong className="text-amber-300">Ctrl + 0</strong>을 누르면 커서 바로 옆에 <strong className="text-teal-300">『귀신창(Ghost Window)』</strong>이 퐁~띠링!(①번 소환음) 나타나며, 정본 3D 로고 클릭 시 웹 호출 · 상단 미니 검색창 기억 소환 · 바깥 클릭 시 0.01초 만에 즉시 사라집니다!
                 </p>
               </div>
 
@@ -911,33 +913,85 @@ export const OnboardingModal: React.FC = () => {
               )}
             </div>
 
-            {/* 플로팅 바 실물 미리보기 & [👻 귀신같이 ↗] 클릭 시연 */}
-            <div className="p-3 rounded-2xl bg-zinc-950 border border-teal-500/35 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-[11.5px] text-zinc-400">
-                <span>💡 <strong className="text-white">Ctrl + 0 커서 옆 플로팅 바 실물 미리보기</strong> (맨 앞 로고를 직접 클릭해 보세요!)</span>
+            {/* 『귀신창 (Ghost Window) v3.0』 실물 2단 미리보기 (윗단 🔍 귀신기억검색 + 아랫단 정본 3D 로고 일체형) */}
+            <div className="p-3.5 rounded-2xl bg-[#0B1120] border-2 border-[#2DD4BF] shadow-[0_0_24px_rgba(45,212,191,0.2)] flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300">
+                <span>
+                  👻 <strong className="text-white">『귀신창(Ghost Window) v3.1』 실물 미리보기</strong> (마우스 올리면 유지 · 바깥 클릭 시 0.01초 즉시 닫힘)
+                </span>
                 {floatingWebOpenedToast && (
-                  <span className="text-teal-300 font-bold animate-pulse">
-                    ✨ [👻 귀신같이 ↗] 클릭 감지 ➔ https://ghosti.sundreamer.app 즉시 호출!
+                  <span className="text-[#5EEAD4] font-extrabold animate-pulse">
+                    ✨ 정본 3D 로고 클릭 감지 (①번 소환음) ➔ https://ghosti.sundreamer.app 즉시 호출!
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 rounded-xl bg-[#111520] border border-[#2D364F] text-[12px] font-bold">
+
+              {/* [윗단] 조그마한 1줄 미니 검색창 (이모지 제거, 깔끔한 콤팩트 바) */}
+              <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0F172A] border border-[#14B8A6]">
+                <span className="text-[11.5px] font-extrabold text-[#5EEAD4] shrink-0">
+                  기억검색
+                </span>
+                <input
+                  type="text"
+                  value={ghostMemoryQuery}
+                  onChange={(e) => {
+                    const q = e.target.value;
+                    setGhostMemoryQuery(q);
+                    if (!q.trim()) {
+                      setGhostMemoryResult(null);
+                    } else if (q.includes('계좌') || q.includes('국민')) {
+                      setGhostMemoryResult('-> [국민은행 123-45-678910] (Enter 사출)');
+                    } else if (q.includes('주소') || q.includes('강남')) {
+                      setGhostMemoryResult('-> [서울 강남구 테헤란로 123] (Enter 사출)');
+                    } else {
+                      setGhostMemoryResult(`-> [${q} 관련 최근 복사 기억] (Enter 사출)`);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && ghostMemoryQuery.trim()) {
+                      playBabyGhostChime('typo');
+                      setGhostMemoryResult(`[${ghostMemoryQuery}] 기억 소환 및 즉시 붙여넣기 완료`);
+                    }
+                  }}
+                  placeholder="단어 입력 후 Enter..."
+                  className="w-44 sm:w-52 px-2.5 py-1 rounded-lg bg-[#1E293B] text-[11.5px] text-white outline-none border border-transparent focus:border-[#5EEAD4]"
+                />
+                <span className="text-[11px] text-[#6EE7B7] font-bold truncate">
+                  {ghostMemoryResult || '단어 입력 후 Enter 즉시 붙여넣기 (바깥 클릭 시 닫힘)'}
+                </span>
+              </div>
+
+              {/* [아랫단] 좌측 정본 마스터 로고([심볼]+[3D 워드마크], 이모지 제거) + 우측 2줄(Row 1 & Row 2) 전체 메뉴 수납 */}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 px-2 py-1 rounded-xl bg-[#0B1120] text-[12px] font-bold">
                 <button
                   type="button"
                   onClick={() => {
-                    playBabyGhostChime();
+                    playBabyGhostChime('summon');
                     setFloatingWebOpenedToast(true);
-                    setTimeout(() => setFloatingWebOpenedToast(false), 3000);
+                    setTimeout(() => setFloatingWebOpenedToast(false), 3200);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-[#00F5D4] font-extrabold cursor-pointer"
+                  title="정본 3D 로고 클릭 시 귀신같이 웹이 즉시 열립니다"
+                  className="px-2.5 py-1.5 rounded-lg bg-[#131D36] hover:bg-[#1E293B] border border-[#2DD4BF] flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
                 >
-                  👻 귀신같이 ↗
+                  <img
+                    src="/gwisinkachi_app_icon_512.png"
+                    alt="애기귀신 심볼"
+                    className="w-6 h-6 object-contain"
+                  />
+                  <img
+                    src="/gwisinkachi_3d_wordmark_dark.png"
+                    alt="귀신같이 3D 워드마크"
+                    className="h-5 w-auto object-contain"
+                  />
                 </button>
-                <span className="text-zinc-600">|</span>
-                <span className="text-amber-300">★[Ctrl+V] 순차붙여넣기</span>
-                <span className="text-amber-300">★[F1~F5] 내 상용구</span>
-                <span className="text-zinc-600">|</span>
-                <span className="text-zinc-300">[2]한영 [7]전화번호 [8]계좌추출 [9]억만금숫자</span>
+                <div className="flex flex-col gap-0.5 text-left min-w-0">
+                  <div className="text-[#5EEAD4] text-[11.5px] font-extrabold tracking-tight truncate">
+                    [Ctrl+V] 순차·칸맞춤 &nbsp;&nbsp; [9] 파일·PDF변환 &nbsp;&nbsp; [F1~5] 상용구 &nbsp;&nbsp; [2] 한영성형
+                  </div>
+                  <div className="text-[#E2E8F0] text-[11.5px] font-bold tracking-tight truncate">
+                    [3] 서식세탁 &nbsp;&nbsp; [4] 줄바꿈정리 &nbsp;&nbsp; [5] 합본 &nbsp;&nbsp; [6] 글자·표OCR &nbsp;&nbsp; [7] 창고정 &nbsp;&nbsp; [8] 번호·일정
+                  </div>
+                </div>
               </div>
             </div>
 
