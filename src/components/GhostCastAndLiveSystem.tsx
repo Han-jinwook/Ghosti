@@ -95,6 +95,7 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
   const { activeLoungeType, activeFamilyRoom, alumniSchoolName } = useSaySeeStore();
   const [photoSyncActive, setPhotoSyncActive] = useState(false);
   const [shutterMode, setShutterMode] = useState<ShutterShareMode>(getSavedShutterShareMode);
+  const [showLiveDrawer, setShowLiveDrawer] = useState(false);
 
   useEffect(() => {
     const onModeChange = (e: Event) => {
@@ -115,73 +116,111 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
 
   if (activeLoungeType === 'work') return null;
 
-  const roomLabel =
-    activeLoungeType === 'family'
-      ? `${activeFamilyRoom} 방`
-      : activeLoungeType === 'club'
-      ? `${alumniSchoolName || '동호·동창회'} 방`
-      : '내 기기 통합';
-
-  return (
-    <div className="w-full px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-zinc-900/95 via-teal-950/35 to-zinc-900/95 border border-teal-400/30 flex flex-wrap items-center justify-between gap-2 shadow-sm">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="px-2 py-0.5 rounded-full bg-teal-400/20 border border-teal-400/50 text-teal-300 text-[10.5px] font-black shrink-0">
-          ⚡ 고스트 캐스트 &amp; 라이브
+  // [레드팀 UI 다이어트 1] '내 기기(personal)'에서는 1초 찾기의 쾌적함을 해치지 않도록 오직 [💻 모니터로 크게 보기] 1개만 심플하게 노출
+  if (activeLoungeType === 'personal') {
+    return (
+      <div className="w-full px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-cyan-400/25 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11.5px] text-zinc-300 font-bold flex items-center gap-1.5">
+          <span className="text-cyan-300 font-extrabold">👑 내 기기 통합</span>
+          <span>— 내 폰에서 누르면 내 노트북/PC 모니터에 0.5초 전체화면 팝업 (카톡 알림 노출 0%)</span>
         </span>
-        <span className="text-[11.5px] text-zinc-300 font-bold truncate">
-          {roomLabel} — 무설정 0.1초 모니터 팝업 · 프라이빗 생중계 · 거울 원격 셔터
-        </span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        {/* 무기 1: 폰 ➔ 내 PC/노트북 모니터 1초 팝업 & 무선 리모컨 */}
         <button
           type="button"
           onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' })}
-          className="px-2.5 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-cyan-400/45 text-cyan-300 text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
-          title="스마트폰을 무선 리모컨으로 삼아 내 PC/노트북 모니터에 전체화면 슬라이드쇼를 0.5초 만에 띄웁니다 (사생활 알림 노출 0%)"
+          className="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/50 text-cyan-200 text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
         >
-          <span>💻 모니터로 크게 보기</span>
-        </button>
-
-        {/* 무기 2-A: 우리 방 전용 1초 라이브 생중계 */}
-        <button
-          type="button"
-          onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_ROOM_LIVE' })}
-          className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/60 text-rose-200 text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
-          title="유튜브처럼 외부 노출 걱정 없이 오직 우리 방 멤버들끼리만 1초 만에 여는 실시간 생중계"
-        >
-          <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
-          <span>🔴 방 라이브 켜기</span>
-        </button>
-
-        {/* 무기 2-B: 다 같이 사진 보기 — 앨범 라이브 싱크 */}
-        <button
-          type="button"
-          onClick={() => dispatchGhostCastLiveCommand({ action: 'TOGGLE_PHOTO_SYNC' })}
-          className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
-            photoSyncActive
-              ? 'bg-emerald-400 text-zinc-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.35)]'
-              : 'bg-zinc-950 hover:bg-zinc-800 border-emerald-400/45 text-emerald-300'
-          }`}
-          title="내가 사진을 넘기거나 확대하면 방에 접속한 모든 멤버의 화면이 0.1초 만에 똑같이 넘어갑니다"
-        >
-          <span>📡 다 같이 보기 {photoSyncActive ? '(싱크 ON)' : '(라이브 싱크)'}</span>
-        </button>
-
-        {/* 무기 3: 원격 모니터링 셔터 & 선별/즉시 공유 옵션 */}
-        <button
-          type="button"
-          onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_REMOTE_SHUTTER' })}
-          className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
-          title="삼각대 후면 카메라 화면을 내 손안의 폰에서 거울처럼 보며 원격 촬영합니다"
-        >
-          <span>📸 원격 모니터링 셔터</span>
-          <span className="px-1.5 py-0.2 rounded bg-black/40 text-[10px] text-amber-300">
-            {shutterMode === 'select_first' ? '✨선별업로드' : '⚡즉시공유'}
-          </span>
+          <span>💻 모니터로 크게 보기 (폰 무선 리모컨)</span>
         </button>
       </div>
+    );
+  }
+
+  const roomLabel =
+    activeLoungeType === 'family'
+      ? `${activeFamilyRoom} 방`
+      : `${alumniSchoolName || '동호·동창회'} 방`;
+
+  const isLargeClubRoom = activeLoungeType === 'club' || activeLoungeType === 'student';
+
+  return (
+    <div className="w-full px-3.5 py-2 rounded-2xl bg-gradient-to-r from-zinc-900/95 via-teal-950/35 to-zinc-900/95 border border-teal-400/30 flex flex-col gap-2 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="px-2 py-0.5 rounded-full bg-teal-400/20 border border-teal-400/50 text-teal-300 text-[10.5px] font-black shrink-0">
+            ⚡ 고스트 캐스트
+          </span>
+          <span className="text-[11.5px] text-zinc-300 font-bold truncate">
+            {roomLabel} — 카톡 알림 노출 없는 0.5초 모니터 팝업 &amp; 다 같이 보기 싱크
+          </span>
+        </div>
+
+        {/* [레드팀 UI 다이어트 2] 평소에는 핵심 버튼(모니터 크게 보기 + 다 같이 보기 싱크)과 [📡 현장 라이브·단체셔터 ▾] 접이식 토글만 노출 */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' })}
+            className="px-2.5 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-cyan-400/45 text-cyan-300 text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+            title="스마트폰을 무선 리모컨으로 삼아 내 PC/노트북 모니터에 전체화면 슬라이드쇼를 0.5초 만에 띄웁니다 (사생활 알림 노출 0%)"
+          >
+            <span>💻 모니터로 크게 보기</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => dispatchGhostCastLiveCommand({ action: 'TOGGLE_PHOTO_SYNC' })}
+            className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
+              photoSyncActive
+                ? 'bg-emerald-400 text-zinc-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.35)]'
+                : 'bg-zinc-950 hover:bg-zinc-800 border-emerald-400/45 text-emerald-300'
+            }`}
+            title="내가 사진을 넘기거나 확대하면 방에 접속한 모든 멤버의 화면이 0.1초 만에 똑같이 넘어갑니다 (다수 인원 방에서도 발열·트래픽 부담 0%)"
+          >
+            <span>📡 다 같이 보기 {photoSyncActive ? '(싱크 ON)' : '(앨범 싱크)'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowLiveDrawer((prev) => !prev)}
+            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+          >
+            <span>📸 모임 도구 더보기</span>
+            <span>{showLiveDrawer ? '▴' : '▾'}</span>
+          </button>
+        </div>
+      </div>
+
+      {showLiveDrawer && (
+        <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[11px] text-zinc-400">
+            {isLargeClubRoom
+              ? '💡 다수 인원 모임방은 발열 없는 [📡 다 같이 보기]가 가장 쾌적하며, 카메라 생중계는 소수 인원(6인 이하) 연결에 최적화되어 있습니다.'
+              : '💡 명절·가족모임 시 실시간 카메라 안부 중계와 삼각대 단체사진 리모컨을 사용할 수 있습니다.'}
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_ROOM_LIVE' })}
+              className="px-2.5 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/60 text-rose-200 text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+              title="소수 정예(최대 6인 쾌적 P2P) 가족·멤버끼리 외부 노출 없이 여는 프라이빗 카메라 생중계"
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+              <span>🔴 방 라이브 (소수 P2P)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_REMOTE_SHUTTER' })}
+              className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+              title="가족·모임 단체사진 촬영 시 삼각대 폰 화면을 내 손안의 폰으로 보며 타이머 촬영합니다"
+            >
+              <span>📸 삼각대 단체사진 리모컨</span>
+              <span className="px-1.5 py-0.2 rounded bg-black/40 text-[10px] text-amber-300">
+                {shutterMode === 'select_first' ? '✨선별업로드' : '⚡즉시공유'}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

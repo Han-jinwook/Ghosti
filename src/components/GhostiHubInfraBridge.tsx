@@ -72,8 +72,10 @@ export const GhostiTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> 
 
   return (
     <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-      {/* [강화 ③] 상단 가로 헤더 F 패밀리 앱 버튼: 클릭 시 바로 아래쪽으로 세로 드롭다운(내가 다녀간 패밀리 앱 + 전체 패밀리 앱) 펼침 */}
-      <HubAppSwitcher currentAppId="ghosti" variant="icon" placement="top-down" />
+      {/* [강화 ③ + 레드팀 중복 제거] 모바일/태블릿(좌측 사이드바 미노출 화면)에서만 상단 가로 헤더 F 세로 드롭다운 노출 */}
+      <div className="lg:hidden">
+        <HubAppSwitcher currentAppId="ghosti" variant="icon" placement="top-down" />
+      </div>
 
       {/* 🪙 코인 잔액 & 3몬스터 충전소 트리거 (스토어 앱 심사 모드에서는 DOM 원천 비노출) */}
       {!hideCoin && (
