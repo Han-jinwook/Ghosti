@@ -317,7 +317,54 @@ export async function startSuperpowerTrialAction(accountId: string, isSubscribed
   return fallback;
 }
 
-// [이메일 단일 로그인 자동 연결]: 불필요한 QR 스캔 없이 이메일 계정 하나로 폰·집PC·회사PC가 자동 연결됩니다.
+/**
+ * 📱 스마트폰 모바일 앱 1초 설치 안내용 QR 코드 SVG
+ * - 역할 구분: 기기 페어링용이 아니라, PC 화면을 보고 있는 유저가 스마트폰 카메라로 스캔해
+ *   『귀신같이 모바일 앱』을 스토어 검색 없이 1초 만에 바로 설치·실행하도록 안내하는 QR 코드입니다.
+ * - 설치 후 기기 간 연동은 별도 코드 없이 동일한 이메일 로그인 하나로 자동 연결됩니다.
+ */
+const PairingQrCodeSvg: React.FC = () => {
+  const matrix = [
+    [1,1,1,1,1,1,1,0,1,0,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,0,1,1,0,0,0,1],
+    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1],
+    [1,0,1,1,1,0,1,0,1,1,0,0,1,0,1],
+    [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1],
+    [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,0,1,0,1,0,1,1,1],
+    [0,0,0,0,0,0,0,0,1,1,0,1,0,0,0],
+    [1,0,1,1,0,1,1,1,0,0,1,1,0,1,1],
+    [0,1,1,0,1,0,0,1,1,0,1,0,1,0,1],
+    [1,1,1,1,1,1,1,0,1,1,1,0,1,1,0],
+    [1,0,0,0,0,0,1,0,0,0,1,1,0,0,1],
+    [1,0,1,1,1,0,1,0,1,1,0,1,1,1,0],
+    [1,0,0,0,0,0,1,0,1,0,0,0,1,0,1],
+    [1,1,1,1,1,1,1,0,1,1,0,1,1,1,1],
+  ];
+  return (
+    <svg
+      viewBox="0 0 17 17"
+      className="w-24 h-24 rounded-xl bg-white p-1.5 shadow-[0_0_20px_rgba(0,229,255,0.3)] shrink-0"
+      aria-label="스마트폰 모바일 앱 1초 설치 QR 코드"
+    >
+      {matrix.map((row, rIdx) =>
+        row.map((cell, cIdx) =>
+          cell ? (
+            <rect
+              key={`${rIdx}-${cIdx}`}
+              x={cIdx + 1}
+              y={rIdx + 1}
+              width={0.92}
+              height={0.92}
+              rx={0.15}
+              fill="#071318"
+            />
+          ) : null
+        )
+      )}
+    </svg>
+  );
+};
 
 export const OnboardingModal: React.FC = () => {
   const {
@@ -883,23 +930,21 @@ export const OnboardingModal: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0 bg-zinc-950/90 px-3.5 py-2.5 rounded-2xl border border-teal-400/30">
-                <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-400/40 flex items-center justify-center text-[18px] shrink-0">
-                  📧
-                </div>
-                <div className="flex flex-col gap-0.5 max-w-[230px]">
-                  <span className="text-[11.5px] font-extrabold text-teal-300">
-                    📧 이메일 하나로 모든 기기 자동 연결
+              <div className="flex items-center gap-3 shrink-0 bg-zinc-950/90 p-2.5 rounded-2xl border border-teal-400/30">
+                <PairingQrCodeSvg />
+                <div className="flex flex-col gap-1 max-w-[215px]">
+                  <span className="text-[11px] font-extrabold text-teal-300">
+                    📱 스마트폰 앱 1초 설치 QR 코드
                   </span>
                   <p className="text-[10.5px] text-zinc-300 leading-snug">
-                    번거로운 QR 스캔 없이 <strong className="text-white">{merlinAuth.email || '내 이메일 계정'}</strong> 로그인 하나로 내 폰·집PC·회사PC가 자동 연결됩니다.
+                    폰 카메라로 스캔해 <strong className="text-white">모바일 앱을 바로 설치</strong>하세요! 설치 후에는 <strong className="text-emerald-300">같은 이메일 로그인 하나로</strong> 내 폰·PC가 자동 연결됩니다.
                   </p>
                   <button
                     type="button"
                     onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
-                    className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer mt-0.5"
+                    className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer"
                   >
-                    {pcAgentPairedMobile ? '● 이메일 멀티기기 자동 연결됨' : '○ 연결 상태 토글'}
+                    {pcAgentPairedMobile ? '● 내 폰 앱 설치·이메일 연결됨' : '○ 연결 상태 토글'}
                   </button>
                 </div>
               </div>

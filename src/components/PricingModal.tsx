@@ -293,7 +293,14 @@ export const PricingModal: React.FC = () => {
   const [appShareCopied, setAppShareCopied] = useState(false);
   const [p2pGiftSent, setP2pGiftSent] = useState(false);
   const [hostRetainsHidePermission, setHostRetainsHidePermission] = useState(true);
-  const [earlyBirdRemainingSeats, setEarlyBirdRemainingSeats] = useState<number>(72); // <= 30일 때만 [마감 임박: 잔여 N석] 점등
+  /**
+   * [멀린님 지침 주석 — 얼리버드 실시간 현황판 노출 정책]:
+   * - '실제 잔여 좌석이 30석 이하(<= 30)일 때만 [🔥 마감 임박: 잔여 N석]을 띄운다'는 규칙은 1차 기준입니다.
+   * - 출시 후 현장 분위기를 봐서 괜찮다 싶으면 언제든 상시 실시간 현황판(전체 잔여석/소진율 현황판)을
+   *   바로 띄울 수 있도록 FORCE_SHOW_LIVE_SEAT_BOARD 스위치 및 현황판 블록을 주석/토글로 보존해 둡니다.
+   */
+  const FORCE_SHOW_LIVE_SEAT_BOARD = false; // 분위기 봐서 언제든 상시 현황판을 띄울 때 true로 전환
+  const [earlyBirdRemainingSeats, setEarlyBirdRemainingSeats] = useState<number>(72); // 1차 기준: <= 30일 때 [마감 임박: 잔여 N석] 점등
   const [clubSignboardName, setClubSignboardName] = useState('산들산악회');
   const [clubSignboardFeedback, setClubSignboardFeedback] = useState<string | null>(null);
 
@@ -505,9 +512,10 @@ export const PricingModal: React.FC = () => {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {earlyBirdRemainingSeats <= 30 ? (
+            {/* [1차 기준]: earlyBirdRemainingSeats <= 30 일 때 점등하되, 분위기 봐서 괜찮다 싶으면 FORCE_SHOW_LIVE_SEAT_BOARD = true 로 언제든 상시 실시간 현황판 노출 가능 */}
+            {FORCE_SHOW_LIVE_SEAT_BOARD || earlyBirdRemainingSeats <= 30 ? (
               <span className="px-2.5 py-1 rounded-full bg-rose-500/25 border border-rose-400/60 text-amber-200 font-label-mono text-[11px] font-extrabold animate-pulse">
-                🔥 마감 임박: 잔여 {earlyBirdRemainingSeats}석
+                🔥 마감 임박 현황판: {100 - earlyBirdRemainingSeats}석 소진 / 잔여 {earlyBirdRemainingSeats}석
               </span>
             ) : (
               <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 font-label-mono text-[11px] font-extrabold">
