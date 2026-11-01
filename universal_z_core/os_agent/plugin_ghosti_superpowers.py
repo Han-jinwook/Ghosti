@@ -130,7 +130,7 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     return {
         "ok": True,
         "engine_running": True,
-        "version": "3.1",
+        "version": "3.2",
         "port": 5199,
         "machine_hwid": hwid,
         "account_id": account_id,
@@ -141,6 +141,8 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         "is_subscribed": bool(is_subscribed or trial_status == "SUBSCRIBED"),
         "web_launcher_url": spd.GHOSTI_WEB_URL,
         "snippets": get_snippets(),
+        "settings": spd.get_superpower_settings(),
+        "e2ee_mailbox": spd.sync_offline_e2ee_mailbox(),
     }
 
 
@@ -176,13 +178,16 @@ def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]
     return status
 
 
+SNIPPET_KEYS = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10")
+
+
 def get_snippets() -> Dict[str, str]:
     snippets = spd.ensure_default_snippets()
     if USER_SNIPPETS_FILE.exists():
         try:
             custom = json.loads(USER_SNIPPETS_FILE.read_text(encoding="utf-8"))
             if isinstance(custom, dict):
-                snippets.update({k: str(v) for k, v in custom.items() if k in ("F1", "F2", "F3", "F4", "F5")})
+                snippets.update({k: str(v) for k, v in custom.items() if k in SNIPPET_KEYS})
         except Exception:
             pass
     return snippets
@@ -192,7 +197,7 @@ def save_snippets(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     data = body or {}
     raw_snippets = data.get("snippets") if isinstance(data.get("snippets"), dict) else data
     current = get_snippets()
-    for key in ("F1", "F2", "F3", "F4", "F5"):
+    for key in SNIPPET_KEYS:
         if key in raw_snippets and raw_snippets[key] is not None:
             current[key] = str(raw_snippets[key]).strip()[:300]
 
@@ -206,8 +211,43 @@ def save_snippets(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     return {
         "ok": True,
         "snippets": current,
-        "message": "✅ F1~F5 내 상용구가 Z-코어에 즉시 저장되었습니다! (재시작 없이 Ctrl+0 ➔ F1~F5 즉시 사용 가능)",
+        "message": "✅ F1~F10 내 상용구가 Z-코어에 즉시 저장되었습니다! (재시작 없이 Ctrl+0 ➔ F1~F10 즉시 사용 가능)",
     }
+
+
+def get_superpower_settings_api() -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "settings": spd.get_superpower_settings(),
+        "snippets": get_snippets(),
+        "e2ee_mailbox": spd.sync_offline_e2ee_mailbox(),
+    }
+
+
+def update_superpower_settings_api(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    data = body or {}
+    if data.get("clear_history"):
+        cleared_cnt = spd.clear_clipboard_history()
+        return {
+            "ok": True,
+            "cleared_count": cleared_cnt,
+            "settings": spd.get_superpower_settings(),
+            "message": f"🧹 클립보드 복사검색 기록({cleared_cnt}건)과 오프라인 암호화 우체통 버퍼를 즉시 비웠습니다.",
+        }
+    updated_cfg = spd.update_superpower_settings(data)
+    return {
+        "ok": True,
+        "settings": updated_cfg,
+        "message": "✅ 귀신창 및 클립보드 보관 설정이 Z-코어에 즉시 반영되었습니다.",
+    }
+
+
+def sync_e2ee_mailbox_api(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    data = body or {}
+    items = data.get("items") if isinstance(data.get("items"), list) else None
+    res = spd.sync_offline_e2ee_mailbox(items)
+    res["message"] = "📬 E2EE 암호화 우체통 양방향 클립보드 동기화가 완료되었습니다."
+    return res
 
 
 def _convert_korean_money_bidirectional(text: str) -> str:

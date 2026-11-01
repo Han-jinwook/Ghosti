@@ -23,6 +23,11 @@ const DEFAULT_SNIPPETS: Record<string, string> = {
   F3: 'contact@sundreamer.app',
   F4: '안녕하세요, 확인 후 빠르게 회신드리겠습니다. 감사합니다.',
   F5: '귀신같이(Ghosti) 1초 내용검색 https://ghosti.sundreamer.app',
+  F6: '사업자등록번호: 123-86-98765 ((주)썬드림)',
+  F7: '세금계산서 발행 이메일: billing@sundreamer.app',
+  F8: '현관 공동비밀번호 및 와이파이 안내',
+  F9: '오늘 오후 3시 줌(Zoom) 화상 미팅 링크입니다.',
+  F10: '감사합니다. 좋은 하루 보내세요!',
 };
 
 const TRIAL_STORAGE_KEY = 'ghosti_superpower_trial_v27';
@@ -312,48 +317,7 @@ export async function startSuperpowerTrialAction(accountId: string, isSubscribed
   return fallback;
 }
 
-const PairingQrCodeSvg: React.FC = () => {
-  const matrix = [
-    [1,1,1,1,1,1,1,0,1,0,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,1,1,0,0,0,1],
-    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1],
-    [1,0,1,1,1,0,1,0,1,1,0,0,1,0,1],
-    [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1],
-    [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,0,1,0,1,0,1,1,1],
-    [0,0,0,0,0,0,0,0,1,1,0,1,0,0,0],
-    [1,0,1,1,0,1,1,1,0,0,1,1,0,1,1],
-    [0,1,1,0,1,0,0,1,1,0,1,0,1,0,1],
-    [1,1,1,1,1,1,1,0,1,1,1,0,1,1,0],
-    [1,0,0,0,0,0,1,0,0,0,1,1,0,0,1],
-    [1,0,1,1,1,0,1,0,1,1,0,1,1,1,0],
-    [1,0,0,0,0,0,1,0,1,0,0,0,1,0,1],
-    [1,1,1,1,1,1,1,0,1,1,0,1,1,1,1],
-  ];
-  return (
-    <svg
-      viewBox="0 0 17 17"
-      className="w-24 h-24 rounded-xl bg-white p-1.5 shadow-[0_0_20px_rgba(0,229,255,0.3)] shrink-0"
-      aria-label="스마트폰 즉시 연결 QR 코드"
-    >
-      {matrix.map((row, rIdx) =>
-        row.map((cell, cIdx) =>
-          cell ? (
-            <rect
-              key={`${rIdx}-${cIdx}`}
-              x={cIdx + 1}
-              y={rIdx + 1}
-              width={0.92}
-              height={0.92}
-              rx={0.15}
-              fill="#071318"
-            />
-          ) : null
-        )
-      )}
-    </svg>
-  );
-};
+// [이메일 단일 로그인 자동 연결]: 불필요한 QR 스캔 없이 이메일 계정 하나로 폰·집PC·회사PC가 자동 연결됩니다.
 
 export const OnboardingModal: React.FC = () => {
   const {
@@ -471,9 +435,11 @@ export const OnboardingModal: React.FC = () => {
   });
   const [showTermsClause, setShowTermsClause] = useState(false);
 
-  // F1~F5 내 상용구 & 전화번호 하이픈
+  // F1~F10 내 상용구 & 클립보드 보관 기간(기본 7일·최대 30일) & 전화번호 하이픈
   const [snippets, setSnippets] = useState<Record<string, string>>(DEFAULT_SNIPPETS);
   const [snippetSavedMsg, setSnippetSavedMsg] = useState<string | null>(null);
+  const [retentionDays, setRetentionDays] = useState<1 | 3 | 7 | 30>(7);
+  const [retentionToast, setRetentionToast] = useState<string | null>(null);
   const [hyphenInput, setHyphenInput] = useState('01012345678');
   const [hyphenOutput, setHyphenOutput] = useState('010-1234-5678');
 
@@ -600,7 +566,7 @@ export const OnboardingModal: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok) {
-          setSnippetSavedMsg(data.message || '✅ Z-코어에 F1~F5 상용구가 즉시 저장되었습니다!');
+          setSnippetSavedMsg(data.message || '✅ Z-코어에 F1~F10 10개 상용구가 즉시 저장되었습니다!');
           playBabyGhostChime();
           setTimeout(() => setSnippetSavedMsg(null), 3500);
           return;
@@ -609,7 +575,7 @@ export const OnboardingModal: React.FC = () => {
     } catch {
       // 로컬 폴백
     }
-    setSnippetSavedMsg('✅ F1~F5 내 상용구가 저장되었습니다! (Ctrl + 0 ➔ F1~F5로 즉시 붙여넣기)');
+    setSnippetSavedMsg('✅ F1~F10 10개 내 상용구가 저장되었습니다! (Ctrl + 0 ➔ F1~F10으로 즉시 붙여넣기)');
     playBabyGhostChime();
     setTimeout(() => setSnippetSavedMsg(null), 3500);
   };
@@ -917,21 +883,23 @@ export const OnboardingModal: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0 bg-zinc-950/90 p-2.5 rounded-2xl border border-white/10">
-                <PairingQrCodeSvg />
-                <div className="flex flex-col gap-1 max-w-[180px]">
-                  <span className="text-[11px] font-extrabold text-teal-300">
-                    📱 스마트폰 QR 즉시 연결
+              <div className="flex items-center gap-3 shrink-0 bg-zinc-950/90 px-3.5 py-2.5 rounded-2xl border border-teal-400/30">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-400/40 flex items-center justify-center text-[18px] shrink-0">
+                  📧
+                </div>
+                <div className="flex flex-col gap-0.5 max-w-[230px]">
+                  <span className="text-[11.5px] font-extrabold text-teal-300">
+                    📧 이메일 하나로 모든 기기 자동 연결
                   </span>
-                  <p className="text-[10.5px] text-zinc-400 leading-snug">
-                    폰 카메라로 스캔하면 내 폰과 PC가 즉시 연결됩니다.
+                  <p className="text-[10.5px] text-zinc-300 leading-snug">
+                    번거로운 QR 스캔 없이 <strong className="text-white">{merlinAuth.email || '내 이메일 계정'}</strong> 로그인 하나로 내 폰·집PC·회사PC가 자동 연결됩니다.
                   </p>
                   <button
                     type="button"
                     onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
-                    className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer"
+                    className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer mt-0.5"
                   >
-                    {pcAgentPairedMobile ? '● 내 폰 연결됨' : '○ 연결 상태 토글'}
+                    {pcAgentPairedMobile ? '● 이메일 멀티기기 자동 연결됨' : '○ 연결 상태 토글'}
                   </button>
                 </div>
               </div>
@@ -993,8 +961,8 @@ export const OnboardingModal: React.FC = () => {
 
               {/* [윗단] 조그마한 1줄 미니 검색창 (클릭 또는 타이핑 시 아래로 5개 카드 아코디언 펼침) */}
               <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0F172A] border border-[#14B8A6]">
-                <span className="text-[11.5px] font-extrabold text-[#5EEAD4] shrink-0">
-                  기억검색
+                <span className="text-[11.5px] font-extrabold text-[#5EEAD4] shrink-0" title="내가 복사(Ctrl+C)한 텍스트와 캡처(Win+Shift+S)한 스샷만 0.1초 만에 소환">
+                  복사검색
                 </span>
                 <input
                   type="text"
@@ -1075,7 +1043,7 @@ export const OnboardingModal: React.FC = () => {
                 </button>
                 <div className="flex flex-col gap-0.5 text-left min-w-0">
                   <div className="text-[#5EEAD4] text-[11.5px] font-extrabold tracking-tight truncate">
-                    [Ctrl+V] 순차·칸맞춤 &nbsp;&nbsp; [9] 파일·PDF변환 &nbsp;&nbsp; [F1~5] 상용구 &nbsp;&nbsp; [2] 한영성형
+                    [Ctrl+V] 순차·칸맞춤 &nbsp;&nbsp; [9] 파일·PDF변환 &nbsp;&nbsp; [F1~10] 상용구 &nbsp;&nbsp; [2] 한영성형
                   </div>
                   <div className="text-[#E2E8F0] text-[11.5px] font-bold tracking-tight truncate">
                     [3] 서식세탁 &nbsp;&nbsp; [4] 줄바꿈정리 &nbsp;&nbsp; [5] 합본 &nbsp;&nbsp; [6] 글자·표OCR &nbsp;&nbsp; [7] 창고정 &nbsp;&nbsp; [8] 번호·일정
@@ -1345,12 +1313,12 @@ export const OnboardingModal: React.FC = () => {
               </div>
             </div>
 
-            {/* 체험 ⑤: F1~F5 내 상용구 실시간 저장 (Z-코어 127.0.0.1:5199 직결) */}
+            {/* 체험 ⑤: F1~F10 10개 내 상용구 실시간 저장 & 클립보드 보관 기간(기본 7일·최대 30일) 설정 */}
             <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-amber-400/35 flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[13px] font-extrabold text-white">
-                    ⑤ ⌨️ F1 ~ F5 내 상용구 등록 (저장 즉시 Ctrl + 0 ➔ F1~F5로 0.1초 입력)
+                    ⑤ ⌨️ F1 ~ F10 내 상용구 10슬롯 등록 (Ctrl + 0 ➔ F1~F10으로 0.1초 입력 · 내 모든 기기 자동 동기화)
                   </span>
                 </div>
                 <button
@@ -1358,7 +1326,7 @@ export const OnboardingModal: React.FC = () => {
                   onClick={() => void handleSaveSnippets()}
                   className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black cursor-pointer"
                 >
-                  💾 내 PC Z-코어에 상용구 즉시 저장
+                  💾 내 PC Z-코어에 F1~F10 상용구 즉시 저장
                 </button>
               </div>
 
@@ -1369,7 +1337,7 @@ export const OnboardingModal: React.FC = () => {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
-                {(['F1', 'F2', 'F3', 'F4', 'F5'] as const).map((key) => (
+                {(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'] as const).map((key) => (
                   <div key={key} className="flex flex-col gap-1">
                     <span className="text-[10.5px] font-mono text-amber-300 font-bold">
                       {key} 단축 슬롯
@@ -1385,6 +1353,74 @@ export const OnboardingModal: React.FC = () => {
                   </div>
                 ))}
               </div>
+
+              {/* 클립보드 [복사검색] 보관 기간 설정 바 (디폴트 7일 300개 / 최대 30일 1,000개 / 즉시 비우기) */}
+              <div className="mt-1 pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+                <div className="flex items-center gap-1.5 text-zinc-300">
+                  <span className="font-extrabold text-teal-300">📋 [복사검색] 클립보드 보관 기간:</span>
+                  <span>기본 7일(300개) · 필요 시 한 달(30일, 1,000개)까지 확장 가능 (🪄 손보기 채팅창에서 말로도 변경 가능)</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(
+                    [
+                      { days: 1 as const, label: '오늘만(24시간)' },
+                      { days: 3 as const, label: '3일' },
+                      { days: 7 as const, label: '7일 (기본·300개)' },
+                      { days: 30 as const, label: '30일 (한 달·1,000개)' },
+                    ]
+                  ).map((opt) => (
+                    <button
+                      key={opt.days}
+                      type="button"
+                      onClick={async () => {
+                        setRetentionDays(opt.days);
+                        try {
+                          await fetch(getZCoreUrl('/api/superpower/settings'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ retention_days: opt.days }),
+                            signal: AbortSignal.timeout(1200),
+                          });
+                        } catch {
+                          // 로컬 폴백
+                        }
+                        setRetentionToast(`✅ [복사검색] 클립보드 보관 기간이 '${opt.label}'로 설정되었습니다.`);
+                        setTimeout(() => setRetentionToast(null), 3000);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer border ${
+                        retentionDays === opt.days
+                          ? 'bg-teal-400 text-zinc-950 border-teal-300 font-black'
+                          : 'bg-zinc-950 text-zinc-300 border-white/15 hover:bg-zinc-800'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await fetch(getZCoreUrl('/api/superpower/clear-history'), {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ clear_history: true }),
+                          signal: AbortSignal.timeout(1200),
+                        });
+                      } catch {
+                        // ignore
+                      }
+                      setRetentionToast('🧹 복사검색 클립보드 기록을 즉시 비웠습니다.');
+                      setTimeout(() => setRetentionToast(null), 3000);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 font-bold cursor-pointer"
+                  >
+                    🧹 즉시 비우기
+                  </button>
+                </div>
+              </div>
+              {retentionToast && (
+                <div className="text-[11px] text-teal-300 font-bold">{retentionToast}</div>
+              )}
             </div>
           </div>
         )}
@@ -1432,15 +1468,15 @@ export const OnboardingModal: React.FC = () => {
                 </button>
               </div>
 
-              {/* 우측: 👑 구독 회원 (1인 계정 모든 기기 통합 월 1,900원~ + 가족·팀 공유방 + 초능력 평생 무료) */}
+              {/* 우측: 👑 주력 상품 — 내 기기 통합 (월 3,900원 · 1차 5년 특판 39,000원) */}
               <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-zinc-900 to-zinc-900 border-2 border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)] flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <span className="px-3 py-1 rounded-full bg-emerald-400 text-zinc-950 text-[11.5px] font-black">
-                      👑 1인 모든 기기 통합 (월 1,900원 · 10년권 19,000원)
+                      👑 내 기기 통합 (월 3,900원 · 1차 5년 특판 39,000원)
                     </span>
                     <span className="text-[11.5px] font-extrabold text-emerald-300">
-                      공유방은 방장 1인만 · 멤버 전원 0원!
+                      이메일 하나로 기기 대수 무제한 통합!
                     </span>
                   </div>
                   <h3 className="text-[17px] font-extrabold text-white leading-snug">
@@ -1451,13 +1487,13 @@ export const OnboardingModal: React.FC = () => {
                       🥇 <strong className="text-emerald-300">1위. 카톡 ‘나에게 보내기’ &amp; 클라우드 월세 완전 종식</strong>: 폰으로 찍은 사진·서류가 압축 없이 내 PC로 1초 직결되고, 2TB·4TB도 클라우드 요금 0원으로 무제한 씁니다.
                     </li>
                     <li>
-                      🥈 <strong className="text-emerald-300">2위. 밖에서 스마트폰으로 집·회사 PC 원격 1초 투시검색</strong>: 외근 중에도 내 사무실·집 PC 하드디스크 속 계약서 본문과 영상 장면을 폰에서 1초 만에 찾아 꺼내 씁니다.
+                      🥈 <strong className="text-emerald-300">2위. 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 회사 PC나 폰에서 복사(<code className="text-white">Ctrl+C</code>·스샷)만 해두면, 꺼져 있던 집 PC를 켜는 순간 <code className="text-teal-300">Ctrl+0 [복사검색]</code>에 최근 100개 텍스트·10장 스샷이 자동 장전됩니다!
                     </li>
                     <li>
-                      🥉 <strong className="text-amber-300">3위. 귀신 초능력 팩(Ctrl + 0) 내 모든 PC 평생 무제한 해금</strong>: 7일 체험 제한이 즉시 풀리며, 집 PC·회사 PC·노트북 어디서나 9대 초능력과 <code className="text-white">F1~F5</code> 상용구가 하나로 동기화됩니다.
+                      🥉 <strong className="text-amber-300">3위. 귀신 초능력 팩(Ctrl + 0) 평생 해금 &amp; F1~F10 동기화</strong>: 집 PC·회사 PC·노트북 어디서나 9대 초능력과 <code className="text-white">F1~F10</code> 10개 상용구가 1초 만에 똑같이 동기화됩니다.
                     </li>
                     <li>
-                      👨‍👩‍👧‍👦 <strong className="text-teal-300">가족·모임·업무 공유방 (월 4,900원~)</strong>: 방장 한 분만 구독하면 초대받은 가족·동호회원·팀원은 <strong className="text-white">전원 0원(무료)</strong>으로 함께 씁니다.
+                      👨‍👩‍👧‍👦 <strong className="text-teal-300">모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~)</strong>: 방장 한 분만 구독하면 초대받은 가족·동호회원·팀원은 <strong className="text-white">전원 0원(무료)</strong>입니다.
                     </li>
                   </ul>
                 </div>
@@ -1471,7 +1507,7 @@ export const OnboardingModal: React.FC = () => {
                   }}
                   className="w-full py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[13px] font-black shadow-[0_0_20px_rgba(16,185,129,0.35)] cursor-pointer"
                 >
-                  👑 내 모든 기기 통합(월 1,900원) · 공유방 요금제 보기 →
+                  👑 내 기기 통합(월 3,900원 · 5년 특판 3.9만) · 공유방 요금제 보기 →
                 </button>
               </div>
             </div>

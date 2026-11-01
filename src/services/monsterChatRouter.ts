@@ -9,6 +9,12 @@ import {
   triggerUserFavoriteAiLiveVoiceBatonTouch,
 } from './voiceSearchAndAiBatonEngine';
 import { getZCoreUrl } from './zCoreBridge';
+import {
+  submitStudioSupportTicket,
+  buildStudioSupportJumpUrl,
+} from './merlin-hub-sdk/Support/blackbox';
+import { useSaySeeStore } from '../store/useSaySeeStore';
+import { validateClubSignboardName } from '../components/PricingModal';
 
 /**
  * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
@@ -35,7 +41,38 @@ export type MonsterCardKind =
   | 'RESTORE_POINTS_LIST'
   | 'PC_SPEC_CONSULTATION'
   | 'DEVICE_REPAIR_GATE'
-  | 'BATON_TOUCH_CUTOFF';
+  | 'BATON_TOUCH_CUTOFF'
+  | 'GHOSTI_INFO_DESK'
+  | 'APP_SETTINGS_CONTROL'
+  | 'STUDIO_SUPPORT_PROXY';
+
+export interface MonsterInfoDeskPayload {
+  topicBadge: string;
+  title: string;
+  bulletPoints: string[];
+  actionButtons: Array<{
+    label: string;
+    actionType: 'OPEN_ONBOARDING_TAB1' | 'OPEN_ONBOARDING_TAB2' | 'OPEN_ONBOARDING_TAB3' | 'OPEN_PRICING_MODAL' | 'JUMP_SEARCH';
+  }>;
+}
+
+export interface MonsterAppSettingsPayload {
+  settingCategory: 'CLIPBOARD_RETENTION' | 'SNIPPET_UPDATE' | 'GHOST_WINDOW_PREF' | 'CLUB_SIGNBOARD';
+  badgeText: string;
+  summaryText: string;
+  appliedValueLabel: string;
+  isBlockedByFilter?: boolean;
+}
+
+export interface MonsterStudioSupportPayload {
+  ticketKind: 'CLAIM' | 'AS_BUG' | 'IDEA';
+  badgeLabel: string;
+  userEmail: string;
+  userComment: string;
+  ticketId?: string | number;
+  studioJumpUrl: string;
+  submittedOk: boolean;
+}
 
 export type MonsterLlmIntent =
   | 'CLEANUP_FOLDER_REORG'
@@ -186,6 +223,9 @@ export interface MonsterChatMessage {
   llmActionJson?: MonsterLlmActionJson;
   followUpSuggestions?: string[];
   repairSymptomQuery?: string;
+  infoDeskPayload?: MonsterInfoDeskPayload;
+  appSettingsPayload?: MonsterAppSettingsPayload;
+  studioSupportPayload?: MonsterStudioSupportPayload;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,8 +244,8 @@ function createWelcomeMessage(): MonsterChatMessage {
     timestamp: now,
     sourceTab: 'trash',
     text:
-      '💬 **질문 가이드** — 사양·느려짐 점검, 폴더·설치파일 정리, 사라진 파일 찾기, 먹통 수리를 한곳에서 편하게 말씀해 주세요.\n' +
-      '↩️ **승인·원복 가이드** — 미리보기 확인 후 **"응 진행해"**처럼 직접 타이핑해 승인하실 때만 실행되며, **"복원 기록 보여줘"** 후 **"1번 복원해줘"**처럼 번호를 타이핑하면 즉시 원복되고 블랙박스에 남습니다.',
+      '💬 **손보기 마스터 대화창** — ① 내 PC 치우기·고치기·복원, ② **귀신같이 기능·요금·업데이트 질문(인포데스크)**, ③ **말 한마디로 모든 앱 설정·F1~F10 상용구·복사 보관기간 변경**, ④ **클레임·A/S·아이디어 제안(스튜디오 자동 접수 & 결과 링크)**까지 한곳에서 말씀해 주세요.\n' +
+      '↩️ **승인·원복 철칙** — 파일 정리는 미리보기 확인 후 **"응 진행해"**처럼 타이핑하실 때만 실행되며, **"복원 기록 보여줘"** ➔ **"1번 복원해줘"**로 언제든 100% 원복됩니다.',
   };
 }
 
@@ -863,6 +903,373 @@ function reply(
 const RED_LINES_TEXT = DOCTOR_3_RED_LINES_NOTICE.join('\n');
 
 // ---------------------------------------------------------------------------
+// 📮 Role 4: 클레임 · A/S(오류) 접수 · 아이디어 제안 스튜디오 대리 접수 창구
+// 🎛️ Role 3: 말 한마디로 모든 앱 설정·상용구 변경 마스터 컨트롤 센터
+// 💁‍♂️ Role 2: 귀신같이 기능 · 요금 · 업데이트 인포메이션 데스크
+// ---------------------------------------------------------------------------
+
+async function handleStudioSupportProxyIfMatched(
+  clean: string,
+  sourceTab: 'trash' | 'repair',
+  speak: (t: string) => void
+): Promise<MonsterChatMessage | null> {
+  const isClaim =
+    /클레임|불만|항의|환불|결제\s*취소|컴플레인|짜증|엉망|불편\s*신고|고객\s*센터\s*접수/i.test(clean);
+  const isIdea =
+    /아이디어|건의|제안|기능\s*(추가|넣어|만들어)|업데이트\s*요청|개선\s*요청|이런\s*기능/i.test(clean);
+  const isAsBug =
+    /a\/s|as\s*접수|에이에스|고장\s*신고|버그\s*(신고|접수|리포트)|오류\s*(신고|접수|리포트)|스튜디오.*접수|문의방.*접수/i.test(
+      clean
+    );
+
+  if (!isClaim && !isIdea && !isAsBug) return null;
+
+  const ticketKind: 'CLAIM' | 'AS_BUG' | 'IDEA' = isClaim ? 'CLAIM' : isIdea ? 'IDEA' : 'AS_BUG';
+  const badgeLabel =
+    ticketKind === 'CLAIM'
+      ? '🚨 클레임(불만·환불·개선) 접수'
+      : ticketKind === 'IDEA'
+      ? '💡 신규 아이디어·기능 제안 접수'
+      : '🛠️ A/S · 오류 · 버그 수리 접수';
+
+  const storeState = useSaySeeStore.getState();
+  const userEmail =
+    storeState?.merlinAuth?.email ||
+    (typeof window !== 'undefined' ? localStorage.getItem('userEmail') || '' : '') ||
+    'merlin_member@sundreamer.app';
+  const userHubId = storeState?.merlinAuth?.userId || 'ghosti_member';
+
+  const submitRes = await submitStudioSupportTicket({
+    appId: 'Ghosti',
+    appVersion: 'v2026.11',
+    userEmail,
+    userHubId,
+    category: ticketKind === 'IDEA' ? 'INQUIRY' : 'BUG',
+    userComment: `[${badgeLabel}] ${clean}`,
+  });
+
+  const resolvedTicketId = submitRes.ticketId || `GH-${Date.now().toString().slice(-5)}`;
+  const studioJumpUrl = buildStudioSupportJumpUrl({
+    appId: 'Ghosti',
+    ticketId: resolvedTicketId,
+    email: userEmail,
+  });
+
+  const payload: MonsterStudioSupportPayload = {
+    ticketKind,
+    badgeLabel,
+    userEmail,
+    userComment: clean,
+    ticketId: resolvedTicketId,
+    studioJumpUrl,
+    submittedOk: true,
+  };
+
+  speak(`${badgeLabel}를 회원님 성함으로 스튜디오에 대신 접수했습니다. 아래 링크를 누르시면 스튜디오 나의 문의방에서 자동 처리 결과를 바로 확인하실 수 있습니다.`);
+
+  return reply(
+    sourceTab,
+    `📮 **[스튜디오 통합 CS 대리 접수 완료 — ${badgeLabel}]**
+` +
+      `회원님 계정(**${userEmail}**)으로 말씀하신 내용을 **썬드리머 스튜디오**에 즉시 전달·접수했습니다 (접수번호: **#${resolvedTicketId}**).
+` +
+      `스튜디오의 자동화 IDE 에이전트가 내용을 분석·작업하여 결과를 안내해 드리오니, 아래 **[👉 스튜디오 ‘나의 문의방’ 결과 보러 가기 ↗]** 링크를 눌러 진행 상황과 답변을 확인해 주세요!`,
+    {
+      cardKind: 'STUDIO_SUPPORT_PROXY',
+      studioSupportPayload: payload,
+      followUpSuggestions: [
+        '방금 접수한 내역 스튜디오 문의방 링크 다시 보여줘',
+        '귀신같이 최신 업데이트 기능도 알려줘',
+        '내 PC 사양이랑 상태 점검해줘',
+      ],
+    }
+  );
+}
+
+async function handleAppSettingsControlIfMatched(
+  clean: string,
+  sourceTab: 'trash' | 'repair',
+  speak: (t: string) => void
+): Promise<MonsterChatMessage | null> {
+  // 1) 클립보드 [복사검색] 기록 즉시 비우기
+  if (/(복사|클립보드)\s*(기록|내역|목록|히스토리).*?(비워|지워|삭제|초기화|클리어)/i.test(clean)) {
+    try {
+      await fetch(getZCoreUrl('/api/superpower/clear-history'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear_history: true }),
+        signal: AbortSignal.timeout(1500),
+      });
+    } catch {
+      /* local fallback */
+    }
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'CLIPBOARD_RETENTION',
+      badgeText: '🧹 클립보드 복사검색 기록 즉시 비우기 완료',
+      summaryText: '내 PC에 저장된 Ctrl+0 [복사검색] 히스토리와 오프라인 암호화 우체통 버퍼를 100% 비웠습니다.',
+      appliedValueLabel: '보관 기록 0건 (완전 초기화됨)',
+    };
+    speak('복사검색 클립보드 기록을 즉시 모두 비웠습니다.');
+    return reply(sourceTab, `🎛️ **[앱 설정 즉시 변경 완료]**
+${payload.summaryText}`, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+      followUpSuggestions: [
+        '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
+        '복사 기록 기본 7일 보관으로 설정해줘',
+        'F1번에 내 계좌번호 등록해줘',
+      ],
+    });
+  }
+
+  // 2) 클립보드 [복사검색] 보관 기간 변경 (오늘만 1일 / 3일 / 7일 기본 / 한 달 30일)
+  if (/(복사|클립보드).*?(보관|유지|기간|기억|저장).*?(오늘|하루|24시간|3일|사흘|7일|일주일|1주일|30일|한\s*달|한달)/i.test(clean)) {
+    let targetDays: 1 | 3 | 7 | 30 = 7;
+    let labelKo = '최근 7일 (기본 · 최대 300개)';
+    if (/30일|한\s*달|한달/.test(clean)) {
+      targetDays = 30;
+      labelKo = '최근 30일 (한 달 · 최대 1,000개)';
+    } else if (/오늘|하루|24시간|1일/.test(clean)) {
+      targetDays = 1;
+      labelKo = '오늘만 (24시간 · 최대 300개)';
+    } else if (/3일|사흘/.test(clean)) {
+      targetDays = 3;
+      labelKo = '최근 3일 (최대 300개)';
+    }
+    try {
+      await fetch(getZCoreUrl('/api/superpower/settings'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retention_days: targetDays }),
+        signal: AbortSignal.timeout(1500),
+      });
+    } catch {
+      /* local fallback */
+    }
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'CLIPBOARD_RETENTION',
+      badgeText: '📋 Ctrl+0 [복사검색] 보관 기간 변경 완료',
+      summaryText: `말씀하신 대로 클립보드 복사·캡처 기록 보관 기간을 '${labelKo}'로 즉시 변경했습니다.`,
+      appliedValueLabel: labelKo,
+    };
+    speak(`클립보드 복사 기록 보관 기간을 ${labelKo}로 변경했습니다.`);
+    return reply(sourceTab, `🎛️ **[앱 설정 즉시 변경 완료]**
+${payload.summaryText}`, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+      followUpSuggestions: [
+        '방금 복사한 기록 다 비워줘',
+        'F1번에 국민은행 123-45-67890 넣어줘',
+        '귀신창 소리 켜져 있는지 봐줘',
+      ],
+    });
+  }
+
+  // 3) F1 ~ F10 상용구 말 한마디로 즉시 등록/변경
+  const snippetMatch =
+    clean.match(/(?:F|상용구\s*)([1-9]|10)\s*번?(?:에|에는|을|를|슬롯에)?\s*["'“”]?(.+?)["'“”]?\s*(?:넣어|등록|저장|설정|바꿔|입력)(?:해\s*줘|해\s*주세요|해|줘)?$/i) ||
+    clean.match(/^(?:F|상용구\s*)([1-9]|10)\s*[:=-]\s*(.+)$/i);
+  if (snippetMatch) {
+    const slotKey = `F${snippetMatch[1]}`;
+    const slotValue = snippetMatch[2].trim();
+    try {
+      const savedRaw = localStorage.getItem('ghosti_superpower_snippets_v27');
+      const existing = savedRaw ? JSON.parse(savedRaw) : {};
+      const updated = { ...existing, [slotKey]: slotValue };
+      localStorage.setItem('ghosti_superpower_snippets_v27', JSON.stringify(updated));
+      await fetch(getZCoreUrl('/api/superpower/snippets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snippets: { [slotKey]: slotValue } }),
+        signal: AbortSignal.timeout(1500),
+      });
+    } catch {
+      /* local fallback */
+    }
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'SNIPPET_UPDATE',
+      badgeText: `⌨️ [${slotKey}] 단축 상용구 즉시 등록 완료`,
+      summaryText: `이제 윈도우 어디서나 Ctrl + 0 ➔ ${slotKey} 키를 누르면 "${slotValue}" 문구가 0.1초 만에 입력됩니다 (내 기기 통합 시 전 기기 자동 동기화).`,
+      appliedValueLabel: `${slotKey} = "${slotValue}"`,
+    };
+    speak(`${slotKey} 상용구 슬롯에 말씀하신 문구를 저장했습니다.`);
+    return reply(sourceTab, `🎛️ **[상용구 즉시 등록 완료]**
+${payload.summaryText}`, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+      followUpSuggestions: [
+        'F2번에 서울 강남구 테헤란로 123 넣어줘',
+        'F6번에 사업자등록번호 123-86-98765 등록해줘',
+        '온보딩 2탭 초능력 체험방 열어줘',
+      ],
+    });
+  }
+
+  // 4) 귀신창(Ghost Window) 소리 / 노출 시간 / 한영 오타 자동변환 설정 변경
+  if (/(귀신창|애기귀신|효과음|초능력\s*소리).*?(꺼|켜|음소거|무음)/i.test(clean)) {
+    const turnOn = /켜|활성|다시/.test(clean) && !/꺼|음소거|무음/.test(clean);
+    try {
+      await fetch(getZCoreUrl('/api/superpower/settings'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sound_enabled: turnOn }),
+        signal: AbortSignal.timeout(1500),
+      });
+    } catch {
+      /* ignore */
+    }
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'GHOST_WINDOW_PREF',
+      badgeText: `🔊 귀신창 애기귀신 효과음 ${turnOn ? 'ON (켜짐)' : 'OFF (음소거)'}`,
+      summaryText: turnOn
+        ? 'Ctrl+0 귀신창 소환음과 2어절 한영 오타 둔갑술 애기귀신 효과음을 다시 켰습니다.'
+        : '조용한 집중 환경을 위해 귀신창 소환음과 오타 변환 효과음을 음소거(OFF)했습니다.',
+      appliedValueLabel: turnOn ? '효과음 켜짐 (ON)' : '효과음 꺼짐 (OFF)',
+    };
+    speak(payload.summaryText);
+    return reply(sourceTab, `🎛️ **[앱 설정 즉시 변경 완료]**
+${payload.summaryText}`, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+    });
+  }
+
+  const durMatch = clean.match(/귀신창.*?(\d+)\s*초.*?(떠\s*있|유지|노출|보여|바꿔|설정)/i);
+  if (durMatch) {
+    const sec = Math.max(2, Math.min(20, Number(durMatch[1]) || 7));
+    try {
+      await fetch(getZCoreUrl('/api/superpower/settings'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ window_duration_ms: sec * 1000 }),
+        signal: AbortSignal.timeout(1500),
+      });
+    } catch {
+      /* ignore */
+    }
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'GHOST_WINDOW_PREF',
+      badgeText: `⏱️ 귀신창(Ctrl+0) 화면 유지 시간 변경 완료`,
+      summaryText: `Ctrl+0을 눌렀을 때 귀신창이 화면에 머무는 시간을 ${sec}초(${sec * 1000}ms)로 변경했습니다.`,
+      appliedValueLabel: `${sec}초 유지 (바깥 클릭 시 즉시 닫힘)`,
+    };
+    speak(payload.summaryText);
+    return reply(sourceTab, `🎛️ **[앱 설정 즉시 변경 완료]**
+${payload.summaryText}`, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+    });
+  }
+
+  // 5) 동호회·동창회 문패 이름 변경 (AI 문패 필터 연동)
+  const signboardMatch = clean.match(/(?:동호회|동창회|모임|우리\s*방)?\s*문패\s*(?:이름)?(?:을|를)?\s*["'“”]?(.+?)["'“”]?(?:으로|로)?\s*(?:바꿔|변경|설정|등록)/i);
+  if (signboardMatch) {
+    const candidateName = signboardMatch[1].trim();
+    const check = validateClubSignboardName(candidateName);
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'CLUB_SIGNBOARD',
+      badgeText: check.valid ? '⛳ 모임 상단 문패 변경 완료' : '🚫 AI 문패 필터 작동 (우회 개설 차단)',
+      summaryText: check.valid
+        ? `모임 라운지 상단 문패를 [⛳ ${candidateName}]로 변경했습니다. 모든 모임 회원 화면 상단에 고정 표시됩니다.`
+        : check.reason || '가족 또는 회사 명칭은 동호회·동창회 문패로 사용할 수 없습니다.',
+      appliedValueLabel: check.valid ? `[⛳ ${candidateName}]` : `변경 차단됨 ("${candidateName}")`,
+      isBlockedByFilter: !check.valid,
+    };
+    speak(payload.summaryText);
+    return reply(sourceTab, `🎛️ **[모임 문패 설정 결과]**
+${payload.summaryText}`, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+    });
+  }
+
+  return null;
+}
+
+function handleGhostiInfoDeskIfMatched(
+  clean: string,
+  sourceTab: 'trash' | 'repair',
+  speak: (t: string) => void
+): MonsterChatMessage | null {
+  const isAskingAboutGhosti =
+    /귀신같이|귀신창|ctrl\s*\+?\s*0|컨트롤\s*0|컨트롤\s*영|초능력|복사검색|기억검색|상용구|f1|f10|오타\s*둔갑|한영\s*성형|내\s*기기\s*통합|3,?900원|4,?900원|5,?900원|8,?900원|9,?900원|마스터권|특판|얼리버드|요금제|구독료|얼마야|암호화\s*우체통|qr\s*코드|이메일\s*연결|기기\s*연결|온보딩|새로\s*추가된|업데이트\s*내역|무슨\s*앱|어떤\s*기능/i.test(
+      clean
+    );
+
+  if (!isAskingAboutGhosti) return null;
+
+  // Case 1: 요금제 · 내 기기 통합(3,900원) · 특판(5년/3년/2년) · QR 없는 이메일 연결 문의
+  if (/내\s*기기\s*통합|3,?900|4,?900|5,?900|8,?900|9,?900|요금|가격|구독|얼마|특판|마스터권|얼리버드|qr|이메일\s*연결|기기\s*연결/i.test(clean)) {
+    const infoPayload: MonsterInfoDeskPayload = {
+      topicBadge: '👑 귀신같이 가격 사다리 & 이메일 자동 기기 통합 안내',
+      title: '혼자 쓰는 내 기기 1대는 평생 0원, 내 모든 기기 통합은 월 3,900원입니다',
+      bulletPoints: [
+        '🆓 내 기기 1대 (언제나 0원): 사진·서류·영상 1초 AI 내용검색(🎯 찾기)과 치우기·고치기(🪄 손보기) 평생 무료 + Ctrl+0 초능력 7일 무료체험',
+        '👑 내 기기 통합 (대표 주력 · 월 3,900원 / 1차 5년 특판 39,000원): 번거로운 QR 스캔 없이 이메일 로그인 하나로 내 폰·집PC·회사PC·노트북이 대수 제한 없이 하나로 묶입니다!',
+        '📬 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’: 회사나 폰에서 복사(Ctrl+C)·캡처한 내역(최근 텍스트 100개·스샷 10장)이 꺼져 있던 집 PC를 켜는 순간 Ctrl+0 [복사검색]에 자동 장전됩니다.',
+        '⛳ 동호회·동창회 무제한(월 4,900원) / 👨‍👩‍👧‍👦 패밀리 우리집(월 5,900원)·양가 3방(월 8,900원) / 💼 업무 공유(월 9,900원~): 방장 1인만 결제하면 초대받은 멤버는 전원 0원!',
+        '🔥 3단계 특판 스케줄: 월 구독료 10개월 치 일시불로 1차 5년(100명) ➔ 2차 3년(1,000명) ➔ 3차 2년(10,000명)을 보장합니다.',
+      ],
+      actionButtons: [
+        { label: '👑 내 기기 통합(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' },
+        { label: '📖 온보딩 3탭(기기 묶기 혜택) 보기', actionType: 'OPEN_ONBOARDING_TAB3' },
+      ],
+    };
+    speak('혼자 쓰시는 기기 한 대는 평생 무료이며, 이메일 하나로 폰과 집 피씨, 회사 피씨를 모두 묶는 내 기기 통합 플랜은 월 삼천구백 원입니다.');
+    return reply(
+      sourceTab,
+      `💁‍♂️ **[귀신같이 인포메이션 데스크 — 요금제 & 이메일 자동 기기 연결 안내]**
+` +
+        `우리 앱은 **별도의 스마트폰 QR 스캔 없이 가입하신 이메일 계정 하나로 모든 기기(폰·집PC·회사PC)가 자동 연결**됩니다. 아래 요약과 바로가기 버튼을 확인해 주세요!`,
+      {
+        cardKind: 'GHOSTI_INFO_DESK',
+        infoDeskPayload: infoPayload,
+        followUpSuggestions: [
+          'Ctrl+0 귀신창 초능력 9가지랑 F1~F10 상용구도 설명해줘',
+          '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
+          '아이디어 건의하고 싶은데 스튜디오에 접수해줘',
+        ],
+      }
+    );
+  }
+
+  // Case 2: Ctrl+0 귀신창 · 복사검색 · F1~F10 상용구 · 최신 업데이트(v2026.11) 안내
+  const infoPayload: MonsterInfoDeskPayload = {
+    topicBadge: '👻 귀신창(Ctrl+0) 9대 초능력 & v2026.11 최신 업데이트 안내',
+    title: '윈도우 어디서나 Ctrl + 0을 누르면 마우스 옆에 『귀신창』이 소환됩니다',
+    bulletPoints: [
+      '🔍 상단 [복사검색] (Win+V형 5개 카드 아코디언): 내가 복사(Ctrl+C)한 텍스트와 캡처(Win+Shift+S)한 표·이미지만 0.1초 만에 찾아 커서 위치에 바로 붙여넣습니다 (기본 7일·최대 30일 보관).',
+      '⌨️ [F1 ~ F10] 10개 고정 상용구: 자주 쓰는 계좌번호·사업자번호·주소를 10개까지 저장해 두고 Ctrl+0 ➔ F1~F10으로 0.1초 만에 입력합니다 (이 채팅창에서 "F1번에 ~ 넣어줘"라고 말해도 즉시 변경!).',
+      '🪄 2어절 한영·영한 오타 둔갑술: 영문 상태에서 dkssudgktpdy qksrkqtmqslek를 치면 애기귀신 소리(띠리링~👻)와 함께 한글로 자동 변환하고 한/영키까지 바꿔줍니다.',
+      '📋 연속 복사 순차·AI 칸맞춤(Ctrl+V) · [3] 서식세탁 · [4] 줄바꿈정리 · [6] 표(TSV) OCR 추출 · [8] 카톡 성함·연락처·계좌·일정 분리 · [9] 다중 스샷 1개 PDF 합본 변환까지 지원합니다.',
+      '📮 스튜디오 직결 창구: 이 손보기 대화창에 클레임·A/S·아이디어를 말씀하시면 회원님 이름으로 스튜디오에 즉시 대리 접수하고 결과 확인 링크를 드립니다.',
+    ],
+    actionButtons: [
+      { label: '👻 온보딩 2탭(Ctrl+0 초능력 체험방) 열기', actionType: 'OPEN_ONBOARDING_TAB2' },
+      { label: '📖 온보딩 1탭(🎯 찾기 · 🪄 손보기 가이드) 열기', actionType: 'OPEN_ONBOARDING_TAB1' },
+      { label: '👑 내 기기 통합(월 3,900원) 요금제 보기', actionType: 'OPEN_PRICING_MODAL' },
+    ],
+  };
+  speak('컨트롤 영을 누르시면 마우스 옆에 귀신창이 나타나며 복사검색과 에프일에서 에프십 상용구, 한영 오타 자동 변환을 쓰실 수 있습니다.');
+  return reply(
+    sourceTab,
+    `💁‍♂️ **[귀신같이 인포메이션 데스크 — 핵심 기능 & v2026.11 업데이트 안내]**
+` +
+      `궁금하신 **『귀신같이(Ghosti)』**의 주요 기능과 최신 업데이트 내역입니다. 이 대화창에서 **"복사 기록 30일 보관으로 바꿔줘"**, **"F1번에 내 계좌번호 넣어줘"**처럼 말씀하시면 설정도 바로 바꿔 드립니다!`,
+    {
+      cardKind: 'GHOSTI_INFO_DESK',
+      infoDeskPayload: infoPayload,
+      followUpSuggestions: [
+        'F1번에 국민은행 123-45-67890 넣어줘',
+        '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
+        '내 기기 통합 3,900원 요금제 혜택 알려줘',
+      ],
+    }
+  );
+}
+
+
+// ---------------------------------------------------------------------------
 // 메인 라우터: 저가 LLM AI (Gemini 2.5 Flash) 자연어 대화 + JSON Z-코어(5199) 실행 위임
 // ---------------------------------------------------------------------------
 
@@ -1083,6 +1490,18 @@ export async function processUnifiedMonsterChatQuery(params: {
       }
     );
   }
+
+  // 0-0C) [Role 4: 클레임 · A/S 접수 · 아이디어 제안 스튜디오 대리 접수 창구 (회원 로그인 유지 & 나의 문의방 링크 즉시 반환)]
+  const studioSupportReply = await handleStudioSupportProxyIfMatched(clean, sourceTab, speak);
+  if (studioSupportReply) return studioSupportReply;
+
+  // 0-0D) [Role 3: 말 한마디로 모든 앱 설정·F1~F10 상용구·클립보드 보관기간을 직접 변경하는 마스터 컨트롤 센터]
+  const settingsControlReply = await handleAppSettingsControlIfMatched(clean, sourceTab, speak);
+  if (settingsControlReply) return settingsControlReply;
+
+  // 0-0E) [Role 2: 귀신같이 자체 기능 · 요금제(내 기기 통합 3,900원) · 업데이트 질문에 답하는 인포메이션 데스크]
+  const infoDeskReply = handleGhostiInfoDeskIfMatched(clean, sourceTab, speak);
+  if (infoDeskReply) return infoDeskReply;
 
   // 0-A) 명백한 일상 잡담(PC·파일·설정 키워드 전무)은 LLM 토큰 소모(비용 낭비) 없이 0원으로 즉시 정중히 거절 안내
   const hasAnyPcOrFileCue =

@@ -244,6 +244,14 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_superpowers.get_telemetry())
             return
 
+        if path == "/api/superpower/settings":
+            self._send_json(plugin_ghosti_superpowers.get_superpower_settings_api())
+            return
+
+        if path == "/api/superpower/mailbox-sync":
+            self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api({}))
+            return
+
         if path.startswith("/api/senstalk"):
             sub = path[len("/api/senstalk") :].strip("/") or "health"
             self._send_json(plugin_senstalk.handle_get(sub))
@@ -348,6 +356,16 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/superpower/telemetry":
             self._send_json(plugin_ghosti_superpowers.update_telemetry(body))
+            return
+
+        if path in ("/api/superpower/settings", "/api/superpower/clear-history"):
+            if path.endswith("/clear-history"):
+                body = {**(body or {}), "clear_history": True}
+            self._send_json(plugin_ghosti_superpowers.update_superpower_settings_api(body))
+            return
+
+        if path == "/api/superpower/mailbox-sync":
+            self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api(body))
             return
 
         if path.startswith("/api/senstalk"):

@@ -41,8 +41,16 @@ const NOTION_MINIMAL_STARTERS: Array<{ label: string; prompt: string }> = [
     prompt: '바탕화면이랑 다운로드 폴더 정리할 파일 봐줘',
   },
   {
-    label: '🕵️ 사라진 파일 찾기',
-    prompt: '어제 보던 파일이 사라졌는데 찾아줘',
+    label: '💁‍♂️ 귀신같이 기능·요금 안내',
+    prompt: '귀신같이 Ctrl+0 초능력 기능이랑 내 기기 통합 3,900원 혜택 알려줘',
+  },
+  {
+    label: '🎛️ 말로 앱 설정·상용구 변경',
+    prompt: '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
+  },
+  {
+    label: '📮 클레임·A/S·아이디어 접수',
+    prompt: '아이디어 건의 및 A/S 접수하고 싶은데 내 이름으로 스튜디오에 접수해줘',
   },
   {
     label: '🕰️ 복원 기록·원복',

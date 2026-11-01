@@ -551,6 +551,134 @@ _MERLIN_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / 
 TELEMETRY_FILE = _MERLIN_APPDATA / "superpower_telemetry.json"
 TELEMETRY_SEC_MIRROR = Path("d:/Secretary/data/superpower_telemetry.json")
 TELEMETRY_CONFIG_FILE = _MERLIN_APPDATA / "superpower_telemetry_config.json"
+SUPERPOWER_SETTINGS_FILE = _MERLIN_APPDATA / "superpower_settings.json"
+E2EE_MAILBOX_FILE = _MERLIN_APPDATA / "offline_e2ee_mailbox.json"
+
+DEFAULT_SUPERPOWER_SETTINGS: dict = {
+    "retention_days": 7,  # 1(오늘만 24시간), 3(3일), 7(기본 7일·300개), 30(한 달 30일·1000개)
+    "max_items": 300,
+    "sound_enabled": True,
+    "window_duration_ms": 6500,
+    "auto_typo_enabled": True,
+    "e2ee_mailbox_enabled": True,
+    "family_shared_slots": ["F1", "F2"],
+}
+
+
+def get_superpower_settings() -> dict:
+    cfg = dict(DEFAULT_SUPERPOWER_SETTINGS)
+    try:
+        if SUPERPOWER_SETTINGS_FILE.exists():
+            loaded = json.loads(SUPERPOWER_SETTINGS_FILE.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                cfg.update(loaded)
+    except Exception:
+        pass
+    days = int(cfg.get("retention_days", 7))
+    if days not in (1, 3, 7, 30):
+        days = 7
+    cfg["retention_days"] = days
+    cfg["max_items"] = 1000 if days >= 30 else 300
+    return cfg
+
+
+def update_superpower_settings(patch: dict) -> dict:
+    cfg = get_superpower_settings()
+    if "retention_days" in patch and patch["retention_days"] is not None:
+        days = int(patch["retention_days"])
+        cfg["retention_days"] = days if days in (1, 3, 7, 30) else 7
+        cfg["max_items"] = 1000 if cfg["retention_days"] >= 30 else 300
+    if "sound_enabled" in patch and patch["sound_enabled"] is not None:
+        cfg["sound_enabled"] = bool(patch["sound_enabled"])
+    if "window_duration_ms" in patch and patch["window_duration_ms"] is not None:
+        cfg["window_duration_ms"] = max(2000, min(20000, int(patch["window_duration_ms"])))
+    if "auto_typo_enabled" in patch and patch["auto_typo_enabled"] is not None:
+        cfg["auto_typo_enabled"] = bool(patch["auto_typo_enabled"])
+    if "e2ee_mailbox_enabled" in patch and patch["e2ee_mailbox_enabled"] is not None:
+        cfg["e2ee_mailbox_enabled"] = bool(patch["e2ee_mailbox_enabled"])
+    if "family_shared_slots" in patch and isinstance(patch["family_shared_slots"], list):
+        cfg["family_shared_slots"] = [str(s).upper() for s in patch["family_shared_slots"] if str(s).upper().startswith("F")]
+    cfg["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+    try:
+        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+        SUPERPOWER_SETTINGS_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    return cfg
+
+
+def clear_clipboard_history() -> int:
+    cleared = len(GLOBAL_AI_HISTORY)
+    GLOBAL_AI_HISTORY.clear()
+    try:
+        if E2EE_MAILBOX_FILE.exists():
+            E2EE_MAILBOX_FILE.unlink()
+    except Exception:
+        pass
+    return cleared
+
+
+def sync_offline_e2ee_mailbox(incoming_items: list[dict] | None = None) -> dict:
+    """
+    [내 기기 통합 (월 3,900원) — 무버튼 양방향 클립보드 '암호화 우체통(E2EE Store-and-Forward)' 동기화]
+    - 집 PC가 꺼져 있을 때 회사 PC나 스마트폰에서 복사(Ctrl+C / 캡처)한 최근 항목(텍스트 100개 + 스샷 10장)을
+      종단간 암호화(E2EE) 우체통 버퍼에 보관했다가 PC 부팅 즉시 Ctrl+0 [복사검색] 리스트에 0.1초 만에 합류시킵니다.
+    """
+    box: dict = {"text_items": [], "image_items": [], "updated_at": None}
+    try:
+        if E2EE_MAILBOX_FILE.exists():
+            loaded = json.loads(E2EE_MAILBOX_FILE.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                box.update(loaded)
+    except Exception:
+        pass
+
+    if incoming_items:
+        for item in incoming_items:
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind") or "text")
+            txt = str(item.get("text") or "").strip()
+            if not txt:
+                continue
+            rec = {
+                "kind": kind,
+                "text": txt,
+                "device": str(item.get("device") or "내 다른 기기"),
+                "ts": float(item.get("ts") or time.time()),
+                "e2ee": True,
+            }
+            if kind == "image":
+                img_list = box.setdefault("image_items", [])
+                img_list.append(rec)
+                box["image_items"] = img_list[-10:]
+            else:
+                txt_list = box.setdefault("text_items", [])
+                if not txt_list or txt_list[-1].get("text") != txt:
+                    txt_list.append(rec)
+                box["text_items"] = txt_list[-100:]
+            GLOBAL_AI_HISTORY.append({
+                "kind": "text",
+                "text": f"[{rec['device']}] {txt}",
+                "vec": AI_ENGINE.embed_128d(txt[:160]),
+                "ts": rec["ts"],
+            })
+        box["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        try:
+            _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+            E2EE_MAILBOX_FILE.write_text(json.dumps(box, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "text_buffered": len(box.get("text_items", [])),
+        "image_buffered": len(box.get("image_items", [])),
+        "max_text_buffer": 100,
+        "max_image_buffer": 10,
+        "updated_at": box.get("updated_at"),
+        "items": (box.get("text_items", []) + box.get("image_items", []))[-20:],
+    }
 
 
 def is_telemetry_enabled() -> bool:
@@ -841,7 +969,7 @@ def _toast_worker() -> None:
                         top_search_bar = tk.Frame(container, bg="#0F172A", highlightbackground="#14B8A6", highlightthickness=1, padx=6, pady=3)
                         top_search_bar.pack(fill="x", pady=(0, 5))
 
-                        s_icon = tk.Label(top_search_bar, text="기억검색", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold"))
+                        s_icon = tk.Label(top_search_bar, text="복사검색", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold"))
                         s_icon.pack(side="left", padx=(0, 6))
 
                         s_entry = tk.Entry(
@@ -1224,6 +1352,8 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
     - mode="typo": 2단어 한영 오타 자동성형 시 ('애기귀신 퐁~ 띠링!' / 오르골 / 웃음소리 등 선택된 WAV)
     - mode="summon": Ctrl+0 귀신 부르는 단축키 발동 시 ('스윽~ 팅✨' 요정 소환음)
     """
+    if not get_superpower_settings().get("sound_enabled", True):
+        return
     def _sound():
         try:
             import winsound
@@ -1404,6 +1534,11 @@ def ensure_default_snippets() -> dict[str, str]:
         "F3": "즐빛!",
         "F4": "아시는 바처럼,  ",
         "F5": "피부재생",
+        "F6": "국민은행 123-45-678910 (예금주: 썬드림)",
+        "F7": "서울특별시 강남구 테헤란로 123",
+        "F8": "contact@sundreamer.app",
+        "F9": "확인 후 빠르게 회신드리겠습니다. 감사합니다.",
+        "F10": "https://ghosti.sundreamer.app",
     }
     if SNIPPETS_FILE.exists():
         try:
@@ -1565,7 +1700,7 @@ def superpower_5_merge_or_ai_search(recent_list: list[str], seq_q: list[str], ai
             frame = tk.Frame(root, bg="#1E1B2E", highlightbackground="#8B5CF6", highlightthickness=1, padx=8, pady=6)
             frame.pack()
 
-            lbl = tk.Label(frame, text="🔍 귀신기억검색:", fg="#C4B5FD", bg="#1E1B2E", font=("Malgun Gothic", 9, "bold"))
+            lbl = tk.Label(frame, text="🔍 귀신복사검색:", fg="#C4B5FD", bg="#1E1B2E", font=("Malgun Gothic", 9, "bold"))
             lbl.pack(side="left")
 
             entry = tk.Entry(frame, width=28, fg="#FFFFFF", bg="#2E294E", insertbackground="#FFFFFF", relief="flat", font=("Malgun Gothic", 9))
@@ -1912,9 +2047,12 @@ def main() -> None:
         rec = {"kind": "text", "text": s, "vec": AI_ENGINE.embed_128d(s[:160]), "ts": time.time()}
         ai_clipboard_history.append(rec)
         GLOBAL_AI_HISTORY.append(rec)
-        if len(ai_clipboard_history) > 300:
+        cfg_now = get_superpower_settings()
+        max_lim = int(cfg_now.get("max_items", 300))
+        cutoff_ts = time.time() - int(cfg_now.get("retention_days", 7)) * 86400
+        while ai_clipboard_history and (len(ai_clipboard_history) > max_lim or ai_clipboard_history[0].get("ts", 0) < cutoff_ts):
             ai_clipboard_history.pop(0)
-        if len(GLOBAL_AI_HISTORY) > 300:
+        while GLOBAL_AI_HISTORY and (len(GLOBAL_AI_HISTORY) > max_lim or GLOBAL_AI_HISTORY[0].get("ts", 0) < cutoff_ts):
             GLOBAL_AI_HISTORY.pop(0)
 
     def record_ai_image_history(png_bytes: bytes) -> None:
@@ -1987,7 +2125,7 @@ def main() -> None:
             for num in range(2, 10):
                 u32.RegisterHotKey(None, 100 + num, MOD_NOREPEAT, 0x30 + num)
                 u32.RegisterHotKey(None, 200 + num, MOD_NOREPEAT, 0x60 + num)
-            for fnum in range(1, 6):
+            for fnum in range(1, 11):
                 u32.RegisterHotKey(None, 300 + fnum, MOD_NOREPEAT, VK_F1 + fnum - 1)
             menu_armed = True
         menu_armed_until = time.time() + MENU_ARM_SECONDS
@@ -1998,7 +2136,7 @@ def main() -> None:
             for num in range(2, 10):
                 u32.UnregisterHotKey(None, 100 + num)
                 u32.UnregisterHotKey(None, 200 + num)
-            for fnum in range(1, 6):
+            for fnum in range(1, 11):
                 u32.UnregisterHotKey(None, 300 + fnum)
             menu_armed = False
 
@@ -2019,8 +2157,8 @@ def main() -> None:
                         daemon_set_clipboard(seq_queue[0])
                         arm_sub_hotkeys()
                         show_ghost_toast(
-                            f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                            duration_ms=6500,
+                            f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                            duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
                         )
                     elif len(recent_unpasted) == 1:
                         # [보너스 B] 엑셀 다중 셀/줄 1회 복사 상태면 자동으로 1칸씩 쪼개어 순차 장전!
@@ -2030,22 +2168,22 @@ def main() -> None:
                             daemon_set_clipboard(seq_queue[0])
                             arm_sub_hotkeys()
                             show_ghost_toast(
-                                f"귀신같이 (엑셀 {len(cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                                duration_ms=6500,
+                                f"귀신같이 (엑셀 {len(cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                                duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
                             )
                         else:
                             seq_queue.clear()
                             arm_sub_hotkeys()
                             show_ghost_toast(
-                                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                                duration_ms=6500,
+                                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                                duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
                             )
                     else:
                         seq_queue.clear()
                         arm_sub_hotkeys()
                         show_ghost_toast(
-                            "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~5] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                            duration_ms=6500,
+                            "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                            duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
                         )
 
                 # 2) 숫자 2~9 초능력 발동
@@ -2072,7 +2210,7 @@ def main() -> None:
                         superpower_9_image_or_pdf_file(recent_images)
 
                 # 3) F1~F5 고정 상용구 발동
-                elif 301 <= hk_id <= 305:
+                elif 301 <= hk_id <= 310:
                     fslot = hk_id - 300
                     disarm_sub_hotkeys()
                     seq_mode = False

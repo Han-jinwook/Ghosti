@@ -20,6 +20,11 @@ import {
   formatBytes,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
 } from '../services/monsterChatRouter';
+import { useSaySeeStore } from '../store/useSaySeeStore';
+import {
+  submitStudioSupportTicket,
+  buildStudioSupportJumpUrl,
+} from '../services/merlin-hub-sdk/Support/blackbox';
 import { speakWithHyunsuOrSunhi } from '../services/voiceSearchAndAiBatonEngine';
 
 interface MonsterCardProps {
@@ -41,6 +46,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showAllRestorePoints, setShowAllRestorePoints] = useState(false);
   const [restoreFilterText, setRestoreFilterText] = useState('');
+  const [extraSupportKind, setExtraSupportKind] = useState<'CLAIM' | 'AS_BUG' | 'IDEA'>('IDEA');
+  const [extraSupportText, setExtraSupportText] = useState('');
+  const [extraSupportSending, setExtraSupportSending] = useState(false);
 
   const handleBatonTouch = async () => {
     if (!message.batonTouchPayload) return;
@@ -434,7 +442,210 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 9) 짝수 회차(2회 완료마다 1번) 1분 숏폼 큐레이션 팁 */}
+      {/* 9) 💁‍♂️ 귀신같이 인포메이션 데스크 (자체 기능 · 요금 · 업데이트 안내 + 바로가기 버튼) */}
+      {message.cardKind === 'GHOSTI_INFO_DESK' && message.infoDeskPayload && (
+        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[11px] font-extrabold">
+              <Sparkles className="w-3.5 h-3.5" />
+              {message.infoDeskPayload.topicBadge}
+            </span>
+          </div>
+          <div className="text-xs font-extrabold text-white">
+            {message.infoDeskPayload.title}
+          </div>
+          <ul className="space-y-1.5 text-[11.5px] text-slate-200 leading-relaxed">
+            {message.infoDeskPayload.bulletPoints.map((pt, idx) => (
+              <li key={idx} className="bg-slate-950/80 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
+                {pt}
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {message.infoDeskPayload.actionButtons.map((btn, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => {
+                  const st = useSaySeeStore.getState();
+                  if (btn.actionType === 'OPEN_PRICING_MODAL') {
+                    st.setShowProModal(true);
+                  } else if (btn.actionType === 'OPEN_ONBOARDING_TAB1') {
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_open_onboarding_tab', { detail: { tab: 'tab1_find_care' } })
+                    );
+                  } else if (btn.actionType === 'OPEN_ONBOARDING_TAB2') {
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_open_onboarding_tab', { detail: { tab: 'tab2_superpower' } })
+                    );
+                  } else if (btn.actionType === 'OPEN_ONBOARDING_TAB3') {
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_open_onboarding_tab', { detail: { tab: 'tab3_share_pro' } })
+                    );
+                  } else if (btn.actionType === 'JUMP_SEARCH') {
+                    onJumpToSearch('');
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-[11.5px] font-black cursor-pointer shadow"
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 10) 🎛️ 말 한마디로 모든 앱 설정·상용구 변경 마스터 컨트롤 센터 완료 카드 */}
+      {message.cardKind === 'APP_SETTINGS_CONTROL' && message.appSettingsPayload && (
+        <div
+          className={`rounded-xl border p-3.5 space-y-2 ${
+            message.appSettingsPayload.isBlockedByFilter
+              ? 'border-rose-500/45 bg-rose-950/20'
+              : 'border-emerald-500/45 bg-slate-900/95'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                message.appSettingsPayload.isBlockedByFilter
+                  ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
+                  : 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
+              }`}
+            >
+              {message.appSettingsPayload.badgeText}
+            </span>
+            <span className="text-[11px] font-mono font-bold text-amber-300">
+              {message.appSettingsPayload.appliedValueLabel}
+            </span>
+          </div>
+          <p className="text-xs text-slate-200 leading-relaxed">
+            {message.appSettingsPayload.summaryText}
+          </p>
+          {message.appSettingsPayload.isBlockedByFilter && (
+            <button
+              type="button"
+              onClick={() => useSaySeeStore.getState().setShowProModal(true)}
+              className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11.5px] font-black cursor-pointer"
+            >
+              👑 패밀리(5,900원) · 업무 공유(9,900원) 요금제 보기 →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 11) 📮 클레임 · A/S 접수 · 아이디어 제안 스튜디오 대리 접수 & [나의 문의방] 직행 링크 카드 */}
+      {message.cardKind === 'STUDIO_SUPPORT_PROXY' && message.studioSupportPayload && (
+        <div className="rounded-xl border border-amber-400/50 bg-slate-900/95 p-3.5 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+              {message.studioSupportPayload.badgeLabel}
+            </span>
+            <span className="text-[11px] font-mono text-emerald-300 font-bold">
+              접수번호 #{message.studioSupportPayload.ticketId} · 회원 {message.studioSupportPayload.userEmail}
+            </span>
+          </div>
+
+          <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 text-xs text-slate-200 space-y-1">
+            <div className="text-[11px] text-slate-400 font-bold">📝 스튜디오에 전달된 접수 원문:</div>
+            <div className="font-semibold text-white">{message.studioSupportPayload.userComment}</div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <a
+              href={message.studioSupportPayload.studioJumpUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 py-2.5 px-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-[0_0_16px_rgba(16,185,129,0.3)]"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>👉 스튜디오 [나의 문의방]에서 IDE 자동 작업 결과 보러 가기 ↗</span>
+            </a>
+          </div>
+
+          {/* 추가 클레임 / A/S / 아이디어 1초 구분 접수 미니 입력줄 */}
+          <div className="pt-2 border-t border-slate-800 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-slate-400 font-bold">추가 접수 구분:</span>
+              {(
+                [
+                  { id: 'CLAIM' as const, label: '🚨 클레임' },
+                  { id: 'AS_BUG' as const, label: '🛠️ A/S·오류' },
+                  { id: 'IDEA' as const, label: '💡 아이디어' },
+                ]
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setExtraSupportKind(tab.id)}
+                  className={`px-2 py-0.5 rounded font-bold cursor-pointer ${
+                    extraSupportKind === tab.id
+                      ? 'bg-amber-400 text-slate-950 font-black'
+                      : 'bg-slate-950 text-slate-300 border border-slate-800'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={extraSupportText}
+                onChange={(e) => setExtraSupportText(e.target.value)}
+                placeholder="추가로 전달할 클레임·A/S·아이디어를 입력하면 회원 이름으로 즉시 스튜디오에 접수됩니다..."
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11.5px] text-white outline-none focus:border-amber-400"
+              />
+              <button
+                type="button"
+                disabled={extraSupportSending || !extraSupportText.trim()}
+                onClick={async () => {
+                  const val = extraSupportText.trim();
+                  if (!val) return;
+                  setExtraSupportSending(true);
+                  const badge =
+                    extraSupportKind === 'CLAIM'
+                      ? '🚨 클레임(불만·환불·개선) 접수'
+                      : extraSupportKind === 'IDEA'
+                      ? '💡 신규 아이디어·기능 제안 접수'
+                      : '🛠️ A/S · 오류 · 버그 수리 접수';
+                  const res = await submitStudioSupportTicket({
+                    appId: 'Ghosti',
+                    appVersion: 'v2026.11',
+                    userEmail: message.studioSupportPayload!.userEmail,
+                    category: extraSupportKind === 'IDEA' ? 'INQUIRY' : 'BUG',
+                    userComment: `[${badge}] ${val}`,
+                  });
+                  const newTid = res.ticketId || `GH-${Date.now().toString().slice(-5)}`;
+                  const newJump = buildStudioSupportJumpUrl({
+                    appId: 'Ghosti',
+                    ticketId: newTid,
+                    email: message.studioSupportPayload!.userEmail,
+                  });
+                  setExtraSupportSending(false);
+                  setExtraSupportText('');
+                  onUpdateMessage({
+                    ...message,
+                    studioSupportPayload: {
+                      ...message.studioSupportPayload!,
+                      ticketKind: extraSupportKind,
+                      badgeLabel: badge,
+                      userComment: val,
+                      ticketId: newTid,
+                      studioJumpUrl: newJump,
+                    },
+                  });
+                  onToast?.(`📮 [${badge}] 스튜디오 대리 접수 완료 (#${newTid})`);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-slate-950 text-[11.5px] font-black cursor-pointer shrink-0"
+              >
+                {extraSupportSending ? '접수 중...' : '스튜디오 접수'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 12) 짝수 회차(2회 완료마다 1번) 1분 숏폼 큐레이션 팁 */}
       {message.shortformTip && (
         <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/25 p-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="space-y-0.5">
