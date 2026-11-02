@@ -50,11 +50,11 @@ except ImportError:
     win32clipboard = None
     win32con = None
 
-SENSEBOT_VERSION = "3.3"
+SENSEBOT_VERSION = "3.4"
 
 PLUGIN_METADATA = {
     "pluginId": "senstalk",
-    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v3.3)",
+    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v3.4)",
     "version": SENSEBOT_VERSION,
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
@@ -416,16 +416,18 @@ def paste_message_to_chat(chat_hwnd, message: str, expected_seq_id: int = None):
                 # 5. 사후 무결성 검증: 혹시라도 기존 텍스트와 합쳐져 2회 중복 입력되었는지 즉시 확인 후 1회분으로 강제 교정!
                 after_txt = _get_richedit_text(re_hwnd).replace('\r\n', '\n').replace('\r', '\n').strip()
                 if norm_msg and len(after_txt) > len(norm_msg) + 4:
-                    msg_buf = ctypes.create_unicode_buffer(message)
-                    user32.SendMessageW(wintypes.HWND(re_hwnd), 0x000C, wintypes.WPARAM(0), msg_buf)
-                    user32.SendMessageW(wintypes.HWND(re_hwnd), 0x00B1, wintypes.WPARAM(len(message)), wintypes.LPARAM(len(message)))
+                    user32.SendMessageW(wintypes.HWND(re_hwnd), 0x000C, wintypes.WPARAM(0), empty_buf)
+                    user32.SendMessageW(wintypes.HWND(re_hwnd), 0x0302, wintypes.WPARAM(0), wintypes.LPARAM(0))
                     print("   [무결성 자동 교정] 입력창 중복 텍스트 감지 즉시 1회분 단일 본문으로 교정 완료!")
                 _LAST_PASTED_INFO["hwnd"] = chat_hwnd
                 _LAST_PASTED_INFO["msg"] = message
                 _LAST_PASTED_INFO["time"] = time.time()
 
-            # 6. 혹시 모를 시스템 메뉴 상태 완벽 취소
-            user32.SendMessageW(wintypes.HWND(chat_hwnd), 0x001F, wintypes.WPARAM(0), wintypes.LPARAM(0)) # WM_CANCELMODE
+            # 6. 포커스 재확인 (WM_CANCELMODE 호출 시 RICHEDIT50W 키보드 포커스가 해제되어 엔터 타건이 먹통되는 현상 원천 차단!)
+            user32.AttachThreadInput(cur_tid, chat_tid, True)
+            user32.SetFocus(re_hwnd)
+            user32.AttachThreadInput(cur_tid, chat_tid, False)
+            user32.SendMessageW(wintypes.HWND(re_hwnd), 0x00B1, wintypes.WPARAM(-1), wintypes.LPARAM(-1)) # 커서를 맨 끝으로 이동
         elif message:
             # 보조: 키보드 Ctrl + V
             press_hotkey(VK_CONTROL, VK_V)
@@ -1960,7 +1962,7 @@ def load_emoticon_to_chat(chat_hwnd, block):
 
     # 입력창 포커스 및 비우기 (텍스트 장전과 동일한 방식) 후 빈 상태에서 키워드를 직접 타이핑
     paste_message_to_chat(chat_hwnd, "")
-    time.sleep(0.05)
+    time.sleep(0.08)
 
     _type_unicode_text(keyword)
     time.sleep(random.uniform(0.65, 0.85))  # 추천창 렌더링 대기
@@ -1976,6 +1978,8 @@ def load_emoticon_to_chat(chat_hwnd, block):
 
     press_key(VK_RETURN)  # 선택 → 미리보기
     time.sleep(random.uniform(0.18, 0.28))
+    while user32.GetAsyncKeyState(VK_RETURN) & 0x8000:
+        time.sleep(0.01)
     print(f"   [😊 이모티콘 장전] '{keyword}' 추천창 {row}줄 {col}번째 → 미리보기 완료. 확인 후 [Enter]를 치세요.")
     return True
 
@@ -2158,6 +2162,8 @@ def enter_listener_loop():
             fg = GetForegroundWindow()
             channel = SYNCED_STATE.get("channel", "kakao")
             is_valid_fg = is_valid_messenger_window(fg, channel)
+            if not is_valid_fg and channel == "kakao" and CURRENT_CHAT_HWND and user32.IsWindow(CURRENT_CHAT_HWND) and user32.IsWindowVisible(CURRENT_CHAT_HWND):
+                is_valid_fg = True
             if not is_valid_fg:
                 time.sleep(0.05)
                 continue
@@ -2173,6 +2179,34 @@ def enter_listener_loop():
             name = rec.get("name", "") if rec else ""
             total_b = len(CURRENT_REC_BLOCKS)
             curr_b_idx = CURRENT_BLOCK_INDEX
+
+            if channel == "kakao":
+                chat_h_chk = CURRENT_CHAT_HWND if (CURRENT_CHAT_HWND and user32.IsWindow(CURRENT_CHAT_HWND)) else (fg if is_chat_window(fg) else find_open_chat_window(name))
+                if chat_h_chk and user32.IsWindow(chat_h_chk):
+                    re_chk_list = []
+                    def _find_re_chk(h, lp):
+                        c = ctypes.create_unicode_buffer(256)
+                        user32.GetClassNameW(h, c, 256)
+                        if 'RICHEDIT' in c.value:
+                            re_chk_list.append(h)
+                        return True
+                    user32.EnumChildWindows(chat_h_chk, ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(_find_re_chk), 0)
+                    if re_chk_list:
+                        re_h = re_chk_list[0]
+                        time.sleep(0.04)
+                        rem_txt = _get_richedit_text(re_h).strip()
+                        if rem_txt:
+                            force_foreground(chat_h_chk)
+                            cur_tid = kernel32.GetCurrentThreadId()
+                            chat_tid = user32.GetWindowThreadProcessId(chat_h_chk, None)
+                            user32.AttachThreadInput(cur_tid, chat_tid, True)
+                            user32.SetFocus(re_h)
+                            user32.AttachThreadInput(cur_tid, chat_tid, False)
+                            time.sleep(0.03)
+                            press_key(VK_RETURN)
+                            time.sleep(0.08)
+                            while user32.GetAsyncKeyState(VK_RETURN) & 0x8000:
+                                time.sleep(0.01)
 
             b_type_kr = "사진" if (curr_b_idx < total_b and CURRENT_REC_BLOCKS[curr_b_idx]["type"] == "image") else ("이모티콘" if (curr_b_idx < total_b and CURRENT_REC_BLOCKS[curr_b_idx]["type"] == "emoticon") else "텍스트")
             print(f"   [타건 감지] '{name}'님 [{curr_b_idx + 1}/{total_b} {b_type_kr}] 전송 확정! ({channel})")

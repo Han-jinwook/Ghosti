@@ -17,7 +17,7 @@ const ALLOWED_ROOT_DOMAINS = ['sundreamer.app'] as const;
 
 /** 패밀리 서비스별 Android 알림 채널 (id는 서버 FCM payload의 android.notification.channel_id와 일치시켜야 함) */
 export const FAMILY_PUSH_CHANNELS = [
-  { id: 'ghosti', name: '귀신같이', description: '사진·영상 공유, 클린몬스터·설정몬스터 알림' },
+  { id: 'ghosti', name: '귀신같이', description: '사진·영상 공유, 귀신같이 손보기 알림' },
   { id: 'senstalk', name: '센스톡', description: '메신저 발송 준비·완료 알림' },
   { id: 'luminote', name: '루미노트', description: '루미노트 고객 관리 알림' },
   { id: 'sundreamer', name: '썬드리머', description: '램프 수명·치유 기록 알림' },

@@ -115,7 +115,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+          <GhostiBrandLogo size="mobile" showBadge={true} />
           <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
             💻 데스크톱(PC) 기기 연동 안내
           </span>
@@ -193,7 +193,7 @@ export const MobileMasterPcIntroModal: React.FC = () => {
         <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="desktop" showBadge={true} />
               <span className="px-3 py-1 rounded-full bg-amber-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold w-fit">
                 💻 이 페이지는 PC 화면 전용 마스터 세팅 페이지입니다
               </span>
@@ -353,7 +353,7 @@ export const PricingModal: React.FC = () => {
 
   const handleShareApp = async () => {
     const shareText =
-      '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
+      '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·손보기는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
@@ -392,7 +392,7 @@ export const PricingModal: React.FC = () => {
           <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2.5">
-                <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+                <GhostiBrandLogo size="desktop" showBadge={true} />
                 <span className="px-3 py-1 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold w-fit">
                   📱 모바일 뷰어 ➔ 💻 데스크톱(PC) 대화면 작업 이어가기
                 </span>
@@ -465,7 +465,7 @@ export const PricingModal: React.FC = () => {
         <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="desktop" showBadge={true} />
               <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px] font-bold">
                 현재 상태: {PLAN_LABELS[activePricingPlan]}
               </span>
@@ -1122,7 +1122,7 @@ export const PricingModal: React.FC = () => {
         <div className="p-5 rounded-2xl bg-[#18181B] border border-primary-container/35 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2.5">
-              <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="mobile" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
                 💌 라운지 초대장 카드 &amp; 앱 공유
               </span>

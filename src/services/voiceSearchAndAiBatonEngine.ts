@@ -15,7 +15,7 @@ export const GHOSTI_VOICE_ACTORS = {
   hyunsu_briefing: {
     voiceId: 'ko-KR-HyunsuNeural',
     nameKo: '현수',
-    roleDesc: '설정몬스터·클린몬스터 안내, Z몬스터 브리핑, 내용검색 짧은 결과 답변, AI 바톤터치 안내',
+    roleDesc: '귀신같이 손보기 안내, Z-코어 브리핑, 내용검색 짧은 결과 답변, AI 바톤터치 안내',
   },
   sunhi_doc_reader: {
     voiceId: 'ko-KR-SunHiNeural',

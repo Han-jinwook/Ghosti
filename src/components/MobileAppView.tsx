@@ -1017,8 +1017,8 @@ export const MobileAppView: React.FC = () => {
                       }`}
                     >
                       {enableSetupMonster
-                        ? '🛠️ 설정몬스터 (enableSetupMonster=true)'
-                        : '🔒 설정몬스터 숨김 (enableSetupMonster=false)'}
+                        ? '🛠️ 귀신같이 손보기 (enableSetupMonster=true)'
+                        : '🔒 귀신같이 손보기 숨김 (enableSetupMonster=false)'}
                     </button>
                     <button
                       type="button"

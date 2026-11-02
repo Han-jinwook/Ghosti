@@ -2762,7 +2762,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   moveSelectedToQuarantine: async () => {
-    if (!ensureLoginAndZCoreReady('클린몬스터 사진 정리')) return;
+    if (!ensureLoginAndZCoreReady('손보기 사진 정리')) return;
     const { selectedTrashIds, photos } = get();
     const targetNames = Array.from(selectedTrashIds);
     if (targetNames.length === 0) return;
@@ -2809,7 +2809,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       freeTrialUsed: true,
       lastUndoBatch: {
         fileNames: Array.from(movedSet),
-        actionLabel: '클린몬스터 추천 항목 일괄 정리',
+        actionLabel: '손보기 추천 항목 일괄 정리',
         count: movedSet.size,
         savedBytes,
         timestamp: Date.now(),
@@ -2960,7 +2960,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       showCoinBalanceInApp: isStoreAppMode ? state.enableMobileCoinDisplay : state.enableMobileCoinDisplay,
       lastQuarantineToast: isStoreAppMode
         ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: enableSetupMonster=false 및 크레딧 잔액을 숨기고 스토어 심사 프리패스 모드로 전환했습니다.'
-        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)] 활성화: 🛠️ 설정몬스터(enableSetupMonster=true) 및 모든 마스터 기능이 활성화되었습니다.',
+        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)] 활성화: 🛠️ 귀신같이 손보기(enableSetupMonster=true) 및 모든 마스터 기능이 활성화되었습니다.',
     })),
 
   setEnableSetupMonster: (enableSetupMonster) =>
@@ -2969,8 +2969,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       enableMobileCoinDisplay: enableSetupMonster,
       showCoinBalanceInApp: enableSetupMonster,
       lastQuarantineToast: enableSetupMonster
-        ? '🛠️ [원격 토글 enableSetupMonster=true] Ghosti 설정몬스터(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
-        : '🔒 [1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 설정몬스터와 크레딧 잔액을 잠시 숨김 처리했습니다.',
+        ? '🛠️ [원격 토글 enableSetupMonster=true] 귀신같이 손보기(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
+        : '🔒 [1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 귀신같이 손보기와 크레딧 잔액을 잠시 숨김 처리했습니다.',
     }),
 
   setEnableMobileCoinDisplay: (enableMobileCoinDisplay) =>
@@ -3006,7 +3006,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       id: 'welcome_setup_monster',
       role: 'assistant_triage',
       timestamp: '방금',
-      text: '안녕하세요! 🩺 귀신같이 설정몬스터 × 클린몬스터 통합 대화형 엔진입니다.\n• 🆓 [내 기기]의 모든 치우기·고치기·파일 복구·내 PC 사양 상담·바탕화면 바로가기 생성은 코인 차감 없이 언제나 0원(100% 무료)입니다.\n• 🛡️ 모든 실행 전 [실물 증거 미리보기 게이트(Zero-Auto-Action)]를 먼저 보여드리며, 유저님이 [⭕ 확인 완료]를 누르시기 전에는 절대 임의로 실행하지 않습니다.\n• 🕰️ 모든 변경 0.01초 전 [복원 기록]을 남기며, 🟢[100% 완벽 복원 가능] / 🟡[부분 복원 가능] / 🔴[복원 불가] 3단계 무결성 사전 검진(Pre-Check) 후 1초 만에 원래 상태로 되돌릴 수 있습니다.',
+      text: '안녕하세요! ✋ 귀신같이 손보기 통합 대화창입니다.\n• 🆓 [내 기기]의 모든 치우기·고치기·파일 복구·내 PC 사양 상담·바탕화면 바로가기 생성은 코인 차감 없이 언제나 0원(100% 무료)입니다.\n• 🛡️ 모든 실행 전 [실물 증거 미리보기 게이트(Zero-Auto-Action)]를 먼저 보여드리며, 유저님이 [⭕ 확인 완료]를 누르시기 전에는 절대 임의로 실행하지 않습니다.\n• 🕰️ 모든 변경 0.01초 전 [복원 기록]을 남기며, 🟢[100% 완벽 복원 가능] / 🟡[부분 복원 가능] / 🔴[복원 불가] 3단계 무결성 사전 검진(Pre-Check) 후 1초 만에 원래 상태로 되돌릴 수 있습니다.',
       triageQuestion: buildSetupPreTriageQuestion(
         'pc',
         '부팅 시 뜨는 광고/유령앱 차단',
@@ -3161,7 +3161,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   submitSetupMonsterQuery: async (query, presetIdHint, platformOverride) => {
-    if (!ensureLoginAndZCoreReady('설정몬스터 고치기')) return;
+    if (!ensureLoginAndZCoreReady('손보기 고치기')) return;
     const clean = query.trim();
     if (!clean) return;
     const state = get();
@@ -4138,8 +4138,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set((state) => {
       const labelMap: Record<PricingPlanId, string> = {
         free_trial: '✨ 개인 (기본) : 언제나 0원 ("혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다.")',
-        personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • 🩺 귀신같이 클린몬스터',
-        personal_sub_3900: '개인 라운지 • 1초 AI 내용검색 몬스터 (월 1,900원 • 월 1회 클린몬스터 청소 포함)',
+        personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • ✋ 귀신같이 손보기',
+        personal_sub_3900: '개인 라운지 • 1초 AI 내용검색 (월 1,900원 • 손보기 포함)',
         personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 • 선착순 100명 10년 마스터권)',
         family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
         family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',

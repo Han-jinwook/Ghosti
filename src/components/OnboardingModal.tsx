@@ -678,7 +678,7 @@ export const OnboardingModal: React.FC = () => {
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="desktop" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-300 font-mono text-[11px] font-bold">
                 혼자 쓸 땐 귀신같이 찾고 손보고! · 함께 쓸 땐 귀신같이 공유하고!
               </span>
@@ -992,21 +992,21 @@ export const OnboardingModal: React.FC = () => {
             </div>
 
             {/* 『귀신창 (Ghost Window) v3.2』 실물 미리보기 (윗단 기억검색 + 아랫단 정본 3D 로고 2줄 메뉴 + 클릭 시 Win+V형 5개 카드 아코디언 드롭다운) */}
-            <div className="p-3.5 rounded-2xl bg-[#0B1120] border-2 border-[#2DD4BF] shadow-[0_0_24px_rgba(45,212,191,0.2)] flex flex-col gap-2">
+            <div className="p-3.5 rounded-2xl bg-zinc-900 border-2 border-[#2DD4BF] shadow-[0_0_24px_rgba(45,212,191,0.2)] flex flex-col gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300">
                 <span>
                   👻 <strong className="text-white">『귀신창(Ghost Window) v3.2』 실물 미리보기</strong> (검색창 클릭 시 Win+V형 5개 카드 아코디언 펼침 · 바깥 클릭 시 즉시 닫힘)
                 </span>
                 {floatingWebOpenedToast && (
-                  <span className="text-[#5EEAD4] font-extrabold animate-pulse">
+                  <span className="text-teal-300 font-extrabold animate-pulse">
                     ✨ 정본 3D 로고 클릭 감지 (①번 소환음) ➔ https://ghosti.sundreamer.app 즉시 호출!
                   </span>
                 )}
               </div>
 
               {/* [윗단] 조그마한 1줄 미니 검색창 (클릭 또는 타이핑 시 아래로 5개 카드 아코디언 펼침) */}
-              <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0F172A] border border-[#14B8A6]">
-                <span className="text-[11.5px] font-extrabold text-[#5EEAD4] shrink-0" title="내가 복사(Ctrl+C)한 텍스트와 캡처(Win+Shift+S)한 스샷만 0.1초 만에 소환">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950 border border-[#14B8A6]">
+                <span className="text-[11.5px] font-extrabold text-teal-300 shrink-0" title="내가 복사(Ctrl+C)한 텍스트와 캡처(Win+Shift+S)한 스샷만 0.1초 만에 소환">
                   복사검색
                 </span>
                 <input
@@ -1044,9 +1044,9 @@ export const OnboardingModal: React.FC = () => {
                     }
                   }}
                   placeholder="클릭 시 최근 5건 펼침 · 단어 입력..."
-                  className="w-48 sm:w-56 px-2.5 py-1 rounded-lg bg-[#1E293B] text-[11.5px] text-white outline-none border border-transparent focus:border-[#5EEAD4]"
+                  className="w-48 sm:w-56 px-2.5 py-1 rounded-lg bg-zinc-800 text-[11.5px] text-white outline-none border border-transparent focus:border-teal-400"
                 />
-                <span className="text-[11px] text-[#6EE7B7] font-bold truncate flex-1">
+                <span className="text-[11px] text-emerald-300 font-bold truncate flex-1">
                   {ghostMemoryResult || '클릭 시 최근 목록 펼침 · 단어 입력 후 ↑↓·Enter 선택 (마우스 호버 시 전체 원문 팝업)'}
                 </span>
                 {ghostMemoryExpanded && (
@@ -1064,7 +1064,7 @@ export const OnboardingModal: React.FC = () => {
               </div>
 
               {/* [아랫단] 좌측 정본 마스터 로고([심볼]+[3D 워드마크], 이모지 제거) + 우측 2줄(Row 1 & Row 2) 전체 메뉴 수납 */}
-              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 px-2 py-1 rounded-xl bg-[#0B1120] text-[12px] font-bold">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 px-2 py-1 rounded-xl bg-zinc-900 text-[12px] font-bold">
                 <button
                   type="button"
                   onClick={() => {
@@ -1073,7 +1073,7 @@ export const OnboardingModal: React.FC = () => {
                     setTimeout(() => setFloatingWebOpenedToast(false), 3200);
                   }}
                   title="정본 3D 로고 클릭 시 귀신같이 웹이 즉시 열립니다"
-                  className="px-2.5 py-1.5 rounded-lg bg-[#131D36] hover:bg-[#1E293B] border border-[#2DD4BF] flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
+                  className="px-2.5 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-[#2DD4BF] flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
                 >
                   <img
                     src="/gwisinkachi_app_icon_512.png"
@@ -1083,14 +1083,19 @@ export const OnboardingModal: React.FC = () => {
                   <img
                     src="/gwisinkachi_3d_wordmark_dark.png"
                     alt="귀신같이 3D 워드마크"
-                    className="h-5 w-auto object-contain"
+                    className="h-5 w-auto object-contain block dark:hidden"
+                  />
+                  <img
+                    src="/gwisinkachi_3d_wordmark_light.png"
+                    alt="귀신같이 3D 워드마크"
+                    className="h-5 w-auto object-contain hidden dark:block"
                   />
                 </button>
                 <div className="flex flex-col gap-0.5 text-left min-w-0">
-                  <div className="text-[#5EEAD4] text-[11.5px] font-extrabold tracking-tight truncate">
+                  <div className="text-teal-300 text-[11.5px] font-extrabold tracking-tight truncate">
                     [Ctrl+V] 순차·칸맞춤 &nbsp;&nbsp; [9] 파일·PDF변환 &nbsp;&nbsp; [F1~10] 상용구 &nbsp;&nbsp; [2] 한영성형
                   </div>
-                  <div className="text-[#E2E8F0] text-[11.5px] font-bold tracking-tight truncate">
+                  <div className="text-zinc-200 text-[11.5px] font-bold tracking-tight truncate">
                     [3] 서식세탁 &nbsp;&nbsp; [4] 줄바꿈정리 &nbsp;&nbsp; [5] 합본 &nbsp;&nbsp; [6] 글자·표OCR &nbsp;&nbsp; [7] 창고정 &nbsp;&nbsp; [8] 번호·일정
                   </div>
                 </div>
@@ -1098,7 +1103,7 @@ export const OnboardingModal: React.FC = () => {
 
               {/* [3단: Win+V 스타일 아코디언 다중 기억검색 드롭다운 (상위 5개 후보 카드 + 44x32 스샷 썸네일 + 호버 시 전체 원문 팝업)] */}
               {ghostMemoryExpanded && (
-                <div className="mt-1 pt-2 border-t border-[#1E293B] grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+                <div className="mt-1 pt-2 border-t border-white/15 grid grid-cols-1 lg:grid-cols-12 gap-2.5">
                   <div className="lg:col-span-7 flex flex-col gap-1">
                     {ghostMemoryCandidates.slice(0, 5).map((item, idx) => {
                       const isSel = idx === ghostMemorySelIdx;
@@ -1118,15 +1123,15 @@ export const OnboardingModal: React.FC = () => {
                           }}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center gap-2.5 transition-all cursor-pointer border ${
                             isSel
-                              ? 'bg-[#172554] border-[#2DD4BF] text-white'
-                              : 'bg-[#0F172A] border-[#1E293B] text-zinc-200 hover:bg-[#172554]/60'
+                              ? 'bg-teal-500/20 border-[#2DD4BF] text-white'
+                              : 'bg-zinc-950 border-white/15 text-zinc-200 hover:bg-teal-500/20/60'
                           }`}
                         >
-                          <span className="text-[11px] font-extrabold text-[#5EEAD4] w-4 shrink-0">
+                          <span className="text-[11px] font-extrabold text-teal-300 w-4 shrink-0">
                             {idx + 1}
                           </span>
                           {item.kind === 'image' && (
-                            <div className="w-[44px] h-[32px] rounded bg-[#0B1120] border border-[#2DD4BF]/50 flex flex-col items-center justify-center shrink-0 text-[9px] text-[#5EEAD4] font-black leading-none">
+                            <div className="w-[44px] h-[32px] rounded bg-zinc-900 border border-[#2DD4BF]/50 flex flex-col items-center justify-center shrink-0 text-[9px] text-teal-300 font-black leading-none">
                               <span>IMG</span>
                               <span className="text-[8px] text-zinc-400">OCR</span>
                             </div>
@@ -1141,14 +1146,14 @@ export const OnboardingModal: React.FC = () => {
                       );
                     })}
                   </div>
-                  <div className="lg:col-span-5 p-2.5 rounded-xl bg-[#0F172A] border border-[#2DD4BF]/60 flex flex-col justify-between gap-1.5">
+                  <div className="lg:col-span-5 p-2.5 rounded-xl bg-zinc-950 border border-[#2DD4BF]/60 flex flex-col justify-between gap-1.5">
                     {(() => {
                       const activeItem =
                         ghostMemoryCandidates[ghostMemoryHoverIdx ?? ghostMemorySelIdx] ||
                         ghostMemoryCandidates[0];
                       return (
                         <>
-                          <div className="flex items-center justify-between text-[10.5px] text-[#5EEAD4] font-extrabold">
+                          <div className="flex items-center justify-between text-[10.5px] text-teal-300 font-extrabold">
                             <span>
                               {activeItem?.kind === 'image'
                                 ? '🖼️ 캡처 이미지 + 백그라운드 OCR 전문 미리보기'
@@ -1156,10 +1161,10 @@ export const OnboardingModal: React.FC = () => {
                             </span>
                             <span className="text-zinc-400">{activeItem?.relTime}</span>
                           </div>
-                          <pre className="text-[11px] text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed bg-[#0B1120] p-2 rounded-lg border border-white/5">
+                          <pre className="text-[11px] text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed bg-zinc-900 p-2 rounded-lg border border-white/5">
                             {activeItem?.fullText}
                           </pre>
-                          <span className="text-[10px] text-[#6EE7B7] font-bold">
+                          <span className="text-[10px] text-emerald-300 font-bold">
                             👉 클릭 또는 Enter 시 현재 커서 위치에 즉시 붙여넣기 (③번 결과음 재생)
                           </span>
                         </>

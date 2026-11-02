@@ -226,7 +226,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                     : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-sm'
                 }`}
               >
-                {msg.text}
+                {msg.text.replace(/\*\*/g, '')}
 
                 {!isUser && (
                   <MonsterInteractiveCardView

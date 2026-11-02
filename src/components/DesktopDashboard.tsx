@@ -489,7 +489,7 @@ export const DesktopDashboard: React.FC = () => {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <MainLoungeMonoIcon id={menu.id} className="w-[15px] h-[15px] shrink-0" />
-                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 클린·설정몬스터와 귀신같이 찾기' : undefined}>{menu.label}</span>
+                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 손보기와 귀신같이 찾기' : undefined}>{menu.label}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {menu.freeBadge && !isLoungeSub && (
@@ -785,7 +785,7 @@ export const DesktopDashboard: React.FC = () => {
                   type="button"
                   onClick={() => {
                     const shareText =
-                      '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·Z몬스터는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
+                      '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·손보기는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
                       void navigator.clipboard.writeText(shareText);
                     }
@@ -1684,8 +1684,8 @@ export const DesktopDashboard: React.FC = () => {
                       }`}
                     >
                       {enableSetupMonster
-                        ? '🛠️ 설정몬스터 (enableSetupMonster=true)'
-                        : '🔒 설정몬스터 숨김 (enableSetupMonster=false)'}
+                        ? '🛠️ 귀신같이 손보기 (enableSetupMonster=true)'
+                        : '🔒 귀신같이 손보기 숨김 (enableSetupMonster=false)'}
                     </button>
 
                     <button

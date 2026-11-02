@@ -25,7 +25,7 @@ const LOUNGE_TABS: Array<{
     icon: '💻',
     label: '내 기기',
     shortPrice: '이메일 로그인 즉시 사용',
-    desc: '내 폰·PC 속 클린·설정몬스터 진단과 1초 AI 내용검색',
+    desc: '내 폰·PC 속 손보기 진단과 1초 AI 내용검색',
   },
   {
     id: 'family',
@@ -52,7 +52,7 @@ const LOUNGE_TABS: Array<{
 
 const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   free_trial: '✨ 개인 (기본) : 언제나 0원',
-  personal_single_2900: '🩺 귀신같이 클린몬스터 (개인 기본 : 언제나 0원)',
+  personal_single_2900: '🩺 귀신같이 손보기 (개인 기본 : 언제나 0원)',
   personal_sub_3900: '💻 업무 입문 • 1인 멀티PC (월 1,900원)',
   personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 · 10년 마스터권)',
   family_home_5900: '🏠 패밀리 우리집 단독 (월 5,900원)',
@@ -488,7 +488,7 @@ export const LoungeView: React.FC = () => {
                   💻 내 기기 (PC · 스마트폰)
                 </span>
                 <h1 className="font-headline-md text-[22px] md:text-[26px] text-white font-extrabold tracking-tight">
-                  🧹 내 기기 클린몬스터 진단
+                  🧹 내 기기 손보기 진단
                 </h1>
                 <p className="font-body-sm text-[13.5px] text-zinc-400">
                   {personalTrialStatus === 'done'
@@ -505,7 +505,7 @@ export const LoungeView: React.FC = () => {
                     onClick={handleStartPersonalTrial}
                     className="px-6 py-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14.5px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🧹 클린몬스터 진단 시작
+                    🧹 손보기 진단 시작
                   </button>
                 )}
 
@@ -672,7 +672,7 @@ export const LoungeView: React.FC = () => {
                         }}
                         className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap cursor-pointer"
                       >
-                        🩺 클린몬스터 열기 →
+                        🩺 손보기 열기 →
                       </button>
                     </div>
                   )}
@@ -720,7 +720,7 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-amber-400 font-bold">
-                    🩺 귀신같이 클린몬스터
+                    🩺 귀신같이 손보기
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     중복 사진 · 바탕화면 정리
@@ -730,7 +730,7 @@ export const LoungeView: React.FC = () => {
                   </p>
                 </div>
                 <span className="text-[12.5px] font-extrabold text-amber-300 group-hover:translate-x-0.5 transition-transform">
-                  클린몬스터 열기 →
+                  손보기 열기 →
                 </span>
               </button>
 
@@ -744,7 +744,7 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-emerald-400 font-bold">
-                    🛠️ 설정몬스터
+                    🛠️ 손보기 (고치기)
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     1:1 기기 설정 &amp; 수리 해결사
@@ -754,7 +754,7 @@ export const LoungeView: React.FC = () => {
                   </p>
                 </div>
                 <span className="text-[12.5px] font-extrabold text-emerald-300 group-hover:translate-x-0.5 transition-transform">
-                  설정몬스터 열기 →
+                  손보기 열기 →
                 </span>
               </button>
             </section>
@@ -3160,7 +3160,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+            <GhostiBrandLogo size="mobile" showBadge={true} />
             <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
               {currentMeta.badge}
             </span>
@@ -3863,7 +3863,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
-              <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="mobile" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
                 👑 가족 초대 &amp; 방 분리 관리
               </span>
@@ -4032,7 +4032,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
-              <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
+              <GhostiBrandLogo size="mobile" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
                 👥 동호회 · 동창회 관리
               </span>

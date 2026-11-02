@@ -125,7 +125,7 @@ export const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       name: '귀신같이',
       url: 'https://ghosti.sundreamer.app',
       icon: '👁️',
-      description: '1초 투시검색 · 클린몬스터 · 패밀리 사진/업무 공유',
+      description: '1초 투시검색 · 손보기 · 패밀리 사진/업무 공유',
       isActive: true,
       isLinkActive: true,
       sortOrder: 5,

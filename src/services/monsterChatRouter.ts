@@ -250,8 +250,8 @@ function createWelcomeMessage(): MonsterChatMessage {
     timestamp: now,
     sourceTab: 'trash',
     text:
-      '✋ 안녕하세요! **컴퓨터·휴대폰 정리, 고치기, 복원, 요금·기능 문의**를 편하게 말씀해 주세요.\n' +
-      '아래 버튼을 누르거나 글자로 입력하시면 바로 도와드립니다.',
+      '✋ 안녕하세요! 컴퓨터·휴대폰 정리, 고치기, 복원, 요금·기능 문의를 편하게 말씀해 주세요.\n' +
+      '아래 입력창에 글자로 입력하시면 바로 도와드립니다.',
   };
 }
 
@@ -554,7 +554,7 @@ export async function callMonsterLowCostLlmJson(params: {
   const { query, sourceTab, literacyLevel, pcContextText, recentTurns = [] } = params;
   const historyBlock = recentTurns
     .slice(-6)
-    .map((t) => `${t.role === 'user' ? '유저' : '몬스터'}: ${t.text.slice(0, 220)}`)
+    .map((t) => `${t.role === 'user' ? '유저' : '귀신같이 비서'}: ${t.text.slice(0, 220)}`)
     .join('\n');
 
   const prompt = [
@@ -573,7 +573,7 @@ export async function callMonsterLowCostLlmJson(params: {
     '',
     '[절대 준수 4대 화법 및 아키텍처 원칙 — 비서 존댓말 · 군더더기 0% · 잡담 정중 거절 · JSON 기능 분리]',
     '1. [일상 잡담 정중 거절 (비용 절감)]: PC 정리(치우기)·수리(고치기)·파일 복구·사양 진단과 무관한 일상 잡담(날씨, 기분, 반려동물, 농담, 상식 등)에는 일일이 맞장구치지 마세요. 반드시 "intent": "GENERAL_CONVERSATION", "zCoreCommand": { "endpoint": "NONE", "action": "POLITE_DECLINE", "params": {} }로 설정하고, replyKo에는 "죄송합니다만 저는 PC 정리·수리 전담 비서라 일상 대화는 답변드리기 어렵습니다. 기기 정리나 수리가 필요하실 때 말씀해 주세요."라고 정중히 거절하세요.',
-    '2. [과한 인사치레·호들갑 절대 금지]: "어휴~", "정말 좋은 생각이에요!", "제가 클린몬스터인데 걱정 마세요!" 같은 수다스러운 인사치레와 자기소개를 절대 쓰지 마세요. 공감은 딱 한두 단어("충분히 가능하십니다.", "답답하셨겠습니다.", "새로 안 사셔도 됩니다.")만 하고 즉시 본론(기능 및 실측 수치)으로 들어가세요.',
+    '2. [과한 인사치레·호들갑 절대 금지]: "어휴~", "정말 좋은 생각이에요!", "제가 귀신같이 비서인데 걱정 마세요!" 같은 수다스러운 인사치레와 자기소개를 절대 쓰지 마세요. 공감은 딱 한두 단어("충분히 가능하십니다.", "답답하셨겠습니다.", "새로 안 사셔도 됩니다.")만 하고 즉시 본론(기능 및 실측 수치)으로 들어가세요.',
     '3. [비서 같은 신뢰감 있는 존댓말 고정]: 유저가 반말("정리해 줄래?", "고마워")로 말해도 절대 반말("응!", "해줄게")을 쓰지 말고, 항상 정중하고 간결한 비서 존댓말("~입니다", "~해 드리겠습니다")로 총 1~2문장 이내로 심플하게 답하세요.',
     '4. [기능은 JSON으로만 완전 분리 & 임의 삭제 표현 금지]: 말풍선(replyKo)은 군더더기 없이 심플하게 끝내고, 실제 실행할 기능은 JSON의 intent와 zCoreCommand에 분리 주입하세요. 폴더·설치파일 정리 시 "자동으로 삭제해 드리겠습니다"라고 하지 말고 "정리 대상 파일 목록을 먼저 스캔해 보여드리겠습니다."라고 안내하세요.',
     '5. 반드시 아래 JSON 스키마 하나만 순수 JSON으로 출력하세요 (마크다운 코드블록 없이 { 로 시작해서 } 로 끝낼 것):',
@@ -1625,7 +1625,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       speak('아직 복원 기록이 없습니다.');
       return reply(
         sourceTab,
-        `${llmIntro}🕰️ 아직 [복원 기록]이 없습니다. 클린몬스터·설정몬스터로 정리·바로가기·복구를 실행하면 그때마다 되돌리기용 번호가 여기에 남습니다.`,
+        `${llmIntro}🕰️ 아직 [복원 기록]이 없습니다. 귀신같이 손보기로 정리·바로가기·복구를 실행하면 그때마다 되돌리기용 번호가 여기에 남습니다.`,
         {
           llmActionJson: actionJson,
           followUpSuggestions: defaultFollowUps || [
@@ -2067,7 +2067,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   ) {
     return reply(
       sourceTab,
-      `${llmIntro}${RED_LINES_TEXT}\n\n🤝 이 질문은 클린몬스터·설정몬스터가 정확히 답할 수 있는 범위를 넘습니다. 질문 내용을 클립보드에 복사하고, 평소 쓰시는 **단골 AI(기본: Google Gemini)** 창을 열어 드릴 수 있습니다.`,
+      `${llmIntro}${RED_LINES_TEXT}\n\n🤝 이 질문은 귀신같이 손보기가 정확히 답할 수 있는 범위를 넘습니다. 질문 내용을 클립보드에 복사하고, 평소 쓰시는 **단골 AI(기본: Google Gemini)** 창을 열어 드릴 수 있습니다.`,
       {
         cardKind: 'BATON_TOUCH_CUTOFF',
         batonTouchPayload: { docTitle: '질문 내용', docText: clean, userQuestion: clean },
@@ -2106,7 +2106,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   ) {
     const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
     const actionJson: MonsterLlmActionJson = llmDecision || {
-      replyKo: '말씀하신 기기 설정·수리 증상을 확인했습니다. 설정몬스터 수리 엔진으로 바로 연결해 드립니다.',
+      replyKo: '말씀하신 기기 설정·수리 증상을 확인했습니다. 귀신같이 손보기 수리 엔진으로 바로 연결해 드립니다.',
       intent: 'OS_REPAIR_ACTION',
       zCoreCommand: {
         endpoint: '/__zcore/os-inspect',
@@ -2125,7 +2125,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       `${
         llmDecision?.replyKo
           ? `💬 ${llmDecision.replyKo}\n\n🛠️ 좌측 **[⚙️ 고치기 진단 카드]** 또는 아래 추천 버튼을 눌러 1초 수리와 화면 위 손가락(👆) 안내를 바로 실행하실 수 있습니다.`
-          : `🛠️ 말씀하신 **"${clean}"** 증상을 설정몬스터가 진단했습니다. 언제나 0원으로 수리 전 상태를 백업한 뒤 안전하게 해결해 드립니다.`
+          : `🛠️ 말씀하신 **"${clean}"** 증상을 귀신같이 손보기가 진단했습니다. 언제나 0원으로 수리 전 상태를 백업한 뒤 안전하게 해결해 드립니다.`
       }`,
       {
         cardKind: 'DEVICE_REPAIR_GATE',

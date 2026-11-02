@@ -65,9 +65,9 @@ const DEFAULT_SHORTS_DATA: ShortsItem[] = [
     title: '“비슷한 연사 사진 50장... 가장 잘 나온 1장만 남기기”',
     hookTime: '00:00 ~ 00:03 (훅)',
     hookLine: '“눈 감은 사진, 흔들린 사진 지우느라 주말 반나절을 사진첩 정리에 버리셨나요?”',
-    solutionLine: '클린몬스터가 눈 뜬 베스트 1장만 추천하고, 나머지는 윈도우 휴지통으로 안전하게 정리!',
+    solutionLine: '귀신같이 손보기가 눈 뜬 베스트 1장만 추천하고, 나머지는 윈도우 휴지통으로 안전하게 정리!',
     recommendedKeyword: '연사 묶음 Pick / 눈 감은 사진 정리',
-    tag: '🧹 클린몬스터 연사 Pick 엔진',
+    tag: '🧹 귀신같이 연사 Pick 엔진',
     thumbnailBg: 'from-amber-950 via-teal-950 to-slate-900',
     isNew: true,
   },
@@ -1177,7 +1177,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             {
               icon: '↩️',
               title: '영구 삭제 없는 1초 타임머신 복원',
-              desc: '클린몬스터가 정리한 중복 사진과 파일은 임의로 증발하지 않고 Windows 정식 휴지통 및 복원 기록에 보호되어 언제든 1초 만에 원래 폴더로 되돌립니다.',
+              desc: '귀신같이 손보기가 정리한 중복 사진과 파일은 임의로 증발하지 않고 Windows 정식 휴지통 및 복원 기록에 보호되어 언제든 1초 만에 원래 폴더로 되돌립니다.',
             },
             {
               icon: '💎',
@@ -1302,7 +1302,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
           <div className="rounded-2xl bg-zinc-900/60 border border-white/10 p-5">
             <dt className="text-sm sm:text-base font-black text-[#00F0B5] mb-2">
-              Q4. 클린몬스터로 중복 사진을 치우면 영구 삭제되나요?
+              Q4. 손보기로 중복 사진을 치우면 영구 삭제되나요?
             </dt>
             <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
               아닙니다. 『귀신같이』는 사용자 파일을 임의로 영구 증발시키지 않습니다. 정리된 파일은 <b>Windows 정식 휴지통($Recycle.Bin)</b> 및 앱 내 <b>[복원 기록] 타임머신</b>에 안전하게 보호 격리되어 언제든 클릭 한 번으로 원래 폴더 위치 그대로 1초 복원할 수 있습니다.

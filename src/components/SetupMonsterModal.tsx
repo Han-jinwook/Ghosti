@@ -356,7 +356,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
               🛡️ 1차 앱스토어 심사 방어 모드 (isStoreAppMode=true · enableSetupMonster=false)
             </span>
             <h3 className="font-headline-sm text-[17px] text-white font-bold mt-1">
-              현재 1차 스토어 심사 프리패스를 위해 설정몬스터와 크레딧 잔액이 숨김 상태입니다
+              현재 1차 스토어 심사 프리패스를 위해 기기 고치기와 크레딧 잔액이 숨김 상태입니다
             </h3>
             <p className="font-body-sm text-[12.5px] text-zinc-400">
               심사 통과 후 스토어 재심사 없이 원격 플래그(enableSetupMonster = true)만 켜면 즉시 전체 기능과 크레딧 지갑이 개통됩니다.
@@ -367,7 +367,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
             onClick={() => setEnableSetupMonster(true)}
             className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
           >
-            🛠️ 설정몬스터 즉시 켜기 (enableSetupMonster=true 테스트)
+            🛠️ 귀신같이 손보기 즉시 켜기 (enableSetupMonster=true 테스트)
           </button>
         </div>
       </div>
@@ -517,7 +517,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex flex-col gap-0.5">
             <h2 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2">
-              <span>🛠️ 귀신같이 설정몬스터</span>
+              <span>🛠️ 귀신같이 손보기</span>
             </h2>
           </div>
 
@@ -1314,13 +1314,13 @@ export const SetupMonsterModal: React.FC = () => {
     <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div className="relative w-full max-w-7xl my-auto">
         <div className="flex items-center justify-between mb-2 px-1">
-          <GhostiBrandLogo size="desktop" themeMode="dark" showBadge={true} />
+          <GhostiBrandLogo size="desktop" showBadge={true} />
           <button
             type="button"
             onClick={() => setShowSetupMonsterModal(false)}
             className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-white font-label-sm text-[12px] font-bold cursor-pointer"
           >
-            ✕ 설정몬스터 창 닫기
+            ✕ 창 닫기
           </button>
         </div>
         <SetupMonsterContent />

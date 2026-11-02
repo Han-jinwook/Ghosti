@@ -231,7 +231,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
             />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xl sm:text-2xl font-black tracking-tight text-white">3몬스터 패밀리 코인 충전소</span>
+                <span className="text-xl sm:text-2xl font-black tracking-tight text-white">멀린 패밀리 코인 충전소</span>
                 <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-lime-400 text-slate-950 shadow-sm">
                   공식 충전센터
                 </span>
@@ -243,7 +243,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           </div>
           <div className="text-right hidden sm:block border-l border-slate-700/80 pl-4">
             <span className="text-xs text-lime-400 font-bold block">KCP / 간편결제 공식 제휴</span>
-            <span className="text-[11px] text-slate-400 font-semibold">가맹점 상점명: 3몬스터</span>
+            <span className="text-[11px] text-slate-400 font-semibold">가맹점 상점명: 썬드림(멀린 패밀리)</span>
           </div>
         </div>
 
@@ -544,7 +544,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           <div>
             <p className="mb-1 text-slate-700 font-bold">상품정보</p>
             <p>
-              본 상품은 3몬스터 패밀리({appName} 등) AI 및 자동화 솔루션을 이용할 수 있는 통합 디지털 이용권 코인입니다. 결제 즉시 코인이 계정에 충전되어 패밀리 전 서비스를 즉시 이용할 수 있습니다.
+              본 상품은 멀린 패밀리({appName} 등) AI 및 자동화 솔루션을 이용할 수 있는 통합 디지털 이용권 코인입니다. 결제 즉시 코인이 계정에 충전되어 패밀리 전 서비스를 즉시 이용할 수 있습니다.
             </p>
           </div>
           <div>

@@ -1167,8 +1167,8 @@ export const SmartTrashView: React.FC = () => {
       </section>
         </div>
 
-        {/* ═══════════════ [우측 1열] 통상의 채팅창 (클린몬스터 × 설정몬스터 · Gemini Flash AI + JSON 코어 위임) ═══════════════ */}
-        <div className="xl:col-span-5 2xl:col-span-4 w-full">
+        {/* ═══════════════ [우측 1열] 통상의 채팅창 (본문이 스크롤되어도 화면 우측에 항상 고정) ═══════════════ */}
+        <div className="xl:col-span-5 2xl:col-span-4 w-full xl:sticky xl:top-20 xl:self-start z-20">
           <MonsterStandardChatColumn
             sourceTab="trash"
             externalQueryTrigger={externalQueryTrigger}
