@@ -366,7 +366,9 @@ const PairingQrCodeSvg: React.FC = () => {
   );
 };
 
-export const OnboardingModal: React.FC = () => {
+export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
+  inlineSuperpowerOnly = false,
+}) => {
   const {
     showOnboarding,
     setShowOnboarding,
@@ -389,7 +391,7 @@ export const OnboardingModal: React.FC = () => {
     subscribedLounges,
   } = useSaySeeStore();
 
-  const [activeTab, setActiveTab] = useState<OnboardingTabId>('tab1_find_care');
+  const [activeTab, setActiveTab] = useState<OnboardingTabId>(inlineSuperpowerOnly ? 'tab2_superpower' : 'tab1_find_care');
   const [trialStatus, setTrialStatus] = useState<SuperpowerTrialStatus | null>(null);
 
   // 탭 2: 인터랙티브 체험 상태
@@ -525,7 +527,7 @@ export const OnboardingModal: React.FC = () => {
   }, [setShowOnboarding]);
 
   useEffect(() => {
-    if (!showOnboarding) return;
+    if (!showOnboarding && !inlineSuperpowerOnly) return;
     void fetchSuperpowerStatus(accountId, isSubscribedUser).then((st) => {
       setTrialStatus(st);
       if (st.snippets) {
@@ -536,7 +538,7 @@ export const OnboardingModal: React.FC = () => {
 
   // 탭 2 Show 애니메이션 루프 (3단계 자동 순환)
   useEffect(() => {
-    if (!showOnboarding || activeTab !== 'tab2_superpower') return;
+    if ((!showOnboarding && !inlineSuperpowerOnly) || activeTab !== 'tab2_superpower') return;
     const timer = window.setInterval(() => {
       setShowDemoStep((s) => (s + 1) % 3);
     }, 2200);
@@ -562,7 +564,7 @@ export const OnboardingModal: React.FC = () => {
     [videoSceneItems]
   );
 
-  if (!showOnboarding) return null;
+  if (!showOnboarding && !inlineSuperpowerOnly) return null;
 
   const handleStart7DayTrial = async () => {
     const st = await startSuperpowerTrialAction(accountId, isSubscribedUser);
@@ -672,8 +674,39 @@ export const OnboardingModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <div className="relative w-full max-w-4xl rounded-3xl bg-[#111114] border border-white/15 p-5 md:p-7 shadow-[0_0_60px_rgba(0,229,255,0.18)] flex flex-col gap-5 my-auto text-zinc-100">
+    <div
+      className={
+        inlineSuperpowerOnly
+          ? 'w-full'
+          : 'fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 overflow-y-auto'
+      }
+    >
+      <div
+        className={
+          inlineSuperpowerOnly
+            ? 'relative w-full rounded-2xl bg-[#18181B] border border-white/10 p-5 md:p-6 flex flex-col gap-5 text-zinc-100'
+            : 'relative w-full max-w-4xl rounded-3xl bg-[#111114] border border-white/15 p-5 md:p-7 shadow-[0_0_60px_rgba(0,229,255,0.18)] flex flex-col gap-5 my-auto text-zinc-100'
+        }
+      >
+        {inlineSuperpowerOnly && (
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                  ⚡ 귀신 초능력 9+3 (Ctrl + 0)
+                </span>
+                <span className="px-2.5 py-0.5 rounded-md bg-teal-500/15 border border-teal-400/40 text-teal-300 font-label-sm text-[11.5px] font-extrabold">
+                  내 기기 통합 구독 시 평생 무제한 · 기기당 7일 무료체험
+                </span>
+              </div>
+              <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
+                👻 귀신 초능력 9+3 컨트롤 센터 &amp; 실시간 체험방
+              </h1>
+            </div>
+          </div>
+        )}
+        {!inlineSuperpowerOnly && (
+          <>
         {/* 1) 상단 헤더 + 닫기 버튼 */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
@@ -773,6 +806,9 @@ export const OnboardingModal: React.FC = () => {
             </span>
           </button>
         </div>
+
+          </>
+        )}
 
         {/* ─────────────────────────────────────────────────────────────
             [탭 1] 🎯 찾기 & 🪄 손보기 (내 기기 1대는 언제나 0원)

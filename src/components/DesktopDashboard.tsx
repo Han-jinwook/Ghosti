@@ -18,6 +18,7 @@ import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import {
+  OnboardingModal,
   fetchSuperpowerStatus,
   startSuperpowerTrialAction,
   type SuperpowerTrialStatus,
@@ -320,6 +321,7 @@ export const DesktopDashboard: React.FC = () => {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDeviceIntegrationOpen, setIsDeviceIntegrationOpen] = useState(false);
+  const [activeIntegrationSubTab, setActiveIntegrationSubTab] = useState<'devices' | 'superpower'>('devices');
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isCanvasExpanded, setIsCanvasExpanded] = useState(false);
   const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
@@ -660,12 +662,13 @@ export const DesktopDashboard: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
+                            setActiveIntegrationSubTab('devices');
                             setActiveLoungeType('personal');
                             setDesktopTab('sync');
                             if (isMobileDrawer) setIsMobileDrawerOpen(false);
                           }}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
-                            isDeviceIntegrationActive
+                            isDeviceIntegrationActive && activeIntegrationSubTab === 'devices'
                               ? themeMode === 'light'
                                 ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
                                 : 'bg-white/10 text-white font-extrabold'
@@ -688,15 +691,17 @@ export const DesktopDashboard: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            window.dispatchEvent(
-                              new CustomEvent('ghosti_open_onboarding_tab', {
-                                detail: { tab: 'tab2_superpower' },
-                              })
-                            );
+                            setActiveIntegrationSubTab('superpower');
+                            setActiveLoungeType('personal');
+                            setDesktopTab('sync');
                             if (isMobileDrawer) setIsMobileDrawerOpen(false);
                           }}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
-                            themeMode === 'light'
+                            isDeviceIntegrationActive && activeIntegrationSubTab === 'superpower'
+                              ? themeMode === 'light'
+                                ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
+                                : 'bg-white/10 text-white font-extrabold'
+                              : themeMode === 'light'
                               ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
                               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
                           }`}
@@ -1536,6 +1541,10 @@ export const DesktopDashboard: React.FC = () => {
       {/* ─────────────── 서브메뉴 4번: AI 설정몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 ─────────────── */}
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1640px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
+          {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
+            <OnboardingModal inlineSuperpowerOnly={true} />
+          ) : (
+            <>
           {/* 라운지별 전용 상단 설정 섹션 (AI 설정몬스터 / 가족 무수락 초대·강퇴 / 동호·동창회 관리 / 업무 공유(S:) 관리) */}
           <LoungeCustomSettingsHeader />
 
@@ -1849,6 +1858,8 @@ export const DesktopDashboard: React.FC = () => {
               </div>
             )}
           </section>
+            </>
+          )}
         </main>
       )}
       </div>
