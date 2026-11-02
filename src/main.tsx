@@ -4,12 +4,17 @@ import App from './App';
 import './index.css';
 import { initNativePushRouter } from './services/nativePushRouter';
 
-// Register PWA Service Worker
+// Register PWA Service Worker with immediate update check (prevents stale HTML/JS cache)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      /* ignore sw error in dev */
-    });
+    navigator.serviceWorker
+      .register('/sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        void reg.update();
+      })
+      .catch(() => {
+        /* ignore sw error in dev */
+      });
   });
 }
 

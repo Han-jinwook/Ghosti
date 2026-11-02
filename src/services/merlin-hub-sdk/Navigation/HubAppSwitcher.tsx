@@ -292,7 +292,9 @@ export function HubAppSwitcher({
           <img
             src={typeof LOCAL_LOGOS[cleanId] === 'string' ? LOCAL_LOGOS[cleanId] : (LOCAL_LOGOS[cleanId] as any)?.src}
             alt={app.name}
-            style={{ width: pixelSize, height: pixelSize }}
+            width={pixelSize}
+            height={pixelSize}
+            style={{ width: pixelSize, height: pixelSize, maxWidth: pixelSize, maxHeight: pixelSize }}
             className="w-full h-full object-cover"
           />
         ) : typeof app.icon === 'string' &&
@@ -300,7 +302,9 @@ export function HubAppSwitcher({
           <img
             src={app.icon}
             alt={app.name}
-            style={{ width: pixelSize, height: pixelSize }}
+            width={pixelSize}
+            height={pixelSize}
+            style={{ width: pixelSize, height: pixelSize, maxWidth: pixelSize, maxHeight: pixelSize }}
             className="w-full h-full object-cover"
           />
         ) : (
