@@ -125,7 +125,6 @@ const MAIN_LOUNGE_MENUS: Array<{
     id: 'personal',
     label: '내 기기 (PC·폰)',
     shortLabel: '내 기기',
-    sectionHeader: '💻 내 기기',
     freeBadge: false,
   },
   {
@@ -184,7 +183,6 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   personal: [
     { id: 'dashboard', label: '🔍 찾기', subcaption: '제목 몰라도 1초 검색' },
     { id: 'trash', label: '✋ 손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
-    { id: 'share', label: '👨‍👩‍👧‍👦 공유', subcaption: '가족 · 모임 · 업무 공유' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },
@@ -321,6 +319,7 @@ export const DesktopDashboard: React.FC = () => {
   } = useSaySeeStore();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDeviceIntegrationOpen, setIsDeviceIntegrationOpen] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isCanvasExpanded, setIsCanvasExpanded] = useState(false);
   const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
@@ -450,7 +449,11 @@ export const DesktopDashboard: React.FC = () => {
         {/* 2. 3대 전략 메뉴(🆓 내 기기 / 📸 사진 공유 / 💼 업무 공유) & 하위 메뉴 트리 (노션 워크스페이스 스타일) */}
         <div className="flex flex-col gap-1">
           {MAIN_LOUNGE_MENUS.map((menu) => {
-            const active = activeLoungeType === menu.id;
+            const isDeviceIntegrationActive = activeLoungeType === 'personal' && desktopTab === 'sync';
+            const active =
+              menu.id === 'personal'
+                ? activeLoungeType === 'personal' && desktopTab !== 'sync' && !isDeviceIntegrationOpen
+                : activeLoungeType === menu.id;
             const isLoungeSub = Boolean(subscribedLounges[menu.id]);
             return (
               <div key={menu.id} className="flex flex-col gap-0.5">
@@ -462,6 +465,7 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    setIsDeviceIntegrationOpen(false);
                     setActiveLoungeType(menu.id);
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
@@ -590,6 +594,93 @@ export const DesktopDashboard: React.FC = () => {
                         </button>
                       );
                     })}
+                  </div>
+                )}
+
+                {menu.id === 'personal' && (
+                  <div className="flex flex-col gap-0.5 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen((prev) => !prev);
+                        setActiveLoungeType('personal');
+                        setDesktopTab('sync');
+                      }}
+                      className={`w-full px-2.5 py-2 rounded-xl font-label-md text-[14.5px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                        isDeviceIntegrationActive || isDeviceIntegrationOpen
+                          ? themeMode === 'light'
+                            ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                            : 'bg-zinc-800/90 text-primary-container font-extrabold'
+                          : themeMode === 'light'
+                          ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-bold'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5 font-bold'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[14px] shrink-0">👑</span>
+                        <span className="truncate" title="집PC · 회사PC · 스마트폰 통합 및 귀신 초능력 9+3">
+                          내 기기 통합 (PC+폰+PC+)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] opacity-60">
+                          {isDeviceIntegrationActive || isDeviceIntegrationOpen ? '▾' : '▸'}
+                        </span>
+                      </div>
+                    </button>
+
+                    {(isDeviceIntegrationActive || isDeviceIntegrationOpen) && (
+                      <div className="ml-4 pl-2.5 border-l border-white/10 flex flex-col gap-0.5 py-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveLoungeType('personal');
+                            setDesktopTab('sync');
+                            if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                          }}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+                            isDeviceIntegrationActive
+                              ? themeMode === 'light'
+                                ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
+                                : 'bg-white/10 text-white font-extrabold'
+                              : themeMode === 'light'
+                              ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
+                          }`}
+                        >
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="truncate font-bold">🔗 내 모든 기기 통합</span>
+                            <span className="text-[11.5px] opacity-75 font-normal truncate">
+                              PC · 폰 · 서브PC 1초 연동
+                            </span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent('ghosti_open_onboarding_tab', {
+                                detail: { tab: 'tab2_superpower' },
+                              })
+                            );
+                            if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                          }}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+                            themeMode === 'light'
+                              ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
+                          }`}
+                        >
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="truncate font-bold">⚡ 귀신 초능력 9+3</span>
+                            <span className="text-[11.5px] opacity-75 font-normal truncate">
+                              Ctrl+0 귀신창 · 복사검색 · 상용구
+                            </span>
+                          </div>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
