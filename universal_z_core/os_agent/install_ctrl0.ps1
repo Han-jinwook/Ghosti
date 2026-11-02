@@ -4,23 +4,32 @@ Write-Host "==========================================================" -Foregro
 Write-Host "  [1/4] Preparing C:\MerlinTools directory..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path "C:\MerlinTools" | Out-Null
 
-# 1. Schedule daily 08:30 reboot & OpenSSH Server (Port 22) for remote cluster control
+# 1. Schedule daily 08:30 reboot & OpenSSH Server (Port 22) for remote cluster control (Self-elevating Admin block)
 schtasks /create /tn "MerlinDailyReboot0830" /tr "shutdown.exe /r /f /t 0" /sc DAILY /st 08:30 /f 2>$null | Out-Null
 try {
-    Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue | Out-Null
-    Start-Service sshd -ErrorAction SilentlyContinue
-    Set-Service -Name sshd -StartupType 'Automatic' -ErrorAction SilentlyContinue
-    New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue | Out-Null
-    $pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/8DiYI6DZZKtb/KqgNfLY3NmwHOWRN9HHiI3vKXGsq chichi@DESKTOP-TRRSPRP"
-    $sshDir = Join-Path $env:USERPROFILE ".ssh"
-    if (!(Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir -Force | Out-Null }
-    Set-Content -Path (Join-Path $sshDir "authorized_keys") -Value $pubKey -Encoding ASCII -ErrorAction SilentlyContinue
-    $adminKeyFile = "C:\ProgramData\ssh\administrators_authorized_keys"
-    if (Test-Path "C:\ProgramData\ssh") {
-        Set-Content -Path $adminKeyFile -Value $pubKey -Encoding ASCII -ErrorAction SilentlyContinue
-        icacls.exe $adminKeyFile /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null | Out-Null
+    $sshCmd = @"
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue | Out-Null
+Start-Service sshd -ErrorAction SilentlyContinue
+Set-Service -Name sshd -StartupType 'Automatic' -ErrorAction SilentlyContinue
+New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled `$true -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue | Out-Null
+`$pubKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/8DiYI6DZZKtb/KqgNfLY3NmwHOWRN9HHiI3vKXGsq chichi@DESKTOP-TRRSPRP'
+`$sshDir = Join-Path `$env:USERPROFILE '.ssh'
+if (!(Test-Path `$sshDir)) { New-Item -ItemType Directory -Path `$sshDir -Force | Out-Null }
+Set-Content -Path (Join-Path `$sshDir 'authorized_keys') -Value `$pubKey -Encoding ASCII -ErrorAction SilentlyContinue
+`$adminKeyFile = 'C:\ProgramData\ssh\administrators_authorized_keys'
+if (!(Test-Path 'C:\ProgramData\ssh')) { New-Item -ItemType Directory -Path 'C:\ProgramData\ssh' -Force | Out-Null }
+Set-Content -Path `$adminKeyFile -Value `$pubKey -Encoding ASCII -ErrorAction SilentlyContinue
+icacls.exe `$adminKeyFile /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' 2>`$null | Out-Null
+Restart-Service sshd -ErrorAction SilentlyContinue
+"@
+    Set-Content -Path "C:\MerlinTools\enable_ssh.ps1" -Value $sshCmd -Encoding ASCII
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdmin) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\MerlinTools\enable_ssh.ps1"
+    } else {
+        Write-Host "        -> Requesting Admin permission to open Remote Support Port (SSH 22)..." -ForegroundColor Yellow
+        Start-Process -Wait -FilePath "powershell.exe" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","C:\MerlinTools\enable_ssh.ps1" -Verb RunAs -WindowStyle Hidden
     }
-    Restart-Service sshd -ErrorAction SilentlyContinue
 } catch {}
 
 # 2. Stop existing daemon
