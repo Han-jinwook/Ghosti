@@ -827,29 +827,6 @@ export const DesktopDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* 공식 마스터 슬로건 카피 띠 (혼자 쓸 땐 찾고 치우고 고치고! | 가족·팀과 함께 쓸 땐 귀신같이 공유하고!) */}
-            <div
-              className={`hidden sm:flex items-center justify-between px-3.5 py-1.5 rounded-xl border text-[12px] transition-colors ${
-                themeMode === 'light'
-                  ? 'bg-teal-50/70 border-teal-200/70 text-slate-800'
-                  : 'bg-zinc-900/60 border-teal-500/20 text-zinc-300'
-              }`}
-              title="Ghosti: Find, Clean, and Fix when alone — Share scary fast with Family & Team!"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-extrabold text-teal-600 dark:text-teal-400 shrink-0">
-                  혼자 쓸 땐 귀신같이 찾고 손보고!
-                </span>
-                <span className="opacity-30 shrink-0">|</span>
-                <span className="font-extrabold text-emerald-600 dark:text-emerald-400 shrink-0">
-                  가족·팀과 함께 쓸 땐 귀신같이 공유하고!
-                </span>
-              </div>
-              <span className="hidden xl:inline text-[11px] opacity-60 font-mono tracking-tight">
-                Ghosti: Find, Clean, Fix &amp; Share
-              </span>
-            </div>
-
             {/* 모바일(lg 미만, 360px 포함) 전용 1줄 라운지 빠른 전환 바 — 1차 출시 3대 메뉴(내 기기 / 사진 공유 / 업무 공유) */}
             <nav className="grid grid-cols-3 lg:hidden gap-1">
               {MOBILE_QUICK_MENUS.map((menu) => {
@@ -945,9 +922,6 @@ export const DesktopDashboard: React.FC = () => {
                           ? '⛳ 모임 추억 & 원본 보관함'
                           : '🎒 우리반 타임캡슐'}
                       </h1>
-                      <span className="text-[12px] text-zinc-500 font-medium">
-                        말 한마디나 인물 클릭으로 도화지를 채워보세요
-                      </span>
                     </div>
 
                     {showCanvasResults && (
@@ -970,67 +944,20 @@ export const DesktopDashboard: React.FC = () => {
                   {/* 보더리스 통합 검색창 + [동영상/사진/문서] 캡슐 + 추천 칩 */}
                   <VoiceHeroStage />
 
-                  {/* [골든존 배너] 귀신 초능력 팩(Ctrl + 0 & 한영 오타 둔갑술) 1주일 무료체험 — 모바일 스토어 심사 모드 및 기 구독자는 자동 숨김 */}
-                  {!isStoreAppMode && !isAnySubscribed && (
-                    <div className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500/15 via-teal-500/10 to-zinc-900/90 border border-amber-400/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_24px_rgba(251,191,36,0.12)]">
-                      <div className="flex items-center gap-2.5 text-left">
-                        <span className="text-xl shrink-0">👻</span>
-                        <div className="flex flex-col">
-                          <span className="text-[13px] font-extrabold text-white">
-                            {superpowerStatus?.trial_status === 'ACTIVE'
-                              ? `⏳ 귀신 초능력 팩 체험 중 (D-${superpowerStatus.trial_days_left}) · Ctrl + 0 & 한영 오타 둔갑술 작동 중`
-                              : '🎁 귀신 부르는 Ctrl + 0 & 2어절 한영 오타 둔갑술 (띠리링~👻)'}
-                          </span>
-                          <span className="text-[11.5px] text-zinc-300">
-                            카톡·엑셀·문서 어디서나 연속 붙여넣기, 억만금 숫자 변환, F1~F5 상용구를 바로 써보세요.
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
-                          if (!superpowerStatus || superpowerStatus.trial_status === 'NOT_STARTED') {
-                            const st = await startSuperpowerTrialAction(accountId, false);
-                            setSuperpowerStatus(st);
-                          }
-                          window.dispatchEvent(
-                            new CustomEvent('ghosti_open_onboarding_tab', {
-                              detail: { tab: 'tab2_superpower' },
-                            })
-                          );
-                        }}
-                        className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-black text-[12px] whitespace-nowrap shadow-md transition-all cursor-pointer shrink-0"
-                      >
-                        {superpowerStatus?.trial_status === 'ACTIVE'
-                          ? `⏳ 귀신 초능력 체험 중 (D-${superpowerStatus.trial_days_left}) · 체험방 열기`
-                          : '🎁 귀신 초능력 팩 사용해보기 (1주일 무료체험 · 구독 시 평생 무료)'}
-                      </button>
-                    </div>
-                  )}
-
                   {/* [Zero-State 도화지 안내]: 아직 검색 전일 때는 무거운 카드 덤프 대신 깔끔한 펼치기 블록만 노출 */}
                   {!showCanvasResults && (
-                    <div className="pt-4 flex flex-col items-center gap-3 text-center">
+                    <div className="pt-2 flex flex-col items-center gap-3 text-center">
                       {!isZCoreConnected && (
-                        <div className="w-full max-w-xl p-4 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-left mb-1 shadow-sm">
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl shrink-0">⚡</span>
-                            <div>
-                              <div className="text-[13px] font-black text-slate-900 dark:text-white">
-                                내 컴퓨터 사진·문서 1초 만에 귀신같이 찾기 시작하기 (언제나 0원)
-                              </div>
-                              <div className="text-[11.5px] text-slate-600 dark:text-zinc-300 mt-0.5">
-                                한 번의 [OK]로 초경량 로컬 엔진 연결부터 AI 내용검색 인덱싱까지 자동 진행됩니다.
-                              </div>
-                            </div>
-                          </div>
+                        <div className="w-full max-w-xl px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex items-center justify-between gap-3 text-left shadow-sm">
+                          <span className="text-[12.5px] font-extrabold text-slate-900 dark:text-white">
+                            ⚡ 내 컴퓨터 파일 연결
+                          </span>
                           <button
                             type="button"
                             onClick={() => setShowZCoreGuideModal(true)}
-                            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap shadow-md shadow-teal-500/20 transition-all cursor-pointer shrink-0"
+                            className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
                           >
-                            ⭕ OK! 귀신같이 찾기 시작하기
+                            ⭕ 연결 시작
                           </button>
                         </div>
                       )}
@@ -1509,17 +1436,6 @@ export const DesktopDashboard: React.FC = () => {
 
             {showPrivateSyncSection && (
               <div className="px-5 pb-5 pt-3 border-t border-white/10 flex flex-col gap-4">
-                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-white/10 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-zinc-400 text-[20px] shrink-0">
-                    battery_charging_full
-                  </span>
-                  <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                    <strong>배터리 · OS 제재 방어 원칙:</strong> 귀신같이(Ghosti) 정식 모바일 앱(Google Play / App Store)은 상시 백그라운드 통신을 하지 않으며,{' '}
-                    <strong className="text-white">[집 Wi-Fi 연결 + 충전 중]</strong>이거나{' '}
-                    <strong className="text-primary-container">[지금 일치시키기]</strong> 버튼을 누를 때만 작동합니다.
-                  </p>
-                </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* 모드 A */}
                   <div
@@ -1547,10 +1463,6 @@ export const DesktopDashboard: React.FC = () => {
                         🔄 100% 원본 미러링 모드
                       </h2>
 
-                      <p className="font-body-sm text-[12.5px] text-zinc-400 leading-relaxed">
-                        폰과 PC를 클린몬스터 정리로 먼저 깨끗이 비운 뒤, 양쪽 기기에 똑같은 원본 파일을 1:1로 유지하여 클라우드 없이 상호 백업 보험을 구축합니다.
-                      </p>
-
                       <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">
                         <div className="flex items-center justify-between">
                           <span className="text-zinc-400">내 PC 보관함 용량</span>
@@ -1562,10 +1474,6 @@ export const DesktopDashboard: React.FC = () => {
                         </div>
                       </div>
                     </div>
-
-                    <span className="font-label-sm text-[11.5px] text-zinc-400 pt-2 border-t border-white/10">
-                      ✓ 폰 분실 시 PC에 원본 100% 보존 · PC 고장 시 폰에 원본 100% 보존
-                    </span>
                   </div>
 
                   {/* 모드 B */}
@@ -1594,10 +1502,6 @@ export const DesktopDashboard: React.FC = () => {
                         ⚡ 스마트폰 용량 절약 모드 (원본은 PC에 안전 보관)
                       </h2>
 
-                      <p className="font-body-sm text-[12.5px] text-zinc-400 leading-relaxed">
-                        무거운 원본(수십 GB)은 집 PC 하드디스크로 안전하게 옮겨 폰 용량을 비우고, 폰에는 어디서든 바로 찾아볼 수 있는 가벼운 미리보기 사진만 남깁니다.
-                      </p>
-
                       <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">
                         <div className="flex items-center justify-between">
                           <span className="text-zinc-400">내 PC 하드디스크 (원본 보관)</span>
@@ -1611,10 +1515,6 @@ export const DesktopDashboard: React.FC = () => {
                         </div>
                       </div>
                     </div>
-
-                    <span className="font-label-sm text-[11.5px] text-zinc-300 pt-2 border-t border-white/10">
-                      ⚡ 집 PC 전원이 꺼져 있어도 밖에서 내 폰으로 1초 만에 100% 검색·열람 가능
-                    </span>
                   </div>
                 </div>
 
@@ -1731,42 +1631,12 @@ export const DesktopDashboard: React.FC = () => {
 
             {showPolicyAndStoreSection && (
               <div className="px-5 pb-5 pt-3 border-t border-white/10 flex flex-col gap-4">
-                {/* 💻 모바일 ➔ PC 전환 시 스토어 규정(Anti-steering)을 100% 준수하는 데스크톱 기기 연동 패널 */}
                 <PcMasterQuickSendPanel />
 
-                {/* 🔄 내 기기 원본 동기화 경로 & 🚪 탈퇴(자퇴·강퇴 동일) 시 썸네일 DB 즉시 자동 삭제 원칙 */}
-                <div className="p-5 rounded-2xl bg-zinc-950/80 border border-white/10 flex flex-col gap-2.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[12px] text-primary-container font-extrabold">
-                      🔄 내 기기 원본 동기화 자체 해결 &amp; 🚪 탈퇴 시 썸네일 DB 즉시 자동 삭제 원칙
-                    </span>
-                    <span className="text-[11px] text-emerald-300 font-mono font-bold">
-                      ✓ 방장 PC 원본 호출 폐지 · 내 기기 동기화로 100% 자체 해결
-                    </span>
-                  </div>
-                  <div className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed flex flex-col gap-1">
-                    <p>• <strong>평소(기본):</strong> 멤버 기기에는 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 용량 부담 없이 0.01초 만에 검색합니다.</p>
-                    <p>• <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 넉넉할 때 지정한 내 폴더 경로(예: <code>D:\Ghosti\다운로드_원본</code>)로 원본 사진이 자동 복제되어, 방장 PC를 따로 호출할 필요 없이 내 기기에서 자체 해결합니다.</p>
-                    <p>• <strong>📜 이용약관 &amp; 개인정보처리방침 제N조 (비식별 기능 사용 빈도 및 오류 통계 수집):</strong> 회사는 서비스 품질 개선을 위해 <strong>사용자가 입력·복사한 텍스트 원문이나 파일 내용, 암호화된 외부 메신저 DB 등은 단 0 Byte도 수집·열람·전송하지 않으며</strong>, 오직 비식별화된 <strong>기능별 호출 횟수(익명 카운트 숫자) 및 오류 코드(<code>error_code</code>)</strong>만을 집계합니다. 회원은 언제든 <code>[✔ 서비스 개선을 위한 익명 사용 통계 보내기]</code> 토글(기본값 ON)로 직접 제어할 수 있습니다.</p>
-                    <p>• <strong>탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준:</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역에 보관된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 0.1초 만에 자동 삭제</strong>됩니다 (※ 유저가 자기 PC에 인덱싱한 <strong>‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리).</p>
-                  </div>
-                </div>
-
-                {/* 🛡️ 스토어 1차 심사 통과용 클린 모드(isStoreAppMode) · 코인 잔액(enableMobileCoinDisplay) · 원격 공유 토글(enablePcGuideShareButton) · /?master=pc 이중 방어 제어 바 */}
                 <div className="p-4 rounded-2xl bg-zinc-950/80 border border-white/10 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[12px] text-emerald-300 font-extrabold">
-                        스토어 1차 출시 3중 안전장치 (Anti-steering 완벽 방어)
-                      </span>
-                      <span className="font-label-mono text-[11px] text-zinc-400">
-                        isStoreAppMode={String(isStoreAppMode)} · showCoinBalanceInApp={String(showCoinBalanceInApp)} · enablePcGuideShareButton={String(enablePcGuideShareButton)}
-                      </span>
-                    </div>
-                    <p className="font-body-sm text-[12px] text-zinc-400">
-                      ① ‘주소/URL/결제’ 단어 전면 배제(데스크톱 기기 연동 워딩), ② 모바일에서 <code>/?master=pc</code> 접속 시 결제 없는 순수 ‘PC 데스크톱 엔진 기능 소개 화면’만 렌더링, ③ 심사 기간 중 공유 버튼 원격 토글(<code>enablePcGuideShareButton</code>)을 1초 만에 제어합니다.
-                    </p>
-                  </div>
+                  <span className="text-[12px] text-emerald-300 font-extrabold">
+                    스토어 심사 모드 설정
+                  </span>
 
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button

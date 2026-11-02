@@ -112,7 +112,7 @@ export const SmartTrashView: React.FC = () => {
   } = useSaySeeStore();
 
   const [gridColumns, setGridColumns] = useState<3 | 4>(3);
-  const [showSystemConsult, setShowSystemConsult] = useState<boolean>(true);
+  const [showSystemConsult, setShowSystemConsult] = useState<boolean>(false);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(true);
   const [isTrashBinTabActive, setIsTrashBinTabActive] = useState<boolean>(false);
   const [showHealthHistoryDrawer, setShowHealthHistoryDrawer] = useState<boolean>(false);
@@ -230,9 +230,6 @@ export const SmartTrashView: React.FC = () => {
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
                   <span>🪄 귀신같이 손보기</span>
                 </h1>
-                <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-                  정리(치우기)·수리(고치기)·복원을 대화창 하나로 해결 · 모든 타이핑 승인과 원복은 블랙박스에 기록됩니다
-                </span>
               </div>
 
               {/* 탐색 반응 속도 상태 박스 (고치기의 PC/스마트폰 스위처 위치와 대칭) */}
@@ -341,9 +338,6 @@ export const SmartTrashView: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="font-body-sm text-[12.5px] text-zinc-500 dark:text-zinc-400">
-            동일 내용 중복 사진은 최고화질 원본 1장만 남기고, 연사는 마음에 드는 1장을 직접 선택(Pick)해 나머지를 정리합니다.
-          </p>
         </div>
 
         {showHealthHistoryDrawer && (
@@ -400,11 +394,8 @@ export const SmartTrashView: React.FC = () => {
           className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors select-none"
         >
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-[12px] text-amber-400 font-bold">
-              {showSystemConsult ? '▾' : '▸'} 💬 기기 3대 핵심 건강검진 (클린몬스터 × 설정몬스터 · 클릭 시 우측 채팅창에서 즉시 검진)
-            </span>
-            <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-              다운로드 설치파일(.exe/.apk) · PC 바탕화면 · 상주 보안모듈을 미리 확인하고 우측 채팅창의 AI와 대화로 정리하세요
+            <span className="text-[12.5px] text-amber-400 font-bold">
+              {showSystemConsult ? '▾' : '▸'} 💬 기기 3대 핵심 건강검진
             </span>
             {decidedCount > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-primary-container/15 text-primary-container text-[11px] font-extrabold">
@@ -422,14 +413,9 @@ export const SmartTrashView: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* ① 다운로드 폴더 방치 설치파일(.exe/.apk/.msi) & 중복 압축파일 청소 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                    📦 다운로드 방치 설치파일(.exe·.apk) 정리
-                  </span>
-                  <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
-                    이미 설치가 끝난 구버전 설치파일(<code>.exe</code>, <code>.msi</code>, <code>.apk</code>)과 중복 압축 사본을 미리 확인하고 정리합니다.
-                  </p>
-                </div>
+                <span className="font-headline-sm text-[14.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                  📦 다운로드 설치파일(.exe·.apk) 정리
+                </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
@@ -463,14 +449,9 @@ export const SmartTrashView: React.FC = () => {
 
               {/* ② PC 바탕화면 중복파일 & 바로가기(.lnk) 뒤섞임 정리 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                    💻 PC 바탕화면 잡파일 · 구형 폴더 정리
-                  </span>
-                  <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
-                    바탕화면에 업무와 무관한 잡파일과 옛날 폴더가 뒤섞여 있습니다. 핵심 아이콘만 남기고 안전 정리함으로 모을까요?
-                  </p>
-                </div>
+                <span className="font-headline-sm text-[14.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                  💻 PC 바탕화면 잡파일 · 구형 폴더 정리
+                </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
@@ -506,18 +487,11 @@ export const SmartTrashView: React.FC = () => {
 
               {/* ③ 전기·메모리 먹는 상주 보안모듈 동결 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <span className="font-headline-sm text-[15px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                    {isStoreAppMode
-                      ? '⚡ 원본 PC 이관 & 13KB 섀도우 다이어트'
-                      : '⚡ 은행·관공서 상주 보안모듈 동결'}
-                  </span>
-                  <p className="font-body-sm text-[12.5px] text-zinc-600 dark:text-zinc-300 font-medium leading-relaxed">
-                    {isStoreAppMode
-                      ? '대용량 4K 영상과 원본을 내 PC로 안전 이관하고 폰에는 13KB 초경량 캐시만 남겨 저장공간을 확보할까요?'
-                      : '은행·관공서 상주 보안모듈(AnySign, MagicLine, Veraport, TouchEn)이 메모리를 점유 중입니다. 안전 동결할까요?'}
-                  </p>
-                </div>
+                <span className="font-headline-sm text-[14.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                  {isStoreAppMode
+                    ? '⚡ 원본 PC 이관 & 용량 절약'
+                    : '⚡ 은행·관공서 상주 보안모듈 동결'}
+                </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"

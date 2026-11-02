@@ -181,13 +181,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </div>
       </div>
 
-      {/* 1.5. [최종 교정 지시 #3] 상단 고정 안심 배너 ('원래대로 돌려줘' 타이핑 복구 가이드) */}
-      <div className="px-3.5 py-2 bg-emerald-950/40 border-b border-emerald-500/20 flex items-start gap-2 text-[11px] text-emerald-200/90 leading-relaxed">
-        <span className="shrink-0 text-emerald-400 font-bold">🛡️ 안심 보장:</span>
+      {/* 1.5. 상단 슬림 원복 안내 */}
+      <div className="px-3.5 py-1.5 bg-emerald-950/30 border-b border-emerald-500/20 flex items-center gap-1.5 text-[11px] text-emerald-200/90">
+        <span className="shrink-0 text-emerald-400 font-bold">🛡️</span>
         <span>
-          손보기 전 상태가 0.01초 스냅샷으로 보관됩니다. 언제든{' '}
-          <strong className="text-emerald-300 font-extrabold">&ldquo;원래대로 돌려줘&rdquo;</strong> 또는{' '}
-          <strong className="text-emerald-300 font-extrabold">&ldquo;1번 복원해줘&rdquo;</strong>라고 입력하시면 1초 만에 이전 상태로 되돌아갑니다.
+          언제든 <strong className="text-emerald-300 font-extrabold">&ldquo;원래대로 돌려줘&rdquo;</strong> 또는{' '}
+          <strong className="text-emerald-300 font-extrabold">&ldquo;1번 복원해줘&rdquo;</strong>로 즉시 복원됩니다.
         </span>
       </div>
 

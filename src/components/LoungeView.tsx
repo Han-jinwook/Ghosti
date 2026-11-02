@@ -350,9 +350,9 @@ export const LoungeView: React.FC = () => {
   // 1초 진단 & 공유 시작 내 안전 검증(정리 대기함 이동 -> 원복 직접 눌러보기) 상태
   const [trialSafetyStep, setTrialSafetyStep] = useState<'ready' | 'quarantined' | 'restored'>('ready');
   const [trialMovedIds, setTrialMovedIds] = useState<string[]>([]);
-  // 노션 스타일 동적 토글: 공유방 3대 핵심 기능 안내 & 요금제 플랜 접기/펼치기
-  const [showLoungeFeatures, setShowLoungeFeatures] = useState(true);
-  const [showLoungePricing, setShowLoungePricing] = useState(true);
+  // 노션 스타일 동적 토글: 공유방 3대 핵심 기능 안내 & 요금제 플랜 접기/펼치기 (기본 접힘으로 TMI 제거)
+  const [showLoungeFeatures, setShowLoungeFeatures] = useState(false);
+  const [showLoungePricing, setShowLoungePricing] = useState(false);
 
   const handleStartPersonalTrial = () => {
     setPersonalTrialStatus('running');
@@ -2801,17 +2801,12 @@ export const LoungeFeedContextBanner: React.FC = () => {
           </div>
         </div>
 
-        {/* 원본 동기화 저장 경로 지정 및 안내 메시지 */}
+        {/* 원본 동기화 저장 경로 지정 */}
         {!simulateLowStorage && (
           <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-[12px]">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-emerald-300 font-extrabold">
-                📂 원본 동기화 저장 경로 안내 (초기 기본값은 숨김 썸네일 DB만 유지)
-              </span>
-              <span className="text-zinc-300 text-[11.5px]">
-                평소 멤버 기기에는 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>썸네일 DB</strong>만 보관되며, 원본 동기화를 켜면 아래 지정한 경로에 원본 사진이 저장됩니다.
-              </span>
-            </div>
+            <span className="text-emerald-300 font-extrabold">
+              📂 원본 동기화 저장 경로
+            </span>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <input
                 type="text"
@@ -3095,35 +3090,31 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     }
   > = {
     family: {
-      badge: `⏳ AI 꽃단장(인덱싱) 대기실 (${activeFamilyRoom})`,
-      title: '방장 사전 검수 없이 즉시 합류! AI가 예쁜 이름표를 달며 꽃단장 중이에요',
-      subtitle:
-        '이미 라운지에 있는 중복 사진(64-bit dHash)은 자동 제외하되 EXIF 원본 메타데이터가 살아있고 실제 해상도가 더 큰 진짜 원본이면 자동으로 교체(댓글·좋아요 유지)하며, 업로드 후 24시간 내 올린 본인 삭제 및 방 개설 설정에 따른 방장 숨기기가 지원됩니다.',
-      bufferReason: '✨ AI가 예쁜 이름표를 달며 꽃단장 중이에요 (Gemma 2 이름표 + 13KB 썸네일 생성 중)',
+      badge: `⏳ AI 정리 대기실 (${activeFamilyRoom})`,
+      title: '새로 올라온 가족 사진을 정리하고 있습니다',
+      subtitle: '',
+      bufferReason: '✨ 인물·날짜 자동 분류 중',
       senderLabels: ['은숙(아내)', '진욱(방장)', '우리딸', '본가 어머님'],
     },
     club: {
-      badge: '⏳ AI 꽃단장(인덱싱) 대기실 (모임 사진 & 옛날 앨범 스캔 사진)',
-      title: '방장 사전 검수 없이 즉시 합류! 중복 사진은 빼고 진짜 고화질 원본으로 자동 업그레이드합니다',
-      subtitle:
-        '64-bit dHash 대조로 중복 사진은 입구에서 자동 제외(EXIF 원본 메타데이터+실제 고해상도 진짜 원본이면 자동 교체)되며, 업로드 후 24시간 내 올린 본인 삭제 및 방 개설 옵션에 따른 방장 숨기기가 지원됩니다.',
-      bufferReason: '✨ AI가 예쁜 이름표를 달며 꽃단장 중이에요 (인물 분류 및 스캔 사진 정리 중)',
+      badge: '⏳ AI 정리 대기실',
+      title: '새로 올라온 모임 사진을 정리하고 있습니다',
+      subtitle: '',
+      bufferReason: '✨ 인물 분류 및 스캔 사진 정리 중',
       senderLabels: ['김총무(방장)', '박회장', '이프로', '최회원'],
     },
     student: {
       badge: '📥 우리반 새 사진·영상 정리함',
-      title: '친구들이 올린 사진과 축제 영상을 방장 PC에서 자동으로 정리하여 앨범에 올립니다',
-      subtitle:
-        '학교·학원에 있는 낮 시간 동안 친구들이 찍어 올린 사진·영상을 모아 두었다가, 하교 후 방장 PC가 켜지면 자동으로 분류해 우리반 피드에 올려줍니다.',
+      title: '친구들이 올린 사진과 영상을 정리하고 있습니다',
+      subtitle: '',
       bufferReason: '방장 PC가 켜지면 자동으로 사진·영상 정리가 시작됩니다',
       senderLabels: ['민준 아이폰', '서연 갤럭시', '도윤 아이폰', '하은 아이폰'],
     },
     work: {
-      badge: '📥 새 업무 문서 정리함 (부서 폴더 자동 분류)',
-      title: '외근·현장 직원이 새로 올린 계약서·견적서·시공사진을 폴더별로 자동 정리합니다',
-      subtitle:
-        '외부에서 올린 엑셀 단가표, PDF 견적서, 현장 도면의 내용을 읽어 부서별 폴더(S: 드라이브)로 자동 분류하고, 스마트폰에서도 바로 검색할 수 있게 준비합니다.',
-      bufferReason: '내 PC 업무 공유 드라이브(S:) 폴더 자동 분류 및 본문 검색 준비 중',
+      badge: '📥 새 업무 문서 정리함',
+      title: '새로 올라온 업무 서류·사진을 폴더별로 자동 정리합니다',
+      subtitle: '',
+      bufferReason: '업무 공유 드라이브(S:) 폴더 자동 분류 중',
       senderLabels: ['박과장 외근 노트북', '이팀장 아이폰', '정실장 데스크탑', '강사원 현장 태블릿'],
     },
   };
@@ -3211,13 +3202,15 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1">
           <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
             {currentMeta.title}
           </h1>
-          <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-            {currentMeta.subtitle}
-          </p>
+          {currentMeta.subtitle && (
+            <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
+              {currentMeta.subtitle}
+            </p>
+          )}
         </div>
 
         {/* 실시간 파이프라인 상태 바 */}
@@ -3261,19 +3254,14 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             </div>
           </div>
         ) : (
-          /* 🎯 ✨ AI 얼굴 자동 매칭 도우미 + 👑 방장 누락분 & 연도 제보 일괄 승인 */
-          <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                ✨ AI 얼굴 자동 매칭 도우미
-              </span>
-              <span className="font-label-sm text-[12.5px] text-white font-bold">
-                새로 찾은 얼굴은 원터치로 등록하고, 바쁠 때는 확인을 건너뛰고 사진만 바로 올리세요 (👑 방장이 나중에 한 번에 정리)
-              </span>
-            </div>
+            {/* 🎯 ✨ AI 얼굴 자동 매칭 도우미 + 👑 방장 누락분 & 연도 제보 일괄 승인 */}
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                  ✨ AI 얼굴 자동 매칭 도우미
+                </span>
 
-            <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
               {memberActiveHints.length > 0 && (
                 <button
                   type="button"
@@ -3661,16 +3649,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       {/* 새로 올라온 사진 정리함 그리드 */}
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-headline-sm text-[15.5px] text-white font-bold">
-              📥 최근 올라온 사진 ({queuePhotos.length}장)
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-              ✓ 64-bit dHash 중복 제외 (EXIF 원본 메타데이터+실제 고해상도 진짜 원본만 자동 교체)
-            </span>
-          </div>
-          <span className="font-label-sm text-[11.5px] text-zinc-400">
-            👤 올린 본인은 24시간 내 직접 삭제 가능 · 방장은 올라오는 처음부터 상시 숨기기 가능(방 개설 설정 시)
+          <span className="font-headline-sm text-[15.5px] text-white font-bold">
+            📥 최근 올라온 사진 ({queuePhotos.length}장)
           </span>
         </div>
 
@@ -3786,52 +3766,34 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [hostRetainsHidePermission, setHostRetainsHidePermission] = useState(true);
 
   const renderRoomCreationAndExitPolicyBox = () => (
-    <div className="p-4 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-sm text-[10.5px] font-extrabold">
-              🛠️ 방 개설 설정 옵션 · 삭제/숨기기 권한 기준
-            </span>
-            <span className="text-[11.5px] text-emerald-300 font-bold">
-              ✓ 올린 본인은 24시간 내 직접 삭제 · 방장은 올라오는 처음부터 상시 숨기기 감시 가능
-            </span>
-          </div>
-          <p className="font-body-sm text-[11.5px] text-zinc-300">
-            올린 원본 주인은 업로드 후 <strong>24시간 이내에 직접 삭제</strong>할 수 있고, 멤버가 잘못된 사진을 올릴 때를 대비해 <strong>방장이 사진이 올라오는 처음부터 상시 [숨기기] 권한을 가질지</strong> 방 개설 시 선택합니다.
-          </p>
-        </div>
+    <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
+      <span className="font-label-sm text-[12px] text-zinc-200 font-bold">
+        🛠️ 사진 삭제·숨기기 권한 설정
+      </span>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setHostRetainsHidePermission(true)}
-            className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
-              hostRetainsHidePermission
-                ? 'bg-primary-container text-zinc-950 border-primary-container'
-                : 'bg-zinc-900 text-zinc-300 border-white/15'
-            }`}
-          >
-            👑 방장 상시 숨기기 권한 보유 — 올라오는 처음부터 가능 (권장)
-          </button>
-          <button
-            type="button"
-            onClick={() => setHostRetainsHidePermission(false)}
-            className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
-              !hostRetainsHidePermission
-                ? 'bg-primary-container text-zinc-950 border-primary-container'
-                : 'bg-zinc-900 text-zinc-300 border-white/15'
-            }`}
-          >
-            🤝 방장 숨기기 없음 (24시간 내 본인 삭제만)
-          </button>
-        </div>
-      </div>
-
-      <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-400">
-        <span>
-          🚪 <strong className="text-zinc-200">탈퇴(자퇴 · 강퇴 동일) 시 데이터 처리 기준 (방 개설 안내 &amp; 약관 명시):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 기기 내 숨김 영역에 저장된 <strong>그 공유방의 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다. (※ 유저가 내 PC에 무료 서비스로 인덱싱해 둔 <strong>‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 절대 삭제되지 않고 100% 보존</strong>되며, 이미 받아둔 공유방 원본 폴더도 반납 없이 각자 자율 관리합니다.)
-        </span>
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => setHostRetainsHidePermission(true)}
+          className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
+            hostRetainsHidePermission
+              ? 'bg-primary-container text-zinc-950 border-primary-container'
+              : 'bg-zinc-900 text-zinc-300 border-white/15'
+          }`}
+        >
+          👑 방장 상시 숨기기 가능 (권장)
+        </button>
+        <button
+          type="button"
+          onClick={() => setHostRetainsHidePermission(false)}
+          className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
+            !hostRetainsHidePermission
+              ? 'bg-primary-container text-zinc-950 border-primary-container'
+              : 'bg-zinc-900 text-zinc-300 border-white/15'
+          }`}
+        >
+          🤝 24시간 내 본인 삭제만
+        </button>
       </div>
     </div>
   );
@@ -3911,17 +3873,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
               <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-              {isStoreAppMode
-                ? '👑 가족 초대 & 양가 방 분리 관리 (가족 전원 100% 무료 열람)'
-                : '👑 가족 초대 & 양가 통합권 관리 (마스터 1인 결제 ➔ 가족 전원 무료)'}
+                👑 가족 초대 &amp; 방 분리 관리
               </span>
             </div>
-            <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-              가족 무수락 카톡 초대 링크/QR &amp; 방장 즉시 강퇴권 관리
+            <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
+              가족 카톡 초대 &amp; 멤버 관리
             </h2>
-            <p className="font-body-sm text-[12.5px] text-zinc-400">
-              초대 링크를 누르면 복잡한 승인 대기 없이 즉시 합류하며, 실수로 잘못 들어온 외부인은 방장이 원터치로 즉시 강퇴(캐시 폐기)할 수 있습니다.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -4085,17 +4042,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
               <GhostiBrandLogo size="mobile" themeMode="dark" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-                👥 동호회 · 동창회 라운지 관리 &amp; 회원 초대/강퇴 (방 1개 기준 · 인원수 무제한)
+                👥 동호회 · 동창회 관리
               </span>
             </div>
-            <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-              ⛳ 동호회 · 🎓 동창회 인원 무제한 월 4,900원 (10년 마스터권 49,000원) 단일가 &amp; 회원 관리
+            <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
+              ⛳ 동호회 · 🎓 동창회 초대 &amp; 회원 관리
             </h2>
-            <p className="font-body-sm text-[12.5px] text-zinc-400">
-              {isStoreAppMode
-                ? '초대받은 동호·동창 회원은 모바일 앱에서 100% 무료로 모임 사진을 찾고 감상합니다. 방 개설 및 마스터 엔진 연동은 데스크톱(PC)에서 관리합니다.'
-                : '모임 인원이 10명이든 500명이든 인원수 계산 없이 월 4,900원(10년 마스터권 49,000원) 단일가로 운영되며, 초대받은 회원은 전원 무료입니다.'}
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -4252,14 +4204,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-              💼 업무 라운지 — 팀원 권한 &amp; 내 컴퓨터 업무 공유 드라이브(S:) 안내
+              💼 업무 공유 드라이브 (S:)
             </span>
-            <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-              사무실 PC 업무 폴더가 전 직원의 문서 검색창과 윈도우 탐색기(S:)에 자동으로 연결됩니다
+            <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
+              사무실 PC 업무 폴더 &amp; 탐색기(S:) 연동
             </h2>
-            <p className="font-body-sm text-[12.5px] text-zinc-300">
-              따로 연결 버튼을 누를 필요 없이 <strong>[윈도우 탐색기 ➔ 내 PC ➔ S: 드라이브]</strong>(`D:\Ghosti\업무공유폴더_S`)에서 계약서·견적서·세금계산서·도면 폴더를 일반 폴더처럼 바로 열어 쓰고, 외근 중인 직원은 스마트폰 LTE/5G로 들어와도 자동으로 외부 접속 모드로 연결됩니다.
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!isStoreAppMode && (

@@ -874,17 +874,6 @@ export const MobileAppView: React.FC = () => {
 
             {showPrivateSyncSection && (
               <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
-                <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-1.5">
-                  <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[10.5px] font-semibold w-fit">
-                    🔋 배터리 · OS 제재 방어 원칙
-                  </span>
-                  <p className="font-body-sm text-[11.5px] text-zinc-300 leading-relaxed">
-                    귀신같이(Ghosti) 정식 모바일 앱(Google Play / App Store)은 배터리를 소모하는 상시 통신을 하지 않으며,{' '}
-                    <strong className="text-white">[집 Wi-Fi 연결 + 충전 중]</strong>이거나{' '}
-                    <strong className="text-primary-container">[지금 일치시키기]</strong> 버튼을 누를 때만 작동합니다.
-                  </p>
-                </div>
-
                 <div
                   onClick={() => setPrivateSyncStrategy('mirror')}
                   className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
@@ -904,9 +893,6 @@ export const MobileAppView: React.FC = () => {
                       className="w-4 h-4 accent-[#00E5FF]"
                     />
                   </div>
-                  <p className="font-body-sm text-[11.5px] text-zinc-400">
-                    여유 공간 넉넉할 때: 폰과 PC 양쪽 기기에 똑같은 원본 파일을 유지하여 상호 백업 보험 구축.
-                  </p>
                 </div>
 
                 <div
@@ -919,7 +905,7 @@ export const MobileAppView: React.FC = () => {
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-headline-sm text-[13.5px] text-white font-bold">
-                      👻 모드 B. 초경량 섀도우 캐시 모드 (권장)
+                      👻 모드 B. 초경량 섀도우 캐시 모드 (권장 · {syncState.packSizeMB}MB)
                     </span>
                     <input
                       type="radio"
@@ -928,9 +914,6 @@ export const MobileAppView: React.FC = () => {
                       className="w-4 h-4 accent-[#00E5FF]"
                     />
                   </div>
-                  <p className="font-body-sm text-[11.5px] text-zinc-400">
-                    무거운 원본은 집 PC로 이관하고 폰에는 장당 13KB WebP 썸네일+768d 벡터만 남김 (단 {syncState.packSizeMB}MB). 집 PC 전원이 꺼져도 밖에서 1초 만에 100% 검색·열람 가능!
-                  </p>
                 </div>
 
                 <div className="flex gap-2 pt-1">
@@ -988,32 +971,12 @@ export const MobileAppView: React.FC = () => {
 
             {showPolicyAndStoreSection && (
               <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
-                {/* 💻 모바일 ➔ PC 전환 시 스토어 규정(Anti-steering)을 100% 준수하는 데스크톱 기기 연동 패널 */}
                 <PcMasterQuickSendPanel compact />
 
-                {/* 🔄 내 기기 원본 동기화 & 🚪 탈퇴(자퇴·강퇴) 시 데이터 처리 기준 */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-primary-container/40 flex flex-col gap-2">
-                  <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[10.5px] font-extrabold w-fit">
-                    🔄 내 기기 원본 동기화 &amp; 🚪 탈퇴 시 데이터 처리 원칙
-                  </span>
-                  <h3 className="font-headline-sm text-[14px] text-white font-bold">
-                    방장 PC 소환 없이 내 기기 동기화로 자체 해결 &amp; 탈퇴 시 썸네일 DB 즉시 삭제
-                  </h3>
-                  <p className="font-body-sm text-[11.5px] text-zinc-200 leading-relaxed bg-zinc-900/80 p-3 rounded-xl border border-white/10">
-                    • <strong>평소(기본):</strong> 기기 내 보이지 않는 시스템 영역(<code>%LOCALAPPDATA%\Merlin\thumb_db</code>)에 <strong>13KB 썸네일 DB</strong>만 보관하여 0.01초 만에 검색합니다.<br />
-                    • <strong>원본 동기화 ON:</strong> Wi-Fi 및 여유 공간이 충분할 때 지정한 내 폴더로 원본을 자동 복제해 내 기기에서 100% 자체 해결합니다.<br />
-                    • <strong>탈퇴(자퇴 · 강퇴 동일):</strong> 탈퇴/강퇴 즉시 해당 방 계정 아웃 처리되며, 숨김 영역의 <strong>그 공유방 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제</strong>됩니다 (※ 내 PC·계정의 ‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 100% 보존되며, 기동기화된 원본 폴더도 각자 자율 관리).
-                  </p>
-                </div>
-
-                {/* 🛡️ 스토어 1차 심사 통과용 3중 안전장치 제어 */}
                 <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-2.5">
                   <span className="px-2.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[10.5px] font-bold w-fit">
-                    스토어 1차 출시 3중 안전장치 (Anti-steering 완벽 방어)
+                    스토어 심사 모드 설정
                   </span>
-                  <p className="font-body-sm text-[11.5px] text-zinc-400">
-                    ‘주소/URL/결제’ 단어를 배제하고 순수 데스크톱 기기 연동 워딩을 사용하며, 코인 잔액·가이드 버튼 노출 및 <code>/?master=pc</code> 모바일 방어 화면을 1초 만에 제어합니다.
-                  </p>
                   <div className="grid grid-cols-1 gap-2">
                     <button
                       type="button"

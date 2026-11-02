@@ -70,65 +70,43 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
 
   if (activeLoungeType === 'work') return null;
 
-  // 1) '내 기기(personal)'에서는 [💻 모니터로 크게 보기] 1개만 심플하게 노출
+  // 1) '내 기기(personal)'에서는 [💻 모니터로 크게 보기] 버튼만 심플하게 노출
   if (activeLoungeType === 'personal') {
     return (
-      <div className="w-full px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-cyan-400/25 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[11.5px] text-zinc-300 font-bold flex items-center gap-1.5">
-          <span className="text-cyan-300 font-extrabold">👑 내 기기 통합</span>
-          <span>— 내 폰에서 누르면 내 노트북/PC 모니터에 0.5초 전체화면 팝업 (카톡 알림 노출 0%)</span>
-        </span>
+      <div className="w-full flex items-center justify-end">
         <button
           type="button"
           onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' })}
-          className="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/50 text-cyan-200 text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+          className="px-3 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/40 text-cyan-300 text-[11.5px] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
         >
-          <span>💻 모니터로 크게 보기 (폰 무선 리모컨)</span>
+          <span>💻 모니터로 크게 보기</span>
         </button>
       </div>
     );
   }
 
-  // 2) '사진 공유방(패밀리 / 동호회·동창회)'에서는 [💻 모니터로 크게 보기] + [📡 다 같이 보기 (앨범 싱크)] 2대 알짜만 깔끔하게 노출
-  const roomLabel =
-    activeLoungeType === 'family'
-      ? `${activeFamilyRoom} 방`
-      : `${alumniSchoolName || '동호·동창회'} 방`;
-
+  // 2) '사진 공유방(패밀리 / 동호회·동창회)'에서는 [💻 모니터로 크게 보기] + [📡 다 같이 보기] 버튼만 깔끔하게 노출
   return (
-    <div className="w-full px-3.5 py-2 rounded-2xl bg-gradient-to-r from-zinc-900/95 via-teal-950/35 to-zinc-900/95 border border-teal-400/30 flex flex-wrap items-center justify-between gap-2 shadow-sm">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="px-2 py-0.5 rounded-full bg-teal-400/20 border border-teal-400/50 text-teal-300 text-[10.5px] font-black shrink-0">
-          ⚡ 고스트 캐스트 &amp; 싱크
-        </span>
-        <span className="text-[11.5px] text-zinc-300 font-bold truncate">
-          {roomLabel} — 카톡 알림 노출 없는 0.5초 모니터 팝업 &amp; 0.1초 다 같이 보기 앨범 싱크
-        </span>
-      </div>
+    <div className="w-full flex flex-wrap items-center justify-end gap-1.5">
+      <button
+        type="button"
+        onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' })}
+        className="px-3 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/40 text-cyan-300 text-[11.5px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+      >
+        <span>💻 모니터로 크게 보기</span>
+      </button>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' })}
-          className="px-2.5 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-cyan-400/45 text-cyan-300 text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
-          title="스마트폰을 무선 리모컨으로 삼아 내 PC/노트북 모니터에 전체화면 슬라이드쇼를 0.5초 만에 띄웁니다 (사생활 알림 노출 0%)"
-        >
-          <span>💻 모니터로 크게 보기</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => dispatchGhostCastLiveCommand({ action: 'TOGGLE_PHOTO_SYNC' })}
-          className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
-            photoSyncActive
-              ? 'bg-emerald-400 text-zinc-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.35)]'
-              : 'bg-zinc-950 hover:bg-zinc-800 border-emerald-400/45 text-emerald-300'
-          }`}
-          title="내가 사진을 넘기거나 확대하면 방에 접속한 모든 멤버의 화면이 0.1초 만에 똑같이 넘어갑니다 (다수 인원 방에서도 발열·트래픽 부담 0%)"
-        >
-          <span>📡 다 같이 보기 {photoSyncActive ? '(싱크 ON)' : '(앨범 싱크)'}</span>
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => dispatchGhostCastLiveCommand({ action: 'TOGGLE_PHOTO_SYNC' })}
+        className={`px-3 py-1 rounded-xl border text-[11.5px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+          photoSyncActive
+            ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+            : 'bg-zinc-900 hover:bg-zinc-800 border-emerald-400/40 text-emerald-300'
+        }`}
+      >
+        <span>📡 다 같이 보기 {photoSyncActive ? '(싱크 ON)' : ''}</span>
+      </button>
     </div>
   );
 };

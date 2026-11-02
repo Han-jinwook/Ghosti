@@ -522,9 +522,6 @@ export const SetupMonsterContent: React.FC = () => {
             <h2 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2">
               <span>🛠️ 귀신같이 설정몬스터</span>
             </h2>
-            <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400 font-medium">
-              비용 없이 제한 없이 (언제나 0원) PC·스마트폰 해결사 · 언제든 1초 원상복구 보장
-            </span>
           </div>
 
           {/* 깔끔한 2단 플랫폼 스위처 */}
