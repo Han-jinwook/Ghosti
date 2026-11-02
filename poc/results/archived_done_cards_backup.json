@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-02T09:14:11.890341",
+  "updated_at": "2026-11-02T10:09:53.498948",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -354,6 +354,14 @@
       "last_edited_time": "2026-10-30T04:36:00.000Z",
       "url": "https://app.notion.com/p/409f9ffd2c1d806fb8f5e8a92a400eaf",
       "archived_at": "2026-11-02T09:14:11.890145"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-8068-9766-f0a437b3bed0",
+      "title": "🎯[센스톡] 카톡 단체 전송시 센스톡 명단 반응 속도 관련",
+      "app": "",
+      "last_edited_time": "2026-10-30T04:45:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d80689766f0a437b3bed0",
+      "archived_at": "2026-11-02T10:09:53.498719"
     }
   ]
 }

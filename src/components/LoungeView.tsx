@@ -2908,14 +2908,6 @@ export const LoungeFeedContextBanner: React.FC = () => {
         })}
         <button
           type="button"
-          onClick={() => setDoorplatePickerClusterId('face_member_5')}
-          className="px-2.5 py-1.5 rounded-full bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11px] font-extrabold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
-          title="귀신같이 여권 5대 스타일 슬롯(①정면/②미소/③측면/④선글라스/⑤야외) 원터치 문패 사진 교체"
-        >
-          🎨 내 문패 사진 변경
-        </button>
-        <button
-          type="button"
           onClick={() => setShowFaceRegistryModal(true)}
           className="px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
         >

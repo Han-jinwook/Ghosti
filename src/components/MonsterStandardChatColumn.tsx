@@ -256,22 +256,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         )}
       </div>
 
-      {/* 3. 하단 핵심 가이드 칩 + 입력창 */}
-      <div className="px-3.5 py-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60 space-y-2.5">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-          {NOTION_MINIMAL_STARTERS.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              disabled={busy}
-              onClick={() => void handleSend(q.prompt)}
-              className="shrink-0 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[12.5px] font-bold transition disabled:opacity-40 shadow-2xs cursor-pointer"
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
-
+      {/* 3. 하단 입력창 */}
+      <div className="px-3.5 py-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60">
         <form
           onSubmit={(e) => {
             e.preventDefault();
