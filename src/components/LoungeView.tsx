@@ -2920,25 +2920,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return (
       <div className="flex flex-col gap-2.5">
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {FAMILY_ROOMS.map((room) => {
-              const active = activeFamilyRoom === room;
-              return (
-                <button
-                  key={room}
-                  type="button"
-                  onClick={() => setActiveFamilyRoom(room)}
-                  className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] font-bold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
-                    active
-                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-xs'
-                      : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                  }`}
-                >
-                  {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
-                </button>
-              );
-            })}
-          </div>
+
 
           <div className="flex flex-wrap items-center gap-2">
             {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}

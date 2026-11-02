@@ -501,12 +501,12 @@ export const DesktopDashboard: React.FC = () => {
                         PRO
                       </span>
                     )}
-                    <span className="text-[10px] opacity-60">{active ? '▾' : '▸'}</span>
+                    {menu.id === 'personal' && <span className="text-[10px] opacity-60">{active ? '▾' : '▸'}</span>}
                   </div>
                 </button>
 
-                {/* 선택된 메인 메뉴의 사이드메뉴 (들여쓰기 통일 & 흑백 이모지 통일) */}
-                {active && (
+                {/* 선택된 메인 메뉴의 사이드메뉴 (공유 메뉴는 사이드바 하위 트리를 없애고 본문 상단 바에서 제어) */}
+                {active && menu.id === 'personal' && (
                   <div
                     className={`ml-3.5 pl-2.5 border-l flex flex-col gap-0.5 py-0.5 ${
                       themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
@@ -994,6 +994,83 @@ export const DesktopDashboard: React.FC = () => {
             )}
           </div>
         </header>
+
+        {/* ─────────────── 공유 라운지(패밀리 / 동호회·동창회 / 업무 공유) 본문 상단 우측 통합 탭 바 ─────────────── */}
+        {activeLoungeType !== 'personal' && (
+          <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-5 pb-1 flex flex-wrap items-center justify-between gap-3">
+            {/* 좌측: 패밀리일 때는 우리집 / 본가 / 처가 방 선택 알약, 그 외에는 라운지 타이틀 */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {activeLoungeType === 'family' ? (
+                FAMILY_ROOMS.map((room) => {
+                  const roomActive = activeFamilyRoom === room;
+                  return (
+                    <button
+                      key={room}
+                      type="button"
+                      onClick={() => {
+                        setActiveFamilyRoom(room);
+                        if (desktopTab !== 'dashboard') setDesktopTab('dashboard');
+                      }}
+                      className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                        roomActive && desktopTab === 'dashboard'
+                          ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
+                          : themeMode === 'light'
+                          ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                      }`}
+                    >
+                      {room === '우리집'
+                        ? '🏠 우리집'
+                        : room === '본가(친가)'
+                        ? '🏡 본가(친가)'
+                        : '🌸 처가(친정)'}
+                    </button>
+                  );
+                })
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setDesktopTab('dashboard')}
+                  className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all cursor-pointer ${
+                    desktopTab === 'dashboard'
+                      ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
+                      : themeMode === 'light'
+                      ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                  }`}
+                >
+                  {activeLoungeType === 'work' ? '📂 업무 공유(S:) 메인' : '🖼️ 모임·동창 앨범 홈'}
+                </button>
+              )}
+            </div>
+
+            {/* 우측: 해당 공유방의 서브메뉴 버튼들 (공유 시작 / 새 사진 정리함 / 초대 & 방 관리) */}
+            <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+              {currentSubmenus
+                .filter((sub) => sub.id !== 'dashboard' && !(sub.id === 'trial' && isCurrentLoungeSubscribed))
+                .map((sub) => {
+                  const isSubActive = desktopTab === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setDesktopTab(sub.id)}
+                      className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12.5px] font-extrabold border transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                        isSubActive
+                          ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
+                          : themeMode === 'light'
+                          ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span className="grayscale opacity-80 text-[12px]">{sub.icon}</span>
+                      <span>{sub.label}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        )}
 
         {/* ─────────────── 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) ─────────────── */}
         {desktopTab === 'trial' && <LoungeView />}
