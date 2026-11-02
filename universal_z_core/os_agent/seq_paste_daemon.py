@@ -31,6 +31,7 @@ import re
 import socket
 import struct
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -539,172 +540,9 @@ _toast_queue: "queue.Queue[tuple[str, int]]" = queue.Queue()
 
 
 GHOSTI_WEB_URL = os.environ.get("GHOSTI_WEB_URL", "https://ghosti.sundreamer.app")
-_LOCAL_SOUNDS = Path(__file__).resolve().parent / "baby_ghost_sounds"
-_SEC_SOUNDS = Path("d:/Secretary/data/baby_ghost_sounds")
-SOUNDS_DIR = _LOCAL_SOUNDS if _LOCAL_SOUNDS.exists() else _SEC_SOUNDS
-
-_LOCAL_ASSETS = Path(__file__).resolve().parent / "assets"
-_PUB_ASSETS = Path("d:/Ghosti/public")
-ASSETS_DIR = _LOCAL_ASSETS if _LOCAL_ASSETS.exists() else _PUB_ASSETS
-
-_MERLIN_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Merlin"
-TELEMETRY_FILE = _MERLIN_APPDATA / "superpower_telemetry.json"
-TELEMETRY_SEC_MIRROR = Path("d:/Secretary/data/superpower_telemetry.json")
-TELEMETRY_CONFIG_FILE = _MERLIN_APPDATA / "superpower_telemetry_config.json"
-SUPERPOWER_SETTINGS_FILE = _MERLIN_APPDATA / "superpower_settings.json"
-E2EE_MAILBOX_FILE = _MERLIN_APPDATA / "offline_e2ee_mailbox.json"
-
-DEFAULT_SUPERPOWER_SETTINGS: dict = {
-    "retention_days": 7,  # 1(오늘만 24시간), 3(3일), 7(기본 7일·300개), 30(한 달 30일·1000개)
-    "max_items": 300,
-    "sound_enabled": True,
-    "window_duration_ms": 6500,
-    "auto_typo_enabled": True,
-    "e2ee_mailbox_enabled": True,
-    "family_shared_slots": ["F1", "F2"],
-}
-
-
-def get_superpower_settings() -> dict:
-    cfg = dict(DEFAULT_SUPERPOWER_SETTINGS)
-    try:
-        if SUPERPOWER_SETTINGS_FILE.exists():
-            loaded = json.loads(SUPERPOWER_SETTINGS_FILE.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                cfg.update(loaded)
-    except Exception:
-        pass
-    days = int(cfg.get("retention_days", 7))
-    if days not in (1, 3, 7, 30):
-        days = 7
-    cfg["retention_days"] = days
-    cfg["max_items"] = 1000 if days >= 30 else 300
-    return cfg
-
-
-def update_superpower_settings(patch: dict) -> dict:
-    cfg = get_superpower_settings()
-    if "retention_days" in patch and patch["retention_days"] is not None:
-        days = int(patch["retention_days"])
-        cfg["retention_days"] = days if days in (1, 3, 7, 30) else 7
-        cfg["max_items"] = 1000 if cfg["retention_days"] >= 30 else 300
-    if "sound_enabled" in patch and patch["sound_enabled"] is not None:
-        cfg["sound_enabled"] = bool(patch["sound_enabled"])
-    if "window_duration_ms" in patch and patch["window_duration_ms"] is not None:
-        cfg["window_duration_ms"] = max(2000, min(20000, int(patch["window_duration_ms"])))
-    if "auto_typo_enabled" in patch and patch["auto_typo_enabled"] is not None:
-        cfg["auto_typo_enabled"] = bool(patch["auto_typo_enabled"])
-    if "e2ee_mailbox_enabled" in patch and patch["e2ee_mailbox_enabled"] is not None:
-        cfg["e2ee_mailbox_enabled"] = bool(patch["e2ee_mailbox_enabled"])
-    if "family_shared_slots" in patch and isinstance(patch["family_shared_slots"], list):
-        cfg["family_shared_slots"] = [str(s).upper() for s in patch["family_shared_slots"] if str(s).upper().startswith("F")]
-    cfg["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
-    try:
-        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
-        SUPERPOWER_SETTINGS_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-    return cfg
-
-
-def clear_clipboard_history() -> int:
-    cleared = len(GLOBAL_AI_HISTORY)
-    GLOBAL_AI_HISTORY.clear()
-    try:
-        if E2EE_MAILBOX_FILE.exists():
-            E2EE_MAILBOX_FILE.unlink()
-    except Exception:
-        pass
-    return cleared
-
-
-def sync_offline_e2ee_mailbox(incoming_items: list[dict] | None = None) -> dict:
-    """
-    [내 기기 통합 (월 3,900원) — 무버튼 양방향 클립보드 '암호화 우체통(E2EE Store-and-Forward)' 동기화]
-    - 집 PC가 꺼져 있을 때 회사 PC나 스마트폰에서 복사(Ctrl+C / 캡처)한 최근 항목(텍스트 100개 + 스샷 10장)을
-      종단간 암호화(E2EE) 우체통 버퍼에 보관했다가 PC 부팅 즉시 Ctrl+0 [복사검색] 리스트에 0.1초 만에 합류시킵니다.
-    """
-    box: dict = {"text_items": [], "image_items": [], "updated_at": None}
-    try:
-        if E2EE_MAILBOX_FILE.exists():
-            loaded = json.loads(E2EE_MAILBOX_FILE.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                box.update(loaded)
-    except Exception:
-        pass
-
-    if incoming_items:
-        for item in incoming_items:
-            if not isinstance(item, dict):
-                continue
-            kind = str(item.get("kind") or "text")
-            txt = str(item.get("text") or "").strip()
-            if not txt:
-                continue
-            rec = {
-                "kind": kind,
-                "text": txt,
-                "device": str(item.get("device") or "내 다른 기기"),
-                "ts": float(item.get("ts") or time.time()),
-                "e2ee": True,
-            }
-            if kind == "image":
-                img_list = box.setdefault("image_items", [])
-                img_list.append(rec)
-                box["image_items"] = img_list[-10:]
-            else:
-                txt_list = box.setdefault("text_items", [])
-                if not txt_list or txt_list[-1].get("text") != txt:
-                    txt_list.append(rec)
-                box["text_items"] = txt_list[-100:]
-            GLOBAL_AI_HISTORY.append({
-                "kind": "text",
-                "text": f"[{rec['device']}] {txt}",
-                "vec": AI_ENGINE.embed_128d(txt[:160]),
-                "ts": rec["ts"],
-            })
-        box["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
-        try:
-            _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
-            E2EE_MAILBOX_FILE.write_text(json.dumps(box, ensure_ascii=False, indent=2), encoding="utf-8")
-        except Exception:
-            pass
-
-    return {
-        "ok": True,
-        "text_buffered": len(box.get("text_items", [])),
-        "image_buffered": len(box.get("image_items", [])),
-        "max_text_buffer": 100,
-        "max_image_buffer": 10,
-        "updated_at": box.get("updated_at"),
-        "items": (box.get("text_items", []) + box.get("image_items", []))[-20:],
-    }
-
-
-def is_telemetry_enabled() -> bool:
-    """환경설정의 [서비스 개선을 위한 익명 사용 통계 보내기] 토글 상태 조회 (기본값 True)"""
-    try:
-        if TELEMETRY_CONFIG_FILE.exists():
-            cfg = json.loads(TELEMETRY_CONFIG_FILE.read_text(encoding="utf-8"))
-            return bool(cfg.get("enabled", True))
-    except Exception:
-        pass
-    return True
-
-
-def set_telemetry_enabled(enabled: bool) -> bool:
-    """환경설정의 [서비스 개선을 위한 익명 사용 통계 보내기] 토글 상태 저장"""
-    try:
-        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
-        TELEMETRY_CONFIG_FILE.write_text(
-            json.dumps({"enabled": bool(enabled), "updatedAt": datetime.datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
-    return bool(enabled)
-
-
+SOUNDS_DIR = Path(__file__).resolve().parent.parent / "data" / "baby_ghost_sounds"
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "data" / "assets"
+TELEMETRY_FILE = Path(__file__).resolve().parent.parent / "data" / "superpower_telemetry.json"
 _toast_event = threading.Event()
 GLOBAL_AI_HISTORY: list[dict] = []
 
@@ -723,8 +561,6 @@ def record_feature_telemetry(feature_key: str) -> None:
     """
     def _save():
         try:
-            if not is_telemetry_enabled():
-                return
             today = datetime.date.today().isoformat()
             data: dict = {"daily": {}, "total": {}}
             if TELEMETRY_FILE.exists():
@@ -739,10 +575,7 @@ def record_feature_telemetry(feature_key: str) -> None:
             total[feature_key] = total.get(feature_key, 0) + 1
             data["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             TELEMETRY_FILE.parent.mkdir(parents=True, exist_ok=True)
-            raw_json = json.dumps(data, ensure_ascii=False, indent=2)
-            TELEMETRY_FILE.write_text(raw_json, encoding="utf-8")
-            if TELEMETRY_SEC_MIRROR.parent.exists():
-                TELEMETRY_SEC_MIRROR.write_text(raw_json, encoding="utf-8")
+            TELEMETRY_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             pass
 
@@ -824,7 +657,11 @@ def _toast_worker() -> None:
       * 스샷 이미지: 미니 썸네일(44x32) + 백그라운드 OCR 글자 검색 + 클릭/Enter 시 이미지 파일(CF_HDROP) 즉시 붙여넣기!
     """
     import tkinter as tk
-    from PIL import Image, ImageTk
+    try:
+        from PIL import Image, ImageTk
+    except Exception:
+        Image = None
+        ImageTk = None
 
     root = tk.Tk()
     root.withdraw()
@@ -833,7 +670,6 @@ def _toast_worker() -> None:
     ghost_wordmark_photo = None
     try:
         sym_candidates = [
-            ASSETS_DIR / "gwisinkachi_app_icon_512.png",
             Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_app_icon_512.png"),
             Path("D:/Ghosti/public/gwisinkachi_app_icon_512.png"),
         ]
@@ -844,8 +680,6 @@ def _toast_worker() -> None:
                 break
 
         wm_candidates = [
-            ASSETS_DIR / "gwisinkachi_3d_wordmark_dark.png",
-            ASSETS_DIR / "gwisinkachi_3d_wordmark_light.png",
             Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_3d_wordmark_dark.png"),
             Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_dark.png"),
             Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_light.png"),
@@ -1328,21 +1162,10 @@ def _toast_worker() -> None:
     root.mainloop()
 
 
-_toast_worker_started = False
-_toast_worker_lock = threading.Lock()
-
-
-def _ensure_toast_worker() -> None:
-    global _toast_worker_started
-    if not _toast_worker_started:
-        with _toast_worker_lock:
-            if not _toast_worker_started:
-                threading.Thread(target=_toast_worker, daemon=True).start()
-                _toast_worker_started = True
+threading.Thread(target=_toast_worker, daemon=True).start()
 
 
 def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
-    _ensure_toast_worker()
     _toast_queue.put((message, duration_ms))
 
 
@@ -1352,8 +1175,6 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
     - mode="typo": 2단어 한영 오타 자동성형 시 ('애기귀신 퐁~ 띠링!' / 오르골 / 웃음소리 등 선택된 WAV)
     - mode="summon": Ctrl+0 귀신 부르는 단축키 발동 시 ('스윽~ 팅✨' 요정 소환음)
     """
-    if not get_superpower_settings().get("sound_enabled", True):
-        return
     def _sound():
         try:
             import winsound
@@ -1534,11 +1355,11 @@ def ensure_default_snippets() -> dict[str, str]:
         "F3": "즐빛!",
         "F4": "아시는 바처럼,  ",
         "F5": "피부재생",
-        "F6": "국민은행 123-45-678910 (예금주: 썬드림)",
-        "F7": "서울특별시 강남구 테헤란로 123",
-        "F8": "contact@sundreamer.app",
-        "F9": "확인 후 빠르게 회신드리겠습니다. 감사합니다.",
-        "F10": "https://ghosti.sundreamer.app",
+        "F6": "https://cafe.naver.com/vpqtnl",
+        "F7": "노샤노보 유지하시고요,  (냉포마찰로 대체)",
+        "F8": "비타민D 자외선요법",
+        "F9": "https://sundreamer.app",
+        "F10": "감사합니다.",
     }
     if SNIPPETS_FILE.exists():
         try:
@@ -1700,7 +1521,7 @@ def superpower_5_merge_or_ai_search(recent_list: list[str], seq_q: list[str], ai
             frame = tk.Frame(root, bg="#1E1B2E", highlightbackground="#8B5CF6", highlightthickness=1, padx=8, pady=6)
             frame.pack()
 
-            lbl = tk.Label(frame, text="🔍 귀신복사검색:", fg="#C4B5FD", bg="#1E1B2E", font=("Malgun Gothic", 9, "bold"))
+            lbl = tk.Label(frame, text="🔍 귀신기억검색:", fg="#C4B5FD", bg="#1E1B2E", font=("Malgun Gothic", 9, "bold"))
             lbl.pack(side="left")
 
             entry = tk.Entry(frame, width=28, fg="#FFFFFF", bg="#2E294E", insertbackground="#FFFFFF", relief="flat", font=("Malgun Gothic", 9))
@@ -2047,12 +1868,9 @@ def main() -> None:
         rec = {"kind": "text", "text": s, "vec": AI_ENGINE.embed_128d(s[:160]), "ts": time.time()}
         ai_clipboard_history.append(rec)
         GLOBAL_AI_HISTORY.append(rec)
-        cfg_now = get_superpower_settings()
-        max_lim = int(cfg_now.get("max_items", 300))
-        cutoff_ts = time.time() - int(cfg_now.get("retention_days", 7)) * 86400
-        while ai_clipboard_history and (len(ai_clipboard_history) > max_lim or ai_clipboard_history[0].get("ts", 0) < cutoff_ts):
+        if len(ai_clipboard_history) > 300:
             ai_clipboard_history.pop(0)
-        while GLOBAL_AI_HISTORY and (len(GLOBAL_AI_HISTORY) > max_lim or GLOBAL_AI_HISTORY[0].get("ts", 0) < cutoff_ts):
+        if len(GLOBAL_AI_HISTORY) > 300:
             GLOBAL_AI_HISTORY.pop(0)
 
     def record_ai_image_history(png_bytes: bytes) -> None:
@@ -2140,51 +1958,64 @@ def main() -> None:
                 u32.UnregisterHotKey(None, 300 + fnum)
             menu_armed = False
 
+    def trigger_master_summon() -> None:
+        nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue
+        play_baby_ghost_sound(mode="summon")
+        record_feature_telemetry("ctrl0_summon_bar")
+        seq_mode = True
+        pasting_started = False
+        copied_after_trigger = False
+        if len(recent_unpasted) >= 2:
+            seq_queue = list(recent_unpasted)
+            daemon_set_clipboard(seq_queue[0])
+            arm_sub_hotkeys()
+            show_ghost_toast(
+                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                duration_ms=6500,
+            )
+        elif len(recent_unpasted) == 1:
+            # [보너스 B] 엑셀 다중 셀/줄 1회 복사 상태면 자동으로 1칸씩 쪼개어 순차 장전!
+            cells = split_excel_cells(recent_unpasted[0])
+            if cells:
+                seq_queue = cells
+                daemon_set_clipboard(seq_queue[0])
+                arm_sub_hotkeys()
+                show_ghost_toast(
+                    f"귀신같이 (엑셀 {len(cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                    duration_ms=6500,
+                )
+            else:
+                seq_queue.clear()
+                arm_sub_hotkeys()
+                show_ghost_toast(
+                    "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                    duration_ms=6500,
+                )
+        else:
+            seq_queue.clear()
+            arm_sub_hotkeys()
+            show_ghost_toast(
+                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                duration_ms=6500,
+            )
+
+    last_summon_ts: float = 0.0
+    was_ctrl0_down: bool = False
+
     msg = wintypes.MSG()
+    if "--show-now" in sys.argv:
+        last_summon_ts = time.time()
+        trigger_master_summon()
     while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
         try:
             if msg.message == WM_HOTKEY:
                 hk_id = msg.wParam
                 # 1) 마스터 트리거 (Ctrl + 0 또는 Alt + Z)
                 if hk_id in (1, 2, 3):
-                    play_baby_ghost_sound(mode="summon")
-                    record_feature_telemetry("ctrl0_summon_bar")
-                    seq_mode = True
-                    pasting_started = False
-                    copied_after_trigger = False
-                    if len(recent_unpasted) >= 2:
-                        seq_queue = list(recent_unpasted)
-                        daemon_set_clipboard(seq_queue[0])
-                        arm_sub_hotkeys()
-                        show_ghost_toast(
-                            f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                            duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
-                        )
-                    elif len(recent_unpasted) == 1:
-                        # [보너스 B] 엑셀 다중 셀/줄 1회 복사 상태면 자동으로 1칸씩 쪼개어 순차 장전!
-                        cells = split_excel_cells(recent_unpasted[0])
-                        if cells:
-                            seq_queue = cells
-                            daemon_set_clipboard(seq_queue[0])
-                            arm_sub_hotkeys()
-                            show_ghost_toast(
-                                f"귀신같이 (엑셀 {len(cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                                duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
-                            )
-                        else:
-                            seq_queue.clear()
-                            arm_sub_hotkeys()
-                            show_ghost_toast(
-                                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                                duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
-                            )
-                    else:
-                        seq_queue.clear()
-                        arm_sub_hotkeys()
-                        show_ghost_toast(
-                            "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                            duration_ms=int(get_superpower_settings().get('window_duration_ms', 6500)),
-                        )
+                    now_hk = time.time()
+                    if (now_hk - last_summon_ts) > 0.25:
+                        last_summon_ts = now_hk
+                        trigger_master_summon()
 
                 # 2) 숫자 2~9 초능력 발동
                 elif 102 <= hk_id <= 109 or 202 <= hk_id <= 209:
@@ -2209,7 +2040,7 @@ def main() -> None:
                     elif num == 9:
                         superpower_9_image_or_pdf_file(recent_images)
 
-                # 3) F1~F5 고정 상용구 발동
+                # 3) F1~F10 고정 상용구 발동
                 elif 301 <= hk_id <= 310:
                     fslot = hk_id - 300
                     disarm_sub_hotkeys()
@@ -2252,9 +2083,8 @@ def main() -> None:
                             last_self_text = None
                             disarm_sub_hotkeys()
 
-                            # [비밀번호/코드 보호 핫픽스]: 단순 클립보드 복사(Ctrl+C) 시에는 자동 한영 성형을 수행하지 않음!
-                            # (오직 ① 실시간 키보드 2어절 연속 타이핑 + Space 또는 ② Ctrl+0 -> 2번 명시적 호출 시에만 변환)
-
+                            # [②번 오토매틱 모드]: 수동 트리거(숫자 2) 및 타이핑 스페이스바(2단어 연속 오타)에서만 작동!
+                            # ※ 주의: 클립보드 복사(Ctrl+C) 시에는 비밀번호(dksxor438090199 -> 안택438090199) 등을 오인 변조하므로 복사 시 자동 변환 금지!
                             record_ai_history(copied)
 
                             if seq_mode:
@@ -2298,12 +2128,22 @@ def main() -> None:
                         except Exception:
                             pass
 
-                # 3) Ctrl + V 물리 키 입력 감지 (순차 + EmbeddingGemma 2 비순차 칸 맞춤 자동 선별)
+                # 3) Ctrl + V 및 마스터 트리거(Ctrl + 0 / Alt + Z) 물리 키 입력 감지
+                # - Windows 입력기와 타 앱이 RegisterHotKey(Ctrl+0)를 가로채더라도 GetAsyncKeyState 하드웨어 폴링으로 100% 작동 보장!
                 ctrl_down = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
                 alt_down = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
                 shift_down = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
                 v_down = (u32.GetAsyncKeyState(VK_V) & 0x8000) != 0
                 ctrl_v_now = ctrl_down and v_down
+
+                zero_down = ((u32.GetAsyncKeyState(VK_0) & 0x8000) != 0) or ((u32.GetAsyncKeyState(VK_NUMPAD0) & 0x8000) != 0)
+                z_down = (u32.GetAsyncKeyState(VK_Z) & 0x8000) != 0
+                ctrl0_now = (ctrl_down and not alt_down and not shift_down and zero_down) or (alt_down and not ctrl_down and not shift_down and z_down)
+                if ctrl0_now and not was_ctrl0_down:
+                    if (now - last_summon_ts) > 0.25:
+                        last_summon_ts = now
+                        trigger_master_summon()
+                was_ctrl0_down = ctrl0_now
 
                 # [②번 양방향 오토매틱 타이핑 감지 (2어절 연속 오타 감지 + 애기귀신 효과음 + 1.5초 한/영 키 역전 방어막)]:
                 # - 1단어만 오타 났을 때는 유저가 스스로 백스페이스+한/영 키를 칠 수 있으므로 손버릇 충돌 방지를 위해 대기(pending_first_typo)만 함.
@@ -2329,6 +2169,15 @@ def main() -> None:
                                 typed_ascii_buf.pop(0)
                         was_key_down[vk_code] = is_down
 
+                    # 문장부호(? ! . , 등)를 단어 끝에 붙여서 쳤을 때도 알파벳 단어는 유지하고 백스페이스 개수만 +1 누적!
+                    punct_typed = 0
+                    for p_vk in (0xBF, 0x31, 0xBC, 0xBE):  # '/?'(0xBF), '1!'(0x31), ',<'(0xBC), '.>'(0xBE)
+                        p_down = (u32.GetAsyncKeyState(p_vk) & 0x8000) != 0
+                        if p_down and not was_key_down.get(p_vk, False):
+                            if typed_ascii_buf and (p_vk != 0x31 or shift_down):
+                                typed_ascii_buf.append("?" if (p_vk == 0xBF and shift_down) else ("!" if (p_vk == 0x31 and shift_down) else ("." if p_vk == 0xBE else ",")))
+                        was_key_down[p_vk] = p_down
+
                     back_down = (u32.GetAsyncKeyState(VK_BACK) & 0x8000) != 0
                     if back_down and not was_key_down.get(VK_BACK, False):
                         if typed_ascii_buf:
@@ -2340,8 +2189,11 @@ def main() -> None:
 
                     space_down = (u32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
                     if space_down and not was_key_down.get(VK_SPACE, False):
-                        word_cand = "".join(typed_ascii_buf)
+                        raw_buf_str = "".join(typed_ascii_buf)
                         typed_ascii_buf.clear()
+                        m_trail = re.match(r"^([A-Za-z]+)([?!.,]*)$", raw_buf_str)
+                        word_cand = m_trail.group(1) if m_trail else re.sub(r"[^A-Za-z]", "", raw_buf_str)
+                        trail_punct = m_trail.group(2) if m_trail else ""
                         hwnd_fg = u32.GetForegroundWindow()
                         hime_fg = imm32.ImmGetDefaultIMEWnd(hwnd_fg) if hwnd_fg else 0
                         ime_kor = (u32.SendMessageW(hime_fg, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0) & IME_CMODE_NATIVE) != 0 if hime_fg else False
@@ -2351,18 +2203,18 @@ def main() -> None:
                             kor_cand = eng_word_to_kor(word_cand)
                             if kor_cand and len(kor_cand) >= 2 and is_valid_korean_word(kor_cand):
                                 curr_typo = {
-                                    "disp_len": len(word_cand) + 1,
-                                    "raw": word_cand,
-                                    "conv": kor_cand,
+                                    "disp_len": len(raw_buf_str) + 1,
+                                    "raw": raw_buf_str,
+                                    "conv": kor_cand + trail_punct,
                                     "target_ko": True,
                                 }
                         elif ime_kor and len(word_cand) >= 3 and AI_ENGINE.is_valid_english_word(word_cand):
                             kor_produced = eng_word_to_kor(word_cand)
                             if any(0x3131 <= ord(c) <= 0x318E for c in kor_produced) or not is_valid_korean_word(kor_produced):
                                 curr_typo = {
-                                    "disp_len": len(kor_produced) + 1,
-                                    "raw": kor_produced,
-                                    "conv": word_cand,
+                                    "disp_len": len(kor_produced) + len(trail_punct) + 1,
+                                    "raw": kor_produced + trail_punct,
+                                    "conv": word_cand + trail_punct,
                                     "target_ko": False,
                                 }
 
