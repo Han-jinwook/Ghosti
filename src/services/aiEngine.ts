@@ -82,7 +82,6 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
               categoryBadge: enriched.categoryBadge || d.categoryBadge,
               extractedText: enriched.extractedText || d.extractedText,
               keywords: enriched.keywords?.length ? enriched.keywords : d.keywords,
-              vec: enriched.vec || d.vec,
               path: d.path || enriched.path,
             });
           } else {
