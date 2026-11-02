@@ -131,7 +131,7 @@ const MAIN_LOUNGE_MENUS: Array<{
     id: 'family',
     label: '패밀리 (우리집·양가)',
     shortLabel: '패밀리',
-    sectionHeader: '📸 사진 공유',
+    sectionHeader: '사진 공유',
   },
   {
     id: 'club',
@@ -142,7 +142,7 @@ const MAIN_LOUNGE_MENUS: Array<{
     id: 'work',
     label: '업무 공유 (S: 드라이브)',
     shortLabel: '업무(S:)',
-    sectionHeader: '💼 업무 공유',
+    sectionHeader: '업무 공유',
   },
 ];
 
@@ -178,35 +178,35 @@ const resolveQuickMenuId = (lounge: LoungeType): QuickMenuId =>
 
 const LOUNGE_SUBMENU_CONFIG: Record<
   LoungeType,
-  Array<{ id: DesktopTab; label: string; subcaption?: string; showTrashCount?: boolean }>
+  Array<{ id: DesktopTab; icon: string; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'dashboard', label: '🔍 찾기', subcaption: '제목 몰라도 1초 검색' },
-    { id: 'trash', label: '✋ 손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
+    { id: 'dashboard', icon: '🔍', label: '찾기', subcaption: '제목 몰라도 1초 검색' },
+    { id: 'trash', icon: '✋', label: '손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
   ],
   family: [
-    { id: 'trial', label: '📸 패밀리 공유 시작' },
-    { id: 'dashboard', label: '우리집·본가·처가 앨범' },
-    { id: 'trash', label: '새 사진 정리함' },
-    { id: 'sync', label: '가족 초대 & 방 관리' },
+    { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
+    { id: 'dashboard', icon: '🖼️', label: '우리집·본가·처가 앨범' },
+    { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
+    { id: 'sync', icon: '⚙️', label: '가족 초대 & 방 관리' },
   ],
   club: [
-    { id: 'trial', label: '⛳ 동호·동창회 시작' },
-    { id: 'dashboard', label: '모임·동창 앨범 & 원본 다운로드' },
-    { id: 'trash', label: '새 사진 정리함' },
-    { id: 'sync', label: '모임 관리 & 회원 초대' },
+    { id: 'trial', icon: '⛳', label: '동호·동창회 시작' },
+    { id: 'dashboard', icon: '🖼️', label: '모임·동창 앨범 & 원본 다운로드' },
+    { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
+    { id: 'sync', icon: '⚙️', label: '모임 관리 & 회원 초대' },
   ],
   student: [
-    { id: 'trial', label: '⛳ 동호·동창회 시작' },
-    { id: 'dashboard', label: '타임캡슐 앨범 & 영상 검색' },
-    { id: 'trash', label: '새 사진·영상 정리함' },
-    { id: 'sync', label: '우리반 관리 & 학생인증' },
+    { id: 'trial', icon: '⛳', label: '동호·동창회 시작' },
+    { id: 'dashboard', icon: '🖼️', label: '타임캡슐 앨범 & 영상 검색' },
+    { id: 'trash', icon: '🧹', label: '새 사진·영상 정리함' },
+    { id: 'sync', icon: '⚙️', label: '우리반 관리 & 학생인증' },
   ],
   work: [
-    { id: 'trial', label: '💼 업무 공유(S:) 시작' },
-    { id: 'dashboard', label: '업무 문서·현장사진 & S: 드라이브' },
-    { id: 'trash', label: '새 업무파일 정리함' },
-    { id: 'sync', label: '팀원 권한 & S: 드라이브 연결' },
+    { id: 'trial', icon: '💼', label: '업무 공유(S:) 시작' },
+    { id: 'dashboard', icon: '📂', label: '업무 문서·현장사진 & S: 드라이브' },
+    { id: 'trash', icon: '🧹', label: '새 업무파일 정리함' },
+    { id: 'sync', icon: '⚙️', label: '팀원 권한 & S: 드라이브 연결' },
   ],
 };
 
@@ -446,7 +446,7 @@ export const DesktopDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* 2. 3대 전략 메뉴(🆓 내 기기 / 📸 사진 공유 / 💼 업무 공유) & 하위 메뉴 트리 (노션 워크스페이스 스타일) */}
+        {/* 2. 메인 메뉴(이모지 제거 · 폰트 확대 · 색상 차별화) & 사이드 서브메뉴(들여쓰기 통일 · 흑백 이모지) */}
         <div className="flex flex-col gap-1">
           {MAIN_LOUNGE_MENUS.map((menu) => {
             const isDeviceIntegrationActive = activeLoungeType === 'personal' && desktopTab === 'sync';
@@ -458,7 +458,11 @@ export const DesktopDashboard: React.FC = () => {
             return (
               <div key={menu.id} className="flex flex-col gap-0.5">
                 {menu.sectionHeader && (
-                  <span className="px-2 pt-2 pb-0.5 text-[12px] font-extrabold uppercase tracking-wider text-zinc-500">
+                  <span
+                    className={`px-3 pt-3 pb-1 text-[11.5px] font-extrabold tracking-wider ${
+                      themeMode === 'light' ? 'text-slate-400' : 'text-zinc-500'
+                    }`}
+                  >
                     {menu.sectionHeader}
                   </span>
                 )}
@@ -470,19 +474,20 @@ export const DesktopDashboard: React.FC = () => {
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
                   }}
-                  className={`w-full px-2.5 py-2 rounded-xl font-label-md text-[14.5px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                  className={`w-full px-3 py-2 rounded-xl font-label-md text-[15px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
                     active
                       ? themeMode === 'light'
-                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                        ? 'bg-[#E6F7F5] text-[#0F766E] font-extrabold'
                         : 'bg-zinc-800/90 text-primary-container font-extrabold'
                       : themeMode === 'light'
-                      ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-bold'
-                      : 'text-zinc-400 hover:text-white hover:bg-white/5 font-bold'
+                      ? 'text-slate-800 hover:text-slate-950 hover:bg-black/5 font-extrabold'
+                      : 'text-zinc-200 hover:text-white hover:bg-white/5 font-extrabold'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <MainLoungeMonoIcon id={menu.id} className="w-[15px] h-[15px] shrink-0" />
-                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 손보기와 귀신같이 찾기' : undefined}>{menu.label}</span>
+                  <div className="flex items-center min-w-0">
+                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 손보기와 귀신같이 찾기' : undefined}>
+                      {menu.label}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {menu.freeBadge && !isLoungeSub && (
@@ -499,15 +504,25 @@ export const DesktopDashboard: React.FC = () => {
                   </div>
                 </button>
 
-                {/* 선택된 라운지의 하위 트리 (노션 페이지 인덴트 구조) */}
+                {/* 선택된 메인 메뉴의 사이드메뉴 (들여쓰기 통일 & 흑백 이모지 통일) */}
                 {active && (
-                  <div className="ml-4 pl-2.5 border-l border-white/10 flex flex-col gap-0.5 py-0.5">
+                  <div
+                    className={`ml-3.5 pl-2.5 border-l flex flex-col gap-0.5 py-0.5 ${
+                      themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
+                    }`}
+                  >
                     {/* 패밀리 라운지일 때: 우리집 / 본가 / 처가 방 전환 트리 */}
                     {menu.id === 'family' && (
-                      <div className="flex flex-col gap-0.5 pb-1 mb-1 border-b border-white/5">
+                      <div
+                        className={`flex flex-col gap-0.5 pb-1 mb-1 border-b ${
+                          themeMode === 'light' ? 'border-slate-200/70' : 'border-white/5'
+                        }`}
+                      >
                         {FAMILY_ROOMS.map((room) => {
                           const roomActive =
                             desktopTab === 'dashboard' && activeFamilyRoom === room;
+                          const roomIcon =
+                            room === '우리집' ? '🏠' : room === '본가(친가)' ? '🏡' : '🌸';
                           return (
                             <button
                               key={room}
@@ -517,19 +532,20 @@ export const DesktopDashboard: React.FC = () => {
                                 setDesktopTab('dashboard');
                                 if (isMobileDrawer) setIsMobileDrawerOpen(false);
                               }}
-                              className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between transition-colors cursor-pointer ${
+                              className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between transition-all cursor-pointer ${
                                 roomActive
-                                  ? 'bg-primary-container/15 text-primary-container font-extrabold'
-                                  : 'text-zinc-400 hover:text-white hover:bg-white/5 font-medium'
+                                  ? themeMode === 'light'
+                                    ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
+                                    : 'bg-white/10 text-white font-extrabold'
+                                  : themeMode === 'light'
+                                  ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
+                                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
                               }`}
                             >
-                              <span>
-                                {room === '우리집'
-                                  ? '🏠 우리집'
-                                  : room === '본가(친가)'
-                                  ? '🏡 본가(친가)'
-                                  : '🌸 처가(친정)'}
-                              </span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="grayscale opacity-75 shrink-0 text-[13px]">{roomIcon}</span>
+                                <span className="truncate font-bold">{room}</span>
+                              </div>
                             </button>
                           );
                         })}
@@ -573,9 +589,16 @@ export const DesktopDashboard: React.FC = () => {
                           }`}
                         >
                           <div className="flex flex-col min-w-0 flex-1">
-                            <span className="truncate font-bold">{activeLoungeType === 'personal' && sub.id === 'trial' ? '🧹 귀신같이 청소 진단' : sub.label}</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="grayscale opacity-75 shrink-0 text-[13px]">{sub.icon}</span>
+                              <span className="truncate font-bold">
+                                {activeLoungeType === 'personal' && sub.id === 'trial'
+                                  ? '귀신같이 청소 진단'
+                                  : sub.label}
+                              </span>
+                            </div>
                             {sub.subcaption && (
-                              <span className="text-[11.5px] opacity-75 font-normal truncate">
+                              <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
                                 {sub.subcaption}
                               </span>
                             )}
@@ -598,7 +621,7 @@ export const DesktopDashboard: React.FC = () => {
                 )}
 
                 {menu.id === 'personal' && (
-                  <div className="flex flex-col gap-0.5 mt-1">
+                  <div className="flex flex-col gap-0.5 mt-0.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -606,18 +629,17 @@ export const DesktopDashboard: React.FC = () => {
                         setActiveLoungeType('personal');
                         setDesktopTab('sync');
                       }}
-                      className={`w-full px-2.5 py-2 rounded-xl font-label-md text-[14.5px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                      className={`w-full px-3 py-2 rounded-xl font-label-md text-[15px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
                         isDeviceIntegrationActive || isDeviceIntegrationOpen
                           ? themeMode === 'light'
-                            ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                            ? 'bg-[#E6F7F5] text-[#0F766E] font-extrabold'
                             : 'bg-zinc-800/90 text-primary-container font-extrabold'
                           : themeMode === 'light'
-                          ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-bold'
-                          : 'text-zinc-400 hover:text-white hover:bg-white/5 font-bold'
+                          ? 'text-slate-800 hover:text-slate-950 hover:bg-black/5 font-extrabold'
+                          : 'text-zinc-200 hover:text-white hover:bg-white/5 font-extrabold'
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[14px] shrink-0">👑</span>
+                      <div className="flex items-center min-w-0">
                         <span className="truncate" title="집PC · 회사PC · 스마트폰 통합 및 귀신 초능력 9+3">
                           내 기기 통합 (PC+폰+PC+)
                         </span>
@@ -630,7 +652,11 @@ export const DesktopDashboard: React.FC = () => {
                     </button>
 
                     {(isDeviceIntegrationActive || isDeviceIntegrationOpen) && (
-                      <div className="ml-4 pl-2.5 border-l border-white/10 flex flex-col gap-0.5 py-0.5">
+                      <div
+                        className={`ml-3.5 pl-2.5 border-l flex flex-col gap-0.5 py-0.5 ${
+                          themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
+                        }`}
+                      >
                         <button
                           type="button"
                           onClick={() => {
@@ -649,8 +675,11 @@ export const DesktopDashboard: React.FC = () => {
                           }`}
                         >
                           <div className="flex flex-col min-w-0 flex-1">
-                            <span className="truncate font-bold">🔗 내 모든 기기 통합</span>
-                            <span className="text-[11.5px] opacity-75 font-normal truncate">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
+                              <span className="truncate font-bold">내 모든 기기 통합</span>
+                            </div>
+                            <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
                               PC · 폰 · 서브PC 1초 연동
                             </span>
                           </div>
@@ -673,8 +702,11 @@ export const DesktopDashboard: React.FC = () => {
                           }`}
                         >
                           <div className="flex flex-col min-w-0 flex-1">
-                            <span className="truncate font-bold">⚡ 귀신 초능력 9+3</span>
-                            <span className="text-[11.5px] opacity-75 font-normal truncate">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="grayscale opacity-75 shrink-0 text-[13px]">⚡</span>
+                              <span className="truncate font-bold">귀신 초능력 9+3</span>
+                            </div>
+                            <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
                               Ctrl+0 귀신창 · 복사검색 · 상용구
                             </span>
                           </div>
