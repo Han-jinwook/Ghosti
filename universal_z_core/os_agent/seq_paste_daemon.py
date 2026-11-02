@@ -2004,8 +2004,11 @@ def main() -> None:
 
     msg = wintypes.MSG()
     if "--show-now" in sys.argv:
+        def _delayed_init_summon():
+            time.sleep(0.35)
+            trigger_master_summon()
         last_summon_ts = time.time()
-        trigger_master_summon()
+        threading.Thread(target=_delayed_init_summon, daemon=True).start()
     while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
         try:
             if msg.message == WM_HOTKEY:
