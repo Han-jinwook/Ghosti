@@ -1184,7 +1184,7 @@ export const DesktopDashboard: React.FC = () => {
                     className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-medium border border-white/10 flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[15px]">folder_open</span>
-                    <span>내 PC 서류함 폴더(test_docs) 열기</span>
+                    <span>내 PC 문서 폴더 열기</span>
                   </button>
                 </div>
 

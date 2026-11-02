@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-02T10:26:29.508716",
+  "updated_at": "2026-11-02T11:12:27.571843",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -370,6 +370,14 @@
       "last_edited_time": "2026-10-30T05:18:00.000Z",
       "url": "https://app.notion.com/p/Z-OS-3-3-5-1-408f9ffd2c1d817fbfc7f814a9f77a7f",
       "archived_at": "2026-11-02T10:26:29.505457"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-808a-8717-c1c85f9a5f69",
+      "title": "🎯[센스톡] 카톡 단체 전송시 내용이 중복되어 들어가는 건",
+      "app": "",
+      "last_edited_time": "2026-10-30T05:30:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d808a8717c1c85f9a5f69",
+      "archived_at": "2026-11-02T11:12:27.571333"
     }
   ]
 }

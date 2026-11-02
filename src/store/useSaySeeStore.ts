@@ -2892,7 +2892,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           target === 'quarantine'
             ? '🗑️ OS 기본 [휴지통] 이동 내역 폴더를 열었습니다.'
             : target === 'docs'
-            ? '📂 윈도우 탐색기에서 [로컬 스마트 서류함 (test_docs)] 폴더를 열었습니다.'
+            ? '📂 윈도우 탐색기에서 내 PC 문서 폴더를 열었습니다.'
             : '📂 윈도우 탐색기에서 원본 사진 폴더를 열었습니다.',
       });
     } catch {

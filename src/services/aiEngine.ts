@@ -47,7 +47,8 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
       fetch(getZCoreUrl('/__docs/list')),
       fetch('/poc/results/docs_semantic_index.json'),
     ]);
-    const merged = new Map<string, LocalDocumentFile>();
+
+    const staticByFileName = new Map<string, LocalDocumentFile>();
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
       const sJson = await sRes.value.json();
       const sDocs: LocalDocumentFile[] = Array.isArray(sJson.documents)
@@ -56,9 +57,10 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         ? sJson.docs
         : [];
       for (const d of sDocs) {
-        if (d && d.fileName) merged.set(d.fileName, d);
+        if (d && d.fileName) staticByFileName.set(d.fileName, d);
       }
     }
+
     if (zRes.status === 'fulfilled' && zRes.value.ok) {
       const zJson = await zRes.value.json();
       const zDocs: LocalDocumentFile[] = Array.isArray(zJson.documents)
@@ -66,15 +68,32 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         : Array.isArray(zJson.docs)
         ? zJson.docs
         : [];
-      for (const d of zDocs) {
-        const fname = d.fileName || (d as any).name;
-        if (!fname) continue;
-        if (!merged.has(fname)) {
-          merged.set(fname, d);
+      if (zDocs.length > 0) {
+        const realMerged = new Map<string, LocalDocumentFile>();
+        for (const d of zDocs) {
+          const fname = d.fileName || (d as any).name;
+          if (!fname || realMerged.has(fname)) continue;
+          const enriched = staticByFileName.get(fname);
+          if (enriched) {
+            realMerged.set(fname, {
+              ...enriched,
+              ...d,
+              title: enriched.title || d.title,
+              categoryBadge: enriched.categoryBadge || d.categoryBadge,
+              extractedText: enriched.extractedText || d.extractedText,
+              keywords: enriched.keywords?.length ? enriched.keywords : d.keywords,
+              vec: enriched.vec || d.vec,
+              path: d.path || enriched.path,
+            });
+          } else {
+            realMerged.set(fname, d);
+          }
         }
+        return Array.from(realMerged.values());
       }
     }
-    return Array.from(merged.values());
+
+    return Array.from(staticByFileName.values());
   } catch {
     return [];
   }
