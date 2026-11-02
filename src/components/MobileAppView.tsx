@@ -7,6 +7,7 @@ import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
+import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
 import {
@@ -686,6 +687,23 @@ export const MobileAppView: React.FC = () => {
                         <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2">
                           {doc.extractedText}
                         </p>
+                        <div className="pt-1.5 flex items-center justify-between gap-2 border-t border-white/10">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
+                                useSaySeeStore.setState({
+                                  lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
+                                });
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 font-label-sm text-[11px] font-extrabold cursor-pointer"
+                          >
+                            🔍 이 파일 바로 띄우기
+                          </button>
+                          <span className="text-primary-container text-[11px] font-bold">본문 →</span>
+                        </div>
                       </article>
                     ))}
                   </div>

@@ -1,0 +1,1 @@
+{"bundles":[{"asset":"63971272a81a65e1a8b31ae39c4deeb168068392b698244514230d8f5a430eef.eszip","format":"eszip2"}],"routes":[{"function":"models-mirror","pattern":"^/api/models-mirror(?:/(.*))/?$","excluded_patterns":[],"path":"/api/models-mirror/*"}],"post_cache_routes":[],"bundler_version":"14.0.6","layers":[],"import_map":"netlify:import-map","function_config":{}}

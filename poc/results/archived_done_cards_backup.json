@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-30T13:46:08.520517",
+  "updated_at": "2026-11-02T09:14:11.890341",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -306,6 +306,54 @@
       "last_edited_time": "2026-10-30T01:18:00.000Z",
       "url": "https://app.notion.com/p/2-408f9ffd2c1d8109a43dc3c8a7588c4a",
       "archived_at": "2026-10-30T13:46:08.520149"
+    },
+    {
+      "page_id": "405f9ffd-2c1d-81d8-b208-c8a409ec8f4e",
+      "title": "🎯 [센스톡] 5. Z-Core PC 카톡 자동 발송 & 엑셀 명단 변수 치환·긴급 멈춤(ESC) 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-10-30T04:00:00.000Z",
+      "url": "https://app.notion.com/p/5-Z-Core-PC-ESC-405f9ffd2c1d81d8b208c8a409ec8f4e",
+      "archived_at": "2026-10-30T14:19:57.594377"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-8042-8f59-c70a3c56fe11",
+      "title": "🎯[센스톡] 카톡 단체 전송 후 완료 상태가 다시 대기로 변하는 건",
+      "app": "",
+      "last_edited_time": "2026-10-30T04:03:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d80428f59c70a3c56fe11",
+      "archived_at": "2026-10-30T14:31:11.605104"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-8059-a33f-de7b19ad8567",
+      "title": "미션 카드 피드백 순서 관련",
+      "app": "",
+      "last_edited_time": "2026-10-30T04:04:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d8059a33fde7b19ad8567",
+      "archived_at": "2026-10-30T14:41:23.968911"
+    },
+    {
+      "page_id": "407f9ffd-2c1d-8165-9767-fe3dbff49cb3",
+      "title": "🎯 [귀신같이] [서브메뉴 ①: 🎯 찾기] 동영상·사진·문서 3대 통합 검색 & 타임라인 점프 & 연사 Pick & 꼬리물기 전수 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-30T04:17:00.000Z",
+      "url": "https://app.notion.com/p/3-Pick-407f9ffd2c1d81659767fe3dbff49cb3",
+      "archived_at": "2026-10-30T14:42:27.315090"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-81a8-8e87-e2bd0baea78b",
+      "title": "🎯 [귀신같이] [서브메뉴 ②: 🧹 치우기] 4대 카테고리(중복·연사/메모/캡처/흔들림) Pick 정리 & 실제 윈도우 휴지통 직행·1초 복원 & 대화형 폴더 청소 전수 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-30T04:33:00.000Z",
+      "url": "https://app.notion.com/p/4-Pick-1-408f9ffd2c1d81a88e87e2bd0baea78b",
+      "archived_at": "2026-10-30T15:01:44.313558"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-806f-b8f5-e8a92a400eaf",
+      "title": "🎯[귀신같이] 제트코어 파일명 관련 ",
+      "app": "",
+      "last_edited_time": "2026-10-30T04:36:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d806fb8f5e8a92a400eaf",
+      "archived_at": "2026-11-02T09:14:11.890145"
     }
   ]
 }

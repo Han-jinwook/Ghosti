@@ -236,6 +236,7 @@ export interface SwarmRetroScanReport {
 export interface LocalDocumentFile {
   id: string;
   fileName: string;
+  path?: string;
   ext: 'PDF' | 'TXT' | 'DOCX';
   title: string;
   categoryBadge: string;

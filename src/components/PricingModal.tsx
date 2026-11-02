@@ -3,6 +3,7 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import type { GpuHelperTierId, PricingPlanId } from '../types/saysee';
 import { LoungeModeSwitcherBar } from './LoungeView';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
+import { executeRealOsAction } from '../services/setupMonsterEngine';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 내 기기 1대 (기본) : 언제나 0원 (혼자 쓰는 내 기기 1대는 기간 제한 없이 언제나 0원입니다)',
@@ -1268,14 +1269,32 @@ export const LocalDocPreviewModal: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2.5 pt-2">
+        <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              void executeRealOsAction(
+                'open_file_search',
+                selectedDocModal.path || selectedDocModal.fileName
+              ).then((res) => {
+                useSaySeeStore.setState({
+                  lastQuarantineToast:
+                    res.summaryKo ||
+                    `📂 탐색기에서 [${selectedDocModal.fileName}] 파일을 바로 띄웠습니다.`,
+                });
+              });
+            }}
+            className="px-4 py-2.5 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
+          >
+            <span>🔍 탐색기에서 이 파일 바로 띄우기</span>
+          </button>
           <button
             type="button"
             onClick={() => void openLocalFolder('docs')}
             className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-[18px]">folder_open</span>
-            <span>로컬 서류함 폴더(test_docs) 열기</span>
+            <span>로컬 서류함 폴더 열기</span>
           </button>
           <button
             type="button"

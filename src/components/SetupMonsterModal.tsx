@@ -255,7 +255,7 @@ export const SetupMonsterContent: React.FC = () => {
   } = useSaySeeStore();
 
   const [showBlackboxPanel, setShowBlackboxPanel] = useState(false);
-  const [showRealOsPanel, setShowRealOsPanel] = useState(false);
+  const [showRealOsPanel, setShowRealOsPanel] = useState(true);
   const [showHealthHistoryDrawer, setShowHealthHistoryDrawer] = useState(false);
   const [healthHistoryRecords, setHealthHistoryRecords] = useState<DigitalHealthCheckRecord[]>(() =>
     loadLocalHealthCheckHistory()

@@ -3,6 +3,7 @@ import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults } from '../services/aiEngine';
+import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
 import {
@@ -1225,9 +1226,25 @@ export const DesktopDashboard: React.FC = () => {
                             </p>
                           </div>
 
-                          <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
+                          <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400 gap-2">
                             <span>{doc.date}</span>
-                            <span className="text-primary-container font-bold">본문 열람 →</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
+                                    useSaySeeStore.setState({
+                                      lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
+                                    });
+                                  });
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer"
+                              >
+                                🔍 이 파일 바로 띄우기
+                              </button>
+                              <span className="text-primary-container font-bold">본문 →</span>
+                            </div>
                           </div>
                         </article>
                       ))}

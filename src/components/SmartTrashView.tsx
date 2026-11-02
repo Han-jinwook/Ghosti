@@ -270,6 +270,14 @@ export const SmartTrashView: React.FC = () => {
 
             <button
               type="button"
+              onClick={() => useSaySeeStore.getState().setShowSetupMonsterModal(true, 'pc')}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-label-sm text-[12px] font-black transition-colors cursor-pointer whitespace-nowrap shadow-sm"
+            >
+              🛠️ PC·폰 고치기 &amp; 3초 파일 찾기
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowHealthHistoryDrawer((v) => !v)}
               className="px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
             >
