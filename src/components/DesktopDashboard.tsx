@@ -440,6 +440,7 @@ export const DesktopDashboard: React.FC = () => {
             themeMode={themeMode}
             showBadge={true}
             onClick={() => {
+              setActiveLoungeType('personal');
               setDesktopTab('dashboard');
               resetToZenCanvas();
               if (isMobileDrawer) setIsMobileDrawerOpen(false);
@@ -678,6 +679,7 @@ export const DesktopDashboard: React.FC = () => {
                       themeMode={themeMode}
                       showBadge={true}
                       onClick={() => {
+                        setActiveLoungeType('personal');
                         setDesktopTab('dashboard');
                         resetToZenCanvas();
                       }}
@@ -690,6 +692,7 @@ export const DesktopDashboard: React.FC = () => {
                   themeMode={themeMode}
                   showBadge={true}
                   onClick={() => {
+                    setActiveLoungeType('personal');
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
                   }}

@@ -316,7 +316,14 @@ export const MobileAppView: React.FC = () => {
                 themeMode={themeMode}
                 showBadge={false}
                 subtitle=""
-                onClick={() => setMobileTab('search')}
+                onClick={() => {
+                  setActiveLoungeType('personal');
+                  setMobileTab('search');
+                  useSaySeeStore.setState({
+                    hasExecutedUserSearch: false,
+                    hasUserSelectedSearchTab: false,
+                  });
+                }}
                 className="shrink-0 max-w-full"
               />
             </div>
