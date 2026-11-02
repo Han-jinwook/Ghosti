@@ -104,7 +104,7 @@ export const App: React.FC = () => {
       localStorage.setItem('ghosti_onboarding_completed', 'true');
       localStorage.setItem('ghosti_view_mode', 'workspace');
     } catch {}
-    playAppEnterGiggleSound(true);
+    playAppEnterGiggleSound();
     setViewMode('workspace');
   };
 
