@@ -515,7 +515,7 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
 
         return tok
 
-    morphed = re.sub(r"[A-Za-z\u3131-\u318E\uAC00-\uD7A3]+", replace_token, text)
+    morphed = re.sub(r"(?<![A-Za-z0-9_])[A-Za-z\u3131-\u318E\uAC00-\uD7A3]+(?![A-Za-z0-9_])", replace_token, text)
     return morphed, target_lang
 
 
@@ -2252,14 +2252,8 @@ def main() -> None:
                             last_self_text = None
                             disarm_sub_hotkeys()
 
-                            # [②번 오토매틱 모드]: 단건 어절/문장 복사 시 명백한 한영 오타(예: wlswkdi, ㅡㄷ갸ㅜ)면 자동으로 성형 및 한/영 키 전환!
-                            if len(copied.strip()) <= 40 and "\n" not in copied:
-                                morphed, target_lang = morph_korean_english_text_with_direction(copied)
-                                if morphed != copied and target_lang is not None:
-                                    copied = morphed
-                                    daemon_set_clipboard(copied)
-                                    set_ime_language(target_korean=(target_lang == "KO"))
-                                    show_ghost_toast(f"👻 귀신같이 오토한영 ({copied.strip()})")
+                            # [비밀번호/코드 보호 핫픽스]: 단순 클립보드 복사(Ctrl+C) 시에는 자동 한영 성형을 수행하지 않음!
+                            # (오직 ① 실시간 키보드 2어절 연속 타이핑 + Space 또는 ② Ctrl+0 -> 2번 명시적 호출 시에만 변환)
 
                             record_ai_history(copied)
 

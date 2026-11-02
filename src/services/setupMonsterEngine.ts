@@ -155,7 +155,20 @@ export async function launchRealOsTopmostOverlay(params: {
 }
 
 export async function executeRealOsAction(
-  action: 'open_file_location' | 'open_file_search' | 'open_file_direct' | 's_drive_mount' | 's_drive_unmount' | 'shadow_backup' | 'inspect',
+  action:
+    | 'open_file_location'
+    | 'open_file_search'
+    | 'open_file_direct'
+    | 's_drive_mount'
+    | 's_drive_unmount'
+    | 'shadow_backup'
+    | 'inspect'
+    | 'boot_lag_diagnose'
+    | 'boot_lag_emergency_reset'
+    | 'boot_lag_schedule_reboot'
+    | 'boot_lag_clean_bloatware'
+    | 'defender_status'
+    | 'defender_quick_scan',
   targetPath?: string
 ): Promise<{ ok: boolean; message?: string; summaryKo?: string; [k: string]: unknown }> {
   try {
@@ -396,6 +409,22 @@ export interface SetupSymptomChip {
 }
 
 export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
+  {
+    id: 'pc_boot_lag_care',
+    platform: 'pc',
+    label: '🚀 부팅·버벅임 1초 케어 (고클린·구라제거기 대체)',
+    trackBadge: 'Track A · 원클릭 케어',
+    levelBadge: '🟢 Level 1 · 언제나 0원 (무료)',
+    query: '컴퓨터를 안 끄고 오래 켜둬서 창 이동이 버벅거리는데 창 안 닫고 1초 응급 렉 풀기랑 은행 보안 프로그램 정리해줘',
+  },
+  {
+    id: 'pc_defender_security',
+    platform: 'pc',
+    label: '🛡️ 바이러스·랜섬웨어 안심 점검 (알약 대체)',
+    trackBadge: 'Track A · 순정 백신 관제',
+    levelBadge: '🟢 Level 1 · 언제나 0원 (무료)',
+    query: '알약 대신 윈도우 순정 백신(디펜더)으로 바이러스·랜섬웨어 방어막이 잘 켜져 있는지 1초 점검해줘',
+  },
   {
     id: 'pc_laptop_noise_overlay',
     platform: 'pc',

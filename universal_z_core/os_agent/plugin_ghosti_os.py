@@ -1197,6 +1197,15 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
         q = str(data.get("query") or data.get("q") or "").strip()
         return scan_g_drive_google_docs_and_sheets(q)
 
+    if act in ("boot-lag-care", "boot_lag_care"):
+        sub = str(data.get("subAction") or data.get("mode") or "diagnose").strip()
+        param = str(data.get("targetParam") or data.get("scheduleTime") or "04:00").strip()
+        return zos.run_boot_lag_care(sub, param)
+
+    if act in ("defender-security-check", "defender_security_check", "defender-check"):
+        sub = str(data.get("subAction") or data.get("mode") or "status").strip()
+        return zos.run_defender_security_check(sub)
+
     if act in ("execute", "os-execute"):
         exec_action = str(data.get("action") or "inspect").strip()
         target = str(data.get("targetPath") or data.get("target") or "").strip()

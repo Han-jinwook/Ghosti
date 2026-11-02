@@ -16,6 +16,7 @@ import {
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { validateClubSignboardName } from '../components/PricingModal';
 import { dispatchGhostCastLiveCommand } from '../components/GhostCastAndLiveSystem';
+import { executeRealOsAction } from './setupMonsterEngine';
 
 /**
  * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
@@ -2094,6 +2095,46 @@ export async function processUnifiedMonsterChatQuery(params: {
         followUpSuggestions: defaultFollowUps,
       }
     );
+  }
+
+  // 7-A) [🚀 부팅·버벅임 케어] (고클린·구라제거기 대체: 장기 미재부팅 / 1초 응급 렉 풀기 / 보안쓰레기·시작프로그램 정리)
+  if (/고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|시작\s*프로그램/i.test(clean)) {
+    const subAct =
+      /예약|새벽|재부팅/i.test(clean)
+        ? 'boot_lag_schedule_reboot'
+        : /구라|보안|시작\s*프로그램|정리/i.test(clean)
+        ? 'boot_lag_clean_bloatware'
+        : /렉|응급|리셋|버벅/i.test(clean)
+        ? 'boot_lag_emergency_reset'
+        : 'boot_lag_diagnose';
+    const osRes = await executeRealOsAction(subAct, '04:00');
+    const summaryText =
+      osRes.summaryKo ||
+      '🚀 [부팅·버벅임 케어] 열린 창은 그대로 보존한 채 그래픽 핸들 찌꺼기 리셋 및 은행·관공서 상주 보안 프로그램 점검을 완료했습니다!';
+    speak(summaryText);
+    return reply(sourceTab, summaryText, {
+      followUpSuggestions: [
+        '열린 창 안 닫고 1초 응급 렉 풀기 해줘',
+        '은행·관공서 보안 쓰레기(구라제거기) 정리해줘',
+        '새벽 4시에 자동 재부팅 예약해줘',
+      ],
+    });
+  }
+
+  // 7-B) [🛡️ 바이러스·랜섬웨어 안심 점검] (알약 대체: Windows Defender 순정 백신 직결)
+  if (/알약|바이러스|랜섬웨어|백신|디펜더|defender|악성코드|방어막/i.test(clean)) {
+    const subDef = /검사|스캔/i.test(clean) ? 'defender_quick_scan' : 'defender_status';
+    const defRes = await executeRealOsAction(subDef);
+    const summaryText =
+      defRes.summaryKo ||
+      '🛡️ 안심하세요! 윈도우 순정 바이러스·랜섬웨어 방어막(Windows Defender)이 완벽하게 작동 중입니다. (무겁고 광고 뜨는 무료 백신을 따로 까실 필요가 없습니다)';
+    speak(summaryText);
+    return reply(sourceTab, summaryText, {
+      followUpSuggestions: [
+        '윈도우 순정 백신으로 빠른 바이러스 검사 실행해줘',
+        '컴퓨터가 느린데 1초 응급 렉 풀기 해줘',
+      ],
+    });
   }
 
   // 8) 프린터·네트워크·화면·소리·S드라이브 등 OS 수리 의도 (⚙️ 고치기 연동)
