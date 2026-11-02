@@ -422,16 +422,16 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
                 : '👆 화면 위 화살표 안내'}
             </span>
           </div>
-          <span className="px-2.5 py-0.5 rounded-md bg-pink-500/15 border border-pink-400/40 font-label-sm text-[11px] text-pink-200 font-extrabold">
+          <span className="px-2.5 py-0.5 rounded-md bg-pink-500/15 border border-pink-400/40 font-label-sm text-[11px] text-pink-800 dark:text-pink-200 font-extrabold">
             🆓 개인 (기본) : 언제나 0원 · 수리 전 상태 자동 백업 & 1초 원상복구 보장
           </span>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h4 className="font-headline-sm text-[16px] !text-white font-extrabold tracking-wide drop-shadow-sm">
+          <h4 className="font-headline-sm text-[16px] text-slate-900 dark:text-white font-extrabold tracking-wide drop-shadow-sm">
             {plan.title}
           </h4>
-          <p className="font-body-sm text-[13px] !text-zinc-100 font-medium leading-relaxed">
+          <p className="font-body-sm text-[13px] text-slate-700 dark:text-zinc-100 font-medium leading-relaxed">
             {plan.rootCause}
           </p>
         </div>
@@ -1202,7 +1202,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
                     className="p-3 rounded-xl bg-pink-950/25 border border-pink-400/40 flex flex-col gap-1"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-label-sm text-[11.5px] text-pink-200 font-extrabold">
+                      <span className="font-label-sm text-[11.5px] text-pink-800 dark:text-pink-200 font-extrabold">
                         [{ota.trajectoryGradeBadgeKo}] {ota.title} (언제나 0원)
                       </span>
                       <span className="font-mono text-[10.5px] text-zinc-400">

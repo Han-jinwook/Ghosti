@@ -270,6 +270,8 @@ html.theme-warm-light .border-white\/25 {
 html.theme-warm-light .text-white:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *):not([class*="bg-emerald-500"]):not([class*="bg-indigo-500"]):not([class*="bg-rose-500"]):not([class*="bg-fuchsia-500"]),
 html.theme-warm-light .text-zinc-100:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-slate-100:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light .\!text-white:not([data-keep-dark="true"] *),
+html.theme-warm-light .\!text-zinc-100:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-on-surface:not([data-keep-dark="true"] *) {
   color: #1E293B !important;
 }
@@ -296,7 +298,13 @@ html.theme-warm-light .text-slate-500:not([data-keep-dark="true"] *) {
 html.theme-warm-light .text-primary-container:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-cyan-200:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-cyan-300:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-cyan-100:not([data-keep-dark="true"] *) {
+html.theme-warm-light .text-cyan-100:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-cyan-400:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-teal-100:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-teal-200:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-teal-300:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-teal-400:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-\[\#00F0B5\]:not([data-keep-dark="true"] *) {
   color: #0F766E !important;
 }
 
@@ -383,8 +391,34 @@ html.theme-warm-light .text-fuchsia-300:not([data-keep-dark="true"] *) {
 }
 
 html.theme-warm-light .text-rose-200:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-rose-300:not([data-keep-dark="true"] *) {
+html.theme-warm-light .text-rose-100:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-rose-300:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-rose-400:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-pink-100:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-pink-200:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-pink-300:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-pink-400:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-red-200:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-red-300:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-red-400:not([data-keep-dark="true"] *) {
   color: #BE123C !important;
+}
+
+html.theme-warm-light .text-sky-100:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-sky-200:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-sky-300:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-sky-400:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-blue-200:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-blue-300:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-blue-400:not([data-keep-dark="true"] *) {
+  color: #0369A1 !important;
+}
+
+html.theme-warm-light [class*="bg-teal-950"]:not([data-keep-dark="true"]),
+html.theme-warm-light [class*="bg-teal-900"]:not([data-keep-dark="true"]) {
+  background-color: #F0FDFA !important;
+  border-color: #2DD4BF !important;
+  color: #0F766E !important;
 }
 
 /* 8. 솔리드 포인트 버튼 (primary-container 등) 화이트 바탕 위 시인성 강화 */
