@@ -512,47 +512,6 @@ export const DesktopDashboard: React.FC = () => {
                       themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
                     }`}
                   >
-                    {/* 패밀리 라운지일 때: 우리집 / 본가 / 처가 방 전환 트리 */}
-                    {menu.id === 'family' && (
-                      <div
-                        className={`flex flex-col gap-0.5 pb-1 mb-1 border-b ${
-                          themeMode === 'light' ? 'border-slate-200/70' : 'border-white/5'
-                        }`}
-                      >
-                        {FAMILY_ROOMS.map((room) => {
-                          const roomActive =
-                            desktopTab === 'dashboard' && activeFamilyRoom === room;
-                          const roomIcon =
-                            room === '우리집' ? '🏠' : room === '본가(친가)' ? '🏡' : '🌸';
-                          return (
-                            <button
-                              key={room}
-                              type="button"
-                              onClick={() => {
-                                setActiveFamilyRoom(room);
-                                setDesktopTab('dashboard');
-                                if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                              }}
-                              className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between transition-all cursor-pointer ${
-                                roomActive
-                                  ? themeMode === 'light'
-                                    ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
-                                    : 'bg-white/10 text-white font-extrabold'
-                                  : themeMode === 'light'
-                                  ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
-                                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="grayscale opacity-75 shrink-0 text-[13px]">{roomIcon}</span>
-                                <span className="truncate font-bold">{room}</span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
                     {/* 해당 라운지의 서브메뉴 트리 */}
                     {currentSubmenus.map((sub) => {
                       if (sub.id === 'trial' && isCurrentLoungeSubscribed) return null;
