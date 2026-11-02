@@ -2,44 +2,39 @@
 
 ---
 
-## 🕒 [2026-11-02 03:12 KST 세션 체크아웃 완료 인계 기록]
+## 🕒 [2026-11-02 15:53 KST 세션 체크아웃 완료 인계 기록]
 
-- **세션 제목**: 무소음브레이크·특허7·8호검토
+- **세션 제목**: 노션QA4건·UI정비·우체국감시
 
 ### 1. 이번 세션에서 완료한 핵심 작업 요약
-1. **[『3단 무소음 인덱싱 브레이크』 및 『밑바닥 하드웨어 보호 4대 알고리즘』 전면 구현 및 배포 (`605050b`, `f2c4b01`)]:**
-   - **엔진 로직 ([`silentIndexingBrake.ts`](file:///d:/Ghosti/src/services/silentIndexingBrake.ts), [`aiEngine.ts`](file:///d:/Ghosti/src/services/aiEngine.ts))**:
-     - **1단계 (초고속 메타 수집 + 최근 90일 우선 인덱싱 + 과거 검색어 새치기 `On-Demand Priority Jump`)**: 드라이브 전체 메타데이터는 1초 만에 개방하고, 딥러닝 임베딩은 최근 90일부터 정렬 처리. 과거 키워드 검색 시 대기열 맨 앞으로 즉시 새치기(`prioritizeArchiveFilesForQuery`)하여 '옛날 파일 0건 실망' 원천 방어.
-     - **2단계 (유휴 스로틀링 & CPU 점유율 15% 캡)**: 포그라운드 작업 시 2개 처리 후 250ms 강제 Yield로 15% 이하 유지.
-     - **3단계 (모바일 배터리/발열 방어)**: 화면 On 조작 시 대기, Wi-Fi/충전 시 가속.
-   - **유저 안심 상태 안내 UI ([`SilentIndexingStatusBar.tsx`](file:///d:/Ghosti/src/components/SilentIndexingStatusBar.tsx), [`VoiceHeroStage.tsx`](file:///d:/Ghosti/src/components/VoiceHeroStage.tsx), [`LoungeView.tsx`](file:///d:/Ghosti/src/components/LoungeView.tsx))**:
-     - 검색창 하단 및 라운지 상단에 1줄 안심 배너 노출 + **`[⚡ 지금 전체 고속 정리]` ⇄ `[🍃 무소음 모드로 전환]` 양방향 즉시 토글** + `[🛡️ CPU 14% · RAM 215MB]` 실시간 텔레메트리 칩 장착.
-   - **밑바닥 하드웨어 4대 안전망 내장**:
-     - ① 프로세스/스레드 우선순위 최하위 고정 (`BELOW_NORMAL_PRIORITY_CLASS`, [`plugin_ghosti_os.py`](file:///d:/Ghosti/universal_z_core/os_agent/plugin_ghosti_os.py))
-     - ② CPU 코어 50% 상한 캡 (`SetProcessAffinityMask`)
-     - ③ 메모리 500MB 상한 강제 릴리즈 (20개 단위 캐시 해제, `gc.collect()`, 워킹셋 트림)
-     - ④ 모바일 40℃ · 배터리 20% 써멀 쿨다운 (안드로이드 배터리 API + iOS Safari 추론 1.8x 지연 감지 하이브리드)
+1. **[해나라님 노션 QA 칸반 보드 이슈 전건 수정·실서버 배포 및 '재테스트 대기' 완료 (`b5898b2` ~ `6e2d63f`)]**:
+   - **① 전체 디자인 및 색상·레이아웃 정리 (`40cf9ffd-2c1d-8028-a67e-e4d18624ad8d`, `40bf9ffd-2c1d-810a-8d10-cc60837fc48e`)**:
+     - **검색창 위아래 가이드/칩 일원화**: `[🎯 찾기]` 및 `[✋ 손보기]` 화면 밖에 흩어져 있던 추천 힌트 칩·중복 가이드를 제거하고 상단 `[📖 온보딩/가이드]` 모달 내부로 통합하여 노션형 백지 도화지(Zen Canvas) 완성.
+     - **검색 탭 순서 및 사진 그리드 확장**: 검색 캡슐 탭 및 전체 펼치기 버튼 순서를 **`[사진] ➔ [동영상] ➔ [문서]`**로 변경하고, 사진 검색 결과 그리드를 8열(`lg:grid-cols-8`)로 확장.
+     - **사진 정리함 `3열 / 5열` 보기 전환 및 즐겨찾기 시인성 개선**: [`SmartTrashView.tsx`](file:///d:/Ghosti/src/components/SmartTrashView.tsx) 전 사진 탭에 **`3열 / 5열`** 전환 토글을 추가하고, 밝은 사진 위에서도 잘 보이도록 즐겨찾기 하트를 선명한 빨간색 배지(`bg-red-600/95 text-white`, `'FILL' 1`)로 개선.
+     - **손보기 타이포그래피 확대 & 채팅창 우측 상단 Sticky 고정**: `💬 기기 3대 핵심 건강검진` 영역 글씨 크기를 1~2단계 키우고, `[검진 항목 펼치기 ▾]` 바로 옆에 `[📋 내 검진 기록함]` 버튼 배치 및 우측 채팅창을 `lg:sticky lg:top-20`으로 고정하여 좌측 본문 스크롤 시에도 따라 내려가지 않도록 고정.
+     - **감사로그 상단 이동**: [`SetupMonsterModal.tsx`](file:///d:/Ghosti/src/components/SetupMonsterModal.tsx)의 `[📋 감사로그]` 패널이 상단 헤더 바로 아래에서 펼쳐지도록 위치 개선.
+   - **② 좌측 상단 `귀신같이` 브랜드 로고 클릭 시 메인 복귀 버그 수정 (`40cf9ffd-2c1d-80c5-b701-e4cdd3495560`)**:
+     - [`DesktopDashboard.tsx`](file:///d:/Ghosti/src/components/DesktopDashboard.tsx) 및 [`MobileAppView.tsx`](file:///d:/Ghosti/src/components/MobileAppView.tsx)에서 로고 클릭 시 `setActiveLoungeType('personal')` + `setDesktopTab('dashboard')` + `resetToZenCanvas()`가 함께 호출되도록 수정.
+   - **③ 센스톡 거대 SVG 아이콘 FOUC 버그 원천 차단**:
+     - [`index.html`](file:///d:/Ghosti/index.html)에 전역 `<style>svg:not([width]):not([height]) { max-width: 100%; }</style>` 가드를 추가하고 [`HubAppSwitcher.tsx`](file:///d:/Ghosti/src/services/merlin-hub-sdk/Navigation/HubAppSwitcher.tsx)의 SVG에 명시적 `width`/`height` 속성을 부여하여 스타일시트 지연 시에도 아이콘이 거대하게 렌더링되지 않도록 방어.
+   - **④ 찾기(`1초 투시검색 & 도화지`) 동영상 중반부 구간 점프·문서 노란색 하이라이트·무마스킹 복사 수정 (`40bf9ffd-2c1d-81cf-b658-d2ccdb6d401f`)**:
+     - **동영상 중반부 구간 점프(`00:08`, `00:12` 등) 재생 보장**: [`PricingModal.tsx`](file:///d:/Ghosti/src/components/PricingModal.tsx)의 [`VideoScenePreviewModal`](file:///d:/Ghosti/src/components/PricingModal.tsx#L1364)에 인메모리 Blob Byte-Range 캐싱(`videoBlobUrlCache`)과 [`merlin_z_core_daemon.py`](file:///d:/Ghosti/universal_z_core/os_agent/merlin_z_core_daemon.py#L165-L202) HTTP `206 Partial Content`(`Accept-Ranges: bytes`) 지원을 동시 적용하여 중반부 클릭 시 도입부(`00:00`)로 초기화되던 현상 해결.
+     - **문서 본문 검색어 노란색 형광펜 하이라이트 & `[📋 복사]` 버튼**: [`renderHighlightedDocText`](file:///d:/Ghosti/src/components/PricingModal.tsx#L1206)를 구현해 문서 카드·상세 모달에서 검색어를 노란색(`<mark className="bg-amber-300 ...">`)으로 하이라이트하고, G: 드라이브 무마스킹 계정 원장 및 `[📋 복사]` 원터치 버튼을 문서 카드와 모달에 연동.
+     - **미션 카드 체크리스트 문구 현행화**: 삭제된 `'추천 힌트 칩'` 문구로 인해 테스터가 혼동하지 않도록 노션 미션 카드(`40bf9ffd-2c1d-81cf-b658-d2ccdb6d401f`)의 1~4번 설명 문구를 현재 화면 구조에 맞게 교정.
 
-2. **[대표 주력 상품명 및 기획서 전면 정비 (In-Place 최신화)]:**
-   - 대표 주력 상품명: **`👑 내 기기 통합`** (월 3,900원 / 1차 5년 특판 39,000원) 원안 최종 확정.
-   - [`귀신같이_기획서.md`](file:///d:/Ghosti/docs/귀신같이_기획서.md) & [`기능명세.md`](file:///d:/Ghosti/docs/기능명세.md): 구버전 가격표(`1인 3대 0원`, `10년권`) 완전 삭제, v3.0 통합 요금제 통일, 모바일 화면읽기/코인 에스크로 구버전 도려냄.
-   - [`MonsterStandardChatColumn.tsx`](file:///d:/Ghosti/src/components/MonsterStandardChatColumn.tsx): `[🪄 손보기]` 대화창 최상단 고정 안심 배너(`"원래대로 돌려줘"` / `"1번 복원해줘"` 타이핑 복구 안내) 장착.
-   - 외부 AI 교차검증 3대 디테일(`무설치 100개 샌드박스`, `랜선 뽑기 쇼츠`, `카톡 13KB 무가입 프리뷰`) 기획서 15절 반영.
+2. **[실시간 감시병(`z_core_watcher.py --watch`) 전사 중앙 우체국 + 노션 보드 동시 감시 고도화]**:
+   - [`z_core_watcher.py`](file:///d:/Ghosti/z_core_watcher.py)의 `--watch` 루프가 노션 QA 보드뿐만 아니라 15초 주기로 전사 중앙 우체국(`D:\Secretary\post_office\`)의 `Ghosti_` 및 `ALL_` 미열람 문서를 실시간 감지하여 즉시 에이전트를 깨우도록 업그레이드.
 
-3. **[KIPO 추가 2대 특허(제7호, 제8호) 출원명세서 및 NotebookLM 분석 검토 완료]**:
-   - 비서 및 NotebookLM 교차 검증:
-     - 제7호: 무후크 한영 오타 교정 단독 카피 방어용 독립항 추가 및 특허법 제45조 단일성(STF) 방어(온디바이스 언어모델 토크나이저 & 무후크 클립보드 스왑 파이프라인 결합).
-     - 제8호: 독립항 제1항·제9항 모바일 백그라운드 샌드박스 제약(로컬 큐 선적재 후 포그라운드/키보드 호출 시 승격 주입 `Promoted Injection`) 반영 및 사전 설정 슬롯 기반 이원화 버퍼(실제 스펙 100건+10장).
-     - 모니터 캐스트 사출 방향(스마트폰 ➔ PC 대화면 모니터 클린 뷰어) 및 3단 무소음 브레이크 아키텍처 정합성 교정 완료.
-
-4. **[전사 중앙 우체국 100% 처리 및 푸시]**:
-   - 수신 공문 전건 `(읽음)` 처리 완료.
-   - 답변 메일(`Secretary_Ghosti_답변_외부AI최종교정3대디테일반영완료_20261102_0309.md`) 발송 및 `Secretary` 레포 Git 푸시 완료.
+3. **[직전 세션 핵심 완료 사항 유지 확인]**:
+   - 『3단 무소음 인덱싱 브레이크』 및 『밑바닥 하드웨어 보호 4대 알고리즘』([`silentIndexingBrake.ts`](file:///d:/Ghosti/src/services/silentIndexingBrake.ts), [`SilentIndexingStatusBar.tsx`](file:///d:/Ghosti/src/components/SilentIndexingStatusBar.tsx), [`plugin_ghosti_os.py`](file:///d:/Ghosti/universal_z_core/os_agent/plugin_ghosti_os.py)) 정상 가동 중.
+   - KIPO 추가 특허 제7호·제8호 출원명세서 및 `👑 내 기기 통합` 요금제 기획서·기능명세서 최신 상태 유지.
 
 ---
 
 ### 2. 다음 세션 최우선 과제 🚨
-1. **[1순위] 특허 제7호·제8호 KIPO 최종 출원 명세서 및 NotebookLM 원장 반영 확인**:
-   - 비서가 작업 중인 [`[NotebookLM_전달용]_귀신같이_추가특허_제7호_제8호_KIPO출원명세서_및_최신기획서.md`](file:///d:/Secretary/docs/프로젝트별_문서/Patent_특허상표/[NotebookLM_전달용]_귀신같이_추가특허_제7호_제8호_KIPO출원명세서_및_최신기획서.md) 최종본 동기화 상태 점검.
-2. **[2순위] 노션 QA 칸반 보드 연동 대기**:
-   - `모니터 크게 보기` / `다 같이 보기` 및 `무소음 인덱싱 브레이크`는 멀린님 지침대로 노션 미등록 상태 유지 중이며, 향후 공유방 작업 시 알바생 검증 미션 카드 발행.
+1. **[1순위] 해나라님 노션 QA `'재테스트 대기'` 카드 검수 결과 모니터링 및 후속 대응**:
+   - 체크인 즉시 `z_core_watcher.py --watch`(`IsDaemon=true`)를 기동하여 노션 `'발견된 버그'` 및 우체국 수신 공문 실시간 감시.
+   - **원칙 준수**: 단순 디자인·UI·시인성 개선 요청은 에이전트가 즉시 반영·배포하되, **기능·정책·기획 변경이 수반되는 요청은 반드시 멀린님께 먼저 보고 및 상의 후 진행**.
+2. **[2순위] 특허 제7호·제8호 KIPO 출원 명세서 및 공유방 후속 일정 점검**:
+   - 비서(Secretary) 우체국 공문 수신 여부 확인 및 공유방(`모니터 크게 보기` / `다 같이 보기`) 후속 QA 일정 대응.
