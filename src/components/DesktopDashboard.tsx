@@ -187,7 +187,6 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   ],
   family: [
     { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
-    { id: 'dashboard', icon: '🖼️', label: '우리집·본가·처가 앨범' },
     { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
     { id: 'sync', icon: '⚙️', label: '가족 초대 & 방 관리' },
   ],
