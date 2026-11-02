@@ -182,7 +182,7 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 > = {
   personal: [
     { id: 'dashboard', icon: '🔍', label: '찾기', subcaption: '제목 몰라도 1초 검색' },
-    { id: 'trash', icon: '✋', label: '손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
+    { id: 'trash', icon: '✋', label: '치우기 & 손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
   ],
   family: [
     { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
@@ -323,7 +323,7 @@ export const DesktopDashboard: React.FC = () => {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isCanvasExpanded, setIsCanvasExpanded] = useState(false);
   const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
-  const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
+  const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(true);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
   const [superpowerStatus, setSuperpowerStatus] = useState<SuperpowerTrialStatus | null>(null);
 

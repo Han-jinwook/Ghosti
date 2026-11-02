@@ -8,7 +8,6 @@ import {
 } from '../services/monsterChatRouter';
 import { PersonalHealthCheckHistoryDrawer } from './MonsterInteractiveCards';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
-import { SetupMonsterContent } from './SetupMonsterModal';
 import {
   zCoreBridge,
   isZCoreOutdated,
@@ -226,7 +225,7 @@ export const SmartTrashView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-col gap-0.5">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  <span>✋ 귀신같이 손보기</span>
+                  <span>✋ 치우기 &amp; 손보기</span>
                 </h1>
               </div>
 
@@ -269,18 +268,7 @@ export const SmartTrashView: React.FC = () => {
               🆓 개인 (기본) : 언제나 0원
             </span>
 
-            <button
-              type="button"
-              onClick={() => {
-                document.getElementById('ghosti-inline-setup-monster')?.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'start',
-                });
-              }}
-              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-label-sm text-[12px] font-black transition-colors cursor-pointer whitespace-nowrap shadow-sm"
-            >
-              🛠️ PC·폰 고치기 &amp; 3초 파일 찾기 ↓
-            </button>
+
 
             <button
               type="button"
@@ -1240,10 +1228,7 @@ export const SmartTrashView: React.FC = () => {
         )}
       </section>
 
-      {/* ─────────────── 6. [한 화면 통합] 🛠️ PC·스마트폰 설정·수리 & 🔍 3초 실물 파일 스캔 (팝업 없이 바로 표시) ─────────────── */}
-      <section id="ghosti-inline-setup-monster" className="w-full scroll-mt-4">
-        <SetupMonsterContent embedded={true} />
-      </section>
+
         </div>
 
         {/* ═══════════════ [우측 1열] 통상의 채팅창 (본문이 스크롤되어도 화면 우측에 항상 고정) ═══════════════ */}

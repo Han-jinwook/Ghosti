@@ -9,7 +9,6 @@ import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../t
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { PcMasterQuickSendPanel } from './PricingModal';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
-import { SetupMonsterContent } from './SetupMonsterModal';
 import { GhostCastLiveToolbar } from './GhostCastAndLiveSystem';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 
@@ -3853,7 +3852,81 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   };
 
   if (activeLoungeType === 'personal') {
-    return <SetupMonsterContent />;
+    return (
+      <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
+                👑 내 기기 통합 (PC + 폰 + 서브PC)
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
+                클라우드 요금 0원 · 100% 직결 동기화
+              </span>
+            </div>
+            <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
+              🔗 내 모든 기기 통합 센터 (집 PC · 회사 PC · 스마트폰)
+            </h1>
+            <p className="text-[13px] text-zinc-400">
+              같은 이메일 하나로 집 컴퓨터, 사무실 컴퓨터, 내 스마트폰의 사진·동영상·서류를 클라우드 업로드 없이 1초 만에 하나로 묶어 찾습니다.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent('ghosti_open_onboarding_tab', {
+                    detail: { tab: 'tab1_find_care' },
+                  })
+                );
+              }}
+              className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm"
+            >
+              📱 스마트폰 1초 연결 QR · 이메일 연동
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowProModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm"
+            >
+              👑 내 기기 통합 요금제 (월 3,900원 / 5년 특판)
+            </button>
+          </div>
+        </div>
+
+        {/* 3대 기기 연결 슬롯 현황 카드 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-white/10">
+          <div className="p-4 rounded-xl bg-zinc-950/80 border border-primary-container/40 flex flex-col justify-between gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-extrabold text-primary-container">💻 기기 1 · 메인 PC (현재 기기)</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">연결됨</span>
+            </div>
+            <p className="text-[13px] text-white font-bold">내 데스크톱 / 노트북 원본 보관소</p>
+            <span className="text-[11.5px] text-zinc-400">로컬 디스크 원본 100% 직결 탐색</span>
+          </div>
+
+          <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-extrabold text-zinc-200">📱 기기 2 · 내 스마트폰 (갤럭시 / 아이폰)</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-extrabold">QR 1초 연동 대기</span>
+            </div>
+            <p className="text-[13px] text-white font-bold">폰 사진 자동 백업 &amp; 밖에서 내 PC 검색</p>
+            <span className="text-[11.5px] text-zinc-400">폰 용량 99.4% 절약 모드 지원</span>
+          </div>
+
+          <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-extrabold text-zinc-200">🖥️ 기기 3 · 서브 PC (회사 / 집 2호기)</span>
+              <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 text-[11px] font-extrabold">추가 가능</span>
+            </div>
+            <p className="text-[13px] text-white font-bold">집 ↔ 사무실 PC 양방향 투시 검색</p>
+            <span className="text-[11.5px] text-zinc-400">동일 이메일 로그인 시 자동 묶기</span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (activeLoungeType === 'family') {
