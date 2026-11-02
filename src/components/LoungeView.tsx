@@ -3254,8 +3254,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             </div>
           </div>
         ) : (
-            {/* 🎯 ✨ AI 얼굴 자동 매칭 도우미 + 👑 방장 누락분 & 연도 제보 일괄 승인 */}
-            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
+          /* 🎯 ✨ AI 얼굴 자동 매칭 도우미 + 👑 방장 누락분 & 연도 제보 일괄 승인 */
+          <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-primary-container/30 flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
                   ✨ AI 얼굴 자동 매칭 도우미
