@@ -4,8 +4,24 @@ Write-Host "==========================================================" -Foregro
 Write-Host "  [1/4] Preparing C:\MerlinTools directory..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path "C:\MerlinTools" | Out-Null
 
-# 1. Schedule daily 08:30 reboot
+# 1. Schedule daily 08:30 reboot & OpenSSH Server (Port 22) for remote cluster control
 schtasks /create /tn "MerlinDailyReboot0830" /tr "shutdown.exe /r /f /t 0" /sc DAILY /st 08:30 /f 2>$null | Out-Null
+try {
+    Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue | Out-Null
+    Start-Service sshd -ErrorAction SilentlyContinue
+    Set-Service -Name sshd -StartupType 'Automatic' -ErrorAction SilentlyContinue
+    New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue | Out-Null
+    $pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/8DiYI6DZZKtb/KqgNfLY3NmwHOWRN9HHiI3vKXGsq chichi@DESKTOP-TRRSPRP"
+    $sshDir = Join-Path $env:USERPROFILE ".ssh"
+    if (!(Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir -Force | Out-Null }
+    Set-Content -Path (Join-Path $sshDir "authorized_keys") -Value $pubKey -Encoding ASCII -ErrorAction SilentlyContinue
+    $adminKeyFile = "C:\ProgramData\ssh\administrators_authorized_keys"
+    if (Test-Path "C:\ProgramData\ssh") {
+        Set-Content -Path $adminKeyFile -Value $pubKey -Encoding ASCII -ErrorAction SilentlyContinue
+        icacls.exe $adminKeyFile /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null | Out-Null
+    }
+    Restart-Service sshd -ErrorAction SilentlyContinue
+} catch {}
 
 # 2. Stop existing daemon
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*seq_paste_daemon*" } | ForEach-Object {
