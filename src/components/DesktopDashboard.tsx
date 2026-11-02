@@ -251,20 +251,8 @@ export const DesktopDashboard: React.FC = () => {
         return;
       }
 
-      const ok = await zCoreBridge.checkHealth();
-      if (!ok) {
-        if (
-          typeof sessionStorage !== 'undefined' &&
-          sessionStorage.getItem('ghosti_zcore_prompt_dismissed') !== '1'
-        ) {
-          setShowZCoreGuideModal(true);
-        }
-      } else if (
-        typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && false
-      ) {
-        setShowZCoreGuideModal(true);
-      }
+      // 본페이지 첫 진입 시 다짜고짜 연결 팝업을 띄우지 않고 백그라운드 헬스체크만 수행
+      await zCoreBridge.checkHealth();
     }, 850);
 
     return () => {
@@ -699,30 +687,6 @@ export const DesktopDashboard: React.FC = () => {
                   className="lg:hidden mr-1"
                 />
 
-                {/* 노션 스타일 상단 경로(Breadcrumb) 표시 */}
-                <div className="flex items-center gap-1.5 text-[14.5px] truncate">
-                  <span
-                    onClick={() => {
-                      setDesktopTab('dashboard');
-                      resetToZenCanvas();
-                    }}
-                    className="font-extrabold text-zinc-200 hover:text-white cursor-pointer truncate"
-                  >
-                    {activeLoungeLabel}
-                  </span>
-                  {activeLoungeType === 'family' && desktopTab === 'dashboard' && (
-                    <>
-                      <span className="text-zinc-600">/</span>
-                      <span className="text-primary-container font-bold truncate">
-                        {activeFamilyRoom}
-                      </span>
-                    </>
-                  )}
-                  <span className="hidden sm:inline text-zinc-600">/</span>
-                  <span className="hidden sm:inline text-zinc-400 font-medium truncate">
-                    {activeSubmenuLabel}
-                  </span>
-                </div>
               </div>
 
               {/* 우측 상단 불변의 생태계 앵커: 귀신같이 여권 문패(업무 공유 제외) + 설정몬스터 + 크레딧 + 테마 토글 */}
