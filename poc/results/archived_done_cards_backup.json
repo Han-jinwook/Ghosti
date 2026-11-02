@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-02T11:12:27.571843",
+  "updated_at": "2026-11-02T12:45:20.308798",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -378,6 +378,14 @@
       "last_edited_time": "2026-10-30T05:30:00.000Z",
       "url": "https://app.notion.com/p/409f9ffd2c1d808a8717c1c85f9a5f69",
       "archived_at": "2026-11-02T11:12:27.571333"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-802d-8224-cea7aec503bb",
+      "title": "🎯[센스톡] 수신자 명단 동료에게 공유시 알림",
+      "app": "",
+      "last_edited_time": "2026-10-30T05:40:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d802d8224cea7aec503bb",
+      "archived_at": "2026-11-02T12:45:20.306990"
     }
   ]
 }

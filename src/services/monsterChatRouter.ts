@@ -2097,25 +2097,23 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
   }
 
-  // 7-A) [🚀 부팅·버벅임 케어] (고클린·구라제거기 대체: 장기 미재부팅 / 1초 응급 렉 풀기 / 보안쓰레기·시작프로그램 정리)
-  if (/고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|시작\s*프로그램/i.test(clean)) {
+  // 7-A) [🚀 부팅·버벅임 케어] (매일 1회[24시간] 재부팅 기준점 & 브라우저 강제 청소 영구 금지 + 은행·관공서 보안쓰레기 안전 정리)
+  if (/고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|시작\s*프로그램|부팅\s*컨디션/i.test(clean)) {
     const subAct =
-      /예약|새벽|재부팅/i.test(clean)
+      /예약|새벽/i.test(clean)
         ? 'boot_lag_schedule_reboot'
-        : /구라|보안|시작\s*프로그램|정리/i.test(clean)
+        : /구라|보안\s*프로그램|보안\s*쓰레기/i.test(clean)
         ? 'boot_lag_clean_bloatware'
-        : /렉|응급|리셋|버벅/i.test(clean)
-        ? 'boot_lag_emergency_reset'
         : 'boot_lag_diagnose';
     const osRes = await executeRealOsAction(subAct, '04:00');
     const summaryText =
       osRes.summaryKo ||
-      '🚀 [부팅·버벅임 케어] 열린 창은 그대로 보존한 채 그래픽 핸들 찌꺼기 리셋 및 은행·관공서 상주 보안 프로그램 점검을 완료했습니다!';
+      '하루 이상(24시간 초과) 켜두어 윈도우에 쌓인 피로는 강제로 메모리를 청소하면 오히려 열려 있는 브라우저(구글시트 등) 화면이 깨질 수 있습니다. 억지 청소 대신 지금 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (권장 기준: 매일 1회 재부팅)';
     speak(summaryText);
     return reply(sourceTab, summaryText, {
       followUpSuggestions: [
-        '열린 창 안 닫고 1초 응급 렉 풀기 해줘',
-        '은행·관공서 보안 쓰레기(구라제거기) 정리해줘',
+        '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+        '재부팅해도 다시 켜지는 은행·관공서 보안 쓰레기만 정리해줘',
         '새벽 4시에 자동 재부팅 예약해줘',
       ],
     });
@@ -2132,7 +2130,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     return reply(sourceTab, summaryText, {
       followUpSuggestions: [
         '윈도우 순정 백신으로 빠른 바이러스 검사 실행해줘',
-        '컴퓨터가 느린데 1초 응급 렉 풀기 해줘',
+        '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
       ],
     });
   }

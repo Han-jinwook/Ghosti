@@ -278,7 +278,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
   const [loadingForensic, setLoadingForensic] = useState(false);
   const [buttonGuideStep, setButtonGuideStep] = useState<0 | 3 | 4 | 5 | 6>(5);
   const [bootLagSummary, setBootLagSummary] = useState<string | null>(
-    '열린 창을 닫지 않고도 그래픽 핸들 누수만 1초 만에 리셋하거나, 한국형 은행·관공서 상주 보안 프로그램과 장기 무재부팅 누적 렉을 원클릭으로 해결합니다.'
+    '마지막 재부팅 후 경과 시간(권장 기준: 매일 1회 24시간)을 실측하여 안내하고, 재부팅해도 다시 켜지는 은행·관공서 상주 보안 프로그램만 브라우저 손상 없이 안전하게 정리합니다.'
   );
   const [bootLagBusy, setBootLagBusy] = useState(false);
   const [defenderSummary, setDefenderSummary] = useState<string | null>(
@@ -290,6 +290,10 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
     setLoadingRealPc(true);
     const data = await fetchRealPcOsInspection();
     if (data) setRealPcState(data);
+    const bootRes = await executeRealOsAction('boot_lag_diagnose');
+    if (bootRes?.summaryKo) setBootLagSummary(String(bootRes.summaryKo));
+    const defRes = await executeRealOsAction('defender_status');
+    if (defRes?.summaryKo) setDefenderSummary(String(defRes.summaryKo));
     setLoadingRealPc(false);
   };
 
@@ -674,17 +678,17 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
       {/* 3-B. 💻 PC 전용: [🚀 부팅·버벅임 케어 (고클린·구라제거기 대체)] & [🛡️ 바이러스·랜섬웨어 안심 점검 (알약 대체)] 2대 핵심 모듈 */}
       {setupMonsterPlatform === 'pc' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {/* 모듈 ①: 🚀 부팅·버벅임 케어 */}
+          {/* 모듈 ①: 🚀 부팅·버벅임 케어 (매일 1회 재부팅 기준점 & 보안 쓰레기 정리) */}
           <div className="p-4 rounded-2xl bg-zinc-950/90 border border-teal-500/40 flex flex-col justify-between gap-3">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-label-sm text-[11px] font-extrabold">
-                  🚀 부팅·버벅임 케어 (고클린 · 구라제거기 대체)
+                  🚀 부팅 컨디션(매일 1회 기준) & 보안쓰레기 점검
                 </span>
                 <span className="text-[11px] text-emerald-400 font-extrabold">언제나 0원</span>
               </div>
               <h4 className="font-headline-sm text-[15px] text-slate-900 dark:text-white font-extrabold">
-                창 안 닫고 1초 응급 렉 풀기 & 보안 쓰레기 정리
+                매일 1회(24시간) 재부팅 컨디션 진단 & 은행 보안 쓰레기 정리
               </h4>
               <p className="font-body-sm text-[12.5px] text-slate-700 dark:text-zinc-300 leading-relaxed">
                 {bootLagSummary}
@@ -696,17 +700,17 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
                 disabled={bootLagBusy}
                 onClick={async () => {
                   setBootLagBusy(true);
-                  const res = await executeRealOsAction('boot_lag_emergency_reset');
+                  const res = await executeRealOsAction('boot_lag_diagnose');
                   setBootLagBusy(false);
                   const msg =
                     res.summaryKo ||
-                    '⚡ 열린 창은 그대로 보존한 채 핸들이 쌓인 그래픽 서브 프로세스를 1초 만에 리셋했습니다!';
+                    '🔍 컴퓨터 연속 가동 시간(권장 기준: 매일 1회 재부팅) 및 상주 보안 프로그램을 점검했습니다.';
                   setBootLagSummary(msg);
                   useSaySeeStore.setState({ lastQuarantineToast: msg });
                 }}
                 className="px-3 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
               >
-                ⚡ 창 안 닫고 1초 렉 풀기
+                🔍 부팅 경과 시간 1초 진단
               </button>
               <button
                 type="button"
@@ -717,13 +721,13 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
                   setBootLagBusy(false);
                   const msg =
                     res.summaryKo ||
-                    '🧹 은행·관공서 상주 보안 프로그램과 불필요한 시작프로그램을 정리했습니다!';
+                    '🧹 재부팅해도 다시 켜지는 은행·관공서 상주 보안 프로그램을 정리했습니다.';
                   setBootLagSummary(msg);
                   useSaySeeStore.setState({ lastQuarantineToast: msg });
                 }}
                 className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-100 font-label-sm text-[12px] font-bold cursor-pointer"
               >
-                🧹 보안쓰레기·시작앱 정리
+                🧹 은행·관공서 보안 쓰레기 정리
               </button>
               <button
                 type="button"
@@ -734,7 +738,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
                   setBootLagBusy(false);
                   const msg =
                     res.summaryKo ||
-                    '⏰ 안 쓰시는 새벽 04:00에 자동 재부팅되도록 예약했습니다!';
+                    '⏰ 안 쓰시는 새벽 04:00에 자동 재부팅되도록 예약했습니다.';
                   setBootLagSummary(msg);
                   useSaySeeStore.setState({ lastQuarantineToast: msg });
                 }}

@@ -412,10 +412,10 @@ export const PC_SYMPTOM_CHIPS: SetupSymptomChip[] = [
   {
     id: 'pc_boot_lag_care',
     platform: 'pc',
-    label: '🚀 부팅·버벅임 1초 케어 (고클린·구라제거기 대체)',
-    trackBadge: 'Track A · 원클릭 케어',
+    label: '🚀 부팅 컨디션(매일 1회 기준) & 보안쓰레기 점검',
+    trackBadge: 'Track A · 실측 진단',
     levelBadge: '🟢 Level 1 · 언제나 0원 (무료)',
-    query: '컴퓨터를 안 끄고 오래 켜둬서 창 이동이 버벅거리는데 창 안 닫고 1초 응급 렉 풀기랑 은행 보안 프로그램 정리해줘',
+    query: '컴퓨터를 켜둔 지 얼마나 지났는지 부팅 컨디션(매일 1회 재부팅 기준)을 실측 진단하고 은행·관공서 보안 쓰레기만 정리해줘',
   },
   {
     id: 'pc_defender_security',

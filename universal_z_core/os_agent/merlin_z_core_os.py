@@ -112,11 +112,20 @@ class PROCESS_INFORMATION(ctypes.Structure):
     ]
 
 
+_CACHED_INTERACTIVE_HDESK: int = 0
+
+
 def open_interactive_desktop_handle() -> int:
-    """유저가 보고 있는 실제 모니터 데스크톱(WinSta0\\Default) 핸들을 반환합니다."""
+    """유저가 보고 있는 실제 모니터 데스크톱(WinSta0\\Default) 핸들을 반환합니다 (단일 핸들 캐싱으로 데스크톱 핸들 누수 원천 차단)."""
+    global _CACHED_INTERACTIVE_HDESK
+    if _CACHED_INTERACTIVE_HDESK:
+        return _CACHED_INTERACTIVE_HDESK
     try:
         hdesk = ctypes.windll.user32.OpenDesktopW("Default", 0, False, 0x01FF)
-        return int(hdesk) if hdesk else 0
+        if hdesk:
+            _CACHED_INTERACTIVE_HDESK = int(hdesk)
+            return _CACHED_INTERACTIVE_HDESK
+        return 0
     except Exception:
         return 0
 
@@ -1306,10 +1315,12 @@ def _run_powershell_json(ps_cmd: str, timeout: float = 4.0) -> Any:
 
 def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00") -> Dict[str, Any]:
     """
-    [🚀 부팅·버벅임 케어] (고클린 + 구라제거기 완벽 대체)
-    1) 장기 미재부팅(Uptime) 실측 진단 & 무인 예약 리부팅 (schtasks)
-    2) 창을 닫을 수 없을 때 '1초 응급 누수 리셋' (핸들 폭증 GPU 서브프로세스 선별 재시작)
-    3) 시작프로그램 & 한국형 은행/관공서 상주 보안모듈(구라제거기) 원클릭 정리
+    [🚀 부팅·버벅임 케어] (매일 1회[24시간] 재부팅 기준점 & 브라우저 강제 청소 영구 금지)
+    1) GetTickCount64()로 마지막 재부팅 후 경과 시간(Uptime)을 실측하여 '24시간(1일)' 기준으로 분기 안내
+       - Uptime >= 24시간: 억지 메모리/프로세스 청소 시 열려 있는 브라우저(구글시트 WebGL 등)가 깨질 수 있으므로 '청소 대신 다시 시작(재부팅)' 최우선 권고
+       - Uptime < 24시간: 오늘 재부팅 컨디션 양호 안내 (재부팅 잔소리 금지)
+    2) Chrome / Edge / Whale 등 브라우저 프로세스(GPU 프로세스 포함) 강제 종료 및 워킹셋 강제 축소 영구 금지
+    3) 재부팅해도 다시 자동 실행되는 한국형 은행·관공서 상주 보안 프로그램(구라제거기 표적)만 실제 감지 시 안전 정리
     """
     t0 = time.perf_counter()
     act = (sub_action or "diagnose").strip().lower()
@@ -1326,69 +1337,15 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
 
     uptime_days = round(uptime_sec / 86400.0, 1)
     uptime_hours = int(uptime_sec // 3600)
-    needs_reboot = uptime_days >= 5.0
+    uptime_days_int = uptime_hours // 24
+    uptime_rem_hours = uptime_hours % 24
+    # 권장 기준점: 매일 1회 (24시간 = 86,400초)
+    needs_reboot = uptime_sec >= 86400.0
 
-    # 2. 핸들 폭증 프로세스 및 한국형 상주 보안 프로그램 스캔
+    # 2. 한국형 상주 보안 프로그램 및 시작프로그램 실측 스캔 (브라우저 프로세스 절대 건드리지 않음)
     pc_state = inspect_real_pc_state()
     sec_plugins = pc_state.get("spoolerAndSecurity", {}).get("activeSecurityPlugins", [])
     startup_items = pc_state.get("startupPrograms", [])
-
-    high_handle_procs: List[Dict[str, Any]] = []
-    total_handles = 0
-    if os.name == "nt":
-        ps_handles = (
-            "Get-Process | Group-Object ProcessName | ForEach-Object { "
-            "$h = ($_.Group | Measure-Object Handles -Sum).Sum; "
-            "if ($h -gt 4000) { [PSCustomObject]@{ name=$_.Name; handles=$h; count=$_.Count } } "
-            "} | Sort-Object handles -Descending | Select-Object -First 6 | ConvertTo-Json -Compress"
-        )
-        raw_h = _run_powershell_json(ps_handles, timeout=3.5)
-        if isinstance(raw_h, dict):
-            raw_h = [raw_h]
-        if isinstance(raw_h, list):
-            for item in raw_h:
-                if isinstance(item, dict):
-                    h_cnt = int(item.get("handles") or 0)
-                    total_handles += h_cnt
-                    high_handle_procs.append({
-                        "name": str(item.get("name") or ""),
-                        "handles": h_cnt,
-                        "processCount": int(item.get("count") or 1),
-                    })
-
-    if act == "emergency_reset":
-        killed_gpu_count = 0
-        if os.name == "nt":
-            # 열린 브라우저 창/탭은 100% 보존하고 핸들이 누수된 GPU 서브프로세스(--type=gpu-process)만 선별 재시작
-            ps_reset = (
-                "$procs = Get-CimInstance Win32_Process | Where-Object { "
-                "$_.CommandLine -like '*--type=gpu-process*' -or ($_.Name -in @('chrome.exe','msedge.exe','whale.exe') -and $_.HandleCount -gt 10000) "
-                "}; "
-                "$cnt = 0; foreach ($p in $procs) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue; $cnt++ } catch {} }; "
-                "[PSCustomObject]@{ resetCount = $cnt } | ConvertTo-Json -Compress"
-            )
-            res_reset = _run_powershell_json(ps_reset, timeout=4.0)
-            if isinstance(res_reset, dict):
-                killed_gpu_count = int(res_reset.get("resetCount") or 0)
-        summary_ko = (
-            f"⚡ 열려 있는 인터넷 창과 문서는 그대로 보존한 채, 찌꺼기(핸들)가 쌓인 그래픽 서브 프로세스 {killed_gpu_count}개를 1초 만에 리셋하여 화면 버벅임을 풀었습니다!"
-            if killed_gpu_count > 0
-            else "⚡ 열려 있는 창을 그대로 유지한 채 그래픽·탐색기 핸들 찌꺼기 리셋을 완료했습니다!"
-        )
-        return {
-            "ok": True,
-            "subAction": act,
-            "uptimeDays": uptime_days,
-            "uptimeHours": uptime_hours,
-            "needsReboot": needs_reboot,
-            "resetGpuSubprocessCount": killed_gpu_count,
-            "highHandleProcesses": high_handle_procs,
-            "activeSecurityPluginsCount": len(sec_plugins),
-            "startupProgramsCount": len(startup_items),
-            "summaryKo": summary_ko,
-            "message": summary_ko,
-            "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
-        }
 
     if act == "schedule_reboot":
         sched_time = target_param if re.match(r"^\d{2}:\d{2}$", str(target_param or "")) else "04:00"
@@ -1398,7 +1355,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                 cmd = [
                     "schtasks", "/Create",
                     "/TN", "Ghosti_AutoCare_Reboot",
-                    "/TR", "shutdown /r /t 60 /c \"귀신같이 예약 재부팅 (장기 미재부팅 핸들 초기화)\"",
+                    "/TR", "shutdown /r /t 60 /c \"귀신같이 예약 재부팅 (매일 1회 재부팅 권장 기준)\"",
                     "/SC", "ONCE",
                     "/ST", sched_time,
                     "/F",
@@ -1407,7 +1364,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                 scheduled_ok = (r.returncode == 0)
             except Exception:
                 scheduled_ok = False
-        summary_ko = f"⏰ 안 쓰시는 새벽 {sched_time}에 컴퓨터가 알아서 상쾌하게 재부팅되도록 예약을 완료했습니다! (언제든 취소 가능)"
+        summary_ko = f"⏰ 안 쓰시는 새벽 {sched_time}에 컴퓨터가 자동으로 재부팅되도록 예약했습니다. (언제든 취소 가능)"
         return {
             "ok": True,
             "subAction": act,
@@ -1423,21 +1380,34 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
 
     if act == "clean_bloatware":
         stopped_names: List[str] = []
+        # ⚠️ 철칙: Chrome/Edge/Whale 등 브라우저 프로세스는 절대 건드리지 않고, 오직 KNOWN_SECURITY_PLUGIN_KEYWORDS에 해당하는 보안 모듈만 정지
+        SAFE_BROWSER_NAMES = {"chrome", "msedge", "whale", "firefox", "brave", "opera", "iexplore"}
         if os.name == "nt" and sec_plugins:
             for sp in sec_plugins:
-                kw = str(sp.get("keyword") or "").strip()
-                if kw:
+                kw = str(sp.get("keyword") or "").strip().lower()
+                if kw and kw not in SAFE_BROWSER_NAMES:
                     try:
-                        ps_kill = f"Get-Process | Where-Object {{ $_.Name -like '*{kw}*' }} | Stop-Process -Force -ErrorAction SilentlyContinue"
+                        ps_kill = (
+                            f"Get-Process | Where-Object {{ $_.Name -like '*{kw}*' -and "
+                            f"$_.Name -notin @('chrome','msedge','whale','firefox','brave') }} | "
+                            f"Stop-Process -Force -ErrorAction SilentlyContinue"
+                        )
                         subprocess.run(["powershell", "-NoProfile", "-Command", ps_kill], capture_output=True, timeout=2.5, creationflags=0x08000000)
                         stopped_names.append(str(sp.get("label") or kw))
                     except Exception:
                         pass
-        summary_ko = (
-            f"🧹 은행·관공서 상주 보안 프로그램({', '.join(stopped_names)})과 불필요한 시작프로그램 찌꺼기를 깔끔하게 정리했습니다!"
-            if stopped_names
-            else f"🧹 현재 상주 중인 은행·관공서 보안 쓰레기가 0건으로 이미 깨끗합니다! (시작프로그램 {len(startup_items)}개 점검 완료)"
-        )
+        if stopped_names:
+            summary_ko = (
+                f"🧹 재부팅해도 다시 자동 실행되는 은행·관공서 보안 프로그램 {len(stopped_names)}개({', '.join(stopped_names)})를 정리했습니다."
+            )
+        else:
+            summary_ko = "🧹 현재 백그라운드에 상주 중인 은행·관공서 보안 쓰레기가 0건으로 깨끗합니다."
+
+        if needs_reboot:
+            summary_ko += (
+                f" 단, 현재 컴퓨터를 켜둔 지 {uptime_days_int}일 {uptime_rem_hours}시간(권장: 매일 1회 재부팅)이 지났으므로 "
+                f"윈도우에 쌓인 피로는 억지 청소 대신 작업 후 '다시 시작(재부팅)'을 한 번 해주시는 것이 가장 빠르고 깨끗합니다."
+            )
         return {
             "ok": True,
             "subAction": act,
@@ -1452,25 +1422,34 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
             "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
         }
 
-    # 기본: diagnose
+    # 기본(diagnose) 및 구버전 emergency_reset 호출 시: 브라우저 강제 청소를 절대 수행하지 않고 24시간 기준점 실측 가이드 반환
     if needs_reboot:
         summary_ko = (
-            f"🚨 컴퓨터가 {uptime_days}일째({uptime_hours}시간 연속) 켜져 있어 창 이동·클릭을 느리게 만드는 찌꺼기(핸들)가 쌓여 있습니다! "
-            f"지금 창을 닫기 어려우시면 [⚡ 1초 응급 렉 풀기]를 누르시거나, [⏰ 새벽 4시 자동 재부팅 예약]을 켜두시면 새 컴퓨터처럼 빨라집니다."
+            f"현재 컴퓨터를 켜둔 지 {uptime_days_int}일 {uptime_rem_hours}시간 (권장 기준: 매일 1회 재부팅)이 지났습니다. "
+            f"하루 이상 켜두어 윈도우에 쌓인 피로는 강제로 찌꺼기 청소를 하면 오히려 열려 있는 브라우저(구글시트 등) 화면이 깨지거나 버벅거림이 남을 수 있습니다. "
+            f"억지 청소 대신 지금 '다시 시작(재부팅)'을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (매일 1회 아침이나 퇴근 전 재부팅을 권장합니다)"
         )
+        if sec_plugins:
+            labels = ", ".join([str(p.get("label") or p.get("keyword")) for p in sec_plugins[:3]])
+            summary_ko += f" (추가로 재부팅해도 자동 실행되는 은행·관공서 보안 프로그램 {len(sec_plugins)}개[{labels}]만 함께 꺼드릴까요?)"
     else:
         summary_ko = (
-            f"✅ 현재 컴퓨터 연속 가동 시간은 {uptime_days}일({uptime_hours}시간)로 양호하며, "
-            f"은행·관공서 보안 프로그램 {len(sec_plugins)}건 · 시작프로그램 {len(startup_items)}건이 감지되었습니다."
+            f"오늘 재부팅한 지 {max(1, uptime_hours)}시간째로 윈도우 부팅 컨디션이 깨끗합니다 (권장: 매일 1회 재부팅 잘 유지 중)."
         )
+        if sec_plugins:
+            labels = ", ".join([str(p.get("label") or p.get("keyword")) for p in sec_plugins[:3]])
+            summary_ko += f" 현재 백그라운드에 상주 중인 은행·관공서 보안 프로그램 {len(sec_plugins)}개({labels})만 브라우저 영향 없이 정리할 수 있습니다."
+        else:
+            summary_ko += " 백그라운드에 상주 중인 은행·관공서 보안 프로그램도 0건으로 깨끗합니다."
 
     return {
         "ok": True,
         "subAction": "diagnose",
         "uptimeDays": uptime_days,
         "uptimeHours": uptime_hours,
+        "uptimeDaysInt": uptime_days_int,
+        "uptimeRemHours": uptime_rem_hours,
         "needsReboot": needs_reboot,
-        "highHandleProcesses": high_handle_procs,
         "activeSecurityPluginsCount": len(sec_plugins),
         "activeSecurityPlugins": sec_plugins,
         "startupProgramsCount": len(startup_items),
