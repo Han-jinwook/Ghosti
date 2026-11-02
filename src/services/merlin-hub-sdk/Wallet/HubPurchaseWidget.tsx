@@ -334,7 +334,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                       type="radio"
                       checked={method === 'card'}
                       onChange={() => setMethod('card')}
-                      className="h-4.5 w-4.5 accent-emerald-600"
+                      className="h-4 w-4 accent-emerald-600"
                     />
                     <div className="flex flex-col text-left">
                       <span className="font-extrabold text-sm text-slate-900">간편결제 (Npay / 카카오페이 등)</span>
@@ -355,7 +355,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                       type="radio"
                       checked={method === 'bank'}
                       onChange={() => setMethod('bank')}
-                      className="h-4.5 w-4.5 accent-indigo-600"
+                      className="h-4 w-4 accent-indigo-600"
                     />
                     <div className="flex flex-col text-left">
                       <span className="font-extrabold text-sm text-slate-900">신용 / 체크카드</span>

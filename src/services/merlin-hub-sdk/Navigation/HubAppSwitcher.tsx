@@ -281,21 +281,28 @@ export function HubAppSwitcher({
       ? familyIcon
       : (familyIcon as any)?.src || `${getConfig().hubUrl}/family-icon.png`;
 
-  const renderAppLogo = (app: FamilyApp, sizeClass = 'w-6 h-6') => {
+  const renderAppLogo = (app: FamilyApp, sizeClass = 'w-6 h-6', pixelSize = 24) => {
     const cleanId = app.id.toLowerCase();
     return (
       <div
+        style={{ width: pixelSize, height: pixelSize, minWidth: pixelSize, minHeight: pixelSize }}
         className={`${sizeClass} rounded-lg bg-white shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden shrink-0`}
       >
         {LOCAL_LOGOS[cleanId] ? (
           <img
             src={typeof LOCAL_LOGOS[cleanId] === 'string' ? LOCAL_LOGOS[cleanId] : (LOCAL_LOGOS[cleanId] as any)?.src}
             alt={app.name}
+            style={{ width: pixelSize, height: pixelSize }}
             className="w-full h-full object-cover"
           />
         ) : typeof app.icon === 'string' &&
           (app.icon.startsWith('http') || app.icon.startsWith('/') || app.icon.includes('.')) ? (
-          <img src={app.icon} alt={app.name} className="w-full h-full object-cover" />
+          <img
+            src={app.icon}
+            alt={app.name}
+            style={{ width: pixelSize, height: pixelSize }}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <span className="text-sm">{app.icon}</span>
         )}
@@ -331,7 +338,7 @@ export function HubAppSwitcher({
                 title={`${app.name} (${app.description}) — 클릭 시 자동 로그인(SSO) 상태로 바로 이동`}
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  {renderAppLogo(app, 'w-5.5 h-5.5')}
+                  {renderAppLogo(app, 'w-5 h-5', 22)}
                   <span className="text-[12px] font-extrabold text-slate-800 dark:text-zinc-200 group-hover:text-teal-600 dark:group-hover:text-primary-container truncate">
                     {app.name}
                   </span>
@@ -358,7 +365,10 @@ export function HubAppSwitcher({
           aria-label="패밀리 앱 전체 열기"
         >
           <span className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-white shadow-xs border border-slate-200/80 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform">
+            <span
+              style={{ width: 24, height: 24, minWidth: 24, minHeight: 24 }}
+              className="w-6 h-6 rounded-lg bg-white shadow-xs border border-slate-200/80 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform"
+            >
               <img
                 src={resolvedFamilyIconSrc}
                 alt="Family Apps"
@@ -372,6 +382,7 @@ export function HubAppSwitcher({
                     parent.appendChild(fallback);
                   }
                 }}
+                style={{ width: 16, height: 16 }}
                 className="w-4 h-4 object-contain pointer-events-none"
               />
             </span>
@@ -409,7 +420,8 @@ export function HubAppSwitcher({
                 parent.appendChild(fallback);
               }
             }}
-            className="w-4 h-4 sm:w-4.5 sm:h-4.5 object-contain pointer-events-none"
+            style={{ width: 16, height: 16 }}
+            className="w-4 h-4 sm:w-[18px] sm:h-[18px] object-contain pointer-events-none"
           />
           <span className="font-label-sm text-[11.5px] font-extrabold hidden sm:inline">패밀리</span>
           <span className="text-[10px] opacity-75">{isOpen ? '▴' : '▾'}</span>
@@ -457,7 +469,7 @@ export function HubAppSwitcher({
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        {renderAppLogo(app, 'w-9 h-9')}
+                        {renderAppLogo(app, 'w-9 h-9', 36)}
                         <div className="min-w-0">
                           <div className="text-sm font-black text-slate-900 truncate">{app.name}</div>
                           <div className="text-[11px] font-medium text-slate-500 truncate">
@@ -503,7 +515,7 @@ export function HubAppSwitcher({
                           : 'opacity-80 cursor-default'
                       }`}
                     >
-                      {renderAppLogo(app, 'w-8.5 h-8.5')}
+                      {renderAppLogo(app, 'w-8 h-8', 32)}
                       <div className="flex-1 flex flex-col justify-center min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-black text-slate-900">{app.name}</span>
