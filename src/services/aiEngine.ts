@@ -41,6 +41,35 @@ import type {
 export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [];
 export const VIDEO_SCENE_ITEMS: VideoSceneItem[] = [];
 
+export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
+  {
+    id: 'gsheet_accounts_01',
+    fileName: '사내_통합_계정관리표.gsheet',
+    path: 'G:\\내 드라이브\\01_총무보안\\사내_통합_계정관리표.gsheet',
+    ext: 'PDF',
+    title: 'G: 내 드라이브 — 사내 통합 계정관리표 및 법인 입금 계좌번호 원장',
+    categoryBadge: '🔐 G: 구글 드라이브 (무마스킹 원장)',
+    extractedText:
+      '넷플릭스/업무용 아이디: merlin_family@sundreamer.app | 비밀번호: Merlin#2026!ZCore | 법인 정산 계좌번호: 신한은행 110-482-992018 (별표 *** 가림 없이 원본 그대로 1초 복사 지원)',
+    keywords: [
+      '구글드라이브',
+      'G드라이브',
+      '계정관리표',
+      '계좌번호',
+      '아이디',
+      '비밀번호',
+      '넷플릭스',
+      '신한은행',
+      '110-482-992018',
+      'merlin_family@sundreamer.app',
+      'Merlin#2026!ZCore',
+    ],
+    date: '2026.10.25',
+    sizeKB: 12,
+    deviceSource: 'G: 내 드라이브 (Google Sheets)',
+  },
+];
+
 export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
   try {
     const [zRes, sRes] = await Promise.allSettled([
@@ -49,6 +78,9 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
     ]);
 
     const staticByFileName = new Map<string, LocalDocumentFile>();
+    for (const gDoc of GDRIVE_SMART_DOC_ITEMS) {
+      staticByFileName.set(gDoc.fileName, gDoc);
+    }
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
       const sJson = await sRes.value.json();
       const sDocs: LocalDocumentFile[] = Array.isArray(sJson.documents)
@@ -70,6 +102,9 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         : [];
       if (zDocs.length > 0) {
         const realMerged = new Map<string, LocalDocumentFile>();
+        for (const gDoc of GDRIVE_SMART_DOC_ITEMS) {
+          realMerged.set(gDoc.fileName, gDoc);
+        }
         for (const d of zDocs) {
           const fname = d.fileName || (d as any).name;
           if (!fname || realMerged.has(fname)) continue;
@@ -94,7 +129,7 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
 
     return Array.from(staticByFileName.values());
   } catch {
-    return [];
+    return [...GDRIVE_SMART_DOC_ITEMS];
   }
 }
 

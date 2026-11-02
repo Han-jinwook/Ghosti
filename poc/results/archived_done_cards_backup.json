@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-02T12:45:20.308798",
+  "updated_at": "2026-11-02T14:50:31.114130",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -386,6 +386,30 @@
       "last_edited_time": "2026-10-30T05:40:00.000Z",
       "url": "https://app.notion.com/p/409f9ffd2c1d802d8224cea7aec503bb",
       "archived_at": "2026-11-02T12:45:20.306990"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-8004-be64-fd3f374da0c0",
+      "title": "🎯[센스톡] 수신자 명단 순서를 숫자로 표시",
+      "app": "",
+      "last_edited_time": "2026-10-30T05:41:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d8004be64fd3f374da0c0",
+      "archived_at": "2026-11-02T14:25:09.395428"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-8037-8304-c2ce8d066484",
+      "title": "🎯[센스톡] 명단 중 카톡 전송 완료/패스 구분",
+      "app": "",
+      "last_edited_time": "2026-10-30T06:01:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d80378304c2ce8d066484",
+      "archived_at": "2026-11-02T14:31:14.335680"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-80a5-bb1f-ffa1c8c73143",
+      "title": "[센스톡] 작성중 버그수정중으로 바로 가버리는 현상",
+      "app": "",
+      "last_edited_time": "2026-11-02T00:12:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d80a5bb1fffa1c8c73143",
+      "archived_at": "2026-11-02T14:50:31.113381"
     }
   ]
 }

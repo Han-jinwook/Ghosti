@@ -1203,12 +1203,79 @@ export const PricingModal: React.FC = () => {
   );
 };
 
+export function renderHighlightedDocText(
+  text: string,
+  query: string,
+  fallbackKeywords: string[] = []
+): React.ReactNode {
+  if (!text) return text;
+  const rawQ = (query || '').trim();
+  const stopSet = new Set([
+    '찾아줘',
+    '보여줘',
+    '사진',
+    '문서',
+    '파일',
+    '서류함',
+    '최근',
+    '서류',
+    '내역',
+    '전체',
+  ]);
+  const queryTokens = rawQ
+    .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+    .split(/\s+/)
+    .map((t) =>
+      t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '')
+    )
+    .filter((t) => t.length >= 2 && !stopSet.has(t));
+
+  const activeTokens =
+    queryTokens.length > 0
+      ? queryTokens
+      : fallbackKeywords.filter((k) => k && k.trim().length >= 2).slice(0, 4);
+
+  if (activeTokens.length === 0) return text;
+
+  const escaped = Array.from(new Set(activeTokens))
+    .sort((a, b) => b.length - a.length)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (escaped.length === 0) return text;
+
+  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const parts = text.split(regex);
+  const lowerSet = new Set(activeTokens.map((t) => t.toLowerCase()));
+
+  return parts.map((part, idx) =>
+    lowerSet.has(part.toLowerCase()) ? (
+      <mark
+        key={idx}
+        className="bg-amber-300 text-zinc-950 font-extrabold px-1 py-0.5 rounded shadow-sm"
+      >
+        {part}
+      </mark>
+    ) : (
+      <React.Fragment key={idx}>{part}</React.Fragment>
+    )
+  );
+}
+
+const videoBlobUrlCache = new Map<string, string>();
+
 /**
  * [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달
  */
 export const LocalDocPreviewModal: React.FC = () => {
-  const { selectedDocModal, setSelectedDocModal, openLocalFolder } = useSaySeeStore();
+  const {
+    selectedDocModal,
+    setSelectedDocModal,
+    openLocalFolder,
+    activeQuery,
+    hasExecutedUserSearch,
+  } = useSaySeeStore();
   if (!selectedDocModal) return null;
+
+  const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
 
   return (
     <div
@@ -1233,7 +1300,11 @@ export const LocalDocPreviewModal: React.FC = () => {
               </span>
             </div>
             <h3 className="font-headline-sm text-[19px] text-on-surface font-extrabold mt-1">
-              {selectedDocModal.title}
+              {renderHighlightedDocText(
+                selectedDocModal.title,
+                effectiveQuery,
+                selectedDocModal.keywords.slice(0, 3)
+              )}
             </h3>
             <p className="font-label-mono text-[11.5px] text-on-surface-variant">
               파일명: {selectedDocModal.fileName} • 날짜: {selectedDocModal.date} • 크기:{' '}
@@ -1251,11 +1322,29 @@ export const LocalDocPreviewModal: React.FC = () => {
         </div>
 
         <div className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2">
-          <span className="font-label-mono text-[11px] text-primary-container font-bold">
-            🔍 자체 로컬 서버 휘발성 텍스트/OCR 색인 본문 미리보기 (하드디스크 저장 0건 • RAM 연산 후 0.1초 내 즉시 자동 소각)
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-label-mono text-[11px] text-primary-container font-bold">
+              🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 별표 *** 가림 없이 1초 복사 지원)
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(selectedDocModal.extractedText);
+                useSaySeeStore.setState({
+                  lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 별표(***) 가림 없이 클립보드에 복사되었습니다.`,
+                });
+              }}
+              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
+            >
+              📋 복사
+            </button>
+          </div>
           <p className="font-body-md text-[14px] text-on-surface leading-relaxed">
-            {selectedDocModal.extractedText}
+            {renderHighlightedDocText(
+              selectedDocModal.extractedText,
+              effectiveQuery,
+              selectedDocModal.keywords.slice(0, 4)
+            )}
           </p>
           <div className="flex flex-wrap gap-1.5 pt-2">
             {selectedDocModal.keywords.map((kw) => (
@@ -1270,6 +1359,18 @@ export const LocalDocPreviewModal: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(selectedDocModal.extractedText);
+              useSaySeeStore.setState({
+                lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 즉시 복사되었습니다.`,
+              });
+            }}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-emerald-400 transition-colors cursor-pointer"
+          >
+            <span>📋 복사</span>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -1315,35 +1416,79 @@ export const LocalDocPreviewModal: React.FC = () => {
 export const VideoScenePreviewModal: React.FC = () => {
   const { selectedVideoModal, setSelectedVideoModal, openLocalFolder } = useSaySeeStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const pendingSeekSecRef = useRef<number | null>(null);
+  const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
+
+  useEffect(() => {
+    if (!selectedVideoModal) {
+      setResolvedVideoSrc('');
+      return;
+    }
+    const rawUrl = selectedVideoModal.videoUrl;
+    pendingSeekSecRef.current = selectedVideoModal.matchedSeekSec ?? 0;
+
+    const cachedBlob = videoBlobUrlCache.get(rawUrl);
+    if (cachedBlob) {
+      setResolvedVideoSrc(cachedBlob);
+      return;
+    }
+
+    let cancelled = false;
+    setResolvedVideoSrc(rawUrl);
+    fetch(rawUrl)
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('blob fetch failed'))))
+      .then((blob) => {
+        if (blob.size > 0) {
+          const objUrl = URL.createObjectURL(blob);
+          videoBlobUrlCache.set(rawUrl, objUrl);
+          if (!cancelled) {
+            pendingSeekSecRef.current = selectedVideoModal.matchedSeekSec ?? 0;
+            setResolvedVideoSrc(objUrl);
+          }
+        }
+      })
+      .catch(() => {
+        // fallback to rawUrl
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl]);
 
   useEffect(() => {
     if (!selectedVideoModal) return;
+    const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
+    pendingSeekSecRef.current = targetSec;
     const vidEl = videoRef.current;
     if (!vidEl) return;
 
-    const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
-    const applySeek = () => {
+    if (vidEl.readyState >= 1) {
       try {
         vidEl.currentTime = targetSec;
-        void vidEl.play().catch(() => {
-          // 자동재생 정책 제한 시 일시정지 상태로 해당 초(Sec) 프레임 표시
-        });
+        void vidEl.play().catch(() => {});
       } catch {
         // ignore
       }
-    };
-
-    if (vidEl.readyState >= 1) {
-      applySeek();
-    } else {
-      vidEl.addEventListener('loadedmetadata', applySeek, { once: true });
-      return () => vidEl.removeEventListener('loadedmetadata', applySeek);
     }
-  }, [selectedVideoModal?.id, selectedVideoModal?.matchedSeekSec]);
+  }, [selectedVideoModal?.id, selectedVideoModal?.matchedSeekSec, resolvedVideoSrc]);
 
   if (!selectedVideoModal) return null;
 
+  const applyPendingSeek = (vidEl: HTMLVideoElement) => {
+    const targetSec = pendingSeekSecRef.current ?? selectedVideoModal.matchedSeekSec ?? 0;
+    try {
+      if (Math.abs(vidEl.currentTime - targetSec) > 0.4) {
+        vidEl.currentTime = targetSec;
+      }
+      void vidEl.play().catch(() => {});
+    } catch {
+      // ignore
+    }
+  };
+
   const handleJumpToSecond = (sec: number) => {
+    pendingSeekSecRef.current = sec;
     setSelectedVideoModal(selectedVideoModal, sec);
     if (videoRef.current) {
       try {
@@ -1395,14 +1540,29 @@ export const VideoScenePreviewModal: React.FC = () => {
           </button>
         </div>
 
-        {/* 동영상 플레이어 (실제 test_photos 내 MP4 Byte-Range 스트리밍 + 포착된 초(Sec)로 즉시 점프 재생) */}
+        {/* 동영상 플레이어 (인메모리 Blob Byte-Range 지원으로 중반부/후반부 어느 초(Sec)든 0.01초 즉시 점프 재생) */}
         <div className="relative rounded-2xl overflow-hidden bg-black border border-primary-container/40 aspect-video flex items-center justify-center">
           <video
             ref={videoRef}
-            src={selectedVideoModal.videoUrl}
+            src={resolvedVideoSrc || selectedVideoModal.videoUrl}
             poster={selectedVideoModal.thumbUrl}
             controls
             playsInline
+            onLoadedMetadata={(e) => applyPendingSeek(e.currentTarget)}
+            onCanPlay={(e) => {
+              if (pendingSeekSecRef.current !== null) {
+                const target = pendingSeekSecRef.current;
+                pendingSeekSecRef.current = null;
+                try {
+                  if (Math.abs(e.currentTarget.currentTime - target) > 0.4) {
+                    e.currentTarget.currentTime = target;
+                  }
+                  void e.currentTarget.play().catch(() => {});
+                } catch {
+                  // ignore
+                }
+              }
+            }}
             className="w-full h-full object-contain"
           />
           <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">

@@ -12,7 +12,7 @@ import {
   LoungeIndexingWaitingRoom,
   LoungeView,
 } from './LoungeView';
-import { PcMasterQuickSendPanel } from './PricingModal';
+import { PcMasterQuickSendPanel, renderHighlightedDocText } from './PricingModal';
 import { GhostiTopRightHubAnchor, GhostiSidebarBottomFamilyLauncher } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
@@ -1221,17 +1221,36 @@ export const DesktopDashboard: React.FC = () => {
                             </div>
 
                             <h4 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
-                              {doc.title}
+                              {renderHighlightedDocText(
+                                doc.title,
+                                hasExecutedUserSearch ? activeQuery : ''
+                              )}
                             </h4>
 
                             <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2 leading-relaxed bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
-                              {doc.extractedText}
+                              {renderHighlightedDocText(
+                                doc.extractedText,
+                                hasExecutedUserSearch ? activeQuery : ''
+                              )}
                             </p>
                           </div>
 
                           <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400 gap-2">
                             <span>{doc.date}</span>
                             <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void navigator.clipboard?.writeText(doc.extractedText);
+                                  useSaySeeStore.setState({
+                                    lastQuarantineToast: `📋 복사 완료! [${doc.title}] 본문/계정 정보가 별표(***) 가림 없이 즉시 복사되었습니다.`,
+                                  });
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer"
+                              >
+                                📋 복사
+                              </button>
                               <button
                                 type="button"
                                 onClick={(e) => {

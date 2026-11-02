@@ -163,12 +163,40 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def _send_bytes(self, data: bytes, content_type: str = "application/octet-stream", status: int = 200) -> None:
+        total_len = len(data)
+        range_header = self.headers.get("Range")
+        if status == 200 and range_header and range_header.strip().lower().startswith("bytes="):
+            try:
+                spec = range_header.strip()[6:].split(",")[0].strip()
+                start_s, end_s = spec.split("-", 1)
+                start = int(start_s) if start_s else 0
+                end = int(end_s) if end_s else total_len - 1
+                start = max(0, min(start, total_len - 1))
+                end = max(start, min(end, total_len - 1))
+                chunk = data[start : end + 1]
+                self.send_response(206)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Range", f"bytes {start}-{end}/{total_len}")
+                self.send_header("Content-Length", str(len(chunk)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+                self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
+                self.send_header("Access-Control-Allow-Private-Network", "true")
+                self.end_headers()
+                self.wfile.write(chunk)
+                return
+            except Exception:
+                pass
         self.send_response(status)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(total_len))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+        self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
         self.wfile.write(data)

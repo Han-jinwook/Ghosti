@@ -16,7 +16,7 @@ import {
   LoungeIndexingWaitingRoom,
   LoungeView,
 } from './LoungeView';
-import { PcMasterQuickSendPanel } from './PricingModal';
+import { PcMasterQuickSendPanel, renderHighlightedDocText } from './PricingModal';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -224,6 +224,7 @@ export const MobileAppView: React.FC = () => {
     matchedVideoScenes,
     setSelectedVideoModal,
     activeQuery,
+    hasExecutedUserSearch,
     searchResults,
     groupBurstsInSearch,
     setGroupBurstsInSearch,
@@ -689,26 +690,47 @@ export const MobileAppView: React.FC = () => {
                           </span>
                         </div>
                         <h4 className="font-headline-sm text-[14px] text-white font-bold truncate">
-                          {doc.title}
+                          {renderHighlightedDocText(
+                            doc.title,
+                            hasExecutedUserSearch ? activeQuery : ''
+                          )}
                         </h4>
                         <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2">
-                          {doc.extractedText}
+                          {renderHighlightedDocText(
+                            doc.extractedText,
+                            hasExecutedUserSearch ? activeQuery : ''
+                          )}
                         </p>
                         <div className="pt-1.5 flex items-center justify-between gap-2 border-t border-white/10">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void navigator.clipboard?.writeText(doc.extractedText);
                                 useSaySeeStore.setState({
-                                  lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
+                                  lastQuarantineToast: `📋 복사 완료! [${doc.title}] 본문 내용이 복사되었습니다.`,
                                 });
-                              });
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 font-label-sm text-[11px] font-extrabold cursor-pointer"
-                          >
-                            🔍 이 파일 바로 띄우기
-                          </button>
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11px] font-extrabold cursor-pointer"
+                            >
+                              📋 복사
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
+                                  useSaySeeStore.setState({
+                                    lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
+                                  });
+                                });
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 font-label-sm text-[11px] font-extrabold cursor-pointer"
+                            >
+                              🔍 이 파일 바로 띄우기
+                            </button>
+                          </div>
                           <span className="text-primary-container text-[11px] font-bold">본문 →</span>
                         </div>
                       </article>

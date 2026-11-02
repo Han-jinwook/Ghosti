@@ -244,7 +244,7 @@ export interface LocalDocumentFile {
   keywords: string[];
   date: string;
   sizeKB: number;
-  deviceSource: 'PC 바탕화면' | '스마트폰 다운로드' | 'PC 로컬 폴더';
+  deviceSource: 'PC 바탕화면' | '스마트폰 다운로드' | 'PC 로컬 폴더' | 'G: 내 드라이브 (Google Sheets)' | string;
 }
 
 /** [스펙 2] 3중 타임머신 안전망: 즉시 되돌리기(Undo) 배치 스냅샷 */
