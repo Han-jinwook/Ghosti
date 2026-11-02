@@ -1363,10 +1363,22 @@ export const DesktopDashboard: React.FC = () => {
                                 toggleBookmark(item.photo.id);
                               }}
                               aria-label="즐겨찾기"
-                              className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-primary-container transition-colors"
+                              title={item.photo.bookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                              className={`absolute top-2.5 right-2.5 w-7.5 h-7.5 rounded-full backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
+                                item.photo.bookmarked
+                                  ? 'bg-red-600/95 text-white ring-2 ring-white/80 shadow-md scale-105'
+                                  : 'bg-black/60 text-white/85 hover:text-red-400 hover:bg-black/80'
+                              }`}
                             >
-                              <span className="material-symbols-outlined text-[16px]">
-                                {item.photo.bookmarked ? 'bookmark_added' : 'favorite'}
+                              <span
+                                className="material-symbols-outlined text-[16px]"
+                                style={
+                                  item.photo.bookmarked
+                                    ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
+                                    : undefined
+                                }
+                              >
+                                favorite
                               </span>
                             </button>
 

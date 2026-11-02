@@ -363,13 +363,24 @@ export const PhotoDetailModal: React.FC = () => {
             </button>
             <button
               onClick={() => toggleBookmark(selectedPhoto.id)}
-              className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1 transition-colors ${
+              className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1 transition-all cursor-pointer ${
                 selectedPhoto.bookmarked
-                  ? 'bg-primary-container text-on-primary-container font-bold'
-                  : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
+                  ? 'bg-red-600 text-white font-extrabold shadow-xs'
+                  : 'bg-surface-container-high text-on-surface-variant hover:text-red-500'
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">favorite</span>
+              <span
+                className={`material-symbols-outlined text-[16px] ${
+                  selectedPhoto.bookmarked ? 'text-white' : 'text-red-500'
+                }`}
+                style={
+                  selectedPhoto.bookmarked
+                    ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
+                    : undefined
+                }
+              >
+                favorite
+              </span>
               <span>{selectedPhoto.bookmarked ? '즐겨찾기됨' : '즐겨찾기'}</span>
             </button>
             <button

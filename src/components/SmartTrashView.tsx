@@ -405,11 +405,11 @@ export const SmartTrashView: React.FC = () => {
           className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors select-none"
         >
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-[12.5px] text-amber-400 font-bold">
+            <span className="text-[16px] md:text-[17.5px] text-amber-400 font-extrabold tracking-tight">
               {showSystemConsult ? '▾' : '▸'} 💬 기기 3대 핵심 건강검진
             </span>
             {decidedCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-primary-container/15 text-primary-container text-[11px] font-extrabold">
+              <span className="px-2.5 py-0.5 rounded-full bg-primary-container/15 text-primary-container text-[12px] font-extrabold">
                 ✓ {decidedCount}/3 항목 선택됨
               </span>
             )}
@@ -418,14 +418,14 @@ export const SmartTrashView: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowHealthHistoryDrawer((v) => !v)}
-              className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[13px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
             >
               📋 내 검진 기록함 ({healthHistoryRecords.length})
             </button>
             <button
               type="button"
               onClick={() => setShowSystemConsult((v) => !v)}
-              className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13.5px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
             >
               {showSystemConsult ? '접기 ▴' : '검진 항목 펼치기 ▾'}
             </button>
@@ -437,7 +437,7 @@ export const SmartTrashView: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* ① 다운로드 폴더 방치 설치파일(.exe/.apk/.msi) & 중복 압축파일 청소 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <span className="font-headline-sm text-[14.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                   📦 다운로드 설치파일(.exe·.apk) 정리
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
@@ -447,7 +447,7 @@ export const SmartTrashView: React.FC = () => {
                       setDecisions((d) => ({ ...d, downloadInstallers: 'clean_installers' }));
                       void triggerMonsterQuery('다운로드 폴더 방치된 설치파일(.exe/.apk) 미리보고 정리해 줘');
                     }}
-                    className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.downloadInstallers === 'clean_installers'
                         ? 'bg-primary-container text-zinc-950 font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
@@ -460,7 +460,7 @@ export const SmartTrashView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setDecisions((d) => ({ ...d, downloadInstallers: 'keep' }))}
-                    className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.downloadInstallers === 'keep'
                         ? 'bg-zinc-700 text-white font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
@@ -473,7 +473,7 @@ export const SmartTrashView: React.FC = () => {
 
               {/* ② PC 바탕화면 중복파일 & 바로가기(.lnk) 뒤섞임 정리 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <span className="font-headline-sm text-[14.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                   💻 PC 바탕화면 잡파일 · 구형 폴더 정리
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
@@ -485,7 +485,7 @@ export const SmartTrashView: React.FC = () => {
                         "바탕화면이랑 다운로드 폴더에서 잡파일은 '기타_정리함'으로 모으고 옛날 폴더는 숨겨줘"
                       );
                     }}
-                    className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.pcDesktop === 'archive_move'
                         ? 'bg-primary-container text-zinc-950 font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
@@ -498,7 +498,7 @@ export const SmartTrashView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setDecisions((d) => ({ ...d, pcDesktop: 'keep' }))}
-                    className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.pcDesktop === 'keep'
                         ? 'bg-zinc-700 text-white font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
@@ -511,7 +511,7 @@ export const SmartTrashView: React.FC = () => {
 
               {/* ③ 전기·메모리 먹는 상주 보안모듈 동결 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <span className="font-headline-sm text-[14.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                   {isStoreAppMode
                     ? '⚡ 원본 PC 이관 & 용량 절약'
                     : '⚡ 은행·관공서 상주 보안모듈 동결'}
@@ -525,7 +525,7 @@ export const SmartTrashView: React.FC = () => {
                         '은행 관공서 상주 보안 프로그램(AnySign, MagicLine, TouchEn) 동결해서 부팅 속도 높여줘'
                       );
                     }}
-                    className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.powerDrain === 'freeze_remove'
                         ? 'bg-primary-container text-zinc-950 font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
@@ -542,7 +542,7 @@ export const SmartTrashView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setDecisions((d) => ({ ...d, powerDrain: 'keep' }))}
-                    className={`px-2.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.powerDrain === 'keep'
                         ? 'bg-zinc-700 text-white font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'

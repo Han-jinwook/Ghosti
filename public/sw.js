@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ghosti-pwa-v20261102-v5';
+const CACHE_NAME = 'ghosti-pwa-v20261102-v6';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
