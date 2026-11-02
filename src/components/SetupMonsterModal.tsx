@@ -215,9 +215,9 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
 
 /**
  * [🛠️ 설정몬스터 (Setup Monster) 본체 패널]
- * - 개인 라운지 4번 탭 및 독립 모달에서 공통으로 렌더링됩니다.
+ * - 개인 라운지 손보기(SmartTrashView) 내 임베디드 및 독립 모달에서 공통으로 렌더링됩니다.
  */
-export const SetupMonsterContent: React.FC = () => {
+export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const {
     merlinAuth,
     isStoreAppMode,
@@ -550,25 +550,29 @@ export const SetupMonsterContent: React.FC = () => {
 
         {/* 우측: 언제나 0원 배지 + 건강검진 기록함 + 복원 기록 타임머신 */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
-            🆓 개인 (기본) : 언제나 0원
-          </span>
+          {!embedded && (
+            <>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
+                🆓 개인 (기본) : 언제나 0원
+              </span>
 
-          <button
-            type="button"
-            onClick={() => setShowHealthHistoryDrawer((v) => !v)}
-            className="px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-          >
-            📋 내 기기 건강검진 기록함 ({healthHistoryRecords.length})
-          </button>
+              <button
+                type="button"
+                onClick={() => setShowHealthHistoryDrawer((v) => !v)}
+                className="px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+              >
+                📋 내 기기 건강검진 기록함 ({healthHistoryRecords.length})
+              </button>
 
-          <button
-            type="button"
-            onClick={() => void triggerMonsterQuery('최근 [복원 기록] 보여줘')}
-            className="px-3 py-2 rounded-xl bg-violet-950/80 hover:bg-violet-900/80 border border-violet-500/40 text-violet-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-          >
-            🕰️ [복원 기록] 타임머신
-          </button>
+              <button
+                type="button"
+                onClick={() => void triggerMonsterQuery('최근 [복원 기록] 보여줘')}
+                className="px-3 py-2 rounded-xl bg-violet-950/80 hover:bg-violet-900/80 border border-violet-500/40 text-violet-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+              >
+                🕰️ [복원 기록] 타임머신
+              </button>
+            </>
+          )}
 
           {hasActiveUndoableAudit && (
             <button
@@ -603,8 +607,8 @@ export const SetupMonsterContent: React.FC = () => {
       )}
 
       {/* ═══════════════ [좌우 2열 배치] 좌측: 원클릭 진단·수리 & Z-코어 실물 포렌식 / 우측: 통상의 채팅창 (Gemini Flash AI + JSON 코어 위임) ═══════════════ */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        <div className="xl:col-span-7 flex flex-col gap-4 min-w-0">
+      <div className={embedded ? 'flex flex-col gap-4' : 'grid grid-cols-1 xl:grid-cols-12 gap-5 items-start'}>
+        <div className={embedded ? 'flex flex-col gap-4 min-w-0' : 'xl:col-span-7 flex flex-col gap-4 min-w-0'}>
       {/* 3. 📱 모바일판 전용: 선제적 맞춤 진단 카드 */}
       {setupMonsterPlatform === 'mobile' && (
         <div className="flex flex-col gap-2.5">
@@ -1278,23 +1282,25 @@ export const SetupMonsterContent: React.FC = () => {
         </div>
 
         {/* ═══════════════ [우측 1열] 통상의 채팅창 (설정몬스터 × 클린몬스터 · Gemini Flash AI + JSON 코어 위임) ═══════════════ */}
-        <div className="xl:col-span-5 w-full">
-          <MonsterStandardChatColumn
-            sourceTab="repair"
-            externalQueryTrigger={externalQueryTrigger}
-            onHealthRecordAdded={(rec) =>
-              setHealthHistoryRecords((prev) => [rec, ...prev])
-            }
-            onJumpToSearch={(kw) => {
-              void runTextQuery(kw);
-              if (layout === 'mobile') setMobileTab('search');
-              else setDesktopTab('dashboard');
-            }}
-            onTriggerOsRepair={(symptomQuery) => {
-              submitSetupMonsterQuery(symptomQuery);
-            }}
-          />
-        </div>
+        {!embedded && (
+          <div className="xl:col-span-5 w-full">
+            <MonsterStandardChatColumn
+              sourceTab="repair"
+              externalQueryTrigger={externalQueryTrigger}
+              onHealthRecordAdded={(rec) =>
+                setHealthHistoryRecords((prev) => [rec, ...prev])
+              }
+              onJumpToSearch={(kw) => {
+                void runTextQuery(kw);
+                if (layout === 'mobile') setMobileTab('search');
+                else setDesktopTab('dashboard');
+              }}
+              onTriggerOsRepair={(symptomQuery) => {
+                submitSetupMonsterQuery(symptomQuery);
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

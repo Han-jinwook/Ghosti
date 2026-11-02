@@ -8,6 +8,7 @@ import {
 } from '../services/monsterChatRouter';
 import { PersonalHealthCheckHistoryDrawer } from './MonsterInteractiveCards';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
+import { SetupMonsterContent } from './SetupMonsterModal';
 import {
   zCoreBridge,
   isZCoreOutdated,
@@ -270,10 +271,15 @@ export const SmartTrashView: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => useSaySeeStore.getState().setShowSetupMonsterModal(true, 'pc')}
+              onClick={() => {
+                document.getElementById('ghosti-inline-setup-monster')?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                });
+              }}
               className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-label-sm text-[12px] font-black transition-colors cursor-pointer whitespace-nowrap shadow-sm"
             >
-              🛠️ PC·폰 고치기 &amp; 3초 파일 찾기
+              🛠️ PC·폰 고치기 &amp; 3초 파일 찾기 ↓
             </button>
 
             <button
@@ -1154,6 +1160,11 @@ export const SmartTrashView: React.FC = () => {
           </div>
         )}
       </section>
+
+      {/* ─────────────── 6. [한 화면 통합] 🛠️ PC·스마트폰 설정·수리 & 🔍 3초 실물 파일 스캔 (팝업 없이 바로 표시) ─────────────── */}
+      <section id="ghosti-inline-setup-monster" className="w-full scroll-mt-4">
+        <SetupMonsterContent embedded={true} />
+      </section>
         </div>
 
         {/* ═══════════════ [우측 1열] 통상의 채팅창 (클린몬스터 × 설정몬스터 · Gemini Flash AI + JSON 코어 위임) ═══════════════ */}
@@ -1171,7 +1182,10 @@ export const SmartTrashView: React.FC = () => {
             }}
             onTriggerOsRepair={(symptomQuery) => {
               void useSaySeeStore.getState().submitSetupMonsterQuery(symptomQuery);
-              useSaySeeStore.getState().setShowSetupMonsterModal(true);
+              document.getElementById('ghosti-inline-setup-monster')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+              });
             }}
           />
         </div>

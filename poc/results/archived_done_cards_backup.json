@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-02T10:09:53.498948",
+  "updated_at": "2026-11-02T10:26:29.508716",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -362,6 +362,14 @@
       "last_edited_time": "2026-10-30T04:45:00.000Z",
       "url": "https://app.notion.com/p/409f9ffd2c1d80689766f0a437b3bed0",
       "archived_at": "2026-11-02T10:09:53.498719"
+    },
+    {
+      "page_id": "408f9ffd-2c1d-817f-bfc7-f814a9f77a7f",
+      "title": "🎯 [귀신같이] [서브메뉴 ③: ⚙️ 고치기] Z-코어 실물 OS 3대 검증·3초 포렌식 5줄 미리보기 & 사라진 파일 1초 추적·복구 & 바탕화면 바로가기·실측 사양 진단 전수 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-10-30T05:18:00.000Z",
+      "url": "https://app.notion.com/p/Z-OS-3-3-5-1-408f9ffd2c1d817fbfc7f814a9f77a7f",
+      "archived_at": "2026-11-02T10:26:29.505457"
     }
   ]
 }
