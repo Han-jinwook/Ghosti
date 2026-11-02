@@ -447,115 +447,86 @@ export const DesktopDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* 2. 메인 메뉴(이모지 제거 · 폰트 확대 · 색상 차별화) & 사이드 서브메뉴(들여쓰기 통일 · 흑백 이모지) */}
-        <div className="flex flex-col gap-1">
-          {MAIN_LOUNGE_MENUS.map((menu) => {
-            const isDeviceIntegrationActive = activeLoungeType === 'personal' && desktopTab === 'sync';
-            const active =
-              menu.id === 'personal'
-                ? activeLoungeType === 'personal' && desktopTab !== 'sync' && !isDeviceIntegrationOpen
-                : activeLoungeType === menu.id;
-            const isLoungeSub = Boolean(subscribedLounges[menu.id]);
-            return (
-              <div key={menu.id} className="flex flex-col gap-0.5">
-                {menu.sectionHeader && (
-                  <span
-                    className={`px-3 pt-3 pb-1 text-[11.5px] font-extrabold tracking-wider ${
-                      themeMode === 'light' ? 'text-slate-400' : 'text-zinc-500'
-                    }`}
-                  >
-                    {menu.sectionHeader}
-                  </span>
-                )}
+        {/* 2. 4대 메인 메뉴(내 기기 / 내 기기 통합 / 사진 공유 / 업무 공유) & 들여쓰기 사이드 서브메뉴 통일 */}
+        {(() => {
+          const isDeviceIntegrationActive =
+            (activeLoungeType === 'personal' && desktopTab === 'sync') || isDeviceIntegrationOpen;
+          const isMyDeviceActive =
+            activeLoungeType === 'personal' && desktopTab !== 'sync' && !isDeviceIntegrationOpen;
+          const isPhotoShareActive =
+            !isDeviceIntegrationOpen &&
+            (activeLoungeType === 'family' ||
+              activeLoungeType === 'club' ||
+              activeLoungeType === 'student');
+          const isWorkShareActive = !isDeviceIntegrationOpen && activeLoungeType === 'work';
+
+          const mainBtnClass = (active: boolean) =>
+            `w-full px-3 py-2 rounded-xl font-label-md text-[15px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+              active
+                ? themeMode === 'light'
+                  ? 'bg-[#E6F7F5] text-[#0F766E] font-extrabold'
+                  : 'bg-zinc-800/90 text-primary-container font-extrabold'
+                : themeMode === 'light'
+                ? 'text-slate-800 hover:text-slate-950 hover:bg-black/5 font-extrabold'
+                : 'text-zinc-200 hover:text-white hover:bg-white/5 font-extrabold'
+            }`;
+
+          const subWrapClass = `ml-3.5 pl-2.5 border-l flex flex-col gap-0.5 py-0.5 ${
+            themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
+          }`;
+
+          const subBtnClass = (active: boolean) =>
+            `w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+              active
+                ? themeMode === 'light'
+                  ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
+                  : 'bg-white/10 text-white font-extrabold'
+                : themeMode === 'light'
+                ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
+            }`;
+
+          return (
+            <div className="flex flex-col gap-1">
+              {/* [메인 메뉴 1] 내 기기 (PC·폰) */}
+              <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
                   onClick={() => {
                     setIsDeviceIntegrationOpen(false);
-                    setActiveLoungeType(menu.id);
+                    setActiveLoungeType('personal');
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
                   }}
-                  className={`w-full px-3 py-2 rounded-xl font-label-md text-[15px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                    active
-                      ? themeMode === 'light'
-                        ? 'bg-[#E6F7F5] text-[#0F766E] font-extrabold'
-                        : 'bg-zinc-800/90 text-primary-container font-extrabold'
-                      : themeMode === 'light'
-                      ? 'text-slate-800 hover:text-slate-950 hover:bg-black/5 font-extrabold'
-                      : 'text-zinc-200 hover:text-white hover:bg-white/5 font-extrabold'
-                  }`}
+                  className={mainBtnClass(isMyDeviceActive)}
                 >
-                  <div className="flex items-center min-w-0">
-                    <span className="truncate" title={menu.id === 'personal' ? '내 폰·PC 속 손보기와 귀신같이 찾기' : undefined}>
-                      {menu.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {menu.freeBadge && !isLoungeSub && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-teal-500/15 text-teal-400 text-[9.5px] font-extrabold">
-                        0원
-                      </span>
-                    )}
-                    {isLoungeSub && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500 text-[9.5px] font-extrabold">
-                        PRO
-                      </span>
-                    )}
-                    {menu.id === 'personal' && <span className="text-[10px] opacity-60">{active ? '▾' : '▸'}</span>}
-                  </div>
+                  <span className="truncate" title="내 폰·PC 속 찾기 및 치우기&손보기">
+                    내 기기 (PC·폰)
+                  </span>
+                  <span className="text-[10px] opacity-60">{isMyDeviceActive ? '▾' : '▸'}</span>
                 </button>
 
-                {/* 선택된 메인 메뉴의 사이드메뉴 (공유 메뉴는 사이드바 하위 트리를 없애고 본문 상단 바에서 제어) */}
-                {active && menu.id === 'personal' && (
-                  <div
-                    className={`ml-3.5 pl-2.5 border-l flex flex-col gap-0.5 py-0.5 ${
-                      themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
-                    }`}
-                  >
-                    {/* 해당 라운지의 서브메뉴 트리 */}
-                    {currentSubmenus.map((sub) => {
-                      if (sub.id === 'trial' && isCurrentLoungeSubscribed) return null;
-                      if (
-                        activeLoungeType === 'personal' &&
-                        sub.id === 'sync' &&
-                        isStoreAppMode &&
-                        !enableSetupMonster
-                      ) {
-                        return null;
-                      }
+                {isMyDeviceActive && (
+                  <div className={subWrapClass}>
+                    {LOUNGE_SUBMENU_CONFIG.personal.map((sub) => {
                       const isSubActive = desktopTab === sub.id;
                       return (
                         <button
                           key={sub.id}
                           type="button"
                           onClick={() => {
-                            if (sub.id === 'share') {
-                              setActiveLoungeType('family');
-                              setDesktopTab('dashboard');
-                            } else {
-                              setDesktopTab(sub.id);
-                            }
+                            setIsDeviceIntegrationOpen(false);
+                            setActiveLoungeType('personal');
+                            setDesktopTab(sub.id);
                             if (isMobileDrawer) setIsMobileDrawerOpen(false);
                           }}
                           title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
-                            isSubActive
-                              ? themeMode === 'light'
-                                ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
-                                : 'bg-white/10 text-white font-extrabold'
-                              : themeMode === 'light'
-                              ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
-                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
-                          }`}
+                          className={subBtnClass(isSubActive)}
                         >
                           <div className="flex flex-col min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="grayscale opacity-75 shrink-0 text-[13px]">{sub.icon}</span>
-                              <span className="truncate font-bold">
-                                {activeLoungeType === 'personal' && sub.id === 'trial'
-                                  ? '귀신같이 청소 진단'
-                                  : sub.label}
-                              </span>
+                              <span className="truncate font-bold">{sub.label}</span>
                             </div>
                             {sub.subcaption && (
                               <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
@@ -579,109 +550,200 @@ export const DesktopDashboard: React.FC = () => {
                     })}
                   </div>
                 )}
+              </div>
 
-                {menu.id === 'personal' && (
-                  <div className="flex flex-col gap-0.5 mt-0.5">
+              {/* [메인 메뉴 2] 내 기기 통합 (PC+폰+PC+) */}
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeviceIntegrationOpen(true);
+                    setActiveLoungeType('personal');
+                    setDesktopTab('sync');
+                  }}
+                  className={mainBtnClass(isDeviceIntegrationActive)}
+                >
+                  <span className="truncate" title="집PC · 회사PC · 스마트폰 통합 및 귀신 초능력 9+3">
+                    내 기기 통합 (PC+폰+PC+)
+                  </span>
+                  <span className="text-[10px] opacity-60">{isDeviceIntegrationActive ? '▾' : '▸'}</span>
+                </button>
+
+                {isDeviceIntegrationActive && (
+                  <div className={subWrapClass}>
                     <button
                       type="button"
                       onClick={() => {
-                        setIsDeviceIntegrationOpen((prev) => !prev);
+                        setIsDeviceIntegrationOpen(true);
+                        setActiveIntegrationSubTab('devices');
                         setActiveLoungeType('personal');
                         setDesktopTab('sync');
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
                       }}
-                      className={`w-full px-3 py-2 rounded-xl font-label-md text-[15px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                        isDeviceIntegrationActive || isDeviceIntegrationOpen
-                          ? themeMode === 'light'
-                            ? 'bg-[#E6F7F5] text-[#0F766E] font-extrabold'
-                            : 'bg-zinc-800/90 text-primary-container font-extrabold'
-                          : themeMode === 'light'
-                          ? 'text-slate-800 hover:text-slate-950 hover:bg-black/5 font-extrabold'
-                          : 'text-zinc-200 hover:text-white hover:bg-white/5 font-extrabold'
-                      }`}
+                      className={subBtnClass(
+                        isDeviceIntegrationActive && activeIntegrationSubTab === 'devices'
+                      )}
                     >
-                      <div className="flex items-center min-w-0">
-                        <span className="truncate" title="집PC · 회사PC · 스마트폰 통합 및 귀신 초능력 9+3">
-                          내 기기 통합 (PC+폰+PC+)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] opacity-60">
-                          {isDeviceIntegrationActive || isDeviceIntegrationOpen ? '▾' : '▸'}
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
+                          <span className="truncate font-bold">내 모든 기기 통합</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          PC · 폰 · 서브PC 1초 연동
                         </span>
                       </div>
                     </button>
 
-                    {(isDeviceIntegrationActive || isDeviceIntegrationOpen) && (
-                      <div
-                        className={`ml-3.5 pl-2.5 border-l flex flex-col gap-0.5 py-0.5 ${
-                          themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveIntegrationSubTab('devices');
-                            setActiveLoungeType('personal');
-                            setDesktopTab('sync');
-                            if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                          }}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
-                            isDeviceIntegrationActive && activeIntegrationSubTab === 'devices'
-                              ? themeMode === 'light'
-                                ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
-                                : 'bg-white/10 text-white font-extrabold'
-                              : themeMode === 'light'
-                              ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
-                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
-                          }`}
-                        >
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
-                              <span className="truncate font-bold">내 모든 기기 통합</span>
-                            </div>
-                            <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                              PC · 폰 · 서브PC 1초 연동
-                            </span>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveIntegrationSubTab('superpower');
-                            setActiveLoungeType('personal');
-                            setDesktopTab('sync');
-                            if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                          }}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
-                            isDeviceIntegrationActive && activeIntegrationSubTab === 'superpower'
-                              ? themeMode === 'light'
-                                ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
-                                : 'bg-white/10 text-white font-extrabold'
-                              : themeMode === 'light'
-                              ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
-                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
-                          }`}
-                        >
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="grayscale opacity-75 shrink-0 text-[13px]">⚡</span>
-                              <span className="truncate font-bold">귀신 초능력 9+3</span>
-                            </div>
-                            <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                              Ctrl+0 귀신창 · 복사검색 · 상용구
-                            </span>
-                          </div>
-                        </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen(true);
+                        setActiveIntegrationSubTab('superpower');
+                        setActiveLoungeType('personal');
+                        setDesktopTab('sync');
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(
+                        isDeviceIntegrationActive && activeIntegrationSubTab === 'superpower'
+                      )}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">⚡</span>
+                          <span className="truncate font-bold">귀신 초능력 9+3</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          Ctrl+0 귀신창 · 복사검색 · 상용구
+                        </span>
                       </div>
-                    )}
+                    </button>
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
+
+              {/* [메인 메뉴 3] 사진 공유 */}
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeviceIntegrationOpen(false);
+                    if (
+                      activeLoungeType !== 'family' &&
+                      activeLoungeType !== 'club' &&
+                      activeLoungeType !== 'student'
+                    ) {
+                      setActiveLoungeType('family');
+                    }
+                    setDesktopTab('dashboard');
+                    resetToZenCanvas();
+                  }}
+                  className={mainBtnClass(isPhotoShareActive)}
+                >
+                  <span className="truncate" title="패밀리 및 동호회·동창회 사진 공유">
+                    사진 공유
+                  </span>
+                  <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
+                </button>
+
+                {isPhotoShareActive && (
+                  <div className={subWrapClass}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen(false);
+                        setActiveLoungeType('family');
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(activeLoungeType === 'family')}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">👨‍👩‍👧‍👦</span>
+                          <span className="truncate font-bold">패밀리 (우리집·양가)</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          우리집 · 본가 · 처가 앨범
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen(false);
+                        setActiveLoungeType('club');
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(
+                        activeLoungeType === 'club' || activeLoungeType === 'student'
+                      )}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">🏕️</span>
+                          <span className="truncate font-bold">동호회 · 동창회</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          모임 · 행사 · 동창 앨범
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* [메인 메뉴 4] 업무 공유 */}
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeviceIntegrationOpen(false);
+                    setActiveLoungeType('work');
+                    setDesktopTab('dashboard');
+                    resetToZenCanvas();
+                  }}
+                  className={mainBtnClass(isWorkShareActive)}
+                >
+                  <span className="truncate" title="업무 공유 (S: 드라이브)">
+                    업무 공유
+                  </span>
+                  <span className="text-[10px] opacity-60">{isWorkShareActive ? '▾' : '▸'}</span>
+                </button>
+
+                {isWorkShareActive && (
+                  <div className={subWrapClass}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen(false);
+                        setActiveLoungeType('work');
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(activeLoungeType === 'work')}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
+                          <span className="truncate font-bold">업무 공유 (S: 드라이브)</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          부서 · 팀 · 프로젝트 공유
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 3. 사이드바 하단: 멀린 패밀리 생태계 앱 런처 (허브 SSO 연동) */}
