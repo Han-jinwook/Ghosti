@@ -90,7 +90,7 @@ SWP_NOACTIVATE = 0x0010
 KEYEVENTF_KEYUP = 0x0002
 
 LOCK_PORT = 51988
-AUTO_CLEAN_SECONDS = 30.0
+AUTO_CLEAN_SECONDS = 300.0
 IMAGE_CLEAN_SECONDS = 90.0
 MENU_ARM_SECONDS = 7.5
 
@@ -540,8 +540,14 @@ _toast_queue: "queue.Queue[tuple[str, int]]" = queue.Queue()
 
 
 GHOSTI_WEB_URL = os.environ.get("GHOSTI_WEB_URL", "https://ghosti.sundreamer.app")
-SOUNDS_DIR = Path(__file__).resolve().parent.parent / "data" / "baby_ghost_sounds"
-ASSETS_DIR = Path(__file__).resolve().parent.parent / "data" / "assets"
+_CAND_SOUNDS = [
+    Path(__file__).resolve().parent / "assets",
+    Path(__file__).resolve().parent.parent / "data" / "baby_ghost_sounds",
+    Path("C:/MerlinTools/assets"),
+    Path("d:/Secretary/data/baby_ghost_sounds"),
+]
+SOUNDS_DIR = next((d for d in _CAND_SOUNDS if (d / "active_summon_sound.wav").exists()), _CAND_SOUNDS[0])
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 TELEMETRY_FILE = Path(__file__).resolve().parent.parent / "data" / "superpower_telemetry.json"
 _toast_event = threading.Event()
 GLOBAL_AI_HISTORY: list[dict] = []
@@ -670,6 +676,8 @@ def _toast_worker() -> None:
     ghost_wordmark_photo = None
     try:
         sym_candidates = [
+            Path(__file__).resolve().parent / "assets" / "gwisinkachi_app_icon_512.png",
+            Path("C:/MerlinTools/assets/gwisinkachi_app_icon_512.png"),
             Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_app_icon_512.png"),
             Path("D:/Ghosti/public/gwisinkachi_app_icon_512.png"),
         ]
@@ -680,6 +688,8 @@ def _toast_worker() -> None:
                 break
 
         wm_candidates = [
+            Path(__file__).resolve().parent / "assets" / "gwisinkachi_3d_wordmark_dark.png",
+            Path("C:/MerlinTools/assets/gwisinkachi_3d_wordmark_dark.png"),
             Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_3d_wordmark_dark.png"),
             Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_dark.png"),
             Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_light.png"),
@@ -1469,8 +1479,37 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
         s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
         s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
         s = re.sub(r"(\*\*|__|^#{1,6}\s*|```[a-zA-Z]*)", "", s, flags=re.MULTILINE)
-        # 문장 중간에 끊어진 줄바꿈 연결 (마침표/물음표/느낌표/콜론으로 끝나지 않은 줄바꿈은 공백으로 연결)
-        s = re.sub(r"(?<![.?!:다요죠음함])\r?\n(?=[가-힣a-z0-9])", " ", s)
+        # 1) 문장 중간에 끊어진 줄바꿈 연결 (영문 대문자 및 괄호 줄바꿈 포함)
+        s = re.sub(r"(?<![.?!:다요죠음함])\r?\n(?=[가-힣A-Za-z0-9(\[])", " ", s)
+        # 2) PDF 표/문서에서 자간(kerning) 때문에 쪼개진 한글 조사·어미·단어 공백 복원
+        s = re.sub(r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|니|니까|면|다면|된|될|됨|합니다|습니다)(?=[\s.,?!:;)]|$))", "", s)
+        _standalone_1char = {"나", "너", "저", "그", "이", "더", "덜", "안", "못", "잘", "또", "꼭", "다", "총", "각", "전", "현", "신", "구", "유", "무", "열", "행", "칸", "줄", "초", "분", "시", "일", "월", "년", "원", "명", "건", "개", "장", "번"}
+        def _join_broken_hangul(line: str) -> str:
+            tokens = line.split(" ")
+            if len(tokens) < 2:
+                return line
+            single_ko_cnt = sum(1 for t in tokens if len(t) == 1 and "가" <= t <= "힣" and t not in _standalone_1char)
+            out = []
+            i = 0
+            while i < len(tokens):
+                cur = tokens[i]
+                if i + 1 < len(tokens):
+                    nxt = tokens[i + 1]
+                    cur_pure = re.sub(r"[.,?!:;)]+$", "", cur)
+                    nxt_pure = re.sub(r"[.,?!:;)]+$", "", nxt)
+                    if len(cur) == 1 and "가" <= cur <= "힣" and cur not in _standalone_1char and nxt_pure and all("가" <= c <= "힣" for c in nxt_pure):
+                        out.append(cur + nxt)
+                        i += 2
+                        continue
+                    if cur_pure and all("가" <= c <= "힣" for c in cur_pure) and nxt_pure and all("가" <= c <= "힣" for c in nxt_pure):
+                        if len(cur_pure) == 2 and len(nxt_pure) == 2 and nxt_pure.endswith(("에", "의", "로", "를", "을", "이", "가", "은", "는", "도", "만", "와", "과")) and single_ko_cnt >= 1:
+                            out.append(cur + nxt)
+                            i += 2
+                            continue
+                out.append(cur)
+                i += 1
+            return " ".join(out)
+        s = "\n".join(_join_broken_hangul(ln) for ln in s.splitlines())
         s = re.sub(r"\r?\n\s*\r?\n+", "\n\n", s)
 
         # 문장이 5개 이상 한 덩어리로 뭉쳐 있으면 EmbeddingGemma 2 문장 간 의미 거리로 자연스러운 문단 나누기
@@ -1592,24 +1631,50 @@ def superpower_6_screen_ocr(daemon_set_cb) -> None:
             return
         tmp_img = Path(tempfile.gettempdir()) / "ghosti_ocr_temp.png"
         img.save(tmp_img, "PNG")
-        ps_cmd = (
-            "Add-Type -AssemblyName System.Runtime.WindowsRuntime; "
-            "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]; "
-            "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]; "
-            "$file = [Windows.Storage.StorageFile]::GetFileFromPathAsync('" + str(tmp_img) + "').GetAwaiter().GetResult(); "
-            "$stream = $file.OpenAsync([Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult(); "
-            "$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult(); "
-            "$bitmap = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult(); "
-            "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages(); "
-            "$res = $engine.RecognizeAsync($bitmap).GetAwaiter().GetResult(); "
-            "$words = @(); "
-            "foreach ($line in $res.Lines) { foreach ($w in $line.Words) { "
-            "$r = $w.BoundingRect; "
-            "$words += [PSCustomObject]@{t=$w.Text; x=$r.X; y=$r.Y; w=$r.Width; h=$r.Height} "
-            "} }; "
-            "$words | ConvertTo-Json -Compress"
-        )
-        out = subprocess.check_output(["powershell", "-NoProfile", "-Command", ps_cmd], encoding="utf-8", errors="ignore", timeout=7).strip()
+        import base64
+        ps_script = f"""
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType=WindowsRuntime]
+$null = [Windows.Storage.Streams.IRandomAccessStream, Windows.Storage.Streams, ContentType=WindowsRuntime]
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {{ $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' }})[0]
+function Await($WinRtTask, $ResultType) {{
+    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+    $netTask = $asTask.Invoke($null, @($WinRtTask))
+    $netTask.Wait(-1) | Out-Null
+    $netTask.Result
+}}
+$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync('{str(tmp_img)}')) ([Windows.Storage.StorageFile])
+$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+$res = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+$stream.Dispose()
+$words = @()
+foreach ($line in $res.Lines) {{
+    foreach ($w in $line.Words) {{
+        $r = $w.BoundingRect
+        $words += [PSCustomObject]@{{t=$w.Text; x=$r.X; y=$r.Y; w=$r.Width; h=$r.Height}}
+    }}
+}}
+$words | ConvertTo-Json -Compress
+"""
+        enc_cmd = base64.b64encode(ps_script.encode("utf-16-le")).decode("ascii")
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0
+        out = subprocess.check_output(
+            ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", enc_cmd],
+            encoding="utf-8",
+            errors="ignore",
+            timeout=8,
+            startupinfo=si,
+            creationflags=0x08000000,
+        ).strip()
         if out:
             words = json.loads(out)
             if isinstance(words, dict):
@@ -1657,13 +1722,46 @@ def superpower_6_screen_ocr(daemon_set_cb) -> None:
     show_ghost_toast("👻 귀신같이 글자추출")
 
 
-def superpower_7_toggle_topmost() -> None:
+_LAST_TARGET_HWND: int = 0
+
+
+def _capture_target_hwnd() -> int:
+    global _LAST_TARGET_HWND
     hwnd = u32.GetForegroundWindow()
     if hwnd:
+        buf = ctypes.create_unicode_buffer(256)
+        u32.GetWindowTextW(hwnd, buf, 256)
+        cls_buf = ctypes.create_unicode_buffer(128)
+        u32.GetClassNameW(hwnd, cls_buf, 128)
+        # Tk Toplevel 오버레이 창이 아닌 실제 유저 작업 창만 기록
+        if cls_buf.value != "TkTopLevel":
+            _LAST_TARGET_HWND = hwnd
+    return _LAST_TARGET_HWND or hwnd
+
+
+def superpower_7_toggle_topmost(target_hwnd: int = 0) -> None:
+    hwnd = target_hwnd or _capture_target_hwnd()
+    if hwnd:
+        root_hwnd = u32.GetAncestor(hwnd, 2)  # GA_ROOT = 2
+        if root_hwnd:
+            hwnd = root_hwnd
         ex_style = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
         is_top = (ex_style & WS_EX_TOPMOST) != 0
         target_flag = HWND_NOTOPMOST if is_top else HWND_TOPMOST
-        u32.SetWindowPos(hwnd, target_flag, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        u32.SetWindowPos(hwnd, target_flag, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)
+        # 창 제목줄에 [📌고정] 시각 표시 토글
+        try:
+            buf = ctypes.create_unicode_buffer(512)
+            u32.GetWindowTextW(hwnd, buf, 512)
+            cur_title = buf.value or ""
+            if is_top:
+                new_title = cur_title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", "")
+            else:
+                new_title = cur_title if "고정]" in cur_title else f"📌 [항상 위 고정] {cur_title}"
+            if new_title != cur_title:
+                u32.SetWindowTextW(hwnd, new_title)
+        except Exception:
+            pass
         show_ghost_toast("👻 귀신같이 창고정해제" if is_top else "👻 귀신같이 창고정 📌")
 
 
@@ -1675,9 +1773,19 @@ def _toggle_korean_number_format(txt: str) -> str:
     - 통짜 카톡 문장이면 -> [성함 / 연락처 / 계좌 / 일정] AI 구조화 발라내기!
     """
     s = txt.strip()
-    # 1) 단일 번호에 이미 하이픈이 들어있는 경우 -> 숫자만 남기도록 역토글!
+    # 1-A) 단일 번호에 이미 하이픈이 들어있는 경우 -> 숫자만 남기도록 역토글!
     if re.fullmatch(r"\d{2,4}-\d{2,4}-\d{4,5}", s):
         return re.sub(r"\D", "", s)
+    # 1-B) 순수 숫자만 복사된 경우 (휴대폰 10~11자리, 사업자번호 10자리, 생년월일 8자리) -> 하이픈만 깔끔하게 삽입!
+    if re.fullmatch(r"\d{8,11}", s):
+        if re.fullmatch(r"01[016789]\d{7,8}", s):
+            return f"{s[:3]}-{s[3:-4]}-{s[-4:]}"
+        if re.fullmatch(r"02\d{7,8}", s):
+            return f"{s[:2]}-{s[2:-4]}-{s[-4:]}"
+        if len(s) == 10:
+            return f"{s[:3]}-{s[3:5]}-{s[5:]}"
+        if len(s) == 8 and s[:2] in ("19", "20"):
+            return f"{s[:4]}-{s[4:6]}-{s[6:]}"
 
     # 2) 통짜 카톡/메시지(연락처 + 계좌/일정이 함께 들어있는 문장) -> 구조화 추출!
     phone_m = re.search(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b", s)
@@ -1711,26 +1819,10 @@ def _toggle_korean_number_format(txt: str) -> str:
 
 def superpower_8_format_numbers(daemon_set_cb) -> None:
     orig_clip = get_clipboard_text()
-    tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
-    time.sleep(0.035)
-    tap_key_combo([VK_CONTROL], VK_C)
-    time.sleep(0.045)
-    selected = get_clipboard_text()
-    if selected and selected != orig_clip:
-        formatted = _toggle_korean_number_format(selected)
-        if formatted != selected:
-            daemon_set_cb(formatted)
-            time.sleep(0.02)
-            tap_key_combo([VK_CONTROL], VK_V)
-            time.sleep(0.05)
-            if orig_clip:
-                daemon_set_cb(orig_clip)
-            show_ghost_toast("👻 귀신같이 번호성형")
-            return
-    if orig_clip:
+    if orig_clip and orig_clip.strip():
         formatted = _toggle_korean_number_format(orig_clip)
         daemon_set_cb(formatted)
-        show_ghost_toast("👻 귀신같이 번호·일정성형")
+        show_ghost_toast(f"👻 귀신같이 번호·일정성형 ({formatted.splitlines()[0][:22]})")
 
 
 def _generate_smart_filename_prefix() -> str:
@@ -1760,11 +1852,17 @@ def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes]) -> None:
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         tag = _generate_smart_filename_prefix()
 
-        # 1) 연속 캡처한 스샷이 2장 이상 쌓여 있는 경우 -> PDF 1개로 합본 변환!
+        # 1) 연속 캡처한 스샷이 2장 이상 쌓여 있는 경우 -> 초고화질(300 DPI + 소형 캡처 2배 업스케일) PDF 1개로 합본 변환!
         if len(recent_png_bytes) >= 2:
-            pil_imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in recent_png_bytes]
+            pil_imgs = []
+            for b in recent_png_bytes:
+                im = Image.open(io.BytesIO(b)).convert("RGB")
+                if im.width < 1600:
+                    scale = 2 if im.width >= 600 else 3
+                    im = im.resize((im.width * scale, im.height * scale), Image.Resampling.LANCZOS)
+                pil_imgs.append(im)
             pdf_path = Path(tempfile.gettempdir()) / f"귀신같이_합본_{tag}_{ts}.pdf"
-            pil_imgs[0].save(pdf_path, "PDF", resolution=150.0, save_all=True, append_images=pil_imgs[1:])
+            pil_imgs[0].save(pdf_path, "PDF", resolution=300.0, quality=100, subsampling=0, save_all=True, append_images=pil_imgs[1:])
             if set_clipboard_hdrop_file(str(pdf_path)):
                 count = len(pil_imgs)
                 recent_png_bytes.clear()
@@ -1894,26 +1992,40 @@ def main() -> None:
 
             def _async_ocr_enrich(target_rec: dict, p_str: str, base_tag: str) -> None:
                 try:
-                    ps_cmd = (
-                        "Add-Type -AssemblyName System.Runtime.WindowsRuntime; "
-                        "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]; "
-                        "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]; "
-                        "$file = [Windows.Storage.StorageFile]::GetFileFromPathAsync('" + p_str + "').GetAwaiter().GetResult(); "
-                        "$stream = $file.OpenAsync([Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult(); "
-                        "$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult(); "
-                        "$bitmap = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult(); "
-                        "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages(); "
-                        "$res = $engine.RecognizeAsync($bitmap).GetAwaiter().GetResult(); "
-                        "$res.Text"
-                    )
+                    import base64
+                    ps_script = f"""
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType=WindowsRuntime]
+$null = [Windows.Storage.Streams.IRandomAccessStream, Windows.Storage.Streams, ContentType=WindowsRuntime]
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {{ $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' }})[0]
+function Await($WinRtTask, $ResultType) {{
+    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+    $netTask = $asTask.Invoke($null, @($WinRtTask))
+    $netTask.Wait(-1) | Out-Null
+    $netTask.Result
+}}
+$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync('{p_str}')) ([Windows.Storage.StorageFile])
+$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+$res = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+$stream.Dispose()
+Write-Output $res.Text
+"""
+                    enc_cmd = base64.b64encode(ps_script.encode("utf-16-le")).decode("ascii")
                     si = subprocess.STARTUPINFO()
                     si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                     si.wShowWindow = 0
                     ocr_txt = subprocess.check_output(
-                        ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
+                        ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", enc_cmd],
                         encoding="utf-8",
                         errors="ignore",
-                        timeout=6,
+                        timeout=8,
                         startupinfo=si,
                         creationflags=0x08000000,
                     ).strip()
@@ -1960,6 +2072,7 @@ def main() -> None:
 
     def trigger_master_summon() -> None:
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue
+        _capture_target_hwnd()
         play_baby_ghost_sound(mode="summon")
         record_feature_telemetry("ctrl0_summon_bar")
         seq_mode = True
@@ -2024,6 +2137,7 @@ def main() -> None:
                 elif 102 <= hk_id <= 109 or 202 <= hk_id <= 209:
                     num = hk_id % 100
                     disarm_sub_hotkeys()
+                    close_ghost_toast()
                     seq_mode = False
                     record_feature_telemetry(f"superpower_key_{num}")
                     if num == 2:
@@ -2037,7 +2151,7 @@ def main() -> None:
                     elif num == 6:
                         superpower_6_screen_ocr(daemon_set_clipboard)
                     elif num == 7:
-                        superpower_7_toggle_topmost()
+                        superpower_7_toggle_topmost(_LAST_TARGET_HWND)
                     elif num == 8:
                         superpower_8_format_numbers(daemon_set_clipboard)
                     elif num == 9:

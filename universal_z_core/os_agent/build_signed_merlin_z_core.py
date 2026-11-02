@@ -253,6 +253,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile",
+        "--runtime-tmpdir", r"%LOCALAPPDATA%\Merlin\zcore_rt",
         "--name", "Merlin_Z_Core_Setup",
         "--distpath", str(DIST_DIR),
         "--workpath", str(work_root / "work"),

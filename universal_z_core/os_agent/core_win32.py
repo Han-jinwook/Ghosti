@@ -209,13 +209,18 @@ def set_autostart_enabled(enable: bool, daemon_script_path: Optional[str] = None
 
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_REG_PATH, 0, winreg.KEY_SET_VALUE) as key:
             if enable:
-                target_script = daemon_script_path or os.path.abspath(
-                    os.path.join(os.path.dirname(__file__), "merlin_z_core_daemon.py")
-                )
-                python_exe = sys.executable
-                pythonw_exe = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
-                runner = pythonw_exe if os.path.exists(pythonw_exe) else python_exe
-                cmd = f'"{runner}" "{target_script}"'
+                is_frozen = bool(getattr(sys, "frozen", False))
+                if is_frozen:
+                    # PyInstaller 단일 실행파일(.exe) 환경: _MEIPASS 임시 폴더 경로를 인자로 넣지 않고 순수 .exe 경로만 등록!
+                    cmd = f'"{os.path.abspath(sys.executable)}"'
+                else:
+                    target_script = daemon_script_path or os.path.abspath(
+                        os.path.join(os.path.dirname(__file__), "merlin_z_core_daemon.py")
+                    )
+                    python_exe = sys.executable
+                    pythonw_exe = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
+                    runner = pythonw_exe if os.path.exists(pythonw_exe) else python_exe
+                    cmd = f'"{runner}" "{target_script}"'
                 winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, cmd)
             else:
                 try:

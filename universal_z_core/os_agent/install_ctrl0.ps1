@@ -32,16 +32,21 @@ Restart-Service sshd -ErrorAction SilentlyContinue
     }
 } catch {}
 
-# 2. Stop existing daemon
-Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*seq_paste_daemon*" } | ForEach-Object {
+# 2. Stop existing daemon and clean up broken PyInstaller _MEI Run registry / orphan processes
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "MerlinZCoreDaemon" /f 2>$null | Out-Null
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*seq_paste_daemon*" -or $_.Name -like "*Merlin_Z_Core_Setup*" } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
-# 3. Download latest seq_paste_daemon.py
-Write-Host "  [2/4] Downloading latest Ghost Window daemon..." -ForegroundColor Cyan
+# 3. Download latest seq_paste_daemon.py and assets (3D logo + sounds)
+Write-Host "  [2/4] Downloading latest Ghost Window daemon & assets..." -ForegroundColor Cyan
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ts = [DateTimeOffset]::Now.ToUnixTimeSeconds()
+New-Item -ItemType Directory -Force -Path "C:\MerlinTools\assets" | Out-Null
 & curl.exe -sL "https://raw.githubusercontent.com/Han-jinwook/Ghosti/main/universal_z_core/os_agent/seq_paste_daemon.py?t=$ts" -o "C:\MerlinTools\seq_paste_daemon.py"
+foreach ($assetName in @("gwisinkachi_app_icon_512.png", "gwisinkachi_3d_wordmark_dark.png", "active_summon_sound.wav", "active_typo_sound.wav")) {
+    & curl.exe -sL "https://raw.githubusercontent.com/Han-jinwook/Ghosti/main/universal_z_core/os_agent/assets/$assetName?t=$ts" -o "C:\MerlinTools\assets\$assetName"
+}
 
 # 4. Find real Python with Tkinter (excluding WindowsApps Microsoft Store stub)
 Write-Host "  [3/4] Checking Python (Tkinter) environment..." -ForegroundColor Cyan
