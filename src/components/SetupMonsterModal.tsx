@@ -599,9 +599,13 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
           <button
             type="button"
             onClick={() => setShowBlackboxPanel((prev) => !prev)}
-            className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
+            className={`px-3 py-2 rounded-xl border font-label-sm text-[11.5px] font-bold cursor-pointer transition-all ${
+              showBlackboxPanel
+                ? 'bg-amber-400 text-zinc-950 border-amber-400 font-extrabold shadow-xs'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-300'
+            }`}
           >
-            📋 감사로그 ({setupAuditLogs.length})
+            📋 감사로그 ({setupAuditLogs.length}) {showBlackboxPanel ? '▴' : '▾'}
           </button>
         </div>
       </div>
@@ -616,6 +620,117 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
             });
           }}
         />
+      )}
+
+      {/* 7. 🌍 본사 Multi-LLM 최단 직행 지름길 OTA 큐 & 🛡️ 분쟁 예방 감사 로그 (상단 감사로그 버튼 바로 아래 즉시 펼침) */}
+      {showBlackboxPanel && (
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-950 border-2 border-amber-400/70 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-zinc-200 dark:border-white/10">
+            <span className="font-headline-sm text-[14.5px] text-zinc-900 dark:text-white font-extrabold flex items-center gap-1.5">
+              <span>📋 PC·스마트폰 설정·수리 감사로그 ({setupAuditLogs.length}건)</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowBlackboxPanel(false)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-white/10 text-zinc-700 dark:text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
+            >
+              접기 ▴
+            </button>
+          </div>
+
+          {/* 7-0. 본사 Multi-LLM 최단 직행 지름길 (Shortest Path) OTA 자산화 큐 */}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-label-sm text-[12px] text-pink-700 dark:text-pink-300 font-extrabold">
+                🌍 최단 직행 지름길(Shortest Path) 학습 큐 ({setupSelfHealingOtaQueue.length}건)
+              </span>
+            </div>
+
+            {setupSelfHealingOtaQueue.length === 0 ? (
+              <p className="font-body-sm text-[11.5px] text-zinc-600 dark:text-zinc-400 py-1">
+                아직 수집된 초행길 우회 학습 궤적이 없습니다.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
+                {setupSelfHealingOtaQueue.map((ota) => (
+                  <div
+                    key={ota.otaId}
+                    className="p-3 rounded-xl bg-pink-50 dark:bg-pink-950/25 border border-pink-300 dark:border-pink-400/40 flex flex-col gap-1"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-label-sm text-[11.5px] text-pink-800 dark:text-pink-200 font-extrabold">
+                        [{ota.trajectoryGradeBadgeKo}] {ota.title} (언제나 0원)
+                      </span>
+                      <span className="font-mono text-[10.5px] text-zinc-500 dark:text-zinc-400">
+                        {ota.otaId} · {ota.createdAt}
+                      </span>
+                    </div>
+                    <p className="font-mono text-[10.5px] text-emerald-700 dark:text-emerald-300 break-all">
+                      • 최단 직행 지름길: {ota.prunedShortestPathSteps.join(' ➔ ')}
+                    </p>
+                    <p className="font-mono text-[10.5px] text-zinc-700 dark:text-zinc-300 break-all">
+                      • {ota.multiLlmActionKo}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 7-B. 분쟁 예방 감사 로그 (Audit Log) */}
+          <div className="flex flex-col gap-2 pt-3 border-t border-zinc-200 dark:border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-col">
+                <span className="font-label-sm text-[11.5px] text-amber-700 dark:text-amber-300 font-extrabold">
+                  🛡️ 수리 변경 전후 기록 &amp; 1초 원상복구 내역
+                </span>
+              </div>
+            </div>
+
+            {setupAuditLogs.length === 0 ? (
+              <p className="font-body-sm text-[12px] text-zinc-600 dark:text-zinc-400 py-1">
+                아직 기록된 수리 감사 로그가 없습니다. 아래 수리 카드를 실행하면 이곳에 변경 전후 기록이 남습니다.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
+                {setupAuditLogs.map((log) => (
+                  <div
+                    key={log.auditId}
+                    className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 flex flex-col gap-1.5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-label-sm text-[12px] text-zinc-900 dark:text-white font-bold">
+                        [{log.platform.toUpperCase()} · 언제나 0원 · Back {log.backtrackCount ?? 0}회] {log.title}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10.5px] text-zinc-500 dark:text-zinc-400">
+                          승인: {log.userApprovedAt} · DOM: {log.domCaptureHash}
+                        </span>
+                        {log.undone ? (
+                          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-label-sm text-[10.5px] font-bold">
+                            ↩️ 원복됨 ({log.undoneAt})
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => undoSetupMonsterRepair(log.auditId)}
+                            className="px-2.5 py-1 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold cursor-pointer"
+                          >
+                            ↩️ 1초 원상복구
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="font-mono text-[10.5px] text-zinc-700 dark:text-zinc-300 break-all">
+                      • Before Snapshot: {JSON.stringify(log.beforeSnapshot)} ➔ After:{' '}
+                      {JSON.stringify(log.afterSnapshot)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ═══════════════ [좌우 2열 배치] 좌측: 원클릭 진단·수리 & Z-코어 실물 포렌식 / 우측: 통상의 채팅창 (Gemini Flash AI + JSON 코어 위임) ═══════════════ */}
@@ -1315,110 +1430,6 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* 7. 🌍 본사 Multi-LLM 최단 직행 지름길 OTA 큐 & 📡 실패 분석 큐 & 🛡️ 분쟁 예방 감사 로그 */}
-      {showBlackboxPanel && (
-        <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-400/40 flex flex-col gap-4">
-          {/* 7-0. 본사 Multi-LLM 최단 직행 지름길 (Shortest Path) OTA 자산화 큐 */}
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-label-sm text-[12px] text-pink-300 font-extrabold">
-                🌍 본사 Multi-LLM ‘최단 직행 지름길(Shortest Path) OTA 자산화 큐’ ({setupSelfHealingOtaQueue.length}건)
-              </span>
-              <span className="font-mono text-[10.5px] text-emerald-300">
-                초행길 우회 성공 궤적(Trajectory Log) ➔ 헤맨 구간 제거 ➔ 전 세계 APK / .exe 실시간 OTA 배포
-              </span>
-            </div>
-
-            {setupSelfHealingOtaQueue.length === 0 ? (
-              <p className="font-body-sm text-[11.5px] text-zinc-400 py-1">
-                아직 수집된 초행길 우회 학습 궤적이 없습니다.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
-                {setupSelfHealingOtaQueue.map((ota) => (
-                  <div
-                    key={ota.otaId}
-                    className="p-3 rounded-xl bg-pink-950/25 border border-pink-400/40 flex flex-col gap-1"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-label-sm text-[11.5px] text-pink-800 dark:text-pink-200 font-extrabold">
-                        [{ota.trajectoryGradeBadgeKo}] {ota.title} (언제나 0원)
-                      </span>
-                      <span className="font-mono text-[10.5px] text-zinc-400">
-                        {ota.otaId} · {ota.createdAt}
-                      </span>
-                    </div>
-                    <p className="font-mono text-[10.5px] text-emerald-300 break-all">
-                      • 최단 직행 지름길(Shortest Path): {ota.prunedShortestPathSteps.join(' ➔ ')}
-                    </p>
-                    <p className="font-mono text-[10.5px] text-zinc-300 break-all">
-                      • {ota.multiLlmActionKo}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 7-B. 분쟁 예방 감사 로그 (Audit Log) */}
-          <div className="flex flex-col gap-2 pt-3 border-t border-white/10">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-col">
-                <span className="font-label-sm text-[11.5px] text-amber-300 font-extrabold">
-                  🛡️ 분쟁 예방 감사 로그 (Audit Log 로컬 블랙박스 · poc/results/ghosti_setup_blackbox.json)
-                </span>
-                <span className="font-body-sm text-[11.5px] text-zinc-400">
-                  [대화 전문 + 변경 전후 JSON 스냅샷 + 유저 승인 타임스탬프 + 화면 DOM 캡처 해시]를 영구 보존합니다.
-                </span>
-              </div>
-            </div>
-
-            {setupAuditLogs.length === 0 ? (
-              <p className="font-body-sm text-[12px] text-zinc-400 py-1">
-                아직 기록된 수리 감사 로그가 없습니다.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
-                {setupAuditLogs.map((log) => (
-                  <div
-                    key={log.auditId}
-                    className="p-3 rounded-xl bg-zinc-900 border border-white/10 flex flex-col gap-1.5"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-label-sm text-[12px] text-white font-bold">
-                        [{log.platform.toUpperCase()} · 언제나 0원 · Back {log.backtrackCount ?? 0}회] {log.title}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[10.5px] text-zinc-400">
-                          승인: {log.userApprovedAt} · DOM: {log.domCaptureHash}
-                        </span>
-                        {log.undone ? (
-                          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-label-sm text-[10.5px] font-bold">
-                            ↩️ 원복됨 ({log.undoneAt})
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => undoSetupMonsterRepair(log.auditId)}
-                            className="px-2.5 py-1 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold cursor-pointer"
-                          >
-                            ↩️ 1초 원상복구
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="font-mono text-[10.5px] text-zinc-300 break-all">
-                      • Before Snapshot: {JSON.stringify(log.beforeSnapshot)} ➔ After:{' '}
-                      {JSON.stringify(log.afterSnapshot)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       )}
         </div>

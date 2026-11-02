@@ -972,24 +972,24 @@ export const DesktopDashboard: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            setSearchSpace('video');
-                            setIsCanvasExpanded(true);
-                          }}
-                          className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
-                        >
-                          <span>🎬 동영상 전체 펼치기 ({videoSceneItems.length}개)</span>
-                          <span className="text-zinc-500">▾</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
                             setSearchSpace('gallery');
                             setIsCanvasExpanded(true);
                           }}
                           className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
                         >
                           <span>🖼️ 사진 전체 펼치기 ({activePhotos.length}장)</span>
+                          <span className="text-zinc-500">▾</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchSpace('video');
+                            setIsCanvasExpanded(true);
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm font-label-sm text-[12.5px] font-bold flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          <span>🎬 동영상 전체 펼치기 ({videoSceneItems.length}개)</span>
                           <span className="text-zinc-500">▾</span>
                         </button>
 
@@ -1331,7 +1331,7 @@ export const DesktopDashboard: React.FC = () => {
                 </div>
 
                 {groupedResults.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
                     {groupedResults.map((group) => {
                       const item = group.representative;
                       const isBurst = group.burstCount >= 2;

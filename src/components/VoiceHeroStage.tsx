@@ -220,9 +220,32 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         )}
 
-        {/* 1-B. 3대 카테고리 스위칭 캡슐 탭: [동영상] | [사진] | [문서] (이모지 없이 깔끔한 캡슐 디자인) */}
+        {/* 1-B. 3대 카테고리 스위칭 캡슐 탭: [사진] | [동영상] | [문서] (이모지 없이 깔끔한 캡슐 디자인) */}
         <div className="flex flex-wrap items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-0.5">
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSearchSpace('gallery')}
+              className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                searchSpace === 'gallery'
+                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+              }`}
+            >
+              <span>사진</span>
+              <span
+                className={`px-2 py-0.2 rounded-full text-[11px] font-mono ${
+                  searchSpace === 'gallery'
+                    ? 'bg-white/25 text-zinc-950 font-black'
+                    : hasExecutedUserSearch && searchResults.length > 0
+                    ? 'bg-primary-container/20 text-primary-container font-bold'
+                    : 'text-zinc-400 font-bold'
+                }`}
+              >
+                {hasExecutedUserSearch ? `(${searchResults.length})` : activePhotos.length}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setSearchSpace('video')}
@@ -245,29 +268,6 @@ export const VoiceHeroStage: React.FC = () => {
                 {hasExecutedUserSearch
                   ? `(${matchedVideoScenes.length})`
                   : `${videoSceneItems.length}개·${totalDissectedSegments}구간`}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSearchSpace('gallery')}
-              className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
-                searchSpace === 'gallery'
-                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
-              }`}
-            >
-              <span>사진</span>
-              <span
-                className={`px-2 py-0.2 rounded-full text-[11px] font-mono ${
-                  searchSpace === 'gallery'
-                    ? 'bg-white/25 text-zinc-950 font-black'
-                    : hasExecutedUserSearch && searchResults.length > 0
-                    ? 'bg-primary-container/20 text-primary-container font-bold'
-                    : 'text-zinc-400 font-bold'
-                }`}
-              >
-                {hasExecutedUserSearch ? `(${searchResults.length})` : activePhotos.length}
               </span>
             </button>
 
@@ -301,7 +301,7 @@ export const VoiceHeroStage: React.FC = () => {
                 <span className="hidden md:inline font-label-mono text-[11.5px] text-zinc-300">
                   <strong className="text-white">“{activeQuery}”</strong> 매칭:{' '}
                   <span className="text-primary-container font-bold">
-                    (동영상 {matchedVideoScenes.length}) (사진 {searchResults.length}) (문서 {matchedTotalDocsCount})
+                    (사진 {searchResults.length}) (동영상 {matchedVideoScenes.length}) (문서 {matchedTotalDocsCount})
                   </span>
                 </span>
                 <button

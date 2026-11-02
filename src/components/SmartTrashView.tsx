@@ -112,7 +112,7 @@ export const SmartTrashView: React.FC = () => {
     isStoreAppMode,
   } = useSaySeeStore();
 
-  const [gridColumns, setGridColumns] = useState<3 | 4>(3);
+  const [gridColumns, setGridColumns] = useState<3 | 5>(3);
   const [showSystemConsult, setShowSystemConsult] = useState<boolean>(false);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(true);
   const [isTrashBinTabActive, setIsTrashBinTabActive] = useState<boolean>(false);
@@ -414,9 +414,22 @@ export const SmartTrashView: React.FC = () => {
               </span>
             )}
           </div>
-          <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all">
-            {showSystemConsult ? '접기 ▴' : '검진 항목 펼치기 ▾'}
-          </span>
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setShowHealthHistoryDrawer((v) => !v)}
+              className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+            >
+              📋 내 검진 기록함 ({healthHistoryRecords.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSystemConsult((v) => !v)}
+              className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
+            >
+              {showSystemConsult ? '접기 ▴' : '검진 항목 펼치기 ▾'}
+            </button>
+          </div>
         </div>
 
         {showSystemConsult && (
@@ -682,6 +695,33 @@ export const SmartTrashView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setGridColumns(3)}
+                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    gridColumns === 3
+                      ? 'bg-primary-container text-zinc-950 font-extrabold'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">grid_on</span>
+                  <span>3열</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGridColumns(5)}
+                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    gridColumns === 5
+                      ? 'bg-primary-container text-zinc-950 font-extrabold'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">apps</span>
+                  <span>5열</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => void openLocalFolder('quarantine')}
@@ -713,7 +753,13 @@ export const SmartTrashView: React.FC = () => {
           </div>
 
           {quarantinedPhotos.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div
+              className={`grid grid-cols-2 ${
+                gridColumns === 3
+                  ? 'sm:grid-cols-3 lg:grid-cols-3'
+                  : 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+              } gap-3`}
+            >
               {quarantinedPhotos.map((p) => (
                 <div
                   key={p.id}
@@ -779,7 +825,7 @@ export const SmartTrashView: React.FC = () => {
               </p>
             </div>
 
-            {/* PC 3x3 / 4x4 바둑판 배열 전환 + 전체 카테고리 보기 */}
+            {/* PC 3열 / 5열 바둑판 배열 전환 + 전체 카테고리 보기 */}
             <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
               <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-white/10">
                 <button
@@ -796,15 +842,15 @@ export const SmartTrashView: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setGridColumns(4)}
+                  onClick={() => setGridColumns(5)}
                   className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    gridColumns === 4
+                    gridColumns === 5
                       ? 'bg-primary-container text-zinc-950 font-extrabold'
                       : 'text-zinc-400 hover:text-white'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[14px]">apps</span>
-                  <span>4열</span>
+                  <span>5열</span>
                 </button>
               </div>
 
@@ -881,7 +927,7 @@ export const SmartTrashView: React.FC = () => {
                     className={`grid grid-cols-2 ${
                       gridColumns === 3
                         ? 'sm:grid-cols-3 lg:grid-cols-3'
-                        : 'sm:grid-cols-3 lg:grid-cols-4'
+                        : 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
                     } gap-3`}
                   >
                     {groupPhotos.map((ph, idx) => {
@@ -975,6 +1021,33 @@ export const SmartTrashView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setGridColumns(3)}
+                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    gridColumns === 3
+                      ? 'bg-primary-container text-zinc-950 font-extrabold'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">grid_on</span>
+                  <span>3열</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGridColumns(5)}
+                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    gridColumns === 5
+                      ? 'bg-primary-container text-zinc-950 font-extrabold'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">apps</span>
+                  <span>5열</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={selectAllTrashInFilter}
@@ -1001,7 +1074,13 @@ export const SmartTrashView: React.FC = () => {
           </div>
 
           {filteredCandidates.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+            <div
+              className={`grid grid-cols-2 ${
+                gridColumns === 3
+                  ? 'sm:grid-cols-3 lg:grid-cols-3'
+                  : 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+              } gap-3.5`}
+            >
               {filteredCandidates.map((photo) => {
                 const isChecked = selectedTrashIds.has(photo.id);
                 const tabMeta =

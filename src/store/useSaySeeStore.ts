@@ -1101,7 +1101,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     });
   },
 
-  searchSpace: 'video',
+  searchSpace: 'gallery',
   hasExecutedUserSearch: false,
   hasUserSelectedSearchTab: false,
   localDocuments: LOCAL_DOCUMENT_FILES,
@@ -2019,11 +2019,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       syncState,
       sentenceChips: localChips,
       onboardingAhaItems: localAhaItems,
-      searchSpace: 'video',
+      searchSpace: 'gallery',
       hasExecutedUserSearch: false,
       hasUserSelectedSearchTab: false,
-      activeQuery: `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
-      matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
+      activeQuery: `전체 갤러리 사진 (${enrichedPhotos.filter((p) => !p.quarantined).length}장)`,
+      matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
       searchResults: initialGalleryPhotos,
       selectedTrashIds: trashIds,
       initialized: true,
@@ -2368,7 +2368,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       ? 'gallery'
       : hasUserSelectedSearchTab
       ? searchSpace
-      : 'video';
+      : 'gallery';
 
     const topTags =
       expansionBadges.length > 0
@@ -2452,7 +2452,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems),
       ]);
       const vaultPhotoMatches = results.filter((r) => r.photo.isVaultDocument);
-      const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'video';
+      const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'gallery';
       const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
 
       set((state) => ({
