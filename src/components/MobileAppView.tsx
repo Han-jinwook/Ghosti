@@ -141,9 +141,9 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   Array<{ id: MobileTab; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'search', label: '🎯 찾기', subcaption: '제목 몰라도 귀신같이 찾고' },
-    { id: 'trash', label: '🪄 손보기', subcaption: '정리·수리·복원 귀신같이 손보고', showTrashCount: true },
-    { id: 'share', label: '👨‍👩‍👧‍👦 공유', subcaption: '가족·팀과 함께 쓸 땐 귀신같이 공유하고' },
+    { id: 'search', label: '🔍 찾기', subcaption: '제목 몰라도 1초 검색' },
+    { id: 'trash', label: '✋ 손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
+    { id: 'share', label: '👨‍👩‍👧‍👦 공유', subcaption: '가족 · 모임 · 업무 공유' },
   ],
   family: [
     { id: 'trial', label: '📸 패밀리 공유 시작' },

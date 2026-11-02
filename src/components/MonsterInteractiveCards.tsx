@@ -134,8 +134,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   : ''}
               </span>
             ) : (
-              <div className="rounded-lg bg-slate-950/90 border border-emerald-500/30 px-3 py-1.5 text-[11px] text-emerald-200 font-semibold">
-                ✍️ 복구하시려면 아래 채팅창에 <strong>&ldquo;응 복구해줘&rdquo;</strong>처럼 편하게 타이핑해 주세요 (블랙박스에 기록됩니다)
+              <div className="rounded-lg bg-slate-950/90 border border-emerald-500/30 px-3 py-1.5 text-[12px] text-emerald-200 font-semibold">
+                ✍️ 복구하시려면 채팅창에 <strong>&ldquo;응 복구해줘&rdquo;</strong>라고 입력해 주세요.
               </div>
             )}
           </div>
@@ -205,8 +205,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </div>
             ) : (
               <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed">
-                ✍️ <strong>블랙박스 타이핑 승인 대기</strong> — 실행하시려면 아래 채팅창에{' '}
-                <strong>&ldquo;응 진행해&rdquo;</strong>, <strong>&ldquo;네 정리해 주세요&rdquo;</strong>처럼 편하게 입력해 주세요. (타이핑하신 동의 문장이 블랙박스에 그대로 기록됩니다)
+                ✍️ 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력해 주세요.
               </div>
             )}
           </div>
@@ -247,8 +246,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </div>
             ) : (
               <div className="rounded-lg bg-sky-500/10 border border-sky-500/30 px-3 py-2 text-xs text-sky-200 font-semibold leading-relaxed">
-                ✍️ <strong>블랙박스 타이핑 승인 대기</strong> — 생성하시려면 아래 채팅창에{' '}
-                <strong>&ldquo;응 진행해&rdquo;</strong>, <strong>&ldquo;네 만들어 주세요&rdquo;</strong>처럼 편하게 입력해 주세요.
+                ✍️ 생성하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력해 주세요.
               </div>
             )}
           </div>

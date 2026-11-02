@@ -87,22 +87,13 @@ export const VoiceHeroStage: React.FC = () => {
 
   const searchPlaceholder = useMemo(() => {
     if (searchSpace === 'vault') {
-      const ex = dynamicDocHints.slice(0, 2).map((d) => `"${d.query}"`).join(', ');
-      return ex
-        ? `서류·영수증·계약서 검색 (예: ${ex})`
-        : '서류·영수증·계약서 본문 키워드를 입력해 보세요';
+      return '서류·영수증·계약서 내용을 입력해 보세요';
     }
     if (searchSpace === 'video') {
-      const ex = dynamicMicroObjectChips.slice(0, 2).map((c) => `"${c.query}"`).join(', ');
-      return ex
-        ? `동영상·사진·문서 통합 검색 (예: ${ex})`
-        : '동영상·사진·문서 속 장면이나 인물 이름을 검색해 보세요';
+      return '동영상·사진 속 장면이나 인물을 검색해 보세요';
     }
-    const ex = sentenceChips.slice(0, 2).map((s) => `"${s.query}"`).join(', ');
-    return ex
-      ? `기억나는 장면을 문장으로 검색해 보세요 (예: ${ex})`
-      : '기억나는 장면을 문장으로 검색해 보세요';
-  }, [searchSpace, dynamicDocHints, dynamicMicroObjectChips, sentenceChips]);
+    return '기억나는 장면이나 단어를 입력해 보세요';
+  }, [searchSpace]);
 
   const scrollToResults = () => {
     if (typeof document !== 'undefined') {

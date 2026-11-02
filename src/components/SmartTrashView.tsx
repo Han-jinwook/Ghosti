@@ -28,21 +28,21 @@ const TRASH_TABS: {
   {
     key: 'duplicate',
     stepNum: '①',
-    title: '동일 내용 중복(최고화질 보존) · 연사(1장 직접 선택)',
+    title: '중복 사진 · 연사 선택',
     shortTitle: '중복 · 연사 선택',
     shortBadge: '중복·연사 선택',
     cleanTag: '#중복·연사사본',
-    subtitle: '중복 사진은 최고화질 원본 1장만 남기고, 연사는 펼쳐 보고 마음에 드는 1장을 직접 선택(Pick)합니다',
+    subtitle: '원본 1장만 남기고 정리',
     icon: 'burst_mode',
   },
   {
     key: 'memo',
     stepNum: '②',
-    title: '주차장 · 영수증 · 일회성 사물 메모',
+    title: '주차 · 영수증 · 일회성 메모',
     shortTitle: '주차 · 영수증 · 메모',
     shortBadge: '주차·사물·일회성메모',
     cleanTag: '#주차·부품·일회성메모',
-    subtitle: '주차장 기둥(K13) · 케이블/부품 접사 · 단기 택배/현수막 메모',
+    subtitle: '주차장 · 부품 · 단기 메모',
     icon: 'description',
   },
   {
@@ -52,17 +52,17 @@ const TRASH_TABS: {
     shortTitle: '스크린샷 · 캡처',
     shortBadge: '스크린샷 캡처',
     cleanTag: '#스크린샷 캡처',
-    subtitle: '문자 메시지 캡처 · 모바일 홈 화면 · 일회성 앱 알림 화면 캡처',
+    subtitle: '문자 · 화면 캡처 정리',
     icon: 'screenshot_mobile',
   },
   {
     key: 'blurry',
     stepNum: '④',
-    title: '심한 흔들림 · 바닥 오촬영',
+    title: '흔들림 · 바닥 오촬영',
     shortTitle: '흔들림 · 오촬영',
     shortBadge: '흔들림·오촬영',
     cleanTag: '#초점이탈·오촬영',
-    subtitle: '보행 중 바닥 오촬영 및 초점 완전 붕괴 불량 사진',
+    subtitle: '흐릿하거나 잘못 찍힌 사진',
     icon: 'blur_on',
   },
 ];
@@ -195,22 +195,19 @@ export const SmartTrashView: React.FC = () => {
   return (
     <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
       {zCoreOutdated && (
-        <div className="p-3.5 rounded-2xl bg-amber-950/80 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3">
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/80 border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2.5">
             <span className="text-[18px]">⚠️</span>
             <div className="flex flex-col">
-              <span className="text-[13px] text-amber-200 font-extrabold">
-                현재 실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 한글 폴더(다운로드·문서·바탕 화면) 정밀 매칭 엔진(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요!
-              </span>
-              <span className="text-[11.5px] text-amber-100/80">
-                구버전 Z-코어가 켜져 있으면 탐색기 파일 하이라이트가 어긋날 수 있습니다. 우측 버튼을 눌러 최신 설치파일을 받아 실행해 주세요.
+              <span className="text-[14px] text-amber-900 dark:text-amber-200 font-extrabold">
+                실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 버전(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요.
               </span>
             </div>
           </div>
           <a
             href={Z_CORE_ZIP_URL}
             download="Merlin_Z_Core.zip"
-            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap shadow cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap shadow cursor-pointer"
           >
             ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
           </a>
@@ -228,7 +225,7 @@ export const SmartTrashView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-col gap-0.5">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  <span>🪄 귀신같이 손보기</span>
+                  <span>✋ 귀신같이 손보기</span>
                 </h1>
               </div>
 
@@ -659,14 +656,14 @@ export const SmartTrashView: React.FC = () => {
             <div className="flex flex-col gap-0.5">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-zinc-900 dark:text-white font-extrabold flex items-center gap-1.5">
-                  <span>🗑️ 휴지통 보관함 (OS 기본 휴지통 이동 내역)</span>
+                  <span>🗑️ 휴지통 보관함</span>
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-primary-container/40 text-primary-container font-label-sm text-[12px] font-bold">
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-primary-container/40 text-primary-container font-label-sm text-[12.5px] font-bold">
                   총 {quarantinedPhotos.length}장 보관 중
                 </span>
               </div>
-              <p className="font-body-sm text-[12.5px] text-zinc-500 dark:text-zinc-400">
-                정리한 사진은 영구 삭제되지 않고 이곳에 안전하게 보관됩니다. 원하는 사진의 [↩️ 1초 복원] 또는 우측 [↩️ 전체 복원]을 누르면 즉시 원래 자리로 돌아갑니다.
+              <p className="font-body-sm text-[13.5px] text-zinc-600 dark:text-zinc-400">
+                [↩️ 1초 복원]을 누르면 즉시 원래 자리로 돌아갑니다.
               </p>
             </div>
 
@@ -756,15 +753,15 @@ export const SmartTrashView: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
             <div className="flex flex-col gap-0.5">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-headline-sm text-[16.5px] md:text-[18px] text-white font-bold">
-                  ① 중복 사진(최고화질 원본 보존) &amp; 연사 묶음(1장 직접 선택)
+                <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-white font-extrabold">
+                  ① 중복 사진 &amp; 연사 묶음 선택
                 </h2>
-                <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[12.5px] font-bold">
                   {activeDuplicateGroups.length}개 묶음
                 </span>
               </div>
-              <p className="font-body-sm text-[12px] text-zinc-400">
-                동일 내용 중복은 최고화질 원본 1장만 남기고, 연사는 마음에 드는 1장을 클릭(선택)하면 나머지를 휴지통으로 정리합니다.
+              <p className="font-body-sm text-[13px] text-zinc-400">
+                남길 사진 1장을 누른 뒤 우측 [정리] 버튼을 눌러주세요.
               </p>
             </div>
 

@@ -493,22 +493,19 @@ export const SetupMonsterContent: React.FC = () => {
       className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-5 transition-all"
     >
       {zCoreOutdated && (
-        <div className="p-3.5 rounded-2xl bg-amber-950/80 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3">
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/80 border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2.5">
             <span className="text-[18px]">⚠️</span>
             <div className="flex flex-col">
-              <span className="text-[13px] text-amber-200 font-extrabold">
-                현재 실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 한글 폴더(다운로드·문서·바탕 화면) 정밀 매칭 엔진(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요!
-              </span>
-              <span className="text-[11.5px] text-amber-100/80">
-                구버전 Z-코어가 켜져 있으면 탐색기 파일 바로 띄우기 시 창 포커스나 폴더 매칭이 어긋날 수 있습니다. 우측 버튼을 눌러 최신 설치파일을 받아 실행해 주세요.
+              <span className="text-[14px] text-amber-900 dark:text-amber-200 font-extrabold">
+                실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 버전(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요.
               </span>
             </div>
           </div>
           <a
             href={Z_CORE_ZIP_URL}
             download="Merlin_Z_Core.zip"
-            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap shadow cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap shadow cursor-pointer"
           >
             ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
           </a>
