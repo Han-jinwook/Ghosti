@@ -1180,6 +1180,8 @@ def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
 
 
 def play_baby_ghost_sound(mode: str = "typo") -> None:
+    if mode == "summon":
+        return
     """
     [멀린님 UX 설계 반영] 기계음(Beep)을 완전히 배제한 44.1kHz 스튜디오급 '애기귀신 효과음(.wav)' 비동기 재생!
     - mode="typo": 2단어 한영 오타 자동성형 시 ('애기귀신 퐁~ 띠링!' / 오르골 / 웃음소리 등 선택된 WAV)
