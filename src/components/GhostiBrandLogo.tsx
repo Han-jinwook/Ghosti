@@ -33,7 +33,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   showBadge: _showBadge,
   badgeText: _badgeText,
   subtitle,
-  sloganText = '1초 AI\n사진·영상·문서 찾기',
+  sloganText = '사진·영상·문서 찾기',
   autoCycle = true,
   cycleIntervalMs = 10000,
   onClick,
@@ -77,7 +77,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   return (
     <div
       onClick={onClick}
-      title="귀신같이 — 1초 AI 사진·영상·문서 찾기"
+      title="귀신같이 — AI 1초 투시검색 사진·영상·문서 찾기"
       className={`inline-flex items-center gap-2 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
@@ -99,18 +99,16 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
           {showSlogan && activeSlogan ? (
             <div className="w-full flex flex-col justify-center gap-0.5 leading-tight">
               <div className="flex items-center gap-1">
-                <span className="text-[9.5px] font-extrabold px-1.5 py-0.2 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
-                  투시검색
+                <span className="text-[9.5px] font-extrabold px-1 py-0.2 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
+                  AI
                 </span>
                 <span className={`text-[11px] font-extrabold tracking-tight ${sloganColorClass} whitespace-nowrap`}>
-                  {sloganLines[0]}
+                  1초 투시검색
                 </span>
               </div>
-              {sloganLines[1] && (
-                <span className={`text-[10px] font-bold tracking-tight opacity-85 ${sloganColorClass} whitespace-nowrap pl-0.5`}>
-                  {sloganLines[1]}
-                </span>
-              )}
+              <span className={`text-[10px] font-bold tracking-tight opacity-85 ${sloganColorClass} whitespace-nowrap pl-0.5`}>
+                {activeSlogan}
+              </span>
             </div>
           ) : (
             <div className="w-full flex items-center leading-none">

@@ -144,6 +144,9 @@ export const App: React.FC = () => {
 
   return (
     <GhostiHubRootProvider>
+      {/* 앱 진입 시 0.5초 가벼운 로딩 스플래시 */}
+      <GhostiLoadingSplash />
+
       {/* 공식 쇼룸 & 하이브리드 온보딩 대문 vs 내부 개발 워크스페이스 분기 */}
       {viewMode === 'showroom' ? (
         <GhostiShowroomLanding

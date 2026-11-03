@@ -17,15 +17,15 @@ export const GhostiLoadingSplash: React.FC = () => {
   const [unmounted, setUnmounted] = useState(false);
 
   useEffect(() => {
-    // 첫 실행 시 브랜드 스플래시를 인지할 수 있는 최소 노출 시간 (1.1초)
+    // 첫 실행 시 브랜드 스플래시를 인지할 수 있는 최소 노출 시간 (0.5초 가볍게)
     const minTimer = window.setTimeout(() => {
       setMinTimePassed(true);
-    }, 1100);
+    }, 500);
 
     // 네트워크 지연 시에도 최대 3.2초 후에는 자동 진입 보장
     const maxTimer = window.setTimeout(() => {
       setDismissed(true);
-    }, 3200);
+    }, 1200);
 
     return () => {
       clearTimeout(minTimer);
