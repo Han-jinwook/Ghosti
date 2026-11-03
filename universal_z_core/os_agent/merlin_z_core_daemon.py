@@ -319,9 +319,14 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             for candidate_root in (
                 Path("D:/Merlin_AI_Models/embeddinggemma-2"),
                 Path("E:/Merlin_AI_Models/embeddinggemma-2"),
+                Path("C:/Merlin_AI_Models/embeddinggemma-2"),
+                Path("F:/Merlin_AI_Models/embeddinggemma-2"),
+                Path("G:/Merlin_AI_Models/embeddinggemma-2"),
             ):
                 if candidate_root.exists():
                     target_file = (candidate_root / rel).resolve()
+                    if not target_file.is_file() and "_q8.onnx" in rel:
+                        target_file = (candidate_root / rel.replace("_q8.onnx", "_quantized.onnx")).resolve()
                     if str(target_file).startswith(str(candidate_root.resolve())) and target_file.is_file():
                         mime = "application/json; charset=utf-8" if target_file.suffix.lower() == ".json" else "application/octet-stream"
                         self._send_bytes(target_file.read_bytes(), content_type=mime, status=200)

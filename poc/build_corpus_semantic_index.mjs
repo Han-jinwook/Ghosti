@@ -209,7 +209,7 @@ if (batches.length > 0) {
   cfg.audio_config = null;
   const model = await AutoModel.from_pretrained('onnx-community/embeddinggemma-2-ONNX', {
     config: cfg,
-    dtype: 'q4',
+    dtype: 'q8',
   });
   const tokenizer = await AutoTokenizer.from_pretrained('onnx-community/embeddinggemma-2-ONNX');
 

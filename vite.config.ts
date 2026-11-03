@@ -271,7 +271,7 @@ async function embedQueryVector768(query: string): Promise<number[] | null> {
           cfg.audio_config = null;
           nodeGemmaModel = await AutoModel.from_pretrained('onnx-community/embeddinggemma-2-ONNX', {
             config: cfg,
-            dtype: 'q4',
+            dtype: 'q8',
           } as any);
           nodeGemmaTokenizer = await AutoTokenizer.from_pretrained('onnx-community/embeddinggemma-2-ONNX');
         })();

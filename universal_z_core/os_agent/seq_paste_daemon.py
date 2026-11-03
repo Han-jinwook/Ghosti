@@ -160,6 +160,9 @@ class Gemma2LightweightEngine:
         candidates = [
             Path("D:/Merlin_AI_Models/embeddinggemma-2"),
             Path("E:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("C:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("F:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("G:/Merlin_AI_Models/embeddinggemma-2"),
             Path("D:/Ghosti/node_modules/@huggingface/transformers/.cache/onnx-community/embeddinggemma-2-ONNX"),
             Path("D:/Ghosti/poc/node_modules/@huggingface/transformers/.cache/onnx-community/embeddinggemma-2-ONNX"),
         ]
@@ -188,9 +191,9 @@ class Gemma2LightweightEngine:
                             for ch in clean_k:
                                 self.ko_chars.add(ch)
 
-                    onnx_path = model_dir / "onnx" / "model_q4.onnx"
+                    onnx_path = model_dir / "onnx" / "model_quantized.onnx"
                     if not onnx_path.exists():
-                        onnx_path = model_dir / "onnx" / "model_quantized.onnx"
+                        onnx_path = model_dir / "onnx" / "model_q4.onnx"
                     if onnx_path.exists():
                         import numpy as np
                         import onnxruntime as ort

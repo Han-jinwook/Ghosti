@@ -366,7 +366,7 @@ cfg.vision_config = null;
 cfg.audio_config = null;
 const gemmaModel = await AutoModel.from_pretrained('onnx-community/embeddinggemma-2-ONNX', {
   config: cfg,
-  dtype: 'q4',
+  dtype: 'q8',
 });
 const gemmaTokenizer = await AutoTokenizer.from_pretrained('onnx-community/embeddinggemma-2-ONNX');
 
