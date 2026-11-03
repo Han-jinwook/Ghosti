@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-03T10:43:52.317568",
+  "updated_at": "2026-11-03T13:57:43.233679",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -482,6 +482,30 @@
       "last_edited_time": "2026-11-02T05:49:00.000Z",
       "url": "https://app.notion.com/p/3-4-1-Pick-1-40bf9ffd2c1d810a8d10cc60837fc48e",
       "archived_at": "2026-11-03T10:43:52.317425"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-812e-85b8-db64afb354b0",
+      "title": "🎯 [멀린허브] 3몬스터 코인 충전 4대 간편결제(삼성·카카오·토스·애플) 실결제 및 KCP 즉시취소 풀코스 테스트",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-03T01:29:00.000Z",
+      "url": "https://app.notion.com/p/3-4-KCP-40cf9ffd2c1d812e85b8db64afb354b0",
+      "archived_at": "2026-11-03T13:57:43.233024"
+    },
+    {
+      "page_id": "40bf9ffd-2c1d-81cf-b658-d2ccdb6d401f",
+      "title": "🎯 [귀신같이] 1. [🎯 찾기: 1초 투시검색 & 도화지] 동영상 초(Sec) 단위 장면 점프 · 사진 사물/인물 여권 검색 · 문서 본문 하이라이트 & G: 드라이브 무마스킹 복사 실전 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-03T00:50:00.000Z",
+      "url": "https://app.notion.com/p/1-1-Sec-G-40bf9ffd2c1d81cfb658d2ccdb6d401f",
+      "archived_at": "2026-11-03T13:57:43.233064"
+    },
+    {
+      "page_id": "40af9ffd-2c1d-8139-a813-d33093f718e7",
+      "title": "🎯 [멀린비서] 『귀신창(Ctrl+0) v3.2 & 9대 초능력』 전수 실전 QA (1차 통과분 보관)",
+      "app": "멀린비서",
+      "last_edited_time": "2026-11-03T00:50:00.000Z",
+      "url": "https://app.notion.com/p/Ctrl-0-v3-2-9-QA-1-40af9ffd2c1d8139a813d33093f718e7",
+      "archived_at": "2026-11-03T13:57:43.233073"
     }
   ]
 }
