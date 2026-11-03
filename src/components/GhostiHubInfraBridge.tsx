@@ -58,55 +58,16 @@ export function useIsCoinHiddenInStore(): boolean {
 }
 
 /**
- * [1. 우측 상단 헤더 허브 앵커 (곰발바닥 프로필 + 코인 지갑)]
- * - 귀신같이 고유 기능(`👑 여권 문패`, `🛠️ 설정몬스터`, `공유`, `🌙 테마 토글`)은 건드리지 않고,
- *   우상단 프로필과 코인 위치를 허브 표준으로 연결합니다.
+ * [1. 우측 상단 헤더 허브 앵커 (프로필 위젯 단독)]
+ * - 코인 표시 알약은 프로필 모달 내부에 이미 포함되어 있으므로 헤더에서 제외하고,
+ *   허브 표준 프로필 위젯만 심플하게 렌더링합니다.
  */
 export const GhostiTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> = ({
   themeMode,
 }) => {
-  const { isLoggedIn, balance } = useHub();
-  const hideCoin = useIsCoinHiddenInStore();
-
-  const displayBalance = isLoggedIn ? (balance ?? 0) : 0;
-
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-      {/* [강화 ③ + 레드팀 중복 제거] 모바일/태블릿(좌측 사이드바 미노출 화면)에서만 상단 가로 헤더 F 세로 드롭다운 노출 */}
-      <div className="lg:hidden">
-        <HubAppSwitcher currentAppId="ghosti" variant="icon" placement="top-down" />
-      </div>
-
-      {/* 🪙 코인 잔액 & 3몬스터 충전소 트리거 (스토어 앱 심사 모드에서는 DOM 원천 비노출) */}
-      {!hideCoin && (
-        <button
-          type="button"
-          onClick={() => {
-            if (!isLoggedIn) {
-              window.dispatchEvent(new CustomEvent('openLoginModal'));
-            } else {
-              window.dispatchEvent(new CustomEvent('openPurchaseModal'));
-            }
-          }}
-          title={
-            isLoggedIn
-              ? '멀린 패밀리 코인 충전소 & 선물함 열기'
-              : '로그인 후 코인 지갑 및 선물함 이용'
-          }
-          className={`px-2.5 py-1 rounded-full font-label-mono text-[12px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
-            themeMode === 'light'
-              ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
-              : 'bg-zinc-900 border-amber-400/35 text-amber-300 hover:bg-zinc-800'
-          }`}
-        >
-          <span className="flex items-center gap-1">
-            <img src="/hub_assets/coin_icon.svg" alt="Coin" className="w-3.5 h-3.5 inline-block" />
-            <span>{displayBalance.toLocaleString()} C</span>
-          </span>
-        </button>
-      )}
-
-      {/* 🐾 허브 표준 3D 곰발바닥 프로필 위젯 (게스트: 로그인 모달 / 회원: 통합 프로필·선물함·문의방 모달) */}
+    <div className="flex items-center gap-1.5 shrink-0">
+      {/* 🐾 허브 표준 프로필 위젯 (클릭 시 통합 프로필·귀신여권·코인/선물함·문의방 모달 오픈) */}
       <div
         className={`rounded-full px-1 py-0.5 border transition-colors ${
           themeMode === 'light'
@@ -275,13 +236,32 @@ const GhostiHubGlobalModals: React.FC = () => {
               <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-1.5">
                 <span>🐾 내 프로필 · 계정 설정</span>
               </h3>
-              <button
-                type="button"
-                onClick={() => setIsProfileOpen(false)}
-                className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    const st = useSaySeeStore.getState();
+                    const cluster =
+                      st.faceClusters.find((c) => c.clusterId === 'face_member_5') ||
+                      st.faceClusters[0];
+                    if (cluster) {
+                      st.setDoorplatePickerClusterId(cluster.clusterId);
+                    }
+                  }}
+                  className="px-3 py-1 rounded-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <span>👑</span>
+                  <span>귀신여권</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <HubProfileCard

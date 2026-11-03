@@ -41,7 +41,7 @@ export function playBabyGhostChime(mode: 'typo' | 'summon' = 'typo'): void {
   try {
     const wavUrl = mode === 'summon' ? '/sounds/active_summon_sound.wav' : '/sounds/active_typo_sound.wav';
     const audio = new Audio(wavUrl);
-    audio.volume = 0.55;
+    audio.volume = 0.22;
     void audio.play().catch(() => {
       // 브라우저 자동재생 정책 등으로 WAV 재생 실패 시 Web Audio 차임벨 폴백
       playWebAudioFallbackChime();
@@ -324,45 +324,12 @@ export async function startSuperpowerTrialAction(accountId: string, isSubscribed
  * - 설치 후 기기 간 연동은 별도 코드 없이 동일한 이메일 로그인 하나로 자동 연결됩니다.
  */
 const PairingQrCodeSvg: React.FC = () => {
-  const matrix = [
-    [1,1,1,1,1,1,1,0,1,0,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,1,1,0,0,0,1],
-    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1],
-    [1,0,1,1,1,0,1,0,1,1,0,0,1,0,1],
-    [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1],
-    [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,0,1,0,1,0,1,1,1],
-    [0,0,0,0,0,0,0,0,1,1,0,1,0,0,0],
-    [1,0,1,1,0,1,1,1,0,0,1,1,0,1,1],
-    [0,1,1,0,1,0,0,1,1,0,1,0,1,0,1],
-    [1,1,1,1,1,1,1,0,1,1,1,0,1,1,0],
-    [1,0,0,0,0,0,1,0,0,0,1,1,0,0,1],
-    [1,0,1,1,1,0,1,0,1,1,0,1,1,1,0],
-    [1,0,0,0,0,0,1,0,1,0,0,0,1,0,1],
-    [1,1,1,1,1,1,1,0,1,1,0,1,1,1,1],
-  ];
   return (
-    <svg
-      viewBox="0 0 17 17"
+    <img
+      src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=6&data=https%3A%2F%2Fghosti.sundreamer.app"
+      alt="스마트폰 모바일 앱 1초 설치 QR 코드"
       className="w-24 h-24 rounded-xl bg-white p-1.5 shadow-[0_0_20px_rgba(0,229,255,0.3)] shrink-0"
-      aria-label="스마트폰 모바일 앱 1초 설치 QR 코드"
-    >
-      {matrix.map((row, rIdx) =>
-        row.map((cell, cIdx) =>
-          cell ? (
-            <rect
-              key={`${rIdx}-${cIdx}`}
-              x={cIdx + 1}
-              y={rIdx + 1}
-              width={0.92}
-              height={0.92}
-              rx={0.15}
-              fill="#071318"
-            />
-          ) : null
-        )
-      )}
-    </svg>
+    />
   );
 };
 
@@ -1128,8 +1095,22 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   />
                 </button>
                 <div className="flex flex-col gap-0.5 text-left min-w-0">
-                  <div className="text-teal-300 text-[11.5px] font-extrabold tracking-tight truncate">
-                    [Ctrl+V] 순차·칸맞춤 &nbsp;&nbsp; [9] 파일·PDF변환 &nbsp;&nbsp; [F1~10] 상용구 &nbsp;&nbsp; [2] 한영성형
+                  <div className="text-teal-300 text-[11.5px] font-extrabold tracking-tight truncate flex flex-wrap items-center gap-2">
+                    <span>[Ctrl+V] 순차·칸맞춤</span>
+                    <span>[9] 파일·PDF변환</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document.getElementById('ghosti-snippets-section')?.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'center',
+                        });
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-amber-400/20 hover:bg-amber-400/35 border border-amber-400/50 text-amber-300 font-black cursor-pointer"
+                    >
+                      [F1~10] 상용구 편집·보관기간 ↓
+                    </button>
+                    <span>[2] 한영성형</span>
                   </div>
                   <div className="text-zinc-200 text-[11.5px] font-bold tracking-tight truncate">
                     [3] 서식세탁 &nbsp;&nbsp; [4] 줄바꿈정리 &nbsp;&nbsp; [5] 합본 &nbsp;&nbsp; [6] 글자·표OCR &nbsp;&nbsp; [7] 창고정 &nbsp;&nbsp; [8] 번호·일정
@@ -1400,7 +1381,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             </div>
 
             {/* 체험 ⑤: F1~F10 10개 내 상용구 실시간 저장 & 클립보드 보관 기간(기본 7일·최대 30일) 설정 */}
-            <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-amber-400/35 flex flex-col gap-2.5">
+            <div id="ghosti-snippets-section" className="p-3.5 rounded-2xl bg-zinc-900/90 border border-amber-400/35 flex flex-col gap-2.5 scroll-mt-10">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[13px] font-extrabold text-white">

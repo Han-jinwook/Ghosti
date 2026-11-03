@@ -3858,11 +3858,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                window.dispatchEvent(
-                  new CustomEvent('ghosti_open_onboarding_tab', {
-                    detail: { tab: 'tab1_find_care' },
-                  })
-                );
+                window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
               }}
               className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm"
             >

@@ -15,7 +15,7 @@ function ensurePreloaded(): void {
   if (!preloadedGiggleAudio) {
     preloadedGiggleAudio = new Audio(GIGGLE_SOUND_URL);
     preloadedGiggleAudio.preload = 'auto';
-    preloadedGiggleAudio.volume = 0.85;
+    preloadedGiggleAudio.volume = 0.35;
   }
 }
 
@@ -34,7 +34,7 @@ function playFallbackWebAudio(): void {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, now + idx * 0.065);
       gain.gain.setValueAtTime(0.001, now + idx * 0.065);
-      gain.gain.exponentialRampToValueAtTime(0.14, now + idx * 0.065 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.055, now + idx * 0.065 + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.065 + 0.16);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -58,7 +58,7 @@ export function playAppEnterGiggleSound(_forceReplay = false): void {
   ensurePreloaded();
   try {
     const audio = new Audio(GIGGLE_SOUND_URL);
-    audio.volume = 0.85;
+    audio.volume = 0.35;
     const p = audio.play();
     if (p && typeof p.then === 'function') {
       p.then(() => {
@@ -73,7 +73,7 @@ export function playAppEnterGiggleSound(_forceReplay = false): void {
             if (!hasPlayedAppEnterGiggle) {
               hasPlayedAppEnterGiggle = true;
               const retryAudio = new Audio(GIGGLE_SOUND_URL);
-              retryAudio.volume = 0.85;
+              retryAudio.volume = 0.35;
               retryAudio.play().catch(() => playFallbackWebAudio());
             }
           };

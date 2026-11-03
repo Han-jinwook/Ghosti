@@ -329,82 +329,45 @@ export const MobileAppView: React.FC = () => {
               />
             </div>
 
-            {/* 우상단: 귀신같이 여권 자동 문패(업무 공유 제외) + 설정(모바일 상시 노출) + 크레딧 잔액 + 심플 아이콘 테마 토글 */}
-            <div className="flex items-center gap-1 shrink-0" aria-label="화면 테마 영역">
-              {myPassportCluster && activeLoungeType !== 'work' && (
-                <button
-                  type="button"
-                  onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
-                  title="🛂 귀신같이 여권 최신 연도 정면 얼굴 자동 문패 (5대 스타일 슬롯 원터치 변경)"
-                  className={`pl-1 pr-1 py-0.5 rounded-full border flex items-center gap-0.5 transition-all cursor-pointer ${
-                    themeMode === 'light'
-                      ? 'bg-teal-50/90 border-teal-300 text-teal-900'
-                      : 'bg-zinc-900 border-primary-container/45 text-white'
-                  }`}
-                >
-                  <img
-                    src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
-                    alt={myDoorplatePersona}
-                    className="w-3.5 h-3.5 rounded-full object-cover border border-primary-container shrink-0"
-                  />
-                  <span className="font-label-sm text-[9.5px] font-extrabold whitespace-nowrap hidden min-[460px]:inline">
-                    👑 {myDoorplatePersona}
-                  </span>
-                </button>
-              )}
-              {/* 🛠️ 설정 버튼: 모바일에서도 상시 정상 노출 (스토어 심사 리젝 대상 아님) */}
-              <button
-                type="button"
-                onClick={() => setShowSetupMonsterModal(true, 'mobile')}
-                title="기기 설정 및 고치기"
-                className="px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10px] font-extrabold shrink-0"
-              >
-                ⚙️
-              </button>
-              {/* 허브 SDK 표준 앵커 (PC 헤더와 동일): 🪙 코인(스토어 심사 모드·네이티브 앱에서는 DOM 원천 비노출) + 🐾 곰발바닥 OTP 로그인/통합 프로필 */}
-              <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} compact={true} />
-              <GhostiTopRightHubAnchor themeMode={themeMode} />
+            {/* 우상단 심플 앵커: 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
+            <div className="flex items-center gap-1 shrink-0" aria-label="가이드 공유 및 프로필 영역">
               <button
                 type="button"
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                 }}
-                title="공식 쇼룸 대문으로 이동"
-                className="px-2 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-sm text-[10px] font-extrabold shrink-0"
+                title="공식 온보딩/가이드 페이지로 이동"
+                className={`px-2 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1 shrink-0 cursor-pointer ${
+                  themeMode === 'light'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
+                    : 'text-zinc-300 hover:text-white hover:bg-white/10'
+                }`}
               >
-                🏠 대문
+                <span>📖</span>
+                <span>가이드</span>
               </button>
               <button
                 type="button"
-                onClick={toggleThemeMode}
-                title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-                aria-label={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0 outline-none focus:outline-none ${
+                onClick={() => {
+                  const shareText =
+                    '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·손보기는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
+                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                    void navigator.clipboard.writeText(shareText);
+                  }
+                  useSaySeeStore.setState({
+                    lastQuarantineToast: '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
+                  });
+                }}
+                title="지인·가족에게 앱 공유하기"
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
                   themeMode === 'light'
-                    ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
-                    : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
+                    ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
+                    : 'text-zinc-300 hover:text-white hover:bg-white/10'
                 }`}
               >
-                {themeMode === 'light' ? (
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
-                ) : (
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="4" fill="currentColor" />
-                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                  </svg>
-                )}
+                <span className="material-symbols-outlined text-[15px]">share</span>
               </button>
+              <GhostiTopRightHubAnchor themeMode={themeMode} />
             </div>
           </div>
 

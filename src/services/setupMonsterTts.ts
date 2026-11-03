@@ -111,6 +111,7 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     utter.voice = preferredVoice;
     utter.lang = 'ko-KR';
     utter.rate = 1.15;
+    utter.volume = 0.4;
     window.speechSynthesis.speak(utter);
     return true;
   } catch {
@@ -157,6 +158,7 @@ export async function speakSetupMonsterTts(
   if (cachedUrl && typeof Audio !== 'undefined') {
     try {
       const audio = new Audio(cachedUrl);
+      audio.volume = 0.4;
       activeAudioElement = audio;
       await audio.play();
       return {
@@ -185,6 +187,7 @@ export async function speakSetupMonsterTts(
         const playableUrl = getZCoreUrl(String(data.audioUrl));
         memoryAudioUrlCache.set(cacheKey, playableUrl);
         const audio = new Audio(playableUrl);
+        audio.volume = 0.4;
         activeAudioElement = audio;
         await audio.play().catch(() => {});
         return {

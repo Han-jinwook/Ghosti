@@ -35,13 +35,12 @@ export const App: React.FC = () => {
     dismissUndoBatch,
   } = useSaySeeStore();
 
-  // 오직 URL 뒤에 `?dev=true`가 붙어 있을 때만 개발자/QA 전용 내부 워크스페이스 권한 부여
-  // 그 외 일반 외부 방문자에게는 정식 출시 전까지 개발 중인 본진 워크스페이스를 100% 비노출 잠금합니다.
+  // 오직 현재 URL 뒤에 `?dev=true`가 붙어 있거나 로컬호스트일 때만 개발자/QA 전용 내부 워크스페이스 권한 부여
+  // https://ghosti.sundreamer.app/ 처럼 `?dev=true` 없이 접속하면 무조건 온보딩 대문(showroom)만 노출합니다.
   const [isDevAuthorized] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('dev') === 'true') {
-        localStorage.setItem('ghosti_dev_unlocked', 'true');
         return true;
       }
       if (
@@ -50,44 +49,32 @@ export const App: React.FC = () => {
       ) {
         return true;
       }
-      return localStorage.getItem('ghosti_dev_unlocked') === 'true';
+      return false;
     } catch {
       return false;
     }
   });
 
-  // [기능명세 12.1절 확정] 세션 감지형 자동 패스스루 (Seamless Auto-Bypass):
-  // 1) 정식 출시 전(!OFFICIAL_LAUNCH_LIVE): ?dev=true 권한이 없는 일반 방문자는 무조건 온보딩 대문('showroom') 고정.
-  // 2) 정식 출시 후(OFFICIAL_LAUNCH_LIVE === true) 또는 개발자(?dev=true):
-  //    - 이미 로그인 세션(merlin_session_token)이 있거나 온보딩을 거쳐 진입한 이력(ghosti_onboarding_completed === 'true')이 있는 기존 회원은
-  //      재방문 시 온보딩 대문을 다시 거치거나 버튼을 누르지 않고 0.001초 만에 본진 워크스페이스('workspace')로 직행합니다.
-  //    - 오직 비로그인 첫 방문자(Guest)에게만 온보딩 대문('showroom')을 먼저 노출합니다.
+  // [라우팅 잠금 철칙]:
+  // 1) `https://ghosti.sundreamer.app/` (일반 루트 접속) ➔ 무조건 온보딩 대문('showroom')만 노출
+  // 2) `https://ghosti.sundreamer.app/?dev=true` 또는 로컬 개발 환경 ➔ 내부 워크스페이스('workspace') 진입
   const [viewMode, setViewMode] = useState<'showroom' | 'workspace'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('dev') === 'true') {
-        localStorage.setItem('ghosti_onboarding_completed', 'true');
         return 'workspace';
       }
-
-      const unlocked =
+      if (
         window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1' ||
-        localStorage.getItem('ghosti_dev_unlocked') === 'true';
-
-      // 정식 출시 전에는 일반 외부 방문자의 워크스페이스 진입을 원천 잠금
-      if (!OFFICIAL_LAUNCH_LIVE && !unlocked) {
+        window.location.hostname === '127.0.0.1'
+      ) {
+        return 'workspace';
+      }
+      if (!OFFICIAL_LAUNCH_LIVE) {
         return 'showroom';
       }
-
-      // 세션 감지형 자동 패스스루(Seamless Auto-Bypass):
-      // 로그인 토큰(merlin_session_token) 보유 회원 또는 이미 온보딩을 완료한 기존 유저는 대문 스킵 후 즉시 본 앱 오픈
       const hasActiveSession = Boolean(localStorage.getItem('merlin_session_token'));
-      const hasCompletedOnboarding =
-        localStorage.getItem('ghosti_onboarding_completed') === 'true' ||
-        localStorage.getItem('ghosti_view_mode') === 'workspace';
-
-      if (hasActiveSession || hasCompletedOnboarding) {
+      if (hasActiveSession) {
         return 'workspace';
       }
     } catch {
@@ -170,8 +157,8 @@ export const App: React.FC = () => {
         <>
           {layout === 'desktop' ? <DesktopDashboard /> : <MobileAppView />}
 
-          {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 */}
-          <OnboardingModal />
+          {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 (온보딩 대문 페이지와 중복이므로 팝업 주석 처리) */}
+          {/* <OnboardingModal /> */}
 
           {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
           <PhotoDetailModal />

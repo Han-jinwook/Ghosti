@@ -2487,7 +2487,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (def?.wavFile) {
       try {
         const audio = new Audio(`/__poc/audio/file?f=${encodeURIComponent(def.wavFile)}`);
-        audio.volume = 0.65;
+        audio.volume = 0.26;
         void audio.play().catch(() => {});
       } catch {
         /* ignore */

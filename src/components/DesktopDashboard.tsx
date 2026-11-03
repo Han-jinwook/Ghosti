@@ -837,65 +837,24 @@ export const DesktopDashboard: React.FC = () => {
 
               </div>
 
-              {/* 우측 상단 불변의 생태계 앵커: 귀신같이 여권 문패(업무 공유 제외) + 설정몬스터 + 크레딧 + 테마 토글 */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="화면 테마 및 프로필 영역">
-                {myPassportCluster && activeLoungeType !== 'work' && (
-                  <button
-                    type="button"
-                    onClick={() => setDoorplatePickerClusterId(myPassportCluster.clusterId)}
-                    title="🛂 귀신같이 여권 문패 사진 변경"
-                    className={`pl-1 pr-2.5 py-1 rounded-full border flex items-center gap-1.5 transition-all cursor-pointer ${
-                      themeMode === 'light'
-                        ? 'bg-teal-50/90 hover:bg-teal-100/80 border-teal-300 text-teal-900 shadow-xs'
-                        : 'bg-zinc-900/95 hover:bg-zinc-800 border-primary-container/45 text-white shadow-xs'
-                    }`}
-                  >
-                    <img
-                      src={myPassportCluster.avatarUrl || myPassportCluster.representativePhoto}
-                      alt={myDoorplatePersona}
-                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover border border-primary-container shrink-0"
-                    />
-                    <span className="font-label-sm text-[12.5px] font-extrabold whitespace-nowrap">
-                      👑 {myDoorplatePersona}
-                    </span>
-                  </button>
-                )}
-                <ZCoreEngineStatusBadge themeMode={themeMode} onClickGuide={() => setShowZCoreGuideModal(true)} />
-                <GhostiTopRightHubAnchor themeMode={themeMode} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent('ghosti_open_onboarding_tab', {
-                        detail: { tab: 'tab1_find_care' },
-                      })
-                    );
-                  }}
-                  title="3탭 심플 온보딩 및 Ctrl + 0 귀신 초능력 체험방 열기"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-extrabold text-[12px] transition-all cursor-pointer ${
-                    themeMode === 'light'
-                      ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
-                      : 'bg-amber-500/15 text-amber-300 border border-amber-400/40 hover:bg-amber-500/25'
-                  }`}
-                >
-                  <span>📖</span>
-                  <span className="hidden sm:inline">온보딩/가이드</span>
-                </button>
+              {/* 우측 상단 심플 앵커: 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="가이드 공유 및 프로필 영역">
                 <button
                   type="button"
                   onClick={() => {
                     window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                   }}
-                  title="검색어 빌드업용 공식 쇼룸 및 다운로드 대문 페이지로 이동"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-extrabold text-[12px] transition-all cursor-pointer ${
+                  title="공식 온보딩/가이드 페이지로 이동"
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-[12px] transition-all cursor-pointer ${
                     themeMode === 'light'
-                      ? 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
-                      : 'bg-teal-950/80 text-[#00F0B5] border border-teal-500/40 hover:bg-teal-900/60 shadow-[0_0_15px_rgba(0,240,181,0.2)]'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
+                      : 'text-zinc-300 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  <span>🏠</span>
-                  <span className="hidden sm:inline">공식 쇼룸 대문</span>
+                  <span className="text-[13px]">📖</span>
+                  <span>가이드</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -909,43 +868,16 @@ export const DesktopDashboard: React.FC = () => {
                     });
                   }}
                   title="지인·가족에게 앱 공유하기 (초대받은 가족·회원·직원은 언제나 무료)"
-                  className={`hidden lg:flex w-8 h-8 rounded-xl items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+                  className={`flex w-7 h-7 rounded-lg items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
                     themeMode === 'light'
                       ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
-                      : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
+                      : 'text-zinc-300 hover:text-white hover:bg-white/10'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[15px]">share</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={toggleThemeMode}
-                  title={themeMode === 'light' ? '어두운 화면으로 전환' : '밝은 화면으로 전환'}
-                  className={`flex w-8 h-8 rounded-xl items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
-                    themeMode === 'light'
-                      ? 'text-slate-400 hover:text-slate-700 hover:bg-black/5'
-                      : 'bg-slate-800/90 hover:bg-slate-700 border border-white/20 text-slate-300 hover:text-white'
-                  }`}
-                >
-                  {themeMode === 'light' ? (
-                    <svg className="w-[16px] h-[16px]" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                    </svg>
-                  ) : (
-                    <svg
-                      className="w-[16px] h-[16px]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="4" fill="currentColor" />
-                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                    </svg>
-                  )}
-                </button>
+
+                <GhostiTopRightHubAnchor themeMode={themeMode} />
               </div>
             </div>
 
@@ -1848,7 +1780,9 @@ export const DesktopDashboard: React.FC = () => {
                         🗑️ OS 기본 휴지통 열기
                       </button>
                       <button
-                        onClick={() => setShowOnboarding(true)}
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
+                        }}
                         className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-semibold cursor-pointer"
                       >
                         🔒 보안 · QR 페어링 설정

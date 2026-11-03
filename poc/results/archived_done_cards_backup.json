@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-02T14:50:31.114130",
+  "updated_at": "2026-11-03T09:52:02.887723",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -410,6 +410,38 @@
       "last_edited_time": "2026-11-02T00:12:00.000Z",
       "url": "https://app.notion.com/p/409f9ffd2c1d80a5bb1fffa1c8c73143",
       "archived_at": "2026-11-02T14:50:31.113381"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-81b7-a3a1-c3946f766612",
+      "title": "🎯[센스톡] 명단·템플릿·상용구 동료 공유 및 실시간 도착 알림·구/신 구분 통합 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-02T01:32:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d81b7a3a1c3946f766612",
+      "archived_at": "2026-11-03T09:03:28.198373"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-80fd-8e8a-c90ddde4d87e",
+      "title": "🎯[센스톡] 수신자 명단 비우기 오류, 삭제 후 다시 불러오기 후에 덮어씌워지는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-02T01:54:00.000Z",
+      "url": "https://app.notion.com/p/40cf9ffd2c1d80fd8e8ac90ddde4d87e",
+      "archived_at": "2026-11-03T09:06:31.106101"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-80e2-8ebb-ea30c9abbb2f",
+      "title": "🎯[센스톡] 단체 카톡 전송 명수 오류",
+      "app": "",
+      "last_edited_time": "2026-11-02T02:11:00.000Z",
+      "url": "https://app.notion.com/p/40cf9ffd2c1d80e28ebbea30c9abbb2f",
+      "archived_at": "2026-11-03T09:51:01.521626"
+    },
+    {
+      "page_id": "409f9ffd-2c1d-807f-8822-eb96b6289d8f",
+      "title": "🎯[귀신같이] 고치기 파일 바로 띄우기",
+      "app": "",
+      "last_edited_time": "2026-11-02T03:43:00.000Z",
+      "url": "https://app.notion.com/p/409f9ffd2c1d807f8822eb96b6289d8f",
+      "archived_at": "2026-11-03T09:52:02.887558"
     }
   ]
 }

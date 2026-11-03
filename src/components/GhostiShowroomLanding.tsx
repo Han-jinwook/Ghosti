@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useHub } from '../services/merlin-hub-sdk/react';
 import { useHubAuth } from '../services/merlin-hub-sdk/Auth/useHubAuth';
 import { syncHubUserToLocalSupabase } from '../services/supabaseClient';
+import { useSaySeeStore } from '../store/useSaySeeStore';
+import { Z_CORE_ZIP_URL, LATEST_Z_CORE_VERSION } from '../services/zCoreBridge';
+import { simulateSuperpowerLocal, playBabyGhostChime } from './OnboardingModal';
 
 // 특허 출원번호(10-2026-XXXXXXX) 확보 전까지 허위표시 리스크 및 출원 전 공지(신규성 상실) 방지를 위해 false 유지
 export const PATENTS_FILED = false;
@@ -176,10 +179,36 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [activeBannerMode, setActiveBannerMode] = useState<'after' | 'before'>('after');
 
   // 인터랙티브 3초 온보딩 체험 탭 상태
-  const [demoTab, setDemoTab] = useState<'video' | 'doc' | 'clean'>('video');
+  const [demoTab, setDemoTab] = useState<'video' | 'doc' | 'clean' | 'superpower'>('video');
   const [selectedVideoScenarioIdx, setSelectedVideoScenarioIdx] = useState(0);
   const [selectedDocScenarioIdx, setSelectedDocScenarioIdx] = useState(0);
   const [cleanDemoDone, setCleanDemoDone] = useState(false);
+
+  // 팝업에서 이관된 온보딩 전용 상태 (Ctrl+0 귀신 초능력 & 안전 검진 구역 & QR & Z-코어 1회 안내)
+  const {
+    trialScanPermissions,
+    setTrialScanPermission,
+    pcAgentPairedMobile,
+    setPcAgentPairedMobile,
+  } = useSaySeeStore();
+  const [typoInput, setTypoInput] = useState('dkssudgktpdy qksrkqtmqslek');
+  const [typoOutput, setTypoOutput] = useState('안녕하세요 반갑습니다');
+  const [moneyInput, setMoneyInput] = useState('3억 5천만');
+  const [moneyOutput, setMoneyOutput] = useState('350,000,000');
+  const [extractInput, setExtractInput] = useState(
+    '김철수 팀장입니다 01012345678 국민 123-45-678910 내일 오후 3시 미팅'
+  );
+  const [extractOutput, setExtractOutput] = useState(
+    '- 성함: 김철수\n- 연락처: 010-1234-5678\n- 계좌: 국민 123-45-678910\n- 일정: 내일 오후 3시'
+  );
+  const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ghosti_telemetry_enabled') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [showTermsClause, setShowTermsClause] = useState(false);
 
   // 사전 가입 & 출시 알림 이메일 인증 상태
   const [emailInput, setEmailInput] = useState('');
@@ -776,6 +805,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               >
                 🧹 연사 사진 1장 Pick
               </button>
+              <button
+                type="button"
+                onClick={() => setDemoTab('superpower')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  demoTab === 'superpower'
+                    ? 'bg-amber-400 text-slate-950 shadow-[0_0_15px_rgba(251,191,36,0.4)]'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                👻 Ctrl+0 초능력 · 기기통합
+              </button>
             </div>
           </div>
 
@@ -955,6 +995,247 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {demoTab === 'superpower' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 1) 2어절 한영·영한 오타 둔갑술 */}
+                  <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-400/35 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs sm:text-sm font-extrabold text-amber-300">
+                        ① 2어절 한영·영한 오타 둔갑술 (띠리링~👻)
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-black">
+                        Ctrl + 0 · [2]번
+                      </span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={typoInput}
+                        onChange={(e) => setTypoInput(e.target.value)}
+                        placeholder="예: dkssudgktpdy qksrkqtmqslek"
+                        className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-xs text-white outline-none focus:border-amber-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTypoOutput(simulateSuperpowerLocal('typo', typoInput));
+                          playBabyGhostChime('typo');
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 cursor-pointer"
+                      >
+                        🪄 둔갑 체험
+                      </button>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-400/30 text-xs">
+                      <span className="text-zinc-400 mr-1.5">변환 결과:</span>
+                      <strong className="text-white">{typoOutput}</strong>
+                    </div>
+                  </div>
+
+                  {/* 2) 9번 억만금 숫자 양방향 변환 */}
+                  <div className="p-4 rounded-2xl bg-zinc-950 border border-emerald-400/35 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs sm:text-sm font-extrabold text-emerald-300">
+                        ② 억만금 한글 숫자 ⇄ 아라비아 숫자 변환 (9번)
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMoneyInput('3억 5천만');
+                            setMoneyOutput(simulateSuperpowerLocal('number9', '3억 5천만'));
+                          }}
+                          className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
+                        >
+                          3억 5천만
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMoneyInput('1285000000');
+                            setMoneyOutput(simulateSuperpowerLocal('number9', '1285000000'));
+                          }}
+                          className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
+                        >
+                          1,285,000,000
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={moneyInput}
+                        onChange={(e) => {
+                          setMoneyInput(e.target.value);
+                          setMoneyOutput(simulateSuperpowerLocal('number9', e.target.value));
+                        }}
+                        className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-xs text-white outline-none focus:border-emerald-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMoneyOutput(simulateSuperpowerLocal('number9', moneyInput))}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-black shrink-0 cursor-pointer"
+                      >
+                        변환
+                      </button>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-400/30 text-xs">
+                      <span className="text-zinc-400 mr-1.5">결과:</span>
+                      <strong className="text-white font-mono">{moneyOutput}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3) 8번 카톡 통짜 문자 계좌·연락처·일정 구조화 추출 & 무료 vs 내 기기 통합 요약 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-2xl bg-zinc-950 border border-cyan-400/35 flex flex-col gap-2">
+                    <span className="text-xs sm:text-sm font-extrabold text-cyan-300">
+                      ③ 카톡 통짜 문자 계좌·연락처·일정 구조화 추출 (8번)
+                    </span>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={extractInput}
+                        onChange={(e) => setExtractInput(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setExtractOutput(simulateSuperpowerLocal('extract8', extractInput))}
+                        className="px-3.5 py-2 rounded-xl bg-cyan-400 text-slate-950 text-xs font-black shrink-0 cursor-pointer"
+                      >
+                        구조화 추출
+                      </button>
+                    </div>
+                    <pre className="px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-[11px] text-cyan-100 whitespace-pre-wrap font-sans leading-snug">
+                      {extractOutput}
+                    </pre>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/60 via-zinc-950 to-zinc-950 border border-emerald-400/40 flex flex-col justify-between gap-2.5">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-[11px] font-black">
+                          👑 내 기기 통합 (월 3,900원 · 5년 특판 39,000원)
+                        </span>
+                        <span className="text-[11px] text-teal-300 font-bold">혼자 1대는 평생 0원</span>
+                      </div>
+                      <p className="text-xs text-zinc-200 leading-relaxed">
+                        • <b>폰 ↔ 집PC ↔ 회사PC</b> 이메일 하나로 무제한 직결 통합 (클라우드 월세 0원)<br />
+                        • <b>양방향 암호화 클립보드 우체통</b> &amp; <b>Ctrl+0 귀신 초능력 9+3 + F1~F10 상용구</b> 전 기기 동기화<br />
+                        • 모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~) 방장 1인 구독 시 <b>초대 멤버 전원 0원</b>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4) 내 PC 안전 검진 3대 폴더 & 스마트폰 1초 설치 QR 코드 & Z-코어 1회 설치 안내 통합 바 */}
+                <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                  <div className="flex flex-col gap-2 flex-1">
+                    <div className="text-xs font-extrabold text-white flex items-center gap-2">
+                      <span>🔒 내 PC 안전 검진 구역 (허용한 기본 폴더만 스캔 · 외부 전송 0%) &amp; Z-코어 1회 연결</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 flex items-center gap-2 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={trialScanPermissions.gallery}
+                          onChange={(e) => setTrialScanPermission('gallery', e.target.checked)}
+                          className="accent-teal-400"
+                        />
+                        <span>☑️ 사진첩(갤러리)</span>
+                      </label>
+                      <label className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 flex items-center gap-2 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={trialScanPermissions.downloads}
+                          onChange={(e) => setTrialScanPermission('downloads', e.target.checked)}
+                          className="accent-amber-400"
+                        />
+                        <span>☑️ 다운로드 폴더</span>
+                      </label>
+                      <label className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 flex items-center gap-2 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={trialScanPermissions.desktop}
+                          onChange={(e) => setTrialScanPermission('desktop', e.target.checked)}
+                          className="accent-emerald-400"
+                        />
+                        <span>☑️ 바탕화면 폴더</span>
+                      </label>
+                      <a
+                        href={Z_CORE_ZIP_URL}
+                        download="Merlin_Z_Core.zip"
+                        className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-300 font-extrabold text-xs transition-all"
+                      >
+                        📥 PC Z-코어 1회 설치파일 받기 (v{LATEST_Z_CORE_VERSION})
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* 실제 스캔 가능한 정식 QR 코드 (스마트폰 카메라로 스캔 시 https://ghosti.sundreamer.app 즉시 연결) */}
+                  <div className="flex items-center gap-3 shrink-0 bg-zinc-900/90 p-2.5 rounded-2xl border border-teal-400/30">
+                    <img
+                      src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=6&data=https%3A%2F%2Fghosti.sundreamer.app"
+                      alt="스마트폰 앱 1초 설치 QR 코드"
+                      className="w-20 h-20 rounded-xl bg-white p-1 shrink-0"
+                    />
+                    <div className="flex flex-col gap-1 max-w-[220px]">
+                      <span className="text-[11px] font-extrabold text-teal-300">
+                        📱 스마트폰 앱 1초 설치 QR 코드
+                      </span>
+                      <p className="text-[10.5px] text-zinc-300 leading-snug">
+                        폰 카메라로 스캔해 <b>모바일 웹/앱을 바로 실행</b>하세요! 같은 이메일 로그인 하나로 내 폰·PC가 자동 연결됩니다.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
+                        className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer"
+                      >
+                        {pcAgentPairedMobile ? '● 내 폰 앱 설치·이메일 연결됨' : '○ 연결 상태 토글'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5) 익명 사용 통계(Zero-Content Telemetry) ON/OFF 토글 & 약관 고지 */}
+                <div className="pt-2 border-t border-white/10 flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+                    <label className="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={telemetryEnabled}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          setTelemetryEnabled(next);
+                          try {
+                            localStorage.setItem('ghosti_telemetry_enabled', String(next));
+                          } catch {}
+                        }}
+                        className="w-4 h-4 accent-teal-400 rounded"
+                      />
+                      <span className="font-bold text-zinc-200">
+                        ✔ 서비스 개선을 위한 익명 사용 통계 보내기 (입력·복사 원문 텍스트 및 파일 내용 0 Byte 수집)
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowTermsClause((v) => !v)}
+                      className="text-teal-300 hover:text-teal-200 font-bold underline cursor-pointer"
+                    >
+                      {showTermsClause ? '📜 익명 통계 약관 조항 접기 ▴' : '📜 익명 통계 약관 조항 보기 ▾'}
+                    </button>
+                  </div>
+                  {showTermsClause && (
+                    <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 text-[11px] text-zinc-300 leading-relaxed">
+                      회사는 서비스 품질 개선을 위해 사용자가 입력·복사한 텍스트 원문이나 파일 내용은 단 0 Byte도 수집하지 않으며, 오직 비식별화된 기능별 호출 횟수와 오류 코드만을 집계합니다.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
