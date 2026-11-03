@@ -979,27 +979,11 @@ def get_explorer_folder_title_candidates(folder_path: Path) -> List[str]:
 
 def bring_window_to_front_immediately(hw_int: int) -> None:
     """
-    멀린님이 현재 보고 계신 '귀신같이 (Ghosti)' 브라우저가 있는 모니터 한가운데 맨 앞으로
-    작업표시줄에 가려지지 않는 넉넉한 크기로 탐색기 창을 즉시 끌어올립니다.
+    현재 모니터 한가운데 맨 앞으로 탐색기/뷰어 창을 즉시 끌어올립니다.
+    (c_int64 캐스팅 미사용 시 64비트 Windows에서 HWND(-1)/HWND(-2)가 양수로 잘려 창이 0.1초 떴다 사라지는 버그 방지)
     """
     user32 = ctypes.windll.user32
     hw = wintypes.HWND(hw_int)
-
-    rc = wintypes.RECT()
-    user32.GetWindowRect(hw, ctypes.byref(rc))
-    w = max(1160, rc.right - rc.left)
-    h = max(760, rc.bottom - rc.top)
-    target_x = rc.left
-    target_y = rc.top
-
-    # '귀신같이 (Ghosti)' 브라우저 창이 있는 모니터 위치를 찾아 동일한 모니터 중앙(작업표시줄 위쪽 안전 영역)으로 이동
-    z_win = find_window_on_default_desktop("귀신같이") or find_window_on_default_desktop("Ghosti")
-    if z_win and z_win.get("rect"):
-        zx, zy, zw, zh = z_win["rect"]
-        w = min(max(1180, w), max(1000, zw - 120))
-        h = min(max(760, h), max(680, zh - 140))
-        target_x = zx + max(40, (zw - w) // 2)
-        target_y = zy + 55
 
     if user32.IsIconic(hw):
         user32.ShowWindow(hw, 9)  # SW_RESTORE
@@ -1014,15 +998,18 @@ def bring_window_to_front_immediately(hw_int: int) -> None:
         attached = False
         if fg_tid and cur_tid and fg_tid != cur_tid:
             attached = bool(user32.AttachThreadInput(fg_tid, cur_tid, True))
-        user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
+        # Alt key dummy event to unlock Windows ForegroundLockTimeout safely
+        user32.keybd_event(0x12, 0, 0, 0)
+        user32.keybd_event(0x12, 0, 2, 0)
         user32.BringWindowToTop(hw)
         user32.SetForegroundWindow(hw)
         if attached:
             user32.AttachThreadInput(fg_tid, cur_tid, False)
-        time.sleep(0.12)
-        user32.SetWindowPos(hw, wintypes.HWND(-2), int(target_x), int(target_y), int(w), int(h), 0x0040 | 0x0010)
     except Exception:
-        user32.SetWindowPos(hw, wintypes.HWND(-1), int(target_x), int(target_y), int(w), int(h), 0x0040)
+        try:
+            user32.SetForegroundWindow(hw)
+        except Exception:
+            pass
 
 
 def set_clipboard_unicode_text_pure_win32(text: str) -> None:
@@ -1109,8 +1096,6 @@ def run_gui_task_runner() -> None:
             candidates = find_explorer_windows_on_default_desktop(["S:", "업무공유폴더_S"])
             if candidates:
                 bring_window_to_front_immediately(candidates[0]["rawHwnd"])
-                hw = wintypes.HWND(candidates[0]["rawHwnd"])
-                user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
                 break
         return
 
@@ -1121,55 +1106,14 @@ def run_gui_task_runner() -> None:
         target_file = Path(target_str)
         if not target_file.exists():
             return
-
-        folder_path = target_file.parent
-        folder_titles = get_explorer_folder_title_candidates(folder_path)
-
-        # 기존에 같은 폴더나 검색 결과로 열려 있던 탐색기 창이 있으면 먼저 닫아 단일 창만 깔끔하게 표시
-        old_same_wins = find_explorer_windows_on_default_desktop(folder_titles + ["검색 결과", target_file.stem])
-        for old_w in old_same_wins:
-            try:
-                user32.PostMessageW(wintypes.HWND(old_w["rawHwnd"]), 0x0010, 0, 0)
-            except Exception:
-                pass
-        if old_same_wins:
-            time.sleep(0.10)
-
-        existing_other_explorers = {
-            w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])
-        }
-
-        # 일반 폴더를 안전하게 연 뒤 탐색기 우측 상단 검색창에 파일명을 자동 입력하여 이 파일만 단독 표시! (뒤로가기 시 전체 폴더로 즉시 이동)
-        os.startfile(str(folder_path))
-
-        primary_win: Dict[str, Any] = {}
-        for tick in range(50):
-            time.sleep(0.05)
-            candidates = find_explorer_windows_on_default_desktop(
-                folder_titles + ["검색 결과", target_file.stem],
-                exclude_hwnds=existing_other_explorers if tick < 15 else None,
-            )
-            if candidates:
-                primary_win = candidates[0]
-                for dup in candidates[1:]:
-                    try:
-                        user32.PostMessageW(wintypes.HWND(dup["rawHwnd"]), 0x0010, 0, 0)
-                    except Exception:
-                        pass
-                bring_window_to_front_immediately(primary_win["rawHwnd"])
-                break
-
-        if not primary_win:
-            return
-
-        hw_int = primary_win["rawHwnd"]
-        time.sleep(0.32)
-        filter_explorer_by_search_box_pure_win32(hw_int, target_file.stem)
-        time.sleep(0.25)
-
-        # 탐색기 창을 크롬 위 전면에 유지하되 일반 창(NOTOPMOST)으로 전환
-        hw = wintypes.HWND(hw_int)
-        user32.SetWindowPos(hw, wintypes.HWND(-2), 0, 0, 0, 0, 0x0043)
+        try:
+            os.startfile(str(target_file))
+        except Exception:
+            pass
+        try:
+            subprocess.Popen(f'explorer.exe /select,"{str(target_file.resolve())}"')
+        except Exception:
+            pass
         return
 
     if mode == "overlay":
@@ -1565,15 +1509,27 @@ def run_defender_security_check(sub_action: str = "status") -> Dict[str, Any]:
 def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]:
     ensure_merlin_dirs()
 
-    # [초고속 직결] 윈도우 탐색기 /select 모드로 해당 파일을 선택해 화면 맨 앞으로 즉시 표시!
+    # [초고속 직결] 문서/파일 기본 뷰어 직접 실행(open_file_direct) 또는 탐색기 /select 위치 표시!
     if action in ("open_file_location", "open_file_search", "open_file_direct") and target_path:
         p = Path(target_path)
         if not p.exists():
             fname = p.name
-            for cand_dir in (USERPROFILE / "Desktop", USERPROFILE / "Documents", USERPROFILE / "Downloads"):
-                if (cand_dir / fname).exists():
-                    p = cand_dir / fname
-                    break
+            search_dirs = [
+                USERPROFILE / "Desktop",
+                USERPROFILE / "Documents",
+                USERPROFILE / "Downloads",
+                USERPROFILE / "Pictures",
+                Path(__file__).resolve().parents[2] / "test_docs",
+                Path("D:/Ghosti/test_docs"),
+                Path("C:/MerlinTools/test_docs"),
+            ]
+            for cand_dir in search_dirs:
+                try:
+                    if cand_dir.exists() and (cand_dir / fname).exists():
+                        p = cand_dir / fname
+                        break
+                except Exception:
+                    pass
         if p.exists() and p.name.startswith("~$"):
             real_cand = p.with_name(p.name[2:])
             if real_cand.exists():
@@ -1588,25 +1544,21 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                         ctypes.windll.kernel32.SetFileAttributesW(str(resolved_p), f_attrs & ~0x02)
             except Exception:
                 pass
-            user32 = ctypes.windll.user32
-            folder_titles = get_explorer_folder_title_candidates(resolved_p.parent)
-            close_targets = list(folder_titles)
-            if resolved_p.parent.name.lower() != "documents":
-                for doc_title in ("Documents", "문서", "내 문서"):
-                    if doc_title not in close_targets:
-                        close_targets.append(doc_title)
-            old_same_wins = find_explorer_windows_on_default_desktop(close_targets)
-            for old_w in old_same_wins:
+
+            # 1) open_file_direct 또는 open_file_search 호출 시:
+            #    먼저 해당 파일을 내 컴퓨터의 기본 뷰어(엑셀/한글/PDF/크롬·엣지·메모장)로 직접 실행하고,
+            #    동시에 윈도우 탐색기에서도 해당 파일이 선택(/select)된 상태로 창이 정상 유지되게 띄웁니다.
+            viewer_launched = False
+            if action in ("open_file_direct", "open_file_search"):
                 try:
-                    user32.PostMessageW(wintypes.HWND(old_w["rawHwnd"]), 0x0010, 0, 0)
+                    os.startfile(str(resolved_p))
+                    viewer_launched = True
                 except Exception:
-                    pass
-            if old_same_wins:
-                time.sleep(0.15)
+                    viewer_launched = False
+
+            folder_titles = get_explorer_folder_title_candidates(resolved_p.parent)
             existing_explorers = {w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])}
             try:
-                # ⚠️ 중요: 리스트로 전달하면 공백 포함 경로에서 "/select,C:\..."로 감싸져 Documents 폴더가 열리는 버그가 발생하므로
-                # 반드시 /select,"C:\..." 형태의 원시 문자열(raw command line)로 호출합니다!
                 subprocess.Popen(f'explorer.exe /select,"{str(resolved_p)}"')
             except Exception:
                 try:
@@ -1615,27 +1567,34 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                     pass
             opened_win: Dict[str, Any] = {}
             search_titles = folder_titles + [resolved_p.stem, resolved_p.name]
-            for tick in range(28):
+            for tick in range(20):
                 time.sleep(0.08)
                 found = find_explorer_windows_on_default_desktop(
                     search_titles,
-                    exclude_hwnds=existing_explorers if tick < 10 else None,
+                    exclude_hwnds=existing_explorers if tick < 8 else None,
                 )
                 if found:
                     opened_win = found[0]
-                    time.sleep(0.22)
-                    try:
-                        bring_window_to_front_immediately(opened_win["rawHwnd"])
-                    except Exception:
-                        pass
+                    if not viewer_launched:
+                        try:
+                            bring_window_to_front_immediately(opened_win["rawHwnd"])
+                        except Exception:
+                            pass
                     break
+            msg_ko = (
+                f"📄 [{resolved_p.name}] 문서를 내 PC 기본 뷰어 및 탐색기 위치로 즉시 열었습니다!"
+                if viewer_launched
+                else f"📂 윈도우 탐색기를 열어 [{resolved_p.name}] 파일을 선택해 화면 맨 앞으로 띄웠습니다!"
+            )
             return {
                 "ok": True,
                 "action": action,
                 "targetPath": str(resolved_p),
+                "viewerLaunched": viewer_launched,
                 "verifiedExplorerOnMonitor": bool(opened_win),
                 "explorerHwnd": opened_win.get("hwnd", ""),
-                "message": f"📂 윈도우 탐색기를 열어 [{resolved_p.name}] 파일을 선택해 화면 맨 앞으로 띄웠습니다!",
+                "summaryKo": msg_ko,
+                "message": msg_ko,
             }
         return {"ok": False, "error": f"파일이 존재하지 않습니다: {target_path}"}
 
