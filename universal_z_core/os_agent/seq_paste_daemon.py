@@ -1068,6 +1068,50 @@ def _toast_worker() -> None:
                         )
                         s_preview.pack(side="left")
 
+                        # [우측 상단] 클립보드 보관기간(1일/3일/7일/30일) 원클릭 순환 배지 + [🧹비우기] 버튼
+                        cur_cfg = get_superpower_settings()
+                        cur_days = int(cur_cfg.get("retention_days", 7))
+                        ret_label_map = {1: "보관: 오늘(1일)", 3: "보관: 3일", 7: "보관: 7일", 30: "보관: 30일"}
+
+                        def _on_clear_click(_e=None):
+                            clear_clipboard_history()
+
+                        clear_btn = tk.Label(
+                            top_search_bar,
+                            text="🧹비우기",
+                            fg="#FCA5A5",
+                            bg="#1E293B",
+                            padx=5,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        clear_btn.pack(side="right", padx=(4, 0))
+                        clear_btn.bind("<Button-1>", _on_clear_click)
+
+                        ret_btn = tk.Label(
+                            top_search_bar,
+                            text=ret_label_map.get(cur_days, f"보관: {cur_days}일") + " ▾",
+                            fg="#5EEAD4",
+                            bg="#1E293B",
+                            padx=6,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        ret_btn.pack(side="right", padx=(6, 0))
+
+                        def _cycle_retention(_e=None):
+                            is_hovered[0] = True
+                            now_d = int(get_superpower_settings().get("retention_days", 7))
+                            order = [1, 3, 7, 30]
+                            nxt_d = order[(order.index(now_d) + 1) % len(order)] if now_d in order else 7
+                            update_superpower_settings({"retention_days": nxt_d})
+                            ret_btn.config(text=ret_label_map.get(nxt_d, f"보관: {nxt_d}일") + " ▾")
+                            s_preview.config(text=f"✅ 클립보드 보관기간이 [{ret_label_map.get(nxt_d)}]로 변경되었습니다!", fg="#5EEAD4")
+
+                        ret_btn.bind("<Button-1>", _cycle_retention)
+
                         # [아랫단] 좌측 정본 마스터 로고([심볼]+[3D 워드마크]) + 우측 2줄 전체 메뉴
                         bottom_bar = tk.Frame(container, bg="#0B1120")
                         bottom_bar.pack(fill="x")
@@ -1649,6 +1693,9 @@ def select_best_matching_item_index(queue_items: list[str], field_context: str) 
     return 0, False
 
 
+USER_SNIPPETS_APPDATA = _MERLIN_APPDATA / "user_snippets.json"
+
+
 def ensure_default_snippets() -> dict[str, str]:
     default_map = {
         "F1": "썬드림주식회사",
@@ -1662,19 +1709,24 @@ def ensure_default_snippets() -> dict[str, str]:
         "F9": "https://sundreamer.app",
         "F10": "감사합니다.",
     }
-    if SNIPPETS_FILE.exists():
+    merged = dict(default_map)
+    for cand in (SNIPPETS_FILE, USER_SNIPPETS_APPDATA):
+        if cand.exists():
+            try:
+                data = json.loads(cand.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        if str(k).upper().startswith("F") and v is not None:
+                            merged[str(k).upper()] = str(v)
+            except Exception:
+                pass
+    if not SNIPPETS_FILE.exists():
         try:
-            data = json.loads(SNIPPETS_FILE.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return {**default_map, **data}
+            SNIPPETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            SNIPPETS_FILE.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             pass
-    try:
-        SNIPPETS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SNIPPETS_FILE.write_text(json.dumps(default_map, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-    return default_map
+    return merged
 
 
 # =====================================================================
@@ -2385,6 +2437,15 @@ def main() -> None:
         set_clipboard_text(text)
         last_seq_num = u32.GetClipboardSequenceNumber()
 
+    def _prune_history_by_retention() -> int:
+        cfg = get_superpower_settings()
+        ret_days = int(cfg.get("retention_days", 7))
+        max_items = int(cfg.get("max_items", 300))
+        cutoff_ts = time.time() - (ret_days * 86400.0)
+        ai_clipboard_history[:] = [r for r in ai_clipboard_history if float(r.get("ts", 0)) >= cutoff_ts][-max_items:]
+        GLOBAL_AI_HISTORY[:] = [r for r in GLOBAL_AI_HISTORY if float(r.get("ts", 0)) >= cutoff_ts][-max_items:]
+        return ret_days
+
     def record_ai_history(text: str) -> None:
         s = text.strip()
         if len(s) < 2:
@@ -2394,10 +2455,7 @@ def main() -> None:
         rec = {"kind": "text", "text": s, "vec": AI_ENGINE.embed_128d(s[:160]), "ts": time.time()}
         ai_clipboard_history.append(rec)
         GLOBAL_AI_HISTORY.append(rec)
-        if len(ai_clipboard_history) > 300:
-            ai_clipboard_history.pop(0)
-        if len(GLOBAL_AI_HISTORY) > 300:
-            GLOBAL_AI_HISTORY.pop(0)
+        _prune_history_by_retention()
 
     def record_ai_image_history(png_bytes: bytes) -> None:
         try:
