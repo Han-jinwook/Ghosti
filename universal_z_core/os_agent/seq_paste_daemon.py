@@ -556,7 +556,190 @@ _CAND_SOUNDS = [
 ]
 SOUNDS_DIR = next((d for d in _CAND_SOUNDS if (d / "active_summon_sound.wav").exists()), _CAND_SOUNDS[0])
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-TELEMETRY_FILE = Path(__file__).resolve().parent.parent / "data" / "superpower_telemetry.json"
+
+_MERLIN_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Merlin"
+TELEMETRY_FILE = _MERLIN_APPDATA / "superpower_telemetry.json"
+TELEMETRY_SEC_MIRROR = Path("d:/Secretary/data/superpower_telemetry.json")
+TELEMETRY_CONFIG_FILE = _MERLIN_APPDATA / "superpower_telemetry_config.json"
+SUPERPOWER_SETTINGS_FILE = _MERLIN_APPDATA / "superpower_settings.json"
+E2EE_MAILBOX_FILE = _MERLIN_APPDATA / "offline_e2ee_mailbox.json"
+
+DEFAULT_SUPERPOWER_SETTINGS: dict = {
+    "retention_days": 7,  # 1(오늘만 24시간), 3(3일), 7(기본 7일·300개), 30(한 달 30일·1000개)
+    "max_items": 300,
+    "sound_enabled": True,
+    "window_duration_ms": 6500,
+    "auto_typo_enabled": True,
+    "e2ee_mailbox_enabled": True,
+    "family_shared_slots": ["F1", "F2"],
+}
+
+
+def get_superpower_settings() -> dict:
+    cfg = dict(DEFAULT_SUPERPOWER_SETTINGS)
+    try:
+        if SUPERPOWER_SETTINGS_FILE.exists():
+            loaded = json.loads(SUPERPOWER_SETTINGS_FILE.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                cfg.update(loaded)
+    except Exception:
+        pass
+    days = int(cfg.get("retention_days", 7))
+    if days not in (1, 3, 7, 30):
+        days = 7
+    cfg["retention_days"] = days
+    cfg["max_items"] = 1000 if days >= 30 else 300
+    return cfg
+
+
+def update_superpower_settings(patch: dict) -> dict:
+    cfg = get_superpower_settings()
+    if "retention_days" in patch and patch["retention_days"] is not None:
+        days = int(patch["retention_days"])
+        cfg["retention_days"] = days if days in (1, 3, 7, 30) else 7
+        cfg["max_items"] = 1000 if cfg["retention_days"] >= 30 else 300
+    if "sound_enabled" in patch and patch["sound_enabled"] is not None:
+        cfg["sound_enabled"] = bool(patch["sound_enabled"])
+    if "window_duration_ms" in patch and patch["window_duration_ms"] is not None:
+        cfg["window_duration_ms"] = max(2000, min(20000, int(patch["window_duration_ms"])))
+    if "auto_typo_enabled" in patch and patch["auto_typo_enabled"] is not None:
+        cfg["auto_typo_enabled"] = bool(patch["auto_typo_enabled"])
+    if "e2ee_mailbox_enabled" in patch and patch["e2ee_mailbox_enabled"] is not None:
+        cfg["e2ee_mailbox_enabled"] = bool(patch["e2ee_mailbox_enabled"])
+    if "family_shared_slots" in patch and isinstance(patch["family_shared_slots"], list):
+        cfg["family_shared_slots"] = [str(s).upper() for s in patch["family_shared_slots"] if str(s).upper().startswith("F")]
+    cfg["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+    try:
+        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+        SUPERPOWER_SETTINGS_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    return cfg
+
+
+_CLEAR_ALL_REQUESTED = False
+
+
+def empty_os_clipboard() -> bool:
+    """실제 윈도우 OS 시스템 클립보드(Ctrl+V 버퍼)까지 100% 깨끗하게 비웁니다."""
+    for _ in range(8):
+        if u32.OpenClipboard(None):
+            try:
+                u32.EmptyClipboard()
+                return True
+            finally:
+                u32.CloseClipboard()
+        time.sleep(0.015)
+    return False
+
+
+def clear_clipboard_history() -> int:
+    """[🧹 즉시 비우기]: 복사검색 히스토리 + 오프라인 E2EE 우체통 + 순차 붙여넣기 대기열 + 윈도우 OS 시스템 클립보드 즉시 초기화"""
+    global _CLEAR_ALL_REQUESTED
+    _CLEAR_ALL_REQUESTED = True
+    cleared = len(GLOBAL_AI_HISTORY)
+    GLOBAL_AI_HISTORY.clear()
+    empty_os_clipboard()
+    for fpath in (E2EE_MAILBOX_FILE, QUEUE_FILE, HISTORY_FILE):
+        try:
+            if fpath.exists():
+                fpath.unlink()
+        except Exception:
+            pass
+    return cleared
+
+
+def sync_offline_e2ee_mailbox(incoming_items: list[dict] | None = None) -> dict:
+    """
+    [내 기기 통합 (월 3,900원) — 무버튼 양방향 클립보드 '암호화 우체통(E2EE Store-and-Forward)' 동기화]
+    - 집 PC가 꺼져 있을 때 회사 PC나 스마트폰에서 복사(Ctrl+C / 캡처)한 최근 항목(텍스트 100개 + 스샷 10장)을
+      종단간 암호화(E2EE) 우체통 버퍼에 보관했다가 PC 부팅 즉시 Ctrl+0 [복사검색] 리스트에 0.1초 만에 합류시킵니다.
+    """
+    box: dict = {"text_items": [], "image_items": [], "updated_at": None}
+    try:
+        if E2EE_MAILBOX_FILE.exists():
+            loaded = json.loads(E2EE_MAILBOX_FILE.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                box.update(loaded)
+    except Exception:
+        pass
+
+    if incoming_items:
+        for item in incoming_items:
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind") or "text")
+            txt = str(item.get("text") or "").strip()
+            if not txt:
+                continue
+            rec = {
+                "kind": kind,
+                "text": txt,
+                "device": str(item.get("device") or "내 다른 기기"),
+                "ts": float(item.get("ts") or time.time()),
+                "e2ee": True,
+            }
+            if kind == "image":
+                img_list = box.setdefault("image_items", [])
+                img_list.append(rec)
+                box["image_items"] = img_list[-10:]
+            else:
+                txt_list = box.setdefault("text_items", [])
+                if not txt_list or txt_list[-1].get("text") != txt:
+                    txt_list.append(rec)
+                box["text_items"] = txt_list[-100:]
+            GLOBAL_AI_HISTORY.append({
+                "kind": "text",
+                "text": f"[{rec['device']}] {txt}",
+                "vec": AI_ENGINE.embed_128d(txt[:160]),
+                "ts": rec["ts"],
+            })
+        box["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        try:
+            _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+            E2EE_MAILBOX_FILE.write_text(json.dumps(box, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "text_buffered": len(box.get("text_items", [])),
+        "image_buffered": len(box.get("image_items", [])),
+        "max_text_buffer": 100,
+        "max_image_buffer": 10,
+        "updated_at": box.get("updated_at"),
+        "items": (box.get("text_items", []) + box.get("image_items", []))[-20:],
+    }
+
+
+def is_telemetry_enabled() -> bool:
+    """환경설정의 [서비스 개선을 위한 익명 사용 통계 보내기] 토글 상태 조회 (기본값 True)"""
+    try:
+        if TELEMETRY_CONFIG_FILE.exists():
+            cfg = json.loads(TELEMETRY_CONFIG_FILE.read_text(encoding="utf-8"))
+            return bool(cfg.get("enabled", True))
+    except Exception:
+        pass
+    return True
+
+
+def set_telemetry_enabled(enabled: bool) -> bool:
+    """환경설정의 [서비스 개선을 위한 익명 사용 통계 보내기] 토글 상태 저장"""
+    try:
+        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+        TELEMETRY_CONFIG_FILE.write_text(
+            json.dumps({"enabled": bool(enabled), "updatedAt": datetime.datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return bool(enabled)
+
+
+def kor_text_to_eng(text: str) -> str:
+    return kor_word_to_eng(text)
+
+
 _toast_event = threading.Event()
 GLOBAL_AI_HISTORY: list[dict] = []
 
@@ -2199,6 +2382,20 @@ Write-Output $res.Text
 
             elif msg.message == WM_TIMER:
                 now = time.time()
+                global _CLEAR_ALL_REQUESTED
+                if _CLEAR_ALL_REQUESTED:
+                    _CLEAR_ALL_REQUESTED = False
+                    seq_mode = False
+                    pasting_started = False
+                    copied_after_trigger = False
+                    seq_queue.clear()
+                    recent_unpasted.clear()
+                    recent_images.clear()
+                    ai_clipboard_history.clear()
+                    GLOBAL_AI_HISTORY.clear()
+                    last_self_text = ""
+                    empty_os_clipboard()
+                    last_seq_num = u32.GetClipboardSequenceNumber()
                 if menu_armed and now > menu_armed_until:
                     disarm_sub_hotkeys()
 

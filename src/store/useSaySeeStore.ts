@@ -59,6 +59,15 @@ import {
   speakSetupMonsterTts,
   triggerSetupMonsterTtsPrewarm,
 } from '../services/setupMonsterTts';
+import {
+  dispatchFileToKakaoRealChatroom,
+  extractKeywordSentencesZeroLlm,
+  isMonsterCareIntentFromSearch,
+  parseZeroLlmVoiceDocCommand,
+  resolveTargetDocAndBuildFactAnswer,
+  speakWithHyunsuOrSunhi,
+  triggerUserFavoriteAiLiveVoiceBatonTouch,
+} from '../services/voiceSearchAndAiBatonEngine';
 import type {
   AlumniStickChip,
   AnalogScannedPhotoItem,
@@ -2124,6 +2133,138 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       analogYearProposals,
     } = get();
 
+    // [양방향 0토큰 통합 음성/텍스트 자동 라우터 (Zero-LLM Bidirectional Voice Toss)]
+    // 1) [🎯 찾기]에서 치우기·고치기·복원 의도("중복 사진 치워줘", "글씨 크기 키워줘", "원래대로 돌려줘")를 말하거나 입력하면
+    //    즉시 [✋ 손보기] 탭으로 화면을 전환하고 [✋ 손보기 대화창]에 전달하여 원스톱 실행!
+    if (isMonsterCareIntentFromSearch(query)) {
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem('ghosti_pending_monster_query', query);
+        } catch {}
+        window.dispatchEvent(
+          new CustomEvent('ghosti_toss_to_monster_chat', { detail: { query } })
+        );
+      }
+      set({
+        desktopTab: 'trash',
+        mobileTab: 'trash',
+        lastQuarantineToast: `🪄 [양방향 0토큰 자동 토스] "${query}" 요청을 감지해 [✋ 손보기 대화창]으로 즉시 연결했습니다!`,
+      });
+      return;
+    }
+
+    // 2) [🎯 찾기]에서 카톡 전달 / 문서 수치 즉답("보증금 얼마야?") / 키워드 문장 발췌 / 요약 낭독 / 단골 AI 바톤터치 의도 처리
+    const voiceDocCmd = parseZeroLlmVoiceDocCommand(query);
+    if (voiceDocCmd.intentType === 'KAKAO_REAL_CHATROOM_SEND') {
+      const { matchedDoc } = resolveTargetDocAndBuildFactAnswer(
+        localDocuments,
+        voiceDocCmd.targetDocKeyword
+      );
+      const targetTitle = matchedDoc?.fileName || matchedDoc?.title || `${voiceDocCmd.targetDocKeyword}.pdf`;
+      const docMatches = await searchLocalDocumentFilesAsync(voiceDocCmd.targetDocKeyword, localDocuments);
+      const kakaoRes = await dispatchFileToKakaoRealChatroom({
+        recipientName: voiceDocCmd.kakaoRecipientName,
+        fileName: targetTitle,
+      });
+      set({
+        searchSpace: 'vault',
+        hasExecutedUserSearch: true,
+        activeQuery: query,
+        matchedTags: [`#카톡실채팅방전달(${kakaoRes.recipientName})`, '#엔터1번안전전송', '#0토큰직결'],
+        matchedLocalDocs: docMatches.length > 0 ? docMatches : matchedDoc ? [matchedDoc] : localDocuments,
+        lastQuarantineToast: `💬 [카카오톡 '${kakaoRes.recipientName}' 대화방 파일 장전 완료] ${kakaoRes.hyunsuAnnouncement}`,
+      });
+      return;
+    }
+
+    if (voiceDocCmd.intentType === 'DOC_FACT_QA_READ') {
+      const { matchedDoc, factAnswerKo, voiceRole } = resolveTargetDocAndBuildFactAnswer(
+        localDocuments,
+        voiceDocCmd.targetDocKeyword,
+        voiceDocCmd.extractKeywords
+      );
+      void speakWithHyunsuOrSunhi(factAnswerKo, voiceRole);
+      const docMatches = await searchLocalDocumentFilesAsync(voiceDocCmd.targetDocKeyword, localDocuments);
+      set({
+        searchSpace: 'vault',
+        hasExecutedUserSearch: true,
+        activeQuery: query,
+        matchedTags: [
+          `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
+          '#무토큰로컬브리핑',
+          '#현수선희음성안내',
+        ],
+        matchedLocalDocs: docMatches.length > 0 ? docMatches : matchedDoc ? [matchedDoc] : localDocuments,
+        selectedDocModal: matchedDoc || null,
+        lastQuarantineToast: `🎙️ [0토큰 문서 즉답 브리핑] ${factAnswerKo}`,
+      });
+      return;
+    }
+
+    if (voiceDocCmd.intentType === 'DOC_KEYWORD_SENTENCE_READ') {
+      const { matchedDoc } = resolveTargetDocAndBuildFactAnswer(
+        localDocuments,
+        voiceDocCmd.targetDocKeyword
+      );
+      const extracted = extractKeywordSentencesZeroLlm(
+        matchedDoc?.extractedText || '',
+        voiceDocCmd.extractKeywords
+      );
+      void speakWithHyunsuOrSunhi(
+        `${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`,
+        'sunhi_doc_reader'
+      );
+      set({
+        searchSpace: 'vault',
+        hasExecutedUserSearch: true,
+        activeQuery: query,
+        matchedTags: ['#키워드문장발췌낭독', '#선희아나운서낭독', '#0토큰무료'],
+        matchedLocalDocs: matchedDoc ? [matchedDoc] : localDocuments,
+        selectedDocModal: matchedDoc || null,
+        lastQuarantineToast: `🎙️ [선희 아나운서 키워드 문장 발췌 낭독] ${extracted.hyunsuIntroText}`,
+      });
+      return;
+    }
+
+    if (voiceDocCmd.intentType === 'DOC_SUMMARY_READ') {
+      const { matchedDoc, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
+        localDocuments,
+        voiceDocCmd.targetDocKeyword
+      );
+      void speakWithHyunsuOrSunhi(factAnswerKo, 'sunhi_doc_reader');
+      set({
+        searchSpace: 'vault',
+        hasExecutedUserSearch: true,
+        activeQuery: query,
+        matchedTags: ['#사전요약본즉시낭독', '#선희아나운서', '#0토큰무료'],
+        matchedLocalDocs: matchedDoc ? [matchedDoc] : localDocuments,
+        selectedDocModal: matchedDoc || null,
+        lastQuarantineToast: `🎙️ [선희 아나운서 문서 요약 낭독] ${factAnswerKo}`,
+      });
+      return;
+    }
+
+    if (voiceDocCmd.intentType === 'HIGH_DIFFICULTY_AI_BATON_TOUCH') {
+      const { matchedDoc } = resolveTargetDocAndBuildFactAnswer(
+        localDocuments,
+        voiceDocCmd.targetDocKeyword
+      );
+      const batonRes = await triggerUserFavoriteAiLiveVoiceBatonTouch({
+        docTitle: matchedDoc?.title || voiceDocCmd.targetDocKeyword,
+        docText: matchedDoc?.extractedText || '',
+        userQuestion: query,
+      });
+      set({
+        searchSpace: 'vault',
+        hasExecutedUserSearch: true,
+        activeQuery: query,
+        matchedTags: [`#${batonRes.detectedAiLabel}바톤터치`, '#라이브음성상담', '#0토큰무료'],
+        matchedLocalDocs: matchedDoc ? [matchedDoc] : localDocuments,
+        lastQuarantineToast: `🤝 [${batonRes.detectedAiLabel} 라이브 음성 바톤터치] ${batonRes.ttsBriefingKo}`,
+      });
+      return;
+    }
+
     const isWorkLounge = activeLoungeType === 'work';
 
     // 업무 공유(work)에서는 귀신같이 인물 여권 발동 및 여권 인물 검색 매칭을 제외하고, 일반 사진(현장·자재·제품·서류) 시각 분석만 수행
@@ -2444,6 +2585,21 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         set({
           lastQuarantineToast: '🎤 음성이 인식되지 않았습니다. 마이크에 대고 다시 말씀해 주세요.',
         });
+        return;
+      }
+
+      // [마이크 음성 인식 직후 양방향 0토큰 라우터 검사]
+      const spokenUtterance = (backgroundSttTranscript || trace.resolvedQuery || '').trim();
+      if (
+        isMonsterCareIntentFromSearch(spokenUtterance) ||
+        parseZeroLlmVoiceDocCommand(spokenUtterance).intentType !== 'SIMPLE_PERSPECTIVE_SEARCH'
+      ) {
+        set((state) => ({
+          lastVoiceTrace: trace,
+          voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
+          isSlimCapsule: true,
+        }));
+        await get().runTextQuery(spokenUtterance);
         return;
       }
 

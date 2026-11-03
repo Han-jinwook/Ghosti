@@ -7,6 +7,10 @@ import {
 import {
   speakWithHyunsuOrSunhi,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
+  parseZeroLlmVoiceDocCommand,
+  extractKeywordSentencesZeroLlm,
+  resolveTargetDocAndBuildFactAnswer,
+  dispatchFileToKakaoRealChatroom,
 } from './voiceSearchAndAiBatonEngine';
 import { getZCoreUrl } from './zCoreBridge';
 import {
@@ -265,7 +269,7 @@ function createWelcomeMessage(): MonsterChatMessage {
     sourceTab: 'trash',
     text:
       '✋ 안녕하세요! 컴퓨터·휴대폰 정리, 고치기, 복원, 요금·기능 문의를 편하게 말씀해 주세요.\n' +
-      '아래 입력창에 글자로 입력하시면 바로 도와드립니다.',
+      '아래 입력창에 글자로 입력하시거나 🎙️ 음성으로 편하게 말씀해 주세요.',
   };
 }
 
@@ -1563,6 +1567,141 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 0-0E) [Role 2: 귀신같이 자체 기능 · 요금제(내 기기 통합 3,900원) · 업데이트 질문에 답하는 인포메이션 데스크]
   const infoDeskReply = handleGhostiInfoDeskIfMatched(clean, sourceTab, speak);
   if (infoDeskReply) return infoDeskReply;
+
+  // 0-0F) [[🎯 찾기] ↔ [✋ 손보기] 양방향 0토큰 통합 음성/텍스트 자동 라우터]
+  // [✋ 손보기 대화창]에서 문서 카톡 전달, 문서 핵심 수치 Q&A("보증금 얼마야?"), 키워드 문장 낭독, 문서 요약, 또는 단순 사진·서류 찾기를 말했을 때
+  // "다른 메뉴로 가세요"라고 거절하지 않고 0.001초 만에 [🎯 찾기] 엔진으로 자동 토스(Toss) 및 음성 브리핑까지 원스톱 실행합니다!
+  const voiceDocCmd = parseZeroLlmVoiceDocCommand(clean);
+  if (voiceDocCmd.intentType === 'KAKAO_REAL_CHATROOM_SEND') {
+    const store = useSaySeeStore.getState();
+    const { matchedDoc } = resolveTargetDocAndBuildFactAnswer(
+      store.localDocuments,
+      voiceDocCmd.targetDocKeyword
+    );
+    const fileName = matchedDoc?.fileName || `${voiceDocCmd.targetDocKeyword}.pdf`;
+    const filePath = matchedDoc?.path;
+    const kakaoRes = await dispatchFileToKakaoRealChatroom({
+      recipientName: voiceDocCmd.kakaoRecipientName,
+      fileName,
+      filePath,
+    });
+    return reply(
+      sourceTab,
+      `🎯 **[양방향 자동 토스 ➔ 카카오톡 '${kakaoRes.recipientName}' 대화방 파일 장전 완료]**\n` +
+        `${kakaoRes.hyunsuAnnouncement}\n` +
+        `• 대상 서류: **${kakaoRes.fileName}** (스마트 서류함 자동 매칭)`,
+      {
+        cardKind: 'SEARCH_ROUTING',
+        searchKeyword: voiceDocCmd.targetDocKeyword,
+        followUpSuggestions: [
+          '이 계약서 보증금이랑 월세 얼마야?',
+          '계약서에서 위약금이나 해지 나오는 문장 다 읽어줘',
+          '이 계약서에서 나한테 불리한 조항 있어?',
+        ],
+      }
+    );
+  }
+
+  if (voiceDocCmd.intentType === 'DOC_FACT_QA_READ') {
+    const store = useSaySeeStore.getState();
+    const { matchedDoc, factAnswerKo, voiceRole } = resolveTargetDocAndBuildFactAnswer(
+      store.localDocuments,
+      voiceDocCmd.targetDocKeyword,
+      voiceDocCmd.extractKeywords
+    );
+    if (ttsEnabled) void speakWithHyunsuOrSunhi(factAnswerKo, voiceRole);
+    return reply(
+      sourceTab,
+      `🎯 **[양방향 자동 토스 ➔ 스마트 서류함 핵심 수치 즉답]**\n` +
+        `💬 ${factAnswerKo}`,
+      {
+        cardKind: 'SEARCH_ROUTING',
+        searchKeyword: matchedDoc?.title || voiceDocCmd.targetDocKeyword,
+        followUpSuggestions: [
+          '사무실 계약서 찾아서 이쁜이에게 카톡 전달해줘',
+          '계약서에서 위약금이나 해지 나오는 문장 다 읽어줘',
+          '이 계약서에서 나한테 불리한 독소조항 있어?',
+        ],
+      }
+    );
+  }
+
+  if (voiceDocCmd.intentType === 'DOC_KEYWORD_SENTENCE_READ' || voiceDocCmd.intentType === 'DOC_SUMMARY_READ') {
+    const store = useSaySeeStore.getState();
+    const { matchedDoc, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
+      store.localDocuments,
+      voiceDocCmd.targetDocKeyword,
+      voiceDocCmd.extractKeywords
+    );
+    const fullText = matchedDoc?.extractedText || factAnswerKo;
+    if (voiceDocCmd.intentType === 'DOC_KEYWORD_SENTENCE_READ') {
+      const extracted = extractKeywordSentencesZeroLlm(fullText, voiceDocCmd.extractKeywords);
+      if (ttsEnabled) {
+        void speakWithHyunsuOrSunhi(
+          `${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`,
+          'sunhi_doc_reader'
+        );
+      }
+      return reply(
+        sourceTab,
+        `🎯 **[양방향 자동 토스 ➔ 문서 키워드 문장 전수 발췌 낭독]**\n` +
+          `🔊 ${extracted.hyunsuIntroText}\n` +
+          (extracted.sunhiReadScript ? `📖 ${extracted.sunhiReadScript}` : `📖 ${fullText}`),
+        {
+          cardKind: 'SEARCH_ROUTING',
+          searchKeyword: voiceDocCmd.targetDocKeyword,
+        }
+      );
+    } else {
+      if (ttsEnabled) void speakWithHyunsuOrSunhi(factAnswerKo, 'sunhi_doc_reader');
+      return reply(
+        sourceTab,
+        `🎯 **[양방향 자동 토스 ➔ 스마트 서류함 요약 낭독]**\n📖 ${factAnswerKo}`,
+        {
+          cardKind: 'SEARCH_ROUTING',
+          searchKeyword: voiceDocCmd.targetDocKeyword,
+        }
+      );
+    }
+  }
+
+  if (voiceDocCmd.intentType === 'HIGH_DIFFICULTY_AI_BATON_TOUCH') {
+    const store = useSaySeeStore.getState();
+    const { matchedDoc } = resolveTargetDocAndBuildFactAnswer(
+      store.localDocuments,
+      voiceDocCmd.targetDocKeyword
+    );
+    return reply(
+      sourceTab,
+      `${RED_LINES_TEXT}\n\n🤝 이 질문은 귀신같이 무료 팩트 검색 범위를 넘는 심층 분석 질문입니다. 찾으신 문서(**${matchedDoc?.fileName || '계약서'}**) 본문과 질문을 클립보드에 담아 평소 쓰시는 **단골 AI(기본: Google Gemini)** 라이브 음성 상담으로 바로 연결해 드립니다.`,
+      {
+        cardKind: 'BATON_TOUCH_CUTOFF',
+        batonTouchPayload: {
+          docTitle: matchedDoc?.title || '계약서 문서',
+          docText: matchedDoc?.extractedText || clean,
+          userQuestion: clean,
+        },
+      }
+    );
+  }
+
+  // 단순 사진/영상/문서 찾기 발화("작년 가족사진 찾아줘", "바닷가에서 뛰노는 아이 보여줘")도 LLM 호출 대기 없이 0.001초 만에 [🎯 찾기]로 즉시 토스!
+  const earlySearchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
+  if (
+    earlySearchIntent.isSimpleSearchIntent &&
+    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|없어졌|날아갔|휴지통|정리|치워|복원|사양|스펙/i.test(clean)
+  ) {
+    const kw = earlySearchIntent.extractedKeyword || clean;
+    speak(`말씀하신 ${kw} 검색 결과를 찾기 화면에서 바로 띄워드립니다.`);
+    return reply(
+      sourceTab,
+      `🎯 **[양방향 자동 토스 ➔ 🎯 찾기 즉시 실행]**\n"${kw}" 검색 결과를 **[🎯 찾기]** 화면에서 바로 찾아 띄워드립니다.`,
+      {
+        cardKind: 'SEARCH_ROUTING',
+        searchKeyword: kw,
+      }
+    );
+  }
 
   // 0-A) 명백한 일상 잡담(PC·파일·설정 키워드 전무)은 LLM 토큰 소모(비용 낭비) 없이 0원으로 즉시 정중히 거절 안내
   const hasAnyPcOrFileCue =

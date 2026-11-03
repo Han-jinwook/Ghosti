@@ -1345,7 +1345,9 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   ))}
                   {pasteQueue.length === 0 && (
                     <span className="text-[11px] text-emerald-400 font-bold">
-                      🎉 3개 항목 모두 순서대로 붙여넣기 완료!
+                      {isClipboardCleared
+                        ? '🧹 클립보드 및 연속 붙여넣기 대기열이 모두 비워졌습니다 (0건 · 우측 상단 [↺ 다시 장전] 가능)'
+                        : '🎉 3개 항목 모두 순서대로 붙여넣기 완료!'}
                     </span>
                   )}
                 </div>
@@ -1366,7 +1368,11 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     📋 Ctrl + V 순차 붙여넣기 ({pasteQueue.length}개 남음)
                   </button>
                   <div className="flex-1 px-2.5 py-1.5 rounded-xl bg-zinc-950 border border-white/10 text-[11.5px] text-white truncate">
-                    {pastedSlots.length > 0 ? pastedSlots.join(' ➔ ') : '버튼을 눌러 1번부터 붙여넣어 보세요'}
+                    {pastedSlots.length > 0
+                      ? pastedSlots.join(' ➔ ')
+                      : isClipboardCleared
+                      ? '🧹 현재 클립보드가 깨끗하게 비워진 상태입니다 (0건)'
+                      : '버튼을 눌러 1번부터 붙여넣어 보세요'}
                   </div>
                 </div>
               </div>
@@ -1563,12 +1569,19 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     type="button"
                     onClick={async () => {
                       setIsClipboardCleared(true);
+                      setPasteQueue([]);
+                      setPastedSlots([]);
                       setGhostMemoryQuery('');
                       setGhostMemoryExpanded(true);
                       setGhostMemoryHoverIdx(null);
-                      setGhostMemoryResult('🧹 복사검색 클립보드 기록이 모두 비워졌습니다 (0건).');
+                      setGhostMemoryResult('🧹 복사검색 기록 · 연속 붙여넣기 대기열 · 윈도우 클립보드가 모두 비워졌습니다 (0건).');
                       try {
                         localStorage.setItem('ghosti_clipboard_cleared', 'true');
+                      } catch {}
+                      try {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                          await navigator.clipboard.writeText('');
+                        }
                       } catch {}
                       try {
                         await fetch(getZCoreUrl('/api/superpower/clear-history'), {
@@ -1580,7 +1593,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       } catch {
                         // ignore
                       }
-                      setRetentionToast('🧹 복사검색 클립보드 기록을 즉시 비웠습니다 (상단 복사검색 목록 0건으로 초기화됨).');
+                      setRetentionToast('🧹 복사했던 클립보드 내용 · 상단 복사검색 목록 · 연속 붙여넣기 대기열을 모두 비웠습니다 (0건 초기화 완료).');
                       setTimeout(() => setRetentionToast(null), 4000);
                     }}
                     className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 font-bold cursor-pointer"
@@ -1592,11 +1605,13 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       type="button"
                       onClick={() => {
                         setIsClipboardCleared(false);
+                        setPasteQueue(['홍길동 대표', '010-1234-5678', '서울 강남구 테헤란로 123']);
+                        setPastedSlots([]);
                         try {
                           localStorage.removeItem('ghosti_clipboard_cleared');
                         } catch {}
-                        setGhostMemoryResult('✅ 최근 클립보드 예시 기록 5건을 다시 복구했습니다.');
-                        setRetentionToast('✅ 복사검색 예시 기록 5건이 다시 복구되었습니다.');
+                        setGhostMemoryResult('✅ 최근 클립보드 예시 기록 5건과 연속 붙여넣기 대기열을 다시 복구했습니다.');
+                        setRetentionToast('✅ 복사검색 예시 기록 5건과 연속 붙여넣기 대기열이 다시 복구되었습니다.');
                         setTimeout(() => setRetentionToast(null), 3000);
                       }}
                       className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-200 font-bold cursor-pointer"

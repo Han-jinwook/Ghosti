@@ -1,8 +1,11 @@
 import { getZCoreUrl } from './zCoreBridge';
 import { speakSetupMonsterTts, SETUP_MONSTER_TTS_RATE_DEFAULT } from './setupMonsterTts';
+import type { LocalDocumentFile } from '../types/saysee';
+
 /**
  * 🎙️ 귀신같이(Ghosti) 전 영역 무료 무제한 TTS ('현수 & 선희' 투톱) · 무토큰 문서 요약/키워드 발췌 낭독 ·
- *    실제 카톡 대화방 직행 장전 · 고난도 질문 시 단골 AI(기본값: 제미나이) 라이브 음성 바톤터치 엔진
+ *    실제 카톡 대화방 직행 장전 · 고난도 질문 시 단골 AI(기본값: 제미나이) 라이브 음성 바톤터치 ·
+ *    [🎯 찾기] ↔ [✋ 손보기] 양방향 0토큰 통합 음성 라우터 엔진
  *
  * - 유료 Typecast 전면 배제 -> 100% 무료 MS 신경망(edge-tts) '현수(ko-KR-HyunsuNeural) & 선희(ko-KR-SunHiNeural)' 투톱 일원화
  * - 일일 10회 제한 등 횟수 제한 전면 폐지 ("내 폰·PC 속 내용검색·Z몬스터는 언제나 0원")
@@ -27,6 +30,7 @@ export const GHOSTI_VOICE_ACTORS = {
 export type ZeroLlmVoiceDocIntentType =
   | 'DOC_SUMMARY_READ'
   | 'DOC_KEYWORD_SENTENCE_READ'
+  | 'DOC_FACT_QA_READ'
   | 'KAKAO_REAL_CHATROOM_SEND'
   | 'HIGH_DIFFICULTY_AI_BATON_TOUCH'
   | 'SIMPLE_PERSPECTIVE_SEARCH';
@@ -41,21 +45,63 @@ export interface ParsedVoiceDocCommand {
 }
 
 /**
+ * [🎯 찾기] 화면에서 말했을 때 '[✋ 손보기(치우기/고치기/복원/요금·기능)]' 의도인지 0.001초 만에 판별하는 양방향 0토큰 라우터
+ */
+export function isMonsterCareIntentFromSearch(utterance: string): boolean {
+  const raw = (utterance || '').trim();
+  if (!raw) return false;
+  // 카톡 전달, 문서 보증금/월세/금액 질문, 사진/영상 찾아줘 등은 [🎯 찾기] 고유 의도
+  if (/(카톡|카카오톡).*?(전달|보내|전송)|(?:에게|한테|님께).*?(카톡|카카오톡)/i.test(raw)) return false;
+  if (
+    /(보증금|월세|임대료|관리비|위약금|만기일|계약금|잔금|계좌\s*번호|비밀번호|비번).*?(얼마|언제|알려|읽어|뭐야|어떻게)/i.test(
+      raw
+    )
+  ) {
+    return false;
+  }
+  return /(중복\s*사진|연사\s*정리|치워|청소|바탕화면\s*정리|다운로드.*?정리|설치\s*파일|글씨\s*(크기|키워|작아|크게)|원래대로|되돌려|복원\s*기록|복구해|사라졌|없어졌|날아갔|프린터|인쇄.*?안|와이파이.*?끊|인터넷.*?안|블루투스|소리.*?안|스피커|느려|버벅|사양\s*봐|스펙\s*봐|바이러스|랜섬웨어|백신|바로가기\s*만들)/i.test(
+    raw
+  );
+}
+
+/**
  * 100% 무토큰(Zero-LLM) 로컬 자연어 발화 의도 해석기 (0.001초 정규식/형태소 규칙)
  */
 export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCommand {
   const raw = (utterance || '').trim();
 
-  // 1) 카톡 실채팅방 파일 전달 ("계약서 찾아서 카톡 이쁜이에게 전달해줘" / "견적서 카톡 김대리한테 보내줘")
-  const kakaoMatch = raw.match(
-    /^(.+?)\s*(?:찾아서\s*)?(?:카톡|카카오톡)\s*['"]?([가-힣a-zA-Z0-9_]+?)['"]?(?:에게|한테|님께|방에)\s*(?:전달|보내|전송)/i
+  // 1) 카톡 실채팅방 파일 전달 ("사무실 계약서 찾아서 이쁜이에게 카톡 전달해줘" / "계약서 찾아서 카톡 이쁜이에게 전달해줘")
+  const kakaoMatchA = raw.match(
+    /^(.+?)\s*(?:찾아서\s*)?(?:카톡|카카오톡)(?:으로)?\s*['"]?([가-힣a-zA-Z0-9_]+?)['"]?(?:에게|한테|님께|방에)\s*(?:전달|보내|전송)/i
   );
+  const kakaoMatchB = raw.match(
+    /^(.+?)\s*(?:찾아서\s*)?['"]?([가-힣a-zA-Z0-9_]+?)['"]?(?:에게|한테|님께|방에)\s*(?:카톡|카카오톡)(?:으로)?\s*(?:전달|보내|전송)/i
+  );
+  const kakaoMatch = kakaoMatchA || kakaoMatchB;
   if (kakaoMatch) {
     return {
       intentType: 'KAKAO_REAL_CHATROOM_SEND',
-      targetDocKeyword: kakaoMatch[1].replace(/(파일|문서|서류)\s*$/, '').trim() || '계약서',
+      targetDocKeyword: kakaoMatch[1].replace(/(파일|문서|서류|좀)\s*$/, '').trim() || '계약서',
       extractKeywords: [],
       kakaoRecipientName: kakaoMatch[2].trim(),
+      rawQuestion: raw,
+      serverTokenCostWon: 0,
+    };
+  }
+
+  // 1-B) 문서 내 핵심 수치/조건 즉답 ("보증금 얼마야?", "사무실 계약서 보증금이 얼마야?", "만기일 언제야?", "월세 얼마야?")
+  const factQaMatch = raw.match(
+    /(?:(.+?)\s*(?:에서|의)?\s*)?(보증금|월세|임대료|관리비|위약금|계약금|잔금|만기일|계약\s*기간|특약|계좌\s*번호|비밀번호|비번)(?:이|은|는|가)?\s*(얼마|언제|뭐야|어떻게|알려|읽어|몇)/i
+  );
+  if (factQaMatch) {
+    const docHint =
+      (factQaMatch[1] || '').replace(/(이|그|저|우리|내)\s*/g, '').trim() || '계약서';
+    const factKey = factQaMatch[2].replace(/\s+/g, '').trim();
+    return {
+      intentType: 'DOC_FACT_QA_READ',
+      targetDocKeyword: docHint,
+      extractKeywords: [factKey],
+      kakaoRecipientName: '',
       rawQuestion: raw,
       serverTokenCostWon: 0,
     };
@@ -134,7 +180,7 @@ export function extractKeywordSentencesZeroLlm(
 } {
   const cleanKeywords = (keywords || []).map((k) => k.trim()).filter(Boolean);
   const rawSentences = (fullText || '')
-    .split(/(?<=[.?!다요함음])\s+|\r?\n+/)
+    .split(/(?<=[.?!다요함음])\s+|\r?\n+|\s*\|\s*/)
     .map((s) => s.trim())
     .filter((s) => s.length >= 4);
 
@@ -163,6 +209,69 @@ export function extractKeywordSentencesZeroLlm(
     hyunsuIntroText,
     sunhiReadScript,
     highlightedSentences: matched,
+  };
+}
+
+/**
+ * 로컬 서류함 목록에서 발화 키워드와 가장 잘 매칭되는 문서를 찾고,
+ * 보증금·월세·만기일·계좌번호 등 핵심 수치 즉답 브리핑 문장을 0토큰으로 생성합니다.
+ */
+export function resolveTargetDocAndBuildFactAnswer(
+  docs: LocalDocumentFile[],
+  targetDocKeyword: string,
+  extractKeywords: string[] = []
+): {
+  matchedDoc: LocalDocumentFile | null;
+  factAnswerKo: string;
+  voiceRole: GhostiNeuralVoiceRole;
+} {
+  const kwLower = (targetDocKeyword || '').toLowerCase();
+  const findBestDoc = (): LocalDocumentFile | null => {
+    if (!docs || docs.length === 0) return null;
+    for (const d of docs) {
+      const hay = `${d.fileName} ${d.title} ${d.extractedText} ${(d.keywords || []).join(' ')}`.toLowerCase();
+      if (kwLower && hay.includes(kwLower)) return d;
+      if (/계약서|사무실|임대차|보증금|월세/.test(kwLower) && /계약서|임대차/.test(hay)) return d;
+      if (/계좌|비밀번호|비번|아이디/.test(kwLower) && /계좌|계정관리표/.test(hay)) return d;
+    }
+    return (
+      docs.find((d) => /계약서|임대차/.test(`${d.fileName} ${d.title}`)) ||
+      docs[0] ||
+      null
+    );
+  };
+
+  const doc = findBestDoc();
+  if (!doc) {
+    return {
+      matchedDoc: null,
+      factAnswerKo: '스마트 서류함에서 관련 문서를 찾지 못했습니다.',
+      voiceRole: 'hyunsu_briefing',
+    };
+  }
+
+  const factKey = extractKeywords[0] || '';
+  const text = doc.extractedText || '';
+  const segments = text
+    .split(/\s*\|\s*|\r?\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (factKey) {
+    const matchedSegs = segments.filter((seg) => seg.includes(factKey));
+    if (matchedSegs.length > 0) {
+      return {
+        matchedDoc: doc,
+        factAnswerKo: `찾으신 '${doc.title}' 확인 결과, ${matchedSegs.join(' · ')}입니다. (전체 내용: ${text})`,
+        voiceRole: 'hyunsu_briefing',
+      };
+    }
+  }
+
+  return {
+    matchedDoc: doc,
+    factAnswerKo: `찾으신 '${doc.title}'의 핵심 내용입니다. ${text}`,
+    voiceRole: 'sunhi_doc_reader',
   };
 }
 
