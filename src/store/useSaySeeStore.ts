@@ -3629,16 +3629,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       /* ignore offline fallback */
     }
 
-    // 음성 합성(TTS) 안내 재생 (지원 브라우저)
+    // 음성 합성(TTS) 안내 재생 (남성 성우 '현수' 단일 파이프라인 직결)
     try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const ttsText = realExecution?.ok ? plan.voiceTtsSummary : honestCompletionMessage.replace(/^⚠️\s*/, '');
-        const utter = new SpeechSynthesisUtterance(ttsText);
-        utter.lang = 'ko-KR';
-        utter.rate = 1.02;
-        void speakSetupMonsterTts(utter.text);
-      }
+      const ttsText = realExecution?.ok ? plan.voiceTtsSummary : honestCompletionMessage.replace(/^⚠️\s*/, '');
+      void speakWithHyunsuOrSunhi(ttsText, 'hyunsu_briefing');
     } catch {
       /* ignore tts error */
     }
@@ -3782,15 +3776,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
 
     try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(
-          '두 번 이상 길을 헤매게 해드려 죄송합니다. 이번 수리비는 받지 않고 전액 환불해 드렸습니다.'
-        );
-        utter.lang = 'ko-KR';
-        utter.rate = 1.02;
-        void speakSetupMonsterTts(utter.text);
-      }
+      void speakWithHyunsuOrSunhi(
+        '두 번 이상 길을 헤매게 해드려 죄송합니다. 이번 수리비는 받지 않고 전액 환불해 드렸습니다.',
+        'hyunsu_briefing'
+      );
     } catch {
       /* ignore */
     }
@@ -3902,12 +3891,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     });
 
     try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(undoMessage.replace(/^[↩️⚠️\s]+/u, ''));
-        utter.lang = 'ko-KR';
-        void speakSetupMonsterTts(utter.text);
-      }
+      void speakWithHyunsuOrSunhi(undoMessage.replace(/^[↩️⚠️\s]+/u, ''), 'hyunsu_briefing');
     } catch {
       /* ignore */
     }
@@ -4013,14 +3997,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
 
     try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(
-          '해결되지 않았다는 신고를 기록했습니다. 자동으로 바꾼 설정이 있었다면 되돌리기 버튼으로 원래대로 돌릴 수 있습니다.'
-        );
-        utter.lang = 'ko-KR';
-        void speakSetupMonsterTts(utter.text);
-      }
+      void speakWithHyunsuOrSunhi(
+        '해결되지 않았다는 신고를 기록했습니다. 자동으로 바꾼 설정이 있었다면 되돌리기 버튼으로 원래대로 돌릴 수 있습니다.',
+        'hyunsu_briefing'
+      );
     } catch {
       /* ignore */
     }
@@ -4115,11 +4095,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       const nextIdx = state.activeOverlayStepIndex + 1;
       const nextStep = steps[nextIdx];
       try {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window && nextStep) {
-          window.speechSynthesis.cancel();
-          const utter = new SpeechSynthesisUtterance(nextStep.voiceGuideText);
-          utter.lang = 'ko-KR';
-          void speakSetupMonsterTts(utter.text);
+        if (nextStep) {
+          void speakWithHyunsuOrSunhi(nextStep.voiceGuideText, 'hyunsu_briefing');
         }
       } catch {
         /* ignore */

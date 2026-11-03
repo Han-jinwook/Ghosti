@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-03T14:38:22.368635",
+  "updated_at": "2026-11-03T16:29:05.160385",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -530,6 +530,46 @@
       "last_edited_time": "2026-11-03T01:42:00.000Z",
       "url": "https://app.notion.com/p/40df9ffd2c1d80be9c87e5e5e859a64e",
       "archived_at": "2026-11-03T14:38:22.368445"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-80cb-8f48-f068dcbc539f",
+      "title": "🎯 [멀린비서] 귀신창이 안 뜨는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-03T05:25:00.000Z",
+      "url": "https://app.notion.com/p/40df9ffd2c1d80cb8f48f068dcbc539f",
+      "archived_at": "2026-11-03T15:08:59.352436"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-80a4-9602-e7524a19f431",
+      "title": "🎯[센스톡] 로그인 후 수신자 명단이 바로 뜨지 않고 새로고침을 해야 뜨는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-03T05:20:00.000Z",
+      "url": "https://app.notion.com/p/40df9ffd2c1d80a49602e7524a19f431",
+      "archived_at": "2026-11-03T15:08:59.352455"
+    },
+    {
+      "page_id": "40bf9ffd-2c1d-8100-be73-f6fbf9110616",
+      "title": "🎯 [귀신같이] 4. [👨‍👩‍👧‍👦 공유: 내 기기 묶기 & 3대 공유방] 패밀리(우리집·본가·처가 분리) · 동호회 원본 앨범 · 업무(S: 드라이브 동시편집 잠금) & 방장 1인 결제(팀원 0원) 실전 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-03T04:55:00.000Z",
+      "url": "https://app.notion.com/p/4-3-S-1--40bf9ffd2c1d8100be73f6fbf9110616",
+      "archived_at": "2026-11-03T15:08:59.352462"
+    },
+    {
+      "page_id": "40bf9ffd-2c1d-8124-b411-fdad384455a2",
+      "title": "🎯 [귀신같이] 5. [📖 심플 온보딩 3탭 & 요금표·사운드] 모바일 앱 1초 설치 QR & 이메일 자동 연결 · [복사검색] F1~F10 & 7일/30일 보관 · 👑 내 기기 통합(3,900원/5년 특판) 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-03T05:28:00.000Z",
+      "url": "https://app.notion.com/p/5-3-1-QR-F1-F10-7-30-3-90-40bf9ffd2c1d8124b411fdad384455a2",
+      "archived_at": "2026-11-03T15:47:39.739904"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-817b-81de-f757813e4583",
+      "title": "🎯 [귀신같이] 2-B. [손보기 실전] 영구삭제 파일 3초 포렌식 복원 & 타임머신 원상복구",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-03T05:48:00.000Z",
+      "url": "https://app.notion.com/p/2-B-3-40cf9ffd2c1d817b81def757813e4583",
+      "archived_at": "2026-11-03T16:29:05.160199"
     }
   ]
 }
