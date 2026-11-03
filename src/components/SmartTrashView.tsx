@@ -8,6 +8,7 @@ import {
 } from '../services/monsterChatRouter';
 import { PersonalHealthCheckHistoryDrawer } from './MonsterInteractiveCards';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
+import { SetupMonsterContent } from './SetupMonsterModal';
 import {
   zCoreBridge,
   isZCoreOutdated,
@@ -1228,6 +1229,10 @@ export const SmartTrashView: React.FC = () => {
         )}
       </section>
 
+      {/* ─────────────── 6. ⚙️ 고치기 진단 & 3초 포렌식 실물 수리 패널 ─────────────── */}
+      <section id="ghosti-inline-setup-monster" className="scroll-mt-24">
+        <SetupMonsterContent embedded={true} />
+      </section>
 
         </div>
 

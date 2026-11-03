@@ -19,6 +19,7 @@ import {
   type DigitalHealthCheckRecord,
   formatBytes,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
+  executeMissingFileRecovery,
 } from '../services/monsterChatRouter';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import {
@@ -26,6 +27,11 @@ import {
   buildStudioSupportJumpUrl,
 } from '../services/merlin-hub-sdk/Support/blackbox';
 import { speakWithHyunsuOrSunhi } from '../services/voiceSearchAndAiBatonEngine';
+import {
+  executeRealOsAction,
+  buildSetupDiagnosisPlan,
+  launchRealOsTopmostOverlay,
+} from '../services/setupMonsterEngine';
 
 interface MonsterCardProps {
   message: MonsterChatMessage;
@@ -104,26 +110,75 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
           <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 font-mono text-[11px] text-emerald-200 space-y-1">
             {message.missingFilePayload.fiveLinePreview.map((line, i) => (
-              <div key={i} className="truncate">
+              <div key={i} className="whitespace-normal break-words leading-snug">
                 {line}
               </div>
             ))}
           </div>
 
           <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-            <button
-              type="button"
-              onClick={() =>
-                void speakWithHyunsuOrSunhi(
-                  message.missingFilePayload!.fiveLinePreview.join('. '),
-                  'sunhi_doc_reader'
-                )
-              }
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-amber-400" />
-              👩 음성으로 미리듣기
-            </button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  void speakWithHyunsuOrSunhi(
+                    message.missingFilePayload!.fiveLinePreview.join('. '),
+                    'sunhi_doc_reader'
+                  )
+                }
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                👩 음성으로 미리듣기
+              </button>
+
+              {message.missingFilePayload.currentLocation && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const targetPath = message.missingFilePayload!.currentLocation;
+                    onToast?.(`📂 탐색기에서 [${message.missingFilePayload!.fileName}] 위치를 엽니다...`);
+                    const res = await executeRealOsAction('open_file_search', targetPath);
+                    if (res.ok) {
+                      onToast?.(`📂 윈도우 탐색기에서 [${message.missingFilePayload!.fileName}] 폴더를 열었습니다!`);
+                    } else {
+                      onToast?.(`⚠️ Z-코어 연결을 확인해 주세요.`);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
+                >
+                  📂 폴더 열기
+                </button>
+              )}
+
+              {!message.missingFilePayload.restored && (
+                <button
+                  type="button"
+                  disabled={busyId === 'missing_restore'}
+                  onClick={async () => {
+                    setBusyId('missing_restore');
+                    const res = await executeMissingFileRecovery(
+                      message.missingFilePayload!,
+                      '원위치 복원 버튼 클릭'
+                    );
+                    setBusyId(null);
+                    onUpdateMessage({
+                      ...message,
+                      missingFilePayload: {
+                        ...message.missingFilePayload!,
+                        restored: res.ok,
+                        approvedTypedText: '응 복구해줘 (버튼 원클릭)',
+                        restoreError: res.ok ? undefined : res.message,
+                      },
+                    });
+                    onToast?.(res.message);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-black flex items-center gap-1 cursor-pointer shadow"
+                >
+                  ↩️ 원위치/바탕화면 복원
+                </button>
+              )}
+            </div>
 
             {message.missingFilePayload.restored ? (
               <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
@@ -135,7 +190,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </span>
             ) : (
               <div className="rounded-lg bg-slate-950/90 border border-emerald-500/30 px-3 py-1.5 text-[12px] text-emerald-200 font-semibold">
-                ✍️ 복구하시려면 채팅창에 <strong>&ldquo;응 복구해줘&rdquo;</strong>라고 입력해 주세요.
+                ✍️ 채팅창에 <strong>&ldquo;응 복구해줘&rdquo;</strong>라고 입력하거나 위 버튼을 눌러 주세요.
               </div>
             )}
           </div>
@@ -358,13 +413,13 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
               <div className="text-slate-400">CPU</div>
-              <div className="font-bold text-slate-100 truncate">
+              <div className="font-bold text-slate-100 whitespace-normal break-words leading-snug">
                 {message.pcSpecPayload.cpuModel}
               </div>
             </div>
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
               <div className="text-slate-400">메모리 (RAM)</div>
-              <div className="font-bold text-emerald-300">
+              <div className="font-bold text-emerald-300 whitespace-normal break-words leading-snug">
                 {message.pcSpecPayload.ramTotalGb ?? '확인 불가'}
                 {message.pcSpecPayload.ramTotalGb !== null ? 'GB' : ''}
                 {message.pcSpecPayload.ramUsedPercent !== null ? ` (${message.pcSpecPayload.ramUsedPercent}%)` : ''}
@@ -372,17 +427,129 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             </div>
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
               <div className="text-slate-400">그래픽 (GPU)</div>
-              <div className="font-bold text-sky-300 truncate">
+              <div className="font-bold text-sky-300 whitespace-normal break-words leading-snug">
                 {message.pcSpecPayload.gpuModel}
               </div>
             </div>
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
               <div className="text-slate-400">여유 공간</div>
-              <div className="font-bold text-amber-300 flex items-center gap-1">
-                <HardDrive className="w-3 h-3" />
-                {message.pcSpecPayload.diskFreeGb !== null ? `${message.pcSpecPayload.diskFreeGb} GB 여유` : '확인 불가'}
+              <div className="font-bold text-amber-300 flex items-center gap-1 whitespace-normal break-words leading-snug">
+                <HardDrive className="w-3 h-3 shrink-0" />
+                <span>{message.pcSpecPayload.diskFreeGb !== null ? `${message.pcSpecPayload.diskFreeGb} GB 여유` : '확인 불가'}</span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6-B) ⚙️ 고치기 진단 & 1초 수리 / 빨간 손가락(👆) 화면 안내 카드 */}
+      {message.cardKind === 'DEVICE_REPAIR_GATE' && message.deviceRepairPayload && (
+        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[11px] font-extrabold">
+              🛠️ ⚙️ 고치기 진단 카드
+            </span>
+            <span className="text-[11px] font-extrabold text-emerald-300">
+              {message.deviceRepairPayload.badgeText}
+            </span>
+          </div>
+
+          <div className="text-xs font-extrabold text-white whitespace-normal break-words">
+            {message.deviceRepairPayload.title}
+          </div>
+          <p className="text-[11.5px] text-slate-300 leading-relaxed whitespace-normal break-words">
+            {message.deviceRepairPayload.rootCause}
+          </p>
+
+          {message.deviceRepairPayload.executed && (
+            <div className="rounded-lg bg-emerald-950/50 border border-emerald-500/40 p-2.5 text-xs text-emerald-200 font-bold whitespace-normal break-words">
+              {message.deviceRepairPayload.undone
+                ? '↩️ 수리 전 원래 설정으로 1초 원상복구되었습니다!'
+                : message.deviceRepairPayload.completionMessage || '✅ 1초 자동 수리 및 설정 백업이 완료되었습니다!'}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {!message.deviceRepairPayload.executed || message.deviceRepairPayload.undone ? (
+              <button
+                type="button"
+                disabled={busyId === 'repair_exec'}
+                onClick={async () => {
+                  setBusyId('repair_exec');
+                  const plan = buildSetupDiagnosisPlan(
+                    'pc',
+                    message.deviceRepairPayload!.symptomQuery,
+                    message.deviceRepairPayload!.presetId
+                  );
+                  await useSaySeeStore.getState().approveAndExecuteSetupPlan(plan, 0);
+                  setBusyId(null);
+                  onUpdateMessage({
+                    ...message,
+                    deviceRepairPayload: {
+                      ...message.deviceRepairPayload!,
+                      executed: true,
+                      undone: false,
+                    },
+                  });
+                  onToast?.(plan.completionMessage);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-black cursor-pointer shadow"
+              >
+                ⚡ 바로 해결하기 (언제나 0원)
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  await useSaySeeStore.getState().undoSetupMonsterRepair();
+                  onUpdateMessage({
+                    ...message,
+                    deviceRepairPayload: {
+                      ...message.deviceRepairPayload!,
+                      undone: true,
+                    },
+                  });
+                  onToast?.('↩️ 수리 전 원래 설정으로 1초 원상복구했습니다.');
+                }}
+                className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black cursor-pointer shadow"
+              >
+                ↩️ 원래 설정으로 1초 되돌리기
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                const plan = buildSetupDiagnosisPlan(
+                  'pc',
+                  message.deviceRepairPayload!.symptomQuery,
+                  message.deviceRepairPayload!.presetId
+                );
+                if (plan.overlaySteps && plan.overlaySteps.length > 0) {
+                  useSaySeeStore.getState().openSetupOverlayGuide(plan);
+                } else {
+                  const fallbackPlan = buildSetupDiagnosisPlan(
+                    'pc',
+                    message.deviceRepairPayload!.symptomQuery,
+                    'pc_excel_overlay'
+                  );
+                  useSaySeeStore.getState().openSetupOverlayGuide({
+                    ...fallbackPlan,
+                    title: `👆 [${message.deviceRepairPayload!.symptomQuery}] 빨간 손가락 화면 안내`,
+                  });
+                }
+                await launchRealOsTopmostOverlay({
+                  x: 420,
+                  y: 180,
+                  text: `👆 [${message.deviceRepairPayload!.symptomQuery}] 여기를 클릭해 설정을 확인하세요!`,
+                  durationSec: 10,
+                });
+                onToast?.('👆 화면 위에 빨간 손가락(👆) 동행 가이드를 띄웠습니다!');
+              }}
+              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold cursor-pointer shadow flex items-center gap-1"
+            >
+              👆 빨간 손가락 화면 안내 보기
+            </button>
           </div>
         </div>
       )}

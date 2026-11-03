@@ -41,11 +41,19 @@ const NOTION_MINIMAL_STARTERS: Array<{ label: string; prompt: string }> = [
     prompt: '바탕화면이랑 다운로드 폴더 정리할 파일 봐줘',
   },
   {
-    label: '💁‍♂️ 귀신같이 기능·요금 안내',
+    label: '🕵️ 사라진 파일 찾기',
+    prompt: '어제 작업하던 계약서 파일이 사라졌어',
+  },
+  {
+    label: '🕰️ 복원 기록·원복',
+    prompt: '최근 복원 기록 보여줘',
+  },
+  {
+    label: '💁 귀신같이 기능 질문',
     prompt: '귀신같이 Ctrl+0 초능력 기능이랑 내 기기 통합 3,900원 혜택 알려줘',
   },
   {
-    label: '🎛️ 말로 앱 설정·상용구 변경',
+    label: '🎛️ 상용구·보관기간 설정',
     prompt: '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
   },
   {
@@ -53,8 +61,8 @@ const NOTION_MINIMAL_STARTERS: Array<{ label: string; prompt: string }> = [
     prompt: '아이디어 건의 및 A/S 접수하고 싶은데 내 이름으로 스튜디오에 접수해줘',
   },
   {
-    label: '🕰️ 복원 기록·원복',
-    prompt: '최근 복원 기록 보여줘',
+    label: '🤝 심층 질문(단골 AI 바톤터치)',
+    prompt: '임대차 계약서 독소조항 법률 검토랑 세금 계산 상담해줘',
   },
 ];
 
@@ -243,6 +251,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                     onToast={onToast}
                   />
                 )}
+
+                {!isUser && msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
+                    {msg.followUpSuggestions.map((sug, sIdx) => (
+                      <button
+                        key={sIdx}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleSend(sug)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                      >
+                        💬 {sug}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -254,6 +278,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             확인하고 있습니다...
           </div>
         )}
+      </div>
+
+      {/* 2.5. 하단 스타터 칩 바 */}
+      <div className="px-3.5 py-2 border-t border-slate-200 dark:border-slate-800/80 bg-slate-100/70 dark:bg-slate-900/80 flex flex-wrap gap-1.5">
+        {NOTION_MINIMAL_STARTERS.map((st, idx) => (
+          <button
+            key={idx}
+            type="button"
+            disabled={busy}
+            onClick={() => void handleSend(st.prompt)}
+            className="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-50 dark:bg-slate-950 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer shadow-2xs"
+          >
+            {st.label}
+          </button>
+        ))}
       </div>
 
       {/* 3. 하단 입력창 */}

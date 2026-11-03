@@ -16,7 +16,7 @@ import {
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { validateClubSignboardName } from '../components/PricingModal';
 import { dispatchGhostCastLiveCommand } from '../components/GhostCastAndLiveSystem';
-import { executeRealOsAction } from './setupMonsterEngine';
+import { executeRealOsAction, buildSetupDiagnosisPlan } from './setupMonsterEngine';
 
 /**
  * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
@@ -206,6 +206,18 @@ export interface DigitalHealthCheckRecord {
   healthScoreAfter?: number;
 }
 
+export interface MonsterDeviceRepairPayload {
+  title: string;
+  badgeText: string;
+  rootCause: string;
+  symptomQuery: string;
+  presetId: string;
+  hasOverlayGuide: boolean;
+  executed?: boolean;
+  undone?: boolean;
+  completionMessage?: string;
+}
+
 export interface MonsterChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -219,6 +231,7 @@ export interface MonsterChatMessage {
   shortcutPreview?: MonsterShortcutPreviewPayload;
   restorePoints?: MonsterRestorePointItem[];
   pcSpecPayload?: MonsterPcSpecPayload;
+  deviceRepairPayload?: MonsterDeviceRepairPayload;
   batonTouchPayload?: {
     docTitle: string;
     docText: string;
@@ -1767,6 +1780,62 @@ export async function processUnifiedMonsterChatQuery(params: {
         followUpSuggestions: defaultFollowUps,
       });
     }
+
+    // 휴지통/복원기록에 없더라도 내 PC 5대 은닉 금고(문서·다운로드·자동복구·서류함) 3초 포렌식 스캔 시도
+    if (!isSyntheticMissingTest) {
+      const fKeyword = d?.keywords?.[0] || (/계약서/.test(clean) ? '계약서' : '');
+      const fRes = await zcoreJson<{
+        ok: boolean;
+        files?: Array<{
+          fileName: string;
+          fullPath: string;
+          vaultLabel: string;
+          modifiedAt: string;
+          sizeFormatted: string;
+          preview5Lines: string[];
+        }>;
+      }>('/__zcore/forensic-scan', postJson({ query: fKeyword }), 3000);
+      let matchedFiles = fRes.ok ? fRes.data.files || [] : [];
+      if (matchedFiles.length === 0 && fKeyword) {
+        const fResAll = await zcoreJson<{
+          ok: boolean;
+          files?: Array<{
+            fileName: string;
+            fullPath: string;
+            vaultLabel: string;
+            modifiedAt: string;
+            sizeFormatted: string;
+            preview5Lines: string[];
+          }>;
+        }>('/__zcore/forensic-scan', postJson({ query: '' }), 3000);
+        matchedFiles = fResAll.ok ? fResAll.data.files || [] : [];
+      }
+      if (matchedFiles.length > 0) {
+        const top = matchedFiles[0];
+        const payload: MonsterMissingFilePayload = {
+          query: clean,
+          caseType: 'CASE_C_OFFICE_AUTORECOVER',
+          fileName: top.fileName,
+          currentLocation: top.fullPath,
+          originalLocation: '바탕화면에 "(복구본)"으로 복사 (원본은 그대로 보존)',
+          deletedAtOrSavedAt: `마지막 저장 ${top.modifiedAt} · ${top.sizeFormatted}`,
+          recoverFullPath: top.fullPath,
+          fiveLinePreview: (top.preview5Lines || []).slice(0, 5),
+          briefingKo: `${llmIntro}🔍 **[3초 포렌식 실측 — ${top.vaultLabel}]**\n내 PC 문서·은닉 금고에서 **${top.fileName}** (${top.modifiedAt})을 찾았습니다. 아래 5줄 미리보기를 확인하시고 **[📂 폴더 열기]** 또는 **[↩️ 바탕화면에 복구본 만들기]** 버튼을 누르시거나 **"응 복구해줘"**라고 입력해 주세요.`,
+        };
+        speak('문서 금고에서 파일을 찾았습니다. 다섯 줄 미리보기를 확인하시고 폴더 열기나 원위치 복원을 눌러 주세요.');
+        return reply(sourceTab, payload.briefingKo, {
+          cardKind: 'MISSING_FILE_EXONERATION',
+          missingFilePayload: payload,
+          llmActionJson: actionJson,
+          followUpSuggestions: defaultFollowUps || [
+            '응 복구해줘',
+            '최근 복원 기록 보여줘',
+          ],
+        });
+      }
+    }
+
     let cleanBriefing =
       d?.briefingKo ||
       '복원 기록과 내 휴지통을 확인했지만 찾지 못했습니다. 귀신같이가 옮기거나 지운 기록도 없습니다. 다른 폴더로 옮겨졌을 수 있으니 [🎯 찾기]에서 이름으로 검색해 보세요.';
@@ -2144,6 +2213,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       ))
   ) {
     const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
+    const diagPlan = buildSetupDiagnosisPlan('pc', clean);
     const actionJson: MonsterLlmActionJson = llmDecision || {
       replyKo: '말씀하신 기기 설정·수리 증상을 확인했습니다. 귀신같이 손보기 수리 엔진으로 바로 연결해 드립니다.',
       intent: 'OS_REPAIR_ACTION',
@@ -2163,11 +2233,20 @@ export async function processUnifiedMonsterChatQuery(params: {
       sourceTab,
       `${
         llmDecision?.replyKo
-          ? `💬 ${llmDecision.replyKo}\n\n🛠️ 좌측 **[⚙️ 고치기 진단 카드]** 또는 아래 추천 버튼을 눌러 1초 수리와 화면 위 손가락(👆) 안내를 바로 실행하실 수 있습니다.`
+          ? `💬 ${llmDecision.replyKo}\n\n🛠️ 아래 **[⚙️ 고치기 진단 카드]** 또는 추천 버튼을 눌러 1초 수리와 화면 위 손가락(👆) 안내를 바로 실행하실 수 있습니다.`
           : `🛠️ 말씀하신 **"${clean}"** 증상을 귀신같이 손보기가 진단했습니다. 언제나 0원으로 수리 전 상태를 백업한 뒤 안전하게 해결해 드립니다.`
       }`,
       {
         cardKind: 'DEVICE_REPAIR_GATE',
+        deviceRepairPayload: {
+          title: diagPlan.title,
+          badgeText: diagPlan.difficultyBadgeKo,
+          rootCause: diagPlan.rootCause,
+          symptomQuery: clean,
+          presetId: diagPlan.presetId,
+          hasOverlayGuide: true,
+          completionMessage: diagPlan.completionMessage,
+        },
         shortformTip: tipRes.tip,
         llmActionJson: actionJson,
         followUpSuggestions: actionJson.followUpSuggestions,
