@@ -87,6 +87,7 @@ HWND_NOTOPMOST = -2
 SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
 SWP_NOACTIVATE = 0x0010
+SWP_SHOWWINDOW = 0x0040
 KEYEVENTF_KEYUP = 0x0002
 
 LOCK_PORT = 51988
@@ -530,9 +531,13 @@ def morph_korean_english_text(text: str) -> str:
 
 def split_excel_cells(text: str) -> list[str]:
     """엑셀/표에서 여러 줄이나 탭으로 묶여 복사된 단일 텍스트를 개별 셀 배열로 자동 분해"""
-    if "\n" not in text and "\t" not in text:
+    if not text:
         return []
-    parts = [p.strip() for p in re.split(r"[\r\n\t]+", text) if p.strip()]
+    s = text.replace("\r\n", "\n").replace("\r", "\n")
+    if "\n" not in s and "\t" not in s:
+        return []
+    raw_parts = re.split(r"[\n\t]+", s)
+    parts = [p.strip() for p in raw_parts if p.strip()]
     return parts if len(parts) >= 2 else []
 
 
@@ -1399,12 +1404,21 @@ def superpower_2_typo_morph(daemon_set_cb, auto_triggered: bool = False) -> bool
     [②번] 무후크 가상 클립보드 스왑 기반 양방향 한영 오타 성형 + 한/영 키(IME) 자동 전환
     """
     orig_clip = get_clipboard_text()
-    tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
-    time.sleep(0.035)
+
+    # 1) 먼저 텍스트가 블록 선택되어 있는지 확인 (유저가 드래그했거나 Shift로 지정한 경우)
     tap_key_combo([VK_CONTROL], VK_C)
-    time.sleep(0.045)
+    time.sleep(0.04)
     selected = get_clipboard_text()
-    if selected:
+
+    # 2) 블록 선택이 없었다면 현재 커서 앞 1어절 선택 시도
+    if not selected or selected == orig_clip:
+        tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
+        time.sleep(0.035)
+        tap_key_combo([VK_CONTROL], VK_C)
+        time.sleep(0.045)
+        selected = get_clipboard_text()
+
+    if selected and selected != orig_clip:
         morphed, target_lang = morph_korean_english_text_with_direction(selected)
         if morphed != selected and target_lang is not None:
             daemon_set_cb(morphed)
@@ -1426,13 +1440,18 @@ def superpower_2_typo_morph(daemon_set_cb, auto_triggered: bool = False) -> bool
             if auto_triggered:
                 return False
 
+    # 3) 캐럿 선택이 불가능한 경우 클립보드 원문 전체 변환
     if not auto_triggered and orig_clip:
         morphed, target_lang = morph_korean_english_text_with_direction(orig_clip)
-        daemon_set_cb(morphed)
-        if target_lang is not None:
+        if morphed != orig_clip and target_lang is not None:
+            daemon_set_cb(morphed)
             set_ime_language(target_korean=(target_lang == "KO"))
-        show_ghost_toast("👻 귀신같이 한영성형")
-        return True
+            lang_badge = "한글키 전환" if target_lang == "KO" else "영문키 전환"
+            show_ghost_toast(f"👻 귀신같이 한영성형 ({morphed[:15].strip()} | {lang_badge})")
+            return True
+        else:
+            show_ghost_toast("👻 귀신같이 한영성형")
+            return True
     return False
 
 
@@ -1483,7 +1502,11 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
         s = unicodedata.normalize("NFKC", txt)
         s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
         s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
-        s = re.sub(r"(\*\*|__|^#{1,6}\s*|```[a-zA-Z]*)", "", s, flags=re.MULTILINE)
+        # 마크다운 강조 기호만 안전 제거 (일반 별표 *** 등 텍스트 문맥은 온전히 보존!)
+        s = re.sub(r"\*\*(.*?)\*\*", r"\1", s)
+        s = re.sub(r"__(.*?)__", r"\1", s)
+        s = re.sub(r"^#{1,6}\s*", "", s, flags=re.MULTILINE)
+        s = re.sub(r"```[a-zA-Z]*", "", s)
         # 1) 문장 중간에 끊어진 줄바꿈 연결 (영문 대문자 및 괄호 줄바꿈 포함)
         s = re.sub(r"(?<![.?!:다요죠음함])\r?\n(?=[가-힣A-Za-z0-9(\[])", " ", s)
         # 2) PDF 표/문서에서 자간(kerning) 때문에 쪼개진 한글 조사·어미·단어 공백 복원
@@ -1734,13 +1757,12 @@ def _capture_target_hwnd() -> int:
     global _LAST_TARGET_HWND
     hwnd = u32.GetForegroundWindow()
     if hwnd:
-        buf = ctypes.create_unicode_buffer(256)
-        u32.GetWindowTextW(hwnd, buf, 256)
         cls_buf = ctypes.create_unicode_buffer(128)
         u32.GetClassNameW(hwnd, cls_buf, 128)
-        # Tk Toplevel 오버레이 창이 아닌 실제 유저 작업 창만 기록
-        if cls_buf.value != "TkTopLevel":
-            _LAST_TARGET_HWND = hwnd
+        # Tk 창 또는 셸/데스크톱이 아닌 실제 유저 작업 창만 확실히 기록
+        if "Tk" not in cls_buf.value and cls_buf.value not in ("Progman", "WorkerW", "Shell_TrayWnd"):
+            root_h = u32.GetAncestor(hwnd, 2)  # GA_ROOT = 2
+            _LAST_TARGET_HWND = root_h or hwnd
     return _LAST_TARGET_HWND or hwnd
 
 
@@ -1753,7 +1775,7 @@ def superpower_7_toggle_topmost(target_hwnd: int = 0) -> None:
         ex_style = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
         is_top = (ex_style & WS_EX_TOPMOST) != 0
         target_flag = HWND_NOTOPMOST if is_top else HWND_TOPMOST
-        u32.SetWindowPos(hwnd, target_flag, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)
+        u32.SetWindowPos(hwnd, target_flag, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
         # 창 제목줄에 [📌고정] 시각 표시 토글
         try:
             buf = ctypes.create_unicode_buffer(512)
@@ -2083,7 +2105,30 @@ Write-Output $res.Text
         seq_mode = True
         pasting_started = False
         copied_after_trigger = False
-        if len(recent_unpasted) >= 2:
+
+        # 트리거 즉시 현재 클립보드 실시간 점검 (recent_unpasted가 비었거나 갱신 지연 시 100% 보정)
+        live_clip = get_clipboard_text()
+        if live_clip:
+            if not recent_unpasted:
+                recent_unpasted.append(live_clip)
+            elif recent_unpasted[-1] != live_clip:
+                recent_unpasted.append(live_clip)
+
+        # 엑셀 셀 검사 (최근 복사물 중 다중 셀이 있는지 확인)
+        excel_cells = []
+        if recent_unpasted:
+            excel_cells = split_excel_cells(recent_unpasted[-1])
+
+        if excel_cells:
+            # [보너스 B] 엑셀 다중 셀/줄 1회 복사 상태면 자동으로 1칸씩 쪼개어 순차 장전!
+            seq_queue = excel_cells
+            daemon_set_clipboard(seq_queue[0])
+            arm_sub_hotkeys()
+            show_ghost_toast(
+                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                duration_ms=6500,
+            )
+        elif len(recent_unpasted) >= 2:
             seq_queue = list(recent_unpasted)
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
@@ -2091,24 +2136,6 @@ Write-Output $res.Text
                 f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
                 duration_ms=6500,
             )
-        elif len(recent_unpasted) == 1:
-            # [보너스 B] 엑셀 다중 셀/줄 1회 복사 상태면 자동으로 1칸씩 쪼개어 순차 장전!
-            cells = split_excel_cells(recent_unpasted[0])
-            if cells:
-                seq_queue = cells
-                daemon_set_clipboard(seq_queue[0])
-                arm_sub_hotkeys()
-                show_ghost_toast(
-                    f"귀신같이 (엑셀 {len(cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                    duration_ms=6500,
-                )
-            else:
-                seq_queue.clear()
-                arm_sub_hotkeys()
-                show_ghost_toast(
-                    "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
-                    duration_ms=6500,
-                )
         else:
             seq_queue.clear()
             arm_sub_hotkeys()
