@@ -1798,13 +1798,14 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
         s = re.sub(r"(?<![?!:다요죠음함])\r?\n\s*(?=[가-힣A-Za-z0-9(\[.*·])", " ", s)
         s = re.sub(r"[ \t]{2,}", " ", s)
         # 2) PDF 표/문서에서 자간(kerning) 때문에 쪼개진 한글 조사·어미·관형사형 공백 정밀 복원
+        # '과도 한 빈줄 이' -> '과도한 빈줄이', '과도 한빈 줄' -> '과도한 빈줄' 모두 먼저 정규화
+        s = re.sub(r"([가-힣]{2,})\s+([한된할])\s+([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
+        s = re.sub(r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
         s = re.sub(
             r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|니|니까|면|다면|한|할|된|될|됨|합니다|습니다)(?=[\s.,?!:;)]|$))",
             "",
             s,
         )
-        # '과도 한빈 줄' -> '과도한 빈줄' 등 관형사 어미('한/된/할')가 뒷단어에 잘못 붙은 경우 자동 교정
-        s = re.sub(r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
         _standalone_1char = {"나", "너", "저", "그", "이", "더", "덜", "안", "못", "잘", "또", "꼭", "다", "총", "각", "전", "현", "신", "구", "유", "무", "열", "행", "칸", "줄", "초", "분", "시", "일", "월", "년", "원", "명", "건", "개", "장", "번"}
         def _join_broken_hangul(line: str) -> str:
             tokens = line.split(" ")
@@ -2814,16 +2815,17 @@ Write-Output $res.Text
                                 pending_first_typo = None
 
                                 orig_c = get_clipboard_text()
-                                # 빠른 VK_BACK 연타 시 신형 메모장 등에서 앞 글자('dks')가 씹혀 남는 현상을 막기 위해
-                                # 방금 입력된 공백 1칸을 지운 뒤 Ctrl+Shift+Left 2회로 정확히 두 어절 전체를 통째로 블록 선택해 덮어씁니다!
+                                # 신형 메모장(Win11 Notepad) 등에서 빠른 백스페이스나 Ctrl+Shift+Left가 씹혀
+                                # 영문이 그대로 남는 현상을 완벽히 방지하기 위해, 정확한 글자 수(total_backspaces)만큼
+                                # Shift+Left로 블록 지정 후 VK_BACK 1회로 깨끗이 지우고 붙여넣습니다!
+                                for _ in range(total_backspaces):
+                                    tap_key_combo([VK_SHIFT], VK_LEFT)
+                                    time.sleep(0.008)
+                                time.sleep(0.02)
                                 tap_key_combo([], VK_BACK)
-                                time.sleep(0.015)
-                                tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
-                                time.sleep(0.015)
-                                tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
-                                time.sleep(0.02)
+                                time.sleep(0.025)
                                 daemon_set_clipboard(combined_conv)
-                                time.sleep(0.02)
+                                time.sleep(0.025)
                                 tap_key_combo([VK_CONTROL], VK_V)
                                 time.sleep(0.04)
                                 set_ime_language(target_korean=target_ko)
