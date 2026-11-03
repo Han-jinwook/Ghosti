@@ -144,9 +144,6 @@ export const App: React.FC = () => {
 
   return (
     <GhostiHubRootProvider>
-      {/* 앱/웹 첫 실행 시 『귀신같이』 마스터 로딩 스플래시 화면 */}
-      <GhostiLoadingSplash />
-
       {/* 공식 쇼룸 & 하이브리드 온보딩 대문 vs 내부 개발 워크스페이스 분기 */}
       {viewMode === 'showroom' ? (
         <GhostiShowroomLanding

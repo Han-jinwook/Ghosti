@@ -33,7 +33,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   showBadge: _showBadge,
   badgeText: _badgeText,
   subtitle,
-  sloganText = '1초 AI\n파일·영상 내용찾기',
+  sloganText = '1초 AI\n사진·영상·문서 찾기',
   autoCycle = true,
   cycleIntervalMs = 10000,
   onClick,
@@ -61,8 +61,9 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   }, [shouldCycle, cycleIntervalMs]);
 
   const isMobile = size === 'mobile';
-  const symbolSizeClass = isMobile ? 'w-8 h-8' : 'w-9 h-9';
-  const wordmarkHeightClass = isMobile ? 'h-[24px]' : 'h-[30px]';
+  const symbolSizeClass = isMobile ? 'w-9 h-9' : 'w-[42px] h-[42px]';
+  const wordmarkHeightClass = isMobile ? 'h-[28px]' : 'h-[34px]';
+  const slotWidthClass = isMobile ? 'w-[108px]' : 'w-[126px]';
 
   const sloganColorClass =
     themeMode === 'light'
@@ -76,7 +77,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   return (
     <div
       onClick={onClick}
-      title="귀신같이 — 1초 AI 파일·영상 내용찾기"
+      title="귀신같이 — 1초 AI 사진·영상·문서 찾기"
       className={`inline-flex items-center gap-2 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
@@ -89,30 +90,30 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
         }`}
       />
 
-      <div className="flex items-center min-h-[36px] min-w-0">
+      <div className={`relative flex items-center min-h-[42px] ${slotWidthClass} shrink-0 overflow-hidden`}>
         <div
-          className={`flex items-center transition-all duration-300 ease-in-out ${
+          className={`w-full flex items-center transition-all duration-300 ease-in-out ${
             isFading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
           }`}
         >
           {showSlogan && activeSlogan ? (
-            <div className="flex flex-col justify-center gap-0.5 leading-tight">
+            <div className="w-full flex flex-col justify-center gap-0.5 leading-tight">
               <div className="flex items-center gap-1">
-                <span className="text-[9.5px] font-extrabold px-1 py-0.2 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
-                  내용검색
+                <span className="text-[9.5px] font-extrabold px-1.5 py-0.2 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
+                  투시검색
                 </span>
                 <span className={`text-[11px] font-extrabold tracking-tight ${sloganColorClass} whitespace-nowrap`}>
                   {sloganLines[0]}
                 </span>
               </div>
               {sloganLines[1] && (
-                <span className={`text-[10.5px] font-bold tracking-tight opacity-80 ${sloganColorClass} whitespace-nowrap pl-0.5`}>
+                <span className={`text-[10px] font-bold tracking-tight opacity-85 ${sloganColorClass} whitespace-nowrap pl-0.5`}>
                   {sloganLines[1]}
                 </span>
               )}
             </div>
           ) : (
-            <div className="flex items-center leading-none">
+            <div className="w-full flex items-center leading-none">
               {themeMode === 'light' ? (
                 <img
                   src="/gwisinkachi_3d_wordmark_dark.png"
