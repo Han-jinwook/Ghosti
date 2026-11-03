@@ -529,8 +529,30 @@ def morph_korean_english_text(text: str) -> str:
     return morphed
 
 
+def has_excel_clipboard_format() -> bool:
+    """현재 클립보드에 엑셀(Biff8, XML Spreadsheet, CSV) 고유 포맷이 포함되어 있는지 확인"""
+    try:
+        if u32.OpenClipboard(None):
+            try:
+                fmt = 0
+                name_buf = ctypes.create_unicode_buffer(128)
+                while True:
+                    fmt = u32.EnumClipboardFormats(fmt)
+                    if not fmt:
+                        break
+                    if u32.GetClipboardFormatNameW(fmt, name_buf, 128) > 0:
+                        fname = name_buf.value.lower()
+                        if any(k in fname for k in ("biff", "spreadsheet", "csv", "excel", "WK1")):
+                            return True
+            finally:
+                u32.CloseClipboard()
+    except Exception:
+        pass
+    return False
+
+
 def split_excel_cells(text: str) -> list[str]:
-    """엑셀/표에서 여러 줄이나 탭으로 묶여 복사된 단일 텍스트를 개별 셀 배열로 자동 분해"""
+    """엑셀/표에서 여러 줄이나 탭으로 묶여 복사된 단일 텍스트를 개별 셀 배열로 자동 분해 (빈 셀 드래그 포함)"""
     if not text:
         return []
     s = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -538,7 +560,15 @@ def split_excel_cells(text: str) -> list[str]:
         return []
     raw_parts = re.split(r"[\n\t]+", s)
     parts = [p.strip() for p in raw_parts if p.strip()]
-    return parts if len(parts) >= 2 else []
+    if len(parts) >= 2:
+        return parts
+    # 엑셀에서 빈 셀이나 1개 값+빈 셀들을 다중 드래그 복사한 경우
+    s_trimmed = s[:-1] if s.endswith("\n") else s
+    if "\n" in s_trimmed or "\t" in s_trimmed:
+        grid_cells = [c.strip() for c in re.split(r"[\n\t]", s_trimmed)]
+        if len(grid_cells) >= 2:
+            return grid_cells
+    return []
 
 
 # =====================================================================
@@ -1397,13 +1427,74 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
 # 클립보드 · 키보드 · UI 접근성 트리(IUIAutomation) 문맥 추출
 # =====================================================================
 def acquire_single_instance() -> socket.socket | None:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.bind(("127.0.0.1", LOCK_PORT))
-        s.listen(1)
-        return s
-    except OSError:
-        return None
+    """
+    단일 인스턴스 보장 + 구버전 데몬 자동 교체(Hot-Swap):
+    - 이미 LOCK_PORT(51988)를 점유 중인 구버전 프로세스가 있으면 종료 신호를 보내거나
+      해당 포트 점유 PID를 핀셋 종료한 뒤 새 데몬이 즉시 포트를 승계합니다.
+    """
+    for attempt in range(4):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", LOCK_PORT))
+            s.listen(2)
+
+            def _shutdown_listener(srv_sock: socket.socket) -> None:
+                while True:
+                    try:
+                        conn, _ = srv_sock.accept()
+                        data = conn.recv(64)
+                        conn.close()
+                        if b"__REPLACE__" in data:
+                            srv_sock.close()
+                            os._exit(0)
+                    except Exception:
+                        break
+
+            threading.Thread(target=_shutdown_listener, args=(s,), daemon=True).start()
+            return s
+        except OSError:
+            try:
+                s.close()
+            except Exception:
+                pass
+            # 1) 우아한 교체 신호 전송 시도
+            try:
+                c = socket.create_connection(("127.0.0.1", LOCK_PORT), timeout=0.3)
+                c.sendall(b"__REPLACE__")
+                c.close()
+                time.sleep(0.25)
+            except Exception:
+                pass
+            # 2) 구버전(리스너 없는 버전)이 포트를 잡고 있을 경우 해당 포트 점유 PID만 핀셋 종료
+            if attempt >= 1:
+                try:
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    si.wShowWindow = 0
+                    out = subprocess.check_output(
+                        ["cmd", "/c", f"netstat -ano | findstr :{LOCK_PORT}"],
+                        encoding="utf-8",
+                        errors="ignore",
+                        startupinfo=si,
+                        creationflags=0x08000000,
+                    )
+                    my_pid = os.getpid()
+                    for ln in out.splitlines():
+                        parts = ln.split()
+                        if len(parts) >= 5 and "LISTENING" in ln.upper():
+                            pid = int(parts[-1])
+                            if pid > 0 and pid != my_pid:
+                                subprocess.run(
+                                    ["taskkill", "/F", "/PID", str(pid)],
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                    startupinfo=si,
+                                    creationflags=0x08000000,
+                                )
+                    time.sleep(0.25)
+                except Exception:
+                    pass
+    return None
 
 
 def get_clipboard_text() -> str:
@@ -1593,10 +1684,16 @@ def superpower_2_typo_morph(daemon_set_cb, auto_triggered: bool = False) -> bool
     time.sleep(0.04)
     selected = get_clipboard_text()
 
-    # 2) 블록 선택이 없었다면 현재 커서 앞 1어절 선택 시도
+    # 2) 블록 선택이 없었다면:
+    #    - 수동 실행([Ctrl+0] -> [2]) 시에는 줄 앞쪽에 남은 오타(예: 'dkssud 아기귀신아 뭐해'의 'dkssud')까지
+    #      한 번에 모두 고쳐지도록 현재 줄 전체(Shift+Home)를 먼저 선택하여 검사!
     if not selected or selected == orig_clip:
-        tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
-        time.sleep(0.035)
+        VK_HOME = 0x24
+        if not auto_triggered:
+            tap_key_combo([VK_SHIFT], VK_HOME)
+        else:
+            tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
+        time.sleep(0.04)
         tap_key_combo([VK_CONTROL], VK_C)
         time.sleep(0.045)
         selected = get_clipboard_text()
@@ -1605,7 +1702,7 @@ def superpower_2_typo_morph(daemon_set_cb, auto_triggered: bool = False) -> bool
         morphed, target_lang = morph_korean_english_text_with_direction(selected)
         if morphed != selected and target_lang is not None:
             daemon_set_cb(morphed)
-            time.sleep(0.02)
+            time.sleep(0.025)
             tap_key_combo([VK_CONTROL], VK_V)
             time.sleep(0.05)
             # 변환 방향에 맞춰 한/영 키(IME) 상태를 목표 언어로 즉시 전환!
@@ -1679,21 +1776,28 @@ def superpower_3_clean_format(daemon_set_cb) -> None:
 def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
     """
     [④번] 줄바꿈·유령공백(NFKC) 다림질 + EmbeddingGemma 2 문단 의미 분리
+    - 별표(***), 가운뎃점(·), 말줄임표(. . .) 등 원문 특수문자는 단 1글자도 삭제하지 않고 100% 보존!
     """
     txt = get_clipboard_text()
     if txt:
-        s = unicodedata.normalize("NFKC", txt)
+        # 가운뎃점(·) 등 보존을 위해 NFKC 전후로 보호
+        s = txt.replace("\u00B7", "__MIDDOT__").replace("\u318D", "__MIDDOT__")
+        s = unicodedata.normalize("NFKC", s)
+        s = s.replace("__MIDDOT__", "·")
         s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
         s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
-        # 마크다운 강조 기호만 안전 제거 (일반 별표 *** 등 텍스트 문맥은 온전히 보존!)
-        s = re.sub(r"\*\*(.*?)\*\*", r"\1", s)
-        s = re.sub(r"__(.*?)__", r"\1", s)
-        s = re.sub(r"^#{1,6}\s*", "", s, flags=re.MULTILINE)
-        s = re.sub(r"```[a-zA-Z]*", "", s)
-        # 1) 문장 중간에 끊어진 줄바꿈 연결 (영문 대문자 및 괄호 줄바꿈 포함)
-        s = re.sub(r"(?<![.?!:다요죠음함])\r?\n(?=[가-힣A-Za-z0-9(\[])", " ", s)
-        # 2) PDF 표/문서에서 자간(kerning) 때문에 쪼개진 한글 조사·어미·단어 공백 복원
-        s = re.sub(r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|니|니까|면|다면|된|될|됨|합니다|습니다)(?=[\s.,?!:;)]|$))", "", s)
+        # 1) 말줄임표(. . . 또는 ...) 뒤 줄바꿈 및 문장 중간에 끊어진 줄바꿈을 모두 매끄럽게 한 줄로 연결
+        s = re.sub(r"(\.\s*\.\s*\.)\s*\r?\n\s*", r"\1 ", s)
+        s = re.sub(r"(?<![?!:다요죠음함])\r?\n\s*(?=[가-힣A-Za-z0-9(\[.*·])", " ", s)
+        s = re.sub(r"[ \t]{2,}", " ", s)
+        # 2) PDF 표/문서에서 자간(kerning) 때문에 쪼개진 한글 조사·어미·관형사형 공백 정밀 복원
+        s = re.sub(
+            r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|니|니까|면|다면|한|할|된|될|됨|합니다|습니다)(?=[\s.,?!:;)]|$))",
+            "",
+            s,
+        )
+        # '과도 한빈 줄' -> '과도한 빈줄' 등 관형사 어미('한/된/할')가 뒷단어에 잘못 붙은 경우 자동 교정
+        s = re.sub(r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
         _standalone_1char = {"나", "너", "저", "그", "이", "더", "덜", "안", "못", "잘", "또", "꼭", "다", "총", "각", "전", "현", "신", "구", "유", "무", "열", "행", "칸", "줄", "초", "분", "시", "일", "월", "년", "원", "명", "건", "개", "장", "번"}
         def _join_broken_hangul(line: str) -> str:
             tokens = line.split(" ")
@@ -1934,16 +2038,80 @@ $words | ConvertTo-Json -Compress
 
 
 _LAST_TARGET_HWND: int = 0
+_PINNED_HWNDS: set[int] = set()
+
+
+def _get_win_class_and_title(hwnd: int) -> tuple[str, str]:
+    if not hwnd:
+        return "", ""
+    cls_buf = ctypes.create_unicode_buffer(128)
+    u32.GetClassNameW(hwnd, cls_buf, 128)
+    title_buf = ctypes.create_unicode_buffer(512)
+    u32.GetWindowTextW(hwnd, title_buf, 512)
+    return cls_buf.value or "", title_buf.value or ""
+
+
+def _find_visible_utility_windows() -> list[int]:
+    """화면에 열려 있는 메모장(Notepad) 또는 계산기(Calculator/ApplicationFrameWindow) 등 보조 유틸 창 탐색"""
+    found: list[int] = []
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def _enum_cb(h: int, _lp: int) -> bool:
+        if u32.IsWindowVisible(h) and not u32.IsIconic(h):
+            cls_name, title = _get_win_class_and_title(h)
+            t_low = title.lower()
+            c_low = cls_name.lower()
+            if (
+                "notepad" in c_low
+                or "메모장" in t_low
+                or "notepad" in t_low
+                or "계산기" in t_low
+                or "calculator" in t_low
+            ):
+                found.append(h)
+        return True
+
+    u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
+    return found
+
+
+def _unpin_accidental_browsers(exclude_hwnd: int = 0) -> None:
+    """실수로 거대 브라우저(Chrome/Edge/Notion)에 걸린 WS_EX_TOPMOST가 작은 메모장/계산기를 덮지 않도록 자동 해제"""
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def _enum_cb(h: int, _lp: int) -> bool:
+        if h == exclude_hwnd or not u32.IsWindowVisible(h):
+            return True
+        cls_name, title = _get_win_class_and_title(h)
+        if "Chrome_WidgetWin" in cls_name and h not in _PINNED_HWNDS:
+            ex_s = u32.GetWindowLongW(h, GWL_EXSTYLE)
+            if (ex_s & WS_EX_TOPMOST) != 0:
+                u32.SetWindowPos(h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+                if "📌" in title:
+                    u32.SetWindowTextW(h, title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", ""))
+        return True
+
+    u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
+
+
+def enforce_pinned_windows() -> None:
+    """타이머마다 고정된 창(_PINNED_HWNDS)이 다른 창(노션/브라우저 등) 클릭 시 절대 뒤로 숨지 않도록 하드웨어급 Z-Order 최상단 유지"""
+    dead = []
+    for h in list(_PINNED_HWNDS):
+        if not u32.IsWindow(h):
+            dead.append(h)
+            continue
+        u32.SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+    for d in dead:
+        _PINNED_HWNDS.discard(d)
 
 
 def _capture_target_hwnd() -> int:
     global _LAST_TARGET_HWND
     hwnd = u32.GetForegroundWindow()
     if hwnd:
-        cls_buf = ctypes.create_unicode_buffer(128)
-        u32.GetClassNameW(hwnd, cls_buf, 128)
-        # Tk 창 또는 셸/데스크톱이 아닌 실제 유저 작업 창만 확실히 기록
-        if "Tk" not in cls_buf.value and cls_buf.value not in ("Progman", "WorkerW", "Shell_TrayWnd"):
+        cls_name, _ = _get_win_class_and_title(hwnd)
+        if "Tk" not in cls_name and cls_name not in ("Progman", "WorkerW", "Shell_TrayWnd"):
             root_h = u32.GetAncestor(hwnd, 2)  # GA_ROOT = 2
             _LAST_TARGET_HWND = root_h or hwnd
     return _LAST_TARGET_HWND or hwnd
@@ -1955,15 +2123,50 @@ def superpower_7_toggle_topmost(target_hwnd: int = 0) -> None:
         root_hwnd = u32.GetAncestor(hwnd, 2)  # GA_ROOT = 2
         if root_hwnd:
             hwnd = root_hwnd
+
+    # 만약 유저가 노션(브라우저)을 보면서 옆에 띄워둔 메모장/계산기를 고정하려고 [Ctrl+0]->[7]을 누른 경우:
+    # 브라우저에 걸린 Topmost를 해제하고, 열려 있는 메모장/계산기 유틸 창들을 모두 최상단 고정(Pin)해 줍니다!
+    cls_name, title = _get_win_class_and_title(hwnd)
+    util_hwnds = _find_visible_utility_windows()
+    if "Chrome_WidgetWin" in cls_name and util_hwnds:
+        # 브라우저 자체에 걸려 있던 오고정 해제
+        u32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        _PINNED_HWNDS.discard(hwnd)
+        if "📌" in title:
+            u32.SetWindowTextW(hwnd, title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", ""))
+        # 화면에 떠 있는 메모장/계산기들을 즉시 고정!
+        any_unpinned = any(uh not in _PINNED_HWNDS for uh in util_hwnds)
+        for uh in util_hwnds:
+            _, utitle = _get_win_class_and_title(uh)
+            if any_unpinned:
+                _PINNED_HWNDS.add(uh)
+                u32.SetWindowPos(uh, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+                if "고정]" not in utitle:
+                    u32.SetWindowTextW(uh, f"📌 [항상 위 고정] {utitle}")
+            else:
+                _PINNED_HWNDS.discard(uh)
+                u32.SetWindowPos(uh, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+                u32.SetWindowTextW(uh, utitle.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", ""))
+        show_ghost_toast("👻 귀신같이 창고정 📌" if any_unpinned else "👻 귀신같이 창고정해제")
+        return
+
+    if hwnd:
+        _unpin_accidental_browsers(exclude_hwnd=hwnd)
         ex_style = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        is_top = (ex_style & WS_EX_TOPMOST) != 0
-        target_flag = HWND_NOTOPMOST if is_top else HWND_TOPMOST
-        u32.SetWindowPos(hwnd, target_flag, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-        # 창 제목줄에 [📌고정] 시각 표시 토글
+        is_top = (hwnd in _PINNED_HWNDS) or ((ex_style & WS_EX_TOPMOST) != 0)
+        if is_top:
+            _PINNED_HWNDS.discard(hwnd)
+            u32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+        else:
+            _PINNED_HWNDS.add(hwnd)
+            u32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+            # 만약 메모장/계산기 중 하나를 고정할 때 옆에 다른 보조창(메모장·계산기)도 함께 떠 있다면 같이 고정해 주어 둘 다 가려지지 않게 보장!
+            if hwnd in util_hwnds:
+                for uh in util_hwnds:
+                    _PINNED_HWNDS.add(uh)
+                    u32.SetWindowPos(uh, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
         try:
-            buf = ctypes.create_unicode_buffer(512)
-            u32.GetWindowTextW(hwnd, buf, 512)
-            cur_title = buf.value or ""
+            _, cur_title = _get_win_class_and_title(hwnd)
             if is_top:
                 new_title = cur_title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", "")
             else:
@@ -2297,10 +2500,14 @@ Write-Output $res.Text
             elif recent_unpasted[-1] != live_clip:
                 recent_unpasted.append(live_clip)
 
-        # 엑셀 셀 검사 (최근 복사물 중 다중 셀이 있는지 확인)
+        # 엑셀 셀 검사 (최근 복사물 중 다중 셀이 있거나 엑셀 클립보드 포맷인지 확인)
         excel_cells = []
         if recent_unpasted:
             excel_cells = split_excel_cells(recent_unpasted[-1])
+        if not excel_cells and live_clip:
+            excel_cells = split_excel_cells(live_clip)
+        if not excel_cells and has_excel_clipboard_format() and len(recent_unpasted) >= 2:
+            excel_cells = list(recent_unpasted)
 
         if excel_cells:
             # [보너스 B] 엑셀 다중 셀/줄 1회 복사 상태면 자동으로 1칸씩 쪼개어 순차 장전!
@@ -2382,6 +2589,8 @@ Write-Output $res.Text
 
             elif msg.message == WM_TIMER:
                 now = time.time()
+                if _PINNED_HWNDS:
+                    enforce_pinned_windows()
                 global _CLEAR_ALL_REQUESTED
                 if _CLEAR_ALL_REQUESTED:
                     _CLEAR_ALL_REQUESTED = False
@@ -2505,6 +2714,14 @@ Write-Output $res.Text
                     pending_first_typo = None
                 was_key_down[VK_HANGUL] = hangul_down
 
+                # 마우스 클릭이나 방향키(Left/Up/Right/Down) 입력 시에는 타이핑 버퍼를 즉시 초기화하여 앞 글자 찌꺼기('dks안녕') 현상 원천 차단!
+                for nav_vk in (0x01, 0x02, 0x25, 0x26, 0x27, 0x28):
+                    nav_down = (u32.GetAsyncKeyState(nav_vk) & 0x8000) != 0
+                    if nav_down and not was_key_down.get(nav_vk, False):
+                        typed_ascii_buf.clear()
+                        pending_first_typo = None
+                    was_key_down[nav_vk] = nav_down
+
                 if not ctrl_down and not alt_down and not menu_armed:
                     for vk_code in range(0x41, 0x5B):  # A ~ Z
                         is_down = (u32.GetAsyncKeyState(vk_code) & 0x8000) != 0
@@ -2574,10 +2791,16 @@ Write-Output $res.Text
                                 pending_first_typo = None
 
                                 orig_c = get_clipboard_text()
-                                for _ in range(total_backspaces):
-                                    tap_key_combo([], VK_BACK)
-                                daemon_set_clipboard(combined_conv)
+                                # 빠른 VK_BACK 연타 시 신형 메모장 등에서 앞 글자('dks')가 씹혀 남는 현상을 막기 위해
+                                # 방금 입력된 공백 1칸을 지운 뒤 Ctrl+Shift+Left 2회로 정확히 두 어절 전체를 통째로 블록 선택해 덮어씁니다!
+                                tap_key_combo([], VK_BACK)
                                 time.sleep(0.015)
+                                tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
+                                time.sleep(0.015)
+                                tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
+                                time.sleep(0.02)
+                                daemon_set_clipboard(combined_conv)
+                                time.sleep(0.02)
                                 tap_key_combo([VK_CONTROL], VK_V)
                                 time.sleep(0.04)
                                 set_ime_language(target_korean=target_ko)
