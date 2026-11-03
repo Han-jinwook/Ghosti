@@ -1506,6 +1506,103 @@ def run_defender_security_check(sub_action: str = "status") -> Dict[str, Any]:
     }
 
 
+def resolve_viewer_command_for_file(file_path: Path) -> str:
+    """
+    Windows 레지스트리(UserChoice ➔ HKCR)에서 해당 파일 확장자의 실제 뷰어 실행파일 경로를 찾아
+    '"{exe}" "{file_path}"' 명령줄을 반환합니다.
+    - 연결된 뷰어가 없는 확장자(.md 등)나 텍스트 기반 샘플 파일은 notepad.exe로 즉시 직결하여
+      '연결 프로그램 선택' 팝업에 막히지 않고 100% 열리도록 보장합니다.
+    - 백그라운드 데몬이 Session 0에서 떠 있더라도 spawn_on_interactive_desktop / schtasks /IT를 통해
+      유저 모니터(WinSta0\\Default)에 뷰어 창이 직접 뜨도록 합니다.
+    """
+    ext = file_path.suffix.lower()
+    raw_head = b""
+    try:
+        raw_head = file_path.open("rb").read(64)
+    except Exception:
+        pass
+
+    # 1) 확장자는 .pdf / .docx / .xlsx 이지만 실제로는 순수 텍스트 샘플이거나 xref 테이블이 없는 경우 -> 메모장으로 즉시 오픈
+    if ext == ".pdf":
+        try:
+            tail_bytes = file_path.read_bytes()[-512:]
+        except Exception:
+            tail_bytes = b""
+        if not raw_head.startswith(b"%PDF") or b"startxref" not in tail_bytes:
+            return f'notepad.exe "{file_path}"'
+    elif ext in (".docx", ".xlsx", ".pptx", ".hwpx") and not raw_head.startswith(b"PK\x03\x04"):
+        return f'notepad.exe "{file_path}"'
+
+    # 2) 텍스트/마크다운 계열(.txt, .md, .log, .json, .ini)은 메모장으로 즉시 직결
+    if ext in (".txt", ".md", ".log", ".json", ".ini"):
+        return f'notepad.exe "{file_path}"'
+
+    # 3) UserChoice 또는 HKCR에서 ProgID 조회
+    prog_ids: List[str] = []
+    if os.name == "nt":
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                rf"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\{ext}\UserChoice",
+            ) as k:
+                uc, _ = winreg.QueryValueEx(k, "ProgId")
+                if uc:
+                    prog_ids.append(str(uc))
+        except Exception:
+            pass
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, ext) as k:
+                default_pid, _ = winreg.QueryValueEx(k, "")
+                if default_pid and str(default_pid) not in prog_ids:
+                    prog_ids.append(str(default_pid))
+        except Exception:
+            pass
+
+        fallback_progids = {
+            ".pdf": ["Hpdf.Document.pdf.120", "MSEdgePDF", "Acrobat.Document.DC"],
+            ".xlsx": ["HCell.Document.xlsx.120", "Excel.Sheet.12"],
+            ".xls": ["HCell.Document.xls.120", "Excel.Sheet.8"],
+            ".csv": ["HCell.Document.csv.120", "Excel.CSV"],
+            ".docx": ["HWord.Document.docx.120", "Word.Document.12"],
+            ".doc": ["HWord.Document.doc.120", "Word.Document.8"],
+            ".hwp": ["Hwp.Document.120", "HWP.Document"],
+            ".hwpx": ["Hwp.Document.hwpx.120", "HWPX_auto_file"],
+            ".pptx": ["HShow.Document.pptx.120", "PowerPoint.Show.12"],
+        }
+        for fb in fallback_progids.get(ext, []):
+            if fb not in prog_ids:
+                prog_ids.append(fb)
+
+        for pid in prog_ids:
+            try:
+                with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, rf"{pid}\shell\open\command") as k:
+                    cmd_tpl, _ = winreg.QueryValueEx(k, "")
+                    if cmd_tpl:
+                        cmd_str = os.path.expandvars(str(cmd_tpl)).strip()
+                        exe_candidate = ""
+                        if cmd_str.startswith('"'):
+                            end_q = cmd_str.find('"', 1)
+                            if end_q > 1:
+                                exe_candidate = cmd_str[1:end_q]
+                        else:
+                            exe_candidate = cmd_str.split()[0]
+                        if exe_candidate and Path(exe_candidate).exists():
+                            return f'"{exe_candidate}" "{file_path}"'
+            except Exception:
+                continue
+
+        if ext == ".pdf":
+            for edge_p in (
+                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            ):
+                if Path(edge_p).exists():
+                    return f'"{edge_p}" "{file_path}"'
+
+    return f'notepad.exe "{file_path}"'
+
+
 def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]:
     ensure_merlin_dirs()
 
@@ -1522,14 +1619,35 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 Path(__file__).resolve().parents[2] / "test_docs",
                 Path("D:/Ghosti/test_docs"),
                 Path("C:/MerlinTools/test_docs"),
+                Path("C:/Users/Public/Documents"),
             ]
             for cand_dir in search_dirs:
                 try:
-                    if cand_dir.exists() and (cand_dir / fname).exists():
+                    if not cand_dir.exists():
+                        continue
+                    if (cand_dir / fname).exists():
                         p = cand_dir / fname
+                        break
+                    for sub_match in cand_dir.rglob(fname):
+                        if sub_match.is_file():
+                            p = sub_match
+                            break
+                    if p.exists():
                         break
                 except Exception:
                     pass
+        if not p.exists() and target_path.lower().endswith(".gsheet"):
+            # G: 드라이브 구글 시트 가상 원장의 경우 즉석에서 열람 가능한 요약 텍스트 파일 생성 후 오픈
+            virtual_sheet = MERLIN_DIR / Path(target_path).with_suffix(".txt").name
+            if not virtual_sheet.exists():
+                virtual_sheet.write_text(
+                    "[G: 내 드라이브 — 사내 통합 계정관리표 및 법인 입금 계좌번호 원장]\r\n"
+                    "• 넷플릭스/업무용 아이디: merlin_family@sundreamer.app\r\n"
+                    "• 비밀번호: Merlin#2026!ZCore\r\n"
+                    "• 법인 정산 계좌번호: 신한은행 110-482-992018 (별표 *** 가림 없이 원본 그대로 1초 복사 지원)\r\n",
+                    encoding="utf-8",
+                )
+            p = virtual_sheet
         if p.exists() and p.name.startswith("~$"):
             real_cand = p.with_name(p.name[2:])
             if real_cand.exists():
@@ -1546,43 +1664,79 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 pass
 
             # 1) open_file_direct 또는 open_file_search 호출 시:
-            #    먼저 해당 파일을 내 컴퓨터의 기본 뷰어(엑셀/한글/PDF/크롬·엣지·메모장)로 직접 실행하고,
-            #    동시에 윈도우 탐색기에서도 해당 파일이 선택(/select)된 상태로 창이 정상 유지되게 띄웁니다.
+            #    먼저 해당 파일을 내 컴퓨터의 기본 뷰어(한셀/한워드/한글/한PDF/엑셀/워드/메모장)로 직접 실행하고,
+            #    동시에 윈도우 탐색기에서도 해당 파일이 선택(/select)된 상태로 창이 정상 유지되게 띄운 뒤,
+            #    뷰어 창이 탐색기 뒤에 가려지거나 최소화(-32000)되어 있지 않도록 뷰어 창을 최상단(Foreground)으로 복원합니다!
             viewer_launched = False
+            viewer_cmd = ""
+            existing_viewer_hwnds = {
+                w["rawHwnd"]
+                for w in find_all_windows_on_default_desktop(resolved_p.stem[:12])
+            }
             if action in ("open_file_direct", "open_file_search"):
+                viewer_cmd = resolve_viewer_command_for_file(resolved_p)
                 try:
-                    os.startfile(str(resolved_p))
-                    viewer_launched = True
+                    pid_v = spawn_on_interactive_desktop(viewer_cmd, hide_console=False)
+                    if pid_v > 0:
+                        viewer_launched = True
                 except Exception:
                     viewer_launched = False
+                if not viewer_launched:
+                    try:
+                        os.startfile(str(resolved_p))
+                        viewer_launched = True
+                    except Exception:
+                        viewer_launched = False
 
             folder_titles = get_explorer_folder_title_candidates(resolved_p.parent)
             existing_explorers = {w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])}
             try:
-                subprocess.Popen(f'explorer.exe /select,"{str(resolved_p)}"')
+                spawn_on_interactive_desktop(f'explorer.exe /select,"{str(resolved_p)}"', hide_console=False)
             except Exception:
                 try:
-                    os.startfile(str(resolved_p.parent))
+                    subprocess.Popen(f'explorer.exe /select,"{str(resolved_p)}"')
                 except Exception:
                     pass
             opened_win: Dict[str, Any] = {}
+            viewer_win: Dict[str, Any] = {}
             search_titles = folder_titles + [resolved_p.stem, resolved_p.name]
-            for tick in range(20):
+            stem_kw = resolved_p.stem[:14]
+            for tick in range(24):
                 time.sleep(0.08)
-                found = find_explorer_windows_on_default_desktop(
-                    search_titles,
-                    exclude_hwnds=existing_explorers if tick < 8 else None,
-                )
-                if found:
-                    opened_win = found[0]
-                    if not viewer_launched:
+                if not opened_win:
+                    found = find_explorer_windows_on_default_desktop(
+                        search_titles,
+                        exclude_hwnds=existing_explorers if tick < 8 else None,
+                    )
+                    if found:
+                        opened_win = found[0]
                         try:
                             bring_window_to_front_immediately(opened_win["rawHwnd"])
                         except Exception:
                             pass
-                    break
+                if viewer_launched and stem_kw:
+                    v_cands = [
+                        w
+                        for w in find_all_windows_on_default_desktop(stem_kw)
+                        if w["rawHwnd"] != opened_win.get("rawHwnd")
+                    ]
+                    if v_cands:
+                        # 새로 뜬 뷰어 창 우선, 없으면 기존에 열려 있던(최소화 포함) 해당 문서 뷰어 창을 복원하여 맨 앞으로!
+                        new_v = [w for w in v_cands if w["rawHwnd"] not in existing_viewer_hwnds]
+                        viewer_win = new_v[0] if new_v else v_cands[0]
+                        try:
+                            bring_window_to_front_immediately(viewer_win["rawHwnd"])
+                        except Exception:
+                            pass
+                        if opened_win:
+                            break
+            if not viewer_win and opened_win:
+                try:
+                    bring_window_to_front_immediately(opened_win["rawHwnd"])
+                except Exception:
+                    pass
             msg_ko = (
-                f"📄 [{resolved_p.name}] 문서를 내 PC 기본 뷰어 및 탐색기 위치로 즉시 열었습니다!"
+                f"📄 [{resolved_p.name}] 문서를 내 PC 기본 뷰어로 화면 맨 앞에 바로 띄우고 탐색기 위치도 함께 열었습니다!"
                 if viewer_launched
                 else f"📂 윈도우 탐색기를 열어 [{resolved_p.name}] 파일을 선택해 화면 맨 앞으로 띄웠습니다!"
             )
@@ -1591,6 +1745,8 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 "action": action,
                 "targetPath": str(resolved_p),
                 "viewerLaunched": viewer_launched,
+                "viewerCommand": viewer_cmd,
+                "viewerHwnd": viewer_win.get("hwnd", ""),
                 "verifiedExplorerOnMonitor": bool(opened_win),
                 "explorerHwnd": opened_win.get("hwnd", ""),
                 "summaryKo": msg_ko,

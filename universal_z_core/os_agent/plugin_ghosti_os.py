@@ -564,6 +564,7 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         THIS_DIR / "sample_photos_301",
         THIS_DIR.parents[1] / "test_photos",
         THIS_DIR.parents[1] / "test_docs",
+        Path("C:/MerlinTools/test_docs"),
         Path("D:/Ghosti/test_photos"),
         Path("D:/Ghosti/test_docs"),
         home / "Pictures",
@@ -788,6 +789,48 @@ def _extract_doc_text(entry: Path) -> str:
                     text = re.sub(r"\s+", " ", text).strip()
                     if text:
                         return text[:1500]
+        if ext == ".xlsx":
+            with zipfile.ZipFile(entry, "r") as zf:
+                names = zf.namelist()
+                chunks: List[str] = []
+                if "xl/sharedStrings.xml" in names:
+                    ss_bytes = zf.read("xl/sharedStrings.xml")
+                    ss_text = re.sub(r"<[^>]+>", " ", ss_bytes.decode("utf-8", errors="ignore"))
+                    ss_text = re.sub(r"\s+", " ", ss_text).strip()
+                    if ss_text:
+                        chunks.append(ss_text)
+                for sheet_name in sorted(n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml"))[:3]:
+                    sh_bytes = zf.read(sheet_name)
+                    sh_text = re.sub(r"<[^>]+>", " ", sh_bytes.decode("utf-8", errors="ignore"))
+                    sh_text = re.sub(r"\s+", " ", sh_text).strip()
+                    if sh_text:
+                        chunks.append(sh_text[:600])
+                joined_xl = " | ".join(chunks).strip()
+                if joined_xl:
+                    return joined_xl[:1500]
+        if ext == ".hwpx":
+            with zipfile.ZipFile(entry, "r") as zf:
+                sec_chunks: List[str] = []
+                for sec_name in sorted(n for n in zf.namelist() if n.startswith("Contents/section") and n.endswith(".xml"))[:3]:
+                    sec_bytes = zf.read(sec_name)
+                    sec_text = re.sub(r"<[^>]+>", " ", sec_bytes.decode("utf-8", errors="ignore"))
+                    sec_text = re.sub(r"\s+", " ", sec_text).strip()
+                    if sec_text:
+                        sec_chunks.append(sec_text)
+                joined_hwpx = " ".join(sec_chunks).strip()
+                if joined_hwpx:
+                    return joined_hwpx[:1500]
+        if ext == ".pdf":
+            raw_pdf = entry.read_bytes()[:65536]
+            # 텍스트 기반 샘플 PDF이거나 평문 메타가 포함된 경우 즉시 추출
+            if b"startxref" not in raw_pdf[-1024:]:
+                for enc in ("utf-8", "cp949"):
+                    try:
+                        decoded_p = raw_pdf.decode(enc).replace("%PDF-1.4", "").strip()
+                        if decoded_p:
+                            return decoded_p[:1500]
+                    except Exception:
+                        continue
     except Exception:
         pass
     return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다."
