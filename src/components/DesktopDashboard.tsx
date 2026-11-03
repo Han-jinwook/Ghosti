@@ -317,7 +317,15 @@ export const DesktopDashboard: React.FC = () => {
     setDoorplatePickerClusterId,
     hasExecutedUserSearch,
     hasUserSelectedSearchTab,
+    isGuestPreviewMode,
+    guestJoinWallReason,
+    setIsGuestPreviewMode,
+    triggerGuestJoinWall,
+    completeGuestOneSecJoin,
   } = useSaySeeStore();
+
+  const [guestNicknameDraft, setGuestNicknameDraft] = useState('박총무');
+  const [guestEmailDraft, setGuestEmailDraft] = useState('friend@sundreamer.app');
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDeviceIntegrationOpen, setIsDeviceIntegrationOpen] = useState(false);
@@ -695,10 +703,10 @@ export const DesktopDashboard: React.FC = () => {
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">🏕️</span>
-                          <span className="truncate font-bold">동호회 · 동창회</span>
+                          <span className="truncate font-bold">소모임 · 동호회 · 동창회</span>
                         </div>
                         <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          모임 · 행사 · 동창 앨범
+                          9인 이하(300개 0원) · 10인+ 모임
                         </span>
                       </div>
                     </button>
@@ -1054,6 +1062,62 @@ export const DesktopDashboard: React.FC = () => {
                     </button>
                   );
                 })}
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────── 💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) 샌드박스 & 4대 행동 트리거 바 (패밀리/소모임·동호·동창회 공유방 전용) ─────────────── */}
+        {(activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') && (
+          <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-2">
+            <div
+              className={`px-3.5 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 transition-all ${
+                isGuestPreviewMode
+                  ? 'bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50'
+                  : themeMode === 'light'
+                  ? 'bg-slate-50 border-slate-200/90'
+                  : 'bg-zinc-900/70 border-white/10'
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGuestPreviewMode(!isGuestPreviewMode)}
+                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all ${
+                    isGuestPreviewMode
+                      ? 'bg-[#FEE500] text-[#191919] shadow-xs'
+                      : 'bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30'
+                  }`}
+                >
+                  {isGuestPreviewMode
+                    ? '💬 카톡 무가입 1초 프리뷰 모드 ON (13KB 썸네일 구경 중)'
+                    : '💬 카톡 단톡방 무가입 1초 프리뷰 체험하기'}
+                </button>
+                <span className="text-[11.5px] text-zinc-300">
+                  {isGuestPreviewMode
+                    ? '로그인 없이 0.5초 만에 사진 피드·얼굴 문패·0.04초 검색을 구경 중입니다! 아래 4가지 행동 클릭 시 1초 합류 창이 열립니다.'
+                    : '단톡방 초대 링크 터치 시 로그인 창 없이 0.5초 만에 사진 바둑판과 친구 얼굴 아바타를 먼저 보여주는 무가입 프리뷰 퍼널입니다.'}
+                </span>
+              </div>
+
+              {isGuestPreviewMode && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { label: '🎯 내 얼굴 사진 1초 찾기', reason: '🎯 내 얼굴이 나온 사진만 1초 만에 다 찾기' },
+                    { label: '📥 고화질 원본(5MB) 저장', reason: '📥 이 사진 고화질 원본(5MB) 내 폰에 저장하기' },
+                    { label: '❤️ 하트 / 💬 댓글 달기', reason: '❤️ 하트 누르기 / 💬 댓글("야 이거 누구야ㅋㅋ") 달기' },
+                    { label: '📸 내 폰 사진 같이 올리기', reason: '📸 내 폰에 있는 그날 사진도 같이 올리기' },
+                  ].map((trig) => (
+                    <button
+                      key={trig.label}
+                      type="button"
+                      onClick={() => triggerGuestJoinWall(trig.reason)}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 text-[11px] font-bold cursor-pointer"
+                    >
+                      {trig.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1937,6 +2001,89 @@ export const DesktopDashboard: React.FC = () => {
         }}
         themeMode={themeMode}
       />
+
+      {/* 💬 카톡 인앱 무가입 1초 프리뷰 — Step 3: [1초 합류] 명분 있는 별명(실명) + 이메일 입력 모달 (Auth-Wall) */}
+      {guestJoinWallReason && (
+        <div
+          onClick={() => triggerGuestJoinWall('')}
+          className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-zinc-950 border-2 border-amber-400/60 p-6 shadow-[0_0_50px_rgba(251,191,36,0.25)] flex flex-col gap-4"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="px-2.5 py-1 rounded-full bg-[#FEE500] text-[#191919] font-label-sm text-[11.5px] font-black">
+                💬 카톡 단톡방 1초 합류 (평생 0원)
+              </span>
+              <button
+                type="button"
+                onClick={() => useSaySeeStore.setState({ guestJoinWallReason: null })}
+                className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center text-xs font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="text-[12px] font-extrabold text-amber-300">
+                선택하신 기능: [{guestJoinWallReason}]
+              </div>
+              <h3 className="font-headline-sm text-[18px] text-white font-black leading-snug">
+                🔒 외부인 유출 방지 및 고화질 원본 전달을 위해, 이 방에서 쓰실 별명(실명)과 이메일만 입력해 주세요!
+              </h3>
+              <p className="text-[12px] text-emerald-300 font-bold">
+                ✨ 방장님이 초대하신 분은 앱 설치·결제 없이 평생 100% 무료입니다. (각 방에서 입력한 별명·실명 그대로 표시됩니다)
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11.5px] text-zinc-300 font-bold">
+                  이 방에서 쓰실 별명 또는 실명 (예: 박총무, 김사장, 둘째사위)
+                </span>
+                <input
+                  type="text"
+                  value={guestNicknameDraft}
+                  onChange={(e) => setGuestNicknameDraft(e.target.value)}
+                  placeholder="예: 박총무"
+                  className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-[11.5px] text-zinc-300 font-bold">
+                  이메일 주소 (고화질 원본 전달 및 내 얼굴 여권 연결용)
+                </span>
+                <input
+                  type="email"
+                  value={guestEmailDraft}
+                  onChange={(e) => setGuestEmailDraft(e.target.value)}
+                  placeholder="예: friend@naver.com"
+                  className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => completeGuestOneSecJoin(guestNicknameDraft, guestEmailDraft)}
+                className="flex-1 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-black cursor-pointer shadow-md"
+              >
+                🚀 1초 합류하고 고화질 원본·댓글 바로 쓰기 (0원)
+              </button>
+              <button
+                type="button"
+                onClick={() => useSaySeeStore.setState({ guestJoinWallReason: null })}
+                className="px-3.5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer"
+              >
+                더 구경하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

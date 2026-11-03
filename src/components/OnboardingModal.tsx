@@ -1696,7 +1696,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       🥉 <strong className="text-amber-300">3위. 귀신 초능력 팩(Ctrl + 0) 평생 해금 &amp; F1~F10 동기화</strong>: 집 PC·회사 PC·노트북 어디서나 9대 초능력과 <code className="text-white">F1~F10</code> 10개 상용구가 1초 만에 똑같이 동기화됩니다.
                     </li>
                     <li>
-                      👨‍👩‍👧‍👦 <strong className="text-teal-300">모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~)</strong>: 방장 한 분만 구독하면 초대받은 가족·동호회원·팀원은 <strong className="text-white">전원 0원(무료)</strong>입니다.
+                      👨‍👩‍👧‍👦 <strong className="text-teal-300">9인 이하 소모임(300개까지 0원 / 초과 시 월 2,900원) · 10인+ 모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~)</strong>: 방장 한 분만 구독하면 초대받은 가족·모임원·팀원은 <strong className="text-white">전원 0원(무료)</strong>입니다.
                     </li>
                   </ul>
                 </div>

@@ -347,6 +347,13 @@ interface SaySeeStore {
   sendPcMasterUrlToEmail: () => Promise<void>;
   sharePcMasterUrlToKakao: () => Promise<void>;
 
+  // [💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) & 4대 행동 트리거 Auth-Wall]
+  isGuestPreviewMode: boolean;
+  guestJoinWallReason: string | null;
+  setIsGuestPreviewMode: (enabled: boolean) => void;
+  triggerGuestJoinWall: (reason: string) => void;
+  completeGuestOneSecJoin: (nickname: string, email: string) => void;
+
   // [🛠️ 설정몬스터 (AI 스마트폰 & PC 통합 설정 해결사)]
   showSetupMonsterModal: boolean;
   setupMonsterPlatform: SetupMonsterPlatform;
@@ -2283,7 +2290,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }
     }
 
-    // [1단계: 방별 별명(Room Persona) ➔ 귀신같이 여권(Ghosti Face Passport) 자동 번역 (업무 공유 제외)]
+    // [1단계: 각 방에서 입력한 실명·별명(Room Persona) 그대로 매칭 (호칭 자동 번역 배제 · 업무 공유 제외)]
     let resolvedQuery = query;
     if (!isWorkLounge) {
       for (const fc of faceClusters) {
@@ -3148,6 +3155,41 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   setShowMobileMasterPcIntroModal: (showMobileMasterPcIntroModal) =>
     set({ showMobileMasterPcIntroModal }),
+
+  // [💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) 초기 상태 및 액션]
+  isGuestPreviewMode:
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location.search).has('invite') ||
+      new URLSearchParams(window.location.search).get('preview') === 'guest'),
+  guestJoinWallReason: null,
+
+  setIsGuestPreviewMode: (isGuestPreviewMode) =>
+    set({
+      isGuestPreviewMode,
+      guestJoinWallReason: null,
+      lastQuarantineToast: isGuestPreviewMode
+        ? '👀 [카톡 인앱 무가입 1초 프리뷰 모드 ON] 로그인 창 없이 13KB 초경량 썸네일 피드 · 얼굴 아바타 · 0.04초 검색을 먼저 체험합니다! (원본 저장·댓글·사진 업로드·내 얼굴 찾기 클릭 시 1초 합류 창 점등)'
+        : '✅ [정식 멤버 모드 전환] 모든 고화질 원본 다운로드 · 댓글 · 사진 업로드 권한이 활성화되었습니다.',
+    }),
+
+  triggerGuestJoinWall: (reason) =>
+    set({
+      guestJoinWallReason: reason,
+    }),
+
+  completeGuestOneSecJoin: (nickname, email) => {
+    const cleanNick = nickname.trim() || '새멤버';
+    const cleanEmail = email.trim() || 'member@sundreamer.app';
+    set((state) => ({
+      isGuestPreviewMode: false,
+      guestJoinWallReason: null,
+      merlinAuth: {
+        ...state.merlinAuth,
+        email: cleanEmail,
+      },
+      lastQuarantineToast: `🎉 [${cleanNick}님(${cleanEmail}) 1초 합류 완료!] 방장님의 초대로 평생 0원(무료) 정식 멤버가 되셨습니다. 이제 고화질 원본 저장·댓글·사진 올리기·내 얼굴 1초 찾기를 자유롭게 이용하세요!`,
+    }));
+  },
 
   // ─────────────── [🛠️ 설정몬스터 (AI 스마트폰 & PC 통합 설정 해결사) 스토어 상태 및 액션] ───────────────
   showSetupMonsterModal: false,
@@ -4293,26 +4335,28 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   activatePricingPlan: (planId: PricingPlanId) => {
     set((state) => {
       const labelMap: Record<PricingPlanId, string> = {
-        free_trial: '✨ 개인 (기본) : 언제나 0원 ("혼자 쓰는 개인 공간은 기간 제한 없이 언제나 0원입니다.")',
-        personal_single_2900: '🆓 개인 (기본) : 언제나 0원 • ✋ 귀신같이 손보기',
-        personal_sub_3900: '개인 라운지 • 1초 AI 내용검색 (월 1,900원 • 손보기 포함)',
-        personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 • 선착순 100명 10년 마스터권)',
-        family_home_5900: '🏠 패밀리 라운지 • 우리집 단독 (월 5,900원 • 방 1개)',
-        family_home_year_59000: '🏠 패밀리 라운지 • 우리집 단독 연간권 (연 59,000원 • 방 1개)',
-        family_three_8900: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합권 (월 8,900원 • 우리집+본가+처가 3방 분리)',
-        family_three_year_89000: '👨‍👩‍👧‍👦 패밀리 라운지 • 양가 통합 연간권 (연 89,000원 • 3방 분리)',
-        club_small_4900: '⛳ 동호회 · 동창회 • 소형 동호·동창회 20명 기준 (월 4,900원 • 방 1개)',
-        club_small_year_49000: '⛳ 동호회 · 동창회 • 소형 동호·동창회 연간권 (연 49,000원 • 방 1개)',
-        club_medium_7900: '⛳ 동호회 · 동창회 • 중형 동호·동창회 100명 기준 (월 7,900원 • 방 1개)',
-        club_medium_year_79000: '⛳ 동호회 · 동창회 • 중형 동호·동창회 연간권 (연 79,000원 • 방 1개)',
-        club_large_14900: '⛳ 동호회 · 동창회 • 대형 동호·동창회 인원 제한 없음 (월 14,900원 • 방 1개)',
-        club_large_year_149000: '⛳ 동호회 · 동창회 • 대형 동호·동창회 연간권 (연 149,000원 • 방 1개)',
-        student_sub_900: '🎒 동호회 · 동창회 (초·중·고 반/동아리 특가 월 900원)',
-        student_year_9000: '🎒 동호회 · 동창회 (초·중·고 반/동아리 특가 연 9,000원)',
-        work_soho_9900: '💼 업무 라운지 • 소호·팀 10인 기준 (월 9,900원 • S: 드라이브 마운트)',
-        work_soho_year_99000: '💼 업무 라운지 • 소호·팀 연간권 (연 99,000원 • S: 드라이브 마운트)',
-        work_biz_19900: '💼 업무 라운지 • 비즈니스 무제한 (월 19,900원 • 전 직원 S: 드라이브)',
-        work_biz_year_199000: '💼 업무 라운지 • 비즈니스 연간권 (연 199,000원 • 전 직원 S: 드라이브)',
+        free_trial: '✨ 내 기기 1대 (기본) : 언제나 0원 ("혼자 쓰는 내 기기 1대는 기간 제한 없이 언제나 0원입니다.")',
+        personal_single_2900: '🆓 내 기기 1대 (기본) : 언제나 0원 • ✋ 귀신같이 손보기',
+        personal_sub_3900: '👑 내 기기 통합 • 폰+집PC+회사PC 대수 무제한 (월 3,900원)',
+        personal_year_35000: '👑 내 기기 통합 • 폰+집PC+회사PC 무제한 (39,000원 • 1차 선착순 100명 5년 특판)',
+        family_home_5900: '🏠 패밀리 공유 • 우리집 단독 (월 5,900원 • 방 1개)',
+        family_home_year_59000: '🏠 패밀리 공유 • 우리집 단독 (59,000원 • 1차 선착순 100명 5년 특판)',
+        family_three_8900: '👨‍👩‍👧‍👦 패밀리 공유 • 양가 통합권 (월 8,900원 • 우리집+본가+처가 3방 분리)',
+        family_three_year_89000: '👨‍👩‍👧‍👦 패밀리 공유 • 양가 통합권 (89,000원 • 1차 선착순 100명 5년 특판)',
+        club_mini_free_300: '🥂 9인 이하 일상 소모임 (친구·계모임·취미) • 누적 300개 이하 평생 0원(무료)',
+        club_mini_2900: '🥂 9인 이하 일상 소모임 • 누적 300개 초과 시 방장만 월 2,900원 (월 구독 전용)',
+        club_small_4900: '⛳·🎓 10인 이상 동호회 · 동창회 • 인원 무제한 단일가 (월 4,900원 • 방 1개)',
+        club_small_year_49000: '⛳·🎓 10인 이상 동호회 · 동창회 • 1차 선착순 100명 5년 특판 (49,000원 • 방 1개)',
+        club_medium_7900: '⛳·🎓 10인 이상 동호회 · 동창회 • 인원 무제한 단일가 (월 4,900원 • 방 1개)',
+        club_medium_year_79000: '⛳·🎓 10인 이상 동호회 · 동창회 • 1차 선착순 100명 5년 특판 (49,000원 • 방 1개)',
+        club_large_14900: '⛳·🎓 10인 이상 동호회 · 동창회 • 인원 무제한 단일가 (월 4,900원 • 방 1개)',
+        club_large_year_149000: '⛳·🎓 10인 이상 동호회 · 동창회 • 1차 선착순 100명 5년 특판 (49,000원 • 방 1개)',
+        student_sub_900: '📸 사진 공유 (소모임·동호회·동창회 통합)',
+        student_year_9000: '📸 사진 공유 (소모임·동호회·동창회 통합)',
+        work_soho_9900: '💼 업무 공유 • 소호(SOHO) ~5인 (월 9,900원 • S: 드라이브 마운트)',
+        work_soho_year_99000: '💼 업무 공유 • 소호(SOHO) ~5인 (99,000원 • 1차 5년 특판 • S: 드라이브 마운트)',
+        work_biz_19900: '💼 업무 공유 • 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
+        work_biz_year_199000: '💼 업무 공유 • 소기업 ~20인 (190,000원) / 중소기업 ~50인 (290,000원 • 1차 5년 특판)',
       };
 
       const nextLoungeType: LoungeType = planId.startsWith('personal_')

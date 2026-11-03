@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-03T13:57:43.233679",
+  "updated_at": "2026-11-03T14:38:22.368635",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -506,6 +506,30 @@
       "last_edited_time": "2026-11-03T00:50:00.000Z",
       "url": "https://app.notion.com/p/Ctrl-0-v3-2-9-QA-1-40af9ffd2c1d8139a813d33093f718e7",
       "archived_at": "2026-11-03T13:57:43.233073"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-8076-961f-d4fb7f253917",
+      "title": "🎯 [센스톡] 카톡 단체 전송 완료 대기 버튼 클릭시 오류",
+      "app": "",
+      "last_edited_time": "2026-11-03T04:42:00.000Z",
+      "url": "https://app.notion.com/p/40cf9ffd2c1d8076961fd4fb7f253917",
+      "archived_at": "2026-11-03T14:38:22.368422"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-809f-bf79-d7777fd61d6b",
+      "title": "🎯 [센스톡] 로그인 후 처음 화면에서 기존 불러온 명단과 템플릿 대신 샘플만 보이는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-03T04:40:00.000Z",
+      "url": "https://app.notion.com/p/40df9ffd2c1d809fbf79d7777fd61d6b",
+      "archived_at": "2026-11-03T14:38:22.368438"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-80be-9c87-e5e5e859a64e",
+      "title": "🎯[센스톡] 로그인 인증코드 전송이 안되는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-03T01:42:00.000Z",
+      "url": "https://app.notion.com/p/40df9ffd2c1d80be9c87e5e5e859a64e",
+      "archived_at": "2026-11-03T14:38:22.368445"
     }
   ]
 }

@@ -1128,7 +1128,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       <p className="text-xs text-zinc-200 leading-relaxed">
                         • <b>폰 ↔ 집PC ↔ 회사PC</b> 이메일 하나로 무제한 직결 통합 (클라우드 월세 0원)<br />
                         • <b>양방향 암호화 클립보드 우체통</b> &amp; <b>Ctrl+0 귀신 초능력 9+3 + F1~F10 상용구</b> 전 기기 동기화<br />
-                        • 모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~) 방장 1인 구독 시 <b>초대 멤버 전원 0원</b>
+                        • <b>9인 이하 소모임(300개 0원 / 초과 시 월 2,900원)</b> · 10인+ 모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~) 방장 1인 구독 시 <b>초대 멤버 전원 0원</b>
                       </p>
                     </div>
                   </div>

@@ -173,6 +173,8 @@ export const PhotoDetailModal: React.FC = () => {
     toggleBookmark,
     openLocalFolder,
     pickBestInBurstPhotos,
+    isGuestPreviewMode,
+    triggerGuestJoinWall,
   } = useSaySeeStore();
 
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
@@ -364,13 +366,18 @@ export const PhotoDetailModal: React.FC = () => {
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <a
-                href={selectedPhoto.fullUrl}
-                download={selectedPhoto.name}
-                onClick={() =>
+                href={isGuestPreviewMode ? '#guest-join-wall' : selectedPhoto.fullUrl}
+                download={isGuestPreviewMode ? undefined : selectedPhoto.name}
+                onClick={(e) => {
+                  if (isGuestPreviewMode) {
+                    e.preventDefault();
+                    triggerGuestJoinWall('📥 이 사진 고화질 원본(5MB) 내 폰에 저장하기');
+                    return;
+                  }
                   setActionNotice(
                     `⬇️ '${selectedPhoto.name}' 원본 화질(무압축 ${(selectedPhoto.size / 1024 / 1024).toFixed(2)}MB) 다운로드가 시작되었습니다!`
-                  )
-                }
+                  );
+                }}
                 className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 title="카톡처럼 화질이 깨지지 않는 100% 무압축 원본 화질 사진을 내 기기에 그대로 저장합니다"
               >
@@ -422,7 +429,13 @@ export const PhotoDetailModal: React.FC = () => {
                 <span>💻 모니터로 크게 보기</span>
               </button>
               <button
-                onClick={() => toggleBookmark(selectedPhoto.id)}
+                onClick={() => {
+                  if (isGuestPreviewMode) {
+                    triggerGuestJoinWall('❤️ 하트 누르기 / 💬 댓글 달기');
+                    return;
+                  }
+                  toggleBookmark(selectedPhoto.id);
+                }}
                 className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1 transition-all cursor-pointer ${
                   selectedPhoto.bookmarked
                     ? 'bg-red-600 text-white font-extrabold shadow-xs'

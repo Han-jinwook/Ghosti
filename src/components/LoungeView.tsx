@@ -36,9 +36,9 @@ const LOUNGE_TABS: Array<{
   {
     id: 'club',
     icon: '⛳',
-    label: '동호회 · 동창회',
-    shortPrice: '인원수 무제한 월 4,900원 (10년 마스터권 49,000원) 단일가',
-    desc: '모임·동창 단체컷 얼굴 추출 & 참석자 폰 사진 레이더 수합 맛보기 (방 1개 기준)',
+    label: '소모임 · 동호회 · 동창회',
+    shortPrice: '🥂 9인 이하 소모임(300개 0원 / 초과 시 월 2,900원) · ⛳ 10인 이상 모임(월 4,900원)',
+    desc: '9인 이하 일상 소모임 300개 무료 마중물 & 10인 이상 동호회·동창회 무제한 공유 (카톡 무가입 1초 프리뷰 지원)',
   },
   {
     id: 'work',
@@ -50,26 +50,28 @@ const LOUNGE_TABS: Array<{
 ];
 
 const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
-  free_trial: '✨ 개인 (기본) : 언제나 0원',
-  personal_single_2900: '🩺 귀신같이 손보기 (개인 기본 : 언제나 0원)',
-  personal_sub_3900: '💻 업무 입문 • 1인 멀티PC (월 1,900원)',
-  personal_year_35000: '💻 업무 입문 • 1인 멀티PC (19,000원 · 10년 마스터권)',
+  free_trial: '✨ 내 기기 1대 (기본) : 언제나 0원',
+  personal_single_2900: '🩺 귀신같이 손보기 (내 기기 기본 : 언제나 0원)',
+  personal_sub_3900: '👑 내 기기 통합 • 폰+집PC+회사PC 무제한 (월 3,900원)',
+  personal_year_35000: '👑 내 기기 통합 • 폰+집PC+회사PC 무제한 (39,000원 · 1차 5년 특판)',
   family_home_5900: '🏠 패밀리 우리집 단독 (월 5,900원)',
-  family_home_year_59000: '🏠 패밀리 우리집 단독 (59,000원 · 10년 마스터권)',
+  family_home_year_59000: '🏠 패밀리 우리집 단독 (59,000원 · 1차 5년 특판)',
   family_three_8900: '👨‍👩‍👧‍👦 패밀리 양가 통합 3방 (월 8,900원)',
-  family_three_year_89000: '👨‍👩‍👧‍👦 패밀리 양가 통합 3방 (89,000원 · 10년 마스터권)',
-  club_small_4900: '⛳ 동호회 · 동창회 단일가 (월 4,900원)',
-  club_small_year_49000: '⛳ 동호회 · 동창회 단일가 (49,000원 · 10년 마스터권)',
-  club_medium_7900: '⛳ 동호회 · 동창회 단일가 (월 4,900원)',
-  club_medium_year_79000: '⛳ 동호회 · 동창회 단일가 (49,000원 · 10년 마스터권)',
-  club_large_14900: '⛳ 동호회 · 동창회 단일가 (월 4,900원)',
-  club_large_year_149000: '⛳ 동호회 · 동창회 단일가 (49,000원 · 10년 마스터권)',
-  student_sub_900: '📸 사진 공유 (동호회·동창회 통합)',
-  student_year_9000: '📸 사진 공유 (동호회·동창회 통합)',
+  family_three_year_89000: '👨‍👩‍👧‍👦 패밀리 양가 통합 3방 (89,000원 · 1차 5년 특판)',
+  club_mini_free_300: '🥂 9인 이하 일상 소모임 (누적 300개 이하 평생 0원)',
+  club_mini_2900: '🥂 9인 이하 일상 소모임 (300개 초과 시 방장만 월 2,900원)',
+  club_small_4900: '⛳·🎓 10인 이상 동호회 · 동창회 단일가 (월 4,900원)',
+  club_small_year_49000: '⛳·🎓 10인 이상 동호회 · 동창회 단일가 (49,000원 · 1차 5년 특판)',
+  club_medium_7900: '⛳·🎓 10인 이상 동호회 · 동창회 단일가 (월 4,900원)',
+  club_medium_year_79000: '⛳·🎓 10인 이상 동호회 · 동창회 단일가 (49,000원 · 1차 5년 특판)',
+  club_large_14900: '⛳·🎓 10인 이상 동호회 · 동창회 단일가 (월 4,900원)',
+  club_large_year_149000: '⛳·🎓 10인 이상 동호회 · 동창회 단일가 (49,000원 · 1차 5년 특판)',
+  student_sub_900: '📸 사진 공유 (소모임·동호회·동창회 통합)',
+  student_year_9000: '📸 사진 공유 (소모임·동호회·동창회 통합)',
   work_soho_9900: '💼 업무 공유 SOHO ~5인 (월 9,900원)',
-  work_soho_year_99000: '💼 업무 공유 SOHO ~5인 (99,000원 · 10년 마스터권)',
+  work_soho_year_99000: '💼 업무 공유 SOHO ~5인 (99,000원 · 1차 5년 특판)',
   work_biz_19900: '💼 업무 공유 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
-  work_biz_year_199000: '💼 업무 공유 기업 (190,000원 / 290,000원 · 10년 마스터권)',
+  work_biz_year_199000: '💼 업무 공유 기업 (190,000원 / 290,000원 · 1차 5년 특판)',
 };
 
 export const LoungeModeSwitcherBar: React.FC = () => null;
@@ -96,6 +98,8 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
     approveAllAnalogYearProposals,
     isStoreAppMode,
     setShowProModal,
+    isGuestPreviewMode,
+    triggerGuestJoinWall,
   } = useSaySeeStore();
 
   const [inviteCopied, setInviteCopied] = useState(false);
@@ -201,6 +205,10 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
           <button
             type="button"
             onClick={() => {
+              if (isGuestPreviewMode) {
+                triggerGuestJoinWall('🎯 내 얼굴이 나온 사진만 1초 만에 다 찾기');
+                return;
+              }
               void findMySchoolDaysPhotosFast();
               if (onNavigateToFeed) onNavigateToFeed();
             }}
@@ -460,7 +468,7 @@ export const LoungeView: React.FC = () => {
               </span>
             </p>
             <span className="text-[12px] text-amber-300 font-extrabold">
-              🎁 선착순 100명, 10년 방장 마스터권 (월 구독료 10개월 치로 10년 보장)
+              🥂 9인 이하 소모임 300개까지 0원(초과 시 월 2,900원) · 🔥 1차 선착순 100명 5년 특판(10개월 치로 5년 보장)
             </span>
           </div>
           <button
@@ -468,7 +476,7 @@ export const LoungeView: React.FC = () => {
             onClick={() => setShowProModal(true)}
             className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer whitespace-nowrap"
           >
-            🔥 선착순 100명, 10년 방장 마스터권 보기 →
+            🔥 요금제 &amp; 1차 5년 특판 보기 →
           </button>
         </section>
       )}
@@ -1007,11 +1015,11 @@ export const LoungeView: React.FC = () => {
                               월 5,900원
                             </span>
                             <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                              (10년 마스터권 59,000원)
+                              (1차 5년 특판 59,000원)
                             </span>
                           </div>
                           <p className="font-body-sm text-[12px] text-zinc-400">
-                            부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 1초 실명 검색
+                            부부·자녀가 찍은 모든 사진·영상을 방장 PC로 안전하게 모으고 가족 전원 스마트폰에서 1초 실명·별명 검색
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -1027,7 +1035,7 @@ export const LoungeView: React.FC = () => {
                             onClick={() => activatePricingPlan('family_home_year_59000')}
                             className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
                           >
-                            10년권 59,000원
+                            🔥 5년 특판 59,000원
                           </button>
                         </div>
                       </div>
@@ -1042,11 +1050,11 @@ export const LoungeView: React.FC = () => {
                               월 8,900원
                             </span>
                             <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                              (10년 마스터권 89,000원)
+                              (1차 5년 특판 89,000원)
                             </span>
                           </div>
                           <p className="font-body-sm text-[12px] text-zinc-300">
-                            사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 손주·가족 사진을 원하는 방에만 자동 배포합니다.
+                            사생활 혼선 없이 [우리집] · [본가(친가)] · [처가(친정)] 3개 방을 완벽히 분리 제공하며 각 방에서 입력한 실명·별명 그대로 손주·가족 사진을 자동 배포합니다.
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -1062,7 +1070,7 @@ export const LoungeView: React.FC = () => {
                             onClick={() => activatePricingPlan('family_three_year_89000')}
                             className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
                           >
-                            10년권 89,000원
+                            🔥 5년 특판 89,000원
                           </button>
                         </div>
                       </div>
@@ -1071,7 +1079,7 @@ export const LoungeView: React.FC = () => {
                     {/* 가족 라운지 연 구독(마스터권) 특전: 모임 라운지 3개월 무료 구독권 1장 */}
                     <div className="p-3.5 rounded-xl bg-primary-container/10 border border-primary-container/35 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[12px] text-emerald-200 font-medium">
-                        🎁 <strong>[가족방 연 구독 특전]</strong> 패밀리 연 구독(10년 마스터권 59,000원 / 89,000원) 결제 시 <strong>[모임(동호회·동창회) 라운지 3개월 무료 구독권 1장]</strong>을 증정합니다!
+                        🎁 <strong>[가족방 5년 특판 특전]</strong> 패밀리 1차 5년 특판(59,000원 / 89,000원) 결제 시 <strong>[모임(동호회·동창회) 라운지 3개월 무료 구독권 1장]</strong>을 증정합니다!
                       </span>
                       <button
                         type="button"
@@ -1296,7 +1304,7 @@ export const LoungeView: React.FC = () => {
                       {showLoungePricing ? '▾' : '▸'}
                     </span>
                     <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                      💳 동호회 · 동창회 인원 무제한 단일가 요금제 (월 4,900원 / 10년권 49,000원)
+                      💳 🥂 9인 이하 일상 소모임(300개 0원 / 초과 시 월 2,900원) &amp; ⛳ 10인 이상 동호·동창회(월 4,900원)
                     </span>
                   </div>
                   <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all">
@@ -1306,94 +1314,135 @@ export const LoungeView: React.FC = () => {
 
                 {showLoungePricing && (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* 동호회·소모임 단일가 */}
-                      <div className="p-5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* ① 🥂 9인 이하 일상 소모임 (300개 무료 / 초과 시 월 2,900원 · 월 구독 전용) */}
+                      <div className="p-5 rounded-xl bg-gradient-to-br from-emerald-950/60 via-zinc-950 to-zinc-950 border border-emerald-400/50 flex flex-col justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-label-sm text-[12px] text-primary-container font-extrabold">
-                              ⛳ 동호회 · 소모임 (모임 이름 문패)
+                            <span className="font-label-sm text-[12px] text-emerald-300 font-extrabold">
+                              🥂 9인 이하 일상 소모임 (친구·계모임·취미)
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10.5px] font-bold">
-                              인원수 무제한 · 회원 전원 무료
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[10px] font-bold">
+                              방장 포함 9인 이하
                             </span>
                           </div>
-                          <div className="flex items-baseline gap-2 mt-0.5">
-                            <span className="font-headline-md text-[24px] text-white font-black">
-                              월 4,900원
+                          <div className="flex flex-wrap items-baseline gap-1.5 mt-0.5">
+                            <span className="font-headline-md text-[22px] text-white font-black">
+                              300개까지 0원
                             </span>
-                            <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                              (10년 마스터권 49,000원)
+                            <span className="font-label-mono text-[12px] text-emerald-300 font-extrabold">
+                              (300개 초과 시 방장만 월 2,900원)
                             </span>
                           </div>
                           <p className="font-body-sm text-[12px] text-zinc-300">
-                            골프·산악회·독서·조기축구 등 모임 인원이 10명이든 500명이든 추가 요금 없이 월 4,900원 단일가!
+                            단톡방 친구들(최대 9명)끼리 방 개설 즉시 누적 300개까지 평생 0원! 300개 초과 시 그때부터 방장만 월 2,900원 (월 구독 전용 · 카톡 무가입 1초 프리뷰 지원)
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={() => activatePricingPlan('club_small_4900')}
-                            className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                            onClick={() => activatePricingPlan('club_mini_free_300')}
+                            className="py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
                           >
-                            월 4,900원 개설
+                            🥂 300개 0원 개설
                           </button>
                           <button
                             type="button"
-                            onClick={() => activatePricingPlan('club_small_year_49000')}
-                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                            onClick={() => activatePricingPlan('club_mini_2900')}
+                            className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-emerald-400/40 text-emerald-200 font-label-md text-[12px] font-extrabold cursor-pointer"
                           >
-                            10년권 49,000원
+                            초과 시 월 2,900원
                           </button>
                         </div>
                       </div>
 
-                      {/* 동창회·반창회 단일가 */}
-                      <div className="p-5 rounded-xl bg-zinc-900 border border-amber-400/50 flex flex-col justify-between gap-4">
+                      {/* ② ⛳ 10인 이상 동호회 단일가 */}
+                      <div className="p-5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-label-sm text-[12px] text-amber-300 font-extrabold">
-                              🎓 동창회 · 반창회 (학교/학년/반 문패)
+                            <span className="font-label-sm text-[12px] text-primary-container font-extrabold">
+                              ⛳ 10인 이상 동호회 (모임 이름 문패)
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10.5px] font-bold">
-                              인원수 무제한 · 동창 전원 무료
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10px] font-bold">
+                              10인~무제한 · 회원 무료
                             </span>
                           </div>
-                          <div className="flex items-baseline gap-2 mt-0.5">
-                            <span className="font-headline-md text-[24px] text-white font-black">
+                          <div className="flex flex-wrap items-baseline gap-1.5 mt-0.5">
+                            <span className="font-headline-md text-[22px] text-white font-black">
                               월 4,900원
                             </span>
-                            <span className="font-label-mono text-[13px] text-amber-300 font-bold">
-                              (10년 마스터권 49,000원)
+                            <span className="font-label-mono text-[12px] text-amber-300 font-bold">
+                              (1차 5년 특판 49,000원)
                             </span>
                           </div>
                           <p className="font-body-sm text-[12px] text-zinc-300">
-                            졸업앨범 아날로그 스캔 사진 복원 + 학창시절 내 얼굴 1초 찾기 &amp; 총무 명예의 전당 헌정 배지!
+                            골프·산악회·독서·조기축구 등 10명 이상~500명 모임도 추가 요금 없이 월 4,900원 단일가!
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => activatePricingPlan('club_small_4900')}
-                            className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12.5px] font-bold cursor-pointer"
+                            className="py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
                           >
                             월 4,900원 개설
                           </button>
                           <button
                             type="button"
                             onClick={() => activatePricingPlan('club_small_year_49000')}
-                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
                           >
-                            10년권 49,000원
+                            🔥 5년 특판 49,000원
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ③ 🎓 10인 이상 동창회·반창회 단일가 */}
+                      <div className="p-5 rounded-xl bg-zinc-900 border border-amber-400/50 flex flex-col justify-between gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-label-sm text-[12px] text-amber-300 font-extrabold">
+                              🎓 10인 이상 동창회 (학교/학년/반 문패)
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10px] font-bold">
+                              10인~무제한 · 동창 무료
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-baseline gap-1.5 mt-0.5">
+                            <span className="font-headline-md text-[22px] text-white font-black">
+                              월 4,900원
+                            </span>
+                            <span className="font-label-mono text-[12px] text-amber-300 font-bold">
+                              (1차 5년 특판 49,000원)
+                            </span>
+                          </div>
+                          <p className="font-body-sm text-[12px] text-zinc-300">
+                            졸업앨범 아날로그 스캔 사진 복원 + 학창시절 내 얼굴 1초 찾기 &amp; 총무 명예의 전당 배지!
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('club_small_4900')}
+                            className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-md text-[12px] font-bold cursor-pointer"
+                          >
+                            월 4,900원 개설
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => activatePricingPlan('club_small_year_49000')}
+                            className="py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
+                          >
+                            🔥 5년 특판 49,000원
                           </button>
                         </div>
                       </div>
                     </div>
 
-                    {/* 모임 라운지 연 구독(마스터권) 특전: 가족 라운지 1개월 무료 구독권 3장 */}
+                    {/* 모임 라운지 5년 특판 특전: 가족 라운지 1개월 무료 구독권 3장 */}
                     <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/35 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[12px] text-amber-200 font-medium">
-                        🎁 <strong>[모임방 연 구독 특전]</strong> 동호회·동창회 연 구독(10년 마스터권 49,000원) 결제 시 총무님께 <strong>[가족 라운지 1개월 무료 구독권 3장]</strong>을 즉시 증정합니다!
+                        🎁 <strong>[모임방 5년 특판 특전]</strong> 10인 이상 동호회·동창회 1차 5년 특판(49,000원) 결제 시 총무님께 <strong>[가족 라운지 1개월 무료 구독권 3장]</strong>을 즉시 증정합니다!
                       </span>
                       <button
                         type="button"
@@ -4326,18 +4375,26 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[
             {
+              id: 'mini_9' as ClubSizeTier,
+              label: '🥂 9인 이하 일상 소모임 (친구·계모임·취미 · 방장 포함 9인 이하)',
+              price: isStoreAppMode
+                ? '9인 이하 일상 소모임 방'
+                : '누적 300개까지 0원 (300개 초과 시 방장만 월 2,900원 · 월 구독 전용)',
+              plan: 'club_mini_free_300' as PricingPlanId,
+            },
+            {
               id: 'small' as ClubSizeTier,
-              label: '⛳ 동호회 · 소모임 (모임 이름 문패 · 인원수 무제한)',
-              price: isStoreAppMode ? '인원수 무제한 모임 방' : '월 4,900원 (10년 마스터권 49,000원) 단일가',
+              label: '⛳ 10인 이상 동호회 (모임 이름 문패 · 10인~무제한)',
+              price: isStoreAppMode ? '인원수 무제한 동호회 방' : '월 4,900원 (1차 5년 특판 49,000원) 단일가',
               plan: 'club_small_4900' as PricingPlanId,
             },
             {
               id: 'large' as ClubSizeTier,
-              label: '🎓 동창회 · 반창회 (학교/학년/반 문패 · 인원수 무제한)',
-              price: isStoreAppMode ? '인원수 무제한 동창회 방' : '월 4,900원 (10년 마스터권 49,000원) 단일가',
+              label: '🎓 10인 이상 동창회 · 반창회 (학교/학년/반 문패 · 10인~무제한)',
+              price: isStoreAppMode ? '인원수 무제한 동창회 방' : '월 4,900원 (1차 5년 특판 49,000원) 단일가',
               plan: 'club_small_year_49000' as PricingPlanId,
             },
           ].map((t) => (

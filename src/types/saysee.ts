@@ -267,8 +267,8 @@ export type LoungeType = 'personal' | 'family' | 'club' | 'student' | 'work';
 /** [패밀리 라운지 양가 통합권] 3개 방 분리 ID */
 export type FamilyRoomId = '우리집' | '본가(친가)' | '처가(친정)';
 
-/** [동호회 · 동창회 규모] 소형(20명 기준) | 중형(100명 기준) | 대형(인원 제한 없음) */
-export type ClubSizeTier = 'small' | 'medium' | 'large';
+/** [모임 · 동호회 · 동창회 규모] 9인 이하 소모임(300개 무료/초과 시 월 2,900원) | 10인 이상 동호회·동창회(월 4,900원 단일가) */
+export type ClubSizeTier = 'mini_9' | 'small' | 'medium' | 'large';
 
 /** [4050 동창회 투트랙 탭] 기본값 = 'memories_1989' (🎞️ 응답하라 1989 (추억)) | 'recent_now' (🍻 최근 우리들 (근황)) */
 export type ClubFeedTrackId = 'memories_1989' | 'recent_now';
@@ -333,6 +333,8 @@ export type PricingPlanId =
   | 'family_home_year_59000'
   | 'family_three_8900'
   | 'family_three_year_89000'
+  | 'club_mini_free_300'
+  | 'club_mini_2900'
   | 'club_small_4900'
   | 'club_small_year_49000'
   | 'club_medium_7900'
