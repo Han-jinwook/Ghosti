@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Merlin Hub SDK v2.17.0
+ * Merlin Hub SDK v2.21.0
  * ─────────────────────────────────────────────
  * [CLIENT ONLY] 리액트 전용 엔트리
  * 이 파일은 클라이언트 컴포넌트에서만 임포트해야 합니다.
@@ -32,6 +32,7 @@ export {
   MerlinHubClient
 } from './CoreLogic';
 export type { GiftItem, GiftContact } from './CoreLogic';
+export type { HubPayMethodType } from './Wallet/wallet';
 
 // 3. Custom UI Components (표준 UI 부품)
 export { HubProfileWidget, HubAvatar } from './Session/HubProfileWidget';
@@ -40,7 +41,7 @@ export { HubAuthModal } from './Auth/HubAuthModal';
 export { HubRegisterNudge } from './UI/HubRegisterNudge';
 export { HubPaymentTrigger } from './Wallet/HubPaymentTrigger';
 export { HubPurchaseWidget } from './Wallet/HubPurchaseWidget';
-export { HubGiftBoxModal, AGGRO_GIFT_PRODUCTS } from './Wallet/HubGiftBoxModal';
+export { HubGiftBoxModal, AGGRO_GIFT_PRODUCTS, SENSETALK_GIFT_PRODUCTS } from './Wallet/HubGiftBoxModal';
 export type { GiftProductItem } from './Wallet/HubGiftBoxModal';
 export { HubNotifier, showToast } from './CoreLogic/HubNotifier';
 export { HubReferralWidget } from './Referral/HubReferralWidget';

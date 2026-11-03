@@ -1581,33 +1581,41 @@ export const VideoScenePreviewModal: React.FC = () => {
           </button>
         </div>
 
-        {/* 동영상 플레이어 (인메모리 Blob Byte-Range 지원으로 중반부/후반부 어느 초(Sec)든 0.01초 즉시 점프 재생) */}
+        {/* 동영상 플레이어 (미연결 샘플 모드에서는 시꺼먼 화면 없이 해당 초(Sec)의 선명한 컬러 장면 스틸컷 즉시 표시) */}
         <div className="relative rounded-2xl overflow-hidden bg-black border border-primary-container/40 aspect-video flex items-center justify-center">
-          <video
-            ref={videoRef}
-            src={resolvedVideoSrc || selectedVideoModal.videoUrl}
-            poster={selectedVideoModal.thumbUrl}
-            controls
-            playsInline
-            onLoadedMetadata={(e) => applyPendingSeek(e.currentTarget)}
-            onCanPlay={(e) => {
-              if (pendingSeekSecRef.current !== null) {
-                const target = pendingSeekSecRef.current;
-                pendingSeekSecRef.current = null;
-                try {
-                  if (Math.abs(e.currentTarget.currentTime - target) > 0.4) {
-                    e.currentTarget.currentTime = target;
+          {resolvedVideoSrc.startsWith('blob:') ? (
+            <video
+              ref={videoRef}
+              src={resolvedVideoSrc}
+              poster={selectedVideoModal.thumbUrl}
+              controls
+              playsInline
+              onLoadedMetadata={(e) => applyPendingSeek(e.currentTarget)}
+              onCanPlay={(e) => {
+                if (pendingSeekSecRef.current !== null) {
+                  const target = pendingSeekSecRef.current;
+                  pendingSeekSecRef.current = null;
+                  try {
+                    if (Math.abs(e.currentTarget.currentTime - target) > 0.4) {
+                      e.currentTarget.currentTime = target;
+                    }
+                    void e.currentTarget.play().catch(() => {});
+                  } catch {
+                    // ignore
                   }
-                  void e.currentTarget.play().catch(() => {});
-                } catch {
-                  // ignore
                 }
-              }
-            }}
-            className="w-full h-full object-contain"
-          />
+              }}
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <img
+              src={selectedVideoModal.thumbUrl}
+              alt={selectedVideoModal.title}
+              className="w-full h-full object-contain"
+            />
+          )}
           <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">
-            {selectedVideoModal.matchedTimestamp} 즉시 점프 재생 중
+            {selectedVideoModal.matchedTimestamp} 장면 포착 (아래 시간대 클릭 시 해당 초 장면 즉시 전환)
           </div>
         </div>
 
@@ -1678,7 +1686,7 @@ export const VideoScenePreviewModal: React.FC = () => {
             className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-[18px]">folder_open</span>
-            <span>원본 동영상 폴더(test_photos) 열기</span>
+            <span>원본 동영상 폴더 열기</span>
           </button>
           <button
             type="button"

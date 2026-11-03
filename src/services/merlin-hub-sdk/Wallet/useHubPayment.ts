@@ -1,9 +1,10 @@
 /**
- * Version: v1.4.0
- * Last Updated: 2026-10-01
+ * Version: v1.5.0
+ * Last Updated: 2026-11-03
+ * Description: KCP 간편결제 다이렉트 플래그(kakaopay_direct, naverpay_direct, tosspay_direct, sspay_direct, applepay_direct, payco_direct) 히든 폼 주입 완비
  */
 import { useState, useCallback, useEffect } from 'react';
-import { requestKcpPayment } from './wallet';
+import { requestKcpPayment, HubPayMethodType } from './wallet';
 import { getConfig } from '../CoreLogic/config';
 
 export type PaymentStatus = 'idle' | 'preparing' | 'pending' | 'success' | 'error';
@@ -45,7 +46,7 @@ export function useHubPayment() {
   const requestPayment = useCallback(async (params: {
     amount: number;
     coinAmount: number;
-    payMethodType: 'card' | 'phone' | 'bank';
+    payMethodType: HubPayMethodType;
     returnUrl?: string;
     productName?: string;
   }) => {
@@ -127,7 +128,7 @@ export function useHubPayment() {
         buyr_name: orderData.buyr_name || '',
         buyr_mail: orderData.buyr_mail || '',
         site_name: orderData.site_name || '',
-        pay_method: orderData.pay_method || '',
+        pay_method: orderData.pay_method || '100000000000',
         req_tx: 'pay',
         currency: 'WON',
         param_opt_1: returnUrl,
@@ -139,6 +140,21 @@ export function useHubPayment() {
         enc_data: '',
         tran_cd: ''
       };
+
+      // 간편결제 다이렉트 호출 플래그 주입 (서버 응답 또는 클라이언트 선택값 기반)
+      const directFlags: Array<[HubPayMethodType, string]> = [
+        ['kakaopay', 'kakaopay_direct'],
+        ['naverpay', 'naverpay_direct'],
+        ['tosspay', 'tosspay_direct'],
+        ['sspay', 'sspay_direct'],
+        ['applepay', 'applepay_direct'],
+        ['payco', 'payco_direct'],
+      ];
+      for (const [methodKey, fieldName] of directFlags) {
+        if (orderData[fieldName] === 'Y' || params.payMethodType === methodKey) {
+          fields[fieldName] = 'Y';
+        }
+      }
 
       form.innerHTML = '';
       Object.entries(fields).forEach(([name, value]) => {
@@ -203,10 +219,6 @@ export function useHubPayment() {
           try {
             kcpExecute(form);
           } catch (e: any) {
-            // KCP SDK는 정상 동작 과정에서 실행 중단을 위해 의도적으로 Exception을 throw합니다.
-            // 하지만 아직 로딩 초기 단계(attempts < maxAttempts)이고, 던져진 예외가 
-            // ReferenceError, TypeError 이거나 특정 undefined 관련 메시지인 경우 
-            // 의존성 스크립트(jQuery 등)가 덜 로드되어 발생한 실질적 오류로 판단하고 재시도합니다.
             const isInitError = e instanceof TypeError || 
                                 e instanceof ReferenceError || 
                                 (e && e.message && (
@@ -222,12 +234,10 @@ export function useHubPayment() {
               console.warn(`[KCP Execute] 의존성 미로드 오류 발생으로 재시도 중 (${attempts}/${maxAttempts}):`, e);
               setTimeout(checkAndExecute, 50);
             } else {
-              // 의도된 종료 예외이거나, 대기 시간을 초과한 경우
               console.log('[KCP Execute] 결제 모듈 실행 함수 호출됨 (KCP 내부 예외 발생 가능하나 정상 흐름):', e);
             }
           }
         } else {
-          // 아직 함수가 준비되지 않았다면 대기 루프를 지속합니다.
           if (attempts < maxAttempts) {
             attempts++;
             setTimeout(checkAndExecute, 50);

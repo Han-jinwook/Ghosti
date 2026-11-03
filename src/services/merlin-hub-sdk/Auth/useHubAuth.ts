@@ -81,7 +81,6 @@ export function useHubAuth() {
         }
         return {
           success: true,
-          token: result.token,
           userId: resolvedUserId,
           email: emailToVerify,
           nickname: result.nickname,

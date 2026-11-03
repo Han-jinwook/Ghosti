@@ -6,7 +6,7 @@ import { WifiOff, Wifi } from 'lucide-react';
  * 오프라인/온라인 전환을 감지하여 자연스러운 상태 토스트를 제공합니다.
  */
 export const HubOfflineBanner: React.FC = () => {
-  const [isOnline, setIsOnline] = useState<boolean>(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
   const [showReconnected, setShowReconnected] = useState<boolean>(false);
 
   useEffect(() => {

@@ -157,8 +157,9 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
         const fullTargetUri = `${cleanHost}${currentPath}${currentSearch}${encodedHash}`;
 
         if (isAndroid) {
-          // 안드로이드: 크롬 및 기설치된 PWA 앱으로 0.1초 원천 탈출
-          window.location.href = `intent://${fullTargetUri}#Intent;scheme=https;package=com.android.chrome;end`;
+          // 안드로이드: 기설치된 PWA(WebAPK) 단독 앱 1순위 호출 (package 고정 해제로 OS가 기설치 PWA 우선 매칭, 미설치 시 기본 브라우저 연결)
+          const fallbackUrl = encodeURIComponent(window.location.href);
+          window.location.href = `intent://${fullTargetUri}#Intent;scheme=https;S.browser_fallback_url=${fallbackUrl};end`;
           return;
         } else if (isIOS && isKakao) {
           // iOS 카카오톡: 외부 브라우저(Safari) 호출 스킴 자동 시도

@@ -1,10 +1,21 @@
 /**
- * Version: v1.6.0
- * Last Updated: 2026-10-20
- * Description: 패밀리 통합 선물하기(getGiftList, searchGiftUsers, sendGift, claimGift, cancelGift, nudgeGift) API 연동 및 일괄 정액 과금 지원
+ * Version: v1.7.0
+ * Last Updated: 2026-11-03
+ * Description: 귀신코인(Ghost Coin) 브랜드 개편, KCP 간편결제 다이렉트 플래그(카카오페이/네이버페이/토스페이/삼성월렛/애플페이) 지원 및 패밀리 통합 선물하기 API 연동
  */
 import { hubFetch } from '../CoreLogic/client';
 import { getConfig } from '../CoreLogic/config';
+
+export type HubPayMethodType =
+  | 'card'
+  | 'kakaopay'
+  | 'naverpay'
+  | 'tosspay'
+  | 'sspay'
+  | 'applepay'
+  | 'payco'
+  | 'phone'
+  | 'bank';
 
 export interface WalletBalance {
   balance: number;
@@ -225,7 +236,7 @@ export async function getHistory(userId: string, page: number = 1): Promise<{
 export async function requestKcpPayment(params: {
   amount: number;
   coinAmount: number;
-  payMethodType: 'card' | 'phone' | 'bank';
+  payMethodType: HubPayMethodType;
   returnUrl: string;
   productName?: string;
 }): Promise<{ success: boolean; paymentData?: any; error?: string }> {
@@ -494,4 +505,3 @@ export async function nudgeGift(giftId: string): Promise<{
     return { success: false, error: '허브 서버 연결 실패' };
   }
 }
-

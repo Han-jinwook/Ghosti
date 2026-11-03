@@ -380,6 +380,7 @@ export class MerlinHubClient {
   async sendNotification(params: {
     userId?: string;
     email?: string;
+    app_id?: string;
     title?: string;
     content?: string;
     type?: string;
@@ -406,7 +407,7 @@ export class MerlinHubClient {
       body: JSON.stringify({
         userId: params.userId,
         email: params.email,
-        app_id: config.appId,
+        app_id: params.app_id || config.appId,
         title: params.title,
         content: params.content,
         type: params.type,

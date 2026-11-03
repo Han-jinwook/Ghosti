@@ -1,7 +1,9 @@
 /**
- * Version: v2.7.0
- * Last Updated: 2026-10-18
- * Merlin Hub SDK — PWA 바로가기 추가 유도 배너 & 아이폰 카페/사파리/카톡 1:1 맞춤 그래픽 가이드 카드
+ * Version: v3.1.0
+ * Last Updated: 2026-10-30
+ * Merlin Hub SDK — PWA 바로가기 수동 추가 시스템 & 아이폰 카페/사파리/카톡 1:1 맞춤 그래픽 가이드 카드
+ * - [v3.1.0] 페이지 진입 시 화면을 가로막던 0.8초 강제 자동 팝업 완전 폐지 (이미 바탕화면에 설치한 회원에게도 반복 노출되던 불편 원천 근절)
+ * - [v3.1.0] 기설치자(standalone 구동 이력 / getInstalledRelatedApps / appinstalled) localStorage 영구 감지 및 수동 설치 버튼(triggerPWAInstall) 전용화
  */
 'use client';
 
@@ -23,7 +25,13 @@ const checkIsMobile = () => {
 // 독립 PWA 구동 여부 감지 (아이콘으로 실행 중인지)
 const checkIsStandalone = () => {
   if (typeof window === 'undefined') return false;
-  return window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+  if (isStandalone) {
+    try {
+      localStorage.setItem('pwa-installed', 'true');
+    } catch {}
+  }
+  return isStandalone;
 };
 
 // 전역 PWA 설치 이벤트 캐시
@@ -37,7 +45,7 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * 1. [상시 설치 진입로] 모바일 브라우저 전용 심플 버튼
+ * 1. [상시 설치 진입로] 모바일 브라우저 전용 심플 버튼 (마이페이지/메뉴 내부 배치용)
  */
 export function HubPWAInstallButton({ className = '' }: { className?: string }) {
   const [mounted, setMounted] = useState(false);
@@ -85,9 +93,10 @@ export function HubPWAInstallButton({ className = '' }: { className?: string }) 
 }
 
 /**
- * 2. [PWA 설치 유도 시스템]
- * - 안드로이드: 하단 설치 바닥 배너 & 네이티브 즉시 추가
- * - 아이폰: 하단을 가리지 않는 화면 상단 고정 슬림 가이드 카드 (카페/사파리/카톡 1:1 맞춤 그래픽)
+ * 2. [PWA 수동 설치 유도 시스템]
+ * - 카페 공지 링크 등으로 웹 진입 시 화면을 가로막는 자동 팝업을 띄우지 않음 (수동 버튼 클릭 시에만 작동)
+ * - 안드로이드: 네이티브 즉시 추가 또는 하단 설치 안내 배너
+ * - 아이폰: 화면 상단 슬림 가이드 카드 (카페/사파리/카톡 1:1 맞춤 그래픽)
  */
 export function HubPWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -99,15 +108,39 @@ export function HubPWAInstallPrompt() {
   const [inAppType, setInAppType] = useState<'naver' | 'kakao' | 'safari' | 'generic'>('generic');
 
   useEffect(() => {
-    const isTestMode = window.location.search.includes('t=') || window.location.search.includes('test=') || window.location.search.includes('debug=') || window.location.search.includes('install=');
+    const search = window.location.search;
+    const isExplicitGuideMode = search.includes('install=1') || search.includes('guide=');
 
-    if (!isTestMode && (!checkIsMobile() || checkIsStandalone())) {
+    if (checkIsStandalone()) {
+      setIsInstalled(true);
       return;
     }
 
+    if (!isExplicitGuideMode && !checkIsMobile()) {
+      return;
+    }
+
+    // 기설치 이력 및 Related Apps 비동기 확인
+    try {
+      if (localStorage.getItem('pwa-installed') === 'true') {
+        setIsInstalled(true);
+      }
+      if (typeof navigator !== 'undefined' && 'getInstalledRelatedApps' in navigator) {
+        (navigator as any)
+          .getInstalledRelatedApps()
+          .then((apps: any[]) => {
+            if (Array.isArray(apps) && apps.length > 0) {
+              localStorage.setItem('pwa-installed', 'true');
+              setIsInstalled(true);
+              setShowInstallPrompt(false);
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {}
+
     const ua = navigator.userAgent || '';
-    const search = window.location.search;
-    let isAppleIOS = (/iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream) || search.includes('ios');
+    const isAppleIOS = (/iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream) || search.includes('ios');
     setIsIOS(isAppleIOS);
 
     // 네이버 카페 / 네이버 앱 / 카카오톡 등 인앱 브라우저 정밀 감지
@@ -128,31 +161,20 @@ export function HubPWAInstallPrompt() {
       setInAppType('generic');
     }
 
-    // 닫기 상태 확인 (이번 세션 동안만 닫힘 기억, 브라우저 닫고 다시 오면 다시 뜸)
-    const sessionDismissed = sessionStorage.getItem('pwa-prompt-dismissed');
-    let canShow = !sessionDismissed || isTestMode;
-
-    let promptTimer: NodeJS.Timeout | null = null;
-    if (canShow) {
-      promptTimer = setTimeout(() => {
-        if (isAppleIOS) {
-          // 🍎 아이폰: 첫 화면 상단에 방해 없는 슬림 가이드 카드 표출
-          setIsIosGuideOpen(true);
-        } else {
-          // 안드로이드: 하단 설치 배너 노출
-          setShowInstallPrompt(true);
-        }
-      }, 800);
+    // 명시적 가이드 URL 파라미터(?install=1 등)로 진입한 경우에만 오픈 (일반 링크 진입 시 자동 팝업 없음)
+    if (isExplicitGuideMode) {
+      if (isAppleIOS) {
+        setIsIosGuideOpen(true);
+      } else {
+        setShowInstallPrompt(true);
+      }
     }
 
-    // 안드로이드 네이티브 PWA 설치 이벤트 수신
+    // 안드로이드 네이티브 PWA 설치 이벤트 캐시 (수동 버튼 클릭 시 즉시 활용)
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       globalDeferredPrompt = e as BeforeInstallPromptEvent;
-      if (canShow && !isAppleIOS) {
-        setShowInstallPrompt(true);
-      }
     };
 
     const handleAppInstalled = () => {
@@ -161,15 +183,18 @@ export function HubPWAInstallPrompt() {
       setIsIosGuideOpen(false);
       setDeferredPrompt(null);
       globalDeferredPrompt = null;
-      localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+      try {
+        localStorage.setItem('pwa-installed', 'true');
+        localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+      } catch {}
     };
 
-    // 상시 설치 버튼 등 외부 트리거 수신
+    // 상시 설치 버튼(HubPWAInstallButton) 등 사용자의 명시적 수동 트리거 수신
     const handleExternalTrigger = () => {
       if (isAppleIOS) {
         setIsIosGuideOpen(true);
       } else {
-        handleAndroidInstallClick();
+        setShowInstallPrompt(true);
       }
     };
 
@@ -178,7 +203,6 @@ export function HubPWAInstallPrompt() {
     window.addEventListener('triggerPWAInstall', handleExternalTrigger);
 
     return () => {
-      if (promptTimer) clearTimeout(promptTimer);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('triggerPWAInstall', handleExternalTrigger);
@@ -188,15 +212,19 @@ export function HubPWAInstallPrompt() {
   const handleDismiss = () => {
     setShowInstallPrompt(false);
     setIsIosGuideOpen(false);
-    sessionStorage.setItem('pwa-prompt-dismissed', '1');
+    try {
+      sessionStorage.setItem('pwa-prompt-dismissed', '1');
+      localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+    } catch {}
   };
 
   const handleAndroidInstallClick = async () => {
     if (isInAppBrowser) {
-      // 안드로이드 인앱브라우저: 크롬으로 0.1초 즉시 외부 탈출
+      // 안드로이드 인앱브라우저: 기설치 PWA 또는 기본 브라우저로 즉시 외부 연결
       const cleanHost = window.location.host;
-      const cleanPath = window.location.pathname + window.location.search;
-      window.location.href = `intent://${cleanHost}${cleanPath}#Intent;scheme=https;package=com.android.chrome;end`;
+      const cleanPath = window.location.pathname + window.location.search + window.location.hash;
+      const fallbackUrl = encodeURIComponent(window.location.href);
+      window.location.href = `intent://${cleanHost}${cleanPath}#Intent;scheme=https;S.browser_fallback_url=${fallbackUrl};end`;
       setShowInstallPrompt(false);
       return;
     }
@@ -204,17 +232,26 @@ export function HubPWAInstallPrompt() {
     const activePrompt = deferredPrompt || globalDeferredPrompt;
     if (activePrompt) {
       activePrompt.prompt();
-      await activePrompt.userChoice;
+      const choice = await activePrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        try {
+          localStorage.setItem('pwa-installed', 'true');
+        } catch {}
+      }
       setDeferredPrompt(null);
       globalDeferredPrompt = null;
       setShowInstallPrompt(false);
-      localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+      try {
+        localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+      } catch {}
       return;
     }
 
     alert('홈 화면에 아이콘을 추가하려면:\n\n우측 상단 메뉴(⋮) 터치 ➔ [홈 화면에 추가 / 앱 설치]를 선택해 주세요!');
     setShowInstallPrompt(false);
-    localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+    try {
+      localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+    } catch {}
   };
 
   // 접속 환경별 최적 맞춤 가이드 이미지 선택 (네이버 카페 최우선)
@@ -233,11 +270,10 @@ export function HubPWAInstallPrompt() {
 
   return (
     <>
-      {/* 1. 🍎 [아이폰 전용] 화면 맨 위 상단 슬림 가이드 카드 (하단 공유/메뉴 터치 영역 100% 방해 안 함) */}
-      {isIOS && isIosGuideOpen && !isInstalled && (
+      {/* 1. 🍎 [아이폰 전용] 화면 맨 위 상단 슬림 가이드 카드 */}
+      {isIOS && isIosGuideOpen && (
         <div className="fixed top-2.5 left-2.5 right-2.5 z-[9999] mx-auto max-w-md animate-in slide-in-from-top-4">
           <div className="bg-slate-900/98 text-white rounded-2xl border-2 border-amber-400/80 shadow-[0_12px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl overflow-hidden p-2.5 sm:p-3">
-            {/* 헤더: 간소화된 제목과 닫기 버튼 */}
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-700/80">
               <h4 className="text-sm sm:text-base font-extrabold text-amber-300 tracking-tight flex items-center gap-1.5">
                 <span>아이폰 홈 화면 추가 순서</span>
@@ -267,7 +303,6 @@ export function HubPWAInstallPrompt() {
               </button>
             </div>
 
-            {/* 실물 아이콘 순서 가이드 그래픽 이미지 (카페/사파리/카톡 1:1 맞춤 분기) */}
             <div className="pt-2">
               <div className="rounded-xl overflow-hidden border border-slate-700/80 shadow-inner bg-slate-950">
                 <img 
@@ -282,8 +317,8 @@ export function HubPWAInstallPrompt() {
         </div>
       )}
 
-      {/* 2. 🤖 [안드로이드 전용] 바닥 PWA 설치 배너 */}
-      {!isIOS && !isInstalled && showInstallPrompt && (
+      {/* 2. 🤖 [안드로이드 전용] 수동 요청 시에만 열리는 하단 PWA 설치 배너 */}
+      {!isIOS && showInstallPrompt && (
         <div className="fixed bottom-4 left-4 right-4 z-[9999] mx-auto max-w-sm">
           <div className="bg-gradient-to-b from-[#0b192c]/98 via-[#0d223a]/98 to-[#081220]/98 backdrop-blur-xl border border-sky-500/35 rounded-2xl shadow-[0_16px_40px_rgba(0,10,25,0.5)] p-4 animate-in slide-in-from-bottom-5">
             <div className="flex items-start space-x-3">
@@ -322,7 +357,7 @@ export function HubPWAInstallPrompt() {
                 onClick={handleDismiss}
                 className="flex-1 bg-white/10 hover:bg-white/15 text-slate-300 text-xs sm:text-sm font-bold py-2.5 px-3 rounded-xl border border-white/10 active:scale-[0.98] transition-all cursor-pointer"
               >
-                나중에
+                닫기
               </button>
             </div>
           </div>
@@ -331,4 +366,3 @@ export function HubPWAInstallPrompt() {
     </>
   );
 }
-

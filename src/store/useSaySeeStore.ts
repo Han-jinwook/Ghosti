@@ -1144,6 +1144,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         selectedVideoModal: {
           ...selectedVideoModal,
           matchedSeekSec: seekSec,
+          thumbUrl: matchedFrame?.thumbUrl || selectedVideoModal.thumbUrl,
           matchedTimestamp: matchedFrame
             ? `🎯 ${matchedFrame.timestampText} 구간 포착`
             : selectedVideoModal.matchedTimestamp,
@@ -1204,7 +1205,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       });
     } else {
       const galleryPhotos = photos
-        .filter((p) => !p.quarantined)
+        .filter(
+          (p) =>
+            !p.quarantined &&
+            !p.isVaultDocument &&
+            p.trashCategory !== 'blurry' &&
+            p.trashCategory !== 'screenshot' &&
+            p.trashCategory !== 'memo'
+        )
         .slice(0, 350)
         .map((photo) => ({
           photo,
@@ -1233,7 +1241,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         matchedBy: 'text-direct' as const,
       }));
     const galleryPhotos = photos
-      .filter((p) => !p.quarantined)
+      .filter(
+        (p) =>
+          !p.quarantined &&
+          !p.isVaultDocument &&
+          p.trashCategory !== 'blurry' &&
+          p.trashCategory !== 'screenshot' &&
+          p.trashCategory !== 'memo'
+      )
       .slice(0, 350)
       .map((photo) => ({
         photo,
@@ -2007,7 +2022,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         matchedBy: 'text-direct' as const,
       }));
     const initialGalleryPhotos = enrichedPhotos
-      .filter((p) => !p.quarantined)
+      .filter(
+        (p) =>
+          !p.quarantined &&
+          !p.isVaultDocument &&
+          p.trashCategory !== 'blurry' &&
+          p.trashCategory !== 'screenshot' &&
+          p.trashCategory !== 'memo'
+      )
       .slice(0, 350)
       .map((photo) => ({
         photo,

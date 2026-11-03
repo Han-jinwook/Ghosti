@@ -28,7 +28,7 @@ export interface VideoTimelineFrame {
   phaseLabel: string;
   sceneCaption: string;
   keywords: string[];
-  tags: string[];
+  tags: string[]; thumbUrl?: string;
 }
 
 /** [동영상 체험 혁신] 최신 동영상 3개 선정 후 00:00부터 끝까지 전 구간(Full-Timeline) 완전 해부 데이터 */
@@ -237,7 +237,7 @@ export interface LocalDocumentFile {
   id: string;
   fileName: string;
   path?: string;
-  ext: 'PDF' | 'TXT' | 'DOCX';
+  ext: 'PDF' | 'TXT' | 'DOCX' | 'XLSX';
   title: string;
   categoryBadge: string;
   extractedText: string;

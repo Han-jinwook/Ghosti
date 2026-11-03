@@ -43,44 +43,18 @@ export const VIDEO_SCENE_ITEMS: VideoSceneItem[] = [];
 
 export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
   {
-    id: 'gsheet_accounts_01',
-    fileName: '사내_통합_계정관리표.gsheet',
-    path: 'G:\\내 드라이브\\01_총무보안\\사내_통합_계정관리표.gsheet',
-    ext: 'PDF',
-    title: 'G: 내 드라이브 — 사내 통합 계정관리표 및 법인 입금 계좌번호 원장',
-    categoryBadge: '🔐 G: 구글 드라이브 (무마스킹 원장)',
-    extractedText:
-      '넷플릭스/업무용 아이디: merlin_family@sundreamer.app | 비밀번호: Merlin#2026!ZCore | 법인 정산 계좌번호: 신한은행 110-482-992018 (별표 *** 가림 없이 원본 그대로 1초 복사 지원)',
-    keywords: [
-      '구글드라이브',
-      'G드라이브',
-      '계정관리표',
-      '계좌번호',
-      '아이디',
-      '비밀번호',
-      '넷플릭스',
-      '신한은행',
-      '110-482-992018',
-      'merlin_family@sundreamer.app',
-      'Merlin#2026!ZCore',
-    ],
-    date: '2026.10.25',
-    sizeKB: 12,
-    deviceSource: 'G: 내 드라이브 (Google Sheets)',
-  },
-  {
-    id: 'doc_7_주택임대차_표준계약서_',
+    id: 'doc_1_주택임대차_표준계약서',
     fileName: '주택임대차_표준계약서_확정일자_사본.pdf',
     path: 'C:\\Users\\Public\\Documents\\주택임대차_표준계약서_확정일자_사본.pdf',
     ext: 'PDF',
-    title: '주택·사무실 임대차 표준계약서 및 전입신고 확정일자 부여 현황 사본',
-    categoryBadge: '📋 계약서 · 약정 서류',
+    title: '주택·사무실 임대차 표준계약서 및 확정일자 사본',
+    categoryBadge: '📋 부동산 · 임대차 계약서',
     extractedText:
-      '소재지: 인천광역시 서구 청라동 (사무실 겸용 주택 임대차) | 보증금: 5,000만 원 (금 오천만 원정) | 월세(임대료): 월 150만 원 (매월 25일 후불) | 관리비: 월 15만 원 | 계약기간(만기일): 2026.10.28 ~ 2028.10.27 (24개월) | 특약사항: 원상복구 의무 및 중도해지 시 위약금 10% 조항 포함.',
+      '소재지: 인천광역시 서구 청라동 (사무실 겸용 주택 임대차) | 보증금: 5,000만 원 (금 오천만 원정) | 월세(임대료): 월 150만 원 (매월 25일 후불) | 관리비: 월 15만 원 | 계약기간(만기일): 2026.10.28 ~ 2028.10.27 (24개월) | 특약사항: 원상복구 의무 및 중도해지 위약금 10% 조항 포함.',
     keywords: [
       '주택임대차',
-      '사무실',
       '사무실계약서',
+      '임대차계약서',
       '표준계약서',
       '확정일자',
       '전입신고',
@@ -99,12 +73,40 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
       '만기일',
       '계약기간',
       '위약금',
-      '해지',
       '특약사항',
     ],
     date: '2026.10.28',
     sizeKB: 148,
-    deviceSource: '로컬 서류함 (test_docs)',
+    deviceSource: '내 PC 문서함',
+  },
+  {
+    id: 'doc_4_가족_계정_비밀번호_관리표',
+    fileName: '가족_통합_계정_비밀번호_관리표.xlsx',
+    path: 'G:\\내 드라이브\\01_가족보안\\가족_통합_계정_비밀번호_관리표.xlsx',
+    ext: 'XLSX',
+    title: '가족 공용 OTT · 홈네트워크 계정 및 비밀번호 관리표',
+    categoryBadge: '🔐 계정 · 비밀번호 관리표',
+    extractedText:
+      '넷플릭스/유튜브 프리미엄 아이디: merlin_family@sundreamer.app | 비밀번호: Merlin#2026!ZCore | 거실 와이파이(Wi-Fi): Ghosti_5GHz (비번: family2026*) | 관리비·공과금 입금 계좌번호: 신한은행 110-482-992018 (별표 *** 가림 없이 1초 복사 지원)',
+    keywords: [
+      '구글드라이브',
+      'G드라이브',
+      '계정관리표',
+      '계좌번호',
+      '아이디',
+      '비밀번호',
+      '비번',
+      '넷플릭스',
+      '유튜브',
+      '와이파이',
+      '신한은행',
+      '110-482-992018',
+      'merlin_family@sundreamer.app',
+      'Merlin#2026!ZCore',
+    ],
+    date: '2026.10.25',
+    sizeKB: 24,
+    deviceSource: '구글 드라이브 (G:)',
   },
 ];
 
@@ -116,9 +118,6 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
     ]);
 
     const staticByFileName = new Map<string, LocalDocumentFile>();
-    for (const gDoc of GDRIVE_SMART_DOC_ITEMS) {
-      staticByFileName.set(gDoc.fileName, gDoc);
-    }
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
       const sJson = await sRes.value.json();
       const sDocs: LocalDocumentFile[] = Array.isArray(sJson.documents)
@@ -127,7 +126,17 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         ? sJson.docs
         : [];
       for (const d of sDocs) {
-        if (d && d.fileName) staticByFileName.set(d.fileName, d);
+        if (d && d.fileName && !d.fileName.includes('비밀금고')) {
+          staticByFileName.set(d.fileName, {
+            ...d,
+            deviceSource: (d.deviceSource || '내 PC 문서함').replace(/\s*\(test_docs\)/g, ''),
+          });
+        }
+      }
+    }
+    for (const gDoc of GDRIVE_SMART_DOC_ITEMS) {
+      if (!staticByFileName.has(gDoc.fileName)) {
+        staticByFileName.set(gDoc.fileName, gDoc);
       }
     }
 
@@ -140,35 +149,34 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         : [];
       if (zDocs.length > 0) {
         const realMerged = new Map<string, LocalDocumentFile>();
-        for (const gDoc of GDRIVE_SMART_DOC_ITEMS) {
-          realMerged.set(gDoc.fileName, gDoc);
+        for (const [fname, sDoc] of staticByFileName.entries()) {
+          realMerged.set(fname, sDoc);
         }
         for (const d of zDocs) {
           const fname = d.fileName || (d as any).name;
-          if (!fname || realMerged.has(fname)) continue;
-          const enriched = staticByFileName.get(fname);
-          if (enriched) {
-            realMerged.set(fname, {
-              ...enriched,
-              ...d,
-              title: enriched.title || d.title,
-              categoryBadge: enriched.categoryBadge || d.categoryBadge,
-              extractedText: enriched.extractedText || d.extractedText,
-              keywords: enriched.keywords?.length ? enriched.keywords : d.keywords,
-              path: d.path || enriched.path,
-            });
-          } else {
-            realMerged.set(fname, d);
-          }
+          if (!fname || fname.includes('비밀금고') || realMerged.has(fname)) continue;
+          realMerged.set(fname, {
+            ...d,
+            deviceSource: (d.deviceSource || '내 PC 문서함').replace(/\s*\(test_docs\)/g, ''),
+          });
         }
         return Array.from(realMerged.values());
       }
     }
 
-    return Array.from(staticByFileName.values());
+    return Array.from(staticByFileName.values()).slice(0, 6);
   } catch {
     return [...GDRIVE_SMART_DOC_ITEMS];
   }
+}
+
+function normalizeSampleVideoFrameUrl(url?: string): string {
+  if (!url) return '';
+  if (url.includes('/__videos/frame?f=')) {
+    const fn = url.split('f=').pop() || '';
+    return `/poc/results/video_frames/${fn}`;
+  }
+  return url;
 }
 
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
@@ -181,10 +189,15 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
       const sJson = await sRes.value.json();
       const sVids: VideoSceneItem[] = Array.isArray(sJson.videos) ? sJson.videos : [];
-      for (const v of sVids) {
+      for (const v of sVids.slice(0, 3)) {
         if (v && v.videoFileName) {
           merged.set(v.videoFileName, {
             ...v,
+            thumbUrl: normalizeSampleVideoFrameUrl(v.thumbUrl),
+            timelineFrames: (v.timelineFrames || []).map((f) => ({
+              ...f,
+              thumbUrl: normalizeSampleVideoFrameUrl(f.thumbUrl),
+            })),
             videoUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`),
           });
         }
@@ -1008,25 +1021,43 @@ export async function loadInitialPhotoDataset(): Promise<{
         }
       }
       if (fileList.length === 0 && semJson.items && typeof semJson.items === 'object') {
-        fileList = Object.keys(semJson.items)
-          .sort()
-          .map((name, idx) => {
-            const a = auditByPhoto.get(name);
-            return {
-              path: name,
-              size: a?.size ?? 72000,
-              date: name.includes('20250510')
-                ? '2025-05-10'
-                : name.includes('20250515')
-                ? '2025-05-15'
-                : name.includes('20250610')
-                ? '2025-06-10'
-                : name.includes('20250720')
-                ? '2025-07-20'
-                : '2025-08-15',
-              mtimeMs: a?.ts || Date.now() - idx * 60000,
-            };
-          });
+        const curatedSampleFiles = [
+          // 초정예 명품 쇼윈도 갤러리 8장 (1번 해변 가족 노을은 3장 연사 묶음 1세트 포함)
+          'IMG_20250510_1001.jpg',
+          'IMG_20250510_1002.jpg',
+          'IMG_20250510_1003.jpg',
+          'PET_20250610_1091.jpg',
+          'TRV_20250720_1139.jpg',
+          'IMG_20250515_1053.jpg',
+          'TRV_20250720_1136.jpg',
+          'TRV_20250720_1141.jpg',
+          'TRV_20250720_1143.jpg',
+          'IMG_20250815_1008.jpg',
+          // AI 클린몬스터 4대 탭 체험용 정예 샘플
+          'MEMO_202509_1259_주차장_기둥.jpg',
+          'MEMO_202509_1261_택배_상자.jpg',
+          'Screenshot_20250802_1001_쇼핑위시리스트.jpg',
+          'Screenshot_20250802_1002_배달주문내역.jpg',
+          'BLUR_202510_1282_흔들린사진.jpg',
+          'BLUR_202510_1283_흔들린사진.jpg',
+        ];
+        fileList = curatedSampleFiles.map((name, idx) => {
+          const a = auditByPhoto.get(name);
+          return {
+            path: name,
+            size: a?.size ?? 72000,
+            date: name.includes('20250510')
+              ? '2025-05-10'
+              : name.includes('20250515')
+              ? '2025-05-15'
+              : name.includes('20250610')
+              ? '2025-06-10'
+              : name.includes('20250720')
+              ? '2025-07-20'
+              : '2025-08-15',
+            mtimeMs: a?.ts || Date.now() - idx * 60000,
+          };
+        });
       }
     }
   } catch {
@@ -1220,17 +1251,7 @@ export async function loadInitialPhotoDataset(): Promise<{
       continue;
     }
 
-    // 문자/메시지 캡처, 현수막 안내, 주차기둥, 택배상자 등도 시맨틱 태그 기반으로 [📁 스마트 서류함]에 자동 등록
-    const semCorpus = `${semMeta?.captionKo ?? ''} ${(semMeta?.keywordsKo ?? []).join(' ')}`.toLowerCase();
-    if (pTag === '#스크린샷' && /(문자|메시지|심사|안내|결제)/.test(semCorpus)) {
-      vaultDocByPhoto.set(f.path, '💬 결제·심사 안내 문자 캡처');
-    } else if (pTag === '#현수막·안내') {
-      vaultDocByPhoto.set(f.path, '📋 행사 · 공고 안내문 촬영본');
-    } else if (pTag === '#주차장·기둥') {
-      vaultDocByPhoto.set(f.path, '🅿️ 일회성 주차 위치 메모');
-    } else if (pTag === '#택배·상자') {
-      vaultDocByPhoto.set(f.path, '📦 택배 · 부품 박스 기록');
-    }
+    // 일회성 메모(주차기둥, 택배상자 등) 및 스크린샷은 문서함을 오염시키지 않고 AI 클린몬스터에서만 전담 처리
 
     if (dupGroupByPhoto.has(f.path)) continue; // 이미 연사/중복 그룹에 속한 사진은 중복 분류로 처리 완료
 
@@ -1278,7 +1299,11 @@ export async function loadInitialPhotoDataset(): Promise<{
     // C) 탭 ②: 단기 일회성 주차장 · 영수증 · 사물 접사 메모 (Bes2 쓰레기 정책: 주차기둥·사물/부품 접사·케이블단자·택배상자·현수막)
     //    ※ Bes2 Positive Filter 준수: 음식/와인(#식당·음식), 인물/풍경 사진, 그리고 #문서·설명서/#문서·신분증 자산은 100% 보호!
     const isProtectedFoodOrScene =
-      pTag === '#식당·음식' || pTag === '#가족·단체' || pTag === '#해변·물놀이';
+      pTag === '#식당·음식' ||
+      pTag === '#가족·단체' ||
+      pTag === '#해변·물놀이' ||
+      pTag === '#영수증·결제전표' ||
+      pTag === '#삼겹살·고기외식';
 
     const docSem = Math.max(sem['document_en'] ?? 0, sem['receipt_en'] ?? 0);
     const isOpticalDocOrObject =
@@ -1341,9 +1366,14 @@ export async function loadInitialPhotoDataset(): Promise<{
     const audit = auditByPhoto.get(f.path);
     const vaultLabel = vaultDocByPhoto.get(f.path);
     const locParam = isQuarantined ? '&loc=quarantine' : '';
-    // 유저 PC의 실물 사진은 항상 로컬 Z-코어에서 원본 그대로 표시합니다 (외부 임의 이미지 대체 금지).
-    const fullUrl = getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
-    const thumbUrl = `${fullUrl}&thumb=1`;
+    // 미연결 신입 유저용 체험 샘플 파일은 정적 번들(/sample_photos_301/)에서 100% 깨짐 없이 즉시 렌더링합니다.
+    const isBundledSampleFile = /^(IMG_2025|PET_2025|TRV_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(
+      f.path
+    );
+    const fullUrl = isBundledSampleFile
+      ? `/sample_photos_301/${encodeURIComponent(f.path)}`
+      : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
+    const thumbUrl = isBundledSampleFile ? fullUrl : `${fullUrl}&thumb=1`;
 
     const dateFromFilenameMatch = f.path.match(/(20\d{2})(\d{2})(\d{2})/);
     const canonicalDate = dateFromFilenameMatch
