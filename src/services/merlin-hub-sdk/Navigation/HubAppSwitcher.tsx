@@ -1,6 +1,19 @@
 'use client';
+import { GUISHINFAM_CAPSULE_BASE64 } from '../assets/guishinfamCapsuleBase64';
+import { GUISHINFAM_ICON_BASE64 } from '../assets/guishinfamIconBase64';
 
-import React, { useState, useRef, useEffect } from 'react';
+/**
+ * Version: v3.1.0 (Merlin Hub SDK v2.22.1)
+ * Last Updated: 2026-11-03
+ * Merlin Hub SDK — Smart Roll-Screen '귀신팸' Family App Launcher (HubAppSwitcher)
+ * - 상단 트리거: '귀신' 아이콘(ghostiLogo) + '귀신팸' 텍스트 + 개폐 화살표(▴/▾) 일체형 캡슐 (프로필 경계 우측 바깥 안착)
+ * - 가로형 헤더 앱(variant='icon'): PC 우측 빈 날개 영역에서 스르륵 펼쳐지고 본문 사용 시 눈치껏 위로 감아 올라감
+ * - 세로형 사이드바 앱(variant='sidebar', placement='bottom-up'): 좌하단에서 위쪽으로 스르륵 뻗어 올라옴
+ * - 초슬림 레이아웃(로고 + 앱 이름만 노출) + 마우스 오버(Hover) 시 앱 이름 우측(left-full)에 설명글 플로팅 말풍선 표시
+ * - 최근 본(방문한) 패밀리 앱이 위에서 아래로 최우선 배치되는 단일 수직 리스트 구조
+ */
+
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import familyIcon from '../assets/family-icon.png';
 import sundreamerLogo from '../assets/logos/sundreamer.png';
 import whateatLogo from '../assets/logos/whateat.png';
@@ -13,7 +26,8 @@ const LOCAL_LOGOS: Record<string, any> = {
   whateat: whateatLogo,
   aggrofilter: aggrofilterLogo,
   sensetalk: sensetalkLogo,
-  ghosti: ghostiLogo,
+  zeye: ghostiLogo,
+  ghosti: ghostiLogo
 };
 
 import { getConfig } from '../CoreLogic/config';
@@ -31,6 +45,7 @@ export interface FamilyApp {
   openSchedule?: string;
   sortOrder: number;
   isJoined?: boolean;
+  isRecent?: boolean;
 }
 
 export interface FamilyConfig {
@@ -41,43 +56,15 @@ export interface FamilyConfig {
 export interface HubAppSwitcherProps {
   currentAppId?: string; // 현재 실행중인 앱의 ID (예: 'aggrofilter', 'ghosti', 'sundreamer')
   joinedAppIds?: string[]; // 유저가 가입한 패밀리 앱 ID 목록 (명시적 전달용)
-  variant?: 'icon' | 'sidebar'; // 'icon'(상단 가로 헤더 F 세로 드롭다운) | 'sidebar'(좌측 세로 사이드바 하단 빈 공간 상시 노출 + F 팝업)
-  placement?: 'top-down' | 'bottom-up'; // 'top-down'(F 버튼 바로 아래 세로 드롭다운) | 'bottom-up'(사이드바 하단에서 위로 펼침)
+  variant?: 'icon' | 'sidebar'; // 'icon'(헤더 우측 귀신팸 캡슐, 기본값) | 'sidebar'(좌측 사이드바 하단 버튼)
+  placement?: 'top-down' | 'bottom-up'; // 'top-down'(아래로 펼침, 기본값) | 'bottom-up'(사이드바 하단에서 위로 펼침)
+  autoRollOnDesktop?: boolean; // 데스크톱 유휴/활성 상태에 따른 자동 스르륵 펼침·감기 활성화 여부 (기본값: true)
 }
 
-const VISITED_FAMILY_APPS_STORAGE_KEY = 'merlin_visited_family_apps_v1';
-const DEFAULT_VISITED_APP_IDS = ['sensetalk', 'aggrofilter', 'sundreamer'];
+const RECENT_APPS_STORAGE_KEY = 'merlin_recent_family_apps';
+const RECENT_APPS_COOKIE_KEY = 'merlin_recent_apps';
 
-export function getVisitedFamilyAppIds(): string[] {
-  if (typeof window === 'undefined') return DEFAULT_VISITED_APP_IDS;
-  try {
-    const raw = localStorage.getItem(VISITED_FAMILY_APPS_STORAGE_KEY);
-    if (!raw) return DEFAULT_VISITED_APP_IDS;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map((id) => String(id).toLowerCase());
-    }
-  } catch {
-    // ignore
-  }
-  return DEFAULT_VISITED_APP_IDS;
-}
-
-export function recordVisitedFamilyApp(appId: string): string[] {
-  const clean = String(appId || '').toLowerCase().trim();
-  if (!clean) return getVisitedFamilyAppIds();
-  const prev = getVisitedFamilyAppIds().filter((id) => id !== clean);
-  const next = [clean, ...prev].slice(0, 8);
-  try {
-    localStorage.setItem(VISITED_FAMILY_APPS_STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new CustomEvent('merlinVisitedAppsUpdated', { detail: next }));
-  } catch {
-    // ignore
-  }
-  return next;
-}
-
-export const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
+const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
   isFeatureLive: true,
   apps: [
     {
@@ -88,7 +75,7 @@ export const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       description: '12년차 비타민D 자외선조사기 회원 전용 멤버십',
       isActive: true,
       isLinkActive: true,
-      sortOrder: 1,
+      sortOrder: 1
     },
     {
       id: 'whateat',
@@ -98,7 +85,7 @@ export const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       description: '학교 급식과 식생활 기록 플랫폼',
       isActive: true,
       isLinkActive: true,
-      sortOrder: 2,
+      sortOrder: 2
     },
     {
       id: 'aggrofilter',
@@ -108,7 +95,7 @@ export const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       description: '유튜브 영상 팩트 신뢰도 분석기',
       isActive: true,
       isLinkActive: true,
-      sortOrder: 3,
+      sortOrder: 3
     },
     {
       id: 'sensetalk',
@@ -118,33 +105,79 @@ export const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       description: '1:1 맞춤 감성 메시지 고속 발송 비서',
       isActive: true,
       isLinkActive: true,
-      sortOrder: 4,
+      sortOrder: 4
     },
     {
       id: 'ghosti',
       name: '귀신같이',
-      url: 'https://ghosti.sundreamer.app',
-      icon: '👁️',
-      description: '1초 투시검색 · 손보기 · 패밀리 사진/업무 공유',
+      url: 'https://z-eye.sundreamer.app',
+      icon: '👻',
+      description: '1초 AI 파일·영상 내용찾기 & 용량청소·공유방',
       isActive: true,
       isLinkActive: true,
-      sortOrder: 5,
-    },
-  ],
+      sortOrder: 5
+    }
+  ]
 };
 
-export function buildFamilySsoUrl(url: string): string {
-  if (typeof window === 'undefined') return url;
-  const token = localStorage.getItem('merlin_session_token');
-  if (!token) return url;
+function normalizeAppId(rawId?: string): string {
+  const lower = (rawId || '').trim().toLowerCase();
+  if (lower === 'zeye' || lower === 'z-eye') return 'ghosti';
+  if (lower === 'senstalk') return 'sensetalk';
+  return lower;
+}
+
+function readRecentApps(): string[] {
+  if (typeof window === 'undefined') return [];
+  const merged: string[] = [];
+
   try {
-    const urlObj = new URL(url);
-    urlObj.searchParams.set('token', token);
-    urlObj.searchParams.set('sso_token', token);
-    return urlObj.toString();
-  } catch {
-    return `${url}${url.includes('?') ? '&' : '?'}token=${token}&sso_token=${token}`;
-  }
+    const rawCookie = document.cookie
+      .split('; ')
+      .find(row => row.startsWith(`${RECENT_APPS_COOKIE_KEY}=`));
+    if (rawCookie) {
+      const val = decodeURIComponent(rawCookie.split('=')[1] || '');
+      val.split(',').map(normalizeAppId).filter(Boolean).forEach(id => {
+        if (!merged.includes(id)) merged.push(id);
+      });
+    }
+  } catch {}
+
+  try {
+    const rawLocal = window.localStorage.getItem(RECENT_APPS_STORAGE_KEY);
+    if (rawLocal) {
+      const parsed = JSON.parse(rawLocal);
+      if (Array.isArray(parsed)) {
+        parsed.map(normalizeAppId).filter(Boolean).forEach(id => {
+          if (!merged.includes(id)) merged.push(id);
+        });
+      }
+    }
+  } catch {}
+
+  return merged;
+}
+
+function recordRecentApp(appId?: string): string[] {
+  if (typeof window === 'undefined') return [];
+  const clean = normalizeAppId(appId);
+  if (!clean) return readRecentApps();
+
+  const current = readRecentApps().filter(id => id !== clean);
+  const updated = [clean, ...current].slice(0, 10);
+
+  try {
+    window.localStorage.setItem(RECENT_APPS_STORAGE_KEY, JSON.stringify(updated));
+  } catch {}
+
+  try {
+    const val = encodeURIComponent(updated.join(','));
+    const isSundreamDomain = window.location.hostname.endsWith('sundreamer.app');
+    const domainAttr = isSundreamDomain ? '; domain=.sundreamer.app' : '';
+    document.cookie = `${RECENT_APPS_COOKIE_KEY}=${val}; path=/; max-age=2592000; SameSite=Lax${domainAttr}`;
+  } catch {}
+
+  return updated;
 }
 
 export function HubAppSwitcher({
@@ -152,58 +185,47 @@ export function HubAppSwitcher({
   joinedAppIds = [],
   variant = 'icon',
   placement = 'top-down',
+  autoRollOnDesktop = true
 }: HubAppSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [hoveredAppId, setHoveredAppId] = useState<string | null>(null);
+  const [isDesktopWingAvailable, setIsDesktopWingAvailable] = useState(false);
+  const [recentAppIds, setRecentAppIds] = useState<string[]>([]);
   const [config, setConfig] = useState<FamilyConfig>(DEFAULT_FAMILY_CONFIG);
-  const [visitedIds, setVisitedIds] = useState<string[]>(() => getVisitedFamilyAppIds());
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const isHoveringLauncherRef = useRef(false);
+  const userManuallyClosedRef = useRef(false);
+  const userManuallyPinnedRef = useRef(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const { user } = useHub();
+  const normalizedCurrentId = normalizeAppId(currentAppId);
 
-  // 모바일 바탕화면 아이콘 0.5초 꾹 누르기(롱프레스 shortcuts)로 진입한 `?family_jump=<appId>` 자동 점프 처리
+  // 1. 현재 접속 앱을 최근 본 앱 기록에 자동 반영
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const jumpTarget = params.get('family_jump')?.toLowerCase().trim();
-      if (!jumpTarget) return;
-      const targetApp = DEFAULT_FAMILY_CONFIG.apps.find((a) => a.id.toLowerCase() === jumpTarget);
-      if (targetApp && targetApp.id.toLowerCase() !== currentAppId?.toLowerCase()) {
-        recordVisitedFamilyApp(targetApp.id);
-        params.delete('family_jump');
-        const cleanSearch = params.toString();
-        window.history.replaceState(
-          {},
-          '',
-          `${window.location.pathname}${cleanSearch ? `?${cleanSearch}` : ''}`
-        );
-        window.location.href = buildFamilySsoUrl(targetApp.url);
-      }
-    } catch {
-      // ignore
-    }
-  }, [currentAppId]);
+    const updated = recordRecentApp(normalizedCurrentId);
+    setRecentAppIds(updated);
+  }, [normalizedCurrentId]);
 
-  useEffect(() => {
-    const onVisitedUpdated = () => setVisitedIds(getVisitedFamilyAppIds());
-    window.addEventListener('merlinVisitedAppsUpdated', onVisitedUpdated);
-    return () => window.removeEventListener('merlinVisitedAppsUpdated', onVisitedUpdated);
-  }, []);
-
-  // 중앙 통제 설정 불러오기 (비동기 갱신 + 신규 패밀리 앱 누락 방지 병합)
+  // 2. 중앙 통제 설정 불러오기 (비동기 갱신 + 신규 패밀리 앱 누락 방지 병합)
   useEffect(() => {
     const loadConfig = async () => {
       try {
         const res = await hubFetch<{ isFeatureLive: boolean; apps: FamilyApp[] }>('/api/family/config');
         if (res.ok && res.data && Array.isArray(res.data.apps) && res.data.apps.length > 0) {
-          const remoteApps = res.data.apps;
-          const remoteIds = new Set(remoteApps.map((a) => String(a.id).toLowerCase()));
+          const remoteApps = res.data.apps.map(a => ({
+            ...a,
+            id: normalizeAppId(a.id)
+          }));
+          const remoteIds = new Set(remoteApps.map(a => a.id));
           const mergedApps = [
             ...remoteApps,
-            ...DEFAULT_FAMILY_CONFIG.apps.filter((a) => !remoteIds.has(String(a.id).toLowerCase())),
+            ...DEFAULT_FAMILY_CONFIG.apps.filter(a => !remoteIds.has(normalizeAppId(a.id)))
           ];
           setConfig({
-            isFeatureLive: true,
-            apps: mergedApps,
+            isFeatureLive: res.data.isFeatureLive !== undefined ? Boolean(res.data.isFeatureLive) : true,
+            apps: mergedApps
           });
         }
       } catch (err) {
@@ -213,13 +235,108 @@ export function HubAppSwitcher({
     loadConfig();
   }, []);
 
-  // 외부 클릭/터치 시 닫기
+  // 3. 데스크톱 우측 여백(Wing) 가용 여부 체크 및 '눈치껏 스르륵' 동적 롤스크린 제어
+  const checkViewport = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    // 가로형 아이콘 모드는 1120px 이상(800px 본문 + 우측 빈 날개 확보), 세로형 사이드바 모드는 1024px 이상일 때 자동 롤스크린 작동
+    const minWidth = variant === 'sidebar' ? 1024 : 1120;
+    const available = window.innerWidth >= minWidth;
+    setIsDesktopWingAvailable(available);
+    return available;
+  }, [variant]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const available = checkViewport();
+
+    const handleResize = () => {
+      const nowAvailable = checkViewport();
+      if (!nowAvailable && !userManuallyPinnedRef.current) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    if (!autoRollOnDesktop) {
+      return () => window.removeEventListener('resize', handleResize);
+    }
+
+    // 초기 진입 후 0.9초 뒤 스르륵 펼침 (데스크톱 여백 확보 시)
+    let initTimer: ReturnType<typeof setTimeout> | null = null;
+    if (available && !userManuallyClosedRef.current) {
+      initTimer = setTimeout(() => {
+        if (window.scrollY < 100 && !userManuallyClosedRef.current) {
+          setIsOpen(true);
+        }
+      }, 900);
+    }
+
+    const scheduleIdleUnroll = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (userManuallyClosedRef.current) return;
+      idleTimerRef.current = setTimeout(() => {
+        if (!checkViewport()) return;
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        const isTyping = activeTag === 'input' || activeTag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable;
+        if (!isTyping && window.scrollY < 120 && !userManuallyClosedRef.current) {
+          setIsOpen(true);
+        }
+      }, 6000);
+    };
+
+    // 유저가 본문을 사용하면 조용히 눈치껏 위로(사이드바는 아래로) 감아 올라감
+    const handleUserActiveUse = (e: Event) => {
+      if (isHoveringLauncherRef.current) return;
+      if (containerRef.current && e.target instanceof Node && containerRef.current.contains(e.target)) {
+        return;
+      }
+      if (!userManuallyPinnedRef.current) {
+        setIsOpen(false);
+        setHoveredAppId(null);
+      }
+      scheduleIdleUnroll();
+    };
+
+    const handleScroll = () => {
+      if (isHoveringLauncherRef.current) return;
+      if (window.scrollY > 110) {
+        if (!userManuallyPinnedRef.current) {
+          setIsOpen(false);
+          setHoveredAppId(null);
+        }
+      } else if (window.scrollY < 25 && checkViewport() && !userManuallyClosedRef.current) {
+        setIsOpen(true);
+      }
+      scheduleIdleUnroll();
+    };
+
+    document.addEventListener('mousedown', handleUserActiveUse, { passive: true });
+    document.addEventListener('keydown', handleUserActiveUse, { passive: true });
+    document.addEventListener('focusin', handleUserActiveUse, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      if (initTimer) clearTimeout(initTimer);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('mousedown', handleUserActiveUse);
+      document.removeEventListener('keydown', handleUserActiveUse);
+      document.removeEventListener('focusin', handleUserActiveUse);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [autoRollOnDesktop, checkViewport]);
+
+  // 4. 모바일/수동 오픈 시 바깥 터치 닫기
   useEffect(() => {
     if (!isOpen) return;
 
     function handleClickOutside(event: MouseEvent | TouchEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        if (!isDesktopWingAvailable || userManuallyPinnedRef.current) {
+          userManuallyPinnedRef.current = false;
+          setIsOpen(false);
+          setHoveredAppId(null);
+        }
       }
     }
 
@@ -233,319 +350,306 @@ export function HubAppSwitcher({
       document.removeEventListener('click', handleClickOutside);
       document.removeEventListener('touchend', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, isDesktopWingAvailable]);
 
-  if (!config || !config.isFeatureLive) {
-    return null;
-  }
+  // 5. 최근 본 앱이 위에서 아래로 배치되는 단일 정렬 리스트 계산
+  const sortedApps = useMemo(() => {
+    if (!config || !config.isFeatureLive) return [];
 
-  const currentAppConfig = config.apps.find((app) => app.id.toLowerCase() === currentAppId?.toLowerCase());
-  if (currentAppConfig && !currentAppConfig.isActive) {
-    return null;
-  }
-
-  const launchedApps = config.apps
-    .filter((app) => app.isActive && app.id.toLowerCase() !== currentAppId?.toLowerCase())
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
-  const effectiveJoinedIds = Array.from(
-    new Set([
-      ...(joinedAppIds.length > 0 ? joinedAppIds : user?.registered_apps || []),
-      ...visitedIds,
-    ].map((id) => String(id).toLowerCase()))
-  );
-
-  const appsWithStatus = launchedApps.map((app) => ({
-    ...app,
-    isJoined: effectiveJoinedIds.includes(app.id.toLowerCase()),
-  }));
-
-  // 내가 다녀간 패밀리 앱 (최근 방문 순서 우선 정렬)
-  const visitedApps = [
-    ...visitedIds
-      .map((id) => appsWithStatus.find((a) => a.id.toLowerCase() === id))
-      .filter((a): a is FamilyApp & { isJoined: boolean } => Boolean(a)),
-    ...appsWithStatus.filter((a) => a.isJoined && !visitedIds.includes(a.id.toLowerCase())),
-  ];
-
-  const unjoinedApps = appsWithStatus.filter(
-    (app) => !visitedApps.some((v) => v.id.toLowerCase() === app.id.toLowerCase())
-  );
-
-  if (visitedApps.length === 0 && unjoinedApps.length === 0) {
-    return null;
-  }
-
-  const resolvedFamilyIconSrc =
-    typeof familyIcon === 'string'
-      ? familyIcon
-      : (familyIcon as any)?.src || `${getConfig().hubUrl}/family-icon.png`;
-
-  const renderAppLogo = (app: FamilyApp, sizeClass = 'w-6 h-6', pixelSize = 24) => {
-    const cleanId = app.id.toLowerCase();
-    return (
-      <div
-        style={{ width: pixelSize, height: pixelSize, minWidth: pixelSize, minHeight: pixelSize }}
-        className={`${sizeClass} rounded-lg bg-white shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden shrink-0`}
-      >
-        {LOCAL_LOGOS[cleanId] ? (
-          <img
-            src={typeof LOCAL_LOGOS[cleanId] === 'string' ? LOCAL_LOGOS[cleanId] : (LOCAL_LOGOS[cleanId] as any)?.src}
-            alt={app.name}
-            width={pixelSize}
-            height={pixelSize}
-            style={{ width: pixelSize, height: pixelSize, maxWidth: pixelSize, maxHeight: pixelSize }}
-            className="w-full h-full object-cover"
-          />
-        ) : typeof app.icon === 'string' &&
-          (app.icon.startsWith('http') || app.icon.startsWith('/') || app.icon.includes('.')) ? (
-          <img
-            src={app.icon}
-            alt={app.name}
-            width={pixelSize}
-            height={pixelSize}
-            style={{ width: pixelSize, height: pixelSize, maxWidth: pixelSize, maxHeight: pixelSize }}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <span className="text-sm">{app.icon}</span>
-        )}
-      </div>
+    const launchedApps = config.apps.filter(
+      app => app.isActive && normalizeAppId(app.id) !== normalizedCurrentId
     );
+
+    const effectiveJoinedIds = (joinedAppIds.length > 0 ? joinedAppIds : (user?.registered_apps || []))
+      .map(normalizeAppId);
+
+    const joinDates: Record<string, number> = {};
+    if (user && (user as any).app_join_dates && typeof (user as any).app_join_dates === 'object') {
+      Object.entries((user as any).app_join_dates).forEach(([k, v]) => {
+        const ts = new Date(String(v)).getTime();
+        if (!isNaN(ts)) joinDates[normalizeAppId(k)] = ts;
+      });
+    }
+
+    return launchedApps
+      .map(app => {
+        const cleanId = normalizeAppId(app.id);
+        const recentIdx = recentAppIds.indexOf(cleanId);
+        const isJoined = effectiveJoinedIds.includes(cleanId);
+        const isRecent = recentIdx !== -1 || isJoined;
+        return {
+          ...app,
+          id: cleanId,
+          isJoined,
+          isRecent,
+          _recentRank: recentIdx !== -1 ? recentIdx : 999,
+          _joinTs: joinDates[cleanId] || 0
+        };
+      })
+      .sort((a, b) => {
+        if (a._recentRank !== b._recentRank) return a._recentRank - b._recentRank;
+        if (a._joinTs !== b._joinTs) return b._joinTs - a._joinTs;
+        if (a.isJoined !== b.isJoined) return a.isJoined ? -1 : 1;
+        return a.sortOrder - b.sortOrder;
+      });
+  }, [config, normalizedCurrentId, joinedAppIds, user, recentAppIds]);
+
+  if (!config || !config.isFeatureLive) return null;
+
+  const currentAppConfig = config.apps.find(app => normalizeAppId(app.id) === normalizedCurrentId);
+  if (currentAppConfig && !currentAppConfig.isActive) return null;
+
+  if (sortedApps.length === 0) return null;
+
+  const getSsoUrl = (url: string) => {
+    if (typeof window === 'undefined') return url;
+    const token = localStorage.getItem('merlin_session_token');
+    if (!token) return url;
+    try {
+      const urlObj = new URL(url);
+      urlObj.searchParams.set('token', token);
+      urlObj.searchParams.set('sso_token', token);
+      return urlObj.toString();
+    } catch {
+      return `${url}${url.includes('?') ? '&' : '?'}token=${token}&sso_token=${token}`;
+    }
+  };
+
+  const handleToggleManual = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsOpen(prev => {
+      const next = !prev;
+      if (next) {
+        userManuallyClosedRef.current = false;
+        userManuallyPinnedRef.current = true;
+      } else {
+        userManuallyClosedRef.current = true;
+        userManuallyPinnedRef.current = false;
+        setHoveredAppId(null);
+      }
+      return next;
+    });
+  };
+
+  const handleAppClick = (appId: string) => {
+    const updated = recordRecentApp(appId);
+    setRecentAppIds(updated);
+  };
+
+  const hubBaseUrl = (getConfig().hubUrl || "https://os.sundreamer.app").replace(/\/+$/, "");
+  const resolvedGhostiIconSrc = GUISHINFAM_ICON_BASE64;
+  const isBottomUp = placement === 'bottom-up' || variant === 'sidebar';
+
+  const renderAppLogo = (app: FamilyApp) => {
+    const cleanId = normalizeAppId(app.id);
+    const localAsset = LOCAL_LOGOS[cleanId];
+    if (localAsset) {
+      const src = typeof localAsset === 'string' ? localAsset : (localAsset as any)?.src;
+      return <img src={src} alt={app.name} className="w-full h-full object-cover" />;
+    }
+    if (typeof app.icon === 'string' && (app.icon.startsWith('http') || app.icon.startsWith('/') || app.icon.includes('.'))) {
+      return <img src={app.icon} alt={app.name} className="w-full h-full object-cover" />;
+    }
+    return <span className="text-base leading-none">{app.icon}</span>;
   };
 
   return (
     <div
-      className={`relative text-left shrink-0 ${variant === 'sidebar' ? 'w-full block' : 'inline-block'}`}
       ref={containerRef}
+      onMouseEnter={() => {
+        isHoveringLauncherRef.current = true;
+      }}
+      onMouseLeave={() => {
+        isHoveringLauncherRef.current = false;
+        setHoveredAppId(null);
+      }}
+      className={`relative text-left shrink-0 select-none ${variant === 'sidebar' ? 'w-full block' : 'inline-flex flex-col items-start'}`}
     >
-      {/* [강화 ②] 좌측 세로 사이드바 모드일 때: 하단 빈 공간에 '내가 다녀간 패밀리 앱'을 상시 펼쳐 두어 F를 누르지 않고도 원터치로 즉시 이동 */}
-      {variant === 'sidebar' && visitedApps.length > 0 && (
-        <div className="mb-2 p-2 rounded-2xl bg-black/[0.03] dark:bg-white/[0.03] border border-black/8 dark:border-white/10">
-          <div className="px-1.5 pb-1.5 flex items-center justify-between">
-            <span className="text-[10.5px] font-extrabold text-slate-600 dark:text-zinc-400 tracking-tight flex items-center gap-1">
-              <span>🕘 내가 다녀간 패밀리 앱</span>
-            </span>
-            <span className="text-[9.5px] font-bold text-emerald-600 dark:text-emerald-400">
-              원터치 이동
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            {visitedApps.slice(0, 3).map((app) => (
-              <a
-                key={app.id}
-                href={buildFamilySsoUrl(app.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => recordVisitedFamilyApp(app.id)}
-                className="px-2 py-1.5 rounded-xl hover:bg-black/6 dark:hover:bg-white/8 flex items-center justify-between gap-2 transition-all group cursor-pointer"
-                title={`${app.name} (${app.description}) — 클릭 시 자동 로그인(SSO) 상태로 바로 이동`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  {renderAppLogo(app, 'w-5 h-5', 22)}
-                  <span className="text-[12px] font-extrabold text-slate-800 dark:text-zinc-200 group-hover:text-teal-600 dark:group-hover:text-primary-container truncate">
-                    {app.name}
-                  </span>
-                </div>
-                <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 group-hover:text-teal-600 dark:group-hover:text-primary-container shrink-0">
-                  이동 ↗
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 트리거 버튼 (sidebar 모드 vs 상단 가로 헤더 F 아이콘 모드) */}
+      {/* 트리거 버튼: '귀신' 아이콘 + '귀신팸' 텍스트 + 개폐 화살표 (상단 헤더 & 좌하단 사이드바 동일 캡슐 규격) */}
       {variant === 'sidebar' ? (
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsOpen((prev) => !prev);
-          }}
-          className="w-full px-2.5 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between text-[12.5px] font-extrabold text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer group"
-          aria-label="패밀리 앱 전체 열기"
-        >
-          <span className="flex items-center gap-2">
-            <span
-              style={{ width: 24, height: 24, minWidth: 24, minHeight: 24 }}
-              className="w-6 h-6 rounded-lg bg-white shadow-xs border border-slate-200/80 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform"
-            >
-              <img
-                src={resolvedFamilyIconSrc}
-                alt="Family Apps"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const parent = e.currentTarget.parentElement;
-                  if (parent && !parent.querySelector('.fallback-f')) {
-                    const fallback = document.createElement('span');
-                    fallback.className = 'fallback-f font-black text-xs text-indigo-600';
-                    fallback.innerText = 'F';
-                    parent.appendChild(fallback);
-                  }
-                }}
-                style={{ width: 16, height: 16 }}
-                className="w-4 h-4 object-contain pointer-events-none"
-              />
-            </span>
-            <span>썬드리머 패밀리 전체 보기</span>
-          </span>
-          <span className="text-[10px] opacity-60 group-hover:opacity-100">{isOpen ? '▴' : '▾'}</span>
-        </button>
-      ) : (
-        /* [강화 ③] 상단 가로 헤더 F 버튼: 클릭 시 바로 아래쪽으로 세로 드롭다운(내가 다녀간 패밀리 앱 + 전체 패밀리 앱) 펼침 */
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsOpen((prev) => !prev);
-          }}
-          title="썬드리머 패밀리 앱 런처 (클릭 시 아래로 내가 다녀간 앱 세로 드롭다운 펼침)"
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-full border transition-all group active:scale-95 cursor-pointer shrink-0 ${
+          onClick={handleToggleManual}
+          title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
+          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-2xl border transition-all cursor-pointer select-none focus:outline-none active:scale-95 shadow-sm ${
             isOpen
-              ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
-              : 'bg-white/90 dark:bg-zinc-900/90 hover:bg-indigo-50 dark:hover:bg-zinc-800 border-slate-200 dark:border-white/15 text-slate-800 dark:text-zinc-200'
+              ? 'bg-white border-amber-400 ring-2 ring-amber-400/30'
+              : 'bg-white hover:bg-slate-50/90 border-amber-300/90 hover:border-amber-400'
           }`}
-          aria-label="패밀리 앱 세로 드롭다운 열기"
+          aria-label="귀신팸 펼치기/접기"
         >
           <img
-            src={resolvedFamilyIconSrc}
-            alt="Family Apps"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              const parent = e.currentTarget.parentElement;
-              if (parent && !parent.querySelector('.fallback-f')) {
-                const fallback = document.createElement('span');
-                fallback.className = 'fallback-f font-black text-xs sm:text-sm text-indigo-600';
-                fallback.innerText = 'F';
-                parent.appendChild(fallback);
-              }
-            }}
-            style={{ width: 16, height: 16 }}
-            className="w-4 h-4 sm:w-[18px] sm:h-[18px] object-contain pointer-events-none"
+            src={GUISHINFAM_CAPSULE_BASE64}
+            alt="귀신팸"
+            className="h-9 sm:h-11 w-auto min-w-[100px] sm:min-w-[122px] object-contain pointer-events-none"
           />
-          <span className="font-label-sm text-[11.5px] font-extrabold hidden sm:inline">패밀리</span>
-          <span className="text-[10px] opacity-75">{isOpen ? '▴' : '▾'}</span>
+          <span
+            className={`text-xs leading-none font-black ml-0.5 transition-colors ${
+              isOpen ? 'text-indigo-600' : 'text-slate-400'
+            }`}
+          >
+            {isOpen ? '▾' : '▴'}
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleToggleManual}
+          title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-2xl border transition-all cursor-pointer shrink-0 focus:outline-none active:scale-95 shadow-sm ${
+            isOpen
+              ? 'bg-white border-amber-400 ring-2 ring-amber-400/30'
+              : 'bg-white hover:bg-slate-50/80 border-amber-300/90 hover:border-amber-400'
+          }`}
+          aria-label="귀신팸 펼치기/접기"
+        >
+          {/* 플로우에서 하나로 완성된 [갓 쓴 아기귀신 + 3D 귀신팸] 새 화이트 원본 타이트 크롭 로고 */}
+          <img
+            src={GUISHINFAM_CAPSULE_BASE64}
+            alt="귀신팸"
+            className="h-9 sm:h-11 w-auto min-w-[100px] sm:min-w-[122px] object-contain pointer-events-none"
+          />
+          <span
+            className={`text-xs leading-none font-black ml-0.5 transition-colors ${
+              isOpen ? 'text-indigo-600' : 'text-slate-400'
+            }`}
+          >
+            {isOpen ? '▴' : '▾'}
+          </span>
         </button>
       )}
 
-      {/* 공식 드롭다운 메뉴 (상단 가로 헤더 F 클릭 시 바로 아래 세로 드롭다운 / 사이드바 하단 클릭 시 위로 팝업) */}
-      {isOpen && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className={`absolute ${
-            placement === 'bottom-up'
-              ? 'left-0 bottom-full mb-2 origin-bottom-left'
-              : 'right-0 top-full mt-2 origin-top-right'
-          } w-72 sm:w-80 bg-white border border-slate-200 rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.28)] p-4 z-[99999] transform transition-all animate-in fade-in zoom-in duration-200 select-none text-slate-800`}
-        >
-          {/* 1) 내가 다녀간 패밀리 앱 (세로 드롭다운 & 3열 그리드 겸용) */}
-          {visitedApps.length > 0 && (
-            <div className="mb-3.5">
-              <div className="flex items-center justify-between px-1.5 mb-2">
-                <span className="text-[11px] font-black text-slate-700 flex items-center gap-1">
-                  <span>🕘 내가 다녀간 패밀리 앱</span>
-                </span>
-                <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  SSO 자동연결
-                </span>
-              </div>
-              <div className="space-y-1">
-                {visitedApps.map((app) => {
-                  const Wrapper = app.isLinkActive !== false ? 'a' : 'div';
-                  return (
-                    <Wrapper
-                      key={app.id}
-                      href={app.isLinkActive !== false ? buildFamilySsoUrl(app.url) : undefined}
-                      target={app.isLinkActive !== false ? '_blank' : undefined}
-                      rel={app.isLinkActive !== false ? 'noopener noreferrer' : undefined}
-                      onClick={() => {
-                        recordVisitedFamilyApp(app.id);
-                        setIsOpen(false);
-                      }}
-                      className={`flex items-center justify-between gap-3 p-2.5 rounded-2xl transition-all ${
-                        app.isLinkActive !== false
-                          ? 'hover:bg-indigo-50/80 border border-transparent hover:border-indigo-200/80 cursor-pointer active:scale-[0.99]'
-                          : 'opacity-80 cursor-default'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {renderAppLogo(app, 'w-9 h-9', 36)}
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-slate-900 truncate">{app.name}</div>
-                          <div className="text-[11px] font-medium text-slate-500 truncate">
-                            {app.description}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-extrabold text-indigo-600 shrink-0">
-                        열기 ↗
-                      </span>
-                    </Wrapper>
-                  );
-                })}
-              </div>
-            </div>
+      {/* 스르륵 롤스크린 컨테이너: 프로필 경계 우측 바깥 날개 영역(left-0)에 수직 정렬 */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`absolute z-[99999] transition-all duration-300 ease-out ${
+          isBottomUp
+            ? 'left-0 bottom-full mb-1.5 w-[156px] origin-bottom-left'
+            : isDesktopWingAvailable
+              ? 'left-0 top-full mt-1.5 w-[150px] origin-top-left'
+              : 'right-0 top-full mt-1.5 w-[156px] origin-top-right'
+        } ${
+          isOpen
+            ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
+            : isBottomUp
+              ? 'opacity-0 scale-y-75 translate-y-2 pointer-events-none'
+              : 'opacity-0 scale-y-75 -translate-y-2 pointer-events-none'
+        }`}
+      >
+        {/* 버튼과 롤스크린 사이 마우스 이동 브릿지 */}
+        {!isBottomUp && <div className="absolute -top-2.5 left-0 right-0 h-2.5 bg-transparent" />}
+
+        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-slate-200/90 dark:border-zinc-700/80 rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.12)] p-1.5 text-slate-800 dark:text-zinc-100">
+          {/* 세로형(bottom-up)일 때는 상단 끝단에 접기 손잡이 바 배치 */}
+          {isBottomUp && (
+            <button
+              type="button"
+              onClick={handleToggleManual}
+              className="w-full flex items-center justify-center gap-1 py-1 mb-1 rounded-lg bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[10px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              title="귀신팸 접기"
+            >
+              <span>▾ 접기</span>
+            </button>
           )}
 
-          {/* 2) 새로운 패밀리 앱 (Discovery) */}
-          {unjoinedApps.length > 0 && (
-            <div className={`${visitedApps.length > 0 ? 'pt-3 border-t border-slate-200/70' : ''}`}>
-              <h3 className="text-[11px] font-black text-indigo-600/90 tracking-widest mb-2 px-1.5 flex items-center justify-between">
-                <span>✨ 썬드리머 패밀리 전체 앱</span>
-                <span className="bg-rose-50 text-rose-600 border border-rose-200 text-[9px] px-1.5 py-0.5 rounded-full shadow-xs">
-                  New
-                </span>
-              </h3>
-              <div className="space-y-1">
-                {unjoinedApps.map((app) => {
-                  const Wrapper = app.isLinkActive !== false ? 'a' : 'div';
-                  return (
+          {/* 위에서 아래로: 최근 본 앱 -> 미방문 앱 단일 슬림 리스트 (로고 + 앱 이름만 노출) */}
+          <div className="flex flex-col gap-0.5">
+            {sortedApps.map((app, index) => {
+              const isHovered = hoveredAppId === app.id;
+              const Wrapper = app.isLinkActive !== false ? 'a' : 'div';
+              const showDivider =
+                index > 0 &&
+                sortedApps[index - 1].isRecent &&
+                !app.isRecent;
+
+              return (
+                <React.Fragment key={app.id}>
+                  {showDivider && (
+                    <div className="my-0.5 border-t border-dashed border-slate-200/70 dark:border-zinc-800" />
+                  )}
+                  <div
+                    className="relative"
+                    onMouseEnter={() => setHoveredAppId(app.id)}
+                  >
                     <Wrapper
-                      key={app.id}
-                      href={app.isLinkActive !== false ? buildFamilySsoUrl(app.url) : undefined}
+                      href={app.isLinkActive !== false ? getSsoUrl(app.url) : undefined}
                       target={app.isLinkActive !== false ? '_blank' : undefined}
                       rel={app.isLinkActive !== false ? 'noopener noreferrer' : undefined}
-                      onClick={() => {
-                        recordVisitedFamilyApp(app.id);
-                        setIsOpen(false);
-                      }}
-                      className={`flex items-center gap-3 p-2 rounded-2xl transition-all group ${
+                      onClick={() => handleAppClick(app.id)}
+                      className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-xl transition-all duration-150 group/item ${
                         app.isLinkActive !== false
-                          ? 'hover:bg-slate-100/80 cursor-pointer active:scale-[0.99]'
-                          : 'opacity-80 cursor-default'
+                          ? 'hover:bg-indigo-50/80 dark:hover:bg-indigo-950/40 cursor-pointer active:scale-[0.98]'
+                          : 'opacity-75 cursor-default'
                       }`}
                     >
-                      {renderAppLogo(app, 'w-8 h-8', 32)}
-                      <div className="flex-1 flex flex-col justify-center min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-black text-slate-900">{app.name}</span>
-                          {app.openSchedule && (
-                            <span className="text-[9.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
-                              {app.openSchedule}
-                            </span>
-                          )}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6.5 h-6.5 rounded-lg bg-white shadow-2xs border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:scale-105 transition-transform">
+                          {renderAppLogo(app)}
                         </div>
-                        <span className="text-[11px] font-medium text-slate-500 truncate">
-                          {app.description}
+                        <span className="text-[12.5px] font-extrabold text-slate-800 dark:text-zinc-100 group-hover/item:text-indigo-600 dark:group-hover/item:text-indigo-400 truncate">
+                          {app.name}
                         </span>
                       </div>
-                    </Wrapper>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
-          {/* 모바일 0.5초 꾹 누르기(롱프레스) 팁 안내 */}
-          <div className="mt-3 pt-2.5 border-t border-slate-100 px-1.5 flex items-center justify-between text-[10.5px] text-slate-500">
-            <span>📱 폰 바탕화면 앱 아이콘을 0.5초 꾹 누르면 바로가기 메뉴가 뜹니다</span>
+                      {/* 우측 초소형 상태 표시 (최근 본 앱 에메랄드 점 vs 미방문 N) */}
+                      {app.isRecent ? (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 shrink-0"
+                          title="최근 본 앱"
+                        />
+                      ) : (
+                        <span className="text-[8.5px] font-black text-rose-500 bg-rose-50 border border-rose-200/80 px-1 py-0.2 rounded-full shrink-0">
+                          N
+                        </span>
+                      )}
+                    </Wrapper>
+
+                    {/* 마우스 오버(Hover) 시 앱 이름 우측(left-full)에 나타나는 설명글 말풍선 */}
+                    {isHovered && (
+                      <div
+                        className={`hidden sm:block absolute z-[100000] w-52 p-2.5 rounded-2xl bg-slate-900/95 text-white shadow-xl border border-slate-700/80 pointer-events-none animate-in fade-in duration-150 ${
+                          isBottomUp
+                            ? 'left-full ml-2 bottom-0'
+                            : isDesktopWingAvailable
+                              ? 'left-full ml-2 top-0'
+                              : 'right-full mr-2 top-0'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1.5 mb-1">
+                          <span className="text-xs font-black text-white">{app.name}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                            app.isRecent
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          }`}>
+                            {app.isRecent ? '최근 본 앱' : '패밀리 New'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-medium text-slate-200 leading-snug break-keep">
+                          {app.description}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
+
+          {/* 가로형(top-down)일 때는 롤스크린 하단 끝단에 접기 손잡이 바 배치 */}
+          {!isBottomUp && (
+            <button
+              type="button"
+              onClick={handleToggleManual}
+              className="w-full flex items-center justify-center gap-1 py-1 mt-1 rounded-lg bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[10px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              title="귀신팸 접기"
+            >
+              <span>▴ 접기</span>
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

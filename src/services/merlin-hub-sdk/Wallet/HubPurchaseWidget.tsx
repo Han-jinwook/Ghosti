@@ -1,11 +1,17 @@
+import { GHOST_COIN_WINK_BASE64, GHOST_COIN_HUG_BASE64, GHOST_COIN_TITLE_BASE64 } from '../assets/ghostCoinBase64';
 /**
- * Version: v1.4.0
- * Last Updated: 2026-10-26
+ * Version: v1.5.0
+ * Last Updated: 2026-11-03
+ * Description:
+ * - 『👻 귀신코인 공식 충전소』 브랜드 전면 개편 (아기귀신 3D 로고 & 3종 귀신코인 카드 장착)
+ * - 어떤 앱 도메인(귀신같이, 어그로필터, 센스톡 등)에서도 이미지가 절대 깨지지 않도록 허브 CDN 절대경로 + 로컬 폴백 적용
+ * - KCP 간편결제 다이렉트 호출(카카오페이 / 네이버페이 / 토스페이 / 삼성월렛 / 애플페이 / 신용·체크카드) 원터치 선택 지원 (기존 payMethodType="card" 하드코딩 버그 완전 해결)
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { hubFetch } from '../CoreLogic/client';
 import { HubPaymentTrigger } from './HubPaymentTrigger';
 import { HubGiftBoxModal, GiftProductItem } from './HubGiftBoxModal';
+import { HubPayMethodType } from './wallet';
 import { getConfig } from '../CoreLogic/config';
 import { useHub } from '../HubProvider';
 
@@ -22,7 +28,7 @@ interface HistoryItem {
 }
 
 const getAppDisplayName = (appId?: string) => {
-  if (!appId) return '어그로필터';
+  if (!appId) return '귀신같이';
   const id = appId.toUpperCase();
   if (id === 'AGGROFILTER' || id === 'AGGRO_FILTER' || id === 'APP-01' || id === 'DEFAULT_APP') {
     return '어그로필터';
@@ -51,6 +57,70 @@ const getAppDisplayName = (appId?: string) => {
   return appId;
 };
 
+const PAY_METHOD_OPTIONS: Array<{
+  id: HubPayMethodType;
+  label: string;
+  subLabel: string;
+  badge?: string;
+  badgeColor?: string;
+  dotColor: string;
+  activeBorder: string;
+  activeBg: string;
+}> = [
+  {
+    id: 'kakaopay',
+    label: '카카오페이',
+    subLabel: '카톡 간편결제 · 머니/카드',
+    badge: '인기',
+    badgeColor: 'bg-amber-400 text-slate-950',
+    dotColor: 'bg-[#FEE500] text-[#191919]',
+    activeBorder: 'border-amber-500 ring-2 ring-amber-400/30',
+    activeBg: 'bg-amber-50/70',
+  },
+  {
+    id: 'naverpay',
+    label: '네이버페이 (Npay)',
+    subLabel: '네이버 포인트 · 간편카드',
+    badge: '추천',
+    badgeColor: 'bg-emerald-500 text-white',
+    dotColor: 'bg-[#03C75A] text-white',
+    activeBorder: 'border-emerald-600 ring-2 ring-emerald-500/30',
+    activeBg: 'bg-emerald-50/70',
+  },
+  {
+    id: 'tosspay',
+    label: '토스페이',
+    subLabel: '토스 앱 1초 간편결제',
+    dotColor: 'bg-[#0064FF] text-white',
+    activeBorder: 'border-blue-600 ring-2 ring-blue-500/30',
+    activeBg: 'bg-blue-50/70',
+  },
+  {
+    id: 'sspay',
+    label: '삼성월렛 (삼성페이)',
+    subLabel: '갤럭시/삼성카드 간편결제',
+    dotColor: 'bg-[#1428A0] text-white',
+    activeBorder: 'border-indigo-700 ring-2 ring-indigo-500/30',
+    activeBg: 'bg-indigo-50/70',
+  },
+  {
+    id: 'applepay',
+    label: '애플페이 (Apple Pay)',
+    subLabel: '아이폰 · 현대카드 간편결제',
+    dotColor: 'bg-slate-900 text-white',
+    activeBorder: 'border-slate-800 ring-2 ring-slate-400/30',
+    activeBg: 'bg-slate-100/80',
+  },
+  {
+    id: 'card',
+    label: '신용 / 체크카드 (일반)',
+    subLabel: '국내 모든 카드사 통합결제',
+    dotColor: 'bg-indigo-600 text-white',
+    activeBorder: 'border-indigo-600 ring-2 ring-indigo-500/30',
+    activeBg: 'bg-indigo-50/70',
+  },
+];
+
 export interface HubPurchaseWidgetProps {
   appName?: string;
   redirectUrl?: string;
@@ -65,7 +135,7 @@ export interface HubPurchaseWidgetProps {
 }
 
 export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
-  appName = '어그로필터',
+  appName = '귀신같이',
   redirectUrl = '/',
   initialTab = 'charge',
   isModal = false,
@@ -100,10 +170,10 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
 
   const targetRedirectUrl = redirectUrlParam.startsWith('/') ? redirectUrlParam : '/';
 
-  const [selectedOption, setSelectedOption] = useState<number>(1000);
+  const [selectedOption, setSelectedOption] = useState<number>(0);
   const [tab, setTab] = useState<'charge' | 'history' | 'gift'>(initialTab);
   const [giftSubTab, setGiftSubTab] = useState<'received' | 'sent' | 'send'>('received');
-  const [method, setMethod] = useState<'card' | 'phone' | 'bank'>('card');
+  const [method, setMethod] = useState<HubPayMethodType>('kakaopay');
   const [allHistory, setAllHistory] = useState<HistoryItem[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -125,7 +195,6 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
     if (!uid) return;
     try {
       setHistoryLoading(true);
-      // 서버에서 전체 내역을 한 번에 가져오기 (limit 등 추가)
       const res = await hubFetch(`/api/wallet/history?userId=${encodeURIComponent(uid)}&limit=1000`);
       if (res.ok && res.data.history) {
         setAllHistory(res.data.history);
@@ -182,18 +251,60 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
     setHistoryPage(1);
   }, [filterType, filterApp, filterPeriod]);
 
+  const config = getConfig();
+  const hubBaseUrl = (config?.hubUrl || 'https://os.sundreamer.app').replace(/\/+$/, '');
+
   const options = useMemo(
     () => [
-      { credits: 1000, price: 1000, discount: 0, imgSrc: '/hub_assets/card_1000.png' },
-      { credits: 5000, price: 4750, discount: 5, imgSrc: '/hub_assets/card_5000.png' },
-      { credits: 10000, price: 9000, discount: 10, imgSrc: '/hub_assets/card_10000.png' },
+      {
+        credits: 1000,
+        price: 1000,
+        discount: 0,
+        imgSrc: `${hubBaseUrl}/hub_assets/card_1000.png?v=ghost2`,
+        fallbackSrc: '/hub_assets/card_1000.png?v=ghost2',
+      },
+      {
+        credits: 5000,
+        price: 4750,
+        discount: 5,
+        imgSrc: `${hubBaseUrl}/hub_assets/card_5000.png?v=ghost2`,
+        fallbackSrc: '/hub_assets/card_5000.png?v=ghost2',
+      },
+      {
+        credits: 10000,
+        price: 9000,
+        discount: 10,
+        imgSrc: `${hubBaseUrl}/hub_assets/card_10000.png?v=ghost2`,
+        fallbackSrc: '/hub_assets/card_10000.png?v=ghost2',
+      },
     ],
-    []
+    [hubBaseUrl]
   );
 
-  const selectedPkg = useMemo(
-    () => options.find((o) => o.credits === selectedOption) || options[0],
-    [selectedOption, options]
+  // 귀신코인 충전 금액 및 할인율 동적 계산 (1만 이상 5%, 3만 이상 10%, 5만 이상 10%)
+  const calculatePrice = (coin: number) => {
+    if (coin >= 30000) return Math.round(coin * 0.9); // 10% 할인
+    if (coin >= 10000) return Math.round(coin * 0.95); // 5% 할인
+    return coin;
+  };
+
+  const discountPercent = useMemo(() => {
+    if (selectedOption >= 30000) return 10;
+    if (selectedOption >= 10000) return 5;
+    return 0;
+  }, [selectedOption]);
+
+  const finalPrice = useMemo(() => calculatePrice(selectedOption), [selectedOption]);
+
+  const selectedPkg = useMemo(() => ({
+    credits: selectedOption,
+    price: finalPrice,
+    discount: discountPercent,
+  }), [selectedOption, finalPrice, discountPercent]);
+
+  const selectedMethodObj = useMemo(
+    () => PAY_METHOD_OPTIONS.find((m) => m.id === method) || PAY_METHOD_OPTIONS[0],
+    [method]
   );
 
   const formatDate = (iso: string) => {
@@ -205,11 +316,11 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
     ).padStart(2, '0')}`;
   };
 
-  const config = getConfig();
+  if (isModal && !isOpen) return null;
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-[360px] bg-slate-50 flex items-center justify-center rounded-2xl">
         <svg className="animate-spin h-8 w-8 text-indigo-600" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -218,45 +329,109 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      <main className="mx-auto max-w-[var(--app-max-width,720px)] px-4 py-4 space-y-3">
-        {/* 상단 3몬스터 공식 브랜드 헤더 배너 */}
-        <div className="rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 p-4 sm:p-5 text-white shadow-xl border-2 border-indigo-500/40 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <img 
-              src="/hub_assets/3Monster_logo.png" 
-              alt="3Monster Logo" 
-              className="h-12 sm:h-14 w-auto object-contain drop-shadow-[0_0_15px_rgba(74,222,128,0.35)]" 
-            />
+  const innerContent = (
+    <div
+      className={`${isModal ? '' : 'min-h-screen'} bg-slate-50 text-slate-800 rounded-2xl`}
+      style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
+    >
+      <style>{`
+        @font-face {
+          font-family: 'Cafe24Ssurround';
+          src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2105_2@1.0/Cafe24Ssurround.woff') format('woff');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'TmoneyRoundWindExtraBold';
+          src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-07@1.0/TmoneyRoundWindExtraBold.woff') format('woff');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+      `}</style>
+      <main className="mx-auto max-w-[var(--app-max-width,720px)] px-4 py-4 space-y-3.5">
+        {/* 상단 귀신코인 공식 브랜드 헤더 배너 (아기귀신 3D 로고 + 도자기체 통일 + 골드 테두리) */}
+        <div className="rounded-2xl bg-gradient-to-r from-[#0d1230] via-[#131c47] to-[#0a0f29] p-4 sm:p-5 text-white shadow-xl border border-amber-300/80 ring-1 ring-amber-400/20 flex items-center justify-between relative">
+          {isModal && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors cursor-pointer"
+              aria-label="충전소 닫기"
+            >
+              ✕
+            </button>
+          )}
+          <div className="flex items-center gap-3.5 sm:gap-4">
+            <div className="relative shrink-0">
+              <img 
+                src={`${hubBaseUrl}/ghosti.png`}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.endsWith('/guishinfam_icon.webp')) {
+                    target.src = '/hub_assets/guishinfam_icon.webp';
+                  }
+                }}
+                alt="귀신코인 아기귀신 로고" 
+                className="h-14 sm:h-16 w-14 sm:w-16 object-contain rounded-2xl border border-amber-300/40 shadow-[0_0_16px_rgba(45,212,191,0.3)]" 
+              />
+            </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xl sm:text-2xl font-black tracking-tight text-white">멀린 패밀리 코인 충전소</span>
-                <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-lime-400 text-slate-950 shadow-sm">
-                  공식 충전센터
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span
+                  className="text-xl sm:text-2xl tracking-wide bg-gradient-to-b from-white via-cyan-50 to-teal-200 bg-clip-text text-transparent"
+                  style={{
+                    fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
+                    filter: 'drop-shadow(0 2px 0 #0f4c5c) drop-shadow(0 4px 10px rgba(45,212,191,0.35))',
+                  }}
+                >
+                  귀신코인 충전소
+                </span>
+                <span
+                  className="text-[11px] px-3 py-0.5 rounded-full bg-gradient-to-b from-amber-200 via-amber-400 to-amber-500 text-slate-950 border border-amber-100/80 shadow-sm tracking-wide"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
+                  GHOST COIN 공식 센터
                 </span>
               </div>
-              <p className="text-xs text-slate-300 font-medium mt-1">
-                3Monster & 패밀리 솔루션({appName}) 공용 디지털 코인 충전
+              <p
+                className="text-xs text-cyan-100/90 mt-1.5 tracking-wide"
+                style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
+              >
+                귀신같이 시리즈 & 패밀리 솔루션({appName}) 공용 귀신코인 충전
               </p>
             </div>
           </div>
-          <div className="text-right hidden sm:block border-l border-slate-700/80 pl-4">
-            <span className="text-xs text-lime-400 font-bold block">KCP / 간편결제 공식 제휴</span>
-            <span className="text-[11px] text-slate-400 font-semibold">가맹점 상점명: 썬드림(멀린 패밀리)</span>
+          <div className={`text-right hidden sm:block border-l border-indigo-800/80 pl-4 ${isModal && onClose ? ' pr-7' : ''}`}>
+            <span
+              className="text-xs text-amber-300 block tracking-wide"
+              style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+            >
+              NHN KCP / 5대 간편결제 공식 제휴
+            </span>
+            <span
+              className="text-[11px] text-cyan-200/80 mt-0.5 block"
+              style={{ fontFamily: "'TmoneyRoundWindExtraBold', sans-serif" }}
+            >
+              가맹점 상점명: 3몬스터
+            </span>
           </div>
         </div>
 
-        {/* 탭 전환 영역 */}
-        <div className="bg-slate-200/50 p-1.5 border border-slate-300/70 rounded-2xl flex gap-1 shadow-inner">
+        {/* 탭 전환 영역 (도자기 라운드 서체 통일) */}
+        <div
+          className="bg-slate-200/75 p-1.5 border border-slate-300/80 rounded-2xl flex gap-1.5 shadow-inner"
+          style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+        >
           <button
             onClick={() => setTab('charge')}
             className={tab === 'charge'
-              ? "flex-1 rounded-xl py-2.5 text-sm font-black bg-slate-900 text-white shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-300/40 transition-all active:scale-[0.98] cursor-pointer"
+              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
-            충전하기
+            👻 충전하기
           </button>
           <button
             onClick={() => {
@@ -264,8 +439,8 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               setTab('gift');
             }}
             className={tab === 'gift'
-              ? "flex-1 rounded-xl py-2.5 text-sm font-black bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-100/50 transition-all active:scale-[0.98] cursor-pointer"
+              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-sm transition-all cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-rose-600 hover:text-rose-700 hover:bg-rose-100/60 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
             🎁 선물함 · 선물하기
@@ -273,8 +448,8 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           <button
             onClick={() => setTab('history')}
             className={tab === 'history'
-              ? "flex-1 rounded-xl py-2.5 text-sm font-black bg-slate-900 text-white shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-300/40 transition-all active:scale-[0.98] cursor-pointer"
+              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
             이용 내역
@@ -284,106 +459,317 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         {/* 충전 탭 화면 */}
         {tab === 'charge' && (
           <div className="space-y-4">
-            {/* 상품 선택 */}
-            <div className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-md">
-              <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-                <h2 className="text-base text-slate-900 font-extrabold">1. 이용권 상품 선택</h2>
+            {/* 1. 귀신코인 스마트 충전 카드 (군더더기 제로 & 네이버페이식 누적 충전) */}
+            <div className="rounded-3xl border-2 border-slate-200/90 bg-white p-5 sm:p-7 shadow-lg">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-indigo-800 block shadow-2xs"></span>
+                  <h2
+                    className="text-lg sm:text-xl text-slate-900 tracking-wide"
+                    style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                  >
+                    귀신코인 충전
+                  </h2>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     setGiftSubTab('send');
                     setTab('gift');
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-extrabold transition-colors cursor-pointer"
+                  className="px-4 py-1.5 rounded-xl bg-gradient-to-b from-rose-50 to-rose-100/80 hover:from-rose-100 hover:to-rose-200/80 text-rose-600 border border-rose-200/90 text-xs tracking-wide transition-all cursor-pointer shadow-2xs hover:scale-102"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
-                  🎁 보유 코인으로 지인에게 선물하기 ›
+                  🎁 보유 귀신코인으로 지인에게 선물하기 ›
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {options.map((opt) => {
-                  const isSelected = selectedOption === opt.credits;
-                  return (
-                    <button
-                      key={opt.credits}
-                      onClick={() => setSelectedOption(opt.credits)}
-                      className={`relative rounded-2xl overflow-hidden transition-all hover:scale-[1.03] shadow-lg ${
-                        isSelected
-                          ? "ring-4 ring-indigo-600 scale-[1.03] shadow-indigo-100 shadow-xl"
-                          : "border-2 border-slate-200 hover:border-indigo-400 hover:scale-[1.01]"
-                      }`}
+
+              {/* 🏆 컴팩트 단일 스마트 카드 (아기귀신 2배 확대 + 3D 도자기체 귀신코인 & 품위있는 라운드 도자기 서체 + 카드 밖 우측 초기화) */}
+              <div className="mx-auto max-w-md">
+                <div
+                  className="relative rounded-2xl overflow-hidden shadow-xl border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_10px_28px_rgba(13,18,48,0.45),0_0_12px_rgba(251,191,36,0.18)] bg-gradient-to-b from-[#0d1230] via-[#0f173a] to-[#0a0e27] p-5 sm:p-6 text-white transition-all"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
+                  <div className="absolute top-0 right-1/4 w-48 h-48 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+                  <div className="absolute bottom-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                  {/* 메인 컨텐츠: 아기귀신(가로·세로 2배 큼직하게 + 경계선 자연 블렌딩) + 우측 상단부터 정렬된 도자기체 텍스트 & 금액 */}
+                  <div className="relative z-10 flex items-stretch justify-between gap-4">
+                    {/* 좌측: 마스코트 (가로·세로 2배 확대) + 진짜 3D 백자·청자 도자기체 귀신코인 로고 */}
+                    <div className="flex flex-col items-center shrink-0">
+                      <div className="w-32 h-32 sm:w-36 sm:h-36 flex items-center justify-center">
+                        <img
+                          src={selectedOption >= 30000 ? GHOST_COIN_HUG_BASE64 : GHOST_COIN_WINK_BASE64}
+                          alt="귀신코인"
+                          className="w-full h-full object-contain filter drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]"
+                          style={{
+                            WebkitMaskImage: 'radial-gradient(circle at 50% 50%, black 52%, rgba(0,0,0,0.68) 72%, transparent 97%)',
+                            maskImage: 'radial-gradient(circle at 50% 50%, black 52%, rgba(0,0,0,0.68) 72%, transparent 97%)',
+                          }}
+                        />
+                      </div>
+                      <img
+                        src={GHOST_COIN_TITLE_BASE64}
+                        alt="귀신코인"
+                        className="h-9 sm:h-10 w-auto object-contain -mt-1 pointer-events-none select-none"
+                      />
+                    </div>
+
+                    {/* 우측: 위쪽으로 바짝 올린 도자기체 귀신팸 패밀리 앱 공용 코인 + 상시 노출 할인 뱃지(0% 포함) + 도자기체 금액 */}
+                    <div className="flex-1 text-right flex flex-col justify-between py-0.5">
+                      <div className="flex flex-col items-end gap-1.5 -mt-1">
+                        <span
+                          className="text-xs sm:text-[13px] tracking-wide bg-gradient-to-b from-white via-cyan-100 to-teal-200 bg-clip-text text-transparent"
+                          style={{
+                            fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
+                            filter: 'drop-shadow(0 1.5px 0 #0d4a56) drop-shadow(0 2px 6px rgba(45,212,191,0.3))',
+                          }}
+                        >
+                          귀신팸 패밀리 앱 공용 코인
+                        </span>
+                        <span
+                          className={`text-[11px] px-3 py-0.5 rounded-full shadow-xs transition-all tracking-wide ${
+                            discountPercent > 0
+                              ? 'bg-gradient-to-b from-rose-400 via-rose-500 to-pink-600 text-white border border-rose-300/50 shadow-[0_2px_8px_rgba(244,63,94,0.4)]'
+                              : 'bg-white/10 text-cyan-100/90 border border-cyan-300/25'
+                          }`}
+                          style={{
+                            fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
+                          }}
+                        >
+                          {discountPercent}% 할인
+                        </span>
+                      </div>
+
+                      <div className="mt-2">
+                        <div
+                          className="text-2xl sm:text-3xl tracking-wide flex items-baseline justify-end gap-1.5"
+                          style={{
+                            fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
+                          }}
+                        >
+                          <span
+                            className="bg-gradient-to-b from-white via-slate-50 to-cyan-200 bg-clip-text text-transparent"
+                            style={{
+                              filter: 'drop-shadow(0 2px 0 #134e4a) drop-shadow(0 4px 10px rgba(45,212,191,0.35))',
+                            }}
+                          >
+                            {selectedOption.toLocaleString()}
+                          </span>
+                          <span
+                            className="text-lg sm:text-xl bg-gradient-to-b from-white via-cyan-100 to-teal-300 bg-clip-text text-transparent"
+                            style={{
+                              filter: 'drop-shadow(0 2px 0 #115e59) drop-shadow(0 3px 8px rgba(45,212,191,0.3))',
+                            }}
+                          >
+                            코인
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-end gap-2">
+                          {discountPercent > 0 && (
+                            <span
+                              className="text-xs text-slate-400 line-through"
+                              style={{ fontFamily: "'TmoneyRoundWindExtraBold', sans-serif" }}
+                            >
+                              {selectedOption.toLocaleString()}원
+                            </span>
+                          )}
+                          <span
+                            className="text-xl sm:text-2xl tracking-wide bg-gradient-to-b from-amber-100 via-amber-300 to-amber-500 bg-clip-text text-transparent"
+                            style={{
+                              fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
+                              filter: 'drop-shadow(0 2px 0 #78350f) drop-shadow(0 4px 10px rgba(251,191,36,0.35))',
+                            }}
+                          >
+                            {finalPrice.toLocaleString()}원
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 카드 밖 우측 하단: 0 코인 초기화 버튼 */}
+                <div className="mt-2.5 flex justify-end px-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOption(0)}
+                    className="text-xs text-slate-600 hover:text-indigo-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-300/80 px-3 py-1 rounded-full cursor-pointer transition-all flex items-center gap-1 shadow-2xs active:scale-95"
+                    style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                  >
+                    ↺ 0 코인 초기화
+                  </button>
+                </div>
+              </div>
+
+              {/* ⚡ 네이버페이식 누적 금액 권종 카드 (+1천, +5천, +1만, +5만 — 중후한 다크 네이비·골드 테두리 & 도자기 서체 통일) */}
+              <div className="mt-4 max-w-md mx-auto">
+                <div
+                  className="grid grid-cols-4 gap-2.5"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOption((prev) => Math.min(prev + 1000, 1000000))}
+                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
+                  >
+                    <span
+                      className="bg-gradient-to-b from-white via-slate-100 to-cyan-200 bg-clip-text text-transparent"
+                      style={{ filter: 'drop-shadow(0 1.5px 0 #09132c)' }}
                     >
-                      <img src={opt.imgSrc} alt={`${opt.credits} Coins`} className="w-full h-auto" />
-                    </button>
-                  );
-                })}
+                      +1천
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOption((prev) => Math.min(prev + 5000, 1000000))}
+                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
+                  >
+                    <span
+                      className="bg-gradient-to-b from-white via-slate-100 to-cyan-200 bg-clip-text text-transparent"
+                      style={{ filter: 'drop-shadow(0 1.5px 0 #09132c)' }}
+                    >
+                      +5천
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOption((prev) => Math.min(prev + 10000, 1000000))}
+                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#1d2754] via-[#141c3f] to-[#0c112b] hover:from-[#233066] hover:to-[#101738] border border-amber-300/75 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_5px_12px_rgba(13,18,48,0.26)]"
+                  >
+                    <span
+                      className="bg-gradient-to-b from-amber-50 via-amber-200 to-amber-400 bg-clip-text text-transparent"
+                      style={{ filter: 'drop-shadow(0 1.5px 0 #451a03)' }}
+                    >
+                      +1만
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOption((prev) => Math.min(prev + 50000, 1000000))}
+                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#251f52] via-[#181740] to-[#0d102b] hover:from-[#2d2663] hover:to-[#121638] border border-amber-300/95 ring-1 ring-amber-400/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_6px_14px_rgba(13,18,48,0.3)]"
+                  >
+                    <span
+                      className="bg-gradient-to-b from-amber-100 via-amber-300 to-amber-500 bg-clip-text text-transparent"
+                      style={{ filter: 'drop-shadow(0 1.5px 0 #451a03)' }}
+                    >
+                      +5만
+                    </span>
+                  </button>
+                </div>
+
+                {/* 하단 할인 안내 (진하고 예쁘게 강조) */}
+                <div
+                  className="mt-3 py-2 px-3.5 rounded-xl bg-gradient-to-r from-slate-100 via-indigo-50/75 to-slate-100 border border-indigo-200/80 flex items-center justify-center flex-wrap gap-x-2 gap-y-1 text-xs sm:text-[13px] text-slate-700 shadow-2xs"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
+                  <span>
+                    1만원 이상 <strong className="text-rose-600 font-normal">5% 할인</strong>
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span>
+                    3만원 이상 <strong className="text-rose-600 font-normal">10% 할인</strong>
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span>
+                    5만원 이상 <strong className="text-rose-600 font-normal">10% 할인</strong>
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* 결제 수단 선택 */}
-            <div className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-md">
-              <h2 className="text-base text-slate-900 font-extrabold">2. 결제 수단 선택</h2>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label
-                  className={method === 'card'
-                    ? "flex items-center justify-between px-4 py-4 rounded-xl border-2 cursor-pointer transition-all border-emerald-600 bg-emerald-50/70 text-emerald-900 shadow-sm font-extrabold"
-                    : "flex items-center justify-between px-4 py-4 rounded-xl border-2 cursor-pointer transition-all border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 font-bold"
-                  }
+            {/* 결제 수단 (간편결제 5종 다이렉트 호출 + 신용/체크카드) */}
+            <div className="rounded-2xl border-2 border-slate-200 bg-white p-5 sm:p-6 shadow-md">
+              <div className="flex items-center justify-between mb-3.5 flex-wrap gap-1">
+                <h2
+                  className="text-base sm:text-lg text-slate-900 tracking-wide"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      checked={method === 'card'}
-                      onChange={() => setMethod('card')}
-                      className="h-4 w-4 accent-emerald-600"
-                    />
-                    <div className="flex flex-col text-left">
-                      <span className="font-extrabold text-sm text-slate-900">간편결제 (Npay / 카카오페이 등)</span>
-                      <span className="text-[11px] text-emerald-600 font-semibold">네이버페이 · 카카오페이 · 토스페이 · 애플페이</span>
-                    </div>
-                  </div>
-                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full shrink-0">추천</span>
-                </label>
-
-                <label
-                  className={method === 'bank'
-                    ? "flex items-center justify-between px-4 py-4 rounded-xl border-2 cursor-pointer transition-all border-indigo-600 bg-indigo-50/70 text-indigo-900 shadow-sm font-extrabold"
-                    : "flex items-center justify-between px-4 py-4 rounded-xl border-2 cursor-pointer transition-all border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 font-bold"
-                  }
+                  결제 수단
+                </h2>
+                <span
+                  className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full"
+                  style={{ fontFamily: "'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      checked={method === 'bank'}
-                      onChange={() => setMethod('bank')}
-                      className="h-4 w-4 accent-indigo-600"
-                    />
-                    <div className="flex flex-col text-left">
-                      <span className="font-extrabold text-sm text-slate-900">신용 / 체크카드</span>
-                      <span className="text-[11px] text-slate-500 font-medium">모든 국내 카드사 일반 결제</span>
-                    </div>
-                  </div>
-                </label>
+                  원하시는 간편결제를 누르면 해당 앱 결제창이 바로 열립니다
+                </span>
               </div>
 
-              <div className="mt-3.5 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
-                <span className="font-bold text-slate-700">제휴 간편결제:</span>
-                <span className="font-semibold text-slate-600">
-                  <strong className="text-emerald-700 font-black">네이버페이(Npay)</strong> · 카카오페이 · 토스페이 · PAYCO · 애플페이
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {PAY_METHOD_OPTIONS.map((item) => {
+                  const isActive = method === item.id;
+                  return (
+                    <label
+                      key={item.id}
+                      onClick={() => setMethod(item.id)}
+                      className={`flex items-center justify-between px-3.5 py-3 rounded-xl border-2 cursor-pointer transition-all ${
+                        isActive
+                          ? `${item.activeBorder} ${item.activeBg} shadow-sm`
+                          : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <input
+                          type="radio"
+                          name="ghost_coin_pay_method"
+                          checked={isActive}
+                          onChange={() => setMethod(item.id)}
+                          className="h-4 w-4 accent-indigo-600 shrink-0"
+                        />
+                        <div className="flex flex-col text-left min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="text-sm text-slate-900 truncate tracking-wide"
+                              style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                            >
+                              {item.label}
+                            </span>
+                            {item.badge && (
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 ${item.badgeColor}`}
+                                style={{ fontFamily: "'Cafe24Ssurround', sans-serif" }}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className="text-[11px] text-slate-500 truncate mt-0.5"
+                            style={{ fontFamily: "'TmoneyRoundWindExtraBold', sans-serif" }}
+                          >
+                            {item.subLabel}
+                          </span>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div
+                className="mt-3.5 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between flex-wrap gap-2 text-xs text-slate-600"
+                style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
+              >
+                <span className="text-slate-700">선택된 결제방식:</span>
+                <span className="text-indigo-700">
+                  {selectedMethodObj.label} · {selectedPkg.price.toLocaleString()}원 ({selectedPkg.credits.toLocaleString()} 귀신코인 즉시 충전)
                 </span>
               </div>
             </div>
 
-            {/* 결제 실행 버튼 */}
+            {/* 결제 실행 버튼 (선택한 method를 payMethodType으로 정확히 전달!) */}
             <HubPaymentTrigger
               amount={selectedPkg.price}
               coinAmount={selectedPkg.credits}
-              payMethodType="card"
+              payMethodType={method}
               returnUrl={`${origin}/api/payment/callback?redirectUrl=${encodeURIComponent(targetRedirectUrl)}`}
               onSuccess={onSuccess}
               onError={onError}
-              className="w-full rounded-2xl bg-indigo-600 py-5 text-lg font-black text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:shadow-xl active:scale-[0.98] transition-all border-b-4 border-indigo-800"
+              className="w-full rounded-2xl bg-gradient-to-b from-[#1b2554] via-[#131b40] to-[#0b1029] hover:from-[#222f68] hover:to-[#101738] py-5 text-lg text-white border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_10px_24px_rgba(13,18,48,0.35)] hover:shadow-xl active:scale-[0.98] transition-all tracking-wide"
             >
-              {selectedOption.toLocaleString()} 코인 결제하기
+              <span style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}>
+                👻 {selectedOption.toLocaleString()} 귀신코인 결제하기 ({selectedMethodObj.label.split(' ')[0]})
+              </span>
             </HubPaymentTrigger>
           </div>
         )}
@@ -397,7 +783,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         {tab === 'history' && (
           <div className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-md">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="text-base text-slate-900 font-extrabold">이용 내역</h2>
+              <h2 className="text-base text-slate-900 font-extrabold">귀신코인 이용 내역</h2>
               <select 
                 value={filterPeriod} 
                 onChange={(e) => setFilterPeriod(e.target.value as any)}
@@ -437,7 +823,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               {/* 최종 잔액 (오른쪽) */}
               <div className="flex justify-end items-center">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] sm:text-xs font-bold text-slate-500">최종 잔액</span>
+                  <span className="text-[10px] sm:text-xs font-bold text-slate-500">보유 귀신코인</span>
                   <div className="px-2.5 h-8 min-w-[40px] rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 shadow-sm">
                     <span className="text-xs sm:text-sm font-black tabular-nums">
                       {typeof hubBalance === 'number' ? `${hubBalance.toLocaleString()} C` : '…'}
@@ -465,10 +851,9 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   const itemAppName = getAppDisplayName(item.app_id);
                   let actionAndTitle = rawDesc
                     .replace('(신규)', '')
-                    .replace('KCP 심사관 테스트 코인 충전 (5,000C)', '코인 충전')
+                    .replace('KCP 심사관 테스트 코인 충전 (5,000C)', '귀신코인 충전')
                     .trim();
 
-                  // Strip app name prefix if it starts with it
                   const prefix = `${itemAppName} -`;
                   if (actionAndTitle.startsWith(prefix)) {
                     actionAndTitle = actionAndTitle.substring(prefix.length).trim();
@@ -476,7 +861,6 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                     actionAndTitle = actionAndTitle.substring(itemAppName.length).trim();
                   }
 
-                  // Fallback if empty after stripping
                   if (!actionAndTitle) {
                     actionAndTitle = rawDesc;
                   }
@@ -542,21 +926,21 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         {/* 하단 약관 및 유의사항 */}
         <div className="rounded-xl p-5 text-xs space-y-4 bg-slate-100 border-2 border-slate-200 text-slate-500">
           <div>
-            <p className="mb-1 text-slate-700 font-bold">상품정보</p>
+            <p className="mb-1 text-slate-700 font-bold">상품정보 (귀신코인 · GHOST COIN)</p>
             <p>
-              본 상품은 멀린 패밀리({appName} 등) AI 및 자동화 솔루션을 이용할 수 있는 통합 디지털 이용권 코인입니다. 결제 즉시 코인이 계정에 충전되어 패밀리 전 서비스를 즉시 이용할 수 있습니다.
+              본 상품은 귀신같이 시리즈 및 패밀리 솔루션({appName} 등)을 이용할 수 있는 통합 디지털 이용권 『귀신코인』입니다. 결제 즉시 코인이 계정에 충전되어 전 서비스를 바로 이용할 수 있습니다.
             </p>
           </div>
           <div>
             <p className="mb-1 text-slate-700 font-bold">환불 정책 및 디지털 이용권 안내</p>
             <p className="mb-1">
               결제 완료 시 계정으로 즉시 지급되는 무형의 디지털 재화이므로 실물 배송은 없습니다. 결제 후 7일 이내,
-              충전된 코인을 단 1회도 사용하지 않은 경우에 한하여 전액 환불 가능합니다. (일부 사용 시 잔여분 환불 불가)
+              충전된 귀신코인을 단 1회도 사용하지 않은 경우에 한하여 전액 환불 가능합니다. (일부 사용 시 잔여분 환불 불가)
             </p>
             <div className="bg-white p-3 rounded-lg border border-slate-200 text-slate-600 font-medium">
               <p className="font-bold text-slate-800">※ 간편결제 및 카드결제 환불 안내</p>
               <p className="mt-1 text-[11px] text-slate-500">
-                네이버페이, 카카오페이 등 제휴 간편결제 및 신용카드 취소는 PG사 및 카드사/간편결제 정책에 따라 즉시 승인 취소 또는 영업일 기준 3~5일 이내 카드사 한도 복원 및 환불 처리됩니다.
+                카카오페이, 네이버페이, 토스페이, 삼성월렛, 애플페이 등 제휴 간편결제 및 신용카드 취소는 PG사(NHN KCP) 및 카드사 정책에 따라 즉시 승인 취소 또는 영업일 기준 3~5일 이내 한도 복원 및 환불 처리됩니다.
               </p>
             </div>
           </div>
@@ -564,4 +948,22 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
       </main>
     </div>
   );
+
+  if (isModal) {
+    return (
+      <div
+        className="fixed inset-0 z-[9999] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+        onClick={onClose}
+      >
+        <div
+          className="w-full max-w-[740px] max-h-[92vh] overflow-y-auto rounded-3xl shadow-2xl bg-slate-50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {innerContent}
+        </div>
+      </div>
+    );
+  }
+
+  return innerContent;
 };

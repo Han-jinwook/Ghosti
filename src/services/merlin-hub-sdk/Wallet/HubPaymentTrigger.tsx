@@ -1,14 +1,15 @@
 /**
- * Version: v1.1.0
- * Last Updated: 2026-05-19
+ * Version: v1.2.0
+ * Last Updated: 2026-11-03
  */
 import React from 'react';
 import { useHubPayment } from './useHubPayment';
+import { HubPayMethodType } from './wallet';
 
 interface HubPaymentTriggerProps {
   amount: number;
   coinAmount: number;
-  payMethodType?: 'card' | 'phone' | 'bank';
+  payMethodType?: HubPayMethodType;
   returnUrl?: string;
   label?: string;
   className?: string;
@@ -35,6 +36,10 @@ export const HubPaymentTrigger: React.FC<HubPaymentTriggerProps> = ({
   const { status, requestPayment, error } = useHubPayment();
 
   const handlePayment = async () => {
+    if (!coinAmount || coinAmount <= 0) {
+      alert('충전하실 코인 금액(+1천, +5천, +1만, +5만)을 먼저 선택해 주세요.');
+      return;
+    }
     const success = await requestPayment({
       amount,
       coinAmount,
@@ -57,8 +62,8 @@ export const HubPaymentTrigger: React.FC<HubPaymentTriggerProps> = ({
         onClick={handlePayment}
         disabled={isLoading}
         className={`
-          relative flex items-center justify-center py-4 px-6 rounded-2xl font-bold text-lg transition-all
-          ${isLoading ? 'bg-gray-100 text-gray-400' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]'}
+          relative flex items-center justify-center py-4 px-6 rounded-2xl font-bold text-lg transition-all cursor-pointer
+          ${isLoading ? 'bg-gray-100 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-[0.98]'}
           ${className}
         `}
       >
@@ -68,7 +73,7 @@ export const HubPaymentTrigger: React.FC<HubPaymentTriggerProps> = ({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            <span>준비 중...</span>
+            <span>결제창 준비 중...</span>
           </div>
         ) : (
           children || label
