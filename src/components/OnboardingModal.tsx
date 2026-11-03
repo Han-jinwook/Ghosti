@@ -237,7 +237,21 @@ export function simulateSuperpowerLocal(mode: 'typo' | 'number9' | 'extract8' | 
   return s;
 }
 
+function loadLocalSnippets(): Record<string, string> {
+  try {
+    const savedSnippetsRaw = localStorage.getItem(SNIPPETS_STORAGE_KEY);
+    if (savedSnippetsRaw) {
+      return { ...DEFAULT_SNIPPETS, ...JSON.parse(savedSnippetsRaw) };
+    }
+  } catch {
+    // ignore
+  }
+  return { ...DEFAULT_SNIPPETS };
+}
+
 export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boolean): Promise<SuperpowerTrialStatus> {
+  const localSnippets = loadLocalSnippets();
+  const hasLocalSavedSnippets = Boolean(localStorage.getItem(SNIPPETS_STORAGE_KEY));
   try {
     const q = new URLSearchParams({ accountId, isSubscribed: String(isSubscribed) });
     const res = await fetch(getZCoreUrl(`/api/superpower/status?${q.toString()}`), {
@@ -246,16 +260,19 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok) {
-        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(data));
-        return data as SuperpowerTrialStatus;
+        const mergedSnippets = hasLocalSavedSnippets
+          ? { ...DEFAULT_SNIPPETS, ...(data.snippets || {}), ...localSnippets }
+          : { ...DEFAULT_SNIPPETS, ...(data.snippets || {}) };
+        const mergedData = { ...data, snippets: mergedSnippets };
+        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
+        return mergedData as SuperpowerTrialStatus;
       }
     }
   } catch {
     // 로컬 폴백
   }
   const savedRaw = localStorage.getItem(TRIAL_STORAGE_KEY);
-  const savedSnippetsRaw = localStorage.getItem(SNIPPETS_STORAGE_KEY);
-  const snippets = savedSnippetsRaw ? { ...DEFAULT_SNIPPETS, ...JSON.parse(savedSnippetsRaw) } : DEFAULT_SNIPPETS;
+  const snippets = localSnippets;
   if (savedRaw) {
     try {
       const parsed = JSON.parse(savedRaw) as SuperpowerTrialStatus;
@@ -281,6 +298,7 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
 }
 
 export async function startSuperpowerTrialAction(accountId: string, isSubscribed: boolean): Promise<SuperpowerTrialStatus> {
+  const localSnippets = loadLocalSnippets();
   try {
     const res = await fetch(getZCoreUrl('/api/superpower/start-trial'), {
       method: 'POST',
@@ -291,9 +309,10 @@ export async function startSuperpowerTrialAction(accountId: string, isSubscribed
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok) {
-        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(data));
-        window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: data }));
-        return data as SuperpowerTrialStatus;
+        const mergedData = { ...data, snippets: { ...(data.snippets || {}), ...localSnippets } };
+        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
+        window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: mergedData }));
+        return mergedData as SuperpowerTrialStatus;
       }
     }
   } catch {
@@ -310,7 +329,7 @@ export async function startSuperpowerTrialAction(accountId: string, isSubscribed
     started_at: now.toISOString().slice(0, 19).replace('T', ' '),
     expires_at: exp.toISOString().slice(0, 19).replace('T', ' '),
     is_subscribed: isSubscribed,
-    snippets: DEFAULT_SNIPPETS,
+    snippets: localSnippets,
   };
   localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(fallback));
   window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: fallback }));
@@ -380,16 +399,35 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
   const [ghostMemoryExpanded, setGhostMemoryExpanded] = useState(false);
   const [ghostMemorySelIdx, setGhostMemorySelIdx] = useState(0);
   const [ghostMemoryHoverIdx, setGhostMemoryHoverIdx] = useState<number | null>(null);
+  const [isClipboardCleared, setIsClipboardCleared] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ghosti_clipboard_cleared') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // F1~F10 내 상용구 & 클립보드 보관 기간(기본 7일·최대 30일) & 전화번호 하이픈
+  const [snippets, setSnippets] = useState<Record<string, string>>(() => loadLocalSnippets());
+  const [snippetSavedMsg, setSnippetSavedMsg] = useState<string | null>(null);
+  const [retentionDays, setRetentionDays] = useState<1 | 3 | 7 | 30>(7);
+  const [retentionToast, setRetentionToast] = useState<string | null>(null);
+  const [hyphenInput, setHyphenInput] = useState('01012345678');
+  const [hyphenOutput, setHyphenOutput] = useState('010-1234-5678');
 
   const ghostMemoryCandidates = useMemo(() => {
+    if (isClipboardCleared) {
+      return [];
+    }
+    const f1Text = snippets.F1 || DEFAULT_SNIPPETS.F1;
+    const f2Text = snippets.F2 || DEFAULT_SNIPPETS.F2;
     const baseItems = [
       {
         id: 'mem-1',
         kind: 'text' as const,
         relTime: '방금 전',
-        snippet: '국민은행 123-45-678910 (예금주: 썬드림 백은숙 대표) 월 정기 구독료 정산 계좌 안내',
-        fullText:
-          '국민은행 123-45-678910 (예금주: 썬드림 백은숙 대표)\n- 용도: 월 정기 구독료 및 거래처 대금 정산 전용 계좌\n- 세금계산서 발행 이메일: billing@sundreamer.app',
+        snippet: `${f1Text} (F1 상용구 · 월 정기 구독료 정산 계좌 안내)`,
+        fullText: `${f1Text}\n- 용도: 월 정기 구독료 및 거래처 대금 정산 전용 계좌 (F1 단축 슬롯)\n- 세금계산서 발행 이메일: ${snippets.F7 || DEFAULT_SNIPPETS.F7}`,
       },
       {
         id: 'mem-2',
@@ -403,9 +441,8 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
         id: 'mem-3',
         kind: 'text' as const,
         relTime: '5분 전',
-        snippet: '서울 강남구 테헤란로 123 썬드림타워 15층 (본사 회의실 방문 안내 및 주차 등록)',
-        fullText:
-          '서울 강남구 테헤란로 123 썬드림타워 15층\n- 지하 2~4층 방문객 주차장 이용 가능 (2시간 무료 쿠폰 지급)\n- 도착 후 안내데스크에서 홍길동 대표에게 연락 부탁드립니다.',
+        snippet: `${f2Text} (F2 상용구 · 본사 회의실 방문 안내 및 주차 등록)`,
+        fullText: `${f2Text}\n- 지하 2~4층 방문객 주차장 이용 가능 (2시간 무료 쿠폰 지급)\n- 도착 후 안내데스크에서 홍길동 대표에게 연락 부탁드립니다.`,
       },
       {
         id: 'mem-4',
@@ -441,7 +478,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
           },
           ...baseItems.slice(0, 4),
         ];
-  }, [ghostMemoryQuery]);
+  }, [ghostMemoryQuery, isClipboardCleared, snippets]);
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem('ghosti_telemetry_enabled') !== 'false';
@@ -450,14 +487,6 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     }
   });
   const [showTermsClause, setShowTermsClause] = useState(false);
-
-  // F1~F10 내 상용구 & 클립보드 보관 기간(기본 7일·최대 30일) & 전화번호 하이픈
-  const [snippets, setSnippets] = useState<Record<string, string>>(DEFAULT_SNIPPETS);
-  const [snippetSavedMsg, setSnippetSavedMsg] = useState<string | null>(null);
-  const [retentionDays, setRetentionDays] = useState<1 | 3 | 7 | 30>(7);
-  const [retentionToast, setRetentionToast] = useState<string | null>(null);
-  const [hyphenInput, setHyphenInput] = useState('01012345678');
-  const [hyphenOutput, setHyphenOutput] = useState('010-1234-5678');
 
   // 9번 억만금 숫자 변환
   const [moneyInput, setMoneyInput] = useState('3억 5천만');
@@ -497,6 +526,15 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     if (!showOnboarding && !inlineSuperpowerOnly) return;
     void fetchSuperpowerStatus(accountId, isSubscribedUser).then((st) => {
       setTrialStatus(st);
+      const localSaved = localStorage.getItem(SNIPPETS_STORAGE_KEY);
+      if (localSaved) {
+        try {
+          setSnippets((prev) => ({ ...DEFAULT_SNIPPETS, ...(st.snippets || {}), ...prev, ...JSON.parse(localSaved) }));
+          return;
+        } catch {
+          // ignore
+        }
+      }
       if (st.snippets) {
         setSnippets((prev) => ({ ...prev, ...st.snippets }));
       }
@@ -573,6 +611,19 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
   const handleSaveSnippets = async () => {
     localStorage.setItem(SNIPPETS_STORAGE_KEY, JSON.stringify(snippets));
     try {
+      const rawTrial = localStorage.getItem(TRIAL_STORAGE_KEY);
+      if (rawTrial) {
+        const parsedTrial = JSON.parse(rawTrial);
+        localStorage.setItem(
+          TRIAL_STORAGE_KEY,
+          JSON.stringify({ ...parsedTrial, snippets: { ...(parsedTrial.snippets || {}), ...snippets } })
+        );
+      }
+    } catch {
+      // ignore
+    }
+    setGhostMemoryResult(`✅ 상용구 저장 반영 완료! (F1: ${snippets.F1 || DEFAULT_SNIPPETS.F1})`);
+    try {
       const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -582,18 +633,18 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok) {
-          setSnippetSavedMsg(data.message || '✅ Z-코어에 F1~F10 10개 상용구가 즉시 저장되었습니다!');
+          setSnippetSavedMsg(data.message || '✅ Z-코어에 F1~F10 10개 상용구가 즉시 저장·반영되었습니다!');
           playBabyGhostChime();
-          setTimeout(() => setSnippetSavedMsg(null), 3500);
+          setTimeout(() => setSnippetSavedMsg(null), 4000);
           return;
         }
       }
     } catch {
       // 로컬 폴백
     }
-    setSnippetSavedMsg('✅ F1~F10 10개 내 상용구가 저장되었습니다! (Ctrl + 0 ➔ F1~F10으로 즉시 붙여넣기)');
+    setSnippetSavedMsg('✅ F1~F10 10개 내 상용구가 즉시 저장·반영되었습니다! (상단 복사검색 목록 및 F1~F10 슬롯에 즉시 적용됨)');
     playBabyGhostChime();
-    setTimeout(() => setSnippetSavedMsg(null), 3500);
+    setTimeout(() => setSnippetSavedMsg(null), 4000);
   };
 
   const handleMoneySimulate = async (val: string) => {
@@ -1120,74 +1171,97 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
 
               {/* [3단: Win+V 스타일 아코디언 다중 기억검색 드롭다운 (상위 5개 후보 카드 + 44x32 스샷 썸네일 + 호버 시 전체 원문 팝업)] */}
               {ghostMemoryExpanded && (
-                <div className="mt-1 pt-2 border-t border-white/15 grid grid-cols-1 lg:grid-cols-12 gap-2.5">
-                  <div className="lg:col-span-7 flex flex-col gap-1">
-                    {ghostMemoryCandidates.slice(0, 5).map((item, idx) => {
-                      const isSel = idx === ghostMemorySelIdx;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onMouseEnter={() => {
-                            setGhostMemorySelIdx(idx);
-                            setGhostMemoryHoverIdx(idx);
-                          }}
-                          onClick={() => {
-                            playBabyGhostChime('typo');
-                            setGhostMemoryResult(`✅ #${idx + 1} [${item.snippet.slice(0, 26)}...] 즉시 붙여넣기 완료!`);
-                            setGhostMemoryExpanded(false);
-                            setGhostMemoryHoverIdx(null);
-                          }}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center gap-2.5 transition-all cursor-pointer border ${
-                            isSel
-                              ? 'bg-teal-500/20 border-[#2DD4BF] text-white'
-                              : 'bg-zinc-950 border-white/15 text-zinc-200 hover:bg-teal-500/20/60'
-                          }`}
-                        >
-                          <span className="text-[11px] font-extrabold text-teal-300 w-4 shrink-0">
-                            {idx + 1}
-                          </span>
-                          {item.kind === 'image' && (
-                            <div className="w-[44px] h-[32px] rounded bg-zinc-900 border border-[#2DD4BF]/50 flex flex-col items-center justify-center shrink-0 text-[9px] text-teal-300 font-black leading-none">
-                              <span>IMG</span>
-                              <span className="text-[8px] text-zinc-400">OCR</span>
-                            </div>
-                          )}
-                          <span className="text-[11.5px] font-semibold truncate flex-1">
-                            {item.snippet}
-                          </span>
-                          <span className="text-[10px] text-zinc-400 shrink-0">
-                            {item.relTime}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="lg:col-span-5 p-2.5 rounded-xl bg-zinc-950 border border-[#2DD4BF]/60 flex flex-col justify-between gap-1.5">
-                    {(() => {
-                      const activeItem =
-                        ghostMemoryCandidates[ghostMemoryHoverIdx ?? ghostMemorySelIdx] ||
-                        ghostMemoryCandidates[0];
-                      return (
-                        <>
-                          <div className="flex items-center justify-between text-[10.5px] text-teal-300 font-extrabold">
-                            <span>
-                              {activeItem?.kind === 'image'
-                                ? '🖼️ 캡처 이미지 + 백그라운드 OCR 전문 미리보기'
-                                : '📄 전체 원문 미리보기 말풍선 (Hover)'}
-                            </span>
-                            <span className="text-zinc-400">{activeItem?.relTime}</span>
-                          </div>
-                          <pre className="text-[11px] text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed bg-zinc-900 p-2 rounded-lg border border-white/5">
-                            {activeItem?.fullText}
-                          </pre>
-                          <span className="text-[10px] text-emerald-300 font-bold">
-                            👉 클릭 또는 Enter 시 현재 커서 위치에 즉시 붙여넣기 (③번 결과음 재생)
-                          </span>
-                        </>
-                      );
-                    })()}
-                  </div>
+                <div className="mt-1 pt-2 border-t border-white/15">
+                  {ghostMemoryCandidates.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-zinc-950 border border-rose-400/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                      <span className="text-zinc-300 font-bold">
+                        📭 현재 보관 중인 복사검색 클립보드 기록이 없습니다 (🧹 즉시 비우기 완료 · 0건).
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsClipboardCleared(false);
+                          try {
+                            localStorage.removeItem('ghosti_clipboard_cleared');
+                          } catch {}
+                          setGhostMemoryResult('✅ 최근 클립보드 예시 기록 5건을 다시 불러왔습니다.');
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-300 font-extrabold cursor-pointer shrink-0"
+                      >
+                        ↺ 예시 기록 5건 다시 불러오기
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+                      <div className="lg:col-span-7 flex flex-col gap-1">
+                        {ghostMemoryCandidates.slice(0, 5).map((item, idx) => {
+                          const isSel = idx === ghostMemorySelIdx;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onMouseEnter={() => {
+                                setGhostMemorySelIdx(idx);
+                                setGhostMemoryHoverIdx(idx);
+                              }}
+                              onClick={() => {
+                                playBabyGhostChime('typo');
+                                setGhostMemoryResult(`✅ #${idx + 1} [${item.snippet.slice(0, 26)}...] 즉시 붙여넣기 완료!`);
+                                setGhostMemoryExpanded(false);
+                                setGhostMemoryHoverIdx(null);
+                              }}
+                              className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center gap-2.5 transition-all cursor-pointer border ${
+                                isSel
+                                  ? 'bg-teal-500/20 border-[#2DD4BF] text-white'
+                                  : 'bg-zinc-950 border-white/15 text-zinc-200 hover:bg-teal-500/20/60'
+                              }`}
+                            >
+                              <span className="text-[11px] font-extrabold text-teal-300 w-4 shrink-0">
+                                {idx + 1}
+                              </span>
+                              {item.kind === 'image' && (
+                                <div className="w-[44px] h-[32px] rounded bg-zinc-900 border border-[#2DD4BF]/50 flex flex-col items-center justify-center shrink-0 text-[9px] text-teal-300 font-black leading-none">
+                                  <span>IMG</span>
+                                  <span className="text-[8px] text-zinc-400">OCR</span>
+                                </div>
+                              )}
+                              <span className="text-[11.5px] font-semibold truncate flex-1">
+                                {item.snippet}
+                              </span>
+                              <span className="text-[10px] text-zinc-400 shrink-0">
+                                {item.relTime}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="lg:col-span-5 p-2.5 rounded-xl bg-zinc-950 border border-[#2DD4BF]/60 flex flex-col justify-between gap-1.5">
+                        {(() => {
+                          const activeItem =
+                            ghostMemoryCandidates[ghostMemoryHoverIdx ?? ghostMemorySelIdx] ||
+                            ghostMemoryCandidates[0];
+                          return (
+                            <>
+                              <div className="flex items-center justify-between text-[10.5px] text-teal-300 font-extrabold">
+                                <span>
+                                  {activeItem?.kind === 'image'
+                                    ? '🖼️ 캡처 이미지 + 백그라운드 OCR 전문 미리보기'
+                                    : '📄 전체 원문 미리보기 말풍선 (Hover)'}
+                                </span>
+                                <span className="text-zinc-400">{activeItem?.relTime}</span>
+                              </div>
+                              <pre className="text-[11px] text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed bg-zinc-900 p-2 rounded-lg border border-white/5">
+                                {activeItem?.fullText}
+                              </pre>
+                              <span className="text-[10px] text-emerald-300 font-bold">
+                                👉 클릭 또는 Enter 시 현재 커서 위치에 즉시 붙여넣기 (③번 결과음 재생)
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1406,15 +1480,37 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
                 {(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'] as const).map((key) => (
                   <div key={key} className="flex flex-col gap-1">
-                    <span className="text-[10.5px] font-mono text-amber-300 font-bold">
-                      {key} 단축 슬롯
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10.5px] font-mono text-amber-300 font-bold">
+                        {key} 단축 슬롯
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = snippets[key] || '';
+                          localStorage.setItem(SNIPPETS_STORAGE_KEY, JSON.stringify(snippets));
+                          playBabyGhostChime('typo');
+                          setGhostMemoryResult(`✅ [${key} 상용구] "${val}" 즉시 입력 완료!`);
+                          setSnippetSavedMsg(`✅ [${key} 슬롯 테스트] "${val}" 문구가 즉시 호출되었습니다!`);
+                        }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 hover:bg-amber-400/30 text-amber-300 font-bold cursor-pointer"
+                      >
+                        눌러보기
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={snippets[key] || ''}
-                      onChange={(e) =>
-                        setSnippets((prev) => ({ ...prev, [key]: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        const nextVal = e.target.value;
+                        setSnippets((prev) => {
+                          const updated = { ...prev, [key]: nextVal };
+                          try {
+                            localStorage.setItem(SNIPPETS_STORAGE_KEY, JSON.stringify(updated));
+                          } catch {}
+                          return updated;
+                        });
+                      }}
                       className="px-2.5 py-1.5 rounded-lg bg-zinc-950 border border-white/15 text-[11.5px] text-white outline-none focus:border-amber-400"
                     />
                   </div>
@@ -1466,6 +1562,14 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   <button
                     type="button"
                     onClick={async () => {
+                      setIsClipboardCleared(true);
+                      setGhostMemoryQuery('');
+                      setGhostMemoryExpanded(true);
+                      setGhostMemoryHoverIdx(null);
+                      setGhostMemoryResult('🧹 복사검색 클립보드 기록이 모두 비워졌습니다 (0건).');
+                      try {
+                        localStorage.setItem('ghosti_clipboard_cleared', 'true');
+                      } catch {}
                       try {
                         await fetch(getZCoreUrl('/api/superpower/clear-history'), {
                           method: 'POST',
@@ -1476,13 +1580,30 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       } catch {
                         // ignore
                       }
-                      setRetentionToast('🧹 복사검색 클립보드 기록을 즉시 비웠습니다.');
-                      setTimeout(() => setRetentionToast(null), 3000);
+                      setRetentionToast('🧹 복사검색 클립보드 기록을 즉시 비웠습니다 (상단 복사검색 목록 0건으로 초기화됨).');
+                      setTimeout(() => setRetentionToast(null), 4000);
                     }}
                     className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 font-bold cursor-pointer"
                   >
                     🧹 즉시 비우기
                   </button>
+                  {isClipboardCleared && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsClipboardCleared(false);
+                        try {
+                          localStorage.removeItem('ghosti_clipboard_cleared');
+                        } catch {}
+                        setGhostMemoryResult('✅ 최근 클립보드 예시 기록 5건을 다시 복구했습니다.');
+                        setRetentionToast('✅ 복사검색 예시 기록 5건이 다시 복구되었습니다.');
+                        setTimeout(() => setRetentionToast(null), 3000);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-200 font-bold cursor-pointer"
+                    >
+                      ↺ 예시 기록 복구
+                    </button>
+                  )}
                 </div>
               </div>
               {retentionToast && (
