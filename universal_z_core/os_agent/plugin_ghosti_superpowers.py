@@ -39,25 +39,14 @@ _DAEMON_LOCK = threading.Lock()
 
 
 def ensure_superpower_daemon_running() -> bool:
-    """Ctrl+0 초능력 백그라운드 데몬이 떠 있지 않으면 스레드/프로세스로 즉시 기동합니다."""
-    global _DAEMON_THREAD_STARTED
-    with _DAEMON_LOCK:
-        if _DAEMON_THREAD_STARTED:
-            return True
-        try:
-            import socket
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                s.bind(("127.0.0.1", spd.LOCK_PORT))
-                s.close()
-                t = threading.Thread(target=spd.main, daemon=True)
-                t.start()
-            except OSError:
-                pass
-            _DAEMON_THREAD_STARTED = True
-            return True
-        except Exception:
-            return False
+    """
+    [프로세스 완전 분리 모드 (멀린님 지시 반영)]
+    - 귀신창 데몬(seq_paste_daemon.py, 포트 51988)은 전속비서(Secretary)가 관리하는
+      독립 프로세스(MerlinGhostWindowStart / start_seq_daemon.vbs)로만 단독 구동합니다.
+    - 기본 엔진(5199)이 내장 스레드(threading.Thread)로 중복 기동하여 포트를 선점하거나
+      인덱싱/재기동 시 귀신창에 간섭하는 현상을 100% 원천 차단합니다.
+    """
+    return True
 
 
 def get_machine_hwid() -> str:
