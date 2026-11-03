@@ -74,23 +74,7 @@ export const GhostiLoadingSplash: React.FC = () => {
           />
         </div>
 
-        {/* 하단 상태 배지 & 3대 핵심 리듬 안내 */}
-        <div className="mt-5 flex flex-col items-center gap-2.5 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-teal-950/75 border border-teal-400/35 shadow-[0_0_24px_rgba(45,212,191,0.2)]">
-            <span className="w-2 h-2 rounded-full bg-teal-300 animate-ping" />
-            <span className="text-[12.5px] md:text-[13.5px] font-extrabold text-teal-100 tracking-tight">
-              {initialized
-                ? zCoreConnected
-                  ? '✨ 멀린 Z-코어(5199) 직결 완료! 내 PC 파일을 불러왔습니다'
-                  : '✨ 준비 완료! 귀신같이 찾고, 치우고, 고칠 준비가 끝났습니다'
-                : '귀신같이 찾고 · 치우고 · 고치는 AI 엔진을 깨우는 중...'}
-            </span>
-          </div>
 
-          <p className="text-[11.5px] md:text-[12px] font-bold text-teal-200/75 tracking-tight">
-            🎯 1초 내용찾기 · 🧹 안전 휴지통 청소 · ⚙️ 3초 포렌식 복구
-          </p>
-        </div>
       </div>
     </div>
   );
