@@ -2060,7 +2060,7 @@ def _get_win_class_and_title(hwnd: int) -> tuple[str, str]:
 
 
 def _find_visible_utility_windows() -> list[int]:
-    """화면에 열려 있는 메모장(Notepad) 또는 계산기(Calculator/ApplicationFrameWindow) 등 보조 유틸 창 탐색"""
+    """Win10 & Win11 공통: 화면에 열려 있는 메모장(Notepad) 또는 계산기(ApplicationFrameWindow/CalcFrame/SciCalc) 탐색"""
     found: list[int] = []
     WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
@@ -2071,6 +2071,7 @@ def _find_visible_utility_windows() -> list[int]:
             c_low = cls_name.lower()
             if (
                 "notepad" in c_low
+                or "calc" in c_low
                 or "메모장" in t_low
                 or "notepad" in t_low
                 or "계산기" in t_low
@@ -2815,16 +2816,22 @@ Write-Output $res.Text
                                 pending_first_typo = None
 
                                 orig_c = get_clipboard_text()
-                                # 신형 메모장(Win11 Notepad) 등에서 빠른 백스페이스나 Ctrl+Shift+Left가 씹혀
-                                # 영문이 그대로 남는 현상을 완벽히 방지하기 위해, 정확한 글자 수(total_backspaces)만큼
-                                # Shift+Left로 블록 지정 후 VK_BACK 1회로 깨끗이 지우고 붙여넣습니다!
-                                for _ in range(total_backspaces):
-                                    tap_key_combo([VK_SHIFT], VK_LEFT)
-                                    time.sleep(0.008)
-                                time.sleep(0.02)
-                                tap_key_combo([], VK_BACK)
-                                time.sleep(0.025)
-                                daemon_set_clipboard(combined_conv)
+                                # [Win10 & Win11 100% OS-Agnostic 통합 방식]:
+                                # 글자 수를 세어 백스페이스/방향키를 연타하면 Win10/Win11 입력창마다 키가 씹히거나
+                                # 앞글자('dks') 또는 뒷글자('dkssud...')가 남는 문제가 발생하므로,
+                                # 아예 현재 줄 앞부분 전체(Shift+Home)를 블록 지정해 복사한 뒤 줄 전체를 한 번에 변환·교체합니다!
+                                VK_HOME = 0x24
+                                tap_key_combo([VK_SHIFT], VK_HOME)
+                                time.sleep(0.035)
+                                tap_key_combo([VK_CONTROL], VK_C)
+                                time.sleep(0.04)
+                                line_sel = get_clipboard_text()
+                                if line_sel and line_sel != orig_c:
+                                    morphed_line, _ = morph_korean_english_text_with_direction(line_sel)
+                                    final_paste = morphed_line if morphed_line.endswith(" ") else (morphed_line + " ")
+                                else:
+                                    final_paste = combined_conv
+                                daemon_set_clipboard(final_paste)
                                 time.sleep(0.025)
                                 tap_key_combo([VK_CONTROL], VK_V)
                                 time.sleep(0.04)
