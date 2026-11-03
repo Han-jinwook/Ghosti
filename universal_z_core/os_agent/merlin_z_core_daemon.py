@@ -854,6 +854,12 @@ def main() -> None:
     replaced_pids = ensure_port_free(args.port)
     start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
     plugin_ghosti_superpowers.ensure_superpower_daemon_running()
+    try:
+        import ghosti_safe_ops
+
+        ghosti_safe_ops.start_desktop_timemachine_watcher()
+    except Exception:
+        pass
 
     class ReusableThreadingHTTPServer(ThreadingHTTPServer):
         allow_reuse_address = True

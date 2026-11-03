@@ -749,6 +749,28 @@ export const DesktopDashboard: React.FC = () => {
                         </span>
                       </div>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playMenuSummonSound();
+                        setIsDeviceIntegrationOpen(false);
+                        setActiveLoungeType('work');
+                        setDesktopTab('sync');
+                        resetToZenCanvas();
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(activeLoungeType === 'work' && desktopTab === 'sync')}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">👥</span>
+                          <span className="truncate font-bold">팀원 권한 &amp; S: 드라이브 연결</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          멤버별 권한 설정 · 팀원 0원 연결
+                        </span>
+                      </div>
+                    </button>
                   </div>
                 )}
               </div>

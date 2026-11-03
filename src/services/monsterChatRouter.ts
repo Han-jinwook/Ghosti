@@ -1519,14 +1519,22 @@ export async function processUnifiedMonsterChatQuery(params: {
       );
     }
     // 복원지점이 수십 개일 때 유저가 특정 키워드(예: "바탕화면 복원 기록", "설치파일 복원")를 언급했으면 해당 기록을 최상단으로 배치
-    const filterKwMatch = clean.replace(/최근|복원|기록|지점|히스토리|목록|보여|줘|주세요|알려|원래대로|되돌려|원복|취소|해|할래/g, '').trim();
+    const filterKwMatch = clean
+      .replace(
+        /방금|아까|최근|이전|지운|삭제한|영구삭제한|사라진|파일|문서|복원|복구|기록|지점|히스토리|목록|보여|줘|주세요|알려|원래대로|되돌려|원복|취소|해|할래/g,
+        ''
+      )
+      .trim();
     const sortedPoints =
       filterKwMatch.length >= 2
         ? [
             ...points.filter((p) => p.summary.includes(filterKwMatch) || p.userPrompt.includes(filterKwMatch)),
             ...points.filter((p) => !p.summary.includes(filterKwMatch) && !p.userPrompt.includes(filterKwMatch)),
           ]
-        : points;
+        : [
+            ...points.filter((p) => p.summary.includes('영구삭제') || p.summary.includes('타임머신')),
+            ...points.filter((p) => !p.summary.includes('영구삭제') && !p.summary.includes('타임머신')),
+          ];
 
     const countGuide =
       sortedPoints.length > 3

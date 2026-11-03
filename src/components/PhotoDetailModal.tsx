@@ -177,6 +177,8 @@ export const PhotoDetailModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
   const [drillQuery, setDrillQuery] = useState('');
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [isHiddenInLounge, setIsHiddenInLounge] = useState(false);
 
   // 선택된 사진이 속한 실제 연사/중복 그룹 전체 조회
   const resolvedBurstPhotos = useMemo(() => {
@@ -324,79 +326,151 @@ export const PhotoDetailModal: React.FC = () => {
         className="w-full max-w-4xl rounded-3xl glass-l2 p-5 md:p-7 border border-primary-container/30 shadow-[0_0_60px_rgba(0,0,0,0.75)] flex flex-col gap-5 my-auto"
       >
         {/* Top Bar */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="material-symbols-outlined text-primary-container text-[22px]">
-              auto_awesome
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold truncate">
-                  {selectedPhoto.name}
-                </h3>
-                {hasBurstGroup && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-primary-container/25 dark:text-primary-container border border-teal-700/40 dark:border-primary-container/50 font-label-sm text-[11px] font-extrabold shrink-0">
-                    ❐ {resolvedBurstPhotos.length}장 연사 묶음
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="material-symbols-outlined text-primary-container text-[22px]">
+                auto_awesome
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold truncate">
+                    {selectedPhoto.name}
+                  </h3>
+                  {hasBurstGroup && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-primary-container/25 dark:text-primary-container border border-teal-700/40 dark:border-primary-container/50 font-label-sm text-[11px] font-extrabold shrink-0">
+                      ❐ {resolvedBurstPhotos.length}장 연사 묶음
+                    </span>
+                  )}
+                  {isHiddenInLounge && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/50 font-label-sm text-[11px] font-extrabold shrink-0">
+                      🙈 공유방에서 숨김 처리됨 (원본 안전 보존)
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
+                    📸 촬영자: 김총무(방장) · 본인 업로드
                   </span>
-                )}
+                  <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-700 dark:text-cyan-300 font-label-sm text-[11.5px] font-extrabold">
+                    📅 촬영 날짜: {selectedPhoto.date}
+                  </span>
+                  <span className="font-label-mono text-[11px] text-on-surface-variant">
+                    • {(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB • 원본 해상도 100% 보존 (카톡 화질 저하 0%)
+                  </span>
+                </div>
               </div>
-              <p className="font-label-mono text-[11px] text-on-surface-variant">
-                촬영일: {selectedPhoto.date} • {(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB •
-                768차원 시각 임베딩 일치
-              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <a
+                href={selectedPhoto.fullUrl}
+                download={selectedPhoto.name}
+                onClick={() =>
+                  setActionNotice(
+                    `⬇️ '${selectedPhoto.name}' 원본 화질(무압축 ${(selectedPhoto.size / 1024 / 1024).toFixed(2)}MB) 다운로드가 시작되었습니다!`
+                  )
+                }
+                className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="카톡처럼 화질이 깨지지 않는 100% 무압축 원본 화질 사진을 내 기기에 그대로 저장합니다"
+              >
+                <span>⬇️ 원본 화질 다운로드</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isHiddenInLounge;
+                  setIsHiddenInLounge(next);
+                  setActionNotice(
+                    next
+                      ? `🙈 [실수 삭제 방지] '${selectedPhoto.name}' 사진을 공유방 목록에서 안전하게 숨겼습니다. (원본 파일은 삭제되지 않고 보존됩니다)`
+                      : `👁️ '${selectedPhoto.name}' 사진의 숨김을 해제하여 공유방에 다시 표시합니다.`
+                  );
+                }}
+                className={`px-3 py-1.5 rounded-full border font-label-sm text-label-sm font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
+                  isHiddenInLounge
+                    ? 'bg-amber-500 text-zinc-950 border-amber-400'
+                    : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/50 text-amber-700 dark:text-amber-300'
+                }`}
+                title="방장 권한으로 실수 삭제 없이 공유방 화면에서만 사진을 숨기거나 다시 표시합니다"
+              >
+                <span>{isHiddenInLounge ? '👁️ 숨김 해제' : '🙈 숨기기 (실수 삭제 방지)'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setActionNotice(
+                    `🛡️ [본인 업로드 파일 관리] '${selectedPhoto.name}' — 업로더 본인 및 방장만 노출 상태 변경·보관함 이동이 가능하여 다른 회원의 실수 삭제를 원천 차단합니다.`
+                  )
+                }
+                className="px-3 py-1.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/50 text-purple-700 dark:text-purple-300 font-label-sm text-label-sm font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+                title="내가 올린 사진의 공유 범위 변경 및 실수 삭제 방지 보호 설정을 관리합니다"
+              >
+                <span>🗂️ 본인 업로드 파일 관리</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  dispatchGhostCastLiveCommand({
+                    action: 'OPEN_MONITOR_CAST',
+                    photoId: selectedPhoto.id,
+                  })
+                }
+                className="px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/60 text-cyan-700 dark:text-cyan-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="연결된 내 PC/노트북 모니터에 전체화면 클린 뷰어로 띄우고 내 폰을 무선 리모컨으로 전환합니다 (카톡 알림 유출 0%)"
+              >
+                <span>💻 모니터로 크게 보기</span>
+              </button>
+              <button
+                onClick={() => toggleBookmark(selectedPhoto.id)}
+                className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1 transition-all cursor-pointer ${
+                  selectedPhoto.bookmarked
+                    ? 'bg-red-600 text-white font-extrabold shadow-xs'
+                    : 'bg-surface-container-high text-on-surface-variant hover:text-red-500'
+                }`}
+              >
+                <span
+                  className={`material-symbols-outlined text-[16px] ${
+                    selectedPhoto.bookmarked ? 'text-white' : 'text-red-500'
+                  }`}
+                  style={
+                    selectedPhoto.bookmarked
+                      ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
+                      : undefined
+                  }
+                >
+                  favorite
+                </span>
+                <span>{selectedPhoto.bookmarked ? '즐겨찾기됨' : '즐겨찾기'}</span>
+              </button>
+              <button
+                onClick={() => void openLocalFolder('photos')}
+                className="px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[16px]">folder_open</span>
+                <span>원본 폴더</span>
+              </button>
+              <button
+                onClick={() => setSelectedPhoto(null)}
+                className="w-8 h-8 rounded-full bg-surface-container-highest hover:bg-surface-bright flex items-center justify-center text-on-surface"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() =>
-                dispatchGhostCastLiveCommand({
-                  action: 'OPEN_MONITOR_CAST',
-                  photoId: selectedPhoto.id,
-                })
-              }
-              className="px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/60 text-cyan-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              title="연결된 내 PC/노트북 모니터에 전체화면 클린 뷰어로 띄우고 내 폰을 무선 리모컨으로 전환합니다 (카톡 알림 유출 0%)"
-            >
-              <span>💻 모니터로 크게 보기</span>
-            </button>
-            <button
-              onClick={() => toggleBookmark(selectedPhoto.id)}
-              className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1 transition-all cursor-pointer ${
-                selectedPhoto.bookmarked
-                  ? 'bg-red-600 text-white font-extrabold shadow-xs'
-                  : 'bg-surface-container-high text-on-surface-variant hover:text-red-500'
-              }`}
-            >
-              <span
-                className={`material-symbols-outlined text-[16px] ${
-                  selectedPhoto.bookmarked ? 'text-white' : 'text-red-500'
-                }`}
-                style={
-                  selectedPhoto.bookmarked
-                    ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
-                    : undefined
-                }
+          {actionNotice && (
+            <div className="px-4 py-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-emerald-200 font-body-sm text-[12.5px] font-bold flex items-center justify-between gap-2">
+              <span>{actionNotice}</span>
+              <button
+                type="button"
+                onClick={() => setActionNotice(null)}
+                className="text-xs text-emerald-300 hover:text-white font-extrabold px-2 py-0.5 rounded bg-emerald-900/60"
               >
-                favorite
-              </span>
-              <span>{selectedPhoto.bookmarked ? '즐겨찾기됨' : '즐겨찾기'}</span>
-            </button>
-            <button
-              onClick={() => void openLocalFolder('photos')}
-              className="px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm flex items-center gap-1"
-            >
-              <span className="material-symbols-outlined text-[16px]">folder_open</span>
-              <span>원본 폴더</span>
-            </button>
-            <button
-              onClick={() => setSelectedPhoto(null)}
-              className="w-8 h-8 rounded-full bg-surface-container-highest hover:bg-surface-bright flex items-center justify-center text-on-surface"
-            >
-              <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
-          </div>
+                닫기
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 연사 묶음일 경우 상단 비교 & 즉시 Pick 바둑판 영역 */}

@@ -454,9 +454,9 @@ export const LoungeView: React.FC = () => {
               개인 (기본) : 언제나 0원
             </span>
             <p className="font-body-sm text-[13px] text-zinc-200 font-bold">
-              📢 &ldquo;혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만&rdquo;{' '}
+              📢 &ldquo;방장 1명만 구독하면 초대받은 가족·모임원·팀원은 평생 0원(무료)&rdquo;{' '}
               <span className="text-zinc-400 text-[12px] font-normal">
-                (신용카드 등록·광고 없음 · 초대받은 가족·회원·직원 전원 무료)
+                (혼자 쓸 땐 언제나 0원 · 신용카드 등록·광고 없음)
               </span>
             </p>
             <span className="text-[12px] text-amber-300 font-extrabold">
@@ -1930,6 +1930,68 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [newBackupPcName, setNewBackupPcName] = useState<string>('');
   const [newBackupPcPath, setNewBackupPcPath] = useState<string>('D:\\Ghosti_추가백업_폴더');
   const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
+  const [showMemberPermissions, setShowMemberPermissions] = useState<boolean>(true);
+  const [hiddenDocIds, setHiddenDocIds] = useState<string[]>([]);
+  const [docActionNotice, setDocActionNotice] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<
+    Array<{
+      id: string;
+      name: string;
+      dept: string;
+      role: 'host' | 'editor' | 'viewer';
+      sDriveConnected: boolean;
+      statusText: string;
+    }>
+  >([
+    {
+      id: 'm-1',
+      name: '김대표 (방장)',
+      dept: '대표이사 · 마스터 PC',
+      role: 'host',
+      sDriveConnected: true,
+      statusText: 'S:\\ 마스터 연결됨 (방장 1인 결제 · 전체 관리)',
+    },
+    {
+      id: 'm-2',
+      name: '박과장',
+      dept: '공무·계약팀',
+      role: 'editor',
+      sDriveConnected: true,
+      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
+    },
+    {
+      id: 'm-3',
+      name: '이팀장',
+      dept: '전략기획팀',
+      role: 'editor',
+      sDriveConnected: true,
+      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
+    },
+    {
+      id: 'm-4',
+      name: '정실장',
+      dept: '재무회계팀 (백업 2호)',
+      role: 'editor',
+      sDriveConnected: true,
+      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
+    },
+    {
+      id: 'm-5',
+      name: '최대리',
+      dept: '공간기획·설계팀',
+      role: 'editor',
+      sDriveConnected: true,
+      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
+    },
+    {
+      id: 'm-6',
+      name: '강사원',
+      dept: '현장감리·외주협업',
+      role: 'viewer',
+      sDriveConnected: true,
+      statusText: 'S:\\ 읽기 전용 연결됨 (초대 팀원 평생 0원)',
+    },
+  ]);
 
   const triggerNightSleepMode = () => {
     setNightSleepBannerPhase('visible');
@@ -2133,6 +2195,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={() => setShowMemberPermissions((v) => !v)}
+              className="px-3 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 shadow-xs"
+            >
+              <span>👥 팀원 권한 &amp; S: 드라이브 연결 설정 ({teamMembers.length}명)</span>
+              <span>{showMemberPermissions ? '▴' : '▾'}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setShowBackupManager((v) => !v)}
               className="px-3 py-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
             >
@@ -2303,6 +2373,83 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 👥 팀원 권한 & S: 드라이브 연결 설정 화면 (멤버별 읽기/편집/방장 권한 및 0원 무료 연결 상태) */}
+        {showMemberPermissions && (
+          <div className="p-4 rounded-2xl bg-[#18181B] border border-cyan-400/45 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-headline-sm text-[14.5px] text-white font-extrabold">
+                  👥 [팀원 권한 &amp; S: 드라이브 연결] 멤버별 권한 설정 화면
+                </span>
+                <span className="text-[12px] text-zinc-300">
+                  📢 <strong className="text-emerald-300">방장 1명만 구독하면 초대받은 가족·모임원·팀원은 평생 0원(무료)</strong>으로 윈도우 S: 드라이브에 직결되며, 멤버별로 편집·읽기 전용·숨기기 권한을 즉시 변경할 수 있습니다.
+                </span>
+              </div>
+              <span className="px-2.5 py-1 rounded-lg bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                ✓ 팀원 6명 S:\ 연결됨 (초대 팀원 전원 0원)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {teamMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col justify-between gap-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[13px] text-white font-extrabold truncate">
+                        {member.role === 'host' ? '👑 ' : '👤 '}
+                        {member.name}
+                      </span>
+                      <span className="text-[11px] text-zinc-400 truncate">{member.dept}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 text-[10.5px] font-extrabold shrink-0">
+                      {member.role === 'host' ? '방장 (구독 호스트)' : '팀원 0원 (평생 무료)'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-white/10">
+                    <span className="text-[10.5px] text-cyan-300 font-bold truncate">
+                      🔗 {member.statusText}
+                    </span>
+                    {member.role === 'host' ? (
+                      <span className="px-2 py-1 rounded-lg bg-amber-400/20 border border-amber-400/40 text-amber-200 text-[10.5px] font-extrabold shrink-0">
+                        👑 전체 관리·숨기기
+                      </span>
+                    ) : (
+                      <select
+                        value={member.role}
+                        onChange={(e) => {
+                          const nextRole = e.target.value as 'editor' | 'viewer';
+                          setTeamMembers((prev) =>
+                            prev.map((m) =>
+                              m.id === member.id
+                                ? {
+                                    ...m,
+                                    role: nextRole,
+                                    statusText:
+                                      nextRole === 'editor'
+                                        ? 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)'
+                                        : 'S:\\ 읽기 전용 연결됨 (초대 팀원 평생 0원)',
+                                  }
+                                : m
+                            )
+                          );
+                        }}
+                        className="px-2 py-1 rounded-lg bg-zinc-900 border border-cyan-400/40 text-white text-[11px] font-bold cursor-pointer"
+                      >
+                        <option value="editor">✏️ 편집·업로드 허용</option>
+                        <option value="viewer">👁️ 읽기·다운로드 전용</option>
+                      </select>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -2651,6 +2798,72 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 {selectedDoc.fullTextPreview}
               </p>
             </div>
+
+            {/* 원본 다운로드 / 방장 숨기기(실수 삭제 방지) / 본인 업로드 파일 관리 버튼 바 */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() =>
+                  setDocActionNotice(
+                    `⬇️ '${selectedDoc.fileName}' 원본 파일(${selectedDoc.sizeLabel}) 무손실 다운로드가 시작되었습니다!`
+                  )
+                }
+                className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+              >
+                <span>⬇️ 원본 파일 다운로드</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const isCurrentlyHidden = hiddenDocIds.includes(selectedDoc.id);
+                  setHiddenDocIds((prev) =>
+                    isCurrentlyHidden
+                      ? prev.filter((id) => id !== selectedDoc.id)
+                      : [...prev, selectedDoc.id]
+                  );
+                  setDocActionNotice(
+                    isCurrentlyHidden
+                      ? `👁️ '${selectedDoc.fileName}' 파일의 숨김을 해제하여 공유 목록에 다시 표시합니다.`
+                      : `🙈 [실수 삭제 방지] '${selectedDoc.fileName}' 파일을 공유방 목록에서 안전하게 숨겼습니다. (S: 드라이브 원본은 삭제되지 않고 보존됩니다)`
+                  );
+                }}
+                className={`px-3 py-1.5 rounded-xl border font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 ${
+                  hiddenDocIds.includes(selectedDoc.id)
+                    ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                    : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/50 text-amber-200'
+                }`}
+              >
+                <span>
+                  {hiddenDocIds.includes(selectedDoc.id)
+                    ? '👁️ 숨김 해제'
+                    : '🙈 숨기기 (실수 삭제 방지)'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setDocActionNotice(
+                    `🗂️ [본인 업로드 파일 관리] '${selectedDoc.fileName}' (업로더: ${selectedDoc.author}) — 업로더 본인 및 방장만 버전 변경·숨기기가 가능하여 팀원의 실수 삭제를 원천 방지합니다.`
+                  )
+                }
+                className="px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/50 text-purple-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+              >
+                <span>🗂️ 본인 업로드 파일 관리</span>
+              </button>
+            </div>
+
+            {docActionNotice && (
+              <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-emerald-200 font-body-sm text-[11.5px] font-bold flex items-center justify-between gap-2">
+                <span>{docActionNotice}</span>
+                <button
+                  type="button"
+                  onClick={() => setDocActionNotice(null)}
+                  className="text-[11px] text-emerald-300 hover:text-white font-extrabold px-2 py-0.5 rounded bg-emerald-900/60 shrink-0"
+                >
+                  닫기
+                </button>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <span className="font-body-sm text-[11px] text-zinc-400">

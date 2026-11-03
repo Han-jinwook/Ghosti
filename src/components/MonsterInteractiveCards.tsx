@@ -20,6 +20,7 @@ import {
   formatBytes,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
   executeMissingFileRecovery,
+  executeRestorePointRollback,
 } from '../services/monsterChatRouter';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import {
@@ -373,9 +374,42 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                         {pt.rollbackTypedText ? ` · "${pt.rollbackTypedText}"` : ''}
                       </span>
                     ) : (
-                      <span className="text-[11px] text-violet-300 font-semibold">
-                        선택 타이핑: <code>&ldquo;{pt.restoreId.replace('#', '')}번 복원해줘&rdquo;</code>
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] text-violet-300 font-semibold">
+                          선택 타이핑: <code>&ldquo;{pt.restoreId.replace('#', '')}번 복원해줘&rdquo;</code>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={busyId === `rb-${pt.restoreId}`}
+                          onClick={async () => {
+                            setBusyId(`rb-${pt.restoreId}`);
+                            const typed = `${pt.restoreId.replace('#', '')}번 복원해줘`;
+                            const res = await executeRestorePointRollback(pt.restoreId, typed);
+                            setBusyId(null);
+                            if (res.ok) {
+                              onUpdateMessage({
+                                ...message,
+                                restorePoints: message.restorePoints?.map((item) =>
+                                  item.restoreId === pt.restoreId
+                                    ? {
+                                        ...item,
+                                        rolledBack: true,
+                                        rollbackTypedText: typed,
+                                        statusBadge: '↩️ 원위치 복원 완료',
+                                      }
+                                    : item
+                                ),
+                              });
+                            }
+                            onToast?.(res.message);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold cursor-pointer shadow-xs transition"
+                        >
+                          {busyId === `rb-${pt.restoreId}`
+                            ? '복원 중...'
+                            : '↩️ 원래 위치로 1초 복원'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
