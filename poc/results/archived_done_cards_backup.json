@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-03T09:52:02.887723",
+  "updated_at": "2026-11-03T10:43:52.317568",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -442,6 +442,46 @@
       "last_edited_time": "2026-11-02T03:43:00.000Z",
       "url": "https://app.notion.com/p/409f9ffd2c1d807f8822eb96b6289d8f",
       "archived_at": "2026-11-03T09:52:02.887558"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-8027-90e3-e56bee2c95a3",
+      "title": "🎯[센스톡] 엔터 눌러도 카톡 전송이 안되는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-02T05:23:00.000Z",
+      "url": "https://app.notion.com/p/40cf9ffd2c1d802790e3e56bee2c95a3",
+      "archived_at": "2026-11-03T10:30:30.288095"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-80c5-b701-e4cdd3495560",
+      "title": "🎯 [귀신같이] 좌측 상단 귀신같이 로고 클릭시 화면 이동이 안되는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-02T05:30:00.000Z",
+      "url": "https://app.notion.com/p/40cf9ffd2c1d80c5b701e4cdd3495560",
+      "archived_at": "2026-11-03T10:43:40.668637"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-8028-a67e-e4d18624ad8d",
+      "title": "🎯[귀신같이] 전체적인 디자인 및 색상 정리",
+      "app": "",
+      "last_edited_time": "2026-11-03T00:05:00.000Z",
+      "url": "https://app.notion.com/p/40cf9ffd2c1d8028a67ee4d18624ad8d",
+      "archived_at": "2026-11-03T10:43:52.317405"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-807a-b4ea-fc5fd1abfad6",
+      "title": "🎯[멀린비서] 파이썬 오류창이 오랜 시간 후에 뜨는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-03T00:02:00.000Z",
+      "url": "https://app.notion.com/p/40cf9ffd2c1d807ab4eafc5fd1abfad6",
+      "archived_at": "2026-11-03T10:43:52.317418"
+    },
+    {
+      "page_id": "40bf9ffd-2c1d-810a-8d10-cc60837fc48e",
+      "title": "🎯 [귀신같이] 3. [🪄 손보기 ②: 사진·쓰레기 4대 치우기] 중복·연사 1장 Pick 보존 · 주차/영수증/스크린샷/흔들림 분류 · 대기실 이동 시 숫자 연동 & 1초 원상복구 실전 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-02T05:49:00.000Z",
+      "url": "https://app.notion.com/p/3-4-1-Pick-1-40bf9ffd2c1d810a8d10cc60837fc48e",
+      "archived_at": "2026-11-03T10:43:52.317425"
     }
   ]
 }

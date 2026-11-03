@@ -263,7 +263,7 @@ def main() -> None:
         ):
             pass
         else:
-            notion_qa.trim_done_cards(7)
+            notion_qa.trim_done_cards(4)
             initial_bugs = notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED)
     except Exception:
         pass

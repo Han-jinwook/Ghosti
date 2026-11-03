@@ -353,7 +353,7 @@ def fetch_bugs(target_status: Optional[str] = None) -> List[Dict[str, str]]:
     상태가 '발견 버그'(기본값)인 카드를 조회하여
     터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다. (100% 읽기 전용)
     """
-    trim_done_cards(7)
+    trim_done_cards(4)
     bugs = query_bugs_raw(target_status)
     resolved_status = target_status or STATUS_DISCOVERED
 
@@ -604,12 +604,12 @@ def complete_bug(
         print("🔔" * 24)
     else:
         print(f"\n🎉 현재 '{STATUS_DISCOVERED}' 컬럼의 모든 티켓 처리가 끝났습니다!")
-    trim_done_cards(7)
+    trim_done_cards(4)
 
     return True
 
 
-def trim_done_cards(keep_count: int = 7) -> int:
+def trim_done_cards(keep_count: int = 4) -> int:
     """
     '완료' 컬럼의 카드가 무한정 쌓여 보드가 길어지는 문제를 방지하기 위해,
     최신 N개만 남기고 이전 완료 카드들을 노션 보관함(archived: True)으로 안전하게 이동합니다.
@@ -724,7 +724,7 @@ def archive_done(
 
     # 2단계: 카드의 상태를 '완료'로 변경
     ok = update_bug_status(clean_page_id, STATUS_DONE)
-    trim_done_cards(7)
+    trim_done_cards(4)
     return ok
 
 
@@ -1034,7 +1034,7 @@ if __name__ == "__main__":
             update_bug_status(sys.argv[2], sys.argv[3])
             sys.exit(0)
         elif subcmd in ("trim-done", "trim") and len(sys.argv) >= 2:
-            keep = int(sys.argv[2]) if len(sys.argv) >= 3 else 7
+            keep = int(sys.argv[2]) if len(sys.argv) >= 3 else 4
             trim_done_cards(keep)
             sys.exit(0)
         elif subcmd == "done" and len(sys.argv) >= 3:
