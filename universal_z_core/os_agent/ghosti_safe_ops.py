@@ -643,23 +643,14 @@ _TIMEMACHINE_INDEX_FILE = SHADOW_VAULT_DIR / "_desktop_snapshot_index.json"
 
 
 def sync_desktop_timemachine_snapshot() -> None:
-    """바탕화면·문서 폴더의 소형 문서/사진(<=15MB)을 실시간 스냅샷 보호하고,
-    Shift+Delete 영구삭제 등으로 바탕화면에서 사라진 파일이 감지되면 즉시 [복원 기록] 타임머신에 자동 등재한다."""
+    """바탕화면·문서 폴더의 소형 문서/사진(<=15MB)을 실시간(0.25초 주기) 스냅샷 보호하고,
+    Shift+Delete 영구삭제 등으로 바탕화면에서 사라진 파일이 감지되면 유저가 작성했던 원본 내용 그대로
+    즉시 [복원 기록] 타임머신 최상단(#1)에 자동 등재한다."""
     try:
         SHADOW_VAULT_DIR.mkdir(parents=True, exist_ok=True)
         desktop = known_folder("desktop")
         if not desktop.exists():
             return
-
-        # 1) QA 및 실전 영구삭제 복원 보장용 기본 보호본('테스트_임시문서.txt') 시드 확인
-        seed_name = "테스트_임시문서.txt"
-        seed_shadow = SHADOW_VAULT_DIR / seed_name
-        if not seed_shadow.exists():
-            seed_shadow.write_text(
-                "귀신같이 [손보기] 영구삭제(Shift+Delete) 3초 포렌식 & 타임머신 복원 검증용 임시 문서입니다.\r\n"
-                "바탕화면에서 Shift+Delete로 완전 영구삭제하더라도 타임머신 스냅샷 금고에서 1초 만에 원래 위치로 복원됩니다.\r\n",
-                encoding="utf-8",
-            )
 
         # 이전 스냅샷 인덱스 로드
         prev_index: Dict[str, Dict[str, Any]] = {}
@@ -671,19 +662,25 @@ def sync_desktop_timemachine_snapshot() -> None:
             except Exception:
                 prev_index = {}
 
-        # 시드 파일이 바탕화면에 현재 없는데 인덱스에 없었다면 기본 감시 대상으로 포함
-        seed_desktop_path = str((desktop / seed_name).resolve())
-        if not (desktop / seed_name).exists() and seed_desktop_path not in prev_index:
-            prev_index[seed_desktop_path] = {
-                "name": seed_name,
-                "originalPath": seed_desktop_path,
-                "shadowPath": str(seed_shadow.resolve()),
-                "sizeBytes": seed_shadow.stat().st_size,
-                "hash": quick_hash(seed_shadow),
-            }
+        # 과거 데모 시드 문구('귀신같이 [손보기] 영구삭제(Shift+Delete) 3초 포렌식...')가 들어있는 가짜 시드 파일/기록은 즉시 정리하여
+        # 유저가 직접 작성한 실제 파일 내용과 절대 섞이지 않게 보호한다.
+        legacy_seed_marker = "귀신같이 [손보기] 영구삭제(Shift+Delete) 3초 포렌식"
+        seed_shadow = SHADOW_VAULT_DIR / "테스트_임시문서.txt"
+        if seed_shadow.exists():
+            try:
+                txt_chk = seed_shadow.read_text(encoding="utf-8", errors="ignore")
+                if legacy_seed_marker in txt_chk:
+                    seed_shadow.unlink()
+                    for k_del in [k for k in list(prev_index.keys()) if Path(k).name == "테스트_임시문서.txt"]:
+                        prev_index.pop(k_del, None)
+            except Exception:
+                pass
 
-        # 2) 현재 바탕화면 스캔하여 신규/수정 파일 ShadowVault 백업
+        # 1) 현재 바탕화면 스캔하여 신규/수정 파일 ShadowVault 실시간 백업 (해시까지 대조하여 내용 수정 즉시 반영)
         current_paths = set()
+        points_changed = False
+        points = load_restore_points()
+
         for entry in desktop.iterdir():
             try:
                 if not entry.is_file() or entry.name.startswith("~$") or entry.name.lower() == "desktop.ini":
@@ -694,29 +691,54 @@ def sync_desktop_timemachine_snapshot() -> None:
                 st = entry.stat()
                 if st.st_size > 15 * 1024 * 1024:
                     continue
+                # 메모장 등에서 방금 '새로 만들기 -> 텍스트 문서' 직후 아직 0바이트인 빈 파일이더라도,
+                # 기존에 내용이 있던 ShadowVault 백업본을 0바이트로 덮어쓰지 않도록 보호한다.
                 full_str = str(entry.resolve())
                 current_paths.add(full_str)
                 shadow_target = SHADOW_VAULT_DIR / entry.name
+                entry_hash = quick_hash(entry)
                 need_copy = True
                 if shadow_target.exists():
                     try:
-                        if shadow_target.stat().st_size == st.st_size and int(shadow_target.stat().st_mtime) == int(st.st_mtime):
+                        sh_st = shadow_target.stat()
+                        if st.st_size == 0 and sh_st.st_size > 0:
+                            need_copy = False
+                        elif sh_st.st_size == st.st_size and quick_hash(shadow_target) == entry_hash:
                             need_copy = False
                     except Exception:
                         need_copy = True
                 if need_copy:
                     shutil.copy2(str(entry), str(shadow_target))
+
+                final_shadow_st = shadow_target.stat() if shadow_target.exists() else st
+                final_shadow_hash = quick_hash(shadow_target) if shadow_target.exists() else entry_hash
                 prev_index[full_str] = {
                     "name": entry.name,
                     "originalPath": full_str,
                     "shadowPath": str(shadow_target.resolve()),
-                    "sizeBytes": int(st.st_size),
-                    "hash": quick_hash(shadow_target),
+                    "sizeBytes": int(final_shadow_st.st_size),
+                    "hash": final_shadow_hash,
                 }
+
+                # 만약 바탕화면에 파일이 다시 생성/수정되어 존재한다면, 이전에 남아 있던 동일 파일명의 미복원 SHADOW_PROTECT 기록은 자동 완료 처리하여
+                # 나중에 다시 삭제했을 때 최신 내용으로 새 복원 기록(#1)이 생성되도록 보장한다.
+                for pt in points:
+                    for op in pt.get("operations", []) or []:
+                        if (
+                            op.get("op") == "SHADOW_PROTECT"
+                            and str(op.get("name", "")).lower() == entry.name.lower()
+                            and not op.get("rolledBack")
+                        ):
+                            op["rolledBack"] = True
+                            points_changed = True
             except Exception:
                 continue
 
-        # 3) 이전에 바탕화면에 있었는데 지금 사라진 파일(Shift+Delete 영구삭제 등) 감지 → restore_points.json 자동 등재
+        if points_changed:
+            with _LOCK:
+                _write_json_list_atomic(RESTORE_POINTS_FILE, points)
+
+        # 2) 이전에 바탕화면에 있었는데 지금 사라진 파일(Shift+Delete 영구삭제 등) 감지 → restore_points.json 자동 등재
         points = load_restore_points()
         for orig_path, meta in list(prev_index.items()):
             orig_p = Path(orig_path)
@@ -725,8 +747,10 @@ def sync_desktop_timemachine_snapshot() -> None:
             if orig_p.exists() or not shadow_p.exists():
                 continue
 
-            # 이미 활성(미복원) SHADOW_PROTECT 복원 기록이 있는지 확인
+            # 이미 활성(미복원) SHADOW_PROTECT 복원 기록이 있는지 확인 (있더라도 최신 해시/크기로 동기화)
             already_listed = False
+            cur_sh_hash = quick_hash(shadow_p)
+            cur_sh_size = int(shadow_p.stat().st_size)
             for pt in points:
                 for op in pt.get("operations", []) or []:
                     if (
@@ -735,6 +759,11 @@ def sync_desktop_timemachine_snapshot() -> None:
                         and not op.get("rolledBack")
                     ):
                         already_listed = True
+                        if op.get("hash") != cur_sh_hash or op.get("sizeBytes") != cur_sh_size:
+                            op["hash"] = cur_sh_hash
+                            op["sizeBytes"] = cur_sh_size
+                            with _LOCK:
+                                _write_json_list_atomic(RESTORE_POINTS_FILE, points)
                         break
                 if already_listed:
                     break
@@ -745,30 +774,28 @@ def sync_desktop_timemachine_snapshot() -> None:
                     "name": fname,
                     "fromPath": str(orig_p),
                     "toPath": str(shadow_p),
-                    "sizeBytes": int(shadow_p.stat().st_size),
-                    "hash": quick_hash(shadow_p),
+                    "sizeBytes": cur_sh_size,
+                    "hash": cur_sh_hash,
                     "rolledBack": False,
                 }
                 add_restore_point(
                     summary=f"바탕화면 '{fname}' 영구삭제(Shift+Delete) 타임머신 스냅샷 보호본",
                     user_prompt=f"방금 지운 '{fname}' 파일 복원 대기 (타임머신 자동 감지)",
-                    preview=f"원래 위치({orig_p})로 1초 즉시 복원 가능",
+                    preview=f"원래 위치({orig_p})로 원본 내용 그대로 1초 즉시 복원 가능",
                     operations=[op_item],
                     user_approval_text="실시간 타임머신 자동 스냅샷 보호",
                 )
                 points = load_restore_points()
 
-        # 현재 존재하는 파일 + 시드 파일만 인덱스에 유지
-        next_index = {
-            k: v for k, v in prev_index.items() if k in current_paths or Path(k).name == seed_name
-        }
+        # 현재 바탕화면에 존재하는 파일만 인덱스에 유지 (삭제 처리되어 restore_points에 등재된 파일은 인덱스에서 비워 재생성·재삭제 시에도 즉시 감지)
+        next_index = {k: v for k, v in prev_index.items() if k in current_paths}
         _TIMEMACHINE_INDEX_FILE.write_text(json.dumps(next_index, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
 
 
 def start_desktop_timemachine_watcher() -> None:
-    """데몬 기동 시 백그라운드에서 1.5초 주기로 바탕화면 Shift+Delete 영구삭제를 감지해 타임머신에 자동 기록한다."""
+    """데몬 기동 시 백그라운드에서 0.25초 주기로 바탕화면 파일 저장 및 Shift+Delete 영구삭제를 실시간 감지해 타임머신에 기록한다."""
     global _TIMEMACHINE_WATCHER_STARTED
     if _TIMEMACHINE_WATCHER_STARTED:
         return
@@ -780,7 +807,7 @@ def start_desktop_timemachine_watcher() -> None:
                 sync_desktop_timemachine_snapshot()
             except Exception:
                 pass
-            time.sleep(1.5)
+            time.sleep(0.25)
 
     t = threading.Thread(target=_loop, name="GhostiDesktopTimeMachine", daemon=True)
     t.start()
