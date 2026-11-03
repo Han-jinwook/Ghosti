@@ -648,6 +648,7 @@ def update_superpower_settings(patch: dict) -> dict:
 
 
 _CLEAR_ALL_REQUESTED = False
+CLEAR_SIGNAL_FILE = _MERLIN_APPDATA / "clear_clipboard_signal.txt"
 
 
 def empty_os_clipboard() -> bool:
@@ -664,18 +665,24 @@ def empty_os_clipboard() -> bool:
 
 
 def clear_clipboard_history() -> int:
-    """[🧹 즉시 비우기]: 복사검색 히스토리 + 오프라인 E2EE 우체통 + 순차 붙여넣기 대기열 + 윈도우 OS 시스템 클립보드 즉시 초기화"""
+    """[🧹 즉시 비우기]: 복사검색 히스토리 + 오프라인 E2EE 우체통 + 순차 붙여넣기 대기열 + 윈도우 OS 시스템 클립보드 즉시 초기화 (다중 프로세스 신호 동기화 포함)"""
     global _CLEAR_ALL_REQUESTED
     _CLEAR_ALL_REQUESTED = True
     cleared = len(GLOBAL_AI_HISTORY)
     GLOBAL_AI_HISTORY.clear()
     empty_os_clipboard()
+    try:
+        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+        CLEAR_SIGNAL_FILE.write_text(str(time.time()), encoding="utf-8")
+    except Exception:
+        pass
     for fpath in (E2EE_MAILBOX_FILE, QUEUE_FILE, HISTORY_FILE):
         try:
             if fpath.exists():
                 fpath.unlink()
         except Exception:
             pass
+    close_ghost_toast()
     return cleared
 
 
@@ -2355,6 +2362,12 @@ def main() -> None:
     last_self_text: str | None = None
     self_set_until: float = 0.0
     last_seq_num: int = u32.GetClipboardSequenceNumber()
+    last_clear_sig_ts: float = 0.0
+    if CLEAR_SIGNAL_FILE.exists():
+        try:
+            last_clear_sig_ts = float(CLEAR_SIGNAL_FILE.read_text(encoding="utf-8").strip() or "0")
+        except Exception:
+            last_clear_sig_ts = 0.0
     last_queue_mtime: float = QUEUE_FILE.stat().st_mtime if QUEUE_FILE.exists() else 0.0
     was_ctrl_v_down: bool = False
     typed_ascii_buf: list[str] = []
@@ -2592,7 +2605,16 @@ Write-Output $res.Text
                 if _PINNED_HWNDS:
                     enforce_pinned_windows()
                 global _CLEAR_ALL_REQUESTED
-                if _CLEAR_ALL_REQUESTED:
+                sig_triggered = False
+                if CLEAR_SIGNAL_FILE.exists():
+                    try:
+                        sig_ts = float(CLEAR_SIGNAL_FILE.read_text(encoding="utf-8").strip() or "0")
+                        if sig_ts > last_clear_sig_ts:
+                            last_clear_sig_ts = sig_ts
+                            sig_triggered = True
+                    except Exception:
+                        pass
+                if _CLEAR_ALL_REQUESTED or sig_triggered:
                     _CLEAR_ALL_REQUESTED = False
                     seq_mode = False
                     pasting_started = False
@@ -2605,6 +2627,7 @@ Write-Output $res.Text
                     last_self_text = ""
                     empty_os_clipboard()
                     last_seq_num = u32.GetClipboardSequenceNumber()
+                    close_ghost_toast()
                 if menu_armed and now > menu_armed_until:
                     disarm_sub_hotkeys()
 
