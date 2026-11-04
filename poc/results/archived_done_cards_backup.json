@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-04T14:18:44.307335",
+  "updated_at": "2026-11-04T17:24:55.174576",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -682,6 +682,22 @@
       "last_edited_time": "2026-11-04T03:24:00.000Z",
       "url": "https://app.notion.com/p/3-40df9ffd2c1d8117a1c4c15b6005f3f0",
       "archived_at": "2026-11-04T14:18:44.306655"
+    },
+    {
+      "page_id": "40ef9ffd-2c1d-8016-b03e-de6651068fc2",
+      "title": "🎯 [센스톡] 카톡 단체 전송시 명단 중복 오류",
+      "app": "",
+      "last_edited_time": "2026-11-04T05:13:00.000Z",
+      "url": "https://app.notion.com/p/40ef9ffd2c1d8016b03ede6651068fc2",
+      "archived_at": "2026-11-04T17:24:55.174355"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-812f-9bae-d229be978a74",
+      "title": "🎯 [멀린비서 3-A] 『귀신창』 남은 3건 최종 재테스트 (한영성형 · 줄바꿈 · 창고정)",
+      "app": "멀린비서",
+      "last_edited_time": "2026-11-04T05:04:00.000Z",
+      "url": "https://app.notion.com/p/3-A-3-40df9ffd2c1d812f9baed229be978a74",
+      "archived_at": "2026-11-04T17:24:55.174370"
     }
   ]
 }
