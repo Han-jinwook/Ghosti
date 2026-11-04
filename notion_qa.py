@@ -331,7 +331,7 @@ def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
         title_text = extract_plain_text(title_obj.get("title", [])) or "(제목 없음)"
         app_select = (props.get("앱", {}).get("select") or {}).get("name", "")
         # 센스톡·썬드리머·멀린비서·스튜디오 카드는 해당 담당 에이전트가 처리하도록 제외 (오직 [귀신같이] 카드만 감지)
-        if app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오") or any(k in title_text for k in ("[센스톡]", "[썬드리머]", "[멀린비서]", "[스튜디오]", "센스톡", "썬드리머", "멀린비서")):
+        if app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub") or any(k in title_text for k in ("[센스톡]", "[썬드리머]", "[멀린비서]", "[스튜디오]", "[멀린허브]", "[MerlinHub]", "센스톡", "썬드리머", "멀린비서", "멀린허브", "충전소", "귀신팸", "귀신코인")):
             continue
         body_text = fetch_page_body_text(page_id)
         if not app_select and "[귀신같이]" not in title_text and "귀신같이" not in title_text and any(k in body_text for k in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "sensetalk", "sundreamer")):
