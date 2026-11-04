@@ -332,7 +332,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
   const innerContent = (
     <div
       data-keep-dark="true"
-      className={`${isModal ? '' : 'min-h-screen'} bg-slate-50 text-slate-800 rounded-2xl`}
+      className={`hub-purchase-widget ${isModal ? '' : 'min-h-screen'} bg-slate-50 text-slate-800 rounded-2xl`}
       style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
     >
       <style>{`
@@ -349,6 +349,35 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           font-weight: normal;
           font-style: normal;
           font-display: swap;
+        }
+        /* 어그로필터 디자인 100% 보존: 타 앱 전역 CSS가 HubPurchaseWidget 내부 다크 요소를 밝게 덮어쓰지 못하도록 완벽 방어 */
+        .hub-purchase-widget [class*="from-[#0d1230]"],
+        .hub-purchase-widget [class*="from-[#1b2554]"],
+        .hub-purchase-widget [class*="from-[#161f42]"],
+        .hub-purchase-widget [class*="from-[#182246]"],
+        .hub-purchase-widget [class*="from-[#1d2754]"] {
+          background-image: linear-gradient(to bottom, #0d1230, #0a0e27) !important;
+          background-color: #0d1230 !important;
+          border-color: rgba(252, 211, 77, 0.85) !important;
+          box-shadow: 0 10px 28px rgba(13,18,48,0.45) !important;
+        }
+        .hub-purchase-widget .text-white {
+          color: #ffffff !important;
+        }
+        .hub-purchase-widget .text-amber-300 {
+          color: #fcd34d !important;
+        }
+        .hub-purchase-widget .text-cyan-200 {
+          color: #a5f3fc !important;
+        }
+        .hub-purchase-widget .text-slate-900 {
+          color: #0f172a !important;
+        }
+        .hub-purchase-widget .text-slate-800 {
+          color: #1e293b !important;
+        }
+        .hub-purchase-widget .text-slate-700 {
+          color: #334155 !important;
         }
       `}</style>
       <main className="mx-auto max-w-[var(--app-max-width,720px)] px-4 py-4 space-y-3.5">
