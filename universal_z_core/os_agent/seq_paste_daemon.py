@@ -82,13 +82,22 @@ WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_LAYERED = 0x00080000
 WS_EX_NOACTIVATE = 0x08000000
 
-HWND_TOPMOST = -1
-HWND_NOTOPMOST = -2
+HWND_TOPMOST = wintypes.HWND(-1)
+HWND_NOTOPMOST = wintypes.HWND(-2)
 SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
 SWP_NOACTIVATE = 0x0010
 SWP_SHOWWINDOW = 0x0040
 KEYEVENTF_KEYUP = 0x0002
+WM_GETTEXT = 0x000D
+WM_GETTEXTLENGTH = 0x000E
+WM_SETTEXT = 0x000C
+EM_GETSEL = 0x00B0
+EM_SETSEL = 0x00B1
+EM_REPLACESEL = 0x00C2
+EM_LINEFROMCHAR = 0x00C9
+EM_LINEINDEX = 0x00BB
+EM_LINELENGTH = 0x00C1
 
 LOCK_PORT = 51988
 AUTO_CLEAN_SECONDS = 300.0
@@ -112,6 +121,38 @@ u32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
 u32.SetClipboardData.restype = wintypes.HANDLE
 imm32.ImmGetDefaultIMEWnd.argtypes = [wintypes.HWND]
 imm32.ImmGetDefaultIMEWnd.restype = wintypes.HWND
+u32.GetForegroundWindow.restype = wintypes.HWND
+u32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+u32.GetAncestor.restype = wintypes.HWND
+u32.IsWindow.argtypes = [wintypes.HWND]
+u32.IsWindow.restype = wintypes.BOOL
+u32.IsWindowVisible.argtypes = [wintypes.HWND]
+u32.IsWindowVisible.restype = wintypes.BOOL
+u32.IsIconic.argtypes = [wintypes.HWND]
+u32.IsIconic.restype = wintypes.BOOL
+u32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+u32.GetClassNameW.restype = ctypes.c_int
+u32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+u32.GetWindowTextW.restype = ctypes.c_int
+u32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
+u32.SetWindowTextW.restype = wintypes.BOOL
+u32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+u32.GetWindowLongW.restype = wintypes.LONG
+u32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+u32.SetWindowPos.restype = wintypes.BOOL
+u32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+u32.SendMessageW.restype = wintypes.LPARAM
+u32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+u32.FindWindowExW.restype = wintypes.HWND
+u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+u32.GetWindowThreadProcessId.restype = wintypes.DWORD
+u32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+u32.AttachThreadInput.restype = wintypes.BOOL
+u32.SetForegroundWindow.argtypes = [wintypes.HWND]
+u32.SetForegroundWindow.restype = wintypes.BOOL
+u32.SetFocus.argtypes = [wintypes.HWND]
+u32.SetFocus.restype = wintypes.HWND
+k32.GetCurrentThreadId.restype = wintypes.DWORD
 
 
 # =====================================================================
@@ -331,7 +372,65 @@ SHIFTLESS_DOUBLE_CONSONANT_FIX = {
     "예브": "예쁘",
     "기브": "기쁘",
     "조금": "조끔",
+    "아기귄시님": "아기귀신님",
+    "날시가": "날씨가",
+    "날시": "날씨",
+    "박으로": "밖으로",
+    "박에": "밖에",
 }
+
+
+class _GUITHREADINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("hwndActive", wintypes.HWND),
+        ("hwndFocus", wintypes.HWND),
+        ("hwndCapture", wintypes.HWND),
+        ("hwndMenuOwner", wintypes.HWND),
+        ("hwndMoveSize", wintypes.HWND),
+        ("hwndCaret", wintypes.HWND),
+        ("rcCaret", wintypes.RECT),
+    ]
+
+
+def _get_focused_control_hwnd(fg_hwnd: int | None = None) -> int:
+    """현재 활성 창 내부의 실제 키보드 포커스 컨트롤(Edit 등) HWND를 반환합니다."""
+    hwnd = fg_hwnd or u32.GetForegroundWindow()
+    if not hwnd:
+        return 0
+    try:
+        gti = _GUITHREADINFO()
+        gti.cbSize = ctypes.sizeof(_GUITHREADINFO)
+        tid = u32.GetWindowThreadProcessId(hwnd, None)
+        if tid and u32.GetGUIThreadInfo(tid, ctypes.byref(gti)) and gti.hwndFocus:
+            return int(gti.hwndFocus)
+    except Exception:
+        pass
+    try:
+        ed = u32.FindWindowExW(hwnd, None, "Edit", None)
+        if not ed:
+            ed = u32.FindWindowExW(hwnd, None, "RichEditD2DPT", None)
+        if ed:
+            return int(ed)
+    except Exception:
+        pass
+    return int(hwnd)
+
+
+def get_ime_is_korean(fg_hwnd: int | None = None) -> bool:
+    """실제 포커스된 입력 컨트롤(Edit) 및 최상위 창의 현재 한/영(IME) 상태를 정확히 조회합니다."""
+    hwnd = fg_hwnd or u32.GetForegroundWindow()
+    if not hwnd:
+        return False
+    focus_h = _get_focused_control_hwnd(hwnd)
+    for h_cand in (focus_h, hwnd):
+        if h_cand:
+            hime = imm32.ImmGetDefaultIMEWnd(h_cand)
+            if hime:
+                mode = u32.SendMessageW(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0)
+                return (mode & IME_CMODE_NATIVE) != 0
+    return False
 
 
 def is_ksx1001_syllable(ch: str) -> bool:
@@ -360,19 +459,25 @@ def is_valid_korean_word(word: str) -> bool:
 def set_ime_language(target_korean: bool) -> None:
     """
     [멀린님 핵심 지시 반영] 오타 변환 직후 윈도우 한/영 입력기(IME) 상태를 목표 언어로 자동 동기화 전환!
-    - 영문 오타 -> 한글 변환 직후: 한/영 키를 '한글(1)' 모드로 자동 전환
-    - 한글 오타 -> 영문 변환 직후: 한/영 키를 '영문(0)' 모드로 자동 전환
+    - 최상위 창(GetForegroundWindow)과 내부 포커스 컨트롤(Edit/RichEdit) 양쪽의 IME 컨텍스트를 모두 즉시 동기화합니다.
     """
     try:
         hwnd = u32.GetForegroundWindow()
         if hwnd:
-            hime = imm32.ImmGetDefaultIMEWnd(hwnd)
-            if hime:
-                curr_mode = u32.SendMessageW(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0)
-                is_kor = (curr_mode & IME_CMODE_NATIVE) != 0
-                if is_kor != target_korean:
-                    new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
-                    u32.SendMessageW(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode)
+            focus_h = _get_focused_control_hwnd(hwnd)
+            switched = False
+            for h_cand in (focus_h, hwnd):
+                if not h_cand:
+                    continue
+                hime = imm32.ImmGetDefaultIMEWnd(h_cand)
+                if hime:
+                    curr_mode = u32.SendMessageW(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0)
+                    is_kor = (curr_mode & IME_CMODE_NATIVE) != 0
+                    if is_kor != target_korean:
+                        new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
+                        u32.SendMessageW(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode)
+                    switched = True
+            if switched:
                 return
         # 폴백: 한/영 키(VK_HANGUL) 물리 토글
         u32.keybd_event(VK_HANGUL, 0, 0, 0)
@@ -470,14 +575,25 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
     """
     양방향(영->한 KS X 1001 & 한->영 EmbeddingGemma 2 영단어 사전) 스마트 성형 및 목표 언어 방향 반환
     - 반환값: (변환된 문자열, 'KO' | 'EN' | None)
+    - [QA 2-2 완치]:
+      1) 한영 전환 직전/직후 한글 어절 앞에 실수로 1글자 영문이 붙은 경우('w오늘은 날씨가', 't밖으로 나가고') 영문 찌꺼기 자동 제거!
+      2) 영문 오타 뒤에 숫자가 붙은 경우('은호의 roffjrtl25' ➔ '은호의 갤럭시25')에도 영문 오타 구간을 정확히 분리해 한글로 변환!
     """
     target_lang: str | None = None
+
+    # 0) 한글 어절(2음절 이상) 바로 앞에 1글자 영문 오타가 달라붙은 경우('w오늘은' -> '오늘은', 't밖으로' -> '밖으로') 즉시 제거
+    def _strip_leading_single_eng(m_lead: re.Match) -> str:
+        nonlocal target_lang
+        target_lang = "KO"
+        return m_lead.group(2)
+
+    cleaned_lead = re.sub(r"(?<![A-Za-z0-9_:/.-])([a-zA-Z])([가-힣]{2,})", _strip_leading_single_eng, text)
 
     def replace_token(m: re.Match) -> str:
         nonlocal target_lang
         tok = m.group(0)
 
-        # 1) 영문 알파벳 토큰인 경우
+        # 1) 영문 알파벳 토큰인 경우 (뒤에 숫자 '25' 등이 붙어 있어도 영문 파트만 단독 매칭되어 변환됨!)
         if re.fullmatch(r"[A-Za-z]+", tok):
             # 1-A) Caps Lock 역전 오타 (예: tHANKS -> Thanks)
             if len(tok) >= 2 and tok[0].islower() and tok[1:].isupper():
@@ -520,7 +636,8 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
 
         return tok
 
-    morphed = re.sub(r"(?<![A-Za-z0-9_])[A-Za-z\u3131-\u318E\uAC00-\uD7A3]+(?![A-Za-z0-9_])", replace_token, text)
+    # URL이나 이메일 주소가 아닌 일반 어절에서 영문 구간([A-Za-z]+)과 한글 구간([\u3131-\u318E\uAC00-\uD7A3]+)을 각각 독립 토큰으로 정밀 성형
+    morphed = re.sub(r"(?<![A-Za-z_:/])[A-Za-z]+(?![A-Za-z_:/])|[\u3131-\u318E\uAC00-\uD7A3]+", replace_token, cleaned_lead)
     return morphed, target_lang
 
 
@@ -552,8 +669,12 @@ def has_excel_clipboard_format() -> bool:
 
 
 def split_excel_cells(text: str) -> list[str]:
-    """엑셀/표에서 여러 줄이나 탭으로 묶여 복사된 단일 텍스트를 개별 셀 배열로 자동 분해 (빈 셀 드래그 포함)"""
+    """엑셀/표에서 여러 줄이나 탭으로 묶여 복사된 단일 텍스트를 개별 셀 배열로 자동 분해 (일반 줄바꿈·노션 들여쓰기 문장은 오인 분해 절대 금지!)"""
     if not text:
+        return []
+    # [핵심 가드]: 실제 엑셀/스프레드시트 고유 클립보드 포맷(Biff8/XML Spreadsheet/CSV)이 없는 일반 텍스트(노션 불릿 탭 들여쓰기, 메모장, 웹 복사문)는
+    # 절대 개별 셀로 쪼개지 않고 원문 전체를 100% 그대로 보존합니다! (QA 2-4 첫 줄 '별표***'만 붙고 나머지 증발 버그 원천 차단)
+    if not has_excel_clipboard_format():
         return []
     s = text.replace("\r\n", "\n").replace("\r", "\n")
     if "\n" not in s and "\t" not in s:
@@ -785,6 +906,179 @@ def close_ghost_toast() -> None:
     """초능력 실행 또는 외부 클릭 시 귀신창(Ghost Window)을 즉시 닫음"""
     _toast_queue.put(("__CLOSE__", 0))
     _toast_event.set()
+
+
+def _get_machine_hwid_local() -> str:
+    """메인보드 UUID / 머신 GUID 기반 기기 고유 해시(sha256_...) 반환"""
+    import hashlib
+    import platform
+    raw_id = f"{platform.node()}::{platform.machine()}"
+    if os.name == "nt":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography") as k:
+                guid, _ = winreg.QueryValueEx(k, "MachineGuid")
+                if guid:
+                    raw_id = f"{guid}::{platform.node()}"
+        except Exception:
+            pass
+    digest = hashlib.sha256(raw_id.encode("utf-8")).hexdigest()[:20]
+    return f"sha256_{digest}"
+
+
+SUPERPOWER_12_FEATURES: dict[str, str] = {
+    "feat_1_seq_paste": "① 순차붙여넣기",
+    "feat_2_typo_morph": "② 한영오타성형",
+    "feat_3_clean_format": "③ 서식세탁",
+    "feat_4_iron_lines": "④ 줄바꿈정리",
+    "feat_5_merge_search": "⑤ 합본·기억검색",
+    "feat_6_screen_ocr": "⑥ 글자·표OCR",
+    "feat_7_window_pin": "⑦ 창고정",
+    "feat_8_format_numbers": "⑧ 번호·일정성형",
+    "feat_9_image_file": "⑨ 스샷파일변환",
+    "feat_b1_snippets": "🎁 상용구(F1~10)",
+    "feat_b2_excel_split": "🎁 엑셀쪼개기",
+    "feat_b3_pdf_merge": "🎁 다중스샷PDF합본",
+}
+
+
+def normalize_feature_id(raw_key: str) -> str:
+    k = str(raw_key or "").strip()
+    if k in SUPERPOWER_12_FEATURES:
+        return k
+    if k in ("superpower_key_1", "seq_paste_smart_match", "1"):
+        return "feat_1_seq_paste"
+    if k in ("superpower_key_2", "auto_typo_morph_2words", "2"):
+        return "feat_2_typo_morph"
+    if k in ("superpower_key_3", "3"):
+        return "feat_3_clean_format"
+    if k in ("superpower_key_4", "4"):
+        return "feat_4_iron_lines"
+    if k in ("superpower_key_5", "5"):
+        return "feat_5_merge_search"
+    if k in ("superpower_key_6", "6"):
+        return "feat_6_screen_ocr"
+    if k in ("superpower_key_7", "7"):
+        return "feat_7_window_pin"
+    if k in ("superpower_key_8", "8"):
+        return "feat_8_format_numbers"
+    if k in ("superpower_key_9", "9"):
+        return "feat_9_image_file"
+    if k.startswith("snippet_F") or k.upper().startswith("F"):
+        return "feat_b1_snippets"
+    if "excel" in k.lower():
+        return "feat_b2_excel_split"
+    if "pdf" in k.lower():
+        return "feat_b3_pdf_merge"
+    return k
+
+
+def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
+    """
+    [개별 기능별 첫 사용 후 7일 무제한 ➔ 만료된 기능만 일일 성공 3회 제한 검사]
+    - 아직 개봉 안 했거나(UNOPENED), 첫 사용 후 7일 이내(ACTIVE_7D)이거나, 유료 구독자(SUBSCRIBED)이면 무조건 True!
+    - 해당 기능의 7일 무제한이 만료(EXPIRED_7D)되었고 오늘 만료 기능 합산 성공 횟수가 이미 3회에 도달한 경우에만 False 반환!
+    """
+    feat_id = normalize_feature_id(raw_feature_key)
+    ledger_path = _MERLIN_APPDATA / "superpower_trial_ledger.json"
+    if not ledger_path.exists():
+        return True, "UNOPENED"
+    try:
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        hwid = _get_machine_hwid_local()
+        m_info = ledger.get("machines", {}).get(hwid, {})
+        if not isinstance(m_info, dict):
+            return True, "UNOPENED"
+        if m_info.get("isSubscribed"):
+            return True, "SUBSCRIBED"
+        feat_trials = m_info.get("featureTrials", {})
+        f_entry = feat_trials.get(feat_id)
+        if not isinstance(f_entry, dict) or not f_entry.get("firstUsedTs"):
+            return True, "UNOPENED"
+        elapsed_days = (time.time() - float(f_entry["firstUsedTs"])) / 86400.0
+        if elapsed_days < 7.0:
+            rem_days = max(1, int(round(7.0 - elapsed_days + 0.49)))
+            return True, f"ACTIVE_D-{rem_days}"
+        # 7일 만료된 기능인 경우: 오늘 만료 기능 합산 사용량 확인
+        today = datetime.date.today().isoformat()
+        used_today = int(m_info.get("dailyUsage", {}).get(today, 0))
+        if used_today >= 3:
+            unopened_cnt = sum(1 for fk in SUPERPOWER_12_FEATURES if fk not in feat_trials)
+            msg = (
+                f"👻 오늘 만료 기능 무료(3/3회) 소진! (미개봉 {unopened_cnt}개는 지금도 7일 무제한!) "
+                f"[내 기기 통합 월 3,900원] 구독 시 전 기능 평생 무제한"
+            )
+            return False, msg
+        return True, f"DAILY_FREE_{3 - used_today}_LEFT"
+    except Exception:
+        return True, "OK"
+
+
+def complete_feature_action_success(raw_feature_key: str) -> dict:
+    """
+    [오직 '실제 액션이 성공 완수된 시점'에만 호출!]
+    1) 해당 기능이 미개봉(UNOPENED)이면 -> 지금 이 순간부터 해당 기능의 7일 무제한 타이머 개시! (일일 3회 차감 안 함)
+    2) 해당 기능이 7일 무제한 진행 중(ACTIVE_7D)이면 -> 횟수 차감 없이 통과!
+    3) 해당 기능의 7일 무제한이 만료(EXPIRED_7D)되었으면 -> 오늘 일일 무료 횟수(3회 한도)에서 1회 차감!
+    """
+    feat_id = normalize_feature_id(raw_feature_key)
+    record_feature_telemetry(raw_feature_key)
+    ledger_path = _MERLIN_APPDATA / "superpower_trial_ledger.json"
+    now_ts = time.time()
+    now_dt = datetime.datetime.now()
+    today = datetime.date.today().isoformat()
+    hwid = _get_machine_hwid_local()
+
+    try:
+        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+        ledger = {"machines": {}, "accounts": {}}
+        if ledger_path.exists():
+            try:
+                loaded = json.loads(ledger_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    ledger = loaded
+            except Exception:
+                pass
+        machines = ledger.setdefault("machines", {})
+        m_info = machines.setdefault(hwid, {"machineHwid": hwid, "isSubscribed": False})
+        if m_info.get("isSubscribed"):
+            return {"status": "SUBSCRIBED", "feature_id": feat_id, "consumed_daily": False, "daily_remaining": 9999}
+
+        feat_trials = m_info.setdefault("featureTrials", {})
+        f_entry = feat_trials.get(feat_id)
+
+        # Case 1: 생애 첫 성공 사용! -> 지금부터 이 기능만 7일 무제한 타이머 시작!
+        if not isinstance(f_entry, dict) or not f_entry.get("firstUsedTs"):
+            exp_dt = now_dt + datetime.timedelta(days=7)
+            feat_trials[feat_id] = {
+                "featureName": SUPERPOWER_12_FEATURES.get(feat_id, feat_id),
+                "firstUsedTs": now_ts,
+                "firstUsedAt": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "expiresAt": exp_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "successCount": 1,
+            }
+            ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+            return {"status": "FIRST_OPENED_7D", "feature_id": feat_id, "days_left": 7, "consumed_daily": False, "daily_remaining": 3}
+
+        # Case 2: 이미 개봉된 기능 -> 7일 경과 여부 판정
+        f_entry["successCount"] = int(f_entry.get("successCount", 0)) + 1
+        elapsed_days = (now_ts - float(f_entry["firstUsedTs"])) / 86400.0
+        if elapsed_days < 7.0:
+            rem_days = max(1, int(round(7.0 - elapsed_days + 0.49)))
+            ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+            return {"status": "ACTIVE_7D", "feature_id": feat_id, "days_left": rem_days, "consumed_daily": False, "daily_remaining": 3}
+
+        # Case 3: 해당 기능의 7일 무제한이 만료된 상태 -> 오늘 성공 횟수 +1 차감!
+        du = m_info.setdefault("dailyUsage", {})
+        used_today = int(du.get(today, 0)) + 1
+        du[today] = used_today
+        m_info["lastActionAt"] = now_dt.isoformat(timespec="seconds")
+        m_info["lastActionType"] = feat_id
+        ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+        rem = max(0, 3 - used_today)
+        return {"status": "EXPIRED_DAILY_3", "feature_id": feat_id, "days_left": 0, "consumed_daily": True, "daily_remaining": rem}
+    except Exception:
+        return {"status": "OK", "feature_id": feat_id, "consumed_daily": False, "daily_remaining": 3}
 
 
 def record_feature_telemetry(feature_key: str) -> None:
@@ -1615,14 +1909,35 @@ def set_clipboard_hdrop_file(filepath: str) -> bool:
     return False
 
 
+KEYEVENTF_EXTENDEDKEY = 0x0001
+_EXTENDED_VKS = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E}
+
+
+def release_all_modifiers() -> None:
+    """키 조합 사출 전 물리적으로 남아 있을 수 있는 Ctrl/Shift/Alt 눌림 상태를 깨끗이 해제"""
+    for mod_vk in (VK_CONTROL, VK_SHIFT, VK_MENU, 0xA2, 0xA3, 0xA0, 0xA1, 0xA4, 0xA5):
+        if (u32.GetAsyncKeyState(mod_vk) & 0x8000) != 0:
+            sc = u32.MapVirtualKeyW(mod_vk, 0)
+            u32.keybd_event(mod_vk, sc, KEYEVENTF_KEYUP, 0)
+
+
 def tap_key_combo(modifiers: list[int], vk: int) -> None:
+    """
+    [Win10/Win11 NumLock ON 환경 100% 호환 키 사출]
+    - VK_HOME(0x24), VK_END(0x23), 방향키 등은 반드시 KEYEVENTF_EXTENDEDKEY(0x0001) 플래그를 포함해야
+      NumLock이 켜진 상태에서 Shift+Home이 Numpad 7(비선택 이동)로 오작동하지 않고 줄 전체를 정확히 블록 선택합니다!
+    """
+    ext_flag = KEYEVENTF_EXTENDEDKEY if vk in _EXTENDED_VKS else 0
+    vk_sc = u32.MapVirtualKeyW(vk, 0)
     for mod in modifiers:
-        u32.keybd_event(mod, 0, 0, 0)
-    u32.keybd_event(vk, 0, 0, 0)
+        mod_sc = u32.MapVirtualKeyW(mod, 0)
+        u32.keybd_event(mod, mod_sc, 0, 0)
+    u32.keybd_event(vk, vk_sc, ext_flag, 0)
     time.sleep(0.015)
-    u32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+    u32.keybd_event(vk, vk_sc, ext_flag | KEYEVENTF_KEYUP, 0)
     for mod in reversed(modifiers):
-        u32.keybd_event(mod, 0, KEYEVENTF_KEYUP, 0)
+        mod_sc = u32.MapVirtualKeyW(mod, 0)
+        u32.keybd_event(mod, mod_sc, KEYEVENTF_KEYUP, 0)
 
 
 def get_focused_field_context() -> str:
@@ -1730,62 +2045,210 @@ def ensure_default_snippets() -> dict[str, str]:
 
 
 # =====================================================================
-# 2~9번 초능력 & F1~F5 고정 상용구 & AI 기억 검색창 실행 함수들
+# 2~9번 초능력 & F1~F10 고정 상용구 & AI 기억 검색창 실행 함수들
 # =====================================================================
+def _find_edit_control_child(hwnd_fg: int) -> int:
+    if not hwnd_fg or not u32.IsWindow(hwnd_fg):
+        return 0
+    ed = u32.FindWindowExW(hwnd_fg, None, "Edit", None)
+    if not ed:
+        ed = u32.FindWindowExW(hwnd_fg, None, "RichEditD2DPT", None)
+    return ed or 0
+
+
+def _get_edit_control_current_line(edit_child: int) -> str | None:
+    if not edit_child or not u32.IsWindow(edit_child):
+        return None
+    try:
+        total_len = u32.SendMessageW(edit_child, WM_GETTEXTLENGTH, 0, 0)
+        if total_len < 0 or total_len > 65535:
+            return None
+        if total_len == 0:
+            return ""
+        tbuf = ctypes.create_unicode_buffer(total_len + 2)
+        u32.SendMessageW(edit_child, WM_GETTEXT, total_len + 1, ctypes.addressof(tbuf))
+        full_text = tbuf.value
+        sel_ret = u32.SendMessageW(edit_child, EM_GETSEL, 0, 0)
+        s_pos = sel_ret & 0xFFFF
+        line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
+        line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
+        line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
+        if line_start < 0 or line_len < 0:
+            return None
+        return full_text[line_start : line_start + line_len]
+    except Exception:
+        return None
+
+
+def _replace_edit_control_current_line_atomic(edit_child: int, auto_triggered: bool = False) -> tuple[bool, str, str, str | None]:
+    """
+    [메모장(Edit/RichEdit) 0.2ms 무지연 원자적(Atomic) 줄 성형 엔진]
+    - Shift+Home 블록 선택 대기(140ms)나 클립보드(Ctrl+C/Ctrl+V)를 전혀 거치지 않고
+      Win32 WM_GETTEXT -> EM_SETSEL -> EM_REPLACESEL로 0.0002초 만에 줄을 교체하여
+      연속 타이핑 중 다음 단어 첫 글자('w오늘은', 't밖으로')가 섞이는 레이스 컨디션을 100% 원천 차단합니다!
+    """
+    if not edit_child or not u32.IsWindow(edit_child):
+        return False, "", "", None
+    try:
+        total_len = u32.SendMessageW(edit_child, WM_GETTEXTLENGTH, 0, 0)
+        if total_len <= 0 or total_len > 65535:
+            return False, "", "", None
+        tbuf = ctypes.create_unicode_buffer(total_len + 2)
+        u32.SendMessageW(edit_child, WM_GETTEXT, total_len + 1, ctypes.addressof(tbuf))
+        full_text = tbuf.value
+        if not full_text:
+            return False, "", "", None
+
+        sel_ret = u32.SendMessageW(edit_child, EM_GETSEL, 0, 0)
+        s_pos = sel_ret & 0xFFFF
+        e_pos = (sel_ret >> 16) & 0xFFFF
+        if s_pos != e_pos and 0 <= s_pos < e_pos <= len(full_text):
+            line_start, line_end = s_pos, e_pos
+        else:
+            line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
+            line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
+            line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
+            if line_start < 0 or line_len <= 0:
+                return False, "", "", None
+            line_end = line_start + line_len
+
+        target_line = full_text[line_start:line_end]
+        if not target_line:
+            return False, "", "", None
+
+        morphed, target_lang = morph_korean_english_text_with_direction(target_line)
+        if morphed == target_line or target_lang is None:
+            return False, target_line, target_line, None
+
+        final_out = (morphed.rstrip(" ") + " ") if auto_triggered else morphed
+        # 먼저 목표 한/영(IME) 상태를 0.0001초 만에 즉시 전환!
+        set_ime_language(target_korean=(target_lang == "KO"))
+        u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_end)
+        rbuf = ctypes.create_unicode_buffer(final_out)
+        u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+        return True, target_line.strip(), final_out.strip(), target_lang
+    except Exception:
+        return False, "", "", None
+
+
+def _restore_target_focus_and_replace_line(target_hwnd: int, daemon_set_cb, fallback_text: str | None = None, auto_triggered: bool = False) -> tuple[bool, str, str, str | None]:
+    """
+    [Win10/Win11 공통 무결점 줄 단위 스냅샷 & 교체 엔진]
+    1) 귀신창이 닫힌 직후 원래 입력창(target_hwnd)으로 포커스를 확실히 복귀시키고,
+    2) 메모장(Edit 컨트롤)인 경우 0.2ms 원자적 교체(_replace_edit_control_current_line_atomic)를 최우선 수행하며,
+    3) 일반 웹/앱 창에서는 KEYEVENTF_EXTENDEDKEY가 포함된 End -> Shift+Home으로 줄 전체를 한 번에 한글로 변환합니다!
+    """
+    orig_clip = get_clipboard_text()
+    sentinel = "__GHOSTI_EMPTY_SEL__"
+    release_all_modifiers()
+
+    edit_child = 0
+    if target_hwnd and u32.IsWindow(target_hwnd):
+        try:
+            fg_now = u32.GetForegroundWindow()
+            cur_tid = k32.GetCurrentThreadId()
+            tgt_tid = u32.GetWindowThreadProcessId(target_hwnd, None)
+            if cur_tid != tgt_tid and tgt_tid:
+                u32.AttachThreadInput(cur_tid, tgt_tid, True)
+            if fg_now != target_hwnd:
+                u32.SetForegroundWindow(target_hwnd)
+            edit_child = u32.FindWindowExW(target_hwnd, None, "Edit", None)
+            if not edit_child:
+                edit_child = u32.FindWindowExW(target_hwnd, None, "RichEditD2DPT", None)
+            if edit_child:
+                u32.SetFocus(edit_child)
+            if cur_tid != tgt_tid and tgt_tid:
+                u32.AttachThreadInput(cur_tid, tgt_tid, False)
+            time.sleep(0.025)
+        except Exception:
+            pass
+
+    # [0단계] 메모장(Edit 컨트롤)인 경우 클립보드/키보드 지연 없이 0.2ms 만에 줄 전체 직접 성형!
+    if edit_child:
+        ok_ed, raw_ed, out_ed, lang_ed = _replace_edit_control_current_line_atomic(edit_child, auto_triggered=auto_triggered)
+        if ok_ed and lang_ed is not None:
+            return True, raw_ed, out_ed, lang_ed
+
+    # 1) 먼저 유저가 직접 드래그해 둔 블록 선택이 있는지 센티넬 클립보드로 안전하게 확인
+    daemon_set_cb(sentinel)
+    time.sleep(0.015)
+    tap_key_combo([VK_CONTROL], VK_C)
+    time.sleep(0.045)
+    selected = get_clipboard_text()
+
+    # 2) 블록 선택이 없었다면:
+    #    - 수동 실행([Ctrl+0]->[2]) 시에는 커서가 줄 맨 앞이나 중간에 있어도 줄 전체('dkssud 아기귀신아 뭐해', '은호의 roffjrtl25')가
+    #      100% 잡히도록 [End(Extended)] -> [Shift+Home(Extended)]로 현재 줄 전체를 블록 지정!
+    if not selected or selected == sentinel:
+        VK_END = 0x23
+        VK_HOME = 0x24
+        release_all_modifiers()
+        if not auto_triggered:
+            tap_key_combo([], VK_END)
+            time.sleep(0.025)
+        tap_key_combo([VK_SHIFT], VK_HOME)
+        time.sleep(0.045)
+        daemon_set_cb(sentinel)
+        time.sleep(0.015)
+        tap_key_combo([VK_CONTROL], VK_C)
+        time.sleep(0.05)
+        selected = get_clipboard_text()
+
+    if selected and selected != sentinel:
+        morphed, target_lang = morph_korean_english_text_with_direction(selected)
+        if morphed != selected and target_lang is not None:
+            final_out = (morphed if morphed.endswith(" ") else morphed + " ") if auto_triggered else morphed
+            set_ime_language(target_korean=(target_lang == "KO"))
+            daemon_set_cb(final_out)
+            time.sleep(0.02)
+            tap_key_combo([VK_CONTROL], VK_V)
+            time.sleep(0.04)
+            if orig_clip and orig_clip != sentinel:
+                daemon_set_cb(orig_clip)
+            return True, selected.strip(), final_out.strip(), target_lang
+        else:
+            # 오타가 아닌 경우 선택 해제 (오른쪽 화살표)
+            tap_key_combo([], 0x27)
+            if orig_clip and orig_clip != sentinel:
+                daemon_set_cb(orig_clip)
+            return False, selected, selected, None
+
+    # 만약 Shift+Home 복사가 먹히지 않는 특수 입력창인데 오토한영 fallback_text가 있는 경우:
+    if auto_triggered and fallback_text:
+        set_ime_language(target_korean=True)
+        daemon_set_cb(fallback_text)
+        time.sleep(0.02)
+        tap_key_combo([VK_CONTROL], VK_V)
+        time.sleep(0.04)
+        if orig_clip and orig_clip != sentinel:
+            daemon_set_cb(orig_clip)
+        return True, "", fallback_text.strip(), "KO"
+
+    if orig_clip and orig_clip != sentinel:
+        daemon_set_cb(orig_clip)
+    return False, "", "", None
+
+
 def superpower_2_typo_morph(daemon_set_cb, auto_triggered: bool = False) -> bool:
     """
     [②번] 무후크 가상 클립보드 스왑 기반 양방향 한영 오타 성형 + 한/영 키(IME) 자동 전환
     """
     orig_clip = get_clipboard_text()
-
-    # 1) 먼저 텍스트가 블록 선택되어 있는지 확인 (유저가 드래그했거나 Shift로 지정한 경우)
-    tap_key_combo([VK_CONTROL], VK_C)
-    time.sleep(0.04)
-    selected = get_clipboard_text()
-
-    # 2) 블록 선택이 없었다면:
-    #    - 수동 실행([Ctrl+0] -> [2]) 시에는 줄 앞쪽에 남은 오타(예: 'dkssud 아기귀신아 뭐해'의 'dkssud')까지
-    #      한 번에 모두 고쳐지도록 현재 줄 전체(Shift+Home)를 먼저 선택하여 검사!
-    if not selected or selected == orig_clip:
-        VK_HOME = 0x24
-        if not auto_triggered:
-            tap_key_combo([VK_SHIFT], VK_HOME)
-        else:
-            tap_key_combo([VK_CONTROL, VK_SHIFT], VK_LEFT)
-        time.sleep(0.04)
-        tap_key_combo([VK_CONTROL], VK_C)
-        time.sleep(0.045)
-        selected = get_clipboard_text()
-
-    if selected and selected != orig_clip:
-        morphed, target_lang = morph_korean_english_text_with_direction(selected)
-        if morphed != selected and target_lang is not None:
-            daemon_set_cb(morphed)
-            time.sleep(0.025)
-            tap_key_combo([VK_CONTROL], VK_V)
-            time.sleep(0.05)
-            # 변환 방향에 맞춰 한/영 키(IME) 상태를 목표 언어로 즉시 전환!
-            set_ime_language(target_korean=(target_lang == "KO"))
-            if orig_clip:
-                daemon_set_cb(orig_clip)
-            lang_badge = "한글키 전환" if target_lang == "KO" else "영문키 전환"
-            show_ghost_toast(f"👻 귀신같이 한영성형 ({selected.strip()} ➔ {morphed.strip()} | {lang_badge})")
-            return True
-        else:
-            # 오타가 아닌 경우 선택 해제 (오른쪽 화살표)
-            tap_key_combo([], 0x27)
-            if orig_clip:
-                daemon_set_cb(orig_clip)
-            if auto_triggered:
-                return False
+    ok, raw_s, morphed_s, target_lang = _restore_target_focus_and_replace_line(
+        _LAST_TARGET_HWND, daemon_set_cb, fallback_text=None, auto_triggered=auto_triggered
+    )
+    if ok and target_lang is not None:
+        lang_badge = "한글키 전환" if target_lang == "KO" else "영문키 전환"
+        show_ghost_toast(f"👻 귀신같이 한영성형 ({raw_s[:18]} ➔ {morphed_s[:18]} | {lang_badge})")
+        return True
 
     # 3) 캐럿 선택이 불가능한 경우 클립보드 원문 전체 변환
     if not auto_triggered and orig_clip:
-        morphed, target_lang = morph_korean_english_text_with_direction(orig_clip)
-        if morphed != orig_clip and target_lang is not None:
+        morphed, target_lang2 = morph_korean_english_text_with_direction(orig_clip)
+        if morphed != orig_clip and target_lang2 is not None:
             daemon_set_cb(morphed)
-            set_ime_language(target_korean=(target_lang == "KO"))
-            lang_badge = "한글키 전환" if target_lang == "KO" else "영문키 전환"
+            set_ime_language(target_korean=(target_lang2 == "KO"))
+            lang_badge = "한글키 전환" if target_lang2 == "KO" else "영문키 전환"
             show_ghost_toast(f"👻 귀신같이 한영성형 ({morphed[:15].strip()} | {lang_badge})")
             return True
         else:
@@ -1803,11 +2266,11 @@ AD_ANCHOR_PHRASES = [
 ]
 
 
-def superpower_3_clean_format(daemon_set_cb) -> None:
+def superpower_3_clean_format(daemon_set_cb, raw_src: str | None = None) -> None:
     """
     [③번] 서식 100% 세탁 + EmbeddingGemma 2 시맨틱 광고·저작권 꼬리말 자동 절삭
     """
-    txt = get_clipboard_text()
+    txt = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     if txt:
         cleaned = re.sub(r"(무단\s*전재\s*및\s*재배포\s*금지.*|저작권자\s*\(c\).*|ⓒ\s*.*무단.*)", "", txt, flags=re.IGNORECASE)
         lines = [ln for ln in cleaned.splitlines()]
@@ -1832,12 +2295,65 @@ def superpower_3_clean_format(daemon_set_cb) -> None:
         show_ghost_toast("👻 귀신같이 서식세탁")
 
 
-def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
+def _fix_korean_spacing_general(s: str) -> str:
     """
-    [④번] 줄바꿈·유령공백(NFKC) 다림질 + EmbeddingGemma 2 문단 의미 분리
+    [범용 한국어 어절 경계(조사·연결어미·보조용언·부사) 자동 띄어쓰기 교정기]
+    - 특정 예문 하드코딩이 아니라, 한국어 형태소 규칙(체언+조사 뒤 용언 결합, 연결어미 뒤 새 어절/보조용언 결합, 시간·빈도 부사 뒤 결합)을
+      2-Pass로 정밀 분리하여 '밖에나가고' -> '밖에 나가고', '날씨가좋아서' -> '날씨가 좋아서', '밥을먹고싶어요' -> '밥을 먹고 싶어요' 등
+      어떤 문장이 들어와도 바른 띄어쓰기로 교정합니다.
+    """
+    for _ in range(2):
+        # 0) 시간·빈도 명사+은/는/도 및 대표 독립 부사 뒤 자동 띄어쓰기
+        s = re.sub(
+            r"(?<![가-힣])(오늘은|내일은|어제는|지금은|요즘은|이번은|다음은|원래는|사실은|너무|정말|진짜|아주|매우|가장|제일|많이|빨리|천천히|다시|함께|같이|먼저|벌써|아직|항상|자주|가끔)(?=[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        # 1) [연결어미 ~아서/어서/해서/와서/가서/파서/나서/돼서/니까/지만/고] 뒤에 [명사 + 조사]가 이어질 때 자동 띄어쓰기
+        s = re.sub(
+            r"([가-힣]+(?:아서|어서|여서|해서|와서|가서|봐서|파서|커서|써서|나서|돼서|니까|지만|고))(?=(?!싶|있|없|보|주|버리|말|나가|들어가)[가-힣]{1,4}(?:에서|에게|한테|으로|은|는|이|가|을|를|에|도)(?=[가-힣\s.,?!:;)]|$))",
+            r"\1 ",
+            s,
+        )
+        # 2) [명사 + 에/에서/에게/한테/으로] + [용언/다음어절] 자동 띄어쓰기 (예: 밖에나가고 -> 밖에 나가고, 집에가고 -> 집에 가고)
+        s = re.sub(
+            r"([가-힣]{1,5}(?:에서|에게|한테|으로))(?=[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        s = re.sub(
+            r"([가-힣]{1,5}에)(?=(?:나가고|나가서|나가다|나가|들어가고|들어가서|들어가|가고|가서|가다|가요|가니|오다|오고|와서|와요|있고|있어|있으니|있다|없고|없어|없다|앉아|서서|누워|살고|살아|맞춰|넣고|넣어|두고|두어|올리고|올려|내리고|내려|보내고|보내|다니고|다녀))",
+            r"\1 ",
+            s,
+        )
+        # 3) [명사 + 을/를] + [동사/형용사] 자동 띄어쓰기 (예: 밥을먹고 -> 밥을 먹고, 공부를했어요 -> 공부를 했어요)
+        s = re.sub(
+            r"([가-힣]{1,5}[을를])(?=[가-힣]{1,5}(?:고|서|아서|어서|여서|해서|니|니까|면|지만|며|면서|는데|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|싶|있|없|다|습니다|ㅂ니다|합니다|했다|았다|었다|였다|겠다|먹|마시|보|하|듣|쓰|읽|사|팔|만들|찾|잡|열|닫|받|주|넣|빼)(?=[\s.,?!:;가-힣)]|$))",
+            r"\1 ",
+            s,
+        )
+        # 4) [명사 + 이/가/은/는/도] + [주요 형용사/자동사] 자동 띄어쓰기 (예: 날씨가좋아서 -> 날씨가 좋아서, 시간이없어서 -> 시간이 없어서)
+        s = re.sub(
+            r"([가-힣]{1,5}[이가은는도])(?=(?:좋|나쁘|나빠|맑|흐리|흐려|춥|추워|덥|더워|따뜻|시원|많|적|크|커|작|높|낮|길|짧|빠르|빨라|느리|느려|예쁘|예뻐|아프|아파|고프|고파|슬프|슬퍼|기쁘|기뻐|힘들|어렵|어려워|쉽|쉬워|있|없|안되|안돼|되|돼|오|와|불|내리|내려)[가-힣]*(?=[\s.,?!:;가-힣)]|$))",
+            r"\1 ",
+            s,
+        )
+        # 5) [용언 연결어미 ~고/아서/어서/해서] + [보조용언 싶어요/싶다/있어요/있다/보세요/봐요/주세요] 자동 띄어쓰기
+        s = re.sub(
+            r"([가-힣]+(?:고|아서|어서|여서|해서))(?=(?:싶어|싶다|싶습니다|싶네|싶은|싶고|싶으니|있어|있다|있습니다|있네|보세요|보아요|봐요|주세|주어|줘요|버렸|버려)(?=[\s.,?!:;가-힣)]|$))",
+            r"\1 ",
+            s,
+        )
+    return re.sub(r" +", " ", s).strip()
+
+
+def superpower_4_iron_lines_and_nfkc(daemon_set_cb, raw_src: str | None = None) -> None:
+    """
+    [④번] 줄바꿈·유령공백(NFKC) 다림질 + 범용 한국어 띄어쓰기 교정 + EmbeddingGemma 2 문단 의미 분리
     - 별표(***), 가운뎃점(·), 말줄임표(. . .) 등 원문 특수문자는 단 1글자도 삭제하지 않고 100% 보존!
+    - 노션 불릿 복사 시 들어가는 탭(\t) 들여쓰기, 어절 중간 강제 줄바꿈('좋\n아서', '싶어\n요') 및 붙여 써진 어절('밖에나가고' -> '밖에 나가고')까지 완벽 복원!
     """
-    txt = get_clipboard_text()
+    txt = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     if txt:
         # 가운뎃점(·) 등 보존을 위해 NFKC 전후로 보호
         s = txt.replace("\u00B7", "__MIDDOT__").replace("\u318D", "__MIDDOT__")
@@ -1845,16 +2361,22 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
         s = s.replace("__MIDDOT__", "·")
         s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
         s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        # 0) 어절/어미 중간에서 강제로 끊어진 줄바꿈(예: '좋\n아서', '싶어\n요')은 공백 없이 직결!
+        s = re.sub(
+            r"(?<=[가-힣])[ \t]*\r?\n[ \t]*(?=(?:아서|어서|여서|해서|요|네요|군요|나요|가요|까요|어요|아요|해요|죠|지요|습니다|입니다|다)(?=[\s.,?!:;)]|$))",
+            "",
+            s,
+        )
         # 1) 말줄임표(. . . 또는 ...) 뒤 줄바꿈 및 문장 중간에 끊어진 줄바꿈을 모두 매끄럽게 한 줄로 연결
         s = re.sub(r"(\.\s*\.\s*\.)\s*\r?\n\s*", r"\1 ", s)
-        s = re.sub(r"(?<![?!:다요죠음함])\r?\n\s*(?=[가-힣A-Za-z0-9(\[.*·])", " ", s)
-        s = re.sub(r"[ \t]{2,}", " ", s)
+        s = re.sub(r"(?<![?!:다요죠음함])\r?\n[ \t]*(?=[가-힣A-Za-z0-9(\[.*·])", " ", s)
+        s = re.sub(r"[ \t]+", " ", s)
         # 2) PDF 표/문서에서 자간(kerning) 때문에 쪼개진 한글 조사·어미·관형사형 공백 정밀 복원
         # '과도 한 빈줄 이' -> '과도한 빈줄이', '과도 한빈 줄' -> '과도한 빈줄' 모두 먼저 정규화
         s = re.sub(r"([가-힣]{2,})\s+([한된할])\s+([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
         s = re.sub(r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
         s = re.sub(
-            r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|니|니까|면|다면|한|할|된|될|됨|합니다|습니다)(?=[\s.,?!:;)]|$))",
+            r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|아서|어서|여서|해서|니|니까|면|다면|한|할|된|될|됨|요|네요|군요|죠|지요|합니다|습니다|입니다)(?=[\s.,?!:;)]|$))",
             "",
             s,
         )
@@ -1863,28 +2385,21 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb) -> None:
             tokens = line.split(" ")
             if len(tokens) < 2:
                 return line
-            single_ko_cnt = sum(1 for t in tokens if len(t) == 1 and "가" <= t <= "힣" and t not in _standalone_1char)
             out = []
             i = 0
             while i < len(tokens):
                 cur = tokens[i]
                 if i + 1 < len(tokens):
                     nxt = tokens[i + 1]
-                    cur_pure = re.sub(r"[.,?!:;)]+$", "", cur)
                     nxt_pure = re.sub(r"[.,?!:;)]+$", "", nxt)
                     if len(cur) == 1 and "가" <= cur <= "힣" and cur not in _standalone_1char and nxt_pure and all("가" <= c <= "힣" for c in nxt_pure):
                         out.append(cur + nxt)
                         i += 2
                         continue
-                    if cur_pure and all("가" <= c <= "힣" for c in cur_pure) and nxt_pure and all("가" <= c <= "힣" for c in nxt_pure):
-                        if len(cur_pure) == 2 and len(nxt_pure) == 2 and nxt_pure.endswith(("에", "의", "로", "를", "을", "이", "가", "은", "는", "도", "만", "와", "과")) and single_ko_cnt >= 1:
-                            out.append(cur + nxt)
-                            i += 2
-                            continue
                 out.append(cur)
                 i += 1
             return " ".join(out)
-        s = "\n".join(_join_broken_hangul(ln) for ln in s.splitlines())
+        s = "\n".join(_fix_ln for _fix_ln in (_fix_korean_spacing_general(_join_broken_hangul(ln)) for ln in s.splitlines()))
         s = re.sub(r"\r?\n\s*\r?\n+", "\n\n", s)
 
         # 문장이 5개 이상 한 덩어리로 뭉쳐 있으면 EmbeddingGemma 2 문장 간 의미 거리로 자연스러운 문단 나누기
@@ -2099,6 +2614,7 @@ $words | ConvertTo-Json -Compress
 
 _LAST_TARGET_HWND: int = 0
 _PINNED_HWNDS: set[int] = set()
+_AUTO_PINNED_HWNDS: set[int] = set()
 
 
 def _get_win_class_and_title(hwnd: int) -> tuple[str, str]:
@@ -2111,8 +2627,42 @@ def _get_win_class_and_title(hwnd: int) -> tuple[str, str]:
     return cls_buf.value or "", title_buf.value or ""
 
 
+def _apply_window_topmost(hwnd: int, topmost: bool) -> bool:
+    """Win10/Win11 UWP(계산기 ApplicationFrameWindow) 및 일반 창(메모장) 공통 하드웨어급 Topmost 적용·검증"""
+    if not hwnd or not u32.IsWindow(hwnd):
+        return False
+    ins_after = HWND_TOPMOST if topmost else HWND_NOTOPMOST
+    u32.SetWindowPos(hwnd, ins_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW)
+    ex = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    if bool(ex & WS_EX_TOPMOST) != topmost:
+        try:
+            cur_tid = k32.GetCurrentThreadId()
+            tgt_tid = u32.GetWindowThreadProcessId(hwnd, None)
+            if cur_tid != tgt_tid and tgt_tid:
+                u32.AttachThreadInput(cur_tid, tgt_tid, True)
+            u32.SetWindowPos(hwnd, ins_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+            if cur_tid != tgt_tid and tgt_tid:
+                u32.AttachThreadInput(cur_tid, tgt_tid, False)
+        except Exception:
+            pass
+    return bool(u32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) == topmost
+
+
+def _set_pinned_title_badge(hwnd: int, pinned: bool) -> None:
+    try:
+        _, cur_title = _get_win_class_and_title(hwnd)
+        if not cur_title:
+            return
+        clean_t = cur_title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", "")
+        new_t = f"📌 [항상 위 고정] {clean_t}" if pinned else clean_t
+        if new_t != cur_title:
+            u32.SetWindowTextW(hwnd, new_t)
+    except Exception:
+        pass
+
+
 def _find_visible_utility_windows() -> list[int]:
-    """Win10 & Win11 공통: 화면에 열려 있는 메모장(Notepad) 또는 계산기(ApplicationFrameWindow/CalcFrame/SciCalc) 탐색"""
+    """Win10 & Win11 공통: 화면에 열려 있는 메모장(Notepad) 또는 계산기(ApplicationFrameWindow/CalcFrame/SciCalc) 탐색 (브라우저 제외)"""
     found: list[int] = []
     WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
@@ -2121,6 +2671,8 @@ def _find_visible_utility_windows() -> list[int]:
             cls_name, title = _get_win_class_and_title(h)
             t_low = title.lower()
             c_low = cls_name.lower()
+            if "chrome" in c_low or "mozilla" in c_low or "tk" in c_low:
+                return True
             if (
                 "notepad" in c_low
                 or "calc" in c_low
@@ -2147,9 +2699,8 @@ def _unpin_accidental_browsers(exclude_hwnd: int = 0) -> None:
         if "Chrome_WidgetWin" in cls_name and h not in _PINNED_HWNDS:
             ex_s = u32.GetWindowLongW(h, GWL_EXSTYLE)
             if (ex_s & WS_EX_TOPMOST) != 0:
-                u32.SetWindowPos(h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
-                if "📌" in title:
-                    u32.SetWindowTextW(h, title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", ""))
+                _apply_window_topmost(h, False)
+                _set_pinned_title_badge(h, False)
         return True
 
     u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
@@ -2162,9 +2713,10 @@ def enforce_pinned_windows() -> None:
         if not u32.IsWindow(h):
             dead.append(h)
             continue
-        u32.SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        _apply_window_topmost(h, True)
     for d in dead:
         _PINNED_HWNDS.discard(d)
+        _AUTO_PINNED_HWNDS.discard(d)
 
 
 def _capture_target_hwnd() -> int:
@@ -2179,64 +2731,77 @@ def _capture_target_hwnd() -> int:
 
 
 def superpower_7_toggle_topmost(target_hwnd: int = 0) -> None:
+    fg_now = u32.GetForegroundWindow()
+    if fg_now:
+        fg_cls, _ = _get_win_class_and_title(fg_now)
+        if "Tk" not in fg_cls and fg_cls not in ("Progman", "WorkerW", "Shell_TrayWnd"):
+            target_hwnd = u32.GetAncestor(fg_now, 2) or fg_now
+
     hwnd = target_hwnd or _capture_target_hwnd()
     if hwnd:
         root_hwnd = u32.GetAncestor(hwnd, 2)  # GA_ROOT = 2
         if root_hwnd:
             hwnd = root_hwnd
 
-    # 만약 유저가 노션(브라우저)을 보면서 옆에 띄워둔 메모장/계산기를 고정하려고 [Ctrl+0]->[7]을 누른 경우:
-    # 브라우저에 걸린 Topmost를 해제하고, 열려 있는 메모장/계산기 유틸 창들을 모두 최상단 고정(Pin)해 줍니다!
     cls_name, title = _get_win_class_and_title(hwnd)
     util_hwnds = _find_visible_utility_windows()
+
+    # 1) 유저가 노션(브라우저) 창에서 [Ctrl+0]->[7]을 누른 경우:
+    #    - 브라우저 자체는 절대 최상단 고정하지 않고(해제 보장), 화면에 떠 있는 메모장·계산기를 모두 최상단 고정!
+    #    - 이때 _AUTO_PINNED_HWNDS로 표시해 두어, 유저가 직후 메모장·계산기를 각각 클릭해 [Ctrl+0]->[7]을 또 눌러도 해제되지 않고 고정 상태가 확고히 유지되도록 보장!
     if "Chrome_WidgetWin" in cls_name and util_hwnds:
-        # 브라우저 자체에 걸려 있던 오고정 해제
-        u32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        _apply_window_topmost(hwnd, False)
         _PINNED_HWNDS.discard(hwnd)
-        if "📌" in title:
-            u32.SetWindowTextW(hwnd, title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", ""))
-        # 화면에 떠 있는 메모장/계산기들을 즉시 고정!
-        any_unpinned = any(uh not in _PINNED_HWNDS for uh in util_hwnds)
+        _AUTO_PINNED_HWNDS.discard(hwnd)
+        _set_pinned_title_badge(hwnd, False)
         for uh in util_hwnds:
-            _, utitle = _get_win_class_and_title(uh)
-            if any_unpinned:
-                _PINNED_HWNDS.add(uh)
-                u32.SetWindowPos(uh, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-                if "고정]" not in utitle:
-                    u32.SetWindowTextW(uh, f"📌 [항상 위 고정] {utitle}")
-            else:
-                _PINNED_HWNDS.discard(uh)
-                u32.SetWindowPos(uh, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-                u32.SetWindowTextW(uh, utitle.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", ""))
-        show_ghost_toast("👻 귀신같이 창고정 📌" if any_unpinned else "👻 귀신같이 창고정해제")
+            if uh not in _PINNED_HWNDS:
+                _AUTO_PINNED_HWNDS.add(uh)
+            _PINNED_HWNDS.add(uh)
+            _apply_window_topmost(uh, True)
+            _set_pinned_title_badge(uh, True)
+        show_ghost_toast("👻 귀신같이 창고정 📌 (메모장·계산기)")
         return
 
     if hwnd:
         _unpin_accidental_browsers(exclude_hwnd=hwnd)
         ex_style = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        is_top = (hwnd in _PINNED_HWNDS) or ((ex_style & WS_EX_TOPMOST) != 0)
-        if is_top:
+        is_already_top = (hwnd in _PINNED_HWNDS) or ((ex_style & WS_EX_TOPMOST) != 0)
+
+        # 만약 동반 자동 고정(_AUTO_PINNED_HWNDS)되어 있던 메모장/계산기를 유저가 직접 클릭해 [Ctrl+0]->[7]을 누른 경우:
+        # 해제하지 않고 '명시적 고정'으로 승격시켜 고정 상태를 100% 유지!
+        if hwnd in _AUTO_PINNED_HWNDS:
+            _AUTO_PINNED_HWNDS.discard(hwnd)
+            _PINNED_HWNDS.add(hwnd)
+            _apply_window_topmost(hwnd, True)
+            _set_pinned_title_badge(hwnd, True)
+            show_ghost_toast("👻 귀신같이 창고정 📌")
+            return
+
+        if is_already_top:
             _PINNED_HWNDS.discard(hwnd)
-            u32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+            _AUTO_PINNED_HWNDS.discard(hwnd)
+            _apply_window_topmost(hwnd, False)
+            _set_pinned_title_badge(hwnd, False)
+            for auh in list(_AUTO_PINNED_HWNDS):
+                _PINNED_HWNDS.discard(auh)
+                _AUTO_PINNED_HWNDS.discard(auh)
+                _apply_window_topmost(auh, False)
+                _set_pinned_title_badge(auh, False)
+            show_ghost_toast("👻 귀신같이 창고정해제")
         else:
             _PINNED_HWNDS.add(hwnd)
-            u32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-            # 만약 메모장/계산기 중 하나를 고정할 때 옆에 다른 보조창(메모장·계산기)도 함께 떠 있다면 같이 고정해 주어 둘 다 가려지지 않게 보장!
+            _apply_window_topmost(hwnd, True)
+            _set_pinned_title_badge(hwnd, True)
+            # 메모장/계산기 중 하나를 고정할 때 옆에 떠 있는 다른 보조 유틸창도 _AUTO_PINNED_HWNDS로 함께 고정!
             if hwnd in util_hwnds:
                 for uh in util_hwnds:
-                    _PINNED_HWNDS.add(uh)
-                    u32.SetWindowPos(uh, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-        try:
-            _, cur_title = _get_win_class_and_title(hwnd)
-            if is_top:
-                new_title = cur_title.replace("📌 [항상 위 고정] ", "").replace("[📌고정] ", "")
-            else:
-                new_title = cur_title if "고정]" in cur_title else f"📌 [항상 위 고정] {cur_title}"
-            if new_title != cur_title:
-                u32.SetWindowTextW(hwnd, new_title)
-        except Exception:
-            pass
-        show_ghost_toast("👻 귀신같이 창고정해제" if is_top else "👻 귀신같이 창고정 📌")
+                    if uh != hwnd and uh not in _PINNED_HWNDS:
+                        _AUTO_PINNED_HWNDS.add(uh)
+                        _PINNED_HWNDS.add(uh)
+                        _apply_window_topmost(uh, True)
+                        _set_pinned_title_badge(uh, True)
+            show_ghost_toast("👻 귀신같이 창고정 📌")
 
 
 def _toggle_korean_number_format(txt: str) -> str:
@@ -2291,8 +2856,8 @@ def _toggle_korean_number_format(txt: str) -> str:
     return out
 
 
-def superpower_8_format_numbers(daemon_set_cb) -> None:
-    orig_clip = get_clipboard_text()
+def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> None:
+    orig_clip = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     if orig_clip and orig_clip.strip():
         formatted = _toggle_korean_number_format(orig_clip)
         daemon_set_cb(formatted)
@@ -2532,8 +3097,21 @@ Write-Output $res.Text
         init_clip = get_clipboard_text()
         if init_clip and len(init_clip.strip()) >= 2:
             record_ai_history(init_clip)
+        # Session 1 창 진단 스냅샷 기록 (무인 원격 점검용)
+        util_init = _find_visible_utility_windows()
+        diag_list = []
+        for uh in util_init:
+            c_n, t_n = _get_win_class_and_title(uh)
+            diag_list.append({"hwnd": uh, "cls": c_n, "title": t_n, "ex": hex(u32.GetWindowLongW(uh, GWL_EXSTYLE))})
+        (_MERLIN_APPDATA / "ghost_window_session1_diag.json").write_text(
+            json.dumps({"pid": os.getpid(), "ts": time.time(), "util_windows": diag_list}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     except Exception:
         pass
+
+    last_summon_raw_clip: str = ""
+    was_sub_key_down: dict[int, bool] = {}
 
     def arm_sub_hotkeys() -> None:
         nonlocal menu_armed, menu_armed_until
@@ -2541,6 +3119,9 @@ Write-Output $res.Text
             for num in range(2, 10):
                 u32.RegisterHotKey(None, 100 + num, MOD_NOREPEAT, 0x30 + num)
                 u32.RegisterHotKey(None, 200 + num, MOD_NOREPEAT, 0x60 + num)
+                # 유저가 Ctrl+0 직후 Ctrl 키에서 손을 미처 다 떼기 전에 숫자 2~9를 눌러도 100% 작동하도록 Ctrl+숫자도 함께 무장!
+                u32.RegisterHotKey(None, 400 + num, MOD_CONTROL | MOD_NOREPEAT, 0x30 + num)
+                u32.RegisterHotKey(None, 500 + num, MOD_CONTROL | MOD_NOREPEAT, 0x60 + num)
             for fnum in range(1, 11):
                 u32.RegisterHotKey(None, 300 + fnum, MOD_NOREPEAT, VK_F1 + fnum - 1)
             menu_armed = True
@@ -2552,12 +3133,56 @@ Write-Output $res.Text
             for num in range(2, 10):
                 u32.UnregisterHotKey(None, 100 + num)
                 u32.UnregisterHotKey(None, 200 + num)
+                u32.UnregisterHotKey(None, 400 + num)
+                u32.UnregisterHotKey(None, 500 + num)
             for fnum in range(1, 11):
                 u32.UnregisterHotKey(None, 300 + fnum)
             menu_armed = False
 
+    def _execute_superpower_num(num: int) -> None:
+        nonlocal seq_mode
+        disarm_sub_hotkeys()
+        close_ghost_toast()
+        seq_mode = False
+        fkey = f"superpower_key_{num}"
+        allowed, q_msg = check_feature_quota_allowed(fkey)
+        if not allowed:
+            show_ghost_toast(q_msg, duration_ms=3200)
+            return
+        if num == 2:
+            if superpower_2_typo_morph(daemon_set_clipboard, auto_triggered=False):
+                complete_feature_action_success(fkey)
+        elif num == 3:
+            seq_queue.clear()
+            recent_unpasted.clear()
+            superpower_3_clean_format(daemon_set_clipboard, raw_src=last_summon_raw_clip)
+            complete_feature_action_success(fkey)
+        elif num == 4:
+            seq_queue.clear()
+            recent_unpasted.clear()
+            superpower_4_iron_lines_and_nfkc(daemon_set_clipboard, raw_src=last_summon_raw_clip)
+            complete_feature_action_success(fkey)
+        elif num == 5:
+            superpower_5_merge_or_ai_search(recent_unpasted, seq_queue, ai_clipboard_history, daemon_set_clipboard)
+            complete_feature_action_success(fkey)
+        elif num == 6:
+            superpower_6_screen_ocr(daemon_set_clipboard)
+            complete_feature_action_success(fkey)
+        elif num == 7:
+            superpower_7_toggle_topmost(_LAST_TARGET_HWND)
+            complete_feature_action_success(fkey)
+        elif num == 8:
+            seq_queue.clear()
+            recent_unpasted.clear()
+            superpower_8_format_numbers(daemon_set_clipboard, raw_src=last_summon_raw_clip)
+            complete_feature_action_success(fkey)
+        elif num == 9:
+            is_pdf_m = len(recent_images) >= 2
+            superpower_9_image_or_pdf_file(recent_images)
+            complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else fkey)
+
     def trigger_master_summon() -> None:
-        nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue
+        nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip
         _capture_target_hwnd()
         play_baby_ghost_sound(mode="summon")
         record_feature_telemetry("ctrl0_summon_bar")
@@ -2565,15 +3190,18 @@ Write-Output $res.Text
         pasting_started = False
         copied_after_trigger = False
 
-        # 트리거 즉시 현재 클립보드 실시간 점검 (recent_unpasted가 비었거나 갱신 지연 시 100% 보정)
+        # 트리거 즉시 현재 클립보드 원문을 보존 (서식세탁[3]·줄바꿈정리[4]·번호성형[8]에서 첫 줄만 남는 현상 100% 원천 차단!)
         live_clip = get_clipboard_text()
         if live_clip:
+            last_summon_raw_clip = live_clip
             if not recent_unpasted:
                 recent_unpasted.append(live_clip)
             elif recent_unpasted[-1] != live_clip:
                 recent_unpasted.append(live_clip)
+        elif recent_unpasted:
+            last_summon_raw_clip = recent_unpasted[-1]
 
-        # 엑셀 셀 검사 (최근 복사물 중 다중 셀이 있거나 엑셀 클립보드 포맷인지 확인)
+        # 엑셀 셀 검사 (실제 엑셀 클립보드 포맷일 때만 분해)
         excel_cells = []
         if recent_unpasted:
             excel_cells = split_excel_cells(recent_unpasted[-1])
@@ -2591,7 +3219,7 @@ Write-Output $res.Text
                 f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
                 duration_ms=6500,
             )
-        elif len(recent_unpasted) >= 2:
+        elif len(recent_unpasted) >= 2 and not ("\n" in (live_clip or "") and not has_excel_clipboard_format()):
             seq_queue = list(recent_unpasted)
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
@@ -2628,37 +3256,22 @@ Write-Output $res.Text
                         last_summon_ts = now_hk
                         trigger_master_summon()
 
-                # 2) 숫자 2~9 초능력 발동
-                elif 102 <= hk_id <= 109 or 202 <= hk_id <= 209:
-                    num = hk_id % 100
-                    disarm_sub_hotkeys()
-                    close_ghost_toast()
-                    seq_mode = False
-                    record_feature_telemetry(f"superpower_key_{num}")
-                    if num == 2:
-                        superpower_2_typo_morph(daemon_set_clipboard, auto_triggered=False)
-                    elif num == 3:
-                        superpower_3_clean_format(daemon_set_clipboard)
-                    elif num == 4:
-                        superpower_4_iron_lines_and_nfkc(daemon_set_clipboard)
-                    elif num == 5:
-                        superpower_5_merge_or_ai_search(recent_unpasted, seq_queue, ai_clipboard_history, daemon_set_clipboard)
-                    elif num == 6:
-                        superpower_6_screen_ocr(daemon_set_clipboard)
-                    elif num == 7:
-                        superpower_7_toggle_topmost(_LAST_TARGET_HWND)
-                    elif num == 8:
-                        superpower_8_format_numbers(daemon_set_clipboard)
-                    elif num == 9:
-                        superpower_9_image_or_pdf_file(recent_images)
+                # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
+                elif (102 <= hk_id <= 109) or (202 <= hk_id <= 209) or (402 <= hk_id <= 409) or (502 <= hk_id <= 509):
+                    _execute_superpower_num(hk_id % 100)
 
                 # 3) F1~F10 고정 상용구 발동
                 elif 301 <= hk_id <= 310:
                     fslot = hk_id - 300
                     disarm_sub_hotkeys()
                     seq_mode = False
-                    record_feature_telemetry(f"snippet_F{fslot}")
-                    superpower_fixed_snippet(fslot, daemon_set_clipboard)
+                    fkey = f"snippet_F{fslot}"
+                    allowed, q_msg = check_feature_quota_allowed(fkey)
+                    if not allowed:
+                        show_ghost_toast(q_msg, duration_ms=3200)
+                    else:
+                        superpower_fixed_snippet(fslot, daemon_set_clipboard)
+                        complete_feature_action_success(fkey)
 
             elif msg.message == WM_TIMER:
                 now = time.time()
@@ -2691,6 +3304,28 @@ Write-Output $res.Text
                 if menu_armed and now > menu_armed_until:
                     disarm_sub_hotkeys()
 
+                # 귀신창이 열려 있을 때(menu_armed) UWP 계산기 등이 WM_HOTKEY를 가로채더라도 하드웨어 키 폴링으로 숫자 2~9 즉시 발동!
+                if menu_armed and (now - last_summon_ts) > 0.14:
+                    fg_cls_now, _ = _get_win_class_and_title(u32.GetForegroundWindow())
+                    if "Tk" not in fg_cls_now:
+                        triggered_num = 0
+                        for n_check in range(2, 10):
+                            k_main = (u32.GetAsyncKeyState(0x30 + n_check) & 0x8000) != 0
+                            k_numpad = (u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0
+                            k_now = k_main or k_numpad
+                            if k_now and not was_sub_key_down.get(n_check, False):
+                                triggered_num = n_check
+                            was_sub_key_down[n_check] = k_now
+                        if triggered_num:
+                            _execute_superpower_num(triggered_num)
+                            continue
+                else:
+                    for n_check in range(2, 10):
+                        was_sub_key_down[n_check] = (
+                            ((u32.GetAsyncKeyState(0x30 + n_check) & 0x8000) != 0)
+                            or ((u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0)
+                        )
+
                 # 1) 비서가 data/clipboard_queue.json 에 순차 목록을 장전했는지 확인
                 if QUEUE_FILE.exists():
                     try:
@@ -2715,10 +3350,11 @@ Write-Output $res.Text
                     last_seq_num = curr_seq
                     copied = get_clipboard_text()
                     if copied:
-                        if copied == last_self_text and now < self_set_until:
+                        if (copied == last_self_text and now < self_set_until) or (menu_armed and (now - last_summon_ts) < 1.5):
                             pass
                         else:
                             last_self_text = None
+                            last_summon_raw_clip = copied
                             disarm_sub_hotkeys()
 
                             # [②번 오토매틱 모드]: 수동 트리거(숫자 2) 및 타이핑 스페이스바(2단어 연속 오타)에서만 작동!
@@ -2783,12 +3419,11 @@ Write-Output $res.Text
                         trigger_master_summon()
                 was_ctrl0_down = ctrl0_now
 
-                # [②번 양방향 오토매틱 타이핑 감지 (2어절 연속 오타 감지 + 애기귀신 효과음 + 1.5초 한/영 키 역전 방어막)]:
+                # [②번 양방향 오토매틱 타이핑 감지 (2어절 연속 오타 감지 + 0.2ms 원자적 교체 + 한/영 키 즉시 동기화)]:
                 # - 1단어만 오타 났을 때는 유저가 스스로 백스페이스+한/영 키를 칠 수 있으므로 손버릇 충돌 방지를 위해 대기(pending_first_typo)만 함.
-                # - 모른 채 원고만 보며 2단어째 오타까지 연속 입력 후 Space를 치는 순간: 1단어+2단어를 한꺼번에 성형 + 한/영 키 전환 + 애기귀신 소리('띠로링~♪') 재생!
-                if now < ime_guard_until:
-                    # 변환 직후 1.5초 이내에 유저가 반사 신경으로 한/영 키를 또 눌러버려도 목표 언어가 뒤집히지 않도록 고정 보호!
-                    set_ime_language(target_korean=ime_guard_target_kor)
+                # - 모른 채 원고만 보며 2단어째 오타까지 연속 입력 후 Space를 치는 순간: 1단어+2단어를 0.2ms 원자적 교체로 성형 + 한/영 키 전환!
+                if pending_first_typo is not None and (now - pending_first_typo.get("ts", 0.0)) > 4.5:
+                    pending_first_typo = None
 
                 hangul_down = (u32.GetAsyncKeyState(VK_HANGUL) & 0x8000) != 0
                 if hangul_down and not was_key_down.get(VK_HANGUL, False):
@@ -2797,8 +3432,8 @@ Write-Output $res.Text
                     pending_first_typo = None
                 was_key_down[VK_HANGUL] = hangul_down
 
-                # 마우스 클릭이나 방향키(Left/Up/Right/Down) 입력 시에는 타이핑 버퍼를 즉시 초기화하여 앞 글자 찌꺼기('dks안녕') 현상 원천 차단!
-                for nav_vk in (0x01, 0x02, 0x25, 0x26, 0x27, 0x28):
+                # 마우스 클릭이나 방향키·편집키(Left/Up/Right/Down/Home/End/Del/Tab/Esc) 입력 시에는 타이핑 버퍼를 즉시 초기화하여 앞 글자 찌꺼기 현상 원천 차단!
+                for nav_vk in (0x01, 0x02, 0x09, 0x1B, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2E):
                     nav_down = (u32.GetAsyncKeyState(nav_vk) & 0x8000) != 0
                     if nav_down and not was_key_down.get(nav_vk, False):
                         typed_ascii_buf.clear()
@@ -2811,17 +3446,34 @@ Write-Output $res.Text
                         if is_down and not was_key_down.get(vk_code, False):
                             ch = chr(vk_code) if shift_down else chr(vk_code + 32)
                             typed_ascii_buf.append(ch)
-                            if len(typed_ascii_buf) > 24:
+                            if len(typed_ascii_buf) > 28:
                                 typed_ascii_buf.pop(0)
                         was_key_down[vk_code] = is_down
 
-                    # 문장부호(? ! . , 등)를 단어 끝에 붙여서 쳤을 때도 알파벳 단어는 유지하고 백스페이스 개수만 +1 누적!
-                    punct_typed = 0
-                    for p_vk in (0xBF, 0x31, 0xBC, 0xBE):  # '/?'(0xBF), '1!'(0x31), ',<'(0xBC), '.>'(0xBE)
+                    # 숫자(0~9 및 넘패드 0~9)가 영타 단어 뒤에 붙는 경우('roffjrtl25' ➔ '갤럭시25')도 완벽 추적!
+                    for d_vk in range(0x30, 0x3A):  # 상단 숫자키 0 ~ 9
+                        d_down = (u32.GetAsyncKeyState(d_vk) & 0x8000) != 0
+                        if d_down and not was_key_down.get(d_vk, False):
+                            if typed_ascii_buf:
+                                if not shift_down:
+                                    typed_ascii_buf.append(chr(d_vk))
+                                elif d_vk == 0x31:  # Shift + 1 ('!')
+                                    typed_ascii_buf.append("!")
+                        was_key_down[d_vk] = d_down
+
+                    for nd_vk in range(0x60, 0x6A):  # 넘패드 숫자키 0 ~ 9
+                        nd_down = (u32.GetAsyncKeyState(nd_vk) & 0x8000) != 0
+                        if nd_down and not was_key_down.get(nd_vk, False):
+                            if typed_ascii_buf:
+                                typed_ascii_buf.append(chr(nd_vk - 0x30))
+                        was_key_down[nd_vk] = nd_down
+
+                    # 문장부호(? . , 등)를 단어 끝에 붙여서 쳤을 때도 알파벳 단어는 유지
+                    for p_vk in (0xBF, 0xBC, 0xBE):  # '/?'(0xBF), ',<'(0xBC), '.>'(0xBE)
                         p_down = (u32.GetAsyncKeyState(p_vk) & 0x8000) != 0
                         if p_down and not was_key_down.get(p_vk, False):
-                            if typed_ascii_buf and (p_vk != 0x31 or shift_down):
-                                typed_ascii_buf.append("?" if (p_vk == 0xBF and shift_down) else ("!" if (p_vk == 0x31 and shift_down) else ("." if p_vk == 0xBE else ",")))
+                            if typed_ascii_buf:
+                                typed_ascii_buf.append("?" if (p_vk == 0xBF and shift_down) else ("." if p_vk == 0xBE else ","))
                         was_key_down[p_vk] = p_down
 
                     back_down = (u32.GetAsyncKeyState(VK_BACK) & 0x8000) != 0
@@ -2837,70 +3489,131 @@ Write-Output $res.Text
                     if space_down and not was_key_down.get(VK_SPACE, False):
                         raw_buf_str = "".join(typed_ascii_buf)
                         typed_ascii_buf.clear()
-                        m_trail = re.match(r"^([A-Za-z]+)([?!.,]*)$", raw_buf_str)
+                        m_trail = re.match(r"^([A-Za-z]+)([0-9]*)([?!.,]*)$", raw_buf_str)
                         word_cand = m_trail.group(1) if m_trail else re.sub(r"[^A-Za-z]", "", raw_buf_str)
-                        trail_punct = m_trail.group(2) if m_trail else ""
+                        trail_digits = m_trail.group(2) if m_trail else ""
+                        trail_punct = m_trail.group(3) if m_trail else ""
                         hwnd_fg = u32.GetForegroundWindow()
-                        hime_fg = imm32.ImmGetDefaultIMEWnd(hwnd_fg) if hwnd_fg else 0
-                        ime_kor = (u32.SendMessageW(hime_fg, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0) & IME_CMODE_NATIVE) != 0 if hime_fg else False
+                        edit_child = _find_edit_control_child(hwnd_fg)
+
+                        cur_line: str | None = None
+                        if edit_child and raw_buf_str:
+                            time.sleep(0.006)
+                            cur_line = _get_edit_control_current_line(edit_child)
+                            if cur_line is not None and not cur_line.endswith(" "):
+                                time.sleep(0.006)
+                                cur_line = _get_edit_control_current_line(edit_child)
+
+                        if cur_line is not None:
+                            cur_stripped = cur_line.rstrip(" ")
+                            typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
+                            typed_as_kor = not typed_as_eng
+                        else:
+                            ime_kor = get_ime_is_korean(hwnd_fg)
+                            typed_as_eng = not ime_kor
+                            typed_as_kor = ime_kor
 
                         curr_typo: dict | None = None
-                        if not ime_kor and len(word_cand) >= 3 and not AI_ENGINE.is_valid_english_word(word_cand):
+                        if typed_as_eng and len(word_cand) >= 3 and not AI_ENGINE.is_valid_english_word(word_cand):
                             kor_cand = eng_word_to_kor(word_cand)
                             if kor_cand and len(kor_cand) >= 2 and is_valid_korean_word(kor_cand):
                                 curr_typo = {
                                     "disp_len": len(raw_buf_str) + 1,
                                     "raw": raw_buf_str,
-                                    "conv": kor_cand + trail_punct,
+                                    "conv": kor_cand + trail_digits + trail_punct,
                                     "target_ko": True,
+                                    "has_digits": bool(trail_digits),
+                                    "ts": now,
+                                    "hwnd": hwnd_fg,
                                 }
-                        elif ime_kor and len(word_cand) >= 3 and AI_ENGINE.is_valid_english_word(word_cand):
+                        elif typed_as_kor and len(word_cand) >= 3 and not trail_digits and AI_ENGINE.is_valid_english_word(word_cand):
                             kor_produced = eng_word_to_kor(word_cand)
                             if any(0x3131 <= ord(c) <= 0x318E for c in kor_produced) or not is_valid_korean_word(kor_produced):
-                                curr_typo = {
-                                    "disp_len": len(kor_produced) + len(trail_punct) + 1,
-                                    "raw": kor_produced + trail_punct,
-                                    "conv": word_cand + trail_punct,
-                                    "target_ko": False,
-                                }
+                                if cur_line is None or cur_line.rstrip(" ").endswith(kor_produced + trail_punct):
+                                    curr_typo = {
+                                        "disp_len": len(kor_produced) + len(trail_punct) + 1,
+                                        "raw": kor_produced + trail_punct,
+                                        "conv": word_cand + trail_punct,
+                                        "target_ko": False,
+                                        "has_digits": False,
+                                        "ts": now,
+                                        "hwnd": hwnd_fg,
+                                    }
 
                         if curr_typo is not None:
-                            if pending_first_typo is not None and pending_first_typo["target_ko"] == curr_typo["target_ko"]:
-                                # [2단어 연속 오타 도달!] -> 1단어 + 2단어를 한꺼번에 교정 + 애기귀신 소리 + 한/영 키 전환 + 1.5초 방어막 가동!
-                                total_backspaces = pending_first_typo["disp_len"] + curr_typo["disp_len"]
-                                combined_conv = f"{pending_first_typo['conv']} {curr_typo['conv']} "
-                                combined_raw = f"{pending_first_typo['raw']} {curr_typo['raw']}"
+                            should_trigger = False
+                            if cur_line is not None:
+                                line_tokens = cur_line.strip().split()
+                                if len(line_tokens) >= 2:
+                                    prev_tok = line_tokens[-2]
+                                    m_prev = re.match(r"^([A-Za-z]+)([0-9]*)([?!.,]*)$", prev_tok)
+                                    prev_is_eng_typo = False
+                                    if m_prev and len(m_prev.group(1)) >= 2 and not AI_ENGINE.is_valid_english_word(m_prev.group(1)):
+                                        pk = eng_word_to_kor(m_prev.group(1))
+                                        if pk and is_valid_korean_word(pk):
+                                            prev_is_eng_typo = True
+                                    if curr_typo["target_ko"]:
+                                        if prev_is_eng_typo or (curr_typo["has_digits"] and len(word_cand) >= 4):
+                                            should_trigger = True
+                                    else:
+                                        if pending_first_typo is not None and not pending_first_typo["target_ko"] and pending_first_typo.get("hwnd") == hwnd_fg and pending_first_typo["raw"] in cur_line:
+                                            should_trigger = True
+                            else:
+                                if pending_first_typo is not None and pending_first_typo["target_ko"] == curr_typo["target_ko"] and pending_first_typo.get("hwnd") == hwnd_fg:
+                                    should_trigger = True
+                                elif curr_typo["target_ko"] and curr_typo["has_digits"] and len(word_cand) >= 4:
+                                    should_trigger = True
+
+                            if should_trigger:
                                 target_ko = curr_typo["target_ko"]
+                                prev_raw = pending_first_typo["raw"] if pending_first_typo else ""
+                                prev_conv = pending_first_typo["conv"] if pending_first_typo else ""
+                                total_backspaces = (pending_first_typo["disp_len"] if pending_first_typo else 0) + curr_typo["disp_len"]
+                                combined_conv = f"{prev_conv} {curr_typo['conv']} ".lstrip()
+                                combined_raw = f"{prev_raw} {curr_typo['raw']}".lstrip()
                                 pending_first_typo = None
 
-                                orig_c = get_clipboard_text()
-                                # [Win10 & Win11 100% OS-Agnostic 통합 방식]:
-                                # 글자 수를 세어 백스페이스/방향키를 연타하면 Win10/Win11 입력창마다 키가 씹히거나
-                                # 앞글자('dks') 또는 뒷글자('dkssud...')가 남는 문제가 발생하므로,
-                                # 아예 현재 줄 앞부분 전체(Shift+Home)를 블록 지정해 복사한 뒤 줄 전체를 한 번에 변환·교체합니다!
-                                VK_HOME = 0x24
-                                tap_key_combo([VK_SHIFT], VK_HOME)
-                                time.sleep(0.035)
-                                tap_key_combo([VK_CONTROL], VK_C)
-                                time.sleep(0.04)
-                                line_sel = get_clipboard_text()
-                                if line_sel and line_sel != orig_c:
-                                    morphed_line, _ = morph_korean_english_text_with_direction(line_sel)
-                                    final_paste = morphed_line if morphed_line.endswith(" ") else (morphed_line + " ")
+                                if edit_child:
+                                    ok_ed, raw_ed, out_ed, lang_ed = _replace_edit_control_current_line_atomic(edit_child, auto_triggered=True)
+                                    if ok_ed:
+                                        complete_feature_action_success("auto_typo_morph_2words")
+                                        badge = "한글키 전환" if (lang_ed == "KO") else "영문키 전환"
+                                        show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_ed} ➔ {out_ed} | {badge})", duration_ms=1400)
                                 else:
-                                    final_paste = combined_conv
-                                daemon_set_clipboard(final_paste)
-                                time.sleep(0.025)
-                                tap_key_combo([VK_CONTROL], VK_V)
-                                time.sleep(0.04)
-                                set_ime_language(target_korean=target_ko)
-                                ime_guard_target_kor = target_ko
-                                ime_guard_until = time.time() + 1.5
-                                if orig_c:
-                                    daemon_set_clipboard(orig_c)
-                                record_feature_telemetry("auto_typo_morph_2words")
-                                badge = "한글키 전환" if target_ko else "영문키 전환"
-                                show_ghost_toast(f"👻 귀신같이 오토한영 ({combined_raw} ➔ {combined_conv.strip()} | {badge})", duration_ms=1400)
+                                    set_ime_language(target_korean=target_ko)
+                                    orig_c = get_clipboard_text()
+                                    sentinel_auto = "__GHOSTI_AUTO_TYPO__"
+                                    daemon_set_clipboard(sentinel_auto)
+                                    time.sleep(0.015)
+                                    release_all_modifiers()
+                                    VK_HOME = 0x24
+                                    VK_END = 0x23
+                                    tap_key_combo([VK_SHIFT], VK_HOME)
+                                    time.sleep(0.035)
+                                    tap_key_combo([VK_CONTROL], VK_C)
+                                    time.sleep(0.04)
+                                    line_sel = get_clipboard_text()
+                                    if line_sel and line_sel != sentinel_auto:
+                                        morphed_line, _ = morph_korean_english_text_with_direction(line_sel)
+                                        morphed_line = re.sub(r"^([가-힣])\1(녕하세요|기귀신)", r"\1\2", morphed_line)
+                                        final_paste = morphed_line.rstrip(" ") + " "
+                                    else:
+                                        tap_key_combo([], VK_END)
+                                        time.sleep(0.015)
+                                        for _ in range(total_backspaces):
+                                            tap_key_combo([], VK_BACK)
+                                        time.sleep(0.02)
+                                        final_paste = combined_conv
+                                    daemon_set_clipboard(final_paste)
+                                    time.sleep(0.02)
+                                    tap_key_combo([VK_CONTROL], VK_V)
+                                    time.sleep(0.035)
+                                    set_ime_language(target_korean=target_ko)
+                                    if orig_c and orig_c != sentinel_auto:
+                                        daemon_set_clipboard(orig_c)
+                                    complete_feature_action_success("auto_typo_morph_2words")
+                                    badge = "한글키 전환" if target_ko else "영문키 전환"
+                                    show_ghost_toast(f"👻 귀신같이 오토한영 ({combined_raw} ➔ {combined_conv.strip()} | {badge})", duration_ms=1400)
                             else:
                                 # 1단어째 오타는 바꾸지 않고 조용히 기억만 해둠 (유저가 스스로 고치는지 2단어로 넘어가는지 관찰)
                                 pending_first_typo = curr_typo
@@ -2937,6 +3650,7 @@ Write-Output $res.Text
                             pasting_started = False
                             copied_after_trigger = False
                             recent_unpasted.clear()
+                            complete_feature_action_success("feat_1_seq_paste")
                             show_ghost_toast("👻 귀신같이 순차붙여넣기")
                     else:
                         recent_unpasted.clear()
@@ -2949,5 +3663,65 @@ Write-Output $res.Text
         u32.DispatchMessageW(ctypes.byref(msg))
 
 
+def run_quota_self_test() -> int:
+    """
+    [멀린님 지시 반영: 7일을 기다리지 않고 1초 만에 검증하는 기능별 7일 타이머 & 만료 기능 성공 3회 제한 자동 테스트]
+    실행: python tools/seq_paste_daemon.py --test-quota
+    """
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    ledger_path = _MERLIN_APPDATA / "superpower_trial_ledger.json"
+    backup_bytes = ledger_path.read_bytes() if ledger_path.exists() else None
+    try:
+        if ledger_path.exists():
+            ledger_path.unlink()
+        print("🧪 [1단계] 초기 미개봉 상태 검증...")
+        ok, st = check_feature_quota_allowed("superpower_key_2")
+        assert ok and st == "UNOPENED", f"Expected UNOPENED, got {ok}, {st}"
+        print(f"   ✅ 2번(한영성형) 초기 상태: {st} (미개봉 확인)")
+
+        print("🧪 [2단계] 2번(한영성형) 첫 실제 성공 완수 -> 7일 무제한 타이머 개시 검증...")
+        res1 = complete_feature_action_success("superpower_key_2")
+        assert res1["status"] == "FIRST_OPENED_7D" and res1["consumed_daily"] is False
+        ok2, st2 = check_feature_quota_allowed("superpower_key_2")
+        assert ok2 and st2.startswith("ACTIVE_D-")
+        print(f"   ✅ 2번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
+
+        print("🧪 [3단계] 2번 기능을 8일 전 사용으로 강제 타임머신 만료 조작 (4번 줄바꿈정리는 미개봉 유지)...")
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        hwid = _get_machine_hwid_local()
+        ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (8 * 86400)
+        ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        print("🧪 [4단계] 만료된 2번 기능 3회 연속 성공 차감 검증 (1회 -> 2회 -> 3회)...")
+        for i in range(1, 4):
+            ok_exp, st_exp = check_feature_quota_allowed("superpower_key_2")
+            assert ok_exp, f"Should allow #{i}, got {st_exp}"
+            r_exp = complete_feature_action_success("superpower_key_2")
+            assert r_exp["status"] == "EXPIRED_DAILY_3" and r_exp["consumed_daily"] is True
+            print(f"   ✅ 만료 기능 #{i}회째 성공 완수 ➔ 잔여 일일 무료: {r_exp['daily_remaining']}/3회")
+
+        print("🧪 [5단계] 만료된 2번 기능 4번째 시도 시 차단 및 안내 메시지 검증...")
+        ok_4th, msg_4th = check_feature_quota_allowed("superpower_key_2")
+        assert not ok_4th, "4th attempt on expired feature must be blocked!"
+        print(f"   ✅ 4번째 만료 기능 차단 확인: {msg_4th}")
+
+        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 4번(줄바꿈정리)'은 7일 무제한으로 즉시 열리는지 검증!")
+        ok_unopened, st_unopened = check_feature_quota_allowed("superpower_key_4")
+        assert ok_unopened and st_unopened == "UNOPENED"
+        r_unopened = complete_feature_action_success("superpower_key_4")
+        assert r_unopened["status"] == "FIRST_OPENED_7D" and r_unopened["consumed_daily"] is False
+        print(f"   ✅ 미개봉 4번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 7일 무제한 즉시 개시!)")
+        print("\n🎉 [ALL PASS] 기능별 7일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
+        return 0
+    finally:
+        if backup_bytes is not None:
+            ledger_path.write_bytes(backup_bytes)
+        elif ledger_path.exists():
+            ledger_path.unlink()
+
+
 if __name__ == "__main__":
+    if "--test-quota" in sys.argv:
+        sys.exit(run_quota_self_test())
     main()

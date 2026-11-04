@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-04T10:07:03.701649",
+  "updated_at": "2026-11-04T13:11:50.904553",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -602,6 +602,30 @@
       "last_edited_time": "2026-11-03T07:09:00.000Z",
       "url": "https://app.notion.com/p/2-1-5-AI-40af9ffd2c1d8168aaabfd7fc674d2f5",
       "archived_at": "2026-11-04T10:07:03.701422"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-8195-926d-d44d1c4ea7af",
+      "title": "🎯 [귀신같이] 2-A. [손보기 잔여 3건] 사라진 파일 포렌식 · 인포데스크 온보딩 버튼 · 스튜디오 대리접수",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-04T00:26:00.000Z",
+      "url": "https://app.notion.com/p/2-A-3-40df9ffd2c1d8195926dd44d1c4ea7af",
+      "archived_at": "2026-11-04T10:38:21.377751"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-8142-8ed3-cf9d143afb8c",
+      "title": "🎯 [귀신같이] 좌측 하단 사이드바 귀신팸 화이트·골드 캡슐 & 위로 펼침(Bottom-Up) 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-04T00:26:00.000Z",
+      "url": "https://app.notion.com/p/Bottom-Up-40df9ffd2c1d81428ed3cf9d143afb8c",
+      "archived_at": "2026-11-04T12:40:23.145675"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-81c1-8fe7-f43d14057e4c",
+      "title": "🎯 [어그로필터] 상단 우측 『👻 귀신팸』 스르륵 롤스크린 런처 점검",
+      "app": "어그로필터",
+      "last_edited_time": "2026-11-04T00:28:00.000Z",
+      "url": "https://app.notion.com/p/40df9ffd2c1d81c18fe7f43d14057e4c",
+      "archived_at": "2026-11-04T13:11:50.904413"
     }
   ]
 }
