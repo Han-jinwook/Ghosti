@@ -9,7 +9,9 @@ export interface SuperpowerTrialStatus {
   engine_running: boolean;
   machine_hwid: string;
   account_id: string;
-  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'DAILY_FREE_3' | 'EXPIRED' | 'SUBSCRIBED';
+  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'PER_FEATURE_ACTIVE' | 'DAILY_FREE_3' | 'EXPIRED_DAILY_3' | 'EXPIRED' | 'SUBSCRIBED';
+  feature_trials?: Record<string, any>;
+  cross_device_trial?: Record<string, any>;
   trial_days_left: number;
   daily_free_limit?: number;
   daily_free_remaining?: number;
@@ -716,7 +718,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   ⚡ 귀신 초능력 9+3 (Ctrl + 0)
                 </span>
                 <span className="px-2.5 py-0.5 rounded-md bg-teal-500/15 border border-teal-400/40 text-teal-300 font-label-sm text-[11.5px] font-extrabold">
-                  기기별 7일 무제한 체험 · 이후 매일 3회 평생 무료 · [내 기기 통합 (월 3,900원)] 구독 시 평생 무제한!
+                  12대 초능력 각각 첫 사용일로부터 각 7일 무제한 · 만료 기능만 매일 3회 평생 무료 · [내 기기 통합 (월 3,900원)] 2번째 기기 연결 시 7일 풀파워 체험!
                 </span>
               </div>
               <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
@@ -1020,14 +1022,14 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-zinc-950 text-[11px] font-black">
                     0 = 靈 (귀신 영) · 귀신 부르는 단축키 Ctrl + 0
                   </span>
-                  {trialStatus?.trial_status === 'ACTIVE' && (
+                  {(trialStatus?.trial_status === 'ACTIVE' || trialStatus?.trial_status === 'PER_FEATURE_ACTIVE') && (
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[11px] font-extrabold">
-                      ⏳ 기기별 7일 무제한 체험 중 (D-{trialStatus.trial_days_left})
+                      🔥 12대 초능력 개별 7일 무제한 (미개봉 초능력은 첫 사용 시 7일 시작!)
                     </span>
                   )}
-                  {trialStatus?.trial_status === 'DAILY_FREE_3' && (
+                  {(trialStatus?.trial_status === 'DAILY_FREE_3' || trialStatus?.trial_status === 'EXPIRED_DAILY_3') && (
                     <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-[11px] font-extrabold">
-                      🎁 기기별 매일 3회 평생 무료 (오늘 잔여: {trialStatus.daily_free_remaining ?? 3}/3회)
+                      🎁 만료 기능 매일 3회 평생 무료 (오늘 잔여: {trialStatus.daily_free_remaining ?? 3}/3회 · 미개봉 기능은 7일 무제한!)
                     </span>
                   )}
                   {trialStatus?.trial_status === 'SUBSCRIBED' && (
@@ -1037,7 +1039,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   )}
                 </div>
                 <p className="text-[12.5px] text-zinc-200 leading-relaxed mt-0.5">
-                  윈도우 어디서나(카톡·엑셀·한글·브라우저) <strong className="text-amber-300">Ctrl + 0</strong>을 누르면 커서 바로 옆에 <strong className="text-teal-300">『귀신창(Ghost Window)』</strong>이 퐁~띠링!(①번 소환음) 나타나며, 정본 3D 로고 클릭 시 웹 호출 · 상단 미니 검색창 기억 소환 · 바깥 클릭 시 0.01초 만에 즉시 사라집니다!
+                  윈도우 어디서나(카톡·엑셀·한글·브라우저) <strong className="text-amber-300">Ctrl + 0</strong>을 누르면 커서 바로 옆에 <strong className="text-teal-300">『귀신창(Ghost Window)』</strong>이 소환됩니다! 12대 초능력 각각 첫 성공 시 7일간 무제한 무료체험이 개시되며, 7일이 지난 만료 기능들만 합산하여 매일 3회 평생 무료로 안전하게 사용하실 수 있습니다.
                 </p>
               </div>
 
