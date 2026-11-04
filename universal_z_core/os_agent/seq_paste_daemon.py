@@ -153,6 +153,12 @@ u32.SetForegroundWindow.restype = wintypes.BOOL
 u32.SetFocus.argtypes = [wintypes.HWND]
 u32.SetFocus.restype = wintypes.HWND
 k32.GetCurrentThreadId.restype = wintypes.DWORD
+k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+k32.OpenProcess.restype = wintypes.HANDLE
+k32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+k32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+k32.CloseHandle.argtypes = [wintypes.HANDLE]
+k32.CloseHandle.restype = wintypes.BOOL
 
 
 # =====================================================================
@@ -2665,6 +2671,97 @@ def _get_win_class_and_title(hwnd: int) -> tuple[str, str]:
     return cls_buf.value or "", title_buf.value or ""
 
 
+# [귀신창 실시간 타이핑 수호신: 자체 오토코렉트/코드 에디터 프로그램 이중 변환 충돌 방지 예외 블랙리스트]
+# - 아래아한글(HWP/한컴오피스), MS 오피스(Word/PowerPoint), 글로벌 교정 툴(Grammarly/Ichitaro/ATOK) 및 IDE에서는
+#   프로그램 자체 '한/영 자동 고침(AutoCorrect)' 엔진이나 고유 인라인 캔버스와 귀신창이 충돌하지 않도록
+#   실시간 타이핑 자동성형(Space 2어절 감지) 개입을 100% PASS(양보)합니다.
+AUTOCORRECT_EXCLUDE_PROCESSES: set[str] = {
+    # 1. 국내 한컴오피스 계열 (자체 글자판 자동 변경 보유)
+    "hwp.exe",
+    "hshow.exe",
+    "hcell.exe",
+    "hword.exe",
+    # 2. 글로벌 Microsoft Office / LibreOffice 계열 (자체 한/영 자동 고침 및 AutoCorrect 보유)
+    "winword.exe",
+    "powerpnt.exe",
+    "soffice.bin",
+    "soffice.exe",
+    # 3. 글로벌(영미권·일본 등 해외 버전) 자체 교정 및 IME 전문 소프트웨어
+    "grammarly.desktop.exe",
+    "grammarly.exe",
+    "jstaro.exe",
+    "ichitaro.exe",
+    "atok.exe",
+    # 4. 개발자 코딩 IDE (영문 코드 작성 시 오타 판정 간섭 원천 방지)
+    "code.exe",
+    "devenv.exe",
+    "cursor.exe",
+    "windsurf.exe",
+    "pycharm64.exe",
+    "idea64.exe",
+    "webstorm64.exe",
+}
+
+AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
+    "hwp",
+    "hnc_",
+    "hncedit",
+    "opusapp",
+    "_wwg",
+    "pptframeclass",
+)
+
+
+def get_window_process_and_class(hwnd: int) -> tuple[str, str, str]:
+    """활성 창 핸들(hwnd)로부터 (실행파일명, 윈도우클래스명, 창제목)을 고속 추출"""
+    if not hwnd:
+        return "", "", ""
+    win_cls, win_title = _get_win_class_and_title(hwnd)
+    proc_name = ""
+    try:
+        pid = wintypes.DWORD(0)
+        u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value:
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            hproc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+            if hproc:
+                try:
+                    buf_len = wintypes.DWORD(512)
+                    path_buf = ctypes.create_unicode_buffer(512)
+                    if k32.QueryFullProcessImageNameW(hproc, 0, path_buf, ctypes.byref(buf_len)):
+                        proc_name = Path(path_buf.value).name
+                finally:
+                    k32.CloseHandle(hproc)
+    except Exception:
+        pass
+    return proc_name, win_cls, win_title
+
+
+def should_skip_auto_typo(hwnd: int) -> bool:
+    """
+    현재 포커스된 창이 자체 오토코렉트(한영 자동 전환) 탑재 프로그램(HWP, MS워드 등)이거나
+    코딩 전용 IDE인 경우 True를 반환하여 귀신창 실시간 타이핑 자동성형을 100% PASS합니다.
+    """
+    if not hwnd:
+        return False
+    try:
+        if not get_superpower_settings().get("auto_typo_enabled", True):
+            return True
+        for target_h in (hwnd, u32.GetAncestor(hwnd, 2)):
+            if not target_h:
+                continue
+            proc_name, win_cls, _ = get_window_process_and_class(target_h)
+            proc_lower = proc_name.lower()
+            cls_lower = win_cls.lower()
+            if proc_lower in AUTOCORRECT_EXCLUDE_PROCESSES:
+                return True
+            if any(kw in cls_lower for kw in AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def _apply_window_topmost(hwnd: int, topmost: bool) -> bool:
     """Win10/Win11 UWP(계산기 ApplicationFrameWindow) 및 일반 창(메모장) 공통 하드웨어급 Topmost 적용·검증"""
     if not hwnd or not u32.IsWindow(hwnd):
@@ -3542,6 +3639,12 @@ Write-Output $res.Text
 
                     space_down = (u32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
                     if space_down and not was_key_down.get(VK_SPACE, False):
+                        hwnd_fg = u32.GetForegroundWindow()
+                        if should_skip_auto_typo(hwnd_fg):
+                            typed_ascii_buf.clear()
+                            pending_first_typo = None
+                            was_key_down[VK_SPACE] = space_down
+                            continue
                         raw_buf_str = "".join(typed_ascii_buf)
                         typed_ascii_buf.clear()
                         m_trail = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", raw_buf_str)
@@ -3549,7 +3652,6 @@ Write-Output $res.Text
                         word_cand = m_trail.group(2) if m_trail else re.sub(r"[^A-Za-z]", "", raw_buf_str)
                         trail_digits = m_trail.group(3) if m_trail else ""
                         trail_punct = m_trail.group(4) if m_trail else ""
-                        hwnd_fg = u32.GetForegroundWindow()
                         edit_child = _find_edit_control_child(hwnd_fg)
 
                         cur_line: str | None = None
