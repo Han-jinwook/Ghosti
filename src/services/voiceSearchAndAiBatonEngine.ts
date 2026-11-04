@@ -50,10 +50,11 @@ export interface ParsedVoiceDocCommand {
 export function isMonsterCareIntentFromSearch(utterance: string): boolean {
   const raw = (utterance || '').trim();
   if (!raw) return false;
-  // 카톡 전달, 문서 보증금/월세/금액 질문, 사진/영상 찾아줘 등은 [🎯 찾기] 고유 의도
+  // 카톡 전달, 문서 보증금/월세/금액 질문, 조항 낭독, 읽어줘, 알려줘 등은 100% [🎯 찾기] 고유 의도
   if (/(카톡|카카오톡).*?(전달|보내|전송)|(?:에게|한테|님께).*?(카톡|카카오톡)/i.test(raw)) return false;
+  if (/(읽어|낭독|들려|알려|말해|얼마|언제|뭐야|몇|어디)/i.test(raw)) return false;
   if (
-    /(보증금|월세|임대료|관리비|위약금|만기일|계약금|잔금|계좌\s*번호|비밀번호|비번).*?(얼마|언제|알려|읽어|뭐야|어떻게)/i.test(
+    /(계약서|견적서|명세서|등록증|증권|문서|서류|조항|특약|약관|보증금|월세|임대료|관리비|위약금|만기일|계좌|비밀번호|사업자|등록번호|총액|금액|손해배상|원상복구)/i.test(
       raw
     )
   ) {
@@ -70,7 +71,7 @@ export function isMonsterCareIntentFromSearch(utterance: string): boolean {
 export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCommand {
   const raw = (utterance || '').trim();
 
-  // 1) 카톡 실채팅방 파일 전달 ("사무실 계약서 찾아서 이쁜이에게 카톡 전달해줘" / "계약서 찾아서 카톡 이쁜이에게 전달해줘")
+  // 1) 카톡 실채팅방 파일 전달 ("사무실 계약서 찾아서 이쁜이에게 카톡 전달해줘")
   const kakaoMatchA = raw.match(
     /^(.+?)\s*(?:찾아서\s*)?(?:카톡|카카오톡)(?:으로)?\s*['"]?([가-힣a-zA-Z0-9_]+?)['"]?(?:에게|한테|님께|방에)\s*(?:전달|보내|전송)/i
   );
@@ -89,25 +90,7 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
     };
   }
 
-  // 1-B) 문서 내 핵심 수치/조건 즉답 ("보증금 얼마야?", "사무실 계약서 보증금이 얼마야?", "만기일 언제야?", "월세 얼마야?")
-  const factQaMatch = raw.match(
-    /(?:(.+?)\s*(?:에서|의)?\s*)?(보증금|월세|임대료|관리비|위약금|계약금|잔금|만기일|계약\s*기간|특약|계좌\s*번호|비밀번호|비번)(?:이|은|는|가)?\s*(얼마|언제|뭐야|어떻게|알려|읽어|몇)/i
-  );
-  if (factQaMatch) {
-    const docHint =
-      (factQaMatch[1] || '').replace(/(이|그|저|우리|내)\s*/g, '').trim() || '계약서';
-    const factKey = factQaMatch[2].replace(/\s+/g, '').trim();
-    return {
-      intentType: 'DOC_FACT_QA_READ',
-      targetDocKeyword: docHint,
-      extractKeywords: [factKey],
-      kakaoRecipientName: '',
-      rawQuestion: raw,
-      serverTokenCostWon: 0,
-    };
-  }
-
-  // 2) 고난도 심층 분석/법률·유불리 상담 질문 ("이 계약서에서 나한테 불리한 조항 있어?", "독소조항 분석해줘", "어떻게 대응해야 해?")
+  // 2) 고난도 심층 분석/법률·유불리 상담 질문 ("이 계약서에서 나한테 불리한 조항 있어?", "독소조항 분석해줘")
   const highDifficultyRegex =
     /(불리한|유리한|독소\s*조항|위험한|문제\s*될|법적으로|검토해|분석해|해석해|상담|어떻게\s*해야|주의할\s*점|의견)/i;
   if (highDifficultyRegex.test(raw)) {
@@ -122,9 +105,26 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
     };
   }
 
-  // 3) 특정 단어가 나오는 문장 전수 발췌 낭독 ("계약서에서 '위약금'이나 '해지' 나오는 문장 다 읽어줘")
+  // 3) 특정 조항/문구 전수 낭독 ("원상복구 조항 읽어줘", "비밀유지계약서 손해배상 조항 낭독해줘", "위약금 나오는 문장 읽어줘") ➔ 【선희 여성 성우】
+  const clauseReadMatch = raw.match(
+    /(?:(.+?)\s*(?:에서|의)?\s*)?(원상\s*복구|손해\s*배상|비밀\s*유지|위약금|계약\s*해지|면책|하자\s*담보|조항|특약|약관|규정)(?:이|은|는|가|을|를)?\s*(?:좀\s*)?(?:다\s*)?(읽어|낭독|들려|말해)/i
+  );
+  if (clauseReadMatch) {
+    const docHint = (clauseReadMatch[1] || '').replace(/(이|그|저|우리|내|문서|서류)\s*/g, '').trim();
+    const clauseKey = clauseReadMatch[2].replace(/\s+/g, '').trim();
+    return {
+      intentType: 'DOC_KEYWORD_SENTENCE_READ',
+      targetDocKeyword: docHint || (clauseKey.includes('손해배상') || clauseKey.includes('비밀유지') ? '비밀유지' : '계약서'),
+      extractKeywords: [clauseKey, clauseKey.replace(/(조항|특약|약관|규정)/, '').trim()].filter(Boolean),
+      kakaoRecipientName: '',
+      rawQuestion: raw,
+      serverTokenCostWon: 0,
+    };
+  }
+
+  // 3-B) 특정 단어가 나오는 문장 전수 발췌 낭독
   const kwReadMatch = raw.match(
-    /(?:(.+?)(?:에서|중에서)\s*)?['"]?([가-힣a-zA-Z0-9_,\s·]+?)['"]?\s*(?:나오는|들어간|포함된|관련)\s*(?:문장|부분|구절).*?(?:읽어|들려|찾아)/i
+    /(?:(.+?)(?:에서|중에서)\s*)?['"]?([가-힣a-zA-Z0-9_,\s·]+?)['"]?\s*(?:나오는|들어간|포함된|관련)\s*(?:문장|부분|구절).*?(?:읽어|들려|찾아|낭독)/i
   );
   if (kwReadMatch) {
     const docTarget = (kwReadMatch[1] || '계약서').trim();
@@ -143,9 +143,34 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
     };
   }
 
-  // 4) 문서 사전 요약본 즉시 낭독 ("이 문서 요약해서 읽어줘", "핵심만 읽어줘")
-  if (/(요약해\s*서?\s*읽어|핵심만\s*읽어|요약\s*낭독|간단히\s*읽어)/i.test(raw)) {
-    const docHint = raw.replace(/(이\s*문서|요약해서|핵심만|읽어줘|들려줘)/gi, '').trim() || '계약서';
+  // 4) 문서 단답 팩트 수치 Q&A ("보증금이랑 월세 얼마야?", "사업자등록번호 알려줘", "서버 견적서 총액 얼마야?") ➔ 【현수 남성 성우】
+  const factKeywords =
+    '보증금|월세|임대료|관리비|위약금|계약금|잔금|만기일|계약\s*기간|특약|' +
+    '계좌\s*번호|계좌|비밀번호|비번|아이디|ID|' +
+    '사업자\s*등록\s*번호|사업자\s*번호|주민\s*등록\s*번호|주민\s*번호|등록\s*번호|여권\s*번호|전화\s*번호|연락처|' +
+    '총액|견적\s*총액|합계|금액|공급가액|부가세|세액|견적\s*금액|수수료|가격|비용|단가';
+  const factAsk = '얼마|언제|뭐야|뭐|어떻게|알려|몇|누구|어디|확인';
+  const factQaRegex = new RegExp(
+    `(?:(.+?)\s*(?:에서|의)?\s*)?(${factKeywords})(?:이|은|는|가|을|를|과|와|이랑)?\s*(?:좀\s*)?(${factAsk})`,
+    'i'
+  );
+  const factQaMatch = raw.match(factQaRegex);
+  if (factQaMatch) {
+    const docHint = (factQaMatch[1] || '').replace(/(이|그|저|우리|내)\s*/g, '').trim();
+    const factKey = factQaMatch[2].replace(/\s+/g, '').trim();
+    return {
+      intentType: 'DOC_FACT_QA_READ',
+      targetDocKeyword: docHint || (factKey.includes('사업자') ? '사업자등록증' : factKey.includes('견적') || factKey.includes('총액') ? '견적서' : factKey.includes('계좌') ? '계좌' : '계약서'),
+      extractKeywords: [factKey],
+      kakaoRecipientName: '',
+      rawQuestion: raw,
+      serverTokenCostWon: 0,
+    };
+  }
+
+  // 5) 문서 요약/전체 낭독 ("이 문서 요약해서 읽어줘", "계약서 읽어줘", "문서 낭독해줘") ➔ 【선희 여성 성우】
+  if (/(요약해\s*서?\s*읽어|핵심만\s*읽어|요약\s*낭독|간단히\s*읽어|읽어\s*줘|낭독\s*해\s*줘|읽어봐|들려줘)/i.test(raw)) {
+    const docHint = raw.replace(/(이\s*문서|요약해서|핵심만|읽어줘|낭독해줘|들려줘|알려줘|좀)/gi, '').trim() || '계약서';
     return {
       intentType: 'DOC_SUMMARY_READ',
       targetDocKeyword: docHint,
@@ -226,14 +251,30 @@ export function resolveTargetDocAndBuildFactAnswer(
   voiceRole: GhostiNeuralVoiceRole;
 } {
   const kwLower = (targetDocKeyword || '').toLowerCase();
+  const rawExtract = (extractKeywords[0] || '').toLowerCase();
+
   const findBestDoc = (): LocalDocumentFile | null => {
     if (!docs || docs.length === 0) return null;
+
+    // 1차 정밀 탐색: 파일명/제목/본문/키워드 직접 매칭
     for (const d of docs) {
       const hay = `${d.fileName} ${d.title} ${d.extractedText} ${(d.keywords || []).join(' ')}`.toLowerCase();
       if (kwLower && hay.includes(kwLower)) return d;
-      if (/계약서|사무실|임대차|보증금|월세/.test(kwLower) && /계약서|임대차/.test(hay)) return d;
-      if (/계좌|비밀번호|비번|아이디/.test(kwLower) && /계좌|계정관리표/.test(hay)) return d;
     }
+
+    // 2차 도메인 유의어 매칭
+    for (const d of docs) {
+      const hay = `${d.fileName} ${d.title} ${d.extractedText} ${(d.keywords || []).join(' ')}`.toLowerCase();
+      if (/(사업자|등록번호|인허가)/.test(kwLower + ' ' + rawExtract) && /사업자등록/.test(hay)) return d;
+      if (/(견적|총액|서버|gpu|발주)/.test(kwLower + ' ' + rawExtract) && /견적서/.test(hay)) return d;
+      if (/(비밀유지|nda|손해배상|위약)/.test(kwLower + ' ' + rawExtract) && /비밀유지/.test(hay)) return d;
+      if (/(계약서|사무실|임대차|보증금|월세|원상복구)/.test(kwLower + ' ' + rawExtract) && /계약서|임대차/.test(hay)) return d;
+      if (/(계좌|비밀번호|비번|아이디|ott)/.test(kwLower + ' ' + rawExtract) && /계좌|계정관리표/.test(hay)) return d;
+      if (/(여권|신분증)/.test(kwLower + ' ' + rawExtract) && /여권/.test(hay)) return d;
+      if (/(보험|자동차|엔진오일)/.test(kwLower + ' ' + rawExtract) && /보험|정기점검/.test(hay)) return d;
+    }
+
+    // 기본 계약서 우선 반환
     return (
       docs.find((d) => /계약서|임대차/.test(`${d.fileName} ${d.title}`)) ||
       docs[0] ||
@@ -257,21 +298,24 @@ export function resolveTargetDocAndBuildFactAnswer(
     .map((s) => s.trim())
     .filter(Boolean);
 
+  // 단답 수치 매칭 (보증금, 월세, 사업자등록번호, 총액, 계좌 등)
   if (factKey) {
-    const matchedSegs = segments.filter((seg) => seg.includes(factKey));
+    const cleanFact = factKey.replace(/(조항|특약|약관|규정)/, '').trim();
+    const matchedSegs = segments.filter((seg) => seg.includes(factKey) || (cleanFact && seg.includes(cleanFact)));
     if (matchedSegs.length > 0) {
       return {
         matchedDoc: doc,
         factAnswerKo: `찾으신 '${doc.title}' 확인 결과, ${matchedSegs.join(' · ')}입니다. (전체 내용: ${text})`,
-        voiceRole: 'hyunsu_briefing',
+        voiceRole: 'hyunsu_briefing', // 단답 수치 ➔ 차분한 남성 성우 (현수)
       };
     }
   }
 
+  // 조항 및 장문 낭독
   return {
     matchedDoc: doc,
-    factAnswerKo: `찾으신 '${doc.title}'의 핵심 내용입니다. ${text}`,
-    voiceRole: 'sunhi_doc_reader',
+    factAnswerKo: `찾으신 '${doc.title}'의 조항 및 전문 내용입니다. ${text}`,
+    voiceRole: 'sunhi_doc_reader', // 조항/전문 낭독 ➔ 또렷한 여성 아나운서 (선희)
   };
 }
 

@@ -1636,20 +1636,22 @@ export async function processUnifiedMonsterChatQuery(params: {
     const fullText = matchedDoc?.extractedText || factAnswerKo;
     if (voiceDocCmd.intentType === 'DOC_KEYWORD_SENTENCE_READ') {
       const extracted = extractKeywordSentencesZeroLlm(fullText, voiceDocCmd.extractKeywords);
+      const readScript =
+        extracted.matchedCount > 0
+          ? `${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`
+          : `찾으신 '${matchedDoc?.title || '문서'}'의 내용입니다. ${fullText || factAnswerKo}`;
+
       if (ttsEnabled) {
-        void speakWithHyunsuOrSunhi(
-          `${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`,
-          'sunhi_doc_reader'
-        );
+        void speakWithHyunsuOrSunhi(readScript, 'sunhi_doc_reader');
       }
       return reply(
         sourceTab,
-        `🎯 **[양방향 자동 토스 ➔ 문서 키워드 문장 전수 발췌 낭독]**\n` +
-          `🔊 ${extracted.hyunsuIntroText}\n` +
+        `🎯 **[양방향 자동 토스 ➔ 문서 키워드 조항 발췌 낭독]**\n` +
+          `🔊 ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : `선희 아나운서가 '${matchedDoc?.title || '문서'}' 전문을 읽어드립니다.`}\n` +
           (extracted.sunhiReadScript ? `📖 ${extracted.sunhiReadScript}` : `📖 ${fullText}`),
         {
           cardKind: 'SEARCH_ROUTING',
-          searchKeyword: voiceDocCmd.targetDocKeyword,
+          searchKeyword: matchedDoc?.title || voiceDocCmd.targetDocKeyword,
         }
       );
     } else {
