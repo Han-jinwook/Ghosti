@@ -256,6 +256,245 @@ function normalizeSampleVideoFrameUrl(url?: string): string {
   return url;
 }
 
+const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
+  string,
+  {
+    extraKeywords: string[];
+    frameDialogueBySec?: Record<number, { subtitle: string; extraKeywords: string[] }>;
+  }
+> = {
+  '20240719_105706.mp4': {
+    extraKeywords: [
+      '코타키나발루',
+      '말레이시아',
+      '패러세일링',
+      '패러세일',
+      '낙하산',
+      '모터보트',
+      '바다',
+      '해변',
+      '바닷가',
+      '박수',
+      '환호',
+      '축하합니다',
+      '성공',
+      '웃는',
+      '미소',
+    ],
+    frameDialogueBySec: {
+      0: {
+        subtitle: '💬 음성 대사: “와! 코타키나발루 바다 위 하늘 진짜 높다!”',
+        extraKeywords: ['코타키나발루', '패러세일링', '상공', '비행', '하늘'],
+      },
+      12: {
+        subtitle: '💬 음성 대사: “보트 위로 점점 내려간다! 패러세일링 하강 준비!”',
+        extraKeywords: ['코타키나발루', '패러세일링', '패러세일', '하강', '보트'],
+      },
+      20: {
+        subtitle: '💬 음성 대사: “와아 축하합니다! 착지 성공!” (박수 치며 환호하는 순간)',
+        extraKeywords: ['코타키나발루', '박수', '환호', '축하합니다', '축하', '착지', '웃는', '미소'],
+      },
+    },
+  },
+  '20240720_134808.mp4': {
+    extraKeywords: [
+      '코타키나발루',
+      '말레이시아',
+      '리조트',
+      '테라스',
+      '야외테라스',
+      '기념촬영',
+      '생일',
+      '케이크',
+      '촛불',
+      '축하합니다',
+      '박수',
+      '환호',
+      '강아지',
+      '원반',
+      '골프',
+      '스윙',
+      '피니시',
+    ],
+    frameDialogueBySec: {
+      0: {
+        subtitle: '💬 음성 대사: “코타키나발루 리조트 테라스에 카메라 세팅 완료!”',
+        extraKeywords: ['코타키나발루', '리조트', '테라스', '카메라'],
+      },
+      6: {
+        subtitle: '💬 음성 대사: “생일 축하합니다! 케이크 촛불 불고 다 같이 박수!”',
+        extraKeywords: [
+          '코타키나발루',
+          '생일',
+          '케이크',
+          '촛불',
+          '부는',
+          '축하합니다',
+          '축하',
+          '박수',
+          '환호',
+          '손인사',
+        ],
+      },
+      12: {
+        subtitle: '💬 음성 대사: “울다가도 웃는 해맑은 미소! 강아지가 잔디에서 원반 물어오는 구간까지 완벽해!”',
+        extraKeywords: [
+          '코타키나발루',
+          '아이',
+          '울면서',
+          '웃는',
+          '미소',
+          '강아지',
+          '원반',
+          '물어오는',
+          '골프',
+          '스윙',
+          '피니시',
+          '자세',
+        ],
+      },
+    },
+  },
+  '20240722_052422.mp4': {
+    extraKeywords: [
+      '비행기',
+      '항공기',
+      '기내',
+      '창문',
+      '창밖',
+      '일출',
+      '노을',
+      '바닷가',
+      '해변',
+      '코타키나발루',
+      '출장',
+      '회의실',
+      '화이트보드',
+      '판서',
+      '내년',
+      '매출',
+      '목표',
+    ],
+    frameDialogueBySec: {
+      0: {
+        subtitle: '💬 음성 대사: “비행기 창밖으로 노을빛 일출이 떠오르네요, 노을 지는 바닷가 상공입니다.”',
+        extraKeywords: ['비행기', '창밖', '일출', '노을', '바닷가', '걷는', '해변', '구름', '코타키나발루'],
+      },
+      4: {
+        subtitle: '💬 음성 대사: “이번 회의실에서 화이트보드에 판서하며 정리한 내년 매출 목표 브리핑 자료입니다.”',
+        extraKeywords: ['비행기', '회의실', '화이트보드', '판서', '판서하는', '내년', '매출', '목표', '말하는'],
+      },
+      8: {
+        subtitle: '💬 음성 대사: “스마트폰 카메라로 비행기 창문 일출 촬영 완료!”',
+        extraKeywords: ['비행기', '스마트폰', '카메라', '일출', '창문'],
+      },
+    },
+  },
+};
+
+export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
+  {
+    id: 'vid_showcase_meeting_sales',
+    videoFileName: '20260918_202442.mp4',
+    title: '전략 회의실 화이트보드 판서 및 내년 매출 목표 달성 축하 브리핑',
+    keyframePhotoId: '20260918_202442.mp4',
+    thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
+    videoUrl: '/__photos/file?p=20260918_202442.mp4',
+    date: '2026.09.18 20:24',
+    durationText: '01:30',
+    durationSec: 90,
+    matchedSeekSec: 23,
+    matchedTimestamp: '🎯 00:23 구간 포착',
+    matchedFrameCaption:
+      '회의실에서 화이트보드에 판서하며 “내년 매출 목표 200% 달성” 전략을 설명하는 핵심 발언 구간입니다. | 💬 음성 대사: “내년 매출 목표는 올해 대비 2배 성장입니다!”',
+    locationKo: '본사 비전 회의실 · 세미나홀',
+    sceneDescription:
+      '회의실 화이트보드 판서 브리핑부터 내년 매출 목표 발표, 박수 치며 환호하는 축하 순간과 생일 케이크 촛불 파티까지 담긴 통합 하이라이트 영상입니다.',
+    keywords: [
+      '회의실',
+      '화이트보드',
+      '판서',
+      '판서하는',
+      '내년',
+      '매출',
+      '목표',
+      '말하는',
+      '부분',
+      '축하합니다',
+      '외치는',
+      '순간',
+      '박수',
+      '환호',
+      '환호하는',
+      '생일',
+      '케이크',
+      '촛불',
+      '부는',
+      '아이',
+      '울면서',
+      '웃는',
+      '강아지',
+      '원반',
+      '물어오는',
+      '골프',
+      '스윙',
+      '피니시',
+      '자세',
+      '노을',
+      '바닷가',
+      '걷는',
+    ],
+    resolution: '1920x1080 (음성 대사 STT + 비전 타임라인 해부)',
+    sizeMB: 28.4,
+    timelineFrames: [
+      {
+        frameId: 'vid_showcase_f00',
+        timeSec: 0,
+        timestampText: '00:00',
+        phaseLabel: '오프닝 · 노을 해변 & 산책',
+        sceneCaption:
+          '노을 지는 바닷가 해변을 걸으며 강아지가 잔디와 모래사장에서 원반을 물어오는 평화로운 오프닝 장면입니다. | 💬 음성 대사: “노을 지는 바닷가 걷는 장면이랑 강아지가 원반 물어오는 구간 찍자!”',
+        keywords: ['노을', '지는', '바닷가', '해변', '걷는', '강아지', '원반', '물어오는', '구간', '산책'],
+        tags: ['#노을바닷가', '#강아지원반', '#야외산책'],
+        thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
+      },
+      {
+        frameId: 'vid_showcase_f12',
+        timeSec: 12,
+        timestampText: '00:12',
+        phaseLabel: '골프 스윙 피니시 & 야외 활동',
+        sceneCaption:
+          '필드 위에서 깔끔한 골프 스윙 피니시 자세를 유지하고 아이가 울면서 웃는 귀여운 순간이 이어집니다. | 💬 음성 대사: “나이스 샷! 골프 스윙 피니시 자세 완벽하네!”',
+        keywords: ['골프', '스윙', '피니시', '자세', '아이', '울면서', '웃는', '미소', '나이스샷'],
+        tags: ['#골프스윙피니시', '#아이웃는장면'],
+        thumbUrl: '/poc/results/video_frames/20260918_202442_t01.jpg',
+      },
+      {
+        frameId: 'vid_showcase_f23',
+        timeSec: 23,
+        timestampText: '00:23',
+        phaseLabel: '회의실 판서 & 매출 목표 대사',
+        sceneCaption:
+          '회의실에서 화이트보드에 판서하며 “내년 매출 목표” 핵심 수치를 발표하는 브리핑 장면입니다. | 💬 음성 대사: “우리 팀의 내년 매출 목표는 50억 달성입니다!”',
+        keywords: ['회의실', '화이트보드', '판서', '판서하는', '내년', '매출', '목표', '말하는', '부분', '브리핑', '발표'],
+        tags: ['#회의실판서', '#내년매출목표', '#음성대사포착'],
+        thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
+      },
+      {
+        frameId: 'vid_showcase_f45',
+        timeSec: 45,
+        timestampText: '00:45',
+        phaseLabel: '생일 케이크 & 박수 환호',
+        sceneCaption:
+          '생일 케이크 촛불을 부는 장면 직후 다 함께 박수 치며 환호하는 순간과 “축하합니다!” 외치는 음성이 선명하게 포착되었습니다. | 💬 음성 대사: “축하합니다! 생일 케이크 촛불 불어보세요, 박수!”',
+        keywords: ['생일', '케이크', '촛불', '부는', '박수', '치며', '환호', '환호하는', '순간', '축하합니다', '외치는', '파티'],
+        tags: ['#생일케이크촛불', '#박수환호', '#축하합니다대사'],
+        thumbUrl: '/poc/results/video_frames/20260918_202442_t01.jpg',
+      },
+    ],
+  },
+];
+
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
     const [sRes, zRes] = await Promise.allSettled([
@@ -266,18 +505,48 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
       const sJson = await sRes.value.json();
       const sVids: VideoSceneItem[] = Array.isArray(sJson.videos) ? sJson.videos : [];
-      for (const v of sVids.slice(0, 3)) {
+      for (const v of sVids) {
         if (v && v.videoFileName) {
+          const enh = BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS[v.videoFileName];
+          const mergedKeywords = Array.from(
+            new Set([...(v.keywords || []), ...(enh?.extraKeywords || [])])
+          );
+          const enrichedFrames = (v.timelineFrames || []).map((f) => {
+            const fEnh = enh?.frameDialogueBySec?.[f.timeSec];
+            const nextCaption = fEnh?.subtitle
+              ? `${f.sceneCaption} | ${fEnh.subtitle}`
+              : f.sceneCaption;
+            const nextFrameKws = Array.from(
+              new Set([
+                ...(f.keywords || []),
+                ...((f as any).ontologyKeywords || []),
+                ...(fEnh?.extraKeywords || []),
+                ...(v.locationKo ? v.locationKo.split(/\s+/) : []),
+              ])
+            );
+            return {
+              ...f,
+              sceneCaption: nextCaption,
+              keywords: nextFrameKws,
+              thumbUrl: normalizeSampleVideoFrameUrl(f.thumbUrl) || normalizeSampleVideoFrameUrl(v.thumbUrl),
+            };
+          });
           merged.set(v.videoFileName, {
             ...v,
+            keywords: mergedKeywords,
             thumbUrl: normalizeSampleVideoFrameUrl(v.thumbUrl),
-            timelineFrames: (v.timelineFrames || []).map((f) => ({
-              ...f,
-              thumbUrl: normalizeSampleVideoFrameUrl(f.thumbUrl),
-            })),
+            timelineFrames: enrichedFrames,
             videoUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`),
           });
         }
+      }
+    }
+    for (const showcaseVid of BUNDLED_SHOWCASE_VIDEO_ITEMS) {
+      if (!merged.has(showcaseVid.videoFileName)) {
+        merged.set(showcaseVid.videoFileName, {
+          ...showcaseVid,
+          videoUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(showcaseVid.videoFileName)}`),
+        });
       }
     }
     if (zRes.status === 'fulfilled' && zRes.value.ok) {
@@ -291,7 +560,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     }
     return Array.from(merged.values());
   } catch {
-    return [];
+    return [...BUNDLED_SHOWCASE_VIDEO_ITEMS];
   }
 }
 
@@ -395,6 +664,8 @@ export async function searchVideoSceneItemsAsync(
 ): Promise<VideoSceneItem[]> {
   const q = query.trim();
   if (!q || q.includes('전 구간')) return fallbackVideos;
+
+  const localScored = searchVideoSceneItems(q, fallbackVideos);
   try {
     const res = await fetch(getZCoreUrl('/__videos/search'), {
       method: 'POST',
@@ -403,14 +674,24 @@ export async function searchVideoSceneItemsAsync(
     });
     if (res.ok) {
       const json = await res.json();
-      if (json.ok && Array.isArray(json.videos)) {
-        return json.videos;
+      if (json.ok && Array.isArray(json.videos) && json.videos.length > 0) {
+        const merged = new Map<string, VideoSceneItem>();
+        for (const v of localScored) {
+          merged.set(v.videoFileName || v.id, v);
+        }
+        for (const v of json.videos as VideoSceneItem[]) {
+          const k = v.videoFileName || v.id;
+          if (k && !merged.has(k)) {
+            merged.set(k, v);
+          }
+        }
+        return Array.from(merged.values());
       }
     }
   } catch {
     /* offline fallback below */
   }
-  return searchVideoSceneItems(q, fallbackVideos);
+  return localScored;
 }
 
 export async function searchLocalDocumentFilesAsync(
@@ -460,9 +741,10 @@ export function searchVideoSceneItems(
 
   const STOP_WORDS = new Set([
     '찾아줘', '보여줘', '영상', '동영상', '장면', '모습', '클로즈업', '초근접촬영', '포즈',
-    '취하다가', '취하는', '말하며', '다가오는', '다가옴', '에서', '위에서', '아래', '너머',
-    '앞에서', '옆에서', '입고', '있는', '하는', '찍은', '찍는', '촬영', '화면', '나오는',
-    '고화질', '전구간', '구간', '타임라인', '해부', '후', '및',
+    '취하다가', '취하는', '말하며', '말하는', '외치는', '다가오는', '다가옴', '에서', '위에서',
+    '아래', '너머', '앞에서', '옆에서', '입고', '있는', '하는', '찍은', '찍는', '촬영', '화면',
+    '나오는', '고화질', '전구간', '구간', '순간', '부분', '속에서', '속에', '타임라인', '해부',
+    '후', '및', '라고', '이라며',
   ]);
 
   const KEEP_VIDEO_NOUNS = new Set<string>();
@@ -482,7 +764,10 @@ export function searchVideoSceneItems(
     .split(/\s+/)
     .map((t) => {
       if (KEEP_VIDEO_NOUNS.has(t)) return t;
-      return t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '');
+      return t.replace(
+        /(에서부터|으로부터|속에서|에서|으로|이랑|하고|부터|까지|있는|하는|찍는|라고|들을|들|의|을|를|은|는|이|가|에|와|과|도)$/,
+        ''
+      );
     })
     .filter((t) => t.length >= 1 && !STOP_WORDS.has(t));
 
@@ -496,11 +781,16 @@ export function searchVideoSceneItems(
 
   for (const vid of sourceVideos) {
     const videoLevelCorpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
-    let bestFrame = vid.timelineFrames[0];
+    const defaultRepFrame =
+      vid.timelineFrames.find((f) => f.timeSec === vid.matchedSeekSec) || vid.timelineFrames[0];
+    let bestFrame = defaultRepFrame;
     let bestFrameScore = 0;
 
     for (const frame of vid.timelineFrames) {
-      const frameCorpus = `${frame.timestampText} ${frame.phaseLabel} ${frame.sceneCaption} ${frame.keywords.join(' ')} ${frame.tags.join(' ')}`.toLowerCase();
+      const ontoKws = Array.isArray((frame as any).ontologyKeywords)
+        ? ((frame as any).ontologyKeywords as string[]).join(' ')
+        : '';
+      const frameCorpus = `${frame.timestampText} ${frame.phaseLabel} ${frame.sceneCaption} ${frame.keywords.join(' ')} ${ontoKws} ${frame.tags.join(' ')}`.toLowerCase();
       const frameStems = extractKoStems(frameCorpus);
       let frameHits = 0;
       for (const tk of rawTokens) {
@@ -510,14 +800,21 @@ export function searchVideoSceneItems(
           frameHits += 4;
         }
       }
-      if (frameHits > bestFrameScore) {
+      if (
+        frameHits > bestFrameScore ||
+        (frameHits > 0 && frameHits === bestFrameScore && frame.timeSec === vid.matchedSeekSec)
+      ) {
         bestFrameScore = frameHits;
         bestFrame = frame;
       }
     }
 
     if (!bestFrame) continue;
-    const fullVideoAndFrameCorpus = `${videoLevelCorpus} ${bestFrame.sceneCaption} ${bestFrame.keywords.join(' ')}`.toLowerCase();
+    const allFramesCorpus = vid.timelineFrames
+      .map((f) => `${f.sceneCaption} ${f.keywords.join(' ')}`)
+      .join(' ')
+      .toLowerCase();
+    const fullVideoAndFrameCorpus = `${videoLevelCorpus} ${allFramesCorpus}`.toLowerCase();
     const fullStems = extractKoStems(fullVideoAndFrameCorpus);
     let matchedTokenCount = 0;
     let videoBaseHits = 0;
@@ -529,13 +826,18 @@ export function searchVideoSceneItems(
     }
 
     const requiredTokenMatches =
-      rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.6));
+      rawTokens.length <= 2 ? 1 : Math.max(1, Math.ceil(rawTokens.length * 0.45));
 
-    if (bestFrameScore > 0 && matchedTokenCount >= requiredTokenMatches) {
-      const totalScore = videoBaseHits + bestFrameScore + matchedTokenCount * 5;
+    if ((bestFrameScore > 0 || videoBaseHits > 0) && matchedTokenCount >= requiredTokenMatches) {
+      const effectiveFrameScore = bestFrameScore > 0 ? bestFrameScore : 4;
+      const totalScore = videoBaseHits + effectiveFrameScore + matchedTokenCount * 6;
+      const matchedFrameThumb =
+        normalizeSampleVideoFrameUrl(bestFrame.thumbUrl) ||
+        normalizeSampleVideoFrameUrl(vid.thumbUrl);
       scored.push({
         vid: {
           ...vid,
+          thumbUrl: matchedFrameThumb || vid.thumbUrl,
           matchedSeekSec: bestFrame.timeSec,
           matchedTimestamp: `🎯 ${bestFrame.timestampText} 구간 포착`,
           matchedFrameCaption: bestFrame.sceneCaption,
@@ -546,10 +848,18 @@ export function searchVideoSceneItems(
     }
   }
 
-  scored.sort((a, b) => b.totalScore - a.totalScore);
+  scored.sort((a, b) => {
+    if (b.matchedTokenCount !== a.matchedTokenCount) {
+      return b.matchedTokenCount - a.matchedTokenCount;
+    }
+    return b.totalScore - a.totalScore;
+  });
   if (scored.length > 1) {
     const topScore = scored[0].totalScore;
-    return scored.filter((s) => s.totalScore >= topScore * 0.55).map((s) => s.vid);
+    const topTokens = scored[0].matchedTokenCount;
+    return scored
+      .filter((s) => s.matchedTokenCount >= Math.max(1, topTokens - 1) && s.totalScore >= topScore * 0.5)
+      .map((s) => s.vid);
   }
   return scored.map((s) => s.vid);
 }
@@ -1185,33 +1495,127 @@ export async function loadInitialPhotoDataset(): Promise<{
           semanticByPhoto.set(name, meta as any);
         }
       }
-      if (fileList.length === 0 && semJson.items && typeof semJson.items === 'object') {
-        const curatedSampleFiles = [
-          // 초정예 명품 쇼윈도 갤러리 8장 (1번 해변 가족 노을은 3장 연사 묶음 1세트 포함)
-          'IMG_20250510_1001.jpg',
-          'IMG_20250510_1002.jpg',
-          'IMG_20250510_1003.jpg',
-          'PET_20250610_1091.jpg',
-          'TRV_20250720_1139.jpg',
-          'IMG_20250515_1053.jpg',
-          'TRV_20250720_1136.jpg',
-          'TRV_20250720_1141.jpg',
-          'TRV_20250720_1143.jpg',
-          'IMG_20250815_1008.jpg',
-          // AI 클린몬스터 4대 탭 체험용 정예 샘플
-          'MEMO_202509_1259_주차장_기둥.jpg',
-          'MEMO_202509_1261_택배_상자.jpg',
-          'Screenshot_20250802_1001_쇼핑위시리스트.jpg',
-          'Screenshot_20250802_1002_배달주문내역.jpg',
-          'BLUR_202510_1282_흔들린사진.jpg',
-          'BLUR_202510_1283_흔들린사진.jpg',
-        ];
-        fileList = curatedSampleFiles.map((name, idx) => {
+      const curatedSampleFiles = [
+        // 초정예 명품 쇼윈도 갤러리 8장 (1번 해변 가족 노을은 3장 연사 묶음 1세트 포함)
+        'IMG_20250510_1001.jpg',
+        'IMG_20250510_1002.jpg',
+        'IMG_20250510_1003.jpg',
+        'PET_20250610_1091.jpg',
+        'TRV_20250720_1139.jpg',
+        'IMG_20250515_1053.jpg',
+        'TRV_20250720_1136.jpg',
+        'TRV_20250720_1141.jpg',
+        'TRV_20250720_1143.jpg',
+        'IMG_20250815_1008.jpg',
+        // AI 클린몬스터 4대 탭 체험용 정예 샘플
+        'MEMO_202509_1259_주차장_기둥.jpg',
+        'MEMO_202509_1261_택배_상자.jpg',
+        'Screenshot_20250802_1001_쇼핑위시리스트.jpg',
+        'Screenshot_20250802_1002_배달주문내역.jpg',
+        'BLUR_202510_1282_흔들린사진.jpg',
+        'BLUR_202510_1283_흔들린사진.jpg',
+        // 동영상 키프레임 스틸컷 4장 (코타키나발루 패러세일링 · 리조트 테라스 · 비행기 창밖 일출 · 회의실 브리핑)
+        '20240719_105706_t12.jpg',
+        '20240720_134808_t06.jpg',
+        '20240722_052422_t00.jpg',
+        '20260918_202442_t00.jpg',
+      ];
+      semanticByPhoto.set('20240719_105706_t12.jpg', {
+        captionKo:
+          '말레이시아 코타키나발루 푸른 바다와 하늘 위에서 알록달록한 낙하산을 타고 모터보트 위로 하강하는 2인 패러세일링 액티비티 장면입니다.',
+        captionEn: 'Two people parasailing over the ocean in Kota Kinabalu approaching a boat.',
+        keywordsKo: [
+          '코타키나발루',
+          '말레이시아',
+          '패러세일링',
+          '패러세일',
+          '낙하산',
+          '보트',
+          '모터보트',
+          '바다',
+          '해변',
+          '바닷가',
+          '여행',
+          '액티비티',
+          '하늘',
+        ],
+        primaryTag: '#코타키나발루·패러세일링',
+      });
+      semanticByPhoto.set('20240720_134808_t06.jpg', {
+        captionKo:
+          '말레이시아 코타키나발루 리조트 야외 테라스 라탄 소파에 나란히 앉아 손인사하며 기념 촬영하는 남녀 커플 장면입니다.',
+        captionEn: 'Couple posing on a resort outdoor terrace sofa in Kota Kinabalu.',
+        keywordsKo: [
+          '코타키나발루',
+          '말레이시아',
+          '리조트',
+          '테라스',
+          '야외테라스',
+          '기념촬영',
+          '소파',
+          '야자수',
+          '여행',
+          '휴양지',
+          '생일',
+          '케이크',
+          '촛불',
+        ],
+        primaryTag: '#코타키나발루·리조트',
+      });
+      semanticByPhoto.set('20240722_052422_t00.jpg', {
+        captionKo:
+          '비행기 좌석 창문 너머로 구름 위로 떠오르는 붉은 노을빛 일출 햇살과 하늘 풍경을 스마트폰으로 촬영하는 기내 장면입니다.',
+        captionEn: 'Sunrise view through an airplane window above the clouds.',
+        keywordsKo: [
+          '비행기',
+          '항공기',
+          '기내',
+          '창문',
+          '창밖',
+          '일출',
+          '노을',
+          '구름',
+          '하늘',
+          '코타키나발루',
+          '여행',
+        ],
+        primaryTag: '#비행기·창밖일출',
+      });
+      semanticByPhoto.set('20260918_202442_t00.jpg', {
+        captionKo:
+          '회의실에서 화이트보드에 판서하며 내년 매출 목표를 발표하고 박수 치며 환호하는 브리핑 현장 스틸컷입니다.',
+        captionEn: 'Whiteboard presentation in a meeting room discussing next year sales targets.',
+        keywordsKo: [
+          '회의실',
+          '화이트보드',
+          '판서',
+          '내년',
+          '매출',
+          '목표',
+          '박수',
+          '환호',
+          '축하합니다',
+          '골프',
+          '스윙',
+          '피니시',
+        ],
+        primaryTag: '#회의실·브리핑',
+      });
+      const existingNames = new Set(fileList.map((f) => f.path));
+      const bundledEntries = curatedSampleFiles
+        .filter((name) => !existingNames.has(name))
+        .map((name, idx) => {
           const a = auditByPhoto.get(name);
           return {
             path: name,
             size: a?.size ?? 72000,
-            date: name.includes('20250510')
+            date: name.includes('20240719')
+              ? '2024-07-19'
+              : name.includes('20240720')
+              ? '2024-07-20'
+              : name.includes('20240722')
+              ? '2024-07-22'
+              : name.includes('20250510')
               ? '2025-05-10'
               : name.includes('20250515')
               ? '2025-05-15'
@@ -1223,7 +1627,7 @@ export async function loadInitialPhotoDataset(): Promise<{
             mtimeMs: a?.ts || Date.now() - idx * 60000,
           };
         });
-      }
+      fileList = [...bundledEntries, ...fileList];
     }
   } catch {
     /* ignore */
@@ -1535,10 +1939,15 @@ export async function loadInitialPhotoDataset(): Promise<{
     const isBundledSampleFile = /^(IMG_2025|PET_2025|TRV_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(
       f.path
     );
+    const isVideoFrameStillFile = /^(20240719_105706_|20240720_134808_|20240722_052422_|20260918_202442_).*\.jpg$/i.test(
+      f.path
+    );
     const fullUrl = isBundledSampleFile
       ? `/sample_photos_301/${encodeURIComponent(f.path)}`
+      : isVideoFrameStillFile
+      ? `/poc/results/video_frames/${encodeURIComponent(f.path)}`
       : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
-    const thumbUrl = isBundledSampleFile ? fullUrl : `${fullUrl}&thumb=1`;
+    const thumbUrl = isBundledSampleFile || isVideoFrameStillFile ? fullUrl : `${fullUrl}&thumb=1`;
 
     const dateFromFilenameMatch = f.path.match(/(20\d{2})(\d{2})(\d{2})/);
     const canonicalDate = dateFromFilenameMatch

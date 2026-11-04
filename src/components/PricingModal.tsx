@@ -1520,7 +1520,13 @@ export const LocalDocPreviewModal: React.FC = () => {
  * [체험판 타겟 ②] 동영상 3개 전 구간(Full-Timeline) 해부 & 타임라인 점프 재생 모달
  */
 export const VideoScenePreviewModal: React.FC = () => {
-  const { selectedVideoModal, setSelectedVideoModal, openLocalFolder } = useSaySeeStore();
+  const {
+    selectedVideoModal,
+    setSelectedVideoModal,
+    openLocalFolder,
+    activeQuery,
+    hasExecutedUserSearch,
+  } = useSaySeeStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecRef = useRef<number | null>(null);
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
@@ -1581,6 +1587,12 @@ export const VideoScenePreviewModal: React.FC = () => {
 
   if (!selectedVideoModal) return null;
 
+  const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
+  const currentFrameObj =
+    selectedVideoModal.timelineFrames.find((f) => f.timeSec === selectedVideoModal.matchedSeekSec) ||
+    selectedVideoModal.timelineFrames[0];
+  const currentFrameThumbUrl = currentFrameObj?.thumbUrl || selectedVideoModal.thumbUrl;
+
   const applyPendingSeek = (vidEl: HTMLVideoElement) => {
     const targetSec = pendingSeekSecRef.current ?? selectedVideoModal.matchedSeekSec ?? 0;
     try {
@@ -1629,7 +1641,11 @@ export const VideoScenePreviewModal: React.FC = () => {
               </span>
             </div>
             <h3 className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold mt-1">
-              {selectedVideoModal.title}
+              {renderHighlightedDocText(
+                selectedVideoModal.title,
+                effectiveQuery,
+                selectedVideoModal.keywords.slice(0, 4)
+              )}
             </h3>
             <p className="font-label-mono text-[11.5px] text-on-surface-variant">
               원본 파일: {selectedVideoModal.videoFileName} • 촬영일시: {selectedVideoModal.date} • 용량:{' '}
@@ -1640,7 +1656,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setSelectedVideoModal(null)}
-            className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface shrink-0"
+            className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface shrink-0 cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
@@ -1652,7 +1668,7 @@ export const VideoScenePreviewModal: React.FC = () => {
             <video
               ref={videoRef}
               src={resolvedVideoSrc}
-              poster={selectedVideoModal.thumbUrl}
+              poster={currentFrameThumbUrl}
               controls
               playsInline
               onLoadedMetadata={(e) => applyPendingSeek(e.currentTarget)}
@@ -1674,7 +1690,7 @@ export const VideoScenePreviewModal: React.FC = () => {
             />
           ) : (
             <img
-              src={selectedVideoModal.thumbUrl}
+              src={currentFrameThumbUrl}
               alt={selectedVideoModal.title}
               className="w-full h-full object-contain"
             />
@@ -1682,15 +1698,28 @@ export const VideoScenePreviewModal: React.FC = () => {
           <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">
             {selectedVideoModal.matchedTimestamp} 장면 포착 (아래 시간대 클릭 시 해당 초 장면 즉시 전환)
           </div>
+          <div className="absolute bottom-3 inset-x-4 px-3.5 py-2 rounded-xl bg-black/80 backdrop-blur-md border border-white/15 text-center pointer-events-none">
+            <p className="font-body-sm text-[12.5px] text-white font-bold">
+              {renderHighlightedDocText(
+                selectedVideoModal.matchedFrameCaption,
+                effectiveQuery,
+                currentFrameObj?.keywords?.slice(0, 4) ?? []
+              )}
+            </p>
+          </div>
         </div>
 
-        {/* 현재 포착된 구간 상세 설명 */}
+        {/* 현재 포착된 구간 상세 설명 및 대사 자막 하이라이트 */}
         <div className="p-3.5 rounded-2xl bg-primary-container/10 border border-primary-container/45 flex flex-col gap-1">
           <span className="font-label-mono text-[11px] text-primary-container font-black">
-            🎯 현재 포착된 타임라인 프레임 해설:
+            🎯 현재 포착된 타임라인 프레임 해설 &amp; 대사 자막 하이라이트:
           </span>
           <p className="font-body-md text-[13.5px] text-white font-bold leading-relaxed">
-            {selectedVideoModal.matchedFrameCaption}
+            {renderHighlightedDocText(
+              selectedVideoModal.matchedFrameCaption,
+              effectiveQuery,
+              currentFrameObj?.keywords?.slice(0, 4) ?? []
+            )}
           </p>
         </div>
 
@@ -1713,7 +1742,7 @@ export const VideoScenePreviewModal: React.FC = () => {
                   key={frame.timeSec}
                   type="button"
                   onClick={() => handleJumpToSecond(frame.timeSec)}
-                  className={`p-2.5 rounded-xl text-left transition-all border flex flex-col gap-1 ${
+                  className={`p-2.5 rounded-xl text-left transition-all border flex flex-col gap-1 cursor-pointer ${
                     isSelectedFrame
                       ? 'bg-primary-container/20 border-primary-container shadow-[0_0_16px_rgba(0,229,255,0.28)]'
                       : 'bg-surface-container/90 hover:bg-surface-bright border-outline-variant/30'
@@ -1736,7 +1765,11 @@ export const VideoScenePreviewModal: React.FC = () => {
                     )}
                   </div>
                   <p className="font-body-sm text-[11.5px] text-on-surface leading-snug line-clamp-2">
-                    {frame.sceneCaption}
+                    {renderHighlightedDocText(
+                      frame.sceneCaption,
+                      effectiveQuery,
+                      frame.keywords.slice(0, 3)
+                    )}
                   </p>
                 </button>
               );

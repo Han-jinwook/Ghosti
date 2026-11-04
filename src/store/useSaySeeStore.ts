@@ -2556,12 +2556,31 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
     const vaultPhotoMatches = Array.from(vaultMap.values());
 
-    // [규칙 1 & 2 + 동창회 타임라인 검색 시 갤러리 즉시 표시]
-    const targetSpace: SearchSpaceMode = isTimeRangeOrAlumniQuery
+    // [규칙 1 & 2 + 동창회 타임라인 검색 시 갤러리 즉시 표시 + 동영상 전용 질의 시 동영상 탭 자동 포커스]
+    const isExplicitVideoIntent =
+      /영상\s*속|동영상|구간|순간|말하는\s*부분|외치는|패러세일링|화이트보드|판서/.test(query);
+    let targetSpace: SearchSpaceMode = isTimeRangeOrAlumniQuery
       ? 'gallery'
+      : isExplicitVideoIntent && videoMatches.length > 0
+      ? 'video'
       : hasUserSelectedSearchTab
       ? searchSpace
       : 'gallery';
+
+    if (targetSpace === 'gallery' && results.length === 0) {
+      if (videoMatches.length > 0) targetSpace = 'video';
+      else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
+    } else if (targetSpace === 'video' && videoMatches.length === 0) {
+      if (results.length > 0) targetSpace = 'gallery';
+      else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
+    } else if (
+      targetSpace === 'vault' &&
+      docMatches.length === 0 &&
+      vaultPhotoMatches.length === 0
+    ) {
+      if (videoMatches.length > 0) targetSpace = 'video';
+      else if (results.length > 0) targetSpace = 'gallery';
+    }
 
     const topTags =
       expansionBadges.length > 0

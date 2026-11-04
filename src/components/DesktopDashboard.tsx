@@ -1250,12 +1250,18 @@ export const DesktopDashboard: React.FC = () => {
                         <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
                           <div className="flex flex-col gap-2">
                             <h3 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
-                              {vid.title}
+                              {renderHighlightedDocText(
+                                vid.title,
+                                hasExecutedUserSearch ? activeQuery : ''
+                              )}
                             </h3>
 
                             <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-white/10">
                               <p className="font-body-sm text-[12px] text-zinc-300 leading-snug line-clamp-2">
-                                {vid.matchedFrameCaption}
+                                {renderHighlightedDocText(
+                                  vid.matchedFrameCaption,
+                                  hasExecutedUserSearch ? activeQuery : ''
+                                )}
                               </p>
                             </div>
 

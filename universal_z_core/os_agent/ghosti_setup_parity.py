@@ -278,6 +278,14 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
     q = str((body or {}).get("query") or "").strip()
     listed = plugin_ghosti_os.list_local_videos({})
     videos = list(listed.get("videos") or [])
+    seen_vnames = {str(v.get("videoFileName") or "") for v in videos}
+    static_vjson = _load_static_json("video_timeline_index.json")
+    if isinstance(static_vjson, dict) and isinstance(static_vjson.get("videos"), list):
+        for sv in static_vjson["videos"]:
+            vname = str(sv.get("videoFileName") or "")
+            if vname and vname not in seen_vnames:
+                seen_vnames.add(vname)
+                videos.append(sv)
     if not q or "전 구간" in q:
         return {"ok": True, "videos": videos}
 
@@ -285,11 +293,11 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
     if not tokens:
         return {"ok": True, "videos": videos}
 
-    req_hits = len(tokens) if len(tokens) <= 2 else max(2, int((len(tokens) * 0.6) + 0.999))
+    req_hits = 1 if len(tokens) <= 2 else max(1, int((len(tokens) * 0.45) + 0.999))
     scored: list[tuple[int, Dict[str, Any]]] = []
     for v in videos:
         vkws = " ".join(str(x) for x in (v.get("keywords") or []))
-        vbase = f"{v.get('title', '')} {v.get('summaryCaption', '')} {v.get('locationTag', '')} {vkws}".lower()
+        vbase = f"{v.get('title', '')} {v.get('sceneDescription', '')} {v.get('summaryCaption', '')} {v.get('locationKo', '')} {v.get('locationTag', '')} {vkws}".lower()
         frames = list(v.get("timelineFrames") or [])
         best_frame = frames[0] if frames else None
         best_frame_hits = 0
