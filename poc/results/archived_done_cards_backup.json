@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-03T16:29:05.160385",
+  "updated_at": "2026-11-04T10:07:03.701649",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -570,6 +570,38 @@
       "last_edited_time": "2026-11-03T05:48:00.000Z",
       "url": "https://app.notion.com/p/2-B-3-40cf9ffd2c1d817b81def757813e4583",
       "archived_at": "2026-11-03T16:29:05.160199"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-8126-b8bc-e883cb116f73",
+      "title": "✅ [2차 이력 보관] 🎯 [멀린비서] 『귀신창』 2차 재테스트 (QA 2-1 통과 · 나머지 3건 3차 카드로 분리)",
+      "app": "멀린비서",
+      "last_edited_time": "2026-11-03T06:39:00.000Z",
+      "url": "https://app.notion.com/p/2-2-QA-2-1-3-3-40df9ffd2c1d8126b8bce883cb116f73",
+      "archived_at": "2026-11-04T09:44:48.467003"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-8040-bd4e-c11042cfd125",
+      "title": "🎯[센스톡] PC 엔진 버전 오류",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-03T06:38:00.000Z",
+      "url": "https://app.notion.com/p/PC-40df9ffd2c1d8040bd4ec11042cfd125",
+      "archived_at": "2026-11-04T09:44:48.467019"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-81b2-9004-f2d78ed3773d",
+      "title": "🎯 [귀신같이] 1-B. [찾기 실전] 실무 문서(한글/엑셀/PDF) 본문 검색 & 윈도우 원터치 파일 열기",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-03T05:57:00.000Z",
+      "url": "https://app.notion.com/p/1-B-PDF-40cf9ffd2c1d81b29004f2d78ed3773d",
+      "archived_at": "2026-11-04T09:44:48.467024"
+    },
+    {
+      "page_id": "40af9ffd-2c1d-8168-aaab-fd7fc674d2f5",
+      "title": "✅ [완료 보관] 🎯 [귀신같이] 2. [손보기 1~5번 패스] 노션형 AI 비서 기본 대화창·잡담 거절·사양 진단·자연어 승인·번호 원복",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-03T07:09:00.000Z",
+      "url": "https://app.notion.com/p/2-1-5-AI-40af9ffd2c1d8168aaabfd7fc674d2f5",
+      "archived_at": "2026-11-04T10:07:03.701422"
     }
   ]
 }
