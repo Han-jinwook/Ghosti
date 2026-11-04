@@ -451,7 +451,7 @@ export function HubAppSwitcher({
           src={src}
           alt={app.name}
           className="w-full h-full object-cover block"
-          style={{ width: '18px', height: '18px', objectFit: 'cover', display: 'block' }}
+          style={{ width: '26px', height: '26px', objectFit: 'cover', display: 'block' }}
         />
       );
     }
@@ -461,11 +461,11 @@ export function HubAppSwitcher({
           src={app.icon}
           alt={app.name}
           className="w-full h-full object-cover block"
-          style={{ width: '18px', height: '18px', objectFit: 'cover', display: 'block' }}
+          style={{ width: '26px', height: '26px', objectFit: 'cover', display: 'block' }}
         />
       );
     }
-    return <span className="text-xs leading-none">{app.icon}</span>;
+    return <span className="text-base leading-none">{app.icon}</span>;
   };
 
   return (
@@ -480,15 +480,15 @@ export function HubAppSwitcher({
       }}
       className={`relative text-left shrink-0 select-none ${variant === 'sidebar' ? 'w-full block' : 'inline-flex flex-col items-start'}`}
     >
-      {/* 트리거 버튼: sidebar(슬림 캡슐) | circle(30px 원형 뱃지) | icon(상단 헤더 캡슐) */}
+      {/* 트리거 버튼: sidebar & icon(어그로필터 기준 동일 캡슐 규격) | circle(30px 원형 뱃지) */}
       {variant === 'sidebar' ? (
         <button
           type="button"
           onClick={handleToggleManual}
           title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-xl border transition-all cursor-pointer select-none focus:outline-none active:scale-95 shadow-xs ${
+          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-2xl border transition-all cursor-pointer select-none focus:outline-none active:scale-95 shadow-sm ${
             isOpen
-              ? 'bg-white border-amber-400 ring-1 ring-amber-400/30'
+              ? 'bg-white border-amber-400 ring-2 ring-amber-400/30'
               : 'bg-white hover:bg-slate-50/90 border-amber-300/90 hover:border-amber-400'
           }`}
           aria-label="귀신팸 펼치기/접기"
@@ -496,11 +496,11 @@ export function HubAppSwitcher({
           <img
             src={GUISHINFAM_CAPSULE_BASE64}
             alt="귀신팸"
-            className="h-6 w-auto object-contain pointer-events-none"
-            style={{ height: '24px', width: 'auto' }}
+            className="h-9 sm:h-11 w-auto min-w-[100px] sm:min-w-[122px] object-contain pointer-events-none"
+            style={{ height: '44px', minWidth: '122px', width: 'auto' }}
           />
           <span
-            className={`text-[10px] leading-none font-black ml-0.5 transition-colors ${
+            className={`text-xs leading-none font-black ml-0.5 transition-colors ${
               isOpen ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
@@ -544,6 +544,7 @@ export function HubAppSwitcher({
             src={GUISHINFAM_CAPSULE_BASE64}
             alt="귀신팸"
             className="h-9 sm:h-11 w-auto min-w-[100px] sm:min-w-[122px] object-contain pointer-events-none"
+            style={{ height: '44px', minWidth: '122px', width: 'auto' }}
           />
           <span
             className={`text-xs leading-none font-black ml-0.5 transition-colors ${
@@ -555,15 +556,16 @@ export function HubAppSwitcher({
         </button>
       )}
 
-      {/* 스르륵 롤스크린 컨테이너: 슬림 다이어트(148px) */}
+      {/* 스르륵 롤스크린 컨테이너: 어그로필터 표준 규격(156px 폭, 26px 로고, 12.5px 폰트) */}
       <div
         onClick={(e) => e.stopPropagation()}
+        style={{ width: '156px' }}
         className={`absolute z-[99999] transition-all duration-300 ease-out ${
           isBottomUp
-            ? 'left-0 bottom-full mb-1.5 w-[148px] origin-bottom-left'
+            ? 'left-0 bottom-full mb-1.5 w-[156px] origin-bottom-left'
             : isDesktopWingAvailable && variant !== 'circle'
-              ? 'left-0 top-full mt-1.5 w-[148px] origin-top-left'
-              : 'right-0 top-full mt-1.5 w-[148px] origin-top-right'
+              ? 'left-0 top-full mt-1.5 w-[156px] origin-top-left'
+              : 'right-0 top-full mt-1.5 w-[156px] origin-top-right'
         } ${
           isOpen
             ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
@@ -573,15 +575,15 @@ export function HubAppSwitcher({
         }`}
       >
         {/* 버튼과 롤스크린 사이 마우스 이동 브릿지 */}
-        {!isBottomUp && <div className="absolute -top-2 left-0 right-0 h-2 bg-transparent" />}
+        {!isBottomUp && <div className="absolute -top-2.5 left-0 right-0 h-2.5 bg-transparent" />}
 
-        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-slate-200/90 dark:border-zinc-700/80 rounded-xl shadow-[0_10px_25px_rgba(15,23,42,0.12)] p-1 text-slate-800 dark:text-zinc-100">
+        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-slate-200/90 dark:border-zinc-700/80 rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.12)] p-1.5 text-slate-800 dark:text-zinc-100">
           {/* 세로형(bottom-up)일 때는 상단 끝단에 접기 손잡이 바 배치 */}
           {isBottomUp && (
             <button
               type="button"
               onClick={handleToggleManual}
-              className="w-full flex items-center justify-center gap-1 py-0.5 mb-0.5 rounded-md bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[9.5px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-1 py-1 mb-1 rounded-lg bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[10px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               title="귀신팸 접기"
             >
               <span>▾ 접기</span>
@@ -612,20 +614,20 @@ export function HubAppSwitcher({
                       target={app.isLinkActive !== false ? '_blank' : undefined}
                       rel={app.isLinkActive !== false ? 'noopener noreferrer' : undefined}
                       onClick={() => handleAppClick(app.id)}
-                      className={`flex items-center justify-between gap-1.5 px-1.5 py-1 rounded-lg transition-all duration-150 group/item ${
+                      className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-xl transition-all duration-150 group/item ${
                         app.isLinkActive !== false
                           ? 'hover:bg-indigo-50/80 dark:hover:bg-indigo-950/40 cursor-pointer active:scale-[0.98]'
                           : 'opacity-75 cursor-default'
                       }`}
                     >
-                      <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
                         <div
-                          className="w-5 h-5 rounded-md bg-white shadow-xs border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:scale-105 transition-transform"
-                          style={{ width: '18px', height: '18px', minWidth: '18px', maxWidth: '18px', maxHeight: '18px' }}
+                          className="rounded-lg bg-white shadow-xs border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:scale-105 transition-transform"
+                          style={{ width: '26px', height: '26px', minWidth: '26px', maxWidth: '26px', maxHeight: '26px' }}
                         >
                           {renderAppLogo(app)}
                         </div>
-                        <span className="text-[11.5px] font-bold tracking-tight text-slate-800 dark:text-zinc-100 group-hover/item:text-indigo-600 dark:group-hover/item:text-indigo-400 whitespace-nowrap">
+                        <span className="text-[12.5px] font-extrabold text-slate-800 dark:text-zinc-100 group-hover/item:text-indigo-600 dark:group-hover/item:text-indigo-400 whitespace-nowrap">
                           {app.name}
                         </span>
                       </div>
@@ -637,7 +639,7 @@ export function HubAppSwitcher({
                           title="최근 본 앱"
                         />
                       ) : (
-                        <span className="text-[8px] font-black text-rose-500 bg-rose-50 border border-rose-200/80 px-1 py-0.2 rounded-full shrink-0">
+                        <span className="text-[8.5px] font-black text-rose-500 bg-rose-50 border border-rose-200/80 px-1 py-0.2 rounded-full shrink-0">
                           N
                         </span>
                       )}
@@ -680,7 +682,7 @@ export function HubAppSwitcher({
             <button
               type="button"
               onClick={handleToggleManual}
-              className="w-full flex items-center justify-center gap-1 py-0.5 mt-0.5 rounded-md bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[9.5px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-1 py-1 mt-1 rounded-lg bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[10px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               title="귀신팸 접기"
             >
               <span>▴ 접기</span>
