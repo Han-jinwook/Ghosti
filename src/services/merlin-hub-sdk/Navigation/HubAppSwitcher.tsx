@@ -3,7 +3,7 @@ import { GUISHINFAM_CAPSULE_BASE64, GUISHINFAM_CIRCLE_BASE64 } from '../assets/g
 import { GUISHINFAM_ICON_BASE64 } from '../assets/guishinfamIconBase64';
 
 /**
- * Version: v3.3.0 (Merlin Hub SDK v2.22.2)
+ * Version: v3.3.1 (Merlin Hub SDK v2.22.2)
  * Last Updated: 2026-11-04
  * Merlin Hub SDK — Smart Roll-Screen '귀신팸' Family App Launcher (HubAppSwitcher)
  * - 상단 트리거(variant='icon'): '귀신' 아이콘 + '귀신팸' 텍스트 + 개폐 화살표(▴/▾) 일체형 캡슐 (프로필 경계 우측 바깥 안착)
@@ -63,6 +63,45 @@ export interface HubAppSwitcherProps {
 
 const RECENT_APPS_STORAGE_KEY = 'merlin_recent_family_apps';
 const RECENT_APPS_COOKIE_KEY = 'merlin_recent_apps';
+const FOLDED_DATE_KEY = 'merlin_family_folded_date';
+
+function getTodayDateStr(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function isFoldedToday(): boolean {
+  if (typeof window === 'undefined') return false;
+  const today = getTodayDateStr();
+  try {
+    if (window.localStorage.getItem(FOLDED_DATE_KEY) === today) return true;
+  } catch {}
+  try {
+    const rawCookie = document.cookie
+      .split('; ')
+      .find(row => row.startsWith(`${FOLDED_DATE_KEY}=`));
+    if (rawCookie && decodeURIComponent(rawCookie.split('=')[1] || '') === today) {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+function markFoldedToday(): void {
+  if (typeof window === 'undefined') return;
+  const today = getTodayDateStr();
+  try {
+    window.localStorage.setItem(FOLDED_DATE_KEY, today);
+  } catch {}
+  try {
+    const isSundreamDomain = window.location.hostname.endsWith('sundreamer.app');
+    const domainAttr = isSundreamDomain ? '; domain=.sundreamer.app' : '';
+    document.cookie = `${FOLDED_DATE_KEY}=${encodeURIComponent(today)}; path=/; max-age=86400; SameSite=Lax${domainAttr}`;
+  } catch {}
+}
 
 const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
   isFeatureLive: true,
@@ -261,34 +300,43 @@ export function HubAppSwitcher({
       return () => window.removeEventListener('resize', handleResize);
     }
 
-    // 초기 진입 후 0.9초 뒤 스르륵 펼침 (데스크톱 여백 확보 시)
-    let initTimer: ReturnType<typeof setTimeout> | null = null;
-    if (available && !userManuallyClosedRef.current) {
-      initTimer = setTimeout(() => {
-        if (window.scrollY < 100 && !userManuallyClosedRef.current) {
-          setIsOpen(true);
-        }
-      }, 900);
+    if (isFoldedToday()) {
+      userManuallyClosedRef.current = true;
     }
 
-    const scheduleIdleUnroll = () => {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      if (userManuallyClosedRef.current) return;
-      idleTimerRef.current = setTimeout(() => {
-        if (!checkViewport()) return;
-        const activeTag = document.activeElement?.tagName?.toLowerCase();
-        const isTyping = activeTag === 'input' || activeTag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable;
-        if (!isTyping && window.scrollY < 120 && !userManuallyClosedRef.current) {
+    // 초기 진입 후 4초(4000ms) 뒤 스르륵 펼침 (데스크톱 여백 확보 & 오늘 '접기' 안 누른 경우)
+    let initTimer: ReturnType<typeof setTimeout> | null = null;
+    if (available && !userManuallyClosedRef.current && !isFoldedToday()) {
+      initTimer = setTimeout(() => {
+        if (window.scrollY < 100 && !userManuallyClosedRef.current && !isFoldedToday()) {
           setIsOpen(true);
         }
-      }, 6000);
+      }, 4000);
+    }
+
+    // 3분(180,000ms) 이상 완전히 손을 놓고 쉴 때만 조용히 재등장 (오늘 '접기' 누른 경우 제외)
+    const scheduleIdleUnroll = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (userManuallyClosedRef.current || isFoldedToday()) return;
+      idleTimerRef.current = setTimeout(() => {
+        if (!checkViewport() || userManuallyClosedRef.current || isFoldedToday()) return;
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        const isTyping = activeTag === 'input' || activeTag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable;
+        if (!isTyping && window.scrollY < 120) {
+          setIsOpen(true);
+        }
+      }, 180000);
     };
 
-    // 유저가 본문을 사용하면 조용히 눈치껏 위로(사이드바는 아래로) 감아 올라감
+    // 유저가 본문을 사용하면 초기 타이머를 취소하고 조용히 눈치껏 감아 올라감
     const handleUserActiveUse = (e: Event) => {
       if (isHoveringLauncherRef.current) return;
       if (containerRef.current && e.target instanceof Node && containerRef.current.contains(e.target)) {
         return;
+      }
+      if (initTimer) {
+        clearTimeout(initTimer);
+        initTimer = null;
       }
       if (!userManuallyPinnedRef.current) {
         setIsOpen(false);
@@ -297,15 +345,28 @@ export function HubAppSwitcher({
       scheduleIdleUnroll();
     };
 
+    // 마우스 이동 시에는 열려 있는 상태를 강제로 닫지는 않되, 3분 휴식 타이머만 갱신(읽는 중 갑자기 튀어나옴 방지)
+    let lastMoveReset = 0;
+    const handleMouseMove = () => {
+      const now = Date.now();
+      if (now - lastMoveReset < 2000) return;
+      lastMoveReset = now;
+      if (!isOpen) {
+        scheduleIdleUnroll();
+      }
+    };
+
     const handleScroll = () => {
       if (isHoveringLauncherRef.current) return;
       if (window.scrollY > 110) {
+        if (initTimer) {
+          clearTimeout(initTimer);
+          initTimer = null;
+        }
         if (!userManuallyPinnedRef.current) {
           setIsOpen(false);
           setHoveredAppId(null);
         }
-      } else if (window.scrollY < 25 && checkViewport() && !userManuallyClosedRef.current) {
-        setIsOpen(true);
       }
       scheduleIdleUnroll();
     };
@@ -313,6 +374,7 @@ export function HubAppSwitcher({
     document.addEventListener('mousedown', handleUserActiveUse, { passive: true });
     document.addEventListener('keydown', handleUserActiveUse, { passive: true });
     document.addEventListener('focusin', handleUserActiveUse, { passive: true });
+    document.addEventListener('mousemove', handleMouseMove, { passive: true });
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
@@ -322,6 +384,7 @@ export function HubAppSwitcher({
       document.removeEventListener('mousedown', handleUserActiveUse);
       document.removeEventListener('keydown', handleUserActiveUse);
       document.removeEventListener('focusin', handleUserActiveUse);
+      document.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('scroll', handleScroll);
     };
   }, [autoRollOnDesktop, checkViewport]);
@@ -421,11 +484,16 @@ export function HubAppSwitcher({
     setIsOpen(prev => {
       const next = !prev;
       if (next) {
-        userManuallyClosedRef.current = false;
         userManuallyPinnedRef.current = true;
       } else {
+        // 유저가 직접 '접기' 또는 캡슐 닫기를 누르면 그날 하루 동안은 자동으로 튀어나오지 않음
         userManuallyClosedRef.current = true;
         userManuallyPinnedRef.current = false;
+        markFoldedToday();
+        if (idleTimerRef.current) {
+          clearTimeout(idleTimerRef.current);
+          idleTimerRef.current = null;
+        }
         setHoveredAppId(null);
       }
       return next;
