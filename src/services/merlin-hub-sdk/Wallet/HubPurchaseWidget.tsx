@@ -350,28 +350,29 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           font-style: normal;
           font-display: swap;
         }
-        /* 어그로필터 디자인 100% 보존: 타 앱(Ghosti 등) 전역 라이트모드 CSS가 다크 네이비 요소를 탈색시키지 못하도록 최고 우선순위(0,4,2 !important)로 완전 고정 */
-        html body .hub-purchase-widget .gh-dark-banner,
-        html.theme-warm-light body .hub-purchase-widget .gh-dark-banner {
-          background-image: linear-gradient(90deg, #0d1230 0%, #131c47 50%, #0a0f29 100%) !important;
-          background-color: #0d1230 !important;
-          border-color: rgba(252, 211, 77, 0.8) !important;
-          box-shadow: 0 12px 28px rgba(13, 18, 48, 0.35) !important;
-          color: #ffffff !important;
+        /* 원포인트 다크 카드 집중 디자인: 중앙 메인 귀신코인 카드(.gh-dark-card) 단 하나만 진한 밤하늘 네이비로 유지하고, 상단 제목상자·탭·금액 버튼은 산뜻하고 힘 뺀 라이트 톤으로 고정 */
+        html body .hub-purchase-widget .gh-light-banner,
+        html.theme-warm-light body .hub-purchase-widget .gh-light-banner {
+          background-image: linear-gradient(135deg, #ffffff 0%, #f4f7ff 55%, #eef4ff 100%) !important;
+          background-color: #f8fafc !important;
+          border-color: #dbe4f3 !important;
+          box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05) !important;
+          color: #1e293b !important;
         }
-        html body .hub-purchase-widget .gh-dark-tab,
-        html.theme-warm-light body .hub-purchase-widget .gh-dark-tab {
-          background-image: linear-gradient(180deg, #161f42 0%, #0d1230 100%) !important;
-          background-color: #0d1230 !important;
-          border-color: rgba(252, 211, 77, 0.6) !important;
-          color: #ffffff !important;
+        html body .hub-purchase-widget .gh-light-tab,
+        html.theme-warm-light body .hub-purchase-widget .gh-light-tab {
+          background-image: none !important;
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+          color: #1e293b !important;
         }
         html body .hub-purchase-widget .gh-dark-card,
         html.theme-warm-light body .hub-purchase-widget .gh-dark-card {
           background-image: linear-gradient(180deg, #0d1230 0%, #0f173a 50%, #0a0e27 100%) !important;
           background-color: #0d1230 !important;
           border-color: rgba(252, 211, 77, 0.85) !important;
-          box-shadow: 0 10px 28px rgba(13, 18, 48, 0.45), 0 0 12px rgba(251, 191, 36, 0.18) !important;
+          box-shadow: 0 10px 28px rgba(13, 18, 48, 0.35), 0 0 12px rgba(251, 191, 36, 0.14) !important;
           color: #ffffff !important;
         }
         html body .hub-purchase-widget .gh-dark-badge-0,
@@ -380,29 +381,29 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           color: #cffafe !important;
           border-color: rgba(103, 232, 249, 0.3) !important;
         }
-        html body .hub-purchase-widget .gh-dark-btn-1,
-        html.theme-warm-light body .hub-purchase-widget .gh-dark-btn-1 {
-          background-image: linear-gradient(180deg, #182246 0%, #111836 50%, #0b1026 100%) !important;
-          background-color: #111836 !important;
-          border-color: rgba(252, 211, 77, 0.65) !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 5px 12px rgba(13, 18, 48, 0.22) !important;
-          color: #ffffff !important;
+        html body .hub-purchase-widget .gh-light-btn-1,
+        html.theme-warm-light body .hub-purchase-widget .gh-light-btn-1 {
+          background-image: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
+          color: #334155 !important;
         }
-        html body .hub-purchase-widget .gh-dark-btn-2,
-        html.theme-warm-light body .hub-purchase-widget .gh-dark-btn-2 {
-          background-image: linear-gradient(180deg, #1d2754 0%, #141c3f 50%, #0c112b 100%) !important;
-          background-color: #141c3f !important;
-          border-color: rgba(252, 211, 77, 0.8) !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 5px 12px rgba(13, 18, 48, 0.26) !important;
-          color: #fcd34d !important;
+        html body .hub-purchase-widget .gh-light-btn-2,
+        html.theme-warm-light body .hub-purchase-widget .gh-light-btn-2 {
+          background-image: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%) !important;
+          background-color: #ffffff !important;
+          border-color: #bac8ff !important;
+          box-shadow: 0 2px 6px rgba(59, 91, 219, 0.07) !important;
+          color: #364fc7 !important;
         }
-        html body .hub-purchase-widget .gh-dark-btn-3,
-        html.theme-warm-light body .hub-purchase-widget .gh-dark-btn-3 {
-          background-image: linear-gradient(180deg, #251f52 0%, #181740 50%, #0d102b 100%) !important;
-          background-color: #181740 !important;
-          border-color: rgba(252, 211, 77, 0.95) !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 14px rgba(13, 18, 48, 0.3) !important;
-          color: #fcd34d !important;
+        html body .hub-purchase-widget .gh-light-btn-3,
+        html.theme-warm-light body .hub-purchase-widget .gh-light-btn-3 {
+          background-image: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important;
+          background-color: #ffffff !important;
+          border-color: #91a7ff !important;
+          box-shadow: 0 2px 8px rgba(59, 91, 219, 0.1) !important;
+          color: #2b44b8 !important;
         }
         html body .hub-purchase-widget .gh-dark-cta,
         html.theme-warm-light body .hub-purchase-widget .gh-dark-cta {
@@ -442,13 +443,13 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         }
       `}</style>
       <main className="mx-auto max-w-[var(--app-max-width,720px)] px-4 py-4 space-y-3.5">
-        {/* 상단 귀신코인 공식 브랜드 헤더 배너 (아기귀신 3D 로고 + 도자기체 통일 + 골드 테두리) */}
-        <div data-keep-dark="true" className="gh-dark-banner rounded-2xl bg-gradient-to-r from-[#0d1230] via-[#131c47] to-[#0a0f29] p-4 sm:p-5 text-white shadow-xl border border-amber-300/80 ring-1 ring-amber-400/20 flex items-center justify-between relative">
+        {/* 상단 귀신코인 공식 브랜드 헤더 배너 (힘을 뺀 산뜻한 라이트 파스텔 카드) */}
+        <div className="gh-light-banner rounded-2xl bg-gradient-to-r from-white via-[#f4f7ff] to-[#eef4ff] p-4 sm:p-5 text-slate-800 shadow-sm border border-slate-200/90 flex items-center justify-between relative">
           {isModal && onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors cursor-pointer"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-300/80 flex items-center justify-center text-slate-600 transition-colors cursor-pointer"
               aria-label="충전소 닫기"
             >
               ✕
@@ -465,44 +466,43 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   }
                 }}
                 alt="귀신코인 아기귀신 로고" 
-                className="h-14 sm:h-16 w-14 sm:w-16 object-contain rounded-2xl border border-amber-300/40 shadow-[0_0_16px_rgba(45,212,191,0.3)]" 
+                className="h-14 sm:h-16 w-14 sm:w-16 object-contain rounded-2xl border border-slate-200 shadow-sm" 
               />
             </div>
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <span
-                  className="text-xl sm:text-2xl tracking-wide text-white drop-shadow-md"
+                  className="text-xl sm:text-2xl tracking-wide text-slate-800"
                   style={{
                     fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
-                    filter: 'drop-shadow(0 2px 0 #0f4c5c) drop-shadow(0 4px 10px rgba(45,212,191,0.35))',
                   }}
                 >
                   귀신코인 충전소
                 </span>
                 <span
-                  className="text-[11px] px-3 py-0.5 rounded-full bg-gradient-to-b from-amber-200 via-amber-400 to-amber-500 text-slate-950 border border-amber-100/80 shadow-sm tracking-wide"
+                  className="text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 tracking-wide"
                   style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   GHOST COIN 공식 센터
                 </span>
               </div>
               <p
-                className="text-xs text-cyan-100/90 mt-1.5 tracking-wide"
+                className="text-xs text-slate-500 mt-1.5 tracking-wide"
                 style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
               >
                 귀신같이 시리즈 & 패밀리 솔루션({appName}) 공용 귀신코인 충전
               </p>
             </div>
           </div>
-          <div className={`text-right hidden sm:block border-l border-indigo-800/80 pl-4 ${isModal && onClose ? ' pr-7' : ''}`}>
+          <div className={`text-right hidden sm:block border-l border-slate-200 pl-4 ${isModal && onClose ? ' pr-7' : ''}`}>
             <span
-              className="text-xs text-amber-300 block tracking-wide"
+              className="text-xs text-indigo-700 block tracking-wide"
               style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
             >
               NHN KCP / 5대 간편결제 공식 제휴
             </span>
             <span
-              className="text-[11px] text-cyan-200/80 mt-0.5 block"
+              className="text-[11px] text-slate-500 mt-0.5 block"
               style={{ fontFamily: "'TmoneyRoundWindExtraBold', sans-serif" }}
             >
               가맹점 상점명: 3몬스터
@@ -510,16 +510,16 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           </div>
         </div>
 
-        {/* 탭 전환 영역 (도자기 라운드 서체 통일) */}
+        {/* 탭 전환 영역 (힘을 뺀 산뜻한 화이트 탭) */}
         <div
-          className="bg-slate-200/75 p-1.5 border border-slate-300/80 rounded-2xl flex gap-1.5 shadow-inner"
+          className="bg-slate-100 p-1.5 border border-slate-200/90 rounded-2xl flex gap-1.5"
           style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
         >
           <button
             onClick={() => setTab('charge')}
             className={tab === 'charge'
-              ? "gh-dark-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
+              ? "gh-light-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-white text-slate-800 border border-slate-300/90 shadow-xs transition-all cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
             👻 충전하기
@@ -530,8 +530,8 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               setTab('gift');
             }}
             className={tab === 'gift'
-              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-rose-600 hover:text-rose-700 hover:bg-rose-100/60 transition-all active:scale-[0.98] cursor-pointer"
+              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-rose-50 text-rose-600 border border-rose-200 shadow-xs transition-all cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-rose-500 hover:text-rose-600 hover:bg-rose-50/60 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
             🎁 선물함 · 선물하기
@@ -539,8 +539,8 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           <button
             onClick={() => setTab('history')}
             className={tab === 'history'
-              ? "gh-dark-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
+              ? "gh-light-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-white text-slate-800 border border-slate-300/90 shadow-xs transition-all cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
             이용 내역
@@ -693,7 +693,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                 </div>
               </div>
 
-              {/* ⚡ 네이버페이식 누적 금액 권종 카드 (+1천, +5천, +1만, +5만 — 중후한 다크 네이비·골드 테두리 & 도자기 서체 통일) */}
+              {/* ⚡ 네이버페이식 누적 금액 권종 카드 (+1천, +5천, +1만, +5만 — 힘을 뺀 깔끔한 화이트·인디고 라이트 버튼) */}
               <div className="mt-4 max-w-md mx-auto">
                 <div
                   className="grid grid-cols-4 gap-2.5"
@@ -702,50 +702,30 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 1000, 1000000))}
-                    data-keep-dark="true" className="gh-dark-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
+                    className="gh-light-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 text-slate-700 shadow-xs"
                   >
-                    <span
-                      className="text-white drop-shadow-sm"
-                      style={{ filter: 'drop-shadow(0 1.5px 0 #09132c)' }}
-                    >
-                      +1천
-                    </span>
+                    <span>+1천</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 5000, 1000000))}
-                    data-keep-dark="true" className="gh-dark-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
+                    className="gh-light-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 text-slate-700 shadow-xs"
                   >
-                    <span
-                      className="text-white drop-shadow-sm"
-                      style={{ filter: 'drop-shadow(0 1.5px 0 #09132c)' }}
-                    >
-                      +5천
-                    </span>
+                    <span>+5천</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 10000, 1000000))}
-                    data-keep-dark="true" className="gh-dark-btn-2 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#1d2754] via-[#141c3f] to-[#0c112b] hover:from-[#233066] hover:to-[#101738] border border-amber-300/75 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_5px_12px_rgba(13,18,48,0.26)]"
+                    className="gh-light-btn-2 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-white to-indigo-50/50 hover:to-indigo-50 border border-indigo-200 hover:border-indigo-300 text-indigo-700 shadow-xs"
                   >
-                    <span
-                      className="text-amber-300 drop-shadow-sm"
-                      style={{ filter: 'drop-shadow(0 1.5px 0 #451a03)' }}
-                    >
-                      +1만
-                    </span>
+                    <span>+1만</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 50000, 1000000))}
-                    data-keep-dark="true" className="gh-dark-btn-3 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#251f52] via-[#181740] to-[#0d102b] hover:from-[#2d2663] hover:to-[#121638] border border-amber-300/95 ring-1 ring-amber-400/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_6px_14px_rgba(13,18,48,0.3)]"
+                    className="gh-light-btn-3 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-white to-indigo-50/80 hover:to-indigo-100/70 border border-indigo-300 hover:border-indigo-400 text-indigo-800 shadow-xs"
                   >
-                    <span
-                      className="text-amber-300 drop-shadow-md"
-                      style={{ filter: 'drop-shadow(0 1.5px 0 #451a03)' }}
-                    >
-                      +5만
-                    </span>
+                    <span>+5만</span>
                   </button>
                 </div>
 
