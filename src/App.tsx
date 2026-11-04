@@ -158,7 +158,8 @@ export const App: React.FC = () => {
           {layout === 'desktop' ? <DesktopDashboard /> : <MobileAppView />}
 
           {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 (온보딩 대문 페이지와 중복이므로 팝업 주석 처리) */}
-          {/* <OnboardingModal /> */}
+          {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 (인포데스크 온보딩 3탭 가이드 모달) */}
+          <OnboardingModal />
 
           {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
           <PhotoDetailModal />

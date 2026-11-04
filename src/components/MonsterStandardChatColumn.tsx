@@ -51,7 +51,7 @@ const NOTION_MINIMAL_STARTERS: Array<{ label: string; prompt: string }> = [
     prompt: '최근 복원 기록 보여줘',
   },
   {
-    label: '💁 귀신같이 기능 질문',
+    label: '💁 귀신같이 기능 및 요금제',
     prompt: '귀신같이 Ctrl+0 초능력 기능이랑 내 기기 통합 3,900원 혜택 알려줘',
   },
   {
