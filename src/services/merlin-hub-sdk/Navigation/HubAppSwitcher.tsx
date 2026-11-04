@@ -525,7 +525,7 @@ export function HubAppSwitcher({
         onClick={(e) => e.stopPropagation()}
         className={`absolute z-[99999] transition-all duration-300 ease-out ${
           isBottomUp
-            ? 'left-0 bottom-full mb-1.5 w-[156px] origin-bottom-left'
+            ? 'left-0 bottom-full mb-1.5 w-[200px] origin-bottom-left'
             : isDesktopWingAvailable
               ? 'left-0 top-full mt-1.5 w-[150px] origin-top-left'
               : 'right-0 top-full mt-1.5 w-[156px] origin-top-right'
@@ -584,10 +584,10 @@ export function HubAppSwitcher({
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-6.5 h-6.5 rounded-lg bg-white shadow-2xs border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:scale-105 transition-transform">
+                        <div className="w-5.5 h-5.5 rounded-md bg-white shadow-2xs border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:scale-105 transition-transform">
                           {renderAppLogo(app)}
                         </div>
-                        <span className="text-[12.5px] font-extrabold text-slate-800 dark:text-zinc-100 group-hover/item:text-indigo-600 dark:group-hover/item:text-indigo-400 truncate">
+                        <span className="text-[12px] font-extrabold text-slate-800 dark:text-zinc-100 group-hover/item:text-indigo-600 dark:group-hover/item:text-indigo-400 whitespace-nowrap">
                           {app.name}
                         </span>
                       </div>
