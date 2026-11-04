@@ -553,7 +553,7 @@ export const PricingModal: React.FC = () => {
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                🆓 내 기기 1대 (🎯 찾기 · 🪄 손보기 · 7일 초능력 체험)
+                🆓 내 기기 1대 (🎯 찾기 · 🪄 손보기 · 7일 무제한 + 일 3회 평생 무료)
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/35 flex flex-col justify-between gap-2.5">
@@ -571,7 +571,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
                   • 🎯 <strong>귀신같이 찾기</strong> (내 기기 1대 사진·영상·서류 1초 내용검색 · 평생 0원)<br />
                   • 🪄 <strong>귀신같이 손보기</strong> (치우기·고치기·사양진단·빨간 손가락 <code>👆</code> · 평생 0원)<br />
-                  • 👻 <strong>귀신 초능력 팩(Ctrl + 0)</strong> (기기당 1주일 전 기능 무료체험)
+                  • 👻 <strong>귀신 초능력 팩(Ctrl + 0)</strong> (기기별 7일 무제한 체험 · 8일 차부터 기기별 매일 3회 평생 무료!)
                 </p>
               </div>
             </div>
@@ -609,7 +609,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
                   • 🥇 <strong>카톡 ‘나에게 보내기’ &amp; 클라우드 월세 종식</strong> (폰⇄집PC⇄회사PC 원본 직결)<br />
                   • 🥈 <strong>무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong> (꺼져 있던 집 PC 부팅 즉시 회사·폰에서 복사한 텍스트 100개·스샷 10장 <code>Ctrl+0 [복사검색]</code> 자동 장전)<br />
-                  • 🥉 <strong>귀신 초능력 팩(Ctrl+0) 전 기기 평생 무제한 해금 + <code>F1~F10</code> 10개 상용구 동기화</strong><br />
+                  • 🥉 <strong>귀신 초능력 팩(Ctrl+0) 12대 초능력 전 기기 평생 무제한 해금 + <code>F1~F10</code> 10개 상용구 무제한 동기화</strong><br />
                   • 💻 <strong>집 PC ⇄ 회사 PC 탐색기(S:) 양방향 자동 백업</strong>
                 </p>
                 <div className="grid grid-cols-2 gap-2 pt-1">

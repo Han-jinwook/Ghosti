@@ -9,8 +9,10 @@ export interface SuperpowerTrialStatus {
   engine_running: boolean;
   machine_hwid: string;
   account_id: string;
-  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'EXPIRED' | 'SUBSCRIBED';
+  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'DAILY_FREE_3' | 'EXPIRED' | 'SUBSCRIBED';
   trial_days_left: number;
+  daily_free_limit?: number;
+  daily_free_remaining?: number;
   started_at: string | null;
   expires_at: string | null;
   is_subscribed: boolean;
@@ -714,7 +716,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   ⚡ 귀신 초능력 9+3 (Ctrl + 0)
                 </span>
                 <span className="px-2.5 py-0.5 rounded-md bg-teal-500/15 border border-teal-400/40 text-teal-300 font-label-sm text-[11.5px] font-extrabold">
-                  내 기기 통합 구독 시 평생 무제한 · 기기당 7일 무료체험
+                  기기별 7일 무제한 체험 · 이후 매일 3회 평생 무료 · [내 기기 통합 (월 3,900원)] 구독 시 평생 무제한!
                 </span>
               </div>
               <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
@@ -1020,7 +1022,12 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   </span>
                   {trialStatus?.trial_status === 'ACTIVE' && (
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[11px] font-extrabold">
-                      ⏳ 현재 기기 무료체험 진행 중 (D-{trialStatus.trial_days_left})
+                      ⏳ 기기별 7일 무제한 체험 중 (D-{trialStatus.trial_days_left})
+                    </span>
+                  )}
+                  {trialStatus?.trial_status === 'DAILY_FREE_3' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-[11px] font-extrabold">
+                      🎁 기기별 매일 3회 평생 무료 (오늘 잔여: {trialStatus.daily_free_remaining ?? 3}/3회)
                     </span>
                   )}
                   {trialStatus?.trial_status === 'SUBSCRIBED' && (
@@ -1040,7 +1047,16 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   onClick={() => void handleStart7DayTrial()}
                   className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12.5px] font-black shadow-[0_0_20px_rgba(251,191,36,0.35)] shrink-0 cursor-pointer"
                 >
-                  🎁 이 PC에서 1주일 무료체험 즉시 켜기
+                  🎁 이 기기에서 7일 무제한 체험 즉시 켜기
+                </button>
+              )}
+              {trialStatus?.trial_status === 'DAILY_FREE_3' && !isSubscribedUser && (
+                <button
+                  type="button"
+                  onClick={() => setShowProModal(true)}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[12.5px] font-black shadow-[0_0_20px_rgba(16,185,129,0.35)] shrink-0 cursor-pointer"
+                >
+                  👑 평생 무제한 해금 (월 3,900원)
                 </button>
               )}
             </div>

@@ -378,6 +378,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if path == "/api/superpower/start-trial":
             self._send_json(plugin_ghosti_superpowers.start_superpower_trial(body))
             return
+        if path == "/api/superpower/consume-action":
+            self._send_json(plugin_ghosti_superpowers.consume_superpower_action(body))
+            return
 
         if path == "/api/superpower/snippets":
             self._send_json(plugin_ghosti_superpowers.save_snippets(body))

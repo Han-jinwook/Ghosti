@@ -103,9 +103,15 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     started_at_iso = None
     expires_at_iso = None
 
+    today_str = datetime.date.today().isoformat()
+    daily_usage_entry = (m_entry or {}).get("dailyUsage", {}).get(today_str, 0)
+    daily_free_limit = 3
+    daily_free_remaining = max(0, daily_free_limit - int(daily_usage_entry))
+
     if is_subscribed or (m_entry and m_entry.get("isSubscribed")):
         trial_status = "SUBSCRIBED"
         trial_days_left = 9999
+        daily_free_remaining = 9999
     elif m_entry and m_entry.get("startedAtTs"):
         started_ts = float(m_entry["startedAtTs"])
         started_at_iso = m_entry.get("startedAt")
@@ -113,18 +119,24 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         elapsed_days = (time.time() - started_ts) / 86400.0
         rem = int(max(0, round(7.0 - elapsed_days + 0.49)))
         trial_days_left = rem
-        trial_status = "ACTIVE" if rem > 0 else "EXPIRED"
+        if rem > 0:
+            trial_status = "ACTIVE"  # 기기별 7일 무제한 무료체험
+            daily_free_remaining = 9999
+        else:
+            trial_status = "DAILY_FREE_3"  # 8일차부터 기기별 하루 3회 평생 무료!
 
     ensure_superpower_daemon_running()
     return {
         "ok": True,
         "engine_running": True,
-        "version": "3.2",
+        "version": "3.3",
         "port": 5199,
         "machine_hwid": hwid,
         "account_id": account_id,
         "trial_status": trial_status,
         "trial_days_left": trial_days_left,
+        "daily_free_limit": daily_free_limit,
+        "daily_free_remaining": daily_free_remaining,
         "started_at": started_at_iso,
         "expires_at": expires_at_iso,
         "is_subscribed": bool(is_subscribed or trial_status == "SUBSCRIBED"),
@@ -416,3 +428,72 @@ def update_telemetry(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
         else "🔒 익명 기능 사용 통계 수집이 중단(OFF)되었습니다."
     )
     return res
+
+
+def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    [기기별 7일 무제한 후 8일차부터 매일 3회 평생 무료 퍼널]
+    - 단순히 Ctrl+0을 띄우거나 취소(Esc/바깥클릭)하거나 기억 목록만 조회한 것은 절대 차감하지 않음!
+    - 오직 실제로 1~9번, F1~F10 변환·붙여넣기·OCR추출 등 실제 액션이 최종 완수된 시점에만 1회 차감.
+    """
+    data = body or {}
+    account_id = str(data.get("accountId") or "local_user").strip()
+    is_subscribed = bool(data.get("isSubscribed", False))
+    action_type = str(data.get("actionType") or "action").strip()
+    hwid = get_machine_hwid()
+    ledger = _load_trial_ledger()
+    machines = ledger.setdefault("machines", {})
+    m_entry = machines.setdefault(hwid, {
+        "accountId": account_id,
+        "machineHwid": hwid,
+        "isSubscribed": is_subscribed,
+    })
+
+    status = get_superpower_status({"accountId": account_id, "isSubscribed": is_subscribed})
+    trial_status = status.get("trial_status")
+
+    # 구독자이거나 7일 무제한 ACTIVE 기간이면 차감 없이 통과
+    if trial_status in ("SUBSCRIBED", "ACTIVE"):
+        return {
+            "ok": True,
+            "allowed": True,
+            "consumed": False,
+            "trial_status": trial_status,
+            "daily_free_remaining": 9999,
+            "message": "무제한 권한이 적용 중입니다.",
+        }
+
+    # 8일차 이후 DAILY_FREE_3 상태
+    today_str = datetime.date.today().isoformat()
+    daily_usage = m_entry.setdefault("dailyUsage", {})
+    used_today = int(daily_usage.get(today_str, 0))
+
+    if used_today >= 3:
+        return {
+            "ok": False,
+            "allowed": False,
+            "consumed": False,
+            "trial_status": "DAILY_FREE_3",
+            "daily_free_remaining": 0,
+            "daily_free_limit": 3,
+            "error": "DAILY_LIMIT_EXCEEDED",
+            "message": "오늘의 기기별 3회 무료 변환이 모두 소진되었습니다. [내 기기 통합(월 3,900원)] 구독 시 평생 무제한으로 사용하실 수 있습니다!",
+        }
+
+    # 1회 정상 차감
+    used_today += 1
+    daily_usage[today_str] = used_today
+    m_entry["lastActionAt"] = datetime.datetime.now().isoformat()
+    m_entry["lastActionType"] = action_type
+    _save_trial_ledger(ledger)
+
+    rem = max(0, 3 - used_today)
+    return {
+        "ok": True,
+        "allowed": True,
+        "consumed": True,
+        "trial_status": "DAILY_FREE_3",
+        "daily_free_remaining": rem,
+        "daily_free_limit": 3,
+        "message": f"초능력 액션 완수 (오늘 잔여 무료: {rem}/3회)",
+    }
