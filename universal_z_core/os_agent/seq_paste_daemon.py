@@ -592,8 +592,10 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
     def replace_token(m: re.Match) -> str:
         nonlocal target_lang
         tok = m.group(0)
+        if tok.startswith(("http://", "https://", "www.")):
+            return tok
 
-        # 1) 영문 알파벳 토큰인 경우 (뒤에 숫자 '25' 등이 붙어 있어도 영문 파트만 단독 매칭되어 변환됨!)
+        # 1) 영문 알파벳 토큰인 경우 (뒤에 숫자 '25'나 모든 특수문자 '~!@#$%^&*()_+-=:;/?.,' 등이 붙어 있어도 영문 파트만 단독 매칭되어 100% 변환됨!)
         if re.fullmatch(r"[A-Za-z]+", tok):
             # 1-A) Caps Lock 역전 오타 (예: tHANKS -> Thanks)
             if len(tok) >= 2 and tok[0].islower() and tok[1:].isupper():
@@ -636,8 +638,8 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
 
         return tok
 
-    # URL이나 이메일 주소가 아닌 일반 어절에서 영문 구간([A-Za-z]+)과 한글 구간([\u3131-\u318E\uAC00-\uD7A3]+)을 각각 독립 토큰으로 정밀 성형
-    morphed = re.sub(r"(?<![A-Za-z_:/])[A-Za-z]+(?![A-Za-z_:/])|[\u3131-\u318E\uAC00-\uD7A3]+", replace_token, cleaned_lead)
+    # URL만 보호하고 어떤 특수문자(~, @, #, $, %, ^, &, *, _, :, / 등)가 붙어 있든 영문 구간([A-Za-z]+)과 한글 구간을 100% 독립 성형
+    morphed = re.sub(r"https?://\S+|www\.\S+|[A-Za-z]+|[\u3131-\u318E\uAC00-\uD7A3]+", replace_token, cleaned_lead)
     return morphed, target_lang
 
 
@@ -2297,13 +2299,37 @@ def superpower_3_clean_format(daemon_set_cb, raw_src: str | None = None) -> None
 
 def _fix_korean_spacing_general(s: str) -> str:
     """
-    [범용 한국어 어절 경계(조사·연결어미·보조용언·부사) 자동 띄어쓰기 교정기]
-    - 특정 예문 하드코딩이 아니라, 한국어 형태소 규칙(체언+조사 뒤 용언 결합, 연결어미 뒤 새 어절/보조용언 결합, 시간·빈도 부사 뒤 결합)을
-      2-Pass로 정밀 분리하여 '밖에나가고' -> '밖에 나가고', '날씨가좋아서' -> '날씨가 좋아서', '밥을먹고싶어요' -> '밥을 먹고 싶어요' 등
-      어떤 문장이 들어와도 바른 띄어쓰기로 교정합니다.
+    [범용 한국어 어절 경계(조사·연결어미·종결어미·보조용언·부사·깨진 2음절) 자동 띄어쓰기 교정기]
+    - 특정 예문 하드코딩이 아니라, 한국어 형태소 규칙을 2-Pass로 정밀 분리·결합하여
+      '밖에나가고' -> '밖에 나가고', '날씨가좋아서' -> '날씨가 좋아서', '싶어요산책가자' -> '싶어요 산책가자',
+      '아기귀신과함 께' -> '아기귀신과 함께' 등 어떤 문장이 들어와도 바른 띄어쓰기로 교정합니다.
     """
+    # A) 먼저 자간이 깨진 대표 2음절 부사/명사('함 께' -> '함께', '오 늘' -> '오늘', '날 씨' -> '날씨', '산 책' -> '산책' 등) 및 분리된 종결어미('싶어 요산책가자' -> '싶어요 산책가자') 결합
+    s = re.sub(r"([가-힣]+(?:아|어|여|해|지|네|군|나|가|까))\s+(요)(?=[가-힣])", r"\1\2 ", s)
+    s = re.sub(r"함\s+께", "함께", s)
+    s = re.sub(r"같\s+이(?=\s|$|[.,?!~])", "같이", s)
+    s = re.sub(r"오\s+늘", "오늘", s)
+    s = re.sub(r"내\s+일", "내일", s)
+    s = re.sub(r"어\s+제", "어제", s)
+    s = re.sub(r"날\s+씨", "날씨", s)
+    s = re.sub(r"산\s+책", "산책", s)
+    s = re.sub(r"아\s+기", "아기", s)
+    s = re.sub(r"귀\s+신", "귀신", s)
+
     for _ in range(2):
-        # 0) 시간·빈도 명사+은/는/도 및 대표 독립 부사 뒤 자동 띄어쓰기
+        # 0-A) 종결어미(~어요/아요/해요/워요/봐요/와요/자요/줘요/돼요/네요/군요/거든요/잖아요/래요/대요/까요/나요/습니다/입니다/ㅂ니다/세요) 바로 뒤에 새 한글 어절이 붙은 경우('싶어요산책가자' -> '싶어요 산책가자') 즉시 분리!
+        s = re.sub(
+            r"([가-힣]+(?:어요|아요|해요|워요|봐요|와요|자요|줘요|돼요|네요|군요|거든요|잖아요|래요|대요|까요|나요|습니다|입니다|ㅂ니다|세요))(?=[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        # 0-B) [체언 + 와/과/랑/이랑/하고] 뒤에 '함께/같이/다르게/달리' 등이 붙은 경우('아기귀신과함께' -> '아기귀신과 함께') 분리!
+        s = re.sub(
+            r"([가-힣]{1,6}(?:와|과|이랑|하고))(?=(?:함께|같이|다르게|달리|비슷|마찬가지|[가-힣]{2,}\s))",
+            r"\1 ",
+            s,
+        )
+        # 0-C) 시간·빈도 명사+은/는/도 및 대표 독립 부사 뒤 자동 띄어쓰기
         s = re.sub(
             r"(?<![가-힣])(오늘은|내일은|어제는|지금은|요즘은|이번은|다음은|원래는|사실은|너무|정말|진짜|아주|매우|가장|제일|많이|빨리|천천히|다시|함께|같이|먼저|벌써|아직|항상|자주|가끔)(?=[가-힣]{2,})",
             r"\1 ",
@@ -2311,24 +2337,24 @@ def _fix_korean_spacing_general(s: str) -> str:
         )
         # 1) [연결어미 ~아서/어서/해서/와서/가서/파서/나서/돼서/니까/지만/고] 뒤에 [명사 + 조사]가 이어질 때 자동 띄어쓰기
         s = re.sub(
-            r"([가-힣]+(?:아서|어서|여서|해서|와서|가서|봐서|파서|커서|써서|나서|돼서|니까|지만|고))(?=(?!싶|있|없|보|주|버리|말|나가|들어가)[가-힣]{1,4}(?:에서|에게|한테|으로|은|는|이|가|을|를|에|도)(?=[가-힣\s.,?!:;)]|$))",
+            r"([가-힣]+(?:아서|어서|여서|해서|와서|가서|봐서|파서|커서|써서|나서|돼서|니까|지만|고))(?=(?!싶|있|없|보|주|버리|말|나가|들어가)[가-힣]{1,4}(?:에서|에게|한테|으로|은|는|이|가|을|를|에|와|과|도)(?=[가-힣\s.,?!:;)]|$))",
             r"\1 ",
             s,
         )
-        # 2) [명사 + 에/에서/에게/한테/으로] + [용언/다음어절] 자동 띄어쓰기 (예: 밖에나가고 -> 밖에 나가고, 집에가고 -> 집에 가고)
+        # 2) [명사 + 에/에서/에게/한테/으로] + [용언/다음어절] 자동 띄어쓰기 (예: 밖에나가고 -> 밖에 나가고, 밖으로나가고 -> 밖으로 나가고)
         s = re.sub(
             r"([가-힣]{1,5}(?:에서|에게|한테|으로))(?=[가-힣]{2,})",
             r"\1 ",
             s,
         )
         s = re.sub(
-            r"([가-힣]{1,5}에)(?=(?:나가고|나가서|나가다|나가|들어가고|들어가서|들어가|가고|가서|가다|가요|가니|오다|오고|와서|와요|있고|있어|있으니|있다|없고|없어|없다|앉아|서서|누워|살고|살아|맞춰|넣고|넣어|두고|두어|올리고|올려|내리고|내려|보내고|보내|다니고|다녀))",
+            r"([가-힣]{1,5}에)(?=(?:나가고|나가서|나가다|나가|들어가고|들어가서|들어가|가고|가서|가다|가요|가니|가자|오다|오고|와서|와요|있고|있어|있으니|있다|없고|없어|없다|앉아|서서|누워|살고|살아|맞춰|넣고|넣어|두고|두어|올리고|올려|내리고|내려|보내고|보내|다니고|다녀))",
             r"\1 ",
             s,
         )
         # 3) [명사 + 을/를] + [동사/형용사] 자동 띄어쓰기 (예: 밥을먹고 -> 밥을 먹고, 공부를했어요 -> 공부를 했어요)
         s = re.sub(
-            r"([가-힣]{1,5}[을를])(?=[가-힣]{1,5}(?:고|서|아서|어서|여서|해서|니|니까|면|지만|며|면서|는데|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|싶|있|없|다|습니다|ㅂ니다|합니다|했다|았다|었다|였다|겠다|먹|마시|보|하|듣|쓰|읽|사|팔|만들|찾|잡|열|닫|받|주|넣|빼)(?=[\s.,?!:;가-힣)]|$))",
+            r"([가-힣]{1,5}[을를])(?=[가-힣]{1,5}(?:고|서|아서|어서|여서|해서|니|니까|면|지만|며|면서|는데|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|싶|있|없|다|자|습니다|ㅂ니다|합니다|했다|았다|었다|였다|겠다|먹|마시|보|하|듣|쓰|읽|사|팔|만들|찾|잡|열|닫|받|주|넣|빼)(?=[\s.,?!:;가-힣)]|$))",
             r"\1 ",
             s,
         )
@@ -2351,7 +2377,7 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb, raw_src: str | None = None) 
     """
     [④번] 줄바꿈·유령공백(NFKC) 다림질 + 범용 한국어 띄어쓰기 교정 + EmbeddingGemma 2 문단 의미 분리
     - 별표(***), 가운뎃점(·), 말줄임표(. . .) 등 원문 특수문자는 단 1글자도 삭제하지 않고 100% 보존!
-    - 노션 불릿 복사 시 들어가는 탭(\t) 들여쓰기, 어절 중간 강제 줄바꿈('좋\n아서', '싶어\n요') 및 붙여 써진 어절('밖에나가고' -> '밖에 나가고')까지 완벽 복원!
+    - 노션 불릿 복사 시 들어가는 탭(\t) 들여쓰기, 어절 중간 강제 줄바꿈('좋\n아서', '싶어\n요', '함\n께') 및 붙여 써진 어절('밖에나가고', '싶어요산책가자', '아기귀신과함 께')까지 완벽 복원!
     """
     txt = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     if txt:
@@ -2361,22 +2387,22 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb, raw_src: str | None = None) 
         s = s.replace("__MIDDOT__", "·")
         s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
         s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
-        # 0) 어절/어미 중간에서 강제로 끊어진 줄바꿈(예: '좋\n아서', '싶어\n요')은 공백 없이 직결!
+        # 0) 어절/어미 중간에서 강제로 끊어진 줄바꿈(예: '좋\n아서', '싶어\n요', '함\n께')은 공백 없이 직결!
         s = re.sub(
-            r"(?<=[가-힣])[ \t]*\r?\n[ \t]*(?=(?:아서|어서|여서|해서|요|네요|군요|나요|가요|까요|어요|아요|해요|죠|지요|습니다|입니다|다)(?=[\s.,?!:;)]|$))",
+            r"(?<=[가-힣])[ \t]*\r?\n[ \t]*(?=(?:아서|어서|여서|해서|요|네요|군요|나요|가요|까요|어요|아요|해요|죠|지요|습니다|입니다|다|께)(?=[\s.,?!:;)]|$))",
             "",
             s,
         )
-        # 1) 말줄임표(. . . 또는 ...) 뒤 줄바꿈 및 문장 중간에 끊어진 줄바꿈을 모두 매끄럽게 한 줄로 연결
+        # 1) 말줄임표(. . . 또는 ...) 뒤 줄바꿈 및 단일 줄바꿈(\r?\n)을 모두 매끄럽게 한 줄 공백(' ')으로 연결 (단, 빈줄 \n\n은 보존)
         s = re.sub(r"(\.\s*\.\s*\.)\s*\r?\n\s*", r"\1 ", s)
-        s = re.sub(r"(?<![?!:다요죠음함])\r?\n[ \t]*(?=[가-힣A-Za-z0-9(\[.*·])", " ", s)
+        s = re.sub(r"(?<!\n)\r?\n(?!\r?\n)[ \t]*", " ", s)
         s = re.sub(r"[ \t]+", " ", s)
         # 2) PDF 표/문서에서 자간(kerning) 때문에 쪼개진 한글 조사·어미·관형사형 공백 정밀 복원
         # '과도 한 빈줄 이' -> '과도한 빈줄이', '과도 한빈 줄' -> '과도한 빈줄' 모두 먼저 정규화
         s = re.sub(r"([가-힣]{2,})\s+([한된할])\s+([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
         s = re.sub(r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
         s = re.sub(
-            r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|아서|어서|여서|해서|니|니까|면|다면|한|할|된|될|됨|요|네요|군요|죠|지요|합니다|습니다|입니다)(?=[\s.,?!:;)]|$))",
+            r"(?<=[가-힣])\s+(?=(?:은|는|이|가|을|를|에|에서|에게|의|로|으로|와|과|도|만|까지|부터|처럼|보다|지만|거나|며|면서|고|서|아서|어서|여서|해서|니|니까|면|다면|한|할|된|될|됨|요|네요|군요|죠|지요|합니다|습니다|입니다|께)(?=[\s.,?!:;)]|$))",
             "",
             s,
         )
@@ -2391,7 +2417,7 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb, raw_src: str | None = None) 
                 cur = tokens[i]
                 if i + 1 < len(tokens):
                     nxt = tokens[i + 1]
-                    nxt_pure = re.sub(r"[.,?!:;)]+$", "", nxt)
+                    nxt_pure = re.sub(r"[.,?!:;~)]+$", "", nxt)
                     if len(cur) == 1 and "가" <= cur <= "힣" and cur not in _standalone_1char and nxt_pure and all("가" <= c <= "힣" for c in nxt_pure):
                         out.append(cur + nxt)
                         i += 2
@@ -3450,15 +3476,19 @@ Write-Output $res.Text
                                 typed_ascii_buf.pop(0)
                         was_key_down[vk_code] = is_down
 
-                    # 숫자(0~9 및 넘패드 0~9)가 영타 단어 뒤에 붙는 경우('roffjrtl25' ➔ '갤럭시25')도 완벽 추적!
+                    # 숫자(0~9 및 넘패드 0~9) 및 Shift+숫자 특수기호(! @ # $ % ^ & * ( )) 완벽 추적!
+                    _SHIFT_DIGIT_MAP = {
+                        0x30: ")", 0x31: "!", 0x32: "@", 0x33: "#", 0x34: "$",
+                        0x35: "%", 0x36: "^", 0x37: "&", 0x38: "*", 0x39: "(",
+                    }
                     for d_vk in range(0x30, 0x3A):  # 상단 숫자키 0 ~ 9
                         d_down = (u32.GetAsyncKeyState(d_vk) & 0x8000) != 0
                         if d_down and not was_key_down.get(d_vk, False):
                             if typed_ascii_buf:
                                 if not shift_down:
                                     typed_ascii_buf.append(chr(d_vk))
-                                elif d_vk == 0x31:  # Shift + 1 ('!')
-                                    typed_ascii_buf.append("!")
+                                elif d_vk in _SHIFT_DIGIT_MAP:
+                                    typed_ascii_buf.append(_SHIFT_DIGIT_MAP[d_vk])
                         was_key_down[d_vk] = d_down
 
                     for nd_vk in range(0x60, 0x6A):  # 넘패드 숫자키 0 ~ 9
@@ -3468,12 +3498,25 @@ Write-Output $res.Text
                                 typed_ascii_buf.append(chr(nd_vk - 0x30))
                         was_key_down[nd_vk] = nd_down
 
-                    # 문장부호(? . , 등)를 단어 끝에 붙여서 쳤을 때도 알파벳 단어는 유지
-                    for p_vk in (0xBF, 0xBC, 0xBE):  # '/?'(0xBF), ',<'(0xBC), '.>'(0xBE)
+                    # 모든 문장부호·특수문자(~ ` - _ = + [ { ] } \ | ; : ' " , < . > / ?)를 단어 끝에 붙여 쳤을 때도 완벽 추적
+                    _OEM_PUNCT_MAP = {
+                        0xBA: (";", ":"),
+                        0xBB: ("=", "+"),
+                        0xBC: (",", "<"),
+                        0xBD: ("-", "_"),
+                        0xBE: (".", ">"),
+                        0xBF: ("/", "?"),
+                        0xC0: ("`", "~"),
+                        0xDB: ("[", "{"),
+                        0xDC: ("\\", "|"),
+                        0xDD: ("]", "}"),
+                        0xDE: ("'", '"'),
+                    }
+                    for p_vk, (norm_ch, sh_ch) in _OEM_PUNCT_MAP.items():
                         p_down = (u32.GetAsyncKeyState(p_vk) & 0x8000) != 0
                         if p_down and not was_key_down.get(p_vk, False):
                             if typed_ascii_buf:
-                                typed_ascii_buf.append("?" if (p_vk == 0xBF and shift_down) else ("." if p_vk == 0xBE else ","))
+                                typed_ascii_buf.append(sh_ch if shift_down else norm_ch)
                         was_key_down[p_vk] = p_down
 
                     back_down = (u32.GetAsyncKeyState(VK_BACK) & 0x8000) != 0
@@ -3489,15 +3532,16 @@ Write-Output $res.Text
                     if space_down and not was_key_down.get(VK_SPACE, False):
                         raw_buf_str = "".join(typed_ascii_buf)
                         typed_ascii_buf.clear()
-                        m_trail = re.match(r"^([A-Za-z]+)([0-9]*)([?!.,]*)$", raw_buf_str)
-                        word_cand = m_trail.group(1) if m_trail else re.sub(r"[^A-Za-z]", "", raw_buf_str)
-                        trail_digits = m_trail.group(2) if m_trail else ""
-                        trail_punct = m_trail.group(3) if m_trail else ""
+                        m_trail = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", raw_buf_str)
+                        lead_punct = m_trail.group(1) if m_trail else ""
+                        word_cand = m_trail.group(2) if m_trail else re.sub(r"[^A-Za-z]", "", raw_buf_str)
+                        trail_digits = m_trail.group(3) if m_trail else ""
+                        trail_punct = m_trail.group(4) if m_trail else ""
                         hwnd_fg = u32.GetForegroundWindow()
                         edit_child = _find_edit_control_child(hwnd_fg)
 
                         cur_line: str | None = None
-                        if edit_child and raw_buf_str:
+                        if edit_child and (raw_buf_str or True):
                             time.sleep(0.006)
                             cur_line = _get_edit_control_current_line(edit_child)
                             if cur_line is not None and not cur_line.endswith(" "):
@@ -3506,8 +3550,16 @@ Write-Output $res.Text
 
                         if cur_line is not None:
                             cur_stripped = cur_line.rstrip(" ")
-                            typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
-                            typed_as_kor = not typed_as_eng
+                            last_tok = cur_stripped.split()[-1] if cur_stripped.strip() else ""
+                            m_last_eng = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", last_tok)
+                            if m_last_eng:
+                                typed_as_eng = True
+                                typed_as_kor = False
+                                lead_punct, word_cand, trail_digits, trail_punct = m_last_eng.groups()
+                                raw_buf_str = last_tok
+                            else:
+                                typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
+                                typed_as_kor = not typed_as_eng
                         else:
                             ime_kor = get_ime_is_korean(hwnd_fg)
                             typed_as_eng = not ime_kor
@@ -3520,7 +3572,7 @@ Write-Output $res.Text
                                 curr_typo = {
                                     "disp_len": len(raw_buf_str) + 1,
                                     "raw": raw_buf_str,
-                                    "conv": kor_cand + trail_digits + trail_punct,
+                                    "conv": lead_punct + kor_cand + trail_digits + trail_punct,
                                     "target_ko": True,
                                     "has_digits": bool(trail_digits),
                                     "ts": now,
@@ -3531,9 +3583,9 @@ Write-Output $res.Text
                             if any(0x3131 <= ord(c) <= 0x318E for c in kor_produced) or not is_valid_korean_word(kor_produced):
                                 if cur_line is None or cur_line.rstrip(" ").endswith(kor_produced + trail_punct):
                                     curr_typo = {
-                                        "disp_len": len(kor_produced) + len(trail_punct) + 1,
-                                        "raw": kor_produced + trail_punct,
-                                        "conv": word_cand + trail_punct,
+                                        "disp_len": len(lead_punct) + len(kor_produced) + len(trail_punct) + 1,
+                                        "raw": lead_punct + kor_produced + trail_punct,
+                                        "conv": lead_punct + word_cand + trail_punct,
                                         "target_ko": False,
                                         "has_digits": False,
                                         "ts": now,
@@ -3546,10 +3598,10 @@ Write-Output $res.Text
                                 line_tokens = cur_line.strip().split()
                                 if len(line_tokens) >= 2:
                                     prev_tok = line_tokens[-2]
-                                    m_prev = re.match(r"^([A-Za-z]+)([0-9]*)([?!.,]*)$", prev_tok)
+                                    m_prev = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", prev_tok)
                                     prev_is_eng_typo = False
-                                    if m_prev and len(m_prev.group(1)) >= 2 and not AI_ENGINE.is_valid_english_word(m_prev.group(1)):
-                                        pk = eng_word_to_kor(m_prev.group(1))
+                                    if m_prev and len(m_prev.group(2)) >= 2 and not AI_ENGINE.is_valid_english_word(m_prev.group(2)):
+                                        pk = eng_word_to_kor(m_prev.group(2))
                                         if pk and is_valid_korean_word(pk):
                                             prev_is_eng_typo = True
                                     if curr_typo["target_ko"]:
