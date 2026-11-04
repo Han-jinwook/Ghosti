@@ -224,14 +224,17 @@ class Gemma2LightweightEngine:
                     data = json.loads(tok_path.read_text(encoding="utf-8"))
                     vocab = data.get("model", {}).get("vocab", {})
                     self.vocab = vocab
-                    for k in vocab:
-                        clean_k = k.lstrip("▁")
-                        if len(clean_k) >= 3 and clean_k.isalpha() and clean_k.isascii():
-                            self.en_dict.add(clean_k.lower())
-                        elif len(clean_k) >= 1 and all(0xAC00 <= ord(c) <= 0xD7A3 for c in clean_k):
-                            self.ko_subwords.add(clean_k)
-                            for ch in clean_k:
-                                self.ko_chars.add(ch)
+                    for k, tid in vocab.items():
+                        if k.startswith("▁") and isinstance(tid, int) and tid < 50000:
+                            clean_k = k.lstrip("▁")
+                            if len(clean_k) >= 4 and clean_k.isalpha() and clean_k.isascii():
+                                self.en_dict.add(clean_k.lower())
+                        else:
+                            clean_k = k.lstrip("▁")
+                            if len(clean_k) >= 1 and all(0xAC00 <= ord(c) <= 0xD7A3 for c in clean_k):
+                                self.ko_subwords.add(clean_k)
+                                for ch in clean_k:
+                                    self.ko_chars.add(ch)
 
                     onnx_path = model_dir / "onnx" / "model_quantized.onnx"
                     if not onnx_path.exists():
@@ -246,10 +249,19 @@ class Gemma2LightweightEngine:
             finally:
                 self._loaded = True
 
+    _VALID_SHORT_EN = {
+        "a", "i",
+        "am", "an", "as", "at", "be", "by", "do", "go", "he", "hi",
+        "if", "in", "is", "it", "me", "my", "no", "of", "oh", "ok",
+        "on", "or", "so", "to", "up", "us", "we",
+        "ai", "os", "pc", "tv", "ui", "ux", "id", "ip", "qa",
+        "pr", "hr", "vr", "ar", "vs", "ex", "mr", "ms", "dr",
+    }
+
     def is_valid_english_word(self, word: str) -> bool:
         w = word.strip().lower()
         if len(w) <= 2:
-            return True
+            return w in self._VALID_SHORT_EN
         if w in self.en_dict:
             return True
         # 일반 영문 접미사(ing, ed, er, es, ly, tion, ment, s) 변형 검사
@@ -3551,11 +3563,12 @@ Write-Output $res.Text
                         if cur_line is not None:
                             cur_stripped = cur_line.rstrip(" ")
                             last_tok = cur_stripped.split()[-1] if cur_stripped.strip() else ""
-                            m_last_eng = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", last_tok)
+                            m_last_eng = re.match(r"^([^A-Za-z가-힣\s]*)([A-Za-z]+)([^A-Za-z가-힣\s]*)$", last_tok)
                             if m_last_eng:
                                 typed_as_eng = True
                                 typed_as_kor = False
-                                lead_punct, word_cand, trail_digits, trail_punct = m_last_eng.groups()
+                                lead_punct, word_cand, trail_punct = m_last_eng.groups()
+                                trail_digits = re.sub(r"[^0-9]", "", lead_punct + trail_punct)
                                 raw_buf_str = last_tok
                             else:
                                 typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
@@ -3566,13 +3579,13 @@ Write-Output $res.Text
                             typed_as_kor = ime_kor
 
                         curr_typo: dict | None = None
-                        if typed_as_eng and len(word_cand) >= 3 and not AI_ENGINE.is_valid_english_word(word_cand):
+                        if typed_as_eng and len(word_cand) >= 2 and not AI_ENGINE.is_valid_english_word(word_cand):
                             kor_cand = eng_word_to_kor(word_cand)
-                            if kor_cand and len(kor_cand) >= 2 and is_valid_korean_word(kor_cand):
+                            if kor_cand and len(kor_cand) >= 1 and is_valid_korean_word(kor_cand):
                                 curr_typo = {
                                     "disp_len": len(raw_buf_str) + 1,
                                     "raw": raw_buf_str,
-                                    "conv": lead_punct + kor_cand + trail_digits + trail_punct,
+                                    "conv": morph_korean_english_text(raw_buf_str),
                                     "target_ko": True,
                                     "has_digits": bool(trail_digits),
                                     "ts": now,
@@ -3597,15 +3610,18 @@ Write-Output $res.Text
                             if cur_line is not None:
                                 line_tokens = cur_line.strip().split()
                                 if len(line_tokens) >= 2:
-                                    prev_tok = line_tokens[-2]
-                                    m_prev = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", prev_tok)
                                     prev_is_eng_typo = False
-                                    if m_prev and len(m_prev.group(2)) >= 2 and not AI_ENGINE.is_valid_english_word(m_prev.group(2)):
-                                        pk = eng_word_to_kor(m_prev.group(2))
-                                        if pk and is_valid_korean_word(pk):
-                                            prev_is_eng_typo = True
+                                    for prev_tok in line_tokens[:-1]:
+                                        for p_chunk in re.findall(r"[A-Za-z]+", prev_tok):
+                                            if len(p_chunk) >= 2 and not AI_ENGINE.is_valid_english_word(p_chunk):
+                                                pk = eng_word_to_kor(p_chunk)
+                                                if pk and is_valid_korean_word(pk):
+                                                    prev_is_eng_typo = True
+                                                    break
+                                        if prev_is_eng_typo:
+                                            break
                                     if curr_typo["target_ko"]:
-                                        if prev_is_eng_typo or (curr_typo["has_digits"] and len(word_cand) >= 4):
+                                        if prev_is_eng_typo or (curr_typo["has_digits"] and len(word_cand) >= 2) or len(word_cand) >= 6:
                                             should_trigger = True
                                     else:
                                         if pending_first_typo is not None and not pending_first_typo["target_ko"] and pending_first_typo.get("hwnd") == hwnd_fg and pending_first_typo["raw"] in cur_line:
