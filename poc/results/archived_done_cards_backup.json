@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-04T13:17:01.313896",
+  "updated_at": "2026-11-04T14:18:44.307335",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -658,6 +658,30 @@
       "last_edited_time": "2026-11-04T01:38:00.000Z",
       "url": "https://app.notion.com/p/40ef9ffd2c1d8071b8f5cb5ce8328f59",
       "archived_at": "2026-11-04T13:17:01.313758"
+    },
+    {
+      "page_id": "40ef9ffd-2c1d-8087-85ae-c901dfeb69d6",
+      "title": "🎯 [센스톡] 새로고침 후 화면 로딩 시간",
+      "app": "",
+      "last_edited_time": "2026-11-04T04:10:00.000Z",
+      "url": "https://app.notion.com/p/40ef9ffd2c1d808785aec901dfeb69d6",
+      "archived_at": "2026-11-04T14:18:44.306624"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-81df-ab06-dd1ecc02c48b",
+      "title": "🎯 [멀린허브] 귀신코인 충전소 3D 도자기체 개편 & 0코인 초기화·상시 할인뱃지 점검",
+      "app": "멀린허브",
+      "last_edited_time": "2026-11-04T03:39:00.000Z",
+      "url": "https://app.notion.com/p/3D-0-40df9ffd2c1d81dfab06dd1ecc02c48b",
+      "archived_at": "2026-11-04T14:18:44.306648"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-8117-a1c4-c15b6005f3f0",
+      "title": "🎯 [센스톡] 테스트 발송 개편: 최대 3명 테스터 등록 & 엔터 연타 연속 발송 검증",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-04T03:24:00.000Z",
+      "url": "https://app.notion.com/p/3-40df9ffd2c1d8117a1c4c15b6005f3f0",
+      "archived_at": "2026-11-04T14:18:44.306655"
     }
   ]
 }

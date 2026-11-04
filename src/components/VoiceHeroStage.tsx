@@ -3,6 +3,7 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { ensureLoginAndZCoreReady, zCoreBridge } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
+import { VoiceActorControlPill } from './VoiceActorControlPill';
 
 export const VoiceHeroStage: React.FC = () => {
   const {
@@ -194,7 +195,7 @@ export const VoiceHeroStage: React.FC = () => {
               if (!isListening && !ensureLoginAndZCoreReady('음성 찾기 검색')) return;
               void toggleMicRecording();
             }}
-            title="음성으로 검색"
+            title="마이크로 말해서 검색"
             className={`h-12 md:h-13 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
               isListening
                 ? 'bg-primary-container text-zinc-950 border-primary-container'
@@ -208,8 +209,11 @@ export const VoiceHeroStage: React.FC = () => {
             >
               {isListening ? 'stop_circle' : 'mic'}
             </span>
-            <span className="hidden sm:inline">{isListening ? '듣는 중...' : '음성'}</span>
+            <span className="hidden sm:inline">{isListening ? '듣는 중...' : '말하기'}</span>
           </button>
+
+          {/* 음성 아이콘 하나에 재생/중단 토글 + [남 | 여] 성우 선택이 통합된 트렌디 컨트롤 캡슐 */}
+          <VoiceActorControlPill />
         </form>
 
         {/* 음성 인식 중일 때만 슬림하게 열리는 파형 피드백 */}

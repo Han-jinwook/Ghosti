@@ -18,8 +18,88 @@ export const SETUP_MONSTER_TTS_VOICE_SUNHI = 'ko-KR-SunHiNeural' as const;
 export const SETUP_MONSTER_TTS_VOICE_YUJIN = 'typecast_yujin' as const;
 export const SETUP_MONSTER_TTS_VOICE_EDGE = 'ko-KR-InJoonNeural' as const;
 
-export const SETUP_MONSTER_TTS_VOICE_DEFAULT = SETUP_MONSTER_TTS_VOICE_PILJAE;
-export const SETUP_MONSTER_TTS_VOICE_ALT = SETUP_MONSTER_TTS_VOICE_YUJIN;
+export const SETUP_MONSTER_TTS_VOICE_DEFAULT = SETUP_MONSTER_TTS_VOICE_HYUNSU;
+export const SETUP_MONSTER_TTS_VOICE_ALT = SETUP_MONSTER_TTS_VOICE_SUNHI;
+
+export type GhostiVoiceGender = 'male' | 'female';
+
+const VOICE_GENDER_STORAGE_KEY = 'ghosti_preferred_voice_gender';
+const VOICE_ENABLED_STORAGE_KEY = 'ghosti_preferred_voice_enabled';
+
+type VoicePrefListener = () => void;
+const voicePrefListeners = new Set<VoicePrefListener>();
+
+function notifyVoicePrefListeners() {
+  voicePrefListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
+export function subscribeGhostiVoicePrefs(listener: VoicePrefListener): () => void {
+  voicePrefListeners.add(listener);
+  return () => {
+    voicePrefListeners.delete(listener);
+  };
+}
+
+export function getPreferredVoiceGender(): GhostiVoiceGender {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(VOICE_GENDER_STORAGE_KEY);
+      if (saved === 'female' || saved === 'male') return saved;
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'male';
+}
+
+export function setPreferredVoiceGender(gender: GhostiVoiceGender): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(VOICE_GENDER_STORAGE_KEY, gender);
+    }
+  } catch {
+    /* ignore */
+  }
+  notifyVoicePrefListeners();
+}
+
+export function getPreferredVoiceEnabled(): boolean {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(VOICE_ENABLED_STORAGE_KEY);
+      if (saved === 'false') return false;
+    }
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
+export function setPreferredVoiceEnabled(enabled: boolean): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(VOICE_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
+    }
+  } catch {
+    /* ignore */
+  }
+  if (!enabled) {
+    stopSetupMonsterTts();
+  }
+  notifyVoicePrefListeners();
+}
+
+export function resolveActiveTtsVoiceId(): typeof SETUP_MONSTER_TTS_VOICE_HYUNSU | typeof SETUP_MONSTER_TTS_VOICE_SUNHI {
+  return getPreferredVoiceGender() === 'female'
+    ? SETUP_MONSTER_TTS_VOICE_SUNHI
+    : SETUP_MONSTER_TTS_VOICE_HYUNSU;
+}
 
 export type SetupMonsterTtsVoice =
   | typeof SETUP_MONSTER_TTS_VOICE_PILJAE
@@ -47,8 +127,19 @@ export const SETUP_MONSTER_PREWARM_PHRASES: readonly string[] = [
 ];
 
 let activeAudioElement: HTMLAudioElement | null = null;
+let isCurrentlySpeaking = false;
+let lastSpokenText = '';
+let lastSpokenRate: string = SETUP_MONSTER_TTS_RATE_DEFAULT;
 const memoryAudioUrlCache = new Map<string, string>();
 let prewarmTriggered = false;
+
+export function getIsTtsSpeaking(): boolean {
+  return isCurrentlySpeaking;
+}
+
+export function getLastSpokenTtsText(): string {
+  return lastSpokenText;
+}
 
 export function normalizeTtsText(rawText: string): string {
   return String(rawText || '')
@@ -60,6 +151,7 @@ export function normalizeTtsText(rawText: string): string {
  * 현재 재생 중인 모든 TTS 오디오 및 폴백 음성을 즉시 중단합니다.
  */
 export function stopSetupMonsterTts(): void {
+  isCurrentlySpeaking = false;
   try {
     if (activeAudioElement) {
       activeAudioElement.pause();
@@ -76,6 +168,20 @@ export function stopSetupMonsterTts(): void {
   } catch {
     /* ignore */
   }
+  notifyVoicePrefListeners();
+}
+
+/**
+ * 마지막으로 재생되었던 음성(또는 전달된 fallbackText)을 현재 선택된 성우(남/여) 목소리로 다시 재생합니다.
+ */
+export async function replayLastSetupMonsterTts(fallbackText?: string): Promise<boolean> {
+  const target = normalizeTtsText(lastSpokenText || fallbackText || '');
+  if (!target) return false;
+  if (!getPreferredVoiceEnabled()) {
+    setPreferredVoiceEnabled(true);
+  }
+  const res = await speakSetupMonsterTts(target, { rate: lastSpokenRate });
+  return res.ok;
 }
 
 /**
@@ -94,7 +200,11 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     // 구형 기계음(Heami 등)은 절대 선택 금지
     const nonRoboticVoices = voices.filter((v) => !/heami/i.test(v.name));
 
+    const isFemalePref = getPreferredVoiceGender() === 'female';
     const preferredVoice =
+      nonRoboticVoices.find((v) =>
+        isFemalePref ? /SunHi/i.test(v.name) : /InJoon|Hyunsu/i.test(v.name)
+      ) ||
       nonRoboticVoices.find((v) =>
         /Microsoft\s+(InJoon|Hyunsu|SunHi)\s+Online\s*\(Natural\)/i.test(v.name)
       ) ||
@@ -112,9 +222,21 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     utter.lang = 'ko-KR';
     utter.rate = 1.15;
     utter.volume = 0.4;
+    utter.onend = () => {
+      isCurrentlySpeaking = false;
+      notifyVoicePrefListeners();
+    };
+    utter.onerror = () => {
+      isCurrentlySpeaking = false;
+      notifyVoicePrefListeners();
+    };
+    isCurrentlySpeaking = true;
+    notifyVoicePrefListeners();
     window.speechSynthesis.speak(utter);
     return true;
   } catch {
+    isCurrentlySpeaking = false;
+    notifyVoicePrefListeners();
     return false;
   }
 }
@@ -137,18 +259,23 @@ export async function speakSetupMonsterTts(
   elapsedMs: number;
 }> {
   const cleanText = normalizeTtsText(rawText);
-  if (!cleanText) {
+  if (cleanText) {
+    lastSpokenText = cleanText;
+    lastSpokenRate = options?.rate ?? SETUP_MONSTER_TTS_RATE_DEFAULT;
+  }
+  if (!cleanText || !getPreferredVoiceEnabled()) {
     return {
       ok: false,
       cacheStatus: 'SKIPPED',
-      voice: options?.voice ?? SETUP_MONSTER_TTS_VOICE_DEFAULT,
+      voice: resolveActiveTtsVoiceId(),
       elapsedMs: 0,
     };
   }
 
   stopSetupMonsterTts();
 
-  const voice = options?.voice ?? SETUP_MONSTER_TTS_VOICE_DEFAULT;
+  // 유저가 직접 선택한 남(현수)/여(선희) 성우 설정을 최우선으로 일원화 적용
+  const voice = resolveActiveTtsVoiceId();
   const rate = options?.rate ?? SETUP_MONSTER_TTS_RATE_DEFAULT;
   const cacheKey = `${voice}|${rate}|${cleanText}`;
   const t0 = performance.now();
@@ -159,7 +286,23 @@ export async function speakSetupMonsterTts(
     try {
       const audio = new Audio(cachedUrl);
       audio.volume = 0.4;
+      audio.onended = () => {
+        if (activeAudioElement === audio) {
+          activeAudioElement = null;
+          isCurrentlySpeaking = false;
+          notifyVoicePrefListeners();
+        }
+      };
+      audio.onerror = () => {
+        if (activeAudioElement === audio) {
+          activeAudioElement = null;
+          isCurrentlySpeaking = false;
+          notifyVoicePrefListeners();
+        }
+      };
       activeAudioElement = audio;
+      isCurrentlySpeaking = true;
+      notifyVoicePrefListeners();
       await audio.play();
       return {
         ok: true,
@@ -170,6 +313,8 @@ export async function speakSetupMonsterTts(
         elapsedMs: Math.round((performance.now() - t0) * 100) / 100,
       };
     } catch {
+      isCurrentlySpeaking = false;
+      notifyVoicePrefListeners();
       /* continue to local server cache */
     }
   }
@@ -188,8 +333,27 @@ export async function speakSetupMonsterTts(
         memoryAudioUrlCache.set(cacheKey, playableUrl);
         const audio = new Audio(playableUrl);
         audio.volume = 0.4;
+        audio.onended = () => {
+          if (activeAudioElement === audio) {
+            activeAudioElement = null;
+            isCurrentlySpeaking = false;
+            notifyVoicePrefListeners();
+          }
+        };
+        audio.onerror = () => {
+          if (activeAudioElement === audio) {
+            activeAudioElement = null;
+            isCurrentlySpeaking = false;
+            notifyVoicePrefListeners();
+          }
+        };
         activeAudioElement = audio;
-        await audio.play().catch(() => {});
+        isCurrentlySpeaking = true;
+        notifyVoicePrefListeners();
+        await audio.play().catch(() => {
+          isCurrentlySpeaking = false;
+          notifyVoicePrefListeners();
+        });
         return {
           ok: true,
           cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',

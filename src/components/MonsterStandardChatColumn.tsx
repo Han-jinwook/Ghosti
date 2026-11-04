@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Send,
-  Volume2,
-  VolumeX,
   RotateCcw,
   Bot,
   User,
@@ -14,7 +12,6 @@ import {
   subscribeSharedMonsterChat,
   setSharedMonsterMessages,
   setSharedMonsterLiteracyLevel,
-  setSharedMonsterTtsEnabled,
   setSharedMonsterBusy,
   resetSharedMonsterChatToWelcome,
   processUnifiedMonsterChatQuery,
@@ -22,6 +19,7 @@ import {
   type DigitalHealthCheckRecord,
 } from '../services/monsterChatRouter';
 import { MonsterInteractiveCardView } from './MonsterInteractiveCards';
+import { VoiceActorControlPill } from './VoiceActorControlPill';
 
 interface MonsterStandardChatColumnProps {
   sourceTab: 'trash' | 'repair';
@@ -262,19 +260,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setSharedMonsterTtsEnabled((v) => !v)}
-            className={`px-3 py-1.5 rounded-lg text-[12px] font-bold flex items-center gap-1 border transition cursor-pointer ${
-              ttsEnabled
-                ? 'bg-emerald-50 dark:bg-slate-800 border-emerald-300 dark:border-slate-700 text-emerald-800 dark:text-emerald-300'
-                : 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-400'
-            }`}
-            title="음성 안내(TTS 읽어주기) 켜기/끄기"
-          >
-            {ttsEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-            {ttsEnabled ? '음성 켜짐' : '음성 꺼짐'}
-          </button>
+          <VoiceActorControlPill compact />
 
           <button
             type="button"

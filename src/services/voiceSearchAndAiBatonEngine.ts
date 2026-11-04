@@ -1,5 +1,10 @@
 import { getZCoreUrl } from './zCoreBridge';
-import { speakSetupMonsterTts, SETUP_MONSTER_TTS_RATE_DEFAULT } from './setupMonsterTts';
+import {
+  speakSetupMonsterTts,
+  SETUP_MONSTER_TTS_RATE_DEFAULT,
+  resolveActiveTtsVoiceId,
+  getPreferredVoiceGender,
+} from './setupMonsterTts';
 import type { LocalDocumentFile } from '../types/saysee';
 
 /**
@@ -242,9 +247,10 @@ export function extractKeywordSentencesZeroLlm(
   });
 
   const kwLabel = cleanKeywords.join(', ');
+  const actorName = getPreferredVoiceGender() === 'female' ? '선희' : '현수';
   const hyunsuIntroText =
     matched.length > 0
-      ? `요청하신 '${kwLabel}' 단어가 포함된 문장 총 ${matched.length}개를 찾았습니다. 선희 아나운서가 차례대로 읽어드립니다.`
+      ? `요청하신 '${kwLabel}' 단어가 포함된 문장 총 ${matched.length}개를 찾았습니다. ${actorName} 음성으로 차례대로 읽어드립니다.`
       : `문서 본문에서 '${kwLabel}' 단어가 포함된 문장을 찾지 못했습니다.`;
 
   const sunhiReadScript = matched.map((m, i) => `${i + 1}번째 문장입니다. ${m.sentence}`).join(' ');
@@ -506,10 +512,10 @@ export function resolveTargetDocAndBuildFactAnswer(
  */
 export async function speakWithHyunsuOrSunhi(
   text: string,
-  role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
+  _role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
   rate: string = SETUP_MONSTER_TTS_RATE_DEFAULT
 ): Promise<{ ok: boolean; voiceId: string; audioUrl?: string }> {
-  const voiceId = GHOSTI_VOICE_ACTORS[role].voiceId;
+  const voiceId = resolveActiveTtsVoiceId();
   const res = await speakSetupMonsterTts(text, { voice: voiceId, rate });
   return {
     ok: res.ok,

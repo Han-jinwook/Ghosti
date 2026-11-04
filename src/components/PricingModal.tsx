@@ -4,7 +4,14 @@ import type { GpuHelperTierId, PricingPlanId } from '../types/saysee';
 import { LoungeModeSwitcherBar } from './LoungeView';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
-import { stopSetupMonsterTts } from '../services/setupMonsterTts';
+import {
+  stopSetupMonsterTts,
+  getIsTtsSpeaking,
+  replayLastSetupMonsterTts,
+  subscribeGhostiVoicePrefs,
+  getPreferredVoiceGender,
+} from '../services/setupMonsterTts';
+import { VoiceActorControlPill } from './VoiceActorControlPill';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 내 기기 1대 (기본) : 언제나 0원 (혼자 쓰는 내 기기 1대는 기간 제한 없이 언제나 0원입니다)',
@@ -1316,12 +1323,38 @@ export const LocalDocPreviewModal: React.FC = () => {
     activeQuery,
     hasExecutedUserSearch,
   } = useSaySeeStore();
+  const [, setVoiceTick] = useState(0);
+
+  useEffect(() => {
+    return subscribeGhostiVoicePrefs(() => {
+      setVoiceTick((t) => t + 1);
+    });
+  }, []);
+
   if (!selectedDocModal) return null;
 
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
+  const isSpeakingNow = getIsTtsSpeaking();
+  const fallbackDocVoiceText = `${selectedDocModal.title}. ${selectedDocModal.extractedText}`;
+
   const handleCloseModal = () => {
     stopSetupMonsterTts();
     setSelectedDocModal(null);
+  };
+
+  const handleToggleModalVoice = async () => {
+    if (getIsTtsSpeaking()) {
+      stopSetupMonsterTts();
+      useSaySeeStore.setState({
+        lastQuarantineToast: '🔇 음성 안내를 중단했습니다. (다시 클릭하시면 음성이 다시 재생됩니다)',
+      });
+    } else {
+      await replayLastSetupMonsterTts(fallbackDocVoiceText);
+      const actorName = getPreferredVoiceGender() === 'female' ? '여성 성우(선희)' : '남성 성우(현수)';
+      useSaySeeStore.setState({
+        lastQuarantineToast: `🔊 [${actorName}] 문서 음성 안내를 다시 재생합니다.`,
+      });
+    }
   };
 
   return (
@@ -1414,64 +1447,69 @@ export const LocalDocPreviewModal: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2">
-          <button
-            type="button"
-            onClick={() => {
-              stopSetupMonsterTts();
-              useSaySeeStore.setState({
-                lastQuarantineToast: '🔇 음성 안내를 즉시 중단했습니다.',
-              });
-            }}
-            className="px-3.5 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200 font-label-md text-[13px] font-extrabold flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>🔇 음성 중단</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard?.writeText(selectedDocModal.extractedText);
-              useSaySeeStore.setState({
-                lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 즉시 복사되었습니다.`,
-              });
-            }}
-            className="px-4 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-emerald-400 transition-colors cursor-pointer"
-          >
-            <span>📋 복사</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void executeRealOsAction(
-                'open_file_search',
-                selectedDocModal.path || selectedDocModal.fileName
-              ).then((res) => {
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <VoiceActorControlPill fallbackReplayText={fallbackDocVoiceText} compact />
+            <button
+              type="button"
+              onClick={() => void handleToggleModalVoice()}
+              className={`px-3.5 py-2.5 rounded-xl font-label-md text-[13px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all ${
+                isSpeakingNow
+                  ? 'bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200'
+                  : 'bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200'
+              }`}
+            >
+              <span>{isSpeakingNow ? '🔇 음성 중단 (재클릭 시 다시 재생)' : '🔊 음성 다시 듣기'}</span>
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(selectedDocModal.extractedText);
                 useSaySeeStore.setState({
-                  lastQuarantineToast:
-                    res.summaryKo ||
-                    `📂 탐색기에서 [${selectedDocModal.fileName}] 파일을 바로 띄웠습니다.`,
+                  lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 즉시 복사되었습니다.`,
                 });
-              });
-            }}
-            className="px-4 py-2.5 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
-          >
-            <span>🔍 탐색기에서 이 파일 바로 띄우기</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void openLocalFolder('docs')}
-            className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[18px]">folder_open</span>
-            <span>로컬 서류함 폴더 열기</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleCloseModal}
-            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold cursor-pointer"
-          >
-            닫기
-          </button>
+              }}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-emerald-400 transition-colors cursor-pointer"
+            >
+              <span>📋 복사</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void executeRealOsAction(
+                  'open_file_search',
+                  selectedDocModal.path || selectedDocModal.fileName
+                ).then((res) => {
+                  useSaySeeStore.setState({
+                    lastQuarantineToast:
+                      res.summaryKo ||
+                      `📂 탐색기에서 [${selectedDocModal.fileName}] 파일을 바로 띄웠습니다.`,
+                  });
+                });
+              }}
+              className="px-4 py-2.5 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
+            >
+              <span>🔍 탐색기에서 이 파일 바로 띄우기</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void openLocalFolder('docs')}
+              className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[18px]">folder_open</span>
+              <span>로컬 서류함 폴더 열기</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold cursor-pointer"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       </div>
     </div>
