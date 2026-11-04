@@ -57,6 +57,7 @@ function quarantineResultNote(kind: 'move' | 'restore', r: QuarantineOpResult): 
 }
 import {
   speakSetupMonsterTts,
+  stopSetupMonsterTts,
   triggerSetupMonsterTtsPrewarm,
 } from '../services/setupMonsterTts';
 import {
@@ -1132,7 +1133,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     downloads: true,
     desktop: true,
   },
-  setSelectedDocModal: (selectedDocModal) => set({ selectedDocModal }),
+  setSelectedDocModal: (selectedDocModal) => {
+    if (!selectedDocModal) {
+      stopSetupMonsterTts();
+    }
+    set({ selectedDocModal });
+  },
   setSelectedVideoModal: (selectedVideoModal, seekSec) => {
     if (!selectedVideoModal) {
       set({ selectedVideoModal: null });
@@ -2207,13 +2213,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
 
     if (voiceDocCmd.intentType === 'DOC_FACT_QA_READ') {
-      const { matchedDoc, factAnswerKo, voiceRole } = resolveTargetDocAndBuildFactAnswer(
+      const { matchedDoc, rankedDocs, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
         localDocuments,
         voiceDocCmd.targetDocKeyword,
-        voiceDocCmd.extractKeywords
+        voiceDocCmd.extractKeywords,
+        'DOC_FACT_QA_READ'
       );
-      void speakWithHyunsuOrSunhi(factAnswerKo, voiceRole);
+      void speakWithHyunsuOrSunhi(factAnswerKo, 'hyunsu_briefing');
       const docMatches = await searchLocalDocumentFilesAsync(voiceDocCmd.targetDocKeyword, localDocuments);
+      const finalDocs =
+        rankedDocs.length > 0
+          ? rankedDocs
+          : docMatches.length > 0
+          ? docMatches
+          : matchedDoc
+          ? [matchedDoc]
+          : localDocuments;
       set({
         searchSpace: 'vault',
         hasExecutedUserSearch: true,
@@ -2221,27 +2236,32 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         matchedTags: [
           `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
           '#무토큰로컬브리핑',
-          '#현수선희음성안내',
+          '#현수남성성우안내',
         ],
-        matchedLocalDocs: docMatches.length > 0 ? docMatches : matchedDoc ? [matchedDoc] : localDocuments,
-        selectedDocModal: matchedDoc || null,
-        lastQuarantineToast: `🎙️ [0토큰 문서 즉답 브리핑] ${factAnswerKo}`,
+        matchedLocalDocs: finalDocs,
+        selectedDocModal: matchedDoc || finalDocs[0] || null,
+        lastQuarantineToast: `🎙️ [0토큰 문서 즉답 브리핑 · 현수 성우] ${factAnswerKo}`,
       });
       return;
     }
 
     if (voiceDocCmd.intentType === 'DOC_KEYWORD_SENTENCE_READ') {
-      const { matchedDoc, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
+      const { matchedDoc, rankedDocs, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
         localDocuments,
         voiceDocCmd.targetDocKeyword,
-        voiceDocCmd.extractKeywords
+        voiceDocCmd.extractKeywords,
+        'DOC_KEYWORD_SENTENCE_READ'
       );
       const fullText = matchedDoc?.extractedText || '';
       const extracted = extractKeywordSentencesZeroLlm(fullText, voiceDocCmd.extractKeywords);
+      const simPrefix =
+        matchedDoc?.matchType === 'SIMILAR'
+          ? '검색어와 100% 일치하는 문서는 없지만 유사한 문서를 찾았습니다! '
+          : '';
       const readScript =
         extracted.matchedCount > 0
-          ? `${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`
-          : `찾으신 '${matchedDoc?.title || '문서'}' 내용입니다. ${fullText || factAnswerKo}`;
+          ? `${simPrefix}${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`
+          : `${simPrefix}찾으신 '${matchedDoc?.title || '문서'}' 내용입니다. ${fullText || factAnswerKo}`;
 
       void speakWithHyunsuOrSunhi(readScript, 'sunhi_doc_reader');
       set({
@@ -2249,7 +2269,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         hasExecutedUserSearch: true,
         activeQuery: query,
         matchedTags: ['#키워드문장발췌낭독', '#선희아나운서낭독', '#0토큰무료'],
-        matchedLocalDocs: matchedDoc ? [matchedDoc] : localDocuments,
+        matchedLocalDocs: rankedDocs.length > 0 ? rankedDocs : matchedDoc ? [matchedDoc] : localDocuments,
         selectedDocModal: matchedDoc || null,
         lastQuarantineToast: `🎙️ [선희 아나운서 조항·문장 낭독] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 낭독')}`,
       });
@@ -2257,9 +2277,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
 
     if (voiceDocCmd.intentType === 'DOC_SUMMARY_READ') {
-      const { matchedDoc, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
+      const { matchedDoc, rankedDocs, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
         localDocuments,
-        voiceDocCmd.targetDocKeyword
+        voiceDocCmd.targetDocKeyword,
+        [],
+        'DOC_SUMMARY_READ'
       );
       void speakWithHyunsuOrSunhi(factAnswerKo, 'sunhi_doc_reader');
       set({
@@ -2267,7 +2289,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         hasExecutedUserSearch: true,
         activeQuery: query,
         matchedTags: ['#사전요약본즉시낭독', '#선희아나운서', '#0토큰무료'],
-        matchedLocalDocs: matchedDoc ? [matchedDoc] : localDocuments,
+        matchedLocalDocs: rankedDocs.length > 0 ? rankedDocs : matchedDoc ? [matchedDoc] : localDocuments,
         selectedDocModal: matchedDoc || null,
         lastQuarantineToast: `🎙️ [선희 아나운서 문서 요약 낭독] ${factAnswerKo}`,
       });

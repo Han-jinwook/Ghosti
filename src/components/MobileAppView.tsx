@@ -636,6 +636,15 @@ export const MobileAppView: React.FC = () => {
                 </div>
 
                 {/* 로컬 PDF 문서: 모바일 가로 스와이프 카드덱(Horizontal Snap Carousel) */}
+                {hasExecutedUserSearch &&
+                  activeQuery &&
+                  matchedLocalDocs.length > 0 &&
+                  matchedLocalDocs.every((d) => d.matchType === 'SIMILAR') && (
+                    <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-sm text-[12px] font-extrabold">
+                      {matchedLocalDocs[0].similarityNoticeKo ||
+                        '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
+                    </div>
+                  )}
                 {matchedLocalDocs.length > 0 && (
                   <div className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 no-scrollbar">
                     {matchedLocalDocs.map((doc) => (
@@ -644,6 +653,11 @@ export const MobileAppView: React.FC = () => {
                         onClick={() => setSelectedDocModal(doc)}
                         className="min-w-[82%] snap-center p-3.5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-1.5 cursor-pointer shrink-0"
                       >
+                        {hasExecutedUserSearch && doc.matchType === 'SIMILAR' && (
+                          <div className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-sm text-[10.5px] font-extrabold">
+                            {doc.similarityNoticeKo || '💡 유사한 문서를 찾았습니다!'}
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-amber-400 font-label-mono text-[10px] font-bold">
                             {doc.ext} • {doc.categoryBadge}

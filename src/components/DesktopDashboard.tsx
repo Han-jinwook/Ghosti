@@ -1326,6 +1326,17 @@ export const DesktopDashboard: React.FC = () => {
                 </div>
 
                 {/* (1) 로컬 PDF / TXT / DOCX 문서 파일 그리드 (3x2 그리드) */}
+                {hasExecutedUserSearch &&
+                  activeQuery &&
+                  matchedLocalDocs.length > 0 &&
+                  matchedLocalDocs.every((d) => d.matchType === 'SIMILAR') && (
+                    <div className="px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[13px] font-extrabold flex items-center gap-2">
+                      <span>
+                        {matchedLocalDocs[0].similarityNoticeKo ||
+                          '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
+                      </span>
+                    </div>
+                  )}
                 {matchedLocalDocs.length > 0 && (
                   <div className="flex flex-col gap-2.5">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pb-1">
@@ -1336,6 +1347,11 @@ export const DesktopDashboard: React.FC = () => {
                           className="min-w-[85%] sm:min-w-[320px] md:min-w-0 snap-center group p-4 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col justify-between gap-3 cursor-pointer transition-all"
                         >
                           <div className="flex flex-col gap-2">
+                            {hasExecutedUserSearch && doc.matchType === 'SIMILAR' && (
+                              <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-extrabold">
+                                {doc.similarityNoticeKo || '💡 유사한 문서를 찾았습니다!'}
+                              </div>
+                            )}
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5">
                                 <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-amber-400 font-label-mono text-[10px] font-bold">

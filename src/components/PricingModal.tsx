@@ -4,6 +4,7 @@ import type { GpuHelperTierId, PricingPlanId } from '../types/saysee';
 import { LoungeModeSwitcherBar } from './LoungeView';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
+import { stopSetupMonsterTts } from '../services/setupMonsterTts';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 내 기기 1대 (기본) : 언제나 0원 (혼자 쓰는 내 기기 1대는 기간 제한 없이 언제나 0원입니다)',
@@ -1318,16 +1319,29 @@ export const LocalDocPreviewModal: React.FC = () => {
   if (!selectedDocModal) return null;
 
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
+  const handleCloseModal = () => {
+    stopSetupMonsterTts();
+    setSelectedDocModal(null);
+  };
 
   return (
     <div
-      onClick={() => setSelectedDocModal(null)}
+      onClick={handleCloseModal}
       className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-2xl rounded-3xl bg-surface-container-low border border-primary-container/50 p-6 md:p-7 shadow-2xl flex flex-col gap-4"
       >
+        {selectedDocModal.matchType === 'SIMILAR' && (
+          <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[13px] font-extrabold flex items-center gap-2">
+            <span>
+              {selectedDocModal.similarityNoticeKo ||
+                '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
@@ -1356,8 +1370,8 @@ export const LocalDocPreviewModal: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setSelectedDocModal(null)}
-            className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface"
+            onClick={handleCloseModal}
+            className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
@@ -1404,6 +1418,18 @@ export const LocalDocPreviewModal: React.FC = () => {
           <button
             type="button"
             onClick={() => {
+              stopSetupMonsterTts();
+              useSaySeeStore.setState({
+                lastQuarantineToast: '🔇 음성 안내를 즉시 중단했습니다.',
+              });
+            }}
+            className="px-3.5 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200 font-label-md text-[13px] font-extrabold flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>🔇 음성 중단</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               void navigator.clipboard?.writeText(selectedDocModal.extractedText);
               useSaySeeStore.setState({
                 lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 즉시 복사되었습니다.`,
@@ -1441,8 +1467,8 @@ export const LocalDocPreviewModal: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => setSelectedDocModal(null)}
-            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold"
+            onClick={handleCloseModal}
+            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold cursor-pointer"
           >
             닫기
           </button>

@@ -245,6 +245,12 @@ export interface LocalDocumentFile {
   date: string;
   sizeKB: number;
   deviceSource: 'PC 바탕화면' | '스마트폰 다운로드' | 'PC 로컬 폴더' | 'G: 내 드라이브 (Google Sheets)' | string;
+  /** 검색어와 100% 일치('EXACT') vs 일부 키워드만 일치하거나 유의어로 찾은 유사 문서('SIMILAR') */
+  matchType?: 'EXACT' | 'SIMILAR';
+  /** 유사 문서로 매칭되었을 때 일치한 키워드 목록 및 안내 문구 */
+  matchedQueryTokens?: string[];
+  unmatchedQueryTokens?: string[];
+  similarityNoticeKo?: string;
 }
 
 /** [스펙 2] 3중 타임머신 안전망: 즉시 되돌리기(Undo) 배치 스냅샷 */

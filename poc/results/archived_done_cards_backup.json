@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-04T13:11:50.904553",
+  "updated_at": "2026-11-04T13:17:01.313896",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -626,6 +626,38 @@
       "last_edited_time": "2026-11-04T00:28:00.000Z",
       "url": "https://app.notion.com/p/40df9ffd2c1d81c18fe7f43d14057e4c",
       "archived_at": "2026-11-04T13:11:50.904413"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-818e-806c-e6ef6dca3d3e",
+      "title": "🎯 [센스톡] 상단 헤더 귀신팸 화이트·골드 캡슐 & 슬림 롤스크린 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-04T01:15:00.000Z",
+      "url": "https://app.notion.com/p/40df9ffd2c1d818e806ce6ef6dca3d3e",
+      "archived_at": "2026-11-04T13:12:52.484898"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-811b-a1b3-f4bfefd1204d",
+      "title": "🎯 [센스톡] 테스트 연타: 최대 3명 테스터 등록 & 연속 엔터 발송 검증",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-04T03:24:00.000Z",
+      "url": "https://app.notion.com/p/3-40df9ffd2c1d811ba1b3f4bfefd1204d",
+      "archived_at": "2026-11-04T13:17:01.313738"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-8116-8216-c7af39f4c938",
+      "title": "🎯 [센스톡] 2. 명단 불러오기 및 재로그인 시 섹션별 샘플 표시 해제 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-04T01:40:00.000Z",
+      "url": "https://app.notion.com/p/2-40df9ffd2c1d81168216c7af39f4c938",
+      "archived_at": "2026-11-04T13:17:01.313753"
+    },
+    {
+      "page_id": "40ef9ffd-2c1d-8071-b8f5-cb5ce8328f59",
+      "title": "🎯 [귀신같이] 홈 화면 스플래쉬 시간",
+      "app": "",
+      "last_edited_time": "2026-11-04T01:38:00.000Z",
+      "url": "https://app.notion.com/p/40ef9ffd2c1d8071b8f5cb5ce8328f59",
+      "archived_at": "2026-11-04T13:17:01.313758"
     }
   ]
 }

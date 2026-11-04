@@ -419,6 +419,14 @@ export async function searchLocalDocumentFilesAsync(
 ): Promise<LocalDocumentFile[]> {
   const q = query.trim();
   if (!q || q.includes('최근 서류')) return fallbackDocs;
+
+  // 1차로 로컬 정밀 키워드 변별(100% 일치 'EXACT' vs 일부 일치 'SIMILAR')을 먼저 수행하여
+  // 전혀 연관이 없는 문서가 섞이거나 유사 문서 안내 배지가 누락되는 것을 원천 차단합니다.
+  const localScored = searchLocalDocumentFiles(q, fallbackDocs);
+  if (localScored.length > 0) {
+    return localScored;
+  }
+
   try {
     const res = await fetch(getZCoreUrl('/__docs/search'), {
       method: 'POST',
@@ -427,14 +435,20 @@ export async function searchLocalDocumentFilesAsync(
     });
     if (res.ok) {
       const json = await res.json();
-      if (json.ok && Array.isArray(json.documents)) {
-        return json.documents;
+      if (json.ok && Array.isArray(json.documents) && json.documents.length > 0) {
+        return json.documents.map((d: LocalDocumentFile) => ({
+          ...d,
+          matchType: d.matchType || 'SIMILAR',
+          similarityNoticeKo:
+            d.similarityNoticeKo ||
+            '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!',
+        }));
       }
     }
   } catch {
     /* offline fallback below */
   }
-  return searchLocalDocumentFiles(q, fallbackDocs);
+  return localScored;
 }
 
 export function searchVideoSceneItems(
@@ -596,32 +610,106 @@ export function searchLocalDocumentFiles(
 ): LocalDocumentFile[] {
   const q = query.trim().toLowerCase();
   if (!q) return sourceDocs;
-  const rawTokens = q
+
+  const cleaned = q
     .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
-    .split(/\s+/)
-    .map((t) => t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
-    .filter((t) => t.length >= 1 && !['찾아줘', '보여줘', '사진', '문서', '파일', '서류함', '및', '사본'].includes(t));
+    .replace(
+      /(요약해\s*서?\s*읽어\s*줘?|핵심만\s*읽어\s*줘?|간단히\s*읽어\s*줘?|읽어\s*줘|읽어\s*봐|읽어|낭독\s*해\s*줘|낭독|들려\s*줘|들려|알려\s*줘|알려\s*봐|알려|있어\s*요?|있나\s*요?|있니|얼마\s*야|얼마\s*예?요|얼마|언제\s*야|언제|뭐야|뭔가요|어디\s*야|확인\s*해\s*줘|찾아\s*줘|보여\s*줘)/gi,
+      ' '
+    );
+
+  const DOC_STOP_WORDS = new Set([
+    '읽어줘', '읽어봐', '읽어', '낭독해줘', '낭독해', '낭독', '들려줘', '들려',
+    '알려줘', '알려달라', '알려봐', '알려', '있어', '있나', '있니', '있나요',
+    '얼마야', '얼마인가요', '얼마', '언제야', '언제', '뭐야', '뭔가요', '뭐',
+    '어디야', '어디', '몇', '누구', '맞아', '확인해줘', '확인', '찾아줘', '보여줘',
+    '요약해서', '핵심만', '간단히', '사진', '문서', '파일', '서류', '서류함', '및', '사본',
+    '이', '그', '저', '내', '우리', '좀', '다', '에서', '중에서', '관련',
+  ]);
+
+  const rawTokens = Array.from(
+    new Set(
+      cleaned
+        .split(/\s+/)
+        .map((t) =>
+          t.replace(
+            /(에서부터|으로부터|에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|이|가|에|와|과|도|만|나)$/,
+            ''
+          ).trim()
+        )
+        .filter((t) => t.length >= 1 && !DOC_STOP_WORDS.has(t))
+    )
+  );
 
   if (rawTokens.length === 0) return sourceDocs;
 
-  const requiredHits =
-    rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.6));
-
   const scored = sourceDocs
     .map((doc) => {
-      const corpus = `${doc.fileName} ${doc.title} ${doc.categoryBadge} ${doc.extractedText} ${doc.keywords.join(' ')}`.toLowerCase();
+      const titleAndName = `${doc.title} ${doc.fileName} ${doc.categoryBadge}`.toLowerCase();
+      const kwText = (doc.keywords || []).join(' ').toLowerCase();
+      const bodyText = (doc.extractedText || '').toLowerCase();
+      const corpus = `${titleAndName} ${kwText} ${bodyText}`;
       const docStems = extractKoStems(corpus);
-      let hits = 0;
+
+      const matchedTokens: string[] = [];
+      const unmatchedTokens: string[] = [];
+      let weightedScore = 0;
+
       for (const tk of rawTokens) {
-        if (matchKoTokenInStems(tk, docStems, corpus)) {
-          hits += 1;
+        let hit = false;
+        if (titleAndName.includes(tk) || titleAndName.replace(/\s+/g, '').includes(tk.replace(/\s+/g, ''))) {
+          weightedScore += 15;
+          hit = true;
+        } else if (kwText.includes(tk) || kwText.replace(/\s+/g, '').includes(tk.replace(/\s+/g, ''))) {
+          weightedScore += 12;
+          hit = true;
+        } else if (matchKoTokenInStems(tk, docStems, corpus)) {
+          weightedScore += 8;
+          hit = true;
+        }
+
+        if (hit) {
+          matchedTokens.push(tk);
+        } else {
+          unmatchedTokens.push(tk);
         }
       }
-      return { doc, hits };
-    })
-    .filter((item) => item.hits >= requiredHits);
 
-  scored.sort((a, b) => b.hits - a.hits);
+      const isExactMatch = matchedTokens.length === rawTokens.length;
+      const matchType: 'EXACT' | 'SIMILAR' = isExactMatch ? 'EXACT' : 'SIMILAR';
+      const similarityNoticeKo = !isExactMatch && matchedTokens.length > 0
+        ? `💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다! (일치 키워드: ${matchedTokens
+            .map((k) => `'${k}'`)
+            .join(', ')})`
+        : undefined;
+
+      return {
+        doc: {
+          ...doc,
+          matchType,
+          matchedQueryTokens: matchedTokens,
+          unmatchedQueryTokens: unmatchedTokens,
+          similarityNoticeKo,
+        },
+        hits: matchedTokens.length,
+        weightedScore,
+        isExactMatch,
+      };
+    })
+    .filter((item) => item.hits >= 1);
+
+  scored.sort((a, b) => {
+    if (a.isExactMatch !== b.isExactMatch) return a.isExactMatch ? -1 : 1;
+    if (b.hits !== a.hits) return b.hits - a.hits;
+    return b.weightedScore - a.weightedScore;
+  });
+
+  // 만약 100% 일치하는 문서가 1건 이상 존재한다면 부분 일치 문서는 섞지 않고 정확 일치 문서만 반환
+  const exactDocs = scored.filter((s) => s.isExactMatch);
+  if (exactDocs.length > 0) {
+    return exactDocs.map((s) => s.doc);
+  }
+
   return scored.map((s) => s.doc);
 }
 
