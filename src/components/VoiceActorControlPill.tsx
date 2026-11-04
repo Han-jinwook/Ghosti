@@ -6,6 +6,9 @@ import {
   setPreferredVoiceEnabled,
   getIsTtsSpeaking,
   getLastSpokenTtsText,
+  isVoiceActorPreviewGreeting,
+  VOICE_PREVIEW_PHRASE_FEMALE,
+  VOICE_PREVIEW_PHRASE_MALE,
   stopSetupMonsterTts,
   replayLastSetupMonsterTts,
   speakSetupMonsterTts,
@@ -86,14 +89,15 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
     });
 
     // 남/여 클릭 즉시 선택된 성우 목소리를 바로 체감할 수 있도록 직전 문장(없으면 성우 인사말) 즉시 재생
-    const existingText = fallbackReplayText || getLastSpokenTtsText();
+    // 단, 직전 문장이 성우 프리뷰 인사말("안녕하세요, 남성 성우 현수...")이었다면 반드시 새로 선택된 성우의 인사말로 교체 재생!
+    const lastText = getLastSpokenTtsText();
+    const existingText =
+      fallbackReplayText || (lastText && !isVoiceActorPreviewGreeting(lastText) ? lastText : '');
     if (existingText) {
       await replayLastSetupMonsterTts(existingText);
     } else {
       const previewPhrase =
-        nextGender === 'female'
-          ? '안녕하세요, 여성 성우 선희 목소리로 안내해 드립니다.'
-          : '안녕하세요, 남성 성우 현수 목소리로 안내해 드립니다.';
+        nextGender === 'female' ? VOICE_PREVIEW_PHRASE_FEMALE : VOICE_PREVIEW_PHRASE_MALE;
       await speakSetupMonsterTts(previewPhrase);
     }
   };

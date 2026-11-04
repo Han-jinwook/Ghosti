@@ -141,6 +141,35 @@ export function getLastSpokenTtsText(): string {
   return lastSpokenText;
 }
 
+export const VOICE_PREVIEW_PHRASE_MALE =
+  '안녕하세요, 남성 성우 현수 목소리로 안내해 드립니다.' as const;
+export const VOICE_PREVIEW_PHRASE_FEMALE =
+  '안녕하세요, 여성 성우 선희 목소리로 안내해 드립니다.' as const;
+
+export function isVoiceActorPreviewGreeting(text: string): boolean {
+  const clean = normalizeTtsText(text);
+  return (
+    clean === VOICE_PREVIEW_PHRASE_MALE ||
+    clean === VOICE_PREVIEW_PHRASE_FEMALE ||
+    clean.includes('성우 현수 목소리로 안내') ||
+    clean.includes('성우 선희 목소리로 안내')
+  );
+}
+
+export function adaptScriptToActiveVoiceGender(text: string): string {
+  const clean = normalizeTtsText(text);
+  if (!clean) return clean;
+  if (getPreferredVoiceGender() === 'female') {
+    return clean
+      .replace(/남성\s*성우\s*현수/g, '여성 성우 선희')
+      .replace(/현수\s*성우/g, '선희 성우');
+  }
+  return clean
+    .replace(/여성\s*성우\s*선희/g, '남성 성우 현수')
+    .replace(/선희\s*성우/g, '현수 성우')
+    .replace(/선희\s*아나운서/g, '현수 성우');
+}
+
 export function normalizeTtsText(rawText: string): string {
   return String(rawText || '')
     .trim()
@@ -175,7 +204,8 @@ export function stopSetupMonsterTts(): void {
  * 마지막으로 재생되었던 음성(또는 전달된 fallbackText)을 현재 선택된 성우(남/여) 목소리로 다시 재생합니다.
  */
 export async function replayLastSetupMonsterTts(fallbackText?: string): Promise<boolean> {
-  const target = normalizeTtsText(lastSpokenText || fallbackText || '');
+  const rawCandidate = lastSpokenText || fallbackText || '';
+  const target = adaptScriptToActiveVoiceGender(rawCandidate);
   if (!target) return false;
   if (!getPreferredVoiceEnabled()) {
     setPreferredVoiceEnabled(true);
@@ -267,7 +297,7 @@ export async function speakSetupMonsterTts(
   audioUrl?: string;
   elapsedMs: number;
 }> {
-  const cleanText = normalizeTtsText(rawText);
+  const cleanText = adaptScriptToActiveVoiceGender(rawText);
   if (cleanText) {
     lastSpokenText = cleanText;
     lastSpokenRate = options?.rate ?? SETUP_MONSTER_TTS_RATE_DEFAULT;
