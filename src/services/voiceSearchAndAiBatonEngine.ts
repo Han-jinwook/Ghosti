@@ -572,16 +572,59 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
   docTitle: string;
   docText: string;
   userQuestion: string;
+  deviceSpecSummary?: string;
+  openWindow?: boolean;
 }): Promise<{
   ok: boolean;
+  blockedByPrivacyGuard?: boolean;
   detectedAiService: string;
   detectedAiLabel: string;
   targetUrl: string;
   detectionSource: string;
+  stagedPromptText?: string;
+  overlayTriggered?: boolean;
   ttsBriefingKo: string;
   twoStepFingerGuide: Array<{ step: number; label: string; desc: string }>;
   floatingReturnPill: string;
 }> {
+  // 프라이버시 보안 가드: 민감 계정/비밀번호 시트는 외부 AI 자동 바톤터치 원천 제외
+  if (/(비밀번호|패스워드|password|계정\s*정리|아이디.*비번|암호\s*목록)/i.test(params.docTitle || '')) {
+    const blockedMsg =
+      '보안 보호 가드가 작동했습니다. 비밀번호 및 민감 계정 문서는 외부 AI로 절대 전송하지 않으며 오직 내 기기 내부에서만 안전하게 열람할 수 있습니다.';
+    void speakWithHyunsuOrSunhi(blockedMsg, 'hyunsu_briefing');
+    return {
+      ok: false,
+      blockedByPrivacyGuard: true,
+      detectedAiService: 'none',
+      detectedAiLabel: '보안 가드 (외부 전송 차단)',
+      targetUrl: '',
+      detectionSource: 'PRIVACY_GUARD_BLOCK',
+      ttsBriefingKo: blockedMsg,
+      twoStepFingerGuide: [],
+      floatingReturnPill: '⬅️ 귀신같이 안전 화면 유지',
+    };
+  }
+
+  const specBlock = (params.deviceSpecSummary || '').trim();
+  const combinedPrompt =
+    specBlock && (!params.docText || params.docText.trim() === params.userQuestion.trim())
+      ? `[진단 기기 사양 및 상태: ${params.docTitle || '내 PC/기기 실시간 진단 데이터'}]\n${specBlock}\n\n[고난도 수리·스펙 상담 요청]\n${
+          params.userQuestion || '현재 내 기기 사양과 증상을 바탕으로 원인과 해결 방법을 쉽게 설명해 줘.'
+        }`
+      : `[참조 데이터: ${params.docTitle || '선택된 문서'}]\n${(params.docText || '').slice(0, 6000)}${
+          specBlock ? `\n\n[참고 기기 사양]\n${specBlock}` : ''
+        }\n\n[질문 요청]\n${
+          params.userQuestion || '이 문서에서 나에게 불리한 조항이나 핵심 주의사항을 쉽게 설명해 줘.'
+        }`;
+
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(combinedPrompt);
+    }
+  } catch {
+    /* ignore clipboard permission error in headless/non-gesture */
+  }
+
   try {
     const res = await fetch(getZCoreUrl('/__zcore/ai-baton-touch'), {
       method: 'POST',
@@ -589,8 +632,21 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
       body: JSON.stringify(params),
     });
     const data = await res.json();
-    if (data?.ok) {
+    if (data?.ok || data?.blockedByPrivacyGuard) {
       void speakWithHyunsuOrSunhi(data.ttsBriefingKo, 'hyunsu_briefing');
+      if (
+        data.ok &&
+        params.openWindow !== false &&
+        data.targetUrl &&
+        typeof window !== 'undefined' &&
+        typeof window.open === 'function'
+      ) {
+        try {
+          window.open(data.targetUrl, '_blank', 'noopener,noreferrer');
+        } catch {
+          /* ignore popup block */
+        }
+      }
       return data;
     }
   } catch {
@@ -598,18 +654,33 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
   }
 
   const fallbackBriefing =
-    '깊은 분석이 필요한 질문이네요! 평소 쓰시는 제미나이(Gemini) 입력창에 이 문서와 질문을 바로 넣어 띄워드릴게요. [전송] 버튼을 누르신 뒤, 바로 옆 [라이브 음성] 버튼을 누르시면 말로 편하게 상담하실 수 있습니다!';
+    '깊은 분석이 필요한 질문이네요! 평소 쓰시는 제미나이(Gemini) 입력창에 넣을 수 있도록 본문과 질문을 클립보드에 바로 준비해 띄워드릴게요. 붙여넣기 후 [전송] 버튼을 누르신 뒤, 바로 옆 [라이브 음성] 버튼을 누르시면 말로 편하게 상담하실 수 있습니다!';
   void speakWithHyunsuOrSunhi(fallbackBriefing, 'hyunsu_briefing');
+
+  const defaultTargetUrl = 'https://gemini.google.com/app';
+  if (
+    params.openWindow !== false &&
+    typeof window !== 'undefined' &&
+    typeof window.open === 'function'
+  ) {
+    try {
+      window.open(defaultTargetUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      /* ignore popup block */
+    }
+  }
 
   return {
     ok: true,
     detectedAiService: 'gemini',
     detectedAiLabel: '제미나이 (Gemini)',
-    targetUrl: 'https://gemini.google.com/app',
+    targetUrl: defaultTargetUrl,
     detectionSource: 'DEFAULT_GEMINI_FALLBACK',
+    stagedPromptText: combinedPrompt,
+    overlayTriggered: false,
     ttsBriefingKo: fallbackBriefing,
     twoStepFingerGuide: [
-      { step: 1, label: '① [전송 (↑)] 버튼 클릭', desc: '이미 채워진 문서+질문을 즉시 전송합니다.' },
+      { step: 1, label: '① 입력창 붙여넣기(Ctrl+V) 및 [전송 (↑)] 클릭', desc: '이미 복사된 본문+질문 데이터를 즉시 전송합니다.' },
       { step: 2, label: '② 바로 옆 [라이브 음성 🎧] 버튼 클릭', desc: '운전·이동 중에도 말로 편하게 심층 상담을 이어갑니다.' },
     ],
     floatingReturnPill: '⬅️ 대화 종료 후 귀신같이 복귀',

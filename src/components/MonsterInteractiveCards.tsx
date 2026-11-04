@@ -473,6 +473,33 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </div>
             </div>
           </div>
+
+          <div className="pt-1">
+            <button
+              type="button"
+              disabled={busyId === 'spec_baton'}
+              onClick={async () => {
+                const sp = message.pcSpecPayload!;
+                setBusyId('spec_baton');
+                const specSummary = `CPU: ${sp.cpuModel} | RAM: ${sp.ramTotalGb ?? '확인불가'}GB (${sp.ramUsedPercent ?? '?'}% 사용) | GPU: ${sp.gpuModel} | 여유 공간: ${sp.diskFreeGb ?? '?'}GB | 주사율: ${sp.displayHz ?? '?'}Hz | OS: ${sp.osVersion}`;
+                const res = await triggerUserFavoriteAiLiveVoiceBatonTouch({
+                  docTitle: '내 PC 실측 사양 진단표',
+                  docText: specSummary,
+                  deviceSpecSummary: specSummary,
+                  userQuestion:
+                    '위 내 PC 실측 사양을 바탕으로 현재 컴퓨터의 성능 수준, 병목 구간, 업그레이드 또는 최적화 조언을 쉽게 설명해 줘.',
+                });
+                setBusyId(null);
+                onToast?.(
+                  `🤝 [${res.detectedAiLabel}] 내 PC 실측 사양 복사 및 라이브 음성 상담 창 연결이 완료되었습니다!`
+                );
+              }}
+              className="w-full py-2 px-3 rounded-lg bg-fuchsia-600/90 hover:bg-fuchsia-500 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              🤝 내 PC 실측 사양 담아 단골 AI (기본: Gemini) 라이브 음성 상담
+            </button>
+          </div>
         </div>
       )}
 
@@ -595,15 +622,61 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             <span className="text-xs font-extrabold text-fuchsia-300">
               🤝 단골 AI (기본: Google Gemini) 1초 바통 터치
             </span>
-            <span className="text-[11px] text-slate-400">질문 내용 클립보드 자동 복사</span>
+            <span className="text-[11px] text-slate-400">본문·스펙 + 질문 클립보드 자동 복사</span>
           </div>
           {message.batonTouchPayload.result ? (
-            <div className="rounded-lg bg-fuchsia-950/40 border border-fuchsia-500/40 p-2.5 text-xs text-fuchsia-200 space-y-1">
-              <div className="font-bold">
-                ✅ {message.batonTouchPayload.result.detectedAiLabel} 연결 완료!
+            <div className="rounded-lg bg-fuchsia-950/40 border border-fuchsia-500/40 p-2.5 text-xs text-fuchsia-200 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-bold">
+                  ✅ {message.batonTouchPayload.result.detectedAiLabel} 연결 완료!
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 text-[10px] font-bold text-fuchsia-200">
+                  {message.batonTouchPayload.result.floatingReturnPill}
+                </span>
               </div>
-              <div className="text-[11px] text-slate-300">
+              <div className="text-[11px] text-slate-300 leading-relaxed">
                 {message.batonTouchPayload.result.ttsBriefingKo}
+              </div>
+              {message.batonTouchPayload.result.twoStepFingerGuide?.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                  {message.batonTouchPayload.result.twoStepFingerGuide.map((st) => (
+                    <div
+                      key={st.step}
+                      className="rounded-lg bg-slate-950/80 border border-fuchsia-500/30 p-2 text-[11px]"
+                    >
+                      <div className="font-extrabold text-fuchsia-300">👆 {st.label}</div>
+                      <div className="text-slate-400 text-[10.5px] mt-0.5">{st.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {message.batonTouchPayload.result.targetUrl && (
+                  <button
+                    type="button"
+                    onClick={() => void handleBatonTouch()}
+                    className="px-2.5 py-1 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    단골 AI 상담 창 다시 열기
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const label = message.batonTouchPayload?.result?.detectedAiLabel || '제미나이 (Gemini)';
+                    await launchRealOsTopmostOverlay({
+                      x: 420,
+                      y: 150,
+                      text: `👆 [${label}] 입력창에 붙여넣기(Ctrl+V) 후 ① [전송(↑)] ➔ ② [라이브 음성 🎧] 클릭!`,
+                      durationSec: 10,
+                    });
+                    onToast?.('👆 화면 위에 단골 AI 2단계 빨간 손가락(👆) 가이드를 띄웠습니다!');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer"
+                >
+                  👆 빨간 손가락 화면 안내 보기
+                </button>
               </div>
             </div>
           ) : (
@@ -611,10 +684,10 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               type="button"
               disabled={busyId === 'baton'}
               onClick={() => void handleBatonTouch()}
-              className="w-full py-2 px-3 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow"
+              className="w-full py-2 px-3 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow cursor-pointer"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              📋 질문 복사 + 내 단골 AI 상담 창 열기
+              📋 본문·스펙 복사 + 내 단골 AI (기본: Gemini) 라이브 음성 상담 열기
             </button>
           )}
         </div>

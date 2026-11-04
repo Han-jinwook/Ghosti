@@ -12,6 +12,7 @@ import {
   getPreferredVoiceGender,
 } from '../services/setupMonsterTts';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
+import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../services/voiceSearchAndAiBatonEngine';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 내 기기 1대 (기본) : 언제나 0원 (혼자 쓰는 내 기기 1대는 기간 제한 없이 언제나 0원입니다)',
@@ -1464,6 +1465,33 @@ export const LocalDocPreviewModal: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2.5">
+            {!/(비밀번호|패스워드|password|계정\s*정리|아이디.*비번|암호\s*목록)/i.test(
+              selectedDocModal.title || ''
+            ) ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await triggerUserFavoriteAiLiveVoiceBatonTouch({
+                    docTitle: selectedDocModal.title,
+                    docText: selectedDocModal.extractedText,
+                    userQuestion:
+                      activeQuery && hasExecutedUserSearch
+                        ? activeQuery
+                        : '이 문서에서 나에게 불리한 독소조항이나 핵심 주의사항을 쉽게 설명해 줘.',
+                  });
+                  useSaySeeStore.setState({
+                    lastQuarantineToast: `🤝 [${res.detectedAiLabel} 바톤터치] ${res.ttsBriefingKo}`,
+                  });
+                }}
+                className="px-4 py-2.5 rounded-xl bg-fuchsia-600 text-white font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-fuchsia-500 transition-colors cursor-pointer"
+              >
+                <span>🤝 단골 AI(Gemini) 라이브 음성 상담</span>
+              </button>
+            ) : (
+              <span className="px-3 py-2 rounded-xl bg-zinc-900 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11.5px] font-bold">
+                🔒 보안 가드: 민감 계정 시트 외부 AI 전송 차단됨
+              </span>
+            )}
             <button
               type="button"
               onClick={() => {

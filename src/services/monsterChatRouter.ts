@@ -240,6 +240,7 @@ export interface MonsterChatMessage {
     docTitle: string;
     docText: string;
     userQuestion: string;
+    deviceSpecSummary?: string;
     result?: BatonTouchResult;
   };
   shortformTip?: ShortformTipItem | null;
@@ -2279,17 +2280,38 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
-  // 6) 3대 선 넘기 정직 컷오프 & 애착 AI 바통 터치
+  // 6) 3대 선 넘기 정직 컷오프 & 애착 AI 바통 터치 (문서 본문 또는 내 PC/폰 실시간 진단 스펙 자동 첨부)
   if (
     llmDecision?.intent === 'BATON_TOUCH_CUTOFF' ||
     (!hasLlm && /독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean))
   ) {
+    const store = useSaySeeStore.getState();
+    const hw = store.telemetry;
+    const hwSummary = hw
+      ? `CPU 스레드: ${hw.cpuThreads}코어 | 메모리(RAM): ${hw.deviceMemoryGB ?? '자동감지'}GB | GPU: ${
+          hw.gpuDescription || hw.gpuVendor || '내장 그래픽'
+        } (WebGPU ${hw.webgpu ? '지원' : '미지원'})`
+      : '내 PC/기기 실시간 진단 스펙 (Z-코어 자동 측정)';
+    const isDocQuery = /(계약서|합의서|견적서|명세서|규약|문서|서류|조항|소송|법률|세금)/i.test(clean);
+    const matchedDoc = isDocQuery
+      ? resolveTargetDocAndBuildFactAnswer(store.localDocuments, clean).matchedDoc
+      : null;
+
     return reply(
       sourceTab,
-      `${llmIntro}${RED_LINES_TEXT}\n\n🤝 이 질문은 귀신같이 손보기가 정확히 답할 수 있는 범위를 넘습니다. 질문 내용을 클립보드에 복사하고, 평소 쓰시는 **단골 AI(기본: Google Gemini)** 창을 열어 드릴 수 있습니다.`,
+      `${llmIntro}${RED_LINES_TEXT}\n\n🤝 이 질문은 귀신같이 무료 로컬 수리·검색 범위를 넘는 고난도 상담 질문입니다. ${
+        matchedDoc
+          ? `찾으신 문서(**${matchedDoc.fileName}**) 본문과 질문을`
+          : '내 기기 실시간 진단 스펙 데이터와 질문을'
+      } 클립보드에 자동 세팅하고, 평소 쓰시는 **단골 AI(기본: Google Gemini)** 라이브 음성 상담 창으로 바로 연결해 드립니다.`,
       {
         cardKind: 'BATON_TOUCH_CUTOFF',
-        batonTouchPayload: { docTitle: '질문 내용', docText: clean, userQuestion: clean },
+        batonTouchPayload: {
+          docTitle: matchedDoc?.title || '내 PC/기기 실시간 진단 스펙 & 상담 질문',
+          docText: matchedDoc?.extractedText || clean,
+          userQuestion: clean,
+          deviceSpecSummary: hwSummary,
+        },
         llmActionJson: llmDecision || undefined,
         followUpSuggestions: defaultFollowUps,
       }

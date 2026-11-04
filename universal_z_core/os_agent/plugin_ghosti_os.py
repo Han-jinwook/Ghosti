@@ -55,6 +55,9 @@ PLUGIN_METADATA = {
         "restore-point-rollback",
         "recycle-bin-scan",
         "omni-file-trace",
+        "ai-baton-touch",
+        "gdrive-smart-scan",
+        "kakao-real-chatroom-send",
     ],
 }
 
@@ -242,18 +245,49 @@ def detect_most_recent_ai_and_baton_touch(
     doc_title: str = "",
     doc_text: str = "",
     user_question: str = "",
+    device_spec_summary: str = "",
+    show_overlay: bool = True,
 ) -> Dict[str, Any]:
     """
     [고난도 질문 시 유저가 최근 사용한 AI(ChatGPT/Gemini/Claude) 0.01초 자동 판별 & 라이브 음성 바톤터치]
     1순위: 현재 PC에 열려 있는 브라우저 탭/창 제목 실시간 스캔
     2순위: 크롬·엣지·웨일 로컬 방문 기록(History SQLite DB)에서 last_visit_time이 가장 최신인 AI 판별
     3순위 (열어본 기록이 0건인 초기 유저 기본값): 멀린님 확정 원칙에 따라 '제미나이(Gemini, https://gemini.google.com/app)' 오픈!
+    - [찾기] 영역: 찾은 계약서/문서 본문 데이터 + 유저 질문 자동 세팅 (단, 민감 계정/비밀번호 시트는 외부 AI 전송 원천 차단)
+    - [손보기] 영역: 내 PC/폰 실시간 진단 스펙 데이터 + 고난도 수리·스펙 상담 질문 자동 세팅
+    - OS TopMost 빨간 손가락(👆) 2단계 가이드 오버레이 자동 투사 연동
     """
+    import re as _re
     import sqlite3
     import tempfile
     import core_win32 as w32
 
     t0 = time.perf_counter()
+
+    # 프라이버시 보안 가드: 민감 계정/비밀번호 시트는 외부 AI 자동 바톤터치 원천 차단
+    if _re.search(r"(비밀번호|패스워드|password|계정\s*정리|아이디.*비번|암호\s*목록)", doc_title or "", _re.I):
+        blocked_msg = (
+            "보안 보호 가드가 작동했습니다. 비밀번호 및 민감 계정 문서는 외부 AI로 절대 전송하지 않으며 "
+            "오직 내 기기 내부에서만 안전하게 열람할 수 있습니다."
+        )
+        return {
+            "ok": False,
+            "blockedByPrivacyGuard": True,
+            "detectedAiService": "none",
+            "detectedAiLabel": "보안 가드 (외부 전송 차단)",
+            "targetUrl": "",
+            "detectionSource": "PRIVACY_GUARD_BLOCK",
+            "defaultWhenNoHistory": "gemini (https://gemini.google.com/app)",
+            "promptStagedToInput": False,
+            "stagedPromptPreview": "",
+            "ttsVoice": "ko-KR-HyunsuNeural",
+            "ttsBriefingKo": blocked_msg,
+            "twoStepFingerGuide": [],
+            "floatingReturnPill": "⬅️ 귀신같이 안전 화면 유지",
+            "serverLlmTokenCostWon": 0,
+            "elapsedMs": round((time.perf_counter() - t0) * 1000, 2),
+        }
+
     detected_service = "gemini"
     detected_label = "제미나이 (Gemini)"
     detected_url = "https://gemini.google.com/app"
@@ -335,17 +369,59 @@ def detect_most_recent_ai_and_baton_touch(
                     except Exception:
                         pass
 
-    combined_prompt = (
-        f"[참조 문서: {doc_title or '선택된 문서'}]\n"
-        f"{doc_text[:6000]}\n\n"
-        f"[질문 요청]\n{user_question or '이 문서에서 나에게 불리한 조항이나 핵심 주의사항을 쉽게 설명해 줘.'}"
-    ).strip()
+    # [손보기] PC/폰 수리·스펙 상담 시 실측 하드웨어 스펙 자동 첨부
+    spec_block = (device_spec_summary or "").strip()
+    is_device_repair_or_spec = bool(
+        spec_block
+        or _re.search(r"(PC|사양|스펙|수리|진단|메인보드|전원|그래픽|메모리|부팅|질문 내용)", doc_title or "", _re.I)
+    )
+    if is_device_repair_or_spec and not spec_block:
+        try:
+            sp = safe.measure_pc_spec()
+            if isinstance(sp, dict):
+                spec_block = (
+                    f"CPU: {sp.get('cpuModel', '확인불가')} | "
+                    f"RAM: {sp.get('ramTotalGb', '?')}GB (사용률 {sp.get('ramUsedPercent', '?')}%) | "
+                    f"GPU: {sp.get('gpuModel', '확인불가')} | "
+                    f"여유공간: {sp.get('diskFreeGb', '?')}GB / {sp.get('diskTotalGb', '?')}GB | "
+                    f"OS: {sp.get('osVersion', 'Windows')}"
+                )
+        except Exception:
+            pass
+
+    if spec_block and (not doc_text or doc_text.strip() == user_question.strip()):
+        combined_prompt = (
+            f"[진단 기기 사양 및 상태: {doc_title or '내 PC/기기 실시간 진단 데이터'}]\n"
+            f"{spec_block}\n\n"
+            f"[고난도 수리·스펙 상담 요청]\n"
+            f"{user_question or doc_text or '현재 내 기기 사양과 증상을 바탕으로 원인과 해결 방법을 쉽게 설명해 줘.'}"
+        ).strip()
+    else:
+        extra_spec = f"\n\n[참고 기기 사양]\n{spec_block}" if spec_block else ""
+        combined_prompt = (
+            f"[참조 데이터: {doc_title or '선택된 문서'}]\n"
+            f"{doc_text[:6000]}{extra_spec}\n\n"
+            f"[질문 요청]\n{user_question or '이 내용에서 나에게 불리한 조항이나 핵심 주의사항을 쉽게 설명해 줘.'}"
+        ).strip()
 
     w32.set_clipboard_unicode(combined_prompt)
 
+    overlay_triggered = False
+    if show_overlay:
+        try:
+            overlay_text = (
+                f"👆 [{detected_label}] 입력창에 붙여넣기(Ctrl+V) 후 "
+                f"① [전송(↑)] 클릭 ➔ ② 바로 옆 [라이브 음성 🎧] 클릭!"
+            )
+            zos.spawn_overlay_detached(420, 150, overlay_text, 10)
+            overlay_triggered = True
+        except Exception:
+            overlay_triggered = False
+
+    context_noun = "기기 진단 스펙과 질문" if (spec_block and doc_title in ("질문 내용", "내 PC 실측 사양", "")) else "문서와 질문"
     hyunsu_briefing = (
-        f"깊은 분석이 필요한 질문이네요! 평소 쓰시는 {detected_label} 입력창에 이 문서와 질문을 바로 넣어 띄워드릴게요. "
-        f"[전송] 버튼을 누르신 뒤, 바로 옆 [라이브 음성] 버튼을 누르시면 말로 편하게 상담하실 수 있습니다!"
+        f"깊은 분석이 필요한 질문이네요! 평소 쓰시는 {detected_label} 입력창에 넣을 수 있도록 {context_noun}을 바로 준비해 띄워드릴게요. "
+        f"붙여넣기 후 [전송] 버튼을 누르신 뒤, 바로 옆 [라이브 음성] 버튼을 누르시면 말로 편하게 상담하실 수 있습니다!"
     )
 
     return {
@@ -356,12 +432,14 @@ def detect_most_recent_ai_and_baton_touch(
         "detectionSource": detection_source,
         "defaultWhenNoHistory": "gemini (https://gemini.google.com/app)",
         "promptStagedToInput": True,
+        "stagedPromptText": combined_prompt,
         "stagedPromptPreview": combined_prompt[:300],
+        "overlayTriggered": overlay_triggered,
         "ttsVoice": "ko-KR-HyunsuNeural",
         "ttsBriefingKo": hyunsu_briefing,
         "twoStepFingerGuide": [
-            {"step": 1, "label": "① [전송 (↑)] 버튼 클릭", "desc": "이미 채워진 문서+질문을 즉시 전송합니다."},
-            {"step": 2, "label": "② 바로 옆 [라이브 음성 🎧] 버튼 클릭", "desc": "운전·이동 중에도 말로 편하게 심층 상담을 이어갑니다."},
+            {"step": 1, "label": "① 입력창 붙여넣기(Ctrl+V) 및 [전송 (↑)] 클릭", "desc": "이미 복사된 본문+질문 데이터를 즉시 전송합니다."},
+            {"step": 2, "label": "② 바로 옆 [라이브 음성 🎧] 버튼 클릭", "desc": "운전·이동 중에도 말로 편하게 양방향 심층 상담을 이어갑니다."},
         ],
         "floatingReturnPill": "⬅️ 대화 종료 후 귀신같이 복귀",
         "serverLlmTokenCostWon": 0,
@@ -1214,6 +1292,8 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
             doc_title=str(data.get("docTitle") or ""),
             doc_text=str(data.get("docText") or ""),
             user_question=str(data.get("userQuestion") or data.get("query") or ""),
+            device_spec_summary=str(data.get("deviceSpecSummary") or ""),
+            show_overlay=bool(data.get("showOverlay", True)),
         )
 
     if act in ("create-desktop-shortcut", "create-shortcut"):
