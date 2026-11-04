@@ -1,15 +1,15 @@
 'use client';
-import { GUISHINFAM_CAPSULE_BASE64 } from '../assets/guishinfamCapsuleBase64';
+import { GUISHINFAM_CAPSULE_BASE64, GUISHINFAM_CIRCLE_BASE64 } from '../assets/guishinfamCapsuleBase64';
 import { GUISHINFAM_ICON_BASE64 } from '../assets/guishinfamIconBase64';
 
 /**
- * Version: v3.1.0 (Merlin Hub SDK v2.22.1)
- * Last Updated: 2026-11-03
+ * Version: v3.3.0 (Merlin Hub SDK v2.22.2)
+ * Last Updated: 2026-11-04
  * Merlin Hub SDK — Smart Roll-Screen '귀신팸' Family App Launcher (HubAppSwitcher)
- * - 상단 트리거: '귀신' 아이콘(ghostiLogo) + '귀신팸' 텍스트 + 개폐 화살표(▴/▾) 일체형 캡슐 (프로필 경계 우측 바깥 안착)
- * - 가로형 헤더 앱(variant='icon'): PC 우측 빈 날개 영역에서 스르륵 펼쳐지고 본문 사용 시 눈치껏 위로 감아 올라감
- * - 세로형 사이드바 앱(variant='sidebar', placement='bottom-up'): 좌하단에서 위쪽으로 스르륵 뻗어 올라옴
- * - 초슬림 레이아웃(로고 + 앱 이름만 노출) + 마우스 오버(Hover) 시 앱 이름 우측(left-full)에 설명글 플로팅 말풍선 표시
+ * - 상단 트리거(variant='icon'): '귀신' 아이콘 + '귀신팸' 텍스트 + 개폐 화살표(▴/▾) 일체형 캡슐 (프로필 경계 우측 바깥 안착)
+ * - 원형 미니 트리거(variant='circle'): 좁은 헤더(센스톡 등) 전용 30px 갓 쓴 아기귀신 골드 원형 뱃지
+ * - 세로형 사이드바 트리거(variant='sidebar', placement='bottom-up'): 24px 슬림 캡슐 + 좌하단에서 위쪽으로 스르륵 뻗어 올라오는 148px 컴팩트 롤스크린
+ * - 초슬림 레이아웃(18px 로고 + 11.5px 앱 이름만 노출) + 마우스 오버(Hover) 시 앱 이름 우측(left-full)에 설명글 플로팅 말풍선 표시
  * - 최근 본(방문한) 패밀리 앱이 위에서 아래로 최우선 배치되는 단일 수직 리스트 구조
  */
 
@@ -56,7 +56,7 @@ export interface FamilyConfig {
 export interface HubAppSwitcherProps {
   currentAppId?: string; // 현재 실행중인 앱의 ID (예: 'aggrofilter', 'ghosti', 'sundreamer')
   joinedAppIds?: string[]; // 유저가 가입한 패밀리 앱 ID 목록 (명시적 전달용)
-  variant?: 'icon' | 'sidebar'; // 'icon'(헤더 우측 귀신팸 캡슐, 기본값) | 'sidebar'(좌측 사이드바 하단 버튼)
+  variant?: 'icon' | 'sidebar' | 'circle'; // 'icon'(헤더 우측 귀신팸 캡슐, 기본값) | 'sidebar'(좌측 사이드바 하단 슬림 캡슐) | 'circle'(좁은 헤더용 30px 원형 아기귀신 아이콘)
   placement?: 'top-down' | 'bottom-up'; // 'top-down'(아래로 펼침, 기본값) | 'bottom-up'(사이드바 하단에서 위로 펼침)
   autoRollOnDesktop?: boolean; // 데스크톱 유휴/활성 상태에 따른 자동 스르륵 펼침·감기 활성화 여부 (기본값: true)
 }
@@ -466,15 +466,15 @@ export function HubAppSwitcher({
       }}
       className={`relative text-left shrink-0 select-none ${variant === 'sidebar' ? 'w-full block' : 'inline-flex flex-col items-start'}`}
     >
-      {/* 트리거 버튼: '귀신' 아이콘 + '귀신팸' 텍스트 + 개폐 화살표 (상단 헤더 & 좌하단 사이드바 동일 캡슐 규격) */}
+      {/* 트리거 버튼: sidebar(슬림 캡슐) | circle(30px 원형 뱃지) | icon(상단 헤더 캡슐) */}
       {variant === 'sidebar' ? (
         <button
           type="button"
           onClick={handleToggleManual}
           title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-2xl border transition-all cursor-pointer select-none focus:outline-none active:scale-95 shadow-sm ${
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-xl border transition-all cursor-pointer select-none focus:outline-none active:scale-95 shadow-2xs ${
             isOpen
-              ? 'bg-white border-amber-400 ring-2 ring-amber-400/30'
+              ? 'bg-white border-amber-400 ring-1 ring-amber-400/30'
               : 'bg-white hover:bg-slate-50/90 border-amber-300/90 hover:border-amber-400'
           }`}
           aria-label="귀신팸 펼치기/접기"
@@ -482,15 +482,33 @@ export function HubAppSwitcher({
           <img
             src={GUISHINFAM_CAPSULE_BASE64}
             alt="귀신팸"
-            className="h-9 sm:h-11 w-auto min-w-[100px] sm:min-w-[122px] object-contain pointer-events-none"
+            className="h-6 sm:h-6.5 w-auto object-contain pointer-events-none"
           />
           <span
-            className={`text-xs leading-none font-black ml-0.5 transition-colors ${
+            className={`text-[10px] leading-none font-black ml-0.5 transition-colors ${
               isOpen ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
             {isOpen ? '▾' : '▴'}
           </span>
+        </button>
+      ) : variant === 'circle' ? (
+        <button
+          type="button"
+          onClick={handleToggleManual}
+          title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
+          className={`relative flex items-center justify-center w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-full transition-all cursor-pointer shrink-0 focus:outline-none active:scale-95 shadow-2xs ${
+            isOpen
+              ? 'ring-2 ring-amber-400/60 scale-105'
+              : 'hover:scale-105'
+          }`}
+          aria-label="귀신팸 펼치기/접기"
+        >
+          <img
+            src={GUISHINFAM_CIRCLE_BASE64}
+            alt="귀신팸"
+            className="w-full h-full object-contain rounded-full pointer-events-none"
+          />
         </button>
       ) : (
         <button
@@ -520,15 +538,15 @@ export function HubAppSwitcher({
         </button>
       )}
 
-      {/* 스르륵 롤스크린 컨테이너: 프로필 경계 우측 바깥 날개 영역(left-0)에 수직 정렬 */}
+      {/* 스르륵 롤스크린 컨테이너: 슬림 다이어트(148px) */}
       <div
         onClick={(e) => e.stopPropagation()}
         className={`absolute z-[99999] transition-all duration-300 ease-out ${
           isBottomUp
-            ? 'left-0 bottom-full mb-1.5 w-[200px] origin-bottom-left'
-            : isDesktopWingAvailable
-              ? 'left-0 top-full mt-1.5 w-[150px] origin-top-left'
-              : 'right-0 top-full mt-1.5 w-[156px] origin-top-right'
+            ? 'left-0 bottom-full mb-1.5 w-[148px] origin-bottom-left'
+            : isDesktopWingAvailable && variant !== 'circle'
+              ? 'left-0 top-full mt-1.5 w-[148px] origin-top-left'
+              : 'right-0 top-full mt-1.5 w-[148px] origin-top-right'
         } ${
           isOpen
             ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
@@ -538,15 +556,15 @@ export function HubAppSwitcher({
         }`}
       >
         {/* 버튼과 롤스크린 사이 마우스 이동 브릿지 */}
-        {!isBottomUp && <div className="absolute -top-2.5 left-0 right-0 h-2.5 bg-transparent" />}
+        {!isBottomUp && <div className="absolute -top-2 left-0 right-0 h-2 bg-transparent" />}
 
-        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-slate-200/90 dark:border-zinc-700/80 rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.12)] p-1.5 text-slate-800 dark:text-zinc-100">
+        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-slate-200/90 dark:border-zinc-700/80 rounded-xl shadow-[0_10px_25px_rgba(15,23,42,0.12)] p-1 text-slate-800 dark:text-zinc-100">
           {/* 세로형(bottom-up)일 때는 상단 끝단에 접기 손잡이 바 배치 */}
           {isBottomUp && (
             <button
               type="button"
               onClick={handleToggleManual}
-              className="w-full flex items-center justify-center gap-1 py-1 mb-1 rounded-lg bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[10px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-1 py-0.5 mb-0.5 rounded-md bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[9.5px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               title="귀신팸 접기"
             >
               <span>▾ 접기</span>
@@ -577,17 +595,17 @@ export function HubAppSwitcher({
                       target={app.isLinkActive !== false ? '_blank' : undefined}
                       rel={app.isLinkActive !== false ? 'noopener noreferrer' : undefined}
                       onClick={() => handleAppClick(app.id)}
-                      className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-xl transition-all duration-150 group/item ${
+                      className={`flex items-center justify-between gap-1.5 px-1.5 py-1 rounded-lg transition-all duration-150 group/item ${
                         app.isLinkActive !== false
                           ? 'hover:bg-indigo-50/80 dark:hover:bg-indigo-950/40 cursor-pointer active:scale-[0.98]'
                           : 'opacity-75 cursor-default'
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-5.5 h-5.5 rounded-md bg-white shadow-2xs border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:scale-105 transition-transform">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="w-4.5 h-4.5 rounded-md bg-white shadow-2xs border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:scale-105 transition-transform">
                           {renderAppLogo(app)}
                         </div>
-                        <span className="text-[12px] font-extrabold text-slate-800 dark:text-zinc-100 group-hover/item:text-indigo-600 dark:group-hover/item:text-indigo-400 whitespace-nowrap">
+                        <span className="text-[11.5px] font-bold tracking-tight text-slate-800 dark:text-zinc-100 group-hover/item:text-indigo-600 dark:group-hover/item:text-indigo-400 whitespace-nowrap">
                           {app.name}
                         </span>
                       </div>
@@ -599,7 +617,7 @@ export function HubAppSwitcher({
                           title="최근 본 앱"
                         />
                       ) : (
-                        <span className="text-[8.5px] font-black text-rose-500 bg-rose-50 border border-rose-200/80 px-1 py-0.2 rounded-full shrink-0">
+                        <span className="text-[8px] font-black text-rose-500 bg-rose-50 border border-rose-200/80 px-1 py-0.2 rounded-full shrink-0">
                           N
                         </span>
                       )}
@@ -611,7 +629,7 @@ export function HubAppSwitcher({
                         className={`hidden sm:block absolute z-[100000] w-52 p-2.5 rounded-2xl bg-slate-900/95 text-white shadow-xl border border-slate-700/80 pointer-events-none animate-in fade-in duration-150 ${
                           isBottomUp
                             ? 'left-full ml-2 bottom-0'
-                            : isDesktopWingAvailable
+                            : isDesktopWingAvailable && variant !== 'circle'
                               ? 'left-full ml-2 top-0'
                               : 'right-full mr-2 top-0'
                         }`}
@@ -642,7 +660,7 @@ export function HubAppSwitcher({
             <button
               type="button"
               onClick={handleToggleManual}
-              className="w-full flex items-center justify-center gap-1 py-1 mt-1 rounded-lg bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[10px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-1 py-0.5 mt-0.5 rounded-md bg-slate-50/80 dark:bg-zinc-800/60 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[9.5px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               title="귀신팸 접기"
             >
               <span>▴ 접기</span>
