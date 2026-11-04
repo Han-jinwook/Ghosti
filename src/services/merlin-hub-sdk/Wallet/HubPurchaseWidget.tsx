@@ -350,39 +350,100 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           font-style: normal;
           font-display: swap;
         }
-        /* 어그로필터 디자인 100% 보존: 타 앱 전역 CSS가 HubPurchaseWidget 내부 다크 요소를 밝게 덮어쓰지 못하도록 완벽 방어 */
-        .hub-purchase-widget [class*="from-[#0d1230]"],
-        .hub-purchase-widget [class*="from-[#1b2554]"],
-        .hub-purchase-widget [class*="from-[#161f42]"],
-        .hub-purchase-widget [class*="from-[#182246]"],
-        .hub-purchase-widget [class*="from-[#1d2754]"] {
-          background-image: linear-gradient(to bottom, #0d1230, #0a0e27) !important;
+        /* 어그로필터 디자인 100% 보존: 타 앱(Ghosti 등) 전역 라이트모드 CSS가 다크 네이비 요소를 탈색시키지 못하도록 최고 우선순위(0,4,2 !important)로 완전 고정 */
+        html body .hub-purchase-widget .gh-dark-banner,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-banner {
+          background-image: linear-gradient(90deg, #0d1230 0%, #131c47 50%, #0a0f29 100%) !important;
           background-color: #0d1230 !important;
-          border-color: rgba(252, 211, 77, 0.85) !important;
-          box-shadow: 0 10px 28px rgba(13,18,48,0.45) !important;
-        }
-        .hub-purchase-widget .text-white {
+          border-color: rgba(252, 211, 77, 0.8) !important;
+          box-shadow: 0 12px 28px rgba(13, 18, 48, 0.35) !important;
           color: #ffffff !important;
         }
-        .hub-purchase-widget .text-amber-300 {
+        html body .hub-purchase-widget .gh-dark-tab,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-tab {
+          background-image: linear-gradient(180deg, #161f42 0%, #0d1230 100%) !important;
+          background-color: #0d1230 !important;
+          border-color: rgba(252, 211, 77, 0.6) !important;
+          color: #ffffff !important;
+        }
+        html body .hub-purchase-widget .gh-dark-card,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-card {
+          background-image: linear-gradient(180deg, #0d1230 0%, #0f173a 50%, #0a0e27 100%) !important;
+          background-color: #0d1230 !important;
+          border-color: rgba(252, 211, 77, 0.85) !important;
+          box-shadow: 0 10px 28px rgba(13, 18, 48, 0.45), 0 0 12px rgba(251, 191, 36, 0.18) !important;
+          color: #ffffff !important;
+        }
+        html body .hub-purchase-widget .gh-dark-badge-0,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-badge-0 {
+          background-color: rgba(255, 255, 255, 0.12) !important;
+          color: #cffafe !important;
+          border-color: rgba(103, 232, 249, 0.3) !important;
+        }
+        html body .hub-purchase-widget .gh-dark-btn-1,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-btn-1 {
+          background-image: linear-gradient(180deg, #182246 0%, #111836 50%, #0b1026 100%) !important;
+          background-color: #111836 !important;
+          border-color: rgba(252, 211, 77, 0.65) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 5px 12px rgba(13, 18, 48, 0.22) !important;
+          color: #ffffff !important;
+        }
+        html body .hub-purchase-widget .gh-dark-btn-2,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-btn-2 {
+          background-image: linear-gradient(180deg, #1d2754 0%, #141c3f 50%, #0c112b 100%) !important;
+          background-color: #141c3f !important;
+          border-color: rgba(252, 211, 77, 0.8) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 5px 12px rgba(13, 18, 48, 0.26) !important;
           color: #fcd34d !important;
         }
-        .hub-purchase-widget .text-cyan-200 {
+        html body .hub-purchase-widget .gh-dark-btn-3,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-btn-3 {
+          background-image: linear-gradient(180deg, #251f52 0%, #181740 50%, #0d102b 100%) !important;
+          background-color: #181740 !important;
+          border-color: rgba(252, 211, 77, 0.95) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 14px rgba(13, 18, 48, 0.3) !important;
+          color: #fcd34d !important;
+        }
+        html body .hub-purchase-widget .gh-dark-cta,
+        html.theme-warm-light body .hub-purchase-widget .gh-dark-cta {
+          background-image: linear-gradient(180deg, #1b2554 0%, #131b40 50%, #0b1029 100%) !important;
+          background-color: #131b40 !important;
+          border-color: rgba(252, 211, 77, 0.85) !important;
+          box-shadow: 0 10px 24px rgba(13, 18, 48, 0.35) !important;
+          color: #ffffff !important;
+        }
+        html body .hub-purchase-widget .text-white,
+        html.theme-warm-light body .hub-purchase-widget .text-white {
+          color: #ffffff !important;
+        }
+        html body .hub-purchase-widget .text-amber-300,
+        html.theme-warm-light body .hub-purchase-widget .text-amber-300 {
+          color: #fcd34d !important;
+        }
+        html body .hub-purchase-widget .text-cyan-200,
+        html.theme-warm-light body .hub-purchase-widget .text-cyan-200 {
           color: #a5f3fc !important;
         }
-        .hub-purchase-widget .text-slate-900 {
+        html body .hub-purchase-widget .text-cyan-100\/90,
+        html.theme-warm-light body .hub-purchase-widget .text-cyan-100\/90 {
+          color: rgba(207, 250, 254, 0.92) !important;
+        }
+        html body .hub-purchase-widget .text-slate-900,
+        html.theme-warm-light body .hub-purchase-widget .text-slate-900 {
           color: #0f172a !important;
         }
-        .hub-purchase-widget .text-slate-800 {
+        html body .hub-purchase-widget .text-slate-800,
+        html.theme-warm-light body .hub-purchase-widget .text-slate-800 {
           color: #1e293b !important;
         }
-        .hub-purchase-widget .text-slate-700 {
+        html body .hub-purchase-widget .text-slate-700,
+        html.theme-warm-light body .hub-purchase-widget .text-slate-700 {
           color: #334155 !important;
         }
       `}</style>
       <main className="mx-auto max-w-[var(--app-max-width,720px)] px-4 py-4 space-y-3.5">
         {/* 상단 귀신코인 공식 브랜드 헤더 배너 (아기귀신 3D 로고 + 도자기체 통일 + 골드 테두리) */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#0d1230] via-[#131c47] to-[#0a0f29] p-4 sm:p-5 text-white shadow-xl border border-amber-300/80 ring-1 ring-amber-400/20 flex items-center justify-between relative">
+        <div data-keep-dark="true" className="gh-dark-banner rounded-2xl bg-gradient-to-r from-[#0d1230] via-[#131c47] to-[#0a0f29] p-4 sm:p-5 text-white shadow-xl border border-amber-300/80 ring-1 ring-amber-400/20 flex items-center justify-between relative">
           {isModal && onClose && (
             <button
               type="button"
@@ -457,7 +518,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           <button
             onClick={() => setTab('charge')}
             className={tab === 'charge'
-              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
+              ? "gh-dark-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
               : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
@@ -478,7 +539,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           <button
             onClick={() => setTab('history')}
             className={tab === 'history'
-              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
+              ? "gh-dark-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
               : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
@@ -517,7 +578,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               {/* 🏆 컴팩트 단일 스마트 카드 (아기귀신 2배 확대 + 3D 도자기체 귀신코인 & 품위있는 라운드 도자기 서체 + 카드 밖 우측 초기화) */}
               <div className="mx-auto max-w-md">
                 <div
-                  className="relative rounded-2xl overflow-hidden shadow-xl border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_10px_28px_rgba(13,18,48,0.45),0_0_12px_rgba(251,191,36,0.18)] bg-gradient-to-b from-[#0d1230] via-[#0f173a] to-[#0a0e27] p-5 sm:p-6 text-white transition-all"
+                  data-keep-dark="true" className="gh-dark-card relative rounded-2xl overflow-hidden shadow-xl border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_10px_28px_rgba(13,18,48,0.45),0_0_12px_rgba(251,191,36,0.18)] bg-gradient-to-b from-[#0d1230] via-[#0f173a] to-[#0a0e27] p-5 sm:p-6 text-white transition-all"
                   style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   <div className="absolute top-0 right-1/4 w-48 h-48 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -561,7 +622,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                           className={`text-[11px] px-3 py-0.5 rounded-full shadow-xs transition-all tracking-wide ${
                             discountPercent > 0
                               ? 'bg-gradient-to-b from-rose-400 via-rose-500 to-pink-600 text-white border border-rose-300/50 shadow-[0_2px_8px_rgba(244,63,94,0.4)]'
-                              : 'bg-white/10 text-cyan-100/90 border border-cyan-300/25'
+                              : 'gh-dark-badge-0 bg-white/10 text-cyan-100/90 border border-cyan-300/25'
                           }`}
                           style={{
                             fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
@@ -641,7 +702,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 1000, 1000000))}
-                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
+                    data-keep-dark="true" className="gh-dark-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
                   >
                     <span
                       className="text-white drop-shadow-sm"
@@ -653,7 +714,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 5000, 1000000))}
-                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
+                    data-keep-dark="true" className="gh-dark-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#182246] via-[#111836] to-[#0b1026] hover:from-[#1e2a56] hover:to-[#0f1632] border border-amber-300/60 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_5px_12px_rgba(13,18,48,0.22)]"
                   >
                     <span
                       className="text-white drop-shadow-sm"
@@ -665,7 +726,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 10000, 1000000))}
-                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#1d2754] via-[#141c3f] to-[#0c112b] hover:from-[#233066] hover:to-[#101738] border border-amber-300/75 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_5px_12px_rgba(13,18,48,0.26)]"
+                    data-keep-dark="true" className="gh-dark-btn-2 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#1d2754] via-[#141c3f] to-[#0c112b] hover:from-[#233066] hover:to-[#101738] border border-amber-300/75 hover:border-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_5px_12px_rgba(13,18,48,0.26)]"
                   >
                     <span
                       className="text-amber-300 drop-shadow-sm"
@@ -677,7 +738,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 50000, 1000000))}
-                    className="py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#251f52] via-[#181740] to-[#0d102b] hover:from-[#2d2663] hover:to-[#121638] border border-amber-300/95 ring-1 ring-amber-400/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_6px_14px_rgba(13,18,48,0.3)]"
+                    data-keep-dark="true" className="gh-dark-btn-3 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-[#251f52] via-[#181740] to-[#0d102b] hover:from-[#2d2663] hover:to-[#121638] border border-amber-300/95 ring-1 ring-amber-400/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_6px_14px_rgba(13,18,48,0.3)]"
                   >
                     <span
                       className="text-amber-300 drop-shadow-md"
@@ -795,7 +856,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               returnUrl={`${origin}/api/payment/callback?redirectUrl=${encodeURIComponent(targetRedirectUrl)}`}
               onSuccess={onSuccess}
               onError={onError}
-              className="w-full rounded-2xl bg-gradient-to-b from-[#1b2554] via-[#131b40] to-[#0b1029] hover:from-[#222f68] hover:to-[#101738] py-5 text-lg text-white border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_10px_24px_rgba(13,18,48,0.35)] hover:shadow-xl active:scale-[0.98] transition-all tracking-wide"
+              className="gh-dark-cta w-full rounded-2xl bg-gradient-to-b from-[#1b2554] via-[#131b40] to-[#0b1029] hover:from-[#222f68] hover:to-[#101738] py-5 text-lg text-white border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_10px_24px_rgba(13,18,48,0.35)] hover:shadow-xl active:scale-[0.98] transition-all tracking-wide"
             >
               <span style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}>
                 👻 {selectedOption.toLocaleString()} 귀신코인 결제하기 ({selectedMethodObj.label.split(' ')[0]})
