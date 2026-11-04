@@ -3219,6 +3219,40 @@ function ghostiLocalBridge(): Plugin {
         res.end(JSON.stringify(out));
       });
 
+      server.middlewares.use('/api/edge-tts', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const t0 = performance.now();
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const rawText = String(body?.text || '').trim().replace(/\s+/g, ' ').slice(0, 600);
+        if (!rawText) {
+          res.end(JSON.stringify({ ok: false, error: 'EMPTY_TEXT' }));
+          return;
+        }
+        const reqVoice = String(body?.voice || '').toLowerCase();
+        const isFemale = reqVoice.includes('sunhi') || reqVoice.includes('female') || reqVoice.includes('yujin');
+        const voice = isFemale ? 'ko-KR-SunHiNeural' : 'ko-KR-HyunsuNeural';
+        const rate = String(body?.rate || '+15%');
+        try {
+          const mod = await import('./netlify/functions/edge-tts.mjs');
+          const mp3Buf = await mod.synthesizeEdgeNeuralMp3({ text: rawText, voice, rate });
+          const elapsedMs = Math.round((performance.now() - t0) * 100) / 100;
+          res.end(
+            JSON.stringify({
+              ok: true,
+              voice,
+              voiceActor: isFemale
+                ? '선희 (ko-KR-SunHiNeural · 여성 성우)'
+                : '현수 (ko-KR-HyunsuNeural · 남성 성우)',
+              audioDataUrl: `data:audio/mpeg;base64,${mp3Buf.toString('base64')}`,
+              byteLength: mp3Buf.length,
+              elapsedMs,
+            })
+          );
+        } catch (err: any) {
+          res.end(JSON.stringify({ ok: false, error: String(err?.message || err) }));
+        }
+      });
+
       // ─────────────── [🧩 단일 표준 포트 5199 내장 소프트웨어 플러그인 브릿지: 센스톡(/api/senstalk/*) & 어그로필터(/api/aggrofilter/*)] ───────────────
       const zcoreDaemonScriptPath = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_z_core_daemon.py');
 

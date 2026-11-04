@@ -5,8 +5,10 @@ import {
   getPreferredVoiceEnabled,
   setPreferredVoiceEnabled,
   getIsTtsSpeaking,
+  getLastSpokenTtsText,
   stopSetupMonsterTts,
   replayLastSetupMonsterTts,
+  speakSetupMonsterTts,
   subscribeGhostiVoicePrefs,
   type GhostiVoiceGender,
 } from '../services/setupMonsterTts';
@@ -74,7 +76,6 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
 
   const handleGenderSelect = async (nextGender: GhostiVoiceGender, e: React.MouseEvent) => {
     e.stopPropagation();
-    const wasSpeaking = getIsTtsSpeaking();
     setPreferredVoiceGender(nextGender);
     if (!getPreferredVoiceEnabled()) {
       setPreferredVoiceEnabled(true);
@@ -84,9 +85,16 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
       lastQuarantineToast: `🎙️ 음성 목소리가 [${label}]로 변경되었습니다!`,
     });
 
-    // 만약 음성이 재생 중이었거나 문서 모달/검색 직후라면 바뀐 목소리로 즉시 다시 들려주기
-    if (wasSpeaking || fallbackReplayText) {
-      await replayLastSetupMonsterTts(fallbackReplayText);
+    // 남/여 클릭 즉시 선택된 성우 목소리를 바로 체감할 수 있도록 직전 문장(없으면 성우 인사말) 즉시 재생
+    const existingText = fallbackReplayText || getLastSpokenTtsText();
+    if (existingText) {
+      await replayLastSetupMonsterTts(existingText);
+    } else {
+      const previewPhrase =
+        nextGender === 'female'
+          ? '안녕하세요, 여성 성우 선희 목소리로 안내해 드립니다.'
+          : '안녕하세요, 남성 성우 현수 목소리로 안내해 드립니다.';
+      await speakSetupMonsterTts(previewPhrase);
     }
   };
 

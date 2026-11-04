@@ -201,10 +201,11 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     const nonRoboticVoices = voices.filter((v) => !/heami/i.test(v.name));
 
     const isFemalePref = getPreferredVoiceGender() === 'female';
+    const nativeGenderVoice = nonRoboticVoices.find((v) =>
+      isFemalePref ? /SunHi|Female|여성/i.test(v.name) : /InJoon|Hyunsu|Male|남성/i.test(v.name)
+    );
     const preferredVoice =
-      nonRoboticVoices.find((v) =>
-        isFemalePref ? /SunHi/i.test(v.name) : /InJoon|Hyunsu/i.test(v.name)
-      ) ||
+      nativeGenderVoice ||
       nonRoboticVoices.find((v) =>
         /Microsoft\s+(InJoon|Hyunsu|SunHi)\s+Online\s*\(Natural\)/i.test(v.name)
       ) ||
@@ -220,8 +221,16 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     const utter = new SpeechSynthesisUtterance(text);
     utter.voice = preferredVoice;
     utter.lang = 'ko-KR';
-    utter.rate = 1.15;
-    utter.volume = 0.4;
+    // 크롬 등 기본 단일 성우(Google 한국의 등) 환경에서도 남(중저음 바리톤 0.65) vs 여(밝은 톤 1.15) 확실히 구분
+    if (isFemalePref) {
+      utter.pitch = nativeGenderVoice ? 1.05 : 1.18;
+      utter.rate = 1.15;
+    } else {
+      const isAlreadyMaleVoice = /InJoon|Hyunsu|Male|남성/i.test(preferredVoice.name);
+      utter.pitch = isAlreadyMaleVoice ? 0.95 : 0.62;
+      utter.rate = isAlreadyMaleVoice ? 1.15 : 1.05;
+    }
+    utter.volume = 0.45;
     utter.onend = () => {
       isCurrentlySpeaking = false;
       notifyVoicePrefListeners();
@@ -369,6 +378,60 @@ export async function speakSetupMonsterTts(
     }
   } catch {
     /* network offline -> fallback below */
+  }
+
+  // 2.5단계: 웹/Netlify 배포 환경 클라우드 MS 신경망 성우 서버리스 브릿지 (/api/edge-tts)
+  try {
+    const cloudRes = await fetch('/api/edge-tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: cleanText, voice, rate }),
+    });
+    if (cloudRes.ok) {
+      const cloudData = await cloudRes.json();
+      if (cloudData?.ok && cloudData.audioDataUrl && typeof Audio !== 'undefined') {
+        const playableUrl = String(cloudData.audioDataUrl);
+        memoryAudioUrlCache.set(cacheKey, playableUrl);
+        const audio = new Audio(playableUrl);
+        audio.volume = 0.45;
+        audio.onended = () => {
+          if (activeAudioElement === audio) {
+            activeAudioElement = null;
+            isCurrentlySpeaking = false;
+            notifyVoicePrefListeners();
+          }
+        };
+        audio.onerror = () => {
+          if (activeAudioElement === audio) {
+            activeAudioElement = null;
+            isCurrentlySpeaking = false;
+            notifyVoicePrefListeners();
+          }
+        };
+        activeAudioElement = audio;
+        isCurrentlySpeaking = true;
+        notifyVoicePrefListeners();
+        await audio.play().catch(() => {
+          isCurrentlySpeaking = false;
+          notifyVoicePrefListeners();
+        });
+        return {
+          ok: true,
+          cacheStatus: 'MISS',
+          voice: cloudData.voice || voice,
+          voiceActor:
+            cloudData.voiceActor ||
+            (voice.includes('SunHi') ? '선희 (MS Neural 여성 성우)' : '현수 (MS Neural 남성 성우)'),
+          audioUrl: playableUrl,
+          elapsedMs:
+            typeof cloudData.elapsedMs === 'number'
+              ? cloudData.elapsedMs
+              : Math.round((performance.now() - t0) * 100) / 100,
+        };
+      }
+    }
+  } catch {
+    /* cloud endpoint unreachable -> fallback below */
   }
 
   // 3단계: 오프라인 비상 폴백 (Heami 기계음 원천 차단)
