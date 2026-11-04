@@ -331,7 +331,8 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
 
   const innerContent = (
     <div
-      className={`${isModal ? '' : 'min-h-screen'} bg-slate-50 text-slate-800 rounded-2xl`}
+      data-keep-dark="true"
+      className={`${isModal ? '' : 'min-h-screen'} bg-[#0b0f24] text-slate-100 rounded-2xl border border-amber-300/30 shadow-2xl`}
       style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
     >
       <style>{`
@@ -421,14 +422,14 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
 
         {/* 탭 전환 영역 (도자기 라운드 서체 통일) */}
         <div
-          className="bg-slate-200/75 p-1.5 border border-slate-300/80 rounded-2xl flex gap-1.5 shadow-inner"
+          className="bg-[#070a18] p-1.5 border border-amber-300/30 rounded-2xl flex gap-1.5 shadow-inner"
           style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
         >
           <button
             onClick={() => setTab('charge')}
             className={tab === 'charge'
               ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-300 hover:text-white hover:bg-white/10 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
             👻 충전하기
@@ -449,7 +450,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
             onClick={() => setTab('history')}
             className={tab === 'history'
               ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-gradient-to-b from-[#161f42] to-[#0d1230] text-white border border-amber-300/60 shadow-sm transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-700 hover:text-slate-950 hover:bg-slate-300/50 transition-all active:scale-[0.98] cursor-pointer"
+              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-300 hover:text-white hover:bg-white/10 transition-all active:scale-[0.98] cursor-pointer"
             }
           >
             이용 내역
@@ -460,12 +461,12 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         {tab === 'charge' && (
           <div className="space-y-4">
             {/* 1. 귀신코인 스마트 충전 카드 (군더더기 제로 & 네이버페이식 누적 충전) */}
-            <div className="rounded-3xl border-2 border-slate-200/90 bg-white p-5 sm:p-7 shadow-lg">
+            <div className="rounded-3xl border border-amber-300/40 bg-[#0e1433] p-5 sm:p-7 shadow-xl">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="flex items-center gap-2.5">
                   <span className="w-2.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-indigo-800 block shadow-2xs"></span>
                   <h2
-                    className="text-lg sm:text-xl text-slate-900 tracking-wide"
+                    className="text-lg sm:text-xl text-white tracking-wide"
                     style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                   >
                     귀신코인 충전
@@ -664,25 +665,25 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   <span>
-                    1만원 이상 <strong className="text-rose-600 font-normal">5% 할인</strong>
+                    1만원 이상 <strong className="text-amber-300 font-bold">5% 할인</strong>
                   </span>
                   <span className="text-slate-300">·</span>
                   <span>
-                    3만원 이상 <strong className="text-rose-600 font-normal">10% 할인</strong>
+                    3만원 이상 <strong className="text-amber-300 font-bold">10% 할인</strong>
                   </span>
                   <span className="text-slate-300">·</span>
                   <span>
-                    5만원 이상 <strong className="text-rose-600 font-normal">10% 할인</strong>
+                    5만원 이상 <strong className="text-amber-300 font-bold">10% 할인</strong>
                   </span>
                 </div>
               </div>
             </div>
 
             {/* 결제 수단 (간편결제 5종 다이렉트 호출 + 신용/체크카드) */}
-            <div className="rounded-2xl border-2 border-slate-200 bg-white p-5 sm:p-6 shadow-md">
+            <div className="rounded-2xl border border-amber-300/40 bg-[#0e1433] p-5 sm:p-6 shadow-xl">
               <div className="flex items-center justify-between mb-3.5 flex-wrap gap-1">
                 <h2
-                  className="text-base sm:text-lg text-slate-900 tracking-wide"
+                  className="text-base sm:text-lg text-white tracking-wide"
                   style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   결제 수단
@@ -705,7 +706,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                       className={`flex items-center justify-between px-3.5 py-3 rounded-xl border-2 cursor-pointer transition-all ${
                         isActive
                           ? `${item.activeBorder} ${item.activeBg} shadow-sm`
-                          : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'
+                          : 'border-slate-700/80 bg-[#0a0f28] hover:bg-[#121a42] hover:border-amber-300/50 text-slate-200'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -719,7 +720,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                         <div className="flex flex-col text-left min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className="text-sm text-slate-900 truncate tracking-wide"
+                              className="text-sm text-white truncate tracking-wide"
                               style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                             >
                               {item.label}
@@ -734,7 +735,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                             )}
                           </div>
                           <span
-                            className="text-[11px] text-slate-500 truncate mt-0.5"
+                            className="text-[11px] text-slate-400 truncate mt-0.5"
                             style={{ fontFamily: "'TmoneyRoundWindExtraBold', sans-serif" }}
                           >
                             {item.subLabel}
@@ -747,11 +748,11 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               </div>
 
               <div
-                className="mt-3.5 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between flex-wrap gap-2 text-xs text-slate-600"
+                className="mt-3.5 p-3 bg-[#0a0f28] border border-amber-300/30 rounded-xl flex items-center justify-between flex-wrap gap-2 text-xs text-slate-300"
                 style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
               >
-                <span className="text-slate-700">선택된 결제방식:</span>
-                <span className="text-indigo-700">
+                <span className="text-slate-300">선택된 결제방식:</span>
+                <span className="text-amber-300 font-bold">
                   {selectedMethodObj.label} · {selectedPkg.price.toLocaleString()}원 ({selectedPkg.credits.toLocaleString()} 귀신코인 즉시 충전)
                 </span>
               </div>
@@ -783,7 +784,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         {tab === 'history' && (
           <div className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-md">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="text-base text-slate-900 font-extrabold">귀신코인 이용 내역</h2>
+              <h2 className="text-base text-white font-extrabold">귀신코인 이용 내역</h2>
               <select 
                 value={filterPeriod} 
                 onChange={(e) => setFilterPeriod(e.target.value as any)}
@@ -937,9 +938,9 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               결제 완료 시 계정으로 즉시 지급되는 무형의 디지털 재화이므로 실물 배송은 없습니다. 결제 후 7일 이내,
               충전된 귀신코인을 단 1회도 사용하지 않은 경우에 한하여 전액 환불 가능합니다. (일부 사용 시 잔여분 환불 불가)
             </p>
-            <div className="bg-white p-3 rounded-lg border border-slate-200 text-slate-600 font-medium">
-              <p className="font-bold text-slate-800">※ 간편결제 및 카드결제 환불 안내</p>
-              <p className="mt-1 text-[11px] text-slate-500">
+            <div className="bg-[#0e1433] p-3 rounded-lg border border-slate-700 text-slate-300 font-medium">
+              <p className="font-bold text-white">※ 간편결제 및 카드결제 환불 안내</p>
+              <p className="mt-1 text-[11px] text-slate-400">
                 카카오페이, 네이버페이, 토스페이, 삼성월렛, 애플페이 등 제휴 간편결제 및 신용카드 취소는 PG사(NHN KCP) 및 카드사 정책에 따라 즉시 승인 취소 또는 영업일 기준 3~5일 이내 한도 복원 및 환불 처리됩니다.
               </p>
             </div>
@@ -956,7 +957,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         onClick={onClose}
       >
         <div
-          className="w-full max-w-[740px] max-h-[92vh] overflow-y-auto rounded-3xl shadow-2xl bg-slate-50"
+          className="w-full max-w-[740px] max-h-[92vh] overflow-y-auto rounded-3xl shadow-2xl bg-[#0b0f24] border border-amber-300/40"
           onClick={(e) => e.stopPropagation()}
         >
           {innerContent}
