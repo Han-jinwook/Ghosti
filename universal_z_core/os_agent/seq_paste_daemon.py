@@ -2074,26 +2074,57 @@ _UNDO_SNAPSHOT: dict = {
     "edit_child": 0,
     "raw_text": "",
     "morphed_text": "",
+    "full_doc_before": "",
+    "full_doc_after": "",
     "mode": "",  # "edit_replace", "clip_replace", "pre_iron", "snippet"
     "typed_count_after": 0,
 }
 
 
-def arm_undo_snapshot(hwnd: int, edit_child: int, raw_text: str, morphed_text: str, mode: str = "edit_replace") -> None:
+def arm_undo_snapshot(
+    hwnd: int,
+    edit_child: int,
+    raw_text: str,
+    morphed_text: str,
+    mode: str = "edit_replace",
+    full_doc_before: str = "",
+    full_doc_after: str = "",
+) -> None:
     """
     [Ctrl+Z 원클릭 100% 원복 보장 스냅샷 엔진]
     - Win11 메모장(RichEditD2DPT)이나 웹 브라우저에서 붙여넣기(Ctrl+V) 직후 변환이 일어날 때
       OS 기본 Ctrl+Z가 '변환 + 붙여넣기 전체'를 통째로 날려버리는(빈 화면이 되는) 문제를 100% 원천 차단합니다!
-    - 변환 직후 Ctrl+Z(Hotkey 999)를 누르면 붙여넣기 전 상태가 아니라 정확히 '변환 직전의 날것 원문(raw_text)'으로 복원합니다.
+    - 변환 직후 Ctrl+Z(Hotkey 999)를 누르면 붙여넣기 전 상태가 아니라 정확히 '변환 직전의 날것 원문(raw_text / full_doc_before)'으로 복원합니다.
+    - 유저가 [Ctrl+0 ➔ 2] 직후 [Ctrl+0 ➔ 4]를 연속으로 실행한 경우에도 최초 변환 전 원문(raw_text / full_doc_before)을 보존합니다!
     """
     global _UNDO_SNAPSHOT
+    now_ts = time.time()
+    prev_active = bool(_UNDO_SNAPSHOT.get("active"))
+    prev_hwnd = int(_UNDO_SNAPSHOT.get("hwnd") or 0)
+    prev_ts = float(_UNDO_SNAPSHOT.get("ts") or 0.0)
+    prev_raw = str(_UNDO_SNAPSHOT.get("raw_text") or "")
+    prev_morphed = str(_UNDO_SNAPSHOT.get("morphed_text") or "")
+    prev_doc_before = str(_UNDO_SNAPSHOT.get("full_doc_before") or "")
+    prev_doc_after = str(_UNDO_SNAPSHOT.get("full_doc_after") or "")
+
+    keep_chain = False
+    if prev_active and (now_ts - prev_ts) < 30.0 and prev_hwnd == int(hwnd or 0) and prev_raw:
+        norm_new_raw = str(raw_text or "").replace("\r\n", "\n").strip()
+        norm_prev_morphed = prev_morphed.replace("\r\n", "\n").strip()
+        if norm_new_raw and norm_new_raw == norm_prev_morphed:
+            keep_chain = True
+        elif full_doc_before and prev_doc_after and full_doc_before.replace("\r\n", "\n") == prev_doc_after.replace("\r\n", "\n"):
+            keep_chain = True
+
     _UNDO_SNAPSHOT = {
         "active": True,
-        "ts": time.time(),
+        "ts": now_ts,
         "hwnd": int(hwnd or 0),
         "edit_child": int(edit_child or 0),
-        "raw_text": str(raw_text or ""),
+        "raw_text": prev_raw if keep_chain else str(raw_text or ""),
         "morphed_text": str(morphed_text or ""),
+        "full_doc_before": (prev_doc_before if (keep_chain and prev_doc_before) else str(full_doc_before or "")),
+        "full_doc_after": str(full_doc_after or ""),
         "mode": mode,
         "typed_count_after": 0,
     }
@@ -2170,8 +2201,8 @@ def _get_edit_full_text_and_index_str(edit_child: int) -> tuple[str, str, bool]:
 def execute_undo_snapshot(daemon_set_cb) -> bool:
     """
     [Ctrl+Z 원클릭 원상복구 실행기]
-    - 방금 변환된 문장(morphed_text)만 정확히 이전 날것 상태(raw_text)로 되돌려,
-      붙여넣기 자체가 취소되어 빈 화면이 되는 현상을 100% 방지합니다!
+    - 방금 변환된 문장(morphed_text / full_doc_after)만 정확히 이전 날것 상태(raw_text / full_doc_before)로 되돌려,
+      붙여넣기 자체가 취소되어 빈 화면이 되거나 이모지(Surrogate Pair)·줄바꿈 오프셋 차이로 글자가 밀리는 현상을 100% 방지합니다!
     """
     snap = dict(_UNDO_SNAPSHOT)
     disarm_undo_snapshot()
@@ -2181,28 +2212,49 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
     mode = snap.get("mode", "")
     raw_t = snap.get("raw_text", "")
     morphed_t = snap.get("morphed_text", "")
+    full_before = snap.get("full_doc_before", "")
+    full_after = snap.get("full_doc_after", "")
+    snap_hwnd = int(snap.get("hwnd") or 0)
     fg_now = u32.GetForegroundWindow()
     ed = _find_edit_control_child(fg_now) or snap.get("edit_child", 0)
 
-    # 1) 메모장(Edit / RichEditD2DPT) 컨트롤 내부에서 정확히 morphed_t 구간만 찾아 raw_t(상용구는 "")로 원자적 복원!
+    # 1) 메모장(Edit / RichEditD2DPT) 컨트롤 내부에서 오프셋 오차 없이 100% 원자적 복원!
     if ed and u32.IsWindow(ed):
         try:
-            _, idx_text, is_rich = _get_edit_full_text_and_index_str(ed)
-            search_m = morphed_t.replace("\r\n", "\n") if is_rich else morphed_t.replace("\r\n", "\n").replace("\n", "\r\n")
+            cur_full, idx_text, is_rich = _get_edit_full_text_and_index_str(ed)
+            # 1-A) 변환 직전 전체 문서 스냅샷(full_before)이 보존되어 있고 추가 타이핑이 없었던 경우 0..-1 전체 교체로 100% 무결점 복원
+            if full_before and mode != "pre_iron":
+                if not full_after or cur_full.replace("\r\n", "\n") == full_after.replace("\r\n", "\n"):
+                    restore_doc = (
+                        full_before.replace("\r\n", "\n").replace("\n", "\r\n")
+                        if not is_rich
+                        else full_before
+                    )
+                    u32.SendMessageW(ed, EM_SETSEL, 0, -1)
+                    rbuf = ctypes.create_unicode_buffer(restore_doc)
+                    u32.SendMessageW(ed, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                    show_ghost_toast("👻 귀신같이 원상복구 완료 (변환 전 원문 100% 복원)", duration_ms=1600)
+                    return True
+
+            # 1-B) 부분 치환 또는 pre_iron 모드인 경우에도 파이썬 문자열 공간에서 치환한 뒤 EM_SETSEL(0, -1)로 기록하여 Surrogate Pair 오차 원천 차단
+            cur_norm = cur_full.replace("\r\n", "\n")
+            search_m = morphed_t.replace("\r\n", "\n")
             search_m_strip = search_m.strip()
             target_pos = -1
             target_len = 0
-            if search_m and search_m in idx_text:
-                target_pos = idx_text.rfind(search_m)
+            if search_m and search_m in cur_norm:
+                target_pos = cur_norm.rfind(search_m)
                 target_len = len(search_m)
-            elif search_m_strip and search_m_strip in idx_text:
-                target_pos = idx_text.rfind(search_m_strip)
+            elif search_m_strip and search_m_strip in cur_norm:
+                target_pos = cur_norm.rfind(search_m_strip)
                 target_len = len(search_m_strip)
 
             if target_pos >= 0 and target_len > 0:
-                restore_val = "" if mode == "snippet" else (raw_t.replace("\r\n", "\n").replace("\n", "\r\n"))
-                u32.SendMessageW(ed, EM_SETSEL, target_pos, target_pos + target_len)
-                rbuf = ctypes.create_unicode_buffer(restore_val)
+                rep_norm = "" if mode == "snippet" else raw_t.replace("\r\n", "\n")
+                new_norm = cur_norm[:target_pos] + rep_norm + cur_norm[target_pos + target_len :]
+                restore_doc = new_norm.replace("\n", "\r\n") if not is_rich else new_norm
+                u32.SendMessageW(ed, EM_SETSEL, 0, -1)
+                rbuf = ctypes.create_unicode_buffer(restore_doc)
                 u32.SendMessageW(ed, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
                 if mode == "pre_iron" and raw_t:
                     daemon_set_cb(raw_t)
@@ -2212,7 +2264,15 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
             pass
 
     # 2) 일반 웹/앱 창에서 원복:
+    if snap_hwnd and u32.IsWindow(snap_hwnd) and fg_now != snap_hwnd:
+        try:
+            u32.SetForegroundWindow(snap_hwnd)
+            time.sleep(0.02)
+        except Exception:
+            pass
+
     release_all_modifiers()
+    time.sleep(0.02)
     if mode == "snippet":
         tap_key_combo([VK_CONTROL], VK_Z)
         show_ghost_toast("👻 귀신같이 상용구 실행취소 완료", duration_ms=1400)
@@ -2221,31 +2281,14 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
     if raw_t:
         orig_c = get_clipboard_text()
         tap_key_combo([VK_CONTROL], VK_Z)
-        time.sleep(0.035)
+        time.sleep(0.04)
         if mode == "pre_iron":
             daemon_set_cb(raw_t)
             time.sleep(0.02)
             tap_key_combo([VK_CONTROL], VK_V)
             time.sleep(0.035)
-        else:
-            sentinel_u = "__GHOSTI_UNDO_CHK__"
-            daemon_set_cb(sentinel_u)
-            time.sleep(0.015)
-            VK_HOME = 0x24
-            tap_key_combo([VK_SHIFT], VK_HOME)
-            time.sleep(0.03)
-            tap_key_combo([VK_CONTROL], VK_C)
-            time.sleep(0.035)
-            chk_sel = get_clipboard_text()
-            if not chk_sel or chk_sel == sentinel_u:
-                daemon_set_cb(raw_t)
-                time.sleep(0.02)
-                tap_key_combo([VK_CONTROL], VK_V)
-                time.sleep(0.035)
-            else:
-                tap_key_combo([], 0x27)
-        if orig_c:
-            daemon_set_cb(orig_c)
+            if orig_c:
+                daemon_set_cb(orig_c)
         show_ghost_toast("👻 귀신같이 원상복구 완료 (변환 전 원문 100% 복원)", duration_ms=1600)
         return True
 
@@ -2264,12 +2307,16 @@ def _get_edit_control_current_line(edit_child: int) -> str | None:
         e_dw = wintypes.DWORD(0)
         u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
         s_pos = s_dw.value
+        if s_pos == 0 and e_dw.value == 0:
+            sel_ret = u32.SendMessageW(edit_child, EM_GETSEL, 0, 0)
+            s_pos = sel_ret & 0xFFFF
         line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
         line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
         line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
         if line_start < 0 or line_len < 0:
             return None
-        return idx_text[line_start : line_start + line_len]
+        utf16_b = idx_text.encode("utf-16-le")
+        return utf16_b[line_start * 2 : (line_start + line_len) * 2].decode("utf-16-le", errors="ignore")
     except Exception:
         return None
 
@@ -2295,9 +2342,11 @@ def _fix_korean_spacing_general(s: str) -> str:
     s = re.sub(r"되요(?=\s|$|[.,?!~^])", "돼요", s)
     s = re.sub(r"안\s*되요(?=\s|$|[.,?!~^])", "안 돼요", s)
     s = re.sub(r"됬(습|어|다|네|지|고|는데)", r"됐\1", s)
+    s = re.sub(r"햇(습|어|다|네|지|고|는데)", r"했\1", s)
     s = re.sub(r"몇\s*일(?=\s|$|[.,?!~^간동안전후째])", "며칠", s)
     s = re.sub(r"어떻해", "어떡해", s)
     s = re.sub(r"왠만(하|해|히|한)", r"웬만\1", s)
+    s = re.sub(r"잘\s*부탁", "잘 부탁", s)
 
     s = re.sub(r"같\s+이(?=\s|$|[.,?!~])", "같이", s)
     s = re.sub(r"오\s+늘", "오늘", s)
@@ -2322,7 +2371,7 @@ def _fix_korean_spacing_general(s: str) -> str:
     s = re.sub(r"에서\s*영상을\s*만들어", "에서 영상을 만들어", s)
     s = re.sub(r"바뀐\s*것\s*같은데", "바뀐 것 같은데", s)
     s = re.sub(r"다\s*같이(?=[가-힣]{2,})", "다같이 ", s)
-    s = re.sub(r"산책\s*(가자|가면|가고|가서|가요|갈까)(?=\s|$|[.,?!~^]|[가-힣])", r"산책 \1 ", s)
+    s = re.sub(r"산책\s*(가자고|가자|가면|가고|가서|가요|갈까)(?=\s|$|[.,?!~^]|[가-힣])", r"산책 \1 ", s)
 
     s = re.sub(r"(?<![가-힣])(오늘|내일|모레|어제|그제|오전|오후|아침|점심|저녁|밤|새벽)(?=\d)", r"\1 ", s)
     s = re.sub(
@@ -2504,7 +2553,7 @@ def _replace_edit_control_current_line_atomic(
     [메모장(Edit/RichEditD2DPT) 0.2ms 무지연 원자적(Atomic) 줄·드래그 성형 엔진]
     - Shift+Home 블록 선택 대기(140ms)나 클립보드(Ctrl+C/Ctrl+V)를 전혀 거치지 않고
       Win32 WM_GETTEXT -> EM_SETSEL -> EM_REPLACESEL로 0.0002초 만에 줄 또는 드래그 블록을 교체하여
-      연속 타이핑 중 다음 단어 첫 글자가 섞이는 현상과 Ctrl+Z 증발을 100% 원천 차단합니다!
+      연속 타이핑 중 다음 단어 첫 글자가 섞이는 현상과 Ctrl+Z 증발·이모지(Surrogate Pair) 밀림을 100% 원천 차단합니다!
     """
     if not edit_child or not u32.IsWindow(edit_child):
         return False, "", "", None
@@ -2513,28 +2562,54 @@ def _replace_edit_control_current_line_atomic(
         if not idx_text:
             return False, "", "", None
 
+        utf16_bytes = idx_text.encode("utf-16-le")
+        utf16_total = len(utf16_bytes) // 2
+
         s_dw = wintypes.DWORD(0)
         e_dw = wintypes.DWORD(0)
         u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
         s_pos, e_pos = s_dw.value, e_dw.value
+        if s_pos == 0 and e_pos == 0:
+            sel_ret = u32.SendMessageW(edit_child, EM_GETSEL, 0, 0)
+            s_pos = sel_ret & 0xFFFF
+            e_pos = (sel_ret >> 16) & 0xFFFF
 
-        if s_pos != e_pos and 0 <= s_pos < e_pos <= len(idx_text):
+        use_full_sel = False
+        if s_pos != e_pos and 0 <= s_pos < e_pos <= utf16_total:
             line_start, line_end = s_pos, e_pos
-        elif prefer_full_doc and not auto_triggered:
-            line_start, line_end = 0, len(idx_text)
+            if s_pos == 0 and e_pos >= utf16_total:
+                use_full_sel = True
+                target_line = idx_text
+            else:
+                target_line = utf16_bytes[s_pos * 2 : e_pos * 2].decode("utf-16-le", errors="ignore")
+        elif not auto_triggered and prefer_full_doc:
+            line_start, line_end = 0, utf16_total
+            use_full_sel = True
+            target_line = idx_text
         else:
             line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
             line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
             line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
             if line_start < 0 or line_len <= 0:
-                if not auto_triggered and len(idx_text) > 0:
-                    line_start, line_end = 0, len(idx_text)
+                if not auto_triggered and utf16_total > 0:
+                    line_start, line_end = 0, utf16_total
+                    use_full_sel = True
+                    target_line = idx_text
                 else:
                     return False, "", "", None
             else:
                 line_end = line_start + line_len
+                target_line = utf16_bytes[line_start * 2 : line_end * 2].decode("utf-16-le", errors="ignore")
+                if not auto_triggered and "\n" in idx_text:
+                    # 수동 호출([Ctrl+0 ➔ 2]) 시 드래그를 깜빡하고 다중 줄 문단 끝에 커서를 둔 경우 전체 문단 성형 지원
+                    m_cur, l_cur = morph_korean_english_text_with_direction(target_line)
+                    b_cur = m_cur if (m_cur != target_line and l_cur is not None) else target_line
+                    i_cur = iron_and_polish_korean_text(b_cur) if allow_iron else b_cur
+                    if i_cur == target_line and m_cur == target_line:
+                        line_start, line_end = 0, utf16_total
+                        use_full_sel = True
+                        target_line = idx_text
 
-        target_line = idx_text[line_start:line_end]
         if not target_line:
             return False, "", "", None
 
@@ -2551,18 +2626,30 @@ def _replace_edit_control_current_line_atomic(
             return False, target_line, target_line, None
 
         final_out = (morphed.rstrip(" ") + " ") if auto_triggered else morphed
-        if not is_rich and "\n" in final_out and "\r\n" not in final_out:
-            final_out_win = final_out.replace("\n", "\r\n")
+        if not is_rich and "\n" in final_out:
+            final_out_win = final_out.replace("\r\n", "\n").replace("\n", "\r\n")
         else:
             final_out_win = final_out
 
-        root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
-        arm_undo_snapshot(root_hwnd, edit_child, target_line, final_out, mode="edit_replace")
-
         set_ime_language(target_korean=(target_lang == "KO"))
-        u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_end)
+        if use_full_sel or (line_start == 0 and line_end >= utf16_total):
+            u32.SendMessageW(edit_child, EM_SETSEL, 0, -1)
+        else:
+            u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_end)
         rbuf = ctypes.create_unicode_buffer(final_out_win)
         u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+
+        full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
+        root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
+        arm_undo_snapshot(
+            root_hwnd,
+            edit_child,
+            target_line,
+            final_out,
+            mode="edit_replace",
+            full_doc_before=full_text,
+            full_doc_after=full_after,
+        )
         return True, target_line.strip(), final_out.strip(), target_lang
     except Exception:
         return False, "", "", None
@@ -2611,6 +2698,7 @@ def _restore_target_focus_and_replace_line(
         )
         if ok_ed and lang_ed is not None:
             return True, raw_ed, out_ed, lang_ed
+        return False, raw_ed, out_ed, None
 
     daemon_set_cb(sentinel)
     time.sleep(0.015)
@@ -2689,6 +2777,10 @@ def superpower_2_typo_morph(daemon_set_cb, auto_triggered: bool = False) -> bool
         show_ghost_toast(f"👻 귀신같이 복합성형 ({raw_s[:16]} ➔ {morphed_s[:16]} | {lang_badge})")
         return True
 
+    if not auto_triggered and raw_s:
+        show_ghost_toast("👻 귀신같이 복합성형 완료")
+        return True
+
     if not auto_triggered and orig_clip:
         morphed, target_lang2 = morph_korean_english_text_with_direction(orig_clip)
         base_for_iron = morphed if (morphed != orig_clip and target_lang2 is not None) else orig_clip
@@ -2753,7 +2845,7 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb, raw_src: str | None = None) 
     """
     [④번] 드래그 영역 원위치 즉시 다림질 + 줄바꿈·유령공백(NFKC)·문맥오타·띄어쓰기 교정 + 문단 의미 분리
     - 유저가 마우스로 드래그한 문장/문단(또는 메모장 내 텍스트)이 있으면 복사·창전환 없이 그 자리에서 즉시 교체!
-    - 동시에 클립보드 원문도 다림질하여 Ctrl+V 붙여넣기 및 Ctrl+Z 원문 복원을 100% 보장합니다.
+    - 이미 원위치 성형이 끝난 문장에서 연속 호출된 경우 기존 Undo 스냅샷과 클립보드 원문을 100% 보존합니다.
     """
     txt = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     ok_inplace, raw_in, out_in, _ = _restore_target_focus_and_replace_line(
@@ -2765,11 +2857,11 @@ def superpower_4_iron_lines_and_nfkc(daemon_set_cb, raw_src: str | None = None) 
         prefer_full_doc=True,
     )
     if ok_inplace:
-        if txt:
-            morphed_c, _ = morph_korean_english_text_with_direction(txt)
-            ironed_c = iron_and_polish_korean_text(morphed_c if morphed_c != txt else txt)
-            daemon_set_cb(ironed_c)
         show_ghost_toast(f"👻 귀신같이 즉시 다림질 완료 ({raw_in[:14]} ➔ {out_in[:14]})")
+        return
+
+    if raw_in:
+        show_ghost_toast("👻 귀신같이 줄바꿈·띄어쓰기 다림질 완료")
         return
 
     if txt:
@@ -3746,7 +3838,7 @@ Write-Output $res.Text
 
             elif msg.message == WM_TIMER:
                 now = time.time()
-                if _UNDO_SNAPSHOT.get("armed") and (now - _UNDO_SNAPSHOT.get("ts", 0.0)) > 60.0:
+                if _UNDO_SNAPSHOT.get("active") and (now - _UNDO_SNAPSHOT.get("ts", 0.0)) > 60.0:
                     disarm_undo_snapshot()
                 if _PINNED_HWNDS:
                     enforce_pinned_windows()
@@ -3925,8 +4017,6 @@ Write-Output $res.Text
                     for vk_code in range(0x41, 0x5B):  # A ~ Z
                         is_down = (u32.GetAsyncKeyState(vk_code) & 0x8000) != 0
                         if is_down and not was_key_down.get(vk_code, False):
-                            if _UNDO_SNAPSHOT.get("armed") and (now - _UNDO_SNAPSHOT.get("ts", 0.0)) > 0.5:
-                                disarm_undo_snapshot()
                             ch = chr(vk_code) if shift_down else chr(vk_code + 32)
                             typed_ascii_buf.append(ch)
                             if len(typed_ascii_buf) > 28:
