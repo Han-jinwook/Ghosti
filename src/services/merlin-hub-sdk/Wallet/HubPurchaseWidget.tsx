@@ -353,11 +353,11 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         /* 원포인트 다크 카드 집중 디자인: 오직 중앙 메인 귀신코인 카드(.gh-dark-card) 단 1개에만 다크 네이비·골드 포인트를 집중하고, 상단 제목·탭·권종 버튼은 최대한 담백하고 힘을 뺀 화이트/연그레이 톤으로 정돈 */
         html body .hub-purchase-widget .gh-light-banner,
         html.theme-warm-light body .hub-purchase-widget .gh-light-banner {
-          background-image: linear-gradient(135deg, #ffffff 0%, #f8faff 100%) !important;
-          background-color: #ffffff !important;
-          border: 1.5px solid #94a3b8 !important;
-          box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05) !important;
-          color: #334155 !important;
+          background-image: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 55%, #dbeafe 100%) !important;
+          background-color: #eef2ff !important;
+          border: 1.5px solid #818cf8 !important;
+          box-shadow: 0 4px 14px rgba(79, 70, 229, 0.1) !important;
+          color: #1e1b4b !important;
         }
         html body .hub-purchase-widget .gh-section-box,
         html.theme-warm-light body .hub-purchase-widget .gh-section-box {
@@ -449,19 +449,19 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         }
       `}</style>
       <main className="mx-auto max-w-[var(--app-max-width,720px)] px-4 py-4 space-y-3.5">
-        {/* 상단 귀신코인 공식 브랜드 헤더 배너 (힘을 뺀 담백한 순백색 헤더) */}
-        <div className="gh-light-banner rounded-2xl bg-white p-3.5 sm:p-4 text-slate-700 border border-slate-200/90 flex items-center justify-between relative">
+        {/* 상단 귀신코인 공식 브랜드 헤더 배너 (제목 느낌을 살린 은은한 인디고·스카이 틴트 헤더) */}
+        <div className="gh-light-banner rounded-2xl bg-gradient-to-r from-indigo-50 via-indigo-100/70 to-blue-50 p-4 sm:p-4.5 text-indigo-950 border border-indigo-300 flex items-center justify-between relative">
           {isModal && onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 hover:bg-white flex items-center justify-center text-indigo-700 transition-colors cursor-pointer shadow-2xs"
               aria-label="충전소 닫기"
             >
               ✕
             </button>
           )}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             <div className="relative shrink-0">
               <img 
                 src={`${hubBaseUrl}/ghosti.png`}
@@ -472,28 +472,31 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   }
                 }}
                 alt="귀신코인 아기귀신 로고" 
-                className="h-11 sm:h-12 w-11 sm:w-12 object-contain rounded-xl border border-slate-200/80" 
+                className="h-12 sm:h-14 w-12 sm:w-14 object-contain rounded-xl border border-indigo-200 shadow-xs bg-white/60" 
               />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-base sm:text-lg font-bold tracking-tight text-slate-700">
+                <span
+                  className="text-lg sm:text-xl font-bold tracking-wide text-indigo-950"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
                   귀신코인 충전소
                 </span>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200/80 font-medium">
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-semibold shadow-2xs">
                   GHOST COIN 공식 센터
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-indigo-800/80 font-medium mt-1">
                 귀신같이 시리즈 & 패밀리 솔루션({appName}) 공용 귀신코인 충전
               </p>
             </div>
           </div>
-          <div className={`text-right hidden sm:block border-l border-slate-200/80 pl-4 ${isModal && onClose ? ' pr-7' : ''}`}>
-            <span className="text-xs text-slate-500 font-medium block">
+          <div className={`text-right hidden sm:block border-l border-indigo-300/70 pl-4 ${isModal && onClose ? ' pr-7' : ''}`}>
+            <span className="text-xs text-indigo-800 font-bold block">
               NHN KCP / 5대 간편결제 공식 제휴
             </span>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">
+            <span className="text-[11px] text-indigo-600/80 font-medium mt-0.5 block">
               가맹점 상점명: 3몬스터
             </span>
           </div>
