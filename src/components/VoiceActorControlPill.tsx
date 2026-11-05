@@ -105,8 +105,8 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`inline-flex items-center rounded-2xl bg-[#18181B] border border-white/15 shadow-sm select-none transition-all ${
-        compact ? 'h-10 px-1.5 gap-1' : 'h-12 md:h-13 px-2 gap-1.5'
+      className={`md:hidden inline-flex items-center rounded-2xl bg-[#18181B] border border-white/15 shadow-sm select-none transition-all ${
+        compact ? 'h-10 px-1.5 gap-1' : 'h-12 px-2 gap-1.5'
       }`}
       title="음성 안내 재생/중단 및 남·여 성우 목소리 선택"
     >

@@ -95,6 +95,20 @@ export function setPreferredVoiceEnabled(enabled: boolean): void {
   notifyVoicePrefListeners();
 }
 
+/**
+ * [멀린님 지침] PC(데스크톱)에서는 마이크 입력 및 음성 출력(TTS)을 모두 제거하고,
+ * 오직 모바일(스마트폰/태블릿) 환경에서만 음성 인식 및 현수·선희 성우 음성 출력을 가동합니다.
+ */
+export function isMobileVoiceEnvironment(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod|Mobile|KakaoTalk/i.test(ua)) return true;
+  if (typeof window.matchMedia === 'function') {
+    if (window.matchMedia('(max-width: 767px)').matches) return true;
+  }
+  return false;
+}
+
 export function resolveActiveTtsVoiceId(): typeof SETUP_MONSTER_TTS_VOICE_HYUNSU | typeof SETUP_MONSTER_TTS_VOICE_SUNHI {
   return getPreferredVoiceGender() === 'female'
     ? SETUP_MONSTER_TTS_VOICE_SUNHI
@@ -524,7 +538,8 @@ export async function speakSetupMonsterTts(
     lastSpokenText = cleanText;
     lastSpokenRate = options?.rate ?? SETUP_MONSTER_TTS_RATE_DEFAULT;
   }
-  if (!cleanText || !getPreferredVoiceEnabled()) {
+  // PC 환경에서는 음성 출력(TTS)을 완전히 비활성화 (모바일 전용)
+  if (!isMobileVoiceEnvironment() || !cleanText || !getPreferredVoiceEnabled()) {
     return {
       ok: false,
       cacheStatus: 'SKIPPED',
@@ -654,6 +669,7 @@ export function triggerSetupMonsterTtsPrewarm(
   voice: SetupMonsterTtsVoice = SETUP_MONSTER_TTS_VOICE_DEFAULT,
   rate: string = SETUP_MONSTER_TTS_RATE_DEFAULT
 ): void {
+  if (!isMobileVoiceEnvironment()) return;
   if (prewarmTriggered) return;
   prewarmTriggered = true;
   if (typeof window === 'undefined') return;

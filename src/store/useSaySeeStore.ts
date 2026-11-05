@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { getZCoreUrl, zCoreBridge, ensureLoginAndZCoreReady } from '../services/zCoreBridge';
 import { playMenuSummonSound } from '../services/babyGhostSound';
 import { submitExternalMonsterChatQuery } from '../services/monsterChatRouter';
+import { isMobileVoiceEnvironment } from '../services/setupMonsterTts';
 
 /**
  * [사진 정리 휴지통 이동/복원 — 정직 처리]
@@ -2648,11 +2649,17 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       matchedLocalDocs: docMatches,
       matchedVideoScenes: videoMatches,
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
-      lastQuarantineToast: isTimeRangeOrAlumniQuery
-        ? `⚡ [양방향 시간·고유명사 그물망 매칭 (1초 만에)] "${query}" ➔ ${expansionBadges.join(
-            ' · '
-          )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`
-        : `🎙️ [현수 성우 브리핑] ${searchBriefingKo}`,
+      ...(isTimeRangeOrAlumniQuery
+        ? {
+            lastQuarantineToast: `⚡ [양방향 시간·고유명사 그물망 매칭 (1초 만에)] "${query}" ➔ ${expansionBadges.join(
+              ' · '
+            )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`,
+          }
+        : isMobileVoiceEnvironment()
+        ? {
+            lastQuarantineToast: `🎙️ [현수 성우 브리핑] ${searchBriefingKo}`,
+          }
+        : {}),
     });
   },
 
