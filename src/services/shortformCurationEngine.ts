@@ -156,7 +156,7 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
   }
 
   // 단순 검색/열람 패턴 ("~찾아줘", "~보여줘", "~어디 있어?")
-  const searchMatch = text.match(/^(.+?)\s*(찾아\s*줘|보여\s*줘|어디\s*있어|어딨어|열어\s*줘|검색해\s*줘)\??$/i);
+  const searchMatch = text.match(/^(.+?)\s*(찾아\s*줘|찾아|보여\s*줘|보여|어디\s*있어|어딨어|열어\s*줘|열어|검색해\s*줘|검색)\??$/i);
   if (searchMatch && searchMatch[1]) {
     const cleaned = searchMatch[1]
       .replace(/(사진|문서|파일|서류|계약서|영수증)\s*중에서/g, '$1')

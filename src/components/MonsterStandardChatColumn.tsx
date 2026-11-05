@@ -22,6 +22,7 @@ import { MonsterInteractiveCardView } from './MonsterInteractiveCards';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { unlockMobileAudioOnUserGesture, notifyMicSessionEndedForTts } from '../services/setupMonsterTts';
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
+import { normalizeSpokenKoreanQuery } from '../services/voiceSearchAndAiBatonEngine';
 
 interface MonsterStandardChatColumnProps {
   sourceTab: 'trash' | 'repair';
@@ -218,7 +219,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         if (transcribed && !submittedOnceRef.current) {
           submittedOnceRef.current = true;
           setInputText('');
-          void handleSend(transcribed);
+          void handleSend(normalizeSpokenKoreanQuery(transcribed));
         } else {
           setInputText('');
           onToast?.('🎤 음성이 잘 들리지 않았습니다. 마이크 가까이에서 다시 말씀해 주세요.');
@@ -249,7 +250,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       submittedOnceRef.current = true;
       latestTranscriptRef.current = '';
       setInputText('');
-      void handleSend(spoken);
+      void handleSend(normalizeSpokenKoreanQuery(spoken));
     }
   };
 
@@ -314,7 +315,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             }
             setIsMicListening(false);
             finalizeAndSubmitSpokenText();
-          }, 120);
+          }, 650);
         } else if (fullText) {
           silenceAutoTimerRef.current = window.setTimeout(() => {
             try {
@@ -324,7 +325,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             }
             setIsMicListening(false);
             finalizeAndSubmitSpokenText();
-          }, 1150);
+          }, 1600);
         }
       };
       recognition.onerror = (ev: any) => {

@@ -2,6 +2,8 @@ import { getZCoreUrl } from './zCoreBridge';
 import {
   speakSetupMonsterTts,
   SETUP_MONSTER_TTS_RATE_DEFAULT,
+  SETUP_MONSTER_TTS_VOICE_HYUNSU,
+  SETUP_MONSTER_TTS_VOICE_SUNHI,
   resolveActiveTtsVoiceId,
   getPreferredVoiceGender,
 } from './setupMonsterTts';
@@ -18,6 +20,30 @@ import type { LocalDocumentFile } from '../types/saysee';
  */
 
 export type GhostiNeuralVoiceRole = 'hyunsu_briefing' | 'sunhi_doc_reader';
+
+/**
+ * 모바일 음성 인식 STT 오타/조사 보정 및 어미 정규화
+ * 예: "강아진 사진 찾아줘" -> "강아지 사진 찾아줘"
+ *     "음식 사진 찾아" -> "음식 사진 찾아줘"
+ */
+export function normalizeSpokenKoreanQuery(raw: string): string {
+  if (!raw) return '';
+  let text = raw.trim();
+
+  // 음성인식 특유의 받침/조사 결합 오인식 보정
+  text = text.replace(/강아진\s*사진/g, '강아지 사진');
+  text = text.replace(/^강아진\s+/g, '강아지 ');
+  text = text.replace(/\b고양인\b/g, '고양이');
+  text = text.replace(/\b애완견\b/g, '반려견');
+
+  // 문장 끝이 '찾아', '보여', '검색' 등으로 잘렸을 때 온전한 명령어로 복원
+  text = text.replace(/\b(사진|영상|동영상|문서|파일|자료)\s*찾아$/i, '$1 찾아줘');
+  text = text.replace(/\b(사진|영상|동영상|문서|파일|자료)\s*보여$/i, '$1 보여줘');
+  text = text.replace(/\b(사진|영상|동영상|문서|파일|자료)\s*검색$/i, '$1 검색해줘');
+  text = text.replace(/(.+?)\s*찾아$/i, '$1 찾아줘');
+
+  return text.trim();
+}
 
 export const GHOSTI_VOICE_ACTORS = {
   hyunsu_briefing: {

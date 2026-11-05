@@ -20,6 +20,7 @@ import {
 } from '@huggingface/transformers';
 import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, storageInfo } from './opfsCache';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
+import { normalizeSpokenKoreanQuery } from './voiceSearchAndAiBatonEngine';
 import { silentIndexingBrake } from './silentIndexingBrake';
 import type {
   DuplicateGroup,
@@ -3295,15 +3296,15 @@ export class HybridVoiceSession {
           const lastResult = resultsArr[resultsArr.length - 1];
           clearTimeout(this.finalSilenceTimer);
           if (lastResult?.isFinal && this.sttTranscript) {
-            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 80);
+            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 650);
           } else if (this.sttTranscript) {
-            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 950);
+            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 1600);
           }
         };
         r.onspeechend = () => {
           if (this.sttTranscript) {
             clearTimeout(this.finalSilenceTimer);
-            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 80);
+            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 650);
           }
         };
         r.onend = () => {
@@ -3470,7 +3471,7 @@ export class HybridVoiceSession {
     notifyMicSessionEndedForTts();
     return {
       audioBlob: blob,
-      backgroundSttTranscript: this.sttTranscript.trim(),
+      backgroundSttTranscript: normalizeSpokenKoreanQuery(this.sttTranscript.trim()),
     };
   }
 }
