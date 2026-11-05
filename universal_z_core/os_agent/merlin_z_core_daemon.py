@@ -248,6 +248,29 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=status)
             return
 
+        if path in ("/__videos/frame", "/api/ghosti/videos/frame"):
+            fn = str(qp.get("f") or qp.get("file") or "").strip()
+            # public/poc/results/video_frames or poc/results/video_frames
+            frame_cand = None
+            if fn and not "/" in fn and not "\\" in fn and not ".." in fn:
+                repo_root = Path(__file__).resolve().parents[2]
+                for c in [
+                    repo_root / "public" / "poc" / "results" / "video_frames" / fn,
+                    repo_root / "poc" / "results" / "video_frames" / fn,
+                    Path(__file__).resolve().parent / "video_frames" / fn,
+                ]:
+                    if c.exists() and c.is_file():
+                        frame_cand = c
+                        break
+            if frame_cand:
+                try:
+                    self._send_bytes(frame_cand.read_bytes(), content_type="image/jpeg", status=200)
+                    return
+                except Exception:
+                    pass
+            self._send_json({"ok": False, "error": "FRAME_NOT_FOUND"}, status=404)
+            return
+
         if path in ("/__docs/list", "/api/ghosti/docs/list"):
             self._send_json(plugin_ghosti_os.list_local_docs(qp))
             return

@@ -1726,15 +1726,6 @@ export const VideoScenePreviewModal: React.FC = () => {
           <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">
             {selectedVideoModal.matchedTimestamp} 장면 포착 (아래 시간대 클릭 시 해당 초 장면 즉시 전환)
           </div>
-          <div className="absolute bottom-3 inset-x-4 px-3.5 py-2 rounded-xl bg-black/80 backdrop-blur-md border border-white/15 text-center pointer-events-none">
-            <p className="font-body-sm text-[12.5px] text-white font-bold">
-              {renderHighlightedDocText(
-                selectedVideoModal.matchedFrameCaption,
-                effectiveQuery,
-                currentFrameObj?.keywords?.slice(0, 4) ?? []
-              )}
-            </p>
-          </div>
         </div>
 
         {/* 현재 포착된 구간 상세 설명 및 대사 자막 하이라이트 */}

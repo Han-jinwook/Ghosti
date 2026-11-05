@@ -1217,12 +1217,30 @@ export const DesktopDashboard: React.FC = () => {
                         className="min-w-[85%] sm:min-w-[340px] md:min-w-0 snap-center group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
                       >
                         <div className="relative aspect-video w-full overflow-hidden bg-black">
-                          <img
-                            src={vid.thumbUrl}
-                            alt={vid.title}
-                            loading="lazy"
-                            className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
-                          />
+                          {vid.thumbUrl ? (
+                            <img
+                              src={vid.thumbUrl}
+                              alt={vid.title}
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = 'none';
+                              }}
+                              className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : vid.videoUrl ? (
+                            <video
+                              src={`${vid.videoUrl}#t=${vid.matchedSeekSec || 0.1}`}
+                              preload="metadata"
+                              muted
+                              playsInline
+                              className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-zinc-500 gap-1.5 p-4 text-center">
+                              <span className="material-symbols-outlined text-3xl text-zinc-400">movie</span>
+                              <span className="text-[11px] font-medium text-zinc-400 truncate max-w-[80%]">{vid.title}</span>
+                            </div>
+                          )}
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                             <div className="w-11 h-11 rounded-full bg-black/75 border border-white/20 text-white flex items-center justify-center group-hover:bg-primary-container group-hover:text-zinc-950 group-hover:border-primary-container transition-all">
                               <span className="material-symbols-outlined text-[26px]">play_arrow</span>

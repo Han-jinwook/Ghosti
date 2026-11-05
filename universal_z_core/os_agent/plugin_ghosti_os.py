@@ -1054,6 +1054,45 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         if len(videos) >= 120:
             break
 
+    # [동영상 1초 직행 타임라인 인덱스 & 정본 썸네일 고도화 결합]
+    # - 번들 샘플 3종(코타키나발루 등)이 로컬 PC 스캔 경로에 존재할 경우, 단순 파일명 뼈대 목록이 아니라
+    #   해당 영상의 20개 타임라인 해부 구간 및 실제 추출된 정본 썸네일(thumbUrl) 메타데이터를 우선 보강합니다.
+    static_index = None
+    candidates = []
+    if not getattr(os.sys, "frozen", False):
+        repo_root = Path(__file__).resolve().parents[2]
+        candidates.append(repo_root / "poc" / "results" / "video_timeline_index.json")
+        candidates.append(repo_root / "public" / "poc" / "results" / "video_timeline_index.json")
+        candidates.append(Path(__file__).resolve().parent / "video_timeline_index.json")
+    for cand in candidates:
+        try:
+            if cand.exists():
+                static_index = json.loads(cand.read_text(encoding="utf-8"))
+                break
+        except Exception:
+            pass
+
+    if isinstance(static_index, dict) and isinstance(static_index.get("videos"), list):
+        static_map = {str(sv.get("videoFileName")): sv for sv in static_index["videos"] if sv.get("videoFileName")}
+        for idx, v in enumerate(videos):
+            vname = v.get("videoFileName")
+            if vname in static_map:
+                sv = static_map[vname]
+                enriched = dict(sv)
+                enriched["id"] = v.get("id") or enriched.get("id")
+                enriched["videoUrl"] = v.get("videoUrl") or enriched.get("videoUrl")
+                if not enriched.get("thumbUrl") and sv.get("thumbUrl"):
+                    enriched["thumbUrl"] = sv.get("thumbUrl")
+                videos[idx] = enriched
+
+        # 만약 로컬 폴더에 아직 동영상 파일이 없는 환경이라도, 기본 3대 번들 영상은 즉시 체험 가능하도록 자동 합류
+        seen_now = {v.get("videoFileName") for v in videos}
+        for sv in static_index["videos"]:
+            sv_name = sv.get("videoFileName")
+            if sv_name and sv_name not in seen_now:
+                seen_now.add(sv_name)
+                videos.append(sv)
+
     return {
         "ok": True,
         "total": len(videos),

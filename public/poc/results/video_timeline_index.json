@@ -1,14 +1,14 @@
 {
   "createdAt": "2026-10-17T03:37:26.652Z",
-  "videoCount": 3,
-  "totalFrames": 20,
+  "videoCount": 4,
+  "totalFrames": 22,
   "videos": [
     {
       "id": "vid_20240719_105706",
       "videoFileName": "20240719_105706.mp4",
       "title": "코타키나발루 바다에서 보트 위로 하강하는 2인 패러세일링 체험",
       "keyframePhotoId": "20240719_105706.mp4",
-      "thumbUrl": "/poc/results/video_frames/20240719_105706_t12.jpg",
+      "thumbUrl": "/__videos/frame?f=20240719_105706_t12.jpg",
       "videoUrl": "/__photos/file?p=20240719_105706.mp4",
       "date": "2024.07.19 10:57",
       "durationText": "00:21",
@@ -915,7 +915,7 @@
             "#코타키나발루",
             "#해양스포츠"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t00.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t00.jpg",
           "vec": [
             0.0024,
             0.0077,
@@ -1732,7 +1732,7 @@
             "#바다체험",
             "#수상레저"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t03.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t03.jpg",
           "vec": [
             -0.0139,
             -0.0179,
@@ -2546,7 +2546,7 @@
             "#패러세일링",
             "#바다풍경"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t06.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t06.jpg",
           "vec": [
             -0.0093,
             -0.0097,
@@ -3366,7 +3366,7 @@
             "#여름휴가",
             "#코타키나발루"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t09.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t09.jpg",
           "vec": [
             -0.021,
             -0.0099,
@@ -4180,7 +4180,7 @@
             "#보트접근",
             "#해양액티비티"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t12.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t12.jpg",
           "vec": [
             -0.0166,
             -0.0073,
@@ -4987,7 +4987,7 @@
             "#보트착지",
             "#수상스포츠"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t15.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t15.jpg",
           "vec": [
             0.0097,
             -0.0102,
@@ -5794,7 +5794,7 @@
             "#패러세일링",
             "#순간포착"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t18.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t18.jpg",
           "vec": [
             -0.0058,
             -0.0058,
@@ -6608,7 +6608,7 @@
             "#패러세일링완료",
             "#코타키나발루여행"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240719_105706_t20.jpg",
+          "thumbUrl": "/__videos/frame?f=20240719_105706_t20.jpg",
           "vec": [
             0.0065,
             -0.0245,
@@ -7387,7 +7387,7 @@
       "videoFileName": "20240720_134808.mp4",
       "title": "코타키나발루 리조트 야외 테라스에서 카메라를 설치하고 기념 촬영하는 남녀",
       "keyframePhotoId": "20240720_134808.mp4",
-      "thumbUrl": "/poc/results/video_frames/20240720_134808_t09.jpg",
+      "thumbUrl": "/__videos/frame?f=20240720_134808_t09.jpg",
       "videoUrl": "/__photos/file?p=20240720_134808.mp4",
       "date": "2024.07.20 13:48",
       "durationText": "00:19",
@@ -8341,7 +8341,7 @@
             "#리조트휴양",
             "#카메라세팅"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240720_134808_t00.jpg",
+          "thumbUrl": "/__videos/frame?f=20240720_134808_t00.jpg",
           "vec": [
             0.0219,
             -0.0082,
@@ -9167,7 +9167,7 @@
             "#야외휴식",
             "#여름휴가"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240720_134808_t03.jpg",
+          "thumbUrl": "/__videos/frame?f=20240720_134808_t03.jpg",
           "vec": [
             -0.003,
             0.0024,
@@ -9998,7 +9998,7 @@
             "#커플촬영",
             "#휴양지"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240720_134808_t06.jpg",
+          "thumbUrl": "/__videos/frame?f=20240720_134808_t06.jpg",
           "vec": [
             -0.007,
             -0.021,
@@ -10837,7 +10837,7 @@
             "#리조트데크",
             "#테라스풍경"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240720_134808_t09.jpg",
+          "thumbUrl": "/__videos/frame?f=20240720_134808_t09.jpg",
           "vec": [
             -0.0136,
             -0.0237,
@@ -11643,7 +11643,7 @@
             "#클로즈업",
             "#밝은표정"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240720_134808_t12.jpg",
+          "thumbUrl": "/__videos/frame?f=20240720_134808_t12.jpg",
           "vec": [
             -0.0069,
             -0.034,
@@ -12455,7 +12455,7 @@
             "#얼굴클로즈업",
             "#코타키나발루"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240720_134808_t15.jpg",
+          "thumbUrl": "/__videos/frame?f=20240720_134808_t15.jpg",
           "vec": [
             0.0146,
             -0.0259,
@@ -13254,7 +13254,7 @@
             "#종료화면",
             "#여름패션"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240720_134808_t18.jpg",
+          "thumbUrl": "/__videos/frame?f=20240720_134808_t18.jpg",
           "vec": [
             0.0081,
             -0.0152,
@@ -14033,7 +14033,7 @@
       "videoFileName": "20240722_052422.mp4",
       "title": "비행기 창밖으로 펼쳐진 일출 풍경과 이를 스마트폰으로 촬영하는 모습",
       "keyframePhotoId": "20240722_052422.mp4",
-      "thumbUrl": "/poc/results/video_frames/20240722_052422_t04.jpg",
+      "thumbUrl": "/__videos/frame?f=20240722_052422_t04.jpg",
       "videoUrl": "/__photos/file?p=20240722_052422.mp4",
       "date": "2024.07.22 05:24",
       "durationText": "00:09",
@@ -14914,7 +14914,7 @@
             "#일출",
             "#하늘풍경"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240722_052422_t00.jpg",
+          "thumbUrl": "/__videos/frame?f=20240722_052422_t00.jpg",
           "vec": [
             -0.0442,
             -0.0098,
@@ -15738,7 +15738,7 @@
             "#비행기창가",
             "#일출빛"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240722_052422_t02.jpg",
+          "thumbUrl": "/__videos/frame?f=20240722_052422_t02.jpg",
           "vec": [
             -0.0263,
             -0.0285,
@@ -16563,7 +16563,7 @@
             "#비행기안",
             "#창밖풍경"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240722_052422_t04.jpg",
+          "thumbUrl": "/__videos/frame?f=20240722_052422_t04.jpg",
           "vec": [
             -0.0308,
             -0.0217,
@@ -17388,7 +17388,7 @@
             "#창가좌석",
             "#일출감상"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240722_052422_t06.jpg",
+          "thumbUrl": "/__videos/frame?f=20240722_052422_t06.jpg",
           "vec": [
             -0.0469,
             -0.0311,
@@ -18214,7 +18214,7 @@
             "#카메라앱",
             "#비행기일출"
           ],
-          "thumbUrl": "/poc/results/video_frames/20240722_052422_t08.jpg",
+          "thumbUrl": "/__videos/frame?f=20240722_052422_t08.jpg",
           "vec": [
             -0.0336,
             -0.0298,

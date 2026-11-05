@@ -272,6 +272,21 @@ def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
     return {"ok": True, "documents": [d for _, d in scored]}
 
 
+def _load_static_json(filename: str) -> Dict[str, Any] | None:
+    candidates = []
+    if not getattr(os.sys, 'frozen', False):
+        repo_root = Path(__file__).resolve().parents[2]
+        candidates.append(repo_root / 'poc' / 'results' / filename)
+        candidates.append(repo_root / 'public' / 'poc' / 'results' / filename)
+        candidates.append(Path(__file__).resolve().parent / filename)
+    for cand in candidates:
+        try:
+            if cand.exists():
+                return json.loads(cand.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return None
+
 def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
     import plugin_ghosti_os
 
