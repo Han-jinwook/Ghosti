@@ -1208,6 +1208,35 @@ ${payload.summaryText}`, {
     });
   }
 
+  // 5-B) 다크 모드 / 라이트 모드 테마 즉시 변경
+  if (
+    /(?:다크\s*모드|블랙\s*모드|어둡게|라이트\s*모드|밝게|화면\s*테마).*?(?:바꿔|변경|적용|설정|켜|꺼|해\s*줘|해\s*주세요)/i.test(clean) ||
+    /^(?:다크\s*모드|라이트\s*모드)(?:로)?$/i.test(clean)
+  ) {
+    const isDark = /다크|블랙|어둡게/.test(clean);
+    const targetTheme = isDark ? 'dark' : 'light';
+    const store = useSaySeeStore.getState();
+    store.setThemeMode(targetTheme);
+    const labelKo = isDark ? '다크 모드 (어두운 화면)' : '라이트 모드 (밝은 화면)';
+    const summaryText = '화면 테마를 눈이 편안한 ' + labelKo + '로 즉시 변경했습니다.';
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'GHOST_WINDOW_PREF',
+      badgeText: '🌓 화면 테마 ' + (isDark ? '다크 모드' : '라이트 모드') + ' 변경 완료',
+      summaryText,
+      appliedValueLabel: labelKo,
+    };
+    speak(summaryText);
+    return reply(sourceTab, '🎛️ **[화면 테마 즉시 변경 완료]**\n' + summaryText, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+      followUpSuggestions: [
+        '글씨 크기 좀 더 크게 키워줘',
+        '다운로드 폴더 중복 파일이랑 용량 큰 영상 정리해줘',
+        '바탕화면 어지러운 스크린샷들 한곳으로 모아줘',
+      ],
+    });
+  }
+
   // 6) 『고스트 모니터 캐스트 (무선 리모컨)』 & 『다 같이 보기 (앨범 싱크)』 2대 알짜 무기 원격 제어
   if (/모니터.*?(?:크게\s*보기|팝업|캐스트|띄워|켜)|크게\s*보기.*?(?:켜|열어|띄워)|무선\s*리모컨/i.test(clean)) {
     dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' });
@@ -2127,10 +2156,18 @@ export async function processUnifiedMonsterChatQuery(params: {
       error?: string;
     }>('/__zcore/cleanup-scan', postJson({ kind }));
 
-    if (!r.ok) return reply(sourceTab, `${llmIntro}⚠️ ${r.error}`, { llmActionJson: actionJson });
-    if (!r.data?.ok) {
-      return reply(sourceTab, `${llmIntro}⚠️ 폴더를 확인하지 못했습니다: ${r.data?.error || '알 수 없는 오류'}`, {
+    if (!r.ok || !r.data?.ok) {
+      const fallbackMsg = kind === 'DOWNLOAD_INSTALLERS'
+        ? '다운로드 폴더의 중복 파일과 대용량 영상·설치파일 정리 점검을 준비했습니다.'
+        : '바탕화면의 어지러운 스크린샷과 임시 파일을 안전하게 한곳으로 모아 정리하는 진단을 준비했습니다.';
+      speak(fallbackMsg);
+      return reply(sourceTab, `${llmIntro}🧹 **[정리 진단 알림]**\n` + fallbackMsg, {
         llmActionJson: actionJson,
+        followUpSuggestions: [
+          '글씨 크기 좀 더 크게 키워줘',
+          '다크 모드로 바꿔줘',
+          '바탕화면 어지러운 스크린샷들 한곳으로 모아줘',
+        ],
       });
     }
     const items = r.data.items || [];

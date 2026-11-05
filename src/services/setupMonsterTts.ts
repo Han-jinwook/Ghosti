@@ -360,11 +360,14 @@ export async function speakSetupMonsterTts(
 
   // 1·2단계: 로컬 Z-코어 tts_cache 조회(Cache Hit 시 0.001초) 또는 MS 신경망 실시간 합성 + Write-Through 캐싱(Cache Miss)
   try {
+    const zcoreController = new AbortController();
+    const zcoreTimer = setTimeout(() => zcoreController.abort(), 1200);
     const res = await fetch(getZCoreUrl('/__setup-monster/tts'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: cleanText, voice, rate }),
-    });
+      signal: zcoreController.signal,
+    }).finally(() => clearTimeout(zcoreTimer));
     if (res.ok) {
       const data = await res.json();
       if (data?.ok && data.audioUrl && typeof Audio !== 'undefined') {
@@ -412,11 +415,14 @@ export async function speakSetupMonsterTts(
 
   // 2.5단계: 웹/Netlify 배포 환경 클라우드 MS 신경망 성우 서버리스 브릿지 (/api/edge-tts)
   try {
+    const cloudController = new AbortController();
+    const cloudTimer = setTimeout(() => cloudController.abort(), 4500);
     const cloudRes = await fetch('/api/edge-tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: cleanText, voice, rate }),
-    });
+      signal: cloudController.signal,
+    }).finally(() => clearTimeout(cloudTimer));
     if (cloudRes.ok) {
       const cloudData = await cloudRes.json();
       if (cloudData?.ok && cloudData.audioDataUrl && typeof Audio !== 'undefined') {
