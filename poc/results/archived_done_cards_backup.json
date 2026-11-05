@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-05T10:45:25.403388",
+  "updated_at": "2026-11-05T14:26:32.338899",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -714,6 +714,22 @@
       "last_edited_time": "2026-11-04T07:05:00.000Z",
       "url": "https://app.notion.com/p/1-v4-3-40df9ffd2c1d81bbaaa6dbcad4b548de",
       "archived_at": "2026-11-05T10:45:25.403211"
+    },
+    {
+      "page_id": "40ef9ffd-2c1d-816a-a0c9-fa662716aa70",
+      "title": "🎯 [귀신같이/1단계] PC·모바일-단골AI, 고난도 질문 시 제미나이 라이브 음성 상담 & 스펙·문서 자동세팅 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-05T02:08:00.000Z",
+      "url": "https://app.notion.com/p/1-PC-AI-40ef9ffd2c1d816aa0c9fa662716aa70",
+      "archived_at": "2026-11-05T14:26:32.338708"
+    },
+    {
+      "page_id": "40ef9ffd-2c1d-8148-b925-fcca3a2ce7c7",
+      "title": "🎯 [귀신창-3기능] 오타성형 · 줄바꿈다림질 · 창고정 패치 검증",
+      "app": "멀린비서",
+      "last_edited_time": "2026-11-05T01:37:00.000Z",
+      "url": "https://app.notion.com/p/3-40ef9ffd2c1d8148b925fcca3a2ce7c7",
+      "archived_at": "2026-11-05T14:26:32.338721"
     }
   ]
 }
