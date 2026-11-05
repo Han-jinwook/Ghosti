@@ -118,17 +118,32 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
     };
   }
 
-  // 3) 특정 조항/문구 전수 낭독 ("원상복구 조항 읽어줘", "비밀유지계약서 손해배상 조항 낭독해줘", "위약금 나오는 문장 읽어줘") ➔ 【선희 여성 성우】
+  // 3) 특정 조항/특약/약관/근무시간/휴일 장문 낭독 ("보험증권 특약 사항 낭독해줘", "근로계약서 근무시간 및 휴일 조항 읽어줘", "원상복구 조항 읽어줘") ➔ 【선희 여성 성우】
   const clauseReadMatch = raw.match(
-    /(?:(.+?)\s*(?:에서|의)?\s*)?(원상\s*복구|손해\s*배상|비밀\s*유지|위약금|계약\s*해지|면책|하자\s*담보|조항|특약|약관|규정)(?:이|은|는|가|을|를)?\s*(?:좀\s*)?(?:다\s*)?(읽어|낭독|들려|말해)/i
+    /(?:(.+?)\s*(?:에서|의)?\s*)?(특약\s*사항|근무\s*시간.*?(?:휴일\s*조항|조항)|근무\s*시간|휴일\s*조항|원상\s*복구|손해\s*배상|비밀\s*유지|위약금|계약\s*해지|면책|하자\s*담보|조항|특약|약관|규정)(?:\s*사항)?(?:이|은|는|가|을|를)?\s*(?:좀\s*)?(?:다\s*)?(읽어|낭독|들려|말해)/i
   );
   if (clauseReadMatch) {
     const docHint = (clauseReadMatch[1] || '').replace(/(이|그|저|우리|내|문서|서류)\s*/g, '').trim();
-    const clauseKey = clauseReadMatch[2].replace(/\s+/g, '').trim();
+    const clauseRaw = clauseReadMatch[2].trim();
+    const clauseKey = clauseRaw.replace(/\s+/g, '').trim();
+    const extraKws = clauseRaw
+      .split(/(?:및|이랑|하고|과|와|\s)+/)
+      .map((w) => w.replace(/(조항|사항|규정)$/, '').trim())
+      .filter((w) => w.length >= 2);
     return {
       intentType: 'DOC_KEYWORD_SENTENCE_READ',
-      targetDocKeyword: docHint || (clauseKey.includes('손해배상') || clauseKey.includes('비밀유지') ? '비밀유지' : '계약서'),
-      extractKeywords: [clauseKey, clauseKey.replace(/(조항|특약|약관|규정)/, '').trim()].filter(Boolean),
+      targetDocKeyword:
+        docHint ||
+        (clauseKey.includes('특약')
+          ? '보험증권'
+          : clauseKey.includes('근무시간') || clauseKey.includes('휴일')
+          ? '근로계약서'
+          : clauseKey.includes('손해배상') || clauseKey.includes('비밀유지')
+          ? '비밀유지'
+          : '계약서'),
+      extractKeywords: Array.from(
+        new Set([clauseKey, clauseKey.replace(/(조항|특약|약관|규정|사항)/g, '').trim(), ...extraKws])
+      ).filter(Boolean),
       kakaoRecipientName: '',
       rawQuestion: raw,
       serverTokenCostWon: 0,
@@ -156,11 +171,11 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
     };
   }
 
-  // 4) 문서 단답 팩트 수치 Q&A ("보증금이랑 월세 얼마야?", "사업자등록번호 알려줘", "서버 견적서 총액 얼마야?", "썬드림 견적서 알려줘", "견적서 있어?") ➔ 【현수 남성 성우】
+  // 4) 문서 단답 팩트 수치 Q&A ("운전면허증 번호 알려줘", "주민등록등본 발급일자", "보증금이랑 월세 얼마야?", "사업자등록번호 알려줘") ➔ 【현수 남성 성우】
   const factKeywords =
-    '보증금|월세|임대료|관리비|위약금|계약금|잔금|만기일|계약\\s*기간|특약|' +
+    '보증금|월세|임대료|관리비|위약금|계약금|잔금|만기일|발급\\s*일자|발급일|교부\\s*일자|적성\\s*검사|계약\\s*기간|특약|' +
     '계좌\\s*번호|계좌|비밀번호|비번|아이디|ID|' +
-    '사업자\\s*등록\\s*번호|사업자\\s*번호|주민\\s*등록\\s*번호|주민\\s*번호|등록\\s*번호|여권\\s*번호|전화\\s*번호|연락처|' +
+    '운전\\s*면허\\s*번호|면허\\s*번호|운전\\s*면허증\\s*번호|사업자\\s*등록\\s*번호|사업자\\s*번호|주민\\s*등록\\s*번호|주민\\s*번호|등록\\s*번호|여권\\s*번호|번호|전화\\s*번호|연락처|' +
     '총액|견적\\s*총액|합계|금액|공급가액|부가세|세액|견적\\s*금액|수수료|가격|비용|단가';
   const factAsk = '얼마|언제|뭐야|뭐|어떻게|알려|몇|누구|어디|확인|있어|있나|있니|있나요|맞아';
   const factQaRegex = new RegExp(
@@ -214,6 +229,23 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
     }
   }
 
+  // 7) 서류 명사구 단독 발화 ("주민등록등본 발급일자", "운전면허증 번호", "사업자등록증 등록번호", "여권 만료일") ➔ 【현수 남성 성우】
+  if (
+    /(운전\s*면허증|주민\s*등록\s*등본|등본|사업자\s*등록증|여권|보험\s*증권|근로\s*계약서|임대차\s*계약서|견적서).*?(번호|발급\s*일자|발급일|만기일|만료일|금액|보증금|월세|연락처|주소|세대주)/i.test(
+      raw
+    )
+  ) {
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    return {
+      intentType: 'DOC_FACT_QA_READ',
+      targetDocKeyword: raw,
+      extractKeywords: tokens,
+      kakaoRecipientName: '',
+      rawQuestion: raw,
+      serverTokenCostWon: 0,
+    };
+  }
+
   return {
     intentType: 'SIMPLE_PERSPECTIVE_SEARCH',
     targetDocKeyword: raw,
@@ -255,10 +287,9 @@ export function extractKeywordSentencesZeroLlm(
   });
 
   const kwLabel = cleanKeywords.join(', ');
-  const actorName = getPreferredVoiceGender() === 'female' ? '선희' : '현수';
   const hyunsuIntroText =
     matched.length > 0
-      ? `요청하신 '${kwLabel}' 단어가 포함된 문장 총 ${matched.length}개를 찾았습니다. ${actorName} 음성으로 차례대로 읽어드립니다.`
+      ? `요청하신 '${kwLabel}' 관련 조항 총 ${matched.length}개를 찾았습니다. 여성 성우 선희 목소리로 또렷하게 낭독해 드립니다.`
       : `문서 본문에서 '${kwLabel}' 단어가 포함된 문장을 찾지 못했습니다.`;
 
   const sunhiReadScript = matched.map((m, i) => `${i + 1}번째 문장입니다. ${m.sentence}`).join(' ');
@@ -520,11 +551,19 @@ export function resolveTargetDocAndBuildFactAnswer(
  */
 export async function speakWithHyunsuOrSunhi(
   text: string,
-  _role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
+  role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
   rate: string = SETUP_MONSTER_TTS_RATE_DEFAULT
 ): Promise<{ ok: boolean; voiceId: string; audioUrl?: string }> {
-  const voiceId = resolveActiveTtsVoiceId();
-  const res = await speakSetupMonsterTts(text, { voice: voiceId, rate });
+  // [시스템 브리핑·단답형 = 남성(현수 ko-KR-HyunsuNeural) / 서류 장문·약관·조항 낭독 = 여성(선희 ko-KR-SunHiNeural) 칼분리]
+  const voiceId =
+    role === 'sunhi_doc_reader'
+      ? GHOSTI_VOICE_ACTORS.sunhi_doc_reader.voiceId
+      : GHOSTI_VOICE_ACTORS.hyunsu_briefing.voiceId;
+  const res = await speakSetupMonsterTts(text, {
+    voice: voiceId,
+    rate,
+    forceRoleVoice: true,
+  });
   return {
     ok: res.ok,
     voiceId,

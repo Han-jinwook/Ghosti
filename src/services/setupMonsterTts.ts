@@ -128,19 +128,64 @@ export const SETUP_MONSTER_PREWARM_PHRASES: readonly string[] = [
 
 let activeAudioElement: HTMLAudioElement | null = null;
 let sharedGestureAudioElement: HTMLAudioElement | null = null;
+let ttsWebAudioCtx: AudioContext | null = null;
+let activeWebAudioSource: AudioBufferSourceNode | null = null;
 let mobileAudioUnlocked = false;
 let isCurrentlySpeaking = false;
 let lastSpokenText = '';
 let lastSpokenRate: string = SETUP_MONSTER_TTS_RATE_DEFAULT;
+let lastMicReleaseTimestampMs = 0;
 const memoryAudioUrlCache = new Map<string, string>();
+const memoryArrayBufferCache = new Map<string, ArrayBuffer>();
 let prewarmTriggered = false;
 
+function getOrInitTtsAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (!ttsWebAudioCtx) {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (Ctx) {
+      try {
+        ttsWebAudioCtx = new Ctx();
+      } catch {
+        ttsWebAudioCtx = null;
+      }
+    }
+  }
+  return ttsWebAudioCtx;
+}
+
 /**
- * [모바일 iOS Safari / Android Chrome 비동기 TTS 자동재생 잠금 해제]
- * 사용자가 마이크 버튼·전송 버튼 등을 터치한 즉시 호출하여 공용 Audio 엘리먼트를 언락해 둡니다.
+ * 모바일에서 마이크 녹음(SpeechRecognition/MediaRecorder)이 종료된 시각을 기록합니다.
+ * 모바일 OS가 통화/녹음 오디오 세션에서 미디어 스피커 세션으로 복귀할 수 있도록 약 200ms 여유를 보장합니다.
+ */
+export function notifyMicSessionEndedForTts(): void {
+  lastMicReleaseTimestampMs = Date.now();
+}
+
+/**
+ * [모바일 iOS Safari / Android Chrome 비동기 TTS 자동재생 100% 잠금 해제]
+ * WebAudio AudioContext는 최초 1회 터치/클릭 제스처에서 resume()되면 이후 비동기 타이머·음성인식 종료 콜백에서도
+ * NotAllowedError 없이 100% 소리 출력이 보장됩니다.
  */
 export function unlockMobileAudioOnUserGesture(): void {
   if (typeof window === 'undefined') return;
+  try {
+    const ctx = getOrInitTtsAudioContext();
+    if (ctx) {
+      if (ctx.state === 'suspended') {
+        void ctx.resume().catch(() => {});
+      }
+      if (!mobileAudioUnlocked) {
+        const silentBuf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = silentBuf;
+        src.connect(ctx.destination);
+        src.start(0);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   try {
     if (!sharedGestureAudioElement && typeof Audio !== 'undefined') {
       sharedGestureAudioElement = new Audio();
@@ -168,7 +213,16 @@ export function unlockMobileAudioOnUserGesture(): void {
   }
 }
 
-function createOrReuseBlessedAudio(srcUrl: string, volume = 0.75): HTMLAudioElement {
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const autoUnlockHandler = () => {
+    unlockMobileAudioOnUserGesture();
+  };
+  ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'click', 'keydown'].forEach((evt) => {
+    window.addEventListener(evt, autoUnlockHandler, { passive: true, capture: true });
+  });
+}
+
+function createOrReuseBlessedAudio(srcUrl: string, volume = 0.95): HTMLAudioElement {
   const audio = sharedGestureAudioElement ?? new Audio();
   sharedGestureAudioElement = audio;
   try {
@@ -179,6 +233,118 @@ function createOrReuseBlessedAudio(srcUrl: string, volume = 0.75): HTMLAudioElem
   audio.src = srcUrl;
   audio.volume = volume;
   return audio;
+}
+
+function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer | null {
+  try {
+    const commaIdx = dataUrl.indexOf(',');
+    if (commaIdx === -1) return null;
+    const base64 = dataUrl.slice(commaIdx + 1);
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch {
+    return null;
+  }
+}
+
+async function playAudioUrlOrBufferReliably(
+  playableUrl: string,
+  cacheKey: string
+): Promise<boolean> {
+  // 마이크 종료 직후라면 모바일 OS 오디오 라우팅 복귀를 위해 220ms 대기
+  const sinceMicStop = Date.now() - lastMicReleaseTimestampMs;
+  if (sinceMicStop >= 0 && sinceMicStop < 220) {
+    await new Promise((r) => setTimeout(r, 220 - sinceMicStop));
+  }
+
+  // 1차: WebAudio AudioContext 재생 (모바일 비동기 콜백 Autoplay 차단 100% 우회)
+  try {
+    const ctx = getOrInitTtsAudioContext();
+    if (ctx) {
+      if (ctx.state === 'suspended') {
+        await ctx.resume().catch(() => {});
+      }
+      let rawBuf = memoryArrayBufferCache.get(cacheKey) || null;
+      if (!rawBuf) {
+        if (playableUrl.startsWith('data:')) {
+          rawBuf = dataUrlToArrayBuffer(playableUrl);
+        } else {
+          const r = await fetch(playableUrl);
+          if (r.ok) rawBuf = await r.arrayBuffer();
+        }
+        if (rawBuf && rawBuf.byteLength > 128) {
+          memoryArrayBufferCache.set(cacheKey, rawBuf);
+        }
+      }
+      if (rawBuf && rawBuf.byteLength > 128) {
+        const decoded = await ctx.decodeAudioData(rawBuf.slice(0));
+        if (activeWebAudioSource) {
+          try {
+            activeWebAudioSource.stop();
+            activeWebAudioSource.disconnect();
+          } catch {
+            /* ignore */
+          }
+          activeWebAudioSource = null;
+        }
+        const source = ctx.createBufferSource();
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = 1.0;
+        source.buffer = decoded;
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        activeWebAudioSource = source;
+        isCurrentlySpeaking = true;
+        notifyVoicePrefListeners();
+        source.onended = () => {
+          if (activeWebAudioSource === source) {
+            activeWebAudioSource = null;
+            isCurrentlySpeaking = false;
+            notifyVoicePrefListeners();
+          }
+        };
+        source.start(0);
+        return true;
+      }
+    }
+  } catch {
+    /* WebAudio 실패 시 즉시 HTMLAudioElement 폴백 */
+  }
+
+  // 2차: HTMLAudioElement 재생
+  if (typeof Audio !== 'undefined') {
+    try {
+      const audio = createOrReuseBlessedAudio(playableUrl, 0.95);
+      audio.onended = () => {
+        if (activeAudioElement === audio) {
+          activeAudioElement = null;
+          isCurrentlySpeaking = false;
+          notifyVoicePrefListeners();
+        }
+      };
+      audio.onerror = () => {
+        if (activeAudioElement === audio) {
+          activeAudioElement = null;
+          isCurrentlySpeaking = false;
+          notifyVoicePrefListeners();
+        }
+      };
+      activeAudioElement = audio;
+      isCurrentlySpeaking = true;
+      notifyVoicePrefListeners();
+      await audio.play();
+      return true;
+    } catch {
+      isCurrentlySpeaking = false;
+      notifyVoicePrefListeners();
+    }
+  }
+  return false;
 }
 
 export function getIsTtsSpeaking(): boolean {
@@ -229,6 +395,15 @@ export function normalizeTtsText(rawText: string): string {
  */
 export function stopSetupMonsterTts(): void {
   isCurrentlySpeaking = false;
+  try {
+    if (activeWebAudioSource) {
+      activeWebAudioSource.stop();
+      activeWebAudioSource.disconnect();
+      activeWebAudioSource = null;
+    }
+  } catch {
+    /* ignore */
+  }
   try {
     if (activeAudioElement) {
       activeAudioElement.pause();
@@ -324,6 +499,7 @@ export async function speakSetupMonsterTts(
   options?: {
     voice?: SetupMonsterTtsVoice | string;
     rate?: string;
+    forceRoleVoice?: boolean;
   }
 ): Promise<{
   ok: boolean;
@@ -333,7 +509,17 @@ export async function speakSetupMonsterTts(
   audioUrl?: string;
   elapsedMs: number;
 }> {
-  const cleanText = adaptScriptToActiveVoiceGender(rawText);
+  const requestedVoice =
+    options?.forceRoleVoice && options?.voice
+      ? String(options.voice)
+      : resolveActiveTtsVoiceId();
+  const isSunhiTarget = /sunhi|female|yujin/i.test(requestedVoice);
+  const voice = isSunhiTarget ? SETUP_MONSTER_TTS_VOICE_SUNHI : SETUP_MONSTER_TTS_VOICE_HYUNSU;
+
+  const cleanText = options?.forceRoleVoice
+    ? normalizeTtsText(rawText)
+    : adaptScriptToActiveVoiceGender(rawText);
+
   if (cleanText) {
     lastSpokenText = cleanText;
     lastSpokenRate = options?.rate ?? SETUP_MONSTER_TTS_RATE_DEFAULT;
@@ -342,58 +528,34 @@ export async function speakSetupMonsterTts(
     return {
       ok: false,
       cacheStatus: 'SKIPPED',
-      voice: resolveActiveTtsVoiceId(),
+      voice,
       elapsedMs: 0,
     };
   }
 
   stopSetupMonsterTts();
 
-  // 유저가 직접 선택한 남(현수)/여(선희) 성우 설정을 최우선으로 일원화 적용
-  const voice = resolveActiveTtsVoiceId();
   const rate = options?.rate ?? SETUP_MONSTER_TTS_RATE_DEFAULT;
   const cacheKey = `${voice}|${rate}|${cleanText}`;
   const t0 = performance.now();
 
-  // 0단계: 브라우저 메모리 캐시 히트 시 0.001초 즉시 재생
+  // 0단계: 브라우저 메모리 캐시 히트 시 0.001초 즉시 재생 (WebAudio 우선)
   const cachedUrl = memoryAudioUrlCache.get(cacheKey);
-  if (cachedUrl && typeof Audio !== 'undefined') {
-    try {
-      const audio = createOrReuseBlessedAudio(cachedUrl, 0.75);
-      audio.onended = () => {
-        if (activeAudioElement === audio) {
-          activeAudioElement = null;
-          isCurrentlySpeaking = false;
-          notifyVoicePrefListeners();
-        }
-      };
-      audio.onerror = () => {
-        if (activeAudioElement === audio) {
-          activeAudioElement = null;
-          isCurrentlySpeaking = false;
-          notifyVoicePrefListeners();
-        }
-      };
-      activeAudioElement = audio;
-      isCurrentlySpeaking = true;
-      notifyVoicePrefListeners();
-      await audio.play();
+  if (cachedUrl) {
+    const played = await playAudioUrlOrBufferReliably(cachedUrl, cacheKey);
+    if (played) {
       return {
         ok: true,
         cacheStatus: 'MEMORY_HIT',
         voice,
-        voiceActor: voice.includes('SunHi') ? '선희 (MS Neural 무료 무제한)' : '현수 (MS Neural 무료 무제한)',
+        voiceActor: isSunhiTarget ? '선희 (MS Neural 여성 성우)' : '현수 (MS Neural 남성 성우)',
         audioUrl: cachedUrl,
         elapsedMs: Math.round((performance.now() - t0) * 100) / 100,
       };
-    } catch {
-      isCurrentlySpeaking = false;
-      notifyVoicePrefListeners();
-      /* continue to local server cache */
     }
   }
 
-  // 1·2단계: 로컬 Z-코어가 연결된 환경에서만 tts_cache 조회 (모바일 클라우드 접속 시 1.2초 타임아웃 지연 없이 즉시 /api/edge-tts 직행)
+  // 1·2단계: 로컬 Z-코어가 연결된 환경에서만 tts_cache 조회 (모바일 클라우드 접속 시 타임아웃 지연 없이 즉시 /api/edge-tts 직행)
   const canTryLocalZCore =
     zCoreBridge.isConnected ||
     (typeof window !== 'undefined' &&
@@ -410,42 +572,25 @@ export async function speakSetupMonsterTts(
       }).finally(() => clearTimeout(zcoreTimer));
       if (res.ok) {
         const data = await res.json();
-        if (data?.ok && data.audioUrl && typeof Audio !== 'undefined') {
+        if (data?.ok && data.audioUrl) {
           const playableUrl = getZCoreUrl(String(data.audioUrl));
           memoryAudioUrlCache.set(cacheKey, playableUrl);
-          const audio = createOrReuseBlessedAudio(playableUrl, 0.75);
-          audio.onended = () => {
-            if (activeAudioElement === audio) {
-              activeAudioElement = null;
-              isCurrentlySpeaking = false;
-              notifyVoicePrefListeners();
-            }
-          };
-          audio.onerror = () => {
-            if (activeAudioElement === audio) {
-              activeAudioElement = null;
-              isCurrentlySpeaking = false;
-              notifyVoicePrefListeners();
-            }
-          };
-          activeAudioElement = audio;
-          isCurrentlySpeaking = true;
-          notifyVoicePrefListeners();
-          await audio.play().catch(() => {
-            isCurrentlySpeaking = false;
-            notifyVoicePrefListeners();
-          });
-          return {
-            ok: true,
-            cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',
-            voice: data.voice || voice,
-            voiceActor: data.voiceActor || '현수 (MS Neural 무료 무제한)',
-            audioUrl: playableUrl,
-            elapsedMs:
-              typeof data.elapsedMs === 'number'
-                ? data.elapsedMs
-                : Math.round((performance.now() - t0) * 100) / 100,
-          };
+          const played = await playAudioUrlOrBufferReliably(playableUrl, cacheKey);
+          if (played) {
+            return {
+              ok: true,
+              cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',
+              voice: data.voice || voice,
+              voiceActor:
+                data.voiceActor ||
+                (isSunhiTarget ? '선희 (MS Neural 여성 성우)' : '현수 (MS Neural 남성 성우)'),
+              audioUrl: playableUrl,
+              elapsedMs:
+                typeof data.elapsedMs === 'number'
+                  ? data.elapsedMs
+                  : Math.round((performance.now() - t0) * 100) / 100,
+            };
+          }
         }
       }
     } catch {
@@ -456,7 +601,7 @@ export async function speakSetupMonsterTts(
   // 2.5단계: 웹/Netlify 배포 환경 클라우드 MS 신경망 성우 서버리스 브릿지 (/api/edge-tts)
   try {
     const cloudController = new AbortController();
-    const cloudTimer = setTimeout(() => cloudController.abort(), 4500);
+    const cloudTimer = setTimeout(() => cloudController.abort(), 5500);
     const cloudRes = await fetch('/api/edge-tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -465,44 +610,25 @@ export async function speakSetupMonsterTts(
     }).finally(() => clearTimeout(cloudTimer));
     if (cloudRes.ok) {
       const cloudData = await cloudRes.json();
-      if (cloudData?.ok && cloudData.audioDataUrl && typeof Audio !== 'undefined') {
+      if (cloudData?.ok && cloudData.audioDataUrl) {
         const playableUrl = String(cloudData.audioDataUrl);
         memoryAudioUrlCache.set(cacheKey, playableUrl);
-        const audio = createOrReuseBlessedAudio(playableUrl, 0.8);
-        audio.onended = () => {
-          if (activeAudioElement === audio) {
-            activeAudioElement = null;
-            isCurrentlySpeaking = false;
-            notifyVoicePrefListeners();
-          }
-        };
-        audio.onerror = () => {
-          if (activeAudioElement === audio) {
-            activeAudioElement = null;
-            isCurrentlySpeaking = false;
-            notifyVoicePrefListeners();
-          }
-        };
-        activeAudioElement = audio;
-        isCurrentlySpeaking = true;
-        notifyVoicePrefListeners();
-        await audio.play().catch(() => {
-          isCurrentlySpeaking = false;
-          notifyVoicePrefListeners();
-        });
-        return {
-          ok: true,
-          cacheStatus: 'MISS',
-          voice: cloudData.voice || voice,
-          voiceActor:
-            cloudData.voiceActor ||
-            (voice.includes('SunHi') ? '선희 (MS Neural 여성 성우)' : '현수 (MS Neural 남성 성우)'),
-          audioUrl: playableUrl,
-          elapsedMs:
-            typeof cloudData.elapsedMs === 'number'
-              ? cloudData.elapsedMs
-              : Math.round((performance.now() - t0) * 100) / 100,
-        };
+        const played = await playAudioUrlOrBufferReliably(playableUrl, cacheKey);
+        if (played) {
+          return {
+            ok: true,
+            cacheStatus: 'MISS',
+            voice: cloudData.voice || voice,
+            voiceActor:
+              cloudData.voiceActor ||
+              (isSunhiTarget ? '선희 (MS Neural 여성 성우)' : '현수 (MS Neural 남성 성우)'),
+            audioUrl: playableUrl,
+            elapsedMs:
+              typeof cloudData.elapsedMs === 'number'
+                ? cloudData.elapsedMs
+                : Math.round((performance.now() - t0) * 100) / 100,
+          };
+        }
       }
     }
   } catch {

@@ -2627,6 +2627,17 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ).slice(0, 4)
         : Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
 
+    // [남성 성우 현수 브리핑 — 사진/일상/동영상/문서 검색 결과 음성 안내]
+    const searchBriefingKo =
+      targetSpace === 'video' && videoMatches.length > 0
+        ? `요청하신 '${query}' 검색 결과, 일치하는 동영상 장면 ${videoMatches.length}건을 찾았습니다.`
+        : targetSpace === 'vault' && (docMatches.length > 0 || vaultPhotoMatches.length > 0)
+        ? `요청하신 '${query}' 관련 서류 ${docMatches.length + vaultPhotoMatches.length}건을 찾았습니다.`
+        : results.length > 0
+        ? `요청하신 '${query}' 검색 결과, 사진 ${results.length}장을 찾았습니다.`
+        : `요청하신 '${query}' 검색 결과를 화면에 준비했습니다.`;
+    void speakWithHyunsuOrSunhi(searchBriefingKo, 'hyunsu_briefing');
+
     set({
       searchSpace: targetSpace,
       hasExecutedUserSearch: true,
@@ -2637,13 +2648,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       matchedLocalDocs: docMatches,
       matchedVideoScenes: videoMatches,
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
-      ...(isTimeRangeOrAlumniQuery
-        ? {
-            lastQuarantineToast: `⚡ [양방향 시간·고유명사 그물망 매칭 (1초 만에)] "${query}" ➔ ${expansionBadges.join(
-              ' · '
-            )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`,
-          }
-        : {}),
+      lastQuarantineToast: isTimeRangeOrAlumniQuery
+        ? `⚡ [양방향 시간·고유명사 그물망 매칭 (1초 만에)] "${query}" ➔ ${expansionBadges.join(
+            ' · '
+          )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`
+        : `🎙️ [현수 성우 브리핑] ${searchBriefingKo}`,
     });
   },
 
@@ -2702,43 +2711,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         return;
       }
 
-      // [마이크 음성 인식 직후 양방향 0토큰 라우터 검사]
+      // [마이크 음성 인식 직후 통합 실행 + 현수/선희 성우 100% 자동 발화]
       const spokenUtterance = resolvedSpoken;
-      if (
-        isMonsterCareIntentFromSearch(spokenUtterance) ||
-        parseZeroLlmVoiceDocCommand(spokenUtterance).intentType !== 'SIMPLE_PERSPECTIVE_SEARCH'
-      ) {
-        set((state) => ({
-          lastVoiceTrace: trace,
-          voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
-          isSlimCapsule: true,
-        }));
-        await get().runTextQuery(spokenUtterance);
-        return;
-      }
-
-      const [docMatches, videoMatches] = await Promise.all([
-        searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments),
-        searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems),
-      ]);
-      const vaultPhotoMatches = results.filter((r) => r.photo.isVaultDocument);
-      const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'gallery';
-      const topTags = Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
-
       set((state) => ({
-        searchSpace: targetSpace,
-        hasExecutedUserSearch: true,
-        activeQuery: trace.resolvedQuery,
-        matchedTags: topTags.length ? topTags : ['#오디오벡터', '#온디바이스'],
-        searchResults: results,
-        matchedVaultPhotos: vaultPhotoMatches,
-        matchedLocalDocs: docMatches,
-        matchedVideoScenes: videoMatches,
         lastVoiceTrace: trace,
         voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
         isSlimCapsule: true,
-        telemetry: telemetry ? { ...telemetry, lastQueryMs: trace.totalMs } : null,
       }));
+      await get().runTextQuery(spokenUtterance);
     }
   },
 

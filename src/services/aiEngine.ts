@@ -1,3 +1,4 @@
+import { notifyMicSessionEndedForTts } from './setupMonsterTts';
 /**
  * 귀신같이 (Ghosti) 온디바이스 AI 엔진 (EmbeddingGemma 2)
  *
@@ -185,6 +186,48 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     date: '2026.09.20',
     sizeKB: 136,
     deviceSource: '내 PC 문서함',
+  },
+  {
+    id: 'doc_driver_license',
+    fileName: '자동차운전면허증_1종보통_사본.pdf',
+    path: 'C:\\Users\\Public\\Documents\\자동차운전면허증_1종보통_사본.pdf',
+    ext: 'PDF',
+    title: '자동차 운전면허증 (1종 보통) 사본',
+    categoryBadge: '🪪 신분증 · 운전면허증',
+    extractedText:
+      '문서종류: 자동차운전면허증 (1종 보통) | 성명: 김철수 | 운전면허증 번호(면허번호): 11-24-385920-10 | 발급일자: 2024년 05월 14일 | 적성검사 기간: 2034.05.14 ~ 2034.11.13 | 발행처: 서울특별시경찰청장',
+    keywords: ['운전면허증', '자동차운전면허증', '운전면허증번호', '면허번호', '번호', '11-24-385920-10', '1종보통', '적성검사'],
+    date: '2024.05.14',
+    sizeKB: 82,
+    deviceSource: '내 스마트폰 · PC 문서함',
+  },
+  {
+    id: 'doc_resident_register',
+    fileName: '주민등록등본_정부24_발급본_2026.pdf',
+    path: 'C:\\Users\\Public\\Documents\\주민등록등본_정부24_발급본_2026.pdf',
+    ext: 'PDF',
+    title: '주민등록표 등본 (정부24 전자발급본)',
+    categoryBadge: '🏛️ 증명서 · 주민등록등본',
+    extractedText:
+      '문서종류: 주민등록표 등본(초본) | 세대주 성명: 김철수 | 주민등록등본 발급일자: 2026년 10월 28일 (정부24 온라인 발급) | 현주소: 인천광역시 서구 청라동 에일린의뜰 | 세대원 구성: 본인(세대주), 배우자, 자녀 2명 | 발급확인번호: 1204-8839-4012-9901',
+    keywords: ['주민등록등본', '주민등록표등본', '등본', '발급일자', '발급일', '2026년 10월 28일', '정부24', '세대주'],
+    date: '2026.10.28',
+    sizeKB: 94,
+    deviceSource: '내 스마트폰 · PC 문서함',
+  },
+  {
+    id: 'doc_labor_contract',
+    fileName: '표준근로계약서_체결본_2026.pdf',
+    path: 'C:\\Users\\Public\\Documents\\표준근로계약서_체결본_2026.pdf',
+    ext: 'PDF',
+    title: '표준 근로계약서 체결본 (근무시간 및 휴일 조항 포함)',
+    categoryBadge: '📑 계약서 · 표준근로계약서',
+    extractedText:
+      '계약명: 표준근로계약서 | 제1조 (근로계약기간): 2026년 03월 01일부터 기간의 정함이 없는 정규직으로 한다. | 제2조 (근무시간 조항): 소정근로시간은 1일 8시간(오전 9시 출근 ~ 오후 6시 퇴근), 주 40시간을 기준으로 하며 당사자 합의 시 유연근무제를 적용한다. | 제3조 (휴게시간 조항): 근무시간 중 오후 12시부터 오후 1시까지 1시간의 휴게시간(점심시간)을 보장한다. | 제4조 (휴일 및 휴가 조항): 매주 토요일(무급휴무일)과 일요일(주휴일), 근로자의 날 및 관공서 공휴일에 관한 규정에 따른 공휴일을 유급 휴일로 부여하며 근로기준법에 따른 연차유급휴가를 보장한다.',
+    keywords: ['근로계약서', '표준근로계약서', '근무시간', '휴일', '휴일조항', '근무시간조항', '휴가', '연차', '주40시간'],
+    date: '2026.03.01',
+    sizeKB: 115,
+    deviceSource: '내 스마트폰 · PC 문서함',
   }];
 
 export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
@@ -3424,6 +3467,7 @@ export class HybridVoiceSession {
     }
     this.analyser = null;
 
+    notifyMicSessionEndedForTts();
     return {
       audioBlob: blob,
       backgroundSttTranscript: this.sttTranscript.trim(),

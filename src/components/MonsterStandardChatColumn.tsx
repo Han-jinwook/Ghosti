@@ -20,7 +20,7 @@ import {
 } from '../services/monsterChatRouter';
 import { MonsterInteractiveCardView } from './MonsterInteractiveCards';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
-import { unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
+import { unlockMobileAudioOnUserGesture, notifyMicSessionEndedForTts } from '../services/setupMonsterTts';
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 
 interface MonsterStandardChatColumnProps {
@@ -243,6 +243,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
   const finalizeAndSubmitSpokenText = () => {
     window.clearTimeout(silenceAutoTimerRef.current);
+    notifyMicSessionEndedForTts();
     const spoken = latestTranscriptRef.current.trim();
     if (spoken && !submittedOnceRef.current) {
       submittedOnceRef.current = true;
@@ -549,12 +550,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             }
             className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-emerald-600 focus:outline-none text-[13.5px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
           />
+          {/* PC는 텍스트 채팅 올인, 모바일에서만 [음성] 마이크 버튼 노출 */}
           <button
             type="button"
             onClick={toggleChatMicRecording}
             disabled={busy}
-            title="음성으로 말하기 (찾기·카톡전달·손보기 양방향 자동 연결)"
-            className={`px-3 py-2.5 rounded-xl text-[13px] font-extrabold flex items-center gap-1.5 transition shrink-0 cursor-pointer border ${
+            title="모바일 음성으로 말하기 (찾기·카톡전달·손보기 양방향 자동 연결)"
+            className={`md:hidden px-3 py-2.5 rounded-xl text-[13px] font-extrabold flex items-center gap-1.5 transition shrink-0 cursor-pointer border ${
               isMicListening
                 ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
                 : 'bg-white hover:bg-emerald-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-emerald-400/60 dark:border-emerald-500/40'

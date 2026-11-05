@@ -191,14 +191,15 @@ export const VoiceHeroStage: React.FC = () => {
             </button>
           </div>
 
+          {/* PC는 채팅/키보드 검색 올인, 모바일에서만 마이크 [말하기] 버튼 노출 */}
           <button
             type="button"
             onClick={() => {
               unlockMobileAudioOnUserGesture();
               void toggleMicRecording();
             }}
-            title="마이크로 말해서 검색·낭독·손보기"
-            className={`h-12 md:h-13 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[12.5px] md:text-[13px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+            title="모바일 마이크로 말해서 검색·낭독·손보기"
+            className={`md:hidden h-12 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[12.5px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
               isListening
                 ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
                 : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
