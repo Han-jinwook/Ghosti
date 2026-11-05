@@ -109,7 +109,7 @@ export const VoiceHeroStage: React.FC = () => {
       return '서류·영수증·계약서 내용을 입력해 보세요';
     }
     if (searchSpace === 'video') {
-      return '동영상·사진 속 장면이나 인물을 검색해 보세요';
+      return '내 영상 속 찾고 싶은 특정 장면이나 대사를 입력해 보세요 (그 순간부터 바로 재생됩니다)';
     }
     return '기억나는 장면이나 단어를 입력해 보세요';
   }, [searchSpace]);

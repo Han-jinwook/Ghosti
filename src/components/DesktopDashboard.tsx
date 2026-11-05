@@ -1162,11 +1162,13 @@ export const DesktopDashboard: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
                       {hasExecutedUserSearch && activeQuery
-                        ? `“${activeQuery}” 타임라인 구간 검색 결과`
-                        : '전체 동영상 타임라인 목록'}
+                        ? `“${activeQuery}” 동영상 장면 검색 결과`
+                        : '전체 동영상 목록'}
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
-                      {matchedVideoScenes.length}개 영상 매칭 · 클릭 시 포착된 초(Sec) 즉시 재생
+                      {hasExecutedUserSearch && activeQuery
+                        ? `${matchedVideoScenes.length}개 영상 · 포착된 장면부터 즉시 재생`
+                        : `총 ${matchedVideoScenes.length}개 영상`}
                     </span>
                   </div>
 
@@ -1261,12 +1263,14 @@ export const DesktopDashboard: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-white/15 text-primary-container font-label-mono text-[11px] font-bold">
-                            {vid.matchedTimestamp}
-                          </div>
+                          {hasExecutedUserSearch && activeQuery && (
+                            <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container/50 text-primary-container font-label-mono text-[11px] font-bold">
+                              🎯 {vid.matchedTimestamp} 장면 포착
+                            </div>
+                          )}
 
-                          <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container/40 text-white font-label-mono text-[11px] font-extrabold shadow-md">
-                            ⏱️ 총 시간 {vid.durationText} ({vid.timelineFrames.length}구간)
+                          <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-white/15 text-white font-label-mono text-[11px] font-extrabold shadow-md">
+                            ⏱️ {vid.durationText}
                           </div>
 
                           <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex items-center justify-between gap-2">
@@ -1274,7 +1278,7 @@ export const DesktopDashboard: React.FC = () => {
                               {vid.locationKo} • {vid.videoFileName} ({vid.sizeMB}MB)
                             </span>
                             <span className="px-2 py-0.5 rounded bg-black/85 border border-white/20 font-label-mono text-[11px] text-emerald-300 font-extrabold shrink-0">
-                              ▶ 총 {vid.durationText}
+                              ▶ {vid.durationText}
                             </span>
                           </div>
                         </div>
@@ -1288,48 +1292,24 @@ export const DesktopDashboard: React.FC = () => {
                               )}
                             </h3>
 
-                            <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-white/10">
-                              <p className="font-body-sm text-[12px] text-zinc-300 leading-snug line-clamp-2">
-                                {renderHighlightedDocText(
-                                  vid.matchedFrameCaption,
-                                  hasExecutedUserSearch ? activeQuery : ''
-                                )}
-                              </p>
-                            </div>
-
-                            {/* 전 구간 타임라인 점프 버튼 바 */}
-                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                              <span className="font-label-mono text-[10px] text-zinc-500 mr-0.5">
-                                구간 점프:
-                              </span>
-                              {vid.timelineFrames.map((frame) => {
-                                const isMatched = vid.matchedSeekSec === frame.timeSec;
-                                return (
-                                  <button
-                                    key={frame.timeSec}
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedVideoModal(vid, frame.timeSec);
-                                    }}
-                                    title={`${frame.timestampText} (${frame.phaseLabel}): ${frame.sceneCaption}`}
-                                    className={`px-2 py-0.5 rounded font-label-mono text-[10px] font-bold transition-all ${
-                                      isMatched
-                                        ? 'bg-primary-container text-zinc-950 font-black'
-                                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-white/5'
-                                    }`}
-                                  >
-                                    {frame.timestampText} {(frame.phaseLabel || '').split(' ')[0]}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            {hasExecutedUserSearch && activeQuery && (
+                              <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-primary-container/30">
+                                <p className="font-body-sm text-[12px] text-zinc-200 leading-snug line-clamp-2">
+                                  {renderHighlightedDocText(
+                                    vid.matchedFrameCaption,
+                                    activeQuery
+                                  )}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
                             <span>{vid.date}</span>
                             <span className="text-primary-container font-bold">
-                              ▶ {vid.matchedTimestamp} 재생 →
+                              {hasExecutedUserSearch && activeQuery
+                                ? `▶ ${vid.matchedTimestamp} 바로 재생 →`
+                                : '▶ 재생 →'}
                             </span>
                           </div>
                         </div>

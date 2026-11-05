@@ -538,7 +538,9 @@ export const MobileAppView: React.FC = () => {
               <section className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between px-0.5">
                   <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                    🎬 동영상 구간 포착 ({matchedVideoScenes.length}개 · 좌우 스와이프)
+                    {hasExecutedUserSearch && activeQuery
+                      ? `🎬 “${activeQuery}” 장면 검색 결과 (${matchedVideoScenes.length}개)`
+                      : `🎬 전체 동영상 (${matchedVideoScenes.length}개)`}
                   </span>
                   {matchedVideoScenes.length < videoSceneItems.length && (
                     <button
@@ -593,14 +595,16 @@ export const MobileAppView: React.FC = () => {
                             <span className="material-symbols-outlined text-[22px]">play_arrow</span>
                           </div>
                         </div>
-                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-zinc-950/90 border border-white/15 text-primary-container font-label-mono text-[10.5px] font-bold">
-                          {vid.matchedTimestamp}
-                        </div>
-                        <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded bg-zinc-950/90 border border-primary-container/40 text-white font-label-mono text-[10.5px] font-extrabold">
-                          ⏱️ 총 시간 {vid.durationText} ({vid.timelineFrames.length}구간)
+                        {hasExecutedUserSearch && activeQuery && (
+                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-zinc-950/90 border border-primary-container/50 text-primary-container font-label-mono text-[10.5px] font-bold">
+                            🎯 {vid.matchedTimestamp} 장면 포착
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded bg-zinc-950/90 border border-white/15 text-white font-label-mono text-[10.5px] font-extrabold">
+                          ⏱️ {vid.durationText}
                         </div>
                         <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/85 border border-white/20 text-emerald-300 font-label-mono text-[10.5px] font-extrabold">
-                          ▶ 총 {vid.durationText}
+                          ▶ {vid.durationText}
                         </div>
                       </div>
 
@@ -608,34 +612,18 @@ export const MobileAppView: React.FC = () => {
                         <h4 className="font-headline-sm text-[14px] text-white font-bold truncate">
                           {vid.title}
                         </h4>
-                        <p className="font-body-sm text-[11.5px] text-zinc-300 bg-zinc-950/80 border border-white/10 rounded-lg p-2 line-clamp-2">
-                          {vid.matchedFrameCaption}
-                        </p>
-                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-                          {vid.timelineFrames.map((frame) => {
-                            const isMatched = vid.matchedSeekSec === frame.timeSec;
-                            return (
-                              <button
-                                key={frame.timeSec}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedVideoModal(vid, frame.timeSec);
-                                }}
-                                className={`px-2 py-0.5 rounded font-label-mono text-[10px] font-bold shrink-0 ${
-                                  isMatched
-                                    ? 'bg-primary-container text-zinc-950 font-black'
-                                    : 'bg-zinc-900 text-zinc-400 border border-white/5'
-                                }`}
-                              >
-                                {frame.timestampText} {(frame.phaseLabel || '').split(' ')[0]}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {hasExecutedUserSearch && activeQuery && (
+                          <p className="font-body-sm text-[11.5px] text-zinc-200 bg-zinc-950/80 border border-primary-container/30 rounded-lg p-2 line-clamp-2">
+                            {vid.matchedFrameCaption}
+                          </p>
+                        )}
                         <span className="font-label-mono text-[10.5px] text-zinc-400 pt-0.5 flex items-center justify-between">
                           <span>📍 {vid.locationKo}</span>
-                          <span className="text-primary-container font-bold">▶ {vid.matchedTimestamp} 재생</span>
+                          <span className="text-primary-container font-bold">
+                            {hasExecutedUserSearch && activeQuery
+                              ? `▶ ${vid.matchedTimestamp} 바로 재생`
+                              : '▶ 재생'}
+                          </span>
                         </span>
                       </div>
                     </article>
