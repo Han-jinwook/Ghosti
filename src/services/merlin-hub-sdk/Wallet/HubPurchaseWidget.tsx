@@ -350,21 +350,21 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           font-style: normal;
           font-display: swap;
         }
-        /* 원포인트 다크 카드 집중 디자인: 중앙 메인 귀신코인 카드(.gh-dark-card) 단 하나만 진한 밤하늘 네이비로 유지하고, 상단 제목상자·탭·금액 버튼은 산뜻하고 힘 뺀 라이트 톤으로 고정 */
+        /* 원포인트 다크 카드 집중 디자인: 오직 중앙 메인 귀신코인 카드(.gh-dark-card) 단 1개에만 다크 네이비·골드 포인트를 집중하고, 상단 제목·탭·권종 버튼은 최대한 담백하고 힘을 뺀 화이트/연그레이 톤으로 정돈 */
         html body .hub-purchase-widget .gh-light-banner,
         html.theme-warm-light body .hub-purchase-widget .gh-light-banner {
-          background-image: linear-gradient(135deg, #ffffff 0%, #f4f7ff 55%, #eef4ff 100%) !important;
-          background-color: #f8fafc !important;
-          border-color: #dbe4f3 !important;
-          box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05) !important;
-          color: #1e293b !important;
+          background-image: none !important;
+          background-color: #ffffff !important;
+          border-color: #e2e8f0 !important;
+          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03) !important;
+          color: #334155 !important;
         }
         html body .hub-purchase-widget .gh-light-tab,
         html.theme-warm-light body .hub-purchase-widget .gh-light-tab {
           background-image: none !important;
           background-color: #ffffff !important;
           border-color: #cbd5e1 !important;
-          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
           color: #1e293b !important;
         }
         html body .hub-purchase-widget .gh-dark-card,
@@ -382,28 +382,23 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           border-color: rgba(103, 232, 249, 0.3) !important;
         }
         html body .hub-purchase-widget .gh-light-btn-1,
-        html.theme-warm-light body .hub-purchase-widget .gh-light-btn-1 {
-          background-image: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
-          background-color: #ffffff !important;
-          border-color: #cbd5e1 !important;
-          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
-          color: #334155 !important;
-        }
+        html.theme-warm-light body .hub-purchase-widget .gh-light-btn-1,
         html body .hub-purchase-widget .gh-light-btn-2,
-        html.theme-warm-light body .hub-purchase-widget .gh-light-btn-2 {
-          background-image: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%) !important;
-          background-color: #ffffff !important;
-          border-color: #bac8ff !important;
-          box-shadow: 0 2px 6px rgba(59, 91, 219, 0.07) !important;
-          color: #364fc7 !important;
-        }
+        html.theme-warm-light body .hub-purchase-widget .gh-light-btn-2,
         html body .hub-purchase-widget .gh-light-btn-3,
         html.theme-warm-light body .hub-purchase-widget .gh-light-btn-3 {
-          background-image: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important;
-          background-color: #ffffff !important;
-          border-color: #91a7ff !important;
-          box-shadow: 0 2px 8px rgba(59, 91, 219, 0.1) !important;
-          color: #2b44b8 !important;
+          background-image: none !important;
+          background-color: #f8fafc !important;
+          border-color: #e2e8f0 !important;
+          box-shadow: none !important;
+          color: #475569 !important;
+        }
+        html body .hub-purchase-widget .gh-light-btn-1:hover,
+        html body .hub-purchase-widget .gh-light-btn-2:hover,
+        html body .hub-purchase-widget .gh-light-btn-3:hover {
+          background-color: #f1f5f9 !important;
+          border-color: #cbd5e1 !important;
+          color: #1e293b !important;
         }
         html body .hub-purchase-widget .gh-dark-cta,
         html.theme-warm-light body .hub-purchase-widget .gh-dark-cta {
@@ -443,19 +438,19 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         }
       `}</style>
       <main className="mx-auto max-w-[var(--app-max-width,720px)] px-4 py-4 space-y-3.5">
-        {/* 상단 귀신코인 공식 브랜드 헤더 배너 (힘을 뺀 산뜻한 라이트 파스텔 카드) */}
-        <div className="gh-light-banner rounded-2xl bg-gradient-to-r from-white via-[#f4f7ff] to-[#eef4ff] p-4 sm:p-5 text-slate-800 shadow-sm border border-slate-200/90 flex items-center justify-between relative">
+        {/* 상단 귀신코인 공식 브랜드 헤더 배너 (힘을 뺀 담백한 순백색 헤더) */}
+        <div className="gh-light-banner rounded-2xl bg-white p-3.5 sm:p-4 text-slate-700 border border-slate-200/90 flex items-center justify-between relative">
           {isModal && onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-300/80 flex items-center justify-center text-slate-600 transition-colors cursor-pointer"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
               aria-label="충전소 닫기"
             >
               ✕
             </button>
           )}
-          <div className="flex items-center gap-3.5 sm:gap-4">
+          <div className="flex items-center gap-3">
             <div className="relative shrink-0">
               <img 
                 src={`${hubBaseUrl}/ghosti.png`}
@@ -466,60 +461,40 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   }
                 }}
                 alt="귀신코인 아기귀신 로고" 
-                className="h-14 sm:h-16 w-14 sm:w-16 object-contain rounded-2xl border border-slate-200 shadow-sm" 
+                className="h-11 sm:h-12 w-11 sm:w-12 object-contain rounded-xl border border-slate-200/80" 
               />
             </div>
             <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span
-                  className="text-xl sm:text-2xl tracking-wide text-slate-800"
-                  style={{
-                    fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif",
-                  }}
-                >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base sm:text-lg font-bold tracking-tight text-slate-700">
                   귀신코인 충전소
                 </span>
-                <span
-                  className="text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 tracking-wide"
-                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
-                >
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200/80 font-medium">
                   GHOST COIN 공식 센터
                 </span>
               </div>
-              <p
-                className="text-xs text-slate-500 mt-1.5 tracking-wide"
-                style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
-              >
+              <p className="text-xs text-slate-400 mt-0.5">
                 귀신같이 시리즈 & 패밀리 솔루션({appName}) 공용 귀신코인 충전
               </p>
             </div>
           </div>
-          <div className={`text-right hidden sm:block border-l border-slate-200 pl-4 ${isModal && onClose ? ' pr-7' : ''}`}>
-            <span
-              className="text-xs text-indigo-700 block tracking-wide"
-              style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
-            >
+          <div className={`text-right hidden sm:block border-l border-slate-200/80 pl-4 ${isModal && onClose ? ' pr-7' : ''}`}>
+            <span className="text-xs text-slate-500 font-medium block">
               NHN KCP / 5대 간편결제 공식 제휴
             </span>
-            <span
-              className="text-[11px] text-slate-500 mt-0.5 block"
-              style={{ fontFamily: "'TmoneyRoundWindExtraBold', sans-serif" }}
-            >
+            <span className="text-[11px] text-slate-400 mt-0.5 block">
               가맹점 상점명: 3몬스터
             </span>
           </div>
         </div>
 
         {/* 탭 전환 영역 (힘을 뺀 산뜻한 화이트 탭) */}
-        <div
-          className="bg-slate-100 p-1.5 border border-slate-200/90 rounded-2xl flex gap-1.5"
-          style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
-        >
+        <div className="bg-slate-100/90 p-1 border border-slate-200/80 rounded-xl flex gap-1">
           <button
             onClick={() => setTab('charge')}
             className={tab === 'charge'
-              ? "gh-light-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-white text-slate-800 border border-slate-300/90 shadow-xs transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all active:scale-[0.98] cursor-pointer"
+              ? "gh-light-tab flex-1 rounded-lg py-2 text-xs sm:text-sm font-semibold bg-white text-slate-800 border border-slate-200/90 shadow-2xs transition-all cursor-pointer"
+              : "flex-1 rounded-lg py-2 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer"
             }
           >
             👻 충전하기
@@ -530,8 +505,8 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               setTab('gift');
             }}
             className={tab === 'gift'
-              ? "flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-rose-50 text-rose-600 border border-rose-200 shadow-xs transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-rose-500 hover:text-rose-600 hover:bg-rose-50/60 transition-all active:scale-[0.98] cursor-pointer"
+              ? "gh-light-tab flex-1 rounded-lg py-2 text-xs sm:text-sm font-semibold bg-white text-slate-800 border border-slate-200/90 shadow-2xs transition-all cursor-pointer"
+              : "flex-1 rounded-lg py-2 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer"
             }
           >
             🎁 선물함 · 선물하기
@@ -539,8 +514,8 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
           <button
             onClick={() => setTab('history')}
             className={tab === 'history'
-              ? "gh-light-tab flex-1 rounded-xl py-2.5 text-sm tracking-wide bg-white text-slate-800 border border-slate-300/90 shadow-xs transition-all cursor-pointer"
-              : "flex-1 rounded-xl py-2.5 text-sm tracking-wide text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all active:scale-[0.98] cursor-pointer"
+              ? "gh-light-tab flex-1 rounded-lg py-2 text-xs sm:text-sm font-semibold bg-white text-slate-800 border border-slate-200/90 shadow-2xs transition-all cursor-pointer"
+              : "flex-1 rounded-lg py-2 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer"
             }
           >
             이용 내역
@@ -550,15 +525,12 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         {/* 충전 탭 화면 */}
         {tab === 'charge' && (
           <div className="space-y-4">
-            {/* 1. 귀신코인 스마트 충전 카드 (군더더기 제로 & 네이버페이식 누적 충전) */}
-            <div className="rounded-3xl border-2 border-slate-200/90 bg-white p-5 sm:p-7 shadow-lg">
+            {/* 1. 귀신코인 스마트 충전 카드 (오직 중앙 귀신코인 카드 1개에만 힘 집중!) */}
+            <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-2xs">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-indigo-800 block shadow-2xs"></span>
-                  <h2
-                    className="text-lg sm:text-xl text-slate-900 tracking-wide"
-                    style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
-                  >
+                <div className="flex items-center gap-2">
+                  <span className="w-1 h-4 rounded-full bg-slate-300 block"></span>
+                  <h2 className="text-sm sm:text-base font-semibold text-slate-600">
                     귀신코인 충전
                   </h2>
                 </div>
@@ -568,8 +540,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                     setGiftSubTab('send');
                     setTab('gift');
                   }}
-                  className="px-4 py-1.5 rounded-xl bg-gradient-to-b from-rose-50 to-rose-100/80 hover:from-rose-100 hover:to-rose-200/80 text-rose-600 border border-rose-200/90 text-xs tracking-wide transition-all cursor-pointer shadow-2xs hover:scale-102"
-                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                  className="px-3 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 border border-slate-200 text-xs font-medium transition-all cursor-pointer"
                 >
                   🎁 보유 귀신코인으로 지인에게 선물하기 ›
                 </button>
@@ -693,57 +664,51 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                 </div>
               </div>
 
-              {/* ⚡ 네이버페이식 누적 금액 권종 카드 (+1천, +5천, +1만, +5만 — 힘을 뺀 깔끔한 화이트·인디고 라이트 버튼) */}
-              <div className="mt-4 max-w-md mx-auto">
-                <div
-                  className="grid grid-cols-4 gap-2.5"
-                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
-                >
+              {/* ⚡ 네이버페이식 누적 금액 권종 버튼 (+1천, +5천, +1만, +5만 — 완전히 힘을 뺀 담백한 라이트 슬레이트 버튼) */}
+              <div className="mt-3.5 max-w-md mx-auto">
+                <div className="grid grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 1000, 1000000))}
-                    className="gh-light-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 text-slate-700 shadow-xs"
+                    className="gh-light-btn-1 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600"
                   >
-                    <span>+1천</span>
+                    +1천
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 5000, 1000000))}
-                    className="gh-light-btn-1 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 text-slate-700 shadow-xs"
+                    className="gh-light-btn-1 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600"
                   >
-                    <span>+5천</span>
+                    +5천
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 10000, 1000000))}
-                    className="gh-light-btn-2 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-white to-indigo-50/50 hover:to-indigo-50 border border-indigo-200 hover:border-indigo-300 text-indigo-700 shadow-xs"
+                    className="gh-light-btn-2 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600"
                   >
-                    <span>+1만</span>
+                    +1만
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedOption((prev) => Math.min(prev + 50000, 1000000))}
-                    className="gh-light-btn-3 py-3.5 rounded-2xl text-base sm:text-[17px] tracking-wide transition-all cursor-pointer active:scale-95 hover:-translate-y-0.5 bg-gradient-to-b from-white to-indigo-50/80 hover:to-indigo-100/70 border border-indigo-300 hover:border-indigo-400 text-indigo-800 shadow-xs"
+                    className="gh-light-btn-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600"
                   >
-                    <span>+5만</span>
+                    +5만
                   </button>
                 </div>
 
-                {/* 하단 할인 안내 (진하고 예쁘게 강조) */}
-                <div
-                  className="mt-3 py-2 px-3.5 rounded-xl bg-gradient-to-r from-slate-100 via-indigo-50/75 to-slate-100 border border-indigo-200/80 flex items-center justify-center flex-wrap gap-x-2 gap-y-1 text-xs sm:text-[13px] text-slate-700 shadow-2xs"
-                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
-                >
+                {/* 하단 할인 안내 (힘을 뺀 깔끔한 안내 바) */}
+                <div className="mt-2.5 py-1.5 px-3 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-center flex-wrap gap-x-2 gap-y-1 text-xs text-slate-500">
                   <span>
-                    1만원 이상 <strong className="text-rose-600 font-normal">5% 할인</strong>
+                    1만원 이상 <strong className="text-slate-700 font-semibold">5% 할인</strong>
                   </span>
                   <span className="text-slate-300">·</span>
                   <span>
-                    3만원 이상 <strong className="text-rose-600 font-normal">10% 할인</strong>
+                    3만원 이상 <strong className="text-slate-700 font-semibold">10% 할인</strong>
                   </span>
                   <span className="text-slate-300">·</span>
                   <span>
-                    5만원 이상 <strong className="text-rose-600 font-normal">10% 할인</strong>
+                    5만원 이상 <strong className="text-slate-700 font-semibold">10% 할인</strong>
                   </span>
                 </div>
               </div>
