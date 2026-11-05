@@ -2325,7 +2325,15 @@ export async function loadInitialPhotoDataset(): Promise<{
   }
 
   const buildPhotoItem = (
-    f: { path: string; size: number; date: string; mtimeMs: number },
+    f: {
+      path: string;
+      size: number;
+      date: string;
+      mtimeMs: number;
+      folderName?: string;
+      deviceSource?: string;
+      fullPath?: string;
+    },
     isQuarantined: boolean
   ): PhotoItem => {
     const tagSet = new Set<string>();
@@ -2345,10 +2353,26 @@ export async function loadInitialPhotoDataset(): Promise<{
     if (existingTags) {
       for (const t of existingTags) tagSet.add(t);
     }
+    const folderTokens: string[] = [];
+    if (f.folderName && !/^(test_photos|sample_photos_301|pictures|photos|desktop|downloads)$/i.test(f.folderName)) {
+      const cleanedFolder = f.folderName
+        .replace(/^\d{2,8}[_-]?/, '')
+        .replace(/[_&-]+/g, ' ')
+        .trim();
+      for (const tk of cleanedFolder.split(/\s+/)) {
+        if (tk.length >= 2) {
+          folderTokens.push(tk);
+          tagSet.add(`#${tk}`);
+        }
+      }
+    }
+    if (f.deviceSource && f.deviceSource.includes('드라이브')) {
+      tagSet.add(`#${f.deviceSource.split(' ')[0]}`);
+    }
     if (tagSet.size === 0) {
-      if (f.date.startsWith('2024.07')) tagSet.add('#여름휴가·추억');
-      else if (f.date.startsWith('2026.09')) tagSet.add('#가을나들이');
-      else if (f.date.startsWith('2026.10')) tagSet.add('#일상스냅');
+      if (f.date.startsWith('2024.07') || f.date.startsWith('2024-07')) tagSet.add('#여름휴가·추억');
+      else if (f.date.startsWith('2026.09') || f.date.startsWith('2026-09')) tagSet.add('#가을나들이');
+      else if (f.date.startsWith('2026.10') || f.date.startsWith('2026-10')) tagSet.add('#일상스냅');
       else tagSet.add('#가족앨범');
     }
     const trash = trashByPhoto.get(f.path);
@@ -2393,10 +2417,12 @@ export async function loadInitialPhotoDataset(): Promise<{
           ? new Float32Array(semMeta.vec)
           : undefined,
       clusterId: semMeta?.clusterId,
-      locationKo: semMeta?.locationKo,
-      captionKo: semMeta?.captionKo,
+      locationKo: semMeta?.locationKo || (folderTokens.length > 0 ? folderTokens.join(' · ') : f.deviceSource),
+      captionKo:
+        semMeta?.captionKo ||
+        (folderTokens.length > 0 ? `[${folderTokens.join(' ')}] 폴더의 ${f.path} 사진` : undefined),
       captionEn: semMeta?.captionEn,
-      keywordsKo: semMeta?.keywordsKo,
+      keywordsKo: Array.from(new Set([...(semMeta?.keywordsKo ?? []), ...folderTokens])),
       ontologyPrimaryTags: semMeta?.ontologyPrimaryTags,
       ontologyCaptionTags: semMeta?.ontologyCaptionTags,
       isVaultDocument: Boolean(vaultLabel),

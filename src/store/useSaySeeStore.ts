@@ -2221,6 +2221,56 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       analogYearProposals,
     } = get();
 
+    // [0) 무설정 채팅·검색 직결 드라이브 스캔] "D드라이브는 왜 검색안돼?", "D에 사진있는데 찾아줘", "외장하드 찾아줘", "마이박스 사진 찾아줘"
+    if (
+      !(/\bs\s*드라이브\b/i.test(query) && /고쳐|오류|끊김|안\s*열려/i.test(query)) &&
+      /(?:[c-zC-Z]\s*드라이브|\b[d-zD-Z]\s*에\s*(?:있는\s*)?(?:사진|영상|동영상|문서|파일|폴더)|외장\s*하드|마이박스|mybox)/i.test(
+        query
+      )
+    ) {
+      try {
+        const res = await fetch(getZCoreUrl('/__zcore/scan-drive'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ drive: query, query }),
+        });
+        const scanData = await res.json();
+        if (scanData?.ok) {
+          await get().initApp(true);
+          const label = scanData.driveLabel || '추가 드라이브';
+          const toastMsg = `⚡ 별도 설정 없이 [${label}]를 즉시 스캔하여 연결했습니다! (사진 ${
+            scanData.drivePhotoCount ?? 0
+          }장 · 동영상 ${scanData.driveVideoCount ?? 0}개 · 문서 ${scanData.driveDocCount ?? 0}건)`;
+          void speakWithHyunsuOrSunhi(toastMsg, 'hyunsu_briefing');
+
+          const strippedKw = query
+            .replace(/[c-zC-Z]\s*드라이브(?:는|은|도|에서|에)?/gi, ' ')
+            .replace(/\b[d-zD-Z]\s*에(?:서)?\b/gi, ' ')
+            .replace(/외장\s*하드(?:는|은|도|에서|에)?|마이박스(?:는|은|도|에서|에)?|mybox/gi, ' ')
+            .replace(/왜\s*검색\s*안\s*(?:돼|되나요|되니|됨)|검색\s*안\s*돼|있는데|있는\s*거|스캔해\s*줘|연결해\s*줘|찾아\s*줘|보여\s*줘|검색해\s*줘/gi, ' ')
+            .replace(/[?!.~,]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          if (strippedKw && !/^(사진|영상|동영상|문서|파일|폴더)$/.test(strippedKw)) {
+            await get().runTextQuery(strippedKw);
+            set({ lastQuarantineToast: toastMsg });
+            return;
+          }
+
+          set({
+            hasExecutedUserSearch: true,
+            activeQuery: `${label} 전체 연결 완료 (${scanData.drivePhotoCount ?? 0}장)`,
+            matchedTags: [`#${label.replace(/\s+/g, '')}`, '#무설정즉시스캔', '#전체검색연결'],
+            lastQuarantineToast: toastMsg,
+          });
+          return;
+        }
+      } catch {
+        /* ignore and continue */
+      }
+    }
+
     // [양방향 0토큰 통합 음성/텍스트 자동 라우터 (Zero-LLM Bidirectional Voice Toss)]
     // 1) [🎯 찾기]에서 치우기·고치기·복원 의도("중복 사진 치워줘", "글씨 크기 키워줘", "원래대로 돌려줘")를 말하거나 입력하면
     //    즉시 [✋ 손보기] 탭으로 화면을 전환하고 [✋ 손보기 대화창]에 전달하여 원스톱 실행!

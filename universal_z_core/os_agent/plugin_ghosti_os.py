@@ -621,11 +621,79 @@ _SKIP_DIR_NAMES = {
     "build",
     "merlin_z_core",
     "universal_z_core",
+    "merlin_ai_models",
+    "merlinfamilyos",
+    "antigravity",
+    "marketingmonster",
+    "yesfile",
     "$recycle.bin",
+    "system volume information",
+    "programdata",
     "windows",
     "program files",
     "program files (x86)",
 }
+_ALLOW_CORPUS_DIRS = {
+    "test_photos",
+    "test_docs",
+    "ghosti_test_corpus",
+    "sample_photos_301",
+}
+_CUSTOM_SCAN_ROOTS_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_custom_scan_roots.json"
+
+
+def _is_cloud_virtual_or_unpinned_file(p: Path) -> bool:
+    """G: 드라이브 등 가상 클라우드 마운트 경로이거나 클라우드 미동기화(Recall-on-access) 파일인지 판별하여 대량 스캔 시 강제 다운로드를 방지합니다."""
+    s = str(p).lower()
+    if s.startswith("g:"):
+        return True
+    try:
+        attrs = getattr(p.stat(), "st_file_attributes", 0)
+        # FILE_ATTRIBUTE_OFFLINE (0x1000) | FILE_ATTRIBUTE_RECALL_ON_OPEN (0x40000) | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS (0x400000)
+        if attrs & (0x1000 | 0x40000 | 0x400000):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _load_custom_scan_roots() -> List[Path]:
+    out: List[Path] = []
+    try:
+        if _CUSTOM_SCAN_ROOTS_FILE.exists():
+            raw = json.loads(_CUSTOM_SCAN_ROOTS_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, list):
+                for item in raw:
+                    p = Path(str(item))
+                    if p.exists() and p.is_dir():
+                        out.append(p)
+    except Exception:
+        pass
+    return out
+
+
+def _save_custom_scan_roots(new_paths: List[Path]) -> List[Path]:
+    existing = _load_custom_scan_roots()
+    seen = {str(p.resolve()).lower() for p in existing if p.exists()}
+    merged = list(existing)
+    for np in new_paths:
+        try:
+            if np.exists() and np.is_dir():
+                r_str = str(np.resolve()).lower()
+                if r_str not in seen:
+                    seen.add(r_str)
+                    merged.append(np)
+        except Exception:
+            pass
+    try:
+        _CUSTOM_SCAN_ROOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _CUSTOM_SCAN_ROOTS_FILE.write_text(
+            json.dumps([str(p) for p in merged], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return merged
 
 
 def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
@@ -638,6 +706,8 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
             roots.append(p)
     exe_dir = Path(sys.executable).resolve().parent
     candidates = [
+        Path("D:/Ghosti/Ghosti_Test_Corpus"),
+        THIS_DIR.parents[1] / "Ghosti_Test_Corpus",
         exe_dir / "sample_photos_301",
         THIS_DIR / "sample_photos_301",
         THIS_DIR.parents[1] / "test_photos",
@@ -656,6 +726,7 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         onedrive / "문서",
         onedrive / "Desktop",
         onedrive / "바탕 화면",
+        *_load_custom_scan_roots(),
     ]
     seen_resolved: set[str] = set()
     for c in candidates:
@@ -670,12 +741,33 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
     return roots
 
 
+def _is_code_repo_dir(d: Path) -> bool:
+    name_low = d.name.lower()
+    if name_low in _ALLOW_CORPUS_DIRS:
+        return False
+    # 구글드라이브 내부 해시 캐시 폴더(12자리 이상 숫자 폴더명) 및 GitHub zip 압축해제 폴더 제외
+    if re.match(r"^\d{10,}$", name_low) or "-main" in name_low or "-master" in name_low:
+        return True
+    try:
+        if (
+            (d / ".git").exists()
+            or (d / "package.json").exists()
+            or (d / "Cargo.toml").exists()
+            or (d / "requirements.txt").exists()
+            or (d / "pyproject.toml").exists()
+        ):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
     result: List[Path] = []
     seen: set[str] = set()
 
     def _walk(curr: Path, depth: int) -> None:
-        if depth > max_depth:
+        if depth > max_depth or len(result) >= 120:
             return
         try:
             r_str = str(curr.resolve()).lower()
@@ -686,7 +778,14 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
             if depth == max_depth:
                 return
             for sub in sorted(curr.iterdir(), key=lambda x: x.name):
-                if sub.is_dir() and not sub.name.startswith(".") and sub.name.lower() not in _SKIP_DIR_NAMES:
+                if len(result) >= 120:
+                    break
+                if (
+                    sub.is_dir()
+                    and not sub.name.startswith(".")
+                    and sub.name.lower() not in _SKIP_DIR_NAMES
+                    and not _is_code_repo_dir(sub)
+                ):
                     _walk(sub, depth + 1)
         except Exception:
             pass
@@ -698,11 +797,140 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
 
 def _detect_folder_label(p: Path) -> str:
     s = str(p).lower()
+    if "mybox" in s or "마이박스" in s:
+        return "네이버 마이박스"
+    if "내 드라이브" in s or "my drive" in s or s.startswith("g:"):
+        return "G: 구글 드라이브"
     if "desktop" in s or "바탕 화면" in s or "바탕화면" in s:
         return "PC 바탕화면"
     if "downloads" in s or "다운로드" in s:
         return "스마트폰 다운로드"
+    if len(s) >= 2 and s[1] == ":" and s[0] not in ("c",):
+        return f"{s[0].upper()}: 드라이브 ({p.name})"
     return "PC 로컬 폴더"
+
+
+def scan_and_register_custom_drive(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    [무설정 채팅 직결 드라이브 스캔]
+    유저가 설정창 없이 채팅창이나 검색창에서 'D드라이브는 왜 검색안돼?', 'D에 사진있는데 찾아줘',
+    '외장하드 찾아줘', '마이박스 찾아줘'라고 말하면 해당 드라이브/폴더를 즉시 스캔하고 영구 등록합니다.
+    """
+    data = params or {}
+    raw_spec = str(data.get("drive") or data.get("target") or data.get("query") or "").strip()
+    spec_low = raw_spec.lower()
+    home = Path.home()
+
+    target_candidates: List[Path] = []
+    drive_label = "추가 드라이브"
+
+    if "마이박스" in spec_low or "mybox" in spec_low or "네이버" in spec_low:
+        drive_label = "네이버 마이박스(MYBOX)"
+        target_candidates = [
+            Path("G:/내 드라이브/MyBox"),
+            Path("G:/My Drive/MyBox"),
+            home / "MYBOX",
+            home / "네이버 MYBOX",
+            home / "Naver MYBOX",
+            Path("D:/MYBOX"),
+            Path("C:/MYBOX"),
+        ]
+    elif "구글" in spec_low or "gdrive" in spec_low or "g드라이브" in spec_low or "g 드라이브" in spec_low:
+        drive_label = "G: 구글 드라이브"
+        target_candidates = [
+            Path("G:/내 드라이브"),
+            Path("G:/My Drive"),
+            Path("G:/"),
+        ]
+    elif "외장" in spec_low or "usb" in spec_low:
+        drive_label = "외장하드·보조 드라이브"
+        for letter in ("D", "E", "F", "G", "H", "I"):
+            target_candidates.append(Path(f"{letter}:/"))
+    else:
+        m = re.search(r"([c-zC-Z])\s*(?:드라이브|:|에\b|폴더)", raw_spec)
+        if not m and len(raw_spec) <= 3 and re.match(r"^[c-zC-Z]:?\\?$", raw_spec):
+            m = re.match(r"^([c-zC-Z])", raw_spec)
+        letter = (m.group(1).upper() if m else "D")
+        drive_label = f"{letter}: 드라이브"
+        if letter == "G":
+            target_candidates = [Path("G:/내 드라이브"), Path("G:/My Drive"), Path("G:/")]
+        else:
+            target_candidates = [Path(f"{letter}:/")]
+
+    valid_roots: List[Path] = []
+    for cand in target_candidates:
+        try:
+            if cand.exists() and cand.is_dir():
+                valid_roots.append(cand)
+        except Exception:
+            pass
+
+    if not valid_roots:
+        return {
+            "ok": False,
+            "exists": False,
+            "driveLabel": drive_label,
+            "error": f"현재 PC에서 {drive_label}를 찾을 수 없거나 연결되어 있지 않습니다. 드라이브(또는 외장하드) 연결 상태를 확인해 주세요.",
+        }
+
+    discovered_roots: List[Path] = []
+    for vr in valid_roots:
+        if len(str(vr).rstrip("\\/")) <= 2:
+            discovered_roots.append(vr)
+            try:
+                for sub in sorted(vr.iterdir(), key=lambda x: x.name):
+                    if (
+                        sub.is_dir()
+                        and not sub.name.startswith(".")
+                        and sub.name.lower() not in _SKIP_DIR_NAMES
+                        and not _is_code_repo_dir(sub)
+                    ):
+                        discovered_roots.append(sub)
+            except Exception:
+                pass
+        else:
+            discovered_roots.append(vr)
+
+    _save_custom_scan_roots(discovered_roots)
+
+    drive_scan_dirs = _iter_scan_dirs(discovered_roots, max_depth=3)
+    drive_photos = 0
+    drive_videos = 0
+    drive_docs = 0
+
+    for d in drive_scan_dirs:
+        try:
+            for entry in d.iterdir():
+                if not entry.is_file():
+                    continue
+                ext = entry.suffix.lower()
+                if ext in _IMAGE_EXTS:
+                    drive_photos += 1
+                elif ext in _VIDEO_EXTS:
+                    drive_videos += 1
+                elif ext in _DOC_EXTS or ext in (".gdoc", ".gsheet"):
+                    drive_docs += 1
+        except Exception:
+            pass
+
+    all_photos = list_local_photos({})
+    all_videos = list_local_videos({})
+    all_docs = list_local_docs({})
+
+    return {
+        "ok": True,
+        "exists": True,
+        "driveLabel": drive_label,
+        "driveRoots": [str(p) for p in valid_roots],
+        "drivePhotoCount": drive_photos,
+        "driveVideoCount": drive_videos,
+        "driveDocCount": drive_docs,
+        "totalPhotos": int(all_photos.get("total") or 0),
+        "totalVideos": int(all_videos.get("total") or 0),
+        "totalDocs": int(all_docs.get("total") or 0),
+        "scannedFolderCount": len(drive_scan_dirs),
+        "sampleFolders": [d.name for d in drive_scan_dirs[:8] if d.name],
+    }
 
 
 def resolve_active_photo_dir(custom_path: str = "") -> Path:
@@ -849,6 +1077,8 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
 
 
 def _extract_doc_text(entry: Path) -> str:
+    if _is_cloud_virtual_or_unpinned_file(entry):
+        return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 클라우드 연동 문서입니다. 파일명 및 키워드로 즉시 검색됩니다."
     ext = entry.suffix.lower()
     try:
         if ext in (".txt", ".md", ".csv"):
@@ -1007,7 +1237,7 @@ def _parse_mvhd_chunk(buf: bytes) -> float | None:
 def _get_fast_video_duration_sec(file_path: Path) -> float:
     """MP4/MOV 파일의 앞부분(512KB) 및 뒷부분(512KB)에서 mvhd 헤더를 0.001초 만에 파싱하여 실제 재생 시간(초)을 반환합니다."""
     ext = file_path.suffix.lower()
-    if ext in (".mp4", ".m4v", ".mov"):
+    if ext in (".mp4", ".m4v", ".mov") and not _is_cloud_virtual_or_unpinned_file(file_path):
         try:
             sz = file_path.stat().st_size
             with open(file_path, "rb") as f:
@@ -1451,6 +1681,9 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
     if act in ("gdrive-smart-scan", "gdrive-scan"):
         q = str(data.get("query") or data.get("q") or "").strip()
         return scan_g_drive_google_docs_and_sheets(q)
+
+    if act in ("scan-drive", "add-scan-drive", "connect-drive", "drive-scan"):
+        return scan_and_register_custom_drive(data)
 
     if act in ("boot-lag-care", "boot_lag_care"):
         sub = str(data.get("subAction") or data.get("mode") or "diagnose").strip()

@@ -1821,6 +1821,70 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
   }
 
+  // [무설정 채팅 직결 드라이브 스캔] "D드라이브는 왜 검색안돼?", "D에 사진있는데 찾아줘", "외장하드 찾아줘", "마이박스 사진 찾아줘"
+  // 복잡한 설정 페이지나 버튼 없이 채팅창에서 말하면 즉시 해당 드라이브를 스캔·등록하고 검색 엔진에 연결합니다.
+  const isDynamicDriveScanRequest =
+    !(/\bs\s*드라이브\b/i.test(clean) && /고쳐|오류|끊김|안\s*열려/i.test(clean)) &&
+    (/(?:[c-zC-Z]\s*드라이브|\b[d-zD-Z]\s*에\s*(?:있는\s*)?(?:사진|영상|동영상|문서|파일|폴더)|외장\s*하드|마이박스|mybox)/i.test(
+      clean
+    ));
+
+  if (isDynamicDriveScanRequest) {
+    const scanRes = await zcoreJson<{
+      ok: boolean;
+      exists?: boolean;
+      driveLabel?: string;
+      driveRoots?: string[];
+      drivePhotoCount?: number;
+      driveVideoCount?: number;
+      driveDocCount?: number;
+      totalPhotos?: number;
+      totalVideos?: number;
+      totalDocs?: number;
+      scannedFolderCount?: number;
+      sampleFolders?: string[];
+      error?: string;
+    }>('/__zcore/scan-drive', postJson({ drive: clean, query: clean }), 8000);
+
+    if (scanRes.ok && scanRes.data?.ok) {
+      const d = scanRes.data;
+      const label = d.driveLabel || '추가 드라이브';
+      await useSaySeeStore.getState().initApp(true);
+
+      const strippedKw = clean
+        .replace(/[c-zC-Z]\s*드라이브(?:는|은|도|에서|에)?/gi, ' ')
+        .replace(/\b[d-zD-Z]\s*에(?:서)?\b/gi, ' ')
+        .replace(/외장\s*하드(?:는|은|도|에서|에)?|마이박스(?:는|은|도|에서|에)?|mybox/gi, ' ')
+        .replace(/왜\s*검색\s*안\s*(?:돼|되나요|되니|됨)|검색\s*안\s*돼|있는데|있는\s*거|스캔해\s*줘|연결해\s*줘|찾아\s*줘|보여\s*줘|검색해\s*줘/gi, ' ')
+        .replace(/[?!.~,]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const msgKo = `⚡ 별도 설정 없이 말씀하신 **[${label}]**를 즉시 스캔하여 검색 대상에 연결했습니다!\n• ${label} 확인 파일: 사진 **${
+        d.drivePhotoCount ?? 0
+      }장** · 동영상 **${d.driveVideoCount ?? 0}개** · 문서 **${d.driveDocCount ?? 0}건**\n• 현재 전체 검색 가능: 사진 ${
+        d.totalPhotos ?? 0
+      }장 · 동영상 ${d.totalVideos ?? 0}개 · 문서 ${
+        d.totalDocs ?? 0
+      }건\n이제부터 ${label}의 모든 파일이 자동으로 함께 검색됩니다.`;
+      speak(`${label}를 즉시 스캔하여 연결했습니다. 사진 ${d.drivePhotoCount ?? 0}장과 동영상 ${d.driveVideoCount ?? 0}개가 추가되었습니다.`);
+
+      if (strippedKw && !/^(사진|영상|동영상|문서|파일|폴더)$/.test(strippedKw)) {
+        return reply(sourceTab, msgKo, {
+          cardKind: 'SEARCH_ROUTING',
+          searchKeyword: strippedKw,
+        });
+      }
+      return reply(sourceTab, msgKo);
+    }
+
+    const errMsg =
+      (scanRes.ok ? scanRes.data?.error : scanRes.error) ||
+      '말씀하신 드라이브가 현재 PC에 연결되어 있지 않거나 접근할 수 없습니다. 외장하드나 드라이브 연결 상태를 확인해 주세요.';
+    speak(errMsg);
+    return reply(sourceTab, `⚠️ ${errMsg}`);
+  }
+
   // 단순 사진/영상/문서 찾기 발화("작년 가족사진 찾아줘", "바닷가에서 뛰노는 아이 보여줘")도 LLM 호출 대기 없이 0.001초 만에 [🎯 찾기]로 즉시 토스!
   const earlySearchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
   if (

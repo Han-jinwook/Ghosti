@@ -3405,6 +3405,15 @@ function ghostiLocalBridge(): Plugin {
         res.end(JSON.stringify(out));
       });
 
+      server.middlewares.use('/__zcore/scan-drive', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        const body = req.method === 'POST' ? await readJsonBody(req) : {};
+        const u = new URL(req.url || '/', 'http://localhost');
+        const drive = String(body?.drive || body?.query || u.searchParams.get('drive') || u.searchParams.get('q') || '').trim();
+        const out = await runBuiltinPluginPython('ghosti_os', 'scan-drive', { ...body, drive });
+        res.end(JSON.stringify(out));
+      });
+
       server.middlewares.use('/__zcore/create-shortcut', async (req, res) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         const body = req.method === 'POST' ? await readJsonBody(req) : {};
