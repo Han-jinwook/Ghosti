@@ -344,6 +344,63 @@ export function resetSharedMonsterChatToWelcome() {
   notifySharedChatListeners();
 }
 
+/**
+ * [🎯 찾기] 화면 등 외부 탭에서 음성/텍스트로 손보기·설정 변경 명령을 발화했을 때
+ * 컴포넌트 마운트 타이밍과 무관하게 0.001초 만에 [✋ 손보기 대화창] 스토어에서 직접 실행하고
+ * 현수/선희 성우 음성 안내까지 완결합니다.
+ */
+export async function submitExternalMonsterChatQuery(
+  rawQuery: string,
+  sourceTab: 'trash' | 'repair' = 'trash'
+): Promise<void> {
+  const raw = (rawQuery || '').trim();
+  if (!raw || sharedChatState.busy) return;
+
+  const userMsg: MonsterChatMessage = {
+    id: `user_${Date.now()}`,
+    role: 'user',
+    timestamp: new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }),
+    text: raw,
+    sourceTab,
+  };
+
+  setSharedMonsterMessages((prev) => [...prev, userMsg]);
+  setSharedMonsterBusy(true);
+
+  try {
+    const assistantMsg = await processUnifiedMonsterChatQuery({
+      query: raw,
+      sourceTab,
+      literacyLevel: sharedChatState.literacyLevel,
+      ttsEnabled: sharedChatState.ttsEnabled,
+    });
+    setSharedMonsterMessages((prev) => [...prev, assistantMsg]);
+    if (assistantMsg.repairSymptomQuery) {
+      try {
+        void useSaySeeStore.getState().submitSetupMonsterQuery(assistantMsg.repairSymptomQuery);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (assistantMsg.cardKind === 'SEARCH_ROUTING' && assistantMsg.searchKeyword) {
+      try {
+        const st = useSaySeeStore.getState();
+        void st.runTextQuery(assistantMsg.searchKeyword);
+        st.setDesktopTab('dashboard');
+        st.setMobileTab('search');
+      } catch {
+        /* ignore */
+      }
+    }
+  } finally {
+    setSharedMonsterBusy(false);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Z-코어 통신 (실패는 실패로 돌려줌)
 // ---------------------------------------------------------------------------
@@ -1208,30 +1265,77 @@ ${payload.summaryText}`, {
     });
   }
 
-  // 5-B) 다크 모드 / 라이트 모드 테마 즉시 변경
+  // 5-A) 화면 글씨/글자 크기 즉시 확대·축소·기본 복원
   if (
-    /(?:다크\s*모드|블랙\s*모드|어둡게|라이트\s*모드|밝게|화면\s*테마).*?(?:바꿔|변경|적용|설정|켜|꺼|해\s*줘|해\s*주세요)/i.test(clean) ||
-    /^(?:다크\s*모드|라이트\s*모드)(?:로)?$/i.test(clean)
+    /(?:글씨|글자)\s*(?:크기|사이즈)?.*?(?:키워|크게|확대|작게|줄여|보통|기본|원래대로|바꿔|조절|해\s*줘|해\s*주세요)/i.test(
+      clean
+    ) ||
+    /^(?:글씨|글자)\s*(?:크게|작게|키워줘|줄여줘)$/i.test(clean)
   ) {
-    const isDark = /다크|블랙|어둡게/.test(clean);
-    const targetTheme = isDark ? 'dark' : 'light';
-    const store = useSaySeeStore.getState();
-    store.setThemeMode(targetTheme);
-    const labelKo = isDark ? '다크 모드 (어두운 화면)' : '라이트 모드 (밝은 화면)';
-    const summaryText = '화면 테마를 눈이 편안한 ' + labelKo + '로 즉시 변경했습니다.';
+    const isSmaller = /작게|줄여|작아/.test(clean);
+    const isReset = /보통|기본|원래대로|100/.test(clean);
+    const nextScale = isSmaller ? '95%' : isReset ? '100%' : '112%';
+    const labelKo = isSmaller
+      ? '조금 작게 (95%)'
+      : isReset
+      ? '기본 크기 (100%)'
+      : '시원하게 큰 글씨 (112%)';
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.fontSize = nextScale;
+      try {
+        localStorage.setItem('ghosti_ui_font_scale', nextScale);
+      } catch {
+        /* ignore */
+      }
+    }
+    const summaryText = isSmaller
+      ? '화면 글자 크기를 한눈에 많이 보이도록 조금 작게(95%) 조정했습니다.'
+      : isReset
+      ? '화면 글자 크기를 원래 기본 크기(100%)로 되돌렸습니다.'
+      : '어르신과 사용자분께서 보시기 편하도록 화면 글자 크기를 시원하게(112%) 키웠습니다.';
     const payload: MonsterAppSettingsPayload = {
       settingCategory: 'GHOST_WINDOW_PREF',
-      badgeText: '🌓 화면 테마 ' + (isDark ? '다크 모드' : '라이트 모드') + ' 변경 완료',
+      badgeText: `🔠 화면 글자 크기 즉시 변경 완료 (${labelKo})`,
       summaryText,
       appliedValueLabel: labelKo,
     };
     speak(summaryText);
-    return reply(sourceTab, '🎛️ **[화면 테마 즉시 변경 완료]**\n' + summaryText, {
+    return reply(sourceTab, `🎛️ **[글자 크기 즉시 변경 완료]**\n${summaryText}`, {
+      cardKind: 'APP_SETTINGS_CONTROL',
+      appSettingsPayload: payload,
+      followUpSuggestions: [
+        '글씨 크기 원래 기본으로 돌려줘',
+        '복사 기록 30일 보관으로 바꿔줘',
+        '바탕화면 어지러운 스크린샷들 한곳으로 모아줘',
+      ],
+    });
+  }
+
+  // 5-B) 라이트 모드(밝은 화면) 적용 및 다크 모드 미사용 안내 (멀린님 확정: 다크 모드 배제, 라이트 모드 단일 표준)
+  if (
+    /(?:다크\s*모드|블랙\s*모드|어둡게|라이트\s*모드|밝은\s*모드|밝게|화면\s*테마).*?(?:바꿔|변경|적용|설정|켜|꺼|해\s*줘|해\s*주세요)/i.test(clean) ||
+    /^(?:다크\s*모드|라이트\s*모드|밝은\s*모드)(?:로)?$/i.test(clean)
+  ) {
+    const requestedDark = /다크|블랙|어둡게/.test(clean);
+    const store = useSaySeeStore.getState();
+    store.setThemeMode('light');
+    const labelKo = '라이트 모드 (밝고 선명한 표준 화면)';
+    const summaryText = requestedDark
+      ? '귀신같이는 사진과 문서 가독성을 위해 다크 모드를 사용하지 않고 항상 밝고 선명한 라이트 모드로 고정 운영됩니다.'
+      : '화면 테마를 눈이 편안하고 사진·문서가 선명하게 보이는 라이트 모드로 적용했습니다.';
+    const payload: MonsterAppSettingsPayload = {
+      settingCategory: 'GHOST_WINDOW_PREF',
+      badgeText: '☀️ 화면 테마 라이트 모드 유지 완료',
+      summaryText,
+      appliedValueLabel: labelKo,
+    };
+    speak(summaryText);
+    return reply(sourceTab, '🎛️ **[화면 테마 안내]**\n' + summaryText, {
       cardKind: 'APP_SETTINGS_CONTROL',
       appSettingsPayload: payload,
       followUpSuggestions: [
         '글씨 크기 좀 더 크게 키워줘',
-        '다운로드 폴더 중복 파일이랑 용량 큰 영상 정리해줘',
+        '복사 기록 30일 보관으로 바꿔줘',
         '바탕화면 어지러운 스크린샷들 한곳으로 모아줘',
       ],
     });
@@ -2165,7 +2269,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         llmActionJson: actionJson,
         followUpSuggestions: [
           '글씨 크기 좀 더 크게 키워줘',
-          '다크 모드로 바꿔줘',
+          '복사 기록 30일 보관으로 바꿔줘',
           '바탕화면 어지러운 스크린샷들 한곳으로 모아줘',
         ],
       });

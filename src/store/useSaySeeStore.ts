@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { getZCoreUrl, zCoreBridge, ensureLoginAndZCoreReady } from '../services/zCoreBridge';
 import { playMenuSummonSound } from '../services/babyGhostSound';
+import { submitExternalMonsterChatQuery } from '../services/monsterChatRouter';
 
 /**
  * [사진 정리 휴지통 이동/복원 — 정직 처리]
@@ -1070,14 +1071,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   applyHtmlThemeClass('light');
   return {
   themeMode: 'light',
-  setThemeMode: (themeMode) => {
-    applyHtmlThemeClass(themeMode);
-    set({ themeMode });
+  setThemeMode: (_themeMode) => {
+    applyHtmlThemeClass('light');
+    set({ themeMode: 'light' });
   },
   toggleThemeMode: () => {
-    const next: ThemeMode = get().themeMode === 'light' ? 'dark' : 'light';
-    applyHtmlThemeClass(next);
-    set({ themeMode: next });
+    applyHtmlThemeClass('light');
+    set({ themeMode: 'light' });
   },
   layout: 'desktop',
   mobileTab: 'search',
@@ -2214,19 +2214,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     // 1) [🎯 찾기]에서 치우기·고치기·복원 의도("중복 사진 치워줘", "글씨 크기 키워줘", "원래대로 돌려줘")를 말하거나 입력하면
     //    즉시 [✋ 손보기] 탭으로 화면을 전환하고 [✋ 손보기 대화창]에 전달하여 원스톱 실행!
     if (isMonsterCareIntentFromSearch(query)) {
-      if (typeof window !== 'undefined') {
-        try {
-          sessionStorage.setItem('ghosti_pending_monster_query', query);
-        } catch {}
-        window.dispatchEvent(
-          new CustomEvent('ghosti_toss_to_monster_chat', { detail: { query } })
-        );
-      }
       set({
         desktopTab: 'trash',
         mobileTab: 'trash',
-        lastQuarantineToast: `🪄 [양방향 0토큰 자동 토스] "${query}" 요청을 감지해 [✋ 손보기 대화창]으로 즉시 연결했습니다!`,
+        lastQuarantineToast: `🪄 [양방향 0토큰 자동 실행] "${query}" 음성·텍스트 명령을 [✋ 손보기 대화창]에서 즉시 실행했습니다!`,
       });
+      void submitExternalMonsterChatQuery(query, 'trash');
       return;
     }
 
