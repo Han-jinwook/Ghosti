@@ -2045,6 +2045,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }));
     const totalFrames = indexedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
 
+    const currentSearchSpace = get().searchSpace;
+    const currentHasUserSelectedSearchTab = get().hasUserSelectedSearchTab;
+    const currentHasExecutedUserSearch = get().hasExecutedUserSearch;
+
     set({
       photos: enrichedPhotos,
       duplicateGroups: dataset.duplicateGroups,
@@ -2063,11 +2067,24 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       syncState,
       sentenceChips: localChips,
       onboardingAhaItems: localAhaItems,
-      searchSpace: 'gallery',
-      hasExecutedUserSearch: false,
-      hasUserSelectedSearchTab: false,
-      activeQuery: `전체 갤러리 사진 (${enrichedPhotos.filter((p) => !p.quarantined).length}장)`,
-      matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
+      // 유저가 이미 동영상이나 문서 탭을 클릭해 탐색 중이거나 검색한 경우, 백그라운드 재인덱싱/Z코어 재연결 시 사진(gallery) 탭으로 강제 롤백되는 현상을 원천 방지
+      searchSpace: currentHasUserSelectedSearchTab ? currentSearchSpace : 'gallery',
+      hasExecutedUserSearch: currentHasExecutedUserSearch,
+      hasUserSelectedSearchTab: currentHasUserSelectedSearchTab,
+      activeQuery: currentHasExecutedUserSearch
+        ? get().activeQuery
+        : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
+        ? `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
+        : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
+        ? `최근 서류 ${indexedDocs.length + initialVaultPhotos.length}건 통합 (로컬 문서 ${indexedDocs.length}건 + 촬영 서류 ${initialVaultPhotos.length}장)`
+        : `전체 갤러리 사진 (${enrichedPhotos.filter((p) => !p.quarantined).length}장)`,
+      matchedTags: currentHasExecutedUserSearch
+        ? get().matchedTags
+        : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
+        ? ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱']
+        : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
+        ? ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색']
+        : ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
       searchResults: initialGalleryPhotos,
       selectedTrashIds: trashIds,
       initialized: true,
