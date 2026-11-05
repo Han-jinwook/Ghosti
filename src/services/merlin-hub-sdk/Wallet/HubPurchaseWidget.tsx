@@ -353,18 +353,29 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         /* 원포인트 다크 카드 집중 디자인: 오직 중앙 메인 귀신코인 카드(.gh-dark-card) 단 1개에만 다크 네이비·골드 포인트를 집중하고, 상단 제목·탭·권종 버튼은 최대한 담백하고 힘을 뺀 화이트/연그레이 톤으로 정돈 */
         html body .hub-purchase-widget .gh-light-banner,
         html.theme-warm-light body .hub-purchase-widget .gh-light-banner {
-          background-image: none !important;
+          background-image: linear-gradient(135deg, #ffffff 0%, #f8faff 100%) !important;
           background-color: #ffffff !important;
-          border-color: #e2e8f0 !important;
-          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03) !important;
+          border: 1.5px solid #94a3b8 !important;
+          box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05) !important;
           color: #334155 !important;
+        }
+        html body .hub-purchase-widget .gh-section-box,
+        html.theme-warm-light body .hub-purchase-widget .gh-section-box {
+          background-color: #ffffff !important;
+          border: 1.5px solid #94a3b8 !important;
+          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05) !important;
+        }
+        html body .hub-purchase-widget .gh-light-tab-bar,
+        html.theme-warm-light body .hub-purchase-widget .gh-light-tab-bar {
+          background-color: #f1f5f9 !important;
+          border: 1.5px solid #cbd5e1 !important;
         }
         html body .hub-purchase-widget .gh-light-tab,
         html.theme-warm-light body .hub-purchase-widget .gh-light-tab {
           background-image: none !important;
           background-color: #ffffff !important;
-          border-color: #cbd5e1 !important;
-          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+          border: 1.5px solid #94a3b8 !important;
+          box-shadow: 0 2px 5px rgba(15, 23, 42, 0.06) !important;
           color: #1e293b !important;
         }
         html body .hub-purchase-widget .gh-dark-card,
@@ -389,16 +400,16 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         html.theme-warm-light body .hub-purchase-widget .gh-light-btn-3 {
           background-image: none !important;
           background-color: #f8fafc !important;
-          border-color: #e2e8f0 !important;
-          box-shadow: none !important;
-          color: #475569 !important;
+          border: 1.5px solid #cbd5e1 !important;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+          color: #334155 !important;
         }
         html body .hub-purchase-widget .gh-light-btn-1:hover,
         html body .hub-purchase-widget .gh-light-btn-2:hover,
         html body .hub-purchase-widget .gh-light-btn-3:hover {
           background-color: #f1f5f9 !important;
-          border-color: #cbd5e1 !important;
-          color: #1e293b !important;
+          border-color: #94a3b8 !important;
+          color: #0f172a !important;
         }
         html body .hub-purchase-widget .gh-dark-cta,
         html.theme-warm-light body .hub-purchase-widget .gh-dark-cta {
@@ -489,7 +500,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         </div>
 
         {/* 탭 전환 영역 (힘을 뺀 산뜻한 화이트 탭) */}
-        <div className="bg-slate-100/90 p-1 border border-slate-200/80 rounded-xl flex gap-1">
+        <div className="gh-light-tab-bar bg-slate-100 p-1 border border-slate-300 rounded-xl flex gap-1">
           <button
             onClick={() => setTab('charge')}
             className={tab === 'charge'
@@ -526,7 +537,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
         {tab === 'charge' && (
           <div className="space-y-4">
             {/* 1. 귀신코인 스마트 충전 카드 (오직 중앙 귀신코인 카드 1개에만 힘 집중!) */}
-            <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-2xs">
+            <div className="gh-section-box rounded-2xl border border-slate-300 bg-white p-5 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <span className="w-1 h-4 rounded-full bg-slate-300 block"></span>
@@ -715,7 +726,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
             </div>
 
             {/* 결제 수단 (간편결제 5종 다이렉트 호출 + 신용/체크카드) */}
-            <div className="rounded-2xl border-2 border-slate-200 bg-white p-5 sm:p-6 shadow-md">
+            <div className="gh-section-box rounded-2xl border border-slate-300 bg-white p-5 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between mb-3.5 flex-wrap gap-1">
                 <h2
                   className="text-base sm:text-lg text-slate-900 tracking-wide"
