@@ -782,7 +782,7 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
                     break
                 if (
                     sub.is_dir()
-                    and not sub.name.startswith(".")
+                    and (not sub.name.startswith(".") or sub.name == ".shortcut-targets-by-id")
                     and sub.name.lower() not in _SKIP_DIR_NAMES
                     and not _is_code_repo_dir(sub)
                 ):
@@ -840,6 +840,8 @@ def scan_and_register_custom_drive(params: Dict[str, Any] | None = None) -> Dict
         target_candidates = [
             Path("G:/내 드라이브"),
             Path("G:/My Drive"),
+            Path("G:/다른 컴퓨터"),
+            Path("G:/.shortcut-targets-by-id"),
             Path("G:/"),
         ]
     elif "외장" in spec_low or "usb" in spec_low:
@@ -853,7 +855,15 @@ def scan_and_register_custom_drive(params: Dict[str, Any] | None = None) -> Dict
         letter = (m.group(1).upper() if m else "D")
         drive_label = f"{letter}: 드라이브"
         if letter == "G":
-            target_candidates = [Path("G:/내 드라이브"), Path("G:/My Drive"), Path("G:/")]
+            target_candidates = [
+                Path("G:/내 드라이브"),
+                Path("G:/My Drive"),
+                Path("G:/다른 컴퓨터"),
+                Path("G:/.shortcut-targets-by-id"),
+                Path("G:/"),
+            ]
+        elif letter == "D":
+            target_candidates = [Path("D:/"), Path("F:/"), Path("E:/")]
         else:
             target_candidates = [Path(f"{letter}:/")]
 

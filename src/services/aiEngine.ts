@@ -2090,7 +2090,7 @@ export async function loadInitialPhotoDataset(): Promise<{
         scoresByPhoto.get(hit.name)![s.presetId] = calibratedScore;
       }
 
-      if (!def.trashCategory && rank < 6 && hubFreq < 5) {
+      if (!def.trashCategory && rank < 6 && hubFreq < 5 && !semanticByPhoto.has(hit.name) && hit.score >= 0.35) {
         tagsByPhoto.get(hit.name)!.add(def.categoryTag);
       }
     });
@@ -2354,9 +2354,14 @@ export async function loadInitialPhotoDataset(): Promise<{
       for (const t of existingTags) tagSet.add(t);
     }
     const folderTokens: string[] = [];
-    if (f.folderName && !/^(test_photos|sample_photos_301|pictures|photos|desktop|downloads)$/i.test(f.folderName)) {
+    if (
+      f.folderName &&
+      !/^(test_photos|sample_photos_301|ghosti_test_corpus|pictures|photos|desktop|downloads|\d{2}_.+)$/i.test(
+        f.folderName
+      )
+    ) {
       const cleanedFolder = f.folderName
-        .replace(/^\d{2,8}[_-]?/, '')
+        .replace(/^\d{4,8}[_-]?/, '')
         .replace(/[_&-]+/g, ' ')
         .trim();
       for (const tk of cleanedFolder.split(/\s+/)) {
