@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-05T10:08:41.740428",
+  "updated_at": "2026-11-05T10:45:25.403388",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -706,6 +706,14 @@
       "last_edited_time": "2026-11-04T07:05:00.000Z",
       "url": "https://app.notion.com/p/40ef9ffd2c1d807e961df7ef67bba8d1",
       "archived_at": "2026-11-05T10:08:41.740230"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-81bb-aaa6-dbcad4b548de",
+      "title": "🎯 [센스톡] 1. v4.3 연속 발송 시 다음 명단 자동 이동 점검",
+      "app": "센스톡",
+      "last_edited_time": "2026-11-04T07:05:00.000Z",
+      "url": "https://app.notion.com/p/1-v4-3-40df9ffd2c1d81bbaaa6dbcad4b548de",
+      "archived_at": "2026-11-05T10:45:25.403211"
     }
   ]
 }

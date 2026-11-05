@@ -982,6 +982,97 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     }
 
 
+def _get_fast_video_duration_sec(file_path: Path) -> float:
+    """MP4/MOV 파일의 moov 헤더를 0.001초 만에 파싱하여 실제 재생 시간(초)을 반환합니다 (헤더 파싱 불가 시 파일 크기 비례 근사)."""
+    ext = file_path.suffix.lower()
+    if ext in (".mp4", ".m4v", ".mov"):
+        try:
+            with open(file_path, "rb") as f:
+                while True:
+                    header = f.read(8)
+                    if len(header) < 8:
+                        break
+                    size, name = struct.unpack(">I4s", header)
+                    if name == b"moov":
+                        moov_data = f.read(size - 8)
+                        mvhd_pos = moov_data.find(b"mvhd")
+                        if mvhd_pos != -1:
+                            version = moov_data[mvhd_pos + 4]
+                            if version == 0:
+                                timescale, duration = struct.unpack(">II", moov_data[mvhd_pos + 16:mvhd_pos + 24])
+                            elif version == 1:
+                                timescale, duration = struct.unpack(">IQ", moov_data[mvhd_pos + 24:mvhd_pos + 36])
+                            else:
+                                continue
+                            if timescale > 0:
+                                return round(duration / timescale, 1)
+                        break
+                    elif size == 1:
+                        size = struct.unpack(">Q", f.read(8))[0]
+                        f.seek(size - 16, os.SEEK_CUR)
+                    elif size == 0:
+                        break
+                    else:
+                        f.seek(size - 8, os.SEEK_CUR)
+        except Exception:
+            pass
+    try:
+        sz = file_path.stat().st_size
+        approx = max(5, min(300, int(sz / (1.5 * 1024 * 1024))))
+        return float(approx)
+    except Exception:
+        return 15.0
+
+
+def _build_proportional_timeline_frames(
+    stem: str,
+    kw_list: List[str],
+    d_name: str,
+    vid_idx: int,
+    total_sec: float
+) -> List[Dict[str, Any]]:
+    """동영상의 실제 전체 길이에 비례하여 균형 잡힌 타임라인 구간(도입부, 중반부, 후반부 등)을 동적으로 생성합니다."""
+    t_sec = max(2, int(round(total_sec)))
+
+    def _fmt(s: int) -> str:
+        return f"{int(s // 60):02d}:{int(s % 60):02d}"
+
+    if t_sec < 6:
+        secs = [0, max(1, t_sec - 1)]
+        labels = ["도입부", "후반부"]
+    elif t_sec <= 14:
+        mid = max(2, int(round(t_sec * 0.5)))
+        secs = [0, mid, max(mid + 1, t_sec - 1)]
+        labels = ["도입부", "중반부", "후반부"]
+    elif t_sec <= 35:
+        p1 = max(2, int(round(t_sec * 0.25)))
+        p2 = max(p1 + 2, int(round(t_sec * 0.5)))
+        p3 = max(p2 + 2, int(round(t_sec * 0.75)))
+        secs = [0, p1, p2, p3]
+        labels = ["도입부", "초반 전개", "중반부 핵심", "후반 마무리"]
+    else:
+        p1 = max(3, int(round(t_sec * 0.2)))
+        p2 = max(p1 + 3, int(round(t_sec * 0.45)))
+        p3 = max(p2 + 3, int(round(t_sec * 0.7)))
+        p4 = max(p3 + 3, int(round(t_sec * 0.9)))
+        secs = [0, p1, p2, p3, p4]
+        labels = ["도입부", "초반 전개", "중반부 하이라이트", "후반 전개", "클라이맥스/마무리"]
+
+    frames = []
+    for s, lbl in zip(secs, labels):
+        ts = _fmt(s)
+        frames.append({
+            "frameId": f"f_{vid_idx}_{s}",
+            "timeSec": s,
+            "timestampText": ts,
+            "phaseLabel": lbl,
+            "sceneCaption": f"{stem} {lbl} 장면 ({ts})",
+            "keywords": kw_list,
+            "tags": ["#내PC동영상", f"#{d_name}"],
+        })
+    return frames
+
+
 def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
@@ -1008,6 +1099,12 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 enc_name = urllib.parse.quote(entry.name)
                 vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
                 kw_list = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} 동영상 영상") if len(w) >= 2][:12]
+
+                real_dur_sec = _get_fast_video_duration_sec(resolved)
+                int_dur = max(1, int(round(real_dur_sec)))
+                dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
+                timeline_frames = _build_proportional_timeline_frames(stem, kw_list, d.name, len(videos) + 1, real_dur_sec)
+
                 videos.append({
                     "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
                     "videoFileName": entry.name,
@@ -1016,36 +1113,17 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "thumbUrl": "",
                     "videoUrl": vid_url,
                     "date": date_str,
-                    "durationText": "00:15",
-                    "durationSec": 15,
+                    "durationText": dur_text,
+                    "durationSec": int_dur,
                     "matchedSeekSec": 0,
                     "matchedTimestamp": "🎯 00:00 구간 포착",
                     "matchedFrameCaption": f"[{d.name}] 폴더에서 발견된 내 PC 로컬 동영상 ({entry.name})",
                     "locationKo": f"내 PC · {d.name}",
-                    "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB)",
+                    "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
                     "keywords": list(dict.fromkeys(kw_list)),
                     "resolution": "1920x1080",
                     "sizeMB": size_mb,
-                    "timelineFrames": [
-                        {
-                            "frameId": f"f_{len(videos)}_0",
-                            "timeSec": 0,
-                            "timestampText": "00:00",
-                            "phaseLabel": "도입부",
-                            "sceneCaption": f"{stem} 시작 장면 (00:00)",
-                            "keywords": list(dict.fromkeys(kw_list)),
-                            "tags": ["#내PC동영상", f"#{d.name}"],
-                        },
-                        {
-                            "frameId": f"f_{len(videos)}_5",
-                            "timeSec": 5,
-                            "timestampText": "00:05",
-                            "phaseLabel": "중반부",
-                            "sceneCaption": f"{stem} 주요 장면 (00:05)",
-                            "keywords": list(dict.fromkeys(kw_list)),
-                            "tags": ["#내PC동영상", f"#{d.name}"],
-                        },
-                    ],
+                    "timelineFrames": timeline_frames,
                 })
                 if len(videos) >= 120:
                     break
