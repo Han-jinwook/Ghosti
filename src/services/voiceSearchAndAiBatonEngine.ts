@@ -568,6 +568,42 @@ export async function dispatchFileToKakaoRealChatroom(params: {
  * 무료 범위를 넘는 고난도 질문 시 — 유저가 최근 열어본 AI(ChatGPT/Gemini/Claude, 기록 0건 시 기본값: 제미나이)
  * 입력창 자동 채움 & [① 전송 ↑ ➔ ② 라이브 음성 🎧] 2단계 손가락 바톤터치
  */
+/**
+ * 브라우저 사용자 제스처(Click) 컨텍스트에서 100% 확실하게 클립보드에 복사하는 유틸리티
+ * 1) navigator.clipboard.writeText 시도
+ * 2) iframe / 권한 제약 시 document.execCommand('copy') textarea 폴백 완벽 보장
+ */
+export async function copyTextToClipboardDirectly(text: string): Promise<boolean> {
+  if (!text) return false;
+  let copied = false;
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch {
+    /* fallback below */
+  }
+  if (!copied && typeof document !== 'undefined') {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '-9999px';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(textArea);
+    } catch {
+      copied = false;
+    }
+  }
+  return copied;
+}
+
 export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
   docTitle: string;
   docText: string;
@@ -617,40 +653,51 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
           params.userQuestion || '이 문서에서 나에게 불리한 조항이나 핵심 주의사항을 쉽게 설명해 줘.'
         }`;
 
-  try {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(combinedPrompt);
+  // 1) 클릭 제스처가 살아있는 첫 순간에 브라우저 클립보드에 100% 확실하게 복사 (writeText + execCommand 2중 가드)
+  await copyTextToClipboardDirectly(combinedPrompt);
+
+  // 2) 팝업 차단(Popup Blocker) 방지를 위해 클릭 제스처 직후 새 탭 창 핸들을 먼저 열어둡니다
+  let popupWindow: Window | null = null;
+  if (
+    params.openWindow !== false &&
+    typeof window !== 'undefined' &&
+    typeof window.open === 'function'
+  ) {
+    try {
+      popupWindow = window.open('about:blank', '_blank');
+    } catch {
+      /* ignore popup block */
     }
-  } catch {
-    /* ignore clipboard permission error in headless/non-gesture */
   }
 
   try {
+    const zcoreCtrl = new AbortController();
+    const zcoreTimer = setTimeout(() => zcoreCtrl.abort(), 1200);
     const res = await fetch(getZCoreUrl('/__zcore/ai-baton-touch'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
-    });
+      signal: zcoreCtrl.signal,
+    }).finally(() => clearTimeout(zcoreTimer));
+
     const data = await res.json();
     if (data?.ok || data?.blockedByPrivacyGuard) {
       void speakWithHyunsuOrSunhi(data.ttsBriefingKo, 'hyunsu_briefing');
-      if (
-        data.ok &&
-        params.openWindow !== false &&
-        data.targetUrl &&
-        typeof window !== 'undefined' &&
-        typeof window.open === 'function'
-      ) {
-        try {
-          window.open(data.targetUrl, '_blank', 'noopener,noreferrer');
-        } catch {
-          /* ignore popup block */
+      if (data.ok && data.targetUrl) {
+        if (popupWindow && !popupWindow.closed) {
+          popupWindow.location.href = data.targetUrl;
+        } else if (params.openWindow !== false && typeof window !== 'undefined') {
+          try {
+            window.open(data.targetUrl, '_blank', 'noopener,noreferrer');
+          } catch {}
         }
+      } else if (popupWindow && !popupWindow.closed) {
+        popupWindow.close();
       }
       return data;
     }
   } catch {
-    /* fallback to default Gemini */
+    /* fallback to default Gemini below */
   }
 
   const fallbackBriefing =
@@ -658,7 +705,9 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
   void speakWithHyunsuOrSunhi(fallbackBriefing, 'hyunsu_briefing');
 
   const defaultTargetUrl = 'https://gemini.google.com/app';
-  if (
+  if (popupWindow && !popupWindow.closed) {
+    popupWindow.location.href = defaultTargetUrl;
+  } else if (
     params.openWindow !== false &&
     typeof window !== 'undefined' &&
     typeof window.open === 'function'

@@ -482,6 +482,48 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 const sp = message.pcSpecPayload!;
                 setBusyId('spec_baton');
                 const specSummary = `CPU: ${sp.cpuModel} | RAM: ${sp.ramTotalGb ?? '확인불가'}GB (${sp.ramUsedPercent ?? '?'}% 사용) | GPU: ${sp.gpuModel} | 여유 공간: ${sp.diskFreeGb ?? '?'}GB | 주사율: ${sp.displayHz ?? '?'}Hz | OS: ${sp.osVersion}`;
+                
+                // 1) 화면 최상단 빨간 손가락(👆) 오버레이 가이드 즉시 투사
+                const overlayPlan = buildSetupDiagnosisPlan(
+                  'pc',
+                  '내 PC 실측 사양 단골 AI 상담',
+                  'pc_excel_overlay'
+                );
+                useSaySeeStore.getState().openSetupOverlayGuide({
+                  ...overlayPlan,
+                  title: '👆 [내 PC 실측 사양] 단골 AI(Gemini) 라이브 음성 상담 2단계 가이드',
+                  overlaySteps: [
+                    {
+                      step: 1,
+                      screenTitle: 'Google Gemini 웹/앱 상담창',
+                      scrapedElements: [{ text: '입력창', rect: [420, 180] }],
+                      targetLabel: '입력창 붙여넣기(Ctrl+V)',
+                      bubbleMessage: '👆 ① 클립보드에 내 PC 실측 사양이 복사되었습니다. 제미나이 입력창에 붙여넣기(Ctrl+V) 후 전송(↑)을 누르세요!',
+                      voiceGuideText: '입력창에 붙여넣기 후 전송 버튼을 눌러주세요.',
+                      fingerCoordPct: [50, 85],
+                      rawLogicalRect: [420, 180, 200, 60],
+                    },
+                    {
+                      step: 2,
+                      screenTitle: 'Google Gemini 웹/앱 상담창',
+                      scrapedElements: [{ text: '라이브 음성', rect: [540, 180] }],
+                      targetLabel: '라이브 음성(🎧)',
+                      bubbleMessage: '👆 ② 바로 옆 [라이브 음성 🎧] 버튼을 누르면 말로 편하게 심층 상담을 이어갈 수 있습니다!',
+                      voiceGuideText: '바로 옆 라이브 음성 버튼을 눌러 말로 상담하세요.',
+                      fingerCoordPct: [65, 85],
+                      rawLogicalRect: [540, 180, 200, 60],
+                    },
+                  ],
+                });
+
+                void launchRealOsTopmostOverlay({
+                  x: 420,
+                  y: 150,
+                  text: '👆 [제미나이] 입력창에 붙여넣기(Ctrl+V) 후 ① [전송(↑)] ➔ ② [라이브 음성 🎧] 클릭!',
+                  durationSec: 10,
+                });
+
+                // 2) 클립보드 복사 및 제미나이 새 창 오픈
                 const res = await triggerUserFavoriteAiLiveVoiceBatonTouch({
                   docTitle: '내 PC 실측 사양 진단표',
                   docText: specSummary,
@@ -491,7 +533,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 });
                 setBusyId(null);
                 onToast?.(
-                  `🤝 [${res.detectedAiLabel}] 내 PC 실측 사양 복사 및 라이브 음성 상담 창 연결이 완료되었습니다!`
+                  `🤝 [${res.detectedAiLabel}] 내 PC 실측 사양 복사 및 화면 위 빨간 손가락(👆) 가이드 연결이 완료되었습니다!`
                 );
               }}
               className="w-full py-2 px-3 rounded-lg bg-fuchsia-600/90 hover:bg-fuchsia-500 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow cursor-pointer"
