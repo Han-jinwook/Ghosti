@@ -227,39 +227,27 @@ function speakOfflineFallbackWithoutHeami(text: string): boolean {
     }
     window.speechSynthesis.cancel();
     const voices = window.speechSynthesis.getVoices() || [];
-    // 구형 기계음(Heami 등)은 절대 선택 금지
-    const nonRoboticVoices = voices.filter((v) => !/heami/i.test(v.name));
 
     const isFemalePref = getPreferredVoiceGender() === 'female';
-    const nativeGenderVoice = nonRoboticVoices.find((v) =>
-      isFemalePref ? /SunHi|Female|여성/i.test(v.name) : /InJoon|Hyunsu|Male|남성/i.test(v.name)
+    // [현수/선희 외 엉뚱한 목소리 원천 차단]
+    // 오직 MS 신경망 성우인 Hyunsu(현수) 또는 SunHi(선희)만 허용합니다.
+    // InJoon, Google 한국의 등 다른 사람/OS 로봇 목소리는 절대 재생하지 않고 조용히 무음 종료합니다.
+    const exactVoice = voices.find((v) =>
+      isFemalePref
+        ? /SunHi/i.test(v.name)
+        : /Hyunsu/i.test(v.name)
     );
-    const preferredVoice =
-      nativeGenderVoice ||
-      nonRoboticVoices.find((v) =>
-        /Microsoft\s+(InJoon|Hyunsu|SunHi)\s+Online\s*\(Natural\)/i.test(v.name)
-      ) ||
-      nonRoboticVoices.find((v) => /InJoon|Hyunsu|SunHi/i.test(v.name)) ||
-      nonRoboticVoices.find((v) => /Google\s*한국의/i.test(v.name)) ||
-      nonRoboticVoices.find((v) => /Google/i.test(v.name) && /ko/i.test(v.lang));
 
-    if (!preferredVoice) {
-      // Heami밖에 없는 환경에서는 기계음 공해를 막기 위해 발화하지 않고 조용히 종료
+    if (!exactVoice) {
+      // 현수/선희가 없는 환경에서는 다른 목소리 공해를 막기 위해 일체 발화하지 않음
       return false;
     }
 
     const utter = new SpeechSynthesisUtterance(text);
-    utter.voice = preferredVoice;
+    utter.voice = exactVoice;
     utter.lang = 'ko-KR';
-    // 크롬 등 기본 단일 성우(Google 한국의 등) 환경에서도 남(중저음 바리톤 0.65) vs 여(밝은 톤 1.15) 확실히 구분
-    if (isFemalePref) {
-      utter.pitch = nativeGenderVoice ? 1.05 : 1.18;
-      utter.rate = 1.15;
-    } else {
-      const isAlreadyMaleVoice = /InJoon|Hyunsu|Male|남성/i.test(preferredVoice.name);
-      utter.pitch = isAlreadyMaleVoice ? 0.95 : 0.62;
-      utter.rate = isAlreadyMaleVoice ? 1.15 : 1.05;
-    }
+    utter.pitch = isFemalePref ? 1.05 : 0.95;
+    utter.rate = 1.15;
     utter.volume = 0.45;
     utter.onend = () => {
       isCurrentlySpeaking = false;
