@@ -275,6 +275,7 @@ export const DesktopDashboard: React.FC = () => {
     videoSceneItems,
     matchedVideoScenes,
     setSelectedVideoModal,
+    syncRealVideoDuration,
     onboardingTrackMode,
     pcAgentPairedMobile,
     activeQuery,
@@ -1233,6 +1234,12 @@ export const DesktopDashboard: React.FC = () => {
                               preload="metadata"
                               muted
                               playsInline
+                              onLoadedMetadata={(e) => {
+                                const realDur = Math.round(e.currentTarget.duration);
+                                if (realDur > 0 && Number.isFinite(realDur)) {
+                                  syncRealVideoDuration(vid.id, realDur);
+                                }
+                              }}
                               className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
                             />
                           ) : (
@@ -1251,16 +1258,16 @@ export const DesktopDashboard: React.FC = () => {
                             {vid.matchedTimestamp}
                           </div>
 
-                          <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-zinc-950/80 border border-white/10 text-zinc-300 font-label-mono text-[10px] font-medium">
-                            00:00~{vid.durationText} ({vid.timelineFrames.length}구간)
+                          <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container/40 text-white font-label-mono text-[11px] font-extrabold shadow-md">
+                            ⏱️ 총 시간 {vid.durationText} ({vid.timelineFrames.length}구간)
                           </div>
 
-                          <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between">
-                            <span className="font-label-mono text-[11px] text-zinc-200 font-medium">
-                              {vid.locationKo}
+                          <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex items-center justify-between gap-2">
+                            <span className="font-label-mono text-[11px] text-zinc-200 font-medium truncate">
+                              {vid.locationKo} • {vid.videoFileName} ({vid.sizeMB}MB)
                             </span>
-                            <span className="font-label-mono text-[10.5px] text-zinc-400">
-                              {vid.videoFileName} ({vid.sizeMB}MB)
+                            <span className="px-2 py-0.5 rounded bg-black/85 border border-white/20 font-label-mono text-[11px] text-emerald-300 font-extrabold shrink-0">
+                              ▶ 총 {vid.durationText}
                             </span>
                           </div>
                         </div>
@@ -1305,7 +1312,7 @@ export const DesktopDashboard: React.FC = () => {
                                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-white/5'
                                     }`}
                                   >
-                                    {frame.timestampText}
+                                    {frame.timestampText} {(frame.phaseLabel || '').split(' ')[0]}
                                   </button>
                                 );
                               })}

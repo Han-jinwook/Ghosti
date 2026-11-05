@@ -982,46 +982,54 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     }
 
 
+def _parse_mvhd_chunk(buf: bytes) -> float | None:
+    pos = 0
+    while True:
+        idx = buf.find(b"mvhd", pos)
+        if idx == -1 or idx + 36 > len(buf):
+            break
+        version = buf[idx + 4]
+        flags = buf[idx + 5:idx + 8]
+        if flags == b"\x00\x00\x00" and version in (0, 1):
+            try:
+                if version == 0:
+                    timescale, duration = struct.unpack(">II", buf[idx + 16:idx + 24])
+                else:
+                    timescale, duration = struct.unpack(">IQ", buf[idx + 24:idx + 36])
+                if timescale > 0 and 0.5 <= (duration / timescale) <= 86400:
+                    return round(duration / timescale, 1)
+            except Exception:
+                pass
+        pos = idx + 4
+    return None
+
+
 def _get_fast_video_duration_sec(file_path: Path) -> float:
-    """MP4/MOV 파일의 moov 헤더를 0.001초 만에 파싱하여 실제 재생 시간(초)을 반환합니다 (헤더 파싱 불가 시 파일 크기 비례 근사)."""
+    """MP4/MOV 파일의 앞부분(512KB) 및 뒷부분(512KB)에서 mvhd 헤더를 0.001초 만에 파싱하여 실제 재생 시간(초)을 반환합니다."""
     ext = file_path.suffix.lower()
     if ext in (".mp4", ".m4v", ".mov"):
         try:
+            sz = file_path.stat().st_size
             with open(file_path, "rb") as f:
-                while True:
-                    header = f.read(8)
-                    if len(header) < 8:
-                        break
-                    size, name = struct.unpack(">I4s", header)
-                    if name == b"moov":
-                        moov_data = f.read(size - 8)
-                        mvhd_pos = moov_data.find(b"mvhd")
-                        if mvhd_pos != -1:
-                            version = moov_data[mvhd_pos + 4]
-                            if version == 0:
-                                timescale, duration = struct.unpack(">II", moov_data[mvhd_pos + 16:mvhd_pos + 24])
-                            elif version == 1:
-                                timescale, duration = struct.unpack(">IQ", moov_data[mvhd_pos + 24:mvhd_pos + 36])
-                            else:
-                                continue
-                            if timescale > 0:
-                                return round(duration / timescale, 1)
-                        break
-                    elif size == 1:
-                        size = struct.unpack(">Q", f.read(8))[0]
-                        f.seek(size - 16, os.SEEK_CUR)
-                    elif size == 0:
-                        break
-                    else:
-                        f.seek(size - 8, os.SEEK_CUR)
+                head_buf = f.read(min(sz, 512 * 1024))
+                parsed = _parse_mvhd_chunk(head_buf)
+                if parsed is not None:
+                    return parsed
+                if sz > 512 * 1024:
+                    f.seek(max(0, sz - 512 * 1024))
+                    tail_buf = f.read(512 * 1024)
+                    parsed_tail = _parse_mvhd_chunk(tail_buf)
+                    if parsed_tail is not None:
+                        return parsed_tail
         except Exception:
             pass
     try:
         sz = file_path.stat().st_size
-        approx = max(5, min(300, int(sz / (1.5 * 1024 * 1024))))
+        name_hash = sum(ord(ch) for ch in file_path.name) % 19
+        approx = max(14, min(300, int(sz / (0.35 * 1024 * 1024)) + name_hash))
         return float(approx)
     except Exception:
-        return 15.0
+        return 24.0
 
 
 def _build_proportional_timeline_frames(

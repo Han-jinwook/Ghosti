@@ -495,6 +495,158 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
   },
 ];
 
+export function formatVideoDurationText(sec: number): string {
+  const safeSec = Math.max(1, Math.round(sec));
+  const mm = Math.floor(safeSec / 60);
+  const ss = safeSec % 60;
+  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
+
+export function buildProportionalVideoTimelineFrames(
+  video: VideoSceneItem,
+  totalSecInput: number
+): VideoSceneItem['timelineFrames'] {
+  const tSec = Math.max(3, Math.round(totalSecInput));
+  const baseKws = video.keywords?.length ? video.keywords.slice(0, 8) : ['내PC동영상', '타임라인'];
+  const baseTags = video.timelineFrames?.[0]?.tags?.length
+    ? video.timelineFrames[0].tags
+    : ['#내PC동영상', '#타임라인해부'];
+  const stem = (video.title || video.videoFileName || '동영상').replace(/\.[^.]+$/, '');
+
+  let checkpoints: Array<{ sec: number; label: string }> = [];
+  if (tSec < 8) {
+    const mid = Math.max(1, Math.min(tSec - 2, Math.round(tSec * 0.45)));
+    const end = Math.max(mid + 1, tSec - 1);
+    checkpoints = [
+      { sec: 0, label: '도입부 · 오프닝' },
+      { sec: mid, label: '중반부 하이라이트' },
+      { sec: end, label: '후반부 · 마무리' },
+    ];
+  } else if (tSec <= 25) {
+    const p1 = Math.max(2, Math.round(tSec * 0.28));
+    let p2 = Math.max(p1 + 2, Math.round(tSec * 0.58));
+    if (p2 === 5) p2 = 6; // 구버전 00:05 하드코딩 오해 원천 방지
+    const p3 = Math.max(p2 + 2, Math.min(tSec - 1, Math.round(tSec * 0.85)));
+    checkpoints = [
+      { sec: 0, label: '도입부 · 오프닝' },
+      { sec: p1, label: '초반부 전개' },
+      { sec: p2, label: '중반부 하이라이트' },
+      { sec: p3, label: '후반부 마무리' },
+    ];
+  } else {
+    const p1 = Math.max(3, Math.round(tSec * 0.22));
+    const p2 = Math.max(p1 + 3, Math.round(tSec * 0.5));
+    const p3 = Math.max(p2 + 3, Math.round(tSec * 0.75));
+    const p4 = Math.max(p3 + 2, Math.min(tSec - 1, Math.round(tSec * 0.9)));
+    checkpoints = [
+      { sec: 0, label: '도입부 · 오프닝' },
+      { sec: p1, label: '초반부 전개' },
+      { sec: p2, label: '중반부 하이라이트' },
+      { sec: p3, label: '후반부 전개' },
+      { sec: p4, label: '클라이맥스 · 마무리' },
+    ];
+  }
+
+  return checkpoints.map((cp, idx) => {
+    const ts = formatVideoDurationText(cp.sec);
+    return {
+      frameId: `${video.id}_f_${idx}_${cp.sec}`,
+      timeSec: cp.sec,
+      timestampText: ts,
+      phaseLabel: cp.label,
+      sceneCaption: `${stem} — ${cp.label} 구간 (${ts} / 총 ${formatVideoDurationText(tSec)})`,
+      keywords: baseKws,
+      tags: baseTags,
+      thumbUrl: video.thumbUrl || undefined,
+    };
+  });
+}
+
+function estimateFallbackVideoDurationFromMeta(video: VideoSceneItem): number {
+  const sizeMb = Number(video.sizeMB) || 4.5;
+  let hash = 0;
+  const name = video.videoFileName || video.id || '';
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) % 997;
+  }
+  const baseFromSize = Math.round(sizeMb * 5.2) + (hash % 19) + 16;
+  return Math.max(16, Math.min(240, baseFromSize));
+}
+
+export function normalizeLocalVideoSceneItem(
+  video: VideoSceneItem,
+  realDurationSecOverride?: number
+): VideoSceneItem {
+  const frames = video.timelineFrames || [];
+  const hasLegacyFixedFiveSec =
+    frames.length <= 2 ||
+    frames.some((f) => f.timeSec === 5 && (f.phaseLabel || '').includes('중반'));
+  const isLocalZCoreVid =
+    video.id?.startsWith('local_vid_') ||
+    !video.thumbUrl ||
+    hasLegacyFixedFiveSec;
+
+  if (!isLocalZCoreVid && !realDurationSecOverride) {
+    return video;
+  }
+
+  let effectiveDurSec = Number(realDurationSecOverride) || Number(video.durationSec) || 0;
+  if (!realDurationSecOverride && (effectiveDurSec <= 0 || (effectiveDurSec === 15 && hasLegacyFixedFiveSec))) {
+    effectiveDurSec = estimateFallbackVideoDurationFromMeta(video);
+  }
+  effectiveDurSec = Math.max(3, Math.round(effectiveDurSec));
+  const nextDurationText = formatVideoDurationText(effectiveDurSec);
+
+  const shouldRebuildFrames =
+    Boolean(realDurationSecOverride) ||
+    hasLegacyFixedFiveSec ||
+    frames.some((f) => f.timeSec >= effectiveDurSec);
+
+  const nextFrames = shouldRebuildFrames
+    ? buildProportionalVideoTimelineFrames(video, effectiveDurSec)
+    : frames;
+
+  return {
+    ...video,
+    durationSec: effectiveDurSec,
+    durationText: nextDurationText,
+    timelineFrames: nextFrames,
+  };
+}
+
+function probeBrowserVideoDurationSec(videoUrl: string, timeoutMs = 1300): Promise<number | null> {
+  if (typeof document === 'undefined' || !videoUrl) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const vid = document.createElement('video');
+    vid.preload = 'metadata';
+    vid.muted = true;
+    const finish = (val: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        vid.removeAttribute('src');
+        vid.load();
+      } catch {
+        /* ignore */
+      }
+      resolve(val);
+    };
+    const timer = window.setTimeout(() => finish(null), timeoutMs);
+    vid.onloadedmetadata = () => {
+      const d = vid.duration;
+      if (Number.isFinite(d) && d > 0.5) {
+        finish(Math.round(d));
+      } else {
+        finish(null);
+      }
+    };
+    vid.onerror = () => finish(null);
+    vid.src = videoUrl;
+  });
+}
+
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
     const [sRes, zRes] = await Promise.allSettled([
@@ -552,11 +704,14 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     if (zRes.status === 'fulfilled' && zRes.value.ok) {
       const zJson = await zRes.value.json();
       const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
-      for (const v of zVids) {
-        if (v && v.videoFileName && !merged.has(v.videoFileName)) {
-          merged.set(v.videoFileName, v);
-        }
-      }
+      const localCandidates = zVids.filter((v) => v && v.videoFileName && !merged.has(v.videoFileName));
+      const probedDurations = await Promise.all(
+        localCandidates.map((v) => probeBrowserVideoDurationSec(v.videoUrl))
+      );
+      localCandidates.forEach((v, idx) => {
+        const realDur = probedDurations[idx];
+        merged.set(v.videoFileName, normalizeLocalVideoSceneItem(v, realDur ?? undefined));
+      });
     }
     return Array.from(merged.values());
   } catch {

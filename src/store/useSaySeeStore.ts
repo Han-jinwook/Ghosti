@@ -134,6 +134,7 @@ import {
   fetchAutonomousFaceClusters,
   fetchIndexedDocuments,
   fetchIndexedVideos,
+  normalizeLocalVideoSceneItem,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
   searchLocalDocumentFilesAsync,
@@ -193,6 +194,7 @@ interface SaySeeStore {
   resetSearchSpaceToAll: (space: SearchSpaceMode) => void;
   setSelectedDocModal: (doc: LocalDocumentFile | null) => void;
   setSelectedVideoModal: (vid: VideoSceneItem | null, seekSec?: number) => void;
+  syncRealVideoDuration: (videoId: string, realDurationSec: number) => void;
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
 
@@ -1162,6 +1164,29 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       return;
     }
     set({ selectedVideoModal });
+  },
+  syncRealVideoDuration: (videoId, realDurationSec) => {
+    const dur = Math.round(realDurationSec);
+    if (!Number.isFinite(dur) || dur < 2) return;
+    const { videoSceneItems, matchedVideoScenes, selectedVideoModal } = get();
+    const target = videoSceneItems.find((v) => v.id === videoId);
+    if (
+      target &&
+      target.durationSec === dur &&
+      !target.timelineFrames.some((f) => f.timeSec === 5 && (f.phaseLabel || '').includes('중반'))
+    ) {
+      return;
+    }
+    const updateItem = (v: VideoSceneItem): VideoSceneItem =>
+      v.id === videoId ? normalizeLocalVideoSceneItem(v, dur) : v;
+    set({
+      videoSceneItems: videoSceneItems.map(updateItem),
+      matchedVideoScenes: matchedVideoScenes.map(updateItem),
+      selectedVideoModal:
+        selectedVideoModal && selectedVideoModal.id === videoId
+          ? normalizeLocalVideoSceneItem(selectedVideoModal, dur)
+          : selectedVideoModal,
+    });
   },
   setTrialScanPermission: (folder, allowed) =>
     set((state) => ({

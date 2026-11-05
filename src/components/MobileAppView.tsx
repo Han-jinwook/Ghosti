@@ -223,6 +223,7 @@ export const MobileAppView: React.FC = () => {
     videoSceneItems,
     matchedVideoScenes,
     setSelectedVideoModal,
+    syncRealVideoDuration,
     activeQuery,
     hasExecutedUserSearch,
     searchResults,
@@ -569,6 +570,10 @@ export const MobileAppView: React.FC = () => {
                           playsInline
                           onLoadedMetadata={(e) => {
                             try {
+                              const realDur = Math.round(e.currentTarget.duration);
+                              if (realDur > 0 && Number.isFinite(realDur)) {
+                                syncRealVideoDuration(vid.id, realDur);
+                              }
                               e.currentTarget.currentTime = vid.matchedSeekSec;
                             } catch {
                               // ignore
@@ -584,8 +589,11 @@ export const MobileAppView: React.FC = () => {
                         <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-zinc-950/90 border border-white/15 text-primary-container font-label-mono text-[10.5px] font-bold">
                           {vid.matchedTimestamp}
                         </div>
-                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-zinc-950/80 border border-white/10 text-zinc-300 font-label-mono text-[10px]">
-                          #{idx + 1} · {vid.durationText} ({vid.timelineFrames.length}구간)
+                        <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded bg-zinc-950/90 border border-primary-container/40 text-white font-label-mono text-[10.5px] font-extrabold">
+                          ⏱️ 총 시간 {vid.durationText} ({vid.timelineFrames.length}구간)
+                        </div>
+                        <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/85 border border-white/20 text-emerald-300 font-label-mono text-[10.5px] font-extrabold">
+                          ▶ 총 {vid.durationText}
                         </div>
                       </div>
 
@@ -613,7 +621,7 @@ export const MobileAppView: React.FC = () => {
                                     : 'bg-zinc-900 text-zinc-400 border border-white/5'
                                 }`}
                               >
-                                {frame.timestampText}
+                                {frame.timestampText} {(frame.phaseLabel || '').split(' ')[0]}
                               </button>
                             );
                           })}

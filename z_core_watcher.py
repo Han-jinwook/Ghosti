@@ -213,7 +213,7 @@ def check_notion_new_bugs(seen_bug_ids: Set[str]) -> list:
 
         if not notion_qa.NOTION_TOKEN or notion_qa.NOTION_TOKEN.startswith("[여기에"):
             return []
-        bugs = notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED)
+        bugs = [] if notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED)
         return [b for b in bugs if b["page_id"] not in seen_bug_ids]
     except Exception:
         return []
@@ -282,7 +282,7 @@ def main() -> None:
     if initial_bugs:
         import notion_qa
         first_bug = initial_bugs[0]
-        notion_qa.mark_fixing(first_bug["page_id"])
+        notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) or notion_qa.mark_fixing(first_bug["page_id"])
         print("\n" + "🚨" * 24)
         print(
             f"🔔 [노션 QA 대기 버그 감지 — 1건 단위 즉시 반환(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 선(先) 이동!] (총 대기 {len(initial_bugs)}건 중 1번째 착수)"
@@ -359,7 +359,7 @@ def main() -> None:
         if new_bugs:
             import notion_qa
             first_bug = new_bugs[0]
-            notion_qa.mark_fixing(first_bug["page_id"])
+            notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) or notion_qa.mark_fixing(first_bug["page_id"])
             print("\n" + "🚨" * 24)
             print(
                 f"🔔 [노션 QA 신규 버그 자동 감지 — 1건 단위 즉시 반환(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 즉시 이동!] (총 {len(new_bugs)}건 중 1번째 착수)"

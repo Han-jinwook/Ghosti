@@ -1551,6 +1551,7 @@ export const VideoScenePreviewModal: React.FC = () => {
   const {
     selectedVideoModal,
     setSelectedVideoModal,
+    syncRealVideoDuration,
     openLocalFolder,
     activeQuery,
     hasExecutedUserSearch,
@@ -1699,7 +1700,13 @@ export const VideoScenePreviewModal: React.FC = () => {
               poster={currentFrameThumbUrl}
               controls
               playsInline
-              onLoadedMetadata={(e) => applyPendingSeek(e.currentTarget)}
+              onLoadedMetadata={(e) => {
+                const realDur = Math.round(e.currentTarget.duration);
+                if (realDur > 0 && Number.isFinite(realDur)) {
+                  syncRealVideoDuration(selectedVideoModal.id, realDur);
+                }
+                applyPendingSeek(e.currentTarget);
+              }}
               onCanPlay={(e) => {
                 if (pendingSeekSecRef.current !== null) {
                   const target = pendingSeekSecRef.current;
