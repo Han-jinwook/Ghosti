@@ -3,7 +3,7 @@ import { zCoreBridge } from '../services/zCoreBridge';
 import { playMenuSummonSound } from '../services/babyGhostSound';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
-import { groupBurstSearchResults } from '../services/aiEngine';
+import { groupBurstSearchResults, probeBrowserVideoDurationSec } from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
@@ -1239,6 +1239,13 @@ export const DesktopDashboard: React.FC = () => {
                                 if (realDur > 0 && Number.isFinite(realDur)) {
                                   syncRealVideoDuration(vid.id, realDur);
                                 }
+                              }}
+                              onError={() => {
+                                void probeBrowserVideoDurationSec(vid.videoUrl, 2500).then((realDur) => {
+                                  if (realDur && realDur > 0) {
+                                    syncRealVideoDuration(vid.id, realDur);
+                                  }
+                                });
                               }}
                               className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
                             />

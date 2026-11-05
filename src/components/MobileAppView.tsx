@@ -6,7 +6,7 @@ import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
-import { groupBurstSearchResults } from '../services/aiEngine';
+import { groupBurstSearchResults, probeBrowserVideoDurationSec } from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
@@ -578,6 +578,13 @@ export const MobileAppView: React.FC = () => {
                             } catch {
                               // ignore
                             }
+                          }}
+                          onError={() => {
+                            void probeBrowserVideoDurationSec(vid.videoUrl, 2500).then((realDur) => {
+                              if (realDur && realDur > 0) {
+                                syncRealVideoDuration(vid.id, realDur);
+                              }
+                            });
                           }}
                           className="w-full h-full object-cover pointer-events-none"
                         />
