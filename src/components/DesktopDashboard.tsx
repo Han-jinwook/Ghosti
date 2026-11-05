@@ -410,6 +410,12 @@ export const DesktopDashboard: React.FC = () => {
     return orderedGroups;
   }, [searchResults, groupBurstsInSearch, searchSpace, hasExecutedUserSearch]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeLoungeType, desktopTab, activeFamilyRoom]);
+
   const collapsedBurstCount = searchResults.length - groupedResults.length;
   const currentSubmenus = LOUNGE_SUBMENU_CONFIG[activeLoungeType] || LOUNGE_SUBMENU_CONFIG.personal;
   const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);

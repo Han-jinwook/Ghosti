@@ -157,9 +157,9 @@ export const VoiceHeroStage: React.FC = () => {
       {/* ─────────────── 노션형 보더리스(Borderless) 통합 검색 캔버스 블록 ─────────────── */}
       <div className="w-full flex flex-col gap-3">
         {/* 1-A. 자연어 문장형 통합 검색창 */}
-        <form onSubmit={handleTextSubmit} className="w-full flex items-center gap-2">
-          <div className="relative flex-1 flex items-center">
-            <span className="material-symbols-outlined text-[20px] absolute left-4 pointer-events-none text-zinc-400">
+        <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="relative flex-1 min-w-[200px] flex items-center">
+            <span className="material-symbols-outlined text-[20px] absolute left-3.5 pointer-events-none text-zinc-400">
               {searchSpace === 'vault'
                 ? 'folder_managed'
                 : searchSpace === 'video'
@@ -171,13 +171,13 @@ export const VoiceHeroStage: React.FC = () => {
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full h-12 md:h-13 pl-11 pr-24 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13.5px] md:text-[14.5px] text-white placeholder:text-zinc-500 transition-colors"
+              className="w-full h-11 md:h-13 pl-10 pr-20 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-500 transition-colors"
             />
             {textInput && (
               <button
                 type="button"
                 onClick={() => setTextInput('')}
-                className="absolute right-20 text-zinc-400 hover:text-white p-1 cursor-pointer"
+                className="absolute right-16 text-zinc-400 hover:text-white p-1 cursor-pointer"
                 title="지우기"
               >
                 <span className="material-symbols-outlined text-[17px]">close</span>
@@ -185,38 +185,40 @@ export const VoiceHeroStage: React.FC = () => {
             )}
             <button
               type="submit"
-              className="absolute right-1.5 h-9 md:h-10 px-4 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+              className="absolute right-1.5 h-8.5 md:h-10 px-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] md:text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
             >
               검색
             </button>
           </div>
 
-          {/* PC는 채팅/키보드 검색 올인, 모바일에서만 마이크 [말하기] 버튼 노출 */}
-          <button
-            type="button"
-            onClick={() => {
-              unlockMobileAudioOnUserGesture();
-              void toggleMicRecording();
-            }}
-            title="모바일 마이크로 말해서 검색·낭독·손보기"
-            className={`md:hidden h-12 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[12.5px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
-              isListening
-                ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
-                : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
-            }`}
-          >
-            <span
-              className={`material-symbols-outlined text-[20px] ${
-                isListening ? 'text-zinc-950' : 'text-primary-container'
+          <div className="md:hidden flex items-center gap-1.5 shrink-0 ml-auto">
+            {/* PC는 채팅/키보드 검색 올인, 모바일에서만 마이크 [말하기] 버튼 노출 */}
+            <button
+              type="button"
+              onClick={() => {
+                unlockMobileAudioOnUserGesture();
+                void toggleMicRecording();
+              }}
+              title="모바일 마이크로 말해서 검색·낭독·손보기"
+              className={`h-10 px-3 rounded-2xl border flex items-center gap-1 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                isListening
+                  ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
+                  : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
               }`}
             >
-              {isListening ? 'stop_circle' : 'mic'}
-            </span>
-            <span>{isListening ? '듣는 중' : '말하기'}</span>
-          </button>
+              <span
+                className={`material-symbols-outlined text-[18px] ${
+                  isListening ? 'text-zinc-950' : 'text-primary-container'
+                }`}
+              >
+                {isListening ? 'stop_circle' : 'mic'}
+              </span>
+              <span>{isListening ? '듣는 중' : '말하기'}</span>
+            </button>
 
-          {/* 음성 아이콘 하나에 재생/중단 토글 + [남 | 여] 성우 선택이 통합된 트렌디 컨트롤 캡슐 */}
-          <VoiceActorControlPill />
+            {/* 음성 아이콘 하나에 재생/중단 토글 + [남 | 여] 성우 선택이 통합된 트렌디 컨트롤 캡슐 */}
+            <VoiceActorControlPill />
+          </div>
         </form>
 
         {/* 음성 인식 중일 때만 슬림하게 열리는 파형 피드백 */}

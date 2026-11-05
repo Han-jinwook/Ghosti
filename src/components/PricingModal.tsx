@@ -1361,14 +1361,14 @@ export const LocalDocPreviewModal: React.FC = () => {
   return (
     <div
       onClick={handleCloseModal}
-      className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4"
+      className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-3xl bg-surface-container-low border border-primary-container/50 p-6 md:p-7 shadow-2xl flex flex-col gap-4"
+        className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl bg-surface-container-low border border-primary-container/50 p-4 sm:p-6 md:p-7 shadow-2xl flex flex-col gap-3.5 sm:gap-4 my-auto"
       >
         {selectedDocModal.matchType === 'SIMILAR' && (
-          <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[13px] font-extrabold flex items-center gap-2">
+          <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[12.5px] sm:text-[13px] font-extrabold flex items-center gap-2">
             <span>
               {selectedDocModal.similarityNoticeKo ||
                 '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
@@ -1376,27 +1376,27 @@ export const LocalDocPreviewModal: React.FC = () => {
           </div>
         )}
 
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
+        <div className="flex items-start justify-between gap-3 sticky top-0 z-10 bg-surface-container-low/95 backdrop-blur-md pb-2 border-b border-outline-variant/20">
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[10.5px] font-black">
                 {selectedDocModal.ext} 문서 자산
               </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-primary font-label-sm text-[11px] font-bold">
+              <span className="px-2 py-0.5 rounded-full bg-surface-container-highest text-primary font-label-sm text-[10.5px] font-bold">
                 {selectedDocModal.categoryBadge}
               </span>
-              <span className="font-label-mono text-[11px] text-on-surface-variant">
+              <span className="font-label-mono text-[10.5px] text-on-surface-variant">
                 • {selectedDocModal.deviceSource}
               </span>
             </div>
-            <h3 className="font-headline-sm text-[19px] text-on-surface font-extrabold mt-1">
+            <h3 className="font-headline-sm text-[17px] sm:text-[19px] text-on-surface font-extrabold mt-0.5 break-words">
               {renderHighlightedDocText(
                 selectedDocModal.title,
                 effectiveQuery,
                 selectedDocModal.keywords.slice(0, 3)
               )}
             </h3>
-            <p className="font-label-mono text-[11.5px] text-on-surface-variant">
+            <p className="font-label-mono text-[11px] text-on-surface-variant truncate">
               파일명: {selectedDocModal.fileName} • 날짜: {selectedDocModal.date} • 크기:{' '}
               {(selectedDocModal.sizeKB / 1024).toFixed(2)} MB
             </p>
@@ -1405,16 +1405,17 @@ export const LocalDocPreviewModal: React.FC = () => {
           <button
             type="button"
             onClick={handleCloseModal}
-            className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface cursor-pointer"
+            aria-label="닫기"
+            className="w-9 h-9 rounded-full bg-surface-container-highest hover:bg-surface-bright flex items-center justify-center text-on-surface shrink-0 cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
 
-        <div className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
           <div className="flex items-center justify-between gap-2">
             <span className="font-label-mono text-[11px] text-primary-container font-bold">
-              🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 별표 *** 가림 없이 1초 복사 지원)
+              🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
             </span>
             <button
               type="button"
@@ -1429,7 +1430,7 @@ export const LocalDocPreviewModal: React.FC = () => {
               📋 복사
             </button>
           </div>
-          <p className="font-body-md text-[14px] text-on-surface leading-relaxed">
+          <p className="font-body-md text-[13.5px] sm:text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap break-words">
             {renderHighlightedDocText(
               selectedDocModal.extractedText,
               effectiveQuery,
@@ -1448,23 +1449,23 @@ export const LocalDocPreviewModal: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-low/95 backdrop-blur-md">
+          <div className="md:hidden flex flex-wrap items-center gap-1.5">
             <VoiceActorControlPill fallbackReplayText={fallbackDocVoiceText} compact />
             <button
               type="button"
               onClick={() => void handleToggleModalVoice()}
-              className={`px-3.5 py-2.5 rounded-xl font-label-md text-[13px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all ${
+              className={`px-3 py-2 rounded-xl font-label-md text-[12px] font-extrabold flex items-center gap-1 cursor-pointer transition-all ${
                 isSpeakingNow
                   ? 'bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200'
                   : 'bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200'
               }`}
             >
-              <span>{isSpeakingNow ? '🔇 음성 중단 (재클릭 시 다시 재생)' : '🔊 음성 다시 듣기'}</span>
+              <span>{isSpeakingNow ? '🔇 음성 중단' : '🔊 다시 듣기'}</span>
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2.5">
+          <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
             {!/(비밀번호|패스워드|password|계정\s*정리|아이디.*비번|암호\s*목록)/i.test(
               selectedDocModal.title || ''
             ) ? (
@@ -1483,13 +1484,13 @@ export const LocalDocPreviewModal: React.FC = () => {
                     lastQuarantineToast: `🤝 [${res.detectedAiLabel} 바톤터치] ${res.ttsBriefingKo}`,
                   });
                 }}
-                className="px-4 py-2.5 rounded-xl bg-fuchsia-600 text-white font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-fuchsia-500 transition-colors cursor-pointer"
+                className="px-3 py-2 rounded-xl bg-fuchsia-600 text-white font-label-md text-[12px] font-black flex items-center gap-1 shadow-md hover:bg-fuchsia-500 transition-colors cursor-pointer"
               >
-                <span>🤝 단골 AI(Gemini) 라이브 음성 상담</span>
+                <span>🤝 AI 상담</span>
               </button>
             ) : (
-              <span className="px-3 py-2 rounded-xl bg-zinc-900 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11.5px] font-bold">
-                🔒 보안 가드: 민감 계정 시트 외부 AI 전송 차단됨
+              <span className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11px] font-bold">
+                🔒 민감 계정 외부 전송 차단됨
               </span>
             )}
             <button
@@ -1500,7 +1501,7 @@ export const LocalDocPreviewModal: React.FC = () => {
                   lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 즉시 복사되었습니다.`,
                 });
               }}
-              className="px-4 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-emerald-400 transition-colors cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 text-zinc-950 font-label-md text-[12.5px] font-black flex items-center gap-1 shadow-md hover:bg-emerald-400 transition-colors cursor-pointer"
             >
               <span>📋 복사</span>
             </button>
@@ -1518,22 +1519,22 @@ export const LocalDocPreviewModal: React.FC = () => {
                   });
                 });
               }}
-              className="px-4 py-2.5 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
+              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[12.5px] font-black items-center gap-1 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
             >
-              <span>🔍 탐색기에서 이 파일 바로 띄우기</span>
+              <span>🔍 파일 띄우기</span>
             </button>
             <button
               type="button"
               onClick={() => void openLocalFolder('docs')}
-              className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5"
+              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[12.5px] font-extrabold items-center gap-1"
             >
-              <span className="material-symbols-outlined text-[18px]">folder_open</span>
-              <span>로컬 서류함 폴더 열기</span>
+              <span className="material-symbols-outlined text-[16px]">folder_open</span>
+              <span>서류함 폴더</span>
             </button>
             <button
               type="button"
               onClick={handleCloseModal}
-              className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[12.5px] font-extrabold cursor-pointer"
             >
               닫기
             </button>
@@ -1544,9 +1545,6 @@ export const LocalDocPreviewModal: React.FC = () => {
   );
 };
 
-/**
- * [체험판 타겟 ②] 동영상 3개 전 구간(Full-Timeline) 해부 & 타임라인 점프 재생 모달
- */
 export const VideoScenePreviewModal: React.FC = () => {
   const {
     selectedVideoModal,

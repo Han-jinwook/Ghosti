@@ -1101,6 +1101,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? 'share'
           : 'sync',
     });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
   },
   setDesktopTab: (desktopTab) => {
     if (get().desktopTab !== desktopTab) {
@@ -1119,6 +1124,11 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? 'share'
           : 'settings',
     });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
   },
 
   searchSpace: 'gallery',
@@ -4320,7 +4330,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   setShowProModal: (showProModal) => set({ showProModal }),
 
-  setActiveLoungeType: (requestedLoungeType) =>
+  setActiveLoungeType: (requestedLoungeType) => {
     set((state) => {
       // [1차 출시 3대 메뉴 체계] 구버전 'student(스쿨)' 진입은 '사진 공유 › 동호회·동창회(club)'로 일원화
       // (스쿨 화면 코드는 추후 동창회 '우리반 타임캡슐' 메뉴 이식용 자산으로 보존, 라우팅만 차단)
@@ -4353,13 +4363,25 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
               : 'club_small_1000'
             : 'standard_1000',
       };
-    }),
+    });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  },
 
-  setActiveFamilyRoom: (activeFamilyRoom) =>
+  setActiveFamilyRoom: (activeFamilyRoom) => {
     set({
       activeFamilyRoom,
       lastQuarantineToast: `🏠 패밀리 라운지 [${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
-    }),
+    });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  },
 
   setClubSizeTier: (clubSizeTier) =>
     set({

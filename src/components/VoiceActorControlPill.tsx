@@ -105,8 +105,8 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`md:hidden inline-flex items-center rounded-2xl bg-[#18181B] border border-white/15 shadow-sm select-none transition-all ${
-        compact ? 'h-10 px-1.5 gap-1' : 'h-12 px-2 gap-1.5'
+      className={`md:hidden inline-flex items-center shrink-0 rounded-2xl bg-[#18181B] border border-white/15 shadow-sm select-none transition-all ${
+        compact ? 'h-9 px-1 gap-0.5' : 'h-10 px-1.5 gap-1'
       }`}
       title="음성 안내 재생/중단 및 남·여 성우 목소리 선택"
     >
@@ -114,7 +114,7 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
       <button
         type="button"
         onClick={handleSpeakerClick}
-        className={`flex items-center gap-1 rounded-xl px-2 py-1.5 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer ${
+        className={`flex items-center gap-0.5 rounded-xl px-1.5 py-1 font-label-sm text-[11px] font-extrabold transition-all cursor-pointer shrink-0 ${
           isSpeaking
             ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40 animate-pulse'
             : enabled
@@ -127,25 +127,20 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
             : '클릭 시 음성 다시 듣기 / 켜기·끄기'
         }
       >
-        <span className="material-symbols-outlined text-[18px]">
+        <span className="material-symbols-outlined text-[16px]">
           {isSpeaking ? 'volume_up' : enabled ? 'volume_up' : 'volume_off'}
         </span>
-        {!compact && (
-          <span className="hidden xl:inline text-[11.5px]">
-            {isSpeaking ? '중단' : '음성'}
-          </span>
-        )}
       </button>
 
       {/* 구분선 */}
-      <span className="w-[1px] h-5 bg-white/10" />
+      <span className="w-[1px] h-4 bg-white/10 shrink-0" />
 
       {/* 2. 트렌디 슬라이딩 세그먼트 알약: [남 | 여] */}
-      <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-white/10">
+      <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-white/10 shrink-0">
         <button
           type="button"
           onClick={(e) => void handleGenderSelect('male', e)}
-          className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
+          className={`px-2 py-0.5 rounded-lg font-label-sm text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer ${
             gender === 'male'
               ? 'bg-primary-container text-zinc-950 shadow-xs'
               : 'text-zinc-400 hover:text-white'
@@ -157,7 +152,7 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
         <button
           type="button"
           onClick={(e) => void handleGenderSelect('female', e)}
-          className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
+          className={`px-2 py-0.5 rounded-lg font-label-sm text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer ${
             gender === 'female'
               ? 'bg-primary-container text-zinc-950 shadow-xs'
               : 'text-zinc-400 hover:text-white'

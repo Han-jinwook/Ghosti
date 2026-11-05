@@ -297,6 +297,12 @@ export const MobileAppView: React.FC = () => {
     return groupBurstSearchResults(searchResults);
   }, [searchResults, groupBurstsInSearch, searchSpace]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeLoungeType, mobileTab, activeFamilyRoom]);
+
   const currentSubmenus = MOBILE_LOUNGE_SUBMENUS[activeLoungeType] || MOBILE_LOUNGE_SUBMENUS.personal;
   const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);
 

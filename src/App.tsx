@@ -33,7 +33,75 @@ export const App: React.FC = () => {
     lastUndoBatch,
     undoLastQuarantine,
     dismissUndoBatch,
+    selectedPhoto,
+    setSelectedPhoto,
+    selectedVideoModal,
+    setSelectedVideoModal,
+    selectedDocModal,
+    setSelectedDocModal,
+    showProModal,
+    setShowProModal,
+    showSetupMonsterModal,
+    setShowSetupMonsterModal,
+    showOnboarding,
+    setShowOnboarding,
+    showFaceRegistryModal,
+    setShowFaceRegistryModal,
+    doorplatePickerClusterId,
+    setDoorplatePickerClusterId,
   } = useSaySeeStore();
+
+  // 모바일 뒤로가기(Hardware Back Button / History PopState) 시 앱 자체가 꺼지지 않고 열려 있는 상세보기 모달만 닫히도록 방어
+  const hasAnyModalOpen = Boolean(
+    selectedPhoto ||
+      selectedVideoModal ||
+      selectedDocModal ||
+      showProModal ||
+      showSetupMonsterModal ||
+      showOnboarding ||
+      showFaceRegistryModal ||
+      doorplatePickerClusterId
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasAnyModalOpen) return;
+    let pushedByEffect = false;
+    try {
+      if (!window.history.state?.ghostiModalOpen) {
+        window.history.pushState({ ...(window.history.state || {}), ghostiModalOpen: true }, '');
+        pushedByEffect = true;
+      }
+    } catch {
+      // ignore
+    }
+
+    const handlePopState = () => {
+      const st = useSaySeeStore.getState();
+      if (st.selectedPhoto) st.setSelectedPhoto(null);
+      if (st.selectedVideoModal) st.setSelectedVideoModal(null);
+      if (st.selectedDocModal) st.setSelectedDocModal(null);
+      if (st.showProModal) st.setShowProModal(false);
+      if (st.showSetupMonsterModal) st.setShowSetupMonsterModal(false);
+      if (st.showOnboarding) st.setShowOnboarding(false);
+      if (st.showFaceRegistryModal) st.setShowFaceRegistryModal(false);
+      if (st.doorplatePickerClusterId) st.setDoorplatePickerClusterId(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (pushedByEffect && window.history.state?.ghostiModalOpen) {
+        try {
+          window.history.replaceState(
+            { ...(window.history.state || {}), ghostiModalOpen: false },
+            ''
+          );
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [hasAnyModalOpen]);
 
   // 오직 현재 URL 뒤에 `?dev=true`가 붙어 있거나 로컬호스트일 때만 개발자/QA 전용 내부 워크스페이스 권한 부여
   // https://ghosti.sundreamer.app/ 처럼 `?dev=true` 없이 접속하면 무조건 온보딩 대문(showroom)만 노출합니다.
@@ -91,8 +159,8 @@ export const App: React.FC = () => {
       localStorage.setItem('ghosti_onboarding_completed', 'true');
       localStorage.setItem('ghosti_view_mode', 'workspace');
     } catch {}
-    playAppEnterGiggleSound();
     setViewMode('workspace');
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   };
 
   // 워크스페이스 내부 상단 헤더의 [🏠 공식 쇼룸 대문] 버튼을 명시적으로 눌렀을 때만 해당 세션에서 대문 열람
