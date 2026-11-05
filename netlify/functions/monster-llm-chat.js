@@ -32,6 +32,94 @@ export async function handler(event) {
     return reply(400, { ok: false, error: 'Invalid JSON body' });
   }
 
+  // [모바일 WebView / 인앱브라우저 / iOS Safari 음성 인식 폴백: 오디오 파형 -> 한국어 텍스트 즉시 전사]
+  if (body.action === 'transcribe_audio') {
+    const audioBase64 = String(body.audioBase64 || '').trim();
+    const mimeType = String(body.mimeType || 'audio/webm').trim() || 'audio/webm';
+    if (!audioBase64 || audioBase64.length < 50) {
+      return reply(400, { ok: false, error: 'Empty audio payload' });
+    }
+    const sttPrompt =
+      '사용자가 말한 한국어(또는 영어) 음성입니다. 들리는 문장만 정확히 그대로 텍스트로 출력하세요. 부연 설명이나 따옴표 없이 발화 내용만 출력하세요.';
+
+    // 1순위: 중앙 멀린허브 Gemini 게이트웨이 멀티모달 오디오 전사
+    try {
+      const res = await fetch(HUB_GEMINI_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-id': 'ghosti',
+          'x-ai-account': 'beakes',
+        },
+        body: JSON.stringify({
+          appId: 'ghosti',
+          account: 'beakes',
+          model: 'gemini-flash-lite-latest',
+          prompt: sttPrompt,
+          parts: [
+            {
+              inlineData: {
+                mimeType,
+                data: audioBase64,
+              },
+            },
+          ],
+          temperature: 0.1,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const transcript = String(data?.text || '')
+          .trim()
+          .replace(/^["'“”]+|["'“”]+$/g, '')
+          .trim();
+        if (transcript) {
+          return reply(200, { ok: true, transcript, model: 'gemini-flash-lite-hub' });
+        }
+      }
+    } catch {
+      // fallback to direct key
+    }
+
+    // 2순위: 직접 환경변수 GEMINI_API_KEY 멀티모달 오디오 전사
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (geminiKey) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  { text: sttPrompt },
+                  { inlineData: { mimeType, data: audioBase64 } },
+                ],
+              },
+            ],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const transcript = String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '')
+            .trim()
+            .replace(/^["'“”]+|["'“”]+$/g, '')
+            .trim();
+          if (transcript) {
+            return reply(200, { ok: true, transcript, model: 'gemini-2.5-flash-direct' });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return reply(200, { ok: false, transcript: '', error: 'STT transcription empty' });
+  }
+
   const prompt = String(body.prompt || '').trim();
   if (!prompt) {
     return reply(400, { ok: false, error: 'Empty prompt' });

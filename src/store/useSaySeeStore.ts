@@ -2685,16 +2685,24 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         });
       }
     } else {
+      const previewBeforeStop = (get().interimSttPreview || '').trim();
       set({ isListening: false });
       const { audioBlob, backgroundSttTranscript } = await voiceSession.stop();
+      const effectiveStt = (
+        backgroundSttTranscript ||
+        previewBeforeStop ||
+        get().interimSttPreview ||
+        ''
+      ).trim();
       const { results, trace } = await executeZeroSttVoiceSearch({
         audioBlob,
-        backgroundSttTranscript: backgroundSttTranscript.trim(),
+        backgroundSttTranscript: effectiveStt,
         photos,
         threshold: voiceThreshold,
       });
 
-      if (!trace.resolvedQuery) {
+      const resolvedSpoken = (effectiveStt || trace.resolvedQuery || '').trim();
+      if (!resolvedSpoken) {
         set({
           lastQuarantineToast: '🎤 음성이 인식되지 않았습니다. 마이크에 대고 다시 말씀해 주세요.',
         });
@@ -2702,7 +2710,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       }
 
       // [마이크 음성 인식 직후 양방향 0토큰 라우터 검사]
-      const spokenUtterance = (backgroundSttTranscript || trace.resolvedQuery || '').trim();
+      const spokenUtterance = resolvedSpoken;
       if (
         isMonsterCareIntentFromSearch(spokenUtterance) ||
         parseZeroLlmVoiceDocCommand(spokenUtterance).intentType !== 'SIMPLE_PERSPECTIVE_SEARCH'

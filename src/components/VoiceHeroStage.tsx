@@ -4,6 +4,7 @@ import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { ensureLoginAndZCoreReady, zCoreBridge } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
+import { unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
 
 export const VoiceHeroStage: React.FC = () => {
   const {
@@ -126,6 +127,7 @@ export const VoiceHeroStage: React.FC = () => {
 
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    unlockMobileAudioOnUserGesture();
     const q = textInput.trim();
     if (!q) return;
     await runTextQuery(q);
@@ -192,13 +194,13 @@ export const VoiceHeroStage: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              if (!isListening && !ensureLoginAndZCoreReady('음성 찾기 검색')) return;
+              unlockMobileAudioOnUserGesture();
               void toggleMicRecording();
             }}
-            title="마이크로 말해서 검색"
-            className={`h-12 md:h-13 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[13px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+            title="마이크로 말해서 검색·낭독·손보기"
+            className={`h-12 md:h-13 px-3.5 rounded-2xl border flex items-center gap-1.5 font-label-md text-[12.5px] md:text-[13px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
               isListening
-                ? 'bg-primary-container text-zinc-950 border-primary-container'
+                ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
                 : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
             }`}
           >
@@ -209,7 +211,7 @@ export const VoiceHeroStage: React.FC = () => {
             >
               {isListening ? 'stop_circle' : 'mic'}
             </span>
-            <span className="hidden sm:inline">{isListening ? '듣는 중...' : '말하기'}</span>
+            <span>{isListening ? '듣는 중' : '말하기'}</span>
           </button>
 
           {/* 음성 아이콘 하나에 재생/중단 토글 + [남 | 여] 성우 선택이 통합된 트렌디 컨트롤 캡슐 */}

@@ -20,6 +20,8 @@ import {
 } from '../services/monsterChatRouter';
 import { MonsterInteractiveCardView } from './MonsterInteractiveCards';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
+import { unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
+import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 
 interface MonsterStandardChatColumnProps {
   sourceTab: 'trash' | 'repair';
@@ -79,6 +81,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   const [inputText, setInputText] = useState('');
   const [isMicListening, setIsMicListening] = useState(false);
   const speechRecRef = useRef<any>(null);
+  const mediaRecRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const latestTranscriptRef = useRef<string>('');
+  const silenceAutoTimerRef = useRef<number>(0);
+  const submittedOnceRef = useRef<boolean>(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const lastHandledTriggerIdRef = useRef<number | null>(null);
 
@@ -141,21 +148,137 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     }
   };
 
+  const cleanupMediaRecorderFallback = () => {
+    try {
+      if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') {
+        mediaRecRef.current.stop();
+      }
+    } catch {
+      /* ignore */
+    }
+    mediaRecRef.current = null;
+    try {
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    } catch {
+      /* ignore */
+    }
+    mediaStreamRef.current = null;
+  };
+
+  const startMediaRecorderChatFallback = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setIsMicListening(false);
+      onToast?.('🎤 마이크 권한이 없거나 음성 입력이 차단된 브라우저입니다.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      });
+      mediaStreamRef.current = stream;
+      setIsMicListening(true);
+
+      const preferredTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/ogg;codecs=opus',
+      ];
+      let selectedMime = '';
+      if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+        for (const t of preferredTypes) {
+          if (MediaRecorder.isTypeSupported(t)) {
+            selectedMime = t;
+            break;
+          }
+        }
+      }
+      const chunks: Blob[] = [];
+      const rec = selectedMime
+        ? new MediaRecorder(stream, { mimeType: selectedMime })
+        : new MediaRecorder(stream);
+      mediaRecRef.current = rec;
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+      rec.onstop = async () => {
+        setIsMicListening(false);
+        try {
+          stream.getTracks().forEach((t) => t.stop());
+        } catch {
+          /* ignore */
+        }
+        mediaStreamRef.current = null;
+        mediaRecRef.current = null;
+
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        if (blob.size < 100 || submittedOnceRef.current) return;
+        setInputText('🎙️ 음성을 텍스트로 변환하고 있습니다...');
+        const transcribed = await transcribeAudioBlobViaCloud(blob);
+        if (transcribed && !submittedOnceRef.current) {
+          submittedOnceRef.current = true;
+          setInputText('');
+          void handleSend(transcribed);
+        } else {
+          setInputText('');
+          onToast?.('🎤 음성이 잘 들리지 않았습니다. 마이크 가까이에서 다시 말씀해 주세요.');
+        }
+      };
+      rec.start(200);
+      window.clearTimeout(silenceAutoTimerRef.current);
+      silenceAutoTimerRef.current = window.setTimeout(() => {
+        if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') {
+          try {
+            mediaRecRef.current.stop();
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 4200);
+    } catch {
+      setIsMicListening(false);
+      onToast?.('🎤 마이크 권한을 허용해 주시거나 아래 입력창에 입력해 주세요.');
+    }
+  };
+
+  const finalizeAndSubmitSpokenText = () => {
+    window.clearTimeout(silenceAutoTimerRef.current);
+    const spoken = latestTranscriptRef.current.trim();
+    if (spoken && !submittedOnceRef.current) {
+      submittedOnceRef.current = true;
+      latestTranscriptRef.current = '';
+      setInputText('');
+      void handleSend(spoken);
+    }
+  };
+
   const toggleChatMicRecording = () => {
+    unlockMobileAudioOnUserGesture();
+
     if (isMicListening) {
+      window.clearTimeout(silenceAutoTimerRef.current);
       try {
         speechRecRef.current?.stop();
       } catch {
         /* ignore */
       }
-      setIsMicListening(false);
+      if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') {
+        cleanupMediaRecorderFallback();
+      } else {
+        setIsMicListening(false);
+        finalizeAndSubmitSpokenText();
+      }
       return;
     }
+
+    latestTranscriptRef.current = '';
+    submittedOnceRef.current = false;
+    window.clearTimeout(silenceAutoTimerRef.current);
 
     const SpeechRecognitionCtor =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) {
-      onToast?.('🎤 브라우저 음성 인식을 지원하지 않는 환경입니다. 아래 입력창에 텍스트로 입력해 주세요.');
+      void startMediaRecorderChatFallback();
       return;
     }
 
@@ -166,39 +289,64 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       recognition.continuous = false;
       speechRecRef.current = recognition;
 
-      let finalTranscript = '';
       recognition.onstart = () => {
         setIsMicListening(true);
       };
       recognition.onresult = (event: any) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interim += transcript;
-          }
+        const resultsArr = Array.from(event.results) as any[];
+        const fullText = resultsArr
+          .map((r: any) => String(r?.[0]?.transcript || ''))
+          .join('')
+          .trim();
+        if (fullText) {
+          latestTranscriptRef.current = fullText;
+          setInputText(fullText);
         }
-        const combined = (finalTranscript || interim).trim();
-        if (combined) {
-          setInputText(combined);
+        const lastResult = resultsArr[resultsArr.length - 1];
+        window.clearTimeout(silenceAutoTimerRef.current);
+        if (lastResult?.isFinal && fullText) {
+          silenceAutoTimerRef.current = window.setTimeout(() => {
+            try {
+              recognition.stop();
+            } catch {
+              /* ignore */
+            }
+            setIsMicListening(false);
+            finalizeAndSubmitSpokenText();
+          }, 120);
+        } else if (fullText) {
+          silenceAutoTimerRef.current = window.setTimeout(() => {
+            try {
+              recognition.stop();
+            } catch {
+              /* ignore */
+            }
+            setIsMicListening(false);
+            finalizeAndSubmitSpokenText();
+          }, 1150);
         }
       };
-      recognition.onerror = () => {
+      recognition.onerror = (ev: any) => {
+        window.clearTimeout(silenceAutoTimerRef.current);
+        const errCode = String(ev?.error || '');
+        if (latestTranscriptRef.current.trim()) {
+          setIsMicListening(false);
+          finalizeAndSubmitSpokenText();
+          return;
+        }
+        if (errCode && errCode !== 'aborted' && errCode !== 'no-speech') {
+          void startMediaRecorderChatFallback();
+          return;
+        }
         setIsMicListening(false);
       };
       recognition.onend = () => {
         setIsMicListening(false);
-        const spoken = finalTranscript.trim();
-        if (spoken) {
-          setInputText('');
-          void handleSend(spoken);
-        }
+        finalizeAndSubmitSpokenText();
       };
       recognition.start();
     } catch {
-      setIsMicListening(false);
+      void startMediaRecorderChatFallback();
     }
   };
 
@@ -385,6 +533,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            unlockMobileAudioOnUserGesture();
             void handleSend();
           }}
           className="flex items-center gap-2"

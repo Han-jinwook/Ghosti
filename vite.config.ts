@@ -3253,6 +3253,42 @@ function ghostiLocalBridge(): Plugin {
         }
       });
 
+      server.middlewares.use('/api/monster-llm-chat', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+        try {
+          const body = req.method === 'POST' ? await readJsonBody(req) : {};
+          if (body?.action === 'transcribe_audio') {
+            const audioBase64 = String(body?.audioBase64 || '').trim();
+            const mimeType = String(body?.mimeType || 'audio/webm').trim() || 'audio/webm';
+            const transcript = await transcribeAudioToKoreanQuery(audioBase64, mimeType);
+            res.end(
+              JSON.stringify({
+                ok: Boolean(transcript),
+                transcript: transcript || '',
+              })
+            );
+            return;
+          }
+          const mod = await import('./netlify/functions/monster-llm-chat.js');
+          const out = await mod.handler({
+            httpMethod: req.method || 'POST',
+            body: JSON.stringify(body),
+          });
+          res.statusCode = out.statusCode || 200;
+          res.end(out.body);
+        } catch (err: any) {
+          res.end(JSON.stringify({ ok: false, error: String(err?.message || err) }));
+        }
+      });
+
       // ─────────────── [🧩 단일 표준 포트 5199 내장 소프트웨어 플러그인 브릿지: 센스톡(/api/senstalk/*) & 어그로필터(/api/aggrofilter/*)] ───────────────
       const zcoreDaemonScriptPath = path.resolve(ROOT, 'universal_z_core/os_agent/merlin_z_core_daemon.py');
 

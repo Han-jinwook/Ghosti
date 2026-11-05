@@ -1,4 +1,4 @@
-import { getZCoreUrl } from './zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 /**
  * [🛠️ Ghosti 설정몬스터 Neural TTS 클라이언트 & 무지연 캐시 재생기]
  * 1. 기본 성우: typecast_piljae / ko-KR-HyunsuNeural (MS 신경망 남성 성우 '현수')
@@ -127,11 +127,59 @@ export const SETUP_MONSTER_PREWARM_PHRASES: readonly string[] = [
 ];
 
 let activeAudioElement: HTMLAudioElement | null = null;
+let sharedGestureAudioElement: HTMLAudioElement | null = null;
+let mobileAudioUnlocked = false;
 let isCurrentlySpeaking = false;
 let lastSpokenText = '';
 let lastSpokenRate: string = SETUP_MONSTER_TTS_RATE_DEFAULT;
 const memoryAudioUrlCache = new Map<string, string>();
 let prewarmTriggered = false;
+
+/**
+ * [모바일 iOS Safari / Android Chrome 비동기 TTS 자동재생 잠금 해제]
+ * 사용자가 마이크 버튼·전송 버튼 등을 터치한 즉시 호출하여 공용 Audio 엘리먼트를 언락해 둡니다.
+ */
+export function unlockMobileAudioOnUserGesture(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!sharedGestureAudioElement && typeof Audio !== 'undefined') {
+      sharedGestureAudioElement = new Audio();
+      sharedGestureAudioElement.preload = 'auto';
+    }
+    if (!mobileAudioUnlocked && sharedGestureAudioElement) {
+      mobileAudioUnlocked = true;
+      sharedGestureAudioElement.src =
+        'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      sharedGestureAudioElement.volume = 0.01;
+      const playPromise = sharedGestureAudioElement.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise
+          .then(() => {
+            if (!isCurrentlySpeaking && sharedGestureAudioElement) {
+              sharedGestureAudioElement.pause();
+              sharedGestureAudioElement.currentTime = 0;
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function createOrReuseBlessedAudio(srcUrl: string, volume = 0.75): HTMLAudioElement {
+  const audio = sharedGestureAudioElement ?? new Audio();
+  sharedGestureAudioElement = audio;
+  try {
+    audio.pause();
+  } catch {
+    /* ignore */
+  }
+  audio.src = srcUrl;
+  audio.volume = volume;
+  return audio;
+}
 
 export function getIsTtsSpeaking(): boolean {
   return isCurrentlySpeaking;
@@ -311,8 +359,7 @@ export async function speakSetupMonsterTts(
   const cachedUrl = memoryAudioUrlCache.get(cacheKey);
   if (cachedUrl && typeof Audio !== 'undefined') {
     try {
-      const audio = new Audio(cachedUrl);
-      audio.volume = 0.4;
+      const audio = createOrReuseBlessedAudio(cachedUrl, 0.75);
       audio.onended = () => {
         if (activeAudioElement === audio) {
           activeAudioElement = null;
@@ -346,59 +393,64 @@ export async function speakSetupMonsterTts(
     }
   }
 
-  // 1·2단계: 로컬 Z-코어 tts_cache 조회(Cache Hit 시 0.001초) 또는 MS 신경망 실시간 합성 + Write-Through 캐싱(Cache Miss)
-  try {
-    const zcoreController = new AbortController();
-    const zcoreTimer = setTimeout(() => zcoreController.abort(), 1200);
-    const res = await fetch(getZCoreUrl('/__setup-monster/tts'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: cleanText, voice, rate }),
-      signal: zcoreController.signal,
-    }).finally(() => clearTimeout(zcoreTimer));
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.ok && data.audioUrl && typeof Audio !== 'undefined') {
-        const playableUrl = getZCoreUrl(String(data.audioUrl));
-        memoryAudioUrlCache.set(cacheKey, playableUrl);
-        const audio = new Audio(playableUrl);
-        audio.volume = 0.4;
-        audio.onended = () => {
-          if (activeAudioElement === audio) {
-            activeAudioElement = null;
-            isCurrentlySpeaking = false;
-            notifyVoicePrefListeners();
-          }
-        };
-        audio.onerror = () => {
-          if (activeAudioElement === audio) {
-            activeAudioElement = null;
-            isCurrentlySpeaking = false;
-            notifyVoicePrefListeners();
-          }
-        };
-        activeAudioElement = audio;
-        isCurrentlySpeaking = true;
-        notifyVoicePrefListeners();
-        await audio.play().catch(() => {
-          isCurrentlySpeaking = false;
+  // 1·2단계: 로컬 Z-코어가 연결된 환경에서만 tts_cache 조회 (모바일 클라우드 접속 시 1.2초 타임아웃 지연 없이 즉시 /api/edge-tts 직행)
+  const canTryLocalZCore =
+    zCoreBridge.isConnected ||
+    (typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+  if (canTryLocalZCore) {
+    try {
+      const zcoreController = new AbortController();
+      const zcoreTimer = setTimeout(() => zcoreController.abort(), 1200);
+      const res = await fetch(getZCoreUrl('/__setup-monster/tts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: cleanText, voice, rate }),
+        signal: zcoreController.signal,
+      }).finally(() => clearTimeout(zcoreTimer));
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.ok && data.audioUrl && typeof Audio !== 'undefined') {
+          const playableUrl = getZCoreUrl(String(data.audioUrl));
+          memoryAudioUrlCache.set(cacheKey, playableUrl);
+          const audio = createOrReuseBlessedAudio(playableUrl, 0.75);
+          audio.onended = () => {
+            if (activeAudioElement === audio) {
+              activeAudioElement = null;
+              isCurrentlySpeaking = false;
+              notifyVoicePrefListeners();
+            }
+          };
+          audio.onerror = () => {
+            if (activeAudioElement === audio) {
+              activeAudioElement = null;
+              isCurrentlySpeaking = false;
+              notifyVoicePrefListeners();
+            }
+          };
+          activeAudioElement = audio;
+          isCurrentlySpeaking = true;
           notifyVoicePrefListeners();
-        });
-        return {
-          ok: true,
-          cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',
-          voice: data.voice || voice,
-          voiceActor: data.voiceActor || '현수 (MS Neural 무료 무제한)',
-          audioUrl: playableUrl,
-          elapsedMs:
-            typeof data.elapsedMs === 'number'
-              ? data.elapsedMs
-              : Math.round((performance.now() - t0) * 100) / 100,
-        };
+          await audio.play().catch(() => {
+            isCurrentlySpeaking = false;
+            notifyVoicePrefListeners();
+          });
+          return {
+            ok: true,
+            cacheStatus: data.cacheStatus === 'HIT' ? 'HIT' : 'MISS',
+            voice: data.voice || voice,
+            voiceActor: data.voiceActor || '현수 (MS Neural 무료 무제한)',
+            audioUrl: playableUrl,
+            elapsedMs:
+              typeof data.elapsedMs === 'number'
+                ? data.elapsedMs
+                : Math.round((performance.now() - t0) * 100) / 100,
+          };
+        }
       }
+    } catch {
+      /* network offline -> fallback below */
     }
-  } catch {
-    /* network offline -> fallback below */
   }
 
   // 2.5단계: 웹/Netlify 배포 환경 클라우드 MS 신경망 성우 서버리스 브릿지 (/api/edge-tts)
@@ -416,8 +468,7 @@ export async function speakSetupMonsterTts(
       if (cloudData?.ok && cloudData.audioDataUrl && typeof Audio !== 'undefined') {
         const playableUrl = String(cloudData.audioDataUrl);
         memoryAudioUrlCache.set(cacheKey, playableUrl);
-        const audio = new Audio(playableUrl);
-        audio.volume = 0.45;
+        const audio = createOrReuseBlessedAudio(playableUrl, 0.8);
         audio.onended = () => {
           if (activeAudioElement === audio) {
             activeAudioElement = null;

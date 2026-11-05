@@ -18,7 +18,7 @@ import {
   load_audio,
 } from '@huggingface/transformers';
 import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, storageInfo } from './opfsCache';
-import { getZCoreUrl } from './zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 import { silentIndexingBrake } from './silentIndexingBrake';
 import type {
   DuplicateGroup,
@@ -2716,64 +2716,77 @@ export async function executeZeroSttVoiceSearch(params: {
   const photoMap = new Map(activePhotos.map((p) => [p.name, p]));
 
   // 1) 실제 마이크로 녹음한 음성 검색: 브라우저 STT가 이미 텍스트를 잡았다면 무거운 오디오 Base64 업로드 생략 (1초 만에 즉시 응답)
-  const existingStt = (params.backgroundSttTranscript || '').trim();
-  if (params.audioBlob && !params.presetId && !existingStt) {
-    try {
-      const audioBase64 = params.audioBlob.size > 0 ? await blobToBase64(params.audioBlob) : '';
+  let existingStt = (params.backgroundSttTranscript || '').trim();
+  if (params.audioBlob && !params.presetId && !existingStt && params.audioBlob.size > 100) {
+    const canTryLocalVoice =
+      zCoreBridge.isConnected ||
+      (typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+    if (canTryLocalVoice) {
+      try {
+        const audioBase64 = await blobToBase64(params.audioBlob);
+        const res = await fetch(getZCoreUrl('/__search/voice'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audioBase64,
+            mimeType: params.audioBlob.type || 'audio/webm',
+            sttTranscript: '',
+          }),
+        });
 
-      const res = await fetch(getZCoreUrl('/__search/voice'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          audioBase64,
-          mimeType: params.audioBlob.type || 'audio/webm',
-          sttTranscript: '',
-        }),
-      });
+        if (res.ok) {
+          const data = await res.json();
+          const resolvedQuery = String(data.resolvedQuery || '').trim();
+          if (resolvedQuery) {
+            const mapped: SearchResultItem[] = [];
+            for (const r of data.results ?? []) {
+              const photo = photoMap.get(r.name);
+              if (!photo) continue;
+              mapped.push({
+                photo,
+                score: Number(r.score || 0.74),
+                matchPercentage: Number(
+                  r.matchPercentage || scoreToMatchPct(Number(r.score || 0.74), mapped.length)
+                ),
+                matchedBy: data.usedServerAudioStt ? 'stt-fallback-silent' : 'audio-direct',
+              });
+            }
 
-      if (res.ok) {
-        const data = await res.json();
-        const resolvedQuery = String(data.resolvedQuery || '').trim();
-        const mapped: SearchResultItem[] = [];
-        for (const r of data.results ?? []) {
-          const photo = photoMap.get(r.name);
-          if (!photo) continue;
-          mapped.push({
-            photo,
-            score: Number(r.score || 0.74),
-            matchPercentage: Number(
-              r.matchPercentage || scoreToMatchPct(Number(r.score || 0.74), mapped.length)
-            ),
-            matchedBy: data.usedServerAudioStt ? 'stt-fallback-silent' : 'audio-direct',
-          });
+            const totalMs = +(performance.now() - totalStart).toFixed(1);
+            const trace: VoiceRoutingTrace = {
+              id: `trace_${Date.now()}`,
+              timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+              primaryMode: 'audio-direct',
+              audioTop1Score: mapped[0]?.score ?? 0.72,
+              audioMargin: 0.032,
+              threshold,
+              silentFallbackTriggered: Boolean(data.usedServerAudioStt),
+              fallbackReason: data.usedServerAudioStt
+                ? '모바일 오디오 파형 보정 — 하이브리드 음성 인식 폴백 자동 적용'
+                : undefined,
+              resolvedQuery,
+              decodeMs: 42,
+              embedMs: Number(data.embedMs || 38),
+              searchMs: Number(data.searchMs || 2.1),
+              totalMs,
+            };
+
+            return {
+              results: mapped.slice(0, 24),
+              trace,
+            };
+          }
         }
-
-        const totalMs = +(performance.now() - totalStart).toFixed(1);
-        const trace: VoiceRoutingTrace = {
-          id: `trace_${Date.now()}`,
-          timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-          primaryMode: 'audio-direct',
-          audioTop1Score: mapped[0]?.score ?? 0.72,
-          audioMargin: 0.032,
-          threshold,
-          silentFallbackTriggered: Boolean(data.usedServerAudioStt),
-          fallbackReason: data.usedServerAudioStt
-            ? '모바일 오디오 파형 보정 — 하이브리드 음성 인식 폴백 자동 적용'
-            : undefined,
-          resolvedQuery,
-          decodeMs: 42,
-          embedMs: Number(data.embedMs || 38),
-          searchMs: Number(data.searchMs || 2.1),
-          totalMs,
-        };
-
-        return {
-          results: mapped.slice(0, 24),
-          trace,
-        };
+      } catch {
+        /* 로컬 음성 서버 미연결 시 즉시 클라우드 STT 폴백 */
       }
-    } catch {
-      /* 네트워크 오류 시 하단 텍스트 검색 폴백 */
+    }
+
+    // 모바일/클라우드 환경(Netlify 배포 또는 인앱브라우저 등) 오디오 파형 직접 전사 폴백
+    const cloudStt = await transcribeAudioBlobViaCloud(params.audioBlob);
+    if (cloudStt) {
+      existingStt = cloudStt;
     }
   }
 
@@ -2830,6 +2843,41 @@ export async function executeZeroSttVoiceSearch(params: {
 /**
  * 실시간 마이크 녹음 + 실시간 주파수 진폭(AnalyserNode) + 백그라운드 무음 STT 동시 캡처기
  */
+/**
+ * 모바일(iOS/Android/인앱브라우저) 및 클라우드 환경에서 녹음된 오디오 Blob을
+ * /api/monster-llm-chat (action: 'transcribe_audio')를 통해 한국어 텍스트로 즉시 전사합니다.
+ */
+export async function transcribeAudioBlobViaCloud(audioBlob: Blob): Promise<string> {
+  if (!audioBlob || audioBlob.size < 100) return '';
+  try {
+    const audioBase64 = await blobToBase64(audioBlob);
+    if (!audioBase64 || audioBase64.length < 50) return '';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6500);
+    const res = await fetch('/api/monster-llm-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'transcribe_audio',
+        audioBase64,
+        mimeType: audioBlob.type || 'audio/webm',
+      }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+    if (res.ok) {
+      const data = await res.json();
+      const txt = String(data?.transcript || data?.text || '')
+        .trim()
+        .replace(/^["'“”]+|["'“”]+$/g, '')
+        .trim();
+      if (txt) return txt;
+    }
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
 export class HybridVoiceSession {
   private mediaRecorder: MediaRecorder | null = null;
   private stream: MediaStream | null = null;
@@ -2837,11 +2885,93 @@ export class HybridVoiceSession {
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private rafId = 0;
+  private waveIntervalId = 0;
   private sttRecognition: any = null;
   private sttTranscript = '';
   private autoStopTimer = 0;
   private finalSilenceTimer = 0;
   private autoStopFired = false;
+
+  private async startMediaRecorderCapture(
+    callbacks: {
+      onAmplitude?: (bands: number[]) => void;
+      onAutoStop?: () => void;
+    },
+    triggerFastAutoStop: () => void
+  ): Promise<void> {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('마이크 API를 사용할 수 없는 환경입니다.');
+    }
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      this.audioCtx = new AudioContextClass();
+      const source = this.audioCtx.createMediaStreamSource(this.stream);
+      this.analyser = this.audioCtx.createAnalyser();
+      this.analyser.fftSize = 64;
+      source.connect(this.analyser);
+
+      const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+      let hasDetectedSpeech = false;
+      let silenceStartedAt = 0;
+      const tick = () => {
+        if (!this.analyser) return;
+        this.analyser.getByteFrequencyData(dataArray);
+        const bands: number[] = [];
+        let maxAmp = 0;
+        for (let i = 0; i < 16; i++) {
+          const val = Math.max(0.12, (dataArray[i] ?? 0) / 255);
+          bands.push(val);
+          if (val > maxAmp) maxAmp = val;
+        }
+        callbacks.onAmplitude?.(bands);
+
+        // 음성 발화 후 1.1초 이상 침묵 지속 시 자동 종료 (모바일/PC 공통)
+        if (maxAmp > 0.32) {
+          hasDetectedSpeech = true;
+          silenceStartedAt = 0;
+        } else if (hasDetectedSpeech && maxAmp < 0.18) {
+          if (!silenceStartedAt) {
+            silenceStartedAt = performance.now();
+          } else if (performance.now() - silenceStartedAt > 1100) {
+            triggerFastAutoStop();
+            return;
+          }
+        }
+        this.rafId = requestAnimationFrame(tick);
+      };
+      this.rafId = requestAnimationFrame(tick);
+    } catch {
+      /* ignore audio context visualization error */
+    }
+
+    const preferredTypes = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg;codecs=opus',
+    ];
+    let selectedMime = '';
+    if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+      for (const t of preferredTypes) {
+        if (MediaRecorder.isTypeSupported(t)) {
+          selectedMime = t;
+          break;
+        }
+      }
+    }
+
+    this.mediaRecorder = selectedMime
+      ? new MediaRecorder(this.stream, { mimeType: selectedMime })
+      : new MediaRecorder(this.stream);
+    this.mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) this.chunks.push(e.data);
+    };
+    this.mediaRecorder.start(200);
+  }
 
   async start(callbacks: {
     onAmplitude?: (bands: number[]) => void;
@@ -2851,26 +2981,40 @@ export class HybridVoiceSession {
     this.chunks = [];
     this.sttTranscript = '';
     this.autoStopFired = false;
+    clearInterval(this.waveIntervalId);
 
     const triggerFastAutoStop = () => {
       if (this.autoStopFired) return;
       this.autoStopFired = true;
       clearTimeout(this.autoStopTimer);
       clearTimeout(this.finalSilenceTimer);
+      clearInterval(this.waveIntervalId);
       callbacks.onAutoStop?.();
     };
 
-    // 1) 마이크 오디오 스트림 먼저 확보 (마이크 미연결 시 즉시 에러 throw)
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('마이크 API를 사용할 수 없는 환경입니다.');
-    }
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
-
-    // 2) 백그라운드 조용한 Web Speech API (STT) 병렬 대기 시작 (모바일 비프음과 동시에 즉시 검색 트리거)
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SR) {
+    const isMobileDevice =
+      typeof navigator !== 'undefined' &&
+      (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+        (typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches));
+
+    // [핵심] 모바일(Android/iOS)에서는 getUserMedia와 SpeechRecognition이 동시에 마이크를 잡으면
+    // 하드웨어 마이크 독점 충돌(audio-capture/aborted)로 SpeechRecognition이 즉시 죽어버립니다.
+    // 따라서 모바일에서 SpeechRecognition이 지원될 때는 SpeechRecognition 단독으로 마이크를 구동하고,
+    // 미지원(카톡 인앱 등) 또는 onerror 발생 시에만 즉시 MediaRecorder 오디오 녹음 폴백으로 전환합니다!
+    if (isMobileDevice && SR) {
+      let fallbackStarted = false;
+      const switchToRecorderFallback = async () => {
+        if (fallbackStarted || this.autoStopFired) return;
+        fallbackStarted = true;
+        clearInterval(this.waveIntervalId);
+        try {
+          await this.startMediaRecorderCapture(callbacks, triggerFastAutoStop);
+        } catch {
+          triggerFastAutoStop();
+        }
+      };
+
       try {
         const r = new SR();
         r.lang = 'ko-KR';
@@ -2878,7 +3022,80 @@ export class HybridVoiceSession {
         r.continuous = false;
         r.onresult = (ev: any) => {
           const resultsArr = Array.from(ev.results) as any[];
-          const txt = resultsArr.map((x: any) => x[0].transcript).join('');
+          const txt = resultsArr.map((x: any) => x[0]?.transcript || '').join('');
+          if (txt.trim()) {
+            this.sttTranscript = txt.trim();
+            callbacks.onInterimStt?.(this.sttTranscript);
+          }
+          const lastResult = resultsArr[resultsArr.length - 1];
+          clearTimeout(this.finalSilenceTimer);
+          if (lastResult?.isFinal && this.sttTranscript) {
+            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 80);
+          } else if (this.sttTranscript) {
+            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 950);
+          }
+        };
+        r.onspeechend = () => {
+          if (this.sttTranscript) {
+            clearTimeout(this.finalSilenceTimer);
+            this.finalSilenceTimer = window.setTimeout(triggerFastAutoStop, 80);
+          }
+        };
+        r.onend = () => {
+          if (this.sttTranscript) {
+            triggerFastAutoStop();
+          } else if (!fallbackStarted && !this.autoStopFired) {
+            triggerFastAutoStop();
+          }
+        };
+        r.onerror = (ev: any) => {
+          const errCode = String(ev?.error || '');
+          if (errCode === 'no-speech' && this.sttTranscript) {
+            triggerFastAutoStop();
+            return;
+          }
+          if (!this.sttTranscript) {
+            void switchToRecorderFallback();
+          }
+        };
+        r.start();
+        this.sttRecognition = r;
+
+        // 모바일 SpeechRecognition 단독 구동 중 부드러운 파형 피드백 제공
+        let tickCount = 0;
+        this.waveIntervalId = window.setInterval(() => {
+          tickCount += 1;
+          const bands = Array.from({ length: 16 }, (_, i) =>
+            Math.max(0.16, Math.min(0.92, 0.35 + Math.sin(tickCount * 0.45 + i * 0.6) * 0.32))
+          );
+          callbacks.onAmplitude?.(bands);
+        }, 90);
+
+        this.autoStopTimer = window.setTimeout(() => {
+          triggerFastAutoStop();
+        }, 6500);
+        return;
+      } catch {
+        await switchToRecorderFallback();
+        this.autoStopTimer = window.setTimeout(() => {
+          triggerFastAutoStop();
+        }, 5500);
+        return;
+      }
+    }
+
+    // 데스크톱 또는 SpeechRecognition 미지원 모바일 환경: MediaRecorder + (데스크톱일 경우 병렬 SR)
+    await this.startMediaRecorderCapture(callbacks, triggerFastAutoStop);
+
+    if (SR && !isMobileDevice) {
+      try {
+        const r = new SR();
+        r.lang = 'ko-KR';
+        r.interimResults = true;
+        r.continuous = false;
+        r.onresult = (ev: any) => {
+          const resultsArr = Array.from(ev.results) as any[];
+          const txt = resultsArr.map((x: any) => x[0]?.transcript || '').join('');
           if (txt.trim()) {
             this.sttTranscript = txt.trim();
             callbacks.onInterimStt?.(this.sttTranscript);
@@ -2912,56 +3129,6 @@ export class HybridVoiceSession {
       }
     }
 
-    // 3) 실시간 파형 분석기 연결
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      this.audioCtx = new AudioContextClass();
-      const source = this.audioCtx.createMediaStreamSource(this.stream);
-      this.analyser = this.audioCtx.createAnalyser();
-      this.analyser.fftSize = 64;
-      source.connect(this.analyser);
-
-      const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-      const tick = () => {
-        if (!this.analyser) return;
-        this.analyser.getByteFrequencyData(dataArray);
-        const bands: number[] = [];
-        for (let i = 0; i < 16; i++) {
-          bands.push(Math.max(0.12, (dataArray[i] ?? 0) / 255));
-        }
-        callbacks.onAmplitude?.(bands);
-        this.rafId = requestAnimationFrame(tick);
-      };
-      this.rafId = requestAnimationFrame(tick);
-    } catch {
-      /* ignore audio context visualization error */
-    }
-
-    // 4) 모바일(iOS Safari / Android Chrome) 호환 MediaRecorder 포맷 선택 및 200ms 단위 청크 캡처
-    const preferredTypes = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/mp4',
-      'audio/ogg;codecs=opus',
-    ];
-    let selectedMime = '';
-    if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
-      for (const t of preferredTypes) {
-        if (MediaRecorder.isTypeSupported(t)) {
-          selectedMime = t;
-          break;
-        }
-      }
-    }
-
-    this.mediaRecorder = selectedMime
-      ? new MediaRecorder(this.stream, { mimeType: selectedMime })
-      : new MediaRecorder(this.stream);
-    this.mediaRecorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) this.chunks.push(e.data);
-    };
-    this.mediaRecorder.start(200);
-
     this.autoStopTimer = window.setTimeout(() => {
       triggerFastAutoStop();
     }, 5500);
@@ -2970,6 +3137,7 @@ export class HybridVoiceSession {
   async stop(): Promise<{ audioBlob: Blob; backgroundSttTranscript: string }> {
     clearTimeout(this.autoStopTimer);
     clearTimeout(this.finalSilenceTimer);
+    clearInterval(this.waveIntervalId);
     cancelAnimationFrame(this.rafId);
 
     // 이미 텍스트가 인식된 경우 0ms 즉시 통과, 아직 인식 중인 경우에만 최대 150ms 대기
