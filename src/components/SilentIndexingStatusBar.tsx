@@ -36,9 +36,14 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
       } px-3.5 py-2 flex flex-col gap-1.5 ${className}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 w-full">
-        <div className="flex flex-wrap items-center gap-2 text-[13px] min-w-0">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
+          title="내 PC 연결 상태 및 전체 인덱싱 상세 보기"
+          className="flex flex-wrap items-center gap-2 text-[13px] min-w-0 text-left cursor-pointer hover:opacity-85 transition-opacity"
+        >
           <span className="font-extrabold text-emerald-700 dark:text-emerald-300">
-            ⚡ 최근 3개월 준비 완료 ({recentCountFormatted}개)
+            🟢 내 PC 연결됨 · 최근 3개월 준비 완료 ({recentCountFormatted}개)
           </span>
           <span className="text-slate-400 dark:text-zinc-600">·</span>
           {guard.thermalOrBatteryPaused && guard.pauseReason ? (
@@ -50,29 +55,19 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
               {isTurbo ? '⚡ 고속 정리 중' : '🍃 백그라운드 정리 중'} ({snap.archiveProgressPercent}%)
             </span>
           )}
-        </div>
+        </button>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
-            className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0 transition-all shadow-xs"
-          >
-            🚀 내 PC 전체 인덱싱 시작
-          </button>
-
-          <button
-            type="button"
-            onClick={() => silentIndexingBrake.toggleSpeedMode()}
-            className={`px-3 py-1 rounded-lg text-[12.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0 transition-all ${
-              isTurbo
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
-                : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-white/15 text-slate-800 dark:text-zinc-100'
-            }`}
-          >
-            {isTurbo ? '🍃 무소음 전환' : '⚡ 고속 정리'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => silentIndexingBrake.toggleSpeedMode()}
+          className={`px-3 py-1 rounded-lg text-[12.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0 transition-all ${
+            isTurbo
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+              : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-white/15 text-slate-800 dark:text-zinc-100'
+          }`}
+        >
+          {isTurbo ? '🍃 무소음 전환' : '⚡ 고속 정리'}
+        </button>
       </div>
 
       {showPriorityJumpToast && snap.lastPriorityJump && (

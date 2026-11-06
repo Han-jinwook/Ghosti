@@ -203,16 +203,27 @@ const GhostiHubGlobalModals: React.FC = () => {
               launchNotifyOptIn: true,
               forceSync: true,
             });
-            // 로그인 직후 0.1초 헬스체크: 이미 Z-코어가 켜져 있으면 아무 창도 띄우지 않고 무소음 직행 (버전업은 백그라운드 자동 처리)
+            // [골든 타이밍 바톤터치]: 유저가 '[⚡ 내 컴퓨터 1초 연결하기]' 또는 내 컴퓨터 파일 액션을 눌러 로그인한 경우(ghosti_pending_zcore_connect === '1')에만
+            // 로그인 직후 자동으로 Z-코어 연결 모달(또는 인덱싱)로 바톤터치하고, 단순히 우상단 [로그인] 버튼만 누른 경우에는 보던 화면을 그대로 유지합니다.
+            let hasPendingZCoreConnect = false;
+            try {
+              if (sessionStorage.getItem('ghosti_pending_zcore_connect') === '1') {
+                hasPendingZCoreConnect = true;
+                sessionStorage.removeItem('ghosti_pending_zcore_connect');
+              }
+            } catch {
+              // ignore
+            }
             const isMobileEnv =
               typeof window !== 'undefined' &&
               (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
                 window.innerWidth < 860);
-            if (!isMobileEnv) {
+            if (hasPendingZCoreConnect && !isMobileEnv) {
               void (async () => {
                 const ok = zCoreBridge.isConnected || (await zCoreBridge.checkHealth());
                 if (ok) {
                   void useSaySeeStore.getState().initApp(true);
+                  window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
                   return;
                 }
                 window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));

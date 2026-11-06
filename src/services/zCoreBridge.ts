@@ -178,10 +178,61 @@ export const zCoreBridge = ZCoreBridgeManager.getInstance();
  *   ② 로컬 Z-코어(`127.0.0.1:5199`) 또는 모바일 네이티브 환경 가동이 완료된 후에만 실행됩니다.
  * - `/?dev=true`로 접속한 개발자 PC/폰에서도 이 순차 온보딩(로그인 ➔ 코어 실행) 원칙을 동일하게 점검·안내합니다.
  */
+/**
+ * [내 컴퓨터 1초 연결하기 요청 헬퍼]
+ * - 비로그인(게스트) 상태라면 `ghosti_pending_zcore_connect = '1'` 세팅 후 이메일 로그인 모달(`openLoginModal`)을 먼저 오픈하고,
+ *   로그인 성공 즉시 자동으로 Z-코어 연결 모달(`openZCoreGuideModal`)로 물 흐르듯 바톤터치합니다.
+ * - 이미 로그인된 상태라면 즉시 Z-코어 연결 모달(`openZCoreGuideModal`)을 오픈합니다.
+ */
+export function requestConnectMyComputer(): void {
+  if (typeof window === 'undefined') return;
+
+  const hasLoginToken = Boolean(
+    localStorage.getItem('merlin_session_token') ||
+      localStorage.getItem('ghosti_prelaunch_verified_email') ||
+      localStorage.getItem('userEmail')
+  );
+
+  if (!hasLoginToken) {
+    try {
+      sessionStorage.setItem('ghosti_pending_zcore_connect', '1');
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent('openLoginModal'));
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+}
+
+/**
+ * [귀신같이 기본 실행 게이트 (Fundamental Execution Gate)]
+ * - 개인 라운지(찾기·치우기·고치기)의 모든 실제 내 기기 파일 액션은
+ *   ① 이메일 로그인 완료(`merlin_session_token` 보유) +
+ *   ② 로컬 Z-코어(`127.0.0.1:5199`) 또는 모바일 네이티브 환경 가동이 완료된 후에만 실행됩니다.
+ * - 비로그인 게스트가 내 기기 실물 액션을 클릭한 순간: `ghosti_pending_zcore_connect = '1'` 플래그를 세팅하고
+ *   `openLoginModal`을 먼저 띄워 로그인 직후 Z-코어 연결까지 자동 바톤터치합니다.
+ */
 export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
   if (typeof window === 'undefined') return true;
 
-  // PC 환경에서 Z-코어 점검: 이미 설치·실행되어 있으면 비로그인(게스트) 상태여도 로그인 창을 띄우지 않고 즉시 통과!
+  const hasLoginToken = Boolean(
+    localStorage.getItem('merlin_session_token') ||
+      localStorage.getItem('ghosti_prelaunch_verified_email') ||
+      localStorage.getItem('userEmail')
+  );
+
+  if (!hasLoginToken) {
+    try {
+      sessionStorage.setItem('ghosti_pending_zcore_connect', '1');
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent('openLoginModal'));
+    return false;
+  }
+
   const isMobileViewportOrUA =
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
     window.innerWidth < 860;

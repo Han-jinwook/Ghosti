@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
-import { ensureLoginAndZCoreReady, zCoreBridge } from '../services/zCoreBridge';
+import { ensureLoginAndZCoreReady, requestConnectMyComputer, zCoreBridge } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
@@ -352,25 +352,24 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         </div>
 
-        {/* 1-D. Z-코어 연결 시 무소음 인덱싱 상태 바 / 미연결 시 [⚡ 내 컴퓨터 파일 연결] 1줄 안내 바 */}
+        {/* 1-D. Z-코어 연결 시 무소음 인덱싱 상태 바 / 미연결 시 [⚡ 내 컴퓨터 1초 연결하기] 1줄 안내 바 */}
         {isZCoreConnected ? (
           <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
         ) : (
           <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
             <div className="flex items-center gap-2 text-[12.5px] font-extrabold text-slate-900 dark:text-white">
-              <span>⚡ 내 컴퓨터 파일 연결</span>
-              <span className="hidden sm:inline font-medium text-slate-600 dark:text-zinc-300 text-[12px]">
+              <span>
                 {hasExecutedUserSearch
-                  ? '· 현재 샘플 검색 결과입니다 (내 컴퓨터 진짜 사진·영상·문서도 1초 만에 찾아보세요)'
-                  : '· 현재 체험 샘플 화면입니다 (내 컴퓨터 사진·영상·문서를 연결해 보세요)'}
+                  ? '👀 지금은 샘플 검색 결과입니다 · 내 컴퓨터 진짜 사진·영상·문서도 1초 만에 찾아보세요!'
+                  : '👀 지금은 체험 샘플 화면입니다 · 내 컴퓨터 진짜 사진·영상·문서를 1초 만에 찾아볼까요?'}
               </span>
             </div>
             <button
               type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
+              onClick={() => requestConnectMyComputer()}
               className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
             >
-              🚀 내 PC 전체 인덱싱 시작
+              ⚡ 내 컴퓨터 1초 연결하기
             </button>
           </div>
         )}
