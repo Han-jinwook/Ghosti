@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-06T14:56:03.069205",
+  "updated_at": "2026-11-06T15:05:01.397687",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -794,6 +794,22 @@
       "last_edited_time": "2026-11-06T02:11:00.000Z",
       "url": "https://app.notion.com/p/410f9ffd2c1d809398e7ed047ccbead4",
       "archived_at": "2026-11-06T14:32:54.995902"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-814a-907a-fd4351a234f0",
+      "title": "🎯 [귀신같이] 성우 발화 문장 관련",
+      "app": "",
+      "last_edited_time": "2026-11-06T03:49:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d814a907afd4351a234f0",
+      "archived_at": "2026-11-06T15:05:01.397482"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-81ed-88d9-ce06e7a5b212",
+      "title": "🎯 [귀신같이] 성우 발음과 선택되어 있는 성우 목소리로 나오지 않는 문제",
+      "app": "",
+      "last_edited_time": "2026-11-06T03:39:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d81ed88d9ce06e7a5b212",
+      "archived_at": "2026-11-06T15:05:01.397497"
     }
   ]
 }
