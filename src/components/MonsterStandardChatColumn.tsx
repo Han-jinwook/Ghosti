@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Send,
-  RotateCcw,
   Bot,
   User,
   Mic,
@@ -13,7 +12,6 @@ import {
   setSharedMonsterMessages,
   setSharedMonsterLiteracyLevel,
   setSharedMonsterBusy,
-  resetSharedMonsterChatToWelcome,
   processUnifiedMonsterChatQuery,
   type MonsterChatMessage,
   type DigitalHealthCheckRecord,
@@ -471,7 +469,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
   return (
     <aside className="flex flex-col h-[calc(100vh-155px)] min-h-[580px] max-h-[840px] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/95 shadow-lg overflow-hidden">
-      {/* 0. 최상단 독립 배너: 수요 손 없는 날 & 20% 과부하 자동 검진 안내 (손보기 대화창 헤더 위로 완전 분리 · 잘림 없음) */}
+      {/* 0. 최상단 독립 배너: 수요 손 없는 날 & 20% 과부하 자동 검진 안내 (불필요한 '✋ 손보기 대화창' 제목줄 및 '↺ 새 대화' 버튼 전면 제거!) */}
       <div
         title={careScheduleSummary}
         className="px-3.5 py-2 border-b border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/90 dark:bg-emerald-950/40 flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] font-extrabold text-emerald-900 dark:text-emerald-300 leading-snug"
@@ -482,36 +480,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </span>
       </div>
 
-      {/* 1. 노션 스타일 미니멀 상단 헤더 */}
-      <div className="px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-xl bg-teal-50 dark:bg-slate-800 border border-teal-200 dark:border-slate-700 flex items-center justify-center shrink-0 text-[15px]">
-            ✋
-          </div>
-          <div className="min-w-0">
-            <span className="text-[14px] font-extrabold text-slate-900 dark:text-slate-100 whitespace-nowrap block">
-              손보기 대화창
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-          {/* PC에서는 음성 모드를 완전 제거하고 모바일에서만 성우 컨트롤 노출 */}
-          {isMobileOrStore && <VoiceActorControlPill compact />}
-
-          <button
-            type="button"
-            onClick={() => resetSharedMonsterChatToWelcome()}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[11.5px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
-            title="대화 새로 시작"
-          >
-            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-            새 대화
-          </button>
-        </div>
-      </div>
-
-      {/* 1.5. 상단 슬림 원복 안내 (담백하고 안심되는 한 줄) */}
+      {/* 1. 상단 슬림 원복 안내 (모바일에서만 성우 컨트롤 우측 병기) */}
       <div className="px-3.5 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
@@ -519,6 +488,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             손보기 후 원하는 시점으로 복원 가능
           </span>
         </div>
+        {isMobileOrStore && <VoiceActorControlPill compact />}
       </div>
 
       {/* 2. 본문 대화 스트림 (노션 스타일 미니멀 버블) */}
