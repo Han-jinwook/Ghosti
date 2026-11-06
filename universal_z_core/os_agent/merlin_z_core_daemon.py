@@ -138,6 +138,23 @@ def is_trusted_origin(origin: str | None) -> bool:
     return False
 
 
+_TRAY_HWND: int = 0
+
+
+def remove_win32_tray_icon() -> None:
+    """우아한 종료(/__merlin/shutdown) 또는 프로세스 교체 시 유령(Ghost) 트레이 아이콘이 남지 않도록 즉시 삭제합니다."""
+    global _TRAY_HWND
+    if sys.platform != "win32" or not _TRAY_HWND:
+        return
+    try:
+        import win32gui
+
+        win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (_TRAY_HWND, 0))
+        _TRAY_HWND = 0
+    except Exception:
+        pass
+
+
 class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -231,8 +248,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if path in ("/__merlin/shutdown", "/__zcore/shutdown"):
             if self._reject_untrusted():
                 return
+            remove_win32_tray_icon()
             self._send_json({"ok": True, "message": "Merlin_Z_Core shutting down", "version": CORE_VERSION})
-            threading.Thread(target=lambda: (time.sleep(0.2), os._exit(0)), daemon=True).start()
+            threading.Thread(target=lambda: (time.sleep(0.15), os._exit(0)), daemon=True).start()
             return
 
         # [귀신같이 내 PC 전수 인덱싱 API: 사진 / 서류 / 동영상]
@@ -375,8 +393,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if path in ("/__merlin/shutdown", "/__zcore/shutdown"):
             if self._reject_untrusted():
                 return
+            remove_win32_tray_icon()
             self._send_json({"ok": True, "message": "Merlin_Z_Core shutting down", "version": CORE_VERSION})
-            threading.Thread(target=lambda: (time.sleep(0.2), os._exit(0)), daemon=True).start()
+            threading.Thread(target=lambda: (time.sleep(0.15), os._exit(0)), daemon=True).start()
             return
 
         if path in ("/__merlin/ self-update", "/__merlin/self-update", "/__zcore/self-update"):
@@ -625,7 +644,7 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 "@echo off\r\n"
                 "timeout /t 1 /nobreak > NUL\r\n"
                 f'move /y "{extracted_exe}" "{current_exe}" > NUL\r\n'
-                f'start "" "{current_exe}"\r\n'
+                f'start "" "{current_exe}" --replace\r\n'
                 'del "%~f0"\r\n'
             )
             bat_path.write_text(bat_content, encoding="mbcs", errors="replace")
@@ -634,6 +653,7 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 creationflags=0x08000000 if sys.platform == "win32" else 0,
                 close_fds=True,
             )
+            remove_win32_tray_icon()
             time.sleep(0.2)
             os._exit(0)
         except Exception:
@@ -653,11 +673,20 @@ def ensure_port_free(port: int) -> list[int]:
     killed_pids: list[int] = []
     my_pid = os.getpid()
 
-    # 1) 우아한 종료 요청 시도
+    # 0) 이미 동일 버전(v2.3.3+)의 Z-코어가 정상 실행 중이라면 중복 실행(더블클릭 연타 등)으로 트레이 아이콘이 여러 개 생기지 않도록 즉시 종료!
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/__merlin/shutdown", timeout=0.4) as _:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/__merlin/health", timeout=0.6) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+            if data.get("ok") and data.get("version") == CORE_VERSION and not _SELF_UPDATE_IN_PROGRESS:
+                os._exit(0)
+    except Exception:
+        pass
+
+    # 1) 우아한 종료 요청 시도 (이전 프로세스가 스스로 Shell_NotifyIcon(NIM_DELETE)로 트레이 아이콘을 지우고 종료하도록 유도)
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/__merlin/shutdown", timeout=0.6) as _:
             pass
-        time.sleep(0.25)
+        time.sleep(0.35)
     except Exception:
         pass
 
@@ -796,6 +825,8 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
             wc.lpfnWndProc = _wnd_proc
             atom = win32gui.RegisterClass(wc)
             hwnd = win32gui.CreateWindow(atom, class_name, 0, 0, 0, 0, 0, 0, 0, wc.hInstance, None)
+            global _TRAY_HWND
+            _TRAY_HWND = hwnd
 
             hicon = None
             if TRAY_ICON_ICO.exists():
@@ -858,6 +889,7 @@ def main() -> None:
     parser.add_argument("--payload", type=str, default="{}", help="JSON 페이로드 문자열")
     parser.add_argument("--port", type=int, default=STANDARD_PORT, help="단일 표준 포트 (기본 5199)")
     parser.add_argument("--enable-autostart", action="store_true", help="윈도우 시작 시 자동실행 등록")
+    parser.add_argument("--replace", action="store_true", help="자가 업데이트 등 기존 프로세스를 강제 교체할 때 사용")
     args = parser.parse_args()
 
     if args.enable_autostart:
@@ -876,6 +908,28 @@ def main() -> None:
         res = dispatch_plugin_call(args.plugin, args.action, payload_obj)
         print(json.dumps(res, ensure_ascii=False))
         return
+
+    # Windows Named Mutex 기반 단일 인스턴스 보장 (더블클릭 연타로 2~3개가 동시에 뜨더라도 단 1개만 실행되고 나머지는 트레이 아이콘 생성 전에 즉시 종료)
+    _single_mutex = None
+    if os.name == "nt" and not args.replace:
+        try:
+            import ctypes as _ct
+
+            _k32 = _ct.windll.kernel32
+            _mutex_name = f"Local\\Merlin_Z_Core_SingleInstance_Port_{args.port}"
+            _single_mutex = _k32.CreateMutexW(None, True, _mutex_name)
+            if _k32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+                # 이미 실행 중인 인스턴스가 최신 버전이면 트레이 아이콘을 추가로 만들지 않고 즉시 조용히 종료
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{args.port}/__merlin/health", timeout=0.8) as resp:
+                        hdata = json.loads(resp.read().decode("utf-8", errors="replace"))
+                        if hdata.get("ok") and hdata.get("version") == CORE_VERSION:
+                            os._exit(0)
+                except Exception:
+                    # 아직 부팅 중인 첫 번째 인스턴스가 뮤텍스를 쥐고 있는 경우에도 두 번째 인스턴스는 즉시 종료!
+                    os._exit(0)
+        except Exception:
+            pass
 
     replaced_pids = ensure_port_free(args.port)
 
