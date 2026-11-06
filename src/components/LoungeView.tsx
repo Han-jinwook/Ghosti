@@ -4259,6 +4259,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [hostRetainsHidePermission, setHostRetainsHidePermission] = useState(true);
   const [showInlineQrPanel, setShowInlineQrPanel] = useState(false);
   const [showQuickSendDrawer, setShowQuickSendDrawer] = useState(false);
+  const [mobileInstallLinkCopied, setMobileInstallLinkCopied] = useState(false);
+  const [subPcLinkCopied, setSubPcLinkCopied] = useState(false);
 
   const renderRoomCreationAndExitPolicyBox = () => (
     <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
@@ -4359,49 +4361,26 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     const isShadowMode = syncState.privateSyncStrategy === 'shadow';
     return (
       <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
+        {/* [수술 1 & 2 완료] 중복 배지·h1 제목·요금제 버튼 제거 ➔ 핵심 1줄 + 우측 QR 버튼만 유지 */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2 mb-0.5">
-              <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                🔗 내 기기 연결 (PC ↔ 폰 ↔ 서브PC)
-              </span>
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
-                클라우드 요금 0원 · 100% 직결 동기화
-              </span>
-            </div>
-            <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
-              🔗 내 기기 연결 (집 PC · 회사 PC · 스마트폰)
-            </h1>
-            <p className="text-[13px] text-zinc-400">
-              같은 이메일 하나로 집 컴퓨터, 사무실 컴퓨터, 내 스마트폰의 사진·동영상·서류를 클라우드 업로드 없이 1초 만에 하나로 묶어 찾습니다.
-            </p>
-          </div>
+          <p className="text-[14.5px] md:text-[15.5px] text-white font-bold">
+            같은 이메일로 로그인하면 집 PC · 회사 PC · 스마트폰이 클라우드 요금 0원으로 1초 만에 직결됩니다.
+          </p>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowInlineQrPanel((v) => !v)}
-              className={`px-4 py-2.5 rounded-xl font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm transition-all ${
-                showInlineQrPanel
-                  ? 'bg-emerald-400 text-zinc-950 ring-2 ring-emerald-300'
-                  : 'bg-primary-container hover:opacity-95 text-zinc-950'
-              }`}
-            >
-              {showInlineQrPanel ? '📱 스마트폰 1초 연결 QR 닫기 ▴' : '📱 스마트폰 1초 연결 QR · 이메일 연동 ▾'}
-            </button>
-            {!isStoreAppMode && (
-              <button
-                type="button"
-                onClick={() => setShowProModal(true)}
-                className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm"
-              >
-                👑 내 기기 통합 요금제 (월 3,900원 / 5년 특판)
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowInlineQrPanel((v) => !v)}
+            className={`px-4 py-2 rounded-xl font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm transition-all shrink-0 ${
+              showInlineQrPanel
+                ? 'bg-emerald-400 text-zinc-950 ring-2 ring-emerald-300'
+                : 'bg-primary-container hover:opacity-95 text-zinc-950'
+            }`}
+          >
+            {showInlineQrPanel ? '📱 스마트폰 1초 연결 QR 닫기 ▴' : '📱 스마트폰 1초 연결 QR ▾'}
+          </button>
         </div>
 
-        {/* [결함 2 해결] 쇼룸으로 튕겨 나가지 않고 카드 내부에서 즉시 펼쳐지는 스마트폰 앱 설치 QR + 이메일 1초 자동 연결 패널 */}
+        {/* [결함 2 & 수술 7 완료] 인라인 스마트폰 앱 설치 QR + 실제 설치 링크 복사 버튼 */}
         {showInlineQrPanel && (
           <div className="p-4 rounded-2xl bg-zinc-950 border border-primary-container/50 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -4428,6 +4407,25 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
+                onClick={async () => {
+                  try {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      await navigator.clipboard.writeText('https://ghosti.sundreamer.app');
+                    }
+                  } catch {}
+                  setMobileInstallLinkCopied(true);
+                  setTimeout(() => setMobileInstallLinkCopied(false), 3000);
+                }}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold cursor-pointer border transition-all ${
+                  mobileInstallLinkCopied
+                    ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+                    : 'bg-zinc-900 hover:bg-zinc-800 border-primary-container/50 text-primary-container'
+                }`}
+              >
+                {mobileInstallLinkCopied ? '✓ 모바일 설치 링크 복사됨!' : '🔗 모바일 설치 링크 복사'}
+              </button>
+              <button
+                type="button"
                 onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
                 className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold cursor-pointer border transition-all ${
                   pcAgentPairedMobile
@@ -4435,14 +4433,14 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200'
                 }`}
               >
-                {pcAgentPairedMobile ? '● 내 스마트폰 연결됨 (클릭 시 해제)' : '○ 이메일 1초 연결 상태 확인'}
+                {pcAgentPairedMobile ? '● 내 스마트폰 연결됨' : '○ 연결 상태 확인'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowQuickSendDrawer((v) => !v)}
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[12px] font-extrabold cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-extrabold cursor-pointer"
               >
-                {showQuickSendDrawer ? '📤 파일 1초 전송 닫기 ▴' : '📤 폰↔PC 파일 1초 전송 ▾'}
+                {showQuickSendDrawer ? '📤 파일 전송 닫기 ▴' : '📤 폰↔PC 파일 1초 전송 ▾'}
               </button>
             </div>
           </div>
@@ -4481,24 +4479,47 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             </span>
           </div>
 
-          <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-2">
+          {/* [수술 5 완료] 기기 3 서브 PC 클릭 시 설치 주소 즉시 복사 및 안내 */}
+          <div
+            onClick={async () => {
+              try {
+                if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                  await navigator.clipboard.writeText('https://ghosti.sundreamer.app');
+                }
+              } catch {}
+              setSubPcLinkCopied(true);
+              setTimeout(() => setSubPcLinkCopied(false), 3800);
+            }}
+            className="p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border border-white/10 hover:border-emerald-400/40 flex flex-col justify-between gap-2 cursor-pointer transition-all"
+          >
             <div className="flex items-center justify-between">
               <span className="text-[12px] font-extrabold text-zinc-200">🖥️ 기기 3 · 서브 PC (회사 / 집 2호기)</span>
-              <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 text-[11px] font-extrabold">추가 가능</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                  subPcLinkCopied
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : 'bg-zinc-800 text-zinc-300'
+                }`}
+              >
+                {subPcLinkCopied ? '설치 주소 복사됨 ✓' : '추가 가능'}
+              </span>
             </div>
             <p className="text-[13px] text-white font-bold">집 ↔ 사무실 PC 양방향 AI 내용검색</p>
-            <span className="text-[11.5px] text-zinc-400">동일 이메일 로그인 시 자동 묶기</span>
+            <span className={`text-[11.5px] font-bold ${subPcLinkCopied ? 'text-emerald-300' : 'text-zinc-400'}`}>
+              {subPcLinkCopied
+                ? '✅ 서브 PC 설치 주소가 복사되었습니다! 다른 PC에서 접속 후 같은 이메일로 로그인하면 자동 연결됩니다.'
+                : '👉 클릭 시 서브 PC 설치 주소 복사 (동일 이메일 자동 연결)'}
+            </span>
           </div>
         </div>
 
-        {/* [결함 3 해결] 하단 거대 아코디언 2개를 걷어내고 상단 기기 상태 카드 안에 흡수한 1줄 연동 모드 토글 */}
+        {/* [수술 3 완료] 개발자 암호 '모드 A / 모드 B' 용어 삭제 ➔ 직관적 1줄 상태 표시 */}
         <div className="px-4 py-3 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-            <span className="font-extrabold text-primary-container">🔄 폰↔PC 연동 모드:</span>
-            <span className="text-zinc-300 font-bold">
+            <span className="text-zinc-200 font-bold">
               {isShadowMode
-                ? `모드 B 자동 적용 중 · 원본은 PC에 안전 보관하고 폰 용량 99.4% 절약 (단 ${syncState.packSizeMB}MB)`
-                : `모드 A 적용 중 · 폰과 PC 양쪽에 원본 100% 미러링 백업 (${syncState.originalSizeGB}GB)`}
+                ? `⚡ 스마트폰 용량 99.4% 절약 중 (원본은 PC 안전 보관 · 폰 점유 ${syncState.packSizeMB}MB)`
+                : `💾 폰·PC 양쪽 100% 원본 보관 중 (${syncState.originalSizeGB}GB)`}
             </span>
           </div>
 

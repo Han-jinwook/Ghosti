@@ -492,6 +492,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     }
   });
   const [showTermsClause, setShowTermsClause] = useState(false);
+  const [showAllMobileSnippets, setShowAllMobileSnippets] = useState(false);
 
   // 9번 억만금 숫자 변환
   const [moneyInput, setMoneyInput] = useState('3억 5천만');
@@ -1028,13 +1029,13 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
               </div>
             )}
 
-            {/* [1층] ⚡ Ctrl + 0 귀신창 실물 체험 바 (클릭 시 5대 기능 즉시 미리보기) */}
+            {/* [1층 — 수술 4 완료] ⚡ Ctrl + 0 귀신창 실물 체험 바 (중복 배지 5개 전면 삭제 + 로고·검색창 1줄 통합) */}
             <div className="p-4 rounded-2xl bg-zinc-900 border-2 border-[#2DD4BF] shadow-[0_0_24px_rgba(45,212,191,0.16)] flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-zinc-300">
                 <span className="font-extrabold text-white flex items-center gap-1.5">
                   <span>⚡ Ctrl + 0 귀신창 실물 체험 바</span>
                   <span className="text-[11.5px] font-normal text-zinc-400">
-                    (아래 검색창을 클릭하면 최근 복사한 5개 내역이 바로 펼쳐집니다)
+                    (검색창을 클릭하면 최근 복사한 5개 내역이 바로 펼쳐집니다)
                   </span>
                 </span>
                 {floatingWebOpenedToast && (
@@ -1044,8 +1045,35 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 )}
               </div>
 
-              {/* [윗단] 1줄 미니 검색창 (클릭 시 최근 복사 5건 즉시 펼침) */}
+              {/* [1줄 통합] 좌측 귀신같이 로고 버튼 + 복사 내역 검색창 + 최근 복사 5건 펼치기 */}
               <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl bg-zinc-950 border border-[#14B8A6]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playBabyGhostChime('summon');
+                    setFloatingWebOpenedToast(true);
+                    setTimeout(() => setFloatingWebOpenedToast(false), 3200);
+                  }}
+                  title="로고 클릭 시 귀신같이 메인 화면이 열립니다"
+                  className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-[#2DD4BF] flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
+                >
+                  <img
+                    src="/gwisinkachi_app_icon_512.png"
+                    alt="귀신같이 아이콘"
+                    className="w-4 h-4 object-contain"
+                  />
+                  <img
+                    src="/gwisinkachi_3d_wordmark_dark.png"
+                    alt="귀신같이"
+                    className="h-3.5 w-auto object-contain block dark:hidden"
+                  />
+                  <img
+                    src="/gwisinkachi_3d_wordmark_light.png"
+                    alt="귀신같이"
+                    className="h-3.5 w-auto object-contain hidden dark:block"
+                  />
+                </button>
+
                 <span className="text-[11.5px] font-extrabold text-teal-300 shrink-0">
                   🔍 복사 내역 검색
                 </span>
@@ -1112,56 +1140,6 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     최근 복사 5건 펼치기 ▼
                   </button>
                 )}
-              </div>
-
-              {/* [아랫단] 좌측 브랜드 로고 + 우측 5대 핵심 기능 1줄 요약 바 */}
-              <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-xl bg-zinc-950/70 border border-white/5 text-[11.5px] font-bold">
-                <div className="flex flex-wrap items-center gap-2 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playBabyGhostChime('summon');
-                      setFloatingWebOpenedToast(true);
-                      setTimeout(() => setFloatingWebOpenedToast(false), 3200);
-                    }}
-                    title="로고 클릭 시 귀신같이 메인 화면이 열립니다"
-                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-[#2DD4BF] flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
-                  >
-                    <img
-                      src="/gwisinkachi_app_icon_512.png"
-                      alt="귀신같이 아이콘"
-                      className="w-5 h-5 object-contain"
-                    />
-                    <img
-                      src="/gwisinkachi_3d_wordmark_dark.png"
-                      alt="귀신같이"
-                      className="h-4 w-auto object-contain block dark:hidden"
-                    />
-                    <img
-                      src="/gwisinkachi_3d_wordmark_light.png"
-                      alt="귀신같이"
-                      className="h-4 w-auto object-contain hidden dark:block"
-                    />
-                  </button>
-
-                  <div className="flex flex-wrap items-center gap-1.5 text-zinc-200">
-                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-teal-300">
-                      ① 복사 내역 50개 타임머신
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-amber-300">
-                      ② F1~F10 상용구 1초 완성
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-                      ③ 연속 복사 순차 붙여넣기
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-                      ④ 한영 오타 자동 성형
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-                      ⑤ 금액·계좌·일정 1초 변환
-                    </span>
-                  </div>
-                </div>
               </div>
 
               {/* 클릭 시 펼쳐지는 최근 복사 내역 5개 드롭다운 */}
@@ -1261,7 +1239,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
               )}
             </div>
 
-            {/* [2층 — 우선순위 격상] ⌨️ F1 ~ F10 내 상용구 1초 완성 슬롯 (계좌번호·주소·이메일·단골 멘트 즉시 등록/편집) */}
+            {/* [2층 — 수술 6 완료] ⌨️ F1 ~ F10 내 상용구 1초 완성 슬롯 (모바일 4슬롯 기본 노출 + [+ F5~F10 슬롯 더보기]) */}
             <div id="ghosti-snippets-section" className="p-4 rounded-2xl bg-zinc-900/90 border border-amber-400/35 flex flex-col gap-3 scroll-mt-10">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1288,8 +1266,13 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
-                {(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'] as const).map((key) => (
-                  <div key={key} className="flex flex-col gap-1">
+                {(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'] as const).map((key, idx) => (
+                  <div
+                    key={key}
+                    className={`${
+                      idx >= 4 && !showAllMobileSnippets ? 'hidden md:flex' : 'flex'
+                    } flex-col gap-1`}
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-mono text-amber-300 font-bold">
                         {key} 슬롯
@@ -1326,6 +1309,15 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   </div>
                 ))}
               </div>
+
+              {/* 모바일 전용: [+ F5 ~ F10 슬롯 더보기 ▾] 토글 버튼 */}
+              <button
+                type="button"
+                onClick={() => setShowAllMobileSnippets((v) => !v)}
+                className="md:hidden w-full py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-[12px] text-amber-300 font-extrabold cursor-pointer"
+              >
+                {showAllMobileSnippets ? 'F5 ~ F10 슬롯 접기 ▴' : '+ F5 ~ F10 슬롯 더보기 ▾'}
+              </button>
 
               {/* 클립보드 보관 기간 1줄 미니 설정 */}
               <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
