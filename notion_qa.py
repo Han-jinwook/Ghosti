@@ -548,24 +548,9 @@ def complete_bug(
 
     clean_page_id = page_id.strip()
 
-    # 1단계: 카드의 상태를 '재테스트 대기'로 변경
-    page_url = f"{NOTION_API_BASE}/pages/{clean_page_id}"
-    if SCHEMA.status_prop_type == "status":
-        status_update = {SCHEMA.status_prop_name: {"status": {"name": STATUS_READY_FOR_QA}}}
-    else:
-        status_update = {SCHEMA.status_prop_name: {"select": {"name": STATUS_READY_FOR_QA}}}
-
-    patch_res = requests.patch(
-        page_url,
-        headers=get_headers(),
-        json={"properties": status_update},
-        timeout=15,
-    )
-
-    if patch_res.status_code != 200:
-        print(
-            f"❌ 카드 상태 변경 실패 (HTTP {patch_res.status_code}): {patch_res.text}"
-        )
+    # 1단계: 카드의 상태를 '재테스트 대기' 컬럼 맨 아래(Bottom, 새치기 방지)로 변경
+    if not move_card_to_column_bottom(clean_page_id, STATUS_READY_FOR_QA):
+        print("❌ 카드 상태 변경 실패")
         return False
 
     # 2단계: 해당 단계/붉은 코멘트 바로 아래에 인라인으로 "[AI 수정 완료 및 재테스트 안내]" 추가
@@ -740,23 +725,91 @@ def archive_done(
     return ok
 
 
-def update_bug_status(page_id: str, new_status: str) -> bool:
-    """카드의 상태만 원하는 단계(예: '재테스트 대기', '발견된 버그')로 빠르게 변경합니다."""
-    ensure_valid_token()
-    SCHEMA.detect(DATABASE_ID)
+def _get_existing_column_card_ids_bottom_to_top(target_status: str, exclude_page_id: str = "") -> List[str]:
+    """
+    노션 칸반 보드는 상태(status)가 변경된 카드를 무조건 컬럼 맨 위(Top)로 올립니다(새치기).
+    기존 대기 카드들의 순서(Top -> Bottom = last_edited_time 내림차순)를 보존하고
+    새로 진입하는 카드를 맨 아래(Bottom)에 붙이기 위해, 기존 대기 카드들을 Bottom -> Top(last_edited_time 오름차순)으로 조회합니다.
+    """
+    url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
+    if SCHEMA.status_prop_type == "status":
+        filter_payload = {"property": SCHEMA.status_prop_name, "status": {"equals": target_status}}
+    else:
+        filter_payload = {"property": SCHEMA.status_prop_name, "select": {"equals": target_status}}
+
+    payload = {
+        "filter": filter_payload,
+        "sorts": [{"timestamp": "last_edited_time", "direction": "ascending"}],
+        "page_size": 100,
+    }
+    try:
+        res = requests.post(url, headers=get_headers(), json=payload, timeout=15)
+        if res.status_code != 200:
+            return []
+        clean_ex = exclude_page_id.replace("-", "").strip().lower()
+        ids = []
+        for p in res.json().get("results", []):
+            pid = p.get("id", "")
+            if pid and pid.replace("-", "").strip().lower() != clean_ex:
+                ids.append(pid)
+        return ids
+    except Exception:
+        return []
+
+
+def _patch_status_raw(page_id: str, new_status: str) -> bool:
     page_url = f"{NOTION_API_BASE}/pages/{page_id.strip()}"
     if SCHEMA.status_prop_type == "status":
         status_update = {SCHEMA.status_prop_name: {"status": {"name": new_status}}}
     else:
         status_update = {SCHEMA.status_prop_name: {"select": {"name": new_status}}}
+    res = requests.patch(page_url, headers=get_headers(), json={"properties": status_update}, timeout=15)
+    return res.status_code == 200
 
-    res = requests.patch(
-        page_url, headers=get_headers(), json={"properties": status_update}, timeout=15
-    )
-    if res.status_code == 200:
-        print(f"✅ 카드({page_id}) 상태가 '{new_status}'(으)로 변경되었습니다.")
+
+def move_card_to_column_bottom(page_id: str, target_status: str) -> bool:
+    """
+    카드를 target_status(예: '재테스트 대기', '테스트 미션')로 이동시킬 때
+    기존 대기 중인 카드들 위로 새치기하지 않고 반드시 컬럼 맨 아래(Bottom)에 붙도록 처리합니다.
+    """
+    ensure_valid_token()
+    SCHEMA.detect(DATABASE_ID)
+    clean_id = page_id.strip()
+
+    # 1) 이동 전 기존 컬럼 대기 카드 목록(Bottom -> Top 순서) 확보
+    existing_bottom_to_top = []
+    if target_status in (STATUS_READY_FOR_QA, STATUS_MISSION):
+        existing_bottom_to_top = _get_existing_column_card_ids_bottom_to_top(target_status, exclude_page_id=clean_id)
+
+    # 2) 새 카드를 먼저 target_status로 이동 (이 시점엔 노션 API 특성상 맨 위로 감)
+    ok = _patch_status_raw(clean_id, target_status)
+    if not ok:
+        return False
+
+    # 3) 기존 대기 카드들이 있었다면 Bottom -> Top 순서로 재전환하여 새 카드를 맨 아래(Bottom)로 밀어냄
+    if existing_bottom_to_top:
+        temp_status = STATUS_FIXING if target_status != STATUS_FIXING else STATUS_IN_TEST
+        for ex_id in existing_bottom_to_top:
+            time.sleep(0.25)
+            _patch_status_raw(ex_id, temp_status)
+            time.sleep(0.25)
+            _patch_status_raw(ex_id, target_status)
+
+    return True
+
+
+def update_bug_status(page_id: str, new_status: str) -> bool:
+    """카드의 상태만 원하는 단계(예: '재테스트 대기', '발견된 버그')로 변경합니다 ('재테스트 대기' 등은 맨 아래로 배치)."""
+    if new_status in (STATUS_READY_FOR_QA, STATUS_MISSION):
+        ok = move_card_to_column_bottom(page_id, new_status)
+    else:
+        ensure_valid_token()
+        SCHEMA.detect(DATABASE_ID)
+        ok = _patch_status_raw(page_id, new_status)
+    if ok:
+        print(f"✅ 카드({page_id}) 상태가 '{new_status}'(으)로 변경되었습니다 (새치기 방지 맨 아래 배치).")
         return True
-    print(f"❌ 상태 변경 실패 (HTTP {res.status_code}): {res.text}")
+    print(f"❌ 상태 변경 실패 ({page_id} -> {new_status})")
     return False
 
 
