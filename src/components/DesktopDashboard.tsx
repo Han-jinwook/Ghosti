@@ -589,7 +589,7 @@ export const DesktopDashboard: React.FC = () => {
                   }}
                   className={mainBtnClass(isDeviceIntegrationActive)}
                 >
-                  <span className="truncate" title="집PC · 회사PC · 스마트폰 통합 및 귀신 초능력 9+3">
+                  <span className="truncate" title="내 기기 연결(PC↔폰) 및 귀신창(Ctrl+0)">
                     내 기기 통합 (PC+폰+PC+)
                   </span>
                   <span className="text-[10px] opacity-60">{isDeviceIntegrationActive ? '▾' : '▸'}</span>
@@ -613,7 +613,7 @@ export const DesktopDashboard: React.FC = () => {
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
-                          <span className="truncate font-bold">내 모든 기기 통합</span>
+                          <span className="truncate font-bold">내 기기 연결 (PC↔폰)</span>
                         </div>
                         <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
                           PC · 폰 · 서브PC 1초 연동
@@ -637,10 +637,10 @@ export const DesktopDashboard: React.FC = () => {
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">⚡</span>
-                          <span className="truncate font-bold">귀신 초능력 9+3</span>
+                          <span className="truncate font-bold">귀신창 (Ctrl+0)</span>
                         </div>
                         <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          Ctrl+0 귀신창 · 복사검색 · 상용구
+                          복사검색 · F1~F10 상용구 · 초능력
                         </span>
                       </div>
                     </button>
@@ -886,13 +886,13 @@ export const DesktopDashboard: React.FC = () => {
 
               </div>
 
-              {/* 우측 상단 심플 앵커: 1단계 신형/구형 비교 스위치 + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
+              {/* 우측 상단 심플 앵커: 1·2단계 신형/구형 비교 스위치 + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="가이드 공유 및 프로필 영역">
-                {activeLoungeType === 'personal' && (desktopTab === 'dashboard' || desktopTab === 'trash') && (
+                {activeLoungeType === 'personal' && (desktopTab === 'dashboard' || desktopTab === 'trash' || desktopTab === 'sync') && (
                   <button
                     type="button"
                     onClick={() => setIsStage1MinimalPreview((v) => !v)}
-                    title="기존 1단계 화면과 신형 미니멀 1단계 화면을 즉시 전환하여 비교합니다"
+                    title="신형 미니멀 1·2단계 화면과 기존 화면을 즉시 전환하여 비교합니다"
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-extrabold text-[11.5px] border transition-all cursor-pointer shrink-0 ${
                       isStage1MinimalPreview
                         ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.35)]'
@@ -904,8 +904,8 @@ export const DesktopDashboard: React.FC = () => {
                     <span>🧪</span>
                     <span>
                       {isStage1MinimalPreview
-                        ? '1단계 신형 미니멀 UI (기존 화면으로 전환 ↺)'
-                        : '1단계 신형 미니멀 UI 비교 보기'}
+                        ? '1·2단계 신형 미니멀 UI (기존 화면 전환 ↺)'
+                        : '1·2단계 신형 미니멀 UI 비교 보기'}
                     </span>
                   </button>
                 )}
@@ -951,6 +951,80 @@ export const DesktopDashboard: React.FC = () => {
                 <GhostiTopRightHubAnchor themeMode={themeMode} />
               </div>
             </div>
+
+            {/* 가상 비교 모드(?preview=stage1) 작동 시: [1단계: 내 기기 (찾기·손보기)] ↔ [2단계: 내 기기 통합 (기기연결·귀신창)] 1초 전환 바 */}
+            {isStage1MinimalPreview && activeLoungeType === 'personal' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/10">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-extrabold text-emerald-400 mr-1">
+                    🧪 신형 미니멀 UI 즉시 검수:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(false);
+                      setActiveLoungeType('personal');
+                      setDesktopTab('dashboard');
+                    }}
+                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
+                      desktopTab === 'dashboard' && !isDeviceIntegrationOpen
+                        ? 'bg-teal-500 text-zinc-950 border-teal-400 shadow-xs'
+                        : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    }`}
+                  >
+                    1단계 ① 🔍 찾기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(false);
+                      setActiveLoungeType('personal');
+                      setDesktopTab('trash');
+                    }}
+                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
+                      desktopTab === 'trash' && !isDeviceIntegrationOpen
+                        ? 'bg-teal-500 text-zinc-950 border-teal-400 shadow-xs'
+                        : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    }`}
+                  >
+                    1단계 ② ✋ 손보기
+                  </button>
+                  <span className="text-zinc-600 px-0.5">|</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(true);
+                      setActiveIntegrationSubTab('devices');
+                      setActiveLoungeType('personal');
+                      setDesktopTab('sync');
+                    }}
+                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
+                      desktopTab === 'sync' && activeIntegrationSubTab === 'devices'
+                        ? 'bg-emerald-400 text-zinc-950 border-emerald-300 shadow-xs'
+                        : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    }`}
+                  >
+                    2단계 ① 🔗 내 기기 연결 (PC↔폰)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(true);
+                      setActiveIntegrationSubTab('superpower');
+                      setActiveLoungeType('personal');
+                      setDesktopTab('sync');
+                    }}
+                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
+                      desktopTab === 'sync' && activeIntegrationSubTab === 'superpower'
+                        ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-xs'
+                        : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    }`}
+                  >
+                    2단계 ② ⚡ 귀신창 (Ctrl+0)
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* 모바일(lg 미만, 360px 포함) 전용 1줄 라운지 빠른 전환 바 — 1차 출시 3대 메뉴(내 기기 / 사진 공유 / 업무 공유) */}
             <nav className="grid grid-cols-3 lg:hidden gap-1">
@@ -1657,14 +1731,53 @@ export const DesktopDashboard: React.FC = () => {
           <LoungeIndexingWaitingRoom />
         ))}
 
-      {/* ─────────────── 서브메뉴 4번: AI 설정몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 ─────────────── */}
+      {/* ─────────────── 서브메뉴 4번: 내 기기 통합 (내 기기 연결 & 귀신창 Ctrl+0) / 공유방 관리 ─────────────── */}
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1640px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
+          {activeLoungeType === 'personal' && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex p-1 rounded-2xl bg-zinc-900 border border-white/10 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveIntegrationSubTab('devices')}
+                  className={`px-4 py-2 rounded-xl font-label-sm text-[13px] font-extrabold transition-all cursor-pointer ${
+                    activeIntegrationSubTab === 'devices'
+                      ? 'bg-primary-container text-zinc-950 shadow-xs'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  🔗 내 기기 연결 (PC↔폰)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveIntegrationSubTab('superpower')}
+                  className={`px-4 py-2 rounded-xl font-label-sm text-[13px] font-extrabold transition-all cursor-pointer ${
+                    activeIntegrationSubTab === 'superpower'
+                      ? 'bg-amber-400 text-zinc-950 shadow-xs'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  ⚡ 귀신창 (Ctrl+0)
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
             <OnboardingModal inlineSuperpowerOnly={true} />
+          ) : activeLoungeType === 'personal' ? (
+            <>
+              <LoungeCustomSettingsHeader />
+              {/* [결함 3 해결] 하단 거대 중복 아코디언 2개 및 중복 폴더 카운트를 걷어내고 1줄 안심 배너만 유지 */}
+              <div className="px-4 py-3 rounded-xl bg-zinc-900/80 border border-emerald-500/30 flex items-center justify-between gap-2 text-[12.5px] text-emerald-300 font-bold">
+                <span>
+                  🔒 내 사진·문서는 외부 서버 저장 없이 내 기기 간에만 암호화 직결되며, 탈퇴 시 흔적 없이 즉시 소멸됩니다.
+                </span>
+              </div>
+            </>
           ) : (
             <>
-          {/* 라운지별 전용 상단 설정 섹션 (AI 설정몬스터 / 가족 무수락 초대·강퇴 / 동호·동창회 관리 / 업무 공유(S:) 관리) */}
+          {/* 라운지별 전용 상단 설정 섹션 (가족 무수락 초대·강퇴 / 동호·동창회 관리 / 업무 공유(S:) 관리) */}
           <LoungeCustomSettingsHeader />
 
           {/* 노션 토글 1: 🔄 폰↔PC 프라이빗 싱크 센터 & 내 PC 로컬 폴더 직결 관리 (클릭 시 동적 펼침) */}

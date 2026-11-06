@@ -4241,6 +4241,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     activatePricingPlan,
     isStoreAppMode,
     setShowProModal,
+    syncState,
+    setPrivateSyncStrategy,
+    triggerSyncNow,
+    pcAgentPairedMobile,
+    setPcAgentPairedMobile,
+    merlinAuth,
   } = useSaySeeStore();
 
   const [inviteCopied, setInviteCopied] = useState(false);
@@ -4251,6 +4257,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [shortsExportToast, setShortsExportToast] = useState<string | null>(null);
   const [gamingPcAutoSyncAfterSchool, setGamingPcAutoSyncAfterSchool] = useState(true);
   const [hostRetainsHidePermission, setHostRetainsHidePermission] = useState(true);
+  const [showInlineQrPanel, setShowInlineQrPanel] = useState(false);
+  const [showQuickSendDrawer, setShowQuickSendDrawer] = useState(false);
 
   const renderRoomCreationAndExitPolicyBox = () => (
     <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
@@ -4348,20 +4356,21 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   };
 
   if (activeLoungeType === 'personal') {
+    const isShadowMode = syncState.privateSyncStrategy === 'shadow';
     return (
       <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                👑 내 기기 통합 (PC + 폰 + 서브PC)
+                🔗 내 기기 연결 (PC ↔ 폰 ↔ 서브PC)
               </span>
               <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
                 클라우드 요금 0원 · 100% 직결 동기화
               </span>
             </div>
             <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
-              🔗 내 모든 기기 통합 센터 (집 PC · 회사 PC · 스마트폰)
+              🔗 내 기기 연결 (집 PC · 회사 PC · 스마트폰)
             </h1>
             <p className="text-[13px] text-zinc-400">
               같은 이메일 하나로 집 컴퓨터, 사무실 컴퓨터, 내 스마트폰의 사진·동영상·서류를 클라우드 업로드 없이 1초 만에 하나로 묶어 찾습니다.
@@ -4371,22 +4380,73 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
-              }}
-              className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm"
+              onClick={() => setShowInlineQrPanel((v) => !v)}
+              className={`px-4 py-2.5 rounded-xl font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm transition-all ${
+                showInlineQrPanel
+                  ? 'bg-emerald-400 text-zinc-950 ring-2 ring-emerald-300'
+                  : 'bg-primary-container hover:opacity-95 text-zinc-950'
+              }`}
             >
-              📱 스마트폰 1초 연결 QR · 이메일 연동
+              {showInlineQrPanel ? '📱 스마트폰 1초 연결 QR 닫기 ▴' : '📱 스마트폰 1초 연결 QR · 이메일 연동 ▾'}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowProModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm"
-            >
-              👑 내 기기 통합 요금제 (월 3,900원 / 5년 특판)
-            </button>
+            {!isStoreAppMode && (
+              <button
+                type="button"
+                onClick={() => setShowProModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm"
+              >
+                👑 내 기기 통합 요금제 (월 3,900원 / 5년 특판)
+              </button>
+            )}
           </div>
         </div>
+
+        {/* [결함 2 해결] 쇼룸으로 튕겨 나가지 않고 카드 내부에서 즉시 펼쳐지는 스마트폰 앱 설치 QR + 이메일 1초 자동 연결 패널 */}
+        {showInlineQrPanel && (
+          <div className="p-4 rounded-2xl bg-zinc-950 border border-primary-container/50 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="w-[84px] h-[84px] rounded-xl bg-white p-1.5 shrink-0 flex items-center justify-center shadow-md">
+                <svg viewBox="0 0 64 64" className="w-full h-full">
+                  <rect width="64" height="64" fill="#ffffff" />
+                  <path
+                    fill="#09090B"
+                    d="M4 4h20v20H4V4zm4 4v12h12V8H8zm4 4h4v4h-4v-4zm28-8h20v20H40V4zm4 4v12h12V8H44zm4 4h4v4h-4v-4zM4 40h20v20H4V40zm4 4v12h12V44H8zm4 4h4v4h-4v-4zm16-40h4v8h-4V8zm0 12h8v4h-8v-4zm-24 8h8v4H4v-4zm12 0h16v4H16v-4zm20 0h8v8h-8v-8zm12 4h12v4H48v-4zm-20 8h8v12h-8V40zm12 8h8v12h-8V48zm12 0h8v4h-8v-4zm-4 8h12v4H48v-4z"
+                  />
+                </svg>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[13.5px] font-extrabold text-primary-container">
+                  📱 스마트폰 앱 설치 QR 코드 + 같은 이메일로 로그인하면 1초 자동 연결
+                </span>
+                <p className="text-[12.5px] text-zinc-300 leading-relaxed">
+                  ① 스마트폰 카메라로 좌측 QR 코드를 스캔해 <strong className="text-white">『귀신같이』 모바일 앱</strong>을 설치하세요.<br />
+                  ② 앱 실행 후 현재 PC와 동일한 이메일(<strong className="text-emerald-300">{merlinAuth?.email || '내 이메일 계정'}</strong>)로 로그인하면 복잡한 인증번호 입력 없이 1초 만에 자동 연결됩니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
+                className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold cursor-pointer border transition-all ${
+                  pcAgentPairedMobile
+                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                    : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200'
+                }`}
+              >
+                {pcAgentPairedMobile ? '● 내 스마트폰 연결됨 (클릭 시 해제)' : '○ 이메일 1초 연결 상태 확인'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowQuickSendDrawer((v) => !v)}
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[12px] font-extrabold cursor-pointer"
+              >
+                {showQuickSendDrawer ? '📤 파일 1초 전송 닫기 ▴' : '📤 폰↔PC 파일 1초 전송 ▾'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 3대 기기 연결 슬롯 현황 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-white/10">
@@ -4399,13 +4459,26 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <span className="text-[11.5px] text-zinc-400">로컬 디스크 원본 100% 직결 탐색</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-2">
+          <div
+            onClick={() => setShowInlineQrPanel((v) => !v)}
+            className="p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border border-white/10 hover:border-primary-container/40 flex flex-col justify-between gap-2 cursor-pointer transition-all"
+          >
             <div className="flex items-center justify-between">
               <span className="text-[12px] font-extrabold text-zinc-200">📱 기기 2 · 내 스마트폰 (갤럭시 / 아이폰)</span>
-              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-extrabold">QR 1초 연동 대기</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                  pcAgentPairedMobile
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : 'bg-amber-500/20 text-amber-300'
+                }`}
+              >
+                {pcAgentPairedMobile ? '연결됨' : 'QR 1초 연동 대기'}
+              </span>
             </div>
             <p className="text-[13px] text-white font-bold">폰 사진 자동 백업 &amp; 밖에서 내 PC 검색</p>
-            <span className="text-[11.5px] text-zinc-400">폰 용량 99.4% 절약 모드 지원</span>
+            <span className="text-[11.5px] text-primary-container font-bold">
+              👉 클릭하여 앱 설치 QR · 이메일 1초 연결 보기
+            </span>
           </div>
 
           <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col justify-between gap-2">
@@ -4418,8 +4491,59 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </div>
         </div>
 
-        {/* 호스트(내 대장) PC 삼체 연결 관제 및 ON/OFF 스위치 */}
-        <HostThreeBodyControlPanel contextMode="personal" />
+        {/* [결함 3 해결] 하단 거대 아코디언 2개를 걷어내고 상단 기기 상태 카드 안에 흡수한 1줄 연동 모드 토글 */}
+        <div className="px-4 py-3 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+            <span className="font-extrabold text-primary-container">🔄 폰↔PC 연동 모드:</span>
+            <span className="text-zinc-300 font-bold">
+              {isShadowMode
+                ? `모드 B 자동 적용 중 · 원본은 PC에 안전 보관하고 폰 용량 99.4% 절약 (단 ${syncState.packSizeMB}MB)`
+                : `모드 A 적용 중 · 폰과 PC 양쪽에 원본 100% 미러링 백업 (${syncState.originalSizeGB}GB)`}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex p-0.5 rounded-xl bg-zinc-900 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setPrivateSyncStrategy('shadow')}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
+                  isShadowMode
+                    ? 'bg-primary-container text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                ⚡ 스마트 절약 연동(기본)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrivateSyncStrategy('mirror')}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
+                  !isShadowMode
+                    ? 'bg-primary-container text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                💾 원본 전체 백업
+              </button>
+            </div>
+
+            <button
+              type="button"
+              disabled={syncState.syncing}
+              onClick={() => void triggerSyncNow()}
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 whitespace-nowrap"
+            >
+              {syncState.syncing ? '동기화 중...' : '⚡ 지금 일치시키기'}
+            </button>
+          </div>
+        </div>
+
+        {showQuickSendDrawer && (
+          <div className="pt-2 border-t border-white/10">
+            <PcMasterQuickSendPanel />
+          </div>
+        )}
       </div>
     );
   }
