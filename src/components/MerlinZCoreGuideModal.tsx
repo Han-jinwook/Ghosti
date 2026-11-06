@@ -308,10 +308,13 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   <span className="text-xl">{isMobileEnv ? '📱' : '✨'}</span>
                 </div>
                 <div>
+                  <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-400/30 mb-0.5">
+                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어)
+                  </span>
                   <h3 className="text-base sm:text-lg font-black tracking-tight">
                     {isMobileEnv
                       ? '모바일 시작 & PC 폴더 연동'
-                      : '내 PC 사진 · 동영상 · 서류 인덱싱 연결'}
+                      : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 사진·영상·서류 인덱싱'}
                   </h3>
                 </div>
               </div>
@@ -393,10 +396,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 </div>
                 <div>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-400/30 mb-1">
-                    단계 1/2 · 엔진 실행 대기 중
+                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 단계 1/2 엔진 실행 대기 중
                   </span>
                   <h3 className="text-lg font-black tracking-tight">
-                    다운로드된 압축을 풀고 실행해 주세요!
+                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) — 다운로드된 압축을 풀고 실행해 주세요!
                   </h3>
                 </div>
               </div>
@@ -510,7 +513,11 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     </span>
                   </div>
                   <h3 className="text-lg font-black tracking-tight">
-                    {loadDone ? '불러오기 완료!' : loadError ? '불러오기 실패' : '내 컴퓨터 사진 목록 불러오는 중...'}
+                    {loadDone
+                      ? '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 불러오기 완료!'
+                      : loadError
+                      ? '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 불러오기 실패'
+                      : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 사진 목록 불러오는 중...'}
                   </h3>
                 </div>
               </div>
@@ -584,7 +591,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     Port {Z_CORE_PORT} · v{version || '?'} {isOutdated ? '구버전 가동 중' : '정상 가동 중'}
                   </span>
                   <h3 className="text-lg font-black tracking-tight">
-                    멀린 Z-코어 연결 완료!
+                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) 연결 완료!
                   </h3>
                 </div>
               </div>

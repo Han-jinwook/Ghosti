@@ -1701,21 +1701,32 @@ export async function processUnifiedMonsterChatQuery(params: {
     }
   }
 
-  // 0-0A2) [직전 PC 사양 진단(PC_SPEC_CONSULTATION) 직후 후속 질문 0토큰 즉시 비교 브리핑]
-  // "메모리 얼마나 세이브된거야?", "속도 개선된거야?", "왜 아직 남아있어?" 등 후속 질문을 했을 때
-  // 서류 검색(SEARCH_ROUTING)으로 잘못 빠져나가 [🎯 찾기] 화면으로 전환되거나 똑같은 사양 카드를 반복 출력하지 않고
-  // 즉시 정리 전·후 실시간 CPU/메모리 비교 답변만 대화창에 깔끔하게 브리핑합니다.
+  // 0-0A2) [속도·상태 확인 질문("속도 개선된거야?", "빨라졌어?", "메모리 얼마나 세이브된거야?", "정리 잘 됐어?", "지금 상태 어때?") 0토큰 즉시 비교 브리핑]
+  // 서류 검색(SEARCH_ROUTING)으로 잘못 빠져나가거나 LLM이 CLEANUP_FOLDER_REORG로 오분류해 다운로드 .zip 파일을 정리함으로 옮기는 사고를 원천 차단합니다!
   const recentAssistantMsgsEarly = sharedChatState.messages.filter((m) => m.role === 'assistant');
   const lastSpecMsgEarly = [...recentAssistantMsgsEarly]
     .reverse()
     .find((m) => m.cardKind === 'PC_SPEC_CONSULTATION' && m.pcSpecPayload);
-  const isFollowUpAboutPriorSpecEarly =
-    Boolean(lastSpecMsgEarly) &&
-    /(개선된|세이브|줄어든|된\s*거야|된거야|한\s*거야|한거야|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아)|얼마나\s*(줄|빨라|개선|세이브|확보|여유)|차이가|효과가)/i.test(
-      clean
+  const lastSpeedCleanMsgEarly = [...recentAssistantMsgsEarly]
+    .reverse()
+    .find(
+      (m) =>
+        m.pcSpecPayload?.bloatwareCleaned ||
+        m.deviceRepairPayload?.executed ||
+        Boolean(m.healthRecordIssued && /애드웨어|보안|과점유|속도/.test(m.healthRecordIssued.title)) ||
+        /실시간 속도 최적화 & 애드웨어|애드웨어·보안\/자동실행 프로그램/.test(m.text)
     );
+  const isExplicitSpeedOrStatusVerification =
+    !/바탕화면|다운로드|폴더|설치\s*파일|휴지통|바로가기|아이콘|\.exe|\.zip|\.apk/i.test(clean) &&
+    (/(속도\s*개선|개선\s*된|개선됐|빨라졌|빨라진|세이브\s*된|세이브됐|줄어든|줄었|정리\s*잘\s*됐|잘\s*정리\s*됐|지금\s*상태\s*어때|상태\s*어때|얼마나\s*(좋아|빨라|개선|세이브|줄었|확보|여유))/i.test(
+      clean
+    ) ||
+      (Boolean(lastSpecMsgEarly || lastSpeedCleanMsgEarly) &&
+        /(개선된|세이브|줄어든|된\s*거야|된거야|한\s*거야|한거야|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아|여전히\s*느려)|차이가|효과가)/i.test(
+          clean
+        )));
 
-  if (isFollowUpAboutPriorSpecEarly && lastSpecMsgEarly?.pcSpecPayload) {
+  if (isExplicitSpeedOrStatusVerification) {
     const [rNow, osNow] = await Promise.all([
       zcoreJson<{ ok: boolean; ramUsedPercent?: number | null; ramTotalGb?: number | null }>('/__zcore/pc-spec'),
       zcoreJson<{
@@ -1723,38 +1734,57 @@ export async function processUnifiedMonsterChatQuery(params: {
         spoolerAndSecurity?: {
           cpuLoadPercent?: number;
           activeSecurityPlugins?: Array<{ keyword?: string; label?: string }>;
+          browserMemoryBottleneck?: {
+            detected?: boolean;
+            guideKo?: string;
+            browserName?: string;
+            processCount?: number;
+            browserMemoryGb?: number;
+            browserSharePercent?: number;
+          };
         };
       }>('/__zcore/os-inspect'),
     ]);
-    const prevSpec = lastSpecMsgEarly.pcSpecPayload;
+    const prevSpec = lastSpecMsgEarly?.pcSpecPayload;
     const osNowData = osNow.ok ? osNow.data : undefined;
     const rNowData = rNow.ok ? rNow.data : undefined;
     const curCpu =
       typeof osNowData?.spoolerAndSecurity?.cpuLoadPercent === 'number'
         ? osNowData.spoolerAndSecurity.cpuLoadPercent
-        : prevSpec.cpuLoadPercent;
+        : prevSpec?.cpuLoadPercent ?? null;
     const curRamPct =
-      typeof rNowData?.ramUsedPercent === 'number' ? rNowData.ramUsedPercent : prevSpec.ramUsedPercent;
-    const curSecCount = Array.isArray(osNowData?.spoolerAndSecurity?.activeSecurityPlugins)
-      ? osNowData.spoolerAndSecurity!.activeSecurityPlugins!.length
-      : 0;
-    const alreadyCleaned = Boolean(prevSpec.bloatwareCleaned);
+      typeof rNowData?.ramUsedPercent === 'number' ? rNowData.ramUsedPercent : prevSpec?.ramUsedPercent ?? null;
+    const curSecList = Array.isArray(osNowData?.spoolerAndSecurity?.activeSecurityPlugins)
+      ? osNowData.spoolerAndSecurity!.activeSecurityPlugins!
+      : [];
+    const curSecCount = curSecList.length;
+    const browserBn = osNowData?.spoolerAndSecurity?.browserMemoryBottleneck;
+    const browserTipSuffix =
+      browserBn?.detected && browserBn?.guideKo ? `\n\n${browserBn.guideKo}` : '';
+    const alreadyCleaned = Boolean(prevSpec?.bloatwareCleaned || lastSpeedCleanMsgEarly || curSecCount === 0);
+
+    const prevCpuLabel =
+      typeof prevSpec?.cpuLoadPercent === 'number' ? `진단 시 **${prevSpec.cpuLoadPercent}%** ➔ ` : '';
+    const prevRamLabel =
+      typeof prevSpec?.ramUsedPercent === 'number' ? `진단 시 **${prevSpec.ramUsedPercent}%** ➔ ` : '';
 
     const directFollowUpKo = alreadyCleaned
-      ? `📊 **[정리 전·후 실시간 비교 브리핑]**\n• **CPU 부하**: 진단 시 **${
-          prevSpec.cpuLoadPercent ?? '?'
-        }%** ➔ 현재 **${curCpu ?? '?'}%**\n• **메모리(RAM) 점유율**: 진단 시 **${
-          prevSpec.ramUsedPercent ?? '?'
-        }%** ➔ 현재 **${curRamPct ?? '?'}%**\n\n윈도우 OS와 현재 열려 있는 인터넷 브라우저 탭이 기본 메모리를 유지하고 있어 메모리 점유율 수치는 소폭 변동하며, 백그라운드에서 CPU를 과점유하던 상주 보안·애드웨어 프로세스는 모두 정리 완료되었습니다.`
+      ? `📊 **[정리 전·후 실시간 속도·리소스 비교 브리핑]**\n` +
+        `• **CPU 부하**: ${prevCpuLabel}현재 **${curCpu ?? '?'}%**\n` +
+        `• **잔존 상주 애드웨어·보안모듈**: **${curSecCount}건** (${
+          curSecCount === 0 ? '모두 종료 및 자동부활 차단 완료 ✅' : '일부 상주 프로세스 감지됨'
+        })\n` +
+        `• **메모리(RAM) 점유율**: ${prevRamLabel}현재 **${curRamPct ?? '?'}%**\n\n` +
+        `백그라운드에서 CPU를 과점유하던 상주 보안·애드웨어 프로세스와 자동부활 트리거는 정리되었습니다.${browserTipSuffix}`
       : `💬 아직 상주 프로그램 정리가 실행되지 않은 **진단 대기 상태**입니다! (현재 CPU 부하 **${
           curCpu ?? '?'
         }%**, 메모리 사용 **${curRamPct ?? '?'}%**, 상주 보안·애드웨어 **${
-          curSecCount || prevSpec.detectedBloatwareLabels?.length || 0
-        }건**)\n\n프로그램을 임의로 종료하지 않도록 보호 중이니, 정리를 실행하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`;
+          curSecCount || prevSpec?.detectedBloatwareLabels?.length || 0
+        }건**)\n\n프로그램을 임의로 종료하지 않도록 보호 중이니, 정리를 실행하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.${browserTipSuffix}`;
 
     speak(
       alreadyCleaned
-        ? `현재 씨피유 부하는 ${curCpu ?? 0}퍼센트, 메모리 점유율은 ${curRamPct ?? 0}퍼센트입니다.`
+        ? `현재 씨피유 부하는 ${curCpu ?? 0}퍼센트, 잔존 애드웨어는 ${curSecCount}건, 메모리 점유율은 ${curRamPct ?? 0}퍼센트입니다.`
         : '아직 정리가 실행되지 않은 진단 대기 상태입니다. 채팅창에 응 정리해줘라고 입력하시면 즉시 정리해 드립니다.'
     );
     return reply(sourceTab, directFollowUpKo, {
@@ -2477,15 +2507,22 @@ export async function processUnifiedMonsterChatQuery(params: {
   }
 
   // 4) 대화형 폴더 정리 / 다운로드 설치파일 / 시작프로그램 점검
+  // ⚠️ 절대 금지 가드: 유저가 바탕화면/다운로드/폴더/파일을 명시하지 않고 단순히 "속도 개선된거야?", "정리 잘 됐어?", "빨라졌어?" 같은
+  //    속도·상태 확인 질문을 했을 때는 LLM이 CLEANUP_FOLDER_REORG를 반환하더라도 절대 다운로드 .zip/파일 정리 스캔으로 들어가지 않음!
+  const isSpeedOrStatusQuestionNotFolderCleanup =
+    !/바탕화면|다운로드|폴더|설치\s*파일|잡파일|스크린샷|\.exe|\.zip|\.apk|\.msi/i.test(clean) &&
+    /(속도|개선|빨라|세이브|점유율|부하|상태\s*어때|잘\s*됐|된\s*거야|된거야|메모리|램|ram|cpu)/i.test(clean);
+
   if (
-    llmDecision?.intent === 'CLEANUP_FOLDER_REORG' ||
-    llmDecision?.intent === 'CLEANUP_DOWNLOAD_INSTALLERS' ||
-    llmDecision?.intent === 'STARTUP_INSPECT' ||
-    llmDecision?.zCoreCommand?.endpoint === '/__zcore/cleanup-scan' ||
-    (!hasLlm &&
-      /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려/i.test(
-        clean
-      ))
+    !isSpeedOrStatusQuestionNotFolderCleanup &&
+    (llmDecision?.intent === 'CLEANUP_FOLDER_REORG' ||
+      llmDecision?.intent === 'CLEANUP_DOWNLOAD_INSTALLERS' ||
+      llmDecision?.intent === 'STARTUP_INSPECT' ||
+      llmDecision?.zCoreCommand?.endpoint === '/__zcore/cleanup-scan' ||
+      (!hasLlm &&
+        /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려/i.test(
+          clean
+        )))
   ) {
     const isSecurityPlugin =
       /보안|구라|anysign|magicline|veraport|touchen|은행\s*깔린|부팅\s*느려|시작\s*프로그램/i.test(clean) ||
@@ -2739,6 +2776,14 @@ export async function processUnifiedMonsterChatQuery(params: {
           cpuLoadPercent?: number;
           activeSecurityPlugins?: Array<{ keyword?: string; label?: string; matchedProcessOrService?: string }>;
           highCpuSuspects?: Array<{ name?: string; pid?: number; cpuPercent?: number }>;
+          browserMemoryBottleneck?: {
+            detected?: boolean;
+            guideKo?: string;
+            browserName?: string;
+            processCount?: number;
+            browserMemoryGb?: number;
+            browserSharePercent?: number;
+          };
         };
       }>('/__zcore/os-inspect'),
     ]);
@@ -2797,12 +2842,15 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? '🟡 일반 작업 가능 · 무거운 편집은 버거울 수 있음'
         : '🔴 메모리 부족 가능성';
     const lowDisk = disk !== null && disk < 20 ? ` 저장 공간이 ${disk}GB밖에 남지 않아 정리가 필요합니다.` : '';
+    const browserBn = osData?.spoolerAndSecurity?.browserMemoryBottleneck;
+    const browserTipNote =
+      browserBn?.detected && browserBn?.guideKo ? `\n${browserBn.guideKo}` : '';
     const bloatWarning =
       detectedBloatwareLabels.length > 0 || (cpuLoadPct !== null && cpuLoadPct >= 50)
         ? `\n⚠️ **[속도 저하 핵심 원인 실측 (${detectedBloatwareLabels.length}건)]** 현재 백그라운드에서 **${
             detectedBloatwareLabels.slice(0, 8).join(', ') || '과점유 프로세스'
-          }** 등 총 ${detectedBloatwareLabels.length}종이 CPU(${cpuLoadPct ?? '?'}%)와 메모리를 점유하고 있습니다!\n프로그램을 임의로 건드리지 않습니다. 위 내역을 확인하시고 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주시면, 그때 강제 종료 및 자동부활(스케줄러·서비스·레지스트리)을 차단하고 블랙박스와 [복원 기록]에 기록합니다.`
-        : '';
+          }** 등 총 ${detectedBloatwareLabels.length}종이 CPU(${cpuLoadPct ?? '?'}%)와 메모리를 점유하고 있습니다!${browserTipNote}\n프로그램을 임의로 건드리지 않습니다. 위 내역을 확인하시고 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주시면, 그때 강제 종료 및 자동부활(스케줄러·서비스·레지스트리)을 차단하고 블랙박스와 [복원 기록]에 기록합니다.`
+        : browserTipNote;
     const cpu = s.cpuModel || unknown;
     const gpu = s.gpuModel || unknown;
     const hzText = typeof s.displayHz === 'number' ? `${s.displayHz}Hz` : unknown;

@@ -116,6 +116,12 @@ KNOWN_SECURITY_PLUGIN_KEYWORDS = {
     "pennyroyal": "YettieSoft PennyRoyal (APS 보안/상주 모듈)",
     "unicrs": "CrossCert UniCRSV3 (한국전자인증 상주 데몬)",
     "ccdaemon": "CrossCert CCDaemon (한국전자인증 백그라운드 서비스)",
+    "febjb": "febjb (작업 스케줄러 상주 애드웨어)",
+    "msload": "MSLoad (작업 스케줄러 상주 애드웨어)",
+    "ngplus": "NGPlus (작업 스케줄러 상주 애드웨어)",
+    "dumps1wins": "DumpS1Wins (작업 스케줄러 상주 애드웨어)",
+    "yondisk": "Yondisk_macadress (윤디스크 그리드 딜리버리 서비스)",
+    "windowscamera": "WindowsCamera (백그라운드 상주 카메라 리소스 좀비)",
 }
 
 PROTECTED_PROCESS_NAMES = {
@@ -418,7 +424,7 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
     # 3) 0.08초 tasklist.exe 호출로 실행 중인 모든 프로세스 및 메모리 즉시 수집 (CPU 100% 상황에서도 절대 타임아웃 안 남)
     proc_names_set: set[str] = set()
     gui_watch_targets = {
-        "chrome", "msedge", "kakaotalk", "telegram", "weixin",
+        "chrome", "msedge", "whale", "kakaotalk", "telegram", "weixin",
         "excel", "winword", "hwp", "powerpnt", "antigravity",
         "explorer", "myboxexplorer_x64_mt",
     }
@@ -464,17 +470,135 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
                 "samplePid": g["samplePid"],
             }
         )
+    running_gui_apps.sort(key=lambda x: x.get("memoryMb", 0), reverse=True)
 
-    # 4) 애드웨어·보안 플러그인 65종 + 비필수 시작프로그램(HKCU/HKLM/WOW6432 Run) 즉시 매칭
+    # 3-B) 실제 물리 메모리(RAM) 총량/점유율 실측 및 저사양(8GB 이하) 브라우저 메모리 병목 정밀 진단
+    ram_total_gb: float = 0.0
+    ram_used_percent: int = 0
+    ram_free_gb: float = 0.0
+    browser_memory_bottleneck: Dict[str, Any] = {"detected": False}
+    if os.name == "nt":
+        try:
+            class _MEMSTAT(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            ms = _MEMSTAT()
+            ms.dwLength = ctypes.sizeof(_MEMSTAT)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms)):
+                ram_total_gb = round(ms.ullTotalPhys / (1024 ** 3), 1)
+                ram_free_gb = round(ms.ullAvailPhys / (1024 ** 3), 1)
+                ram_used_percent = int(ms.dwMemoryLoad)
+        except Exception:
+            pass
+
+    browser_display_map = {"chrome": "크롬 브라우저", "msedge": "엣지 브라우저", "whale": "웨일 브라우저"}
+    top_browser = None
+    for b_key, b_label in browser_display_map.items():
+        if b_key in gui_agg:
+            mb = gui_agg[b_key]["memoryKb"] / 1024.0
+            if top_browser is None or mb > top_browser["memoryMb"]:
+                top_browser = {
+                    "key": b_key,
+                    "label": b_label,
+                    "processCount": int(gui_agg[b_key]["count"]),
+                    "memoryMb": round(mb, 1),
+                    "memoryGb": round(mb / 1024.0, 1),
+                }
+    if top_browser and ram_total_gb > 0:
+        browser_share_pct = int(round((top_browser["memoryGb"] / max(1.0, ram_total_gb)) * 100))
+        is_bottleneck = bool(
+            (ram_used_percent >= 80 and top_browser["memoryGb"] >= 2.2)
+            or browser_share_pct >= 45
+        )
+        disp_ram_gb = int(round(ram_total_gb)) if abs(ram_total_gb - round(ram_total_gb)) <= 0.3 else ram_total_gb
+        guide_ko = (
+            f"💡 애드웨어는 모두 껐지만, 현재 내 컴퓨터 전체 메모리({disp_ram_gb}GB) 중 "
+            f"{top_browser['label']}(창/탭 {top_browser['processCount']}개)가 "
+            f"{top_browser['memoryGb']}GB({browser_share_pct}%)를 차지해 메모리가 부족합니다. "
+            f"안 쓰는 크롬 탭만 몇 개 닫아주시면 즉시 체감 속도가 확 빨라집니다!"
+        ) if is_bottleneck else ""
+        browser_memory_bottleneck = {
+            "detected": is_bottleneck,
+            "browserName": top_browser["label"],
+            "processCount": top_browser["processCount"],
+            "browserMemoryGb": top_browser["memoryGb"],
+            "browserMemoryMb": top_browser["memoryMb"],
+            "browserSharePercent": browser_share_pct,
+            "ramTotalGb": ram_total_gb,
+            "ramUsedPercent": ram_used_percent,
+            "guideKo": guide_ko,
+        }
+
+    # 3-C) 부활형 윈도우 서비스(HKLM\SYSTEM\CurrentControlSet\Services) 및 루트 작업 스케줄러(C:\Windows\System32\Tasks) 활성 상태 실측
+    active_service_names: set[str] = set()
+    active_task_names: set[str] = set()
+    if os.name == "nt":
+        known_revival_services = (
+            "tuctlsystem", "yondisk_macadress", "yoondisk", "pcappstoresrv", "pcappstore",
+            "nosstarter", "cacheservice", "cachecloud", "cloudtask", "storageservice",
+            "natservice", "natsvc", "wizverapmsvc", "veraport", "crossex", "anysign",
+            "delfino", "magicline", "i3g", "unicrs", "pennyroyal",
+        )
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Services",
+                0,
+                winreg.KEY_READ,
+            ) as sk:
+                for s_cand in known_revival_services:
+                    try:
+                        with winreg.OpenKey(sk, s_cand, 0, winreg.KEY_READ) as sub_k:
+                            start_type, _ = winreg.QueryValueEx(sub_k, "Start")
+                            # Start == 4 는 Disabled, 2(Auto) 또는 3(Manual)이고 프로세스가 살아있거나 Auto면 활성
+                            if int(start_type) in (2, 3):
+                                if int(start_type) == 2 or any(s_cand[:6] in pn for pn in proc_names_set):
+                                    active_service_names.add(f"{s_cand} (서비스 자동실행)")
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
+        known_revival_tasks = (
+            "CacheCloud", "CacheConsole", "CacheService", "CloudTaskModule", "CloudTaskUpdater",
+            "FrontServiceUpdater", "DumpS1Wins", "febjb", "MSLoad", "NGPlus", "RayItemGate",
+            "StorageServiceManager",
+        )
+        tasks_dir = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "Tasks"
+        for t_cand in known_revival_tasks:
+            t_path = tasks_dir / t_cand
+            if t_path.exists():
+                try:
+                    xml_txt = t_path.read_text(encoding="utf-16", errors="ignore")
+                    if "<Enabled>false</Enabled>" not in xml_txt and "<Enabled>False</Enabled>" not in xml_txt:
+                        active_task_names.add(f"{t_cand.lower()} (작업스케줄러)")
+                except Exception:
+                    pass
+
+    # 4) 애드웨어·보안 플러그인 65종 + 비필수 시작프로그램(HKCU/HKLM/WOW6432 Run) + 활성 서비스/스케줄러 즉시 매칭
     startup_names = [f"{s['name'].lower()} ({s['location']})" for s in startup_items]
-    all_names = set(list(proc_names_set) + startup_names)
+    all_names = set(list(proc_names_set) + startup_names + list(active_service_names) + list(active_task_names))
     seen_kws: set[str] = set()
     for kw, label in KNOWN_SECURITY_PLUGIN_KEYWORDS.items():
         matched = [n for n in all_names if kw in n]
         if matched:
+            # WindowsCamera.exe의 경우 실제 유저가 카메라 창을 띄워둔 상태가 아닐 때(백그라운드 리소스 좀비)만 포함
+            if kw == "windowscamera":
+                visible_wins = [w.get("title", "").lower() for w in get_real_open_windows(20)]
+                if any("카메라" in wt or "camera" in wt for wt in visible_wins):
+                    continue
             seen_kws.add(kw)
             is_running_now = any(kw in pn for pn in proc_names_set)
-            status_tag = "실행중(CPU/메모리 점유)" if is_running_now else "부팅 자동실행 등록"
+            status_tag = "실행중(CPU/메모리 점유)" if is_running_now else "부팅 자동실행/스케줄러 등록"
             detected_security_plugins.append(
                 {
                     "keyword": kw,
@@ -516,6 +640,10 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
         "runningGuiApps": running_gui_apps,
         "cpuLoadPercent": cpu_load_percent,
         "highCpuSuspects": high_cpu_suspects,
+        "ramTotalGb": ram_total_gb,
+        "ramFreeGb": ram_free_gb,
+        "ramUsedPercent": ram_used_percent,
+        "browserMemoryBottleneck": browser_memory_bottleneck,
     }
 
 
@@ -1489,6 +1617,89 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
         # 프로세스만 끄면 작업 스케줄러/워치독 서비스(CacheCloud, CloudTaskModule, RayItemGate, TUCTL, yoondisk 등)가 즉시 되살려내므로
         # 반드시 부활 트리거(스케줄러 태스크 + 서비스)부터 먼저 중지·비활성화합니다.
         if os.name == "nt":
+            is_admin = False
+            try:
+                is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
+            except Exception:
+                is_admin = False
+
+            revival_task_names = [
+                "CacheCloud", "CacheConsole", "CacheService", "CloudTaskModule", "CloudTaskUpdater",
+                "FrontServiceUpdater", "DumpS1Wins", "febjb", "MSLoad", "NGPlus", "RayItemGate",
+                "StorageServiceManager", "Task_DataSharingServices", "Task_ShellExecuteAs",
+                "{E0477272-850C-4E8D-9C5C-A638D4800D1D}",
+            ]
+            revival_service_names = [
+                "TUCTLSystem", "Yondisk_macadress", "yoondisk", "PcAppStoreSRV", "PCAppStore",
+                "nosstarter", "CacheService", "CacheCloud", "CloudTaskModule", "StorageServiceManager",
+                "natservice", "natsvc", "wizverapmsvc", "veraport", "crossex", "anysign",
+                "delfino", "magicline", "i3g", "unicrs", "pennyroyal",
+            ]
+            revival_exe_names = [
+                "CacheCloud.exe", "CacheConsole.exe", "CacheService.exe", "CloudTaskModule.exe",
+                "CloudTaskUpdater.exe", "FrontServiceUpdater.exe", "RayItemGate.exe",
+                "StorageServiceManager.exe", "TUCTLSystem.exe", "yoondisk_mac.exe", "PcAppStore.exe",
+                "SmartBridgeLauncher.exe", "nosstarter.npe", "CrossEXService.exe", "veraport.exe",
+                "delfino.exe", "MagicLine4NX.exe", "I3GProc.exe", "pennyroyal.exe", "AnySign4PC.exe",
+                "UniCRSV3.exe", "CCDaemon.exe", "AdobeCollabSync.exe", "CCXProcess.exe",
+                "tabbie.exe", "clipdown.exe", "natservice.exe", "natsvc.exe", "microcloud.exe",
+                "alnotify.exe", "alyac.exe", "hncupdate.exe", "gomupdate.exe", "toast.exe",
+                "adpopup.exe", "plusad.exe", "adcast.exe", "openmatch.exe", "searchlite.exe",
+                "topon.exe", "sideoh.exe", "nbopen.exe", "zespeed.exe", "pcspeedup.exe",
+                "windowexe.exe", "utilzone.exe",
+            ]
+            # 카메라 창이 화면에 열려 있지 않은데 백그라운드에서 리소스만 차지하는 WindowsCamera.exe 좀비도 함께 정리
+            visible_win_titles = [w.get("title", "").lower() for w in get_real_open_windows(20)]
+            if not any("카메라" in wt or "camera" in wt for wt in visible_win_titles):
+                revival_exe_names.append("WindowsCamera.exe")
+
+            # 1-A) CPU 95% 과부하에서도 0.2초 만에 돌아가는 단일 배치(cmd.exe) 네이티브 직격탄 실행
+            batch_lines = ["@echo off"]
+            for tn in revival_task_names:
+                batch_lines.append(f'schtasks /End /TN "\\{tn}" >nul 2>&1')
+                batch_lines.append(f'schtasks /Change /TN "\\{tn}" /DISABLE >nul 2>&1')
+                batch_lines.append(f'schtasks /End /TN "{tn}" >nul 2>&1')
+                batch_lines.append(f'schtasks /Change /TN "{tn}" /DISABLE >nul 2>&1')
+            for sn in revival_service_names:
+                batch_lines.append(f'sc config "{sn}" start= disabled >nul 2>&1')
+                batch_lines.append(f'sc stop "{sn}" >nul 2>&1')
+            for ex in revival_exe_names:
+                batch_lines.append(f'taskkill /F /IM "{ex}" /T >nul 2>&1')
+
+            ensure_merlin_dirs()
+            clean_bat_path = MERLIN_DIR / "merlin_fast_clean_bloatware.cmd"
+            try:
+                clean_bat_path.write_text("\r\n".join(batch_lines) + "\r\n", encoding="cp949", errors="ignore")
+                subprocess.run(
+                    ["cmd.exe", "/c", str(clean_bat_path)],
+                    capture_output=True,
+                    timeout=8,
+                    creationflags=0x08000000,
+                )
+            except Exception:
+                pass
+
+            # 1-B) 비관리자(Standard User) 토큰으로 실행 중이어서 LocalSystem 서비스(TUCTLSystem, yoondisk_mac, PcAppStoreSRV 등)나
+            #      루트 작업 스케줄러가 아직 살아있는 경우, 관리자 권한(RunAs)으로 무소음 배치 1회 승격 실행하여 100% 뿌리 뽑음
+            if not is_admin:
+                still_alive_Check = get_real_spooler_and_security_status(get_real_startup_programs())
+                if still_alive_Check.get("activeSecurityPluginsCount", 0) > 0:
+                    try:
+                        ps_elev = (
+                            f"Start-Process -FilePath 'cmd.exe' "
+                            f"-ArgumentList '/c \"{clean_bat_path}\"' "
+                            f"-Verb RunAs -WindowStyle Hidden -Wait"
+                        )
+                        subprocess.run(
+                            ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_elev],
+                            capture_output=True,
+                            timeout=12,
+                            creationflags=0x08000000,
+                        )
+                    except Exception:
+                        pass
+
+            # 1-C) 와일드카드 기반 잔여 스케줄러 태스크 및 서비스 PowerShell 보조 소탕 (타임아웃 15초로 넉넉히 확보)
             ps_disable_revival = r"""
 $ErrorActionPreference = 'SilentlyContinue'
 $revivalTasks = @(
@@ -1508,14 +1719,14 @@ foreach ($tn in $revivalTasks) {
 }
 Get-ScheduledTask | Where-Object {
   $_.TaskPath -notlike '\Microsoft*' -and $_.State -ne 'Disabled' -and
-  $_.TaskName -match 'CacheCloud|CacheConsole|CacheService|CloudTask|PCAppStore|TUCTL|yoondisk|SmartBridge|Tabbie|ClipDown|NATService|MicroCloud|OpenMatch|SearchLite|ZeSpeed|PCSpeedUp'
+  $_.TaskName -match 'CacheCloud|CacheConsole|CacheService|CloudTask|PCAppStore|TUCTL|yoondisk|Yondisk|SmartBridge|Tabbie|ClipDown|NATService|MicroCloud|OpenMatch|SearchLite|ZeSpeed|PCSpeedUp|febjb|MSLoad|NGPlus|RayItemGate|StorageService'
 } | ForEach-Object {
   Stop-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -ErrorAction SilentlyContinue
   Disable-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -ErrorAction SilentlyContinue | Out-Null
   $disabledList.Add("스케줄러:$($_.TaskName)")
 }
 Get-Service | Where-Object {
-  ($_.Name -match 'Cache|PCAppStore|TUCTL|yoondisk|CloudTask|StorageService|natservice|natsvc|wizverapmsvc|nosstarter|veraport|crossex|anysign|delfino|magicline|i3g|unicrs|pennyroyal') -and
+  ($_.Name -match 'Cache|PCAppStore|TUCTL|yoondisk|Yondisk|CloudTask|StorageService|natservice|natsvc|wizverapmsvc|nosstarter|veraport|crossex|anysign|delfino|magicline|i3g|unicrs|pennyroyal') -and
   ($_.Name -notmatch 'Merlin|SensTalk|Tailscale|Spooler|WinDefend|mpssvc|wscsvc')
 } | ForEach-Object {
   if ($_.Status -eq 'Running') { Stop-Service -Name $_.Name -Force -ErrorAction SilentlyContinue }
@@ -1527,7 +1738,7 @@ $disabledList | ConvertTo-Json -Compress
             try:
                 r_rev = subprocess.run(
                     ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_disable_revival],
-                    capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=6, creationflags=0x08000000
+                    capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=15, creationflags=0x08000000
                 )
                 if r_rev.returncode == 0 and r_rev.stdout.strip():
                     parsed_rev = json.loads(r_rev.stdout.strip())
@@ -1630,18 +1841,24 @@ Get-Process | Where-Object {
                 disabled_startups.extend(disabled_tasks_and_services)
 
         after_state = inspect_real_pc_state()
-        cpu_after = int(after_state.get("spoolerAndSecurity", {}).get("cpuLoadPercent") or 0)
+        after_spool_sec = after_state.get("spoolerAndSecurity", {})
+        cpu_after = int(after_spool_sec.get("cpuLoadPercent") or 0)
+        remaining_sec_count = int(after_spool_sec.get("activeSecurityPluginsCount") or 0)
+        browser_bn = after_spool_sec.get("browserMemoryBottleneck") or {}
 
         if stopped_names or disabled_startups:
             all_cleaned = stopped_names + [f"자동실행 차단: {s}" for s in disabled_startups]
             summary_ko = (
-                f"🚀 CPU와 메모리를 잡아먹던 애드웨어·보안/자동실행 프로그램 {len(all_cleaned)}종({', '.join(all_cleaned[:6])})을 즉시 강제 종료 및 시작프로그램에서 정리했습니다! "
-                f"(실측 CPU 부하: {cpu_before}% ➔ {cpu_after}%)"
+                f"🚀 CPU와 메모리를 잡아먹던 애드웨어·보안/자동실행 프로그램 {len(all_cleaned)}종({', '.join(all_cleaned[:6])})을 즉시 강제 종료 및 시작프로그램·스케줄러에서 차단했습니다! "
+                f"(실측 CPU 부하: {cpu_before}% ➔ {cpu_after}% · 잔존 상주 애드웨어 {remaining_sec_count}건)"
             )
         else:
             summary_ko = (
                 f"🧹 현재 백그라운드에 상주 중인 애드웨어·보안 쓰레기 및 CPU 과점유 비정상 프로세스가 0건으로 깨끗합니다. (현재 CPU 부하: {cpu_after}%)"
             )
+
+        if browser_bn.get("detected") and browser_bn.get("guideKo"):
+            summary_ko += f"\n\n{browser_bn.get('guideKo')}"
 
         if needs_reboot:
             summary_ko += (
@@ -1701,14 +1918,16 @@ Get-Process | Where-Object {
             "uptimeDays": uptime_days,
             "uptimeHours": uptime_hours,
             "needsReboot": needs_reboot,
-            "activeSecurityPluginsCount": max(0, len(sec_plugins) - len(stopped_names)),
+            "activeSecurityPluginsCount": remaining_sec_count,
             "startupProgramsCount": len(startup_items),
+            "browserMemoryBottleneck": browser_bn,
             "summaryKo": summary_ko,
             "message": summary_ko,
             "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
         }
 
     # 기본(diagnose) 및 구버전 emergency_reset 호출 시: 브라우저 강제 청소를 절대 수행하지 않고 24시간 기준점 실측 가이드 반환
+    diag_browser_bn = pc_state.get("spoolerAndSecurity", {}).get("browserMemoryBottleneck") or {}
     if needs_reboot:
         summary_ko = (
             f"현재 컴퓨터를 켜둔 지 {uptime_days_int}일 {uptime_rem_hours}시간 (권장 기준: 매일 1회 재부팅)이 지났습니다. "
@@ -1728,6 +1947,9 @@ Get-Process | Where-Object {
         else:
             summary_ko += " 백그라운드에 상주 중인 은행·관공서 보안 프로그램도 0건으로 깨끗합니다."
 
+    if diag_browser_bn.get("detected") and diag_browser_bn.get("guideKo"):
+        summary_ko += f"\n\n{diag_browser_bn.get('guideKo')}"
+
     return {
         "ok": True,
         "subAction": "diagnose",
@@ -1740,6 +1962,7 @@ Get-Process | Where-Object {
         "activeSecurityPlugins": sec_plugins,
         "startupProgramsCount": len(startup_items),
         "startupPrograms": startup_items[:10],
+        "browserMemoryBottleneck": diag_browser_bn,
         "summaryKo": summary_ko,
         "message": summary_ko,
         "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),

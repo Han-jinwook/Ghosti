@@ -296,7 +296,7 @@ def main() -> None:
         print("🚨" * 24)
         return
 
-    interval_sec = 10
+    interval_sec = 25
     for arg in sys.argv[1:]:
         if arg.isdigit():
             interval_sec = int(arg)

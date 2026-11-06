@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-06T11:10:02.585530",
+  "updated_at": "2026-11-06T14:56:03.069205",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -762,6 +762,38 @@
       "last_edited_time": "2026-11-06T00:43:00.000Z",
       "url": "https://app.notion.com/p/1-40df9ffd2c1d8172b8ccfa57dafaf7e2",
       "archived_at": "2026-11-06T11:10:02.585337"
+    },
+    {
+      "page_id": "40ff9ffd-2c1d-803a-bf6c-c969982ef6a3",
+      "title": "🎯 [귀신같이] 현수, 선희 성우 대신 다른 성우의 목소리가 들리는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-06T00:46:00.000Z",
+      "url": "https://app.notion.com/p/40ff9ffd2c1d803abf6cc969982ef6a3",
+      "archived_at": "2026-11-06T12:50:34.724407"
+    },
+    {
+      "page_id": "40cf9ffd-2c1d-815e-aa8c-e96f65974f05",
+      "title": "🎯 [스튜디오] 숏폼 시사회 영상 품평 & 구글 플로우(Flow) 클립 3종 제작 미션",
+      "app": "스튜디오",
+      "last_edited_time": "2026-11-06T01:56:00.000Z",
+      "url": "https://app.notion.com/p/Flow-3-40cf9ffd2c1d815eaa8ce96f65974f05",
+      "archived_at": "2026-11-06T12:53:01.392899"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-81ca-a798-dd8a5c6d0156",
+      "title": "🎯 [귀신같이/1단계] PC-찾기·동영상, 장면 묘사·음성 대사로 영상 속 원하는 초(sec) 즉시 점프 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-06T02:02:00.000Z",
+      "url": "https://app.notion.com/p/1-PC-sec-40df9ffd2c1d81caa798dd8a5c6d0156",
+      "archived_at": "2026-11-06T14:23:27.397278"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-8093-98e7-ed047ccbead4",
+      "title": "🎯 [귀신같이] 수정 안된 카드들은 재테스트로 넘기지 말기",
+      "app": "",
+      "last_edited_time": "2026-11-06T02:11:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d809398e7ed047ccbead4",
+      "archived_at": "2026-11-06T14:32:54.995902"
     }
   ]
 }
