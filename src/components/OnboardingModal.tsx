@@ -783,7 +783,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
               </span>
             </div>
             <span className="text-[11px] opacity-80">
-              1초 AI 내용검색 + 치우기·고치기 통합 대화창
+              1초 AI 내용검색 + 손보기 통합 대화창
             </span>
           </button>
 
@@ -913,24 +913,24 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 </div>
               </div>
 
-              {/* 2) 🪄 손보기 (🧹 치우기 + ⚙️ 고치기 통합 노션형 대화창) */}
+              {/* 2) ✋ 손보기 (노션형 통합 대화창) */}
               <div className="p-4 rounded-2xl bg-zinc-900/90 border border-emerald-500/35 flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
-                      🪄 손보기 (🧹 치우기 + ⚙️ 고치기 통합)
+                      ✋ 손보기 (정리 · 수리 · 복원)
                     </span>
                     <span className="text-[11px] text-emerald-400 font-bold">평생 무료</span>
                   </div>
                   <h3 className="text-[16px] font-extrabold text-white">
-                    탭 이동 없이 한 채팅창에서 치우고 고칩니다
+                    탭 이동 없이 한 대화창에서 정리하고 수리합니다
                   </h3>
                   <ul className="text-[12px] text-zinc-300 space-y-1.5 leading-relaxed">
                     <li>
-                      • <strong className="text-emerald-300">🧹 치우기</strong>: 중복·흔들린 사진, 바탕화면·다운로드의 어지러운 문서와 설치파일을 깔끔하게 정리합니다.
+                      • <strong className="text-emerald-300">📸 사진·파일 정리</strong>: 중복·흔들린 사진, 바탕화면·다운로드의 어지러운 문서와 설치파일을 깔끔하게 정리합니다.
                     </li>
                     <li>
-                      • <strong className="text-teal-300">⚙️ 고치기</strong>: 2026 최신 기준 내 PC 사양 업그레이드 진단, 먹통 수리(화면 위 빨간 손가락 <code className="text-amber-300">👆</code> 안내), 사라진 파일 추적을 수행합니다.
+                      • <strong className="text-teal-300">⚡ 속도·수리·진단</strong>: 느려진 PC 보안모듈 정리, 2026 최신 사양 진단, 먹통 수리(화면 위 빨간 손가락 <code className="text-amber-300">👆</code> 안내), 사라진 파일 추적을 수행합니다.
                     </li>
                     <li>
                       • <strong className="text-amber-300">🔒 자연어 타이핑 동의 &amp; 번호 선택 원복</strong>: 실수 클릭 방지를 위해 <code className="text-white">&quot;응 해줘&quot;</code>처럼 직접 타이핑할 때만 실행되며, <code className="text-white">&quot;복원지점 보여줘&quot; ➔ &quot;1번 복원해줘&quot;</code>로 언제든 100% 되돌립니다.
@@ -948,7 +948,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     }}
                     className="w-full py-2.5 px-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[12.5px] font-black cursor-pointer"
                   >
-                    🪄 손보기 대화창 바로 열기 (치우기·고치기·복원) →
+                    ✋ 손보기 대화창 바로 열기 →
                   </button>
                 </div>
               </div>
@@ -1672,7 +1672,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       ✅ <strong className="text-white">🎯 귀신같이 찾기</strong>: 내 기기 1대 안의 사진·서류·동영상 1초 AI 내용검색 <strong className="text-teal-300">평생 무제한 무료</strong>
                     </li>
                     <li>
-                      ✅ <strong className="text-white">🪄 손보기 (치우기 + 고치기)</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
+                      ✅ <strong className="text-white">✋ 귀신같이 손보기</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
                     </li>
                     <li>
                       🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: 기기당 <strong className="text-amber-300">1주일(7일) 전 기능 무료체험</strong> 제공

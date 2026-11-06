@@ -19,12 +19,6 @@ import {
   SEARCH_STAGE_MOBILE_ROLLING_PLACEHOLDERS_10,
   getAndAdvanceSessionPlaceholderStartIndex,
 } from '../services/weeklyCareAndPlaceholderEngine';
-import {
-  loadLocalHealthCheckHistory,
-  executeRestorePointRollback,
-  type DigitalHealthCheckRecord,
-} from '../services/monsterChatRouter';
-import { PersonalHealthCheckHistoryDrawer } from './MonsterInteractiveCards';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
 
 const STAGE1_ROLLING_INTERVAL_MS = 10_000; // 10초 자동 롤링
@@ -42,9 +36,9 @@ const TRASH_TABS_4: {
   {
     key: 'duplicate',
     stepNum: '①',
-    title: '중복 사진 · 연사 선택',
-    shortTitle: '중복 · 연사 선택',
-    shortBadge: '중복·연사 선택',
+    title: '중복·연사 사진',
+    shortTitle: '중복·연사 사진',
+    shortBadge: '중복·연사 사진',
     cleanTag: '#중복·연사사본',
     subtitle: '원본 1장만 남기고 정리',
     icon: 'burst_mode',
@@ -52,34 +46,160 @@ const TRASH_TABS_4: {
   {
     key: 'memo',
     stepNum: '②',
-    title: '주차 · 영수증 · 일회성 메모',
-    shortTitle: '주차 · 영수증 · 메모',
-    shortBadge: '주차·사물·일회성메모',
+    title: '주차·영수증·메모',
+    shortTitle: '주차·영수증·메모',
+    shortBadge: '주차·영수증·메모',
     cleanTag: '#주차·부품·일회성메모',
-    subtitle: '주차장 · 부품 · 단기 메모',
+    subtitle: '주차장·부품·단기 메모',
     icon: 'description',
   },
   {
     key: 'screenshot',
     stepNum: '③',
-    title: '스크린샷 · 불필요 캡처',
-    shortTitle: '스크린샷 · 캡처',
-    shortBadge: '스크린샷 캡처',
+    title: '스크린샷·캡처',
+    shortTitle: '스크린샷·캡처',
+    shortBadge: '스크린샷·캡처',
     cleanTag: '#스크린샷 캡처',
-    subtitle: '문자 · 화면 캡처 정리',
+    subtitle: '문자·화면 캡처 정리',
     icon: 'screenshot_mobile',
   },
   {
     key: 'blurry',
     stepNum: '④',
-    title: '흔들림 · 바닥 오촬영',
-    shortTitle: '흔들림 · 오촬영',
+    title: '흔들림·오촬영',
+    shortTitle: '흔들림·오촬영',
     shortBadge: '흔들림·오촬영',
     cleanTag: '#초점이탈·오촬영',
     subtitle: '흐릿하거나 잘못 찍힌 사진',
     icon: 'blur_on',
   },
 ];
+
+const FALLBACK_SAMPLE_TRASH_ITEMS: Record<
+  'duplicate' | 'memo' | 'screenshot' | 'blurry',
+  PhotoItem[]
+> = {
+  duplicate: [
+    {
+      id: 'sample_dup_1',
+      name: 'IMG_20250510_1002.jpg',
+      size: 312_000,
+      date: '2025-05-10',
+      mtimeMs: 1746835200000,
+      thumbUrl: '/sample_photos_301/IMG_20250510_1002.jpg',
+      fullUrl: '/sample_photos_301/IMG_20250510_1002.jpg',
+      tags: ['#연사·중복사본', '#해변가족'],
+      trashCategory: 'duplicate',
+      trashConfidence: 0.99,
+      quarantined: false,
+      presetScores: {},
+    },
+    {
+      id: 'sample_dup_2',
+      name: 'IMG_20250510_1003.jpg',
+      size: 298_000,
+      date: '2025-05-10',
+      mtimeMs: 1746835201000,
+      thumbUrl: '/sample_photos_301/IMG_20250510_1003.jpg',
+      fullUrl: '/sample_photos_301/IMG_20250510_1003.jpg',
+      tags: ['#연사·중복사본', '#해변가족'],
+      trashCategory: 'duplicate',
+      trashConfidence: 0.98,
+      quarantined: false,
+      presetScores: {},
+    },
+  ],
+  memo: [
+    {
+      id: 'sample_memo_1',
+      name: 'MEMO_202509_1259_주차장_기둥.jpg',
+      size: 185_000,
+      date: '2025-09-12',
+      mtimeMs: 1757635200000,
+      thumbUrl: '/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg',
+      fullUrl: '/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg',
+      tags: ['#주차장·기둥메모', '#지하주차장 B3'],
+      trashCategory: 'memo',
+      trashConfidence: 0.97,
+      quarantined: false,
+      presetScores: {},
+    },
+    {
+      id: 'sample_memo_2',
+      name: 'MEMO_202509_1261_택배_상자.jpg',
+      size: 210_000,
+      date: '2025-09-14',
+      mtimeMs: 1757808000000,
+      thumbUrl: '/sample_photos_301/MEMO_202509_1261_택배_상자.jpg',
+      fullUrl: '/sample_photos_301/MEMO_202509_1261_택배_상자.jpg',
+      tags: ['#택배·상자메모', '#일회성기록'],
+      trashCategory: 'memo',
+      trashConfidence: 0.96,
+      quarantined: false,
+      presetScores: {},
+    },
+  ],
+  screenshot: [
+    {
+      id: 'sample_screen_1',
+      name: 'Screenshot_20250802_1001_쇼핑위시리스트.jpg',
+      size: 240_000,
+      date: '2025-08-02',
+      mtimeMs: 1754092800000,
+      thumbUrl: '/sample_photos_301/Screenshot_20250802_1001_쇼핑위시리스트.jpg',
+      fullUrl: '/sample_photos_301/Screenshot_20250802_1001_쇼핑위시리스트.jpg',
+      tags: ['#스크린샷·화면캡처', '#쇼핑위시리스트'],
+      trashCategory: 'screenshot',
+      trashConfidence: 0.99,
+      quarantined: false,
+      presetScores: {},
+    },
+    {
+      id: 'sample_screen_2',
+      name: 'Screenshot_20250802_1002_배달주문내역.jpg',
+      size: 225_000,
+      date: '2025-08-02',
+      mtimeMs: 1754092900000,
+      thumbUrl: '/sample_photos_301/Screenshot_20250802_1002_배달주문내역.jpg',
+      fullUrl: '/sample_photos_301/Screenshot_20250802_1002_배달주문내역.jpg',
+      tags: ['#스크린샷·화면캡처', '#배달주문내역'],
+      trashCategory: 'screenshot',
+      trashConfidence: 0.99,
+      quarantined: false,
+      presetScores: {},
+    },
+  ],
+  blurry: [
+    {
+      id: 'sample_blur_1',
+      name: 'BLUR_202510_1282_흔들린사진.jpg',
+      size: 194_000,
+      date: '2025-10-03',
+      mtimeMs: 1759449600000,
+      thumbUrl: '/sample_photos_301/BLUR_202510_1282_흔들린사진.jpg',
+      fullUrl: '/sample_photos_301/BLUR_202510_1282_흔들린사진.jpg',
+      tags: ['#초점이탈·심한흔들림'],
+      trashCategory: 'blurry',
+      trashConfidence: 0.96,
+      quarantined: false,
+      presetScores: {},
+    },
+    {
+      id: 'sample_blur_2',
+      name: 'BLUR_202510_1283_흔들린사진.jpg',
+      size: 188_000,
+      date: '2025-10-03',
+      mtimeMs: 1759449700000,
+      thumbUrl: '/sample_photos_301/BLUR_202510_1283_흔들린사진.jpg',
+      fullUrl: '/sample_photos_301/BLUR_202510_1283_흔들린사진.jpg',
+      tags: ['#초점이탈·심한흔들림'],
+      trashCategory: 'blurry',
+      trashConfidence: 0.95,
+      quarantined: false,
+      presetScores: {},
+    },
+  ],
+};
 
 const fmtMB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
@@ -240,6 +360,12 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
     scrollToResults();
   };
 
+  const handleStepPlaceholder = (delta: -1 | 1) => {
+    setRollingSearchIdx(
+      (prev) => (prev + delta + searchPlaceholderPool.length) % searchPlaceholderPool.length
+    );
+  };
+
   return (
     <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
       {/* 상단 검색 프레임 */}
@@ -252,7 +378,7 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
 
         <section className="w-full flex flex-col gap-3">
           <div className="w-full flex flex-col gap-3">
-            {/* 1-A. 자연어 문장형 통합 검색창 (10초 롤링 플레이스홀더 + 포커스 정지 + [예시 바로 검색 ↵]) */}
+            {/* 1-A. 자연어 문장형 통합 검색창 (10초 롤링 플레이스홀더 + 포커스 정지 + [◀][▶][예시 바로 검색 ↵][검색] 우측 정렬) */}
             <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-1.5 sm:gap-2">
               <div className="relative flex-1 min-w-[200px] flex items-center">
                 <span className="material-symbols-outlined text-[20px] absolute left-3.5 pointer-events-none text-zinc-400">
@@ -269,33 +395,55 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
                   onBlur={() => setIsInputFocused(false)}
                   onChange={(e) => setTextInput(e.target.value)}
                   placeholder={`예) ${currentExampleSentence}`}
-                  className="w-full h-11 md:h-13 pl-10 pr-44 sm:pr-52 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
+                  className="w-full h-11 md:h-13 pl-10 pr-[110px] sm:pr-[264px] rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
                 />
-                {!textInput.trim() ? (
+
+                {/* 우측 컨트롤 그룹: [◀] [▶] [예시 바로 검색 ↵] [검색] (좌측 겹침 원천 차단) */}
+                <div className="absolute right-1.5 inset-y-0 flex items-center gap-1">
+                  {!textInput.trim() ? (
+                    <div className="hidden sm:flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStepPlaceholder(-1)}
+                        title="이전 예시 문구 보기"
+                        className="w-7 h-7 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
+                      >
+                        ◀
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStepPlaceholder(1)}
+                        title="다음 예시 문구 보기"
+                        className="w-7 h-7 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
+                      >
+                        ▶
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRunExampleInstant()}
+                        title="지금 보이는 예시 문장으로 1초 만에 바로 검색해 봅니다"
+                        className="inline-flex items-center gap-1 h-7.5 px-2.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/35 text-teal-300 font-label-sm text-[11.5px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+                      >
+                        <span>예시 바로 검색 ↵</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setTextInput('')}
+                      className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                      title="지우기"
+                    >
+                      <span className="material-symbols-outlined text-[17px]">close</span>
+                    </button>
+                  )}
                   <button
-                    type="button"
-                    onClick={() => void handleRunExampleInstant()}
-                    title="지금 보이는 예시 문장으로 1초 만에 바로 검색해 봅니다"
-                    className="hidden sm:inline-flex items-center gap-1 absolute right-18 h-7.5 px-2.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/35 text-teal-300 font-label-sm text-[11.5px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+                    type="submit"
+                    className="h-8.5 md:h-10 px-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] md:text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
                   >
-                    <span>예시 바로 검색 ↵</span>
+                    검색
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setTextInput('')}
-                    className="absolute right-18 text-zinc-400 hover:text-white p-1 cursor-pointer"
-                    title="지우기"
-                  >
-                    <span className="material-symbols-outlined text-[17px]">close</span>
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  className="absolute right-1.5 h-8.5 md:h-10 px-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] md:text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
-                >
-                  검색
-                </button>
+                </div>
               </div>
 
               <div className="md:hidden flex items-center gap-1.5 shrink-0 ml-auto">
@@ -830,20 +978,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   } = useSaySeeStore();
 
   const trashMobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [showHealthHistoryDrawer, setShowHealthHistoryDrawer] = useState<boolean>(false);
-  const [healthHistoryRecords, setHealthHistoryRecords] = useState<DigitalHealthCheckRecord[]>(() =>
-    loadLocalHealthCheckHistory()
-  );
-  const [externalQueryTrigger, setExternalQueryTrigger] = useState<{
+  const [externalQueryTrigger] = useState<{
     id: number;
     query: string;
   } | null>(null);
 
-  const triggerMonsterQuery = (rawQuery: string) => {
-    const q = rawQuery.trim();
-    if (!q) return;
-    setExternalQueryTrigger({ id: Date.now() + Math.random(), query: q });
-  };
+  // [수정 4] 진입 시 하단이 비어 있지 않도록 기본 선택 탭을 'all'로 자동 초기화하여 즉시 정리 대상 사진을 펼쳐 보여줌
+  useEffect(() => {
+    if (activeTrashCategoryFilter === 'none') {
+      setActiveTrashCategoryFilter('all');
+    }
+  }, [activeTrashCategoryFilter, setActiveTrashCategoryFilter]);
 
   const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
   const quarantinedPhotos = photos.filter((p) => p.quarantined);
@@ -855,14 +1000,34 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const blurryCount = activeTrash.filter((p) => matchesTrashTab(p, 'blurry')).length;
   const memoAndScreenCount = memoCount + screenshotCount;
 
-  const currentTab =
+  const rawTab =
     activeTrashCategoryFilter === 'object' ||
     activeTrashCategoryFilter === 'document' ||
     activeTrashCategoryFilter === 'receipt'
       ? 'memo'
       : activeTrashCategoryFilter;
+  const currentTab = rawTab === 'none' ? 'all' : rawTab;
 
-  const filteredCandidates = activeTrash.filter((p) => matchesTrashTab(p, currentTab));
+  const realFilteredCandidates = activeTrash.filter((p) => matchesTrashTab(p, currentTab));
+  const fallbackSamplesForCurrentTab: PhotoItem[] =
+    currentTab === 'all'
+      ? [
+          ...FALLBACK_SAMPLE_TRASH_ITEMS.memo,
+          ...FALLBACK_SAMPLE_TRASH_ITEMS.screenshot,
+          ...FALLBACK_SAMPLE_TRASH_ITEMS.blurry,
+        ]
+      : currentTab === 'duplicate' ||
+        currentTab === 'memo' ||
+        currentTab === 'screenshot' ||
+        currentTab === 'blurry'
+      ? FALLBACK_SAMPLE_TRASH_ITEMS[currentTab]
+      : [];
+  const isShowingSamplePreview =
+    realFilteredCandidates.length === 0 && fallbackSamplesForCurrentTab.length > 0;
+  const filteredCandidates = isShowingSamplePreview
+    ? fallbackSamplesForCurrentTab
+    : realFilteredCandidates;
+
   const selectedBytes = activeTrash
     .filter((p) => selectedTrashIds.has(p.id))
     .reduce((a, p) => a + p.size, 0);
@@ -876,7 +1041,6 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   );
 
   const showDuplicatePickSection =
-    currentTab !== 'none' &&
     (currentTab === 'duplicate' || currentTab === 'all') &&
     activeDuplicateGroups.length > 0;
 
@@ -901,14 +1065,14 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        {/* ═══════════════ [좌측 열] 미니멀 정리 워크스페이스 (휴지통 버튼·아코디언·중복 배지 철거 완료) ═══════════════ */}
+        {/* ═══════════════ [좌측 열] 미니멀 정리 워크스페이스 (기록부 버튼·휴지통 버튼·아코디언 완전 제거) ═══════════════ */}
         <div className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0">
-          {/* 1. 슬림 헤더 (난립하던 6개 배지를 [🕰️ 손보기·복원 기록] 단 1개로 통합) */}
+          {/* 1. 슬림 헤더: 현재 쾌적한 상태 요약 + [⚡ 원본 남기고 N장 일괄 정리] 버튼만 깔끔하게 유지 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  <span>✋ 치우기 &amp; 손보기</span>
+                  <span>✋ 손보기</span>
                 </h1>
 
                 <input
@@ -933,17 +1097,6 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     📱 내 폰 사진 불러와 정리하기
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowHealthHistoryDrawer((v) => !v);
-                    void triggerMonsterQuery('최근 [복원 기록] 보여줘');
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
-                >
-                  🕰️ 손보기·복원 기록 ({healthHistoryRecords.length})
-                </button>
               </div>
 
               <button
@@ -969,22 +1122,10 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </>
               ) : (
                 <span className="text-primary-container">
-                  ✨ 모든 중복·연사 사본({quarantinedPhotos.length}장) 정리가 완료되어 가장 쾌적한 상태입니다
+                  ✨ 현재 가장 쾌적한 상태입니다 (정리 완료 {quarantinedPhotos.length}장)
                 </span>
               )}
             </div>
-
-            {showHealthHistoryDrawer && (
-              <PersonalHealthCheckHistoryDrawer
-                records={healthHistoryRecords}
-                onClose={() => setShowHealthHistoryDrawer(false)}
-                onRollbackRestoreId={(rid) => {
-                  void executeRestorePointRollback(rid).then((res) => {
-                    useSaySeeStore.setState({ lastQuarantineToast: res.message });
-                  });
-                }}
-              />
-            )}
 
             {/* 인라인 1초 되돌리기(Undo) 알림 콜아웃 */}
             {lastUndoBatch && (
@@ -1019,12 +1160,16 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             )}
           </section>
 
-          {/* 2. 깔끔한 4열 정리 카테고리 카드 (5번째 [🗑️ 휴지통 보관함] 카드 완전 제거!) */}
+          {/* 2. 깔끔한 4열 정리 카테고리 카드 (글자 잘림 0% + 미니 샘플 썸네일 프리뷰 내장) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {TRASH_TABS_4.map((tab) => {
               const items = activeTrash.filter((p) => matchesTrashTab(p, tab.key));
               const bytes = items.reduce((a, p) => a + p.size, 0);
               const isSelected = currentTab === tab.key;
+              const sampleThumbs =
+                items.length > 0
+                  ? items.slice(0, 2)
+                  : FALLBACK_SAMPLE_TRASH_ITEMS[tab.key].slice(0, 2);
 
               return (
                 <button
@@ -1032,50 +1177,67 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   type="button"
                   onClick={() => {
                     if (currentTab === tab.key) {
-                      setActiveTrashCategoryFilter('none');
+                      setActiveTrashCategoryFilter('all');
                     } else {
                       setActiveTrashCategoryFilter(tab.key as TrashCategory);
                     }
                   }}
-                  className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border ${
+                  className={`group text-left cursor-pointer rounded-2xl p-3.5 transition-all flex flex-col justify-between gap-2.5 border ${
                     isSelected
                       ? 'bg-zinc-900 border-primary-container shadow-md ring-2 ring-primary-container'
                       : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2 w-full">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-headline-sm text-[13.5px] text-primary-container font-bold">
-                          {tab.stepNum}
-                        </span>
-                        <span className="font-headline-sm text-[14.5px] text-white font-bold truncate">
-                          {tab.shortTitle}
-                        </span>
-                      </div>
-                      <span className="font-body-sm text-[11px] text-zinc-400 line-clamp-1">
-                        {tab.subtitle}
+                  <div className="flex flex-col gap-1 w-full">
+                    <div className="flex items-center gap-1 whitespace-nowrap">
+                      <span className="font-headline-sm text-[13px] text-primary-container font-extrabold shrink-0">
+                        {tab.stepNum}
+                      </span>
+                      <span className="font-headline-sm text-[13.5px] xl:text-[14px] text-white font-extrabold tracking-tight">
+                        {tab.shortTitle}
                       </span>
                     </div>
-                    <span className="material-symbols-outlined text-[17px] text-zinc-400 shrink-0">
-                      {tab.icon}
+                    <span className="font-body-sm text-[11px] text-zinc-400 leading-snug">
+                      {tab.subtitle}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-white/10 w-full">
-                    <div className="flex items-baseline gap-1">
-                      <span className="font-headline-md text-[18px] text-white font-extrabold">
+                  {/* 카드 내 미니 썸네일 프리뷰 (실제 0장일 때도 어떤 기능인지 한눈에 보이도록 샘플 제공) */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    {sampleThumbs.map((sp) => (
+                      <div
+                        key={sp.id}
+                        className="w-9 h-9 rounded-lg overflow-hidden border border-white/15 bg-zinc-950 shrink-0"
+                      >
+                        <img
+                          src={sp.thumbUrl}
+                          alt=""
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                    {items.length === 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-zinc-800/90 border border-white/10 text-[10px] text-zinc-300 font-bold whitespace-nowrap">
+                        예시 샘플
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1 pt-2 border-t border-white/10 w-full whitespace-nowrap">
+                    <div className="flex items-baseline gap-1 whitespace-nowrap">
+                      <span className="font-headline-md text-[16px] text-white font-extrabold">
                         {items.length}
                       </span>
-                      <span className="font-label-sm text-[11.5px] text-zinc-400">장</span>
+                      <span className="font-label-sm text-[11px] text-zinc-400">장</span>
                       {tab.key === 'duplicate' && activeDuplicateGroups.length > 0 && (
-                        <span className="ml-1 text-[11px] text-primary-container font-semibold">
+                        <span className="text-[10.5px] text-primary-container font-bold">
                           · {activeDuplicateGroups.length}묶음
                         </span>
                       )}
                     </div>
 
-                    <span className="font-label-mono text-[11px] text-zinc-400 font-semibold">
+                    <span className="font-label-mono text-[10.5px] text-zinc-400 font-semibold whitespace-nowrap">
                       {fmtMB(bytes)}
                     </span>
                   </div>
@@ -1220,8 +1382,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </div>
           )}
 
-          {/* 3-B. 탭 ②·③·④ 개별 선택 그리드 */}
-          {currentTab !== 'duplicate' && currentTab !== 'none' && (
+          {/* 3-B. 탭 ②·③·④ 개별 선택 그리드 (실제 감지 0장일 때도 예시 샘플 사진 표시) */}
+          {currentTab !== 'duplicate' && (
             <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1229,34 +1391,38 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     {TRASH_TABS_4.find((t) => t.key === currentTab)?.title || '전체 정리 후보 사진'}
                   </h2>
                   <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold">
-                    {filteredCandidates.length}장
+                    {isShowingSamplePreview
+                      ? `예시 샘플 ${filteredCandidates.length}장 (내 기기 감지 0장)`
+                      : `${filteredCandidates.length}장`}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={selectAllTrashInFilter}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium cursor-pointer"
-                  >
-                    전체 선택
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearTrashSelection}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 font-label-sm text-[12px] cursor-pointer"
-                  >
-                    선택 해제
-                  </button>
-                  <button
-                    type="button"
-                    disabled={selectedTrashIds.size === 0 || quarantineMoving}
-                    onClick={() => void moveSelectedToQuarantine()}
-                    className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
-                  >
-                    선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 정리
-                  </button>
-                </div>
+                {!isShowingSamplePreview && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllTrashInFilter}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium cursor-pointer"
+                    >
+                      전체 선택
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearTrashSelection}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 font-label-sm text-[12px] cursor-pointer"
+                    >
+                      선택 해제
+                    </button>
+                    <button
+                      type="button"
+                      disabled={selectedTrashIds.size === 0 || quarantineMoving}
+                      onClick={() => void moveSelectedToQuarantine()}
+                      className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
+                    >
+                      선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 정리
+                    </button>
+                  </div>
+                )}
               </div>
 
               {filteredCandidates.length > 0 ? (
@@ -1269,7 +1435,13 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     return (
                       <div
                         key={photo.id}
-                        onClick={() => toggleTrashSelection(photo.id)}
+                        onClick={() => {
+                          if (isShowingSamplePreview) {
+                            setSelectedPhoto(photo, null);
+                          } else {
+                            toggleTrashSelection(photo.id);
+                          }
+                        }}
                         className={`group relative rounded-xl overflow-hidden bg-zinc-950 transition-all cursor-pointer border ${
                           isChecked
                             ? 'border-primary-container ring-1 ring-primary-container'
@@ -1286,19 +1458,23 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
                           <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15">
                             <span className="font-label-sm text-[10.5px] font-semibold text-zinc-200">
-                              {tabMeta.shortBadge}
+                              {isShowingSamplePreview
+                                ? `${tabMeta.shortBadge} (예시 샘플)`
+                                : tabMeta.shortBadge}
                             </span>
                           </div>
 
-                          <div
-                            className={`absolute top-2.5 right-2.5 w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                              isChecked
-                                ? 'bg-primary-container text-zinc-950 font-bold'
-                                : 'bg-black/60 border border-white/20 text-transparent'
-                            }`}
-                          >
-                            <span className="material-symbols-outlined text-[15px]">check</span>
-                          </div>
+                          {!isShowingSamplePreview && (
+                            <div
+                              className={`absolute top-2.5 right-2.5 w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                                isChecked
+                                  ? 'bg-primary-container text-zinc-950 font-bold'
+                                  : 'bg-black/60 border border-white/20 text-transparent'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[15px]">check</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1324,7 +1500,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             sourceTab="trash"
             externalQueryTrigger={externalQueryTrigger}
             showWelcomeQuickCareActions={true}
-            onHealthRecordAdded={(rec) => setHealthHistoryRecords((prev) => [rec, ...prev])}
+            onHealthRecordAdded={() => {}}
             onJumpToSearch={(kw) => {
               if (layout === 'mobile') setMobileTab('search');
               else setDesktopTab('dashboard');

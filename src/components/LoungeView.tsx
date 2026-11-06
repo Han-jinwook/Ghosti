@@ -751,7 +751,7 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-emerald-400 font-bold">
-                    🛠️ 손보기 (고치기)
+                    ✋ 손보기
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     1:1 기기 설정 &amp; 수리 해결사

@@ -601,7 +601,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[11px] font-extrabold">
-              🛠️ ⚙️ 고치기 진단 카드
+              ✋ 손보기 진단 카드
             </span>
             <span className="text-[11px] font-extrabold text-emerald-300">
               {message.deviceRepairPayload.badgeText}

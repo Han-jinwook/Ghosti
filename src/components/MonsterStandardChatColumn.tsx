@@ -471,6 +471,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
   return (
     <aside className="flex flex-col h-[calc(100vh-155px)] min-h-[580px] max-h-[840px] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/95 shadow-lg overflow-hidden">
+      {/* 0. 최상단 독립 배너: 수요 손 없는 날 & 20% 과부하 자동 검진 안내 (손보기 대화창 헤더 위로 완전 분리 · 잘림 없음) */}
+      <div
+        title={careScheduleSummary}
+        className="px-3.5 py-2 border-b border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/90 dark:bg-emerald-950/40 flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] font-extrabold text-emerald-900 dark:text-emerald-300 leading-snug"
+      >
+        <span>🗓️ 매주 수요일 오후 1시 「수요 손 없는 날」</span>
+        <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+          ⚡ 20% 과부하 시 자동 검진
+        </span>
+      </div>
+
       {/* 1. 노션 스타일 미니멀 상단 헤더 */}
       <div className="px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -478,11 +489,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             ✋
           </div>
           <div className="min-w-0">
-            <span className="text-[13.5px] font-extrabold text-slate-900 dark:text-slate-100 truncate block">
+            <span className="text-[14px] font-extrabold text-slate-900 dark:text-slate-100 whitespace-nowrap block">
               손보기 대화창
-            </span>
-            <span className="text-[10.5px] text-emerald-700 dark:text-emerald-400 font-semibold truncate block">
-              🗓️ {careScheduleSummary}
             </span>
           </div>
         </div>
@@ -503,12 +511,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </div>
       </div>
 
-      {/* 1.5. 상단 슬림 원복 안내 */}
-      <div className="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-200 dark:border-emerald-500/20 flex items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
+      {/* 1.5. 상단 슬림 원복 안내 (담백하고 안심되는 한 줄) */}
+      <div className="px-3.5 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
-          <span className="truncate">
-            언제든 <strong className="text-emerald-800 dark:text-emerald-300 font-extrabold">&ldquo;원래대로 돌려줘&rdquo;</strong> 한마디면 즉시 복원됩니다.
+          <span className="font-bold text-emerald-800 dark:text-emerald-300">
+            손보기 후 원하는 시점으로 복원 가능
           </span>
         </div>
       </div>

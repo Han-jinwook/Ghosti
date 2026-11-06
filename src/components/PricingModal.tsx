@@ -575,11 +575,11 @@ export const PricingModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12px] text-emerald-200/95 font-bold">
-                  &ldquo;혼자 쓰는 내 PC 1대 · 내 폰 1대의 1초 AI 내용검색과 치우기·고치기는 평생 0원&rdquo;
+                  &ldquo;혼자 쓰는 내 PC 1대 · 내 폰 1대의 1초 AI 내용검색(찾기)과 손보기는 평생 0원&rdquo;
                 </p>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
                   • 🎯 <strong>귀신같이 찾기</strong> (내 기기 1대 사진·영상·서류 1초 내용검색 · 평생 0원)<br />
-                  • 🪄 <strong>귀신같이 손보기</strong> (치우기·고치기·사양진단·빨간 손가락 <code>👆</code> · 평생 0원)<br />
+                  • ✋ <strong>귀신같이 손보기</strong> (사진·파일 정리 · PC 속도검진 · 사양진단 · 빨간 손가락 <code>👆</code> 수리 · 평생 0원)<br />
                   • 👻 <strong>귀신 초능력 팩(Ctrl + 0)</strong> (12대 기능 각각 첫 성공일부터 7일 무제한 · 만료 기능만 기기당 매일 3회 평생 무료!)
                 </p>
               </div>

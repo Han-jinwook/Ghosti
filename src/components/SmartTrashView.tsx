@@ -235,7 +235,7 @@ export const SmartTrashView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-col gap-0.5">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  <span>✋ 치우기 &amp; 손보기</span>
+                  <span>✋ 손보기</span>
                 </h1>
               </div>
 
@@ -268,7 +268,7 @@ export const SmartTrashView: React.FC = () => {
               onClick={() => void moveAllTrashToQuarantine()}
               className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
             >
-              <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 처치</span>
+              <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
             </button>
           </div>
 
