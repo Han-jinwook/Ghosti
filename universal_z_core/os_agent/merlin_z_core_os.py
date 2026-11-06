@@ -851,7 +851,20 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
     ensure_merlin_dirs()
 
     project_root = Path(__file__).resolve().parents[2]
+    desktop_known = USERPROFILE / "Desktop"
+    downloads_known = USERPROFILE / "Downloads"
+    if _SAFE_OPS_AVAILABLE and ghosti_safe_ops is not None:
+        try:
+            desktop_known = ghosti_safe_ops.known_folder("desktop")
+            downloads_known = ghosti_safe_ops.known_folder("downloads")
+        except Exception:
+            pass
+
     vault_locations = [
+        ("0순위: PC 바탕화면(Desktop) 폴더 (LIFO 선행 개통)", desktop_known),
+        ("0순위: PC 다운로드(Downloads) 폴더 (LIFO 선행 개통)", downloads_known),
+        ("0순위: PC 바탕화면(USERPROFILE) 보조 경로", USERPROFILE / "Desktop"),
+        ("0순위: PC 다운로드(USERPROFILE) 보조 경로", USERPROFILE / "Downloads"),
         ("1순위: Excel 자동복구 금고", APPDATA / "Microsoft" / "Excel"),
         ("1순위: Office 미저장 금고(UnsavedFiles)", LOCAL_APPDATA / "Microsoft" / "Office" / "UnsavedFiles"),
         ("1순위: Word 자동복구 금고", APPDATA / "Microsoft" / "Word"),
@@ -859,9 +872,7 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
         ("2순위: Z-코어 ShadowVault 금고", SHADOW_VAULT_DIR),
         ("3순위: 업무공유폴더 (S: 드라이브 원본)", project_root / "업무공유폴더_S"),
         ("3순위: 로컬 스마트 서류함 (test_docs)", project_root / "test_docs"),
-        ("4순위: PC 다운로드(Downloads) 폴더", USERPROFILE / "Downloads"),
         ("4순위: PC 문서(Documents) 폴더", USERPROFILE / "Documents"),
-        ("4순위: PC 바탕화면(Desktop) 폴더", USERPROFILE / "Desktop"),
     ]
 
     target_exts = {
@@ -902,13 +913,23 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
                         except Exception:
                             pass
 
+                candidates_with_mtime = []
                 for fpath in candidates:
-                    if time.perf_counter() - t0 > deadline_sec:
-                        timed_out = True
-                        break
                     ext = fpath.suffix.lower()
                     if ext not in target_exts or fpath.name.startswith("~$"):
                         continue
+                    try:
+                        st = fpath.stat()
+                        candidates_with_mtime.append((st.st_mtime, fpath, st))
+                    except Exception:
+                        continue
+                # LIFO 최신 수정순 정렬: 최근 파일부터 본문 5줄을 먼저 추출하여 3초 내 100개 개통 보장
+                candidates_with_mtime.sort(key=lambda x: x[0], reverse=True)
+
+                for mtime_val, fpath, stat in candidates_with_mtime:
+                    if time.perf_counter() - t0 > deadline_sec:
+                        timed_out = True
+                        break
                     try:
                         if os.name == "nt":
                             f_attrs = ctypes.windll.kernel32.GetFileAttributesW(str(fpath))
@@ -923,7 +944,6 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
                     if q_lower and q_lower not in fpath.name.lower() and q_lower not in vault_label.lower():
                         continue
 
-                    stat = fpath.stat()
                     seen_paths.add(resolved_str)
                     matched_in_dir += 1
                     parent_key = str(fpath.parent)
@@ -932,6 +952,7 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
                             folder_count_cache[parent_key] = sum(1 for _ in fpath.parent.iterdir())
                         except Exception:
                             folder_count_cache[parent_key] = 1
+                    should_extract_preview = len(found_files) < 100
                     found_files.append(
                         {
                             "fileName": fpath.name,
@@ -940,9 +961,9 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
                             "folderFileCount": folder_count_cache[parent_key],
                             "sizeBytes": stat.st_size,
                             "sizeFormatted": f"{stat.st_size / 1024:.1f} KB" if stat.st_size < 1048576 else f"{stat.st_size / 1048576:.2f} MB",
-                            "modifiedAt": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-                            "mtimeEpoch": stat.st_mtime,
-                            "preview5Lines": extract_real_5_lines_preview(fpath),
+                            "modifiedAt": datetime.datetime.fromtimestamp(mtime_val).strftime("%Y-%m-%d %H:%M:%S"),
+                            "mtimeEpoch": mtime_val,
+                            "preview5Lines": extract_real_5_lines_preview(fpath) if should_extract_preview else "(최근 100개 외 파일명·날짜 즉시 색인 완료)",
                         }
                     )
             except Exception:

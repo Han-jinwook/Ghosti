@@ -44,7 +44,7 @@ const DEFAULT_SHORTS_DATA: ShortsItem[] = [
     hookLine: '“10분짜리 가족 영상에서 아기 걸음마 장면 찾느라 타임라인 일일이 땡기셨죠?”',
     solutionLine: '『귀신같이』에 "걸음마" 세 글자만 치면 03분 12초로 1초 만에 즉시 점프!',
     recommendedKeyword: '아기 걸음마 / 촛불 끄기 / 제주 바다',
-    tag: PATENTS_FILED ? '🎬 비디오 1초 타임스탬프 특허' : '🎬 비디오 1초 타임스탬프 점프',
+    tag: '🎬 비디오 1초 타임스탬프 점프',
     thumbnailBg: 'from-cyan-950 via-teal-900 to-slate-900',
     isNew: true,
   },
@@ -57,7 +57,7 @@ const DEFAULT_SHORTS_DATA: ShortsItem[] = [
     hookLine: '“엑셀 파일 수십 개 하나씩 열어서 Ctrl+F 누르다가 컴퓨터 멈춘 적 있으시죠?”',
     solutionLine: '파일을 안 열어도 표 안의 숫자와 글자를 0.01초 만에 찾아냅니다.',
     recommendedKeyword: '지체상금 0.15% / 계약금 잔금 / 소득공제',
-    tag: PATENTS_FILED ? '📊 무설정 스마트 서류 검색 특허' : '📊 무설정 스마트 서류 내용검색',
+    tag: '📊 무설정 스마트 서류 내용검색',
     thumbnailBg: 'from-blue-950 via-indigo-950 to-slate-900',
     isNew: true,
   },
@@ -384,7 +384,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </div>
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-[#00F0B5] text-[11px] font-bold">
               <span>★</span>
-              <span>특허청 상표출원 40-2026-0229386</span>
+              <span>100% 온디바이스 AI · 내 기기 &amp; 사진 공유 평생 0원</span>
             </div>
           </div>
 
@@ -396,11 +396,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <a href="#shorts" className="hover:text-[#00F0B5] transition-colors">
               🎬 15초 영상 쇼룸
             </a>
-            {PATENTS_FILED && (
-              <a href="#patents" className="hover:text-[#00F0B5] transition-colors">
-                6대 특허 기술
-              </a>
-            )}
             <a href="#security" className="hover:text-[#00F0B5] transition-colors">
               🛡️ 로컬 프라이버시
             </a>
@@ -470,7 +465,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[12px] sm:text-[13px] font-black mb-6">
             <span className="animate-pulse">●</span>
             <span>
-              {PATENTS_FILED ? '대한민국 6대 특허출원' : '특허 출원 진행 중'} · 개인 평생 무료 국민앱 · Zero-Server 로컬 프라이버시
+              내 기기(찾기·손보기) &amp; 사진 공유(가족·동호회·동창회) 평생 0원 · Zero-Server 로컬 프라이버시
             </span>
           </div>
 
@@ -686,7 +681,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </form>
 
                     <p className="mt-4 pt-3 border-t border-white/5 text-[11.5px] text-zinc-400 flex flex-wrap items-center justify-between gap-2">
-                      <span>🔒 신용카드 등록 절대 없음 · 개인 평생 무료 국민앱</span>
+                      <span>🔒 신용카드 등록 절대 없음 · 내 기기 &amp; 사진 공유 평생 무료</span>
                       <span className="text-teal-300/90 font-semibold">✨ 사전 가입자는 정식 오픈일 별도 가입 없이 1초 자동 시작</span>
                     </p>
                   </div>
@@ -1121,14 +1116,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-[11px] font-black">
-                          👑 내 기기 통합 (월 3,900원 · 5년 특판 39,000원)
+                          👑 내 기기 통합 (🎁 1개월 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)
                         </span>
-                        <span className="text-[11px] text-teal-300 font-bold">혼자 1대는 평생 0원</span>
+                        <span className="text-[11px] text-teal-300 font-bold">내 기기·사진 공유는 평생 0원</span>
                       </div>
                       <p className="text-xs text-zinc-200 leading-relaxed">
-                        • <b>폰 ↔ 집PC ↔ 회사PC</b> 이메일 하나로 무제한 직결 통합 (클라우드 월세 0원)<br />
-                        • <b>양방향 암호화 클립보드 우체통</b> &amp; <b>Ctrl+0 귀신 초능력 9+3 + F1~F10 상용구</b> 전 기기 동기화<br />
-                        • <b>9인 이하 소모임(300개 0원 / 초과 시 월 2,900원)</b> · 10인+ 모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~) 방장 1인 구독 시 <b>초대 멤버 전원 0원</b>
+                        • <b>1번 내 기기(찾기·손보기) &amp; 2번 사진 공유(가족·동호회·동창회)</b>: 인원 무제한 <b>평생 0원</b> (사진·동영상 전용)<br />
+                        • <b>3번 내 기기 통합 (PC↔폰 연결 + Ctrl+0 귀신창)</b>: <b>1개월 무제한 무료체험 (만료 후에도 일 3회 평생 무료)</b> · 월 3,900원 / 10년 특판 39,000원<br />
+                        • <b>4번 업무 공유 (S: 드라이브 · 문서/계약서 공유)</b>: <b>1개월 무제한 무료체험 (만료 후 일 3회 평생 무료)</b> · 소호 월 9,900원~ / 10년 특판 99,000원~
                       </p>
                     </div>
                   </div>
@@ -1310,7 +1305,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     말 한마디로 1초 만에 포착! 황금 돋보기 스캔 광선으로 즉시 검색
                   </h3>
                   <p className="text-teal-200/80 text-xs sm:text-sm mt-1">
-                    {PATENTS_FILED ? '대한민국 6대 특허출원 엔진 탑재.' : '100% 로컬 온디바이스 AI 엔진 탑재.'} 파일·영상·사진이 있는 그 자리에서 1초 만에 찾아냅니다.
+                    100% 로컬 온디바이스 AI 엔진 탑재. 파일·영상·사진이 있는 그 자리에서 1초 만에 찾아냅니다.
                   </p>
                 </div>
               </div>

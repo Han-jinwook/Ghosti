@@ -174,8 +174,9 @@ const MOBILE_QUICK_MENUS: Array<{
 ];
 
 const PHOTO_SHARE_GROUPS: Array<{ id: LoungeType; label: string }> = [
-  { id: 'family', label: '패밀리 (우리집·본가·처가)' },
-  { id: 'club', label: '동호회·동창회' },
+  { id: 'family', label: '👨‍👩‍👧‍👦 가족' },
+  { id: 'club', label: '⛰️ 동호회' },
+  { id: 'student', label: '🎓 동창회' },
 ];
 
 const resolveQuickMenuId = (lounge: LoungeType): QuickMenuId =>
@@ -577,7 +578,111 @@ export const DesktopDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* [메인 메뉴 2] 내 기기 통합 (PC+폰+PC+) */}
+              {/* [메인 메뉴 2 — 평생 무료] 사진 공유 (가족 / 동호회 / 동창회 — 오직 사진·동영상 공유 전용, 문서/S: 드라이브 제외) */}
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeviceIntegrationOpen(false);
+                    if (
+                      activeLoungeType !== 'family' &&
+                      activeLoungeType !== 'club' &&
+                      activeLoungeType !== 'student'
+                    ) {
+                      setActiveLoungeType('family');
+                    }
+                    setDesktopTab('dashboard');
+                    resetToZenCanvas();
+                  }}
+                  className={mainBtnClass(isPhotoShareActive)}
+                >
+                  <span className="truncate" title="가족 · 동호회 · 동창회 사진·동영상 무료 공유">
+                    사진 공유
+                  </span>
+                  <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
+                </button>
+
+                {isPhotoShareActive && (
+                  <div className={subWrapClass}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen(false);
+                        setActiveLoungeType('family');
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(activeLoungeType === 'family')}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">👨‍👩‍👧‍👦</span>
+                          <span className="truncate font-bold">가족</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          우리집 · 본가 · 처가 앨범 (평생 0원)
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen(false);
+                        setActiveLoungeType('club');
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(activeLoungeType === 'club')}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">⛰️</span>
+                          <span className="truncate font-bold">동호회</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          인원 무제한 사진·영상 공유 (평생 0원)
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeviceIntegrationOpen(false);
+                        setActiveLoungeType('student');
+                        setDesktopTab('dashboard');
+                        resetToZenCanvas();
+                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      }}
+                      className={subBtnClass(activeLoungeType === 'student')}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">🎓</span>
+                          <span className="truncate font-bold">동창회</span>
+                        </div>
+                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                          학창시절 · 동창 사진·영상 공유 (평생 0원)
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── (무료 / 유료 프로 경계선) ── */}
+              <div className="my-1.5 px-2 flex items-center gap-2 select-none" aria-label="무료 및 유료 프로 경계선">
+                <div className={`h-px flex-1 ${themeMode === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
+                <span className={`text-[10px] font-extrabold tracking-tight whitespace-nowrap ${themeMode === 'light' ? 'text-teal-700' : 'text-emerald-400/90'}`}>
+                  🎁 1개월 무료체험 · 프로
+                </span>
+                <div className={`h-px flex-1 ${themeMode === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
+              </div>
+
+              {/* [메인 메뉴 3 — 1개월 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -589,7 +694,7 @@ export const DesktopDashboard: React.FC = () => {
                   }}
                   className={mainBtnClass(isDeviceIntegrationActive)}
                 >
-                  <span className="truncate" title="내 기기 연결(PC↔폰) 및 귀신창(Ctrl+0)">
+                  <span className="truncate" title="내 기기 연결(PC↔폰) 및 귀신창(Ctrl+0) — 월 3,900원 / 10년 특판">
                     내 기기 통합 (PC+폰+PC+)
                   </span>
                   <span className="text-[10px] opacity-60">{isDeviceIntegrationActive ? '▾' : '▸'}</span>
@@ -616,7 +721,7 @@ export const DesktopDashboard: React.FC = () => {
                           <span className="truncate font-bold">내 기기 연결 (PC↔폰)</span>
                         </div>
                         <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          PC · 폰 · 서브PC 1초 연동
+                          PC · 폰 · 서브PC 1초 연동 (월 3,900원 / 10년 특판)
                         </span>
                       </div>
                     </button>
@@ -648,82 +753,7 @@ export const DesktopDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* [메인 메뉴 3] 사진 공유 */}
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDeviceIntegrationOpen(false);
-                    if (
-                      activeLoungeType !== 'family' &&
-                      activeLoungeType !== 'club' &&
-                      activeLoungeType !== 'student'
-                    ) {
-                      setActiveLoungeType('family');
-                    }
-                    setDesktopTab('dashboard');
-                    resetToZenCanvas();
-                  }}
-                  className={mainBtnClass(isPhotoShareActive)}
-                >
-                  <span className="truncate" title="패밀리 및 동호회·동창회 사진 공유">
-                    사진 공유
-                  </span>
-                  <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
-                </button>
-
-                {isPhotoShareActive && (
-                  <div className={subWrapClass}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDeviceIntegrationOpen(false);
-                        setActiveLoungeType('family');
-                        setDesktopTab('dashboard');
-                        resetToZenCanvas();
-                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      }}
-                      className={subBtnClass(activeLoungeType === 'family')}
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="grayscale opacity-75 shrink-0 text-[13px]">👨‍👩‍👧‍👦</span>
-                          <span className="truncate font-bold">패밀리 (우리집·양가)</span>
-                        </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          우리집 · 본가 · 처가 앨범
-                        </span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDeviceIntegrationOpen(false);
-                        setActiveLoungeType('club');
-                        setDesktopTab('dashboard');
-                        resetToZenCanvas();
-                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      }}
-                      className={subBtnClass(
-                        activeLoungeType === 'club' || activeLoungeType === 'student'
-                      )}
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="grayscale opacity-75 shrink-0 text-[13px]">🏕️</span>
-                          <span className="truncate font-bold">소모임 · 동호회 · 동창회</span>
-                        </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          9인 이하(300개 0원) · 10인+ 모임
-                        </span>
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* [메인 메뉴 4] 업무 공유 */}
+              {/* [메인 메뉴 4 — 1개월 무료체험 / 유료] 업무 공유 */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -735,7 +765,7 @@ export const DesktopDashboard: React.FC = () => {
                   }}
                   className={mainBtnClass(isWorkShareActive)}
                 >
-                  <span className="truncate" title="업무 공유 (S: 드라이브)">
+                  <span className="truncate" title="업무 공유 (S: 드라이브 · 문서/계약서 공유 — 월 9,900원 / 10년 특판)">
                     업무 공유
                   </span>
                   <span className="text-[10px] opacity-60">{isWorkShareActive ? '▾' : '▸'}</span>
@@ -757,10 +787,10 @@ export const DesktopDashboard: React.FC = () => {
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
-                          <span className="truncate font-bold">업무 공유 (S: 드라이브)</span>
+                          <span className="truncate font-bold">S: 드라이브 · 문서/계약서 공유</span>
                         </div>
                         <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          부서 · 팀 · 프로젝트 공유
+                          부서 · 팀 서류 공유 (월 9,900원 / 10년 특판)
                         </span>
                       </div>
                     </button>
@@ -952,7 +982,7 @@ export const DesktopDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* 가상 비교 모드(?preview=stage1) 작동 시: [1단계: 내 기기 (찾기·손보기)] ↔ [2단계: 내 기기 통합 (기기연결·귀신창)] 1초 전환 바 */}
+            {/* 가상 비교 모드(?preview=stage1) 작동 시: [1번 내 기기(찾기·손보기)] ↔ [2번 사진 공유(가족·동호회·동창회 평생 0원)] ↔ [3번 내 기기 통합(1개월 무료체험)] 1초 전환 바 */}
             {isStage1MinimalPreview && activeLoungeType === 'personal' && (
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/10">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -972,7 +1002,7 @@ export const DesktopDashboard: React.FC = () => {
                         : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
                     }`}
                   >
-                    1단계 ① 🔍 찾기
+                    1번 ① 🔍 찾기
                   </button>
                   <button
                     type="button"
@@ -987,7 +1017,19 @@ export const DesktopDashboard: React.FC = () => {
                         : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
                     }`}
                   >
-                    1단계 ② ✋ 손보기
+                    1번 ② ✋ 손보기
+                  </button>
+                  <span className="text-zinc-600 px-0.5">|</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(false);
+                      setActiveLoungeType('family');
+                      setDesktopTab('dashboard');
+                    }}
+                    className="px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer bg-zinc-900/80 text-emerald-300 border-emerald-400/40 hover:bg-zinc-800"
+                  >
+                    2번 📸 사진 공유 (가족·동호회·동창회 평생 0원)
                   </button>
                   <span className="text-zinc-600 px-0.5">|</span>
                   <button
@@ -1004,7 +1046,7 @@ export const DesktopDashboard: React.FC = () => {
                         : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
                     }`}
                   >
-                    2단계 ① 🔗 내 기기 연결 (PC↔폰)
+                    3번 ① 🔗 내 기기 연결 (PC↔폰)
                   </button>
                   <button
                     type="button"
@@ -1020,7 +1062,7 @@ export const DesktopDashboard: React.FC = () => {
                         : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
                     }`}
                   >
-                    2단계 ② ⚡ 귀신창 (Ctrl+0)
+                    3번 ② ⚡ 귀신창 (Ctrl+0)
                   </button>
                 </div>
               </div>
