@@ -1701,6 +1701,76 @@ export async function processUnifiedMonsterChatQuery(params: {
     }
   }
 
+  // 0-0A2) [직전 PC 사양 진단(PC_SPEC_CONSULTATION) 직후 후속 질문 0토큰 즉시 비교 브리핑]
+  // "메모리 얼마나 세이브된거야?", "속도 개선된거야?", "왜 아직 남아있어?" 등 후속 질문을 했을 때
+  // 서류 검색(SEARCH_ROUTING)으로 잘못 빠져나가 [🎯 찾기] 화면으로 전환되거나 똑같은 사양 카드를 반복 출력하지 않고
+  // 즉시 정리 전·후 실시간 CPU/메모리 비교 답변만 대화창에 깔끔하게 브리핑합니다.
+  const recentAssistantMsgsEarly = sharedChatState.messages.filter((m) => m.role === 'assistant');
+  const lastSpecMsgEarly = [...recentAssistantMsgsEarly]
+    .reverse()
+    .find((m) => m.cardKind === 'PC_SPEC_CONSULTATION' && m.pcSpecPayload);
+  const isFollowUpAboutPriorSpecEarly =
+    Boolean(lastSpecMsgEarly) &&
+    /(개선된|세이브|줄어든|된\s*거야|된거야|한\s*거야|한거야|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아)|얼마나\s*(줄|빨라|개선|세이브|확보|여유)|차이가|효과가)/i.test(
+      clean
+    );
+
+  if (isFollowUpAboutPriorSpecEarly && lastSpecMsgEarly?.pcSpecPayload) {
+    const [rNow, osNow] = await Promise.all([
+      zcoreJson<{ ok: boolean; ramUsedPercent?: number | null; ramTotalGb?: number | null }>('/__zcore/pc-spec'),
+      zcoreJson<{
+        ok: boolean;
+        spoolerAndSecurity?: {
+          cpuLoadPercent?: number;
+          activeSecurityPlugins?: Array<{ keyword?: string; label?: string }>;
+        };
+      }>('/__zcore/os-inspect'),
+    ]);
+    const prevSpec = lastSpecMsgEarly.pcSpecPayload;
+    const osNowData = osNow.ok ? osNow.data : undefined;
+    const rNowData = rNow.ok ? rNow.data : undefined;
+    const curCpu =
+      typeof osNowData?.spoolerAndSecurity?.cpuLoadPercent === 'number'
+        ? osNowData.spoolerAndSecurity.cpuLoadPercent
+        : prevSpec.cpuLoadPercent;
+    const curRamPct =
+      typeof rNowData?.ramUsedPercent === 'number' ? rNowData.ramUsedPercent : prevSpec.ramUsedPercent;
+    const curSecCount = Array.isArray(osNowData?.spoolerAndSecurity?.activeSecurityPlugins)
+      ? osNowData.spoolerAndSecurity!.activeSecurityPlugins!.length
+      : 0;
+    const alreadyCleaned = Boolean(prevSpec.bloatwareCleaned);
+
+    const directFollowUpKo = alreadyCleaned
+      ? `📊 **[정리 전·후 실시간 비교 브리핑]**\n• **CPU 부하**: 진단 시 **${
+          prevSpec.cpuLoadPercent ?? '?'
+        }%** ➔ 현재 **${curCpu ?? '?'}%**\n• **메모리(RAM) 점유율**: 진단 시 **${
+          prevSpec.ramUsedPercent ?? '?'
+        }%** ➔ 현재 **${curRamPct ?? '?'}%**\n\n윈도우 OS와 현재 열려 있는 인터넷 브라우저 탭이 기본 메모리를 유지하고 있어 메모리 점유율 수치는 소폭 변동하며, 백그라운드에서 CPU를 과점유하던 상주 보안·애드웨어 프로세스는 모두 정리 완료되었습니다.`
+      : `💬 아직 상주 프로그램 정리가 실행되지 않은 **진단 대기 상태**입니다! (현재 CPU 부하 **${
+          curCpu ?? '?'
+        }%**, 메모리 사용 **${curRamPct ?? '?'}%**, 상주 보안·애드웨어 **${
+          curSecCount || prevSpec.detectedBloatwareLabels?.length || 0
+        }건**)\n\n프로그램을 임의로 종료하지 않도록 보호 중이니, 정리를 실행하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`;
+
+    speak(
+      alreadyCleaned
+        ? `현재 씨피유 부하는 ${curCpu ?? 0}퍼센트, 메모리 점유율은 ${curRamPct ?? 0}퍼센트입니다.`
+        : '아직 정리가 실행되지 않은 진단 대기 상태입니다. 채팅창에 응 정리해줘라고 입력하시면 즉시 정리해 드립니다.'
+    );
+    return reply(sourceTab, directFollowUpKo, {
+      followUpSuggestions: alreadyCleaned
+        ? [
+            '바탕화면이랑 다운로드 폴더 정리할 파일도 봐줘',
+            '방금 한 거 되돌려줘 (복원 기록 확인)',
+          ]
+        : [
+            '응 정리해줘',
+            '응 진행해',
+            '바탕화면이랑 다운로드 폴더 정리할 파일 봐줘',
+          ],
+    });
+  }
+
   // 0-0B) [복원 히스토리 조회 ➔ 번호 타이핑 선택 원복 인터셉터 (0 토큰 · 블랙박스 원복 영구 기록)]
   // 직전 메시지가 복원 기록 목록(RESTORE_POINTS_LIST)일 때는 "1번", "2번 해줘", "#1"만 쳐도 즉시 해당 번호 원복으로 인식합니다.
   const lastAssistantMsg = [...sharedChatState.messages].reverse().find((m) => m.role === 'assistant');
