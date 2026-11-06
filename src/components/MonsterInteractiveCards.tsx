@@ -446,7 +446,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
             <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
-              <div className="text-slate-400">CPU</div>
+              <div className="text-slate-400">
+                CPU {typeof message.pcSpecPayload.cpuLoadPercent === 'number' ? `(부하 ${message.pcSpecPayload.cpuLoadPercent}%)` : ''}
+              </div>
               <div className="font-bold text-slate-100 whitespace-normal break-words leading-snug">
                 {message.pcSpecPayload.cpuModel}
               </div>
@@ -474,7 +476,41 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             </div>
           </div>
 
-          <div className="pt-1">
+          {message.pcSpecPayload.bloatwareCleanSummary && (
+            <div className="rounded-lg bg-emerald-950/60 border border-emerald-500/40 p-2.5 text-xs text-emerald-200 font-bold whitespace-normal break-words">
+              {message.pcSpecPayload.bloatwareCleanSummary}
+            </div>
+          )}
+
+          <div className="pt-1 space-y-2">
+            {!message.pcSpecPayload.bloatwareCleaned && (
+              <button
+                type="button"
+                disabled={busyId === 'spec_clean_bloat'}
+                onClick={async () => {
+                  setBusyId('spec_clean_bloat');
+                  const osRes = await executeRealOsAction('boot_lag_clean_bloatware');
+                  setBusyId(null);
+                  const summary =
+                    osRes.summaryKo ||
+                    osRes.message ||
+                    '✅ 백그라운드 애드웨어·보안모듈 및 비필수 시작프로그램 정리를 완료했습니다!';
+                  onUpdateMessage({
+                    ...message,
+                    pcSpecPayload: {
+                      ...message.pcSpecPayload!,
+                      bloatwareCleaned: true,
+                      bloatwareCleanSummary: summary,
+                      verdictBadge: '🟢 애드웨어·상주모듈 정리 완료',
+                    },
+                  });
+                  onToast?.(summary);
+                }}
+                className="w-full py-2 px-3 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow cursor-pointer"
+              >
+                🚀 애드웨어·보안·CPU 과점유 프로세스 1초 강제종료 및 시작프로그램 정리 (0원)
+              </button>
+            )}
             <button
               type="button"
               disabled={busyId === 'spec_baton'}

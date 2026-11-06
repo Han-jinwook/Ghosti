@@ -184,6 +184,7 @@ export interface MonsterRestorePointItem {
 
 export interface MonsterPcSpecPayload {
   cpuModel: string;
+  cpuLoadPercent?: number | null;
   ramTotalGb: number | null;
   ramUsedPercent: number | null;
   gpuModel: string;
@@ -194,6 +195,9 @@ export interface MonsterPcSpecPayload {
   easyAnswerKo: string;
   normalAnswerKo: string;
   expertAnswerKo: string;
+  detectedBloatwareLabels?: string[];
+  bloatwareCleaned?: boolean;
+  bloatwareCleanSummary?: string;
 }
 
 export interface DigitalHealthCheckRecord {
@@ -491,14 +495,21 @@ export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
     : [];
   const spoolerStatus = o?.spoolerAndSecurity?.spoolerServiceStatus || '정상';
   const stuckPrint = o?.spoolerAndSecurity?.stuckSpoolQueueFiles ?? 0;
+  const cpuLoadPct = o?.spoolerAndSecurity?.cpuLoadPercent ?? null;
+  const secList = Array.isArray(o?.spoolerAndSecurity?.activeSecurityPlugins)
+    ? o.spoolerAndSecurity.activeSecurityPlugins
+        .map((p: any) => String(p?.label || p?.keyword || '').trim())
+        .filter(Boolean)
+    : [];
 
   const lines = [
     '[내 PC 실시간 실측 컨텍스트 (Merlin_Z_Core 127.0.0.1:5199)]',
-    `- CPU: ${s.cpuModel || '확인중'} (${s.cpuLogicalCores ?? '?'}코어) / GPU: ${s.gpuModel || '내장/확인중'}`,
+    `- CPU: ${s.cpuModel || '확인중'} (${s.cpuLogicalCores ?? '?'}코어${cpuLoadPct !== null ? ` · 현재 실시간 부하 ${cpuLoadPct}%` : ''}) / GPU: ${s.gpuModel || '내장/확인중'}`,
     `- RAM(메모리): 총 ${s.ramTotalGb ?? '?'}GB (현재 점유율 ${s.ramUsedPercent ?? '?'}%)`,
     `- 저장공간(C드라이브): 여유 ${s.diskFreeGb ?? '?'}GB / 전체 ${s.diskTotalGb ?? '?'}GB`,
     `- 모니터 주사율: ${s.displayHz ? `${s.displayHz}Hz` : '기본'} / OS: ${s.osVersion || 'Windows'}`,
     `- 시작프로그램(${startupNames.length}개): ${startupNames.join(', ') || '없음'}`,
+    `- 상주 애드웨어·보안·CPU 과점유 모듈(${secList.length}건): ${secList.slice(0, 8).join(', ') || '0건(깨끗함)'}`,
     `- 인쇄 스풀러: ${spoolerStatus} (대기열 멈춘 인쇄물 ${stuckPrint}건)`,
   ];
 
@@ -1905,7 +1916,7 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 0-A) 명백한 일상 잡담(PC·파일·설정 키워드 전무)은 LLM 토큰 소모(비용 낭비) 없이 0원으로 즉시 정중히 거절 안내
   const hasAnyPcOrFileCue =
-    /컴퓨터|피씨|pc|노트북|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|느려|느린|버벅|렉|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|화면|글씨|주사율|팝업|광고|보안|시작프로그램|부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|치워|정리|고쳐|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|먹통|멈춤|꺼졌/i.test(
+    /컴퓨터|피씨|pc|노트북|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|화면|글씨|주사율|팝업|광고|보안|시작프로그램|부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|먹통|멈춤|꺼졌/i.test(
       clean
     );
   if (!hasAnyPcOrFileCue) {
@@ -1943,12 +1954,49 @@ export async function processUnifiedMonsterChatQuery(params: {
     ? llmDecision.followUpSuggestions
     : undefined;
 
+  // 0-0) [즉시 처치] 애드웨어·보안 쓰레기·CPU 과점유·느린 속도/시작프로그램 강제종료 및 최적화 실행 요청
+  const isDirectSlowOrAdwareFix =
+    /(애드웨어|광고\s*프로그램|보안\s*프로그램|보안\s*모듈|보안\s*쓰레기|구라|시작\s*프로그램|cpu\s*점유|과점유|속도\s*최적화).*?(정리|강제\s*종료|종료|고쳐|해결|꺼|끄|없애|치워|잡아)/i.test(
+      clean
+    ) ||
+    /(속도|컴퓨터|피씨|pc).*?(느려|느린|느리|버벅|렉).*?(고쳐|해결|정리|손봐|손보|빠르게|잡아)/i.test(
+      clean
+    );
+
+  if (isDirectSlowOrAdwareFix) {
+    const osRes = await executeRealOsAction('boot_lag_clean_bloatware');
+    const summaryText =
+      osRes.summaryKo ||
+      '🚀 내 PC 백그라운드의 애드웨어·보안 모듈과 비필수 자동실행 시작프로그램을 즉시 종료 및 정리했습니다!';
+    const cleanedCount =
+      (Array.isArray((osRes as any).stoppedBloatware) ? (osRes as any).stoppedBloatware.length : 0) +
+      (Array.isArray((osRes as any).disabledStartups) ? (osRes as any).disabledStartups.length : 0);
+    const issuedRec = appendLocalHealthCheckRecord({
+      category: '⚙️ 고치기',
+      title: '애드웨어·보안모듈·CPU 과점유 프로세스 강제종료 및 시작프로그램 정리',
+      reclaimedSizeLabel: `CPU 부하 ${(osRes as any).cpuLoadBefore ?? '?'}% ➔ ${(osRes as any).cpuLoadAfter ?? '?'}%`,
+      cleanedItemCount: cleanedCount,
+      securityPluginsFrozen: cleanedCount,
+      speedUpSummary: summaryText,
+    });
+    speak(summaryText);
+    return reply(sourceTab, `🛠️ **[실시간 속도 최적화 & 애드웨어·보안모듈 처치 완료]**\n${summaryText}`, {
+      healthRecordIssued: issuedRec,
+      followUpSuggestions: [
+        '지금 내 PC CPU 점유율이랑 사양 상태 다시 확인해줘',
+        '다운로드 폴더 방치된 설치파일(.exe)도 정리해줘',
+        '바탕화면 잡파일 정리할 게 있는지 봐줘',
+      ],
+    });
+  }
+
   // 0) LLM이 순수 일상 대화(GENERAL_CONVERSATION)로 판단한 경우: 정규식 가로채기 없이 100% 자연스러운 일상 대화 즉시 반환
   if (
     hasLlm &&
     llmDecision!.intent === 'GENERAL_CONVERSATION' &&
     (!llmDecision!.zCoreCommand?.endpoint || llmDecision!.zCoreCommand.endpoint === 'NONE') &&
-    !isSyntheticMissingTest
+    !isSyntheticMissingTest &&
+    !/느려|느린|느리|속도|버벅|렉|애드웨어|보안\s*프로그램|시작\s*프로그램|사양|스펙|cpu|메모리|램/i.test(clean)
   ) {
     speak(llmDecision!.replyKo);
     return reply(sourceTab, `💬 ${llmDecision!.replyKo}`, {
@@ -2268,14 +2316,22 @@ export async function processUnifiedMonsterChatQuery(params: {
       llmDecision?.intent === 'STARTUP_INSPECT';
 
     if (isSecurityPlugin) {
-      const r = await zcoreJson<{ ok: boolean; startupPrograms?: Array<{ name?: string; command?: string }> }>(
-        '/__zcore/os-inspect'
-      );
+      const r = await zcoreJson<{
+        ok: boolean;
+        startupPrograms?: Array<{ name?: string; command?: string; location?: string }>;
+        spoolerAndSecurity?: {
+          cpuLoadPercent?: number;
+          activeSecurityPlugins?: Array<{ keyword?: string; label?: string; matchedProcessOrService?: string }>;
+        };
+      }>('/__zcore/os-inspect');
       const actionJson: MonsterLlmActionJson = llmDecision || {
-        replyKo: '내 PC 부팅 시 자동으로 켜지는 시작프로그램과 상주 보안모듈을 실측했습니다.',
+        replyKo: '내 PC 부팅 시 자동으로 켜지는 시작프로그램과 백그라운드 애드웨어·보안·CPU 과점유 모듈을 실측했습니다.',
         intent: 'STARTUP_INSPECT',
         zCoreCommand: { endpoint: '/__zcore/os-inspect', action: 'INSPECT_STARTUP_PROGRAMS' },
-        followUpSuggestions: ['다운로드 폴더에 쌓인 설치파일도 정리해줘', '내 PC 전체 사양도 확인해줘'],
+        followUpSuggestions: [
+          '지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘',
+          '다운로드 폴더에 쌓인 설치파일도 정리해줘',
+        ],
       };
       if (!r.ok) {
         return reply(sourceTab, `${llmIntro}⚠️ ${r.error}`, { llmActionJson: actionJson });
@@ -2284,14 +2340,36 @@ export async function processUnifiedMonsterChatQuery(params: {
         .map((s) => String(s?.name || '').trim())
         .filter(Boolean)
         .slice(0, 12);
+      const secPlugins = (r.data.spoolerAndSecurity?.activeSecurityPlugins || [])
+        .map((p) => String(p?.label || p?.keyword || '').trim())
+        .filter(Boolean);
+      const cpuLoad = r.data.spoolerAndSecurity?.cpuLoadPercent;
+      const diagPlan = buildSetupDiagnosisPlan('pc', clean, 'pc_boot_ads');
       return reply(
         sourceTab,
-        `${llmIntro}⚙️ **[시작프로그램 실측 목록]**\n${
-          names.length ? names.map((n) => `• ${n}`).join('\n') : '(확인된 시작프로그램이 없습니다)'
-        }\n\n은행·관공서 보안 프로그램 동결은 관리자 권한이 필요하고 잘못 멈추면 인터넷뱅킹 접속이 막힐 수 있어, **자동으로 강제 종료하지 않습니다.** 윈도우 [설정 › 앱 › 시작프로그램]에서 안전하게 끄실 수 있습니다.`,
+        `${llmIntro}⚙️ **[내 PC 시작프로그램 & 상주 애드웨어·보안모듈 실측 결과${
+          typeof cpuLoad === 'number' ? ` (현재 CPU 부하 ${cpuLoad}%)` : ''
+        }]**\n• **자동실행 시작프로그램(${names.length}개)**: ${
+          names.length ? names.join(', ') : '없음'
+        }\n• **감지된 애드웨어·보안·CPU 과점유 모듈(${secPlugins.length}건)**: ${
+          secPlugins.length ? secPlugins.join(', ') : '현재 상주 모듈 0건'
+        }\n\n필수 앱(카톡·원드라이브·브라우저)은 건드리지 않고, 컴퓨터 속도를 떨어뜨리는 애드웨어·보안 모듈과 비필수 시작프로그램만 아래 **[⚡ 바로 해결하기]** 버튼(또는 **"지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘"**)으로 1초 만에 정리하실 수 있습니다!`,
         {
+          cardKind: 'DEVICE_REPAIR_GATE',
+          deviceRepairPayload: {
+            title: `🚀 애드웨어·보안·비필수 시작프로그램 즉시 정리 (${secPlugins.length || names.length}종 감지)`,
+            badgeText: '🟢 언제나 0원 · 필수 앱 보호',
+            rootCause: secPlugins.length
+              ? `실측 결과 백그라운드에서 [${secPlugins.slice(0, 6).join(', ')}] 항목이 CPU·메모리를 점유하고 있습니다. 원본 레지스트리를 백업한 뒤 즉시 강제 종료합니다.`
+              : `시작프로그램(${names.slice(0, 6).join(', ')}) 중 불필요한 자동실행 항목을 정리합니다.`,
+            symptomQuery: clean,
+            presetId: 'pc_boot_ads',
+            hasOverlayGuide: false,
+            completionMessage: diagPlan.completionMessage,
+          },
           llmActionJson: actionJson,
-          followUpSuggestions: defaultFollowUps || [
+          followUpSuggestions: [
+            '지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘',
             '다운로드 폴더 방치된 설치파일(.exe) 정리해줘',
             '바탕화면 잡파일 정리할 게 있는지 봐줘',
           ],
@@ -2387,45 +2465,87 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
   }
 
-  // 5) 내 PC 실측 사양 & 느려짐/업그레이드 맞춤 상담
+  // 5) 내 PC 실측 사양 & 느려짐/애드웨어/CPU 과점유/업그레이드 맞춤 상담
   if (
     llmDecision?.intent === 'PC_SPEC_CONSULTATION' ||
     llmDecision?.zCoreCommand?.endpoint === '/__zcore/pc-spec' ||
+    /느려|느린|느리|속도|버벅|답답|애드웨어/i.test(clean) ||
     (!hasLlm &&
       /사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드|느려|느린데|버벅|답답/i.test(
         clean
       ))
   ) {
-    const r = await zcoreJson<{
-      ok: boolean;
-      cpuModel?: string | null;
-      cpuLogicalCores?: number | null;
-      ramTotalGb?: number | null;
-      ramUsedPercent?: number | null;
-      gpuModel?: string | null;
-      osVersion?: string | null;
-      diskFreeGb?: number | null;
-      diskTotalGb?: number | null;
-      displayHz?: number | null;
-    }>('/__zcore/pc-spec');
+    const [r, osInspectRes] = await Promise.all([
+      zcoreJson<{
+        ok: boolean;
+        cpuModel?: string | null;
+        cpuLogicalCores?: number | null;
+        ramTotalGb?: number | null;
+        ramUsedPercent?: number | null;
+        gpuModel?: string | null;
+        osVersion?: string | null;
+        diskFreeGb?: number | null;
+        diskTotalGb?: number | null;
+        displayHz?: number | null;
+      }>('/__zcore/pc-spec'),
+      zcoreJson<{
+        ok: boolean;
+        startupPrograms?: Array<{ name?: string; command?: string; location?: string }>;
+        spoolerAndSecurity?: {
+          cpuLoadPercent?: number;
+          activeSecurityPlugins?: Array<{ keyword?: string; label?: string; matchedProcessOrService?: string }>;
+          highCpuSuspects?: Array<{ name?: string; pid?: number; cpuPercent?: number }>;
+        };
+      }>('/__zcore/os-inspect'),
+    ]);
 
     const actionJson: MonsterLlmActionJson = llmDecision || {
-      replyKo: '내 PC의 실제 하드웨어 사양과 현재 여유 자원을 정밀 측정했습니다.',
+      replyKo: '내 PC의 실제 하드웨어 사양과 실시간 CPU 부하·백그라운드 애드웨어/보안 상주 상태를 정밀 측정했습니다.',
       intent: 'PC_SPEC_CONSULTATION',
       zCoreCommand: { endpoint: '/__zcore/pc-spec', action: 'MEASURE_REAL_PC_SPEC' },
       followUpSuggestions: [
+        '지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘',
         '바탕화면이랑 다운로드 폴더 정리할 파일 있는지 봐줘',
-        '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
       ],
     };
 
     if (!r.ok) return reply(sourceTab, `${llmIntro}⚠️ ${r.error}`, { llmActionJson: actionJson });
     const s = r.data;
+    const osData = osInspectRes.ok ? osInspectRes.data : undefined;
+    const cpuLoadPct =
+      typeof osData?.spoolerAndSecurity?.cpuLoadPercent === 'number'
+        ? osData.spoolerAndSecurity.cpuLoadPercent
+        : null;
+    const secLabels = (osData?.spoolerAndSecurity?.activeSecurityPlugins || [])
+      .map((p) => String(p?.label || p?.keyword || '').trim())
+      .filter(Boolean);
+    const startupItems = osData?.startupPrograms || [];
+    const clientSuspectStartups = startupItems
+      .map((st) => String(st?.name || '').trim())
+      .filter(
+        (n) =>
+          n &&
+          !/merlin|ghosti|senstalk|sundream|kakao|telegram|onedrive|googledrive|dropbox|securityhealth|defender|realtek|nvidia|amd|intel|logi|steam|discord|slack|notion|antigravity|edge|chrome|whale/i.test(
+            n
+          )
+      );
+    const detectedBloatwareLabels = Array.from(
+      new Set([
+        ...secLabels,
+        ...clientSuspectStartups.map((n) => `[자동실행 의심] ${n}`),
+      ])
+    );
+
     const unknown = '확인 불가';
     const ram = typeof s.ramTotalGb === 'number' ? s.ramTotalGb : null;
     const disk = typeof s.diskFreeGb === 'number' ? s.diskFreeGb : null;
+    const hasHighCpuOrBloat = (cpuLoadPct !== null && cpuLoadPct >= 50) || detectedBloatwareLabels.length > 0;
     const verdictBadge =
-      ram === null
+      hasHighCpuOrBloat
+        ? `🔴 속도 저하 원인 포착 (상주 애드웨어·보안모듈 ${detectedBloatwareLabels.length}건${
+            cpuLoadPct !== null ? ` · CPU ${cpuLoadPct}%` : ''
+          })`
+        : ram === null
         ? '⚪ 메모리 확인 불가'
         : ram >= 16 && (disk === null || disk >= 30)
         ? '🟢 일반·편집 작업 여유 있음'
@@ -2433,26 +2553,33 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? '🟡 일반 작업 가능 · 무거운 편집은 버거울 수 있음'
         : '🔴 메모리 부족 가능성';
     const lowDisk = disk !== null && disk < 20 ? ` 저장 공간이 ${disk}GB밖에 남지 않아 정리가 필요합니다.` : '';
+    const bloatWarning =
+      detectedBloatwareLabels.length > 0 || (cpuLoadPct !== null && cpuLoadPct >= 50)
+        ? `\n⚠️ **[속도 저하 핵심 원인 실측]** 현재 백그라운드에서 **${
+            detectedBloatwareLabels.slice(0, 6).join(', ') || '과점유 프로세스'
+          }** 등 총 ${detectedBloatwareLabels.length}종이 CPU(${cpuLoadPct ?? '?'}%)와 메모리를 점유하고 있습니다! 아래 **[🚀 애드웨어·보안·CPU 과점유 즉시 정리하기]** 버튼만 누르시면 열려 있는 브라우저·문서는 건드리지 않고 1초 만에 강제 종료 및 자동실행을 차단해 드립니다.`
+        : '';
     const cpu = s.cpuModel || unknown;
     const gpu = s.gpuModel || unknown;
     const hzText = typeof s.displayHz === 'number' ? `${s.displayHz}Hz` : unknown;
 
     const easyBase = `🌱 **[쉬운말]** 이 컴퓨터의 작업 책상(메모리)은 ${ram ?? unknown}GB, 서랍장 남은 공간(C드라이브)은 ${
       disk ?? unknown
-    }GB입니다. ${
-      ram !== null && ram >= 8 ? '인터넷·문서·사진 정리 같은 일상 작업은 아주 충분합니다.' : ''
-    }${lowDisk}`;
-    const normalBase = `🌿 **[일반]** CPU ${cpu}, 그래픽 ${gpu}, 메모리 ${ram ?? unknown}GB(현재 사용 ${
+    }GB입니다.${cpuLoadPct !== null ? ` 현재 두뇌(CPU) 사용량은 ${cpuLoadPct}%입니다.` : ''} ${
+      ram !== null && ram >= 8 ? '컴퓨터 부품 사양 자체는 일상 작업에 충분합니다.' : ''
+    }${lowDisk}${bloatWarning}`;
+    const normalBase = `🌿 **[일반]** CPU ${cpu}${cpuLoadPct !== null ? `(현재 부하 ${cpuLoadPct}%)` : ''}, 그래픽 ${gpu}, 메모리 ${ram ?? unknown}GB(현재 사용 ${
       s.ramUsedPercent ?? unknown
-    }%), 저장 공간 여유 ${disk ?? unknown}GB, 모니터 주사율 ${hzText}입니다.${lowDisk}`;
-    const expertBase = `🌳 **[전문가]** CPU: ${cpu} (논리 ${s.cpuLogicalCores ?? unknown}코어) | GPU: ${gpu} | RAM: ${
-      ram ?? unknown
-    }GB (점유 ${s.ramUsedPercent ?? unknown}%) | 시스템 드라이브 여유: ${disk ?? unknown}/${
-      s.diskTotalGb ?? unknown
-    }GB | 주사율: ${hzText} | OS: ${s.osVersion || unknown}.`;
+    }%), 저장 공간 여유 ${disk ?? unknown}GB, 모니터 주사율 ${hzText}입니다.${lowDisk}${bloatWarning}`;
+    const expertBase = `🌳 **[전문가]** CPU: ${cpu} (논리 ${s.cpuLogicalCores ?? unknown}코어${
+      cpuLoadPct !== null ? ` · 실시간 부하 ${cpuLoadPct}%` : ''
+    }) | GPU: ${gpu} | RAM: ${ram ?? unknown}GB (점유 ${s.ramUsedPercent ?? unknown}%) | 시스템 드라이브 여유: ${
+      disk ?? unknown
+    }/${s.diskTotalGb ?? unknown}GB | 주사율: ${hzText} | OS: ${s.osVersion || unknown}.${bloatWarning}`;
 
     const pcSpecPayload: MonsterPcSpecPayload = {
       cpuModel: cpu,
+      cpuLoadPercent: cpuLoadPct,
       ramTotalGb: ram,
       ramUsedPercent: typeof s.ramUsedPercent === 'number' ? s.ramUsedPercent : null,
       gpuModel: gpu,
@@ -2463,6 +2590,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       easyAnswerKo: llmDecision?.replyKo ? `${easyBase}\n💬 ${llmDecision.replyKo}` : easyBase,
       normalAnswerKo: llmDecision?.replyKo ? `${normalBase}\n💬 ${llmDecision.replyKo}` : normalBase,
       expertAnswerKo: llmDecision?.replyKo ? `${expertBase}\n💬 ${llmDecision.replyKo}` : expertBase,
+      detectedBloatwareLabels,
     };
     const selectedAnswer =
       literacyLevel === 'easy'
@@ -2470,17 +2598,20 @@ export async function processUnifiedMonsterChatQuery(params: {
         : literacyLevel === 'expert'
         ? pcSpecPayload.expertAnswerKo
         : pcSpecPayload.normalAnswerKo;
-    speak(llmDecision?.replyKo || '내 피씨 사양을 실제로 측정했습니다.');
-    const bubbleText = llmDecision?.replyKo
-      ? `💬 ${llmDecision.replyKo}`
-      : `💻 **[내 PC 실측 사양 & 맞춤 진단]**\n${selectedAnswer}`;
+    speak(
+      hasHighCpuOrBloat
+        ? `내 피씨를 실측한 결과 백그라운드 상주 프로그램 ${detectedBloatwareLabels.length}건이 속도를 늦추고 있습니다. 아래 정리하기 버튼으로 즉시 해결할 수 있습니다.`
+        : llmDecision?.replyKo || '내 피씨 사양을 실제로 측정했습니다.'
+    );
+    const bubbleText = `💻 **[내 PC 실측 사양 & 속도 저하 원인 진단]**\n${selectedAnswer}`;
     return reply(sourceTab, bubbleText, {
       cardKind: 'PC_SPEC_CONSULTATION',
       pcSpecPayload,
       llmActionJson: actionJson,
-      followUpSuggestions: defaultFollowUps || [
+      followUpSuggestions: [
+        '지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘',
         '바탕화면이랑 다운로드 폴더 정리해서 속도 높여줘',
-        '시작프로그램 중에 뭘 끄면 좋을지 봐줘',
+        '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
       ],
     });
   }

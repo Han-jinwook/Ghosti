@@ -3731,7 +3731,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     };
 
     // [정직 원칙] 실제로 실행되고 Z-코어가 성공을 확인한 항목만 '완료'로 표시한다.
-    // 현재 자동 실행을 지원하는 항목은 S: 업무 드라이브 연결뿐이며, 나머지는 설정을 바꾸지 않고 안내만 한다.
     let realExecution: { ok: boolean; message: string } | null = null;
     if (plan.platform === 'pc' && plan.presetId === 'pc_work_s_drive') {
       try {
@@ -3749,6 +3748,25 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         await fetchRealPcOsInspection();
       } catch {
         realExecution = { ok: false, message: '⚠️ 멀린 Z-코어에 연결되지 않아 실행하지 못했습니다. (아무 설정도 바뀌지 않았습니다)' };
+      }
+    } else if (
+      plan.platform === 'pc' &&
+      (plan.presetId === 'pc_boot_ads' || plan.presetId === 'pc_security_plugin')
+    ) {
+      try {
+        const osRes = await executeRealOsAction('boot_lag_clean_bloatware');
+        if (osRes?.ok) {
+          const msg = String(osRes.summaryKo || osRes.message || plan.completionMessage);
+          realExecution = { ok: true, message: msg };
+        } else {
+          realExecution = {
+            ok: false,
+            message: `⚠️ 애드웨어·보안 프로세스 정리를 완료하지 못했습니다: ${String(osRes?.message || osRes?.error || '멀린 Z-코어 연결을 확인해 주세요')}`,
+          };
+        }
+        await fetchRealPcOsInspection();
+      } catch {
+        realExecution = { ok: false, message: '⚠️ 멀린 Z-코어에 연결되지 않아 실행하지 못했습니다.' };
       }
     }
     const honestCompletionMessage = realExecution

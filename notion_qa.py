@@ -548,12 +548,7 @@ def complete_bug(
 
     clean_page_id = page_id.strip()
 
-    # 1단계: 카드의 상태를 '재테스트 대기' 컬럼 맨 아래(Bottom, 새치기 방지)로 변경
-    if not move_card_to_column_bottom(clean_page_id, STATUS_READY_FOR_QA):
-        print("❌ 카드 상태 변경 실패")
-        return False
-
-    # 2단계: 해당 단계/붉은 코멘트 바로 아래에 인라인으로 "[AI 수정 완료 및 재테스트 안내]" 추가
+    # 1단계: 먼저 해당 단계/붉은 코멘트 바로 아래에 인라인으로 "[AI 수정 완료 및 재테스트 안내]" 추가
     full_instruction_text = f"↳ 🛠️ [AI 수정 완료 및 재테스트 안내]\n{guide_text.strip()}"
     ok_block = insert_inline_ai_feedback(
         clean_page_id,
@@ -563,11 +558,13 @@ def complete_bug(
         after_block_id=after_block_id,
         step_num=step_num,
     )
-
     if not ok_block:
-        print(
-            f"⚠️ 상태는 '{STATUS_READY_FOR_QA}'로 변경되었으나 인라인 본문 블록 추가에 실패했습니다."
-        )
+        print("⚠️ 인라인 본문 블록 추가에 실패했습니다.")
+        return False
+
+    # 2단계: 카드를 '재테스트 대기' 컬럼 맨 아래(Bottom, 새치기 방지)로 배치 (POST /v1/pages 복제 생성 + 기존 카드 보관)
+    if not move_card_to_column_bottom(clean_page_id, STATUS_READY_FOR_QA):
+        print("❌ 카드 상태 변경(맨 아래 배치) 실패")
         return False
 
     print("\n✅ [노션 인라인 피드백 자동 반영 완료!]")
@@ -725,38 +722,6 @@ def archive_done(
     return ok
 
 
-def _get_existing_column_card_ids_bottom_to_top(target_status: str, exclude_page_id: str = "") -> List[str]:
-    """
-    노션 칸반 보드는 상태(status)가 변경된 카드를 무조건 컬럼 맨 위(Top)로 올립니다(새치기).
-    기존 대기 카드들의 순서(Top -> Bottom = last_edited_time 내림차순)를 보존하고
-    새로 진입하는 카드를 맨 아래(Bottom)에 붙이기 위해, 기존 대기 카드들을 Bottom -> Top(last_edited_time 오름차순)으로 조회합니다.
-    """
-    url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
-    if SCHEMA.status_prop_type == "status":
-        filter_payload = {"property": SCHEMA.status_prop_name, "status": {"equals": target_status}}
-    else:
-        filter_payload = {"property": SCHEMA.status_prop_name, "select": {"equals": target_status}}
-
-    payload = {
-        "filter": filter_payload,
-        "sorts": [{"timestamp": "last_edited_time", "direction": "ascending"}],
-        "page_size": 100,
-    }
-    try:
-        res = requests.post(url, headers=get_headers(), json=payload, timeout=15)
-        if res.status_code != 200:
-            return []
-        clean_ex = exclude_page_id.replace("-", "").strip().lower()
-        ids = []
-        for p in res.json().get("results", []):
-            pid = p.get("id", "")
-            if pid and pid.replace("-", "").strip().lower() != clean_ex:
-                ids.append(pid)
-        return ids
-    except Exception:
-        return []
-
-
 def _patch_status_raw(page_id: str, new_status: str) -> bool:
     page_url = f"{NOTION_API_BASE}/pages/{page_id.strip()}"
     if SCHEMA.status_prop_type == "status":
@@ -767,35 +732,170 @@ def _patch_status_raw(page_id: str, new_status: str) -> bool:
     return res.status_code == 200
 
 
+def _upload_image_to_notion_for_clone(img_url: str) -> Optional[str]:
+    """노션 내부 S3 만료 이미지 URL을 다운로드하여 Notion File Upload API(/v1/file_uploads)로 영구 재업로드합니다."""
+    try:
+        r_dl = requests.get(img_url, timeout=20)
+        if r_dl.status_code != 200:
+            return None
+        content_type = r_dl.headers.get("Content-Type", "image/png").split(";")[0].strip()
+        if not content_type.startswith("image/"):
+            content_type = "image/png"
+        ext = content_type.split("/")[-1]
+        filename = f"qa_screenshot.{ext}"
+        r_init = requests.post(
+            f"{NOTION_API_BASE}/file_uploads",
+            headers=get_headers(),
+            json={"filename": filename, "content_type": content_type},
+            timeout=15,
+        )
+        if r_init.status_code != 200:
+            return None
+        upload_id = r_init.json().get("id")
+        if not upload_id:
+            return None
+        send_headers = {
+            "Authorization": f"Bearer {NOTION_TOKEN.strip()}",
+            "Notion-Version": NOTION_VERSION,
+        }
+        r_send = requests.post(
+            f"{NOTION_API_BASE}/file_uploads/{upload_id}/send",
+            headers=send_headers,
+            files={"file": (filename, r_dl.content, content_type)},
+            timeout=30,
+        )
+        if r_send.status_code == 200:
+            return upload_id
+    except Exception:
+        pass
+    return None
+
+
+def _sanitize_block_for_clone(blk: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    btype = blk.get("type")
+    if not btype or btype in ("unsupported", "child_page", "child_database"):
+        return None
+    bdata = dict(blk.get(btype) or {})
+    if btype == "image":
+        if "file" in bdata:
+            f_url = bdata["file"].get("url", "")
+            upload_id = _upload_image_to_notion_for_clone(f_url) if f_url else None
+            if upload_id:
+                bdata = {
+                    "type": "file_upload",
+                    "file_upload": {"id": upload_id},
+                    "caption": bdata.get("caption", []),
+                }
+            else:
+                bdata = {
+                    "type": "external",
+                    "external": {"url": f_url},
+                    "caption": bdata.get("caption", []),
+                }
+        elif "external" in bdata:
+            bdata = {
+                "type": "external",
+                "external": {"url": bdata["external"].get("url", "")},
+                "caption": bdata.get("caption", []),
+            }
+    new_blk: Dict[str, Any] = {"object": "block", "type": btype, btype: bdata}
+    if blk.get("has_children"):
+        try:
+            r_c = requests.get(
+                f"{NOTION_API_BASE}/blocks/{blk['id']}/children?page_size=100",
+                headers=get_headers(),
+                timeout=15,
+            )
+            if r_c.status_code == 200:
+                c_list = []
+                for cb in r_c.json().get("results", []):
+                    scb = _sanitize_block_for_clone(cb)
+                    if scb:
+                        c_list.append(scb)
+                if c_list:
+                    new_blk[btype]["children"] = c_list
+        except Exception:
+            pass
+    return new_blk
+
+
 def move_card_to_column_bottom(page_id: str, target_status: str) -> bool:
     """
-    카드를 target_status(예: '재테스트 대기', '테스트 미션')로 이동시킬 때
-    기존 대기 중인 카드들 위로 새치기하지 않고 반드시 컬럼 맨 아래(Bottom)에 붙도록 처리합니다.
+    노션 칸반 보드(Board View)는 수동 정렬 배열(collection_view.page_sort)을 사용하므로
+    단순 PATCH /v1/pages 상태 변경만으로는 테스터가 맨 위에 끌어다 놓은 카드의 보드 순서가 바뀌지 않습니다.
+    반면 POST /v1/pages로 새로 생성된 카드는 노션 보드의 page_sort 맨 끝(컬럼 맨 아래)에 100% 추가됩니다.
+    따라서 기존 카드의 속성·아이콘·본문 블록(첨부 이미지 /v1/file_uploads 재업로드 포함)을 그대로 복제해
+    target_status 컬럼 맨 아래에 생성한 뒤 기존 카드를 보관(archived: True) 처리합니다.
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     clean_id = page_id.strip()
 
-    # 1) 이동 전 기존 컬럼 대기 카드 목록(Bottom -> Top 순서) 확보
-    existing_bottom_to_top = []
-    if target_status in (STATUS_READY_FOR_QA, STATUS_MISSION):
-        existing_bottom_to_top = _get_existing_column_card_ids_bottom_to_top(target_status, exclude_page_id=clean_id)
+    try:
+        r_page = requests.get(f"{NOTION_API_BASE}/pages/{clean_id}", headers=get_headers(), timeout=15)
+        if r_page.status_code != 200:
+            return _patch_status_raw(clean_id, target_status)
+        page_data = r_page.json()
+        props = page_data.get("properties", {})
+        new_props: Dict[str, Any] = {}
 
-    # 2) 새 카드를 먼저 target_status로 이동 (이 시점엔 노션 API 특성상 맨 위로 감)
-    ok = _patch_status_raw(clean_id, target_status)
-    if not ok:
-        return False
+        title_items = props.get(SCHEMA.title_prop_name, {}).get("title", [])
+        new_props[SCHEMA.title_prop_name] = {"title": title_items}
 
-    # 3) 기존 대기 카드들이 있었다면 Bottom -> Top 순서로 재전환하여 새 카드를 맨 아래(Bottom)로 밀어냄
-    if existing_bottom_to_top:
-        temp_status = STATUS_FIXING if target_status != STATUS_FIXING else STATUS_IN_TEST
-        for ex_id in existing_bottom_to_top:
-            time.sleep(0.25)
-            _patch_status_raw(ex_id, temp_status)
-            time.sleep(0.25)
-            _patch_status_raw(ex_id, target_status)
+        if SCHEMA.status_prop_type == "status":
+            new_props[SCHEMA.status_prop_name] = {"status": {"name": target_status}}
+        else:
+            new_props[SCHEMA.status_prop_name] = {"select": {"name": target_status}}
 
-    return True
+        if "앱" in props and props["앱"].get("select"):
+            new_props["앱"] = {"select": {"name": props["앱"]["select"]["name"]}}
+        if "우선순위" in props and props["우선순위"].get("select"):
+            new_props["우선순위"] = {"select": {"name": props["우선순위"]["select"]["name"]}}
+
+        raw_blocks = _fetch_page_top_blocks(clean_id)
+        cloned_blocks: List[Dict[str, Any]] = []
+        for b in raw_blocks:
+            sb = _sanitize_block_for_clone(b)
+            if sb:
+                cloned_blocks.append(sb)
+
+        create_payload: Dict[str, Any] = {
+            "parent": {"database_id": DATABASE_ID},
+            "properties": new_props,
+            "children": cloned_blocks[:100],
+        }
+        if page_data.get("icon"):
+            create_payload["icon"] = page_data["icon"]
+
+        r_create = requests.post(
+            f"{NOTION_API_BASE}/pages",
+            headers=get_headers(),
+            json=create_payload,
+            timeout=30,
+        )
+        if r_create.status_code != 200:
+            return _patch_status_raw(clean_id, target_status)
+
+        new_page_id = r_create.json().get("id", "")
+        if len(cloned_blocks) > 100 and new_page_id:
+            for i in range(100, len(cloned_blocks), 100):
+                requests.patch(
+                    f"{NOTION_API_BASE}/blocks/{new_page_id}/children",
+                    headers=get_headers(),
+                    json={"children": cloned_blocks[i : i + 100]},
+                    timeout=30,
+                )
+
+        requests.patch(
+            f"{NOTION_API_BASE}/pages/{clean_id}",
+            headers=get_headers(),
+            json={"archived": True},
+            timeout=15,
+        )
+        print(f"📌 [맨 아래 배치 완료] 기존 카드({clean_id}) ➔ 컬럼 최하단 신규 카드({new_page_id}) 이동 완료")
+        return True
+    except Exception:
+        return _patch_status_raw(clean_id, target_status)
 
 
 def update_bug_status(page_id: str, new_status: str) -> bool:

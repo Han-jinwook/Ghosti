@@ -36,6 +36,12 @@ export interface RealPcOsInspectionData {
       label: string;
       matchedProcessOrService: string;
     }>;
+    cpuLoadPercent?: number;
+    highCpuSuspects?: Array<{
+      name: string;
+      pid: number;
+      cpuPercent: number;
+    }>;
     runningGuiApps?: Array<{
       name: string;
       count: number;
@@ -1155,9 +1161,18 @@ function buildSetupDiagnosisPlanBase(
     const realStartups = latestRealPcState?.startupPrograms?.map(
       (s) => `${s.name} [${s.location}]`
     ) || [];
-    const nonEssentialStartups = realStartups.filter((n) =>
-      /crossex|veraport|alnotify|itunes|acrobat|weixin/i.test(n)
-    );
+    const activeSecLabels = latestRealPcState?.spoolerAndSecurity?.activeSecurityPlugins?.map(
+      (p) => `${p.label} (${p.matchedProcessOrService})`
+    ) || [];
+    const nonEssentialStartups = [
+      ...activeSecLabels,
+      ...realStartups.filter(
+        (n) =>
+          !/merlin|ghosti|senstalk|sundream|kakao|telegram|onedrive|googledrive|dropbox|securityhealth|defender|realtek|nvidia|amd|intel|logi|steam|discord|slack|notion/i.test(
+            n
+          )
+      ),
+    ];
     return {
       planId,
       presetId: 'pc_boot_ads',

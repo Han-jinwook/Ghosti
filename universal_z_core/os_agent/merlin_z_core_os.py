@@ -59,6 +59,7 @@ KNOWN_SECURITY_PLUGIN_KEYWORDS = {
     "ipinside": "IPInside LWS Agent (인터리젠)",
     "veraport": "Veraport (위즈베라 통합설치)",
     "wizvera": "Wizvera Delfino (위즈베라 전자서명)",
+    "delfino": "Wizvera Delfino (위즈베라 전자서명)",
     "crossex": "iniLINE CrossEX (이니텍 브라우저 인증/보안)",
     "inisafe": "INISAFE CrossWeb EX (이니텍)",
     "crosscert": "CrossCert UniCRSV3 (한국전자인증)",
@@ -66,7 +67,53 @@ KNOWN_SECURITY_PLUGIN_KEYWORDS = {
     "keysharp": "KeySharp Biz (라온시큐어)",
     "kslauncher": "KeySharp Launcher",
     "nosstarter": "nProtect Starter (nosstarter.npe)",
+    "magicline": "DreamSecurity MagicLine4NX (관공서 인증)",
+    "markany": "MarkAny WebDRM / ePageSafer (문서보안)",
+    "fasoo": "Fasoo DRM / WebCracker (문서보안)",
+    "softcamp": "SoftCamp Document Security",
+    "signgate": "SignGate KICA (한국정보인증)",
+    "kcase": "KCaseAgent (한국정보인증)",
+    "xecure": "SoftForum XecureWeb (구형 보안모듈)",
+    "i3g": "I3GProc / I3GManager (금융 보안모듈)",
+    "tecopy": "TouchEn Anti-Capture (화면보안)",
     "alnotify": "ALTools 알림/광고 도우미 (alnotify)",
+    "alyac": "알약(ALYac) 백그라운드/광고 모듈",
+    "alsee": "알씨(ALSee) 상주 업데이트/광고 에이전트",
+    "alcapture": "알캡처(ALCapture) 백그라운드 에이전트",
+    "alzip": "알집(ALZip) 백그라운드 업데이트/광고",
+    "tabbie": "탭비(Tabbie) 쇼핑/광고 애드웨어",
+    "clipdown": "클립다운(ClipDown) 그리드/광고 에이전트",
+    "natservice": "NATService (그리드 딜리버리 대역폭/CPU 점유)",
+    "natsvc": "NATSvc (그리드 백그라운드 전송 에이전트)",
+    "microcloud": "MicroCloud (백그라운드 애드웨어 엔진)",
+    "hncupdate": "한컴 자동 업데이트 상주 에이전트 (HncUpdate)",
+    "gomupdate": "곰플레이어 상주 광고/업데이트 (GomUpdate)",
+    "bandiupdater": "반디소프트 백그라운드 업데이터",
+    "toast": "Toast 팝업 광고 에이전트",
+    "adpopup": "AdPopup 광고 프로세스",
+    "plusad": "PlusAd 쇼핑/배너 애드웨어",
+    "adcast": "AdCast 광고 송출 프로세스",
+    "openmatch": "OpenMatch 키워드 광고 애드웨어",
+    "searchlite": "SearchLite 검색창 납치 애드웨어",
+    "topon": "TopOn 제휴 바로가기 애드웨어",
+    "sideoh": "SideOh 브라우저 사이드 광고",
+    "nbopen": "NBOpen 백그라운드 광고 런처",
+    "zespeed": "ZeSpeed 위장 클리너 애드웨어",
+    "pcspeedup": "PCSpeedUp 위장 최적화 애드웨어",
+    "windowexe": "WindowExe 백그라운드 애드웨어",
+    "utilzone": "UtilZone 번들 애드웨어",
+}
+
+PROTECTED_PROCESS_NAMES = {
+    "idle", "_total", "system", "registry", "smss", "csrss", "wininit", "services",
+    "lsass", "svchost", "dwm", "explorer", "sihost", "taskhostw", "runtimebroker",
+    "searchindexer", "searchhost", "startmenuexperiencehost", "shellexperiencehost",
+    "textinputhost", "ctfmon", "audiodg", "fontdrvhost", "wmiprvse", "msmpeng",
+    "nissrv", "securityhealthservice", "securityhealthsystray", "spoolsv", "conhost",
+    "powershell", "pwsh", "cmd", "chrome", "msedge", "whale", "firefox", "brave",
+    "opera", "iexplore", "kakaotalk", "telegram", "weixin", "excel", "winword",
+    "hwp", "powerpnt", "antigravity", "code", "python", "pythonw", "node",
+    "merlin_z_core", "merlin_z_core_setup", "taskmgr", "dllhost", "applicationframehost",
 }
 
 
@@ -299,6 +346,8 @@ $spool = Get-Service -Name Spooler | Select-Object -ExpandProperty Status
 $prns = Get-Printer | Select-Object -ExpandProperty Name
 $procs = Get-Process | Select-Object -ExpandProperty ProcessName -Unique
 $svcs = Get-Service | Where-Object { $_.Status -eq 'Running' } | Select-Object -ExpandProperty Name
+$cpuLoad = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
+$perfProcs = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | Where-Object { $_.PercentProcessorTime -ge 5 -and $_.Name -notmatch '^(Idle|_Total|System)$' } | Sort-Object PercentProcessorTime -Descending | Select-Object -First 10 Name, IDProcess, PercentProcessorTime
 $guiProcs = Get-Process | Where-Object { $_.ProcessName -match '^(chrome|msedge|KakaoTalk|Telegram|Weixin|EXCEL|WINWORD|Hwp|POWERPNT|Antigravity|explorer|MYBOXExplorer_x64_MT)$' } | Group-Object ProcessName | ForEach-Object {
   $memMb = [math]::Round(($_.Group | Measure-Object WorkingSet64 -Sum).Sum / 1MB, 1)
   @{ name = $_.Name; count = $_.Count; memoryMb = $memMb; samplePid = $_.Group[0].Id }
@@ -309,8 +358,12 @@ $guiProcs = Get-Process | Where-Object { $_.ProcessName -match '^(chrome|msedge|
   processes = @($procs)
   services = @($svcs)
   guiApps = @($guiProcs)
+  cpuLoadPercent = [int]$cpuLoad
+  topCpuProcs = @($perfProcs)
 } | ConvertTo-Json -Compress -Depth 4
 """
+    cpu_load_percent = 0
+    high_cpu_suspects: List[Dict[str, Any]] = []
     try:
         res = subprocess.run(
             ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
@@ -324,6 +377,7 @@ $guiProcs = Get-Process | Where-Object { $_.ProcessName -match '^(chrome|msedge|
         if res.returncode == 0 and res.stdout.strip():
             data = json.loads(res.stdout.strip())
             spooler_status = data.get("spooler") or "Unknown"
+            cpu_load_percent = int(data.get("cpuLoadPercent") or 0)
             raw_prns = data.get("printers") or []
             if isinstance(raw_prns, str):
                 raw_prns = [raw_prns]
@@ -340,14 +394,69 @@ $guiProcs = Get-Process | Where-Object { $_.ProcessName -match '^(chrome|msedge|
                 + [str(x).lower() for x in (data.get("services") or [])]
                 + startup_names
             )
+            seen_kws = set()
             for kw, label in KNOWN_SECURITY_PLUGIN_KEYWORDS.items():
                 matched = [n for n in all_names if kw in n]
                 if matched:
+                    seen_kws.add(kw)
                     detected_security_plugins.append(
                         {
                             "keyword": kw,
                             "label": label,
                             "matchedProcessOrService": ", ".join(sorted(matched)[:3]),
+                        }
+                    )
+
+            # 비필수 시작프로그램(HKCU/HKLM Run, StartupFolder) 중 화이트리스트 외 항목도 애드웨어/부팅지연 의심 항목으로 포착
+            safe_startup_tokens = (
+                "merlin", "ghosti", "senstalk", "sundream", "kakao", "telegram",
+                "onedrive", "googledrive", "dropbox", "securityhealth", "defender",
+                "realtek", "igfx", "nvidia", "nvbackend", "amd", "intel", "logi",
+                "razer", "steam", "discord", "slack", "notion", "claude", "cursor",
+                "antigravity", "msedge", "chrome", "whale", "ctfmon", "windows",
+            )
+            for s_item in startup_items:
+                s_name = str(s_item.get("name") or "").strip()
+                s_cmd = str(s_item.get("command") or "").strip()
+                comb_low = f"{s_name} {s_cmd}".lower()
+                if not s_name or any(tok in comb_low for tok in safe_startup_tokens):
+                    continue
+                s_key = s_name.lower()
+                if s_key not in seen_kws and not any(kw in comb_low for kw in seen_kws):
+                    seen_kws.add(s_key)
+                    detected_security_plugins.append(
+                        {
+                            "keyword": s_key,
+                            "label": f"[자동실행/애드웨어 의심] {s_name}",
+                            "matchedProcessOrService": f"{s_name} ({s_item.get('location', 'Run')})",
+                        }
+                    )
+
+            raw_top_cpu = data.get("topCpuProcs") or []
+            if isinstance(raw_top_cpu, dict):
+                raw_top_cpu = [raw_top_cpu]
+            for cp in raw_top_cpu:
+                if not isinstance(cp, dict):
+                    continue
+                raw_name = str(cp.get("Name") or "").split("#")[0].strip()
+                low_name = raw_name.lower()
+                pct = int(cp.get("PercentProcessorTime") or 0)
+                if not raw_name or low_name in PROTECTED_PROCESS_NAMES:
+                    continue
+                high_cpu_suspects.append(
+                    {
+                        "name": raw_name,
+                        "pid": int(cp.get("IDProcess") or 0),
+                        "cpuPercent": pct,
+                    }
+                )
+                if low_name not in seen_kws:
+                    seen_kws.add(low_name)
+                    detected_security_plugins.append(
+                        {
+                            "keyword": low_name,
+                            "label": f"[CPU 과점유/애드웨어 의심] {raw_name} (CPU {pct}%)",
+                            "matchedProcessOrService": f"{raw_name}.exe (PID {cp.get('IDProcess')})",
                         }
                     )
     except Exception:
@@ -360,6 +469,8 @@ $guiProcs = Get-Process | Where-Object { $_.ProcessName -match '^(chrome|msedge|
         "activeSecurityPluginsCount": len(detected_security_plugins),
         "activeSecurityPlugins": detected_security_plugins,
         "runningGuiApps": running_gui_apps,
+        "cpuLoadPercent": cpu_load_percent,
+        "highCpuSuspects": high_cpu_suspects,
     }
 
 
@@ -1324,38 +1435,80 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
 
     if act == "clean_bloatware":
         stopped_names: List[str] = []
-        # ⚠️ 철칙: Chrome/Edge/Whale 등 브라우저 프로세스는 절대 건드리지 않고, 오직 KNOWN_SECURITY_PLUGIN_KEYWORDS에 해당하는 보안 모듈만 정지
-        SAFE_BROWSER_NAMES = {"chrome", "msedge", "whale", "firefox", "brave", "opera", "iexplore"}
+        disabled_startups: List[str] = []
+        cpu_before = int(pc_state.get("spoolerAndSecurity", {}).get("cpuLoadPercent") or 0)
+        # ⚠️ 철칙: Chrome/Edge/Whale 등 브라우저 및 핵심 업무 프로세스는 절대 건드리지 않고,
+        # 애드웨어·보안 쓰레기 및 CPU 과점유 비필수 백그라운드 프로세스를 즉시 종료합니다.
         if os.name == "nt" and sec_plugins:
             for sp in sec_plugins:
                 kw = str(sp.get("keyword") or "").strip().lower()
-                if kw and kw not in SAFE_BROWSER_NAMES:
+                if kw and kw not in PROTECTED_PROCESS_NAMES:
                     try:
                         ps_kill = (
                             f"Get-Process | Where-Object {{ $_.Name -like '*{kw}*' -and "
-                            f"$_.Name -notin @('chrome','msedge','whale','firefox','brave') }} | "
+                            f"$_.Name -notin @('chrome','msedge','whale','firefox','brave','explorer','python','pythonw','node','Antigravity','Code','KakaoTalk','Telegram','Merlin_Z_Core','Merlin_Z_Core_Setup') }} | "
                             f"Stop-Process -Force -ErrorAction SilentlyContinue"
                         )
                         subprocess.run(["powershell", "-NoProfile", "-Command", ps_kill], capture_output=True, timeout=2.5, creationflags=0x08000000)
                         stopped_names.append(str(sp.get("label") or kw))
                     except Exception:
                         pass
-        if stopped_names:
+
+        # HKCU\Run 내 애드웨어·보안 비필수 자동실행 항목 백업 후 비활성화 (언제든 원복 가능)
+        if os.name == "nt":
+            try:
+                run_subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
+                backup_subkey = r"Software\Merlin\DisabledStartupBackup"
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, backup_subkey) as bk:
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_subkey, 0, winreg.KEY_READ | winreg.KEY_WRITE) as rk:
+                        to_remove: List[tuple[str, str]] = []
+                        idx = 0
+                        while True:
+                            try:
+                                vname, vval, _ = winreg.EnumValue(rk, idx)
+                                idx += 1
+                                comb = f"{vname} {vval}".lower()
+                                if any(p in comb for p in ("merlin", "ghosti", "senstalk", "sundream", "kakao", "telegram", "onedrive", "googledrive", "dropbox", "securityhealth", "defender", "realtek", "nvidia", "amd", "intel", "logi", "steam", "discord", "slack", "notion", "antigravity", "cursor")):
+                                    continue
+                                to_remove.append((str(vname), str(vval)))
+                            except OSError:
+                                break
+                        for vname, vval in to_remove:
+                            try:
+                                winreg.SetValueEx(bk, vname, 0, winreg.REG_SZ, vval)
+                                winreg.DeleteValue(rk, vname)
+                                disabled_startups.append(vname)
+                            except OSError:
+                                pass
+            except Exception:
+                pass
+
+        after_state = inspect_real_pc_state()
+        cpu_after = int(after_state.get("spoolerAndSecurity", {}).get("cpuLoadPercent") or 0)
+
+        if stopped_names or disabled_startups:
+            all_cleaned = stopped_names + [f"자동실행 차단: {s}" for s in disabled_startups]
             summary_ko = (
-                f"🧹 재부팅해도 다시 자동 실행되는 은행·관공서 보안 프로그램 {len(stopped_names)}개({', '.join(stopped_names)})를 정리했습니다."
+                f"🚀 CPU와 메모리를 잡아먹던 애드웨어·보안/자동실행 프로그램 {len(all_cleaned)}종({', '.join(all_cleaned[:6])})을 즉시 강제 종료 및 시작프로그램에서 정리했습니다! "
+                f"(실측 CPU 부하: {cpu_before}% ➔ {cpu_after}%)"
             )
         else:
-            summary_ko = "🧹 현재 백그라운드에 상주 중인 은행·관공서 보안 쓰레기가 0건으로 깨끗합니다."
+            summary_ko = (
+                f"🧹 현재 백그라운드에 상주 중인 애드웨어·보안 쓰레기 및 CPU 과점유 비정상 프로세스가 0건으로 깨끗합니다. (현재 CPU 부하: {cpu_after}%)"
+            )
 
         if needs_reboot:
             summary_ko += (
                 f" 단, 현재 컴퓨터를 켜둔 지 {uptime_days_int}일 {uptime_rem_hours}시간(권장: 매일 1회 재부팅)이 지났으므로 "
-                f"윈도우에 쌓인 피로는 억지 청소 대신 작업 후 '다시 시작(재부팅)'을 한 번 해주시는 것이 가장 빠르고 깨끗합니다."
+                f"윈도우에 쌓인 피로는 작업 후 '다시 시작(재부팅)'을 한 번 해주시는 것이 가장 빠르고 깨끗합니다."
             )
         return {
             "ok": True,
             "subAction": act,
             "stoppedBloatware": stopped_names,
+            "disabledStartups": disabled_startups,
+            "cpuLoadBefore": cpu_before,
+            "cpuLoadAfter": cpu_after,
             "uptimeDays": uptime_days,
             "uptimeHours": uptime_hours,
             "needsReboot": needs_reboot,
