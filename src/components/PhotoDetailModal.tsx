@@ -321,7 +321,7 @@ export const PhotoDetailModal: React.FC = () => {
   return (
     <div
       onClick={() => setSelectedPhoto(null)}
-      className="fixed inset-0 z-[90] bg-surface/90 backdrop-blur-2xl flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -364,7 +364,7 @@ export const PhotoDetailModal: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
               <a
                 href={isGuestPreviewMode ? '#guest-join-wall' : selectedPhoto.fullUrl}
                 download={isGuestPreviewMode ? undefined : selectedPhoto.name}
@@ -381,7 +381,7 @@ export const PhotoDetailModal: React.FC = () => {
                 className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 title="카톡처럼 화질이 깨지지 않는 100% 무압축 원본 화질 사진을 내 기기에 그대로 저장합니다"
               >
-                <span>⬇️ 원본 화질 다운로드</span>
+                <span className="hidden sm:inline">⬇️ 원본 화질 다운로드</span><span className="sm:hidden">⬇️ 원본</span>
               </a>
               <button
                 type="button"
@@ -413,7 +413,7 @@ export const PhotoDetailModal: React.FC = () => {
                 className="px-3 py-1.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/50 text-purple-700 dark:text-purple-300 font-label-sm text-label-sm font-extrabold flex items-center gap-1 transition-all cursor-pointer"
                 title="내가 올린 사진의 공유 범위 변경 및 실수 삭제 방지 보호 설정을 관리합니다"
               >
-                <span>🗂️ 본인 업로드 파일 관리</span>
+                <span className="hidden sm:inline">🗂️ 본인 업로드 파일 관리</span><span className="sm:hidden">🗂️ 관리</span>
               </button>
               <button
                 type="button"
@@ -426,7 +426,7 @@ export const PhotoDetailModal: React.FC = () => {
                 className="px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/60 text-cyan-700 dark:text-cyan-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 title="연결된 내 PC/노트북 모니터에 전체화면 클린 뷰어로 띄우고 내 폰을 무선 리모컨으로 전환합니다 (카톡 알림 유출 0%)"
               >
-                <span>💻 모니터로 크게 보기</span>
+                <span className="hidden sm:inline">💻 모니터로 크게 보기</span><span className="sm:hidden">💻 모니터</span>
               </button>
               <button
                 onClick={() => {

@@ -569,10 +569,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           <button
             type="submit"
             disabled={busy || !inputText.trim()}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[13px] font-extrabold flex items-center gap-1.5 transition shrink-0 cursor-pointer"
+            aria-label="전송"
+            className="px-3 sm:px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[13px] font-extrabold flex items-center gap-1.5 transition shrink-0 cursor-pointer"
           >
             <Send className="w-4 h-4" />
-            전송
+            <span className="hidden min-[360px]:inline">전송</span>
           </button>
         </form>
       </div>

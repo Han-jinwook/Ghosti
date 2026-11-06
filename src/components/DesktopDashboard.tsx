@@ -1,3 +1,10 @@
+function scrollAppToTop(): void {
+  if (typeof window !== 'undefined') {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
+}
 import React, { useEffect, useMemo, useState } from 'react';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { playMenuSummonSound } from '../services/babyGhostSound';
@@ -510,6 +517,7 @@ export const DesktopDashboard: React.FC = () => {
                     setActiveLoungeType('personal');
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
+                    scrollAppToTop();
                   }}
                   className={mainBtnClass(isMyDeviceActive)}
                 >
@@ -575,6 +583,7 @@ export const DesktopDashboard: React.FC = () => {
                     setIsDeviceIntegrationOpen(true);
                     setActiveLoungeType('personal');
                     setDesktopTab('sync');
+                    scrollAppToTop();
                   }}
                   className={mainBtnClass(isDeviceIntegrationActive)}
                 >
@@ -875,6 +884,7 @@ export const DesktopDashboard: React.FC = () => {
                     setActiveLoungeType('personal');
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
+                    scrollAppToTop();
                   }}
                   className="lg:hidden mr-1"
                 />

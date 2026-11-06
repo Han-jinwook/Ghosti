@@ -913,11 +913,7 @@ export const SmartTrashView: React.FC = () => {
 
                   {/* 연사 장수에 맞춰 펼쳐지는 바둑판(Grid) */}
                   <div
-                    className={`grid grid-cols-2 ${
-                      gridColumns === 3
-                        ? 'sm:grid-cols-3 lg:grid-cols-3'
-                        : 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
-                    } gap-3`}
+                    className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
                   >
                     {groupPhotos.map((ph, idx) => {
                       const isBestOriginal = ph.id === group.bestPhotoId;
