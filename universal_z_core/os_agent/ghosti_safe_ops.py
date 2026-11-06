@@ -807,7 +807,7 @@ def start_desktop_timemachine_watcher() -> None:
                 sync_desktop_timemachine_snapshot()
             except Exception:
                 pass
-            time.sleep(0.25)
+            time.sleep(5.0)
 
     t = threading.Thread(target=_loop, name="GhostiDesktopTimeMachine", daemon=True)
     t.start()

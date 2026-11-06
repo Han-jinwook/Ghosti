@@ -887,8 +887,21 @@ def main() -> None:
     except Exception:
         pass
 
+    if os.name == "nt":
+        try:
+            import ctypes as _ct
+            _k32 = _ct.windll.kernel32
+            _hproc = _k32.GetCurrentProcess()
+            _k32.SetPriorityClass(_hproc, 0x00008000)  # ABOVE_NORMAL_PRIORITY_CLASS (CPU 100% 과부하에서도 응답 보장)
+            _all_mask = (1 << max(1, os.cpu_count() or 4)) - 1
+            _k32.SetProcessAffinityMask(_hproc, _ct.c_size_t(_all_mask))
+        except Exception:
+            pass
+
     class ReusableThreadingHTTPServer(ThreadingHTTPServer):
         allow_reuse_address = True
+        daemon_threads = True
+        request_queue_size = 128
 
     srv = ReusableThreadingHTTPServer(("127.0.0.1", args.port), MerlinUnifiedHTTPHandler)
     print(

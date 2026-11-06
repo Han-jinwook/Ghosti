@@ -415,30 +415,38 @@ export const ZCORE_OFFLINE_MESSAGE =
 type ZResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 async function zcoreJson<T = any>(path: string, init?: RequestInit, timeoutMs = 20000): Promise<ZResult<T>> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(getZCoreUrl(path), { ...init, signal: controller.signal });
-    const ct = res.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(getZCoreUrl(path), { ...init, signal: controller.signal });
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
+      }
+      const data = (await res.json()) as any;
+      if (res.status === 403) {
+        return { ok: false, error: data?.error || '허용되지 않은 화면에서 요청되어 Z-코어가 실행을 거절했습니다.' };
+      }
+      if (!res.ok && data?.error) {
+        return { ok: false, error: data.error };
+      }
+      return { ok: true, data };
+    } catch (err: any) {
+      clearTimeout(timer);
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 350));
+        continue;
+      }
+      if (err?.name === 'AbortError') {
+        return { ok: false, error: 'Z-코어 응답 대기 시간이 초과되었습니다. Z-코어가 정상 구동 중인지 확인해 주세요.' };
+      }
       return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
+    } finally {
+      clearTimeout(timer);
     }
-    const data = (await res.json()) as any;
-    if (res.status === 403) {
-      return { ok: false, error: data?.error || '허용되지 않은 화면에서 요청되어 Z-코어가 실행을 거절했습니다.' };
-    }
-    if (!res.ok && data?.error) {
-      return { ok: false, error: data.error };
-    }
-    return { ok: true, data };
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      return { ok: false, error: 'Z-코어 응답 대기 시간(20초)이 초과되었습니다. Z-코어가 정상 구동 중인지 확인해 주세요.' };
-    }
-    return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
-  } finally {
-    clearTimeout(timer);
   }
+  return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
 }
 
 function postJson(body: unknown): RequestInit {
@@ -474,8 +482,8 @@ export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
     return cachedPcContext;
   }
   const [specRes, osRes] = await Promise.all([
-    zcoreJson<any>('/__zcore/pc-spec', undefined, 2500),
-    zcoreJson<any>('/__zcore/os-inspect', undefined, 2500),
+    zcoreJson<any>('/__zcore/pc-spec', undefined, 8000),
+    zcoreJson<any>('/__zcore/os-inspect', undefined, 8000),
   ]);
 
   if (!specRes.ok && !osRes.ok) {

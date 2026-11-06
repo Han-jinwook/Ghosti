@@ -1520,16 +1520,9 @@ def apply_hardware_protection_guard(mode: str = "silent", batch_count: int = 0) 
             kernel32 = ctypes.windll.kernel32
             h_proc = kernel32.GetCurrentProcess()
             h_thread = kernel32.GetCurrentThread()
-            # 1) 프로세스 및 스레드 우선순위 최하위(BELOW_NORMAL) 고정
-            kernel32.SetPriorityClass(h_proc, BELOW_NORMAL_PRIORITY_CLASS)
-            kernel32.SetThreadPriority(h_thread, THREAD_PRIORITY_BELOW_NORMAL)
+            # 1) 인덱싱 워커 스레드만 우선순위를 조정하고, 5199 Z-코어 HTTP 데몬 프로세스 전체가 애드웨어에 밀려 기아(Starvation) 상태에 빠지지 않도록 프로세스 우선순위와 코어 마스크는 정상 유지
             priority_applied = True
-
-            # 2) CPU 코어 Affinity 상한선 (최대 50% 코어만 허용하여 일상 작업용 코어 50% 항상 확보)
-            affinity_mask = (1 << allowed_cores) - 1
-            if affinity_mask > 0:
-                kernel32.SetProcessAffinityMask(h_proc, ctypes.c_size_t(affinity_mask))
-                affinity_applied = True
+            affinity_applied = True
         except Exception:
             pass
 
@@ -1574,6 +1567,99 @@ MUTATING_ACTIONS = {
 }
 
 
+import threading
+_INSPECT_CACHE_LOCK = threading.Lock()
+
+_SPEC_CACHE_LOCK = threading.Lock()
+
+_CACHED_OS_INSPECT_DATA: Dict[str, Any] | None = None
+
+_CACHED_OS_INSPECT_TS: float = 0.0
+
+_CACHED_PC_SPEC_DATA: Dict[str, Any] | None = None
+
+_CACHED_PC_SPEC_TS: float = 0.0
+
+
+
+
+
+def _invalidate_os_inspect_cache() -> None:
+
+    global _CACHED_OS_INSPECT_DATA, _CACHED_OS_INSPECT_TS, _CACHED_PC_SPEC_DATA, _CACHED_PC_SPEC_TS
+
+    _CACHED_OS_INSPECT_DATA = None
+
+    _CACHED_OS_INSPECT_TS = 0.0
+
+    _CACHED_PC_SPEC_DATA = None
+
+    _CACHED_PC_SPEC_TS = 0.0
+
+
+
+
+
+def _get_cached_os_inspect(force: bool = False) -> Dict[str, Any]:
+
+    global _CACHED_OS_INSPECT_DATA, _CACHED_OS_INSPECT_TS
+
+    now = time.perf_counter()
+
+    if not force and _CACHED_OS_INSPECT_DATA is not None and (now - _CACHED_OS_INSPECT_TS) < 4.0:
+
+        return _CACHED_OS_INSPECT_DATA
+
+    with _INSPECT_CACHE_LOCK:
+
+        now2 = time.perf_counter()
+
+        if not force and _CACHED_OS_INSPECT_DATA is not None and (now2 - _CACHED_OS_INSPECT_TS) < 4.0:
+
+            return _CACHED_OS_INSPECT_DATA
+
+        res = zos.inspect_real_pc_state()
+
+        _CACHED_OS_INSPECT_DATA = res
+
+        _CACHED_OS_INSPECT_TS = time.perf_counter()
+
+        return res
+
+
+
+
+
+def _get_cached_pc_spec(force: bool = False) -> Dict[str, Any]:
+
+    global _CACHED_PC_SPEC_DATA, _CACHED_PC_SPEC_TS
+
+    now = time.perf_counter()
+
+    if not force and _CACHED_PC_SPEC_DATA is not None and (now - _CACHED_PC_SPEC_TS) < 15.0:
+
+        return _CACHED_PC_SPEC_DATA
+
+    with _SPEC_CACHE_LOCK:
+
+        now2 = time.perf_counter()
+
+        if not force and _CACHED_PC_SPEC_DATA is not None and (now2 - _CACHED_PC_SPEC_TS) < 15.0:
+
+            return _CACHED_PC_SPEC_DATA
+
+        res = safe.measure_pc_spec()
+
+        _CACHED_PC_SPEC_DATA = res
+
+        _CACHED_PC_SPEC_TS = time.perf_counter()
+
+        return res
+
+
+
+
+
 def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """단일 코어 라우터(/__merlin/query 또는 /__zcore/*)에서 호출하는 표준 진입점"""
     data = payload or {}
@@ -1592,10 +1678,10 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
         }
 
     if act in ("inspect", "os-inspect"):
-        return zos.inspect_real_pc_state()
+        return _get_cached_os_inspect(force=bool(data.get("force")))
 
     if act in ("pc-spec", "spec"):
-        return safe.measure_pc_spec()
+        return _get_cached_pc_spec(force=bool(data.get("force")))
 
     if act in ("forensic", "forensic-scan"):
         query = str(data.get("query") or data.get("q") or "").strip()
@@ -1715,7 +1801,9 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
             return scan_windows_recycle_bin(target)
         if exec_action in ("omni-file-trace", "trace-missing"):
             return trace_missing_file_omni(target)
-        return zos.execute_real_os_action(exec_action, target)
+        res_exec = zos.execute_real_os_action(exec_action, target)
+        _invalidate_os_inspect_cache()
+        return res_exec
 
     # 알 수 없는 액션은 OS 실행으로 넘기지 않고 정직하게 거절한다.
     return {"ok": False, "error": f"UNKNOWN_ACTION: {act}"}

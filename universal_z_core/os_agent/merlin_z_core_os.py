@@ -256,11 +256,13 @@ def get_real_open_windows(max_count: int = 15) -> List[Dict[str, Any]]:
         hw = wintypes.HWND(hwnd)
         if not user32.IsWindowVisible(hw):
             return True
-        length = user32.GetWindowTextLengthW(hw)
-        if length <= 0:
+        buf = ctypes.create_unicode_buffer(260)
+        try:
+            copied = user32.InternalGetWindowText(hw, buf, 256)
+            if copied <= 0:
+                return True
+        except Exception:
             return True
-        buf = ctypes.create_unicode_buffer(length + 1)
-        user32.GetWindowTextW(hw, buf, length + 1)
         title = buf.value.strip()
         if not title or title in ("Program Manager", "Settings", "설정", "Microsoft Text Input Application"):
             return True
