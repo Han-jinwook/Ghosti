@@ -67,6 +67,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   const [step, setStep] = useState<ZCoreModalStep>('intro');
   const [progress, setProgress] = useState<number>(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [manualCheckHint, setManualCheckHint] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
   const hasTriggeredInitRef = useRef<boolean>(false);
   const initPromiseRef = useRef<Promise<void> | null>(null);
@@ -252,13 +253,24 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   const handleManualCheck = async () => {
     setIsChecking(true);
-    const ok = await zCoreBridge.checkHealth();
+    setManualCheckHint('🔍 Z-코어 실행 신호를 확인하고 있습니다 (최초 실행 시 압축 해제에 4~6초가 걸릴 수 있습니다)...');
+    let ok = false;
+    for (let attempt = 0; attempt < 9; attempt++) {
+      ok = await zCoreBridge.checkHealth();
+      if (ok) break;
+      await new Promise((r) => window.setTimeout(r, 900));
+    }
     setIsChecking(false);
     setIsConnected(ok);
     setVersion(zCoreBridge.version);
     if (ok) {
+      setManualCheckHint(null);
       setProgress(0);
       setStep('indexing');
+    } else {
+      setManualCheckHint(
+        '⚠️ 아직 로컬 포트(127.0.0.1:5199)에서 실행 신호가 감지되지 않았습니다. 다운로드된 Merlin_Z_Core.zip 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 더블클릭해 실행(파란 보호창이 뜨면 [추가 정보] ➔ [실행])한 뒤 5초 후 다시 눌러 주세요.'
+      );
     }
   };
 
@@ -436,6 +448,22 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 <span>켜지는 즉시 이 창이 불러오기 화면으로 자동 전환됩니다.</span>
               </div>
             </div>
+
+            {manualCheckHint && (
+              <div
+                className={`mb-4 p-3 rounded-xl border text-xs leading-relaxed ${
+                  isChecking
+                    ? isLight
+                      ? 'bg-teal-50 border-teal-200 text-teal-900'
+                      : 'bg-teal-950/40 border-teal-500/30 text-teal-200'
+                    : isLight
+                    ? 'bg-rose-50 border-rose-200 text-rose-900'
+                    : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+                }`}
+              >
+                {manualCheckHint}
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <a

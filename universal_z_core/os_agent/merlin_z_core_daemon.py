@@ -878,14 +878,6 @@ def main() -> None:
         return
 
     replaced_pids = ensure_port_free(args.port)
-    start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
-    plugin_ghosti_superpowers.ensure_superpower_daemon_running()
-    try:
-        import ghosti_safe_ops
-
-        ghosti_safe_ops.start_desktop_timemachine_watcher()
-    except Exception:
-        pass
 
     if os.name == "nt":
         try:
@@ -903,7 +895,25 @@ def main() -> None:
         daemon_threads = True
         request_queue_size = 128
 
+    # 1) 포트 5199 HTTP 서버를 가장 먼저 즉시 바인딩하여 웹앱의 '실행했어요 (즉시 확인)' 헬스체크가 0.1초 만에 성공하게 보장
     srv = ReusableThreadingHTTPServer(("127.0.0.1", args.port), MerlinUnifiedHTTPHandler)
+
+    # 2) 트레이 아이콘 및 부가 데몬(Ctrl+0 초능력, 바탕화면 타임머신)은 백그라운드 스레드에서 비동기로 기동 (HTTP 바인딩 블로킹 원천 차단)
+    start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
+
+    def _start_auxiliary_watchers() -> None:
+        try:
+            plugin_ghosti_superpowers.ensure_superpower_daemon_running()
+        except Exception:
+            pass
+        try:
+            import ghosti_safe_ops
+
+            ghosti_safe_ops.start_desktop_timemachine_watcher()
+        except Exception:
+            pass
+
+    threading.Thread(target=_start_auxiliary_watchers, daemon=True).start()
     print(
         json.dumps(
             {

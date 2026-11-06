@@ -263,6 +263,8 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         *(["--add-data", f"{icon_file};."] if icon_file.exists() else []),
         *(["--add-data", f"{logo_png};."] if logo_png.exists() else []),
         "--hidden-import", "plugin_ghosti_os",
+        "--hidden-import", "plugin_ghosti_superpowers",
+        "--hidden-import", "seq_paste_daemon",
         "--hidden-import", "ghosti_safe_ops",
         "--hidden-import", "ghosti_setup_parity",
         "--hidden-import", "merlin_tts_engine",
