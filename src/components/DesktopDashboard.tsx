@@ -401,10 +401,27 @@ export const DesktopDashboard: React.FC = () => {
   }, [searchResults, groupBurstsInSearch, searchSpace, hasExecutedUserSearch]);
 
   useEffect(() => {
+    if (isMobileDrawerOpen) return;
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
-  }, [activeLoungeType, desktopTab, activeFamilyRoom]);
+  }, [activeLoungeType, desktopTab, activeFamilyRoom, isMobileDrawerOpen]);
+
+  // 모바일 사이드바 드로어(isMobileDrawerOpen)가 열려 있는 동안 뒤쪽 배경 페이지가 스크롤되는 오류(Background Scroll Bleed) 원천 차단
+  useEffect(() => {
+    if (typeof document === 'undefined' || !isMobileDrawerOpen) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overscrollBehavior = prevBodyOverscroll;
+    };
+  }, [isMobileDrawerOpen]);
 
   const collapsedBurstCount = searchResults.length - groupedResults.length;
   const currentSubmenus = LOUNGE_SUBMENU_CONFIG[activeLoungeType] || LOUNGE_SUBMENU_CONFIG.personal;
@@ -416,13 +433,13 @@ export const DesktopDashboard: React.FC = () => {
 
   const renderSidebarNavigationContent = (isMobileDrawer = false) => (
     <div
-      className={`h-full flex flex-col justify-between p-3 select-none ${
+      className={`h-full flex flex-col justify-between p-3 select-none overscroll-contain ${
         themeMode === 'light'
           ? 'bg-[#F8F7F4] border-r border-[#E5E0D5] text-slate-800'
           : 'bg-[#111114] border-r border-white/10 text-zinc-200'
       }`}
     >
-      <div className="flex flex-col gap-4 overflow-y-auto no-scrollbar">
+      <div className="flex flex-col gap-4 overflow-y-auto overscroll-contain no-scrollbar">
         {/* 1. 사이드바 최상단: 공식 스타일 A 브랜드 로고 (Ghosti + [👁️ AI 내용검색]) & 사이드바 접기 버튼 */}
         <div className="flex items-center justify-between px-1.5 py-1 gap-1.5">
           <GhostiBrandLogo
@@ -499,7 +516,7 @@ export const DesktopDashboard: React.FC = () => {
                     setActiveLoungeType('personal');
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
-                    scrollAppToTop();
+                    if (!isMobileDrawer) scrollAppToTop();
                   }}
                   className={mainBtnClass(isMyDeviceActive)}
                 >
@@ -563,7 +580,7 @@ export const DesktopDashboard: React.FC = () => {
                     setIsDeviceIntegrationOpen(true);
                     setActiveLoungeType('personal');
                     setDesktopTab('sync');
-                    scrollAppToTop();
+                    if (!isMobileDrawer) scrollAppToTop();
                   }}
                   className={mainBtnClass(isDeviceIntegrationActive)}
                 >
@@ -790,12 +807,13 @@ export const DesktopDashboard: React.FC = () => {
 
       {/* ─────────────── [모바일 lg 미만] 좌상단 ☰ 터치 시 열리는 슬라이드 드로어 ─────────────── */}
       {isMobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
+        <div className="fixed inset-0 z-50 lg:hidden flex overscroll-contain">
           <div
             onClick={() => setIsMobileDrawerOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            onTouchMove={(e) => e.preventDefault()}
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs touch-none"
           />
-          <aside className="relative w-[264px] max-w-[82vw] h-full z-10 shadow-2xl">
+          <aside className="relative w-[264px] max-w-[82vw] h-full z-10 shadow-2xl overscroll-contain">
             {renderSidebarNavigationContent(true)}
           </aside>
         </div>
