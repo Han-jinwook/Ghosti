@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { getZCoreUrl, zCoreBridge, ensureLoginAndZCoreReady } from '../services/zCoreBridge';
-import { playMenuSummonSound } from '../services/babyGhostSound';
 import { submitExternalMonsterChatQuery } from '../services/monsterChatRouter';
 import { isMobileVoiceEnvironment } from '../services/setupMonsterTts';
 
@@ -1085,9 +1084,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   desktopTab: 'dashboard',
   setLayout: (layout) => set({ layout }),
   setMobileTab: (mobileTab) => {
-    if (get().mobileTab !== mobileTab) {
-      playMenuSummonSound();
-    }
     set({
       mobileTab,
       desktopTab:
@@ -1108,9 +1104,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
   },
   setDesktopTab: (desktopTab) => {
-    if (get().desktopTab !== desktopTab) {
-      playMenuSummonSound();
-    }
     set({
       desktopTab,
       mobileTab:
@@ -4386,9 +4379,6 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       // (스쿨 화면 코드는 추후 동창회 '우리반 타임캡슐' 메뉴 이식용 자산으로 보존, 라우팅만 차단)
       const activeLoungeType: LoungeType =
         requestedLoungeType === 'student' ? 'club' : requestedLoungeType;
-      if (state.activeLoungeType !== activeLoungeType) {
-        playMenuSummonSound();
-      }
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
       return {
         activeLoungeType,

@@ -7,7 +7,6 @@ function scrollAppToTop(): void {
 }
 import React, { useEffect, useMemo, useState } from 'react';
 import { zCoreBridge } from '../services/zCoreBridge';
-import { playMenuSummonSound } from '../services/babyGhostSound';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import { groupBurstSearchResults, probeBrowserVideoDurationSec } from '../services/aiEngine';
@@ -512,7 +511,6 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    playMenuSummonSound();
                     setIsDeviceIntegrationOpen(false);
                     setActiveLoungeType('personal');
                     setDesktopTab('dashboard');
@@ -536,7 +534,6 @@ export const DesktopDashboard: React.FC = () => {
                           key={sub.id}
                           type="button"
                           onClick={() => {
-                            playMenuSummonSound();
                             setIsDeviceIntegrationOpen(false);
                             setActiveLoungeType('personal');
                             setDesktopTab(sub.id);
@@ -579,7 +576,6 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    playMenuSummonSound();
                     setIsDeviceIntegrationOpen(true);
                     setActiveLoungeType('personal');
                     setDesktopTab('sync');
@@ -598,7 +594,6 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        playMenuSummonSound();
                         setIsDeviceIntegrationOpen(true);
                         setActiveIntegrationSubTab('devices');
                         setActiveLoungeType('personal');
@@ -623,7 +618,6 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        playMenuSummonSound();
                         setIsDeviceIntegrationOpen(true);
                         setActiveIntegrationSubTab('superpower');
                         setActiveLoungeType('personal');
@@ -653,7 +647,6 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    playMenuSummonSound();
                     setIsDeviceIntegrationOpen(false);
                     if (
                       activeLoungeType !== 'family' &&
@@ -678,7 +671,6 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        playMenuSummonSound();
                         setIsDeviceIntegrationOpen(false);
                         setActiveLoungeType('family');
                         setDesktopTab('dashboard');
@@ -701,7 +693,6 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        playMenuSummonSound();
                         setIsDeviceIntegrationOpen(false);
                         setActiveLoungeType('club');
                         setDesktopTab('dashboard');
@@ -731,7 +722,6 @@ export const DesktopDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    playMenuSummonSound();
                     setIsDeviceIntegrationOpen(false);
                     setActiveLoungeType('work');
                     setDesktopTab('dashboard');
@@ -750,7 +740,6 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        playMenuSummonSound();
                         setIsDeviceIntegrationOpen(false);
                         setActiveLoungeType('work');
                         setDesktopTab('dashboard');
@@ -772,7 +761,6 @@ export const DesktopDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        playMenuSummonSound();
                         setIsDeviceIntegrationOpen(false);
                         setActiveLoungeType('work');
                         setDesktopTab('sync');
