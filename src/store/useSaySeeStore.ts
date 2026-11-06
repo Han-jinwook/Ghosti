@@ -2681,15 +2681,17 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ).slice(0, 4)
         : Array.from(new Set(results.slice(0, 4).flatMap((r) => r.photo.tags))).slice(0, 3);
 
-    // [남성 성우 현수 브리핑 — 사진/일상/동영상/문서 검색 결과 음성 안내]
+    // [성우 브리핑 (현수 / 선희) — 검색 결과 군더더기 배제 표준 안내]
+    // 1) 결과 없음: "검색 결과가 없습니다."로 간단하게 읽기
+    // 2) 결과 있음: "요청하신 ~ 검색 결과" 군더더기 제외하고 "사진 0장을 찾았습니다."로 간결하게 브리핑
     const searchBriefingKo =
       targetSpace === 'video' && videoMatches.length > 0
-        ? `요청하신 '${query}' 검색 결과, 일치하는 동영상 장면 ${videoMatches.length}건을 찾았습니다.`
+        ? `일치하는 동영상 장면 ${videoMatches.length}건을 찾았습니다.`
         : targetSpace === 'vault' && (docMatches.length > 0 || vaultPhotoMatches.length > 0)
-        ? `요청하신 '${query}' 관련 서류 ${docMatches.length + vaultPhotoMatches.length}건을 찾았습니다.`
+        ? `관련 서류 ${docMatches.length + vaultPhotoMatches.length}건을 찾았습니다.`
         : results.length > 0
-        ? `요청하신 '${query}' 검색 결과, 사진 ${results.length}장을 찾았습니다.`
-        : `요청하신 '${query}' 검색 결과를 화면에 준비했습니다.`;
+        ? `사진 ${results.length}장을 찾았습니다.`
+        : '검색 결과가 없습니다.';
     void speakWithHyunsuOrSunhi(searchBriefingKo, 'hyunsu_briefing');
 
     set({
