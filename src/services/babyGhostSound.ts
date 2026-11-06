@@ -123,31 +123,10 @@ export function playAppEnterGiggleSound(_forceReplay = false): void {
 }
 
 /**
- * ✨ 좌측 메인/서브메뉴 및 상단 탭 클릭 시 재생되는 '애기귀신 호출소리(퐁~ 띠링!✨)'
- * - 기존 재생 중인 호출소리가 있으면 즉시 멈추고 처음부터 재생하며,
- * - 동시에 두 액션(예: setActiveLoungeType + setMobileTab)이 연달아 호출될 때 280ms 디바운스로 이중 중첩 재생을 원천 차단합니다.
+ * ✨ 좌측 메인/서브메뉴 및 상단 탭 클릭 시 재생되던 '애기귀신 호출소리(퐁~ 띠링!✨)'
+ * - 메뉴 클릭 시 반복되는 음향 피로도를 줄이기 위해 완전 무음(No-Op) 처리
+ * - (입장 시 1회 시그니처 웃음소리 playAppEnterGiggleSound만 유지)
  */
 export function playMenuSummonSound(): void {
-  if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
-  const now = Date.now();
-  if (now - lastSummonSoundAt < 280) {
-    return;
-  }
-  lastSummonSoundAt = now;
-
-  try {
-    if (activeSummonAudio) {
-      activeSummonAudio.pause();
-      activeSummonAudio.currentTime = 0;
-    } else {
-      activeSummonAudio = new Audio(SUMMON_SOUND_URL);
-      activeSummonAudio.preload = 'auto';
-    }
-    activeSummonAudio.volume = 0.25;
-    void activeSummonAudio.play().catch(() => {
-      playFallbackWebAudio();
-    });
-  } catch {
-    playFallbackWebAudio();
-  }
+  // 사용자 피로도 방지를 위해 메뉴 클릭 효과음 제거 (무음 처리)
 }
