@@ -2591,14 +2591,16 @@ export async function processUnifiedMonsterChatQuery(params: {
       }>('/__zcore/os-inspect'),
     ]);
     const prevSpec = lastSpecMsg.pcSpecPayload;
+    const osNowData = osNow.ok ? osNow.data : undefined;
+    const rNowData = rNow.ok ? rNow.data : undefined;
     const curCpu =
-      typeof osNow.data?.spoolerAndSecurity?.cpuLoadPercent === 'number'
-        ? osNow.data.spoolerAndSecurity.cpuLoadPercent
+      typeof osNowData?.spoolerAndSecurity?.cpuLoadPercent === 'number'
+        ? osNowData.spoolerAndSecurity.cpuLoadPercent
         : prevSpec.cpuLoadPercent;
     const curRamPct =
-      typeof rNow.data?.ramUsedPercent === 'number' ? rNow.data.ramUsedPercent : prevSpec.ramUsedPercent;
-    const curSecCount = Array.isArray(osNow.data?.spoolerAndSecurity?.activeSecurityPlugins)
-      ? osNow.data!.spoolerAndSecurity!.activeSecurityPlugins!.length
+      typeof rNowData?.ramUsedPercent === 'number' ? rNowData.ramUsedPercent : prevSpec.ramUsedPercent;
+    const curSecCount = Array.isArray(osNowData?.spoolerAndSecurity?.activeSecurityPlugins)
+      ? osNowData.spoolerAndSecurity!.activeSecurityPlugins!.length
       : 0;
     const alreadyCleaned = Boolean(prevSpec.bloatwareCleaned);
 
