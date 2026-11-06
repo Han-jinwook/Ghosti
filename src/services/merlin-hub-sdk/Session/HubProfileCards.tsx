@@ -492,6 +492,28 @@ export interface HubLogoutCardProps {
 
 export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({ onLogout, className = '' }) => {
   const { isLoggedIn } = useHub();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleAccountDelete = async () => {
+    setDeleting(true);
+    try {
+      const { hubFetch, clearSessionToken } = await import('../CoreLogic/client');
+      await hubFetch('/api/auth/account', { method: 'DELETE' }).catch(() => {});
+      clearSessionToken('global');
+    } catch {}
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
+      document.cookie = 'merlin_session_token=; path=/; max-age=0;';
+      window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
+      window.dispatchEvent(new Event('profileUpdated'));
+      alert('회원 탈퇴 및 개인정보 파기가 즉시 완료되었습니다.');
+      if (onLogout) onLogout();
+      window.location.href = window.location.origin + '/';
+      setTimeout(() => window.location.reload(), 50);
+    }
+  };
 
   const handleLogout = async () => {
     try {

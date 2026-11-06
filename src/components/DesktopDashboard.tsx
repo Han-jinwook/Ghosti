@@ -1142,7 +1142,7 @@ export const DesktopDashboard: React.FC = () => {
                     <div className="flex items-center gap-2.5">
                       <h1 className="font-headline-md text-[20px] md:text-[24px] text-white font-extrabold tracking-tight">
                         {activeLoungeType === 'personal'
-                          ? '🔍 내 기기 1초 투시검색'
+                          ? '🔍 내 기기 1초 AI 내용검색'
                           : activeLoungeType === 'family'
                           ? `👨‍👩‍👧‍👦 ${activeFamilyRoom} 패밀리 앨범`
                           : activeLoungeType === 'club'
@@ -1850,7 +1850,7 @@ export const DesktopDashboard: React.FC = () => {
             )}
           </section>
 
-          {/* 노션 토글 2: 🛡️ 모바일↔PC 연동 가이드 · 탈퇴 데이터 보호 원칙 & 스토어 심사 클린 모드 제어 */}
+          {/* 노션 토글 2: 🛡️ 모바일↔PC 연동 가이드 · 탈퇴 데이터 보호 원칙 */}
           <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
             <div
               onClick={() => setShowPolicyAndStoreSection((v) => !v)}
@@ -1858,10 +1858,10 @@ export const DesktopDashboard: React.FC = () => {
             >
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="text-[12.5px] text-emerald-400 font-bold">
-                  {showPolicyAndStoreSection ? '▾' : '▸'} 🛡️ 데스크톱 연동 가이드 · 탈퇴 데이터 보호 원칙 &amp; 스토어 심사 모드
+                  {showPolicyAndStoreSection ? '▾' : '▸'} 🛡️ 데스크톱 연동 가이드 · 탈퇴 데이터 보호 원칙
                 </span>
                 <span className="hidden sm:inline text-[12px] text-zinc-400">
-                  13KB 썸네일 DB 자체 해결 · 탈퇴 시 내 여권 100% 보존 · Anti-steering 3중 방어
+                  13KB 썸네일 DB 자체 해결 · 탈퇴 시 내 여권 100% 보존 · 원본 로컬 보관
                 </span>
               </div>
               <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all">
@@ -1872,76 +1872,6 @@ export const DesktopDashboard: React.FC = () => {
             {showPolicyAndStoreSection && (
               <div className="px-5 pb-5 pt-3 border-t border-white/10 flex flex-col gap-4">
                 <PcMasterQuickSendPanel />
-
-                <div className="p-4 rounded-2xl bg-zinc-950/80 border border-white/10 flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-[12px] text-emerald-300 font-extrabold">
-                    스토어 심사 모드 설정
-                  </span>
-
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setIsStoreAppMode(!isStoreAppMode)}
-                      className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border transition-all cursor-pointer ${
-                        isStoreAppMode
-                          ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
-                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/15'
-                      }`}
-                    >
-                      {isStoreAppMode ? '📱 스토어 심사 클린 모드: ON' : '💻 PC 마스터 모드 (클릭 시 스토어 모드)'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEnableSetupMonster(!enableSetupMonster)}
-                      className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border transition-all cursor-pointer ${
-                        enableSetupMonster
-                          ? 'bg-primary-container text-zinc-950 border-primary-container'
-                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-white/15'
-                      }`}
-                    >
-                      {enableSetupMonster
-                        ? '🛠️ 귀신같이 손보기 (enableSetupMonster=true)'
-                        : '🔒 귀신같이 손보기 숨김 (enableSetupMonster=false)'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEnableMobileCoinDisplay(!enableMobileCoinDisplay)}
-                      className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border transition-all cursor-pointer ${
-                        enableMobileCoinDisplay
-                          ? 'bg-amber-400 text-zinc-950 border-amber-300'
-                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-white/15'
-                      }`}
-                    >
-                      {enableMobileCoinDisplay
-                        ? '🪙 코인 잔액 표시: ON'
-                        : '🔒 코인 잔액 완전 숨김: OFF (기본값)'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEnablePcGuideShareButton(!enablePcGuideShareButton)}
-                      className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border transition-all cursor-pointer ${
-                        enablePcGuideShareButton
-                          ? 'bg-[#FEE500] text-[#191919] border-[#FEE500]'
-                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-white/15'
-                      }`}
-                    >
-                      {enablePcGuideShareButton
-                        ? '💬 카톡·이메일 가이드 버튼: ON'
-                        : '🔒 카톡·이메일 가이드 버튼: OFF (심사 잠금)'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowMobileMasterPcIntroModal(true)}
-                      className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer"
-                    >
-                      🛡️ /?master=pc 모바일 접속 시 방어 화면 보기
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </section>

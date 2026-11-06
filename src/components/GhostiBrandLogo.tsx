@@ -77,7 +77,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   return (
     <div
       onClick={onClick}
-      title="귀신같이 — AI 1초 투시검색 사진·영상·문서 찾기"
+      title="귀신같이 — 1초 AI 내용검색 사진·영상·문서 찾기"
       className={`inline-flex items-center gap-2 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
@@ -103,7 +103,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
                   AI
                 </span>
                 <span className={`text-[11px] font-extrabold tracking-tight ${sloganColorClass} whitespace-nowrap`}>
-                  1초 투시검색
+                  1초 내용검색
                 </span>
               </div>
               <span className={`text-[10px] font-bold tracking-tight opacity-85 ${sloganColorClass} whitespace-nowrap pl-0.5`}>

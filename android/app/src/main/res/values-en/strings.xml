@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ghosti AI</string>
+    <string name="title_activity_main">Ghosti AI</string>
+    <string name="package_name">app.sundreamer.ghosti</string>
+    <string name="custom_url_scheme">app.sundreamer.ghosti</string>
+</resources>

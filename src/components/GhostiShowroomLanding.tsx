@@ -48,16 +48,16 @@ const DEFAULT_SHORTS_DATA: ShortsItem[] = [
     thumbnailBg: 'from-cyan-950 via-teal-900 to-slate-900',
     isNew: true,
   },
-  // 2. 문서·엑셀 투시 검색
+  // 2. 문서·엑셀 내용 검색
   {
     id: 'doc-1',
     category: 'doc',
     title: '“최종_진짜최종_수정3.xlsx... 파일 열지 마세요”',
     hookTime: '00:00 ~ 00:03 (훅)',
     hookLine: '“엑셀 파일 수십 개 하나씩 열어서 Ctrl+F 누르다가 컴퓨터 멈춘 적 있으시죠?”',
-    solutionLine: '파일을 안 열어도 표 안의 숫자와 글자를 0.01초 만에 엑스레이처럼 투시합니다.',
+    solutionLine: '파일을 안 열어도 표 안의 숫자와 글자를 0.01초 만에 찾아냅니다.',
     recommendedKeyword: '지체상금 0.15% / 계약금 잔금 / 소득공제',
-    tag: PATENTS_FILED ? '📊 무설정 스마트 서류 투시 특허' : '📊 무설정 스마트 서류 투시 검색',
+    tag: PATENTS_FILED ? '📊 무설정 스마트 서류 검색 특허' : '📊 무설정 스마트 서류 내용검색',
     thumbnailBg: 'from-blue-950 via-indigo-950 to-slate-900',
     isNew: true,
   },
@@ -143,7 +143,7 @@ const INTERACTIVE_SCENARIOS = {
       file: 'D:\\업무문서\\2026_물품공급_표준계약서_최종수정3.pdf (24페이지)',
       location: '제14조 (지체상금 및 면책) — 9페이지 12번째 줄',
       previewSnippet: '“을이 납품기한 내에 물품을 납품하지 못할 때에는 지체일수 매 1일당 계약금액의 0.15%(천분의 1.5)에 해당하는 지체상금을...”',
-      latency: '0.006초 (파일 안 열고 즉시 투시)',
+      latency: '0.006초 (파일 안 열고 즉시 포착)',
     },
     {
       query: '부가세 환급 내역',
@@ -155,7 +155,7 @@ const INTERACTIVE_SCENARIOS = {
     {
       query: '사업자등록번호',
       file: 'D:\\스캔보관함\\scan_20260311_004.jpg (스캔 이미지)',
-      location: '온디바이스 OCR 투시 — 상단 3번째 줄',
+      location: '온디바이스 OCR 판독 — 상단 3번째 줄',
       previewSnippet: '“상호: (주)썬드림스튜디오 | 등록번호: 123-86-XXXXX | 개업연월일: 2026년...”',
       latency: '0.012초 (이미지 속 글자 즉시 추출)',
     },
@@ -792,7 +792,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                📊 엑셀·문서 투시
+                📊 엑셀·문서 내용검색
               </button>
               <button
                 type="button"
@@ -906,14 +906,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     >
                       <div>
                         <span className="text-xs text-teal-300 font-bold block mb-0.5">
-                          📄 무열람 투시 검색어 #{idx + 1}
+                          📄 무열람 내용 검색어 #{idx + 1}
                         </span>
                         <span className="text-base font-black text-white">
                           “{item.query}”
                         </span>
                       </div>
                       <span className="px-2.5 py-1 rounded-lg bg-[#00F0B5]/20 text-[#00F0B5] text-xs font-extrabold">
-                        엑스레이 투시 ➔
+                        1초 내용검색 ➔
                       </span>
                     </button>
                   ))}
@@ -1307,7 +1307,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     AFTER (각성 구간)
                   </span>
                   <h3 className="text-lg sm:text-2xl font-black text-white">
-                    말 한마디로 1초 만에 포착! 황금 돋보기 스캔 광선으로 즉시 투시
+                    말 한마디로 1초 만에 포착! 황금 돋보기 스캔 광선으로 즉시 검색
                   </h3>
                   <p className="text-teal-200/80 text-xs sm:text-sm mt-1">
                     {PATENTS_FILED ? '대한민국 6대 특허출원 엔진 탑재.' : '100% 로컬 온디바이스 AI 엔진 탑재.'} 파일·영상·사진이 있는 그 자리에서 1초 만에 찾아냅니다.
@@ -1367,7 +1367,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700'
               }`}
             >
-              📊 문서·엑셀 투시 검색
+              📊 문서·엑셀 내용검색
             </button>
             <button
               type="button"
@@ -1463,7 +1463,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             {
               icon: '💎',
               title: '신용카드 등록 없는 개인 평생 무료',
-              desc: '동영상 장면 찾기, 문서·엑셀 안 열어보고 투시 검색, 중복 사진 용량 청소 등 개인 핵심 기능은 복잡한 카드 등록 없이 평생 무료로 제공됩니다.',
+              desc: '동영상 장면 찾기, 문서·엑셀 안 열어보고 내용 검색, 중복 사진 용량 청소 등 개인 핵심 기능은 복잡한 카드 등록 없이 평생 무료로 제공됩니다.',
             },
           ].map((item) => (
             <div
@@ -1499,7 +1499,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed max-w-xl">
               {!isLaunched
                 ? '미리 이메일 인증을 마친 회원님께는 정식 출시 즉시 알림 메일을 보내드리며, 출시 후 별도 회원가입 없이 1초 만에 본 앱으로 바로 입장하실 수 있습니다.'
-                : '복잡한 설정 없이 버튼 하나로 본 앱 워크스페이스로 입장하여 동영상·문서·사진 1초 투시 검색을 바로 경험하실 수 있습니다.'}
+                : '복잡한 설정 없이 버튼 하나로 본 앱 워크스페이스로 입장하여 동영상·문서·사진 1초 AI 내용검색을 바로 경험하실 수 있습니다.'}
             </p>
           </div>
 
@@ -1559,7 +1559,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               Q1. 귀신같이(Ghosti)는 정말 개인 평생 무료인가요?
             </dt>
             <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              네! 동영상 속 대사·장면 1초 점프 찾기, 엑셀·PDF·한글·스캔 이미지 안 열어보고 투시 검색(찾기), 중복·흔들린 사진 1초 용량 청소(치우기), 컴퓨터 소리·인쇄·화면 먹통 수리(고치기) 등 <b>개인 라운지 3대 핵심 기능은 신용카드 등록 없이 10초 이메일 인증(무료 회원가입)만으로 평생 무료</b>입니다.
+              네! 동영상 속 대사·장면 1초 점프 찾기, 엑셀·PDF·한글·스캔 이미지 안 열어보고 내용 검색(찾기), 중복·흔들린 사진 1초 용량 청소(치우기), 컴퓨터 소리·인쇄·화면 먹통 수리(고치기) 등 <b>개인 라운지 3대 핵심 기능은 신용카드 등록 없이 10초 이메일 인증(무료 회원가입)만으로 평생 무료</b>입니다.
             </dd>
           </div>
 
@@ -1577,7 +1577,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               Q3. 동영상 속 대사나 엑셀·계약서 안의 글자도 열지 않고 찾아주나요?
             </dt>
             <dd className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              네! 파일 제목을 몰라도 기억나는 대사나 장면만 말하면 동영상 속 해당 초(Sec) 구간으로 1초 만에 점프하며, 엑셀·PDF·한글·스캔 이미지도 일일이 열어보지 않고 본문 속 숫자와 조항을 즉시 투시 검색합니다.
+              네! 파일 제목을 몰라도 기억나는 대사나 장면만 말하면 동영상 속 해당 초(Sec) 구간으로 1초 만에 점프하며, 엑셀·PDF·한글·스캔 이미지도 일일이 열어보지 않고 본문 속 숫자와 조항을 즉시 내용 검색합니다.
             </dd>
           </div>
 

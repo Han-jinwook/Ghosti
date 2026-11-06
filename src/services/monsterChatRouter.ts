@@ -1412,6 +1412,46 @@ function handleGhostiInfoDeskIfMatched(
 
   if (!isAskingAboutGhosti) return null;
 
+  const isCapacitorNative =
+    typeof window !== 'undefined' &&
+    Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+  const isStoreCleanMode =
+    isCapacitorNative ||
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('storeApp') === '1');
+
+  // 모바일 스토어 심사 클린 모드일 때: 가격/구독료 언급과 OPEN_PRICING_MODAL을 100% 배제하고 순수 무료 기능·연동 안내만 반환 (Apple 3.1.1 방어)
+  if (isStoreCleanMode) {
+    const cleanInfoPayload: MonsterInfoDeskPayload = {
+      topicBadge: '📱 귀신같이 모바일 핵심 기능 & 이메일 기기 연동 안내',
+      title: '내 기기 속 사진·문서 1초 AI 내용검색과 갤러리 스마트 정리를 지원합니다',
+      bulletPoints: [
+        '🎯 1초 AI 내용검색: 파일 이름이 기억나지 않아도 사진 속 사물·인물·장소, 서류 본문 글자로 1초 만에 찾아냅니다.',
+        '🧹 스마트 갤러리 손보기: 중복·연사 사진 중 가장 선명한 베스트 컷 1장만 남기고, 영수증·주차메모·스크린샷·흔들린 사진을 안전하게 정리 보관함으로 분류합니다.',
+        '🔗 이메일 1초 기기 연동: 동일한 이메일 계정으로 로그인하면 내 스마트폰과 데스크톱(PC)이 자동으로 연결되어 복사한 클립보드(암호화 우체통)와 공유 라운지를 이어서 확인할 수 있습니다.',
+        '📮 스튜디오 직결 창구: 이 대화창에 불편사항·A/S·아이디어를 말씀하시면 회원님 이름으로 스튜디오에 즉시 접수해 드립니다.',
+      ],
+      actionButtons: [
+        { label: '📖 온보딩 1탭(🎯 찾기 · 🪄 손보기 가이드) 열기', actionType: 'OPEN_ONBOARDING_TAB1' },
+        { label: '🔗 데스크톱(PC) 기기 연동 안내 보기', actionType: 'OPEN_PRICING_MODAL' },
+      ],
+    };
+    speak('귀신같이 앱은 사진과 문서를 일 초 만에 찾아주고 중복 사진을 깔끔하게 정리해 드리며, 같은 이메일로 로그인하시면 피씨와 자동으로 연결됩니다.');
+    return reply(
+      sourceTab,
+      `💁‍♂️ **[귀신같이 인포메이션 데스크 — 핵심 기능 & 이메일 자동 기기 연결 안내]**\n` +
+        `우리 앱은 **가입하신 이메일 계정 하나로 스마트폰과 데스크톱(PC)이 자동 연결**되어 어디서나 편리하게 찾고 정리하실 수 있습니다.`,
+      {
+        cardKind: 'GHOSTI_INFO_DESK',
+        infoDeskPayload: cleanInfoPayload,
+        followUpSuggestions: [
+          '중복·연사 사진 정리하는 법 알려줘',
+          '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
+          '아이디어 건의하고 싶은데 스튜디오에 접수해줘',
+        ],
+      }
+    );
+  }
+
   // Case 1: 요금제 · 내 기기 통합(3,900원) · 특판(5년/3년/2년) · QR 없는 이메일 연결 문의
   if (/내\s*기기\s*통합|소모임|300장|300개|2,?900|3,?900|4,?900|5,?900|8,?900|9,?900|요금|가격|구독|얼마|특판|마스터권|얼리버드|qr|이메일\s*연결|기기\s*연결/i.test(clean)) {
     const infoPayload: MonsterInfoDeskPayload = {

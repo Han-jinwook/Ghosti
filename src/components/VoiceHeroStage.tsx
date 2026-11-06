@@ -32,9 +32,12 @@ export const VoiceHeroStage: React.FC = () => {
     runTextQuery,
     runBriefingHintChip,
     openLocalFolder,
+    importMobileLocalPhotos,
+    isStoreAppMode,
   } = useSaySeeStore();
 
   const [textInput, setTextInput] = useState('');
+  const mobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
 
   useEffect(() => {
@@ -355,6 +358,43 @@ export const VoiceHeroStage: React.FC = () => {
         {/* 1-D. Z-코어 연결 시 무소음 인덱싱 상태 바 / 미연결 시 [⚡ 내 컴퓨터 1초 연결하기] 1줄 안내 바 */}
         {isZCoreConnected ? (
           <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
+        ) : isMobile || isStoreAppMode ? (
+          <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
+            <input
+              ref={mobilePhotoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  void importMobileLocalPhotos(e.target.files);
+                  e.target.value = '';
+                }
+              }}
+            />
+            <div className="flex items-center gap-2 text-[12.5px] font-extrabold text-slate-900 dark:text-white">
+              <span>
+                📱 내 스마트폰 갤러리 사진을 불러와 선명도·중복·영수증을 1초 만에 정리·검색해 보세요!
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => mobilePhotoInputRef.current?.click()}
+                className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+              >
+                📱 내 폰 사진 불러오기
+              </button>
+              <button
+                type="button"
+                onClick={() => requestConnectMyComputer()}
+                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/15 font-bold text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+              >
+                💻 내 PC 연결 안내
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
             <div className="flex items-center gap-2 text-[12.5px] font-extrabold text-slate-900 dark:text-white">

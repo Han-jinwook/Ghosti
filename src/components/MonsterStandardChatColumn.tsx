@@ -23,6 +23,7 @@ import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { unlockMobileAudioOnUserGesture, notifyMicSessionEndedForTts } from '../services/setupMonsterTts';
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 import { normalizeSpokenKoreanQuery } from '../services/voiceSearchAndAiBatonEngine';
+import { useSaySeeStore } from '../store/useSaySeeStore';
 
 interface MonsterStandardChatColumnProps {
   sourceTab: 'trash' | 'repair';
@@ -69,6 +70,33 @@ const NOTION_MINIMAL_STARTERS: Array<{ label: string; prompt: string }> = [
   },
 ];
 
+const MOBILE_CLEAN_STARTERS: Array<{ label: string; prompt: string }> = [
+  {
+    label: '📸 중복·연사 사진 정리',
+    prompt: '중복이거나 연사로 찍힌 사진 찾아서 베스트컷만 남기고 정리하는 법 알려줘',
+  },
+  {
+    label: '🧾 영수증·스크린샷 분류',
+    prompt: '주차장 사진이랑 영수증, 스크린샷 캡처 분류해서 정리해줘',
+  },
+  {
+    label: '🔍 사진·문서 1초 검색법',
+    prompt: '귀신같이 앱으로 사진이랑 문서 1초 만에 찾는 방법 알려줘',
+  },
+  {
+    label: '🕰️ 정리 보관함 되돌리기',
+    prompt: '최근 복원 기록 보여줘',
+  },
+  {
+    label: '🎛️ 상용구·보관기간 설정',
+    prompt: '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
+  },
+  {
+    label: '📮 불편·A/S·아이디어 접수',
+    prompt: '아이디어 건의 및 A/S 접수하고 싶은데 내 이름으로 스튜디오에 접수해줘',
+  },
+];
+
 export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps> = ({
   sourceTab,
   externalQueryTrigger,
@@ -89,6 +117,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   const submittedOnceRef = useRef<boolean>(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const lastHandledTriggerIdRef = useRef<number | null>(null);
+
+  const isStoreAppMode = useSaySeeStore((s) => s.isStoreAppMode);
+  const layout = useSaySeeStore((s) => s.layout);
+  const isMobileOrStore =
+    isStoreAppMode ||
+    layout === 'mobile' ||
+    (typeof window !== 'undefined' &&
+      (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860));
+  const activeStarters = isMobileOrStore ? MOBILE_CLEAN_STARTERS : NOTION_MINIMAL_STARTERS;
 
   useEffect(() => {
     return subscribeSharedMonsterChat(() => {
@@ -363,7 +400,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     }
   }, [externalQueryTrigger]);
 
-  // [🎯 찾기] 화면에서 [✋ 손보기] 의도 발화 시 양방향 0토큰 자동 토스 수신
   useEffect(() => {
     const consumePendingToss = () => {
       try {
@@ -517,7 +553,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
       {/* 2.5. 하단 스타터 칩 바 */}
       <div className="px-3.5 py-2 border-t border-slate-200 dark:border-slate-800/80 bg-slate-100/70 dark:bg-slate-900/80 flex flex-wrap gap-1.5">
-        {NOTION_MINIMAL_STARTERS.map((st, idx) => (
+        {activeStarters.map((st, idx) => (
           <button
             key={idx}
             type="button"

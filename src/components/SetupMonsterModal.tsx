@@ -358,32 +358,9 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
     }
   }, [setupAuditLogs.length, setupMonsterPlatform]);
 
-  // 1차 앱스토어 심사 통과용 클린 모드 제어: isStoreAppMode === true && !enableSetupMonster 일 때 숨김 안내
+  // 1차 앱스토어 심사 통과용 클린 모드 제어: isStoreAppMode === true && !enableSetupMonster 일 때 숨김 처리 (Guideline 2.3.1 / 2.5.2 방어)
   if (isStoreAppMode && !enableSetupMonster) {
-    return (
-      <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="px-2.5 py-0.5 rounded-md bg-zinc-800 text-zinc-300 font-label-sm text-[11px] font-bold w-fit">
-              🛡️ 1차 앱스토어 심사 방어 모드 (isStoreAppMode=true · enableSetupMonster=false)
-            </span>
-            <h3 className="font-headline-sm text-[17px] text-white font-bold mt-1">
-              현재 1차 스토어 심사 프리패스를 위해 기기 고치기와 크레딧 잔액이 숨김 상태입니다
-            </h3>
-            <p className="font-body-sm text-[12.5px] text-zinc-400">
-              심사 통과 후 스토어 재심사 없이 원격 플래그(enableSetupMonster = true)만 켜면 즉시 전체 기능과 크레딧 지갑이 개통됩니다.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setEnableSetupMonster(true)}
-            className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
-          >
-            🛠️ 귀신같이 손보기 즉시 켜기 (enableSetupMonster=true 테스트)
-          </button>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const activeChips =

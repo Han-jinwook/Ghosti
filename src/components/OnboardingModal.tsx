@@ -379,6 +379,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     merlinAuth,
     activePricingPlan,
     subscribedLounges,
+    isStoreAppMode,
   } = useSaySeeStore();
 
   const [activeTab, setActiveTab] = useState<OnboardingTabId>(inlineSuperpowerOnly ? 'tab2_superpower' : 'tab1_find_care');
@@ -718,7 +719,9 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   ⚡ 귀신 초능력 9+3 (Ctrl + 0)
                 </span>
                 <span className="px-2.5 py-0.5 rounded-md bg-teal-500/15 border border-teal-400/40 text-teal-300 font-label-sm text-[11.5px] font-extrabold">
-                  12대 초능력 각각 첫 사용일로부터 각 7일 무제한 · 만료 기능만 매일 3회 평생 무료 · [내 기기 통합 (월 3,900원)] 2번째 기기 연결 시 7일 풀파워 체험!
+                  {isStoreAppMode
+                    ? '12대 초능력 각각 첫 사용일로부터 각 7일 무제한 · 만료 기능만 매일 3회 평생 무료!'
+                    : '12대 초능력 각각 첫 사용일로부터 각 7일 무제한 · 만료 기능만 매일 3회 평생 무료 · [내 기기 통합 (월 3,900원)] 2번째 기기 연결 시 7일 풀파워 체험!'}
                 </span>
               </div>
               <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
@@ -820,7 +823,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             <div className="flex items-center justify-between gap-1">
               <span className="text-[13.5px] font-extrabold">탭 3. 👨‍👩‍👧‍👦 기기 묶기 &amp; 공유방</span>
               <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-black">
-                구독 시 초능력 평생무료
+                {isStoreAppMode ? '이메일 1초 연결' : '구독 시 초능력 평생무료'}
               </span>
             </div>
             <span className="text-[11px] opacity-80">
@@ -1052,7 +1055,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   🎁 이 기기에서 7일 무제한 체험 즉시 켜기
                 </button>
               )}
-              {trialStatus?.trial_status === 'DAILY_FREE_3' && !isSubscribedUser && (
+              {trialStatus?.trial_status === 'DAILY_FREE_3' && !isSubscribedUser && !isStoreAppMode && (
                 <button
                   type="button"
                   onClick={() => setShowProModal(true)}
@@ -1689,12 +1692,14 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 </button>
               </div>
 
-              {/* 우측: 👑 주력 상품 — 내 기기 통합 (월 3,900원 · 1차 5년 특판 39,000원) */}
+              {/* 우측: 👑 주력 상품 — 내 기기 통합 */}
               <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-zinc-900 to-zinc-900 border-2 border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)] flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <span className="px-3 py-1 rounded-full bg-emerald-400 text-zinc-950 text-[11.5px] font-black">
-                      👑 내 기기 통합 (월 3,900원 · 1차 5년 특판 39,000원)
+                      {isStoreAppMode
+                        ? '👑 내 기기 통합 & 데스크톱 연동'
+                        : '👑 내 기기 통합 (월 3,900원 · 1차 5년 특판 39,000원)'}
                     </span>
                     <span className="text-[11.5px] font-extrabold text-emerald-300">
                       이메일 하나로 기기 대수 무제한 통합!
@@ -1705,16 +1710,20 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   </h3>
                   <ul className="text-[12.5px] text-zinc-200 space-y-2 leading-relaxed pt-1">
                     <li>
-                      🥇 <strong className="text-emerald-300">1위. 카톡 ‘나에게 보내기’ &amp; 클라우드 월세 완전 종식</strong>: 폰으로 찍은 사진·서류가 압축 없이 내 PC로 1초 직결되고, 2TB·4TB도 클라우드 요금 0원으로 무제한 씁니다.
+                      🥇 <strong className="text-emerald-300">1위. 카톡 ‘나에게 보내기’ &amp; 클라우드 불편 완전 종식</strong>: 폰으로 찍은 사진·서류가 압축 없이 내 PC로 1초 직결되어 무제한 씁니다.
                     </li>
                     <li>
                       🥈 <strong className="text-emerald-300">2위. 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 회사 PC나 폰에서 복사(<code className="text-white">Ctrl+C</code>·스샷)만 해두면, 꺼져 있던 집 PC를 켜는 순간 <code className="text-teal-300">Ctrl+0 [복사검색]</code>에 최근 100개 텍스트·10장 스샷이 자동 장전됩니다!
                     </li>
                     <li>
-                      🥉 <strong className="text-amber-300">3위. 귀신 초능력 팩(Ctrl + 0) 평생 해금 &amp; F1~F10 동기화</strong>: 집 PC·회사 PC·노트북 어디서나 9대 초능력과 <code className="text-white">F1~F10</code> 10개 상용구가 1초 만에 똑같이 동기화됩니다.
+                      🥉 <strong className="text-amber-300">3위. 귀신 초능력 팩(Ctrl + 0) &amp; F1~F10 동기화</strong>: 집 PC·회사 PC·노트북 어디서나 9대 초능력과 <code className="text-white">F1~F10</code> 10개 상용구가 1초 만에 똑같이 동기화됩니다.
                     </li>
                     <li>
-                      👨‍👩‍👧‍👦 <strong className="text-teal-300">9인 이하 소모임(300개까지 0원 / 초과 시 월 2,900원) · 10인+ 모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~)</strong>: 방장 한 분만 구독하면 초대받은 가족·모임원·팀원은 <strong className="text-white">전원 0원(무료)</strong>입니다.
+                      👨‍👩‍👧‍👦 <strong className="text-teal-300">
+                        {isStoreAppMode
+                          ? '일상 소모임 · 동호회·동창회 · 패밀리 · 업무 공유 라운지'
+                          : '9인 이하 소모임(300개까지 0원 / 초과 시 월 2,900원) · 10인+ 모임(4,900원) · 패밀리(5,900원~) · 업무(9,900원~)'}
+                      </strong>: 방장이 개설한 공유 라운지에 초대받은 가족·모임원·팀원은 <strong className="text-white">전원 0원(무료)</strong>입니다.
                     </li>
                   </ul>
                 </div>
@@ -1728,7 +1737,9 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   }}
                   className="w-full py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[13px] font-black shadow-[0_0_20px_rgba(16,185,129,0.35)] cursor-pointer"
                 >
-                  👑 내 기기 통합(월 3,900원 · 5년 특판 3.9만) · 공유방 요금제 보기 →
+                  {isStoreAppMode
+                    ? '💻 데스크톱(PC) 기기 연동 가이드 보기 →'
+                    : '👑 내 기기 통합(월 3,900원 · 5년 특판 3.9만) · 공유방 요금제 보기 →'}
                 </button>
               </div>
             </div>

@@ -4413,7 +4413,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               <span className="text-[12px] font-extrabold text-zinc-200">🖥️ 기기 3 · 서브 PC (회사 / 집 2호기)</span>
               <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 text-[11px] font-extrabold">추가 가능</span>
             </div>
-            <p className="text-[13px] text-white font-bold">집 ↔ 사무실 PC 양방향 투시 검색</p>
+            <p className="text-[13px] text-white font-bold">집 ↔ 사무실 PC 양방향 AI 내용검색</p>
             <span className="text-[11.5px] text-zinc-400">동일 이메일 로그인 시 자동 묶기</span>
           </div>
         </div>

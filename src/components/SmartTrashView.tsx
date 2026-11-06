@@ -110,9 +110,11 @@ export const SmartTrashView: React.FC = () => {
     setSearchSpace,
     runTextQuery,
     isStoreAppMode,
+    importMobileLocalPhotos,
   } = useSaySeeStore();
 
   const [gridColumns, setGridColumns] = useState<3 | 5>(3);
+  const trashMobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [showSystemConsult, setShowSystemConsult] = useState<boolean>(false);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(true);
   const [isTrashBinTabActive, setIsTrashBinTabActive] = useState<boolean>(false);
@@ -269,6 +271,28 @@ export const SmartTrashView: React.FC = () => {
             <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
               🆓 개인 (기본) : 언제나 0원
             </span>
+            <input
+              ref={trashMobilePhotoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  void importMobileLocalPhotos(e.target.files);
+                  e.target.value = '';
+                }
+              }}
+            />
+            {(isStoreAppMode || layout === 'mobile') && (
+              <button
+                type="button"
+                onClick={() => trashMobilePhotoInputRef.current?.click()}
+                className="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                📱 내 폰 사진 불러와 정리하기
+              </button>
+            )}
 
 
 
@@ -361,9 +385,7 @@ export const SmartTrashView: React.FC = () => {
                 history
               </span>
               <span className="font-label-md text-[13px] text-zinc-100 font-semibold">
-                {lastUndoBatch.demo
-                  ? `방금 정리한 ${lastUndoBatch.count}장은 🧪 체험 모드(Z-코어 미연결)라 화면에서만 정리되었고 실제 파일은 그대로입니다.`
-                  : `방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 윈도우 휴지통으로 이동되었습니다.`}
+                {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 정리 보관함(휴지통)으로 안전하게 이동되었습니다.`}
               </span>
             </div>
 
@@ -425,17 +447,24 @@ export const SmartTrashView: React.FC = () => {
         {showSystemConsult && (
           <div className="px-5 pb-5 pt-2 border-t border-white/10 flex flex-col gap-3.5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* ① 다운로드 폴더 방치 설치파일(.exe/.apk/.msi) & 중복 압축파일 청소 */}
+              {/* ① 중복·연사 베스트컷 선별 / 다운로드 폴더 설치파일 정리 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
                 <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                  📦 다운로드 설치파일(.exe·.apk) 정리
+                  {isStoreAppMode || layout === 'mobile'
+                    ? '📸 중복·연사 사진 베스트컷 선별'
+                    : '📦 다운로드 설치파일(.exe·.apk) 정리'}
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
                     onClick={() => {
                       setDecisions((d) => ({ ...d, downloadInstallers: 'clean_installers' }));
-                      void triggerMonsterQuery('다운로드 폴더 방치된 설치파일(.exe/.apk) 미리보고 정리해 줘');
+                      if (isStoreAppMode || layout === 'mobile') {
+                        setIsTrashBinTabActive(false);
+                        setActiveTrashCategoryFilter('duplicate');
+                      } else {
+                        void triggerMonsterQuery('다운로드 폴더 방치된 설치파일(.exe/.apk) 미리보고 정리해 줘');
+                      }
                     }}
                     className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.downloadInstallers === 'clean_installers'
@@ -444,7 +473,11 @@ export const SmartTrashView: React.FC = () => {
                     }`}
                   >
                     {decisions.downloadInstallers === 'clean_installers'
-                      ? '✓ 설치파일 정리 미리보기 열림'
+                      ? isStoreAppMode || layout === 'mobile'
+                        ? '✓ 중복·연사 후보 열림'
+                        : '✓ 설치파일 정리 미리보기 열림'
+                      : isStoreAppMode || layout === 'mobile'
+                      ? '📸 중복·연사 후보 확인'
                       : '📦 설치파일·중복사본 미리보고 정리'}
                   </button>
                   <button
@@ -461,19 +494,26 @@ export const SmartTrashView: React.FC = () => {
                 </div>
               </div>
 
-              {/* ② PC 바탕화면 중복파일 & 바로가기(.lnk) 뒤섞임 정리 */}
+              {/* ② 영수증·스크린샷 분류 / PC 바탕화면 잡파일 정리 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
                 <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                  💻 PC 바탕화면 잡파일 · 구형 폴더 정리
+                  {isStoreAppMode || layout === 'mobile'
+                    ? '🧾 영수증 · 주차메모 · 스크린샷 정리'
+                    : '💻 PC 바탕화면 잡파일 · 구형 폴더 정리'}
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
                     onClick={() => {
                       setDecisions((d) => ({ ...d, pcDesktop: 'archive_move' }));
-                      void triggerMonsterQuery(
-                        "바탕화면이랑 다운로드 폴더에서 잡파일은 '기타_정리함'으로 모으고 옛날 폴더는 숨겨줘"
-                      );
+                      if (isStoreAppMode || layout === 'mobile') {
+                        setIsTrashBinTabActive(false);
+                        setActiveTrashCategoryFilter('memo');
+                      } else {
+                        void triggerMonsterQuery(
+                          "바탕화면이랑 다운로드 폴더에서 잡파일은 '기타_정리함'으로 모으고 옛날 폴더는 숨겨줘"
+                        );
+                      }
                     }}
                     className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.pcDesktop === 'archive_move'
@@ -482,7 +522,11 @@ export const SmartTrashView: React.FC = () => {
                     }`}
                   >
                     {decisions.pcDesktop === 'archive_move'
-                      ? '✓ 바탕화면 정리 미리보기 열림'
+                      ? isStoreAppMode || layout === 'mobile'
+                        ? '✓ 영수증·메모 후보 열림'
+                        : '✓ 바탕화면 정리 미리보기 열림'
+                      : isStoreAppMode || layout === 'mobile'
+                      ? '🧾 영수증·캡처 후보 확인'
                       : '🗂️ 잡파일 이동 · 옛날폴더 숨김'}
                   </button>
                   <button
@@ -499,11 +543,11 @@ export const SmartTrashView: React.FC = () => {
                 </div>
               </div>
 
-              {/* ③ 전기·메모리 먹는 상주 보안모듈 동결 */}
+              {/* ③ 흔들린 사진 정리 / 전기·메모리 먹는 상주 보안모듈 동결 */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
                 <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                  {isStoreAppMode
-                    ? '⚡ 원본 PC 이관 & 용량 절약'
+                  {isStoreAppMode || layout === 'mobile'
+                    ? '🌫️ 초점 나간 · 흔들린 사진 정리'
                     : '⚡ 은행·관공서 상주 보안모듈 동결'}
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
@@ -511,9 +555,14 @@ export const SmartTrashView: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }));
-                      void triggerMonsterQuery(
-                        '은행 관공서 상주 보안 프로그램(AnySign, MagicLine, TouchEn) 동결해서 부팅 속도 높여줘'
-                      );
+                      if (isStoreAppMode || layout === 'mobile') {
+                        setIsTrashBinTabActive(false);
+                        setActiveTrashCategoryFilter('blurry');
+                      } else {
+                        void triggerMonsterQuery(
+                          '은행 관공서 상주 보안 프로그램(AnySign, MagicLine, TouchEn) 동결해서 부팅 속도 높여줘'
+                        );
+                      }
                     }}
                     className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
                       decisions.powerDrain === 'freeze_remove'
@@ -522,11 +571,11 @@ export const SmartTrashView: React.FC = () => {
                     }`}
                   >
                     {decisions.powerDrain === 'freeze_remove'
-                      ? isStoreAppMode
-                        ? '✓ PC 원본 이관 선택됨'
+                      ? isStoreAppMode || layout === 'mobile'
+                        ? '✓ 흔들린 사진 후보 열림'
                         : '✓ 상주 모듈 동결 미리보기 열림'
-                      : isStoreAppMode
-                      ? '⚡ PC 원본 이관 & 용량 확보'
+                      : isStoreAppMode || layout === 'mobile'
+                      ? '🌫️ 흔들린 사진 후보 확인'
                       : '⚡ 상주 모듈 동결 & 속도 향상'}
                   </button>
                   <button
@@ -1066,17 +1115,17 @@ export const SmartTrashView: React.FC = () => {
                 verified
               </span>
               <span className="font-headline-sm text-[15px] text-white font-bold">
-                이 탭의 정리 후보 사진이 모두 OS 기본 [휴지통]으로 이동되었습니다!
+                이 탭의 정리 후보 사진이 모두 정리 보관함(휴지통)으로 이동되었습니다!
               </span>
               <span className="font-body-sm text-[12px] text-zinc-400">
-                아래 [OS 기본 휴지통 이동 내역]에서 언제든 1초 복원할 수 있습니다.
+                아래 [정리 보관함(휴지통) 이동 내역]에서 언제든 1초 복원할 수 있습니다.
               </span>
             </div>
           )}
         </section>
       )}
 
-      {/* ─────────────── 5. 노션 토글형 OS 기본 [휴지통] 이동 내역 & 1초 복원 드로어 ─────────────── */}
+      {/* ─────────────── 5. 노션 토글형 정리 보관함(휴지통) 이동 내역 & 1초 복원 드로어 ─────────────── */}
       <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden">
         <div
           onClick={() => setShowQuarantineDrawer((v) => !v)}
@@ -1088,10 +1137,10 @@ export const SmartTrashView: React.FC = () => {
             </span>
             <span className="material-symbols-outlined text-zinc-400 text-[18px]">delete</span>
             <h3 className="font-headline-sm text-[15px] text-white font-bold">
-              OS 기본 [휴지통] 이동 내역 ({quarantinedPhotos.length}장)
+              정리 보관함(휴지통) 이동 내역 ({quarantinedPhotos.length}장)
             </h3>
             <span className="hidden sm:inline text-[12px] text-zinc-400">
-              · 클릭 한 번으로 원래 폴더에 1초 복원됩니다
+              · 클릭 한 번으로 원래 위치에 1초 복원됩니다
             </span>
           </div>
 

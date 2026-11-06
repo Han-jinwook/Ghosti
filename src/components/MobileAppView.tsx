@@ -690,15 +690,19 @@ export const MobileAppView: React.FC = () => {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isStoreAppMode) {
+                                  setSelectedDocModal(doc);
+                                  return;
+                                }
                                 void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
                                   useSaySeeStore.setState({
-                                    lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
+                                    lastQuarantineToast: res.summaryKo || `📂 [${doc.fileName}] 문서를 바로 열었습니다.`,
                                   });
                                 });
                               }}
                               className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 font-label-sm text-[11px] font-extrabold cursor-pointer"
                             >
-                              🔍 이 파일 바로 띄우기
+                              🔍 이 문서 바로 열기
                             </button>
                           </div>
                           <span className="text-primary-container text-[11px] font-bold">본문 →</span>
@@ -969,7 +973,7 @@ export const MobileAppView: React.FC = () => {
             )}
           </section>
 
-          {/* 노션 스타일 동적 토글 2: 데스크톱 연동 가이드 · 탈퇴 데이터 원칙 & 스토어 심사 안전장치 */}
+          {/* 노션 스타일 동적 토글 2: 데스크톱 연동 가이드 · 탈퇴 데이터 보호 원칙 */}
           <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
             <div
               onClick={() => setShowPolicyAndStoreSection((prev) => !prev)}
@@ -982,14 +986,11 @@ export const MobileAppView: React.FC = () => {
                 <div className="flex flex-col">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <h2 className="font-headline-sm text-[14.5px] text-white font-bold">
-                      🛡️ 데스크톱 연동 · 탈퇴 데이터 보호 원칙 &amp; 스토어 심사 모드
+                      🛡️ 데스크톱 연동 가이드 · 탈퇴 데이터 보호 원칙
                     </h2>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[10.5px] font-bold">
-                      {isStoreAppMode ? '📱 스토어 클린 ON' : '💻 PC 마스터 모드'}
-                    </span>
                   </div>
                   <p className="font-body-sm text-[11.5px] text-zinc-400 mt-0.5">
-                    PC 마스터 연동 안내 · 탈퇴 시 썸네일 DB 처리 원칙 · 3중 안전장치
+                    PC 마스터 연동 안내 · 탈퇴 시 썸네일 DB 처리 원칙 · 원본 로컬 보관
                   </p>
                 </div>
               </div>
@@ -1001,71 +1002,6 @@ export const MobileAppView: React.FC = () => {
             {showPolicyAndStoreSection && (
               <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
                 <PcMasterQuickSendPanel compact />
-
-                <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-2.5">
-                  <span className="px-2.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[10.5px] font-bold w-fit">
-                    스토어 심사 모드 설정
-                  </span>
-                  <div className="grid grid-cols-1 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsStoreAppMode(!isStoreAppMode)}
-                      className={`py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border ${
-                        isStoreAppMode
-                          ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
-                          : 'bg-zinc-900 text-zinc-200 border-white/15'
-                      }`}
-                    >
-                      {isStoreAppMode ? '📱 스토어 심사 클린 모드: ON' : '💻 PC 마스터 모드 (클릭 시 스토어 모드)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEnableSetupMonster(!enableSetupMonster)}
-                      className={`py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border ${
-                        enableSetupMonster
-                          ? 'bg-primary-container text-zinc-950 border-primary-container'
-                          : 'bg-zinc-900 text-zinc-400 border-white/15'
-                      }`}
-                    >
-                      {enableSetupMonster
-                        ? '🛠️ 귀신같이 손보기 (enableSetupMonster=true)'
-                        : '🔒 귀신같이 손보기 숨김 (enableSetupMonster=false)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEnableMobileCoinDisplay(!enableMobileCoinDisplay)}
-                      className={`py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border ${
-                        enableMobileCoinDisplay
-                          ? 'bg-amber-400 text-zinc-950 border-amber-300'
-                          : 'bg-zinc-900 text-zinc-400 border-white/15'
-                      }`}
-                    >
-                      {enableMobileCoinDisplay
-                        ? '🪙 코인 잔액 표시: ON'
-                        : '🔒 코인 잔액 완전 숨김: OFF (기본값)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEnablePcGuideShareButton(!enablePcGuideShareButton)}
-                      className={`py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border ${
-                        enablePcGuideShareButton
-                          ? 'bg-[#FEE500] text-[#191919] border-[#FEE500]'
-                          : 'bg-zinc-900 text-zinc-400 border-white/15'
-                      }`}
-                    >
-                      {enablePcGuideShareButton
-                        ? '💬 카톡·이메일 가이드 버튼: ON'
-                        : '🔒 카톡·이메일 가이드 버튼: OFF (심사 잠금)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowMobileMasterPcIntroModal(true)}
-                      className="py-2 px-3 rounded-xl font-label-sm text-[11.5px] font-extrabold border bg-zinc-900 text-primary-container border-primary-container/50"
-                    >
-                      🛡️ /?master=pc 모바일 접속 시 방어 화면 보기
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </section>

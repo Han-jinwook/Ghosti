@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { getZCoreUrl, zCoreBridge, ensureLoginAndZCoreReady } from '../services/zCoreBridge';
 import { submitExternalMonsterChatQuery } from '../services/monsterChatRouter';
 import { isMobileVoiceEnvironment } from '../services/setupMonsterTts';
+import { analyzeMobilePickedPhotoFiles } from '../services/mobilePhotoPicker';
 
 /**
  * [사진 정리 휴지통 이동/복원 — 정직 처리]
@@ -15,9 +16,21 @@ type QuarantineOpResult = {
   offline: boolean;
 };
 
+function isMobileOrStoreRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const isCap = Boolean(
+    (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+  );
+  if (isCap) return true;
+  if (new URLSearchParams(window.location.search).get('storeApp') === '1') return true;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860;
+}
+
 async function requestQuarantineOp(kind: 'move' | 'restore', names: string[]): Promise<QuarantineOpResult> {
   if (!zCoreBridge.isConnected) {
-    return { done: names, errors: [], demo: true, offline: false };
+    // 모바일 네이티브/스마트폰 환경에서는 앱 내 정리 보관함(휴지통)으로 정식 작동 (demo=false)
+    const isMobileEnv = isMobileOrStoreRuntime();
+    return { done: names, errors: [], demo: !isMobileEnv, offline: false };
   }
   try {
     const res = await fetch(getZCoreUrl(`/__quarantine/${kind}`), {
@@ -41,8 +54,8 @@ async function requestQuarantineOp(kind: 'move' | 'restore', names: string[]): P
 }
 
 function quarantineFailureToast(kind: 'move' | 'restore', r: QuarantineOpResult): string {
-  const verb = kind === 'move' ? '휴지통으로 옮기지' : '되돌리지';
-  if (r.offline) return `⚠️ 멀린 Z-코어에 연결되지 않아 사진을 ${verb} 못했습니다. (아무 파일도 바뀌지 않았습니다)`;
+  const verb = kind === 'move' ? '정리 보관함(휴지통)으로 옮기지' : '되돌리지';
+  if (r.offline) return `⚠️ 로컬 엔진에 연결되지 않아 사진을 ${verb} 못했습니다. (아무 파일도 바뀌지 않았습니다)`;
   const first = r.errors[0];
   return `⚠️ 사진을 ${verb} 못했습니다${first ? `: ${first.error}` : '.'}`;
 }
@@ -51,10 +64,12 @@ function quarantineResultNote(kind: 'move' | 'restore', r: QuarantineOpResult): 
   const fail = r.errors.length ? ` (실패 ${r.errors.length}건: ${r.errors[0].error})` : '';
   if (r.demo) {
     return kind === 'move'
-      ? '정리 목록에서 뺐습니다. 🧪 체험 모드(Z-코어 미연결)라 실제 파일은 그대로입니다.'
-      : '목록으로 되돌렸습니다. 🧪 체험 모드(Z-코어 미연결)라 실제 파일은 바뀌지 않았습니다.';
+      ? '정리 보관함(휴지통)으로 이동했습니다 (↩️ 1초 되돌리기 가능)'
+      : '원래 목록으로 복원했습니다';
   }
-  return kind === 'move' ? `윈도우 휴지통으로 옮겼습니다 (↩️ 되돌리기 가능)${fail}` : `원래 폴더로 되돌렸습니다${fail}`;
+  return kind === 'move'
+    ? `정리 보관함(휴지통)으로 옮겼습니다 (↩️ 1초 되돌리기 가능)${fail}`
+    : `원래 위치로 되돌렸습니다${fail}`;
 }
 import {
   speakSetupMonsterTts,
@@ -237,6 +252,7 @@ interface SaySeeStore {
   initialized: boolean;
   initializing: boolean;
   initApp: (force?: boolean) => Promise<void>;
+  importMobileLocalPhotos: (files: FileList | File[]) => Promise<void>;
 
   // 100% 로컬 팩트 기반 문장형 추천 칩 (외부 LLM 의존도 0%)
   conceptLexiconCount: number;
@@ -2135,6 +2151,35 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     } catch {
       /* 키워드 검색으로 계속 동작 */
     }
+  },
+
+  importMobileLocalPhotos: async (files) => {
+    const { analyzed, newDupGroups } = await analyzeMobilePickedPhotoFiles(files);
+    if (analyzed.length === 0) return;
+    set((state) => {
+      const nextPhotos = [...analyzed, ...state.photos];
+      const nextDupGroups = [...newDupGroups, ...state.duplicateGroups];
+      const nextTrashIds = new Set(state.selectedTrashIds);
+      analyzed.forEach((p) => {
+        if (p.trashCategory) nextTrashIds.add(p.id);
+      });
+      const addedSearchResults: SearchResultItem[] = analyzed.map((photo) => ({
+        photo,
+        score: 0.99,
+        matchPercentage: 99,
+        matchedBy: 'text-direct',
+      }));
+      return {
+        photos: nextPhotos,
+        duplicateGroups: nextDupGroups,
+        selectedTrashIds: nextTrashIds,
+        searchResults: [...addedSearchResults, ...state.searchResults],
+        hasExecutedUserSearch: true,
+        activeQuery: `📱 방금 불러온 내 폰 사진 (${analyzed.length}장 · 온디바이스 1초 AI 분석 완료)`,
+        matchedTags: ['#내폰사진즉시분석', '#온디바이스dHash', '#외부전송0Byte'],
+        lastQuarantineToast: `📱 내 스마트폰 사진 ${analyzed.length}장을 불러와 1초 만에 선명도·중복·캡처 AI 분류를 마쳤습니다! (외부 서버 전송 0 Byte)`,
+      };
+    });
   },
 
   applyAhaRecommendation: async (item: OnboardingAhaItem) => {

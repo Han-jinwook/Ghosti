@@ -103,12 +103,17 @@ export const App: React.FC = () => {
     };
   }, [hasAnyModalOpen]);
 
-  // 오직 현재 URL 뒤에 `?dev=true`가 붙어 있거나 로컬호스트일 때만 개발자/QA 전용 내부 워크스페이스 권한 부여
-  // https://ghosti.sundreamer.app/ 처럼 `?dev=true` 없이 접속하면 무조건 온보딩 대문(showroom)만 노출합니다.
+  // 오직 현재 URL 뒤에 `?dev=true`가 붙어 있거나 로컬호스트이거나 Capacitor 네이티브 스토어 앱일 때 워크스페이스 권한 부여
   const [isDevAuthorized] = useState<boolean>(() => {
     try {
+      const isNative = Boolean(
+        (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      );
+      if (isNative) {
+        return true;
+      }
       const params = new URLSearchParams(window.location.search);
-      if (params.get('dev') === 'true') {
+      if (params.get('dev') === 'true' || params.get('storeApp') === '1') {
         return true;
       }
       if (
@@ -125,11 +130,17 @@ export const App: React.FC = () => {
 
   // [라우팅 잠금 철칙]:
   // 1) `https://ghosti.sundreamer.app/` (일반 루트 접속) ➔ 무조건 온보딩 대문('showroom')만 노출
-  // 2) `https://ghosti.sundreamer.app/?dev=true` 또는 로컬 개발 환경 ➔ 내부 워크스페이스('workspace') 진입
+  // 2) `https://ghosti.sundreamer.app/?dev=true`, 로컬 개발 환경, 또는 Capacitor 네이티브 앱 ➔ 내부 워크스페이스('workspace') 진입
   const [viewMode, setViewMode] = useState<'showroom' | 'workspace'>(() => {
     try {
+      const isNative = Boolean(
+        (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      );
+      if (isNative) {
+        return 'workspace';
+      }
       const params = new URLSearchParams(window.location.search);
-      if (params.get('dev') === 'true') {
+      if (params.get('dev') === 'true' || params.get('storeApp') === '1') {
         return 'workspace';
       }
       if (
@@ -302,7 +313,7 @@ export const App: React.FC = () => {
                   history
                 </span>
                 <span className="font-label-md text-[13px] md:text-[13.5px] font-bold truncate">
-                  🗑️ 방금 정리한 {lastUndoBatch.count}장이 OS 기본 [휴지통]으로 이동되었습니다.
+                  🗑️ 방금 정리한 {lastUndoBatch.count}장이 정리 보관함(휴지통)으로 이동되었습니다.
                 </span>
               </div>
 

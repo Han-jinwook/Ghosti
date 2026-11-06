@@ -76,7 +76,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
   return (
     <div className="mt-2.5 space-y-2.5">
-      {/* 1) 0토큰 1초 투시검색 직행 카드 */}
+      {/* 1) 0토큰 1초 AI 내용검색 직행 카드 */}
       {message.cardKind === 'SEARCH_ROUTING' && message.searchKeyword && (
         <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
