@@ -102,6 +102,20 @@ KNOWN_SECURITY_PLUGIN_KEYWORDS = {
     "pcspeedup": "PCSpeedUp 위장 최적화 애드웨어",
     "windowexe": "WindowExe 백그라운드 애드웨어",
     "utilzone": "UtilZone 번들 애드웨어",
+    "cachecloud": "CacheCloud (CPU 과점유 백그라운드 애드웨어)",
+    "cacheconsole": "CacheConsole (CacheCloud 부활 워치독 애드웨어)",
+    "cacheservice": "CacheService (애드웨어 백그라운드 서비스)",
+    "cloudtask": "CloudTaskModule (CPU 과점유 자동부활 애드웨어)",
+    "tuctl": "TUCTLSystem (SysWOW64 상주 그리드/애드웨어)",
+    "yoondisk": "YoonDisk (윤디스크 그리드 딜리버리 에이전트)",
+    "smartbridge": "VP SmartBridgeLauncher (광고/결제 상주 런처)",
+    "pcappstore": "PCAppStore 번들 애드웨어",
+    "frontservice": "FrontServiceUpdater (백그라운드 애드웨어 업데이터)",
+    "rayitemgate": "RayItemGate (스케줄러 자동부활 애드웨어)",
+    "storageservicemanager": "StorageServiceManager (위장 스토리지 애드웨어)",
+    "pennyroyal": "YettieSoft PennyRoyal (APS 보안/상주 모듈)",
+    "unicrs": "CrossCert UniCRSV3 (한국전자인증 상주 데몬)",
+    "ccdaemon": "CrossCert CCDaemon (한국전자인증 백그라운드 서비스)",
 }
 
 PROTECTED_PROCESS_NAMES = {
@@ -288,6 +302,7 @@ def get_real_startup_programs() -> List[Dict[str, str]]:
     reg_targets = [
         (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU\\Run"),
         (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKLM\\Run"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "HKLM\\WOW6432\\Run"),
     ]
     for root, subkey, scope in reg_targets:
         try:
@@ -409,11 +424,11 @@ $guiProcs = Get-Process | Where-Object { $_.ProcessName -match '^(chrome|msedge|
 
             # 비필수 시작프로그램(HKCU/HKLM Run, StartupFolder) 중 화이트리스트 외 항목도 애드웨어/부팅지연 의심 항목으로 포착
             safe_startup_tokens = (
-                "merlin", "ghosti", "senstalk", "sundream", "kakao", "telegram",
-                "onedrive", "googledrive", "dropbox", "securityhealth", "defender",
-                "realtek", "igfx", "nvidia", "nvbackend", "amd", "intel", "logi",
-                "razer", "steam", "discord", "slack", "notion", "claude", "cursor",
-                "antigravity", "msedge", "chrome", "whale", "ctfmon", "windows",
+                "merlin", "ghosti", "senstalk", "sensebot", "sundream", "kakao", "telegram",
+                "onedrive", "googledrive", "mybox", "dropbox", "securityhealth", "defender",
+                "realtek", "igfx", "nvidia", "nvbackend", "amd", "ati.ace", "clistart", "seagull", "ssdal",
+                "intel", "logi", "razer", "steam", "discord", "slack", "notion", "claude", "cursor",
+                "antigravity", "msedge", "chrome", "whale", "ctfmon", "windows", "figma",
             )
             for s_item in startup_items:
                 s_name = str(s_item.get("name") or "").strip()
@@ -1436,52 +1451,144 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
     if act == "clean_bloatware":
         stopped_names: List[str] = []
         disabled_startups: List[str] = []
+        disabled_tasks_and_services: List[str] = []
         cpu_before = int(pc_state.get("spoolerAndSecurity", {}).get("cpuLoadPercent") or 0)
-        # ⚠️ 철칙: Chrome/Edge/Whale 등 브라우저 및 핵심 업무 프로세스는 절대 건드리지 않고,
-        # 애드웨어·보안 쓰레기 및 CPU 과점유 비필수 백그라운드 프로세스를 즉시 종료합니다.
-        if os.name == "nt" and sec_plugins:
-            for sp in sec_plugins:
-                kw = str(sp.get("keyword") or "").strip().lower()
-                if kw and kw not in PROTECTED_PROCESS_NAMES:
-                    try:
-                        ps_kill = (
-                            f"Get-Process | Where-Object {{ $_.Name -like '*{kw}*' -and "
-                            f"$_.Name -notin @('chrome','msedge','whale','firefox','brave','explorer','python','pythonw','node','Antigravity','Code','KakaoTalk','Telegram','Merlin_Z_Core','Merlin_Z_Core_Setup') }} | "
-                            f"Stop-Process -Force -ErrorAction SilentlyContinue"
-                        )
-                        subprocess.run(["powershell", "-NoProfile", "-Command", ps_kill], capture_output=True, timeout=2.5, creationflags=0x08000000)
-                        stopped_names.append(str(sp.get("label") or kw))
-                    except Exception:
-                        pass
 
-        # HKCU\Run 내 애드웨어·보안 비필수 자동실행 항목 백업 후 비활성화 (언제든 원복 가능)
+        # [1단계: 부활 원천 봉쇄 — 작업 스케줄러(Scheduled Tasks) & 윈도우 서비스(Services) 선제 비활성화]
+        # 프로세스만 끄면 작업 스케줄러/워치독 서비스(CacheCloud, CloudTaskModule, RayItemGate, TUCTL, yoondisk 등)가 즉시 되살려내므로
+        # 반드시 부활 트리거(스케줄러 태스크 + 서비스)부터 먼저 중지·비활성화합니다.
         if os.name == "nt":
+            ps_disable_revival = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$revivalTasks = @(
+  'CacheCloud','CacheConsole','CacheService','CloudTaskModule','CloudTaskUpdater',
+  'FrontServiceUpdater','DumpS1Wins','febjb','MSLoad','NGPlus','RayItemGate',
+  'StorageServiceManager','Task_DataSharingServices','Task_ShellExecuteAs',
+  '{E0477272-850C-4E8D-9C5C-A638D4800D1D}'
+)
+$disabledList = New-Object System.Collections.Generic.List[string]
+foreach ($tn in $revivalTasks) {
+  $tk = Get-ScheduledTask -TaskName $tn -ErrorAction SilentlyContinue
+  if ($tk -and $tk.State -ne 'Disabled') {
+    Stop-ScheduledTask -TaskName $tn -ErrorAction SilentlyContinue
+    Disable-ScheduledTask -TaskName $tn -ErrorAction SilentlyContinue | Out-Null
+    $disabledList.Add("스케줄러:$tn")
+  }
+}
+Get-ScheduledTask | Where-Object {
+  $_.TaskPath -notlike '\Microsoft*' -and $_.State -ne 'Disabled' -and
+  $_.TaskName -match 'CacheCloud|CacheConsole|CacheService|CloudTask|PCAppStore|TUCTL|yoondisk|SmartBridge|Tabbie|ClipDown|NATService|MicroCloud|OpenMatch|SearchLite|ZeSpeed|PCSpeedUp'
+} | ForEach-Object {
+  Stop-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -ErrorAction SilentlyContinue
+  Disable-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -ErrorAction SilentlyContinue | Out-Null
+  $disabledList.Add("스케줄러:$($_.TaskName)")
+}
+Get-Service | Where-Object {
+  ($_.Name -match 'Cache|PCAppStore|TUCTL|yoondisk|CloudTask|StorageService|natservice|natsvc|wizverapmsvc|nosstarter|veraport|crossex|anysign|delfino|magicline|i3g|unicrs|pennyroyal') -and
+  ($_.Name -notmatch 'Merlin|SensTalk|Tailscale|Spooler|WinDefend|mpssvc|wscsvc')
+} | ForEach-Object {
+  if ($_.Status -eq 'Running') { Stop-Service -Name $_.Name -Force -ErrorAction SilentlyContinue }
+  Set-Service -Name $_.Name -StartupType Disabled -ErrorAction SilentlyContinue
+  $disabledList.Add("서비스:$($_.Name)")
+}
+$disabledList | ConvertTo-Json -Compress
+"""
             try:
-                run_subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
-                backup_subkey = r"Software\Merlin\DisabledStartupBackup"
-                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, backup_subkey) as bk:
-                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_subkey, 0, winreg.KEY_READ | winreg.KEY_WRITE) as rk:
-                        to_remove: List[tuple[str, str]] = []
-                        idx = 0
-                        while True:
-                            try:
-                                vname, vval, _ = winreg.EnumValue(rk, idx)
-                                idx += 1
-                                comb = f"{vname} {vval}".lower()
-                                if any(p in comb for p in ("merlin", "ghosti", "senstalk", "sundream", "kakao", "telegram", "onedrive", "googledrive", "dropbox", "securityhealth", "defender", "realtek", "nvidia", "amd", "intel", "logi", "steam", "discord", "slack", "notion", "antigravity", "cursor")):
-                                    continue
-                                to_remove.append((str(vname), str(vval)))
-                            except OSError:
-                                break
-                        for vname, vval in to_remove:
-                            try:
-                                winreg.SetValueEx(bk, vname, 0, winreg.REG_SZ, vval)
-                                winreg.DeleteValue(rk, vname)
-                                disabled_startups.append(vname)
-                            except OSError:
-                                pass
+                r_rev = subprocess.run(
+                    ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_disable_revival],
+                    capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=6, creationflags=0x08000000
+                )
+                if r_rev.returncode == 0 and r_rev.stdout.strip():
+                    parsed_rev = json.loads(r_rev.stdout.strip())
+                    if isinstance(parsed_rev, str):
+                        parsed_rev = [parsed_rev]
+                    if isinstance(parsed_rev, list):
+                        disabled_tasks_and_services.extend([str(x) for x in parsed_rev if x])
             except Exception:
                 pass
+
+        # [2단계: 레지스트리(HKCU\Run, HKLM\Run, HKLM\WOW6432Node\Run) 자동실행 백업 후 제거]
+        if os.name == "nt":
+            safe_run_tokens = (
+                "merlin", "ghosti", "senstalk", "sensebot", "sundream", "kakao", "telegram",
+                "onedrive", "googledrive", "mybox", "dropbox", "securityhealth", "defender",
+                "realtek", "nvidia", "amd", "ati.ace", "clistart", "seagull", "ssdal",
+                "intel", "logi", "steam", "discord", "slack", "notion", "antigravity",
+                "cursor", "chrome", "msedge", "whale", "figma",
+            )
+            reg_clean_targets = [
+                (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU"),
+                (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKLM"),
+                (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "HKLM_WOW64"),
+            ]
+            backup_subkey = r"Software\Merlin\DisabledStartupBackup"
+            try:
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, backup_subkey) as bk:
+                    for root_hkey, run_subkey, tag in reg_clean_targets:
+                        try:
+                            with winreg.OpenKey(root_hkey, run_subkey, 0, winreg.KEY_READ | winreg.KEY_WRITE) as rk:
+                                to_remove: List[tuple[str, str]] = []
+                                idx = 0
+                                while True:
+                                    try:
+                                        vname, vval, _ = winreg.EnumValue(rk, idx)
+                                        idx += 1
+                                        comb = f"{vname} {vval}".lower()
+                                        if any(p in comb for p in safe_run_tokens):
+                                            continue
+                                        to_remove.append((str(vname), str(vval)))
+                                    except OSError:
+                                        break
+                                for vname, vval in to_remove:
+                                    try:
+                                        winreg.SetValueEx(bk, f"{tag}__{vname}", 0, winreg.REG_SZ, vval)
+                                        winreg.DeleteValue(rk, vname)
+                                        disabled_startups.append(vname)
+                                    except OSError:
+                                        pass
+                        except OSError:
+                            pass
+            except Exception:
+                pass
+
+        # [3단계: 상주 중인 애드웨어·보안 쓰레기·CPU 과점유 프로세스 일괄 강제 종료]
+        # ⚠️ 철칙: Chrome/Edge/Whale 등 브라우저 및 핵심 업무 프로세스(카톡·파이썬·마이박스·구글드라이브)는 절대 건드리지 않습니다.
+        if os.name == "nt":
+            kill_keywords = set(KNOWN_SECURITY_PLUGIN_KEYWORDS.keys())
+            for sp in (sec_plugins or []):
+                kw = str(sp.get("keyword") or "").strip().lower()
+                if kw and kw not in PROTECTED_PROCESS_NAMES:
+                    kill_keywords.add(kw)
+                    stopped_names.append(str(sp.get("label") or kw))
+            ps_batch_kill = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$safeProcs = @('chrome','msedge','whale','firefox','brave','explorer','python','pythonw','node','Antigravity','Code','KakaoTalk','Telegram','MYBOXLauncher_x64_MT','MYBOXExplorer_x64_MT','GoogleDriveFS','SenseTalk_Engine','Merlin_Z_Core','Merlin_Z_Core_Setup','svchost','lsass','csrss','wininit','services','dwm','sihost','taskhostw','ctfmon','SearchIndexer','SecurityHealthService','MsMpEng')
+Get-Process | Where-Object {
+  $_.ProcessName -notin $safeProcs -and (
+    $_.ProcessName -match 'CacheCloud|CacheConsole|CacheService|CloudTask|TUCTL|yoondisk|SmartBridge|PCAppStore|FrontService|RayItemGate|StorageService|CrossEX|veraport|delfino|MagicLine|I3GProc|pennyroyal|AnySign|UniCRS|CCDaemon|AdobeCollabSync|AdobeUpdateService|CCXProcess|tabbie|clipdown|natservice|natsvc|microcloud|alnotify|alyac|hncupdate|gomupdate|toast|adpopup|plusad|adcast|openmatch|searchlite|topon|sideoh|nbopen|zespeed|pcspeedup|windowexe|utilzone'
+  )
+} | ForEach-Object {
+  Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+}
+"""
+            try:
+                subprocess.run(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_batch_kill], capture_output=True, timeout=5, creationflags=0x08000000)
+            except Exception:
+                pass
+            for sp in (sec_plugins or []):
+                kw = str(sp.get("keyword") or "").strip().lower()
+                if kw and kw not in PROTECTED_PROCESS_NAMES and len(kw) >= 3:
+                    try:
+                        ps_k = (
+                            f"Get-Process | Where-Object {{ $_.ProcessName -like '*{kw}*' -and "
+                            f"$_.ProcessName -notin @('chrome','msedge','whale','firefox','brave','explorer','python','pythonw','node','Antigravity','Code','KakaoTalk','Telegram','MYBOXLauncher_x64_MT','MYBOXExplorer_x64_MT','GoogleDriveFS','SenseTalk_Engine','Merlin_Z_Core','Merlin_Z_Core_Setup') }} | "
+                            f"Stop-Process -Force -ErrorAction SilentlyContinue"
+                        )
+                        subprocess.run(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_k], capture_output=True, timeout=2.5, creationflags=0x08000000)
+                    except Exception:
+                        pass
+            if disabled_tasks_and_services:
+                disabled_startups.extend(disabled_tasks_and_services)
 
         after_state = inspect_real_pc_state()
         cpu_after = int(after_state.get("spoolerAndSecurity", {}).get("cpuLoadPercent") or 0)
