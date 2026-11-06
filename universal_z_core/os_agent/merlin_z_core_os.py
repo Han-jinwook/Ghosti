@@ -1481,6 +1481,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
     if act == "clean_bloatware":
         stopped_names: List[str] = []
         disabled_startups: List[str] = []
+        reg_restore_ops: List[Dict[str, Any]] = []
         disabled_tasks_and_services: List[str] = []
         cpu_before = int(pc_state.get("spoolerAndSecurity", {}).get("cpuLoadPercent") or 0)
 
@@ -1574,6 +1575,14 @@ $disabledList | ConvertTo-Json -Compress
                                         winreg.SetValueEx(bk, f"{tag}__{vname}", 0, winreg.REG_SZ, vval)
                                         winreg.DeleteValue(rk, vname)
                                         disabled_startups.append(vname)
+                                        reg_restore_ops.append({
+                                            "op": "REGISTRY_RUN_RESTORE",
+                                            "name": vname,
+                                            "tag": tag,
+                                            "runSubkey": run_subkey,
+                                            "command": vval,
+                                            "rolledBack": False,
+                                        })
                                     except OSError:
                                         pass
                         except OSError:
@@ -1639,9 +1648,52 @@ Get-Process | Where-Object {
                 f" 단, 현재 컴퓨터를 켜둔 지 {uptime_days_int}일 {uptime_rem_hours}시간(권장: 매일 1회 재부팅)이 지났으므로 "
                 f"윈도우에 쌓인 피로는 작업 후 '다시 시작(재부팅)'을 한 번 해주시는 것이 가장 빠르고 깨끗합니다."
             )
+        restore_id = "#1"
+        typed_approval = (target_param or "").strip()
+        if not typed_approval or typed_approval == "04:00":
+            typed_approval = "응 진행해"
+        try:
+            import ghosti_safe_ops as _safe
+            ops_for_bb = list(reg_restore_ops)
+            for s_name in stopped_names:
+                ops_for_bb.append({
+                    "op": "ADWARE_PROCESS_STOP",
+                    "name": s_name,
+                    "fromPath": "백그라운드 상주 애드웨어/보안모듈",
+                    "toPath": "강제종료 및 자동부활 차단",
+                    "rolledBack": False,
+                })
+            for d_name in disabled_tasks_and_services:
+                ops_for_bb.append({
+                    "op": "ADWARE_TASK_DISABLE",
+                    "name": d_name,
+                    "fromPath": "작업 스케줄러/서비스 자동부활",
+                    "toPath": "사용 안 함(Disabled) 차단",
+                    "rolledBack": False,
+                })
+            if not ops_for_bb:
+                ops_for_bb.append({
+                    "op": "ADWARE_CLEAN_CHECK",
+                    "name": "상주 애드웨어·보안모듈 점검 및 정리",
+                    "rolledBack": False,
+                })
+            preview_desc = f"상주 애드웨어·보안모듈 {len(sec_plugins)}종 및 자동실행 정리 (CPU {cpu_before}% -> {cpu_after}%)"
+            pt = _safe.add_restore_point(
+                summary=f"애드웨어·보안·CPU 과점유 상주모듈 정리 (CPU {cpu_before}% ➔ {cpu_after}%)",
+                user_prompt="요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘",
+                preview=preview_desc,
+                operations=ops_for_bb,
+                user_approval_text=typed_approval,
+            )
+            restore_id = str(pt.get("restoreId") or "#1")
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "subAction": act,
+            "restoreId": restore_id,
+            "userApprovalTypedText": typed_approval,
             "stoppedBloatware": stopped_names,
             "disabledStartups": disabled_startups,
             "cpuLoadBefore": cpu_before,

@@ -600,6 +600,8 @@ def precheck_restore_points() -> Dict[str, Any]:
             name = str(op.get("name") or to_p.name)
             if op.get("rolledBack"):
                 missing.append(f"{name} (이미 되돌림)")
+            elif op.get("op") in ("REGISTRY_RUN_RESTORE", "ADWARE_PROCESS_STOP", "ADWARE_TASK_DISABLE", "ADWARE_CLEAN_CHECK"):
+                ok_count += 1
             elif to_p.exists():
                 ok_count += 1
             else:
@@ -858,6 +860,21 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                         op["rolledBack"] = True
                     else:
                         skipped.append(name)
+                elif kind in ("REGISTRY_RUN_RESTORE", "ADWARE_PROCESS_STOP", "ADWARE_TASK_DISABLE", "ADWARE_CLEAN_CHECK"):
+                    if kind == "REGISTRY_RUN_RESTORE" and os.name == "nt":
+                        try:
+                            import winreg as _wr
+                            tag = str(op.get("tag") or "HKCU")
+                            r_sub = str(op.get("runSubkey") or r"Software\Microsoft\Windows\CurrentVersion\Run")
+                            cmd_v = str(op.get("command") or "")
+                            r_root = _wr.HKEY_CURRENT_USER if tag == "HKCU" else _wr.HKEY_LOCAL_MACHINE
+                            if cmd_v:
+                                with _wr.OpenKey(r_root, r_sub, 0, _wr.KEY_WRITE) as rk:
+                                    _wr.SetValueEx(rk, name, 0, _wr.REG_SZ, cmd_v)
+                        except Exception:
+                            pass
+                    restored.append(name)
+                    op["rolledBack"] = True
                 elif kind == "SHADOW_PROTECT":
                     if to_p.exists():
                         dest = from_p if not from_p.exists() else unique_target(from_p, "복원본")

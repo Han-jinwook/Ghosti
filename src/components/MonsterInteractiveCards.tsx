@@ -482,34 +482,42 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             </div>
           )}
 
+          {(message.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 && (
+            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5 text-[11px] text-slate-300 space-y-1">
+              <div className="font-bold text-amber-300">
+                📋 적발된 애드웨어·보안·자동실행 상주 모듈 ({message.pcSpecPayload.detectedBloatwareLabels!.length}건):
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
+                {message.pcSpecPayload.detectedBloatwareLabels!.map((lbl, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 truncate">
+                    <span className="text-amber-400">•</span>
+                    <span className="font-mono truncate">{lbl}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="pt-1 space-y-2">
-            {!message.pcSpecPayload.bloatwareCleaned && (
-              <button
-                type="button"
-                disabled={busyId === 'spec_clean_bloat'}
-                onClick={async () => {
-                  setBusyId('spec_clean_bloat');
-                  const osRes = await executeRealOsAction('boot_lag_clean_bloatware');
-                  setBusyId(null);
-                  const summary =
-                    osRes.summaryKo ||
-                    osRes.message ||
-                    '✅ 백그라운드 애드웨어·보안모듈 및 비필수 시작프로그램 정리를 완료했습니다!';
-                  onUpdateMessage({
-                    ...message,
-                    pcSpecPayload: {
-                      ...message.pcSpecPayload!,
-                      bloatwareCleaned: true,
-                      bloatwareCleanSummary: summary,
-                      verdictBadge: '🟢 애드웨어·상주모듈 정리 완료',
-                    },
-                  });
-                  onToast?.(summary);
-                }}
-                className="w-full py-2 px-3 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow cursor-pointer"
-              >
-                🚀 애드웨어·보안·CPU 과점유 프로세스 1초 강제종료 및 시작프로그램 정리 (0원)
-              </button>
+            {message.pcSpecPayload.bloatwareCleaned ? (
+              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                  실행 및 블랙박스 기록 완료 · [복원 기록 {message.pcSpecPayload.createdRestoreId || '#1'}]
+                </span>
+                {message.pcSpecPayload.approvedTypedText && (
+                  <span className="text-[11px] text-emerald-200 font-mono">
+                    승인 발화: &ldquo;{message.pcSpecPayload.approvedTypedText}&rdquo;
+                  </span>
+                )}
+              </div>
+            ) : (
+              ((message.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 ||
+                (message.pcSpecPayload.cpuLoadPercent ?? 0) >= 50) && (
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed">
+                  ✍️ 위 상주 애드웨어·보안모듈 정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong> 또는 <strong>&ldquo;응 정리해줘&rdquo;</strong>라고 입력해 주세요. (시비 방지를 위해 승인 말씀이 블랙박스와 [복원 기록]에 녹화됩니다)
+                </div>
+              )
             )}
             <button
               type="button"
@@ -608,53 +616,26 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {!message.deviceRepairPayload.executed || message.deviceRepairPayload.undone ? (
-              <button
-                type="button"
-                disabled={busyId === 'repair_exec'}
-                onClick={async () => {
-                  setBusyId('repair_exec');
-                  const plan = buildSetupDiagnosisPlan(
-                    'pc',
-                    message.deviceRepairPayload!.symptomQuery,
-                    message.deviceRepairPayload!.presetId
-                  );
-                  await useSaySeeStore.getState().approveAndExecuteSetupPlan(plan, 0);
-                  setBusyId(null);
-                  onUpdateMessage({
-                    ...message,
-                    deviceRepairPayload: {
-                      ...message.deviceRepairPayload!,
-                      executed: true,
-                      undone: false,
-                    },
-                  });
-                  onToast?.(plan.completionMessage);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-black cursor-pointer shadow"
-              >
-                ⚡ 바로 해결하기 (언제나 0원)
-              </button>
+          <div className="pt-1 space-y-2">
+            {message.deviceRepairPayload.executed && !message.deviceRepairPayload.undone ? (
+              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                  실행 및 블랙박스 기록 완료 · [복원 기록 {message.deviceRepairPayload.createdRestoreId || '#1'}]
+                </span>
+                {message.deviceRepairPayload.approvedTypedText && (
+                  <span className="text-[11px] text-emerald-200 font-mono">
+                    승인 발화: &ldquo;{message.deviceRepairPayload.approvedTypedText}&rdquo;
+                  </span>
+                )}
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={async () => {
-                  await useSaySeeStore.getState().undoSetupMonsterRepair();
-                  onUpdateMessage({
-                    ...message,
-                    deviceRepairPayload: {
-                      ...message.deviceRepairPayload!,
-                      undone: true,
-                    },
-                  });
-                  onToast?.('↩️ 수리 전 원래 설정으로 1초 원상복구했습니다.');
-                }}
-                className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black cursor-pointer shadow"
-              >
-                ↩️ 원래 설정으로 1초 되돌리기
-              </button>
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed">
+                ✍️ 수리·정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력해 주세요. (시비 방지를 위해 승인 말씀이 블랙박스와 [복원 기록]에 녹화됩니다)
+              </div>
             )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
 
             <button
               type="button"

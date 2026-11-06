@@ -198,6 +198,8 @@ export interface MonsterPcSpecPayload {
   detectedBloatwareLabels?: string[];
   bloatwareCleaned?: boolean;
   bloatwareCleanSummary?: string;
+  approvedTypedText?: string;
+  createdRestoreId?: string;
 }
 
 export interface DigitalHealthCheckRecord {
@@ -224,6 +226,8 @@ export interface MonsterDeviceRepairPayload {
   executed?: boolean;
   undone?: boolean;
   completionMessage?: string;
+  approvedTypedText?: string;
+  createdRestoreId?: string;
 }
 
 export interface MonsterChatMessage {
@@ -1503,18 +1507,26 @@ export async function processUnifiedMonsterChatQuery(params: {
       (m) =>
         (m.cleanupPreview && !m.cleanupPreview.approved) ||
         (m.shortcutPreview && !m.shortcutPreview.approved) ||
-        (m.missingFilePayload && !m.missingFilePayload.restored)
+        (m.missingFilePayload && !m.missingFilePayload.restored) ||
+        (m.cardKind === 'PC_SPEC_CONSULTATION' &&
+          m.pcSpecPayload &&
+          !m.pcSpecPayload.bloatwareCleaned &&
+          ((m.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 ||
+            (m.pcSpecPayload.cpuLoadPercent ?? 0) >= 50)) ||
+        (m.cardKind === 'DEVICE_REPAIR_GATE' &&
+          m.deviceRepairPayload &&
+          !m.deviceRepairPayload.executed)
     );
 
   const isNegationOrRollback =
     /아니|안\s*해|하지\s*마|취소|보류|멈춰|잠깐|그만|싫어|놔둬|나중에|되돌려|되돌리|원복|원래대로/i.test(clean);
   const isNaturalAffirmativeConsent =
     !isNegationOrRollback &&
-    clean.length <= 50 &&
+    clean.length <= 60 &&
     (/^(응|네|예|그래|좋아|오케이|ok|okay|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|부탁|당장|바로|해\s*줘|해\s*주세요|해라|하자)(\s|$|[.!~,])/i.test(
       clean
     ) ||
-      /진행해|실행해|승인할|동의할|그대로\s*(해|진행|실행|부탁)|정리해\s*(줘|주세요|라)?|치워\s*(줘|주세요|라)?|옮겨\s*(줘|주세요|라)?|만들어\s*(줘|주세요|라)?|복구해\s*(줘|주세요|라)?/i.test(
+      /진행해|실행해|승인할|동의할|그대로\s*(해|진행|실행|부탁)|정리해\s*(줘|주세요|라)?|치워\s*(줘|주세요|라)?|옮겨\s*(줘|주세요|라)?|만들어\s*(줘|주세요|라)?|복구해\s*(줘|주세요|라)?|꺼\s*(줘|주세요|라)?|고쳐\s*(줘|주세요|라)?|해결해\s*(줘|주세요|라)?|최적화해\s*(줘|주세요|라)?/i.test(
         clean
       ));
 
@@ -1599,6 +1611,92 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? `${res.message}\n📋 **블랙박스 복구 승인 기록 완료** — 승인 발화: \`"${clean}"\``
         : res.message;
       speak(res.ok ? '승인 말씀이 블랙박스에 기록되었으며 파일을 복구했습니다.' : res.message);
+      return reply(sourceTab, msgText);
+    }
+
+    if (
+      pendingApprovalMsg.cardKind === 'PC_SPEC_CONSULTATION' &&
+      pendingApprovalMsg.pcSpecPayload &&
+      !pendingApprovalMsg.pcSpecPayload.bloatwareCleaned
+    ) {
+      const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
+      cachedPcContext = null;
+      const restoreId = String((osRes as any).restoreId || '#1');
+      const summary =
+        osRes.summaryKo ||
+        osRes.message ||
+        '✅ 백그라운드 애드웨어·보안모듈 강제 종료 및 자동부활(스케줄러·서비스·레지스트리 Run) 차단을 완료했습니다!';
+      const cleanedCount =
+        (Array.isArray((osRes as any).stoppedBloatware) ? (osRes as any).stoppedBloatware.length : 0) +
+        (Array.isArray((osRes as any).disabledStartups) ? (osRes as any).disabledStartups.length : 0);
+      const healthRecord: DigitalHealthCheckRecord = {
+        recordId: `HC-${Date.now()}`,
+        issuedAt: new Date().toLocaleString('ko-KR'),
+        category: '⚙️ 고치기',
+        title: `애드웨어·보안·CPU 과점유 상주모듈 정리 (승인: "${clean}")`,
+        reclaimedSizeLabel: `상주모듈 ${cleanedCount || pendingApprovalMsg.pcSpecPayload.detectedBloatwareLabels?.length || 1}건 정리`,
+        cleanedItemCount: cleanedCount || 1,
+        securityPluginsFrozen: cleanedCount || 1,
+        speedUpSummary: summary,
+        restoreId,
+      };
+      appendLocalHealthCheckRecord(healthRecord);
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.pcSpecPayload
+            ? {
+                ...m,
+                pcSpecPayload: {
+                  ...m.pcSpecPayload,
+                  bloatwareCleaned: true,
+                  bloatwareCleanSummary: summary,
+                  approvedTypedText: clean,
+                  createdRestoreId: restoreId,
+                  verdictBadge: '🟢 애드웨어·상주모듈 정리 완료',
+                },
+                healthRecordIssued: healthRecord,
+              }
+            : m
+        )
+      );
+      const msgText = `${summary}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 시작프로그램 설정을 원래대로 1초 원복합니다.`;
+      speak('승인 말씀이 블랙박스에 기록되었으며 애드웨어와 상주 보안 프로그램을 모두 정리했습니다.');
+      return reply(sourceTab, msgText, {
+        healthRecordIssued: healthRecord,
+      });
+    }
+
+    if (
+      pendingApprovalMsg.cardKind === 'DEVICE_REPAIR_GATE' &&
+      pendingApprovalMsg.deviceRepairPayload &&
+      !pendingApprovalMsg.deviceRepairPayload.executed
+    ) {
+      const dp = pendingApprovalMsg.deviceRepairPayload;
+      const plan = buildSetupDiagnosisPlan('pc', dp.symptomQuery, dp.presetId);
+      await useSaySeeStore.getState().approveAndExecuteSetupPlan(plan, 0);
+      const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
+      cachedPcContext = null;
+      const restoreId = String((osRes as any).restoreId || '#1');
+      const completionMsg = osRes.summaryKo || plan.completionMessage;
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.deviceRepairPayload
+            ? {
+                ...m,
+                deviceRepairPayload: {
+                  ...m.deviceRepairPayload,
+                  executed: true,
+                  undone: false,
+                  completionMessage: completionMsg,
+                  approvedTypedText: clean,
+                  createdRestoreId: restoreId,
+                },
+              }
+            : m
+        )
+      );
+      const msgText = `${completionMsg}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 원래 설정으로 1초 원복됩니다.`;
+      speak('승인 말씀이 블랙박스에 기록되었으며 수리를 완료했습니다.');
       return reply(sourceTab, msgText);
     }
   }
@@ -2563,9 +2661,9 @@ export async function processUnifiedMonsterChatQuery(params: {
     const lowDisk = disk !== null && disk < 20 ? ` 저장 공간이 ${disk}GB밖에 남지 않아 정리가 필요합니다.` : '';
     const bloatWarning =
       detectedBloatwareLabels.length > 0 || (cpuLoadPct !== null && cpuLoadPct >= 50)
-        ? `\n⚠️ **[속도 저하 핵심 원인 실측]** 현재 백그라운드에서 **${
-            detectedBloatwareLabels.slice(0, 6).join(', ') || '과점유 프로세스'
-          }** 등 총 ${detectedBloatwareLabels.length}종이 CPU(${cpuLoadPct ?? '?'}%)와 메모리를 점유하고 있습니다! 아래 **[🚀 애드웨어·보안·CPU 과점유 즉시 정리하기]** 버튼만 누르시면 열려 있는 브라우저·문서는 건드리지 않고 1초 만에 강제 종료 및 자동실행을 차단해 드립니다.`
+        ? `\n⚠️ **[속도 저하 핵심 원인 실측 (${detectedBloatwareLabels.length}건)]** 현재 백그라운드에서 **${
+            detectedBloatwareLabels.slice(0, 8).join(', ') || '과점유 프로세스'
+          }** 등 총 ${detectedBloatwareLabels.length}종이 CPU(${cpuLoadPct ?? '?'}%)와 메모리를 점유하고 있습니다!\n프로그램을 임의로 건드리지 않습니다. 위 내역을 확인하시고 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주시면, 그때 강제 종료 및 자동부활(스케줄러·서비스·레지스트리)을 차단하고 블랙박스와 [복원 기록]에 기록합니다.`
         : '';
     const cpu = s.cpuModel || unknown;
     const gpu = s.gpuModel || unknown;
@@ -2608,7 +2706,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         : pcSpecPayload.normalAnswerKo;
     speak(
       hasHighCpuOrBloat
-        ? `내 피씨를 실측한 결과 백그라운드 상주 프로그램 ${detectedBloatwareLabels.length}건이 속도를 늦추고 있습니다. 아래 정리하기 버튼으로 즉시 해결할 수 있습니다.`
+        ? `내 피씨를 실측한 결과 백그라운드 애드웨어 및 상주 프로그램 ${detectedBloatwareLabels.length}건이 속도를 늦추고 있습니다. 내역을 보시고 응 정리해줘라고 입력해 주세요.`
         : llmDecision?.replyKo || '내 피씨 사양을 실제로 측정했습니다.'
     );
     const bubbleText = `💻 **[내 PC 실측 사양 & 속도 저하 원인 진단]**\n${selectedAnswer}`;
