@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-05T14:26:32.338899",
+  "updated_at": "2026-11-06T09:47:50.162818",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -730,6 +730,14 @@
       "last_edited_time": "2026-11-05T01:37:00.000Z",
       "url": "https://app.notion.com/p/3-40ef9ffd2c1d8148b925fcca3a2ce7c7",
       "archived_at": "2026-11-05T14:26:32.338721"
+    },
+    {
+      "page_id": "40df9ffd-2c1d-816a-a37e-f2bcf840c7b5",
+      "title": "🎯 [귀신같이/1단계] PC-손보기·음성, 찾기 마이크 ➔ 손보기 화면 즉시 전환 & 현수 실시간 브리핑 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-05T02:22:00.000Z",
+      "url": "https://app.notion.com/p/1-PC-40df9ffd2c1d816aa37ef2bcf840c7b5",
+      "archived_at": "2026-11-06T09:47:50.162660"
     }
   ]
 }
