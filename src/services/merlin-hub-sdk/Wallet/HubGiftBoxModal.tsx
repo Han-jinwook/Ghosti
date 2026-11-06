@@ -1,15 +1,15 @@
 'use client';
 
 /**
- * Version: v2.3.0
- * Last Updated: 2026-10-26
- * Description: 패밀리 통합 '선물함 & 선물하기' 컴포넌트 (썬드리머 포인트 선물하기 멀린님 직접 코칭 UI/UX 100% 표준 반영)
- * - 상단 불필요 문구 제거 & 1줄 헤더 + 균등 3탭([받은 선물] / [보낸 선물] / [선물 보내기])
- * - 1단계: 컴팩트 2열 선물 선택 + 직접 입력 빠른 금액 칩([100C]~[전액])
- * - 2단계: 별명/이메일 실시간 자동완성 검색(한글 조합 깜빡임 방지) + 외부 클릭 닫기 + 고정 높이(h-8) 수신자 확인줄로 모달 화면 튐 0px 달성 ([내 지인 선택] 제거 완료)
- * - 3단계: 4종 테마 + 일체형 응원 메시지 카드(중복 미리보기 제거)
+ * Version: v2.4.0
+ * Last Updated: 2026-11-06
+ * Description: 패밀리 통합 '선물함 & 선물하기' 컴포넌트 (전 패밀리 앱 100% 공통 귀신코인 선물 단일화)
+ * - 개별 앱별 파편화된 묶음 상품(분석 10회, 발송 300건 등) 완전 폐지 — 받는 분이 귀신팸 어떤 앱에서든 자유롭게 쓰는 통합 귀신코인 선물로 100% 단일화
+ * - 1단계: 충전소와 일체감 있는 귀신코인 누적 선물 컨트롤러 (`+1,000 코인`, `+10,000 코인` 2개 버튼 + `↺ 0 초기화` + `전액`)
+ * - 2단계: 별명/이메일 실시간 자동완성 검색(한글 조합 깜빡임 방지) + 외부 클릭 닫기 + 고정 높이(h-8) 수신자 확인줄로 모달 화면 튐 0px 달성
+ * - 3단계: 4종 테마 + 일체형 응원 메시지 카드
  */
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Gift,
   Send,
@@ -24,8 +24,6 @@ import {
   Search,
   PartyPopper,
   Loader2,
-  ChevronDown,
-  Users,
 } from 'lucide-react';
 import {
   getGiftList,
@@ -59,121 +57,28 @@ export interface HubGiftBoxModalProps {
   initialTab?: 'received' | 'sent' | 'send';
   inline?: boolean; // true일 경우 모달 배경 없이 페이지 내 탭 컨텐츠로 렌더링
   appName?: string;
-  customProducts?: GiftProductItem[]; // 개별 앱 맞춤 상품 목록 (미전달 시 어그로필터 묶음 또는 기본값 적용)
-  minCustomCoin?: number; // 자유 코인 선물 최소 단위 (기본 1,000C)
+  customProducts?: GiftProductItem[]; // 하위 호환용 prop 유지 (전 앱 공통 귀신코인 누적 선물로 단일화됨)
+  minCustomCoin?: number; // 최소 선물 코인 단위 (기본 1,000C)
 }
 
 /**
- * 어그로필터 건당 50C 단일가 기반 묶음 상품 (기본 세트)
- * 10건(500C), 30건(1,500C), 50건(2,500C), 채널 재분석(1,000C) + 자유 코인 선물(1,000C~)
+ * 하위 호환용 export 상수 유지 (외부 import 에러 방지)
  */
 export const AGGRO_GIFT_PRODUCTS: GiftProductItem[] = [
   {
-    id: 'aggro_10',
-    title: '🛡️ 분석 10회 (500C)',
-    subtitle: '가벼운 체험 추천',
-    fullTitle: '🛡️ 어그로필터 영상 분석 10회 묶음 선물',
-    amount: 500,
-    category: 'APP_ITEM',
-    emoji: '🛡️',
-    defaultMessage: '유튜브 보실 때 가짜뉴스나 어그로에 속지 마시라고 분석 10회 묶음 선물을 보냅니다! 🎁',
-  },
-  {
-    id: 'aggro_30',
-    title: '⚡ 분석 30회 (1,500C)',
-    subtitle: '인기 실속 팩',
-    fullTitle: '⚡ 어그로필터 영상 분석 30회 묶음 선물',
-    amount: 1500,
-    category: 'APP_ITEM',
-    emoji: '⚡',
-    defaultMessage: '평소 궁금했던 유튜브 영상들 마음껏 판독해 보시라고 30회 분석 선물을 보냅니다! ⚡',
-  },
-  {
-    id: 'aggro_50',
-    title: '🚀 분석 50회 (2,500C)',
-    subtitle: '헤비 유저 베스트',
-    fullTitle: '🚀 어그로필터 영상 분석 50회 묶음 선물',
-    amount: 2500,
-    category: 'APP_ITEM',
-    emoji: '🚀',
-    defaultMessage: '유튜브 팩트체크 필수템! 든든하게 쓰시라고 50회 분석 선물을 보냅니다! 🚀',
-  },
-  {
-    id: 'aggro_owner_1000',
-    title: '👑 채널 재분석 (1,000C)',
-    subtitle: '채널주 전용',
-    fullTitle: '👑 유튜브 채널 소유자 정밀 재분석 선물',
-    amount: 1000,
-    category: 'APP_ITEM',
-    emoji: '👑',
-    defaultMessage: '특별한 응원을 담아 채널 정밀 재분석 코인 선물을 보냅니다! 🎉',
-  },
-  {
-    id: 'custom_coin',
-    title: '🎀 자유 코인 선물',
-    subtitle: '1,000C 이상 직접 입력',
-    fullTitle: '🎀 패밀리 코인 자유 선물',
+    id: 'ghost_coin_1000',
+    title: '👻 귀신코인 선물',
+    subtitle: '1,000C 단위 자유 선택',
+    fullTitle: '👻 귀신코인 선물',
     amount: 1000,
     category: 'COIN',
-    emoji: '🎀',
-    defaultMessage: '마음을 담아 준비한 코인 선물입니다! 반갑게 열어보세요 🎁',
+    emoji: '👻',
+    defaultMessage: '귀신팸 모든 앱에서 자유롭게 쓰실 수 있는 귀신코인 선물을 보냅니다! 🎁',
     isCustom: true,
   },
 ];
 
-export const SENSETALK_GIFT_PRODUCTS: GiftProductItem[] = [
-  {
-    id: 'sensetalk_starter_1000',
-    title: '⚡ 발송 300건 (1,000C)',
-    subtitle: '가벼운 응원 선물',
-    fullTitle: '⚡ 센스톡 1:1 맞춤 발송 300건 묶음 선물',
-    amount: 1000,
-    category: 'APP_ITEM',
-    emoji: '⚡',
-    defaultMessage: '센스톡으로 소중한 분들께 따뜻한 1:1 안부 전하시라고 발송 300건 선물을 보냅니다! 🎁',
-  },
-  {
-    id: 'sensetalk_basic_3000',
-    title: '🚀 스타터 1,000건 (3,000C)',
-    subtitle: '실속 인기 팩',
-    fullTitle: '🚀 센스톡 스타터 1,000건 발송 선물',
-    amount: 3000,
-    category: 'APP_ITEM',
-    emoji: '🚀',
-    defaultMessage: '복붙 없이 엔터키로 편하게 소통하시라고 센스톡 1,000건 발송 선물을 보냅니다! 🚀',
-  },
-  {
-    id: 'sensetalk_pro_6000',
-    title: '👑 프로 3,000건 (6,000C)',
-    subtitle: 'BEST 주력 추천',
-    fullTitle: '👑 센스톡 프로 3,000건 발송 선물',
-    amount: 6000,
-    category: 'APP_ITEM',
-    emoji: '👑',
-    defaultMessage: 'VIP 고객·회원 관리 든든하게 하시라고 센스톡 프로 3,000건 선물을 보냅니다! 👑',
-  },
-  {
-    id: 'sensetalk_biz_12000',
-    title: '💎 비즈니스 9,000건 (12,000C)',
-    subtitle: '대량 소통 특화',
-    fullTitle: '💎 센스톡 비즈니스 9,000건 발송 선물',
-    amount: 12000,
-    category: 'APP_ITEM',
-    emoji: '💎',
-    defaultMessage: '비즈니스 대박 나시길 응원하며 센스톡 비즈니스 9,000건 선물을 보냅니다! 🎉',
-  },
-  {
-    id: 'custom_coin',
-    title: '🎀 자유 코인 선물',
-    subtitle: '1,000C 이상 직접 입력',
-    fullTitle: '🎀 패밀리 코인 자유 선물',
-    amount: 1000,
-    category: 'COIN',
-    emoji: '🎀',
-    defaultMessage: '마음을 담아 준비한 패밀리 코인 선물입니다! 반갑게 열어보세요 🎁',
-    isCustom: true,
-  },
-];
+export const SENSETALK_GIFT_PRODUCTS: GiftProductItem[] = AGGRO_GIFT_PRODUCTS;
 
 type HubGiftThemeId = 'CHEER' | 'THANKS' | 'TOGETHER' | 'CONGRATS' | 'HEART';
 
@@ -229,36 +134,23 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
   onClose,
   initialTab = 'received',
   inline = false,
-  appName = '어그로필터',
-  customProducts,
   minCustomCoin = 1000,
 }) => {
   const { isLoggedIn, balance, refreshBalance } = useHub();
 
-  const products: GiftProductItem[] = useMemo(() => {
-    if (customProducts && customProducts.length > 0) {
-      return customProducts;
-    }
-    if (appName && (appName.includes('센스톡') || appName.toLowerCase().includes('sensetalk'))) {
-      return SENSETALK_GIFT_PRODUCTS;
-    }
-    return AGGRO_GIFT_PRODUCTS;
-  }, [customProducts, appName]);
-
-  const minCoin = typeof minCustomCoin === 'number' && minCustomCoin > 0 ? minCustomCoin : 1000;
+  const minCoin = typeof minCustomCoin === 'number' && minCustomCoin >= 1000 ? minCustomCoin : 1000;
 
   const [activeTab, setActiveTab] = useState<'received' | 'sent' | 'send'>(initialTab);
   const [receivedGifts, setReceivedGifts] = useState<GiftItem[]>([]);
   const [sentGifts, setSentGifts] = useState<GiftItem[]>([]);
-  const [contacts, setContacts] = useState<GiftContact[]>([]);
+  const [, setContacts] = useState<GiftContact[]>([]);
   const [unclaimedCount, setUnclaimedCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [unboxedBanner, setUnboxedBanner] = useState<{ title: string; amount: number; sender: string } | null>(null);
 
-  // 선물 보내기 폼 상태
-  const [selectedPresetId, setSelectedPresetId] = useState<string>(() => products[0]?.id || 'aggro_10');
-  const [customAmountInput, setCustomAmountInput] = useState<string>(() => String(minCoin));
+  // 선물 보내기 폼 상태 (전 패밀리 앱 공통 귀신코인 누적 선택: +1,000 / +10,000)
+  const [giftCoinAmount, setGiftCoinAmount] = useState<number>(0);
   const [recipientInput, setRecipientInput] = useState<string>('');
   const [selectedContact, setSelectedContact] = useState<GiftContact | null>(null);
   const [isContactDropdownOpen, setIsContactDropdownOpen] = useState<boolean>(false);
@@ -272,7 +164,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
   } | null>(null);
   const [isVerifyingRecipient, setIsVerifyingRecipient] = useState<boolean>(false);
   const [selectedTheme, setSelectedTheme] = useState<HubGiftThemeId>('CHEER');
-  const [giftMessage, setGiftMessage] = useState<string>(() => products[0]?.defaultMessage || '마음을 담아 선물을 보냅니다! 🎁');
+  const [giftMessage, setGiftMessage] = useState<string>(THEME_OPTIONS[0].defaultMsg);
   const [isSending, setIsSending] = useState<boolean>(false);
 
   const dropdownBoxRef = useRef<HTMLDivElement | null>(null);
@@ -380,21 +272,28 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
   if (!inline && !isOpen) return null;
 
   const coinBalance = typeof balance === 'number' ? balance : 0;
-  const selectedPreset = products.find(p => p.id === selectedPresetId) || products[0] || AGGRO_GIFT_PRODUCTS[0];
-  const parsedCustom = Math.max(0, Math.floor(Number(customAmountInput.replace(/[^0-9]/g, '')) || 0));
-  const finalGiftAmount = selectedPreset.isCustom ? parsedCustom : selectedPreset.amount;
-  const finalGiftTitle = selectedPreset.isCustom
-    ? `🎀 패밀리 ${finalGiftAmount.toLocaleString()} 코인 선물`
-    : selectedPreset.fullTitle;
+  const finalGiftAmount = Math.max(0, Math.floor(giftCoinAmount));
+  const finalGiftTitle = `👻 귀신코인 ${finalGiftAmount.toLocaleString()}C 선물`;
   const activeThemeObj = THEME_OPTIONS.find(t => t.id === selectedTheme) || THEME_OPTIONS[0];
 
-  const handleSelectPreset = (preset: GiftProductItem) => {
+  const handleAddGiftCoin = (delta: number) => {
     triggerHaptic('light');
-    setSelectedPresetId(preset.id);
-    if (!preset.isCustom) {
-      setCustomAmountInput(String(preset.amount));
+    setGiftCoinAmount(prev => Math.min(Math.max(0, prev + delta), 1000000));
+  };
+
+  const handleResetGiftCoin = () => {
+    triggerHaptic('light');
+    setGiftCoinAmount(0);
+  };
+
+  const handleSelectAllBalance = () => {
+    triggerHaptic('light');
+    const maxThousand = Math.floor(coinBalance / 1000) * 1000;
+    if (maxThousand < 1000) {
+      showToast('선물 가능한 보유 코인(1,000C 단위)이 부족합니다.', 'error');
+      return;
     }
-    setGiftMessage(preset.defaultMessage || activeThemeObj.defaultMsg);
+    setGiftCoinAmount(maxThousand);
   };
 
   const handleSelectTheme = (theme: typeof THEME_OPTIONS[0]) => {
@@ -472,26 +371,19 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
       return;
     }
 
+    if (finalGiftAmount < minCoin) {
+      showToast(`선물하실 코인(+1,000 또는 +10,000)을 먼저 선택해 주세요! (최소 ${minCoin.toLocaleString()}C)`, 'error');
+      return;
+    }
+    if (finalGiftAmount % 1000 !== 0) {
+      showToast('귀신코인 선물은 1,000C 단위로만 보낼 수 있습니다.', 'error');
+      return;
+    }
+
     const rawRecipient = (verifiedRecipient?.email || selectedContact?.email || recipientInput).trim();
     if (!rawRecipient) {
       showToast('선물 받으실 분의 별명 또는 이메일을 입력해 주세요.', 'error');
       return;
-    }
-
-    if (selectedPreset.isCustom) {
-      if (finalGiftAmount < minCoin) {
-        showToast(`자유 코인 선물은 최소 ${minCoin.toLocaleString()}C 이상부터 가능합니다.`, 'error');
-        return;
-      }
-      if (finalGiftAmount % 50 !== 0) {
-        showToast('선물 코인은 50C 단위로 입력해 주세요.', 'error');
-        return;
-      }
-    } else {
-      if (finalGiftAmount < 50 || finalGiftAmount % 50 !== 0) {
-        showToast('선물 코인은 최소 50C부터 50C 단위로 입력해 주세요.', 'error');
-        return;
-      }
     }
 
     if (typeof balance === 'number' && finalGiftAmount > balance) {
@@ -501,7 +393,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
     const displayTarget = verifiedRecipient?.displayName || selectedContact?.nickname || rawRecipient;
     const confirmSend = window.confirm(
-      `[🎁 패밀리 선물 발송 확인]\n\n• 받는 분: ${displayTarget}\n• 선물 내용: ${finalGiftTitle} (${finalGiftAmount.toLocaleString()} C)\n• 응원 메시지: "${giftMessage}"\n\n위 내용으로 선물을 보내시겠습니까?\n(상대방이 수령하기 전까지는 [보낸 선물] 탭에서 언제든 취소·환급 가능합니다.)`
+      `[🎁 귀신코인 선물 발송 확인]\n\n• 받는 분: ${displayTarget}\n• 선물 코인: ${finalGiftAmount.toLocaleString()} C (귀신팸 전 앱 공용)\n• 응원 메시지: "${giftMessage}"\n\n위 내용으로 선물을 보내시겠습니까?\n(상대방이 수령하기 전까지는 [보낸 선물] 탭에서 언제든 취소·환급 가능합니다.)`
     );
     if (!confirmSend) return;
 
@@ -512,10 +404,10 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
         receiverId: selectedContact?.userId,
         receiverName: verifiedRecipient?.displayName || selectedContact?.nickname || rawRecipient.split('@')[0],
         giftTitle: finalGiftTitle,
-        giftCategory: selectedPreset.category || 'APP_ITEM',
+        giftCategory: 'COIN',
         amount: finalGiftAmount,
         theme: selectedTheme,
-        message: giftMessage.trim() || selectedPreset.defaultMessage,
+        message: giftMessage.trim() || activeThemeObj.defaultMsg,
       });
 
       if (!res.success) {
@@ -525,6 +417,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
       triggerHaptic('success');
       showToast(`🎉 ${displayTarget}님께 ${finalGiftAmount.toLocaleString()}C 선물을 성공적으로 보냈습니다!`, 'info');
+      setGiftCoinAmount(0);
       setRecipientInput('');
       setSelectedContact(null);
       setVerifiedRecipient(null);
@@ -597,6 +490,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
   const unclaimedReceived = receivedGifts.filter(g => g.status === 'UNCLAIMED');
   const claimedReceived = receivedGifts.filter(g => g.status === 'CLAIMED');
+  const maxGiftableBalance = Math.floor(coinBalance / 1000) * 1000;
 
   const contentNode = (
     <div
@@ -625,7 +519,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
             <Gift className="w-5 h-5 text-amber-200" />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-white">패밀리 선물함</h2>
+            <h2 className="text-base sm:text-lg font-black tracking-tight text-white">귀신코인 선물함</h2>
             <span className="px-2.5 py-0.5 rounded-full bg-amber-400/25 border border-amber-300/40 text-amber-200 text-xs font-black tabular-nums">
               보유 {coinBalance.toLocaleString()} C
             </span>
@@ -728,7 +622,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                   아직 도착한 선물이 없습니다
                 </p>
                 <p className="text-xs text-slate-400">
-                  받은 선물이 도착하면 이곳에서 바로 코인으로 적립할 수 있습니다.
+                  받은 선물이 도착하면 이곳에서 바로 귀신코인으로 적립할 수 있습니다.
                 </p>
                 <button
                   type="button"
@@ -927,85 +821,84 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
             )}
           </div>
         ) : (
-          /* ================= [탭 3: 🎁 선물 보내기] ================= */
+          /* ================= [탭 3: 🎁 선물 보내기 (전 패밀리 앱 공통 귀신코인 누적 선물)] ================= */
           <div className="space-y-4">
-            {/* STEP 1: 선물할 상품/코인 선택 */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-2.5">
-              <div className="flex items-center justify-between">
+            {/* STEP 1: 선물할 귀신코인 선택 (+1,000 / +10,000 누적 컨트롤러) */}
+            <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-1">
                 <span className="text-xs font-black text-slate-900 dark:text-white">
-                  1️⃣ 선물할 상품 · 코인
+                  1️⃣ 선물할 귀신코인 선택
                 </span>
-                <span className="text-[11px] font-semibold text-slate-400">
-                  {selectedPreset.isCustom ? `최소 ${minCoin.toLocaleString()}C` : '맞춤 묶음'}
+                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                  귀신팸 모든 앱에서 자유롭게 사용 가능
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {products.map(preset => {
-                  const isSelected = selectedPresetId === preset.id;
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => handleSelectPreset(preset)}
-                      className={`p-2.5 px-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-2 border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/50 dark:border-indigo-400 shadow-xs'
-                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
-                          {preset.title}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 shrink-0">
-                          {preset.subtitle}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 직접 입력 (자유 코인 선물 코너) */}
-              {selectedPreset.isCustom && (
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={customAmountInput}
-                      onChange={e => setCustomAmountInput(e.target.value.replace(/[^0-9]/g, ''))}
-                      placeholder={`${minCoin.toLocaleString()}C 이상 직접 입력 (예: ${minCoin.toLocaleString()})`}
-                      className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sm font-black text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <span className="text-xs font-black text-slate-700 dark:text-slate-300">C</span>
+              {/* 선택된 선물 코인 디스플레이 박스 */}
+              <div className="rounded-2xl bg-gradient-to-r from-indigo-50/90 via-indigo-50/50 to-amber-50/60 dark:from-slate-900 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 px-4 py-3.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-indigo-100 dark:border-slate-700 flex items-center justify-center text-lg shadow-2xs shrink-0">
+                    👻
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[1000, 2000, 3000, 5000, 10000].filter(v => v >= minCoin).map(val => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => setCustomAmountInput(String(val))}
-                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-indigo-50 cursor-pointer"
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-indigo-900/70 dark:text-slate-400 block">
+                      보내실 귀신코인 (보유 {coinBalance.toLocaleString()} C)
+                    </span>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span
+                        className="text-xl sm:text-2xl font-black text-indigo-950 dark:text-white tabular-nums tracking-tight"
+                        style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                       >
-                        {val.toLocaleString()}C
-                      </button>
-                    ))}
-                    {coinBalance >= minCoin && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCustomAmountInput(String(Math.floor(coinBalance / 50) * 50))
-                        }
-                        className="px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-700 text-[11px] font-black text-amber-800 dark:text-amber-300 cursor-pointer"
-                      >
-                        전액 ({(Math.floor(coinBalance / 50) * 50).toLocaleString()}C)
-                      </button>
-                    )}
+                        {finalGiftAmount.toLocaleString()}
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-indigo-700 dark:text-indigo-300">
+                        코인 (C)
+                      </span>
+                    </div>
                   </div>
                 </div>
-              )}
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {maxGiftableBalance >= 1000 && (
+                    <button
+                      type="button"
+                      onClick={handleSelectAllBalance}
+                      className="px-2.5 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200/80 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-700 text-[11px] font-black text-amber-900 dark:text-amber-300 transition-all cursor-pointer active:scale-95"
+                    >
+                      전액
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleResetGiftCoin}
+                    className="px-2.5 py-1.5 rounded-full bg-white hover:bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-[11px] font-bold text-slate-600 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
+                  >
+                    ↺ 0 초기화
+                  </button>
+                </div>
+              </div>
+
+              {/* ⚡ 1,000 / 10,000 단위 2개 누적 버튼 */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleAddGiftCoin(1000)}
+                  className="py-3 px-4 rounded-xl bg-slate-50 hover:bg-indigo-50/70 dark:bg-slate-900 dark:hover:bg-slate-800 border-2 border-slate-200 hover:border-indigo-400 dark:border-slate-700 text-slate-800 dark:text-white font-black text-sm sm:text-base transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-2xs"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
+                  <span className="text-indigo-600 dark:text-indigo-400">+1,000</span>
+                  <span className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">코인</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddGiftCoin(10000)}
+                  className="py-3 px-4 rounded-xl bg-slate-50 hover:bg-indigo-50/70 dark:bg-slate-900 dark:hover:bg-slate-800 border-2 border-slate-200 hover:border-indigo-400 dark:border-slate-700 text-slate-800 dark:text-white font-black text-sm sm:text-base transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-2xs"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
+                  <span className="text-indigo-600 dark:text-indigo-400">+10,000</span>
+                  <span className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">코인</span>
+                </button>
+              </div>
             </div>
 
             {/* STEP 2: 받는 분 지정 (실시간 자동완성 검색, 높이 100% 고정으로 화면 튐 원천 차단) */}
@@ -1164,7 +1057,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
               <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xs">
                 <div className={`bg-gradient-to-r ${activeThemeObj.gradient} px-3.5 py-2 text-white flex items-center justify-between text-xs font-black`}>
                   <span>
-                    {activeThemeObj.emoji} {activeThemeObj.label} · {selectedPreset.title}
+                    {activeThemeObj.emoji} {activeThemeObj.label} · 👻 귀신코인 선물
                   </span>
                   <span>+{finalGiftAmount.toLocaleString()} C</span>
                 </div>
@@ -1179,7 +1072,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
               <button
                 type="button"
-                disabled={isSending || finalGiftAmount < 50}
+                disabled={isSending}
                 onClick={handleSendGiftSubmit}
                 className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-amber-600 hover:from-indigo-700 hover:to-amber-700 text-white font-black text-sm shadow-lg transition-all active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
               >

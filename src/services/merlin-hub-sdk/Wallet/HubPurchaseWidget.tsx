@@ -1,11 +1,11 @@
 import { GHOST_COIN_WINK_BASE64, GHOST_COIN_HUG_BASE64, GHOST_COIN_TITLE_BASE64 } from '../assets/ghostCoinBase64';
 /**
- * Version: v1.5.0
- * Last Updated: 2026-11-03
+ * Version: v1.7.0
+ * Last Updated: 2026-11-06
  * Description:
- * - 『👻 귀신코인 공식 충전소』 브랜드 전면 개편 (아기귀신 3D 로고 & 3종 귀신코인 카드 장착)
- * - 어떤 앱 도메인(귀신같이, 어그로필터, 센스톡 등)에서도 이미지가 절대 깨지지 않도록 허브 CDN 절대경로 + 로컬 폴백 적용
- * - KCP 간편결제 다이렉트 호출(카카오페이 / 네이버페이 / 토스페이 / 삼성월렛 / 애플페이 / 신용·체크카드) 원터치 선택 지원 (기존 payMethodType="card" 하드코딩 버그 완전 해결)
+ * - 『👻 귀신코인 충전소』 원포인트 다크 카드 & 은은한 인디고·스카이 타이틀 배너 & 담백한 라이트 탭/금액 버튼 시각적 위계 완성
+ * - 중앙 단일 스마트 카드(아기귀신 2배 확대 + 3D 도자기체 귀신코인 로고 + 3만 이상 코인 안은 귀신 동적 전환) 및 네이버페이식 누적 금액 컨트롤러(+1천, +5천, +1만, +5만, 0코인 초기화) 탑재
+ * - KCP 간편결제 다이렉트 호출(카카오페이 / 네이버페이 / 토스페이 / 삼성월렛 / 애플페이 / 신용·체크카드) 원터치 선택 지원
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { hubFetch } from '../CoreLogic/client';
@@ -719,10 +719,6 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   <span className="text-slate-300">·</span>
                   <span>
                     3만원 이상 <strong className="text-slate-700 font-semibold">10% 할인</strong>
-                  </span>
-                  <span className="text-slate-300">·</span>
-                  <span>
-                    5만원 이상 <strong className="text-slate-700 font-semibold">10% 할인</strong>
                   </span>
                 </div>
               </div>
