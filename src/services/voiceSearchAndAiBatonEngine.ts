@@ -580,12 +580,22 @@ export async function speakWithHyunsuOrSunhi(
   role: GhostiNeuralVoiceRole = 'hyunsu_briefing',
   rate: string = SETUP_MONSTER_TTS_RATE_DEFAULT
 ): Promise<{ ok: boolean; voiceId: string; audioUrl?: string }> {
-  // [시스템 브리핑·단답형 = 남성(현수 ko-KR-HyunsuNeural) / 서류 장문·약관·조항 낭독 = 여성(선희 ko-KR-SunHiNeural) 칼분리]
+  // 1) 유저가 [남 | 여] 알약 스위치에서 성우를 선택한 경우 그 성우 목소리를 최우선 존중
+  // 2) 명시적으로 서류 장문 낭독(sunhi_doc_reader)이거나 기본 선택일 때만 역할별 성우 적용
+  const userGender = getPreferredVoiceGender();
   const voiceId =
-    role === 'sunhi_doc_reader'
+    userGender === 'female'
+      ? GHOSTI_VOICE_ACTORS.sunhi_doc_reader.voiceId
+      : role === 'sunhi_doc_reader'
       ? GHOSTI_VOICE_ACTORS.sunhi_doc_reader.voiceId
       : GHOSTI_VOICE_ACTORS.hyunsu_briefing.voiceId;
-  const res = await speakSetupMonsterTts(text, {
+
+  // 여성 성우(선희) 음소 보정: '음식' 첫 음절 'ㅇ'이 'ㄷ'으로 뭉개져 '듬식'처럼 발음되는 현상 방지
+  const phoneticText = text
+    .replace(/\b음식\b/g, '음-식')
+    .replace(/\b음식\s*사진/g, '음-식 사진');
+
+  const res = await speakSetupMonsterTts(phoneticText, {
     voice: voiceId,
     rate,
     forceRoleVoice: true,
