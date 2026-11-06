@@ -52,17 +52,27 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => silentIndexingBrake.toggleSpeedMode()}
-          className={`px-3 py-1 rounded-lg text-[12.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0 transition-all ${
-            isTurbo
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
-              : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-white/15 text-slate-800 dark:text-zinc-100'
-          }`}
-        >
-          {isTurbo ? '🍃 무소음 전환' : '⚡ 고속 정리'}
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
+            className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0 transition-all shadow-xs"
+          >
+            🚀 내 PC 전체 인덱싱 시작
+          </button>
+
+          <button
+            type="button"
+            onClick={() => silentIndexingBrake.toggleSpeedMode()}
+            className={`px-3 py-1 rounded-lg text-[12.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0 transition-all ${
+              isTurbo
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-white/15 text-slate-800 dark:text-zinc-100'
+            }`}
+          >
+            {isTurbo ? '🍃 무소음 전환' : '⚡ 고속 정리'}
+          </button>
+        </div>
       </div>
 
       {showPriorityJumpToast && snap.lastPriorityJump && (

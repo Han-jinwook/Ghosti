@@ -177,19 +177,7 @@ export const zCoreBridge = ZCoreBridgeManager.getInstance();
 export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
   if (typeof window === 'undefined') return true;
 
-  const hasLoginToken = Boolean(
-    localStorage.getItem('merlin_session_token') ||
-      localStorage.getItem('ghosti_prelaunch_verified_email') ||
-      localStorage.getItem('userEmail')
-  );
-
-  // 미로그인 시: 무소음으로 자연스럽게 이메일 로그인 모달만 호출
-  if (!hasLoginToken) {
-    window.dispatchEvent(new CustomEvent('openLoginModal'));
-    return false;
-  }
-
-  // PC 환경에서 Z-코어 점검: 이미 설치·실행되어 있고 최신 버전이면 0.1초 만에 무소음 통과
+  // PC 환경에서 Z-코어 점검: 이미 설치·실행되어 있으면 비로그인(게스트) 상태여도 로그인 창을 띄우지 않고 즉시 통과!
   const isMobileViewportOrUA =
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
     window.innerWidth < 860;

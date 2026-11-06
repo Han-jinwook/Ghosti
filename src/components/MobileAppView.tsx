@@ -178,21 +178,6 @@ export const MobileAppView: React.FC = () => {
   useEffect(() => {
     const onOpenZCoreGuide = () => setShowZCoreGuideModal(true);
     window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
-    const timer = window.setTimeout(() => {
-      const hasLogin =
-        typeof window !== 'undefined' &&
-        (Boolean(localStorage.getItem('merlin_session_token')) ||
-          Boolean(useSaySeeStore.getState().merlinAuth?.token));
-      if (!hasLogin) {
-        if (
-          typeof sessionStorage !== 'undefined' &&
-          sessionStorage.getItem('ghosti_login_prompt_shown') !== '1'
-        ) {
-          sessionStorage.setItem('ghosti_login_prompt_shown', '1');
-          window.dispatchEvent(new CustomEvent('openLoginModal'));
-        }
-      }
-    }, 750);
     const unsub = zCoreBridge.subscribe((conn) => {
       if (
         conn &&
@@ -204,7 +189,6 @@ export const MobileAppView: React.FC = () => {
     });
     return () => {
       window.removeEventListener('openZCoreGuideModal', onOpenZCoreGuide);
-      clearTimeout(timer);
       unsub();
     };
   }, []);

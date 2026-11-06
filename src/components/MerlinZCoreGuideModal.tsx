@@ -123,15 +123,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         if (isZCoreOutdated(zCoreBridge.version)) {
           void zCoreBridge.triggerSilentSelfUpdate();
         }
-        // 이미 Z-코어가 켜져 있으면 별도 로딩 창이나 수동 업데이트 창으로 붙잡지 않고 0.1초 만에 자동 패스!
-        if (!initialStep) {
-          if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem('ghosti_initial_indexing_done', '1');
-          }
-          void initApp(true);
-          onClose();
-          return;
-        }
         setStep((prev) => {
           if (prev === 'intro' || prev === 'waiting_engine') {
             setProgress(0);
@@ -220,15 +211,17 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   };
 
   const handleOneStopAgreeAndDownload = () => {
-    // 1) 미로그인 상태라면 로그인 모달부터 먼저 띄워 이메일 인증을 완료하게 안내
-    if (!verifiedEmail) {
-      onClose();
-      window.dispatchEvent(new CustomEvent('openLoginModal'));
-      return;
-    }
-
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+    }
+
+    // 1) 이미 Z-코어가 연결되어 있으면 바로 인덱싱(목록 불러오기) 실행
+    if (isConnected) {
+      hasTriggeredInitRef.current = false;
+      initPromiseRef.current = null;
+      setProgress(0);
+      setStep('indexing');
+      return;
     }
 
     // 2) 모바일 브라우저 접속 시: Windows .zip을 폰에 받지 않고 모바일 시작/PC 주소 복사로 안내
@@ -245,12 +238,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     link.click();
     document.body.removeChild(link);
 
-    if (isConnected) {
-      setProgress(0);
-      setStep('indexing');
-    } else {
-      setStep('waiting_engine');
-    }
+    setStep('waiting_engine');
   };
 
   const handleCopyPcLinkForMobile = () => {
@@ -305,15 +293,13 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-xl">{!verifiedEmail ? '🔐' : isMobileEnv ? '📱' : '✨'}</span>
+                  <span className="text-xl">{isMobileEnv ? '📱' : '✨'}</span>
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-black tracking-tight">
-                    {!verifiedEmail
-                      ? '이메일로 간편하게 시작하기'
-                      : isMobileEnv
+                    {isMobileEnv
                       ? '모바일 시작 & PC 폴더 연동'
-                      : '내 PC 사진 · 동영상 · 서류 연결'}
+                      : '내 PC 사진 · 동영상 · 서류 인덱싱 연결'}
                   </h3>
                 </div>
               </div>
@@ -328,9 +314,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             </div>
 
             <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
-              {!verifiedEmail
-                ? '이메일 인증만 마치면 내 기기 찾고·치우고·고치고 모든 기능을 평생 무료로 이용하실 수 있습니다.'
-                : isMobileEnv
+              {isMobileEnv
                 ? '스마트폰에서 바로 시작하실 수 있으며, PC에서도 아래 주소로 접속하시면 PC 속 사진·문서까지 함께 검색됩니다.'
                 : '처음 한 번만 연결해 두시면 다음부터는 이 창 없이 0.1초 만에 내 PC 파일이 자동으로 준비됩니다.'}
             </p>
@@ -364,10 +348,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>
-                  {!verifiedEmail
-                    ? '이메일로 시작하기'
-                    : isMobileEnv
+                  {isMobileEnv
                     ? '바로 시작하기'
+                    : isConnected
+                    ? '🚀 내 PC 전체 인덱싱 시작'
                     : '연결 시작하기'}
                 </span>
               </button>
@@ -600,26 +584,26 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             <div className="flex flex-col sm:flex-row items-center gap-2.5">
               <button
                 type="button"
-                onClick={finishAndPopOpenPhotos}
-                className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
-              >
-                🖼️ 내 컴퓨터 사진 {totalPhotoCount}장 전체 펼치기
-              </button>
-              <button
-                type="button"
                 onClick={() => {
                   hasTriggeredInitRef.current = false;
                   initPromiseRef.current = null;
                   setProgress(0);
                   setStep('indexing');
                 }}
+                className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
+              >
+                🚀 내 PC 전체 인덱싱 시작 ({totalPhotoCount}장 스캔)
+              </button>
+              <button
+                type="button"
+                onClick={finishAndPopOpenPhotos}
                 className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
                   isLight
                     ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
                     : 'bg-zinc-900 border-white/15 text-zinc-300 hover:bg-zinc-800'
                 }`}
               >
-                🔄 목록 다시 불러오기
+                🖼️ 사진 전체 펼치기
               </button>
             </div>
             {!isOutdated && !isMobileEnv && (

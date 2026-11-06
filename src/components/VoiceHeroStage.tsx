@@ -370,7 +370,7 @@ export const VoiceHeroStage: React.FC = () => {
               onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
               className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
             >
-              ⭕ 연결 시작
+              🚀 내 PC 전체 인덱싱 시작
             </button>
           </div>
         )}

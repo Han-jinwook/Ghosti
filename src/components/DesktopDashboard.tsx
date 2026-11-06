@@ -240,23 +240,7 @@ export const DesktopDashboard: React.FC = () => {
     });
 
     const timer = window.setTimeout(async () => {
-      const hasLogin =
-        typeof window !== 'undefined' &&
-        (Boolean(localStorage.getItem('merlin_session_token')) ||
-          Boolean(useSaySeeStore.getState().merlinAuth?.token));
-
-      if (!hasLogin) {
-        if (
-          typeof sessionStorage !== 'undefined' &&
-          sessionStorage.getItem('ghosti_login_prompt_shown') !== '1'
-        ) {
-          sessionStorage.setItem('ghosti_login_prompt_shown', '1');
-          window.dispatchEvent(new CustomEvent('openLoginModal'));
-        }
-        return;
-      }
-
-      // 본페이지 첫 진입 시 다짜고짜 연결 팝업을 띄우지 않고 백그라운드 헬스체크만 수행
+      // 본페이지 첫 진입 시 게스트 상태에서도 다짜고짜 로그인 팝업이나 연결 팝업을 자동 호출하지 않고 백그라운드 헬스체크만 수행
       await zCoreBridge.checkHealth();
     }, 850);
 
