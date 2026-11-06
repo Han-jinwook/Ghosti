@@ -13,6 +13,7 @@ import { groupBurstSearchResults, probeBrowserVideoDurationSec } from '../servic
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
+import { Stage1MinimalSearchPreview, Stage1MinimalCarePreview } from './Stage1MinimalPreview';
 import {
   LoungeCustomSettingsHeader,
   LoungeFeedContextBanner,
@@ -327,6 +328,10 @@ export const DesktopDashboard: React.FC = () => {
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(true);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
   const [superpowerStatus, setSuperpowerStatus] = useState<SuperpowerTrialStatus | null>(null);
+  const [isStage1MinimalPreview, setIsStage1MinimalPreview] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.search.includes('preview=stage1');
+  });
 
   const isAnySubscribed = useMemo(
     () =>
@@ -881,8 +886,30 @@ export const DesktopDashboard: React.FC = () => {
 
               </div>
 
-              {/* 우측 상단 심플 앵커: 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
+              {/* 우측 상단 심플 앵커: 1단계 신형/구형 비교 스위치 + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="가이드 공유 및 프로필 영역">
+                {activeLoungeType === 'personal' && (desktopTab === 'dashboard' || desktopTab === 'trash') && (
+                  <button
+                    type="button"
+                    onClick={() => setIsStage1MinimalPreview((v) => !v)}
+                    title="기존 1단계 화면과 신형 미니멀 1단계 화면을 즉시 전환하여 비교합니다"
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-extrabold text-[11.5px] border transition-all cursor-pointer shrink-0 ${
+                      isStage1MinimalPreview
+                        ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.35)]'
+                        : themeMode === 'light'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                        : 'bg-zinc-900 text-emerald-300 border-emerald-500/40 hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span>🧪</span>
+                    <span>
+                      {isStage1MinimalPreview
+                        ? '1단계 신형 미니멀 UI (기존 화면으로 전환 ↺)'
+                        : '1단계 신형 미니멀 UI 비교 보기'}
+                    </span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -1129,7 +1156,10 @@ export const DesktopDashboard: React.FC = () => {
         {desktopTab === 'trial' && <LoungeView />}
 
         {/* ─────────────── 서브메뉴 2번: 노션형 백지 도화지(Zen Canvas) & 점진적 결과 펼침 ─────────────── */}
-        {desktopTab === 'dashboard' && (
+        {desktopTab === 'dashboard' &&
+          (activeLoungeType === 'personal' && isStage1MinimalPreview ? (
+            <Stage1MinimalSearchPreview />
+          ) : (
           <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
             {activeLoungeType === 'work' ? (
               <LoungeFeedContextBanner />
@@ -1613,12 +1643,16 @@ export const DesktopDashboard: React.FC = () => {
             </>
           )}
         </main>
-      )}
+          ))}
 
       {/* ─────────────── 서브메뉴 3번: 개인은 [AI 클린몬스터], 사진 공유(패밀리·동호·동창회)은 [⏳ AI 인덱싱 대기실] ─────────────── */}
       {desktopTab === 'trash' &&
         (activeLoungeType === 'personal' ? (
-          <SmartTrashView />
+          isStage1MinimalPreview ? (
+            <Stage1MinimalCarePreview />
+          ) : (
+            <SmartTrashView />
+          )
         ) : (
           <LoungeIndexingWaitingRoom />
         ))}

@@ -1,0 +1,1339 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSaySeeStore } from '../store/useSaySeeStore';
+import type { PhotoItem, TrashCategory } from '../types/saysee';
+import { groupBurstSearchResults, probeBrowserVideoDurationSec } from '../services/aiEngine';
+import { executeRealOsAction } from '../services/setupMonsterEngine';
+import { renderHighlightedDocText } from './PricingModal';
+import {
+  requestConnectMyComputer,
+  zCoreBridge,
+  isZCoreOutdated,
+  LATEST_Z_CORE_VERSION,
+  Z_CORE_ZIP_URL,
+} from '../services/zCoreBridge';
+import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
+import { VoiceActorControlPill } from './VoiceActorControlPill';
+import { unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
+import {
+  SEARCH_STAGE_PC_ROLLING_PLACEHOLDERS_10,
+  SEARCH_STAGE_MOBILE_ROLLING_PLACEHOLDERS_10,
+  getAndAdvanceSessionPlaceholderStartIndex,
+} from '../services/weeklyCareAndPlaceholderEngine';
+import {
+  loadLocalHealthCheckHistory,
+  executeRestorePointRollback,
+  type DigitalHealthCheckRecord,
+} from '../services/monsterChatRouter';
+import { PersonalHealthCheckHistoryDrawer } from './MonsterInteractiveCards';
+import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
+
+const STAGE1_ROLLING_INTERVAL_MS = 10_000; // 10초 자동 롤링
+
+const TRASH_TABS_4: {
+  key: 'duplicate' | 'memo' | 'screenshot' | 'blurry';
+  stepNum: string;
+  title: string;
+  shortTitle: string;
+  shortBadge: string;
+  cleanTag: string;
+  subtitle: string;
+  icon: string;
+}[] = [
+  {
+    key: 'duplicate',
+    stepNum: '①',
+    title: '중복 사진 · 연사 선택',
+    shortTitle: '중복 · 연사 선택',
+    shortBadge: '중복·연사 선택',
+    cleanTag: '#중복·연사사본',
+    subtitle: '원본 1장만 남기고 정리',
+    icon: 'burst_mode',
+  },
+  {
+    key: 'memo',
+    stepNum: '②',
+    title: '주차 · 영수증 · 일회성 메모',
+    shortTitle: '주차 · 영수증 · 메모',
+    shortBadge: '주차·사물·일회성메모',
+    cleanTag: '#주차·부품·일회성메모',
+    subtitle: '주차장 · 부품 · 단기 메모',
+    icon: 'description',
+  },
+  {
+    key: 'screenshot',
+    stepNum: '③',
+    title: '스크린샷 · 불필요 캡처',
+    shortTitle: '스크린샷 · 캡처',
+    shortBadge: '스크린샷 캡처',
+    cleanTag: '#스크린샷 캡처',
+    subtitle: '문자 · 화면 캡처 정리',
+    icon: 'screenshot_mobile',
+  },
+  {
+    key: 'blurry',
+    stepNum: '④',
+    title: '흔들림 · 바닥 오촬영',
+    shortTitle: '흔들림 · 오촬영',
+    shortBadge: '흔들림·오촬영',
+    cleanTag: '#초점이탈·오촬영',
+    subtitle: '흐릿하거나 잘못 찍힌 사진',
+    icon: 'blur_on',
+  },
+];
+
+const fmtMB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+function matchesTrashTab(photo: PhotoItem, tabKey: string): boolean {
+  if (!photo.trashCategory || photo.quarantined) return false;
+  if (tabKey === 'all') return true;
+  if (tabKey === 'memo') {
+    return (
+      photo.trashCategory === 'memo' ||
+      photo.trashCategory === 'object' ||
+      photo.trashCategory === 'document' ||
+      photo.trashCategory === 'receipt'
+    );
+  }
+  return photo.trashCategory === tabKey;
+}
+
+/**
+ * 🧪 1단계 [🎯 찾기] 미니멀 프리뷰 컴포넌트
+ * - 기존 상단 검색 구도 + 하단 샘플 사진·영상·문서 바둑판 100% 보존
+ * - 1) 검색창 내부 10초 롤링 플레이스홀더 + 포커스/타이핑 시 즉시 정지 + [예시 바로 검색 ↵] 원클릭 체험 버튼
+ * - 2) [❐ 동일 연사 묶어보기 ON] 스위치 버튼 삭제 & "전체 사진 목록 · 총 N장" 단순화 (썸네일 클릭 시 상세 모달에서 연사 나란히 비교 보장)
+ * - 3) 문서·영상 목록 상단 TMI 설명 배지("실생활 필수 문서 N건 · 별표 가림 없이...") -> "총 N건" 단순화
+ */
+export const Stage1MinimalSearchPreview: React.FC = () => {
+  const {
+    layout,
+    photos,
+    searchSpace,
+    hasExecutedUserSearch,
+    setSearchSpace,
+    resetSearchSpaceToAll,
+    localDocuments,
+    matchedLocalDocs,
+    matchedVaultPhotos,
+    searchResults,
+    videoSceneItems,
+    matchedVideoScenes,
+    activeQuery,
+    isListening,
+    liveWaveBands,
+    interimSttPreview,
+    toggleMicRecording,
+    runTextQuery,
+    openLocalFolder,
+    importMobileLocalPhotos,
+    isStoreAppMode,
+    setSelectedPhoto,
+    setSelectedVideoModal,
+    setSelectedDocModal,
+    syncRealVideoDuration,
+    toggleBookmark,
+  } = useSaySeeStore();
+
+  const [textInput, setTextInput] = useState('');
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const mobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
+
+  useEffect(() => {
+    return zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
+  }, []);
+
+  const isMobile = layout === 'mobile';
+  const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
+  const searchPlaceholderPool = useMemo(
+    () =>
+      isMobileOrStore
+        ? SEARCH_STAGE_MOBILE_ROLLING_PLACEHOLDERS_10
+        : SEARCH_STAGE_PC_ROLLING_PLACEHOLDERS_10,
+    [isMobileOrStore]
+  );
+
+  const [rollingSearchIdx, setRollingSearchIdx] = useState<number>(() =>
+    getAndAdvanceSessionPlaceholderStartIndex(10)
+  );
+
+  // [레드팀 보완 1] 포커스 중이거나 1글자라도 타이핑 중이면 10초 자동 롤링 일시정지
+  useEffect(() => {
+    if (isInputFocused || textInput.trim().length > 0) return;
+    const timer = window.setInterval(() => {
+      setRollingSearchIdx((prev) => (prev + 1) % searchPlaceholderPool.length);
+    }, STAGE1_ROLLING_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isInputFocused, textInput, searchPlaceholderPool.length]);
+
+  const currentExampleSentence = useMemo(() => {
+    return searchPlaceholderPool[rollingSearchIdx % searchPlaceholderPool.length];
+  }, [searchPlaceholderPool, rollingSearchIdx]);
+
+  const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
+  const gallerySceneCount = useMemo(
+    () =>
+      activePhotos.filter(
+        (p) =>
+          !p.isVaultDocument &&
+          p.trashCategory !== 'blurry' &&
+          p.trashCategory !== 'screenshot' &&
+          p.trashCategory !== 'memo' &&
+          p.trashCategory !== 'duplicate'
+      ).length,
+    [activePhotos]
+  );
+  const vaultPhotoCount = useMemo(
+    () => activePhotos.filter((p) => p.isVaultDocument).length,
+    [activePhotos]
+  );
+  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
+  const matchedTotalDocsCount = matchedLocalDocs.length + matchedVaultPhotos.length;
+
+  // 연사 묶기는 스위치 없이 항상 기본 ON으로 자동 작동
+  const groupedResults = useMemo(() => {
+    const orderedGroups = groupBurstSearchResults(searchResults);
+    if (searchSpace === 'vault') {
+      return orderedGroups.flatMap((g) =>
+        g.burstPhotos.map((photo) => ({
+          representative: {
+            photo,
+            score: g.representative.score,
+            matchPercentage: g.representative.matchPercentage,
+            matchedBy: g.representative.matchedBy,
+          },
+          burstPhotos: [photo],
+          burstCount: 1,
+        }))
+      );
+    }
+    return orderedGroups;
+  }, [searchResults, searchSpace]);
+
+  const scrollToResults = () => {
+    if (typeof document !== 'undefined') {
+      window.setTimeout(() => {
+        document.getElementById('ghosti-search-results')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 60);
+    }
+  };
+
+  const handleTextSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    unlockMobileAudioOnUserGesture();
+    const q = (textInput.trim() || currentExampleSentence).trim();
+    if (!q) return;
+    setTextInput(q);
+    await runTextQuery(q);
+    scrollToResults();
+  };
+
+  const handleRunExampleInstant = async () => {
+    unlockMobileAudioOnUserGesture();
+    const q = currentExampleSentence.trim();
+    if (!q) return;
+    setTextInput(q);
+    await runTextQuery(q);
+    scrollToResults();
+  };
+
+  return (
+    <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
+      {/* 상단 검색 프레임 */}
+      <div className="w-full flex flex-col gap-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+          <h1 className="font-headline-md text-[20px] md:text-[24px] text-white font-extrabold tracking-tight">
+            🔍 내 기기 1초 AI 내용검색
+          </h1>
+        </div>
+
+        <section className="w-full flex flex-col gap-3">
+          <div className="w-full flex flex-col gap-3">
+            {/* 1-A. 자연어 문장형 통합 검색창 (10초 롤링 플레이스홀더 + 포커스 정지 + [예시 바로 검색 ↵]) */}
+            <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <div className="relative flex-1 min-w-[200px] flex items-center">
+                <span className="material-symbols-outlined text-[20px] absolute left-3.5 pointer-events-none text-zinc-400">
+                  {searchSpace === 'vault'
+                    ? 'folder_managed'
+                    : searchSpace === 'video'
+                    ? 'smart_display'
+                    : 'search'}
+                </span>
+                <input
+                  type="text"
+                  value={textInput}
+                  onFocus={() => setIsInputFocused(true)}
+                  onBlur={() => setIsInputFocused(false)}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  placeholder={`예) ${currentExampleSentence}`}
+                  className="w-full h-11 md:h-13 pl-10 pr-44 sm:pr-52 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
+                />
+                {!textInput.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleRunExampleInstant()}
+                    title="지금 보이는 예시 문장으로 1초 만에 바로 검색해 봅니다"
+                    className="hidden sm:inline-flex items-center gap-1 absolute right-18 h-7.5 px-2.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/35 text-teal-300 font-label-sm text-[11.5px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+                  >
+                    <span>예시 바로 검색 ↵</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTextInput('')}
+                    className="absolute right-18 text-zinc-400 hover:text-white p-1 cursor-pointer"
+                    title="지우기"
+                  >
+                    <span className="material-symbols-outlined text-[17px]">close</span>
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="absolute right-1.5 h-8.5 md:h-10 px-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] md:text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+                >
+                  검색
+                </button>
+              </div>
+
+              <div className="md:hidden flex items-center gap-1.5 shrink-0 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    unlockMobileAudioOnUserGesture();
+                    void toggleMicRecording();
+                  }}
+                  title="모바일 마이크로 말해서 검색·낭독·손보기"
+                  className={`h-10 px-3 rounded-2xl border flex items-center gap-1 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                    isListening
+                      ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
+                      : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
+                  }`}
+                >
+                  <span
+                    className={`material-symbols-outlined text-[18px] ${
+                      isListening ? 'text-zinc-950' : 'text-primary-container'
+                    }`}
+                  >
+                    {isListening ? 'stop_circle' : 'mic'}
+                  </span>
+                  <span>{isListening ? '듣는 중' : '말하기'}</span>
+                </button>
+                <VoiceActorControlPill />
+              </div>
+            </form>
+
+            {isListening && (
+              <div className="px-3.5 py-2 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-0.5 h-4 shrink-0">
+                    {liveWaveBands.slice(0, 8).map((amp, i) => (
+                      <span
+                        key={i}
+                        style={{ height: `${Math.max(4, Math.round(amp * 16))}px` }}
+                        className="w-1 rounded-full bg-primary-container transition-all duration-100"
+                      />
+                    ))}
+                  </div>
+                  <span className="font-label-md text-[12.5px] text-primary-container font-bold truncate">
+                    {interimSttPreview
+                      ? `“${interimSttPreview}”`
+                      : '말씀해 주세요... (말씀이 끝나면 즉시 검색됩니다)'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 1-B. 3대 카테고리 스위칭 캡슐 탭: [사진] | [동영상] | [문서] */}
+            <div className="flex flex-wrap items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-0.5">
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSearchSpace('gallery')}
+                  className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                    searchSpace === 'gallery'
+                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                      : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+                  }`}
+                >
+                  <span>사진</span>
+                  <span
+                    className={`px-2 py-0.2 rounded-full text-[11px] font-mono ${
+                      searchSpace === 'gallery'
+                        ? 'bg-white/25 text-zinc-950 font-black'
+                        : hasExecutedUserSearch && searchResults.length > 0
+                        ? 'bg-primary-container/20 text-primary-container font-bold'
+                        : 'text-zinc-400 font-bold'
+                    }`}
+                  >
+                    {hasExecutedUserSearch ? `(${searchResults.length})` : gallerySceneCount}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSearchSpace('video')}
+                  className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                    searchSpace === 'video'
+                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                      : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+                  }`}
+                >
+                  <span>동영상</span>
+                  <span
+                    className={`px-2 py-0.2 rounded-full text-[11px] font-mono ${
+                      searchSpace === 'video'
+                        ? 'bg-white/25 text-zinc-950 font-black'
+                        : hasExecutedUserSearch && matchedVideoScenes.length > 0
+                        ? 'bg-primary-container/20 text-primary-container font-bold'
+                        : 'text-zinc-400 font-bold'
+                    }`}
+                  >
+                    {hasExecutedUserSearch
+                      ? `(${matchedVideoScenes.length})`
+                      : `${videoSceneItems.length}`}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSearchSpace('vault')}
+                  className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                    searchSpace === 'vault'
+                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                      : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
+                  }`}
+                >
+                  <span>문서</span>
+                  <span
+                    className={`px-2 py-0.2 rounded-full text-[11px] font-mono ${
+                      searchSpace === 'vault'
+                        ? 'bg-white/25 text-zinc-950 font-black'
+                        : hasExecutedUserSearch && matchedTotalDocsCount > 0
+                        ? 'bg-primary-container/20 text-primary-container font-bold'
+                        : 'text-zinc-400 font-bold'
+                    }`}
+                  >
+                    {hasExecutedUserSearch ? `(${matchedTotalDocsCount})` : totalIndexedDocs}
+                  </span>
+                </button>
+              </div>
+
+              {hasExecutedUserSearch && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTextInput('');
+                      resetSearchSpaceToAll(searchSpace);
+                    }}
+                    className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white font-label-sm text-[11.5px] whitespace-nowrap cursor-pointer"
+                  >
+                    ✕ 검색 해제
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 1-D. 연결 상태 바 */}
+            {isZCoreConnected ? (
+              <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
+            ) : isMobile || isStoreAppMode ? (
+              <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
+                <input
+                  ref={mobilePhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      void importMobileLocalPhotos(e.target.files);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <span className="text-[12.5px] font-extrabold text-slate-900 dark:text-white">
+                  📱 내 스마트폰 갤러리 사진을 불러와 선명도·중복·영수증을 1초 만에 정리·검색해 보세요!
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => mobilePhotoInputRef.current?.click()}
+                    className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+                  >
+                    📱 내 폰 사진 불러오기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => requestConnectMyComputer()}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/15 font-bold text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+                  >
+                    💻 내 PC 연결 안내
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
+                <span className="text-[12.5px] font-extrabold text-slate-900 dark:text-white">
+                  {hasExecutedUserSearch
+                    ? '👀 지금은 샘플 검색 결과입니다 · 내 컴퓨터 진짜 사진·영상·문서도 1초 만에 찾아보세요!'
+                    : '👀 지금은 체험 샘플 화면입니다 · 내 컴퓨터 진짜 사진·영상·문서를 1초 만에 찾아볼까요?'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => requestConnectMyComputer()}
+                  className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+                >
+                  ⚡ 내 컴퓨터 1초 연결하기
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* 하단 샘플 사진·영상·문서 바둑판 (100% 보존 + TMI 배지 단순화) */}
+      <div id="ghosti-search-results" className="scroll-mt-20">
+        {searchSpace === 'video' ? (
+          <section className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
+                  {hasExecutedUserSearch && activeQuery
+                    ? `“${activeQuery}” 동영상 검색 결과`
+                    : '전체 동영상 목록'}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
+                  총 {matchedVideoScenes.length}건
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {matchedVideoScenes.length < videoSceneItems.length && (
+                  <button
+                    onClick={() => resetSearchSpaceToAll('video')}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-primary-container font-label-sm text-[12px] font-bold border border-white/10 cursor-pointer"
+                  >
+                    동영상 {videoSceneItems.length}개 전체 보기
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
+              {matchedVideoScenes.map((vid) => (
+                <article
+                  key={vid.id}
+                  onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
+                  className="min-w-[85%] sm:min-w-[340px] md:min-w-0 snap-center group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
+                >
+                  <div className="relative aspect-video w-full overflow-hidden bg-black">
+                    {vid.thumbUrl ? (
+                      <img
+                        src={vid.thumbUrl}
+                        alt={vid.title}
+                        loading="lazy"
+                        className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <video
+                        src={`${vid.videoUrl}#t=${vid.matchedSeekSec || 0.1}`}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        onLoadedMetadata={(e) => {
+                          const realDur = Math.round(e.currentTarget.duration);
+                          if (realDur > 0 && Number.isFinite(realDur)) {
+                            syncRealVideoDuration(vid.id, realDur);
+                          }
+                        }}
+                        onError={() => {
+                          void probeBrowserVideoDurationSec(vid.videoUrl, 2500).then((realDur) => {
+                            if (realDur && realDur > 0) {
+                              syncRealVideoDuration(vid.id, realDur);
+                            }
+                          });
+                        }}
+                        className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                      <div className="w-11 h-11 rounded-full bg-black/75 border border-white/20 text-white flex items-center justify-center group-hover:bg-primary-container group-hover:text-zinc-950 group-hover:border-primary-container transition-all">
+                        <span className="material-symbols-outlined text-[26px]">play_arrow</span>
+                      </div>
+                    </div>
+                    {hasExecutedUserSearch && activeQuery && (
+                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container/50 text-primary-container font-label-mono text-[11px] font-bold">
+                        🎯 {vid.matchedTimestamp} 장면 포착
+                      </div>
+                    )}
+                    <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-white/15 text-white font-label-mono text-[11px] font-extrabold shadow-md">
+                      ⏱️ {vid.durationText}
+                    </div>
+                  </div>
+                  <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
+                    <h3 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
+                      {renderHighlightedDocText(vid.title, hasExecutedUserSearch ? activeQuery : '')}
+                    </h3>
+                    <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
+                      <span>{vid.date}</span>
+                      <span className="text-primary-container font-bold">
+                        {hasExecutedUserSearch && activeQuery
+                          ? `▶ ${vid.matchedTimestamp} 바로 재생 →`
+                          : '▶ 재생 →'}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : searchSpace === 'vault' ? (
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
+                  {hasExecutedUserSearch && activeQuery
+                    ? `“${activeQuery}” 문서 검색 결과`
+                    : '전체 문서·서류 목록'}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
+                  총 {matchedTotalDocsCount}건
+                </span>
+              </div>
+
+              <button
+                onClick={() => void openLocalFolder('docs')}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-medium border border-white/10 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[15px]">folder_open</span>
+                <span>내 PC 문서 폴더 열기</span>
+              </button>
+            </div>
+
+            {matchedLocalDocs.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pb-1">
+                {matchedLocalDocs.map((doc) => (
+                  <article
+                    key={doc.id}
+                    onClick={() => setSelectedDocModal(doc)}
+                    className="group p-4 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col justify-between gap-3 cursor-pointer transition-all"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-amber-400 font-label-mono text-[10px] font-bold">
+                            {doc.ext}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 font-label-sm text-[11px] font-medium">
+                            {doc.categoryBadge}
+                          </span>
+                        </div>
+                        <span className="font-label-mono text-[10px] text-zinc-500">
+                          {doc.deviceSource}
+                        </span>
+                      </div>
+
+                      <h4 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
+                        {renderHighlightedDocText(doc.title, hasExecutedUserSearch ? activeQuery : '')}
+                      </h4>
+
+                      <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2 leading-relaxed bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
+                        {renderHighlightedDocText(
+                          doc.extractedText,
+                          hasExecutedUserSearch ? activeQuery : ''
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400 gap-2">
+                      <span>{doc.date}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void navigator.clipboard?.writeText(doc.extractedText);
+                            useSaySeeStore.setState({
+                              lastQuarantineToast: `📋 복사 완료! [${doc.title}] 본문 정보가 즉시 복사되었습니다.`,
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer"
+                        >
+                          📋 복사
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
+                              useSaySeeStore.setState({
+                                lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
+                              });
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer"
+                        >
+                          🔍 파일 열기
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : (
+          /* [🖼️ 전체 갤러리] 모드 — [❐ 동일 연사 묶어보기 ON] 스위치 버튼 완전 제거 & 깔끔한 카운트만 표시 */
+          <section className="flex flex-col gap-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
+                  {hasExecutedUserSearch && activeQuery
+                    ? `“${activeQuery}” 검색 결과`
+                    : '전체 사진 목록'}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
+                  총 {groupedResults.length}장
+                </span>
+              </div>
+            </div>
+
+            {groupedResults.length > 0 ? (
+              <div
+                className={
+                  groupedResults.length <= 16
+                    ? 'grid grid-cols-2 sm:grid-cols-4 gap-3.5'
+                    : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5'
+                }
+              >
+                {groupedResults.map((group) => {
+                  const item = group.representative;
+                  const isBurst = group.burstCount >= 2;
+                  return (
+                    <article
+                      key={item.photo.id}
+                      onClick={() =>
+                        // [레드팀 보완] 연사 묶음(❐ N장 연사) 클릭 시 상세 모달에 group.burstPhotos를 그대로 넘겨 모달 내에서 나란히 펼쳐 골라볼 수 있도록 보장
+                        setSelectedPhoto(item.photo, isBurst ? group.burstPhotos : null)
+                      }
+                      className="group relative rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 hover:border-white/25 transition-all cursor-pointer flex flex-col"
+                    >
+                      <div
+                        className={`relative ${
+                          groupedResults.length <= 16 ? 'aspect-[4/3]' : 'aspect-[4/5]'
+                        } w-full overflow-hidden bg-zinc-950`}
+                      >
+                        <img
+                          src={item.photo.thumbUrl}
+                          alt={item.photo.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+
+                        {isBurst && (
+                          <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15 text-primary-container font-label-sm text-[10.5px] font-bold flex items-center gap-1">
+                            <span>❐ {group.burstCount}장 연사</span>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleBookmark(item.photo.id);
+                          }}
+                          aria-label="즐겨찾기"
+                          className={`absolute top-2.5 right-2.5 w-7.5 h-7.5 rounded-full backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
+                            item.photo.bookmarked
+                              ? 'bg-red-600/95 text-white ring-2 ring-white/80 shadow-md scale-105'
+                              : 'bg-black/60 text-white/85 hover:text-red-400 hover:bg-black/80'
+                          }`}
+                        >
+                          <span
+                            className="material-symbols-outlined text-[16px]"
+                            style={
+                              item.photo.bookmarked
+                                ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
+                                : undefined
+                            }
+                          >
+                            favorite
+                          </span>
+                        </button>
+
+                        <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">
+                          <span className="font-label-sm text-[11.5px] font-semibold text-white whitespace-nowrap shrink-0">
+                            {item.photo.date.split(' ')[0]}
+                          </span>
+                          {item.photo.tags[0] && (
+                            <span className="font-label-sm text-[11.5px] font-bold text-primary-container truncate">
+                              {item.photo.tags[0]}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-14 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2">
+                <span className="material-symbols-outlined text-zinc-500 text-[36px]">
+                  image_search
+                </span>
+                <p className="font-headline-sm text-[15px] text-zinc-300 font-semibold">
+                  일치하는 사진을 찾지 못했습니다. 다른 문장이나 단어로 검색해 보세요.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    </main>
+  );
+};
+
+/**
+ * 🧪 1단계 [✋ 손보기] 미니멀 프리뷰 컴포넌트
+ * - 1) [🗑️ 휴지통] 상단 알약 버튼 & 5번째 휴지통 카드 & 하단 휴지통 드로어 전면 철거 -> 깔끔한 4열 카테고리 그리드(① 중복·연사, ② 주차·영수증, ③ 스크린샷, ④ 흔들림)만 유지
+ * - 2) 상단 난립 배지([🆓 언제나 0원], [📁 서류함 분리 확인], 2중 중복 기록함 등) 철거 -> [🕰️ 손보기·복원 기록] 단 1개로 통합
+ * - 3) 좌측 '💬 기기 3대 핵심 건강검진' 아코디언 박스 완전 철거
+ * - 4) [레드팀 보완] 우측 [✋ 손보기 대화창] 첫 인사말 말풍선(Welcome Bubble)에 [⚡ 느려진 PC 보안모듈·속도 1초 검진] · [🗂️ 바탕화면·설치파일 찌꺼기 정리] 1클릭 실행 버튼 기본 내장
+ */
+export const Stage1MinimalCarePreview: React.FC = () => {
+  const {
+    layout,
+    photos,
+    duplicateGroups,
+    selectedTrashIds,
+    activeTrashCategoryFilter,
+    setActiveTrashCategoryFilter,
+    toggleTrashSelection,
+    selectAllTrashInFilter,
+    clearTrashSelection,
+    pickBestInDuplicateGroup,
+    moveSelectedToQuarantine,
+    moveAllTrashToQuarantine,
+    quarantineMoving,
+    setSelectedPhoto,
+    lastUndoBatch,
+    undoLastQuarantine,
+    dismissUndoBatch,
+    setDesktopTab,
+    setMobileTab,
+    runTextQuery,
+    isStoreAppMode,
+    importMobileLocalPhotos,
+  } = useSaySeeStore();
+
+  const trashMobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [showHealthHistoryDrawer, setShowHealthHistoryDrawer] = useState<boolean>(false);
+  const [healthHistoryRecords, setHealthHistoryRecords] = useState<DigitalHealthCheckRecord[]>(() =>
+    loadLocalHealthCheckHistory()
+  );
+  const [externalQueryTrigger, setExternalQueryTrigger] = useState<{
+    id: number;
+    query: string;
+  } | null>(null);
+
+  const triggerMonsterQuery = (rawQuery: string) => {
+    const q = rawQuery.trim();
+    if (!q) return;
+    setExternalQueryTrigger({ id: Date.now() + Math.random(), query: q });
+  };
+
+  const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
+  const quarantinedPhotos = photos.filter((p) => p.quarantined);
+  const totalTrashBytes = activeTrash.reduce((a, p) => a + p.size, 0);
+
+  const dupCount = activeTrash.filter((p) => matchesTrashTab(p, 'duplicate')).length;
+  const memoCount = activeTrash.filter((p) => matchesTrashTab(p, 'memo')).length;
+  const screenshotCount = activeTrash.filter((p) => matchesTrashTab(p, 'screenshot')).length;
+  const blurryCount = activeTrash.filter((p) => matchesTrashTab(p, 'blurry')).length;
+  const memoAndScreenCount = memoCount + screenshotCount;
+
+  const currentTab =
+    activeTrashCategoryFilter === 'object' ||
+    activeTrashCategoryFilter === 'document' ||
+    activeTrashCategoryFilter === 'receipt'
+      ? 'memo'
+      : activeTrashCategoryFilter;
+
+  const filteredCandidates = activeTrash.filter((p) => matchesTrashTab(p, currentTab));
+  const selectedBytes = activeTrash
+    .filter((p) => selectedTrashIds.has(p.id))
+    .reduce((a, p) => a + p.size, 0);
+
+  const photoById = new Map(photos.map((p) => [p.id, p]));
+  const activeDuplicateGroups = duplicateGroups.filter((g) =>
+    g.photoIds.some((id) => {
+      const ph = photoById.get(id);
+      return ph && !ph.quarantined && id !== g.bestPhotoId;
+    })
+  );
+
+  const showDuplicatePickSection =
+    currentTab !== 'none' &&
+    (currentTab === 'duplicate' || currentTab === 'all') &&
+    activeDuplicateGroups.length > 0;
+
+  const zCoreOutdated =
+    zCoreBridge.isConnected && isZCoreOutdated(zCoreBridge.version);
+
+  return (
+    <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
+      {zCoreOutdated && (
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/80 border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+          <span className="text-[14px] text-amber-900 dark:text-amber-200 font-extrabold">
+            ⚠️ 실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 버전(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요.
+          </span>
+          <a
+            href={Z_CORE_ZIP_URL}
+            download="Merlin_Z_Core.zip"
+            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap shadow cursor-pointer"
+          >
+            ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
+          </a>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+        {/* ═══════════════ [좌측 열] 미니멀 정리 워크스페이스 (휴지통 버튼·아코디언·중복 배지 철거 완료) ═══════════════ */}
+        <div className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0">
+          {/* 1. 슬림 헤더 (난립하던 6개 배지를 [🕰️ 손보기·복원 기록] 단 1개로 통합) */}
+          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
+                  <span>✋ 치우기 &amp; 손보기</span>
+                </h1>
+
+                <input
+                  ref={trashMobilePhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      void importMobileLocalPhotos(e.target.files);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                {(isStoreAppMode || layout === 'mobile') && (
+                  <button
+                    type="button"
+                    onClick={() => trashMobilePhotoInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    📱 내 폰 사진 불러와 정리하기
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHealthHistoryDrawer((v) => !v);
+                    void triggerMonsterQuery('최근 [복원 기록] 보여줘');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  🕰️ 손보기·복원 기록 ({healthHistoryRecords.length})
+                </button>
+              </div>
+
+              <button
+                type="button"
+                disabled={activeTrash.length === 0 || quarantineMoving}
+                onClick={() => void moveAllTrashToQuarantine()}
+                className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
+              >
+                <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
+              </button>
+            </div>
+
+            <div className="font-headline-md text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">
+              {activeTrash.length > 0 ? (
+                <>
+                  정리 후보 <span className="text-primary-container">{activeTrash.length}장</span>{' '}
+                  <span className="text-zinc-500 dark:text-zinc-400 font-normal text-[14px]">
+                    ({fmtMB(totalTrashBytes)})
+                  </span>{' '}
+                  — 중복·연사 <span className="text-zinc-900 dark:text-white">{dupCount}장</span> · 메모·캡처{' '}
+                  <span className="text-zinc-900 dark:text-white">{memoAndScreenCount}장</span> · 흔들림{' '}
+                  <span className="text-zinc-900 dark:text-white">{blurryCount}장</span>
+                </>
+              ) : (
+                <span className="text-primary-container">
+                  ✨ 모든 중복·연사 사본({quarantinedPhotos.length}장) 정리가 완료되어 가장 쾌적한 상태입니다
+                </span>
+              )}
+            </div>
+
+            {showHealthHistoryDrawer && (
+              <PersonalHealthCheckHistoryDrawer
+                records={healthHistoryRecords}
+                onClose={() => setShowHealthHistoryDrawer(false)}
+                onRollbackRestoreId={(rid) => {
+                  void executeRestorePointRollback(rid).then((res) => {
+                    useSaySeeStore.setState({ lastQuarantineToast: res.message });
+                  });
+                }}
+              />
+            )}
+
+            {/* 인라인 1초 되돌리기(Undo) 알림 콜아웃 */}
+            {lastUndoBatch && (
+              <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-primary-container text-[20px]">
+                    history
+                  </span>
+                  <span className="font-label-md text-[13px] text-zinc-100 font-semibold">
+                    {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 안전하게 정리되었습니다.`}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void undoLastQuarantine()}
+                    className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
+                  >
+                    ↩️ 1초 즉시 되돌리기 (Undo)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={dismissUndoBatch}
+                    className="p-1 text-zinc-400 hover:text-white cursor-pointer"
+                    title="닫기"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* 2. 깔끔한 4열 정리 카테고리 카드 (5번째 [🗑️ 휴지통 보관함] 카드 완전 제거!) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {TRASH_TABS_4.map((tab) => {
+              const items = activeTrash.filter((p) => matchesTrashTab(p, tab.key));
+              const bytes = items.reduce((a, p) => a + p.size, 0);
+              const isSelected = currentTab === tab.key;
+
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => {
+                    if (currentTab === tab.key) {
+                      setActiveTrashCategoryFilter('none');
+                    } else {
+                      setActiveTrashCategoryFilter(tab.key as TrashCategory);
+                    }
+                  }}
+                  className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border ${
+                    isSelected
+                      ? 'bg-zinc-900 border-primary-container shadow-md ring-2 ring-primary-container'
+                      : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 w-full">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-headline-sm text-[13.5px] text-primary-container font-bold">
+                          {tab.stepNum}
+                        </span>
+                        <span className="font-headline-sm text-[14.5px] text-white font-bold truncate">
+                          {tab.shortTitle}
+                        </span>
+                      </div>
+                      <span className="font-body-sm text-[11px] text-zinc-400 line-clamp-1">
+                        {tab.subtitle}
+                      </span>
+                    </div>
+                    <span className="material-symbols-outlined text-[17px] text-zinc-400 shrink-0">
+                      {tab.icon}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-white/10 w-full">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-headline-md text-[18px] text-white font-extrabold">
+                        {items.length}
+                      </span>
+                      <span className="font-label-sm text-[11.5px] text-zinc-400">장</span>
+                      {tab.key === 'duplicate' && activeDuplicateGroups.length > 0 && (
+                        <span className="ml-1 text-[11px] text-primary-container font-semibold">
+                          · {activeDuplicateGroups.length}묶음
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="font-label-mono text-[11px] text-zinc-400 font-semibold">
+                      {fmtMB(bytes)}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 3-A. ① 중복 사진 & 연사 묶음 선택 */}
+          {showDuplicatePickSection && (
+            <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-white font-extrabold">
+                      ① 중복 사진 &amp; 연사 묶음 선택
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[12.5px] font-bold">
+                      {activeDuplicateGroups.length}개 묶음
+                    </span>
+                  </div>
+                  <p className="font-body-sm text-[13px] text-zinc-400">
+                    남길 사진 1장을 누른 뒤 우측 [정리] 버튼을 눌러주세요.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveTrashCategoryFilter(currentTab === 'all' ? 'duplicate' : 'all')
+                  }
+                  className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border transition-all cursor-pointer ${
+                    currentTab === 'all'
+                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                      : 'bg-zinc-900 text-zinc-300 hover:text-white border-white/10'
+                  }`}
+                >
+                  {currentTab === 'all' ? '중복·연사만 보기' : `전체 후보 보기 (${activeTrash.length})`}
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                {activeDuplicateGroups.map((group, gIdx) => {
+                  const groupPhotos = group.photoIds
+                    .map((id) => photoById.get(id))
+                    .filter((p): p is NonNullable<typeof p> => Boolean(p && !p.quarantined));
+
+                  const redundantCount = groupPhotos.filter((p) => p.id !== group.bestPhotoId).length;
+                  const repPhoto = groupPhotos[0];
+                  const sceneLabel =
+                    repPhoto?.tags.find((t) => !t.includes('연사') && !t.includes('원본')) || '#연사묶음';
+                  const isExactDuplicateGroup = gIdx === 0;
+
+                  return (
+                    <div
+                      key={group.groupId}
+                      className="p-4 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-col gap-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-extrabold">
+                            {isExactDuplicateGroup ? '📑 동일 내용 중복' : '📸 연사 묶음 (1장 선택)'}
+                          </span>
+                          <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                            묶음 #{gIdx + 1} ({groupPhotos.length}장)
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium">
+                            {sceneLabel}
+                          </span>
+                        </div>
+
+                        <button
+                          disabled={quarantineMoving}
+                          onClick={() =>
+                            void pickBestInDuplicateGroup(group.groupId, group.bestPhotoId, true)
+                          }
+                          className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-primary-container text-zinc-100 hover:text-zinc-950 border border-white/10 font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                          <span>
+                            {isExactDuplicateGroup
+                              ? `최고화질 원본 남기고 사본 ${redundantCount}장 정리`
+                              : `선택한 1장 남기고 나머지 ${redundantCount}장 정리`}
+                          </span>
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        {groupPhotos.map((ph, idx) => {
+                          const isBestOriginal = ph.id === group.bestPhotoId;
+                          return (
+                            <div
+                              key={ph.id}
+                              onClick={() =>
+                                void pickBestInDuplicateGroup(group.groupId, ph.id, false)
+                              }
+                              className={`group/card relative aspect-[4/5] rounded-xl overflow-hidden cursor-pointer transition-all ${
+                                isBestOriginal
+                                  ? 'ring-2 ring-primary-container border border-primary-container'
+                                  : 'border border-white/10 opacity-90 hover:opacity-100 hover:border-white/30'
+                              }`}
+                            >
+                              <img
+                                src={ph.thumbUrl}
+                                alt=""
+                                loading="lazy"
+                                className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                              />
+
+                              {isBestOriginal ? (
+                                <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">
+                                    verified_user
+                                  </span>
+                                  <span>👑 보존할 1장</span>
+                                </div>
+                              ) : (
+                                <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/80 backdrop-blur-md border border-white/15 text-zinc-300 font-label-sm text-[11px] font-medium">
+                                  {`#${idx + 1} · 클릭 시 이 사진 보존`}
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedPhoto(ph, groupPhotos);
+                                }}
+                                title="크게 비교 보기"
+                                className="absolute bottom-2.5 right-2.5 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors z-10 cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">zoom_in</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 3-B. 탭 ②·③·④ 개별 선택 그리드 */}
+          {currentTab !== 'duplicate' && currentTab !== 'none' && (
+            <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-headline-sm text-[16.5px] text-white font-bold">
+                    {TRASH_TABS_4.find((t) => t.key === currentTab)?.title || '전체 정리 후보 사진'}
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold">
+                    {filteredCandidates.length}장
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllTrashInFilter}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium cursor-pointer"
+                  >
+                    전체 선택
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearTrashSelection}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 font-label-sm text-[12px] cursor-pointer"
+                  >
+                    선택 해제
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selectedTrashIds.size === 0 || quarantineMoving}
+                    onClick={() => void moveSelectedToQuarantine()}
+                    className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
+                  >
+                    선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 정리
+                  </button>
+                </div>
+              </div>
+
+              {filteredCandidates.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                  {filteredCandidates.map((photo) => {
+                    const isChecked = selectedTrashIds.has(photo.id);
+                    const tabMeta =
+                      TRASH_TABS_4.find((t) => matchesTrashTab(photo, t.key)) || TRASH_TABS_4[1];
+
+                    return (
+                      <div
+                        key={photo.id}
+                        onClick={() => toggleTrashSelection(photo.id)}
+                        className={`group relative rounded-xl overflow-hidden bg-zinc-950 transition-all cursor-pointer border ${
+                          isChecked
+                            ? 'border-primary-container ring-1 ring-primary-container'
+                            : 'border-white/10 opacity-90 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="relative aspect-[4/5] w-full overflow-hidden bg-zinc-950">
+                          <img
+                            src={photo.thumbUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+
+                          <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15">
+                            <span className="font-label-sm text-[10.5px] font-semibold text-zinc-200">
+                              {tabMeta.shortBadge}
+                            </span>
+                          </div>
+
+                          <div
+                            className={`absolute top-2.5 right-2.5 w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                              isChecked
+                                ? 'bg-primary-container text-zinc-950 font-bold'
+                                : 'bg-black/60 border border-white/20 text-transparent'
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-[15px]">check</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2">
+                  <span className="material-symbols-outlined text-primary-container text-[30px]">
+                    verified
+                  </span>
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    이 카테고리의 사진 정리가 모두 완료되었습니다!
+                  </span>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+
+        {/* ═══════════════ [우측 열] 손보기 대화창 (첫 인사말 말풍선에 PC 1클릭 검진 액션 내장) ═══════════════ */}
+        <div className="xl:col-span-5 2xl:col-span-4 xl:sticky xl:top-20">
+          <MonsterStandardChatColumn
+            sourceTab="trash"
+            externalQueryTrigger={externalQueryTrigger}
+            showWelcomeQuickCareActions={true}
+            onHealthRecordAdded={(rec) => setHealthHistoryRecords((prev) => [rec, ...prev])}
+            onJumpToSearch={(kw) => {
+              if (layout === 'mobile') setMobileTab('search');
+              else setDesktopTab('dashboard');
+              void runTextQuery(kw);
+            }}
+            onToast={(msg) => useSaySeeStore.setState({ lastQuarantineToast: msg })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};

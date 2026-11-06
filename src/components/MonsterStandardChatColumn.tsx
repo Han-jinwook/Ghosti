@@ -46,6 +46,7 @@ interface MonsterStandardChatColumnProps {
   onToast?: (msg: string) => void;
   onTriggerOsRepair?: (query: string) => void;
   onRepairSymptomDetected?: (query: string) => void;
+  showWelcomeQuickCareActions?: boolean;
 }
 
 export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps> = ({
@@ -56,6 +57,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   onToast,
   onTriggerOsRepair,
   onRepairSymptomDetected,
+  showWelcomeQuickCareActions = false,
 }) => {
   const [, setTick] = useState(0);
   const [inputText, setInputText] = useState('');
@@ -581,6 +583,35 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                     ))}
                   </div>
                 )}
+
+                {/* [레드팀 보완] 1단계 미니멀 뷰에서 좌측 3대 검진 박스 제거 시, 첫 환영 말풍선 안에 PC 속도·보안모듈 / 바탕화면 1클릭 버튼 제공 */}
+                {!isUser &&
+                  showWelcomeQuickCareActions &&
+                  !isMobileOrStore &&
+                  msg.id === 'monster_welcome_init' && (
+                    <div className="mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void handleSend('지금 PC가 좀 느린데 1초 건강검진 해줘', 'text')
+                        }
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
+                      >
+                        ⚡ 느려진 PC 보안모듈·속도 1초 검진
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void handleSend('바탕화면이랑 다운로드 찌꺼기 파일 정리해줘', 'text')
+                        }
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                      >
+                        🗂️ 바탕화면·설치파일 찌꺼기 정리
+                      </button>
+                    </div>
+                  )}
               </div>
             </div>
           );
