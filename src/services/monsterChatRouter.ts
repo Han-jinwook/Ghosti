@@ -2455,11 +2455,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         sourceTab,
         `${llmIntro}⚙️ **[내 PC 시작프로그램 & 상주 애드웨어·보안모듈 실측 결과${
           typeof cpuLoad === 'number' ? ` (현재 CPU 부하 ${cpuLoad}%)` : ''
-        }]**\n• **자동실행 시작프로그램(${names.length}개)**: ${
-          names.length ? names.join(', ') : '없음'
-        }\n• **감지된 애드웨어·보안·CPU 과점유 모듈(${secPlugins.length}건)**: ${
-          secPlugins.length ? secPlugins.join(', ') : '현재 상주 모듈 0건'
-        }\n\n필수 앱(카톡·원드라이브·브라우저)은 건드리지 않고, 컴퓨터 속도를 떨어뜨리는 애드웨어·보안 모듈과 비필수 시작프로그램만 아래 **[⚡ 바로 해결하기]** 버튼(또는 **"지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘"**)으로 1초 만에 정리하실 수 있습니다!`,
+        }]**\n• **자동실행 시작프로그램(${names.length}개)** · **감지된 애드웨어·보안모듈(${secPlugins.length}건)**을 아래 진단 카드에 정리했습니다. 정리를 실행하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`,
         {
           cardKind: 'DEVICE_REPAIR_GATE',
           deviceRepairPayload: {
@@ -2572,6 +2568,76 @@ export async function processUnifiedMonsterChatQuery(params: {
   }
 
   // 5) 내 PC 실측 사양 & 느려짐/애드웨어/CPU 과점유/업그레이드 맞춤 상담
+  // 단, 이미 직전에 PC 사양 진단(PC_SPEC_CONSULTATION)을 보여준 직후 후속 대화 질문("속도 개선된거야?", "메모리 1%만 세이브된거야?", "왜 아직 남아있어?")을 한 경우에는
+  // 똑같은 사양 진단 템플릿을 기계적으로 반복 출력하지 않고 LLM의 후속 대화 답변(replyKo)으로 자연스럽게 응대합니다!
+  const recentAssistantMessages = sharedChatState.messages.filter((m) => m.role === 'assistant');
+  const lastSpecMsg = [...recentAssistantMessages].reverse().find((m) => m.cardKind === 'PC_SPEC_CONSULTATION' && m.pcSpecPayload);
+  const isFollowUpAboutPriorSpec =
+    Boolean(lastSpecMsg) &&
+    (/(개선된|세이브된|줄어든|된\s*거야|된거야|한\s*거야|한거야|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아)|얼마나\s*(줄|빨라|개선)|차이가|효과가)/i.test(
+      clean
+    ) ||
+      (hasLlm && llmDecision?.intent === 'GENERAL_CONVERSATION'));
+
+  if (isFollowUpAboutPriorSpec && lastSpecMsg?.pcSpecPayload) {
+    const [rNow, osNow] = await Promise.all([
+      zcoreJson<{ ok: boolean; ramUsedPercent?: number | null; ramTotalGb?: number | null }>('/__zcore/pc-spec'),
+      zcoreJson<{
+        ok: boolean;
+        spoolerAndSecurity?: {
+          cpuLoadPercent?: number;
+          activeSecurityPlugins?: Array<{ keyword?: string; label?: string }>;
+        };
+      }>('/__zcore/os-inspect'),
+    ]);
+    const prevSpec = lastSpecMsg.pcSpecPayload;
+    const curCpu =
+      typeof osNow.data?.spoolerAndSecurity?.cpuLoadPercent === 'number'
+        ? osNow.data.spoolerAndSecurity.cpuLoadPercent
+        : prevSpec.cpuLoadPercent;
+    const curRamPct =
+      typeof rNow.data?.ramUsedPercent === 'number' ? rNow.data.ramUsedPercent : prevSpec.ramUsedPercent;
+    const curSecCount = Array.isArray(osNow.data?.spoolerAndSecurity?.activeSecurityPlugins)
+      ? osNow.data!.spoolerAndSecurity!.activeSecurityPlugins!.length
+      : 0;
+    const alreadyCleaned = Boolean(prevSpec.bloatwareCleaned);
+
+    const directFollowUpKo = alreadyCleaned
+      ? `💬 ${
+          llmDecision?.replyKo
+            ? `${llmDecision.replyKo}\n\n`
+            : ''
+        }📊 **[정리 전·후 실시간 비교 브리핑]**\n• **CPU 부하**: 진단 시 **${
+          prevSpec.cpuLoadPercent ?? '?'
+        }%** ➔ 현재 **${curCpu ?? '?'}%**\n• **메모리(RAM) 점유율**: 진단 시 **${
+          prevSpec.ramUsedPercent ?? '?'
+        }%** ➔ 현재 **${curRamPct ?? '?'}%** (윈도우 OS와 열려 있는 브라우저 탭이 기본 메모리를 유지하고 있어 메모리 수치는 소폭 변동하며, 백그라운드 상주 보안·애드웨어 프로세스는 정리 완료되었습니다.)`
+      : `💬 아직 상주 프로그램 정리가 실행되지 않은 **진단 대기 상태**입니다! (현재 CPU 부하 **${
+          curCpu ?? '?'
+        }%**, 메모리 사용 **${curRamPct ?? '?'}%**, 상주 보안·애드웨어 **${
+          curSecCount || prevSpec.detectedBloatwareLabels?.length || 0
+        }건**)\n\n프로그램을 임의로 종료하지 않도록 보호 중이니, 정리를 실행하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`;
+
+    speak(
+      alreadyCleaned
+        ? `현재 씨피유 부하는 ${curCpu ?? 0}퍼센트, 메모리 점유율은 ${curRamPct ?? 0}퍼센트입니다.`
+        : '아직 정리가 실행되지 않은 진단 대기 상태입니다. 채팅창에 응 정리해줘라고 입력하시면 즉시 정리해 드립니다.'
+    );
+    return reply(sourceTab, directFollowUpKo, {
+      llmActionJson: llmDecision || undefined,
+      followUpSuggestions: alreadyCleaned
+        ? [
+            '바탕화면이랑 다운로드 폴더 정리할 파일도 봐줘',
+            '방금 한 거 되돌려줘 (복원 기록 확인)',
+          ]
+        : [
+            '응 정리해줘',
+            '응 진행해',
+            '바탕화면이랑 다운로드 폴더 정리할 파일 봐줘',
+          ],
+    });
+  }
+
   if (
     llmDecision?.intent === 'PC_SPEC_CONSULTATION' ||
     llmDecision?.zCoreCommand?.endpoint === '/__zcore/pc-spec' ||
@@ -2709,7 +2775,11 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? `내 피씨를 실측한 결과 백그라운드 애드웨어 및 상주 프로그램 ${detectedBloatwareLabels.length}건이 속도를 늦추고 있습니다. 내역을 보시고 응 정리해줘라고 입력해 주세요.`
         : llmDecision?.replyKo || '내 피씨 사양을 실제로 측정했습니다.'
     );
-    const bubbleText = `💻 **[내 PC 실측 사양 & 속도 저하 원인 진단]**\n${selectedAnswer}`;
+    const bubbleText = llmDecision?.replyKo
+      ? `💬 ${llmDecision.replyKo}`
+      : hasHighCpuOrBloat
+      ? `💻 **[내 PC 실측 사양 & 속도 저하 원인 진단 완료]**\n백그라운드 상주 애드웨어·보안모듈 **${detectedBloatwareLabels.length}건**이 속도 저하의 핵심 원인으로 감지되었습니다. 아래 진단 카드를 확인하시고 정리를 원하시면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`
+      : `💻 **[내 PC 실측 사양 & 상태 진단 완료]**\n내 PC 하드웨어 사양과 실시간 상태를 아래 진단 카드에 정리했습니다.`;
     return reply(sourceTab, bubbleText, {
       cardKind: 'PC_SPEC_CONSULTATION',
       pcSpecPayload,
