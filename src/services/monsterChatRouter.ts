@@ -21,6 +21,15 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { validateClubSignboardName } from '../components/PricingModal';
 import { dispatchGhostCastLiveCommand } from '../components/GhostCastAndLiveSystem';
 import { executeRealOsAction, buildSetupDiagnosisPlan } from './setupMonsterEngine';
+import {
+  parseConversationalCareScheduleCommand,
+  saveWeeklyCareSchedule,
+  loadWeeklyCareSchedule,
+  formatScheduleLabelKo,
+  recordCareCompletionTimestamp,
+  evaluateDualProactiveCareEngine,
+  type ProactiveCareBriefingResult,
+} from './weeklyCareAndPlaceholderEngine';
 
 /**
  * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
@@ -50,7 +59,8 @@ export type MonsterCardKind =
   | 'BATON_TOUCH_CUTOFF'
   | 'GHOSTI_INFO_DESK'
   | 'APP_SETTINGS_CONTROL'
-  | 'STUDIO_SUPPORT_PROXY';
+  | 'STUDIO_SUPPORT_PROXY'
+  | 'WEEKLY_CARE_BRIEFING';
 
 export interface MonsterInfoDeskPayload {
   topicBadge: string;
@@ -68,7 +78,8 @@ export interface MonsterAppSettingsPayload {
     | 'SNIPPET_UPDATE'
     | 'GHOST_WINDOW_PREF'
     | 'CLUB_SIGNBOARD'
-    | 'GHOST_CAST_LIVE';
+    | 'GHOST_CAST_LIVE'
+    | 'WEEKLY_CARE_SCHEDULE';
   badgeText: string;
   summaryText: string;
   appliedValueLabel: string;
@@ -259,6 +270,15 @@ export interface MonsterChatMessage {
   infoDeskPayload?: MonsterInfoDeskPayload;
   appSettingsPayload?: MonsterAppSettingsPayload;
   studioSupportPayload?: MonsterStudioSupportPayload;
+  proactiveCareBriefing?: ProactiveCareBriefingResult & {
+    executed?: boolean;
+    scheduleConfirmed?: boolean;
+    approvedTypedText?: string;
+    createdRestoreId?: string;
+  };
+  /** 모바일에서 채팅(타자)으로 설정/고치기 가이드를 요청했을 때 다짜고짜 음성 출력하지 않고 사전 승낙을 구하는 스크립트 */
+  voiceConsentPromptKo?: string;
+  voiceConsentApproved?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -1397,6 +1417,80 @@ ${payload.summaryText}`, {
     });
   }
 
+  // 7) 「수요 손 없는 날 (수요일 13:00)」 정기 건강검진 요일·시간 Zero-Settings 대화형 변경
+  const careCmd = parseConversationalCareScheduleCommand(clean);
+  if (careCmd.matched) {
+    if (careCmd.action === 'RUN_NOW_CHECKUP') {
+      const store = useSaySeeStore.getState();
+      const briefing = await evaluateDualProactiveCareEngine({
+        forceManual: true,
+        isStoreAppMode: store.isStoreAppMode,
+      });
+      if (briefing) {
+        const twoLineText = `🩺 **[${briefing.badgeLabel}]**\n1️⃣ ${briefing.headlineLine1}\n2️⃣ ${briefing.schedulePromptLine2}`;
+        speak(briefing.headlineLine1);
+        return reply(sourceTab, twoLineText, {
+          cardKind: 'WEEKLY_CARE_BRIEFING',
+          proactiveCareBriefing: briefing,
+          followUpSuggestions: [
+            '응 지금 1초 만에 손봐줘',
+            '매주 수요일 점심마다 알아서 손봐줘',
+            '정기 검진 요일 금요일 오후 4시로 귀신같이 바꿔줘',
+          ],
+        });
+      }
+    }
+
+    if (careCmd.action === 'DISABLE_SCHEDULE') {
+      const updated = saveWeeklyCareSchedule({ enabled: false });
+      const label = formatScheduleLabelKo(updated);
+      const summaryText =
+        '주간 정기 건강검진 자동 알림을 해제했습니다. 앞으로는 원하실 때 언제든 채팅창에 "지금 손봐줘" 또는 "정기 검진 다시 켜줘"라고 말씀해 주세요.';
+      const payload: MonsterAppSettingsPayload = {
+        settingCategory: 'WEEKLY_CARE_SCHEDULE',
+        badgeText: '🔕 주간 정기 건강검진 알림 해제 완료',
+        summaryText,
+        appliedValueLabel: label,
+      };
+      speak(summaryText);
+      return reply(sourceTab, `🎛️ **[무설정 대화형 예약 변경 완료]**\n${summaryText}`, {
+        cardKind: 'APP_SETTINGS_CONTROL',
+        appSettingsPayload: payload,
+        followUpSuggestions: [
+          '수요일 오후 1시 수요 손 없는 날로 다시 켜줘',
+          '금요일 오후 4시로 정기 검진 바꿔줘',
+        ],
+      });
+    }
+
+    if (careCmd.action === 'UPDATE_SCHEDULE') {
+      const updated = saveWeeklyCareSchedule({
+        enabled: true,
+        dayOfWeek: careCmd.dayOfWeek ?? 3,
+        hour: careCmd.hour ?? 13,
+        minute: careCmd.minute ?? 0,
+      });
+      const label = formatScheduleLabelKo(updated);
+      const summaryText = `별도 설정창 없이 말씀하신 대로 정기 건강검진 일시를 '${label}'로 즉시 변경했습니다! 해당 시간에 맞춰 느려진 컴퓨터 보안모듈과 유령 프로세스를 귀신같이 점검해 브리핑해 드립니다.`;
+      const payload: MonsterAppSettingsPayload = {
+        settingCategory: 'WEEKLY_CARE_SCHEDULE',
+        badgeText: '🗓️ 주간 정기 건강검진 예약 일시 변경 완료',
+        summaryText,
+        appliedValueLabel: label,
+      };
+      speak(summaryText);
+      return reply(sourceTab, `🎛️ **[무설정 대화형 예약 변경 완료]**\n${summaryText}`, {
+        cardKind: 'APP_SETTINGS_CONTROL',
+        appSettingsPayload: payload,
+        followUpSuggestions: [
+          '지금 바로 정기 건강검진 한번 실행해줘',
+          '수요일 오후 1시 수요 손 없는 날로 다시 맞춰줘',
+          '정기 검진 잠시 꺼줘',
+        ],
+      });
+    }
+  }
+
   return null;
 }
 
@@ -1555,7 +1649,10 @@ export async function processUnifiedMonsterChatQuery(params: {
             (m.pcSpecPayload.cpuLoadPercent ?? 0) >= 50)) ||
         (m.cardKind === 'DEVICE_REPAIR_GATE' &&
           m.deviceRepairPayload &&
-          !m.deviceRepairPayload.executed)
+          !m.deviceRepairPayload.executed) ||
+        (m.cardKind === 'WEEKLY_CARE_BRIEFING' &&
+          m.proactiveCareBriefing &&
+          !m.proactiveCareBriefing.executed)
     );
 
   const isNegationOrRollback =
@@ -1680,6 +1777,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         speedUpSummary: summary,
         restoreId,
       };
+      recordCareCompletionTimestamp(pendingApprovalMsg.pcSpecPayload.ramUsedPercent ?? undefined);
       appendLocalHealthCheckRecord(healthRecord);
       setSharedMonsterMessages((prev) =>
         prev.map((m) =>
@@ -1738,6 +1836,56 @@ export async function processUnifiedMonsterChatQuery(params: {
       const msgText = `${completionMsg}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 원래 설정으로 1초 원복됩니다.`;
       speak('승인 말씀이 블랙박스에 기록되었으며 수리를 완료했습니다.');
       return reply(sourceTab, msgText);
+    }
+
+    if (
+      pendingApprovalMsg.cardKind === 'WEEKLY_CARE_BRIEFING' &&
+      pendingApprovalMsg.proactiveCareBriefing &&
+      !pendingApprovalMsg.proactiveCareBriefing.executed
+    ) {
+      const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
+      cachedPcContext = null;
+      const restoreId = String((osRes && osRes.restoreId) || '#1');
+      const summary =
+        osRes.summaryKo ||
+        '✅ 은행·관공서 상주 보안모듈과 백그라운드 유령 프로세스를 멈춰 세우고 컴퓨터 속도를 가볍게 회복했습니다!';
+      recordCareCompletionTimestamp(pendingApprovalMsg.proactiveCareBriefing.ramUsedPercent ?? undefined);
+      saveWeeklyCareSchedule({ enabled: true });
+      const schedLabel = formatScheduleLabelKo(loadWeeklyCareSchedule());
+      const healthRecord: DigitalHealthCheckRecord = {
+        recordId: `HC-${Date.now()}`,
+        issuedAt: new Date().toLocaleString('ko-KR'),
+        category: '⚙️ 고치기',
+        title: `[${pendingApprovalMsg.proactiveCareBriefing.badgeLabel}] 속도 회복 처치 (승인: "${clean}")`,
+        reclaimedSizeLabel: `보안·유령모듈 ${pendingApprovalMsg.proactiveCareBriefing.detectedBloatwareCount || 1}건 제압`,
+        cleanedItemCount: pendingApprovalMsg.proactiveCareBriefing.detectedBloatwareCount || 1,
+        securityPluginsFrozen: pendingApprovalMsg.proactiveCareBriefing.detectedBloatwareCount || 1,
+        speedUpSummary: summary,
+        restoreId,
+      };
+      appendLocalHealthCheckRecord(healthRecord);
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.proactiveCareBriefing
+            ? {
+                ...m,
+                proactiveCareBriefing: {
+                  ...m.proactiveCareBriefing,
+                  executed: true,
+                  scheduleConfirmed: true,
+                  approvedTypedText: clean,
+                  createdRestoreId: restoreId,
+                },
+                healthRecordIssued: healthRecord,
+              }
+            : m
+        )
+      );
+      const msgText = `${summary}\n🗓️ **다음 정기 검진 자동 세팅**: ${schedLabel} (원하실 때 채팅으로 요일·시간 변경 가능)\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${restoreId}\`\n언제든 채팅창에 **"원래대로 돌려줘"**라고 입력하시면 1초 만에 원복됩니다.`;
+      speak('보안 프로그램과 유령 프로세스를 정리하여 컴퓨터 속도를 회복했으며, 다음 주 정기 검진도 자동 예약했습니다.');
+      return reply(sourceTab, msgText, {
+        healthRecordIssued: healthRecord,
+      });
     }
   }
 
@@ -3081,6 +3229,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       }`,
       {
         cardKind: 'DEVICE_REPAIR_GATE',
+        voiceConsentPromptKo: !ttsEnabled ? actionJson.replyKo : undefined,
         deviceRepairPayload: {
           title: diagPlan.title,
           badgeText: diagPlan.difficultyBadgeKo,

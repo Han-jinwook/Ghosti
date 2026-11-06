@@ -5,6 +5,12 @@ import { ensureLoginAndZCoreReady, requestConnectMyComputer, zCoreBridge } from 
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
+import {
+  SEARCH_STAGE_PC_ROLLING_PLACEHOLDERS_10,
+  SEARCH_STAGE_MOBILE_ROLLING_PLACEHOLDERS_10,
+  PLACEHOLDER_ROLLING_INTERVAL_MS,
+  getAndAdvanceSessionPlaceholderStartIndex,
+} from '../services/weeklyCareAndPlaceholderEngine';
 
 export const VoiceHeroStage: React.FC = () => {
   const {
@@ -107,15 +113,29 @@ export const VoiceHeroStage: React.FC = () => {
     return chips;
   }, [videoSceneItems]);
 
+  const isMobile = layout === 'mobile';
+  const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
+  const searchPlaceholderPool = useMemo(
+    () =>
+      isMobileOrStore
+        ? SEARCH_STAGE_MOBILE_ROLLING_PLACEHOLDERS_10
+        : SEARCH_STAGE_PC_ROLLING_PLACEHOLDERS_10,
+    [isMobileOrStore]
+  );
+  const [rollingSearchIdx, setRollingSearchIdx] = useState<number>(() =>
+    getAndAdvanceSessionPlaceholderStartIndex(10)
+  );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRollingSearchIdx((prev) => (prev + 1) % searchPlaceholderPool.length);
+    }, PLACEHOLDER_ROLLING_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [searchPlaceholderPool.length]);
+
   const searchPlaceholder = useMemo(() => {
-    if (searchSpace === 'vault') {
-      return '서류·영수증·계약서 내용을 입력해 보세요';
-    }
-    if (searchSpace === 'video') {
-      return '내 영상 속 찾고 싶은 특정 장면이나 대사를 입력해 보세요 (그 순간부터 바로 재생됩니다)';
-    }
-    return '기억나는 장면이나 단어를 입력해 보세요';
-  }, [searchSpace]);
+    return searchPlaceholderPool[rollingSearchIdx % searchPlaceholderPool.length];
+  }, [searchPlaceholderPool, rollingSearchIdx]);
 
   const scrollToResults = () => {
     if (typeof document !== 'undefined') {
@@ -149,7 +169,6 @@ export const VoiceHeroStage: React.FC = () => {
     scrollToResults();
   };
 
-  const isMobile = layout === 'mobile';
   const activeSentencePool = useMemo(
     () => sentenceChips.slice(sentenceChipPage * 4, sentenceChipPage * 4 + 4),
     [sentenceChips, sentenceChipPage]
@@ -174,7 +193,7 @@ export const VoiceHeroStage: React.FC = () => {
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full h-11 md:h-13 pl-10 pr-20 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-500 transition-colors"
+              className="w-full h-11 md:h-13 pl-10 pr-20 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
             />
             {textInput && (
               <button

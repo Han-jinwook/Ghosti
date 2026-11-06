@@ -293,7 +293,7 @@ interface SaySeeStore {
   setGroupBurstsInSearch: (group: boolean) => void;
   setIsSlimCapsule: (slim: boolean) => void;
   setVoiceThreshold: (t: number) => void;
-  runTextQuery: (q: string) => Promise<void>;
+  runTextQuery: (q: string, options?: { fromVoice?: boolean }) => Promise<void>;
   toggleMicRecording: () => Promise<void>;
   runPresetVoiceQuery: (presetId: string, forceFallbackDemo?: boolean) => Promise<void>;
   toggleBookmark: (photoId: string) => void;
@@ -2241,7 +2241,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setIsSlimCapsule: (isSlimCapsule) => set({ isSlimCapsule }),
   setVoiceThreshold: (voiceThreshold) => set({ voiceThreshold }),
 
-  runTextQuery: async (q: string) => {
+  runTextQuery: async (q: string, options?: { fromVoice?: boolean }) => {
+    const fromVoice = Boolean(options?.fromVoice);
     const query = q.trim();
     if (!query) return;
     const {
@@ -2279,7 +2280,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           const toastMsg = `⚡ 별도 설정 없이 [${label}]를 즉시 스캔하여 연결했습니다! (사진 ${
             scanData.drivePhotoCount ?? 0
           }장 · 동영상 ${scanData.driveVideoCount ?? 0}개 · 문서 ${scanData.driveDocCount ?? 0}건)`;
-          void speakWithHyunsuOrSunhi(toastMsg, 'hyunsu_briefing');
+          if (fromVoice) {
+            void speakWithHyunsuOrSunhi(toastMsg, 'hyunsu_briefing');
+          }
 
           const strippedKw = query
             .replace(/[c-zC-Z]\s*드라이브(?:는|은|도|에서|에)?/gi, ' ')
@@ -2353,7 +2356,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         voiceDocCmd.extractKeywords,
         'DOC_FACT_QA_READ'
       );
-      void speakWithHyunsuOrSunhi(factAnswerKo, 'hyunsu_briefing');
+      if (fromVoice || /읽어|낭독|말해|들려/.test(query)) {
+        void speakWithHyunsuOrSunhi(factAnswerKo, 'hyunsu_briefing');
+      }
       const docMatches = await searchLocalDocumentFilesAsync(voiceDocCmd.targetDocKeyword, localDocuments);
       const finalDocs =
         rankedDocs.length > 0
@@ -2737,7 +2742,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         : results.length > 0
         ? `사진 ${results.length}장을 찾았습니다.`
         : '검색 결과가 없습니다.';
-    void speakWithHyunsuOrSunhi(searchBriefingKo, 'hyunsu_briefing');
+    if (fromVoice) {
+      void speakWithHyunsuOrSunhi(searchBriefingKo, 'hyunsu_briefing');
+    }
 
     set({
       searchSpace: targetSpace,
@@ -2755,7 +2762,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
               ' · '
             )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`,
           }
-        : isMobileVoiceEnvironment()
+        : fromVoice && isMobileVoiceEnvironment()
         ? {
             lastQuarantineToast: `🎙️ [현수 성우 브리핑] ${searchBriefingKo}`,
           }
@@ -2825,7 +2832,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         voiceTraceHistory: [trace, ...state.voiceTraceHistory].slice(0, 12),
         isSlimCapsule: true,
       }));
-      await get().runTextQuery(spokenUtterance);
+      await get().runTextQuery(spokenUtterance, { fromVoice: true });
     }
   },
 

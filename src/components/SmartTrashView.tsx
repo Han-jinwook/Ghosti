@@ -6,6 +6,11 @@ import {
   executeRestorePointRollback,
   type DigitalHealthCheckRecord,
 } from '../services/monsterChatRouter';
+import {
+  loadWeeklyCareSchedule,
+  formatScheduleLabelKo,
+  type WeeklyCareScheduleConfig,
+} from '../services/weeklyCareAndPlaceholderEngine';
 import { PersonalHealthCheckHistoryDrawer } from './MonsterInteractiveCards';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
 import { SetupMonsterContent } from './SetupMonsterModal';
@@ -122,6 +127,7 @@ export const SmartTrashView: React.FC = () => {
   const [healthHistoryRecords, setHealthHistoryRecords] = useState<DigitalHealthCheckRecord[]>(() =>
     loadLocalHealthCheckHistory()
   );
+  const [weeklySchedule] = useState<WeeklyCareScheduleConfig>(() => loadWeeklyCareSchedule());
   const [externalQueryTrigger, setExternalQueryTrigger] = useState<{
     id: number;
     query: string;
@@ -271,6 +277,16 @@ export const SmartTrashView: React.FC = () => {
             <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
               🆓 개인 (기본) : 언제나 0원
             </span>
+            {!(isStoreAppMode || layout === 'mobile') && (
+              <button
+                type="button"
+                onClick={() => void triggerMonsterQuery('지금 정기 건강검진 브리핑 보여줘')}
+                title="손보기 대화창에서 '금요일 오후 4시로 바꿔줘'처럼 말하면 별도 설정창 없이 즉시 변경됩니다"
+                className="px-2.5 py-1 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/40 text-teal-300 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer transition-colors"
+              >
+                🗓️ 정기검진: {formatScheduleLabelKo(weeklySchedule)} · ⚡ 20% 과부하 감지
+              </button>
+            )}
             <input
               ref={trashMobilePhotoInputRef}
               type="file"
@@ -447,142 +463,175 @@ export const SmartTrashView: React.FC = () => {
         {showSystemConsult && (
           <div className="px-5 pb-5 pt-2 border-t border-white/10 flex flex-col gap-3.5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* ① 중복·연사 베스트컷 선별 / 다운로드 폴더 설치파일 정리 */}
+              {/* ① [최우선 1순위] 느려진 PC · 은행/관공서 상주 보안모듈 동결 (모바일 스토어에서는 흔들린 사진 정리) */}
               <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
                 <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                   {isStoreAppMode || layout === 'mobile'
                     ? '📸 중복·연사 사진 베스트컷 선별'
-                    : '📦 다운로드 설치파일(.exe·.apk) 정리'}
+                    : '⚡ 느려진 PC · 상주 보안모듈 & 유령 앱 처치'}
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button
                     type="button"
                     onClick={() => {
-                      setDecisions((d) => ({ ...d, downloadInstallers: 'clean_installers' }));
                       if (isStoreAppMode || layout === 'mobile') {
+                        setDecisions((d) => ({ ...d, downloadInstallers: 'clean_installers' }));
                         setIsTrashBinTabActive(false);
                         setActiveTrashCategoryFilter('duplicate');
                       } else {
-                        void triggerMonsterQuery('다운로드 폴더 방치된 설치파일(.exe/.apk) 미리보고 정리해 줘');
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
-                      decisions.downloadInstallers === 'clean_installers'
-                        ? 'bg-primary-container text-zinc-950 font-extrabold'
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
-                    }`}
-                  >
-                    {decisions.downloadInstallers === 'clean_installers'
-                      ? isStoreAppMode || layout === 'mobile'
-                        ? '✓ 중복·연사 후보 열림'
-                        : '✓ 설치파일 정리 미리보기 열림'
-                      : isStoreAppMode || layout === 'mobile'
-                      ? '📸 중복·연사 후보 확인'
-                      : '📦 설치파일·중복사본 미리보고 정리'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDecisions((d) => ({ ...d, downloadInstallers: 'keep' }))}
-                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
-                      decisions.downloadInstallers === 'keep'
-                        ? 'bg-zinc-700 text-white font-extrabold'
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
-                    }`}
-                  >
-                    그대로 두기
-                  </button>
-                </div>
-              </div>
-
-              {/* ② 영수증·스크린샷 분류 / PC 바탕화면 잡파일 정리 */}
-              <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                  {isStoreAppMode || layout === 'mobile'
-                    ? '🧾 영수증 · 주차메모 · 스크린샷 정리'
-                    : '💻 PC 바탕화면 잡파일 · 구형 폴더 정리'}
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDecisions((d) => ({ ...d, pcDesktop: 'archive_move' }));
-                      if (isStoreAppMode || layout === 'mobile') {
-                        setIsTrashBinTabActive(false);
-                        setActiveTrashCategoryFilter('memo');
-                      } else {
-                        void triggerMonsterQuery(
-                          "바탕화면이랑 다운로드 폴더에서 잡파일은 '기타_정리함'으로 모으고 옛날 폴더는 숨겨줘"
-                        );
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
-                      decisions.pcDesktop === 'archive_move'
-                        ? 'bg-primary-container text-zinc-950 font-extrabold'
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
-                    }`}
-                  >
-                    {decisions.pcDesktop === 'archive_move'
-                      ? isStoreAppMode || layout === 'mobile'
-                        ? '✓ 영수증·메모 후보 열림'
-                        : '✓ 바탕화면 정리 미리보기 열림'
-                      : isStoreAppMode || layout === 'mobile'
-                      ? '🧾 영수증·캡처 후보 확인'
-                      : '🗂️ 잡파일 이동 · 옛날폴더 숨김'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDecisions((d) => ({ ...d, pcDesktop: 'keep' }))}
-                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
-                      decisions.pcDesktop === 'keep'
-                        ? 'bg-zinc-700 text-white font-extrabold'
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
-                    }`}
-                  >
-                    그대로 두기
-                  </button>
-                </div>
-              </div>
-
-              {/* ③ 흔들린 사진 정리 / 전기·메모리 먹는 상주 보안모듈 동결 */}
-              <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
-                <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
-                  {isStoreAppMode || layout === 'mobile'
-                    ? '🌫️ 초점 나간 · 흔들린 사진 정리'
-                    : '⚡ 은행·관공서 상주 보안모듈 동결'}
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }));
-                      if (isStoreAppMode || layout === 'mobile') {
-                        setIsTrashBinTabActive(false);
-                        setActiveTrashCategoryFilter('blurry');
-                      } else {
+                        setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }));
                         void triggerMonsterQuery(
                           '은행 관공서 상주 보안 프로그램(AnySign, MagicLine, TouchEn) 동결해서 부팅 속도 높여줘'
                         );
                       }
                     }}
                     className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
-                      decisions.powerDrain === 'freeze_remove'
+                      (isStoreAppMode || layout === 'mobile'
+                        ? decisions.downloadInstallers === 'clean_installers'
+                        : decisions.powerDrain === 'freeze_remove')
                         ? 'bg-primary-container text-zinc-950 font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
                     }`}
                   >
-                    {decisions.powerDrain === 'freeze_remove'
-                      ? isStoreAppMode || layout === 'mobile'
-                        ? '✓ 흔들린 사진 후보 열림'
-                        : '✓ 상주 모듈 동결 미리보기 열림'
-                      : isStoreAppMode || layout === 'mobile'
-                      ? '🌫️ 흔들린 사진 후보 확인'
-                      : '⚡ 상주 모듈 동결 & 속도 향상'}
+                    {isStoreAppMode || layout === 'mobile'
+                      ? decisions.downloadInstallers === 'clean_installers'
+                        ? '✓ 중복·연사 후보 열림'
+                        : '📸 중복·연사 후보 확인'
+                      : decisions.powerDrain === 'freeze_remove'
+                      ? '✓ 상주 모듈 동결 미리보기 열림'
+                      : '⚡ 상주 모듈 동결 & 속도 즉시 회복'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDecisions((d) => ({ ...d, powerDrain: 'keep' }))}
+                    onClick={() =>
+                      setDecisions((d) =>
+                        isStoreAppMode || layout === 'mobile'
+                          ? { ...d, downloadInstallers: 'keep' }
+                          : { ...d, powerDrain: 'keep' }
+                      )
+                    }
                     className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
-                      decisions.powerDrain === 'keep'
+                      (isStoreAppMode || layout === 'mobile'
+                        ? decisions.downloadInstallers === 'keep'
+                        : decisions.powerDrain === 'keep')
+                        ? 'bg-zinc-700 text-white font-extrabold'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
+                    }`}
+                  >
+                    그대로 두기
+                  </button>
+                </div>
+              </div>
+
+              {/* ② 다운로드 설치파일(.exe·.apk) & 임시 캐시 정리 (모바일 스토어에서는 영수증·스크린샷 분류) */}
+              <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
+                <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                  {isStoreAppMode || layout === 'mobile'
+                    ? '🧾 영수증 · 주차메모 · 스크린샷 정리'
+                    : '📦 다운로드 설치파일(.exe·.zip) 찌꺼기 정리'}
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isStoreAppMode || layout === 'mobile') {
+                        setDecisions((d) => ({ ...d, pcDesktop: 'archive_move' }));
+                        setIsTrashBinTabActive(false);
+                        setActiveTrashCategoryFilter('memo');
+                      } else {
+                        setDecisions((d) => ({ ...d, downloadInstallers: 'clean_installers' }));
+                        void triggerMonsterQuery('다운로드 폴더 방치된 설치파일(.exe/.apk) 미리보고 정리해 줘');
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
+                      (isStoreAppMode || layout === 'mobile'
+                        ? decisions.pcDesktop === 'archive_move'
+                        : decisions.downloadInstallers === 'clean_installers')
+                        ? 'bg-primary-container text-zinc-950 font-extrabold'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                    }`}
+                  >
+                    {isStoreAppMode || layout === 'mobile'
+                      ? decisions.pcDesktop === 'archive_move'
+                        ? '✓ 영수증·메모 후보 열림'
+                        : '🧾 영수증·캡처 후보 확인'
+                      : decisions.downloadInstallers === 'clean_installers'
+                      ? '✓ 설치파일 정리 미리보기 열림'
+                      : '📦 설치파일·중복사본 미리보고 정리'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDecisions((d) =>
+                        isStoreAppMode || layout === 'mobile'
+                          ? { ...d, pcDesktop: 'keep' }
+                          : { ...d, downloadInstallers: 'keep' }
+                      )
+                    }
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
+                      (isStoreAppMode || layout === 'mobile'
+                        ? decisions.pcDesktop === 'keep'
+                        : decisions.downloadInstallers === 'keep')
+                        ? 'bg-zinc-700 text-white font-extrabold'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
+                    }`}
+                  >
+                    그대로 두기
+                  </button>
+                </div>
+              </div>
+
+              {/* ③ PC 바탕화면 잡파일·구형 폴더 정리 (모바일 스토어에서는 흔들린 사진 정리) */}
+              <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-between gap-3">
+                <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
+                  {isStoreAppMode || layout === 'mobile'
+                    ? '🌫️ 초점 나간 · 흔들린 사진 정리'
+                    : '💻 PC 바탕화면 잡파일 · 구형 폴더 정리'}
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isStoreAppMode || layout === 'mobile') {
+                        setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }));
+                        setIsTrashBinTabActive(false);
+                        setActiveTrashCategoryFilter('blurry');
+                      } else {
+                        setDecisions((d) => ({ ...d, pcDesktop: 'archive_move' }));
+                        void triggerMonsterQuery(
+                          "바탕화면이랑 다운로드 폴더에서 잡파일은 '기타_정리함'으로 모으고 옛날 폴더는 숨겨줘"
+                        );
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
+                      (isStoreAppMode || layout === 'mobile'
+                        ? decisions.powerDrain === 'freeze_remove'
+                        : decisions.pcDesktop === 'archive_move')
+                        ? 'bg-primary-container text-zinc-950 font-extrabold'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                    }`}
+                  >
+                    {isStoreAppMode || layout === 'mobile'
+                      ? decisions.powerDrain === 'freeze_remove'
+                        ? '✓ 흔들린 사진 후보 열림'
+                        : '🌫️ 흔들린 사진 후보 확인'
+                      : decisions.pcDesktop === 'archive_move'
+                      ? '✓ 바탕화면 정리 미리보기 열림'
+                      : '🗂️ 잡파일 이동 · 옛날폴더 숨김'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDecisions((d) =>
+                        isStoreAppMode || layout === 'mobile'
+                          ? { ...d, powerDrain: 'keep' }
+                          : { ...d, pcDesktop: 'keep' }
+                      )
+                    }
+                    className={`px-3 py-1.5 rounded-lg font-label-sm text-[13px] font-bold transition-all cursor-pointer ${
+                      (isStoreAppMode || layout === 'mobile'
+                        ? decisions.powerDrain === 'keep'
+                        : decisions.pcDesktop === 'keep')
                         ? 'bg-zinc-700 text-white font-extrabold'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-white/10'
                     }`}

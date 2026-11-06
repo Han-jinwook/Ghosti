@@ -20,10 +20,23 @@ import {
 } from '../services/monsterChatRouter';
 import { MonsterInteractiveCardView } from './MonsterInteractiveCards';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
-import { unlockMobileAudioOnUserGesture, notifyMicSessionEndedForTts } from '../services/setupMonsterTts';
+import {
+  unlockMobileAudioOnUserGesture,
+  notifyMicSessionEndedForTts,
+  isMobileVoiceEnvironment,
+} from '../services/setupMonsterTts';
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 import { normalizeSpokenKoreanQuery } from '../services/voiceSearchAndAiBatonEngine';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import {
+  PC_MONSTER_ROLLING_PLACEHOLDERS_10,
+  MOBILE_CLEAN_ROLLING_PLACEHOLDERS_10,
+  getAndAdvanceSessionPlaceholderStartIndex,
+  PLACEHOLDER_ROLLING_INTERVAL_MS,
+  evaluateDualProactiveCareEngine,
+  loadWeeklyCareSchedule,
+  formatScheduleLabelKo,
+} from '../services/weeklyCareAndPlaceholderEngine';
 
 interface MonsterStandardChatColumnProps {
   sourceTab: 'trash' | 'repair';
@@ -34,68 +47,6 @@ interface MonsterStandardChatColumnProps {
   onTriggerOsRepair?: (query: string) => void;
   onRepairSymptomDetected?: (query: string) => void;
 }
-
-const NOTION_MINIMAL_STARTERS: Array<{ label: string; prompt: string }> = [
-  {
-    label: '💻 느려짐·사양 점검',
-    prompt: '요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘',
-  },
-  {
-    label: '🧹 바탕화면·설치파일 정리',
-    prompt: '바탕화면이랑 다운로드 폴더 정리할 파일 봐줘',
-  },
-  {
-    label: '🕵️ 사라진 파일 찾기',
-    prompt: '어제 작업하던 계약서 파일이 사라졌어',
-  },
-  {
-    label: '🕰️ 복원 기록·원복',
-    prompt: '최근 복원 기록 보여줘',
-  },
-  {
-    label: '💁 귀신같이 기능 및 요금제',
-    prompt: '귀신같이 Ctrl+0 초능력 기능이랑 내 기기 통합 3,900원 혜택 알려줘',
-  },
-  {
-    label: '🎛️ 상용구·보관기간 설정',
-    prompt: '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
-  },
-  {
-    label: '📮 클레임·A/S·아이디어 접수',
-    prompt: '아이디어 건의 및 A/S 접수하고 싶은데 내 이름으로 스튜디오에 접수해줘',
-  },
-  {
-    label: '🤝 심층 질문(단골 AI 바톤터치)',
-    prompt: '임대차 계약서 독소조항 법률 검토랑 세금 계산 상담해줘',
-  },
-];
-
-const MOBILE_CLEAN_STARTERS: Array<{ label: string; prompt: string }> = [
-  {
-    label: '📸 중복·연사 사진 정리',
-    prompt: '중복이거나 연사로 찍힌 사진 찾아서 베스트컷만 남기고 정리하는 법 알려줘',
-  },
-  {
-    label: '🧾 영수증·스크린샷 분류',
-    prompt: '주차장 사진이랑 영수증, 스크린샷 캡처 분류해서 정리해줘',
-  },
-  {
-    label: '🔍 사진·문서 1초 검색법',
-    prompt: '귀신같이 앱으로 사진이랑 문서 1초 만에 찾는 방법 알려줘',
-  },
-  {
-    label: '🕰️ 정리 보관함 되돌리기',
-    prompt: '최근 복원 기록 보여줘',
-  },
-  {
-    label: '🎛️ 상용구·보관기간 설정',
-    prompt: '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
-  },
-  {
-    label: '📮 불편·A/S·아이디어 접수',
-    prompt: '아이디어 건의 및 A/S 접수하고 싶은데 내 이름으로 스튜디오에 접수해줘',
-  },
-];
 
 export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps> = ({
   sourceTab,
@@ -125,7 +76,77 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     layout === 'mobile' ||
     (typeof window !== 'undefined' &&
       (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860));
-  const activeStarters = isMobileOrStore ? MOBILE_CLEAN_STARTERS : NOTION_MINIMAL_STARTERS;
+
+  // [멀린님 확정 명세 ③] 추천 칩 그리드 전면 폐지 ➔ 입력창 내 '연한 색 1줄 롤링 플레이스홀더 10선 (3분 주기 + 재로그인 로테이션)'
+  const activePlaceholderPool = isMobileOrStore
+    ? MOBILE_CLEAN_ROLLING_PLACEHOLDERS_10
+    : PC_MONSTER_ROLLING_PLACEHOLDERS_10;
+
+  const [placeholderIndex, setPlaceholderIndex] = useState<number>(() =>
+    getAndAdvanceSessionPlaceholderStartIndex(activePlaceholderPool.length)
+  );
+  const [careScheduleSummary, setCareScheduleSummary] = useState<string>(() =>
+    formatScheduleLabelKo(loadWeeklyCareSchedule())
+  );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % activePlaceholderPool.length);
+    }, PLACEHOLDER_ROLLING_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [activePlaceholderPool.length]);
+
+  useEffect(() => {
+    const onScheduleChange = () => {
+      setCareScheduleSummary(formatScheduleLabelKo(loadWeeklyCareSchedule()));
+    };
+    window.addEventListener('ghosti_weekly_care_updated', onScheduleChange);
+    return () => window.removeEventListener('ghosti_weekly_care_updated', onScheduleChange);
+  }, []);
+
+  // [멀린님 확정 명세 ②] 2중 자동 케어 엔진 (트랙 A: 20% 과부하 10분 지속 감지 ➕ 트랙 B: 수요일 13:00 「수요 손 없는 날」 정기 검진)
+  useEffect(() => {
+    let cancelled = false;
+    const runProactiveCheck = async () => {
+      if (cancelled) return;
+      const briefing = await evaluateDualProactiveCareEngine({
+        isStoreAppMode: isMobileOrStore,
+      });
+      if (!briefing || cancelled) return;
+      setSharedMonsterMessages((prev) => {
+        if (prev.some((m) => m.cardKind === 'WEEKLY_CARE_BRIEFING' && !m.proactiveCareBriefing?.executed)) {
+          return prev;
+        }
+        const proactiveMsg: MonsterChatMessage = {
+          id: `proactive_care_${Date.now()}`,
+          role: 'assistant',
+          timestamp: new Date().toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }),
+          sourceTab,
+          text: `🩺 **[${briefing.badgeLabel}]**\n1️⃣ ${briefing.headlineLine1}\n2️⃣ ${briefing.schedulePromptLine2}`,
+          cardKind: 'WEEKLY_CARE_BRIEFING',
+          proactiveCareBriefing: briefing,
+          followUpSuggestions: [
+            '응 지금 1초 만에 손봐줘',
+            '정기 검진 요일 금요일 오후 4시로 귀신같이 바꿔줘',
+          ],
+        };
+        return [...prev, proactiveMsg];
+      });
+    };
+
+    // 첫 진입 2.5초 후 1회 점검 + 이후 60초마다 슬라이딩 윈도우(10분 지속 조건) 점검
+    const initTimer = window.setTimeout(() => void runProactiveCheck(), 2500);
+    const pollTimer = window.setInterval(() => void runProactiveCheck(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(initTimer);
+      window.clearInterval(pollTimer);
+    };
+  }, [isMobileOrStore, sourceTab]);
 
   useEffect(() => {
     return subscribeSharedMonsterChat(() => {
@@ -143,7 +164,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     }
   }, [messages.length, busy]);
 
-  const handleSend = async (overrideQuery?: string) => {
+  /**
+   * [멀린님 확정 명세 ④ — 음성 입출력(TTS) 엄격 미러링 & 사전 승낙 원칙]
+   * - PC 환경: 음성 모드 없음 (100% 무음 텍스트 전용)
+   * - 모바일 환경:
+   *   1) 유저가 음성(마이크, inputMode === 'voice')으로 말했을 때만 ➔ 성우 음성(TTS) + 텍스트 응답
+   *   2) 유저가 채팅(타자, inputMode === 'text')으로 입력했을 때 ➔ 똑같이 채팅(무음 텍스트)으로만 응답!
+   *      (단, 따라 해야 하는 설정 가이드인 경우 MonsterInteractiveCards에서 [🔊 음성으로 안내받기] 사전 승낙 버튼 노출)
+   */
+  const handleSend = async (overrideQuery?: string, inputMode: 'text' | 'voice' = 'text') => {
     const raw = (overrideQuery ?? inputText).trim();
     if (!raw || busy) return;
     if (!overrideQuery) setInputText('');
@@ -163,12 +192,16 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     setSharedMonsterMessages((prev) => [...prev, userMsg]);
     setSharedMonsterBusy(true);
 
+    // 음성 입출력 엄격 미러링: 모바일에서 마이크로 말했을 때만 TTS 자동 발화 허용!
+    const mirroredTtsEnabled =
+      inputMode === 'voice' && isMobileVoiceEnvironment() && Boolean(ttsEnabled);
+
     try {
       const assistantMsg = await processUnifiedMonsterChatQuery({
         query: raw,
         sourceTab,
         literacyLevel,
-        ttsEnabled,
+        ttsEnabled: mirroredTtsEnabled,
       });
       setSharedMonsterMessages((prev) => [...prev, assistantMsg]);
       if (assistantMsg.healthRecordIssued) {
@@ -256,7 +289,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         if (transcribed && !submittedOnceRef.current) {
           submittedOnceRef.current = true;
           setInputText('');
-          void handleSend(normalizeSpokenKoreanQuery(transcribed));
+          void handleSend(normalizeSpokenKoreanQuery(transcribed), 'voice');
         } else {
           setInputText('');
           onToast?.('🎤 음성이 잘 들리지 않았습니다. 마이크 가까이에서 다시 말씀해 주세요.');
@@ -287,7 +320,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       submittedOnceRef.current = true;
       latestTranscriptRef.current = '';
       setInputText('');
-      void handleSend(normalizeSpokenKoreanQuery(spoken));
+      void handleSend(normalizeSpokenKoreanQuery(spoken), 'voice');
     }
   };
 
@@ -396,7 +429,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       externalQueryTrigger.query.trim()
     ) {
       lastHandledTriggerIdRef.current = externalQueryTrigger.id;
-      void handleSend(externalQueryTrigger.query);
+      void handleSend(externalQueryTrigger.query, 'text');
     }
   }, [externalQueryTrigger]);
 
@@ -406,7 +439,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         const pending = sessionStorage.getItem('ghosti_pending_monster_query');
         if (pending && pending.trim()) {
           sessionStorage.removeItem('ghosti_pending_monster_query');
-          void handleSend(pending.trim());
+          void handleSend(pending.trim(), 'text');
         }
       } catch {
         /* ignore */
@@ -423,12 +456,16 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         } catch {
           /* ignore */
         }
-        void handleSend(q);
+        void handleSend(q, 'text');
       }
     };
     window.addEventListener('ghosti_toss_to_monster_chat', onTossEvent);
     return () => window.removeEventListener('ghosti_toss_to_monster_chat', onTossEvent);
   }, []);
+
+  const currentRollingPlaceholder =
+    activePlaceholderPool[placeholderIndex % activePlaceholderPool.length] ||
+    activePlaceholderPool[0];
 
   return (
     <aside className="flex flex-col h-[calc(100vh-155px)] min-h-[580px] max-h-[840px] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/95 shadow-lg overflow-hidden">
@@ -442,11 +479,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             <span className="text-[13.5px] font-extrabold text-slate-900 dark:text-slate-100 truncate block">
               손보기 대화창
             </span>
+            <span className="text-[10.5px] text-emerald-700 dark:text-emerald-400 font-semibold truncate block">
+              🗓️ {careScheduleSummary}
+            </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-          <VoiceActorControlPill compact />
+          {/* PC에서는 음성 모드를 완전 제거하고 모바일에서만 성우 컨트롤 노출 */}
+          {isMobileOrStore && <VoiceActorControlPill compact />}
 
           <button
             type="button"
@@ -461,11 +502,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       </div>
 
       {/* 1.5. 상단 슬림 원복 안내 */}
-      <div className="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-200 dark:border-emerald-500/20 flex items-center gap-1.5 text-[12.5px] text-emerald-900 dark:text-emerald-200">
-        <span className="shrink-0 font-bold">🛡️</span>
-        <span>
-          언제든 <strong className="text-emerald-800 dark:text-emerald-300 font-extrabold">&ldquo;원래대로 돌려줘&rdquo;</strong> 한마디면 즉시 복원됩니다.
-        </span>
+      <div className="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-200 dark:border-emerald-500/20 flex items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="shrink-0 font-bold">🛡️</span>
+          <span className="truncate">
+            언제든 <strong className="text-emerald-800 dark:text-emerald-300 font-extrabold">&ldquo;원래대로 돌려줘&rdquo;</strong> 한마디면 즉시 복원됩니다.
+          </span>
+        </div>
       </div>
 
       {/* 2. 본문 대화 스트림 (노션 스타일 미니멀 버블) */}
@@ -530,7 +573,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                         key={sIdx}
                         type="button"
                         disabled={busy}
-                        onClick={() => void handleSend(sug)}
+                        onClick={() => void handleSend(sug, 'text')}
                         className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
                       >
                         💬 {sug}
@@ -551,28 +594,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         )}
       </div>
 
-      {/* 2.5. 하단 스타터 칩 바 */}
-      <div className="px-3.5 py-2 border-t border-slate-200 dark:border-slate-800/80 bg-slate-100/70 dark:bg-slate-900/80 flex flex-wrap gap-1.5">
-        {activeStarters.map((st, idx) => (
-          <button
-            key={idx}
-            type="button"
-            disabled={busy}
-            onClick={() => void handleSend(st.prompt)}
-            className="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-50 dark:bg-slate-950 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer shadow-2xs"
-          >
-            {st.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 3. 하단 입력창 + 🎙️ 음성 입력 버튼 ([🎯 찾기]와 동일한 말하기 경험 & 자동 라우팅) */}
+      {/* 3. 하단 초미니멀 입력창 (고정 스타터 칩 그리드 완전 폐지 ➔ 입력창 내 연한 색 1줄 롤링 플레이스홀더 10선) */}
       <div className="px-3.5 py-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             unlockMobileAudioOnUserGesture();
-            void handleSend();
+            void handleSend(undefined, 'text');
           }}
           className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0"
         >
@@ -583,16 +611,16 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             placeholder={
               isMicListening
                 ? '🎙️ 듣고 있습니다...'
-                : '질문이나 요청을 입력해 주세요'
+                : `예) ${currentRollingPlaceholder}`
             }
-            className="flex-1 min-w-0 px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-emerald-600 focus:outline-none text-[13px] sm:text-[13.5px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+            className="flex-1 min-w-0 px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-emerald-600 focus:outline-none text-[13px] sm:text-[13.5px] text-slate-900 dark:text-white placeholder:text-slate-400/75 dark:placeholder:text-slate-500/75 transition-all"
           />
           {/* PC는 텍스트 채팅 올인, 모바일에서만 [음성] 마이크 버튼 노출 */}
           <button
             type="button"
             onClick={toggleChatMicRecording}
             disabled={busy}
-            title="모바일 음성으로 말하기 (찾기·카톡전달·손보기 양방향 자동 연결)"
+            title="모바일 음성으로 말하기 (음성 입력 시에만 성우 음성으로 응답합니다)"
             className={`md:hidden px-2 sm:px-3 py-2.5 rounded-xl text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer border ${
               isMicListening
                 ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
