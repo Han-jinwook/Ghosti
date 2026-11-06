@@ -635,7 +635,19 @@ def trim_done_cards(keep_count: int = 6) -> int:
     except Exception:
         return 0
 
-    results = res.json().get("results", [])
+    raw_results = res.json().get("results", [])
+    # 🚨 [헌법 제16조 3항] 귀신창, 멀린비서 및 타 프로젝트 전담 카드는 완료 보관 대상에서 영구 제외
+    results = []
+    for p in raw_results:
+        props = p.get("properties", {})
+        t = extract_plain_text(props.get(SCHEMA.title_prop_name, {}).get("title", []))
+        app_val = props.get("앱", {}).get("select", {})
+        app_name = app_val.get("name", "") if app_val else ""
+        if "귀신창" in t or "멀린비서" in t or "귀신창" in app_name or "멀린비서" in app_name:
+            continue
+        # 오직 Ghosti(귀신같이) 관련 카드만 보관 정돈 대상에 포함
+        results.append(p)
+
     if len(results) <= keep_count:
         return 0
 
