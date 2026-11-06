@@ -538,7 +538,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             unlockMobileAudioOnUserGesture();
             void handleSend();
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0"
         >
           <input
             type="text"
@@ -546,10 +546,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             onChange={(e) => setInputText(e.target.value)}
             placeholder={
               isMicListening
-                ? '🎙️ 듣고 있습니다... 편하게 말씀해 주세요'
-                : '질문이나 요청을 입력하거나 🎙️ 음성으로 말씀해 주세요'
+                ? '🎙️ 듣고 있습니다...'
+                : '질문이나 요청을 입력해 주세요'
             }
-            className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-emerald-600 focus:outline-none text-[13.5px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+            className="flex-1 min-w-0 px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-emerald-600 focus:outline-none text-[13px] sm:text-[13.5px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
           />
           {/* PC는 텍스트 채팅 올인, 모바일에서만 [음성] 마이크 버튼 노출 */}
           <button
@@ -557,23 +557,23 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             onClick={toggleChatMicRecording}
             disabled={busy}
             title="모바일 음성으로 말하기 (찾기·카톡전달·손보기 양방향 자동 연결)"
-            className={`md:hidden px-3 py-2.5 rounded-xl text-[13px] font-extrabold flex items-center gap-1.5 transition shrink-0 cursor-pointer border ${
+            className={`md:hidden px-2 sm:px-3 py-2.5 rounded-xl text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer border ${
               isMicListening
                 ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
                 : 'bg-white hover:bg-emerald-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-emerald-400/60 dark:border-emerald-500/40'
             }`}
           >
-            {isMicListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            <span>{isMicListening ? '듣는중' : '음성'}</span>
+            {isMicListening ? <MicOff className="w-4 h-4 shrink-0" /> : <Mic className="w-4 h-4 shrink-0" />}
+            <span className="shrink-0">{isMicListening ? '듣는중' : '음성'}</span>
           </button>
           <button
             type="submit"
             disabled={busy || !inputText.trim()}
             aria-label="전송"
-            className="px-3 sm:px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[13px] font-extrabold flex items-center gap-1.5 transition shrink-0 cursor-pointer"
+            className="px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer"
           >
-            <Send className="w-4 h-4" />
-            <span className="hidden min-[360px]:inline">전송</span>
+            <Send className="w-4 h-4 shrink-0" />
+            <span className="shrink-0">전송</span>
           </button>
         </form>
       </div>

@@ -187,6 +187,7 @@ export const SmartTrashView: React.FC = () => {
 
   const showDuplicatePickSection =
     !isTrashBinTabActive &&
+    currentTab !== 'none' &&
     (currentTab === 'duplicate' || currentTab === 'all') &&
     activeDuplicateGroups.length > 0;
 
@@ -558,12 +559,16 @@ export const SmartTrashView: React.FC = () => {
               key={tab.key}
               type="button"
               onClick={() => {
-                setIsTrashBinTabActive(false);
-                setActiveTrashCategoryFilter(tab.key as TrashCategory);
+                if (!isTrashBinTabActive && currentTab === tab.key) {
+                  setActiveTrashCategoryFilter('none');
+                } else {
+                  setIsTrashBinTabActive(false);
+                  setActiveTrashCategoryFilter(tab.key as TrashCategory);
+                }
               }}
               className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border ${
                 isSelected
-                  ? 'bg-zinc-900 border-primary-container shadow-xs'
+                  ? 'bg-zinc-900 border-primary-container shadow-md ring-2 ring-primary-container'
                   : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
               }`}
             >
@@ -684,32 +689,7 @@ export const SmartTrashView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setGridColumns(3)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    gridColumns === 3
-                      ? 'bg-primary-container text-zinc-950 font-extrabold'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">grid_on</span>
-                  <span>3열</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGridColumns(5)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    gridColumns === 5
-                      ? 'bg-primary-container text-zinc-950 font-extrabold'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">apps</span>
-                  <span>5열</span>
-                </button>
-              </div>
+
 
               <button
                 type="button"
@@ -816,32 +796,7 @@ export const SmartTrashView: React.FC = () => {
 
             {/* PC 3열 / 5열 바둑판 배열 전환 + 전체 카테고리 보기 */}
             <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setGridColumns(3)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    gridColumns === 3
-                      ? 'bg-primary-container text-zinc-950 font-extrabold'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">grid_on</span>
-                  <span>3열</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGridColumns(5)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    gridColumns === 5
-                      ? 'bg-primary-container text-zinc-950 font-extrabold'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">apps</span>
-                  <span>5열</span>
-                </button>
-              </div>
+
 
               <button
                 type="button"
@@ -993,7 +948,7 @@ export const SmartTrashView: React.FC = () => {
       )}
 
       {/* ─────────────── 4-B. 탭 ②·③·④ 및 전체 보기 개별 선택 그리드 (중복 탭 바 없이 깔끔한 액션 헤더만 배치) ─────────────── */}
-      {!isTrashBinTabActive && currentTab !== 'duplicate' && (
+      {!isTrashBinTabActive && currentTab !== 'duplicate' && currentTab !== 'none' && (
         <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
             <div className="flex flex-wrap items-center gap-2">
@@ -1006,32 +961,7 @@ export const SmartTrashView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setGridColumns(3)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    gridColumns === 3
-                      ? 'bg-primary-container text-zinc-950 font-extrabold'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">grid_on</span>
-                  <span>3열</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGridColumns(5)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    gridColumns === 5
-                      ? 'bg-primary-container text-zinc-950 font-extrabold'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">apps</span>
-                  <span>5열</span>
-                </button>
-              </div>
+
 
               <button
                 type="button"

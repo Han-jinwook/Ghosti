@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-06T09:47:50.162818",
+  "updated_at": "2026-11-06T10:59:43.556795",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -738,6 +738,22 @@
       "last_edited_time": "2026-11-05T02:22:00.000Z",
       "url": "https://app.notion.com/p/1-PC-40df9ffd2c1d816aa37ef2bcf840c7b5",
       "archived_at": "2026-11-06T09:47:50.162660"
+    },
+    {
+      "page_id": "40ef9ffd-2c1d-806b-b95b-d65421488164",
+      "title": "🎯 [센스톡] 카톡 단체 전송시 완료 버튼 오류",
+      "app": "",
+      "last_edited_time": "2026-11-05T04:39:00.000Z",
+      "url": "https://app.notion.com/p/40ef9ffd2c1d806bb95bd65421488164",
+      "archived_at": "2026-11-06T10:59:43.556629"
+    },
+    {
+      "page_id": "40ff9ffd-2c1d-8022-b121-f396e7f57ca5",
+      "title": "🎯 [귀신같이] 찾기 메뉴의 사진, 동영상, 문서 탭 클릭 시 계속 사진 탭으로 가는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-05T04:06:00.000Z",
+      "url": "https://app.notion.com/p/40ff9ffd2c1d8022b121f396e7f57ca5",
+      "archived_at": "2026-11-06T10:59:43.556645"
     }
   ]
 }

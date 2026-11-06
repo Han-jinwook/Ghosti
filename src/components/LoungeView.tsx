@@ -3213,11 +3213,12 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const [monthlyReportDismissed, setMonthlyReportDismissed] = useState(false);
 
   const renderOriginalAutoSyncControl = () => (
-    <div className="flex flex-wrap items-center gap-2 shrink-0">
+    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
       {/* 동기화 완료 (새로 9장 추가) 작은 풍선 배지 (Wi-Fi + 여유공간 충분할 때만 ON) */}
       {p2pOriginalSummoned && !simulateLowStorage && (
-        <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-pulse">
-          <span>✨ 동기화 완료 (새로 9장 추가)</span>
+        <span className="px-2 sm:px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-pulse shrink-0">
+          <span className="sm:hidden">✨ 완료 (+9)</span>
+          <span className="hidden sm:inline">✨ 동기화 완료 (새로 9장 추가)</span>
         </span>
       )}
 
@@ -3253,11 +3254,20 @@ export const LoungeFeedContextBanner: React.FC = () => {
         }`}
         title="Wi-Fi 연결 및 내 기기 여유 공간이 넉넉할 때만 활성화됩니다 (그 외 비활성 · 클릭 시 용량 부족 안내)"
       >
-        {simulateLowStorage
-          ? '⚠️ 원본 동기화 (용량 부족 · 비활성)'
-          : p2pOriginalSummoned
-          ? '🔄 원본 동기화 (ON · Wi-Fi+여유공간 확인됨)'
-          : '🔄 원본 동기화 켜기'}
+        <span className="sm:hidden">
+          {simulateLowStorage
+            ? '⚠️ 동기화 불가'
+            : p2pOriginalSummoned
+            ? '🔄 원본 동기화 ON'
+            : '🔄 원본 동기화'}
+        </span>
+        <span className="hidden sm:inline">
+          {simulateLowStorage
+            ? '⚠️ 원본 동기화 (용량 부족 · 비활성)'
+            : p2pOriginalSummoned
+            ? '🔄 원본 동기화 (ON · Wi-Fi+여유공간 확인됨)'
+            : '🔄 원본 동기화 켜기'}
+        </span>
       </button>
     </div>
   );

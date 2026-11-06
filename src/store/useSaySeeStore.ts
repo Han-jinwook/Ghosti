@@ -289,11 +289,11 @@ interface SaySeeStore {
 
   // [스펙 2] Z몬스터 정리 4대 탭 & 바둑판 Pick UI & 3중 타임머신 안전망 (Undo)
   selectedTrashIds: Set<string>;
-  activeTrashCategoryFilter: TrashCategory | 'all';
+  activeTrashCategoryFilter: TrashCategory | 'all' | 'none';
   quarantineMoving: boolean;
   lastQuarantineToast: string | null;
   lastUndoBatch: UndoQuarantineBatch | null;
-  setActiveTrashCategoryFilter: (cat: TrashCategory | 'all') => void;
+  setActiveTrashCategoryFilter: (cat: TrashCategory | 'all' | 'none') => void;
   toggleTrashSelection: (id: string) => void;
   selectAllTrashInFilter: () => void;
   clearTrashSelection: () => void;
@@ -2860,7 +2860,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   // ─────────────── [스펙 2] Z몬스터 정리 4대 탭 & 바둑판 Pick & 3중 타임머신 안전망 (Undo) ───────────────
   selectedTrashIds: new Set<string>(),
-  activeTrashCategoryFilter: 'duplicate',
+  activeTrashCategoryFilter: 'none',
   quarantineMoving: false,
   lastQuarantineToast: null,
   lastUndoBatch: null,
@@ -2880,7 +2880,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const { photos, activeTrashCategoryFilter } = get();
     const matching = photos
       .filter((p) => {
-        if (!p.trashCategory || p.quarantined) return false;
+        if (!p.trashCategory || p.quarantined || activeTrashCategoryFilter === 'none') return false;
         if (activeTrashCategoryFilter === 'all') return true;
         if (activeTrashCategoryFilter === 'memo') {
           return (
