@@ -47,6 +47,7 @@ class ZCoreBridgeManager {
   private listeners: Set<(connected: boolean) => void> = new Set();
   private pollTimer: any = null;
   private selfUpdateRequested: boolean = false;
+  private consecutiveFailures: number = 0;
 
   private constructor() {
     if (typeof window !== 'undefined') {
@@ -106,7 +107,7 @@ class ZCoreBridgeManager {
   public async checkHealth(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(`${Z_CORE_ORIGIN}/__merlin/health`, {
         method: 'GET',
         mode: 'cors',
@@ -117,6 +118,7 @@ class ZCoreBridgeManager {
       if (res.ok) {
         const data: ZCoreHealthResponse = await res.json();
         if (data.ok) {
+          this.consecutiveFailures = 0;
           const wasConnected = this.isConnected;
           const prevVersion = this.version;
           this.isConnected = true;
@@ -141,12 +143,14 @@ class ZCoreBridgeManager {
       /* disconnected or network error */
     }
 
-    if (this.isConnected) {
+    this.consecutiveFailures += 1;
+    // CPU 과부하 시 일시적 지연으로 연결/해제가 깜빡이며 토스트가 반복되는 현상 방어: 3회 연속 실패 시에만 해제 판정
+    if (this.isConnected && this.consecutiveFailures >= 3) {
       this.isConnected = false;
       this.notify();
       window.dispatchEvent(new CustomEvent('zCoreDisconnected'));
     }
-    return false;
+    return this.isConnected;
   }
 
   public startHealthPolling(intervalMs: number = 3000) {

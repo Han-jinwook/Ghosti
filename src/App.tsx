@@ -195,9 +195,21 @@ export const App: React.FC = () => {
     playAppEnterGiggleSound();
     void initApp();
     const handleZCoreConnected = () => {
-      useSaySeeStore.setState({
-        lastQuarantineToast: '🎉 멀린 Z-코어(Port 5199) 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
-      });
+      // 세션당 최초 1회만 연결 완료 토스트를 노출하여 반복 팝업 원천 차단
+      let shouldShowToast = false;
+      try {
+        if (sessionStorage.getItem('ghosti_zcore_connected_toast_shown') !== '1') {
+          sessionStorage.setItem('ghosti_zcore_connected_toast_shown', '1');
+          shouldShowToast = true;
+        }
+      } catch {
+        // ignore
+      }
+      if (shouldShowToast) {
+        useSaySeeStore.setState({
+          lastQuarantineToast: '🎉 멀린 Z-코어(Port 5199) 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
+        });
+      }
       void initApp(true);
     };
     window.addEventListener('zCoreConnected', handleZCoreConnected);
