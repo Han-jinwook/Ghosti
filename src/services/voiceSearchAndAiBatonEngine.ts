@@ -6,6 +6,8 @@ import {
   SETUP_MONSTER_TTS_VOICE_SUNHI,
   resolveActiveTtsVoiceId,
   getPreferredVoiceGender,
+  normalizeTtsText,
+  prefetchVoiceActorCacheInBackground,
 } from './setupMonsterTts';
 import type { LocalDocumentFile } from '../types/saysee';
 
@@ -590,14 +592,9 @@ export async function speakWithHyunsuOrSunhi(
       ? GHOSTI_VOICE_ACTORS.sunhi_doc_reader.voiceId
       : GHOSTI_VOICE_ACTORS.hyunsu_briefing.voiceId;
 
-  // 1) 여성 성우(선희) 음소 보정: '음식' 첫 음절 'ㅇ'이 'ㄷ'으로 뭉개져 '듬식'처럼 발음되는 현상 방지 ('음 식' 공백 분리)
-  // 2) '~해줘' 음성 발음 시 '~ 해 줘'로 과도하게 띄어서 어색하게 발음되는 현상 보정
-  let phoneticText = text
-    .replace(/음식/g, '음 식')
-    .replace(/해\s*줘/g, '해줘')
-    .replace(/찾아\s*줘/g, '찾아줘')
-    .replace(/보여\s*줘/g, '보여줘')
-    .replace(/알려\s*줘/g, '알려줘');
+  const phoneticText = normalizeTtsText(text);
+  // 반대 성우(남<->여) 전환 시 대기 시간 0초로 즉시 들려줄 수 있도록 백그라운드 양방향 캐시 장전
+  prefetchVoiceActorCacheInBackground(phoneticText, rate);
 
   const res = await speakSetupMonsterTts(phoneticText, {
     voice: voiceId,

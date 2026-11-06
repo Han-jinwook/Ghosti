@@ -398,9 +398,21 @@ export function adaptScriptToActiveVoiceGender(text: string): string {
     .replace(/선희\s*아나운서/g, '현수 성우');
 }
 
+let activeTtsFetchController: AbortController | null = null;
+
 export function normalizeTtsText(rawText: string): string {
   return String(rawText || '')
     .trim()
+    // 따옴표('음식') 및 받침(ㄴ/ㄹ/ㅁ) 뒤 '음식' 연음 시 '듬식'으로 뭉개지는 현상 원천 차단 (쉼표 휴지 삽입)
+    .replace(/([가-힣])\s*['"‘’“”]+\s*음식/g, '$1, 음식')
+    .replace(/['"‘’“”]+\s*음식/g, '음식')
+    .replace(/([신진련한된은는을를])\s+음식/g, '$1, 음식')
+    .replace(/음-식/g, '음식')
+    .replace(/음\s+식/g, '음식')
+    .replace(/해\s*줘/g, '해줘')
+    .replace(/찾아\s*줘/g, '찾아줘')
+    .replace(/보여\s*줘/g, '보여줘')
+    .replace(/알려\s*줘/g, '알려줘')
     .replace(/\s+/g, ' ');
 }
 
@@ -409,6 +421,14 @@ export function normalizeTtsText(rawText: string): string {
  */
 export function stopSetupMonsterTts(): void {
   isCurrentlySpeaking = false;
+  try {
+    if (activeTtsFetchController) {
+      activeTtsFetchController.abort();
+      activeTtsFetchController = null;
+    }
+  } catch {
+    /* ignore */
+  }
   try {
     if (activeWebAudioSource) {
       activeWebAudioSource.stop();
@@ -616,6 +636,7 @@ export async function speakSetupMonsterTts(
   // 2.5단계: 웹/Netlify 배포 환경 클라우드 MS 신경망 성우 서버리스 브릿지 (/api/edge-tts)
   try {
     const cloudController = new AbortController();
+    activeTtsFetchController = cloudController;
     const cloudTimer = setTimeout(() => cloudController.abort(), 5500);
     const cloudRes = await fetch('/api/edge-tts', {
       method: 'POST',
@@ -685,4 +706,40 @@ export function triggerSetupMonsterTtsPrewarm(
       }),
     }).catch(() => {});
   }, 150);
+}
+
+/**
+ * [남/여 성우 전환 시 0.001초 즉시 발화를 위한 백그라운드 양방향 캐시 프리페치]
+ * 현재 발화 문장 및 기본 성우 인사말을 반대 성우 목소리로도 미리 메모리에 준비해 두어,
+ * 유저가 검색 직후 [남] 또는 [여] 버튼을 누르는 즉시 대기 시간 0초로 재생합니다.
+ */
+export function prefetchVoiceActorCacheInBackground(text?: string, rate: string = SETUP_MONSTER_TTS_RATE_DEFAULT): void {
+  if (typeof window === 'undefined') return;
+  const targets: Array<{ t: string; v: string }> = [
+    { t: normalizeTtsText(VOICE_PREVIEW_PHRASE_MALE), v: SETUP_MONSTER_TTS_VOICE_HYUNSU },
+    { t: normalizeTtsText(VOICE_PREVIEW_PHRASE_FEMALE), v: SETUP_MONSTER_TTS_VOICE_SUNHI },
+  ];
+  if (text) {
+    const clean = normalizeTtsText(text);
+    if (clean) {
+      targets.push({ t: clean, v: SETUP_MONSTER_TTS_VOICE_HYUNSU });
+      targets.push({ t: clean, v: SETUP_MONSTER_TTS_VOICE_SUNHI });
+    }
+  }
+  for (const item of targets) {
+    const key = `${item.v}|${rate}|${item.t}`;
+    if (memoryAudioUrlCache.has(key)) continue;
+    void fetch('/api/edge-tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: item.t, voice: item.v, rate }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.ok && d.audioDataUrl) {
+          memoryAudioUrlCache.set(key, String(d.audioDataUrl));
+        }
+      })
+      .catch(() => {});
+  }
 }

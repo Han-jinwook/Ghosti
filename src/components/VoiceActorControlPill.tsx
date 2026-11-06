@@ -13,6 +13,7 @@ import {
   replayLastSetupMonsterTts,
   speakSetupMonsterTts,
   subscribeGhostiVoicePrefs,
+  prefetchVoiceActorCacheInBackground,
   type GhostiVoiceGender,
 } from '../services/setupMonsterTts';
 import { useSaySeeStore } from '../store/useSaySeeStore';
@@ -37,6 +38,7 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
   const [, setTick] = useState(0);
 
   useEffect(() => {
+    prefetchVoiceActorCacheInBackground();
     return subscribeGhostiVoicePrefs(() => {
       setTick((t) => t + 1);
     });
