@@ -1390,6 +1390,10 @@ def _toast_worker() -> None:
                         def _on_clear_click(_e=None):
                             clear_clipboard_history()
 
+                        def _on_undo_click(_e=None):
+                            _close_win()
+                            execute_undo_snapshot(set_clipboard_text)
+
                         clear_btn = tk.Label(
                             top_search_bar,
                             text="🧹비우기",
@@ -1402,6 +1406,19 @@ def _toast_worker() -> None:
                         )
                         clear_btn.pack(side="right", padx=(4, 0))
                         clear_btn.bind("<Button-1>", _on_clear_click)
+
+                        undo_btn = tk.Label(
+                            top_search_bar,
+                            text="↩원복(Ctrl+Z)",
+                            fg="#FDE047" if _UNDO_SNAPSHOT.get("active") else "#94A3B8",
+                            bg="#1E293B",
+                            padx=5,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        undo_btn.pack(side="right", padx=(4, 0))
+                        undo_btn.bind("<Button-1>", _on_undo_click)
 
                         ret_btn = tk.Label(
                             top_search_bar,
@@ -2222,9 +2239,13 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
     if ed and u32.IsWindow(ed):
         try:
             cur_full, idx_text, is_rich = _get_edit_full_text_and_index_str(ed)
-            # 1-A) 변환 직전 전체 문서 스냅샷(full_before)이 보존되어 있고 추가 타이핑이 없었던 경우 0..-1 전체 교체로 100% 무결점 복원
+            # 1-A) 변환 직전 전체 문서 스냅샷(full_before)이 보존되어 있는 경우:
+            #      ① 문서 변경이 없었으면 0..-1 전체 교체로 100% 무결점 복원하고,
+            #      ② 유저가 다른 줄을 일부 수정한 뒤 Ctrl+Z를 눌렀더라도 변환된 블록(morphed_t)만 정확히 변환 전 원문(raw_t)으로 치환하여 복원!
             if full_before and mode != "pre_iron":
-                if not full_after or cur_full.replace("\r\n", "\n") == full_after.replace("\r\n", "\n"):
+                cur_norm_check = cur_full.replace("\r\n", "\n")
+                after_norm_check = full_after.replace("\r\n", "\n") if full_after else ""
+                if not after_norm_check or cur_norm_check == after_norm_check:
                     restore_doc = (
                         full_before.replace("\r\n", "\n").replace("\n", "\r\n")
                         if not is_rich
@@ -2329,6 +2350,40 @@ def _fix_korean_spacing_general(s: str) -> str:
       체언+부사('이번프로젝트는꼭'->'이번 프로젝트는 꼭', '오늘3시 에 미팅있습니다'->'오늘 3시에 미팅 있습니다') 정밀 교정
     """
     s = re.sub(r"([가-힣]+(?:아|어|여|해|지|네|군|나|가|까))\s+(요)(?=[가-힣])", r"\1\2 ", s)
+    # 1) 깨진 어미·조사 복원 ('주셔 서' -> '주셔서', '해 서' -> '해서', '와 서' -> '와서', '봐 서' -> '봐서')
+    s = re.sub(r"([가-힣]*(?:주셔|보셔|하셔|오셔|가셔|계셔|드려|올려|내려|보내|만들|받으|찾으|읽으|쓰셔|해|와|봐|가|나|써|꺼|켜))\s+서(?=[가-힣\s.,?!~^]|$)", r"\1서", s)
+    # 2) 부사절/연결어미 뒤에 붙은 부사('정말', '진짜', '너무', '아주', '매우', '다시', '바로', '즉시', '함께', '같이', '모두', '항상', '꼭') 분리
+    s = re.sub(
+        r"([가-힣]+(?:아서|어서|여서|해서|셔|셔서|고|며|면서|자마자|니까|지만|는데|은데|던데))(?=(?:정말|진짜|너무|아주|매우|다시|바로|즉시|함께|같이|모두|항상|꼭|잘|더|다)(?=[가-힣\s.,?!~^]|$))",
+        r"\1 ",
+        s,
+    )
+    # 3) 부사 + 용언 붙여쓰기('정말감사합니다' -> '정말 감사합니다', '너무좋아요' -> '너무 좋아요', '바로확인' -> '바로 확인') 분리
+    s = re.sub(
+        r"(?<![가-힣])(정말|진짜|너무|아주|매우|가장|제일|많이|빨리|천천히|다시|함께|같이|먼저|벌써|아직|항상|자주|가끔|바로|즉시|더욱|특히|전혀|결코|반드시|절대|꼭)(?=(?:감사|고맙|미안|죄송|축하|환영|좋|나쁘|기쁘|슬프|아프|예쁘|멋지|훌륭|완벽|정확|빠르|느리|크|작|많|적|높|낮|길|짧|깊|넓|밝|어둡|맑|흐리|춥|덥|따뜻|시원|힘들|어렵|쉽|중요|필요|가능|불가능|확인|적용|작동|실행|완료|복원|수정|배포|해결|처리|진행|시작|종료|출발|도착|기억|소환|검색|선택|입력|출력|복사|저장|삭제|추가|변경|교정|성형|다림질|공유|연결|해제|테스트|검증|분석|정리|생성|제거|설치|구동|발견|캐치|체크|연습|공부|운동|식사|출근|퇴근|산책|여행|결혼|성공|실패|이해|인정|기대|걱정|고민|노력|도움|부탁|말씀|연락|답변|보고|안내|설명|소개|추천|제안|요청|문의|신청|참여|참석|이용|사용|구독|결제|환불|취소|승인|거절|달성|유지|보존|보호|방어|차단|제한|허용|지원|제공|포함|제외|구분|분리|통합|합체|변환|전환|이동|복귀|도입|출시|오픈|마감|종결)[가-힣]*)",
+        r"\1 ",
+        s,
+    )
+    # 4) '-하게 / -롭게 / -스레 / -히' 부사형 어미 + 용언 붙여쓰기('예리하게캐치해' -> '예리하게 캐치해') 분리
+    s = re.sub(
+        r"([가-힣]{2,}(?:하게|롭게|스레|답게|주셔서|해주셔서|주시고|해주시고))(?=(?!주|보|드|지|도|는|만|요)[가-힣]{2,})",
+        r"\1 ",
+        s,
+    )
+    # 5) 관형사형('완전한', '정확한', '깔끔한', '안전한', '익숙한', '다양한', '특별한', '중요한', '필요한', '간단한', '복잡한', '자세한', '상세한', '동일한', '유일한', '확실한', '분명한', '명확한', '충분한', '적절한', '유용한', '강력한', '새로운', '아름다운', '자연스러운') + 명사 붙여쓰기 분리
+    s = re.sub(
+        r"(?<![가-힣])([가-힣]{2,}(?:한|된|할|로운|스러운|같은|없는|있는))(?=(?:자막|목소리|성우|영상|음성|글자|문장|문단|문서|파일|폴더|화면|창|기능|성능|효과|결과|상태|모습|느낌|분위기|마음|생각|의견|내용|정보|자료|데이터|시스템|서비스|프로그램|어플|앱|모델|기술|방법|방식|구조|설계|기획|특허|사업|아이템|시장|고객|유저|사람|회원|멤버|동료|가족|친구|선생님|대표님|매니저님|문제|오류|버그|원인|해결책|대안|선택|결정|판단|기준|원칙|규칙|조건|환경|상황|과정|절차|단계|순서|시간|기간|일정|계획|목표|성공|승리|변화|발전|성장|기회|가치|이익|수익|비용|가격|요금|할인|혜택|선물|보상|응원|관심|사랑|행복|건강|피부|비타민|햇빛|자외선|산책|운동|음식|식단|습관|생활|일상|하루|오늘|내일|미래|세상)[을를이가은는도의에로와과도만\s.,?!:;)]|$)",
+        r"\1 ",
+        s,
+    )
+    # 6) 존칭 접미사/호칭('님', '씨', '분') + 조사 외 일반 명사/부사 붙여쓰기('해나라님성우' -> '해나라님 성우') 분리
+    s = re.sub(
+        r"([가-힣]{2,}님)(?=(?![은는이가을를의도만께께서으로로와과랑이랑하고이나나부터까지조차마저요\s.,?!:;~^)])[가-힣]{2,})",
+        r"\1 ",
+        s,
+    )
+    # 7) 용언 어간 + 보조용언 '주셔서/주시고/주세요/주시면' 띄어쓰기 또는 붙여쓰기 정규화 ('캐치해 주셔 서' -> '캐치해 주셔서')
+    s = re.sub(r"([가-힣]+(?:아|어|여|해))\s*(주셔서|주시고|주세요|주시면|주신|주실|주셨)", r"\1 \2", s)
     s = re.sub(r"날씨가\s*조아서", "날씨가 좋아서", s)
     s = re.sub(r"조아서(?=\s|$|[.,?!~^]|[가-힣])", "좋아서", s)
     s = re.sub(r"조아요(?=\s|$|[.,?!~^])", "좋아요", s)
@@ -2478,8 +2533,24 @@ def iron_and_polish_korean_text(raw_text: str) -> str:
     s = s.replace("__HDR_NL__", "\n")
     s = re.sub(r"[ \t]+", " ", s)
 
-    s = re.sub(r"([가-힣]{2,})\s+([한된할])\s+([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
-    s = re.sub(r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})", r"\1\2 \3\4", s)
+    s = re.sub(
+        r"([가-힣]{2,})\s+([한된할])\s+([가-힣]{1,3})\s+([가-힣]{1,2})",
+        lambda m: (
+            m.group(0)
+            if (m.group(2) == "한" and m.group(3) in ("번", "번만", "번씩", "번도", "줄", "줄로", "글자", "글자도", "단어", "문장", "페이지", "화면", "사진", "파일", "문서", "영상", "분", "명", "개", "건", "시간", "달", "해"))
+            else f"{m.group(1)}{m.group(2)} {m.group(3)}{m.group(4)}"
+        ),
+        s,
+    )
+    s = re.sub(
+        r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})",
+        lambda m: (
+            m.group(0)
+            if (m.group(2) == "한" and m.group(3) in ("번", "번만", "번씩", "번도", "줄", "줄로", "글자", "글자도", "단어", "문장", "페이지", "화면", "사진", "파일", "문서", "영상", "분", "명", "개", "건", "시간", "달", "해"))
+            else f"{m.group(1)}{m.group(2)} {m.group(3)}{m.group(4)}"
+        ),
+        s,
+    )
     s = re.sub(
         r"(?<=[가-힣]{2})\s+(?=(?:은|는|이|가|을|를|에서|에게|으로|까지|부터|처럼|보다|지만|거나|면서|니까|습니다|입니다|합니다)(?=[\s.,?!:;)]|$))",
         "",
@@ -2634,10 +2705,17 @@ def _replace_edit_control_current_line_atomic(
         set_ime_language(target_korean=(target_lang == "KO"))
         if use_full_sel or (line_start == 0 and line_end >= utf16_total):
             u32.SendMessageW(edit_child, EM_SETSEL, 0, -1)
+            rbuf = ctypes.create_unicode_buffer(final_out_win)
+            u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+            if not auto_triggered and s_pos != e_pos:
+                u32.SendMessageW(edit_child, EM_SETSEL, 0, -1)
         else:
             u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_end)
-        rbuf = ctypes.create_unicode_buffer(final_out_win)
-        u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+            rbuf = ctypes.create_unicode_buffer(final_out_win)
+            u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+            if not auto_triggered and s_pos != e_pos:
+                rep_utf16_len = len(final_out.encode("utf-16-le")) // 2
+                u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_start + rep_utf16_len)
 
         full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
         root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
@@ -3788,6 +3866,7 @@ Write-Output $res.Text
     last_summon_ts: float = 0.0
     was_ctrl0_down: bool = False
     was_ctrl_alt_t_down: bool = False
+    was_ctrl_z_down: bool = False
     last_topmost_ts: float = 0.0
 
     msg = wintypes.MSG()
@@ -3991,6 +4070,12 @@ Write-Output $res.Text
                         last_topmost_ts = now
                         _execute_superpower_num(7)
                 was_ctrl_alt_t_down = ctrl_alt_t_now
+
+                ctrl_z_now = ctrl_down and not alt_down and not shift_down and z_down
+                if ctrl_z_now and not was_ctrl_z_down:
+                    if _UNDO_SNAPSHOT.get("active"):
+                        execute_undo_snapshot(daemon_set_clipboard)
+                was_ctrl_z_down = ctrl_z_now
 
                 # [②번 양방향 오토매틱 타이핑 감지 (2어절 연속 오타 감지 + 0.2ms 원자적 교체 + 한/영 키 즉시 동기화)]:
                 # - 1단어만 오타 났을 때는 유저가 스스로 백스페이스+한/영 키를 칠 수 있으므로 손버릇 충돌 방지를 위해 대기(pending_first_typo)만 함.
