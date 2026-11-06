@@ -204,6 +204,31 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('zCoreConnected', handleZCoreConnected);
   }, [initApp]);
 
+  // 모바일 및 데스크톱 전 페이지 공통 '맨 위로 가기 (Scroll to Top)' 플로팅 버튼 노출 상태
+  const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleScroll = () => {
+      const y =
+        window.scrollY ||
+        document.documentElement.scrollTop ||
+        document.body.scrollTop ||
+        0;
+      setShowScrollTopBtn(y > 160);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleScrollToTop = () => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+
   useEffect(() => {
     if (!lastQuarantineToast) return;
     const t = window.setTimeout(() => dismissQuarantineToast(), 4500);
@@ -307,6 +332,29 @@ export const App: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* 모든 페이지(쇼룸 대문, 모바일, 데스크톱 전 메뉴) 공통 맨 위로 가기 플로팅 버튼 */}
+      {showScrollTopBtn && (
+        <button
+          type="button"
+          onClick={handleScrollToTop}
+          aria-label="맨 위로 가기"
+          title="맨 위로 가기"
+          className="fixed bottom-6 right-5 z-[120] w-11 h-11 rounded-full bg-white hover:bg-slate-50 active:scale-95 text-slate-700 border border-slate-200/80 shadow-[0_6px_20px_rgba(15,23,42,0.16)] flex items-center justify-center transition-all cursor-pointer"
+        >
+          <svg
+            className="w-5 h-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M18 15l-6-6-6 6" />
+          </svg>
+        </button>
       )}
     </GhostiHubRootProvider>
   );
