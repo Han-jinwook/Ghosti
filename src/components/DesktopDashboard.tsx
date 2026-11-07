@@ -15,6 +15,12 @@ import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
 import { Stage1MinimalSearchPreview, Stage1MinimalCarePreview } from './Stage1MinimalPreview';
 import {
+  GhostWindowThreeStageMockup,
+  GhostPhotoOcrTeleportModal,
+  type GhostWindowTierMode,
+  type GhostWindowUiTab,
+} from './GhostWindowThreeStageMockup';
+import {
   LoungeCustomSettingsHeader,
   LoungeFeedContextBanner,
   LoungeIndexingWaitingRoom,
@@ -191,8 +197,8 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   Array<{ id: DesktopTab; icon: string; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'dashboard', icon: '🔍', label: '찾기', subcaption: '제목 몰라도 1초 검색' },
-    { id: 'trash', icon: '✋', label: '손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
+    { id: 'dashboard', icon: '🔍', label: '찾기', subcaption: '내 기기 검색 · 현장 문서 소환 · 모든 사진 원클릭 OCR' },
+    { id: 'trash', icon: '✋', label: '손보기', subcaption: '느려진 PC 속도 주치의 · 수요 손 없는 날 · 1초 복원', showTrashCount: true },
   ],
   family: [
     { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
@@ -323,6 +329,9 @@ export const DesktopDashboard: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDeviceIntegrationOpen, setIsDeviceIntegrationOpen] = useState(false);
   const [activeIntegrationSubTab, setActiveIntegrationSubTab] = useState<'devices' | 'superpower'>('devices');
+  const [ghostWindowTier, setGhostWindowTier] = useState<GhostWindowTierMode>('pc_free');
+  const [ghostWindowInitialTab, setGhostWindowInitialTab] = useState<GhostWindowUiTab>('ui1_basic');
+  const [ocrModalPhoto, setOcrModalPhoto] = useState<any>(null);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isCanvasExpanded, setIsCanvasExpanded] = useState(false);
   const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
@@ -511,9 +520,34 @@ export const DesktopDashboard: React.FC = () => {
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
             }`;
 
+          const isPcFreeSuperpowerActive =
+            isDeviceIntegrationOpen &&
+            activeIntegrationSubTab === 'superpower' &&
+            ghostWindowTier === 'pc_free';
+          const isPhonePcIntegrationActive =
+            isDeviceIntegrationOpen &&
+            (activeIntegrationSubTab === 'devices' ||
+              (activeIntegrationSubTab === 'superpower' && ghostWindowTier === 'phone_pc'));
+          const isWorkTeamSuperpowerActive =
+            isDeviceIntegrationOpen &&
+            activeIntegrationSubTab === 'superpower' &&
+            ghostWindowTier === 'work_team';
+
           return (
-            <div className="flex flex-col gap-1">
-              {/* [메인 메뉴 1] 내 기기 (PC·폰) */}
+            <div className="flex flex-col gap-1.5">
+              {/* ━━━ 🆓 무료구역 (평생 0원) 헤더 ━━━ */}
+              <div className="px-2 pt-1 pb-0.5 flex items-center justify-between select-none">
+                <span
+                  className={`text-[11px] font-black tracking-tight ${
+                    themeMode === 'light' ? 'text-teal-700' : 'text-emerald-400'
+                  }`}
+                >
+                  🆓 무료구역 (평생 0원)
+                </span>
+                <span className="text-[10px] text-zinc-400 font-bold">전국민 무제한 유입</span>
+              </div>
+
+              {/* [무료 1] 내 기기 (PC·폰) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -526,7 +560,7 @@ export const DesktopDashboard: React.FC = () => {
                   }}
                   className={mainBtnClass(isMyDeviceActive)}
                 >
-                  <span className="truncate" title="내 폰·PC 속 찾기 및 손보기">
+                  <span className="truncate" title="내 폰·PC 속 찾기 및 손보기 (평생 0원)">
                     내 기기 (PC·폰)
                   </span>
                   <span className="text-[10px] opacity-60">{isMyDeviceActive ? '▾' : '▸'}</span>
@@ -535,7 +569,7 @@ export const DesktopDashboard: React.FC = () => {
                 {isMyDeviceActive && (
                   <div className={subWrapClass}>
                     {LOUNGE_SUBMENU_CONFIG.personal.map((sub) => {
-                      const isSubActive = desktopTab === sub.id;
+                      const isSubActive = desktopTab === sub.id && !isDeviceIntegrationOpen;
                       return (
                         <button
                           key={sub.id}
@@ -555,7 +589,7 @@ export const DesktopDashboard: React.FC = () => {
                               <span className="truncate font-bold">{sub.label}</span>
                             </div>
                             {sub.subcaption && (
-                              <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                              <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
                                 {sub.subcaption}
                               </span>
                             )}
@@ -578,7 +612,7 @@ export const DesktopDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* [메인 메뉴 2 — 평생 무료] 사진 공유 (가족 / 동호회 / 동창회 — 오직 사진·동영상 공유 전용, 문서/S: 드라이브 제외) */}
+              {/* [무료 2] 사진 공유 (인원·장수 무제한 평생 0원 · 사진/영상 전용) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -596,7 +630,7 @@ export const DesktopDashboard: React.FC = () => {
                   }}
                   className={mainBtnClass(isPhotoShareActive)}
                 >
-                  <span className="truncate" title="가족 · 동호회 · 동창회 사진·동영상 무료 공유">
+                  <span className="truncate" title="인원·장수 무제한 평생 0원 · 사진/영상 전용">
                     사진 공유
                   </span>
                   <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
@@ -620,7 +654,7 @@ export const DesktopDashboard: React.FC = () => {
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">👨‍👩‍👧‍👦</span>
                           <span className="truncate font-bold">가족</span>
                         </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
+                        <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
                           우리집 · 본가 · 처가 앨범 (평생 0원)
                         </span>
                       </div>
@@ -640,10 +674,10 @@ export const DesktopDashboard: React.FC = () => {
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">⛰️</span>
-                          <span className="truncate font-bold">동호회</span>
+                          <span className="truncate font-bold">동호회·모임</span>
                         </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          인원 무제한 사진·영상 공유 (평생 0원)
+                        <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
+                          인원·장수 무제한 사진/영상 (평생 0원)
                         </span>
                       </div>
                     </button>
@@ -664,8 +698,8 @@ export const DesktopDashboard: React.FC = () => {
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">🎓</span>
                           <span className="truncate font-bold">동창회</span>
                         </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          학창시절 · 동창 사진·영상 공유 (평생 0원)
+                        <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
+                          학창시절 · 동창 사진/영상 (평생 0원)
                         </span>
                       </div>
                     </button>
@@ -673,87 +707,121 @@ export const DesktopDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* ── (무료 / 유료 프로 경계선) ── */}
-              <div className="my-1.5 px-2 flex items-center gap-2 select-none" aria-label="무료 및 유료 프로 경계선">
-                <div className={`h-px flex-1 ${themeMode === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
-                <span className={`text-[10px] font-extrabold tracking-tight whitespace-nowrap ${themeMode === 'light' ? 'text-teal-700' : 'text-emerald-400/90'}`}>
-                  🎁 1개월 무료체험 · 프로
-                </span>
-                <div className={`h-px flex-1 ${themeMode === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
-              </div>
-
-              {/* [메인 메뉴 3 — 1개월 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+) */}
+              {/* [무료 3] ⚡ 귀신창 초능력 : 💻 내 PC (내 PC 문서 현장 소환 무제한 무료 + 초능력 1개월 무제한 ➔ 일 3회 무료) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
                   onClick={() => {
                     setIsDeviceIntegrationOpen(true);
+                    setActiveIntegrationSubTab('superpower');
+                    setGhostWindowTier('pc_free');
+                    setGhostWindowInitialTab('ui1_basic');
+                    setActiveLoungeType('personal');
+                    setDesktopTab('sync');
+                    if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    else scrollAppToTop();
+                  }}
+                  className={mainBtnClass(isPcFreeSuperpowerActive)}
+                >
+                  <div className="flex flex-col text-left min-w-0 flex-1">
+                    <span className="truncate text-[14px]">⚡ 귀신창 초능력 : 💻 내 PC</span>
+                    <span className="text-[10.5px] opacity-75 font-normal truncate">
+                      내PC 문서소환 무제한 무료 · 초능력 일 3회 무료
+                    </span>
+                  </div>
+                </button>
+              </div>
+
+              {/* ━━━ 👑 유료구역 (1개월 무제한 무료 후 일 3회 무료 · 🔥 10년 특판) 경계선 ━━━ */}
+              <div className="mt-2 mb-1 px-2 pt-2 border-t border-white/10 flex flex-col gap-0.5 select-none" aria-label="유료 프로 경계선">
+                <span
+                  className={`text-[11px] font-black tracking-tight ${
+                    themeMode === 'light' ? 'text-amber-700' : 'text-amber-300'
+                  }`}
+                >
+                  👑 유료구역 (1개월 무제한 ➔ 일 3회 무료)
+                </span>
+                <span className="text-[10px] text-emerald-400 font-extrabold">
+                  🔥 1차 10년 특판 (월 325원꼴 평생급 보장)
+                </span>
+              </div>
+
+              {/* [유료 1] 내 기기 통합 (월 3,900원 / 🔥 10년 특판 3.9만) */}
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeviceIntegrationOpen(true);
+                    setActiveIntegrationSubTab('devices');
+                    setGhostWindowTier('phone_pc');
                     setActiveLoungeType('personal');
                     setDesktopTab('sync');
                     if (!isMobileDrawer) scrollAppToTop();
                   }}
-                  className={mainBtnClass(isDeviceIntegrationActive)}
+                  className={mainBtnClass(isPhonePcIntegrationActive)}
                 >
-                  <span className="truncate" title="내 기기 연결(PC↔폰) 및 귀신창(Ctrl+0) — 월 3,900원 / 10년 특판">
-                    내 기기 통합 (PC+폰+PC+)
-                  </span>
-                  <span className="text-[10px] opacity-60">{isDeviceIntegrationActive ? '▾' : '▸'}</span>
+                  <div className="flex flex-col text-left min-w-0 flex-1">
+                    <span className="truncate">내 기기 통합</span>
+                    <span className="text-[10.5px] opacity-75 font-normal truncate">
+                      월 3,900원 / 🔥 10년 특판 3.9만
+                    </span>
+                  </div>
+                  <span className="text-[10px] opacity-60">{isPhonePcIntegrationActive ? '▾' : '▸'}</span>
                 </button>
 
-                {isDeviceIntegrationActive && (
-                  <div className={subWrapClass}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDeviceIntegrationOpen(true);
-                        setActiveIntegrationSubTab('devices');
-                        setActiveLoungeType('personal');
-                        setDesktopTab('sync');
-                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      }}
-                      className={subBtnClass(
-                        isDeviceIntegrationActive && activeIntegrationSubTab === 'devices'
-                      )}
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
-                          <span className="truncate font-bold">내 기기 연결 (PC↔폰)</span>
-                        </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          PC · 폰 · 서브PC 1초 연동 (월 3,900원 / 10년 특판)
-                        </span>
+                <div className={subWrapClass}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(true);
+                      setActiveIntegrationSubTab('devices');
+                      setActiveLoungeType('personal');
+                      setDesktopTab('sync');
+                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    }}
+                    className={subBtnClass(
+                      isDeviceIntegrationOpen && activeIntegrationSubTab === 'devices'
+                    )}
+                  >
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
+                        <span className="truncate font-bold">내 기기 연결 (PC ↔ 폰 ↔ 서브PC)</span>
                       </div>
-                    </button>
+                    </div>
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDeviceIntegrationOpen(true);
-                        setActiveIntegrationSubTab('superpower');
-                        setActiveLoungeType('personal');
-                        setDesktopTab('sync');
-                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      }}
-                      className={subBtnClass(
-                        isDeviceIntegrationActive && activeIntegrationSubTab === 'superpower'
-                      )}
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="grayscale opacity-75 shrink-0 text-[13px]">⚡</span>
-                          <span className="truncate font-bold">귀신창 (Ctrl+0)</span>
-                        </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          복사검색 · F1~F10 상용구 · 초능력
-                        </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(true);
+                      setActiveIntegrationSubTab('superpower');
+                      setGhostWindowTier('phone_pc');
+                      setGhostWindowInitialTab('ui3_ocr');
+                      setActiveLoungeType('personal');
+                      setDesktopTab('sync');
+                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    }}
+                    className={subBtnClass(
+                      isDeviceIntegrationOpen &&
+                        activeIntegrationSubTab === 'superpower' &&
+                        ghostWindowTier === 'phone_pc'
+                    )}
+                  >
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="shrink-0 text-[13px]">⚡</span>
+                        <span className="truncate font-bold">귀신창 초능력 : 📱 폰 + PC</span>
                       </div>
-                    </button>
-                  </div>
-                )}
+                      <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
+                        폰 촬영·스샷 1초 공간이동 · 타 기기 문서 소환
+                      </span>
+                    </div>
+                  </button>
+                </div>
               </div>
 
-              {/* [메인 메뉴 4 — 1개월 무료체험 / 유료] 업무 공유 */}
+              {/* [유료 2] 업무 공유 (소호 9.9천 / 소기업 1.9만 / 중소 2.9만 · 🔥 10년 특판) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -763,60 +831,63 @@ export const DesktopDashboard: React.FC = () => {
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
                   }}
-                  className={mainBtnClass(isWorkShareActive)}
+                  className={mainBtnClass(isWorkShareActive || isWorkTeamSuperpowerActive)}
                 >
-                  <span className="truncate" title="업무 공유 (S: 드라이브 · 문서/계약서 공유 — 월 9,900원 / 10년 특판)">
-                    업무 공유
+                  <div className="flex flex-col text-left min-w-0 flex-1">
+                    <span className="truncate">업무 공유</span>
+                    <span className="text-[10.5px] opacity-75 font-normal truncate">
+                      소호 9.9천 / 소기업 1.9만 / 중소 2.9만 · 🔥 10년 특판
+                    </span>
+                  </div>
+                  <span className="text-[10px] opacity-60">
+                    {isWorkShareActive || isWorkTeamSuperpowerActive ? '▾' : '▸'}
                   </span>
-                  <span className="text-[10px] opacity-60">{isWorkShareActive ? '▾' : '▸'}</span>
                 </button>
 
-                {isWorkShareActive && (
-                  <div className={subWrapClass}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDeviceIntegrationOpen(false);
-                        setActiveLoungeType('work');
-                        setDesktopTab('dashboard');
-                        resetToZenCanvas();
-                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      }}
-                      className={subBtnClass(activeLoungeType === 'work')}
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
-                          <span className="truncate font-bold">S: 드라이브 · 문서/계약서 공유</span>
-                        </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          부서 · 팀 서류 공유 (월 9,900원 / 10년 특판)
-                        </span>
+                <div className={subWrapClass}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(false);
+                      setActiveLoungeType('work');
+                      setDesktopTab('dashboard');
+                      resetToZenCanvas();
+                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    }}
+                    className={subBtnClass(activeLoungeType === 'work' && !isDeviceIntegrationOpen)}
+                  >
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
+                        <span className="truncate font-bold">S: 드라이브 · 문서/계약서 공유</span>
                       </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDeviceIntegrationOpen(false);
-                        setActiveLoungeType('work');
-                        setDesktopTab('sync');
-                        resetToZenCanvas();
-                        if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      }}
-                      className={subBtnClass(activeLoungeType === 'work' && desktopTab === 'sync')}
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="grayscale opacity-75 shrink-0 text-[13px]">👥</span>
-                          <span className="truncate font-bold">팀원 권한 &amp; S: 드라이브 연결</span>
-                        </div>
-                        <span className="pl-[21px] text-[11.5px] opacity-75 font-normal truncate">
-                          멤버별 권한 설정 · 팀원 0원 연결
-                        </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(true);
+                      setActiveIntegrationSubTab('superpower');
+                      setGhostWindowTier('work_team');
+                      setGhostWindowInitialTab('ui2_summon');
+                      setActiveLoungeType('personal');
+                      setDesktopTab('sync');
+                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    }}
+                    className={subBtnClass(isWorkTeamSuperpowerActive)}
+                  >
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="shrink-0 text-[13px]">⚡</span>
+                        <span className="truncate font-bold">귀신창 초능력 : 💼 팀 공유</span>
                       </div>
-                    </button>
-                  </div>
-                )}
+                      <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
+                        F7~F12 팀 상용구 1초 동기화 · S: 숫자 소환
+                      </span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -982,12 +1053,12 @@ export const DesktopDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* 가상 비교 모드(?preview=stage1) 작동 시: [1번 내 기기(찾기·손보기)] ↔ [2번 사진 공유(가족·동호회·동창회 평생 0원)] ↔ [3번 내 기기 통합(1개월 무료체험)] 1초 전환 바 */}
-            {isStage1MinimalPreview && activeLoungeType === 'personal' && (
+            {/* 가상 비교 모드(?preview=stage1) 작동 시: 무료구역(찾기·손보기·사진공유·귀신창 내PC) & 👻 애기귀신 3대 현장 소환창 UI 시안 1초 전환 바 */}
+            {isStage1MinimalPreview && (
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/10">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[11px] font-extrabold text-emerald-400 mr-1">
-                    🧪 신형 미니멀 UI 즉시 검수:
+                    🧪 신형 UI &amp; 👻 3대 귀신창 시안 검수:
                   </span>
                   <button
                     type="button"
@@ -996,13 +1067,13 @@ export const DesktopDashboard: React.FC = () => {
                       setActiveLoungeType('personal');
                       setDesktopTab('dashboard');
                     }}
-                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
-                      desktopTab === 'dashboard' && !isDeviceIntegrationOpen
+                    className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition-all cursor-pointer ${
+                      activeLoungeType === 'personal' && desktopTab === 'dashboard' && !isDeviceIntegrationOpen
                         ? 'bg-teal-500 text-zinc-950 border-teal-400 shadow-xs'
                         : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
                     }`}
                   >
-                    1번 ① 🔍 찾기
+                    🔍 찾기 (+모든 사진 원클릭 OCR)
                   </button>
                   <button
                     type="button"
@@ -1011,15 +1082,14 @@ export const DesktopDashboard: React.FC = () => {
                       setActiveLoungeType('personal');
                       setDesktopTab('trash');
                     }}
-                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
-                      desktopTab === 'trash' && !isDeviceIntegrationOpen
+                    className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition-all cursor-pointer ${
+                      activeLoungeType === 'personal' && desktopTab === 'trash' && !isDeviceIntegrationOpen
                         ? 'bg-teal-500 text-zinc-950 border-teal-400 shadow-xs'
                         : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
                     }`}
                   >
-                    1번 ② ✋ 손보기
+                    ✋ 손보기
                   </button>
-                  <span className="text-zinc-600 px-0.5">|</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -1027,42 +1097,68 @@ export const DesktopDashboard: React.FC = () => {
                       setActiveLoungeType('family');
                       setDesktopTab('dashboard');
                     }}
-                    className="px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer bg-zinc-900/80 text-emerald-300 border-emerald-400/40 hover:bg-zinc-800"
+                    className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition-all cursor-pointer ${
+                      activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student'
+                        ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+                        : 'bg-zinc-900/80 text-emerald-300 border-emerald-400/40 hover:bg-zinc-800'
+                    }`}
                   >
-                    2번 📸 사진 공유 (가족·동호회·동창회 평생 0원)
+                    📸 사진 공유 (평생 0원)
                   </button>
                   <span className="text-zinc-600 px-0.5">|</span>
                   <button
                     type="button"
                     onClick={() => {
                       setIsDeviceIntegrationOpen(true);
-                      setActiveIntegrationSubTab('devices');
+                      setActiveIntegrationSubTab('superpower');
+                      setGhostWindowTier('pc_free');
+                      setGhostWindowInitialTab('ui1_basic');
                       setActiveLoungeType('personal');
                       setDesktopTab('sync');
                     }}
-                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
-                      desktopTab === 'sync' && activeIntegrationSubTab === 'devices'
-                        ? 'bg-emerald-400 text-zinc-950 border-emerald-300 shadow-xs'
-                        : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition-all cursor-pointer ${
+                      desktopTab === 'sync' && activeIntegrationSubTab === 'superpower' && ghostWindowInitialTab === 'ui1_basic'
+                        ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-xs'
+                        : 'bg-zinc-900/80 text-amber-200 border-amber-400/40 hover:bg-zinc-800'
                     }`}
                   >
-                    3번 ① 🔗 내 기기 연결 (PC↔폰)
+                    👻 창 UI ① 기본 귀신창 (2줄·상용구·클립보드)
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setIsDeviceIntegrationOpen(true);
                       setActiveIntegrationSubTab('superpower');
+                      setGhostWindowTier('work_team');
+                      setGhostWindowInitialTab('ui2_summon');
                       setActiveLoungeType('personal');
                       setDesktopTab('sync');
                     }}
-                    className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border transition-all cursor-pointer ${
-                      desktopTab === 'sync' && activeIntegrationSubTab === 'superpower'
+                    className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition-all cursor-pointer ${
+                      desktopTab === 'sync' && activeIntegrationSubTab === 'superpower' && ghostWindowInitialTab === 'ui2_summon'
                         ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-xs'
-                        : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                        : 'bg-zinc-900/80 text-amber-200 border-amber-400/40 hover:bg-zinc-800'
                     }`}
                   >
-                    3번 ② ⚡ 귀신창 (Ctrl+0)
+                    👻 창 UI ② 현장 문서·숫자 유령소환 (?·드래그)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeviceIntegrationOpen(true);
+                      setActiveIntegrationSubTab('superpower');
+                      setGhostWindowTier('phone_pc');
+                      setGhostWindowInitialTab('ui3_ocr');
+                      setActiveLoungeType('personal');
+                      setDesktopTab('sync');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition-all cursor-pointer ${
+                      desktopTab === 'sync' && activeIntegrationSubTab === 'superpower' && ghostWindowInitialTab === 'ui3_ocr'
+                        ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-xs'
+                        : 'bg-zinc-900/80 text-amber-200 border-amber-400/40 hover:bg-zinc-800'
+                    }`}
+                  >
+                    👻 창 UI ③ 사진·OCR 단어칩 공간이동
                   </button>
                 </div>
               </div>
@@ -1727,6 +1823,18 @@ export const DesktopDashboard: React.FC = () => {
                               </span>
                             </button>
 
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOcrModalPhoto(item.photo);
+                              }}
+                              title="이 사진에서 글자·표·원하는 단어 조각(칩)만 바로 따내기 (창 UI ③)"
+                              className="absolute bottom-10 right-2.5 z-10 px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
+                            >
+                              📝 OCR 글자 따기
+                            </button>
+
                             <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">
                               <span className="font-label-sm text-[11.5px] font-semibold text-white whitespace-nowrap shrink-0">
                                 {item.photo.date.split(' ')[0]}
@@ -1806,7 +1914,14 @@ export const DesktopDashboard: React.FC = () => {
           )}
 
           {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
-            <OnboardingModal inlineSuperpowerOnly={true} />
+            <div className="flex flex-col gap-6">
+              <GhostWindowThreeStageMockup
+                activeTier={ghostWindowTier}
+                onTierChange={setGhostWindowTier}
+                initialWindowTab={ghostWindowInitialTab}
+              />
+              <OnboardingModal inlineSuperpowerOnly={true} />
+            </div>
           ) : activeLoungeType === 'personal' ? (
             <>
               <LoungeCustomSettingsHeader />
@@ -2069,6 +2184,10 @@ export const DesktopDashboard: React.FC = () => {
         </main>
       )}
       </div>
+      <GhostPhotoOcrTeleportModal
+        photo={ocrModalPhoto}
+        onClose={() => setOcrModalPhoto(null)}
+      />
       <MerlinZCoreGuideModal
         isOpen={showZCoreGuideModal}
         onClose={() => {

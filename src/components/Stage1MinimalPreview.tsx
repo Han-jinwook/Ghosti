@@ -20,6 +20,7 @@ import {
   getAndAdvanceSessionPlaceholderStartIndex,
 } from '../services/weeklyCareAndPlaceholderEngine';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
+import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
 
 const STAGE1_ROLLING_INTERVAL_MS = 10_000; // 10초 자동 롤링
 
@@ -255,6 +256,7 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
   } = useSaySeeStore();
 
   const [textInput, setTextInput] = useState('');
+  const [ocrModalPhoto, setOcrModalPhoto] = useState<PhotoItem | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const mobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
@@ -912,6 +914,18 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
                           </span>
                         </button>
 
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOcrModalPhoto(item.photo);
+                          }}
+                          title="이 사진에서 글자·표·원하는 단어 조각(칩)만 바로 따내기 (창 UI ③)"
+                          className="absolute bottom-10 right-2.5 z-10 px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
+                        >
+                          📝 OCR 글자 따기
+                        </button>
+
                         <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">
                           <span className="font-label-sm text-[11.5px] font-semibold text-white whitespace-nowrap shrink-0">
                             {item.photo.date.split(' ')[0]}
@@ -940,6 +954,10 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
           </section>
         )}
       </div>
+      <GhostPhotoOcrTeleportModal
+        photo={ocrModalPhoto}
+        onClose={() => setOcrModalPhoto(null)}
+      />
     </main>
   );
 };
