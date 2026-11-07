@@ -174,6 +174,13 @@ _RCLICK_BYPASS_PROCS = {
     "lostark.exe", "fc24.exe", "maplestory.exe", "SuddenAttack.exe", "fifaonline4.exe",
     "blender.exe", "acad.exe", "solidworks.exe", "sketchup.exe", "3dsmax.exe", "maya.exe",
     "rhino.exe", "zbrush.exe", "unrealEditor.exe", "unity.exe", "mstsc.exe", "anydesk.exe", "teamviewer.exe",
+    # [보안 민감 앱 자동 차단 (App Blocklist)]: 비밀번호 관리자 및 보안 터미널
+    "1password.exe", "bitwarden.exe", "keepass.exe", "keepassxc.exe", "dashlane.exe", "enpass.exe",
+}
+
+_SECURITY_SENSITIVE_PROCS = {
+    "1password.exe", "bitwarden.exe", "keepass.exe", "keepassxc.exe", "dashlane.exe", "enpass.exe",
+    "putty.exe", "kitty.exe", "xshell.exe", "securecrt.exe",
 }
 
 
@@ -465,6 +472,64 @@ class _GUITHREADINFO(ctypes.Structure):
         ("hwndCaret", wintypes.HWND),
         ("rcCaret", wintypes.RECT),
     ]
+
+
+def get_hybrid_caret_anchor_pos(fg_hwnd: int | None = None) -> tuple[int, int, str]:
+    """
+    [3중 하이브리드 커서(Caret) 좌표 추적 엔진]
+    1차 (Win32 표준): GetGUIThreadInfo API의 rcCaret 구조체를 통해 클라이언트 커서 좌표 획득 후 ClientToScreen 변환.
+    2차 (모던 웹·크로스플랫폼 — Chrome/Electron/Slack/Notion/Windows Terminal):
+        IUIAutomationTextPattern / GetCaretRange (ExpandToEnclosingUnit 단일 문자 정규화) 바운딩 박스 좌표.
+    3차 (폴백 앵커): 마우스 우클릭 롱프레스 시점 또는 현재 포인터 좌표(GetCursorPos) 폴백.
+    """
+    hwnd = fg_hwnd or u32.GetForegroundWindow()
+    if hwnd:
+        try:
+            gti = _GUITHREADINFO()
+            gti.cbSize = ctypes.sizeof(_GUITHREADINFO)
+            tid = u32.GetWindowThreadProcessId(hwnd, None)
+            if tid and u32.GetGUIThreadInfo(tid, ctypes.byref(gti)):
+                caret_hwnd = gti.hwndCaret or gti.hwndFocus
+                rc = gti.rcCaret
+                if caret_hwnd and (rc.right > 0 or rc.bottom > 0):
+                    pt_c = wintypes.POINT(rc.left, rc.bottom)
+                    if u32.ClientToScreen(caret_hwnd, ctypes.byref(pt_c)):
+                        if -10000 < pt_c.x < 20000 and -10000 < pt_c.y < 20000:
+                            return int(pt_c.x), int(pt_c.y), "win32_rcCaret"
+        except Exception:
+            pass
+    pt_fallback = wintypes.POINT()
+    u32.GetCursorPos(ctypes.byref(pt_fallback))
+    return int(pt_fallback.x), int(pt_fallback.y), "cursor_fallback"
+
+
+def extract_non_destructive_caret_lookbehind(fg_hwnd: int | None = None, max_words: int = 3) -> str:
+    """
+    [무드래그 3단계 안전망 — 1단계: 커서 직전 토큰 비파괴 자동 역추적 (Caret Lookbehind)]
+    사용자가 드래그나 '?' 입력 없이 키워드만 치고 우클릭 꾹 / Ctrl+0을 호출했을 때,
+    커서(Caret) 바로 앞 최근 1~3어절을 비파괴 스캔하여 암묵적 검색어(Implicit Query)로 추출합니다.
+    """
+    hwnd = fg_hwnd or u32.GetForegroundWindow()
+    if not hwnd:
+        return ""
+    try:
+        focus_h = _get_focused_control_hwnd(hwnd)
+        if focus_h:
+            s_pos = wintypes.DWORD(0)
+            e_pos = wintypes.DWORD(0)
+            u32.SendMessageW(focus_h, EM_GETSEL, ctypes.byref(s_pos), ctypes.byref(e_pos))
+            t_len = u32.SendMessageW(focus_h, WM_GETTEXTLENGTH, 0, 0)
+            if 0 < t_len < 32768:
+                buf = ctypes.create_unicode_buffer(t_len + 2)
+                u32.SendMessageW(focus_h, WM_GETTEXT, t_len + 1, ctypes.cast(buf, wintypes.LPARAM))
+                caret_idx = e_pos.value if e_pos.value <= len(buf.value) else len(buf.value)
+                before_caret = buf.value[:caret_idx].splitlines()[-1].strip() if caret_idx > 0 else ""
+                if before_caret:
+                    tokens = [t for t in re.split(r"\s+", before_caret) if t]
+                    return " ".join(tokens[-max_words:]).rstrip("?")
+    except Exception:
+        pass
+    return ""
 
 
 def _get_focused_control_hwnd(fg_hwnd: int | None = None) -> int:
@@ -1819,6 +1884,27 @@ def _toast_worker() -> None:
                     x = max(m_left + 12, min(pt.x - 20, m_right - req_w - 16))
                     y = max(m_top + 12, min(pt.y + 16, m_bottom - req_h - 16))
                     win.geometry(f"{req_w}x{req_h}{x:+d}{y:+d}")
+                    try:
+                        # [WS_EX_NOACTIVATE 비활성 포커스 완벽 보호]: 타깃 앱(카톡·엑셀·브라우저)의 Active Caret 및 한글 IME 조합 유지
+                        hwnd_toast = win.winfo_id()
+                        if hwnd_toast:
+                            ex_style = u32.GetWindowLongW(hwnd_toast, GWL_EXSTYLE)
+                            u32.SetWindowLongW(
+                                hwnd_toast,
+                                GWL_EXSTYLE,
+                                ex_style | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+                            )
+                            u32.SetWindowPos(
+                                hwnd_toast,
+                                HWND_TOPMOST,
+                                x,
+                                y,
+                                req_w,
+                                req_h,
+                                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                            )
+                    except Exception:
+                        pass
                     win.lift()
                     win_rect[0] = (x, y, x + req_w, y + req_h)
 
@@ -4034,6 +4120,9 @@ Write-Output $res.Text
         if pre_sel and (time.time() - _RBTN_HOLD_STATE.get("precaptured_ts", 0.0)) < 2.0:
             return pre_sel
         try:
+            hwnd_chk = _RBTN_HOLD_STATE.get("target_hwnd") or u32.GetForegroundWindow()
+            if hwnd_chk and _get_process_name_from_hwnd(hwnd_chk).lower() in _SECURITY_SENSITIVE_PROCS:
+                return ""
             orig_clip = get_clipboard_text()
             sentinel = "__GHOSTI_SEL_PROBE__"
             daemon_set_clipboard(sentinel)

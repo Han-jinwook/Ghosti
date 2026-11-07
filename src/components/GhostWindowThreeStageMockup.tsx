@@ -314,21 +314,53 @@ const SUMMON_SCENARIOS: {
   scenarioTitle: string;
   initialEditorText: string;
   targetToken: string;
+  safetyNetStage?: 0 | 1 | 2;
+  windowContextTitle?: string;
 }[] = [
   {
     id: 'scen_question_mark',
-    triggerTypeLabel: '보조 트리거 (문장 끝에 ? + Ctrl+0)',
-    scenarioTitle: '카톡·이메일에서 “작년 계약서 보증금?” 또는 “사업자등록증 사진?” 입력 후 Ctrl+0',
+    triggerTypeLabel: '보조 트리거 (문장 끝에 ? + 우클릭 꾹/Ctrl+0)',
+    scenarioTitle: '카톡·이메일에서 “작년 계약서 보증금?” 또는 “사업자등록증 사진?” 입력 후 우클릭 꾹',
     initialEditorText: '김 대리님, 거래처에 보낼 작년 계약서 보증금? 그리고 사업자등록증 사진도 바로 첨부해 주세요.',
     targetToken: '작년 계약서 보증금?',
+    safetyNetStage: 0,
+    windowContextTitle: '💬 카카오톡 - 김대리_강남현장',
   },
   {
     id: 'scen_drag_block',
-    triggerTypeLabel: '기본 트리거 (마우스 드래그 블록 지정 + Ctrl+0)',
-    scenarioTitle: '보고서 작성 중 “성수동 시공 영상” 또는 “A업체 납품단가”를 드래그 후 Ctrl+0',
+    triggerTypeLabel: '기본 트리거 (마우스 드래그 블록 지정 + 우클릭 꾹/Ctrl+0)',
+    scenarioTitle: '보고서 작성 중 “성수동 시공 영상” 또는 “A업체 납품단가”를 드래그 후 우클릭 꾹',
     initialEditorText: '박 팀장님, 이번 품의서에 A업체 납품단가 반영하고 성수동 시공 영상 캡처본 같이 넣겠습니다.',
     targetToken: 'A업체 납품단가',
+    safetyNetStage: 0,
+    windowContextTitle: '📧 사내 메일 작성 - 4분기 구매품의서',
   },
+  {
+    id: 'scen_safety1_caret_lookbehind',
+    triggerTypeLabel: '🛡️ 안전망 1단계: 무드래그 커서 직전 어절 자동 역추적 (Caret Lookbehind)',
+    scenarioTitle: '드래그나 ?를 깜빡하고 “사업자등록증”만 친 채 우클릭 꾹 눌러도 직전 1~3어절을 비파괴 자동 스캔 & 덮어쓰기!',
+    initialEditorText: '거래처 경리팀에 전달할 사업자등록증',
+    targetToken: '사업자등록증',
+    safetyNetStage: 1,
+    windowContextTitle: '💬 카카오톡 - 거래처_경리팀',
+  },
+  {
+    id: 'scen_safety2_empty_caret',
+    triggerTypeLabel: '🛡️ 안전망 2단계: 빈칸 호출 (메신저 오발송 공포 0% · 상단 검색칸 포커스 + 맥락 추천)',
+    scenarioTitle: '1:1 채팅방에 민감한 검색어를 치기 두려울 때 빈칸에서 우클릭 꾹 ➔ 상단 검색칸 포커스 & 창 제목(김대리_강남현장) 맥락 추천!',
+    initialEditorText: '',
+    targetToken: '',
+    safetyNetStage: 2,
+    windowContextTitle: '💬 카카오톡 - 김대리_강남현장 (창 제목 맥락 자동 감지)',
+  },
+];
+
+const ROW0_PHONE_OCR_DOCK_CHIPS = [
+  { id: 'r0_chip_1', label: '인증번호: 849201', value: '849201' },
+  { id: 'r0_chip_2', label: '사업자번호: 123-45-67890', value: '123-45-67890' },
+  { id: 'r0_chip_3', label: '합계: 145,000원', value: '145,000원' },
+  { id: 'r0_chip_4', label: '국민은행 012-3456-7890', value: '국민은행 012-3456-7890' },
+  { id: 'r0_chip_5', label: '📊 표 전체 TSV', value: '승인번호\t20261107-849201\t합계\t145,000원' },
 ];
 
 /**
@@ -704,12 +736,21 @@ export const GhostWindowThreeStageMockup: React.FC<{
   );
   const [attachedFileBadge, setAttachedFileBadge] = useState<string | null>(null);
   const [summonReplacedNotice, setSummonReplacedNotice] = useState<string | null>(null);
+  const [row0PhoneOcrDocked, setRow0PhoneOcrDocked] = useState<boolean>(true);
+  const [microHabitNudgeText, setMicroHabitNudgeText] = useState<string | null>(null);
 
   useEffect(() => {
     const scen = SUMMON_SCENARIOS[scenarioIdx] || SUMMON_SCENARIOS[0];
     setUi2EditorText(scen.initialEditorText);
     setAttachedFileBadge(null);
     setSummonReplacedNotice(null);
+    setRow0PhoneOcrDocked(true);
+    setMicroHabitNudgeText(null);
+    if (scen.safetyNetStage === 1 && scen.targetToken) {
+      setMiniExplorerQuery(scen.targetToken);
+    } else if (scen.safetyNetStage === 2) {
+      setMiniExplorerQuery('');
+    }
   }, [scenarioIdx]);
 
   // 검색어에 '사진', '영상', '문서' 포함 시 자동 필터링 연동 또는 수동 탭 필터
@@ -791,10 +832,41 @@ export const GhostWindowThreeStageMockup: React.FC<{
     });
   };
 
+  const triggerMicroHabitNudgeIfNeeded = () => {
+    if (currentScenario.safetyNetStage === 2 || !ui2EditorText.trim()) {
+      setMicroHabitNudgeText(
+        '💡 [3단계 행동교정 마이크로 넛지 (1.5초 노출)] 팁: 다음엔 채팅창에 바로 "단가?"라고 치고 우클릭해 보세요 (2배 빨라집니다)'
+      );
+      window.setTimeout(() => {
+        setMicroHabitNudgeText((prev) =>
+          prev?.includes('마이크로 넛지') ? null : prev
+        );
+      }, 3800);
+    }
+  };
+
+  const handleInsertRow0DockChip = (chipLabel: string, chipValue: string) => {
+    setUi2EditorText((prev) => `${prev}${prev.endsWith(' ') || !prev ? '' : ' '}${chipValue}`);
+    setRow0PhoneOcrDocked(false);
+    setSummonReplacedNotice(
+      `⚡ [Row 0 특설 행 15KB 선발대 OCR 단어칩 주입 완료] "${chipLabel}" ➔ 커서에 즉시 삽입되고 Row 0 사진 바가 자동 소멸(Auto-Dismiss)되었습니다!`
+    );
+    triggerMicroHabitNudgeIfNeeded();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      void navigator.clipboard.writeText(chipValue);
+    }
+    useSaySeeStore.setState({
+      lastQuarantineToast: `📱⚡ [Row 0 60초 시한부 단어칩 주입] "${chipValue}" 0.1초 입력 후 특설 행 자동 소멸!`,
+    });
+  };
+
   const applySummonCandidateToEditor = (
     cand: SummonCandidateItem,
     actionMode: 'insert_value' | 'attach_file' | 'open_ocr_ui3' | 'capture_video_scene' = 'insert_value'
   ) => {
+    // 1~5번 로컬/S: 드라이브 항목 클릭 시 Row 0 사진 도킹 행은 방해 없이 자동 소멸(Auto-Dismiss)
+    setRow0PhoneOcrDocked(false);
+    triggerMicroHabitNudgeIfNeeded();
     if (actionMode === 'open_ocr_ui3') {
       setSelectedOcrPresetId('ocr_receipt');
       setOneTimePopUsed(false);
@@ -823,11 +895,18 @@ export const GhostWindowThreeStageMockup: React.FC<{
       });
       return;
     }
-    const nextText = ui2EditorText.includes(currentScenario.targetToken)
-      ? ui2EditorText.replace(currentScenario.targetToken, cand.replaceSentence)
-      : `${ui2EditorText} ➔ ${cand.replaceSentence}`;
+    const nextText =
+      currentScenario.targetToken && ui2EditorText.includes(currentScenario.targetToken)
+        ? ui2EditorText.replace(currentScenario.targetToken, cand.replaceSentence)
+        : ui2EditorText.trim()
+          ? `${ui2EditorText} ➔ ${cand.replaceSentence}`
+          : cand.replaceSentence;
     setUi2EditorText(nextText);
-    setSummonReplacedNotice(`✨ "${currentScenario.targetToken}" 구간이 현장 소환된 정답으로 즉시 교체되었습니다!`);
+    setSummonReplacedNotice(
+      currentScenario.targetToken
+        ? `✨ "${currentScenario.targetToken}" 구간이 현장 소환된 정답으로 즉시 덮어쓰기(Overwrite) 교체되었습니다!`
+        : `✨ 빈칸 호출(오발송 위험 0%) 상태에서 "${cand.replaceSentence}" 정답이 커서에 즉시 입력되었습니다!`
+    );
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(cand.replaceSentence);
     }
@@ -1417,22 +1496,53 @@ export const GhostWindowThreeStageMockup: React.FC<{
               </h2>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              {SUMMON_SCENARIOS.map((scen, idx) => (
-                <button
-                  key={scen.id}
-                  type="button"
-                  onClick={() => setScenarioIdx(idx)}
-                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold border cursor-pointer transition-all ${
-                    scenarioIdx === idx
-                      ? 'bg-teal-400 text-zinc-950 border-teal-300'
-                      : 'bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800'
-                  }`}
-                >
-                  {idx === 0 ? '시나리오 A: 끝에 ? (보조 트리거)' : '시나리오 B: 마우스 드래그 (기본 트리거)'}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {SUMMON_SCENARIOS.map((scen, idx) => {
+                const btnLabels = [
+                  '시나리오 A: 끝에 ? (보조 트리거)',
+                  '시나리오 B: 마우스 드래그 (기본 트리거)',
+                  '🛡️ 안전망 1단계: 무드래그 직전 어절 역추적',
+                  '🛡️ 안전망 2단계: 빈칸 호출 (오발송 공포 0%)',
+                ];
+                return (
+                  <button
+                    key={scen.id}
+                    type="button"
+                    onClick={() => setScenarioIdx(idx)}
+                    className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold border cursor-pointer transition-all ${
+                      scenarioIdx === idx
+                        ? 'bg-teal-400 text-zinc-950 border-teal-300'
+                        : 'bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {btnLabels[idx] || scen.triggerTypeLabel}
+                  </button>
+                );
+              })}
             </div>
+          </div>
+
+          {/* 🛡️ 무드래그 3단계 UX 안전망 & WS_EX_NOACTIVATE 비활성 포커스 보호 배지 바 */}
+          <div className="px-4 py-2.5 rounded-2xl bg-zinc-950/90 border border-teal-400/35 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+            <div className="flex flex-wrap items-center gap-2 font-bold text-zinc-200">
+              <span className="px-2 py-0.5 rounded bg-teal-400 text-zinc-950 font-black text-[10.5px]">
+                🛡️ 무드래그 3단계 UX 안전망 탑재
+              </span>
+              <span className="text-teal-200">
+                ① 드래그 깜빡 시: <b>커서 직전 1~3어절 자동 스캔(Caret Lookbehind)</b>
+              </span>
+              <span className="text-zinc-600">|</span>
+              <span className="text-amber-200">
+                ② 빈칸 호출 시: <b>상단 검색칸 포커스 + Row 0 폰사진 + 창 제목({currentScenario.windowContextTitle || '카카오톡'}) 맥락 추천</b>
+              </span>
+              <span className="text-zinc-600">|</span>
+              <span className="text-emerald-200">
+                ③ 소환 직후: <b>1.5초 행동교정 마이크로 넛지</b>
+              </span>
+            </div>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 text-[10.5px] font-mono">
+              ⚙️ WS_EX_NOACTIVATE · 3중 커서추적 · WinFsp S:\ 호환
+            </span>
           </div>
 
           {/* 1) 실제 일하던 카톡·이메일 작업창 시연 */}
@@ -1492,7 +1602,12 @@ export const GhostWindowThreeStageMockup: React.FC<{
                     <input
                       type="text"
                       value={miniExplorerQuery}
-                      onChange={(e) => setMiniExplorerQuery(e.target.value)}
+                      onChange={(e) => {
+                        setMiniExplorerQuery(e.target.value);
+                        if (e.target.value.trim()) {
+                          setRow0PhoneOcrDocked(false);
+                        }
+                      }}
                       placeholder="🔍 다른 단어로 바로 이어서 검색... (예: 보증금, 사업자등록증 사진, 시공 영상)"
                       className="w-full px-3.5 py-2 rounded-xl bg-zinc-900 border border-teal-400/50 text-white text-[12.5px] font-extrabold outline-none focus:border-teal-300"
                     />
@@ -1586,6 +1701,64 @@ export const GhostWindowThreeStageMockup: React.FC<{
                   </div>
                 </div>
               </div>
+
+              {/* 🧩 [Row 0 특설 행 도킹 모드] 60초 이내 폰 촬영·스샷 발생 시 일반 검색을 가로막지 않고 최상단 0번째 행에 도킹 (단어칩 클릭 시 주입 / 아래 로컬 파일 클릭 또는 타이핑 시 Auto-Dismiss) */}
+              {row0PhoneOcrDocked ? (
+                <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/10 to-teal-500/15 border border-amber-400/60 flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src="/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg"
+                        alt="Row 0 60초 시한부 썸네일"
+                        className="w-10 h-7 rounded object-cover border border-amber-300/60 shrink-0"
+                      />
+                      <div className="flex flex-col">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="px-1.5 py-0.2 rounded bg-amber-400 text-zinc-950 text-[10px] font-black">
+                            Row 0 · 📱 방금 폰 촬영 (60초 시한부 도킹)
+                          </span>
+                          <span className="text-[11px] font-extrabold text-amber-200">
+                            ⚡ 폰 NPU 선(先) OCR + 15KB 선발대 패킷 0.1초 도착 완료!
+                          </span>
+                        </div>
+                        <span className="text-[10.5px] text-zinc-300">
+                          원하는 단어칩을 찍으면 바로 들어가고, 아래 1~5번 일반 파일을 고르거나 검색어를 치면 방해 없이 자동 소멸됩니다.
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRow0PhoneOcrDocked(false)}
+                      className="px-2 py-0.5 rounded bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[10px] font-bold cursor-pointer"
+                    >
+                      무시·닫기 ✕
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                    {ROW0_PHONE_OCR_DOCK_CHIPS.map((chip) => (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        onClick={() => handleInsertRow0DockChip(chip.label, chip.value)}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-amber-400 hover:text-zinc-950 border border-amber-300/50 text-amber-200 text-[11px] font-black shrink-0 cursor-pointer transition-all"
+                      >
+                        👆 {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-3 py-1 rounded-lg bg-zinc-950/80 border border-white/10 text-[10.5px] text-zinc-400">
+                  <span>✨ Row 0 (60초 시한부 폰 사진 도킹 바) — 사용 완료 또는 일반 파일 선택으로 방해 없이 자동 소멸(Auto-Dismiss)됨</span>
+                  <button
+                    type="button"
+                    onClick={() => setRow0PhoneOcrDocked(true)}
+                    className="text-amber-300 font-bold underline cursor-pointer"
+                  >
+                    Row 0 도킹 다시 보기
+                  </button>
+                </div>
+              )}
 
               {/* 요약 결과 리스트 (문서·사진·영상 통합) */}
               <div className="flex flex-col gap-2">
@@ -1696,6 +1869,20 @@ export const GhostWindowThreeStageMockup: React.FC<{
                   );
                 })}
               </div>
+
+              {/* 💡 3단계: 행동 교정 마이크로 넛지 (Micro-Habit Nudge — 빈칸 호출 소환 직후 1.5초 비간섭 툴팁) */}
+              {microHabitNudgeText && (
+                <div className="px-3.5 py-2 rounded-xl bg-teal-500/20 border border-teal-300/60 text-teal-100 text-[11.5px] font-black flex items-center justify-between gap-2 animate-pulse">
+                  <span>{microHabitNudgeText}</span>
+                  <button
+                    type="button"
+                    onClick={() => setMicroHabitNudgeText(null)}
+                    className="text-[10.5px] text-teal-200 underline cursor-pointer shrink-0"
+                  >
+                    닫기
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 우측(5칸): 마우스 호버 시에만 스윽 나타나는 문서·사진·영상 3종 맞춤 반투명 유령 미리보기 말풍선 */}
