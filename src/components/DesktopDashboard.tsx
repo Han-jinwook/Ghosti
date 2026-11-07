@@ -373,10 +373,9 @@ export const DesktopDashboard: React.FC = () => {
   // 조건 1&2: Pro/체험 중, 모바일 페어링 이력, 또는 수동 Sticky
   const isDeviceIntegrationAutoExpanded = useMemo(() => {
     const isProOrTrial =
-      activePricingPlan === 'pro_personal' ||
-      activePricingPlan === 'business_team' ||
+      activePricingPlan !== 'free_trial' ||
       Boolean(superpowerStatus?.is_subscribed) ||
-      (superpowerStatus?.tier && superpowerStatus.tier !== 'pc_free');
+      (superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED');
     const isDevicePaired = Boolean(pcAgentPairedMobile);
     return Boolean(isProOrTrial || isDevicePaired || isDeviceIntegrationManuallyExpanded);
   }, [activePricingPlan, superpowerStatus, pcAgentPairedMobile, isDeviceIntegrationManuallyExpanded]);
@@ -384,7 +383,7 @@ export const DesktopDashboard: React.FC = () => {
   // 조건 1&2: Team 구독 중 또는 수동 Sticky
   const isWorkShareAutoExpanded = useMemo(() => {
     const isTeamSubscribed =
-      activePricingPlan === 'business_team' ||
+      activePricingPlan.startsWith('work_') ||
       Boolean(subscribedLounges.work);
     return Boolean(isTeamSubscribed || isWorkShareManuallyExpanded);
   }, [activePricingPlan, subscribedLounges.work, isWorkShareManuallyExpanded]);
@@ -814,7 +813,7 @@ export const DesktopDashboard: React.FC = () => {
                         <div className="flex flex-col text-left min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="truncate text-[14px]">내 기기 통합</span>
-                            {superpowerStatus?.tier && superpowerStatus.tier !== 'pc_free' && (
+                            {superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED' && (
                               <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded bg-emerald-500/20 text-emerald-400 shrink-0">
                                 ✨ 체험중
                               </span>
