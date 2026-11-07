@@ -1066,6 +1066,279 @@ def _get_machine_hwid_local() -> str:
     return f"sha256_{digest}"
 
 
+# =====================================================================
+# 🏷️ [확정 ⑤·⑥] 귀신 라벨러(Auto-Naming 날짜 3원칙) & 귀신 말풍선(원본 수정일 동결) & 🎁 30일 무제한 체험(Opt-in) + 손실회피 성적표
+# =====================================================================
+_CANNED_FILENAME_PATTERNS = re.compile(
+    r"^(IMG|DSC|DCIM|PXL|SAM|DJI|Screenshot|Screen[\s_-]*Shot|KakaoTalk|스캔|scan|문서|제목[\s_-]*없음|Untitled|Document|image|photo|캡처)[\s_-]*\d*",
+    re.IGNORECASE,
+)
+
+# [레드팀 확정 ⑤]: 전화번호(02-2611-0500), 금액(145,000), 문서번호 오인을 원천 차단하는 유효 달력 범위(1990~2035년, 01~12월, 01~31일) + 날짜 구분자 정규식
+_VALID_DOC_DATE_REGEX = re.compile(
+    r"(?<!\d)(199\d|20[0-3]\d)\s*(?:년|[./-])\s*(0?[1-9]|1[0-2])\s*(?:월|[./-])\s*(0?[1-9]|[12]\d|3[01])(?:\s*일)?(?!\d)"
+)
+
+
+def extract_first_valid_date_from_content(ocr_or_doc_text: str) -> str | None:
+    """
+    [확정 ⑤ — 귀신 라벨러 날짜 3원칙 중 3번(YYMMDD_내용_) 전용 파서]:
+    전화번호·사업자번호·금액을 날짜로 오인하지 않도록 유효 달력 범위(1990~2035년, 01~12월, 01~31일)와
+    날짜 구분자(년/월/일, ., -, /) 검증을 통과한 실제 날짜 포맷 중
+    '문서/사진 내 첫 번째로 등장하는 날짜'만 추출하여 6자리 YYMMDD 문자열로 반환합니다.
+    """
+    if not ocr_or_doc_text:
+        return None
+    m = _VALID_DOC_DATE_REGEX.search(ocr_or_doc_text)
+    if not m:
+        return None
+    yyyy = int(m.group(1))
+    mm = int(m.group(2))
+    dd = int(m.group(3))
+    if 1990 <= yyyy <= 2035 and 1 <= mm <= 12 and 1 <= dd <= 31:
+        return f"{yyyy % 100:02d}{mm:02d}{dd:02d}"
+    return None
+
+
+def format_ghost_labeler_filename(
+    original_filename: str,
+    summary_slug: str,
+    *,
+    exif_yymmdd: str | None = None,
+    kakao_yymmdd: str | None = None,
+    ocr_or_doc_text: str = "",
+    is_work_s_drive: bool = False,
+    uploader_name: str = "",
+    prefix_only_if_named: bool = False,
+) -> dict:
+    """
+    [🏷️ 귀신 라벨러 3대 안전핀 & 정직한 날짜 정렬 3원칙]:
+    1) 개인➔업무(S: 드라이브) 이동 시 중복 방지 스마트 재라벨링 (Smart Re-Labeling):
+       이미 개인 폴더에서 `261107_영수증_한일건재_145,000원.jpg`로 라벨링된 파일을 회사 S: 폴더로 옮기면,
+       맨 앞 6자리 날짜(YYMMDD_) 패턴을 인식하여 날짜 중복 없이 바로 뒤에 `_김대리`만 끼워 넣음!
+    2) 날짜 출처 꼬리표 딱 3종류:
+       - 진짜 EXIF 촬영일: `YYMMDD_[올린사람_][장소/내용]` (출처 꼬리표 없음)
+       - 카톡 수신 파일: `YYMMDD_[올린사람_]카톡_[내용]`
+       - 본문/OCR 첫 등장 날짜: `YYMMDD_[올린사람_]내용_[문서종류/내용]`
+    """
+    stem, ext = os.path.splitext(original_filename.strip())
+    clean_uploader = re.sub(r"[^\w가-힣]", "", uploader_name or "").strip()
+
+    # 🔄 안전핀 3: 이미 YYMMDD_로 라벨링된 개인 파일을 업무용 S: 드라이브로 옮길 때 스마트 재라벨링
+    m_already = re.match(r"^(\d{6})_(.+)$", stem)
+    if m_already:
+        yymmdd_head, rest_body = m_already.group(1), m_already.group(2)
+        if is_work_s_drive and clean_uploader:
+            if not rest_body.startswith(clean_uploader + "_"):
+                upgraded = f"{yymmdd_head}_{clean_uploader}_{rest_body}{ext}"
+                return {
+                    "changed": True,
+                    "mode": "SMART_RELABEL_PERSONAL_TO_WORK",
+                    "original_filename": original_filename,
+                    "labeled_filename": upgraded,
+                    "date_rule": "SMART_UPGRADE",
+                }
+        return {
+            "changed": False,
+            "mode": "ALREADY_LABELED",
+            "original_filename": original_filename,
+            "labeled_filename": original_filename,
+            "date_rule": "EXISTING",
+        }
+
+    # 안전핀 1: 기계식 깡통 파일명인지 판별
+    is_canned = bool(_CANNED_FILENAME_PATTERNS.match(stem)) or bool(re.fullmatch(r"[0-9a-fA-F_-]{6,}", stem))
+    if not is_canned and not prefix_only_if_named:
+        return {
+            "changed": False,
+            "mode": "SKIPPED_MEANINGFUL_NAME",
+            "original_filename": original_filename,
+            "labeled_filename": original_filename,
+            "date_rule": "NONE",
+        }
+
+    # 날짜 3원칙 판정
+    date_rule = "EXIF_REAL"
+    source_tag = ""
+    if exif_yymmdd and re.fullmatch(r"\d{6}", exif_yymmdd):
+        yymmdd = exif_yymmdd
+        date_rule = "RULE1_EXIF_REAL"
+        source_tag = ""
+    elif kakao_yymmdd or stem.lower().startswith("kakaotalk"):
+        m_kk = re.search(r"20(\d{6})", stem)
+        yymmdd = kakao_yymmdd if (kakao_yymmdd and re.fullmatch(r"\d{6}", kakao_yymmdd)) else (m_kk.group(1) if m_kk else datetime.date.today().strftime("%y%m%d"))
+        date_rule = "RULE2_KAKAO_RECEIVED"
+        source_tag = "카톡"
+    else:
+        extracted_yymmdd = extract_first_valid_date_from_content(ocr_or_doc_text)
+        yymmdd = extracted_yymmdd or datetime.date.today().strftime("%y%m%d")
+        date_rule = "RULE3_CONTENT_FIRST_DATE"
+        source_tag = "내용"
+
+    tokens = [yymmdd]
+    if is_work_s_drive and clean_uploader:
+        tokens.append(clean_uploader)
+    if source_tag:
+        tokens.append(source_tag)
+
+    clean_slug = re.sub(r"[\\/:*?\"<>|\s]+", "_", (summary_slug or stem).strip()).strip("_")
+    if not is_canned and prefix_only_if_named:
+        labeled_name = f"[{'_'.join(tokens)}]_{stem}{ext}"
+    else:
+        tokens.append(clean_slug)
+        labeled_name = f"{'_'.join(tokens)}{ext}"
+
+    return {
+        "changed": labeled_name != original_filename,
+        "mode": "LABELED",
+        "original_filename": original_filename,
+        "labeled_filename": labeled_name,
+        "date_rule": date_rule,
+    }
+
+
+def apply_ghost_bubble_tooltip_preserving_mtime(file_path: str | Path, summary_3lines: str) -> bool:
+    """
+    [확정 ⑥ — 💬 귀신 말풍선(3웨이브 일반 탐색기 호버 3줄 요약) 원본 파일 수정일(LastWriteTime) 동결 보호]:
+    파일에 3줄 요약 메타를 연동할 때 원본 파일의 CreationTime / LastWriteTime(st_atime_ns, st_mtime_ns)을
+    0.001초 오차도 없이 백업 후 즉시 복원(Freeze/Preserve)하여 탐색기 날짜 정렬 오염을 0%로 차단합니다.
+    """
+    p_target = Path(file_path)
+    if not p_target.exists():
+        return False
+    orig_stat = p_target.stat()
+    orig_atime_ns = orig_stat.st_atime_ns
+    orig_mtime_ns = orig_stat.st_mtime_ns
+    try:
+        # 1순위: 로컬 Z-코어 30KB 캐시 원장에 등록 (Shell IQueryInfo 핸들러가 원본 파일 무접촉 조회)
+        bubble_cache_file = _MERLIN_APPDATA / "ghost_bubble_30kb_cache.json"
+        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+        cache_data: dict = {}
+        if bubble_cache_file.exists():
+            try:
+                cache_data = json.loads(bubble_cache_file.read_text(encoding="utf-8"))
+            except Exception:
+                cache_data = {}
+        cache_data[str(p_target.resolve())] = {
+            "summary_3lines": summary_3lines.strip(),
+            "preserved_mtime_ns": orig_mtime_ns,
+            "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        }
+        bubble_cache_file.write_text(json.dumps(cache_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    finally:
+        # 원본 파일 타임스탬프 100% 동결 복원
+        try:
+            os.utime(p_target, ns=(orig_atime_ns, orig_mtime_ns))
+        except Exception:
+            pass
+    return True
+
+
+def resolve_summon_window_ui_routing(
+    *,
+    selected_text: str = "",
+    caret_lookbehind_text: str = "",
+    has_60s_unconsumed_phone_photo: bool = False,
+) -> dict:
+    """
+    [확정 ① — 무드래그 안전망 1단계(Caret Lookbehind) 작동 시 '창 UI ①(기본 귀신창)' 실종 방지 라우터]:
+    1) 60초 이내 미소비 폰 촬영/스샷이 있으면 -> 창 UI ③ (One-Time Pop) 또는 창 UI ② Row 0 도킹
+    2) 명시적 트리거('드래그 선택' 또는 끝에 '?'/'？' 입력)가 있을 때만 -> 창 UI ②(귀신 미니 탐색기)로 100% 직행!
+    3) 드래그도 없고 '?'도 없이 타이핑 중 호출했을 때는 -> 무조건 창 UI ①(기본 귀신창: 상용구·클립보드·초능력)을 기본 유지하되,
+       커서 앞 어절(caret_lookbehind_text)이 있으면 창 UI ① 상단 0순위에 '[🔍 방금 친 어절 관련 파일 즉시 소환]' 1줄 브릿지 칩을 함께 표시!
+    """
+    sel = (selected_text or "").strip()
+    look = (caret_lookbehind_text or "").strip()
+    if sel:
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "EXPLICIT_DRAG_SELECTION",
+            "query": sel.rstrip("?？").strip(),
+            "inline_bridge_token": None,
+        }
+    if look.endswith(("?", "？")):
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "EXPLICIT_QUESTION_MARK_TRIGGER",
+            "query": look.rstrip("?？").strip(),
+            "inline_bridge_token": None,
+        }
+    if has_60s_unconsumed_phone_photo:
+        return {
+            "target_ui": "ui3_ocr",
+            "reason": "ONE_TIME_60S_PHONE_PHOTO",
+            "query": "",
+            "inline_bridge_token": look or None,
+        }
+    return {
+        "target_ui": "ui1_basic",
+        "reason": "PRESERVE_UI1_WITH_INLINE_LOOKBEHIND_BRIDGE",
+        "query": "",
+        "inline_bridge_token": look if len(look) >= 2 else None,
+    }
+
+
+def opt_in_30d_unlimited_superpower_trial(agreed: bool = True) -> dict:
+    """
+    [확정 ⑤ & 2차 딥리서치 — 🎁 모든 귀신 초능력 30일 무제한 무료체험 명시적 동의 스위치 (Opt-in Trial)]:
+    설치 시 자동 카운트다운을 절대 금지하고, 유저가 『애기귀신 소환술 3단 수련장』 수료 직후 또는
+    초능력 최초 실행 시 직접 '[🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기]'를 눌렀을 때만
+    trial_opt_in_at 타임스탬프를 기록하고 30일 무제한 카운트다운(D-30 ~ D-1)을 시작합니다.
+    """
+    ledger_path = _MERLIN_APPDATA / "superpower_trial_ledger.json"
+    now_ts = time.time()
+    now_dt = datetime.datetime.now()
+    hwid = _get_machine_hwid_local()
+    _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+    ledger = {"machines": {}, "accounts": {}}
+    if ledger_path.exists():
+        try:
+            loaded = json.loads(ledger_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                ledger = loaded
+        except Exception:
+            pass
+    machines = ledger.setdefault("machines", {})
+    m_info = machines.setdefault(hwid, {"machineHwid": hwid, "isSubscribed": False})
+    if agreed:
+        if not m_info.get("trialOptInTs"):
+            m_info["trialOptInTs"] = now_ts
+            m_info["trialOptInAt"] = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+            m_info["trialExpiresAt"] = (now_dt + datetime.timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        m_info["trialOptInStatus"] = "ACTIVE_30D"
+    else:
+        m_info["trialOptInStatus"] = "DAILY_3_FREE_ONLY"
+    ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "ok": True,
+        "status": m_info.get("trialOptInStatus"),
+        "trial_opt_in_at": m_info.get("trialOptInAt"),
+        "days_left": 29 if agreed else 0,
+        "badge_label": "🎁 무제한 체험 D-29" if agreed else "일 3회 평생 무료 모드",
+    }
+
+
+def build_loss_aversion_time_saved_report(total_actions_count: int = 412) -> dict:
+    """
+    [2차 딥리서치 확정 — 📊 일 3회 무료 한도 도달 시 '손실회피(Loss Aversion) 시간 절약 성적표 팝업']:
+    1회당 평균 1분(창 전환 + 폴더 찾기 + 복붙 노가다) 절약 기준으로 누적 절약 시간을 환산하여 반환합니다.
+    """
+    cnt = max(1, int(total_actions_count))
+    saved_minutes = cnt * 1
+    hours = saved_minutes // 60
+    mins = saved_minutes % 60
+    time_str = f"{hours}시간 {mins}분" if hours > 0 else f"{mins}분"
+    return {
+        "total_actions": cnt,
+        "saved_minutes": saved_minutes,
+        "saved_time_label": time_str,
+        "headline": "👻 [오늘의 무료 귀신 초능력 3회를 모두 사용하셨습니다!]",
+        "body": f"지금까지 애기귀신과 함께 총 {cnt:,}번의 창 이동·복붙 노가다를 줄여 약 {time_str}의 소중한 시간을 아끼셨습니다!",
+        "cta_primary": "☕ 커피 한 잔 값(월 3,900원 / 🔥10년 특판 3.9만)으로 평생 무제한 풀기",
+        "cta_secondary": "내일 다시 무료로 쓸게요",
+    }
+
+
 SUPERPOWER_12_FEATURES: dict[str, str] = {
     "feat_1_seq_paste": "① 순차붙여넣기",
     "feat_2_typo_morph": "② 한영오타성형",
@@ -1925,7 +2198,8 @@ def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
 
 
 def play_baby_ghost_sound(mode: str = "typo") -> None:
-    if mode == "summon":
+    cfg = get_superpower_settings()
+    if not cfg.get("sound_enabled", True):
         return
     """
     [멀린님 UX 설계 반영] 기계음(Beep)을 완전히 배제한 44.1kHz 스튜디오급 '애기귀신 효과음(.wav)' 비동기 재생!

@@ -632,6 +632,8 @@ export const GhostWindowThreeStageMockup: React.FC<{
   const suppressNextContextMenuRef = React.useRef<boolean>(false);
 
   const triggerMockupSummonFeedback = (methodLabel: string) => {
+    playExistingGhostSound('summon');
+    setRingProgress(100);
     setIsRightClickPulse(true);
     setRightClickSummonFeedback(
       `🎯 [${methodLabel} 호출 성공!] 오른손을 마우스에서 떼지 않고 0.01초 만에 현재 창(${
@@ -714,6 +716,32 @@ export const GhostWindowThreeStageMockup: React.FC<{
   );
   const [activeWave1Ability, setActiveWave1Ability] = useState<number>(1);
   const [autoReturnedFromOneTimePop, setAutoReturnedFromOneTimePop] = useState(false);
+
+  // ── [2차 딥리서치 & 레드팀 6대 핀셋 방어 확정 상태] ──
+  // ① 창 UI ① 기본 유지 + 상단 0순위 인라인 소환 브릿지 (드래그/물음표 없이 타이핑 중 호출 시 창 UI ① 실종 방지)
+  const [showUi1InlineLookbehindBridge, setShowUi1InlineLookbehindBridge] = useState<boolean>(true);
+  // ② 🎮 60초 게이밍 온보딩 『👻 애기귀신 소환술 3단 수련장』 & 0.35초 원형 게이지 + 기존 등장·성공 효과음 연동
+  const [trainingStage, setTrainingStage] = useState<1 | 2 | 3>(1);
+  const [ringProgress, setRingProgress] = useState<number>(0);
+  // ③ 🎁 모든 귀신 초능력 30일 무제한 체험권 수여식 (Opt-in Trial) & 📊 일 3회 도달 손실회피 시간 절약 성적표 모달
+  const [trialOptInAccepted, setTrialOptInAccepted] = useState<boolean>(true);
+  const [activePromoModal, setActivePromoModal] = useState<'none' | 'opt_in_30d' | 'loss_aversion_3limit'>('none');
+  // ④ 🏷️ 귀신 라벨러 날짜 3원칙 (`YYMMDD_`, `YYMMDD_카톡_`, `YYMMDD_내용_`) & 개인➔업무 스마트 재라벨링 시연 상태
+  const [labelerScopeMode, setLabelerScopeMode] = useState<'personal' | 'work_s' | 'smart_upgrade'>('work_s');
+
+  const playExistingGhostSound = (mode: 'summon' | 'success') => {
+    try {
+      const audioSrc =
+        mode === 'summon'
+          ? '/sounds/active_summon_sound.wav'
+          : '/sounds/active_typo_sound.wav';
+      const audio = new Audio(audioSrc);
+      audio.volume = 0.65;
+      void audio.play().catch(() => {});
+    } catch {
+      // ignore audio error in headless/autoplay-blocked environments
+    }
+  };
 
   const filteredClipboardItems = useMemo(() => {
     const q = clipboardQuery.trim().toLowerCase();
@@ -823,6 +851,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
   }, [windowTab]);
 
   const insertIntoUi1Editor = (textToInsert: string, label: string) => {
+    playExistingGhostSound('success');
     setUi1EditorText((prev) => `${prev}${prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' '}${textToInsert}`);
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(textToInsert);
@@ -1154,7 +1183,24 @@ export const GhostWindowThreeStageMockup: React.FC<{
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActivePromoModal((prev) =>
+                      prev === 'opt_in_30d' ? 'loss_aversion_3limit' : 'opt_in_30d'
+                    )
+                  }
+                  title="클릭하여 [🎁 30일 무제한 체험 수여식 모달] 및 [📊 일 3회 도달 시 시간절약 성적표 팝업] 시연 보기"
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-black border cursor-pointer transition-all ${
+                    trialOptInAccepted
+                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 hover:bg-emerald-500/30'
+                      : 'bg-amber-400/20 border-amber-300 text-amber-200 hover:bg-amber-400/30'
+                  }`}
+                >
+                  {trialOptInAccepted ? '🎁 무제한 체험 D-29 (Opt-in 동의됨)' : '🆓 일 3회 평생 무료 모드'}
+                </button>
+
                 <button
                   type="button"
                   onClick={() =>
@@ -1186,6 +1232,39 @@ export const GhostWindowThreeStageMockup: React.FC<{
                 </button>
               </div>
             </div>
+
+            {/* 🛡️ [레드팀 확정 ①] 드래그·'?' 없이 타이핑 중 호출 시: 창 UI ①(기본 귀신창)을 덮어쓰지 않고 상단 0순위에 1줄 인라인 파일 소환 브릿지 노출! */}
+            {showUi1InlineLookbehindBridge && (
+              <div className="px-3.5 py-1.5 bg-gradient-to-r from-teal-500/20 via-emerald-500/15 to-zinc-900 border-b border-teal-400/40 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-teal-400 text-zinc-950 text-[10px] font-black">
+                    🛡️ 레드팀 확정 ① · 창 UI ① 보존 + 직전 어절 브릿지
+                  </span>
+                  <span className="text-teal-100 font-bold">
+                    드래그·<code className="text-amber-300">?</code> 없이 호출해도 상용구·클립보드 창(UI ①)이 실종되지 않고, 직전 타이핑 어절(<strong className="text-amber-300">&apos;사업자 정보&apos;</strong>) 연관 파일 3건을 0순위로 브릿지합니다!
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMiniExplorerQuery('사업자등록증');
+                      setWindowTab('ui2_summon');
+                    }}
+                    className="px-2.5 py-0.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-black cursor-pointer"
+                  >
+                    🔍 &apos;사업자 정보&apos; 관련 파일 3건 즉시 소환 (Tab/클릭) ➔
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowUi1InlineLookbehindBridge(false)}
+                    className="text-zinc-400 hover:text-white text-[10.5px] font-bold cursor-pointer px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* [아랫줄 — 첫 줄 Wave 1 핵심 초능력 5대 원클릭 탭] */}
             <div className="px-3 py-2 bg-[#11151E] border-b border-white/10 flex flex-wrap items-center gap-1.5">
@@ -2294,6 +2373,295 @@ export const GhostWindowThreeStageMockup: React.FC<{
           </div>
         </div>
       )}
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          [제5장 & 레드팀 6대 핀셋 방어 통합 쇼케이스]
+          ① 🏷️ 귀신 라벨러 (날짜 정렬 3원칙: YYMMDD_ / YYMMDD_카톡_ / YYMMDD_내용_ + 개인➔업무 스마트 재라벨링)
+          ② 💬 귀신 말풍선 (3웨이브 일반 윈도우 탐색기 Win+E 호버 3줄 요약 & 원본 파일 수정일 LastWriteTime 동결)
+          ③ 🎮 애기귀신 소환술 3단 수련장 (0.35초 원형 게이지 + 기존 등장·성공 효과음 연동)
+          ④ 🎁 30일 무제한 체험권 수여식 (Opt-in Trial) & 📊 일 3회 도달 시 손실회피 시간 절약 성적표 팝업
+         ════════════════════════════════════════════════════════════════════════ */}
+      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0E131D] via-[#111724] to-zinc-950 border-2 border-amber-400/45 shadow-2xl flex flex-col gap-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 rounded-lg bg-amber-400 text-zinc-950 text-[11.5px] font-black">
+              제5장 &amp; 레드팀 6대 방어 확정
+            </span>
+            <h3 className="text-[15.5px] sm:text-[17.5px] font-black text-white">
+              🏷️ 귀신 라벨러(날짜 3원칙) · 💬 귀신 말풍선(3웨이브 탐색기 호버) · 🎮 애기귀신 소환술 3단 수련장 · 🎁 30일 체험 수여식
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('opt_in_30d')}
+              className="px-3 py-1.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11.5px] font-black cursor-pointer shadow-sm"
+            >
+              🎁 [30일 무제한 체험권 수여식 (Opt-in)] 팝업 보기
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('loss_aversion_3limit')}
+              className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-black cursor-pointer shadow-sm"
+            >
+              📊 [일 3회 도달 시 시간절약 성적표 (412회/6시간50분)] 팝업 보기
+            </button>
+          </div>
+        </div>
+
+        {/* 조건부 팝업 모달 시연: ① 30일 무제한 체험권 수여식 (Opt-in Trial) / ② 손실회피 시간 절약 성적표 팝업 */}
+        {activePromoModal === 'opt_in_30d' && (
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-teal-950/90 via-zinc-900 to-zinc-950 border-2 border-teal-400 shadow-[0_0_40px_rgba(20,184,166,0.3)] flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-teal-400 text-zinc-950 text-[11px] font-black">
+                🎁 모든 귀신 초능력 30일 무제한 체험권 수여식 (Opt-in Trial · 배신감 0% 철칙)
+              </span>
+              <button
+                type="button"
+                onClick={() => setActivePromoModal('none')}
+                className="text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+              >
+                닫기 ✕
+              </button>
+            </div>
+            <div className="text-[15px] font-black text-white">
+              🎉 [축하합니다! &apos;애기귀신 소환술&apos;을 마스터하여 연간 209시간(27일)의 복붙 노가다에서 해방되셨습니다!]
+            </div>
+            <p className="text-[12.5px] text-zinc-200 leading-relaxed">
+              수련 완료 보상으로 <strong>원래 하루 3회 무료(무제한은 월 3,900원 / 10년 3.9만 원)인 『모든 귀신 초능력 30일 무제한 무료체험권』</strong>이 도착했습니다! 지금 바로 열어드릴까요?
+              <br />
+              <span className="text-teal-300 font-bold">
+                *(※ 카드 등록 없음 · 자동 결제 절대 없음 · 30일 후에도 매일 3회씩은 평생 무료!)*
+              </span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setTrialOptInAccepted(true);
+                  setActivePromoModal('none');
+                  playExistingGhostSound('success');
+                  useSaySeeStore.setState({
+                    lastQuarantineToast:
+                      '🚀 [30일 무제한 초능력 체험 시작!] 오늘부터 30일간 횟수 제한 없이 무제한 작동하며 귀신창 모서리에 [🎁 무제한 체험 D-29] 배지가 표시됩니다!',
+                  });
+                }}
+                className="px-4 py-2 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[12.5px] font-black cursor-pointer shadow-md"
+              >
+                🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTrialOptInAccepted(false);
+                  setActivePromoModal('none');
+                  useSaySeeStore.setState({
+                    lastQuarantineToast:
+                      '🆓 [하루 3회 평생 무료 모드 유지] 30일 체험권을 아껴두고 하루 3회 무료 모드로 사용합니다.',
+                  });
+                }}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer"
+              >
+                그냥 하루 3회씩만 쓸게요
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activePromoModal === 'loss_aversion_3limit' && (
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/85 via-zinc-900 to-zinc-950 border-2 border-amber-400 shadow-[0_0_40px_rgba(251,191,36,0.25)] flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-zinc-950 text-[11px] font-black">
+                📊 일 3회 무료 한도 도달 시 『손실회피(Loss Aversion) 시간 절약 성적표 팝업』
+              </span>
+              <button
+                type="button"
+                onClick={() => setActivePromoModal('none')}
+                className="text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+              >
+                닫기 ✕
+              </button>
+            </div>
+            <div className="text-[15px] font-black text-white">
+              👻 [오늘의 무료 귀신 초능력 3회를 모두 사용하셨습니다!]
+            </div>
+            <p className="text-[12.5px] text-zinc-200 leading-relaxed">
+              지금까지 애기귀신과 함께 <strong className="text-amber-300">총 412번</strong>의 창 이동·복붙 노가다를 줄여 약{' '}
+              <strong className="text-teal-300">6시간 50분</strong>의 소중한 시간을 아끼셨습니다!
+              <br />
+              내일 아침이 되면 다시 3회가 무료 충전됩니다. 기다림 없이 지금 바로 무제한으로 풀까요?
+            </p>
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActivePromoModal('none');
+                  playExistingGhostSound('success');
+                  useSaySeeStore.setState({
+                    lastQuarantineToast:
+                      '☕ [내 기기 통합 (월 3,900원 / 10년 특판 3.9만)] 결제 모달로 연결됩니다!',
+                  });
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12.5px] font-black cursor-pointer shadow-md"
+              >
+                ☕ 커피 한 잔 값(월 3,900원 / 🔥10년 특판 3.9만)으로 평생 무제한 풀기
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePromoModal('none')}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer"
+              >
+                내일 다시 무료로 쓸게요
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 상단 그리드: ① 🏷️ 귀신 라벨러 날짜 3원칙 & 스마트 재라벨링 / ② 💬 귀신 말풍선 3웨이브 탐색기 호버 툴팁 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* 카드 1: 🏷️ 귀신 라벨러 */}
+          <div className="p-4 rounded-2xl bg-zinc-950/95 border border-teal-400/40 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[13px] font-black text-teal-300">
+                🏷️ 1. 귀신 라벨러 — 정직한 날짜 정렬 3원칙 (맨 앞 무조건 <code className="text-white">YYMMDD_</code>)
+              </span>
+              <div className="flex items-center gap-1">
+                {[
+                  { id: 'personal' as const, label: '📱 개인 통합' },
+                  { id: 'work_s' as const, label: '💼 회사 S: 드라이브' },
+                  { id: 'smart_upgrade' as const, label: '🔄 개인➔S: 스마트 재라벨링' },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setLabelerScopeMode(m.id)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-black border cursor-pointer ${
+                      labelerScopeMode === m.id
+                        ? 'bg-teal-400 text-zinc-950 border-teal-300'
+                        : 'bg-zinc-900 text-zinc-400 border-white/10'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 text-[11.5px] font-mono">
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-0.5">
+                <span className="text-[10.5px] font-sans font-extrabold text-emerald-300">
+                  원칙 ① 진짜 EXIF 촬영일이 살아있는 사진 (출처 꼬리표 없음 = 100% 진짜 찍은 날)
+                </span>
+                <span className="text-zinc-300">
+                  {labelerScopeMode === 'personal'
+                    ? 'IMG_4829.jpg ➔ 261107_제주애월_가족산책.jpg'
+                    : labelerScopeMode === 'work_s'
+                    ? 'IMG_4829.jpg ➔ 261107_김대리_역삼동_욕실타일.jpg'
+                    : '261107_역삼동_욕실타일.jpg ➔ 261107_김대리_역삼동_욕실타일.jpg (날짜 중복 0%!)'}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-0.5">
+                <span className="text-[10.5px] font-sans font-extrabold text-amber-300">
+                  원칙 ② EXIF가 지워진 카톡 수신 사진 (<code className="text-white">YYMMDD_카톡_</code> 정직 표기)
+                </span>
+                <span className="text-zinc-300">
+                  {labelerScopeMode === 'personal'
+                    ? 'KakaoTalk_20261106...jpg ➔ 261106_카톡_할머니생신모임.jpg'
+                    : 'KakaoTalk_20261106...jpg ➔ 261106_김대리_카톡_사업자등록증_태양물산.jpg'}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-0.5">
+                <span className="text-[10.5px] font-sans font-extrabold text-teal-200">
+                  원칙 ③ 메타 없고 문서/OCR 본문 첫 등장 날짜 (<code className="text-white">YYMMDD_내용_</code> 단일 규칙 · 전화번호 오인 차단 가드)
+                </span>
+                <span className="text-zinc-300">
+                  {labelerScopeMode === 'personal'
+                    ? '스캔_001.pdf ➔ 250315_내용_임대차계약서_역삼빌딩.pdf'
+                    : 'scan_042.jpg ➔ 261105_김대리_내용_영수증_한일건재_145,000원.jpg'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 카드 2: 💬 귀신 말풍선 & 🎮 애기귀신 소환술 3단 수련장 */}
+          <div className="p-4 rounded-2xl bg-zinc-950/95 border border-amber-400/40 flex flex-col justify-between gap-3">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-black text-amber-300">
+                  💬 2. 귀신 말풍선 (3웨이브 일반 윈도우 탐색기 <code className="text-white">Win+E</code> 호버 3줄 요약)
+                </span>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-black">
+                  레드팀 확정 ⑥ · 원본 수정일(LastWriteTime) 동결
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-[#181C24] border border-amber-300/50 text-[11.5px] flex flex-col gap-1">
+                <div className="text-zinc-400 font-mono text-[10.5px]">
+                  📁 S:\계약서_보관함\250315_김대리_내용_임대차계약서_역삼빌딩.pdf (마우스 오버 0.05초)
+                </div>
+                <div className="text-amber-200 font-extrabold">
+                  👻 [귀신 말풍선 Zero-Open 3줄 핵심 요약]
+                </div>
+                <div className="text-white font-mono">
+                  • 보증금: 5,000만 원 / 월세: 320만 원 (부가세 별도)
+                  <br />• 계약 만기일: 2028.11.14 (특약: 원상복구 특약 제4조 참조)
+                  <br />• 임대인: (주)역삼빌딩 / 업로드: 김대리 (원본 파일 수정일 100% 보존됨)
+                </div>
+              </div>
+            </div>
+
+            {/* 🎮 60초 게이밍 온보딩: 애기귀신 소환술 3단 수련장 */}
+            <div className="p-3 rounded-xl bg-zinc-900/90 border border-teal-400/40 flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[12px] font-black text-teal-300">
+                  🎮 3. 60초 게이밍 온보딩 『👻 애기귀신 소환술 3단 수련장』 (0.35초 원형 게이지 {ringProgress}% + 기존 효과음 연동)
+                </span>
+                <div className="flex items-center gap-1">
+                  {[
+                    { step: 1 as const, label: '1단(10초): 0.35초 소환술' },
+                    { step: 2 as const, label: '2단(25초): 1➔2➔3 사출·세탁' },
+                    { step: 3 as const, label: '3단(25초): 단가? 소환 & 수여식' },
+                  ].map((st) => (
+                    <button
+                      key={st.step}
+                      type="button"
+                      onClick={() => {
+                        setTrainingStage(st.step);
+                        if (st.step === 1) {
+                          setRingProgress(100);
+                          playExistingGhostSound('summon');
+                        } else if (st.step === 2) {
+                          playExistingGhostSound('success');
+                        } else {
+                          playExistingGhostSound('success');
+                          setActivePromoModal('opt_in_30d');
+                        }
+                      }}
+                      className={`px-2 py-1 rounded-lg text-[10.5px] font-black border cursor-pointer ${
+                        trainingStage === st.step
+                          ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                          : 'bg-zinc-950 text-zinc-300 border-white/10'
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[11px] text-zinc-300 leading-snug">
+                {trainingStage === 1 &&
+                  '👉 [1단 수련] 우클릭을 0.35초 지그시 누르면 커서 옆 원형 게이지 링이 차오르며 기존 귀신창 [👻 애기귀신 등장 효과음]과 함께 귀신창이 팝업됩니다!'}
+                {trainingStage === 2 &&
+                  '👉 [2단 수련] 샘플 명함과 시커먼 배경 뉴스 문장을 좌클릭➔우클릭만으로 1초 만에 꽂아 넣고 기존 [✨ 초능력 성공 효과음] 타격감을 체험합니다!'}
+                {trainingStage === 3 &&
+                  '👉 [3단 수련] "샘플 견적서?"를 우클릭 꾹으로 소환해 145,000원을 꽂는 순간 [✨ 성공 효과음]과 함께 위의 [🎁 30일 무제한 초능력 체험권 수여식]이 열립니다!'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   );
 };
