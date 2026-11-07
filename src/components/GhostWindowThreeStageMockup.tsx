@@ -561,7 +561,7 @@ export const GhostBabyMascotBadge: React.FC<{ subtitle?: string }> = ({ subtitle
     </span>
     <div className="flex flex-col leading-none">
       <span className="text-[12px] font-black text-teal-200 tracking-tight">
-        애기귀신 현장소환 (Ctrl+0)
+        애기귀신 현장소환 (Ctrl+0 · Ctrl+우클릭 · 우클릭 0.35초 꾹~~)
       </span>
       {subtitle && (
         <span className="text-[10px] font-bold text-emerald-300/90 mt-0.5">{subtitle}</span>
@@ -591,6 +591,77 @@ export const GhostWindowThreeStageMockup: React.FC<{
       setWindowTab('ui3_ocr');
     }
   }, [externalOcrPhoto]);
+
+  // ── 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 라이브 시뮬레이션 상태 ──
+  const [rightClickSummonFeedback, setRightClickSummonFeedback] = useState<string | null>(null);
+  const [isRightClickPulse, setIsRightClickPulse] = useState(false);
+  const rbuttonTimerRef = React.useRef<number | null>(null);
+  const rbuttonDownPosRef = React.useRef<{ x: number; y: number } | null>(null);
+  const suppressNextContextMenuRef = React.useRef<boolean>(false);
+
+  const triggerMockupSummonFeedback = (methodLabel: string) => {
+    setIsRightClickPulse(true);
+    setRightClickSummonFeedback(
+      `🎯 [${methodLabel} 호출 성공!] 오른손을 마우스에서 떼지 않고 0.01초 만에 현재 창(${
+        windowTab === 'ui1_basic'
+          ? '창 UI ① 기본 귀신창'
+          : windowTab === 'ui2_summon'
+          ? '창 UI ② 귀신 미니 탐색기'
+          : '창 UI ③ 사진·Live Text'
+      })을 즉시 소환했습니다! (윈도우 기본 우클릭 메뉴 겹침 0%)`
+    );
+    useSaySeeStore.setState({
+      lastQuarantineToast: `👻 [${methodLabel}] 0.01초 현장 소환 발동! (기본 우클릭 메뉴 자동 차단됨)`,
+    });
+    window.setTimeout(() => setIsRightClickPulse(false), 900);
+  };
+
+  const handleMockupMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 2) return; // 우클릭만 감지
+    if (e.ctrlKey) {
+      // ② 왼손 Ctrl + 오른손 마우스 우클릭 (딸깍) 즉시 호출!
+      suppressNextContextMenuRef.current = true;
+      triggerMockupSummonFeedback('Ctrl + 우클릭 (딸깍)');
+      return;
+    }
+    // ③ 오른손 마우스 한 손 단독: 우클릭 0.35초 꾹~~ (Long-Press) 감지 시작
+    rbuttonDownPosRef.current = { x: e.clientX, y: e.clientY };
+    if (rbuttonTimerRef.current) window.clearTimeout(rbuttonTimerRef.current);
+    rbuttonTimerRef.current = window.setTimeout(() => {
+      suppressNextContextMenuRef.current = true;
+      triggerMockupSummonFeedback('우클릭 0.35초 꾹~~ (한 손 단독)');
+      rbuttonTimerRef.current = null;
+    }, 350);
+  };
+
+  const handleMockupMouseMove = (e: React.MouseEvent) => {
+    if (!rbuttonDownPosRef.current || !rbuttonTimerRef.current) return;
+    const dx = Math.abs(e.clientX - rbuttonDownPosRef.current.x);
+    const dy = Math.abs(e.clientY - rbuttonDownPosRef.current.y);
+    if (dx > 8 || dy > 8) {
+      // 8px 초과 드래그/마우스 제스처 시 롱프레스 취소 (기존 마우스 제스처 100% 보존)
+      window.clearTimeout(rbuttonTimerRef.current);
+      rbuttonTimerRef.current = null;
+      rbuttonDownPosRef.current = null;
+    }
+  };
+
+  const handleMockupMouseUp = (e: React.MouseEvent) => {
+    if (e.button !== 2) return;
+    if (rbuttonTimerRef.current) {
+      window.clearTimeout(rbuttonTimerRef.current);
+      rbuttonTimerRef.current = null;
+    }
+    rbuttonDownPosRef.current = null;
+  };
+
+  const handleMockupContextMenu = (e: React.MouseEvent) => {
+    if (suppressNextContextMenuRef.current || e.ctrlKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressNextContextMenuRef.current = false;
+    }
+  };
 
   // ── [창 UI ①] 상태 ──
   const [openHeaderDrawer, setOpenHeaderDrawer] = useState<'none' | 'snippets' | 'clipboard'>(
@@ -786,14 +857,22 @@ export const GhostWindowThreeStageMockup: React.FC<{
   };
 
   return (
-    <section className="w-full flex flex-col gap-5">
-      {/* 1. 상단 패러다임 선언 & 3단 구역(💻 내 PC / 📱 폰+PC / 💼 팀 공유) 배지 바 */}
+    <section
+      onMouseDown={handleMockupMouseDown}
+      onMouseMove={handleMockupMouseMove}
+      onMouseUp={handleMockupMouseUp}
+      onContextMenu={handleMockupContextMenu}
+      className={`w-full flex flex-col gap-5 transition-all ${
+        isRightClickPulse ? 'ring-4 ring-amber-400/80 rounded-3xl' : ''
+      }`}
+    >
+      {/* 1. 상단 패러다임 선언 & 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 & 3단 구역 배지 바 */}
       <div className="p-5 rounded-3xl bg-gradient-to-br from-zinc-900 via-[#12161F] to-zinc-950 border border-teal-500/35 shadow-xl flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
             <GhostBabyMascotBadge subtitle="탐색기로 찾아가던 시대에서 ➔ 일하던 현장으로 귀신을 부르는 시대로!" />
             <span className="px-3 py-1 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-[11.5px] font-extrabold">
-              ⚡ 네이티브 0.01초 오버레이 (버벅임 0% · Win+V 컴팩트 사이즈)
+              ⚡ 숫자 0 = 마우스 우클릭 일원화: ① Ctrl+0 | ② Ctrl+우클릭(딸깍) | ③ 우클릭 0.35초 꾹~~ (한손 단독!)
             </span>
           </div>
 
@@ -838,18 +917,54 @@ export const GhostWindowThreeStageMockup: React.FC<{
           </div>
         </div>
 
+        {/* 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 라이브 체험 안내 바 */}
+        <div className="px-4 py-2.5 rounded-2xl bg-zinc-950/90 border border-amber-400/40 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+          <div className="flex flex-wrap items-center gap-2 font-extrabold text-zinc-200">
+            <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-black text-[11px]">
+              🖱️ 이 화면에서 지금 바로 우클릭해 보세요!
+            </span>
+            <span>
+              ① 키보드 두 손: <code className="text-teal-300">Ctrl + 0</code>
+            </span>
+            <span className="text-zinc-600">|</span>
+            <span>
+              ② 왼손 Ctrl + 오른손 마우스: <code className="text-amber-300">Ctrl + 우클릭 (딸깍)</code>
+            </span>
+            <span className="text-zinc-600">|</span>
+            <span>
+              ③ 오른손 마우스 한 손 단독: <code className="text-emerald-300">우클릭 0.35초 꾹~~ (Long-Press)</code>
+            </span>
+          </div>
+          <span className="text-[11px] text-zinc-400 font-bold">
+            ※ 짧게 딸깍(&lt;0.35초) 또는 8px 드래그 시 기존 윈도우 우클릭 100% 보존
+          </span>
+        </div>
+
+        {rightClickSummonFeedback && (
+          <div className="px-4 py-2.5 rounded-2xl bg-amber-400/20 border-2 border-amber-300 text-amber-100 text-[12.5px] font-black flex flex-wrap items-center justify-between gap-2">
+            <span>{rightClickSummonFeedback}</span>
+            <button
+              type="button"
+              onClick={() => setRightClickSummonFeedback(null)}
+              className="px-2.5 py-0.5 rounded-lg bg-zinc-900 text-zinc-200 text-[11px] font-bold cursor-pointer"
+            >
+              닫기 ✕
+            </button>
+          </div>
+        )}
+
         {/* 3대 현장 소환창 UI 시안 선택 탭 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
           {[
             {
               id: 'ui1_basic' as const,
-              badge: '창 UI ① · 평상시 Ctrl + 0',
+              badge: '창 UI ① · 평상시 (Ctrl+0 / Ctrl+우클릭 / 우클릭 꾹~~)',
               title: '👻 기본 귀신창 (2줄 날렵 구조)',
               desc: '윗줄: 👻 + [⌨️ 상용구 F1~F12 ▾] + [📋🔍 클립보드 ▾] / 아랫줄: Wave 1 핵심 초능력 5대 탭',
             },
             {
               id: 'ui2_summon' as const,
-              badge: '창 UI ② · 드래그(기본) / 끝에 ?(보조) + Ctrl + 0',
+              badge: '창 UI ② · 드래그(기본) / 끝에 ?(보조) + (Ctrl+0 / 우클릭 꾹~~)',
               title: '👻 귀신 미니 탐색기 (현장 문서·사진·영상 통합 소환 & 이어서 검색)',
               desc: '30년 된 윈도우 탐색기(Win+E) 대체! 문서·사진·영상을 현장에서 바로 소환하고 라이브 검색창으로 이어서 검색!',
             },

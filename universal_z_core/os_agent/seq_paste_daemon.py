@@ -160,6 +160,43 @@ k32.QueryFullProcessImageNameW.restype = wintypes.BOOL
 k32.CloseHandle.argtypes = [wintypes.HANDLE]
 k32.CloseHandle.restype = wintypes.BOOL
 
+WH_MOUSE_LL = 14
+WM_MOUSEMOVE = 0x0200
+WM_RBUTTONDOWN = 0x0204
+WM_RBUTTONUP = 0x0205
+RBUTTON_LONG_PRESS_SEC = 0.35
+
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("pt", wintypes.POINT),
+        ("mouseData", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+LowLevelMouseProcType = ctypes.WINFUNCTYPE(
+    ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+)
+u32.SetWindowsHookExW.argtypes = [ctypes.c_int, LowLevelMouseProcType, wintypes.HINSTANCE, wintypes.DWORD]
+u32.SetWindowsHookExW.restype = wintypes.HANDLE
+u32.CallNextHookEx.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
+u32.CallNextHookEx.restype = ctypes.c_ssize_t
+u32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
+u32.UnhookWindowsHookEx.restype = wintypes.BOOL
+
+_RBTN_HOLD_STATE: dict = {
+    "active": False,
+    "down_ts": 0.0,
+    "x": 0,
+    "y": 0,
+    "triggered": False,
+    "suppress_next_up": False,
+    "summon_requested": False,
+}
+
 
 # =====================================================================
 # 🧠 온디바이스 EmbeddingGemma 2 (MRL 128차원 + 262,144 토크나이저 사전 재활용)
@@ -1331,6 +1368,7 @@ def _toast_worker() -> None:
                     win = tk.Toplevel(root)
                     current_win[0] = win
                     opened_at[0] = time.time()
+                    was_mouse_down[0] = True
                     win.overrideredirect(True)
                     win.attributes("-topmost", True)
                     win.attributes("-alpha", 0.98)
@@ -3927,6 +3965,45 @@ Write-Output $res.Text
     was_ctrl_z_down: bool = False
     last_topmost_ts: float = 0.0
 
+    # [?? 0 = ??? ??? ???]: ? Ctrl + ???(??) / ? ??? 0.35? ?~~ (Long-Press, ?? ??? ?? ?? ?? ??)
+    def _low_level_mouse_proc(nCode: int, wParam: int, lParam: int) -> int:
+        try:
+            if nCode >= 0:
+                if wParam == WM_RBUTTONDOWN:
+                    info = ctypes.cast(lParam, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
+                    ctrl_now = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                    alt_now = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
+                    shift_now = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
+                    if ctrl_now and not alt_now and not shift_now:
+                        _RBTN_HOLD_STATE["active"] = False
+                        _RBTN_HOLD_STATE["triggered"] = True
+                        _RBTN_HOLD_STATE["suppress_next_up"] = True
+                        _RBTN_HOLD_STATE["summon_requested"] = True
+                        return 1
+                    else:
+                        _RBTN_HOLD_STATE["active"] = True
+                        _RBTN_HOLD_STATE["down_ts"] = time.time()
+                        _RBTN_HOLD_STATE["x"] = info.pt.x
+                        _RBTN_HOLD_STATE["y"] = info.pt.y
+                        _RBTN_HOLD_STATE["triggered"] = False
+                        _RBTN_HOLD_STATE["suppress_next_up"] = False
+                elif wParam == WM_MOUSEMOVE:
+                    if _RBTN_HOLD_STATE["active"] and not _RBTN_HOLD_STATE["triggered"]:
+                        info = ctypes.cast(lParam, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
+                        if abs(info.pt.x - _RBTN_HOLD_STATE["x"]) > 8 or abs(info.pt.y - _RBTN_HOLD_STATE["y"]) > 8:
+                            _RBTN_HOLD_STATE["active"] = False
+                elif wParam == WM_RBUTTONUP:
+                    _RBTN_HOLD_STATE["active"] = False
+                    if _RBTN_HOLD_STATE["suppress_next_up"]:
+                        _RBTN_HOLD_STATE["suppress_next_up"] = False
+                        return 1
+        except Exception:
+            pass
+        return u32.CallNextHookEx(None, nCode, wParam, lParam)
+
+    _mouse_hook_cb = LowLevelMouseProcType(_low_level_mouse_proc)
+    _mouse_hook_handle = u32.SetWindowsHookExW(WH_MOUSE_LL, _mouse_hook_cb, None, 0)
+
     msg = wintypes.MSG()
     if "--show-now" in sys.argv:
         def _delayed_init_summon():
@@ -3975,6 +4052,27 @@ Write-Output $res.Text
 
             elif msg.message == WM_TIMER:
                 now = time.time()
+                # ??? ??? ??? ??: ? Ctrl+??? ?? ?? / ? ??? 0.35? ?~~ ?? ?? ??
+                if _RBTN_HOLD_STATE.get("summon_requested"):
+                    _RBTN_HOLD_STATE["summon_requested"] = False
+                    if (now - last_summon_ts) > 0.20:
+                        last_summon_ts = now
+                        trigger_master_summon()
+                elif _RBTN_HOLD_STATE.get("active") and not _RBTN_HOLD_STATE.get("triggered"):
+                    if (u32.GetAsyncKeyState(0x02) & 0x8000) != 0:
+                        if (now - _RBTN_HOLD_STATE.get("down_ts", 0.0)) >= RBUTTON_LONG_PRESS_SEC:
+                            pt_now = wintypes.POINT()
+                            u32.GetCursorPos(ctypes.byref(pt_now))
+                            if abs(pt_now.x - _RBTN_HOLD_STATE["x"]) <= 8 and abs(pt_now.y - _RBTN_HOLD_STATE["y"]) <= 8:
+                                _RBTN_HOLD_STATE["triggered"] = True
+                                _RBTN_HOLD_STATE["suppress_next_up"] = True
+                                if (now - last_summon_ts) > 0.20:
+                                    last_summon_ts = now
+                                    trigger_master_summon()
+                            else:
+                                _RBTN_HOLD_STATE["active"] = False
+                    else:
+                        _RBTN_HOLD_STATE["active"] = False
                 if _UNDO_SNAPSHOT.get("active") and (now - _UNDO_SNAPSHOT.get("ts", 0.0)) > 60.0:
                     disarm_undo_snapshot()
                 if _PINNED_HWNDS:
