@@ -100,7 +100,7 @@ interface ClipboardHistoryItem {
 const SAMPLE_CLIPBOARD_30DAYS: ClipboardHistoryItem[] = [
   {
     id: 'clip_1',
-    copiedAt: '방금 전 (1분 전)',
+    copiedAt: '방금 전',
     daysAgo: 0,
     category: '계좌·숫자',
     content: '국민은행 012-3456-7890-11 (홍길동) · 계약금 5,000,000원',
@@ -124,7 +124,7 @@ const SAMPLE_CLIPBOARD_30DAYS: ClipboardHistoryItem[] = [
     copiedAt: '어제 17:42',
     daysAgo: 1,
     category: '텍스트',
-    content: 'https://ghosti.sundreamer.app — 사진·영상·문서 1초 AI 투시검색',
+    content: 'https://ghosti.sundreamer.app — 사진·영상·문서 1초 AI 내용검색',
   },
   {
     id: 'clip_5',
@@ -161,7 +161,7 @@ export type MiniExplorerMediaFilter = 'all' | 'doc' | 'photo' | 'video';
 interface SummonCandidateItem {
   id: string;
   mediaType: 'doc' | 'photo' | 'video';
-  sourceBadge: '💻 내 PC (무료)' | '📱 내 폰·집PC (통합)' | '💼 회사 S: 드라이브 (팀)';
+  sourceBadge: '💻 내 PC' | '📱 내 폰·집PC' | '💼 팀 S: 드라이브';
   tierScope: GhostWindowTierMode;
   isFreePc: boolean;
   fileName: string;
@@ -182,14 +182,14 @@ const MINI_EXPLORER_ITEMS: SummonCandidateItem[] = [
   {
     id: 'mini_doc_1',
     mediaType: 'doc',
-    sourceBadge: '💻 내 PC (무료)',
+    sourceBadge: '💻 내 PC',
     tierScope: 'pc_free',
     isFreePc: true,
-    fileName: '2025_표준_임대차계약서_확정본.pdf',
+    fileName: '250301_내용_임대차계약서_역삼빌딩.pdf',
     folderPath: 'C:\\Users\\Merlin\\Documents\\계약서',
     matchedValueShort: '보증금 5,000만 원 / 월세 220만 원 (제4조)',
-    replaceSentence: '보증금 5,000만 원 (월 차임 220만 원 · 2025년 표준 임대차계약서 제4조)',
-    ghostPreviewTitle: '📄 2025_표준_임대차계약서_확정본.pdf (Zero-Open 1페이지 발췌)',
+    replaceSentence: '보증금 5,000만 원 (월 차임 220만 원 · 임대차계약서 제4조)',
+    ghostPreviewTitle: '📄 250301_내용_임대차계약서_역삼빌딩.pdf',
     ghostPreviewLines: [
       '제3조 (소재지) 서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층',
       '👉 제4조 (보증금 및 차임) 보증금 금 오천만 원정 (₩50,000,000) / 월세 2,200,000원',
@@ -202,14 +202,14 @@ const MINI_EXPLORER_ITEMS: SummonCandidateItem[] = [
   {
     id: 'mini_doc_2',
     mediaType: 'doc',
-    sourceBadge: '💼 회사 S: 드라이브 (팀)',
+    sourceBadge: '💼 팀 S: 드라이브',
     tierScope: 'work_team',
     isFreePc: false,
-    fileName: 'S:\\02_구매자재\\2026_A업체_납품단가표_최종.xlsx',
-    folderPath: 'S:\\02_구매자재 (30KB 선행 인덱스 캐시)',
+    fileName: '261105_김대리_A업체_납품단가표.xlsx',
+    folderPath: 'S:\\02_구매자재',
     matchedValueShort: 'A업체 표준 납품단가 @14,500원 (500개 이상 @13,800원)',
-    replaceSentence: 'A업체 표준 납품단가 개당 14,500원 (VAT 별도, 500개 이상 13,800원 · S: 납품단가표 12행)',
-    ghostPreviewTitle: '📊 S:\\02_구매자재\\2026_A업체_납품단가표_최종.xlsx [Sheet1]',
+    replaceSentence: 'A업체 표준 납품단가 개당 14,500원 (500개 이상 13,800원)',
+    ghostPreviewTitle: '📊 S:\\02_구매자재\\261105_김대리_A업체_납품단가표.xlsx',
     ghostPreviewLines: [
       '코드   | 업체명         | 품목명        | 단가(원)  | MOQ 할인가',
       '👉 V-01 | A업체(성진정밀) | 방열 하우징   | 14,500원  | 500개 이상 13,800원',
@@ -222,14 +222,14 @@ const MINI_EXPLORER_ITEMS: SummonCandidateItem[] = [
   {
     id: 'mini_photo_1',
     mediaType: 'photo',
-    sourceBadge: '💻 내 PC (무료)',
+    sourceBadge: '💻 내 PC',
     tierScope: 'pc_free',
     isFreePc: true,
-    fileName: '사업자등록증_썬드림.jpg',
+    fileName: '240510_사업자등록증_썬드림.jpg',
     folderPath: 'C:\\Users\\Merlin\\Pictures\\회사증빙',
     matchedValueShort: '등록번호 214-88-12345 · 대표 백은숙 · 서울 성동구 성수이로 88',
-    replaceSentence: '[사진 첨부 완료] 사업자등록증_썬드림.jpg (등록번호: 214-88-12345)',
-    ghostPreviewTitle: '🖼️ 사업자등록증_썬드림.jpg (13KB 초고속 고화질 썸네일)',
+    replaceSentence: '[사진 첨부] 240510_사업자등록증_썬드림.jpg (214-88-12345)',
+    ghostPreviewTitle: '🖼️ 240510_사업자등록증_썬드림.jpg',
     ghostPreviewLines: [
       '👉 [법인 사업자등록증] 상호: (주)썬드리머  |  등록번호: 214-88-12345',
       '대표자: 백은숙  |  개업연월일: 2024년 05월 10일',
@@ -237,137 +237,114 @@ const MINI_EXPLORER_ITEMS: SummonCandidateItem[] = [
     ],
     highlightRowIndex: 0,
     thumbUrl: '/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg',
-    photoMetaSummary: '📅 2026-02-14 촬영 · 📍 성수동 본사 · 🏷️ #사업자등록증 #세금계산서 #공식증빙',
+    photoMetaSummary: '📅 2024-05-10 · 📍 성수동 본사 · #사업자등록증 #세금계산서',
     keywords: ['사업자등록증', '사진', '썬드림', '영수증', '제주도', '가족사진', '시공'],
   },
   {
     id: 'mini_photo_2',
     mediaType: 'photo',
-    sourceBadge: '📱 내 폰·집PC (통합)',
+    sourceBadge: '📱 내 폰·집PC',
     tierScope: 'phone_pc',
     isFreePc: false,
-    fileName: '제주도_가족여행_바다단체.jpg',
-    folderPath: '📱 내 폰 갤러리 > 제주도 가족여행 (성산일출봉)',
-    matchedValueShort: '제주 성산일출봉 해변 가족 단체사진 (선명도 98점 베스트컷)',
-    replaceSentence: '[사진 첨부 완료] 제주도_가족여행_바다단체.jpg (제주 성산일출봉 가족 단체사진)',
-    ghostPreviewTitle: '🖼️ 제주도_가족여행_바다단체.jpg (내 폰 직결 13KB 미리보기)',
+    fileName: '251012_제주성산_가족단체.jpg',
+    folderPath: '📱 내 폰 갤러리 > 제주도 가족여행',
+    matchedValueShort: '제주 성산일출봉 해변 가족 단체사진 (베스트컷)',
+    replaceSentence: '[사진 첨부] 251012_제주성산_가족단체.jpg',
+    ghostPreviewTitle: '🖼️ 251012_제주성산_가족단체.jpg',
     ghostPreviewLines: [
       '👉 촬영일: 2025-10-12 15:40 · 장소: 제주 서귀포시 성산일출봉 해변',
-      '인물 자동분류: 부모님 · 멀린 · 백은숙 대표님 (눈 감은 사람 0명 · 베스트컷)',
-      '우측 [📝 OCR 글자 따기] 또는 [↵ 카톡·메일에 사진 바로 첨부] 즉시 가능!',
+      '인물 자동분류: 부모님 · 멀린 · 백은숙 대표님 (베스트컷)',
     ],
     highlightRowIndex: 0,
     thumbUrl: '/sample_photos_301/20250504_1420_어린이날_선물.jpg',
-    photoMetaSummary: '📅 2025-10-12 · 📍 제주 성산일출봉 · 👨‍👩‍👧‍👦 가족 단체 베스트컷 (98점)',
+    photoMetaSummary: '📅 2025-10-12 · 📍 제주 성산일출봉 · 👨‍👩‍👧‍👦 가족 단체컷',
     keywords: ['제주도', '가족사진', '바다', '여행', '사진', '사업자등록증'],
   },
   // 🎬 영상 2건
   {
     id: 'mini_video_1',
     mediaType: 'video',
-    sourceBadge: '💻 내 PC (무료)',
+    sourceBadge: '💻 내 PC',
     tierScope: 'pc_free',
     isFreePc: true,
-    fileName: '신제품_시연_하이라이트.mp4',
+    fileName: '261020_신제품_시연_하이라이트.mp4',
     folderPath: 'C:\\Users\\Merlin\\Videos\\제품시연',
-    matchedValueShort: '⏱️ 01:24 핵심장면 포착 — 0.01초 투시 검색 라이브 데모 구간',
-    replaceSentence: '[영상 01:24 핵심장면 캡처 삽입] 신제품_시연_하이라이트.mp4 (01:24 구간)',
-    ghostPreviewTitle: '🎬 신제품_시연_하이라이트.mp4 (AI 핵심 장면 01:24 포착)',
+    matchedValueShort: '⏱️ 01:24 핵심장면 — 1초 내용검색 데모 구간',
+    replaceSentence: '[영상 01:24 캡처 삽입] 261020_신제품_시연_하이라이트.mp4',
+    ghostPreviewTitle: '🎬 261020_신제품_시연_하이라이트.mp4 (01:24)',
     ghostPreviewLines: [
-      '00:15 — 오프닝 및 기존 윈도우 탐색기 속도 비교',
-      '👉 [01:24 핵심 장면 포착] Ctrl+0 호출 즉시 0.01초 만에 계약서·사진 소환 장면!',
-      '02:10 — 클로징 및 1개월 무제한 무료체험 안내',
+      '00:15 — 오프닝 및 기존 탐색기 비교',
+      '👉 [01:24 핵심 장면] Ctrl+0 호출 즉시 계약서·사진 소환 장면',
+      '02:10 — 클로징 안내',
     ],
     highlightRowIndex: 1,
     thumbUrl: '/sample_photos_301/20251224_2010_크리스마스_케이크.jpg',
     videoTimestamp: '01:24',
-    photoMetaSummary: '🎬 전체 02:45 (1080p 60fps) · 🎯 AI 포착 타임스탬프 01:24',
+    photoMetaSummary: '🎬 02:45 · 🎯 포착 구간 01:24',
     keywords: ['영상', '시연', '신제품', '시공', '성수동', '하이라이트'],
   },
   {
     id: 'mini_video_2',
     mediaType: 'video',
-    sourceBadge: '💼 회사 S: 드라이브 (팀)',
+    sourceBadge: '💼 팀 S: 드라이브',
     tierScope: 'work_team',
     isFreePc: false,
-    fileName: 'S:\\04_현장시공\\성수동_인테리어_시공전후.mp4',
-    folderPath: 'S:\\04_현장시공 (팀 공유 S: 드라이브)',
-    matchedValueShort: '⏱️ 00:42 핵심장면 포착 — 성수동 쇼룸 간접조명 점등 완료 장면',
-    replaceSentence: '[영상 00:42 핵심장면 캡처 삽입] 성수동_인테리어_시공전후.mp4 (00:42 구간)',
-    ghostPreviewTitle: '🎬 S:\\04_현장시공\\성수동_인테리어_시공전후.mp4 (00:42 포착)',
+    fileName: '261102_김대리_성수동_시공전후.mp4',
+    folderPath: 'S:\\04_현장시공',
+    matchedValueShort: '⏱️ 00:42 핵심장면 — 성수동 쇼룸 간접조명 점등 완료',
+    replaceSentence: '[영상 00:42 캡처 삽입] 261102_김대리_성수동_시공전후.mp4',
+    ghostPreviewTitle: '🎬 S:\\04_현장시공\\261102_김대리_성수동_시공전후.mp4 (00:42)',
     ghostPreviewLines: [
-      '00:05 — 철거 직후 바닥 수평 몰탈 타설 상태',
-      '👉 [00:42 핵심 장면 포착] 성수동 쇼룸 천장 라인조명 & 우드월 시공 완료 장면!',
-      '01:18 — 클라이언트 최종 검수 완료 사인 장면',
+      '00:05 — 철거 직후 바닥 수평 몰탈 타설',
+      '👉 [00:42 핵심 장면] 성수동 쇼룸 천장 라인조명 시공 완료',
+      '01:18 — 최종 검수 완료',
     ],
     highlightRowIndex: 1,
     thumbUrl: '/sample_photos_301/20250720_1630_여름휴가_계곡.jpg',
     videoTimestamp: '00:42',
-    photoMetaSummary: '🎬 전체 01:35 (4K) · 💼 S: 드라이브 팀 공유 · 🎯 타임스탬프 00:42',
+    photoMetaSummary: '🎬 01:35 · 💼 S: 드라이브 · 🎯 00:42',
     keywords: ['성수동', '시공', '인테리어', '영상', '현장'],
   },
 ];
 
 const SUMMON_SCENARIOS: {
   id: string;
-  triggerTypeLabel: string;
-  scenarioTitle: string;
+  shortLabel: string;
   initialEditorText: string;
   targetToken: string;
-  safetyNetStage?: 0 | 1 | 2;
   windowContextTitle?: string;
 }[] = [
   {
     id: 'scen_question_mark',
-    triggerTypeLabel: '보조 트리거 (문장 끝에 ? + 우클릭 꾹/Ctrl+0)',
-    scenarioTitle: '카톡·이메일에서 “작년 계약서 보증금?” 또는 “사업자등록증 사진?” 입력 후 우클릭 꾹',
-    initialEditorText: '김 대리님, 거래처에 보낼 작년 계약서 보증금? 그리고 사업자등록증 사진도 바로 첨부해 주세요.',
+    shortLabel: '문장 끝에 ? 입력',
+    initialEditorText: '김 대리님, 거래처에 보낼 작년 계약서 보증금? 그리고 사업자등록증 사진도 첨부해 주세요.',
     targetToken: '작년 계약서 보증금?',
-    safetyNetStage: 0,
-    windowContextTitle: '💬 카카오톡 - 김대리_강남현장',
+    windowContextTitle: '카카오톡 - 김대리_강남현장',
   },
   {
     id: 'scen_drag_block',
-    triggerTypeLabel: '기본 트리거 (마우스 드래그 블록 지정 + 우클릭 꾹/Ctrl+0)',
-    scenarioTitle: '보고서 작성 중 “성수동 시공 영상” 또는 “A업체 납품단가”를 드래그 후 우클릭 꾹',
+    shortLabel: '단어 드래그 호출',
     initialEditorText: '박 팀장님, 이번 품의서에 A업체 납품단가 반영하고 성수동 시공 영상 캡처본 같이 넣겠습니다.',
     targetToken: 'A업체 납품단가',
-    safetyNetStage: 0,
-    windowContextTitle: '📧 사내 메일 작성 - 4분기 구매품의서',
-  },
-  {
-    id: 'scen_safety1_caret_lookbehind',
-    triggerTypeLabel: '🛡️ 안전망 1단계: 무드래그 커서 직전 어절 자동 역추적 (Caret Lookbehind)',
-    scenarioTitle: '드래그나 ?를 깜빡하고 “사업자등록증”만 친 채 우클릭 꾹 눌러도 직전 1~3어절을 비파괴 자동 스캔 & 덮어쓰기!',
-    initialEditorText: '거래처 경리팀에 전달할 사업자등록증',
-    targetToken: '사업자등록증',
-    safetyNetStage: 1,
-    windowContextTitle: '💬 카카오톡 - 거래처_경리팀',
+    windowContextTitle: '사내 메일 - 4분기 구매품의서',
   },
   {
     id: 'scen_safety2_empty_caret',
-    triggerTypeLabel: '🛡️ 안전망 2단계: 빈칸 호출 (메신저 오발송 공포 0% · 상단 검색칸 포커스 + 맥락 추천)',
-    scenarioTitle: '1:1 채팅방에 민감한 검색어를 치기 두려울 때 빈칸에서 우클릭 꾹 ➔ 상단 검색칸 포커스 & 창 제목(김대리_강남현장) 맥락 추천!',
+    shortLabel: '빈칸에서 바로 검색',
     initialEditorText: '',
     targetToken: '',
-    safetyNetStage: 2,
-    windowContextTitle: '💬 카카오톡 - 김대리_강남현장 (창 제목 맥락 자동 감지)',
+    windowContextTitle: '카카오톡 - 김대리_강남현장',
   },
 ];
 
 const ROW0_PHONE_OCR_DOCK_CHIPS = [
-  { id: 'r0_chip_1', label: '인증번호: 849201', value: '849201' },
-  { id: 'r0_chip_2', label: '사업자번호: 123-45-67890', value: '123-45-67890' },
-  { id: 'r0_chip_3', label: '합계: 145,000원', value: '145,000원' },
-  { id: 'r0_chip_4', label: '국민은행 012-3456-7890', value: '국민은행 012-3456-7890' },
-  { id: 'r0_chip_5', label: '📊 표 전체 TSV', value: '승인번호\t20261107-849201\t합계\t145,000원' },
+  { id: 'r0_chip_1', label: '인증번호 849201', value: '849201' },
+  { id: 'r0_chip_2', label: '사업자 123-45-67890', value: '123-45-67890' },
+  { id: 'r0_chip_3', label: '합계 145,000원', value: '145,000원' },
+  { id: 'r0_chip_4', label: '국민 012-3456-7890', value: '국민은행 012-3456-7890' },
+  { id: 'r0_chip_5', label: '📊 표 복사', value: '승인번호\t20261107-849201\t합계\t145,000원' },
 ];
 
-/**
- * 🎯 원본 화면 위에 글자 그대로 톡톡 찍기 (Live Text 인플레이스 오버레이 블록)
- * - 어설픈 요약 칩 나열 대신, 사진/영수증/계약서 원본 위 실제 글자 위치(top%, left%)에 그대로 얹혀서
- *   유저가 상호를 원하든, 품명을 원하든, 특약 한 줄을 원하든 화면 위 글자를 마우스로 톡톡 찍으면 즉시 복사/커서 입력!
- */
 export interface LiveTextOverlaySpot {
   id: string;
   topPercent: number;
@@ -392,8 +369,8 @@ export interface OcrSamplePreset {
 const OCR_PRESETS: OcrSamplePreset[] = [
   {
     id: 'ocr_receipt',
-    title: '방금 폰으로 찍은 종이 영수증·세금계산서 (원본 화면 위 글자 톡톡 찍기)',
-    sourceLabel: '📱 내 폰 촬영 직후 1분 이내 Ctrl+0 호출 (1회 사용 시 자동 소멸)',
+    title: '영수증 · 세금계산서 사진',
+    sourceLabel: '📱 방금 찍은 사진 (1분간 표시)',
     thumbUrl: '/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg',
     fullText:
       '[전자세금계산서 영수증] 승인번호: 20261107-849201 | 상호: (주)성수오피스디포 | 대표자: 김상훈 | 사업자번호: 123-45-67890 | 품목1: A4 복사용지 80g 10박스 (단가 22,000원) | 품목2: 레이저 토너 카트리지 2개 (단가 44,500원) | 공급가액: 131,818원 | 부가세: 13,182원 | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890',
@@ -404,8 +381,8 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'spot_1',
         topPercent: 8,
         leftPercent: 6,
-        categoryHint: '문서 제목',
-        displayText: '전자세금계산서 (영수증) · 승인번호: 20261107-849201',
+        categoryHint: '승인번호',
+        displayText: '전자세금계산서 · 승인번호: 20261107-849201',
         insertValue: '20261107-849201',
         isPrimaryHighlight: true,
       },
@@ -413,7 +390,7 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'spot_2',
         topPercent: 21,
         leftPercent: 6,
-        categoryHint: '공급자 상호·대표',
+        categoryHint: '상호·대표',
         displayText: '상호: (주)성수오피스디포  |  성명: 김상훈',
         insertValue: '(주)성수오피스디포',
       },
@@ -421,7 +398,7 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'spot_3',
         topPercent: 33,
         leftPercent: 6,
-        categoryHint: '사업자등록번호',
+        categoryHint: '사업자번호',
         displayText: '사업자등록번호: 123-45-67890',
         insertValue: '123-45-67890',
         isPrimaryHighlight: true,
@@ -430,7 +407,7 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'spot_4',
         topPercent: 46,
         leftPercent: 6,
-        categoryHint: '품명·규격 1',
+        categoryHint: '품목 1',
         displayText: '품목 1: 프리미엄 A4 복사용지 (80g) · 10 BOX · 단가 22,000원',
         insertValue: '프리미엄 A4 복사용지 (80g) 10박스',
       },
@@ -438,7 +415,7 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'spot_5',
         topPercent: 58,
         leftPercent: 6,
-        categoryHint: '품명·규격 2',
+        categoryHint: '품목 2',
         displayText: '품목 2: 정품 레이저 토너 카트리지 (BK) · 2 EA · 단가 44,500원',
         insertValue: '정품 레이저 토너 카트리지 (BK) 2개',
       },
@@ -446,7 +423,7 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'spot_6',
         topPercent: 71,
         leftPercent: 6,
-        categoryHint: '공급가액·세액·합계',
+        categoryHint: '합계금액',
         displayText: '공급가액 131,818원  |  세액 13,182원  |  합계금액: 145,000원',
         insertValue: '145,000원',
         isPrimaryHighlight: true,
@@ -464,8 +441,8 @@ const OCR_PRESETS: OcrSamplePreset[] = [
   },
   {
     id: 'ocr_contract',
-    title: '부동산 임대차 계약서 사진 (원본 화면 위 조항·숫자 그대로 톡톡 찍기)',
-    sourceLabel: '💻 1번 내 기기 ➔ 🔍 찾기 사진 카드에서 [📝 OCR 글자 따기] 클릭',
+    title: '부동산 임대차 계약서 사진',
+    sourceLabel: '💻 사진에서 글자 따기',
     thumbUrl: '/sample_photos_301/Screenshot_20250802_1001_쇼핑위시리스트.jpg',
     fullText:
       '[업무용 부동산 임대차 계약서] 소재지: 서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층 | 보증금: 금 오천만 원정 (₩50,000,000) | 월차임: 금 이백이십만 원정 (₩2,200,000, 매월 25일 선불) | 계약기간: 2025.03.01 ~ 2027.02.28 (24개월) | 특약사항: 임차인의 퇴실 시 기본 설치 칸막이에 대한 원상복구 의무는 면제한다. | 임대인 계좌: 신한은행 110-482-991023 (김철수)',
@@ -476,8 +453,8 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'c_spot_1',
         topPercent: 9,
         leftPercent: 6,
-        categoryHint: '소재지 주소',
-        displayText: '제1조 [소재지] 서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층 (전용 42평)',
+        categoryHint: '소재지',
+        displayText: '제1조 [소재지] 서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층',
         insertValue: '서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층',
       },
       {
@@ -485,7 +462,7 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         topPercent: 24,
         leftPercent: 6,
         categoryHint: '보증금',
-        displayText: '제2조 [보증금] 금 오천만 원정 (₩50,000,000) — 계약금 500만 / 잔금 4,500만',
+        displayText: '제2조 [보증금] 금 오천만 원정 (₩50,000,000)',
         insertValue: '금 오천만 원정 (₩50,000,000)',
         isPrimaryHighlight: true,
       },
@@ -493,8 +470,8 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'c_spot_3',
         topPercent: 39,
         leftPercent: 6,
-        categoryHint: '월차임·관리비',
-        displayText: '제3조 [월차임] 금 이백이십만 원정 (₩2,200,000 · VAT 별도, 매월 25일 지급)',
+        categoryHint: '월차임',
+        displayText: '제3조 [월차임] 금 이백이십만 원정 (₩2,200,000 · VAT 별도)',
         insertValue: '월차임 2,200,000원 (VAT 별도)',
         isPrimaryHighlight: true,
       },
@@ -503,15 +480,15 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         topPercent: 54,
         leftPercent: 6,
         categoryHint: '계약기간',
-        displayText: '제4조 [계약기간] 2025년 03월 01일 ~ 2027년 02월 28일 (24개월간)',
+        displayText: '제4조 [계약기간] 2025년 03월 01일 ~ 2027년 02월 28일 (24개월)',
         insertValue: '2025년 03월 01일 ~ 2027년 02월 28일 (24개월)',
       },
       {
         id: 'c_spot_5',
         topPercent: 69,
         leftPercent: 6,
-        categoryHint: '특약사항 문구 한 줄',
-        displayText: '특약 제2항: 임차인의 퇴실 시 기본 설치 칸막이에 대한 원상복구 의무는 면제한다.',
+        categoryHint: '특약사항',
+        displayText: '특약 제2항: 퇴실 시 기본 칸막이 원상복구 의무는 면제한다.',
         insertValue: '임차인의 퇴실 시 기본 설치 칸막이에 대한 원상복구 의무는 면제한다.',
         isPrimaryHighlight: true,
       },
@@ -519,8 +496,8 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'c_spot_6',
         topPercent: 83,
         leftPercent: 6,
-        categoryHint: '임대인 계좌·인적사항',
-        displayText: '임대인: 김철수 (신한은행 110-482-991023 · 연락처 010-9876-5432)',
+        categoryHint: '임대인 계좌',
+        displayText: '임대인: 김철수 (신한은행 110-482-991023)',
         insertValue: '신한은행 110-482-991023 (예금주: 김철수)',
         isPrimaryHighlight: true,
       },
@@ -533,52 +510,53 @@ export function buildOcrPresetFromPhoto(photo: PhotoItem): OcrSamplePreset {
   const baseName = photo.name.replace(/\.[^.]+$/, '');
   return {
     id: `photo_ocr_${photo.id}`,
-    title: `${photo.name} (${photo.date}) — 원본 위 글자 톡톡 찍기`,
-    sourceLabel: '🔍 찾기 검색 사진에서 [📝 OCR 글자 따기] 즉시 호출됨',
+    title: `${photo.name}`,
+    sourceLabel: '🔍 사진에서 글자 따기',
     thumbUrl: photo.thumbUrl,
-    fullText: `[사진 Live Text 추출] 파일명: ${photo.name} | 촬영일: ${photo.date} | 상호: (주)성수오피스디포 | 사업자번호: 123-45-67890 | 품목: ${cleanTags.join(' · ') || baseName} | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890-11`,
+    fullText: `[사진 글자 추출] 파일명: ${photo.name} | 촬영일: ${photo.date} | 상호: (주)성수오피스디포 | 사업자번호: 123-45-67890 | 품목: ${cleanTags.join(' · ') || baseName} | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890-11`,
     tsvTableText: `항목\t추출값\n파일명\t${photo.name}\n촬영일\t${photo.date}\n핵심내용\t${cleanTags.join(', ')}\n사업자번호\t123-45-67890\n합계금액\t145,000원\n입금계좌\t국민은행 012-3456-7890-11`,
     liveTextSpots: [
       {
         id: 'p_spot_1',
         topPercent: 10,
         leftPercent: 6,
-        categoryHint: '상단 문서/사진 헤더',
-        displayText: `문서/사진 제목: ${baseName} (촬영일자: ${photo.date})`,
+        categoryHint: '제목·촬영일',
+        displayText: `${baseName} (${photo.date})`,
         insertValue: `${baseName} (${photo.date})`,
       },
       {
         id: 'p_spot_2',
         topPercent: 26,
         leftPercent: 6,
-        categoryHint: '상호·기관명',
-        displayText: '상호: (주)성수오피스디포  |  사업자번호: 123-45-67890',
-        insertValue: '123-45-67890',
+        categoryHint: '상호·내용',
+        displayText: `(주)성수오피스디포  |  ${cleanTags.slice(0, 2).join(' · ') || baseName}`,
+        insertValue: `(주)성수오피스디포 (${cleanTags.slice(0, 2).join(', ') || baseName})`,
         isPrimaryHighlight: true,
       },
       {
         id: 'p_spot_3',
         topPercent: 43,
         leftPercent: 6,
-        categoryHint: '품명·내역 문구',
-        displayText: `내역 문구: ${cleanTags.join(' · ') || '현장 확인 및 납품 검수 내역서'}`,
-        insertValue: cleanTags.join(' · ') || baseName,
+        categoryHint: '사업자번호',
+        displayText: '사업자등록번호: 123-45-67890',
+        insertValue: '123-45-67890',
+        isPrimaryHighlight: true,
       },
       {
         id: 'p_spot_4',
-        topPercent: 61,
+        topPercent: 60,
         leftPercent: 6,
-        categoryHint: '합계금액·단가',
-        displayText: '공급가액 131,818원  +  부가세 13,182원  =  합계금액 145,000원',
+        categoryHint: '합계금액',
+        displayText: '공급가액 131,818원  |  부가세 13,182원  |  합계: 145,000원',
         insertValue: '145,000원',
         isPrimaryHighlight: true,
       },
       {
         id: 'p_spot_5',
-        topPercent: 79,
+        topPercent: 78,
         leftPercent: 6,
-        categoryHint: '계좌·연락처',
-        displayText: '결제계좌: 국민은행 012-3456-7890-11 (담당자 010-1234-5678)',
+        categoryHint: '입금계좌',
+        displayText: '입금계좌: 국민은행 012-3456-7890-11',
         insertValue: '국민은행 012-3456-7890-11',
         isPrimaryHighlight: true,
       },
@@ -587,224 +565,184 @@ export function buildOcrPresetFromPhoto(photo: PhotoItem): OcrSamplePreset {
 }
 
 export const GhostBabyMascotBadge: React.FC<{ subtitle?: string }> = ({ subtitle }) => (
-  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-xl bg-gradient-to-r from-teal-500/25 via-emerald-500/20 to-cyan-500/20 border border-teal-400/50 shadow-[0_0_16px_rgba(20,184,166,0.28)] shrink-0">
-    <span className="w-7 h-7 rounded-lg bg-teal-400/20 border border-teal-300/60 flex items-center justify-center text-[17px] shadow-inner">
-      👻
-    </span>
+  <div className="inline-flex items-center gap-2 select-none">
+    <div className="relative w-7 h-7 rounded-xl bg-gradient-to-br from-teal-400/25 via-emerald-400/15 to-amber-300/20 border border-teal-300/50 flex items-center justify-center shadow-[0_0_12px_rgba(45,212,191,0.3)] shrink-0">
+      <svg viewBox="0 0 36 36" className="w-5 h-5" aria-hidden="true">
+        <path
+          d="M18 4C11.4 4 6.5 9 6.5 15.6v12.2c0 1.4 1.6 2.2 2.7 1.3l2.2-1.8c.8-.6 1.9-.6 2.7 0l2.1 1.7c.9.8 2.3.8 3.2 0l2.1-1.7c.8-.6 1.9-.6 2.7 0l2.2 1.8c1.1.9 2.7.1 2.7-1.3V15.6C29.5 9 24.6 4 18 4z"
+          fill="#F8FAFC"
+        />
+        <circle cx="14" cy="15.5" r="2" fill="#0F172A" />
+        <circle cx="22" cy="15.5" r="2" fill="#0F172A" />
+        <circle cx="13.3" cy="14.8" r="0.7" fill="#FFFFFF" />
+        <circle cx="21.3" cy="14.8" r="0.7" fill="#FFFFFF" />
+        <ellipse cx="11.2" cy="18.2" rx="1.6" ry="0.9" fill="#FB7185" opacity="0.75" />
+        <ellipse cx="24.8" cy="18.2" rx="1.6" ry="0.9" fill="#FB7185" opacity="0.75" />
+        <path
+          d="M15.4 18.8c.8 1.1 1.7 1.6 2.6 1.6s1.8-.5 2.6-1.6"
+          stroke="#0F172A"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+    </div>
     <div className="flex flex-col leading-none">
-      <span className="text-[12px] font-black text-teal-200 tracking-tight">
-        애기귀신 현장소환 (Ctrl+0 · Ctrl+우클릭 · 우클릭 0.35초 꾹~~)
-      </span>
+      <div className="flex items-center gap-1.5">
+        <span className="font-headline-sm text-[13.5px] font-black tracking-tight text-white">
+          귀신같이
+        </span>
+        <span className="px-1.5 py-0.5 rounded bg-teal-400/20 border border-teal-300/40 text-teal-200 font-mono text-[10px] font-extrabold">
+          우클릭 꾹 · Ctrl+0
+        </span>
+      </div>
       {subtitle && (
-        <span className="text-[10px] font-bold text-emerald-300/90 mt-0.5">{subtitle}</span>
+        <span className="text-[10.5px] text-zinc-400 font-semibold mt-0.5">{subtitle}</span>
       )}
     </div>
   </div>
 );
 
-export const GhostWindowThreeStageMockup: React.FC<{
+interface GhostWindowThreeStageMockupProps {
   activeTier?: GhostWindowTierMode;
   onTierChange?: (tier: GhostWindowTierMode) => void;
   initialWindowTab?: GhostWindowUiTab;
   externalOcrPhoto?: PhotoItem | null;
-}> = ({
+}
+
+export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupProps> = ({
   activeTier = 'pc_free',
   onTierChange,
   initialWindowTab = 'ui1_basic',
   externalOcrPhoto = null,
 }) => {
   const [windowTab, setWindowTab] = useState<GhostWindowUiTab>(initialWindowTab);
+  const [tierMode, setTierMode] = useState<GhostWindowTierMode>(activeTier);
+
+  useEffect(() => {
+    setTierMode(activeTier);
+  }, [activeTier]);
+
   useEffect(() => {
     setWindowTab(initialWindowTab);
   }, [initialWindowTab]);
 
-  useEffect(() => {
-    if (externalOcrPhoto) {
-      setWindowTab('ui3_ocr');
-    }
-  }, [externalOcrPhoto]);
-
-  // ── 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 라이브 시뮬레이션 상태 ──
-  const [rightClickSummonFeedback, setRightClickSummonFeedback] = useState<string | null>(null);
-  const [isRightClickPulse, setIsRightClickPulse] = useState(false);
-  const rbuttonTimerRef = React.useRef<number | null>(null);
-  const rbuttonDownPosRef = React.useRef<{ x: number; y: number } | null>(null);
-  const suppressNextContextMenuRef = React.useRef<boolean>(false);
-
-  const triggerMockupSummonFeedback = (methodLabel: string) => {
-    playExistingGhostSound('summon');
-    setRingProgress(100);
-    setIsRightClickPulse(true);
-    setRightClickSummonFeedback(
-      `🎯 [${methodLabel} 호출 성공!] 오른손을 마우스에서 떼지 않고 0.01초 만에 현재 창(${
-        windowTab === 'ui1_basic'
-          ? '창 UI ① 기본 귀신창'
-          : windowTab === 'ui2_summon'
-          ? '창 UI ② 귀신 미니 탐색기'
-          : '창 UI ③ 사진·Live Text'
-      })을 즉시 소환했습니다! (윈도우 기본 우클릭 메뉴 겹침 0%)`
-    );
-    useSaySeeStore.setState({
-      lastQuarantineToast: `👻 [${methodLabel}] 0.01초 현장 소환 발동! (기본 우클릭 메뉴 자동 차단됨)`,
-    });
-    window.setTimeout(() => setIsRightClickPulse(false), 900);
-  };
-
-  const handleMockupMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 2) return; // 우클릭만 감지
-    // 급소 3: 귀신창이 열린 상태에서 한 번 더 우클릭 시 ➔ 귀신창 닫고 원래 윈도우 기본 우클릭 메뉴 통과(Pass-through)
-    if (rightClickSummonFeedback && !e.ctrlKey) {
-      setRightClickSummonFeedback(null);
-      suppressNextContextMenuRef.current = false;
-      return;
-    }
-    if (e.ctrlKey) {
-      // ② 왼손 Ctrl + 오른손 마우스 우클릭 (딸깍) 즉시 호출!
-      suppressNextContextMenuRef.current = true;
-      triggerMockupSummonFeedback('Ctrl + 우클릭 (딸깍)');
-      return;
-    }
-    // ③ 오른손 마우스 한 손 단독: 우클릭 0.35초 꾹~~ (Long-Press) 감지 시작
-    rbuttonDownPosRef.current = { x: e.clientX, y: e.clientY };
-    if (rbuttonTimerRef.current) window.clearTimeout(rbuttonTimerRef.current);
-    rbuttonTimerRef.current = window.setTimeout(() => {
-      suppressNextContextMenuRef.current = true;
-      triggerMockupSummonFeedback('우클릭 0.35초 꾹~~ (한 손 단독)');
-      rbuttonTimerRef.current = null;
-    }, 350);
-  };
-
-  const handleMockupMouseMove = (e: React.MouseEvent) => {
-    if (!rbuttonDownPosRef.current || !rbuttonTimerRef.current) return;
-    const dx = Math.abs(e.clientX - rbuttonDownPosRef.current.x);
-    const dy = Math.abs(e.clientY - rbuttonDownPosRef.current.y);
-    if (dx > 5 || dy > 5) {
-      // 급소 4: 5px 초과 이동/마우스 제스처 시 롱프레스 즉시 취소 (마우스 제스처 100% 보존)
-      window.clearTimeout(rbuttonTimerRef.current);
-      rbuttonTimerRef.current = null;
-      rbuttonDownPosRef.current = null;
-    }
-  };
-
-  const handleMockupMouseUp = (e: React.MouseEvent) => {
-    if (e.button !== 2) return;
-    if (rbuttonTimerRef.current) {
-      window.clearTimeout(rbuttonTimerRef.current);
-      rbuttonTimerRef.current = null;
-    }
-    rbuttonDownPosRef.current = null;
-  };
-
-  const handleMockupContextMenu = (e: React.MouseEvent) => {
-    if (suppressNextContextMenuRef.current || e.ctrlKey) {
-      e.preventDefault();
-      e.stopPropagation();
-      suppressNextContextMenuRef.current = false;
-    }
-  };
-
-  // ── [창 UI ①] 상태 ──
-  const [openHeaderDrawer, setOpenHeaderDrawer] = useState<'none' | 'snippets' | 'clipboard'>(
-    'snippets'
-  );
+  // ── 창 UI ① 상태 (2줄 미니멀 바 + 조건부 펼침: 상용구 F1~F12 / 클립보드 Win+V 사이즈) ──
+  const [openHeaderDrawer, setOpenHeaderDrawer] = useState<'none' | 'snippets' | 'clipboard'>('none');
   const [snippets, setSnippets] = useState<SnippetSlotItem[]>(INITIAL_SNIPPET_SLOTS_12);
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [clipboardQuery, setClipboardQuery] = useState('');
   const [ui1EditorText, setUi1EditorText] = useState(
-    '안녕하세요 대표님, 요청하신 계좌번호와 사업자 정보 아래에 전달드립니다.\n👉 '
+    '안녕하세요, 요청하신 정산 계좌 및 서류 정보를 아래에 전달드립니다: '
   );
-  const [activeWave1Ability, setActiveWave1Ability] = useState<number>(1);
-  const [autoReturnedFromOneTimePop, setAutoReturnedFromOneTimePop] = useState(false);
+  const [activeWave1Ability, setActiveWave1Ability] = useState<number>(2);
 
-  // ── [2차 딥리서치 & 레드팀 6대 핀셋 방어 확정 상태] ──
-  // ① 창 UI ① 기본 유지 + 상단 0순위 인라인 소환 브릿지 (드래그/물음표 없이 타이핑 중 호출 시 창 UI ① 실종 방지)
-  const [showUi1InlineLookbehindBridge, setShowUi1InlineLookbehindBridge] = useState<boolean>(true);
-  // ② 🎮 60초 게이밍 온보딩 『👻 애기귀신 소환술 3단 수련장』 & 0.35초 원형 게이지 + 기존 등장·성공 효과음 연동
-  const [trainingStage, setTrainingStage] = useState<1 | 2 | 3>(1);
-  const [ringProgress, setRingProgress] = useState<number>(0);
-  // ③ 🎁 모든 귀신 초능력 30일 무제한 체험권 수여식 (Opt-in Trial) & 📊 일 3회 도달 손실회피 시간 절약 성적표 모달
-  const [trialOptInAccepted, setTrialOptInAccepted] = useState<boolean>(true);
-  const [activePromoModal, setActivePromoModal] = useState<'none' | 'opt_in_30d' | 'loss_aversion_3limit'>('none');
-  // ④ 🏷️ 귀신 라벨러 날짜 3원칙 (`YYMMDD_`, `YYMMDD_카톡_`, `YYMMDD_내용_`) & 개인➔업무 스마트 재라벨링 시연 상태
-  const [labelerScopeMode, setLabelerScopeMode] = useState<'personal' | 'work_s' | 'smart_upgrade'>('work_s');
-
-  const playExistingGhostSound = (mode: 'summon' | 'success') => {
-    try {
-      const audioSrc =
-        mode === 'summon'
-          ? '/sounds/active_summon_sound.wav'
-          : '/sounds/active_typo_sound.wav';
-      const audio = new Audio(audioSrc);
-      audio.volume = 0.65;
-      void audio.play().catch(() => {});
-    } catch {
-      // ignore audio error in headless/autoplay-blocked environments
-    }
-  };
-
-  const filteredClipboardItems = useMemo(() => {
-    const q = clipboardQuery.trim().toLowerCase();
-    if (!q) return SAMPLE_CLIPBOARD_30DAYS.slice(0, 5); // 평소엔 최근 5개만 깔끔 노출
-    return SAMPLE_CLIPBOARD_30DAYS.filter(
-      (item) =>
-        item.content.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
-    );
-  }, [clipboardQuery]);
-
-  // ── [창 UI ②: 귀신 미니 탐색기] 상태 ──
+  // ── 창 UI ② 상태 (귀신 미니 탐색기 — 현장 문서·사진·영상 통합 소환 & 이어서 검색) ──
   const [scenarioIdx, setScenarioIdx] = useState(0);
   const currentScenario = SUMMON_SCENARIOS[scenarioIdx] || SUMMON_SCENARIOS[0];
   const [ui2EditorText, setUi2EditorText] = useState(currentScenario.initialEditorText);
-  const [miniExplorerQuery, setMiniExplorerQuery] = useState('');
-  const [mediaFilter, setMediaFilter] = useState<MiniExplorerMediaFilter>('all');
-  const [scopeFilter, setScopeFilter] = useState<'all' | GhostWindowTierMode>('all');
-  const [hoveredCandidateId, setHoveredCandidateId] = useState<string>(
-    MINI_EXPLORER_ITEMS[0]?.id || 'mini_doc_1'
-  );
-  const [attachedFileBadge, setAttachedFileBadge] = useState<string | null>(null);
+  const [miniExplorerQuery, setMiniExplorerQuery] = useState('계약서 보증금');
+  const [miniMediaFilter, setMiniMediaFilter] = useState<MiniExplorerMediaFilter>('all');
+  const [hoveredCandidateId, setHoveredCandidateId] = useState<string>(MINI_EXPLORER_ITEMS[0].id);
   const [summonReplacedNotice, setSummonReplacedNotice] = useState<string | null>(null);
-  const [row0PhoneOcrDocked, setRow0PhoneOcrDocked] = useState<boolean>(true);
-  const [microHabitNudgeText, setMicroHabitNudgeText] = useState<string | null>(null);
+  const [attachedFileBadge, setAttachedFileBadge] = useState<string | null>(null);
+  const [showRow0PhoneOcrDock, setShowRow0PhoneOcrDock] = useState<boolean>(true);
+  const [phoneOcrDockSeconds, setPhoneOcrDockSeconds] = useState<number>(58);
 
   useEffect(() => {
     const scen = SUMMON_SCENARIOS[scenarioIdx] || SUMMON_SCENARIOS[0];
     setUi2EditorText(scen.initialEditorText);
-    setAttachedFileBadge(null);
     setSummonReplacedNotice(null);
-    setRow0PhoneOcrDocked(true);
-    setMicroHabitNudgeText(null);
-    if (scen.safetyNetStage === 1 && scen.targetToken) {
-      setMiniExplorerQuery(scen.targetToken);
-    } else if (scen.safetyNetStage === 2) {
+    setAttachedFileBadge(null);
+    if (scenarioIdx === 0) {
+      setMiniExplorerQuery('계약서 보증금');
+      setMiniMediaFilter('all');
+    } else if (scenarioIdx === 1) {
+      setMiniExplorerQuery('A업체 납품단가');
+      setMiniMediaFilter('all');
+    } else {
       setMiniExplorerQuery('');
+      setMiniMediaFilter('all');
     }
   }, [scenarioIdx]);
 
-  // 검색어에 '사진', '영상', '문서' 포함 시 자동 필터링 연동 또는 수동 탭 필터
-  const effectiveMediaFilter = useMemo<MiniExplorerMediaFilter>(() => {
-    if (mediaFilter !== 'all') return mediaFilter;
-    const q = miniExplorerQuery.trim();
-    if (q.includes('사진') || q.includes('영수증') || q.includes('사업자')) return 'photo';
-    if (q.includes('영상') || q.includes('동영상') || q.includes('시연')) return 'video';
-    if (q.includes('문서') || q.includes('계약서') || q.includes('단가표')) return 'doc';
-    return 'all';
-  }, [mediaFilter, miniExplorerQuery]);
+  // ── 창 UI ③ 상태 (사진·스샷 글자 톡톡 찍기) ──
+  const [ocrPresetIdx, setOcrPresetIdx] = useState(0);
+  const [clickedSpotIds, setClickedSpotIds] = useState<string[]>([]);
+  const [ui3CursorEditorText, setUi3CursorEditorText] = useState('입금하실 금액 및 계좌: ');
+  const [ttlSecondsLeft, setTtlSecondsLeft] = useState<number>(58);
+  const [oneTimePopUsed, setOneTimePopUsed] = useState<boolean>(false);
+  const [lastInsertedSpotNotice, setLastInsertedSpotNotice] = useState<string | null>(null);
+
+  // ── 하단 부가 체험 모달 상태 (귀신 라벨러 / 귀신 말풍선 / 30일 체험 모달 / 일 3회 성적표 모달) ──
+  const [labelerScopeMode, setLabelerScopeMode] = useState<'personal' | 'work_s'>('personal');
+  const [activePromoModal, setActivePromoModal] = useState<'none' | 'opt_in_30d' | 'loss_aversion_3limit' | 'training_dojo'>('none');
+  const [trialOptInAccepted, setTrialOptInAccepted] = useState<boolean>(true);
+  const [trainingStage, setTrainingStage] = useState<1 | 2 | 3>(1);
+
+  const playExistingGhostSound = (kind: 'summon' | 'success') => {
+    try {
+      const src =
+        kind === 'summon'
+          ? '/sounds/active_summon_sound.wav'
+          : '/sounds/active_typo_sound.wav';
+      const audio = new Audio(src);
+      audio.volume = 0.45;
+      void audio.play().catch(() => {});
+    } catch {
+      // ignore audio autoplay block
+    }
+  };
+
+  useEffect(() => {
+    if (windowTab !== 'ui3_ocr' || oneTimePopUsed) return;
+    const timer = window.setInterval(() => {
+      setTtlSecondsLeft((prev) => (prev > 1 ? prev - 1 : 60));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [windowTab, oneTimePopUsed]);
+
+  useEffect(() => {
+    if (windowTab !== 'ui2_summon' || !showRow0PhoneOcrDock) return;
+    const timer = window.setInterval(() => {
+      setPhoneOcrDockSeconds((prev) => (prev > 1 ? prev - 1 : 60));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [windowTab, showRow0PhoneOcrDock]);
+
+  const activeOcrPreset: OcrSamplePreset = useMemo(() => {
+    if (externalOcrPhoto) {
+      return buildOcrPresetFromPhoto(externalOcrPhoto);
+    }
+    return OCR_PRESETS[ocrPresetIdx] || OCR_PRESETS[0];
+  }, [externalOcrPhoto, ocrPresetIdx]);
+
+  const filteredClipboardItems = useMemo(() => {
+    const q = clipboardQuery.trim().toLowerCase();
+    const matched = q
+      ? SAMPLE_CLIPBOARD_30DAYS.filter(
+          (c) =>
+            c.content.toLowerCase().includes(q) || c.category.toLowerCase().includes(q)
+        )
+      : SAMPLE_CLIPBOARD_30DAYS;
+    return matched.slice(0, 5);
+  }, [clipboardQuery]);
 
   const filteredMiniExplorerItems = useMemo(() => {
     const q = miniExplorerQuery.trim().toLowerCase();
     return MINI_EXPLORER_ITEMS.filter((item) => {
-      if (effectiveMediaFilter !== 'all' && item.mediaType !== effectiveMediaFilter) {
-        return false;
-      }
-      if (scopeFilter !== 'all' && item.tierScope !== scopeFilter) {
+      if (miniMediaFilter !== 'all' && item.mediaType !== miniMediaFilter) {
         return false;
       }
       if (!q) return true;
-      const haystack = `${item.fileName} ${item.matchedValueShort} ${item.keywords.join(' ')} ${item.ghostPreviewLines.join(' ')}`.toLowerCase();
-      return q.split(/\s+/).some((token) => token && haystack.includes(token));
+      const hay = `${item.fileName} ${item.matchedValueShort} ${item.keywords.join(' ')}`.toLowerCase();
+      return (
+        hay.includes(q) ||
+        q.split(/\s+/).some((tok) => tok.length >= 2 && hay.includes(tok))
+      );
     });
-  }, [effectiveMediaFilter, scopeFilter, miniExplorerQuery]);
+  }, [miniExplorerQuery, miniMediaFilter]);
 
   const activeCandidate = useMemo(
     () =>
@@ -814,324 +752,137 @@ export const GhostWindowThreeStageMockup: React.FC<{
     [filteredMiniExplorerItems, hoveredCandidateId]
   );
 
-  // ── [창 UI ③] 상태: 1분 유효시간(60초 TTL) + 1회 노출 후 자동 소멸(One-Time Pop) & 원본 화면 위 Live Text 오버레이 ──
-  const customPhotoPreset = useMemo(
-    () => (externalOcrPhoto ? buildOcrPresetFromPhoto(externalOcrPhoto) : null),
-    [externalOcrPhoto]
-  );
-  const [selectedOcrPresetId, setSelectedOcrPresetId] = useState<string>('ocr_receipt');
-  const activeOcrPreset = useMemo(() => {
-    if (customPhotoPreset && selectedOcrPresetId === customPhotoPreset.id) {
-      return customPhotoPreset;
-    }
-    return OCR_PRESETS.find((p) => p.id === selectedOcrPresetId) || OCR_PRESETS[0];
-  }, [customPhotoPreset, selectedOcrPresetId]);
+  const handleSelectTier = (next: GhostWindowTierMode) => {
+    setTierMode(next);
+    onTierChange?.(next);
+  };
 
-  useEffect(() => {
-    if (customPhotoPreset) {
-      setSelectedOcrPresetId(customPhotoPreset.id);
-    }
-  }, [customPhotoPreset]);
-
-  const [ttlSecondsLeft, setTtlSecondsLeft] = useState<number>(58);
-  const [oneTimePopUsed, setOneTimePopUsed] = useState<boolean>(false);
-  const [clickedSpotIds, setClickedSpotIds] = useState<string[]>([]);
-  const [ui3CursorEditorText, setUi3CursorEditorText] = useState(
-    '경리팀 공유드립니다. 방금 찍은 내역: '
-  );
-  const [lastInsertedSpotNotice, setLastInsertedSpotNotice] = useState<string | null>(null);
-
-  // 1분(60초) 유효 타이머 카운트다운
-  useEffect(() => {
-    if (windowTab !== 'ui3_ocr') return;
-    const timer = window.setInterval(() => {
-      setTtlSecondsLeft((prev) => (prev > 1 ? prev - 1 : 60));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [windowTab]);
-
-  const insertIntoUi1Editor = (textToInsert: string, label: string) => {
-    playExistingGhostSound('success');
-    setUi1EditorText((prev) => `${prev}${prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' '}${textToInsert}`);
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(textToInsert);
-    }
+  const insertIntoUi1Editor = (val: string, label: string) => {
+    setUi1EditorText((prev) => `${prev}${prev.endsWith(' ') ? '' : ' '}${val}`);
     useSaySeeStore.setState({
-      lastQuarantineToast: `👻 [${label}] 현재 커서 자리에 0.01초 만에 꽂혔습니다: "${textToInsert}"`,
+      lastQuarantineToast: `👻 [${label}] 커서 위치에 입력되었습니다.`,
     });
   };
 
-  const triggerMicroHabitNudgeIfNeeded = () => {
-    if (currentScenario.safetyNetStage === 2 || !ui2EditorText.trim()) {
-      setMicroHabitNudgeText(
-        '💡 [3단계 행동교정 마이크로 넛지 (1.5초 노출)] 팁: 다음엔 채팅창에 바로 "단가?"라고 치고 우클릭해 보세요 (2배 빨라집니다)'
+  const handleSummonReplace = (cand: SummonCandidateItem) => {
+    const token = currentScenario.targetToken;
+    if (cand.mediaType === 'photo' || cand.mediaType === 'video') {
+      setAttachedFileBadge(
+        `${cand.mediaType === 'photo' ? '🖼️ 사진 첨부됨' : '🎬 영상 장면 첨부됨'}: ${cand.fileName}`
       );
-      window.setTimeout(() => {
-        setMicroHabitNudgeText((prev) =>
-          prev?.includes('마이크로 넛지') ? null : prev
-        );
-      }, 3800);
     }
-  };
-
-  const handleInsertRow0DockChip = (chipLabel: string, chipValue: string) => {
-    setUi2EditorText((prev) => `${prev}${prev.endsWith(' ') || !prev ? '' : ' '}${chipValue}`);
-    setRow0PhoneOcrDocked(false);
-    setSummonReplacedNotice(
-      `⚡ [Row 0 특설 행 15KB 선발대 OCR 단어칩 주입 완료] "${chipLabel}" ➔ 커서에 즉시 삽입되고 Row 0 사진 바가 자동 소멸(Auto-Dismiss)되었습니다!`
-    );
-    triggerMicroHabitNudgeIfNeeded();
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(chipValue);
+    if (ui2EditorText.includes(token)) {
+      setUi2EditorText(ui2EditorText.replace(token, cand.replaceSentence));
+    } else {
+      setUi2EditorText((prev) => `${prev} ${cand.replaceSentence}`);
     }
+    setSummonReplacedNotice(`✨ [${cand.fileName}] 내용이 작업창에 바로 입력되었습니다.`);
     useSaySeeStore.setState({
-      lastQuarantineToast: `📱⚡ [Row 0 60초 시한부 단어칩 주입] "${chipValue}" 0.1초 입력 후 특설 행 자동 소멸!`,
+      lastQuarantineToast: `👻 [${cand.fileName}] 작업창에 즉시 반영되었습니다!`,
     });
   };
 
-  const applySummonCandidateToEditor = (
-    cand: SummonCandidateItem,
-    actionMode: 'insert_value' | 'attach_file' | 'open_ocr_ui3' | 'capture_video_scene' = 'insert_value'
-  ) => {
-    // 1~5번 로컬/S: 드라이브 항목 클릭 시 Row 0 사진 도킹 행은 방해 없이 자동 소멸(Auto-Dismiss)
-    setRow0PhoneOcrDocked(false);
-    triggerMicroHabitNudgeIfNeeded();
-    if (actionMode === 'open_ocr_ui3') {
-      setSelectedOcrPresetId('ocr_receipt');
-      setOneTimePopUsed(false);
-      setTtlSecondsLeft(60);
-      setWindowTab('ui3_ocr');
-      useSaySeeStore.setState({
-        lastQuarantineToast: `📝 [${cand.fileName}] 사진에서 [창 UI ③ 원본 화면 위 글자 톡톡 찍기] 모드로 즉시 직결되었습니다!`,
-      });
-      return;
-    }
-    if (actionMode === 'attach_file') {
-      setAttachedFileBadge(`${cand.fileName} (${cand.sourceBadge})`);
-      useSaySeeStore.setState({
-        lastQuarantineToast: `📎 [귀신 미니 탐색기 즉시 첨부] 윈도우 탐색기를 열지 않고 [${cand.fileName}] 원본을 현재 작업창에 바로 첨부했습니다!`,
-      });
-      return;
-    }
-    if (actionMode === 'capture_video_scene') {
-      const sceneLabel = `${cand.fileName} [${cand.videoTimestamp || '01:24'} 핵심장면 스틸컷 이미지]`;
-      setAttachedFileBadge(sceneLabel);
-      setSummonReplacedNotice(
-        `📸 영상 전체를 다 보지 않고 AI가 포착한 [${cand.videoTimestamp || '01:24'}] 핵심 장면 캡처 이미지를 현재 커서에 바로 삽입했습니다!`
-      );
-      useSaySeeStore.setState({
-        lastQuarantineToast: `📸 [영상 핵심장면(${cand.videoTimestamp || '01:24'}) 캡처 삽입 완료] ${cand.fileName}`,
-      });
-      return;
-    }
-    const nextText =
-      currentScenario.targetToken && ui2EditorText.includes(currentScenario.targetToken)
-        ? ui2EditorText.replace(currentScenario.targetToken, cand.replaceSentence)
-        : ui2EditorText.trim()
-          ? `${ui2EditorText} ➔ ${cand.replaceSentence}`
-          : cand.replaceSentence;
-    setUi2EditorText(nextText);
-    setSummonReplacedNotice(
-      currentScenario.targetToken
-        ? `✨ "${currentScenario.targetToken}" 구간이 현장 소환된 정답으로 즉시 덮어쓰기(Overwrite) 교체되었습니다!`
-        : `✨ 빈칸 호출(오발송 위험 0%) 상태에서 "${cand.replaceSentence}" 정답이 커서에 즉시 입력되었습니다!`
-    );
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(cand.replaceSentence);
-    }
-    useSaySeeStore.setState({
-      lastQuarantineToast: `👻 [귀신 미니 탐색기 소환 완료] "${cand.replaceSentence}" 내 커서 자리에 즉시 입력!`,
-    });
-  };
-
-  const handleTapLiveTextOnImage = (spot: LiveTextOverlaySpot) => {
-    setUi3CursorEditorText(
-      (prev) => `${prev}${prev.endsWith(' ') ? '' : ' '}${spot.insertValue}`
-    );
+  const handleClickLiveSpot = (spot: LiveTextOverlaySpot) => {
     setClickedSpotIds((prev) => (prev.includes(spot.id) ? prev : [...prev, spot.id]));
-    setOneTimePopUsed(true);
-    setLastInsertedSpotNotice(
-      `✨ 원본 화면 위 [${spot.categoryHint}] 글자 톡! ➔ "${spot.insertValue}" 커서 즉시 입력 완료! (1회 사용 완료 · 다음 Ctrl+0부터는 기본 귀신창으로 자동 복귀합니다)`
+    setUi3CursorEditorText((prev) =>
+      prev.endsWith(': ') || prev.length === 0 ? `${prev}${spot.insertValue}` : `${prev} / ${spot.insertValue}`
     );
+    setOneTimePopUsed(true);
+    setLastInsertedSpotNotice(`✅ "${spot.insertValue}" 복사 및 입력 완료`);
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(spot.insertValue);
     }
-    useSaySeeStore.setState({
-      lastQuarantineToast: `👆 [원본 화면 위 글자 톡톡 찍기] "${spot.insertValue}" 복사 및 커서 입력 완료! (One-Time Pop 사용 처리됨)`,
-    });
-  };
-
-  const handleSimulateNextCtrlZeroPress = () => {
-    setAutoReturnedFromOneTimePop(true);
-    setWindowTab('ui1_basic');
-    useSaySeeStore.setState({
-      lastQuarantineToast:
-        '⚡ [One-Time Pop 자동 소멸 작동!] 방금 사진창을 1회 사용했으므로, 다음 Ctrl+0 호출 시 지체 없이 원래의 기본 귀신창(창 UI ①)으로 돌아왔습니다!',
-    });
   };
 
   return (
     <section
-      onMouseDown={handleMockupMouseDown}
-      onMouseMove={handleMockupMouseMove}
-      onMouseUp={handleMockupMouseUp}
-      onContextMenu={handleMockupContextMenu}
-      className={`w-full flex flex-col gap-5 transition-all ${
-        isRightClickPulse ? 'ring-4 ring-amber-400/80 rounded-3xl' : ''
-      }`}
+      aria-label="귀신창 3대 창 UI"
+      className="w-full rounded-3xl bg-[#0B0D12] border border-white/10 p-4 sm:p-6 flex flex-col gap-5 text-zinc-100 shadow-xl"
     >
-      {/* 1. 상단 패러다임 선언 & 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 & 3단 구역 배지 바 */}
-      <div className="p-5 rounded-3xl bg-gradient-to-br from-zinc-900 via-[#12161F] to-zinc-950 border border-teal-500/35 shadow-xl flex flex-col gap-4">
+      {/* 1. 상단 심플 헤더 & 3대 창 UI 탭 스위치 */}
+      <div className="flex flex-col gap-3.5 pb-4 border-b border-white/10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <GhostBabyMascotBadge subtitle="탐색기로 찾아가던 시대에서 ➔ 일하던 현장으로 귀신을 부르는 시대로!" />
-            <span className="px-3 py-1 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-[11.5px] font-extrabold">
-              ⚡ 숫자 0 = 마우스 우클릭 일원화: ① Ctrl+0 | ② Ctrl+우클릭(딸깍) | ③ 우클릭 0.35초 꾹~~ (한손 단독!)
-            </span>
+          <div className="flex items-center gap-2.5">
+            <GhostBabyMascotBadge subtitle="일하다 막힐 때 언제든 부르는 작업 도우미" />
           </div>
 
-          {/* 3단 분리 스위치: 💻 내 PC (무료구역) / 📱 폰+PC (내 기기 통합) / 💼 팀 공유 (업무 공유) */}
-          <div className="inline-flex flex-wrap items-center p-1 rounded-2xl bg-zinc-950 border border-white/10 gap-1">
-            {[
-              {
-                id: 'pc_free' as const,
-                label: '🆓 💻 내 PC (내PC 문서·사진·영상 소환 평생무료 · 초능력 일 3회 무료)',
-                defaultTab: 'ui1_basic' as const,
-              },
-              {
-                id: 'phone_pc' as const,
-                label: '👑 📱 폰 + PC (폰 촬영·스샷 1분내 1회 자동소멸 · 월 3,900원)',
-                defaultTab: 'ui3_ocr' as const,
-              },
-              {
-                id: 'work_team' as const,
-                label: '👑 💼 팀 공유 (F7~F12 팀 상용구 · S: 문서·사진·영상 소환 · 월 9,900원~)',
-                defaultTab: 'ui2_summon' as const,
-              },
-            ].map((tier) => {
-              const active = activeTier === tier.id;
+          {/* 우측: 환경 모드 스위치 + 체험 모달 버튼 */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                { id: 'pc_free' as const, label: '💻 내 PC (무료)' },
+                { id: 'phone_pc' as const, label: '📱 폰 + PC' },
+                { id: 'work_team' as const, label: '💼 팀 공유 (S:)' },
+              ]
+            ).map((t) => {
+              const active = tierMode === t.id;
               return (
                 <button
-                  key={tier.id}
+                  key={t.id}
                   type="button"
-                  onClick={() => {
-                    onTierChange?.(tier.id);
-                    setWindowTab(tier.defaultTab);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+                  onClick={() => handleSelectTier(t.id)}
+                  className={`px-3 py-1.5 rounded-xl font-label-sm text-[12px] font-extrabold transition-all cursor-pointer border ${
                     active
-                      ? 'bg-teal-400 text-zinc-950 shadow-sm'
-                      : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                      ? 'bg-teal-400 text-zinc-950 border-teal-300 shadow-xs'
+                      : 'bg-zinc-900/90 text-zinc-300 border-white/10 hover:bg-zinc-800'
                   }`}
                 >
-                  {tier.label}
+                  {t.label}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 라이브 체험 안내 바 + 레드팀 4대 실전 안전핀 배지 */}
-        <div className="px-4 py-2.5 rounded-2xl bg-zinc-950/90 border border-amber-400/40 flex flex-col gap-2 text-[12px]">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2 font-extrabold text-zinc-200">
-              <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-black text-[11px]">
-                🖱️ 이 화면에서 지금 바로 우클릭해 보세요!
-              </span>
-              <span>
-                ① 키보드 두 손: <code className="text-teal-300">Ctrl + 0</code>
-              </span>
-              <span className="text-zinc-600">|</span>
-              <span>
-                ② 왼손 Ctrl + 오른손 마우스: <code className="text-amber-300">Ctrl + 우클릭 (딸깍)</code>
-              </span>
-              <span className="text-zinc-600">|</span>
-              <span>
-                ③ 오른손 마우스 한 손 단독: <code className="text-emerald-300">우클릭 0.35초 꾹~~ (Long-Press)</code>
-              </span>
-            </div>
-            <span className="px-2 py-0.5 rounded-md bg-teal-500/20 border border-teal-400/40 text-teal-200 text-[10.5px] font-black">
-              📜 특허 제10호 탑재 (60초 시한부 원샷 + 무오픈 현장 탐색기)
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-white/10 text-[11px] font-bold text-zinc-300">
-            <span className="text-emerald-300 font-black">🛡️ 레드팀 4대 안전핀 (2차 심화 완비):</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-              ① 부모창 + WindowFromPoint 자식 컨트롤 이중 WM_CANCELMODE (먹통 0%)
-            </span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-              ② 2단계 무오염 드래그 스냅샷 (0.00초 EM_GETSEL + 0.35초 무음 Ctrl+C 후 원본 클립보드 복원)
-            </span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-              ③ 열린 상태에서 재우클릭 시 원래 메뉴 통과(Pass-through)
-            </span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-              ④ 5px 이동 및 전체화면 게임·3D CAD 자동 패스
-            </span>
-          </div>
-        </div>
-
-        {rightClickSummonFeedback && (
-          <div className="px-4 py-2.5 rounded-2xl bg-amber-400/20 border-2 border-amber-300 text-amber-100 text-[12.5px] font-black flex flex-wrap items-center justify-between gap-2">
-            <span>{rightClickSummonFeedback}</span>
-            <button
-              type="button"
-              onClick={() => setRightClickSummonFeedback(null)}
-              className="px-2.5 py-0.5 rounded-lg bg-zinc-900 text-zinc-200 text-[11px] font-bold cursor-pointer"
-            >
-              닫기 ✕
-            </button>
-          </div>
-        )}
-
-        {/* 3대 현장 소환창 UI 시안 선택 탭 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+        {/* 3대 귀신창 UI 선택 탭 (군더더기 설명 없이 깔끔한 3버튼) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
           {[
             {
               id: 'ui1_basic' as const,
-              badge: '창 UI ① · 평상시 (Ctrl+0 / Ctrl+우클릭 / 우클릭 꾹~~)',
-              title: '👻 기본 귀신창 (2줄 날렵 구조)',
-              desc: '윗줄: 👻 + [⌨️ 상용구 F1~F12 ▾] + [📋🔍 클립보드 ▾] / 아랫줄: Wave 1 핵심 초능력 5대 탭',
+              badge: '창 UI ①',
+              title: '기본 귀신창',
+              desc: '상용구(F1~F12) · 클립보드 · 5대 자동변환',
             },
             {
               id: 'ui2_summon' as const,
-              badge: '창 UI ② · 드래그(기본) / 끝에 ?(보조) + (Ctrl+0 / 우클릭 꾹~~)',
-              title: '👻 귀신 미니 탐색기 (현장 문서·사진·영상 통합 소환 & 이어서 검색)',
-              desc: '30년 된 윈도우 탐색기(Win+E) 대체! 문서·사진·영상을 현장에서 바로 소환하고 라이브 검색창으로 이어서 검색!',
+              badge: '창 UI ②',
+              title: '귀신 미니 탐색기',
+              desc: '작업 중 문서 · 사진 · 영상 바로 찾아 넣기',
             },
             {
               id: 'ui3_ocr' as const,
-              badge: '창 UI ③ · 1분 유효 + 1회 노출 자동소멸(One-Time Pop)',
-              title: '👻 원본 화면 위 글자 톡톡 찍기 (Live Text)',
-              desc: '어설픈 요약 칩 대신 원본 화면 위 글자 위치를 마우스로 톡톡 찍어 쏙쏙 입력 + 1회 사용 후 기본창 자동 복귀!',
+              badge: '창 UI ③',
+              title: '사진 글자 톡톡 찍기',
+              desc: '방금 찍은 사진 위 글자를 눌러 바로 입력',
             },
           ].map((tab) => {
-            const isSelected = windowTab === tab.id;
+            const active = windowTab === tab.id;
             return (
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => {
-                  setAutoReturnedFromOneTimePop(false);
-                  setWindowTab(tab.id);
-                }}
-                className={`p-3.5 rounded-2xl text-left border transition-all flex flex-col gap-1 cursor-pointer ${
-                  isSelected
-                    ? 'bg-teal-500/15 border-teal-400 ring-2 ring-teal-400/50 shadow-lg'
-                    : 'bg-zinc-950/80 hover:bg-zinc-900 border-white/10'
+                onClick={() => setWindowTab(tab.id)}
+                className={`p-3.5 rounded-2xl text-left flex flex-col gap-1 transition-all cursor-pointer border ${
+                  active
+                    ? 'bg-zinc-900 border-2 border-teal-400 shadow-[0_0_20px_rgba(20,184,166,0.18)]'
+                    : 'bg-zinc-950/70 hover:bg-zinc-900/60 border-white/10'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="px-2 py-0.5 rounded-md bg-teal-400/20 text-teal-300 text-[10.5px] font-black">
+                  <span className="text-[14px] font-black text-white">
+                    {tab.title}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[10.5px] font-black ${
+                      active ? 'bg-teal-400 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
+                    }`}
+                  >
                     {tab.badge}
                   </span>
-                  {isSelected && (
-                    <span className="text-[11px] font-black text-emerald-300">● 현재 시안 열림</span>
-                  )}
                 </div>
-                <div className="text-[14.5px] font-black text-white mt-0.5">{tab.title}</div>
-                <p className="text-[11.5px] text-zinc-300 leading-snug">{tab.desc}</p>
+                <span className="text-[12px] text-zinc-400 font-medium truncate">
+                  {tab.desc}
+                </span>
               </button>
             );
           })}
@@ -1139,77 +890,34 @@ export const GhostWindowThreeStageMockup: React.FC<{
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════════
-          [창 UI ① 시안] 평상시 Ctrl + 0 호출 ➔ 『기본 귀신창 (2줄 날렵 구조)』
+          [창 UI ①] 기본 귀신창 (슬림 2줄 + 상용구 F1~F12 + 클립보드)
          ════════════════════════════════════════════════════════════════════════ */}
       {windowTab === 'ui1_basic' && (
-        <div className="p-5 sm:p-6 rounded-3xl bg-[#111318] border-2 border-teal-400/50 shadow-[0_0_40px_rgba(20,184,166,0.15)] flex flex-col gap-5">
-          {autoReturnedFromOneTimePop && (
-            <div className="px-4 py-3 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-200 text-[13px] font-extrabold flex flex-wrap items-center justify-between gap-2">
-              <span>
-                ✅ <strong>[1분 유효 + 1회 노출 후 자동 소멸(One-Time Pop) 확인 완료!]</strong> 방금 사진/스샷 창을 1회 써먹었기 때문에, 다시 <code className="text-white">Ctrl + 0</code>을 누르자 귀찮게 사진창이 또 뜨지 않고 지체 없이 원래의 <strong>기본 귀신창(창 UI ①)</strong>으로 돌아왔습니다!
-              </span>
-              <button
-                type="button"
-                onClick={() => setAutoReturnedFromOneTimePop(false)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-200 text-[11px] font-bold cursor-pointer"
-              >
-                확인 ✕
-              </button>
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black">
-                창 UI ① 인터랙티브 시안
-              </span>
-              <h2 className="text-[16px] sm:text-[18px] font-black text-white">
-                평상시 <code className="text-teal-300">Ctrl + 0</code> 호출 ➔ 『기본 귀신창 (2줄 날렵 구조)』
-              </h2>
-            </div>
-            <span className="text-[12px] text-emerald-300 font-bold">
-              💡 우측 상단 [⌨️ 상용구 ▾] 또는 [📋🔍 클립보드 ▾] 아이콘을 직접 클릭해 보세요!
-            </span>
-          </div>
-
-          {/* ── 실제 화면에 뜨는 2줄 날렵 귀신창 프레임 ── */}
-          <div className="w-full max-w-[920px] mx-auto rounded-2xl bg-[#0B0E14] border-2 border-teal-400/70 shadow-[0_16px_45px_rgba(0,0,0,0.75)] overflow-hidden">
-            {/* [윗줄 — 헤더 바] 맨 앞 👻 애기귀신 마스코트 + 우측 [⌨️ 상용구 (F1~F12) ▾] & [📋🔍 클립보드 (최근 5개+검색) ▾] */}
-            <div className="px-3.5 py-2.5 bg-gradient-to-r from-zinc-900 via-[#111927] to-zinc-900 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-4">
+          <div className="rounded-2xl bg-[#090B10] border-2 border-teal-400/70 shadow-lg overflow-hidden">
+            {/* [1줄 차 헤더] 좌측 마스코트 + 우측 [상용구] [클립보드] */}
+            <div className="px-4 py-2.5 bg-gradient-to-r from-zinc-900 via-[#101822] to-zinc-900 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <GhostBabyMascotBadge subtitle="평소엔 날렵한 2줄 · 클릭 시 1줄 펼침" />
-                <span className="hidden sm:inline text-[11.5px] text-zinc-300 font-semibold">
-                  외운 단축키는 <strong className="text-teal-300">F1~F12</strong> 즉시 발사 (엑셀 F2·브라우저 F5 충돌 0%)
-                </span>
+                <GhostBabyMascotBadge />
+                <button
+                  type="button"
+                  onClick={() => setActivePromoModal('opt_in_30d')}
+                  className="px-2 py-0.5 rounded-full bg-teal-400/20 hover:bg-teal-400/30 border border-teal-300/50 text-teal-200 font-mono text-[10.5px] font-black cursor-pointer"
+                >
+                  {trialOptInAccepted ? '🎁 무제한 체험 D-29' : '🆓 일 3회 무료'}
+                </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
-                    setActivePromoModal((prev) =>
-                      prev === 'opt_in_30d' ? 'loss_aversion_3limit' : 'opt_in_30d'
-                    )
-                  }
-                  title="클릭하여 [🎁 30일 무제한 체험 수여식 모달] 및 [📊 일 3회 도달 시 시간절약 성적표 팝업] 시연 보기"
-                  className={`px-2.5 py-1 rounded-xl text-[11px] font-black border cursor-pointer transition-all ${
-                    trialOptInAccepted
-                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 hover:bg-emerald-500/30'
-                      : 'bg-amber-400/20 border-amber-300 text-amber-200 hover:bg-amber-400/30'
-                  }`}
-                >
-                  {trialOptInAccepted ? '🎁 무제한 체험 D-29 (Opt-in 동의됨)' : '🆓 일 3회 평생 무료 모드'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
                     setOpenHeaderDrawer((prev) => (prev === 'snippets' ? 'none' : 'snippets'))
                   }
-                  className={`px-3 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl font-label-sm text-[12px] font-black flex items-center gap-1.5 border transition-all cursor-pointer ${
                     openHeaderDrawer === 'snippets'
-                      ? 'bg-teal-400 text-zinc-950 border-teal-300 shadow-sm'
-                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/15'
+                      ? 'bg-teal-400 text-zinc-950 border-teal-300'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-teal-200 border-teal-400/40'
                   }`}
                 >
                   <span>⌨️ 상용구 (F1~F12)</span>
@@ -1221,106 +929,87 @@ export const GhostWindowThreeStageMockup: React.FC<{
                   onClick={() =>
                     setOpenHeaderDrawer((prev) => (prev === 'clipboard' ? 'none' : 'clipboard'))
                   }
-                  className={`px-3 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl font-label-sm text-[12px] font-black flex items-center gap-1.5 border transition-all cursor-pointer ${
                     openHeaderDrawer === 'clipboard'
-                      ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-sm'
-                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/15'
+                      ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-amber-200 border-amber-400/40'
                   }`}
                 >
-                  <span>📋🔍 클립보드 (최근 5개+검색)</span>
+                  <span>📋 클립보드</span>
                   <span>{openHeaderDrawer === 'clipboard' ? '▴' : '▾'}</span>
                 </button>
               </div>
             </div>
 
-            {/* 🛡️ [레드팀 확정 ①] 드래그·'?' 없이 타이핑 중 호출 시: 창 UI ①(기본 귀신창)을 덮어쓰지 않고 상단 0순위에 1줄 인라인 파일 소환 브릿지 노출! */}
-            {showUi1InlineLookbehindBridge && (
-              <div className="px-3.5 py-1.5 bg-gradient-to-r from-teal-500/20 via-emerald-500/15 to-zinc-900 border-b border-teal-400/40 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-teal-400 text-zinc-950 text-[10px] font-black">
-                    🛡️ 레드팀 확정 ① · 창 UI ① 보존 + 직전 어절 브릿지
-                  </span>
-                  <span className="text-teal-100 font-bold">
-                    드래그·<code className="text-amber-300">?</code> 없이 호출해도 상용구·클립보드 창(UI ①)이 실종되지 않고, 직전 타이핑 어절(<strong className="text-amber-300">&apos;사업자 정보&apos;</strong>) 연관 파일 3건을 0순위로 브릿지합니다!
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMiniExplorerQuery('사업자등록증');
-                      setWindowTab('ui2_summon');
-                    }}
-                    className="px-2.5 py-0.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-black cursor-pointer"
-                  >
-                    🔍 &apos;사업자 정보&apos; 관련 파일 3건 즉시 소환 (Tab/클릭) ➔
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowUi1InlineLookbehindBridge(false)}
-                    className="text-zinc-400 hover:text-white text-[10.5px] font-bold cursor-pointer px-1"
-                  >
-                    ✕
-                  </button>
-                </div>
+            {/* [2줄 차] 5대 초능력 원클릭 바 */}
+            <div className="px-4 py-2.5 bg-zinc-950/95 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  {
+                    id: 1,
+                    label: '① 한영오타 변환',
+                    sampleOut: '안녕하세요 반갑습니다',
+                  },
+                  {
+                    id: 2,
+                    label: '② 순차 붙여넣기(1·2·3)',
+                    sampleOut: '[1번: 홍길동] ➔ [2번: 010-1234-5678] ➔ [3번: 강남구 테헤란로 123]',
+                  },
+                  {
+                    id: 3,
+                    label: '③ 서식 세탁·추출',
+                    sampleOut: '성함: 김철수 / 연락처: 010-1234-5678 / 계좌: 국민 012-3456-7890-11',
+                  },
+                  {
+                    id: 4,
+                    label: '④ 금액 한글↔숫자',
+                    sampleOut: '금 오천만 원정 (₩50,000,000)',
+                  },
+                  {
+                    id: 5,
+                    label: '⑤ 화면 캡처 글자 따기',
+                    sampleOut: '[화면 캡처 OCR] 승인번호 20261107-849201 · 합계 145,000원',
+                  },
+                ].map((ab) => {
+                  const active = activeWave1Ability === ab.id;
+                  return (
+                    <button
+                      key={ab.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveWave1Ability(ab.id);
+                        if (ab.id === 5) {
+                          setWindowTab('ui3_ocr');
+                          return;
+                        }
+                        insertIntoUi1Editor(ab.sampleOut, ab.label);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all cursor-pointer ${
+                        active
+                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
+                          : 'bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300'
+                      }`}
+                    >
+                      {ab.label}
+                    </button>
+                  );
+                })}
               </div>
-            )}
 
-            {/* [아랫줄 — 첫 줄 Wave 1 핵심 초능력 5대 원클릭 탭] */}
-            <div className="px-3 py-2 bg-[#11151E] border-b border-white/10 flex flex-wrap items-center gap-1.5">
-              {[
-                {
-                  id: 1,
-                  label: '① 한영·오타 자동성형',
-                  sampleOut: '안녕하세요 확인 부탁드립니다 (dkssudgktpdy ➔ 0.1초 자동 변환)',
-                },
-                {
-                  id: 2,
-                  label: '② 연속복사 순차발사(1·2·3)',
-                  sampleOut: '[순차발사 1/3] 홍길동 ➔ [2/3] 010-1234-5678 ➔ [3/3] 강남구 테헤란로 123',
-                },
-                {
-                  id: 3,
-                  label: '③ 서식 세탁·문장 다림질',
-                  sampleOut: '글꼴·배경색·줄바꿈 찌꺼기 100% 제거된 순수 텍스트로 정돈 완료!',
-                },
-                {
-                  id: 4,
-                  label: '④ 금액·하이픈 변환',
-                  sampleOut: '금 오천만 원정 (₩50,000,000 · VAT 별도) / 010-1234-5678',
-                },
-                {
-                  id: 5,
-                  label: '⑤ 화면 캡처 표·OCR',
-                  sampleOut: '방금 캡처한 영역에서 표(TSV) 및 핵심 숫자 추출 준비 완료!',
-                },
-              ].map((ab) => {
-                const active = activeWave1Ability === ab.id;
-                return (
-                  <button
-                    key={ab.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveWave1Ability(ab.id);
-                      if (ab.id === 5) {
-                        setWindowTab('ui3_ocr');
-                        return;
-                      }
-                      insertIntoUi1Editor(ab.sampleOut, ab.label);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all cursor-pointer ${
-                      active
-                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
-                        : 'bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300'
-                    }`}
-                  >
-                    {ab.label}
-                  </button>
-                );
-              })}
+              {/* 미니 탐색기 바로가기 1줄 브릿지 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMiniExplorerQuery('사업자등록증');
+                  setWindowTab('ui2_summon');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/40 text-[11.5px] font-black transition-all cursor-pointer"
+              >
+                🔍 내 파일·사진 바로 소환 ➔
+              </button>
             </div>
 
-            {/* [조건부 펼침 1] [⌨️ 상용구 (F1~F12) ▾] 클릭 시: 왼쪽 6칸 F1~F6(개인) + 오른쪽 6칸 F7~F12(팀 공유) */}
+            {/* [펼침 1] 상용구 (F1~F12) */}
             {openHeaderDrawer === 'snippets' && (
               <div className="p-4 bg-[#0D1119] border-b border-white/10 flex flex-col gap-3">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -1328,10 +1017,10 @@ export const GhostWindowThreeStageMockup: React.FC<{
                   <div className="p-3 rounded-2xl bg-zinc-950/90 border border-teal-500/35 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] font-black text-teal-300">
-                        💻 왼쪽 6칸: F1 ~ F6 내 개인 상용구 (계좌·주소·이메일)
+                        💻 F1 ~ F6 내 개인 상용구
                       </span>
                       <span className="text-[10.5px] text-zinc-400 font-bold">
-                        클릭 시 커서에 즉시 입력
+                        클릭 시 바로 입력
                       </span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -1365,7 +1054,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
                                 }}
                                 className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold cursor-pointer shrink-0"
                               >
-                                ✏️ 편집
+                                편집
                               </button>
                             </div>
                             <button
@@ -1386,10 +1075,10 @@ export const GhostWindowThreeStageMockup: React.FC<{
                   <div className="p-3 rounded-2xl bg-zinc-950/90 border border-amber-400/40 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] font-black text-amber-300">
-                        💼 오른쪽 6칸: F7 ~ F12 팀 공유 상용구 (전 직원 1초 동기화)
+                        💼 F7 ~ F12 팀 공유 상용구
                       </span>
                       <span className="px-2 py-0.5 rounded bg-amber-400/15 text-amber-200 text-[10px] font-extrabold">
-                        방장 수정 시 전 직원 자동 반영
+                        팀원 전체 동기화
                       </span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -1423,7 +1112,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
                                 }}
                                 className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold cursor-pointer shrink-0"
                               >
-                                ✏️ 편집
+                                편집
                               </button>
                             </div>
                             <button
@@ -1444,7 +1133,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
                 {editingSlot && (
                   <div className="p-3 rounded-xl bg-zinc-900 border border-teal-400/50 flex flex-wrap items-center gap-2">
                     <span className="text-[12px] font-black text-teal-300">
-                      [{editingSlot}] 상용구 문구 수정:
+                      [{editingSlot}] 수정:
                     </span>
                     <input
                       type="text"
@@ -1464,7 +1153,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
                       }}
                       className="px-3 py-1.5 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black cursor-pointer"
                     >
-                      저장 완료
+                      저장
                     </button>
                     <button
                       type="button"
@@ -1478,29 +1167,27 @@ export const GhostWindowThreeStageMockup: React.FC<{
               </div>
             )}
 
-            {/* [조건부 펼침 2] [📋🔍 클립보드 (최근 5개+검색) ▾] 클릭 시: Win + V 사이즈 그대로 최근 5개 + 한달치 검색 */}
+            {/* [펼침 2] 클립보드 (최근 5개 + 30일 검색) */}
             {openHeaderDrawer === 'clipboard' && (
               <div className="p-4 bg-[#0D1119] border-b border-white/10 flex flex-col gap-3">
                 <div className="w-full max-w-[460px] mx-auto p-3.5 rounded-2xl bg-zinc-950 border-2 border-amber-400/60 shadow-2xl flex flex-col gap-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[12px] font-black text-amber-300">
-                      📋🔍 Win + V 사이즈 클립보드 전용 창 (최근 5개 + 30일 검색)
+                      📋 최근 복사 내역 (30일 검색)
                     </span>
-                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-[10px] text-zinc-300 font-bold">
-                      일반 파일과 섞이지 않는 클립보드 전용
+                    <span className="text-[10.5px] text-zinc-400 font-bold">
+                      클릭 시 즉시 붙여넣기
                     </span>
                   </div>
 
-                  {/* 상단 한 달 치 클립보드 검색칸 */}
                   <input
                     type="text"
                     value={clipboardQuery}
                     onChange={(e) => setClipboardQuery(e.target.value)}
-                    placeholder="🔍 한 달 치 복사 내역 검색 (예: 계좌, 홈택스, 단가, 통관...)"
+                    placeholder="🔍 복사 내역 검색 (예: 계좌, 홈택스, 단가...)"
                     className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-white text-[12px] font-bold outline-none focus:border-amber-400"
                   />
 
-                  {/* 최근 5개 클립보드 목록 */}
                   <div className="flex flex-col gap-1.5">
                     {filteredClipboardItems.map((clip, idx) => (
                       <button
@@ -1526,7 +1213,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
                           </span>
                         </div>
                         <span className="px-2 py-1 rounded-lg bg-amber-400/15 text-amber-300 text-[10.5px] font-black shrink-0">
-                          붙여넣기 ↵
+                          입력 ↵
                         </span>
                       </button>
                     ))}
@@ -1535,18 +1222,18 @@ export const GhostWindowThreeStageMockup: React.FC<{
               </div>
             )}
 
-            {/* 하단 실제 작업창(카톡·이메일·엑셀) 커서 사출 시뮬레이터 */}
+            {/* 하단 작업창 입력 확인 */}
             <div className="p-3.5 bg-zinc-950 flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11.5px] font-extrabold text-zinc-400">
-                  💬 내 작업 현장 입력창 (위 상용구 F1~F12나 클립보드 항목을 누르면 이 커서 자리에 즉시 꽂힙니다)
+                  💬 내 작업 입력창 (위 버튼을 누르면 커서 위치에 바로 입력됩니다)
                 </span>
                 <button
                   type="button"
                   onClick={() => setUi1EditorText('')}
                   className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
                 >
-                  입력창 비우기
+                  비우기
                 </button>
               </div>
               <textarea
@@ -1561,74 +1248,38 @@ export const GhostWindowThreeStageMockup: React.FC<{
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════
-          [창 UI ② 시안] 30년 된 윈도우 탐색기(Win+E)를 대체하는 『👻 귀신 미니 탐색기 (현장 문서·사진·영상 통합 소환 & 이어서 검색)』
+          [창 UI ②] 귀신 미니 탐색기 (현장 문서·사진·영상 소환)
          ════════════════════════════════════════════════════════════════════════ */}
       {windowTab === 'ui2_summon' && (
-        <div className="p-5 sm:p-6 rounded-3xl bg-[#111318] border-2 border-teal-400/50 shadow-[0_0_40px_rgba(20,184,166,0.15)] flex flex-col gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black">
-                창 UI ② 인터랙티브 시안
-              </span>
-              <h2 className="text-[16px] sm:text-[18px] font-black text-white">
-                👻 귀신 미니 탐색기 — 작업 현장에서 <span className="text-teal-300">문서·사진·영상 통합 소환</span> &amp; <span className="text-amber-300">이어서 검색</span>
-              </h2>
-            </div>
+        <div className="p-4 sm:p-5 rounded-3xl bg-[#111318] border-2 border-teal-400/50 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[15px] font-black text-white">
+              👻 귀신 미니 탐색기
+            </span>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              {SUMMON_SCENARIOS.map((scen, idx) => {
-                const btnLabels = [
-                  '시나리오 A: 끝에 ? (보조 트리거)',
-                  '시나리오 B: 마우스 드래그 (기본 트리거)',
-                  '🛡️ 안전망 1단계: 무드래그 직전 어절 역추적',
-                  '🛡️ 안전망 2단계: 빈칸 호출 (오발송 공포 0%)',
-                ];
-                return (
-                  <button
-                    key={scen.id}
-                    type="button"
-                    onClick={() => setScenarioIdx(idx)}
-                    className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold border cursor-pointer transition-all ${
-                      scenarioIdx === idx
-                        ? 'bg-teal-400 text-zinc-950 border-teal-300'
-                        : 'bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800'
-                    }`}
-                  >
-                    {btnLabels[idx] || scen.triggerTypeLabel}
-                  </button>
-                );
-              })}
+              {SUMMON_SCENARIOS.map((scen, idx) => (
+                <button
+                  key={scen.id}
+                  type="button"
+                  onClick={() => setScenarioIdx(idx)}
+                  className={`px-3 py-1 rounded-xl text-[11.5px] font-extrabold border cursor-pointer transition-all ${
+                    scenarioIdx === idx
+                      ? 'bg-teal-400 text-zinc-950 border-teal-300'
+                      : 'bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800'
+                  }`}
+                >
+                  {scen.shortLabel}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* 🛡️ 무드래그 3단계 UX 안전망 & WS_EX_NOACTIVATE 비활성 포커스 보호 배지 바 */}
-          <div className="px-4 py-2.5 rounded-2xl bg-zinc-950/90 border border-teal-400/35 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
-            <div className="flex flex-wrap items-center gap-2 font-bold text-zinc-200">
-              <span className="px-2 py-0.5 rounded bg-teal-400 text-zinc-950 font-black text-[10.5px]">
-                🛡️ 무드래그 3단계 UX 안전망 탑재
-              </span>
-              <span className="text-teal-200">
-                ① 드래그 깜빡 시: <b>커서 직전 1~3어절 자동 스캔(Caret Lookbehind)</b>
-              </span>
-              <span className="text-zinc-600">|</span>
-              <span className="text-amber-200">
-                ② 빈칸 호출 시: <b>상단 검색칸 포커스 + Row 0 폰사진 + 창 제목({currentScenario.windowContextTitle || '카카오톡'}) 맥락 추천</b>
-              </span>
-              <span className="text-zinc-600">|</span>
-              <span className="text-emerald-200">
-                ③ 소환 직후: <b>1.5초 행동교정 마이크로 넛지</b>
-              </span>
-            </div>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 text-[10.5px] font-mono">
-              ⚙️ WS_EX_NOACTIVATE · 3중 커서추적 · WinFsp S:\ 호환
-            </span>
-          </div>
-
-          {/* 1) 실제 일하던 카톡·이메일 작업창 시연 */}
-          <div className="p-4 rounded-2xl bg-zinc-950 border border-white/15 flex flex-col gap-2.5">
+          {/* 1) 현재 작성 중인 작업창 */}
+          <div className="p-3.5 rounded-2xl bg-zinc-950 border border-white/15 flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[12px] font-black text-amber-300">
-                💼 {currentScenario.scenarioTitle} ({currentScenario.triggerTypeLabel})
+              <span className="text-[12px] font-extrabold text-zinc-300">
+                💬 작업 중인 창 ({currentScenario.windowContextTitle})
               </span>
               <button
                 type="button"
@@ -1637,9 +1288,9 @@ export const GhostWindowThreeStageMockup: React.FC<{
                   setAttachedFileBadge(null);
                   setSummonReplacedNotice(null);
                 }}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 text-[11px] font-bold cursor-pointer"
+                className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
               >
-                ↺ 원래 질문 문장으로 초기화
+                ↺ 초기화
               </button>
             </div>
 
@@ -1647,668 +1298,379 @@ export const GhostWindowThreeStageMockup: React.FC<{
               type="text"
               value={ui2EditorText}
               onChange={(e) => setUi2EditorText(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-zinc-900 border-2 border-teal-400/60 text-white text-[14px] font-extrabold outline-none"
+              placeholder="여기에 찾은 문서 수치나 사진이 바로 들어갑니다..."
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-teal-400/50 text-white text-[13.5px] font-extrabold outline-none"
             />
 
-            {summonReplacedNotice && (
-              <div className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 text-[12px] font-extrabold">
-                {summonReplacedNotice}
-              </div>
-            )}
-            {attachedFileBadge && (
-              <div className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-200 text-[12px] font-extrabold flex items-center justify-between">
-                <span>📎 첨부된 파일/장면: {attachedFileBadge}</span>
-                <button
-                  type="button"
-                  onClick={() => setAttachedFileBadge(null)}
-                  className="text-xs underline cursor-pointer"
-                >
-                  첨부 취소
-                </button>
+            {(summonReplacedNotice || attachedFileBadge) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {summonReplacedNotice && (
+                  <span className="text-[12px] text-emerald-300 font-extrabold">
+                    {summonReplacedNotice}
+                  </span>
+                )}
+                {attachedFileBadge && (
+                  <span className="px-2.5 py-0.5 rounded-lg bg-amber-400/20 border border-amber-300/50 text-amber-200 text-[11.5px] font-black">
+                    {attachedFileBadge}
+                  </span>
+                )}
               </div>
             )}
           </div>
 
-          {/* 2) 커서 바로 위에 뜨는 『👻 귀신 미니 탐색기』 (좌측: 라이브 이어서 검색 + 필터 탭 + 요약 리스트 / 우측: 문서·사진·영상 맞춤 유령 미리보기) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-            {/* 좌측(7칸): 라이브 이어서 검색 바 + [전체/문서/사진/영상] 탭 + 영역 스위치 + 요약 리스트 */}
-            <div className="lg:col-span-7 p-4 rounded-2xl bg-[#0B0E14] border-2 border-teal-400/70 shadow-2xl flex flex-col gap-3">
-              {/* 상단: 맨 앞 👻 애기귀신 마스코트 + 라이브 이어서 검색 입력창 */}
-              <div className="flex flex-col gap-2 border-b border-white/10 pb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <GhostBabyMascotBadge subtitle="30년 된 윈도우 탐색기(Win+E) 대체!" />
-                  <div className="flex-1 min-w-[230px] relative">
-                    <input
-                      type="text"
-                      value={miniExplorerQuery}
-                      onChange={(e) => {
-                        setMiniExplorerQuery(e.target.value);
-                        if (e.target.value.trim()) {
-                          setRow0PhoneOcrDocked(false);
-                        }
-                      }}
-                      placeholder="🔍 다른 단어로 바로 이어서 검색... (예: 보증금, 사업자등록증 사진, 시공 영상)"
-                      className="w-full px-3.5 py-2 rounded-xl bg-zinc-900 border border-teal-400/50 text-white text-[12.5px] font-extrabold outline-none focus:border-teal-300"
-                    />
-                    {miniExplorerQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setMiniExplorerQuery('')}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-zinc-400 hover:text-white cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
+          {/* 2) 미니 탐색기 본체 */}
+          <div className="rounded-2xl bg-[#090B10] border-2 border-teal-400/60 overflow-hidden flex flex-col">
+            {/* 상단 검색창 + 분류 탭 */}
+            <div className="p-3 bg-zinc-900/95 border-b border-white/10 flex flex-col gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex-1 min-w-[220px] flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950 border border-teal-400/60">
+                  <span className="text-teal-300 text-[13px]">🔍</span>
+                  <input
+                    type="text"
+                    value={miniExplorerQuery}
+                    onChange={(e) => setMiniExplorerQuery(e.target.value)}
+                    placeholder="찾을 단어 입력 (예: 계약서, 사업자등록증, 제주도, 시공...)"
+                    className="w-full bg-transparent text-white text-[12.5px] font-extrabold outline-none"
+                  />
+                  {miniExplorerQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setMiniExplorerQuery('')}
+                      className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
-                {/* 추천 검색어 원클릭 칩 */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10.5px] text-zinc-400 font-bold mr-0.5">⚡ 이어서 검색 체험:</span>
-                  {[
-                    { label: '전체 보기 (6)', q: '', media: 'all' as const },
-                    { label: '보증금·단가 문서', q: '보증금 단가', media: 'doc' as const },
-                    { label: '사업자등록증 사진', q: '사업자등록증 사진', media: 'photo' as const },
-                    { label: '제주도 가족사진', q: '제주도 가족사진', media: 'photo' as const },
-                    { label: '성수동 시공 영상', q: '성수동 시공 영상', media: 'video' as const },
-                  ].map((chip) => (
+                <div className="flex items-center gap-1">
+                  {(
+                    [
+                      { id: 'all' as const, label: '전체' },
+                      { id: 'doc' as const, label: '📄 문서' },
+                      { id: 'photo' as const, label: '🖼️ 사진' },
+                      { id: 'video' as const, label: '🎬 영상' },
+                    ]
+                  ).map((tab) => (
                     <button
-                      key={chip.label}
+                      key={tab.id}
                       type="button"
-                      onClick={() => {
-                        setMiniExplorerQuery(chip.q);
-                        setMediaFilter(chip.media);
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-teal-200 text-[10.5px] font-bold cursor-pointer transition-colors"
+                      onClick={() => setMiniMediaFilter(tab.id)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[11.5px] font-black border cursor-pointer transition-all ${
+                        miniMediaFilter === tab.id
+                          ? 'bg-teal-400 text-zinc-950 border-teal-300'
+                          : 'bg-zinc-950 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                      }`}
                     >
-                      {chip.label}
+                      {tab.label}
                     </button>
                   ))}
                 </div>
-
-                {/* 미디어 타입 필터 탭 ([전체 (6)] | [📄 문서 (2)] | [🖼️ 사진 (2)] | [🎬 영상 (2)]) & 3대 영역 필터 */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                  <div className="flex flex-wrap items-center gap-1">
-                    {[
-                      { id: 'all' as const, label: '전체 (6)' },
-                      { id: 'doc' as const, label: '📄 문서 (2)' },
-                      { id: 'photo' as const, label: '🖼️ 사진 (2)' },
-                      { id: 'video' as const, label: '🎬 영상 (2)' },
-                    ].map((mTab) => {
-                      const active = effectiveMediaFilter === mTab.id;
-                      return (
-                        <button
-                          key={mTab.id}
-                          type="button"
-                          onClick={() => setMediaFilter(mTab.id)}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-black border cursor-pointer transition-all ${
-                            active
-                              ? 'bg-teal-400 text-zinc-950 border-teal-300'
-                              : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                          }`}
-                        >
-                          {mTab.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* 1웨이브 3대 영역 스위치 (💻 내 PC / 📱 내 폰+집PC / 💼 우리 팀 공유 S:) */}
-                  <div className="flex flex-wrap items-center gap-1">
-                    {[
-                      { id: 'all' as const, label: '전체 영역' },
-                      { id: 'pc_free' as const, label: '💻 내 PC(무료)' },
-                      { id: 'phone_pc' as const, label: '📱 내 폰+집PC' },
-                      { id: 'work_team' as const, label: '💼 팀 공유 S:' },
-                    ].map((sTab) => {
-                      const active = scopeFilter === sTab.id;
-                      return (
-                        <button
-                          key={sTab.id}
-                          type="button"
-                          onClick={() => setScopeFilter(sTab.id)}
-                          className={`px-2 py-1 rounded-lg text-[10.5px] font-extrabold border cursor-pointer transition-all ${
-                            active
-                              ? 'bg-amber-400 text-zinc-950 border-amber-300'
-                              : 'bg-zinc-900/90 text-zinc-400 border-white/10 hover:text-white'
-                          }`}
-                        >
-                          {sTab.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
 
-              {/* 🧩 [Row 0 특설 행 도킹 모드] 60초 이내 폰 촬영·스샷 발생 시 일반 검색을 가로막지 않고 최상단 0번째 행에 도킹 (단어칩 클릭 시 주입 / 아래 로컬 파일 클릭 또는 타이핑 시 Auto-Dismiss) */}
-              {row0PhoneOcrDocked ? (
-                <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/10 to-teal-500/15 border border-amber-400/60 flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <img
-                        src="/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg"
-                        alt="Row 0 60초 시한부 썸네일"
-                        className="w-10 h-7 rounded object-cover border border-amber-300/60 shrink-0"
-                      />
-                      <div className="flex flex-col">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="px-1.5 py-0.2 rounded bg-amber-400 text-zinc-950 text-[10px] font-black">
-                            Row 0 · 📱 방금 폰 촬영 (60초 시한부 도킹)
-                          </span>
-                          <span className="text-[11px] font-extrabold text-amber-200">
-                            ⚡ 폰 NPU 선(先) OCR + 15KB 선발대 패킷 0.1초 도착 완료!
-                          </span>
-                        </div>
-                        <span className="text-[10.5px] text-zinc-300">
-                          원하는 단어칩을 찍으면 바로 들어가고, 아래 1~5번 일반 파일을 고르거나 검색어를 치면 방해 없이 자동 소멸됩니다.
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setRow0PhoneOcrDocked(false)}
-                      className="px-2 py-0.5 rounded bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[10px] font-bold cursor-pointer"
-                    >
-                      무시·닫기 ✕
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              {/* 방금 찍은 폰 사진 1줄 바 */}
+              {showRow0PhoneOcrDock && (
+                <div className="px-3 py-2 rounded-xl bg-teal-950/50 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-teal-400 text-zinc-950 font-mono text-[10.5px] font-black">
+                      📱 방금 찍은 폰 사진 ({phoneOcrDockSeconds}초)
+                    </span>
                     {ROW0_PHONE_OCR_DOCK_CHIPS.map((chip) => (
                       <button
                         key={chip.id}
                         type="button"
-                        onClick={() => handleInsertRow0DockChip(chip.label, chip.value)}
-                        className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-amber-400 hover:text-zinc-950 border border-amber-300/50 text-amber-200 text-[11px] font-black shrink-0 cursor-pointer transition-all"
+                        onClick={() => {
+                          setUi2EditorText((prev) =>
+                            prev ? `${prev} ${chip.value}` : chip.value
+                          );
+                          setSummonReplacedNotice(`⚡ [${chip.label}] 바로 입력됨`);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-zinc-900 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/40 text-[11px] font-extrabold transition-colors cursor-pointer"
                       >
-                        👆 {chip.label}
+                        {chip.label} ↵
                       </button>
                     ))}
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between px-3 py-1 rounded-lg bg-zinc-950/80 border border-white/10 text-[10.5px] text-zinc-400">
-                  <span>✨ Row 0 (60초 시한부 폰 사진 도킹 바) — 사용 완료 또는 일반 파일 선택으로 방해 없이 자동 소멸(Auto-Dismiss)됨</span>
                   <button
                     type="button"
-                    onClick={() => setRow0PhoneOcrDocked(true)}
-                    className="text-amber-300 font-bold underline cursor-pointer"
+                    onClick={() => setWindowTab('ui3_ocr')}
+                    className="text-[11px] text-amber-300 hover:underline font-extrabold cursor-pointer"
                   >
-                    Row 0 도킹 다시 보기
+                    사진 위에서 직접 찍기 ➔
                   </button>
                 </div>
               )}
+            </div>
 
-              {/* 요약 결과 리스트 (문서·사진·영상 통합) */}
-              <div className="flex flex-col gap-2">
+            {/* 좌측 검색 결과 리스트 + 우측 미리보기 */}
+            <div className="grid grid-cols-1 lg:grid-cols-12">
+              <div className="lg:col-span-6 p-3 border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col gap-2">
                 {filteredMiniExplorerItems.map((cand, idx) => {
-                  const isHovered = activeCandidate?.id === cand.id;
+                  const isHovered = activeCandidate.id === cand.id;
                   const typeIcon =
-                    cand.mediaType === 'doc' ? '📄' : cand.mediaType === 'photo' ? '🖼️' : '🎬';
+                    cand.mediaType === 'doc'
+                      ? '📄'
+                      : cand.mediaType === 'photo'
+                      ? '🖼️'
+                      : '🎬';
                   return (
                     <div
                       key={cand.id}
                       onMouseEnter={() => setHoveredCandidateId(cand.id)}
-                      onFocus={() => setHoveredCandidateId(cand.id)}
-                      className={`p-3 rounded-xl border transition-all flex flex-wrap items-center justify-between gap-2 cursor-pointer ${
+                      onClick={() => setHoveredCandidateId(cand.id)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
                         isHovered
-                          ? 'bg-teal-500/15 border-teal-400 shadow-md'
-                          : 'bg-zinc-900/85 hover:bg-zinc-900 border-white/10'
+                          ? 'bg-teal-500/15 border-teal-400'
+                          : 'bg-zinc-900/90 hover:bg-zinc-800 border-white/10'
                       }`}
                     >
-                      <div
-                        onClick={() =>
-                          applySummonCandidateToEditor(
-                            cand,
-                            cand.mediaType === 'doc' ? 'insert_value' : 'attach_file'
-                          )
-                        }
-                        className="flex flex-col gap-0.5 min-w-0 flex-1"
-                      >
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-teal-300 font-mono text-[10.5px] font-black">
-                            #{idx + 1} {typeIcon}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="px-1.5 py-0.5 rounded bg-teal-400 text-zinc-950 font-mono text-[10px] font-black shrink-0">
+                            {idx + 1}
                           </span>
-                          <span
-                            className={`px-2 py-0.2 rounded text-[10.5px] font-black ${
-                              cand.isFreePc
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                                : 'bg-amber-400/20 text-amber-200 border border-amber-300/40'
-                            }`}
-                          >
-                            {cand.sourceBadge}
-                          </span>
-                          <span className="text-[12px] font-bold text-zinc-200 truncate">
-                            {cand.fileName}
+                          <span className="text-[12.5px] font-extrabold text-white truncate">
+                            {typeIcon} {cand.fileName}
                           </span>
                         </div>
-                        <div className="text-[13px] font-black text-white mt-0.5">
-                          🎯 {cand.matchedValueShort}
-                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black shrink-0 bg-zinc-800 text-zinc-300">
+                          {cand.sourceBadge}
+                        </span>
                       </div>
 
-                      {/* 미디어 타입별 맞춤 즉시 액션 버튼 */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {cand.mediaType === 'doc' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => applySummonCandidateToEditor(cand, 'insert_value')}
-                              className="px-2.5 py-1.5 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11px] font-black cursor-pointer"
-                            >
-                              ↵ 숫자·문장만 커서에 꽂기
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => applySummonCandidateToEditor(cand, 'attach_file')}
-                              className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-amber-200 text-[11px] font-extrabold cursor-pointer"
-                            >
-                              📎 원본 문서 첨부
-                            </button>
-                          </>
-                        )}
+                      <div className="text-[12px] text-amber-200 font-bold truncate">
+                        {cand.matchedValueShort}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1 border-t border-white/10">
                         {cand.mediaType === 'photo' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => applySummonCandidateToEditor(cand, 'attach_file')}
-                              className="px-2.5 py-1.5 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11px] font-black cursor-pointer"
-                            >
-                              ↵ 카톡·메일에 사진 바로 첨부
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => applySummonCandidateToEditor(cand, 'open_ocr_ui3')}
-                              className="px-2.5 py-1.5 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/50 text-amber-200 text-[11px] font-extrabold cursor-pointer"
-                            >
-                              📝 OCR 글자 따기 (창 UI ③ 직결)
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOcrPresetIdx(0);
+                              setWindowTab('ui3_ocr');
+                            }}
+                            className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-amber-400 text-amber-200 hover:text-zinc-950 text-[10.5px] font-black transition-colors cursor-pointer"
+                          >
+                            📝 글자 따기
+                          </button>
                         )}
-                        {cand.mediaType === 'video' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => applySummonCandidateToEditor(cand, 'attach_file')}
-                              className="px-2.5 py-1.5 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11px] font-black cursor-pointer"
-                            >
-                              ↵ 영상 파일 바로 첨부
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => applySummonCandidateToEditor(cand, 'capture_video_scene')}
-                              className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-amber-200 text-[11px] font-extrabold cursor-pointer"
-                            >
-                              📸 이 장면({cand.videoTimestamp || '01:24'}) 캡처 삽입
-                            </button>
-                          </>
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSummonReplace(cand);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11px] font-black cursor-pointer"
+                        >
+                          {cand.mediaType === 'doc'
+                            ? '핵심값 넣기 ↵'
+                            : cand.mediaType === 'photo'
+                            ? '사진 첨부 ↵'
+                            : '장면 넣기 ↵'}
+                        </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* 💡 3단계: 행동 교정 마이크로 넛지 (Micro-Habit Nudge — 빈칸 호출 소환 직후 1.5초 비간섭 툴팁) */}
-              {microHabitNudgeText && (
-                <div className="px-3.5 py-2 rounded-xl bg-teal-500/20 border border-teal-300/60 text-teal-100 text-[11.5px] font-black flex items-center justify-between gap-2 animate-pulse">
-                  <span>{microHabitNudgeText}</span>
-                  <button
-                    type="button"
-                    onClick={() => setMicroHabitNudgeText(null)}
-                    className="text-[10.5px] text-teal-200 underline cursor-pointer shrink-0"
-                  >
-                    닫기
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 우측(5칸): 마우스 호버 시에만 스윽 나타나는 문서·사진·영상 3종 맞춤 반투명 유령 미리보기 말풍선 */}
-            <div className="lg:col-span-5 p-4 rounded-2xl bg-gradient-to-br from-teal-950/60 via-zinc-950/95 to-zinc-950 border-2 border-dashed border-teal-400/60 shadow-[0_0_30px_rgba(20,184,166,0.2)] flex flex-col justify-between gap-3">
-              {activeCandidate && (
-                <>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-teal-400/20 border border-teal-300/50 text-teal-200 text-[11px] font-black">
-                        👻 {activeCandidate.mediaType === 'doc' ? '문서 Zero-Open 유령 미리보기' : activeCandidate.mediaType === 'photo' ? '사진 13KB 초고속 유령 미리보기' : `영상 핵심장면(${activeCandidate.videoTimestamp}) 유령 미리보기`}
-                      </span>
-                      <span className="text-[10.5px] text-zinc-400 font-mono">
-                        {activeCandidate.sourceBadge}
-                      </span>
-                    </div>
-
-                    <h3 className="text-[13.5px] font-black text-white">
+              {/* 우측: 호버 미리보기 */}
+              <div className="lg:col-span-6 p-4 bg-[#07090E] flex flex-col justify-between gap-3">
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+                    <span className="text-[12.5px] font-black text-teal-300 truncate">
                       {activeCandidate.ghostPreviewTitle}
-                    </h3>
-                    <p className="text-[11px] text-zinc-400 font-mono truncate">
-                      경로: {activeCandidate.folderPath}
-                    </p>
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-[10px] text-zinc-400 font-mono shrink-0">
+                      열지 않고 바로보기
+                    </span>
+                  </div>
 
-                    {/* 사진/영상 항목일 경우 13KB 초고속 스틸컷/썸네일 표시 */}
-                    {activeCandidate.thumbUrl && (
-                      <div className="relative w-full h-36 rounded-xl overflow-hidden border border-white/15 bg-black">
+                  {(activeCandidate.mediaType === 'photo' ||
+                    activeCandidate.mediaType === 'video') &&
+                    activeCandidate.thumbUrl && (
+                      <div className="relative h-36 rounded-xl overflow-hidden bg-zinc-950 border border-white/15">
                         <img
                           src={activeCandidate.thumbUrl}
                           alt={activeCandidate.fileName}
                           className="w-full h-full object-cover"
                         />
-                        {activeCandidate.mediaType === 'video' && (
+                        {activeCandidate.videoTimestamp && (
                           <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
-                            <span className="px-3 py-1.5 rounded-full bg-amber-400 text-zinc-950 font-black text-[12px] shadow-lg">
-                              ▶ AI 핵심 장면 포착 ({activeCandidate.videoTimestamp})
+                            <span className="px-3 py-1.5 rounded-full bg-amber-400 text-zinc-950 font-mono text-[12px] font-black shadow-lg">
+                              ▶ {activeCandidate.videoTimestamp} 핵심장면
                             </span>
-                          </div>
-                        )}
-                        {activeCandidate.photoMetaSummary && (
-                          <div className="absolute bottom-0 inset-x-0 px-2.5 py-1 bg-black/75 text-[10.5px] text-teal-200 font-bold truncate">
-                            {activeCandidate.photoMetaSummary}
                           </div>
                         )}
                       </div>
                     )}
 
-                    <div className="mt-0.5 p-3 rounded-xl bg-black/70 border border-white/10 flex flex-col gap-1.5 font-mono text-[11.5px]">
-                      {activeCandidate.ghostPreviewLines.map((line, lIdx) => {
-                        const isHighlight = lIdx === activeCandidate.highlightRowIndex;
-                        return (
-                          <div
-                            key={lIdx}
-                            className={`px-2.5 py-1.5 rounded-lg transition-all ${
-                              isHighlight
-                                ? 'bg-amber-400/25 border border-amber-300 text-amber-100 font-extrabold shadow-sm'
-                                : 'text-zinc-400'
-                            }`}
-                          >
-                            {line}
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-1.5 font-mono text-[11.5px]">
+                    {activeCandidate.ghostPreviewLines.map((line, i) => {
+                      const isTargetRow = i === activeCandidate.highlightRowIndex;
+                      return (
+                        <div
+                          key={i}
+                          className={`p-1.5 rounded-lg transition-all ${
+                            isTargetRow
+                              ? 'bg-amber-400/20 border border-amber-300 text-amber-200 font-black'
+                              : 'text-zinc-400'
+                          }`}
+                        >
+                          {line}
+                        </div>
+                      );
+                    })}
                   </div>
+                </div>
 
-                  {/* 우측 하단 미디어 타입별 맞춤 액션 바 */}
-                  <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
-                    {activeCandidate.mediaType === 'doc' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => applySummonCandidateToEditor(activeCandidate, 'insert_value')}
-                          className="px-3 py-1.5 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black cursor-pointer"
-                        >
-                          ↵ 숫자·문장만 커서에 꽂기
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => applySummonCandidateToEditor(activeCandidate, 'attach_file')}
-                          className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-white/15 text-amber-200 text-[11.5px] font-extrabold cursor-pointer"
-                        >
-                          📎 원본 문서 첨부
-                        </button>
-                      </>
-                    )}
-                    {activeCandidate.mediaType === 'photo' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => applySummonCandidateToEditor(activeCandidate, 'attach_file')}
-                          className="px-3 py-1.5 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black cursor-pointer"
-                        >
-                          ↵ 카톡·메일에 사진 바로 첨부
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => applySummonCandidateToEditor(activeCandidate, 'open_ocr_ui3')}
-                          className="px-3 py-1.5 rounded-lg bg-amber-400 text-zinc-950 text-[11.5px] font-black cursor-pointer"
-                        >
-                          📝 OCR 글자 따기 (창 UI ③ 직결)
-                        </button>
-                      </>
-                    )}
-                    {activeCandidate.mediaType === 'video' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => applySummonCandidateToEditor(activeCandidate, 'attach_file')}
-                          className="px-3 py-1.5 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black cursor-pointer"
-                        >
-                          ↵ 영상 파일 바로 첨부
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => applySummonCandidateToEditor(activeCandidate, 'capture_video_scene')}
-                          className="px-3 py-1.5 rounded-lg bg-amber-400 text-zinc-950 text-[11.5px] font-black cursor-pointer"
-                        >
-                          📸 이 장면({activeCandidate.videoTimestamp || '01:24'}) 캡처 이미지 삽입
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+                  <span className="text-[11px] text-zinc-400 truncate">
+                    📁 {activeCandidate.folderPath}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSummonReplace(activeCandidate)}
+                    className="px-3.5 py-1.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11.5px] font-black cursor-pointer shrink-0"
+                  >
+                    작업창에 바로 넣기 ↵
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* 3) 하단 무료 vs 유료 확장 경계 안내 바 */}
-          <div className="px-4 py-3 rounded-2xl bg-zinc-950 border border-teal-500/40 flex flex-wrap items-center justify-between gap-2 text-[12.5px] font-extrabold">
-            <span className="text-emerald-300">
-              💻 내 PC 문서·사진·영상 현장 소환 = <strong className="underline">평생 무제한 무료!</strong> (기본 검색 기능이므로 일 3회 제한 없음)
-            </span>
-            <span className="text-amber-300">
-              📱 내 폰·집PC 통합 및 💼 회사 S: 드라이브 문서·사진·영상 현장 소환 = 1웨이브(Day 1) 동시 개통 (1개월 무제한 무료 후 일 3회 무료)
-            </span>
           </div>
         </div>
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════
-          [창 UI ③ 시안] 1분 유효시간 + 1회 노출 후 자동 소멸(One-Time Pop) & 원본 화면 위 글자 그대로 톡톡 찍기 (Live Text 오버레이)
+          [창 UI ③] 사진·스샷 글자 톡톡 찍기 (Live Text)
          ════════════════════════════════════════════════════════════════════════ */}
       {windowTab === 'ui3_ocr' && (
-        <div className="p-5 sm:p-6 rounded-3xl bg-[#111318] border-2 border-teal-400/50 shadow-[0_0_40px_rgba(20,184,166,0.15)] flex flex-col gap-5">
-          {/* 상단 헤더: 1분 유효시간(60초 TTL) + 1회 노출 후 자동 소멸(One-Time Pop) 규칙 배지 */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black">
-                창 UI ③ 인터랙티브 시안
+        <div className="p-4 sm:p-5 rounded-3xl bg-[#111318] border-2 border-amber-400/50 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] font-black text-white">
+                📸 사진 위 글자 톡톡 찍기
               </span>
-              <h2 className="text-[16px] sm:text-[18px] font-black text-white">
-                원본 화면 위에 글자 그대로 톡톡 찍기 (<span className="text-teal-300">Live Text 오버레이</span>) &amp; <span className="text-amber-300">1분 내 1회 노출 후 자동 소멸</span>
-              </h2>
+              <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[11px] font-extrabold">
+                ⏱️ {ttlSecondsLeft}초 남음
+              </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`px-3 py-1 rounded-full font-mono text-[11.5px] font-black border ${
-                  oneTimePopUsed
-                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
-                    : 'bg-amber-400/20 border-amber-300 text-amber-200'
-                }`}
-              >
-                {oneTimePopUsed
-                  ? '✅ 1회 사용 완료 (다음 Ctrl+0부터 기본 귀신창 자동 복귀)'
-                  : `⏱️ 촬영/스샷 후 1분 유효시간: ${ttlSecondsLeft}초 남음 (1회 노출 후 자동 소멸)`}
-              </span>
-
-              {customPhotoPreset && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedOcrPresetId(customPhotoPreset.id);
-                    setClickedSpotIds([]);
-                    setOneTimePopUsed(false);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold border cursor-pointer ${
-                    selectedOcrPresetId === customPhotoPreset.id
-                      ? 'bg-amber-400 text-zinc-950 border-amber-300'
-                      : 'bg-zinc-900 text-amber-200 border-amber-400/40'
-                  }`}
-                >
-                  📸 방금 선택한 사진 ({externalOcrPhoto?.name})
-                </button>
-              )}
-              {OCR_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedOcrPresetId(preset.id);
-                    setClickedSpotIds([]);
-                    setOneTimePopUsed(false);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold border cursor-pointer ${
-                    selectedOcrPresetId === preset.id
-                      ? 'bg-teal-400 text-zinc-950 border-teal-300'
-                      : 'bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800'
-                  }`}
-                >
-                  {preset.id === 'ocr_receipt' ? '샘플 1: 영수증·세금계산서 원본' : '샘플 2: 임대차 계약서 원본'}
-                </button>
-              ))}
-            </div>
+            {!externalOcrPhoto && (
+              <div className="flex items-center gap-1.5">
+                {OCR_PRESETS.map((preset, idx) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      setOcrPresetIdx(idx);
+                      setClickedSpotIds([]);
+                    }}
+                    className={`px-3 py-1 rounded-xl text-[11.5px] font-extrabold border cursor-pointer transition-all ${
+                      ocrPresetIdx === idx
+                        ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                        : 'bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {idx === 0 ? '🧾 영수증 예시' : '📑 계약서 예시'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* 핵심 규칙 안내 콜아웃: ① 1분 유효 + 1회 노출 자동 소멸(One-Time Pop) & ② 원본 화면 위 글자 톡톡 찍기 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="p-3.5 rounded-2xl bg-zinc-950/90 border border-amber-400/40 flex flex-col gap-1">
-              <span className="text-[12.5px] font-black text-amber-300">
-                ⚡ 규칙 1. ‘1분 유효시간 + 1회 노출 후 자동 소멸(One-Time Pop)’ ➔ 귀찮음 0%!
+          {/* 원본 화면 위 글자 톡톡 찍기 캔버스 */}
+          <div className="rounded-2xl bg-[#090B10] border-2 border-teal-400/60 overflow-hidden flex flex-col">
+            {/* 상단 액션 바 */}
+            <div className="px-4 py-2.5 bg-zinc-900 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[12.5px] font-extrabold text-zinc-200">
+                원하는 글자를 누르면 작업창 커서에 바로 들어갑니다
               </span>
-              <p className="text-[11.5px] text-zinc-300 leading-snug">
-                폰으로 찍거나 캡처한 직후 <strong>딱 1분 이내에, 그것도 Ctrl+0으로 한 번 호출해서 썼으면 그 뒤로는 다시 안 뜨게(자동 소멸)</strong> 작동합니다. 다음 <code className="text-teal-300">Ctrl+0</code>부터는 지체 없이 원래의 기본 귀신창(창 UI ①)으로 돌아가 작업 흐름이 절대 끊기지 않습니다.
-              </p>
-            </div>
-            <div className="p-3.5 rounded-2xl bg-zinc-950/90 border border-teal-400/40 flex flex-col gap-1">
-              <span className="text-[12.5px] font-black text-teal-300">
-                👆 규칙 2. 어설픈 요약 칩 대신 ‘원본 화면 위에 글자 그대로 톡톡 찍기(Live Text)’ ➔ 활용도 100%!
-              </span>
-              <p className="text-[11.5px] text-zinc-300 leading-snug">
-                유저마다 상호를 원할지, 품명을 원할지, 문구 한 줄을 원할지 아무도 모릅니다. <strong>아래 원본 화면 속 원래 글자 위치 위에 투명하게 올라온 텍스트 블록을 마우스로 톡톡 찍기만 하면</strong> 그 글자가 내 커서에 쏙쏙 들어갑니다!
-              </p>
-            </div>
-          </div>
 
-          {/* ── 메인 Live Text 원본 캔버스 (별도 우측 요약칩 박스 없이 큼직한 원본 화면 위에서 바로 글자 톡톡 찍기!) ── */}
-          <div className="w-full max-w-[960px] mx-auto rounded-2xl bg-[#0B0E14] border-2 border-teal-400/80 shadow-[0_18px_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col">
-            {/* 상단 액션 바: 👻 마스코트 + [🖼️ 원본 사진 그대로 넣기] + [📊 표 전체 엑셀(TSV) 넣기] + [📋 전체 글자 복사] */}
-            <div className="px-4 py-3 bg-gradient-to-r from-zinc-900 via-[#111927] to-zinc-900 border-b border-white/10 flex flex-wrap items-center justify-between gap-2.5">
-              <GhostBabyMascotBadge subtitle={activeOcrPreset.sourceLabel} />
-
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
                     setOneTimePopUsed(true);
-                    setUi3CursorEditorText(
-                      (prev) => `${prev} [원본 이미지 첨부됨: ${activeOcrPreset.title}]`
-                    );
-                    useSaySeeStore.setState({
-                      lastQuarantineToast:
-                        '🖼️ [원본 사진 그대로 넣기 완료] 현재 커서 자리에 고화질 사진 원본이 첨부되었습니다! (1회 사용 완료 · 다음 Ctrl+0부터 기본 귀신창 복귀)',
-                    });
+                    setUi3CursorEditorText((prev) => `${prev} [사진 원본 첨부됨]`);
+                    setLastInsertedSpotNotice('🖼️ 사진 원본이 클립보드에 복사되었습니다.');
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[12px] font-black cursor-pointer shadow-sm"
+                  className="px-2.5 py-1 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11px] font-black cursor-pointer"
                 >
-                  🖼️ 원본 사진 그대로 넣기
+                  🖼️ 사진 원본 넣기
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setOneTimePopUsed(true);
-                    setUi3CursorEditorText(
-                      (prev) => `${prev} ${activeOcrPreset.tsvTableText.replace(/\n/g, ' | ')}`
-                    );
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      void navigator.clipboard.writeText(activeOcrPreset.tsvTableText);
-                    }
-                    useSaySeeStore.setState({
-                      lastQuarantineToast:
-                        '📊 [표 전체 엑셀(TSV) 넣기 완료] 엑셀에 붙여넣으면 열·행이 딱 맞게 들어갑니다! (1회 사용 완료)',
-                    });
+                    setUi3CursorEditorText(activeOcrPreset.tsvTableText.replace(/\n/g, ' | '));
+                    setLastInsertedSpotNotice('📊 표 전체가 엑셀 규격으로 복사되었습니다.');
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black cursor-pointer shadow-sm"
+                  className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-black cursor-pointer"
                 >
-                  📊 표 전체 엑셀(TSV) 넣기
+                  📊 표 엑셀 복사
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setOneTimePopUsed(true);
-                    setUi3CursorEditorText((prev) => `${prev} ${activeOcrPreset.fullText}`);
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      void navigator.clipboard.writeText(activeOcrPreset.fullText);
-                    }
-                    useSaySeeStore.setState({
-                      lastQuarantineToast: '📋 [전체 글자 복사 완료] 문서 전체 텍스트가 복사되었습니다!',
-                    });
+                    setUi3CursorEditorText(activeOcrPreset.fullText);
+                    setLastInsertedSpotNotice('📋 전체 문장이 복사되었습니다.');
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[12px] font-extrabold cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[11px] font-extrabold cursor-pointer"
                 >
-                  📋 전체 글자 복사
+                  📋 전체 복사
                 </button>
               </div>
             </div>
 
-            {/* 큼직한 원본 사진·문서 화면 + 이미지 속 원래 글자 위치 위에 투명하게 얹힌 Live Text 블록들 */}
-            <div className="relative w-full min-h-[390px] sm:min-h-[430px] bg-zinc-950 overflow-hidden select-none">
+            {/* 중앙: 원본 문서/사진 캔버스 */}
+            <div className="relative min-h-[340px] sm:min-h-[370px] w-full bg-zinc-950 overflow-hidden p-4 flex flex-col justify-between">
               <img
                 src={activeOcrPreset.thumbUrl}
                 alt={activeOcrPreset.title}
-                className="absolute inset-0 w-full h-full object-cover opacity-35 blur-[0.5px]"
+                className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/50 to-black/75" />
+              <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 via-zinc-950/65 to-zinc-950/90 pointer-events-none" />
 
-              {/* 상단 오버레이 가이드 캡션 */}
-              <div className="relative z-10 px-4 pt-3 pb-1 flex items-center justify-between">
-                <span className="px-2.5 py-1 rounded-lg bg-black/80 border border-teal-400/50 text-teal-200 text-[11.5px] font-extrabold">
-                  👆 아래 원본 화면 위의 글자 줄(상호·품명·단가·합계·계좌·특약 등)을 원하는 대로 마우스로 톡톡 찍어보세요!
-                </span>
-                <span className="hidden sm:inline text-[11px] text-amber-300 font-bold">
-                  여러 줄을 연속으로 톡톡 찍으면 찍은 순서대로 커서에 들어갑니다
-                </span>
-              </div>
-
-              {/* 이미지 속 원래 글자 위치 위에 투명하게 얹힌 Live Text 오버레이 블록들 */}
-              <div className="relative z-10 w-full h-[340px] sm:h-[375px]">
+              <div className="relative z-10 w-full max-w-3xl mx-auto my-auto rounded-2xl bg-[#12161F]/90 border border-white/20 p-4 sm:p-5 shadow-2xl flex flex-col gap-2">
                 {activeOcrPreset.liveTextSpots.map((spot) => {
                   const wasClicked = clickedSpotIds.includes(spot.id);
                   return (
                     <button
                       key={spot.id}
                       type="button"
-                      onClick={() => handleTapLiveTextOnImage(spot)}
-                      style={{
-                        top: `${spot.topPercent}%`,
-                        left: `${spot.leftPercent}%`,
-                      }}
-                      title={`클릭 시 "${spot.insertValue}" 즉시 복사 및 커서 입력`}
-                      className={`group absolute right-[6%] px-3.5 py-2 rounded-xl backdrop-blur-md border text-left transition-all flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] ${
+                      onClick={() => handleClickLiveSpot(spot)}
+                      className={`group w-full text-left px-3.5 py-2 rounded-xl border transition-all cursor-pointer flex flex-wrap items-center justify-between gap-2 ${
                         wasClicked
-                          ? 'bg-emerald-500/30 border-2 border-emerald-300 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                          ? 'bg-emerald-500/25 border-2 border-emerald-400 text-white'
                           : spot.isPrimaryHighlight
-                          ? 'bg-black/65 hover:bg-teal-500/30 border-teal-400/75 hover:border-teal-300 text-white shadow-md'
-                          : 'bg-black/55 hover:bg-amber-400/25 border-white/25 hover:border-amber-300 text-zinc-100'
+                          ? 'bg-amber-400/15 hover:bg-amber-400/25 border border-amber-300/60 text-amber-100'
+                          : 'bg-zinc-900/90 hover:bg-zinc-800 border border-white/15 text-zinc-200'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-black shrink-0 ${
                             wasClicked
-                              ? 'bg-emerald-300 text-zinc-950'
+                              ? 'bg-emerald-400 text-zinc-950'
                               : spot.isPrimaryHighlight
-                              ? 'bg-teal-400/25 text-teal-200 border border-teal-300/40'
+                              ? 'bg-amber-400 text-zinc-950'
                               : 'bg-zinc-800 text-zinc-300'
                           }`}
                         >
                           {wasClicked ? '✓ 입력됨' : spot.categoryHint}
                         </span>
-                        <span className="font-mono text-[12.5px] sm:text-[13.5px] font-extrabold tracking-tight truncate">
+                        <span className="font-mono text-[12.5px] font-extrabold tracking-tight truncate">
                           {spot.displayText}
                         </span>
                       </div>
 
-                      <span className="px-2.5 py-0.5 rounded-lg bg-teal-400/20 group-hover:bg-teal-400 text-teal-200 group-hover:text-zinc-950 text-[11px] font-black shrink-0 transition-colors">
-                        👆 톡 찍어 넣기 ↵
+                      <span className="px-2 py-0.5 rounded-lg bg-teal-400/20 group-hover:bg-teal-400 text-teal-200 group-hover:text-zinc-950 text-[10.5px] font-black shrink-0 transition-colors">
+                        톡 찍어 넣기 ↵
                       </span>
                     </button>
                   );
@@ -2316,58 +1678,42 @@ export const GhostWindowThreeStageMockup: React.FC<{
               </div>
             </div>
 
-            {/* 하단: 실시간 커서 입력 확인창 + [One-Time Pop] 다음 Ctrl+0 시 기본 귀신창 자동 복귀 시연 버튼 */}
-            <div className="p-4 bg-zinc-950 border-t border-white/10 flex flex-col gap-2.5">
+            {/* 하단: 실시간 커서 입력 확인창 */}
+            <div className="p-3.5 bg-zinc-950 border-t border-white/10 flex flex-col gap-2">
               {lastInsertedSpotNotice && (
-                <div className="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[12px] font-extrabold text-emerald-200">
-                    {lastInsertedSpotNotice}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] font-extrabold text-emerald-300">
+                  <span>{lastInsertedSpotNotice}</span>
                   <button
                     type="button"
-                    onClick={handleSimulateNextCtrlZeroPress}
-                    className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-black cursor-pointer shrink-0 shadow-sm"
+                    onClick={() => setWindowTab('ui1_basic')}
+                    className="text-[11px] text-amber-300 hover:underline cursor-pointer"
                   >
-                    ⚡ 다음 Ctrl+0 눌러보기 ➔ 기본 귀신창(창 UI ①) 자동 복귀 확인!
+                    기본 귀신창으로 돌아가기 ➔
                   </button>
                 </div>
               )}
 
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11.5px] font-extrabold text-zinc-300">
-                  💬 내 작업 현장 커서 (위 원본 화면에서 톡톡 찍은 글자가 그대로 꽂힙니다):
+                <span className="text-[11.5px] font-extrabold text-zinc-400">
+                  💬 내 작업 현장 커서
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOneTimePopUsed(false);
-                      setTtlSecondsLeft(60);
-                      setClickedSpotIds([]);
-                      setLastInsertedSpotNotice(null);
-                    }}
-                    className="text-[11px] text-teal-300 hover:underline font-bold cursor-pointer"
-                  >
-                    📸 새 사진/스샷 다시 찍기 (1분 타이머 리셋)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUi3CursorEditorText('');
-                      setClickedSpotIds([]);
-                    }}
-                    className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
-                  >
-                    입력창 비우기
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUi3CursorEditorText('');
+                    setClickedSpotIds([]);
+                  }}
+                  className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  비우기
+                </button>
               </div>
 
               <input
                 type="text"
                 value={ui3CursorEditorText}
                 onChange={(e) => setUi3CursorEditorText(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border-2 border-teal-400/60 text-white text-[13.5px] font-extrabold outline-none"
+                className="w-full px-3.5 py-2 rounded-xl bg-zinc-900 border border-teal-400/60 text-white text-[13px] font-extrabold outline-none"
               />
             </div>
           </div>
@@ -2375,293 +1721,227 @@ export const GhostWindowThreeStageMockup: React.FC<{
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════
-          [제5장 & 레드팀 6대 핀셋 방어 통합 쇼케이스]
-          ① 🏷️ 귀신 라벨러 (날짜 정렬 3원칙: YYMMDD_ / YYMMDD_카톡_ / YYMMDD_내용_ + 개인➔업무 스마트 재라벨링)
-          ② 💬 귀신 말풍선 (3웨이브 일반 윈도우 탐색기 Win+E 호버 3줄 요약 & 원본 파일 수정일 LastWriteTime 동결)
-          ③ 🎮 애기귀신 소환술 3단 수련장 (0.35초 원형 게이지 + 기존 등장·성공 효과음 연동)
-          ④ 🎁 30일 무제한 체험권 수여식 (Opt-in Trial) & 📊 일 3회 도달 시 손실회피 시간 절약 성적표 팝업
+          [하단 컴팩트 유틸리티 바] 귀신 라벨러 · 귀신 말풍선 · 부가 체험 팝업
          ════════════════════════════════════════════════════════════════════════ */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0E131D] via-[#111724] to-zinc-950 border-2 border-amber-400/45 shadow-2xl flex flex-col gap-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-1 rounded-lg bg-amber-400 text-zinc-950 text-[11.5px] font-black">
-              제5장 &amp; 레드팀 6대 방어 확정
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 pt-1">
+        {/* 카드 1: 🏷️ 귀신 라벨러 (Before -> After 직관적 예시) */}
+        <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] font-black text-teal-300">
+              🏷️ 귀신 라벨러 (자동 파일명 정리)
             </span>
-            <h3 className="text-[15.5px] sm:text-[17.5px] font-black text-white">
-              🏷️ 귀신 라벨러(날짜 3원칙) · 💬 귀신 말풍선(3웨이브 탐색기 호버) · 🎮 애기귀신 소환술 3단 수련장 · 🎁 30일 체험 수여식
-            </h3>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setLabelerScopeMode('personal')}
+                className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer ${
+                  labelerScopeMode === 'personal'
+                    ? 'bg-teal-400 text-zinc-950'
+                    : 'bg-zinc-900 text-zinc-400'
+                }`}
+              >
+                개인
+              </button>
+              <button
+                type="button"
+                onClick={() => setLabelerScopeMode('work_s')}
+                className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer ${
+                  labelerScopeMode === 'work_s'
+                    ? 'bg-amber-400 text-zinc-950'
+                    : 'bg-zinc-900 text-zinc-400'
+                }`}
+              >
+                팀 S:
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActivePromoModal('opt_in_30d')}
-              className="px-3 py-1.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[11.5px] font-black cursor-pointer shadow-sm"
-            >
-              🎁 [30일 무제한 체험권 수여식 (Opt-in)] 팝업 보기
-            </button>
-            <button
-              type="button"
-              onClick={() => setActivePromoModal('loss_aversion_3limit')}
-              className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-black cursor-pointer shadow-sm"
-            >
-              📊 [일 3회 도달 시 시간절약 성적표 (412회/6시간50분)] 팝업 보기
-            </button>
+          <div className="flex flex-col gap-1.5 font-mono text-[11.5px]">
+            <div className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2">
+              <span className="text-zinc-400 truncate">IMG_4829.jpg</span>
+              <span className="text-teal-300 font-bold truncate">
+                ➔ {labelerScopeMode === 'personal' ? '261107_제주애월_가족산책.jpg' : '261107_김대리_역삼동_욕실타일.jpg'}
+              </span>
+            </div>
+            <div className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2">
+              <span className="text-zinc-400 truncate">KakaoTalk_2026...jpg</span>
+              <span className="text-amber-200 font-bold truncate">
+                ➔ {labelerScopeMode === 'personal' ? '261106_카톡_할머니생신.jpg' : '261106_김대리_카톡_사업자등록증.jpg'}
+              </span>
+            </div>
+            <div className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2">
+              <span className="text-zinc-400 truncate">스캔_001.pdf</span>
+              <span className="text-emerald-300 font-bold truncate">
+                ➔ {labelerScopeMode === 'personal' ? '250315_내용_임대차계약서.pdf' : '261105_김대리_내용_영수증_145,000원.pdf'}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* 조건부 팝업 모달 시연: ① 30일 무제한 체험권 수여식 (Opt-in Trial) / ② 손실회피 시간 절약 성적표 팝업 */}
-        {activePromoModal === 'opt_in_30d' && (
-          <div className="p-5 rounded-2xl bg-gradient-to-r from-teal-950/90 via-zinc-900 to-zinc-950 border-2 border-teal-400 shadow-[0_0_40px_rgba(20,184,166,0.3)] flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-teal-400 text-zinc-950 text-[11px] font-black">
-                🎁 모든 귀신 초능력 30일 무제한 체험권 수여식 (Opt-in Trial · 배신감 0% 철칙)
-              </span>
+        {/* 카드 2: 💬 귀신 말풍선 & 체험 모달 열기 */}
+        <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] font-black text-amber-300">
+              💬 탐색기 마우스 오버 3줄 요약
+            </span>
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setActivePromoModal('none')}
-                className="text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+                onClick={() => setActivePromoModal('training_dojo')}
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-[11px] font-bold text-teal-200 cursor-pointer"
               >
-                닫기 ✕
-              </button>
-            </div>
-            <div className="text-[15px] font-black text-white">
-              🎉 [축하합니다! &apos;애기귀신 소환술&apos;을 마스터하여 연간 209시간(27일)의 복붙 노가다에서 해방되셨습니다!]
-            </div>
-            <p className="text-[12.5px] text-zinc-200 leading-relaxed">
-              수련 완료 보상으로 <strong>원래 하루 3회 무료(무제한은 월 3,900원 / 10년 3.9만 원)인 『모든 귀신 초능력 30일 무제한 무료체험권』</strong>이 도착했습니다! 지금 바로 열어드릴까요?
-              <br />
-              <span className="text-teal-300 font-bold">
-                *(※ 카드 등록 없음 · 자동 결제 절대 없음 · 30일 후에도 매일 3회씩은 평생 무료!)*
-              </span>
-            </p>
-            <div className="flex flex-wrap items-center gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setTrialOptInAccepted(true);
-                  setActivePromoModal('none');
-                  playExistingGhostSound('success');
-                  useSaySeeStore.setState({
-                    lastQuarantineToast:
-                      '🚀 [30일 무제한 초능력 체험 시작!] 오늘부터 30일간 횟수 제한 없이 무제한 작동하며 귀신창 모서리에 [🎁 무제한 체험 D-29] 배지가 표시됩니다!',
-                  });
-                }}
-                className="px-4 py-2 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[12.5px] font-black cursor-pointer shadow-md"
-              >
-                🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기
+                🎮 60초 수련장
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setTrialOptInAccepted(false);
-                  setActivePromoModal('none');
-                  useSaySeeStore.setState({
-                    lastQuarantineToast:
-                      '🆓 [하루 3회 평생 무료 모드 유지] 30일 체험권을 아껴두고 하루 3회 무료 모드로 사용합니다.',
-                  });
-                }}
-                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer"
+                onClick={() => setActivePromoModal('loss_aversion_3limit')}
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-[11px] font-bold text-amber-200 cursor-pointer"
               >
-                그냥 하루 3회씩만 쓸게요
+                📊 절약 리포트
               </button>
             </div>
           </div>
-        )}
 
-        {activePromoModal === 'loss_aversion_3limit' && (
-          <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/85 via-zinc-900 to-zinc-950 border-2 border-amber-400 shadow-[0_0_40px_rgba(251,191,36,0.25)] flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-zinc-950 text-[11px] font-black">
-                📊 일 3회 무료 한도 도달 시 『손실회피(Loss Aversion) 시간 절약 성적표 팝업』
-              </span>
-              <button
-                type="button"
-                onClick={() => setActivePromoModal('none')}
-                className="text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
-              >
-                닫기 ✕
-              </button>
+          <div className="p-3 rounded-xl bg-[#141821] border border-amber-300/40 text-[11.5px] font-mono flex flex-col gap-1">
+            <div className="text-amber-200 font-sans font-extrabold">
+              👻 250315_내용_임대차계약서_역삼빌딩.pdf
             </div>
-            <div className="text-[15px] font-black text-white">
-              👻 [오늘의 무료 귀신 초능력 3회를 모두 사용하셨습니다!]
-            </div>
-            <p className="text-[12.5px] text-zinc-200 leading-relaxed">
-              지금까지 애기귀신과 함께 <strong className="text-amber-300">총 412번</strong>의 창 이동·복붙 노가다를 줄여 약{' '}
-              <strong className="text-teal-300">6시간 50분</strong>의 소중한 시간을 아끼셨습니다!
-              <br />
-              내일 아침이 되면 다시 3회가 무료 충전됩니다. 기다림 없이 지금 바로 무제한으로 풀까요?
-            </p>
-            <div className="flex flex-wrap items-center gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setActivePromoModal('none');
-                  playExistingGhostSound('success');
-                  useSaySeeStore.setState({
-                    lastQuarantineToast:
-                      '☕ [내 기기 통합 (월 3,900원 / 10년 특판 3.9만)] 결제 모달로 연결됩니다!',
-                  });
-                }}
-                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12.5px] font-black cursor-pointer shadow-md"
-              >
-                ☕ 커피 한 잔 값(월 3,900원 / 🔥10년 특판 3.9만)으로 평생 무제한 풀기
-              </button>
-              <button
-                type="button"
-                onClick={() => setActivePromoModal('none')}
-                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer"
-              >
-                내일 다시 무료로 쓸게요
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 상단 그리드: ① 🏷️ 귀신 라벨러 날짜 3원칙 & 스마트 재라벨링 / ② 💬 귀신 말풍선 3웨이브 탐색기 호버 툴팁 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* 카드 1: 🏷️ 귀신 라벨러 */}
-          <div className="p-4 rounded-2xl bg-zinc-950/95 border border-teal-400/40 flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[13px] font-black text-teal-300">
-                🏷️ 1. 귀신 라벨러 — 정직한 날짜 정렬 3원칙 (맨 앞 무조건 <code className="text-white">YYMMDD_</code>)
-              </span>
-              <div className="flex items-center gap-1">
-                {[
-                  { id: 'personal' as const, label: '📱 개인 통합' },
-                  { id: 'work_s' as const, label: '💼 회사 S: 드라이브' },
-                  { id: 'smart_upgrade' as const, label: '🔄 개인➔S: 스마트 재라벨링' },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setLabelerScopeMode(m.id)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-black border cursor-pointer ${
-                      labelerScopeMode === m.id
-                        ? 'bg-teal-400 text-zinc-950 border-teal-300'
-                        : 'bg-zinc-900 text-zinc-400 border-white/10'
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 text-[11.5px] font-mono">
-              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-0.5">
-                <span className="text-[10.5px] font-sans font-extrabold text-emerald-300">
-                  원칙 ① 진짜 EXIF 촬영일이 살아있는 사진 (출처 꼬리표 없음 = 100% 진짜 찍은 날)
-                </span>
-                <span className="text-zinc-300">
-                  {labelerScopeMode === 'personal'
-                    ? 'IMG_4829.jpg ➔ 261107_제주애월_가족산책.jpg'
-                    : labelerScopeMode === 'work_s'
-                    ? 'IMG_4829.jpg ➔ 261107_김대리_역삼동_욕실타일.jpg'
-                    : '261107_역삼동_욕실타일.jpg ➔ 261107_김대리_역삼동_욕실타일.jpg (날짜 중복 0%!)'}
-                </span>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-0.5">
-                <span className="text-[10.5px] font-sans font-extrabold text-amber-300">
-                  원칙 ② EXIF가 지워진 카톡 수신 사진 (<code className="text-white">YYMMDD_카톡_</code> 정직 표기)
-                </span>
-                <span className="text-zinc-300">
-                  {labelerScopeMode === 'personal'
-                    ? 'KakaoTalk_20261106...jpg ➔ 261106_카톡_할머니생신모임.jpg'
-                    : 'KakaoTalk_20261106...jpg ➔ 261106_김대리_카톡_사업자등록증_태양물산.jpg'}
-                </span>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-0.5">
-                <span className="text-[10.5px] font-sans font-extrabold text-teal-200">
-                  원칙 ③ 메타 없고 문서/OCR 본문 첫 등장 날짜 (<code className="text-white">YYMMDD_내용_</code> 단일 규칙 · 전화번호 오인 차단 가드)
-                </span>
-                <span className="text-zinc-300">
-                  {labelerScopeMode === 'personal'
-                    ? '스캔_001.pdf ➔ 250315_내용_임대차계약서_역삼빌딩.pdf'
-                    : 'scan_042.jpg ➔ 261105_김대리_내용_영수증_한일건재_145,000원.jpg'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 카드 2: 💬 귀신 말풍선 & 🎮 애기귀신 소환술 3단 수련장 */}
-          <div className="p-4 rounded-2xl bg-zinc-950/95 border border-amber-400/40 flex flex-col justify-between gap-3">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] font-black text-amber-300">
-                  💬 2. 귀신 말풍선 (3웨이브 일반 윈도우 탐색기 <code className="text-white">Win+E</code> 호버 3줄 요약)
-                </span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-black">
-                  레드팀 확정 ⑥ · 원본 수정일(LastWriteTime) 동결
-                </span>
-              </div>
-              <div className="p-3 rounded-xl bg-[#181C24] border border-amber-300/50 text-[11.5px] flex flex-col gap-1">
-                <div className="text-zinc-400 font-mono text-[10.5px]">
-                  📁 S:\계약서_보관함\250315_김대리_내용_임대차계약서_역삼빌딩.pdf (마우스 오버 0.05초)
-                </div>
-                <div className="text-amber-200 font-extrabold">
-                  👻 [귀신 말풍선 Zero-Open 3줄 핵심 요약]
-                </div>
-                <div className="text-white font-mono">
-                  • 보증금: 5,000만 원 / 월세: 320만 원 (부가세 별도)
-                  <br />• 계약 만기일: 2028.11.14 (특약: 원상복구 특약 제4조 참조)
-                  <br />• 임대인: (주)역삼빌딩 / 업로드: 김대리 (원본 파일 수정일 100% 보존됨)
-                </div>
-              </div>
-            </div>
-
-            {/* 🎮 60초 게이밍 온보딩: 애기귀신 소환술 3단 수련장 */}
-            <div className="p-3 rounded-xl bg-zinc-900/90 border border-teal-400/40 flex flex-col gap-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[12px] font-black text-teal-300">
-                  🎮 3. 60초 게이밍 온보딩 『👻 애기귀신 소환술 3단 수련장』 (0.35초 원형 게이지 {ringProgress}% + 기존 효과음 연동)
-                </span>
-                <div className="flex items-center gap-1">
-                  {[
-                    { step: 1 as const, label: '1단(10초): 0.35초 소환술' },
-                    { step: 2 as const, label: '2단(25초): 1➔2➔3 사출·세탁' },
-                    { step: 3 as const, label: '3단(25초): 단가? 소환 & 수여식' },
-                  ].map((st) => (
-                    <button
-                      key={st.step}
-                      type="button"
-                      onClick={() => {
-                        setTrainingStage(st.step);
-                        if (st.step === 1) {
-                          setRingProgress(100);
-                          playExistingGhostSound('summon');
-                        } else if (st.step === 2) {
-                          playExistingGhostSound('success');
-                        } else {
-                          playExistingGhostSound('success');
-                          setActivePromoModal('opt_in_30d');
-                        }
-                      }}
-                      className={`px-2 py-1 rounded-lg text-[10.5px] font-black border cursor-pointer ${
-                        trainingStage === st.step
-                          ? 'bg-amber-400 text-zinc-950 border-amber-300'
-                          : 'bg-zinc-950 text-zinc-300 border-white/10'
-                      }`}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <p className="text-[11px] text-zinc-300 leading-snug">
-                {trainingStage === 1 &&
-                  '👉 [1단 수련] 우클릭을 0.35초 지그시 누르면 커서 옆 원형 게이지 링이 차오르며 기존 귀신창 [👻 애기귀신 등장 효과음]과 함께 귀신창이 팝업됩니다!'}
-                {trainingStage === 2 &&
-                  '👉 [2단 수련] 샘플 명함과 시커먼 배경 뉴스 문장을 좌클릭➔우클릭만으로 1초 만에 꽂아 넣고 기존 [✨ 초능력 성공 효과음] 타격감을 체험합니다!'}
-                {trainingStage === 3 &&
-                  '👉 [3단 수련] "샘플 견적서?"를 우클릭 꾹으로 소환해 145,000원을 꽂는 순간 [✨ 성공 효과음]과 함께 위의 [🎁 30일 무제한 초능력 체험권 수여식]이 열립니다!'}
-              </p>
+            <div className="text-zinc-200">
+              • 보증금 5,000만 원 / 월세 320만 원 · 만기 2028.11.14
+              <br />• 특약: 퇴실 시 기본 칸막이 원상복구 면제
             </div>
           </div>
         </div>
       </div>
+
+      {/* 조건부 팝업 모달들 (클릭 시에만 깔끔하게 표시) */}
+      {activePromoModal === 'opt_in_30d' && (
+        <div className="p-4 rounded-2xl bg-zinc-900 border-2 border-teal-400 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[14px] font-black text-teal-300">
+              🎁 모든 귀신 초능력 30일 무제한 무료체험
+            </span>
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('none')}
+              className="text-zinc-400 hover:text-white text-[12px] font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-[12.5px] text-zinc-200">
+            카드 등록이나 자동 결제 없이 30일 동안 모든 초능력을 무제한으로 써보실 수 있습니다. (30일 후에도 매일 3회 평생 무료)
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setTrialOptInAccepted(true);
+                setActivePromoModal('none');
+                playExistingGhostSound('success');
+              }}
+              className="px-4 py-2 rounded-xl bg-teal-400 text-zinc-950 text-[12px] font-black cursor-pointer"
+            >
+              🚀 30일 무제한 체험 시작하기
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTrialOptInAccepted(false);
+                setActivePromoModal('none');
+              }}
+              className="px-3 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-[12px] font-bold cursor-pointer"
+            >
+              하루 3회씩만 쓰기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activePromoModal === 'loss_aversion_3limit' && (
+        <div className="p-4 rounded-2xl bg-zinc-900 border-2 border-amber-400 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[14px] font-black text-amber-300">
+              👻 오늘 무료 초능력 3회를 모두 사용하셨습니다
+            </span>
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('none')}
+              className="text-zinc-400 hover:text-white text-[12px] font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-[12.5px] text-zinc-200">
+            지금까지 총 <strong className="text-amber-300">412번</strong>의 복붙을 줄여 약{' '}
+            <strong className="text-teal-300">6시간 50분</strong>을 아끼셨습니다. 내일 아침 다시 3회가 무료 충전됩니다.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActivePromoModal('none');
+                playExistingGhostSound('success');
+              }}
+              className="px-4 py-2 rounded-xl bg-amber-400 text-zinc-950 text-[12px] font-black cursor-pointer"
+            >
+              ☕ 월 3,900원 (10년 특판 3.9만) 무제한 풀기
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('none')}
+              className="px-3 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-[12px] font-bold cursor-pointer"
+            >
+              내일 다시 무료로 쓰기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activePromoModal === 'training_dojo' && (
+        <div className="p-4 rounded-2xl bg-zinc-900 border-2 border-teal-400 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[14px] font-black text-teal-300">
+              🎮 60초 애기귀신 소환 수련장
+            </span>
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('none')}
+              className="text-zinc-400 hover:text-white text-[12px] font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { step: 1 as const, label: '1단계: 우클릭 꾹 소환' },
+              { step: 2 as const, label: '2단계: 1·2·3 연속 붙여넣기' },
+              { step: 3 as const, label: '3단계: 문서 숫자 바로 소환' },
+            ].map((st) => (
+              <button
+                key={st.step}
+                type="button"
+                onClick={() => {
+                  setTrainingStage(st.step);
+                  playExistingGhostSound(st.step === 1 ? 'summon' : 'success');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-black cursor-pointer ${
+                  trainingStage === st.step
+                    ? 'bg-teal-400 text-zinc-950'
+                    : 'bg-zinc-950 text-zinc-300 border border-white/10'
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[12px] text-zinc-200">
+            {trainingStage === 1 && '마우스 우클릭을 0.35초 지그시 누르면 효과음과 함께 귀신창이 열립니다.'}
+            {trainingStage === 2 && '여러 줄을 차례대로 복사한 뒤 순서대로 톡톡 붙여넣습니다.'}
+            {trainingStage === 3 && '문장 끝에 ?를 치고 우클릭 꾹을 누르면 계약서·단가표 숫자가 바로 들어갑니다.'}
+          </p>
+        </div>
+      )}
     </section>
   );
 };
@@ -2682,7 +1962,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       >
         <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5">
-            <GhostBabyMascotBadge subtitle="원본 화면 위에 글자 그대로 톡톡 찍기 (Live Text 오버레이)" />
+            <GhostBabyMascotBadge subtitle="사진 위 글자 톡톡 찍기" />
             <span className="text-[14px] font-black text-white truncate">
               {photo.name}
             </span>

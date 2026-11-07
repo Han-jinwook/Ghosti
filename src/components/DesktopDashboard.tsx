@@ -197,8 +197,8 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   Array<{ id: DesktopTab; icon: string; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'dashboard', icon: '🔍', label: '찾기', subcaption: '내 기기 검색 · 현장 문서 소환 · 모든 사진 원클릭 OCR' },
-    { id: 'trash', icon: '✋', label: '손보기', subcaption: '느려진 PC 속도 주치의 · 수요 손 없는 날 · 1초 복원', showTrashCount: true },
+    { id: 'dashboard', icon: '🔍', label: '찾기', subcaption: '사진 · 영상 · 문서 1초 검색' },
+    { id: 'trash', icon: '✋', label: '손보기', subcaption: '사진 정리 · PC 속도 점검', showTrashCount: true },
   ],
   family: [
     { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
@@ -726,7 +726,7 @@ export const DesktopDashboard: React.FC = () => {
                   <div className="flex flex-col text-left min-w-0 flex-1">
                     <span className="truncate text-[14px]">⚡ 귀신창 초능력 : 💻 내 PC</span>
                     <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      내PC 문서소환 무제한 무료 · 초능력 일 3회 무료
+                      내 PC 소환 무료 · 초능력 일 3회
                     </span>
                   </div>
                 </button>
@@ -739,10 +739,10 @@ export const DesktopDashboard: React.FC = () => {
                     themeMode === 'light' ? 'text-amber-700' : 'text-amber-300'
                   }`}
                 >
-                  👑 유료구역 (1개월 무제한 ➔ 일 3회 무료)
+                  👑 프로 (30일 무제한 체험)
                 </span>
                 <span className="text-[10px] text-emerald-400 font-extrabold">
-                  🔥 1차 10년 특판 (월 325원꼴 평생급 보장)
+                  🔥 10년 특판
                 </span>
               </div>
 
@@ -814,14 +814,14 @@ export const DesktopDashboard: React.FC = () => {
                         <span className="truncate font-bold">귀신창 초능력 : 📱 폰 + PC</span>
                       </div>
                       <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
-                        폰 촬영·스샷 1초 공간이동 · 타 기기 문서 소환
+                        폰 사진 1초 전송 · 기기 통합 검색
                       </span>
                     </div>
                   </button>
                 </div>
               </div>
 
-              {/* [유료 2] 업무 공유 (소호 9.9천 / 소기업 1.9만 / 중소 2.9만 · 🔥 10년 특판) */}
+              {/* [유료 2] 업무 공유 (소호 9.9천 ~ · 🔥 10년 특판) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -836,7 +836,7 @@ export const DesktopDashboard: React.FC = () => {
                   <div className="flex flex-col text-left min-w-0 flex-1">
                     <span className="truncate">업무 공유</span>
                     <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      소호 9.9천 / 소기업 1.9만 / 중소 2.9만 · 🔥 10년 특판
+                      소호 9.9천 ~ · 🔥 10년 특판
                     </span>
                   </div>
                   <span className="text-[10px] opacity-60">
@@ -883,7 +883,7 @@ export const DesktopDashboard: React.FC = () => {
                         <span className="truncate font-bold">귀신창 초능력 : 💼 팀 공유</span>
                       </div>
                       <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
-                        F7~F12 팀 상용구 1초 동기화 · S: 숫자 소환
+                        팀 상용구 동기화 · S: 문서 소환
                       </span>
                     </div>
                   </button>
@@ -1809,7 +1809,7 @@ export const DesktopDashboard: React.FC = () => {
                 onTierChange={setGhostWindowTier}
                 initialWindowTab={ghostWindowInitialTab}
               />
-              <OnboardingModal inlineSuperpowerOnly={true} />
+              
             </div>
           ) : activeLoungeType === 'personal' ? (
             <>
