@@ -338,9 +338,9 @@ export const DesktopDashboard: React.FC = () => {
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(true);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
   const [superpowerStatus, setSuperpowerStatus] = useState<SuperpowerTrialStatus | null>(null);
-  const [isStage1MinimalPreview, setIsStage1MinimalPreview] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.location.search.includes('preview=stage1');
+  const [isStage1MinimalPreview] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return !window.location.search.includes('preview=legacy');
   });
 
   const isAnySubscribed = useMemo(
@@ -535,17 +535,7 @@ export const DesktopDashboard: React.FC = () => {
 
           return (
             <div className="flex flex-col gap-1.5">
-              {/* ━━━ 🆓 무료구역 (평생 0원) 헤더 ━━━ */}
-              <div className="px-2 pt-1 pb-0.5 flex items-center justify-between select-none">
-                <span
-                  className={`text-[11px] font-black tracking-tight ${
-                    themeMode === 'light' ? 'text-teal-700' : 'text-emerald-400'
-                  }`}
-                >
-                  🆓 무료구역 (평생 0원)
-                </span>
-                <span className="text-[10px] text-zinc-400 font-bold">전국민 무제한 유입</span>
-              </div>
+              {/* ━━━ 기본 무료 메뉴 ━━━ */}
 
               {/* [무료 1] 내 기기 (PC·폰) */}
               <div className="flex flex-col gap-0.5">
@@ -732,119 +722,80 @@ export const DesktopDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* ━━━ 👑 유료구역 (1개월 무제한 무료 후 일 3회 무료 · 🔥 10년 특판) 경계선 ━━━ */}
-              <div className="mt-2 mb-1 px-2 pt-2 border-t border-white/10 flex flex-col gap-0.5 select-none" aria-label="유료 프로 경계선">
-                <span
-                  className={`text-[11px] font-black tracking-tight ${
-                    themeMode === 'light' ? 'text-amber-700' : 'text-amber-300'
-                  }`}
-                >
-                  👑 프로 (30일 무제한 체험)
-                </span>
-                <span className="text-[10px] text-emerald-400 font-extrabold">
-                  🔥 10년 특판
-                </span>
-              </div>
-
-              {/* [유료 1] 내 기기 통합 (월 3,900원 / 🔥 10년 특판 3.9만) */}
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDeviceIntegrationOpen(true);
-                    setActiveIntegrationSubTab('devices');
-                    setGhostWindowTier('phone_pc');
-                    setActiveLoungeType('personal');
-                    setDesktopTab('sync');
-                    if (!isMobileDrawer) scrollAppToTop();
-                  }}
-                  className={mainBtnClass(isPhonePcIntegrationActive)}
-                >
-                  <div className="flex flex-col text-left min-w-0 flex-1">
-                    <span className="truncate">내 기기 통합</span>
-                    <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      월 3,900원 / 🔥 10년 특판 3.9만
-                    </span>
-                  </div>
-                  <span className="text-[10px] opacity-60">{isPhonePcIntegrationActive ? '▾' : '▸'}</span>
-                </button>
-
-                <div className={subWrapClass}>
+              {/* ━━━ 기기 연동 · 팀 확장 (관심 시 클릭하여 펼침) ━━━ */}
+              <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-1 select-none" aria-label="확장 메뉴">
+                {/* [확장 1] 내 기기 통합 (기본 접힘 -> 클릭 시 하위 펼침) */}
+                <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
                     onClick={() => {
                       setIsDeviceIntegrationOpen(true);
                       setActiveIntegrationSubTab('devices');
-                      setActiveLoungeType('personal');
-                      setDesktopTab('sync');
-                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                    }}
-                    className={subBtnClass(
-                      isDeviceIntegrationOpen && activeIntegrationSubTab === 'devices'
-                    )}
-                  >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
-                        <span className="truncate font-bold">내 기기 연결 (PC ↔ 폰 ↔ 서브PC)</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsDeviceIntegrationOpen(true);
-                      setActiveIntegrationSubTab('superpower');
                       setGhostWindowTier('phone_pc');
-                      setGhostWindowInitialTab('ui3_ocr');
                       setActiveLoungeType('personal');
                       setDesktopTab('sync');
-                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                      if (!isMobileDrawer) scrollAppToTop();
                     }}
-                    className={subBtnClass(
-                      isDeviceIntegrationOpen &&
-                        activeIntegrationSubTab === 'superpower' &&
-                        ghostWindowTier === 'phone_pc'
-                    )}
+                    className={mainBtnClass(isPhonePcIntegrationActive)}
                   >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="shrink-0 text-[13px]">⚡</span>
-                        <span className="truncate font-bold">귀신창 초능력 : 📱 폰 + PC</span>
-                      </div>
-                      <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
-                        폰 사진 1초 전송 · 기기 통합 검색
+                    <div className="flex flex-col text-left min-w-0 flex-1">
+                      <span className="truncate text-[14px]">내 기기 통합</span>
+                      <span className="text-[10.5px] opacity-70 font-normal truncate">
+                        폰 ↔ PC 연동 · 기기 통합 검색
                       </span>
                     </div>
+                    <span className="text-[10px] opacity-60">{isPhonePcIntegrationActive ? '▾' : '▸'}</span>
                   </button>
+
+                  {isPhonePcIntegrationActive && (
+                    <div className={subWrapClass}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDeviceIntegrationOpen(true);
+                          setActiveIntegrationSubTab('devices');
+                          setActiveLoungeType('personal');
+                          setDesktopTab('sync');
+                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                        }}
+                        className={subBtnClass(
+                          isDeviceIntegrationOpen && activeIntegrationSubTab === 'devices'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
+                          <span className="truncate font-bold">기기 연결 (PC ↔ 폰)</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDeviceIntegrationOpen(true);
+                          setActiveIntegrationSubTab('superpower');
+                          setGhostWindowTier('phone_pc');
+                          setGhostWindowInitialTab('ui3_ocr');
+                          setActiveLoungeType('personal');
+                          setDesktopTab('sync');
+                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                        }}
+                        className={subBtnClass(
+                          isDeviceIntegrationOpen &&
+                            activeIntegrationSubTab === 'superpower' &&
+                            ghostWindowTier === 'phone_pc'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="shrink-0 text-[13px]">⚡</span>
+                          <span className="truncate font-bold">귀신창 : 📱 폰 + PC</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {/* [유료 2] 업무 공유 (소호 9.9천 ~ · 🔥 10년 특판) */}
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDeviceIntegrationOpen(false);
-                    setActiveLoungeType('work');
-                    setDesktopTab('dashboard');
-                    resetToZenCanvas();
-                  }}
-                  className={mainBtnClass(isWorkShareActive || isWorkTeamSuperpowerActive)}
-                >
-                  <div className="flex flex-col text-left min-w-0 flex-1">
-                    <span className="truncate">업무 공유</span>
-                    <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      소호 9.9천 ~ · 🔥 10년 특판
-                    </span>
-                  </div>
-                  <span className="text-[10px] opacity-60">
-                    {isWorkShareActive || isWorkTeamSuperpowerActive ? '▾' : '▸'}
-                  </span>
-                </button>
-
-                <div className={subWrapClass}>
+                {/* [확장 2] 업무 공유 (기본 접힘 -> 클릭 시 하위 펼침) */}
+                <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -852,41 +803,59 @@ export const DesktopDashboard: React.FC = () => {
                       setActiveLoungeType('work');
                       setDesktopTab('dashboard');
                       resetToZenCanvas();
-                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
                     }}
-                    className={subBtnClass(activeLoungeType === 'work' && !isDeviceIntegrationOpen)}
+                    className={mainBtnClass(isWorkShareActive || isWorkTeamSuperpowerActive)}
                   >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
-                        <span className="truncate font-bold">S: 드라이브 · 문서/계약서 공유</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsDeviceIntegrationOpen(true);
-                      setActiveIntegrationSubTab('superpower');
-                      setGhostWindowTier('work_team');
-                      setGhostWindowInitialTab('ui2_summon');
-                      setActiveLoungeType('personal');
-                      setDesktopTab('sync');
-                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                    }}
-                    className={subBtnClass(isWorkTeamSuperpowerActive)}
-                  >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="shrink-0 text-[13px]">⚡</span>
-                        <span className="truncate font-bold">귀신창 초능력 : 💼 팀 공유</span>
-                      </div>
-                      <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
-                        팀 상용구 동기화 · S: 문서 소환
+                    <div className="flex flex-col text-left min-w-0 flex-1">
+                      <span className="truncate text-[14px]">업무 공유 (S:)</span>
+                      <span className="text-[10.5px] opacity-70 font-normal truncate">
+                        팀 공유 드라이브 · 계약서/단가표 공유
                       </span>
                     </div>
+                    <span className="text-[10px] opacity-60">
+                      {isWorkShareActive || isWorkTeamSuperpowerActive ? '▾' : '▸'}
+                    </span>
                   </button>
+
+                  {(isWorkShareActive || isWorkTeamSuperpowerActive) && (
+                    <div className={subWrapClass}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDeviceIntegrationOpen(false);
+                          setActiveLoungeType('work');
+                          setDesktopTab('dashboard');
+                          resetToZenCanvas();
+                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                        }}
+                        className={subBtnClass(activeLoungeType === 'work' && !isDeviceIntegrationOpen)}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
+                          <span className="truncate font-bold">S: 드라이브 · 문서 공유</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDeviceIntegrationOpen(true);
+                          setActiveIntegrationSubTab('superpower');
+                          setGhostWindowTier('work_team');
+                          setGhostWindowInitialTab('ui2_summon');
+                          setActiveLoungeType('personal');
+                          setDesktopTab('sync');
+                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                        }}
+                        className={subBtnClass(isWorkTeamSuperpowerActive)}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="shrink-0 text-[13px]">⚡</span>
+                          <span className="truncate font-bold">귀신창 : 💼 팀 공유</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -989,27 +958,7 @@ export const DesktopDashboard: React.FC = () => {
 
               {/* 우측 상단 심플 앵커: 1·2단계 신형/구형 비교 스위치 + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="가이드 공유 및 프로필 영역">
-                {activeLoungeType === 'personal' && (desktopTab === 'dashboard' || desktopTab === 'trash' || desktopTab === 'sync') && (
-                  <button
-                    type="button"
-                    onClick={() => setIsStage1MinimalPreview((v) => !v)}
-                    title="신형 미니멀 1·2단계 화면과 기존 화면을 즉시 전환하여 비교합니다"
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-extrabold text-[11.5px] border transition-all cursor-pointer shrink-0 ${
-                      isStage1MinimalPreview
-                        ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.35)]'
-                        : themeMode === 'light'
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                        : 'bg-zinc-900 text-emerald-300 border-emerald-500/40 hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span>🧪</span>
-                    <span>
-                      {isStage1MinimalPreview
-                        ? '1·2단계 신형 미니멀 UI (기존 화면 전환 ↺)'
-                        : '1·2단계 신형 미니멀 UI 비교 보기'}
-                    </span>
-                  </button>
-                )}
+
 
                 <button
                   type="button"

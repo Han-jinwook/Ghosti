@@ -680,6 +680,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
   const [activePromoModal, setActivePromoModal] = useState<'none' | 'opt_in_30d' | 'loss_aversion_3limit' | 'training_dojo'>('none');
   const [trialOptInAccepted, setTrialOptInAccepted] = useState<boolean>(true);
   const [trainingStage, setTrainingStage] = useState<1 | 2 | 3>(1);
+  const [showAdvancedUtils, setShowAdvancedUtils] = useState<boolean>(false);
 
   const playExistingGhostSound = (kind: 'summon' | 'success') => {
     try {
@@ -1721,97 +1722,116 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════
-          [하단 컴팩트 유틸리티 바] 귀신 라벨러 · 귀신 말풍선 · 부가 체험 팝업
+          [하단 확장 유틸리티 토글] 기본은 1줄로 접어두고 관심 있을 때 클릭해 펼침
          ════════════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 pt-1">
-        {/* 카드 1: 🏷️ 귀신 라벨러 (Before -> After 직관적 예시) */}
-        <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[13px] font-black text-teal-300">
-              🏷️ 귀신 라벨러 (자동 파일명 정리)
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setLabelerScopeMode('personal')}
-                className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer ${
-                  labelerScopeMode === 'personal'
-                    ? 'bg-teal-400 text-zinc-950'
-                    : 'bg-zinc-900 text-zinc-400'
-                }`}
-              >
-                개인
-              </button>
-              <button
-                type="button"
-                onClick={() => setLabelerScopeMode('work_s')}
-                className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer ${
-                  labelerScopeMode === 'work_s'
-                    ? 'bg-amber-400 text-zinc-950'
-                    : 'bg-zinc-900 text-zinc-400'
-                }`}
-              >
-                팀 S:
-              </button>
-            </div>
+      <div className="rounded-2xl bg-zinc-950/90 border border-white/10 overflow-hidden">
+        <div
+          onClick={() => setShowAdvancedUtils((v) => !v)}
+          className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors select-none"
+        >
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px] font-extrabold text-zinc-200">
+            <span className="text-teal-300">{showAdvancedUtils ? '▾' : '▸'}</span>
+            <span>🏷️ 자동 파일명 정리(귀신 라벨러) · 💬 탐색기 3줄 요약 미리보기</span>
           </div>
-
-          <div className="flex flex-col gap-1.5 font-mono text-[11.5px]">
-            <div className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2">
-              <span className="text-zinc-400 truncate">IMG_4829.jpg</span>
-              <span className="text-teal-300 font-bold truncate">
-                ➔ {labelerScopeMode === 'personal' ? '261107_제주애월_가족산책.jpg' : '261107_김대리_역삼동_욕실타일.jpg'}
-              </span>
-            </div>
-            <div className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2">
-              <span className="text-zinc-400 truncate">KakaoTalk_2026...jpg</span>
-              <span className="text-amber-200 font-bold truncate">
-                ➔ {labelerScopeMode === 'personal' ? '261106_카톡_할머니생신.jpg' : '261106_김대리_카톡_사업자등록증.jpg'}
-              </span>
-            </div>
-            <div className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2">
-              <span className="text-zinc-400 truncate">스캔_001.pdf</span>
-              <span className="text-emerald-300 font-bold truncate">
-                ➔ {labelerScopeMode === 'personal' ? '250315_내용_임대차계약서.pdf' : '261105_김대리_내용_영수증_145,000원.pdf'}
-              </span>
-            </div>
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('training_dojo')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-[11px] font-bold text-teal-200 cursor-pointer"
+            >
+              🎮 60초 수련장
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePromoModal('loss_aversion_3limit')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-[11px] font-bold text-amber-200 cursor-pointer"
+            >
+              📊 절약 리포트
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAdvancedUtils((v) => !v)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-[11px] font-bold text-zinc-300 cursor-pointer"
+            >
+              {showAdvancedUtils ? '접기 ▴' : '펼치기 ▾'}
+            </button>
           </div>
         </div>
 
-        {/* 카드 2: 💬 귀신 말풍선 & 체험 모달 열기 */}
-        <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col justify-between gap-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[13px] font-black text-amber-300">
-              💬 탐색기 마우스 오버 3줄 요약
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setActivePromoModal('training_dojo')}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-[11px] font-bold text-teal-200 cursor-pointer"
-              >
-                🎮 60초 수련장
-              </button>
-              <button
-                type="button"
-                onClick={() => setActivePromoModal('loss_aversion_3limit')}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-[11px] font-bold text-amber-200 cursor-pointer"
-              >
-                📊 절약 리포트
-              </button>
-            </div>
-          </div>
+        {showAdvancedUtils && (
+          <div className="p-4 border-t border-white/10 grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+            {/* 카드 1: 🏷️ 귀신 라벨러 */}
+            <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col justify-between gap-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-black text-teal-300">
+                  🏷️ 귀신 라벨러 (자동 파일명 정리)
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setLabelerScopeMode('personal')}
+                    className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer ${
+                      labelerScopeMode === 'personal'
+                        ? 'bg-teal-400 text-zinc-950'
+                        : 'bg-zinc-950 text-zinc-400'
+                    }`}
+                  >
+                    개인
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLabelerScopeMode('work_s')}
+                    className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer ${
+                      labelerScopeMode === 'work_s'
+                        ? 'bg-amber-400 text-zinc-950'
+                        : 'bg-zinc-950 text-zinc-400'
+                    }`}
+                  >
+                    팀 S:
+                  </button>
+                </div>
+              </div>
 
-          <div className="p-3 rounded-xl bg-[#141821] border border-amber-300/40 text-[11.5px] font-mono flex flex-col gap-1">
-            <div className="text-amber-200 font-sans font-extrabold">
-              👻 250315_내용_임대차계약서_역삼빌딩.pdf
+              <div className="flex flex-col gap-1.5 font-mono text-[11.5px]">
+                <div className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-white/5 flex items-center justify-between gap-2">
+                  <span className="text-zinc-400 truncate">IMG_4829.jpg</span>
+                  <span className="text-teal-300 font-bold truncate">
+                    ➔ {labelerScopeMode === 'personal' ? '261107_제주애월_가족산책.jpg' : '261107_김대리_역삼동_욕실타일.jpg'}
+                  </span>
+                </div>
+                <div className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-white/5 flex items-center justify-between gap-2">
+                  <span className="text-zinc-400 truncate">KakaoTalk_2026...jpg</span>
+                  <span className="text-amber-200 font-bold truncate">
+                    ➔ {labelerScopeMode === 'personal' ? '261106_카톡_할머니생신.jpg' : '261106_김대리_카톡_사업자등록증.jpg'}
+                  </span>
+                </div>
+                <div className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-white/5 flex items-center justify-between gap-2">
+                  <span className="text-zinc-400 truncate">스캔_001.pdf</span>
+                  <span className="text-emerald-300 font-bold truncate">
+                    ➔ {labelerScopeMode === 'personal' ? '250315_내용_임대차계약서.pdf' : '261105_김대리_내용_영수증_145,000원.pdf'}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="text-zinc-200">
-              • 보증금 5,000만 원 / 월세 320만 원 · 만기 2028.11.14
-              <br />• 특약: 퇴실 시 기본 칸막이 원상복구 면제
+
+            {/* 카드 2: 💬 귀신 말풍선 */}
+            <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col justify-between gap-2.5">
+              <span className="text-[12.5px] font-black text-amber-300">
+                💬 탐색기 마우스 오버 3줄 요약
+              </span>
+
+              <div className="p-3 rounded-xl bg-[#141821] border border-amber-300/40 text-[11.5px] font-mono flex flex-col gap-1">
+                <div className="text-amber-200 font-sans font-extrabold">
+                  👻 250315_내용_임대차계약서_역삼빌딩.pdf
+                </div>
+                <div className="text-zinc-200">
+                  • 보증금 5,000만 원 / 월세 320만 원 · 만기 2028.11.14
+                  <br />• 특약: 퇴실 시 기본 칸막이 원상복구 면제
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* 조건부 팝업 모달들 (클릭 시에만 깔끔하게 표시) */}

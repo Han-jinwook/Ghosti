@@ -455,28 +455,17 @@ export const LoungeView: React.FC = () => {
   return (
     <main className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5">
       {/* 📢 공유 라운지 핵심 선언 콜아웃 (노션 스타일 미니멀 배너): 내 기기(personal) 내에서는 무료/요금 배너를 띄우지 않음 */}
-      {!isStoreAppMode && activeLoungeType !== 'personal' && (
-        <section className="px-4 py-3.5 rounded-2xl bg-[#18181B] border border-emerald-500/30 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="px-2.5 py-0.5 rounded-md bg-emerald-400/15 border border-emerald-400/35 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-              2번 사진 공유 (가족·동호회·동창회) : 평생 0원
-            </span>
-            <p className="font-body-sm text-[13px] text-zinc-200 font-bold">
-              📢 &ldquo;사진 공유(👨‍👩‍👧‍👦가족 · ⛰️동호회 · 🎓동창회)는 인원 무제한 평생 0원!&rdquo;{' '}
-              <span className="text-zinc-400 text-[12px] font-normal">
-                (내 PC 하드 직결로 클라우드 서버비 0원 · 오직 사진/동영상 전용, 문서/S: 드라이브는 4번 업무 공유 전용)
-              </span>
-            </p>
-            <span className="text-[12px] text-amber-300 font-extrabold">
-              🎁 3·4번 유료 기능(내 기기 통합 · 업무 공유) 1개월 무료체험 (만료 후에도 일 3회 평생 무료) · 🔥 10년 특판
-            </span>
-          </div>
+      {!isStoreAppMode && activeLoungeType === 'work' && (
+        <section className="px-4 py-2.5 rounded-2xl bg-[#18181B] border border-amber-400/30 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[12.5px] text-zinc-200 font-bold">
+            💼 팀 공유 S: 드라이브 · 계약서/단가표 본문 검색 (🎁 30일 무제한 무료체험)
+          </span>
           <button
             type="button"
             onClick={() => setShowProModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer whitespace-nowrap"
+            className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold shrink-0 cursor-pointer"
           >
-            🔥 전체 혜택 &amp; 10년 특판 보기 →
+            팀 플랜 안내 보기 →
           </button>
         </section>
       )}
