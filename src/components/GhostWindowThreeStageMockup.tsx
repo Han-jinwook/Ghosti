@@ -294,6 +294,22 @@ const SUMMON_SCENARIOS: {
   },
 ];
 
+/**
+ * 🎯 원본 화면 위에 글자 그대로 톡톡 찍기 (Live Text 인플레이스 오버레이 블록)
+ * - 어설픈 요약 칩 나열 대신, 사진/영수증/계약서 원본 위 실제 글자 위치(top%, left%)에 그대로 얹혀서
+ *   유저가 상호를 원하든, 품명을 원하든, 특약 한 줄을 원하든 화면 위 글자를 마우스로 톡톡 찍으면 즉시 복사/커서 입력!
+ */
+export interface LiveTextOverlaySpot {
+  id: string;
+  topPercent: number;
+  leftPercent: number;
+  widthPercent?: number;
+  categoryHint: string;
+  displayText: string;
+  insertValue: string;
+  isPrimaryHighlight?: boolean;
+}
+
 export interface OcrSamplePreset {
   id: string;
   title: string;
@@ -301,44 +317,144 @@ export interface OcrSamplePreset {
   thumbUrl: string;
   fullText: string;
   tsvTableText: string;
-  wordChips: { label: string; value: string; highlight?: boolean }[];
+  liveTextSpots: LiveTextOverlaySpot[];
 }
 
 const OCR_PRESETS: OcrSamplePreset[] = [
   {
     id: 'ocr_receipt',
-    title: '방금 폰으로 찍은 종이 영수증·세금계산서',
-    sourceLabel: '📱 내 폰 카메라 촬영 직후 Ctrl+0 공간이동',
+    title: '방금 폰으로 찍은 종이 영수증·세금계산서 (원본 화면 위 글자 톡톡 찍기)',
+    sourceLabel: '📱 내 폰 촬영 직후 1분 이내 Ctrl+0 호출 (1회 사용 시 자동 소멸)',
     thumbUrl: '/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg',
     fullText:
-      '[전자세금계산서 영수증] 상호: (주)성수오피스디포 / 사업자번호: 123-45-67890 / 승인번호: 849201 / 합계금액: 145,000원 (공급가액 131,818원, 세액 13,182원) / 입금계좌: 국민 012-3456-7890',
+      '[전자세금계산서 영수증] 승인번호: 20261107-849201 | 상호: (주)성수오피스디포 | 대표자: 김상훈 | 사업자번호: 123-45-67890 | 품목1: A4 복사용지 80g 10박스 (단가 22,000원) | 품목2: 레이저 토너 카트리지 2개 (단가 44,500원) | 공급가액: 131,818원 | 부가세: 13,182원 | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890',
     tsvTableText:
-      '항목\t내용\n상호\t(주)성수오피스디포\n사업자번호\t123-45-67890\n승인번호\t849201\n공급가액\t131,818원\n부가세\t13,182원\n합계금액\t145,000원\n입금계좌\t국민 012-3456-7890',
-    wordChips: [
-      { label: '인증·승인번호: 849201', value: '849201', highlight: true },
-      { label: '사업자번호: 123-45-67890', value: '123-45-67890', highlight: true },
-      { label: '합계: 145,000원', value: '145,000원', highlight: true },
-      { label: '국민 012-3456-7890', value: '국민은행 012-3456-7890', highlight: true },
-      { label: '공급가액: 131,818원', value: '131,818원' },
-      { label: '세액: 13,182원', value: '13,182원' },
-      { label: '(주)성수오피스디포', value: '(주)성수오피스디포' },
+      '항목\t내용\n승인번호\t20261107-849201\n상호\t(주)성수오피스디포\n사업자번호\t123-45-67890\n품목1\tA4 복사용지 80g 10박스\n품목2\t레이저 토너 카트리지 2개\n공급가액\t131,818원\n부가세\t13,182원\n합계금액\t145,000원\n입금계좌\t국민은행 012-3456-7890',
+    liveTextSpots: [
+      {
+        id: 'spot_1',
+        topPercent: 8,
+        leftPercent: 6,
+        categoryHint: '문서 제목',
+        displayText: '전자세금계산서 (영수증) · 승인번호: 20261107-849201',
+        insertValue: '20261107-849201',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'spot_2',
+        topPercent: 21,
+        leftPercent: 6,
+        categoryHint: '공급자 상호·대표',
+        displayText: '상호: (주)성수오피스디포  |  성명: 김상훈',
+        insertValue: '(주)성수오피스디포',
+      },
+      {
+        id: 'spot_3',
+        topPercent: 33,
+        leftPercent: 6,
+        categoryHint: '사업자등록번호',
+        displayText: '사업자등록번호: 123-45-67890',
+        insertValue: '123-45-67890',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'spot_4',
+        topPercent: 46,
+        leftPercent: 6,
+        categoryHint: '품명·규격 1',
+        displayText: '품목 1: 프리미엄 A4 복사용지 (80g) · 10 BOX · 단가 22,000원',
+        insertValue: '프리미엄 A4 복사용지 (80g) 10박스',
+      },
+      {
+        id: 'spot_5',
+        topPercent: 58,
+        leftPercent: 6,
+        categoryHint: '품명·규격 2',
+        displayText: '품목 2: 정품 레이저 토너 카트리지 (BK) · 2 EA · 단가 44,500원',
+        insertValue: '정품 레이저 토너 카트리지 (BK) 2개',
+      },
+      {
+        id: 'spot_6',
+        topPercent: 71,
+        leftPercent: 6,
+        categoryHint: '공급가액·세액·합계',
+        displayText: '공급가액 131,818원  |  세액 13,182원  |  합계금액: 145,000원',
+        insertValue: '145,000원',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'spot_7',
+        topPercent: 84,
+        leftPercent: 6,
+        categoryHint: '입금계좌',
+        displayText: '입금계좌: 국민은행 012-3456-7890-11 (예금주: 성수오피스디포)',
+        insertValue: '국민은행 012-3456-7890-11',
+        isPrimaryHighlight: true,
+      },
     ],
   },
   {
     id: 'ocr_contract',
-    title: '부동산 임대차 계약서 사진 (🔍 찾기 사진 카드 원클릭)',
+    title: '부동산 임대차 계약서 사진 (원본 화면 위 조항·숫자 그대로 톡톡 찍기)',
     sourceLabel: '💻 1번 내 기기 ➔ 🔍 찾기 사진 카드에서 [📝 OCR 글자 따기] 클릭',
     thumbUrl: '/sample_photos_301/Screenshot_20250802_1001_쇼핑위시리스트.jpg',
     fullText:
-      '[부동산 임대차 계약서] 소재지: 서울시 강남구 역삼동 823-14 6층 / 보증금: 금 오천만 원정(₩50,000,000) / 월차임: 금 이백이십만 원정(₩2,200,000) / 임대인 계좌: 신한 110-482-991023 / 특약: 퇴실 시 원상복구 면제',
+      '[업무용 부동산 임대차 계약서] 소재지: 서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층 | 보증금: 금 오천만 원정 (₩50,000,000) | 월차임: 금 이백이십만 원정 (₩2,200,000, 매월 25일 선불) | 계약기간: 2025.03.01 ~ 2027.02.28 (24개월) | 특약사항: 임차인의 퇴실 시 기본 설치 칸막이에 대한 원상복구 의무는 면제한다. | 임대인 계좌: 신한은행 110-482-991023 (김철수)',
     tsvTableText:
-      '구분\t계약내용\n소재지\t서울시 강남구 역삼동 823-14 6층\n보증금\t50,000,000원\n월차임\t2,200,000원\n임대인계좌\t신한 110-482-991023\n특약사항\t퇴실 시 원상복구 면제',
-    wordChips: [
-      { label: '보증금: 50,000,000원', value: '50,000,000원', highlight: true },
-      { label: '월차임: 2,200,000원', value: '2,200,000원', highlight: true },
-      { label: '신한 110-482-991023', value: '신한은행 110-482-991023', highlight: true },
-      { label: '강남구 역삼동 823-14 6층', value: '서울시 강남구 역삼동 823-14 6층' },
-      { label: '특약: 원상복구 면제', value: '퇴실 시 기본 칸막이 원상복구 의무 면제' },
+      '항목\t계약내용\n소재지\t서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층\n보증금\t50,000,000원\n월차임\t2,200,000원\n계약기간\t2025.03.01 ~ 2027.02.28\n특약사항\t퇴실 시 기본 칸막이 원상복구 의무 면제\n임대인계좌\t신한은행 110-482-991023 (김철수)',
+    liveTextSpots: [
+      {
+        id: 'c_spot_1',
+        topPercent: 9,
+        leftPercent: 6,
+        categoryHint: '소재지 주소',
+        displayText: '제1조 [소재지] 서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층 (전용 42평)',
+        insertValue: '서울특별시 강남구 역삼동 823-14 테헤란빌딩 6층',
+      },
+      {
+        id: 'c_spot_2',
+        topPercent: 24,
+        leftPercent: 6,
+        categoryHint: '보증금',
+        displayText: '제2조 [보증금] 금 오천만 원정 (₩50,000,000) — 계약금 500만 / 잔금 4,500만',
+        insertValue: '금 오천만 원정 (₩50,000,000)',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'c_spot_3',
+        topPercent: 39,
+        leftPercent: 6,
+        categoryHint: '월차임·관리비',
+        displayText: '제3조 [월차임] 금 이백이십만 원정 (₩2,200,000 · VAT 별도, 매월 25일 지급)',
+        insertValue: '월차임 2,200,000원 (VAT 별도)',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'c_spot_4',
+        topPercent: 54,
+        leftPercent: 6,
+        categoryHint: '계약기간',
+        displayText: '제4조 [계약기간] 2025년 03월 01일 ~ 2027년 02월 28일 (24개월간)',
+        insertValue: '2025년 03월 01일 ~ 2027년 02월 28일 (24개월)',
+      },
+      {
+        id: 'c_spot_5',
+        topPercent: 69,
+        leftPercent: 6,
+        categoryHint: '특약사항 문구 한 줄',
+        displayText: '특약 제2항: 임차인의 퇴실 시 기본 설치 칸막이에 대한 원상복구 의무는 면제한다.',
+        insertValue: '임차인의 퇴실 시 기본 설치 칸막이에 대한 원상복구 의무는 면제한다.',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'c_spot_6',
+        topPercent: 83,
+        leftPercent: 6,
+        categoryHint: '임대인 계좌·인적사항',
+        displayText: '임대인: 김철수 (신한은행 110-482-991023 · 연락처 010-9876-5432)',
+        insertValue: '신한은행 110-482-991023 (예금주: 김철수)',
+        isPrimaryHighlight: true,
+      },
     ],
   },
 ];
@@ -348,22 +464,55 @@ export function buildOcrPresetFromPhoto(photo: PhotoItem): OcrSamplePreset {
   const baseName = photo.name.replace(/\.[^.]+$/, '');
   return {
     id: `photo_ocr_${photo.id}`,
-    title: `${photo.name} (${photo.date})`,
+    title: `${photo.name} (${photo.date}) — 원본 위 글자 톡톡 찍기`,
     sourceLabel: '🔍 찾기 검색 사진에서 [📝 OCR 글자 따기] 즉시 호출됨',
     thumbUrl: photo.thumbUrl,
-    fullText: `[사진 OCR 자동 추출] 파일명: ${photo.name} / 촬영일: ${photo.date} / 핵심 키워드: ${cleanTags.join(', ')} / 승인번호: 849201 / 사업자번호: 123-45-67890 / 합계금액: 145,000원 / 입금계좌: 국민 012-3456-7890`,
-    tsvTableText: `항목\t추출값\n파일명\t${photo.name}\n촬영일\t${photo.date}\n태그\t${cleanTags.join(', ')}\n사업자번호\t123-45-67890\n합계금액\t145,000원\n계좌번호\t국민 012-3456-7890`,
-    wordChips: [
-      { label: '인증번호: 849201', value: '849201', highlight: true },
-      { label: '사업자번호: 123-45-67890', value: '123-45-67890', highlight: true },
-      { label: '합계: 145,000원', value: '145,000원', highlight: true },
-      { label: '국민 012-3456-7890', value: '국민은행 012-3456-7890', highlight: true },
-      { label: `촬영일: ${photo.date}`, value: photo.date },
-      { label: `제목: ${baseName}`, value: baseName },
-      ...cleanTags.slice(0, 3).map((tg) => ({
-        label: `#${tg}`,
-        value: tg,
-      })),
+    fullText: `[사진 Live Text 추출] 파일명: ${photo.name} | 촬영일: ${photo.date} | 상호: (주)성수오피스디포 | 사업자번호: 123-45-67890 | 품목: ${cleanTags.join(' · ') || baseName} | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890-11`,
+    tsvTableText: `항목\t추출값\n파일명\t${photo.name}\n촬영일\t${photo.date}\n핵심내용\t${cleanTags.join(', ')}\n사업자번호\t123-45-67890\n합계금액\t145,000원\n입금계좌\t국민은행 012-3456-7890-11`,
+    liveTextSpots: [
+      {
+        id: 'p_spot_1',
+        topPercent: 10,
+        leftPercent: 6,
+        categoryHint: '상단 문서/사진 헤더',
+        displayText: `문서/사진 제목: ${baseName} (촬영일자: ${photo.date})`,
+        insertValue: `${baseName} (${photo.date})`,
+      },
+      {
+        id: 'p_spot_2',
+        topPercent: 26,
+        leftPercent: 6,
+        categoryHint: '상호·기관명',
+        displayText: '상호: (주)성수오피스디포  |  사업자번호: 123-45-67890',
+        insertValue: '123-45-67890',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'p_spot_3',
+        topPercent: 43,
+        leftPercent: 6,
+        categoryHint: '품명·내역 문구',
+        displayText: `내역 문구: ${cleanTags.join(' · ') || '현장 확인 및 납품 검수 내역서'}`,
+        insertValue: cleanTags.join(' · ') || baseName,
+      },
+      {
+        id: 'p_spot_4',
+        topPercent: 61,
+        leftPercent: 6,
+        categoryHint: '합계금액·단가',
+        displayText: '공급가액 131,818원  +  부가세 13,182원  =  합계금액 145,000원',
+        insertValue: '145,000원',
+        isPrimaryHighlight: true,
+      },
+      {
+        id: 'p_spot_5',
+        topPercent: 79,
+        leftPercent: 6,
+        categoryHint: '계좌·연락처',
+        displayText: '결제계좌: 국민은행 012-3456-7890-11 (담당자 010-1234-5678)',
+        insertValue: '국민은행 012-3456-7890-11',
+        isPrimaryHighlight: true,
+      },
     ],
   };
 }
@@ -418,6 +567,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
     '안녕하세요 대표님, 요청하신 계좌번호와 사업자 정보 아래에 전달드립니다.\n👉 '
   );
   const [activeWave1Ability, setActiveWave1Ability] = useState<number>(1);
+  const [autoReturnedFromOneTimePop, setAutoReturnedFromOneTimePop] = useState(false);
 
   const filteredClipboardItems = useMemo(() => {
     const q = clipboardQuery.trim().toLowerCase();
@@ -453,7 +603,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
     [currentScenario, hoveredCandidateId]
   );
 
-  // ── [창 UI ③] 상태 ──
+  // ── [창 UI ③] 상태: 1분 유효시간(60초 TTL) + 1회 노출 후 자동 소멸(One-Time Pop) & 원본 화면 위 Live Text 오버레이 ──
   const customPhotoPreset = useMemo(
     () => (externalOcrPhoto ? buildOcrPresetFromPhoto(externalOcrPhoto) : null),
     [externalOcrPhoto]
@@ -472,10 +622,22 @@ export const GhostWindowThreeStageMockup: React.FC<{
     }
   }, [customPhotoPreset]);
 
+  const [ttlSecondsLeft, setTtlSecondsLeft] = useState<number>(58);
+  const [oneTimePopUsed, setOneTimePopUsed] = useState<boolean>(false);
+  const [clickedSpotIds, setClickedSpotIds] = useState<string[]>([]);
   const [ui3CursorEditorText, setUi3CursorEditorText] = useState(
-    '경리팀 공유드립니다. 방금 찍은 영수증 내역: '
+    '경리팀 공유드립니다. 방금 찍은 내역: '
   );
-  const [lastInsertedChip, setLastInsertedChip] = useState<string | null>(null);
+  const [lastInsertedSpotNotice, setLastInsertedSpotNotice] = useState<string | null>(null);
+
+  // 1분(60초) 유효 타이머 카운트다운
+  useEffect(() => {
+    if (windowTab !== 'ui3_ocr') return;
+    const timer = window.setInterval(() => {
+      setTtlSecondsLeft((prev) => (prev > 1 ? prev - 1 : 60));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [windowTab]);
 
   const insertIntoUi1Editor = (textToInsert: string, label: string) => {
     setUi1EditorText((prev) => `${prev}${prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' '}${textToInsert}`);
@@ -508,14 +670,29 @@ export const GhostWindowThreeStageMockup: React.FC<{
     });
   };
 
-  const insertOcrChipIntoEditor = (chipValue: string, chipLabel: string) => {
-    setUi3CursorEditorText((prev) => `${prev}${prev.endsWith(' ') ? '' : ' '}${chipValue} `);
-    setLastInsertedChip(`${chipLabel} ➔ "${chipValue}" 커서 즉시 입력 완료!`);
+  const handleTapLiveTextOnImage = (spot: LiveTextOverlaySpot) => {
+    setUi3CursorEditorText(
+      (prev) => `${prev}${prev.endsWith(' ') ? '' : ' '}${spot.insertValue}`
+    );
+    setClickedSpotIds((prev) => (prev.includes(spot.id) ? prev : [...prev, spot.id]));
+    setOneTimePopUsed(true);
+    setLastInsertedSpotNotice(
+      `✨ 원본 화면 위 [${spot.categoryHint}] 글자 톡! ➔ "${spot.insertValue}" 커서 즉시 입력 완료! (1회 사용 완료 · 다음 Ctrl+0부터는 기본 귀신창으로 자동 복귀합니다)`
+    );
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(chipValue);
+      void navigator.clipboard.writeText(spot.insertValue);
     }
     useSaySeeStore.setState({
-      lastQuarantineToast: `🎯 [OCR 단어칩 콕 찍어 입력] "${chipValue}" 단어만 커서 위치에 0.1초 만에 입력되었습니다!`,
+      lastQuarantineToast: `👆 [원본 화면 위 글자 톡톡 찍기] "${spot.insertValue}" 복사 및 커서 입력 완료! (One-Time Pop 사용 처리됨)`,
+    });
+  };
+
+  const handleSimulateNextCtrlZeroPress = () => {
+    setAutoReturnedFromOneTimePop(true);
+    setWindowTab('ui1_basic');
+    useSaySeeStore.setState({
+      lastQuarantineToast:
+        '⚡ [One-Time Pop 자동 소멸 작동!] 방금 사진창을 1회 사용했으므로, 다음 Ctrl+0 호출 시 지체 없이 원래의 기본 귀신창(창 UI ①)으로 돌아왔습니다!',
     });
   };
 
@@ -541,7 +718,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
               },
               {
                 id: 'phone_pc' as const,
-                label: '👑 📱 폰 + PC (폰 촬영·스샷 1초 공간이동 · 월 3,900원)',
+                label: '👑 📱 폰 + PC (폰 촬영·스샷 1분내 1회 자동소멸 · 월 3,900원)',
                 defaultTab: 'ui3_ocr' as const,
               },
               {
@@ -589,9 +766,9 @@ export const GhostWindowThreeStageMockup: React.FC<{
             },
             {
               id: 'ui3_ocr' as const,
-              badge: '창 UI ③ · 폰 촬영/스샷 직후 Ctrl + 0 & 모든 사진 [📝 OCR]',
-              title: '👻 사진·OCR 단어칩 공간이동창',
-              desc: '좌측: 원본 사진·엑셀 표 넣기 / 우측: 원하는 단어 조각(칩)만 콕 찍어 내 커서에 0.1초 입력!',
+              badge: '창 UI ③ · 1분 유효 + 1회 노출 자동소멸(One-Time Pop)',
+              title: '👻 원본 화면 위 글자 톡톡 찍기 (Live Text)',
+              desc: '어설픈 요약 칩 대신 원본 화면 위 글자 위치를 마우스로 톡톡 찍어 쏙쏙 입력 + 1회 사용 후 기본창 자동 복귀!',
             },
           ].map((tab) => {
             const isSelected = windowTab === tab.id;
@@ -599,7 +776,10 @@ export const GhostWindowThreeStageMockup: React.FC<{
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setWindowTab(tab.id)}
+                onClick={() => {
+                  setAutoReturnedFromOneTimePop(false);
+                  setWindowTab(tab.id);
+                }}
                 className={`p-3.5 rounded-2xl text-left border transition-all flex flex-col gap-1 cursor-pointer ${
                   isSelected
                     ? 'bg-teal-500/15 border-teal-400 ring-2 ring-teal-400/50 shadow-lg'
@@ -627,6 +807,21 @@ export const GhostWindowThreeStageMockup: React.FC<{
          ════════════════════════════════════════════════════════════════════════ */}
       {windowTab === 'ui1_basic' && (
         <div className="p-5 sm:p-6 rounded-3xl bg-[#111318] border-2 border-teal-400/50 shadow-[0_0_40px_rgba(20,184,166,0.15)] flex flex-col gap-5">
+          {autoReturnedFromOneTimePop && (
+            <div className="px-4 py-3 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-200 text-[13px] font-extrabold flex flex-wrap items-center justify-between gap-2">
+              <span>
+                ✅ <strong>[1분 유효 + 1회 노출 후 자동 소멸(One-Time Pop) 확인 완료!]</strong> 방금 사진/스샷 창을 1회 써먹었기 때문에, 다시 <code className="text-white">Ctrl + 0</code>을 누르자 귀찮게 사진창이 또 뜨지 않고 지체 없이 원래의 <strong>기본 귀신창(창 UI ①)</strong>으로 돌아왔습니다!
+              </span>
+              <button
+                type="button"
+                onClick={() => setAutoReturnedFromOneTimePop(false)}
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-200 text-[11px] font-bold cursor-pointer"
+              >
+                확인 ✕
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-1 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black">
@@ -1187,7 +1382,7 @@ export const GhostWindowThreeStageMockup: React.FC<{
             </div>
           </div>
 
-          {/* 3) 하단 무료 vs 유료 확장 경계 안내 바 (공문 필수 명세) */}
+          {/* 3) 하단 무료 vs 유료 확장 경계 안내 바 */}
           <div className="px-4 py-3 rounded-2xl bg-zinc-950 border border-teal-500/40 flex flex-wrap items-center justify-between gap-2 text-[12.5px] font-extrabold">
             <span className="text-emerald-300">
               💻 내 PC 문서 현장 소환 = <strong className="underline">평생 무제한 무료!</strong> (기본 검색 기능이므로 일 3회 제한 없음)
@@ -1200,25 +1395,42 @@ export const GhostWindowThreeStageMockup: React.FC<{
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════
-          [창 UI ③ 시안] 폰 촬영/스샷 직후 Ctrl+0 (또는 모든 검색 사진에서 [📝 OCR 글자 따기]) ➔ 『사진·OCR 공간이동창』
+          [창 UI ③ 시안] 1분 유효시간 + 1회 노출 후 자동 소멸(One-Time Pop) & 원본 화면 위 글자 그대로 톡톡 찍기 (Live Text 오버레이)
          ════════════════════════════════════════════════════════════════════════ */}
       {windowTab === 'ui3_ocr' && (
         <div className="p-5 sm:p-6 rounded-3xl bg-[#111318] border-2 border-teal-400/50 shadow-[0_0_40px_rgba(20,184,166,0.15)] flex flex-col gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
-            <div className="flex items-center gap-2">
+          {/* 상단 헤더: 1분 유효시간(60초 TTL) + 1회 노출 후 자동 소멸(One-Time Pop) 규칙 배지 */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-1 rounded-lg bg-teal-400 text-zinc-950 text-[11.5px] font-black">
                 창 UI ③ 인터랙티브 시안
               </span>
               <h2 className="text-[16px] sm:text-[18px] font-black text-white">
-                폰 촬영/스샷 직후 <code className="text-teal-300">Ctrl + 0</code> &amp; 모든 사진 <code className="text-amber-300">[📝 OCR 글자 따기]</code> ➔ 『사진·OCR 공간이동창』
+                원본 화면 위에 글자 그대로 톡톡 찍기 (<span className="text-teal-300">Live Text 오버레이</span>) &amp; <span className="text-amber-300">1분 내 1회 노출 후 자동 소멸</span>
               </h2>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`px-3 py-1 rounded-full font-mono text-[11.5px] font-black border ${
+                  oneTimePopUsed
+                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
+                    : 'bg-amber-400/20 border-amber-300 text-amber-200'
+                }`}
+              >
+                {oneTimePopUsed
+                  ? '✅ 1회 사용 완료 (다음 Ctrl+0부터 기본 귀신창 자동 복귀)'
+                  : `⏱️ 촬영/스샷 후 1분 유효시간: ${ttlSecondsLeft}초 남음 (1회 노출 후 자동 소멸)`}
+              </span>
+
               {customPhotoPreset && (
                 <button
                   type="button"
-                  onClick={() => setSelectedOcrPresetId(customPhotoPreset.id)}
+                  onClick={() => {
+                    setSelectedOcrPresetId(customPhotoPreset.id);
+                    setClickedSpotIds([]);
+                    setOneTimePopUsed(false);
+                  }}
                   className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold border cursor-pointer ${
                     selectedOcrPresetId === customPhotoPreset.id
                       ? 'bg-amber-400 text-zinc-950 border-amber-300'
@@ -1232,131 +1444,224 @@ export const GhostWindowThreeStageMockup: React.FC<{
                 <button
                   key={preset.id}
                   type="button"
-                  onClick={() => setSelectedOcrPresetId(preset.id)}
+                  onClick={() => {
+                    setSelectedOcrPresetId(preset.id);
+                    setClickedSpotIds([]);
+                    setOneTimePopUsed(false);
+                  }}
                   className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold border cursor-pointer ${
                     selectedOcrPresetId === preset.id
                       ? 'bg-teal-400 text-zinc-950 border-teal-300'
                       : 'bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800'
                   }`}
                 >
-                  {preset.id === 'ocr_receipt' ? '샘플 1: 영수증·세금계산서 촬영본' : '샘플 2: 계약서 사진 OCR'}
+                  {preset.id === 'ocr_receipt' ? '샘플 1: 영수증·세금계산서 원본' : '샘플 2: 임대차 계약서 원본'}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* 좌측(5칸): 방금 찍은 사진/스샷 썸네일 + [🖼️ 원본 사진 그대로 넣기] + [📊 표 전체 엑셀(TSV) 넣기] */}
-            <div className="lg:col-span-5 p-4 rounded-2xl bg-[#0B0E14] border-2 border-teal-400/60 flex flex-col justify-between gap-3">
-              <div className="flex flex-col gap-2.5">
-                <GhostBabyMascotBadge subtitle={activeOcrPreset.sourceLabel} />
-                <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden bg-zinc-900 border border-white/15">
-                  <img
-                    src={activeOcrPreset.thumbUrl}
-                    alt={activeOcrPreset.title}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-md bg-black/80 text-white text-[11px] font-bold">
-                    {activeOcrPreset.title}
-                  </div>
-                </div>
-              </div>
+          {/* 핵심 규칙 안내 콜아웃: ① 1분 유효 + 1회 노출 자동 소멸(One-Time Pop) & ② 원본 화면 위 글자 톡톡 찍기 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-3.5 rounded-2xl bg-zinc-950/90 border border-amber-400/40 flex flex-col gap-1">
+              <span className="text-[12.5px] font-black text-amber-300">
+                ⚡ 규칙 1. ‘1분 유효시간 + 1회 노출 후 자동 소멸(One-Time Pop)’ ➔ 귀찮음 0%!
+              </span>
+              <p className="text-[11.5px] text-zinc-300 leading-snug">
+                폰으로 찍거나 캡처한 직후 <strong>딱 1분 이내에, 그것도 Ctrl+0으로 한 번 호출해서 썼으면 그 뒤로는 다시 안 뜨게(자동 소멸)</strong> 작동합니다. 다음 <code className="text-teal-300">Ctrl+0</code>부터는 지체 없이 원래의 기본 귀신창(창 UI ①)으로 돌아가 작업 흐름이 절대 끊기지 않습니다.
+              </p>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-zinc-950/90 border border-teal-400/40 flex flex-col gap-1">
+              <span className="text-[12.5px] font-black text-teal-300">
+                👆 규칙 2. 어설픈 요약 칩 대신 ‘원본 화면 위에 글자 그대로 톡톡 찍기(Live Text)’ ➔ 활용도 100%!
+              </span>
+              <p className="text-[11.5px] text-zinc-300 leading-snug">
+                유저마다 상호를 원할지, 품명을 원할지, 문구 한 줄을 원할지 아무도 모릅니다. <strong>아래 원본 화면 속 원래 글자 위치 위에 투명하게 올라온 텍스트 블록을 마우스로 톡톡 찍기만 하면</strong> 그 글자가 내 커서에 쏙쏙 들어갑니다!
+              </p>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {/* ── 메인 Live Text 원본 캔버스 (별도 우측 요약칩 박스 없이 큼직한 원본 화면 위에서 바로 글자 톡톡 찍기!) ── */}
+          <div className="w-full max-w-[960px] mx-auto rounded-2xl bg-[#0B0E14] border-2 border-teal-400/80 shadow-[0_18px_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col">
+            {/* 상단 액션 바: 👻 마스코트 + [🖼️ 원본 사진 그대로 넣기] + [📊 표 전체 엑셀(TSV) 넣기] + [📋 전체 글자 복사] */}
+            <div className="px-4 py-3 bg-gradient-to-r from-zinc-900 via-[#111927] to-zinc-900 border-b border-white/10 flex flex-wrap items-center justify-between gap-2.5">
+              <GhostBabyMascotBadge subtitle={activeOcrPreset.sourceLabel} />
+
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    insertOcrChipIntoEditor(
-                      `[원본 이미지 첨부됨: ${activeOcrPreset.title}]`,
-                      '🖼️ 원본 사진 그대로 넣기'
-                    )
-                  }
-                  className="py-2.5 px-3 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[12px] font-black cursor-pointer shadow-sm"
+                  onClick={() => {
+                    setOneTimePopUsed(true);
+                    setUi3CursorEditorText(
+                      (prev) => `${prev} [원본 이미지 첨부됨: ${activeOcrPreset.title}]`
+                    );
+                    useSaySeeStore.setState({
+                      lastQuarantineToast:
+                        '🖼️ [원본 사진 그대로 넣기 완료] 현재 커서 자리에 고화질 사진 원본이 첨부되었습니다! (1회 사용 완료 · 다음 Ctrl+0부터 기본 귀신창 복귀)',
+                    });
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[12px] font-black cursor-pointer shadow-sm"
                 >
                   🖼️ 원본 사진 그대로 넣기
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    insertOcrChipIntoEditor(
-                      activeOcrPreset.tsvTableText.replace(/\n/g, ' | '),
-                      '📊 표 전체 엑셀(TSV) 넣기'
-                    )
-                  }
-                  className="py-2.5 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black cursor-pointer shadow-sm"
+                  onClick={() => {
+                    setOneTimePopUsed(true);
+                    setUi3CursorEditorText(
+                      (prev) => `${prev} ${activeOcrPreset.tsvTableText.replace(/\n/g, ' | ')}`
+                    );
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      void navigator.clipboard.writeText(activeOcrPreset.tsvTableText);
+                    }
+                    useSaySeeStore.setState({
+                      lastQuarantineToast:
+                        '📊 [표 전체 엑셀(TSV) 넣기 완료] 엑셀에 붙여넣으면 열·행이 딱 맞게 들어갑니다! (1회 사용 완료)',
+                    });
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black cursor-pointer shadow-sm"
                 >
                   📊 표 전체 엑셀(TSV) 넣기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOneTimePopUsed(true);
+                    setUi3CursorEditorText((prev) => `${prev} ${activeOcrPreset.fullText}`);
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      void navigator.clipboard.writeText(activeOcrPreset.fullText);
+                    }
+                    useSaySeeStore.setState({
+                      lastQuarantineToast: '📋 [전체 글자 복사 완료] 문서 전체 텍스트가 복사되었습니다!',
+                    });
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[12px] font-extrabold cursor-pointer"
+                >
+                  📋 전체 글자 복사
                 </button>
               </div>
             </div>
 
-            {/* 우측(7칸): 추출된 OCR 텍스트에서 『원하는 단어 조각(칩)만 마우스로 콕 찍어 입력』하는 인터랙티브 영역 */}
-            <div className="lg:col-span-7 p-4 rounded-2xl bg-[#0B0E14] border-2 border-amber-400/60 flex flex-col justify-between gap-3">
-              <div className="flex flex-col gap-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[13.5px] font-black text-amber-300">
-                    🎯 원하는 단어 조각(칩)만 마우스로 콕 찍어 내 커서에 넣기!
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      insertOcrChipIntoEditor(activeOcrPreset.fullText, '전체 OCR 문장 복사')
-                    }
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[11px] font-bold cursor-pointer"
-                  >
-                    📋 전체 텍스트 통째 넣기
-                  </button>
-                </div>
+            {/* 큼직한 원본 사진·문서 화면 + 이미지 속 원래 글자 위치 위에 투명하게 얹힌 Live Text 블록들 */}
+            <div className="relative w-full min-h-[390px] sm:min-h-[430px] bg-zinc-950 overflow-hidden select-none">
+              <img
+                src={activeOcrPreset.thumbUrl}
+                alt={activeOcrPreset.title}
+                className="absolute inset-0 w-full h-full object-cover opacity-35 blur-[0.5px]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/50 to-black/75" />
 
-                <p className="text-[11.5px] text-zinc-300">
-                  전체 문장을 붙여넣고 불필요한 뒷부분을 백스페이스로 지울 필요 없이, 아래 <strong className="text-teal-300">단어 칩을 클릭하면 그 숫자·단어만</strong> 현재 커서 위치에 0.1초 만에 들어갑니다.
-                </p>
+              {/* 상단 오버레이 가이드 캡션 */}
+              <div className="relative z-10 px-4 pt-3 pb-1 flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-lg bg-black/80 border border-teal-400/50 text-teal-200 text-[11.5px] font-extrabold">
+                  👆 아래 원본 화면 위의 글자 줄(상호·품명·단가·합계·계좌·특약 등)을 원하는 대로 마우스로 톡톡 찍어보세요!
+                </span>
+                <span className="hidden sm:inline text-[11px] text-amber-300 font-bold">
+                  여러 줄을 연속으로 톡톡 찍으면 찍은 순서대로 커서에 들어갑니다
+                </span>
+              </div>
 
-                {/* 클릭 가능한 OCR 단어 칩(Chip) 그리드 */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  {activeOcrPreset.wordChips.map((chip) => (
+              {/* 이미지 속 원래 글자 위치 위에 투명하게 얹힌 Live Text 오버레이 블록들 */}
+              <div className="relative z-10 w-full h-[340px] sm:h-[375px]">
+                {activeOcrPreset.liveTextSpots.map((spot) => {
+                  const wasClicked = clickedSpotIds.includes(spot.id);
+                  return (
                     <button
-                      key={chip.label}
+                      key={spot.id}
                       type="button"
-                      onClick={() => insertOcrChipIntoEditor(chip.value, chip.label)}
-                      className={`px-3.5 py-2 rounded-xl font-mono text-[12.5px] font-black border transition-all cursor-pointer active:scale-95 ${
-                        chip.highlight
-                          ? 'bg-amber-400/20 hover:bg-amber-400 hover:text-zinc-950 border-amber-300 text-amber-200 shadow-sm'
-                          : 'bg-zinc-900 hover:bg-teal-400 hover:text-zinc-950 border-white/15 text-zinc-200'
+                      onClick={() => handleTapLiveTextOnImage(spot)}
+                      style={{
+                        top: `${spot.topPercent}%`,
+                        left: `${spot.leftPercent}%`,
+                      }}
+                      title={`클릭 시 "${spot.insertValue}" 즉시 복사 및 커서 입력`}
+                      className={`group absolute right-[6%] px-3.5 py-2 rounded-xl backdrop-blur-md border text-left transition-all flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] ${
+                        wasClicked
+                          ? 'bg-emerald-500/30 border-2 border-emerald-300 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                          : spot.isPrimaryHighlight
+                          ? 'bg-black/65 hover:bg-teal-500/30 border-teal-400/75 hover:border-teal-300 text-white shadow-md'
+                          : 'bg-black/55 hover:bg-amber-400/25 border-white/25 hover:border-amber-300 text-zinc-100'
                       }`}
                     >
-                      [{chip.label}] ↵
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-black shrink-0 ${
+                            wasClicked
+                              ? 'bg-emerald-300 text-zinc-950'
+                              : spot.isPrimaryHighlight
+                              ? 'bg-teal-400/25 text-teal-200 border border-teal-300/40'
+                              : 'bg-zinc-800 text-zinc-300'
+                          }`}
+                        >
+                          {wasClicked ? '✓ 입력됨' : spot.categoryHint}
+                        </span>
+                        <span className="font-mono text-[12.5px] sm:text-[13.5px] font-extrabold tracking-tight truncate">
+                          {spot.displayText}
+                        </span>
+                      </div>
+
+                      <span className="px-2.5 py-0.5 rounded-lg bg-teal-400/20 group-hover:bg-teal-400 text-teal-200 group-hover:text-zinc-950 text-[11px] font-black shrink-0 transition-colors">
+                        👆 톡 찍어 넣기 ↵
+                      </span>
                     </button>
-                  ))}
-                </div>
-
-                {/* 추출된 원문 미리보기 */}
-                <div className="mt-1 p-3 rounded-xl bg-zinc-950 border border-white/10 text-[11.5px] text-zinc-300 leading-relaxed">
-                  {activeOcrPreset.fullText}
-                </div>
+                  );
+                })}
               </div>
+            </div>
 
-              {/* 하단 실제 커서 입력 확인창 */}
-              <div className="pt-2 border-t border-white/10 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11.5px] font-extrabold text-emerald-300">
-                    {lastInsertedChip || '👇 위 단어 칩을 클릭하면 아래 작업창 커서에 그 단어만 쏙 들어갑니다!'}
+            {/* 하단: 실시간 커서 입력 확인창 + [One-Time Pop] 다음 Ctrl+0 시 기본 귀신창 자동 복귀 시연 버튼 */}
+            <div className="p-4 bg-zinc-950 border-t border-white/10 flex flex-col gap-2.5">
+              {lastInsertedSpotNotice && (
+                <div className="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[12px] font-extrabold text-emerald-200">
+                    {lastInsertedSpotNotice}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setUi3CursorEditorText('')}
-                    className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
+                    onClick={handleSimulateNextCtrlZeroPress}
+                    className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-black cursor-pointer shrink-0 shadow-sm"
                   >
-                    비우기
+                    ⚡ 다음 Ctrl+0 눌러보기 ➔ 기본 귀신창(창 UI ①) 자동 복귀 확인!
                   </button>
                 </div>
-                <input
-                  type="text"
-                  value={ui3CursorEditorText}
-                  onChange={(e) => setUi3CursorEditorText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-teal-400/60 text-white text-[13px] font-bold outline-none"
-                />
+              )}
+
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11.5px] font-extrabold text-zinc-300">
+                  💬 내 작업 현장 커서 (위 원본 화면에서 톡톡 찍은 글자가 그대로 꽂힙니다):
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOneTimePopUsed(false);
+                      setTtlSecondsLeft(60);
+                      setClickedSpotIds([]);
+                      setLastInsertedSpotNotice(null);
+                    }}
+                    className="text-[11px] text-teal-300 hover:underline font-bold cursor-pointer"
+                  >
+                    📸 새 사진/스샷 다시 찍기 (1분 타이머 리셋)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUi3CursorEditorText('');
+                      setClickedSpotIds([]);
+                    }}
+                    className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    입력창 비우기
+                  </button>
+                </div>
               </div>
+
+              <input
+                type="text"
+                value={ui3CursorEditorText}
+                onChange={(e) => setUi3CursorEditorText(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border-2 border-teal-400/60 text-white text-[13.5px] font-extrabold outline-none"
+              />
             </div>
           </div>
         </div>
@@ -1381,7 +1686,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       >
         <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5">
-            <GhostBabyMascotBadge subtitle="모든 검색 사진에서 원클릭 [📝 OCR 글자·단어칩 따기]" />
+            <GhostBabyMascotBadge subtitle="원본 화면 위에 글자 그대로 톡톡 찍기 (Live Text 오버레이)" />
             <span className="text-[14px] font-black text-white truncate">
               {photo.name}
             </span>

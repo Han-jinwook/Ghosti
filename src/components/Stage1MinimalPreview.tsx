@@ -626,12 +626,38 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
-                <span className="text-[12.5px] font-extrabold text-slate-900 dark:text-white">
-                  {hasExecutedUserSearch
-                    ? '👀 지금은 샘플 검색 결과입니다 · 내 컴퓨터 진짜 사진·영상·문서도 1초 만에 찾아보세요!'
-                    : '👀 지금은 체험 샘플 화면입니다 · 내 컴퓨터 진짜 사진·영상·문서를 1초 만에 찾아볼까요?'}
-                </span>
+              <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-2.5 mt-0.5 shadow-sm">
+                <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-extrabold text-slate-900 dark:text-white">
+                  <span>
+                    {hasExecutedUserSearch
+                      ? '👀 지금은 샘플 놀이터 결과입니다 · 내 PC 연결 시 방금 찾은'
+                      : '👀 지금은 샘플 100개 놀이터입니다 · 내 PC 연결 3초 만에'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTextInput('강남역 임대차계약서 위약금');
+                      void runTextQuery('강남역 임대차계약서 위약금');
+                    }}
+                    title="클릭하면 해당 파일로 즉시 0.01초 검색합니다"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/35 text-teal-800 dark:text-teal-200 font-black text-[11.5px] transition-all cursor-pointer"
+                  >
+                    📄 2025_강남역_임대차계약서.pdf
+                  </button>
+                  <span className="text-slate-400">·</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTextInput('제주도 케이크 불 끄는 영상');
+                      void runTextQuery('제주도 케이크 불 끄는 영상');
+                    }}
+                    title="클릭하면 해당 사진·영상으로 즉시 0.01초 검색합니다"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/35 text-teal-800 dark:text-teal-200 font-black text-[11.5px] transition-all cursor-pointer"
+                  >
+                    🖼️ 제주도_케이크_불쇼.mp4
+                  </button>
+                  <span>외 내 최근 파일 100개가 이 한 줄에 바로 뜹니다!</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => requestConnectMyComputer()}
