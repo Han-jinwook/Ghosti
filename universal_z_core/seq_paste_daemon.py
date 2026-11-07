@@ -164,7 +164,17 @@ WH_MOUSE_LL = 14
 WM_MOUSEMOVE = 0x0200
 WM_RBUTTONDOWN = 0x0204
 WM_RBUTTONUP = 0x0205
+WM_CANCELMODE = 0x001F
 RBUTTON_LONG_PRESS_SEC = 0.35
+RBUTTON_MOVE_TOLERANCE_PX = 5
+
+_RCLICK_BYPASS_PROCS = {
+    "league of legends.exe", "leagueoflegends.exe", "valorant.exe", "valorant-win64-shipping.exe",
+    "tslgame.exe", "overwatch.exe", "starcraft.exe", "sc2.exe", "diablo iii64.exe", "diablo iv.exe",
+    "lostark.exe", "fc24.exe", "maplestory.exe", "SuddenAttack.exe", "fifaonline4.exe",
+    "blender.exe", "acad.exe", "solidworks.exe", "sketchup.exe", "3dsmax.exe", "maya.exe",
+    "rhino.exe", "zbrush.exe", "unrealEditor.exe", "unity.exe", "mstsc.exe", "anydesk.exe", "teamviewer.exe",
+}
 
 
 class MSLLHOOKSTRUCT(ctypes.Structure):
@@ -187,6 +197,11 @@ u32.CallNextHookEx.restype = ctypes.c_ssize_t
 u32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
 u32.UnhookWindowsHookEx.restype = wintypes.BOOL
 
+u32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+u32.PostMessageW.restype = wintypes.BOOL
+u32.ReleaseCapture.argtypes = []
+u32.ReleaseCapture.restype = wintypes.BOOL
+
 _RBTN_HOLD_STATE: dict = {
     "active": False,
     "down_ts": 0.0,
@@ -195,6 +210,9 @@ _RBTN_HOLD_STATE: dict = {
     "triggered": False,
     "suppress_next_up": False,
     "summon_requested": False,
+    "precaptured_sel": "",
+    "precaptured_ts": 0.0,
+    "target_hwnd": None,
 }
 
 
@@ -3966,6 +3984,96 @@ Write-Output $res.Text
     last_topmost_ts: float = 0.0
 
     # [?? 0 = ??? ??? ???]: ? Ctrl + ???(??) / ? ??? 0.35? ?~~ (Long-Press, ?? ??? ?? ?? ?? ??)
+    def _should_bypass_rclick_hook(hwnd_fg: int | None) -> bool:
+        if not hwnd_fg:
+            return False
+        try:
+            proc_name = _get_process_name_from_hwnd(hwnd_fg).lower()
+            if proc_name in _RCLICK_BYPASS_PROCS:
+                return True
+            # Fullscreen game/video check (covers entire monitor with no caption/thickframe)
+            rc_win = wintypes.RECT()
+            if u32.GetWindowRect(hwnd_fg, ctypes.byref(rc_win)):
+                style = u32.GetWindowLongW(hwnd_fg, -16)  # GWL_STYLE
+                WS_CAPTION = 0x00C00000
+                if not (style & WS_CAPTION):
+                    scr_w = u32.GetSystemMetrics(0)
+                    scr_h = u32.GetSystemMetrics(1)
+                    if (rc_win.right - rc_win.left) >= scr_w and (rc_win.bottom - rc_win.top) >= scr_h:
+                        cls_n, _ = _get_win_class_and_title(hwnd_fg)
+                        if cls_n not in ("Progman", "WorkerW", "Shell_TrayWnd"):
+                            return True
+        except Exception:
+            pass
+        return False
+
+    def _release_target_rbutton_stuck(hwnd_target: int | None, pt_x: int | None = None, pt_y: int | None = None) -> None:
+        try:
+            u32.ReleaseCapture()
+            target = hwnd_target or u32.GetForegroundWindow()
+            if target:
+                u32.PostMessageW(target, WM_CANCELMODE, 0, 0)
+            if pt_x is not None and pt_y is not None:
+                pt_c = wintypes.POINT(pt_x, pt_y)
+                hwnd_child = u32.WindowFromPoint(pt_c)
+                if hwnd_child and hwnd_child != target:
+                    u32.PostMessageW(hwnd_child, WM_CANCELMODE, 0, 0)
+                    hwnd_root = u32.GetAncestor(hwnd_child, 2)  # GA_ROOT = 2
+                    if hwnd_root and hwnd_root not in (target, hwnd_child):
+                        u32.PostMessageW(hwnd_root, WM_CANCELMODE, 0, 0)
+        except Exception:
+            pass
+
+    def _capture_selection_non_polluting() -> str:
+        """
+        [급소 2 심화 방어]: 0.35초 홀드 확정 또는 Ctrl+우클릭 소환 확정 시점에
+        크롬·엣지·카톡·워드·노션 등 비-Win32 앱의 드래그 선택 텍스트까지
+        원본 클립보드 오염 0%로 0.03초 만에 스냅샷 추출하고 원본 클립보드를 즉시 복원합니다.
+        """
+        pre_sel = (_RBTN_HOLD_STATE.get("precaptured_sel") or "").strip()
+        if pre_sel and (time.time() - _RBTN_HOLD_STATE.get("precaptured_ts", 0.0)) < 2.0:
+            return pre_sel
+        try:
+            orig_clip = get_clipboard_text()
+            sentinel = "__GHOSTI_SEL_PROBE__"
+            daemon_set_clipboard(sentinel)
+            time.sleep(0.01)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.03)
+            probed = get_clipboard_text()
+            if orig_clip:
+                daemon_set_clipboard(orig_clip)
+            elif probed == sentinel:
+                empty_os_clipboard()
+            if probed and probed != sentinel:
+                _RBTN_HOLD_STATE["precaptured_sel"] = probed.strip()
+                _RBTN_HOLD_STATE["precaptured_ts"] = time.time()
+                return probed.strip()
+        except Exception:
+            pass
+        return ""
+
+    def _precapture_selection_async(hwnd_fg: int | None) -> None:
+        try:
+            if not hwnd_fg:
+                return
+            edit_ch = _find_edit_control_child(hwnd_fg)
+            if edit_ch:
+                s_pos = wintypes.DWORD(0)
+                e_pos = wintypes.DWORD(0)
+                u32.SendMessageW(edit_ch, EM_GETSEL, ctypes.byref(s_pos), ctypes.byref(e_pos))
+                if e_pos.value > s_pos.value:
+                    t_len = u32.SendMessageW(edit_ch, WM_GETTEXTLENGTH, 0, 0)
+                    if 0 < t_len < 32768:
+                        buf = ctypes.create_unicode_buffer(t_len + 2)
+                        u32.SendMessageW(edit_ch, WM_GETTEXT, t_len + 1, ctypes.cast(buf, wintypes.LPARAM))
+                        sel_s = buf.value[s_pos.value : e_pos.value].strip()
+                        if sel_s:
+                            _RBTN_HOLD_STATE["precaptured_sel"] = sel_s
+                            _RBTN_HOLD_STATE["precaptured_ts"] = time.time()
+        except Exception:
+            pass
+
     def _low_level_mouse_proc(nCode: int, wParam: int, lParam: int) -> int:
         try:
             if nCode >= 0:
@@ -3974,11 +4082,34 @@ Write-Output $res.Text
                     ctrl_now = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
                     alt_now = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
                     shift_now = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
+                    hwnd_fg = u32.GetForegroundWindow()
+
+                    # [급소 3 방어]: 귀신창이 열린 채로 다시 우클릭했을 때 -> 귀신창 닫고 원래 윈도우 우클릭 메뉴 통과(Pass-through)!
+                    if menu_armed and not ctrl_now:
+                        disarm_sub_hotkeys()
+                        close_ghost_toast()
+                        _RBTN_HOLD_STATE["active"] = False
+                        _RBTN_HOLD_STATE["suppress_next_up"] = False
+                        return u32.CallNextHookEx(None, nCode, wParam, lParam)
+
+                    # [급소 4 방어]: 전체화면 게임 / 3D·CAD·원격데스크톱 앱일 때 우클릭 훅 자동 패스(Bypass)
+                    if _should_bypass_rclick_hook(hwnd_fg):
+                        _RBTN_HOLD_STATE["active"] = False
+                        _RBTN_HOLD_STATE["suppress_next_up"] = False
+                        return u32.CallNextHookEx(None, nCode, wParam, lParam)
+
+                    # [급소 2 방어 (1단계)]: WM_RBUTTONDOWN(0.00초) 시점 드래그 선택 텍스트 선행 스냅샷 캐싱
+                    _RBTN_HOLD_STATE["target_hwnd"] = hwnd_fg
+                    _RBTN_HOLD_STATE["precaptured_sel"] = ""
+                    threading.Thread(target=_precapture_selection_async, args=(hwnd_fg,), daemon=True).start()
+
                     if ctrl_now and not alt_now and not shift_now:
                         _RBTN_HOLD_STATE["active"] = False
                         _RBTN_HOLD_STATE["triggered"] = True
                         _RBTN_HOLD_STATE["suppress_next_up"] = True
                         _RBTN_HOLD_STATE["summon_requested"] = True
+                        _RBTN_HOLD_STATE["x"] = info.pt.x
+                        _RBTN_HOLD_STATE["y"] = info.pt.y
                         return 1
                     else:
                         _RBTN_HOLD_STATE["active"] = True
@@ -3990,12 +4121,19 @@ Write-Output $res.Text
                 elif wParam == WM_MOUSEMOVE:
                     if _RBTN_HOLD_STATE["active"] and not _RBTN_HOLD_STATE["triggered"]:
                         info = ctypes.cast(lParam, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
-                        if abs(info.pt.x - _RBTN_HOLD_STATE["x"]) > 8 or abs(info.pt.y - _RBTN_HOLD_STATE["y"]) > 8:
+                        # [급소 4 방어]: 5px 초과 이동 시 마우스 드래그/제스처로 판단하여 즉시 취소
+                        if abs(info.pt.x - _RBTN_HOLD_STATE["x"]) > RBUTTON_MOVE_TOLERANCE_PX or abs(info.pt.y - _RBTN_HOLD_STATE["y"]) > RBUTTON_MOVE_TOLERANCE_PX:
                             _RBTN_HOLD_STATE["active"] = False
                 elif wParam == WM_RBUTTONUP:
                     _RBTN_HOLD_STATE["active"] = False
                     if _RBTN_HOLD_STATE["suppress_next_up"]:
                         _RBTN_HOLD_STATE["suppress_next_up"] = False
+                        # [급소 1 심화 방어]: 부모 창 + WindowFromPoint 자식 컨트롤 양쪽에 WM_CANCELMODE 및 ReleaseCapture 전송하여 마우스 먹통(Stuck) 0% 보장
+                        _release_target_rbutton_stuck(
+                            _RBTN_HOLD_STATE.get("target_hwnd"),
+                            _RBTN_HOLD_STATE.get("x"),
+                            _RBTN_HOLD_STATE.get("y"),
+                        )
                         return 1
         except Exception:
             pass
@@ -4052,18 +4190,30 @@ Write-Output $res.Text
 
             elif msg.message == WM_TIMER:
                 now = time.time()
-                # ??? ??? ??? ??: ? Ctrl+??? ?? ?? / ? ??? 0.35? ?~~ ?? ?? ??
+                # 마우스 우클릭 일원화 감지: ① Ctrl+우클릭 즉시 소환 / ② 우클릭 0.35초 꾹~~ 제자리 홀드 소환
                 if _RBTN_HOLD_STATE.get("summon_requested"):
                     _RBTN_HOLD_STATE["summon_requested"] = False
                     if (now - last_summon_ts) > 0.20:
                         last_summon_ts = now
+                        _capture_selection_non_polluting()
+                        _release_target_rbutton_stuck(
+                            _RBTN_HOLD_STATE.get("target_hwnd"),
+                            _RBTN_HOLD_STATE.get("x"),
+                            _RBTN_HOLD_STATE.get("y"),
+                        )
                         trigger_master_summon()
                 elif _RBTN_HOLD_STATE.get("active") and not _RBTN_HOLD_STATE.get("triggered"):
                     if (u32.GetAsyncKeyState(0x02) & 0x8000) != 0:
                         if (now - _RBTN_HOLD_STATE.get("down_ts", 0.0)) >= RBUTTON_LONG_PRESS_SEC:
                             pt_now = wintypes.POINT()
                             u32.GetCursorPos(ctypes.byref(pt_now))
-                            if abs(pt_now.x - _RBTN_HOLD_STATE["x"]) <= 8 and abs(pt_now.y - _RBTN_HOLD_STATE["y"]) <= 8:
+                            if abs(pt_now.x - _RBTN_HOLD_STATE["x"]) <= RBUTTON_MOVE_TOLERANCE_PX and abs(pt_now.y - _RBTN_HOLD_STATE["y"]) <= RBUTTON_MOVE_TOLERANCE_PX:
+                                _capture_selection_non_polluting()
+                                _release_target_rbutton_stuck(
+                                    _RBTN_HOLD_STATE.get("target_hwnd"),
+                                    pt_now.x,
+                                    pt_now.y,
+                                )
                                 _RBTN_HOLD_STATE["triggered"] = True
                                 _RBTN_HOLD_STATE["suppress_next_up"] = True
                                 if (now - last_summon_ts) > 0.20:

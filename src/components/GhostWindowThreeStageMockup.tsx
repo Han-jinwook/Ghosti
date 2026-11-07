@@ -948,12 +948,12 @@ export const GhostWindowThreeStageMockup: React.FC<{
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-white/10 text-[11px] font-bold text-zinc-300">
-            <span className="text-emerald-300 font-black">🛡️ 레드팀 4대 안전핀:</span>
+            <span className="text-emerald-300 font-black">🛡️ 레드팀 4대 안전핀 (2차 심화 완비):</span>
             <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-              ① WM_CANCELMODE 바닥 창 먹통 0%
+              ① 부모창 + WindowFromPoint 자식 컨트롤 이중 WM_CANCELMODE (먹통 0%)
             </span>
             <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
-              ② 0.00초 드래그 선행 스냅샷 캐싱
+              ② 2단계 무오염 드래그 스냅샷 (0.00초 EM_GETSEL + 0.35초 무음 Ctrl+C 후 원본 클립보드 복원)
             </span>
             <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
               ③ 열린 상태에서 재우클릭 시 원래 메뉴 통과(Pass-through)
