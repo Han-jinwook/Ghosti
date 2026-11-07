@@ -618,6 +618,12 @@ export const GhostWindowThreeStageMockup: React.FC<{
 
   const handleMockupMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 2) return; // 우클릭만 감지
+    // 급소 3: 귀신창이 열린 상태에서 한 번 더 우클릭 시 ➔ 귀신창 닫고 원래 윈도우 기본 우클릭 메뉴 통과(Pass-through)
+    if (rightClickSummonFeedback && !e.ctrlKey) {
+      setRightClickSummonFeedback(null);
+      suppressNextContextMenuRef.current = false;
+      return;
+    }
     if (e.ctrlKey) {
       // ② 왼손 Ctrl + 오른손 마우스 우클릭 (딸깍) 즉시 호출!
       suppressNextContextMenuRef.current = true;
@@ -638,8 +644,8 @@ export const GhostWindowThreeStageMockup: React.FC<{
     if (!rbuttonDownPosRef.current || !rbuttonTimerRef.current) return;
     const dx = Math.abs(e.clientX - rbuttonDownPosRef.current.x);
     const dy = Math.abs(e.clientY - rbuttonDownPosRef.current.y);
-    if (dx > 8 || dy > 8) {
-      // 8px 초과 드래그/마우스 제스처 시 롱프레스 취소 (기존 마우스 제스처 100% 보존)
+    if (dx > 5 || dy > 5) {
+      // 급소 4: 5px 초과 이동/마우스 제스처 시 롱프레스 즉시 취소 (마우스 제스처 100% 보존)
       window.clearTimeout(rbuttonTimerRef.current);
       rbuttonTimerRef.current = null;
       rbuttonDownPosRef.current = null;
@@ -917,27 +923,45 @@ export const GhostWindowThreeStageMockup: React.FC<{
           </div>
         </div>
 
-        {/* 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 라이브 체험 안내 바 */}
-        <div className="px-4 py-2.5 rounded-2xl bg-zinc-950/90 border border-amber-400/40 flex flex-wrap items-center justify-between gap-2 text-[12px]">
-          <div className="flex flex-wrap items-center gap-2 font-extrabold text-zinc-200">
-            <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-black text-[11px]">
-              🖱️ 이 화면에서 지금 바로 우클릭해 보세요!
-            </span>
-            <span>
-              ① 키보드 두 손: <code className="text-teal-300">Ctrl + 0</code>
-            </span>
-            <span className="text-zinc-600">|</span>
-            <span>
-              ② 왼손 Ctrl + 오른손 마우스: <code className="text-amber-300">Ctrl + 우클릭 (딸깍)</code>
-            </span>
-            <span className="text-zinc-600">|</span>
-            <span>
-              ③ 오른손 마우스 한 손 단독: <code className="text-emerald-300">우클릭 0.35초 꾹~~ (Long-Press)</code>
+        {/* 『숫자 0 = 마우스 우클릭 일원화』 3대 호출 공식 라이브 체험 안내 바 + 레드팀 4대 실전 안전핀 배지 */}
+        <div className="px-4 py-2.5 rounded-2xl bg-zinc-950/90 border border-amber-400/40 flex flex-col gap-2 text-[12px]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 font-extrabold text-zinc-200">
+              <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-black text-[11px]">
+                🖱️ 이 화면에서 지금 바로 우클릭해 보세요!
+              </span>
+              <span>
+                ① 키보드 두 손: <code className="text-teal-300">Ctrl + 0</code>
+              </span>
+              <span className="text-zinc-600">|</span>
+              <span>
+                ② 왼손 Ctrl + 오른손 마우스: <code className="text-amber-300">Ctrl + 우클릭 (딸깍)</code>
+              </span>
+              <span className="text-zinc-600">|</span>
+              <span>
+                ③ 오른손 마우스 한 손 단독: <code className="text-emerald-300">우클릭 0.35초 꾹~~ (Long-Press)</code>
+              </span>
+            </div>
+            <span className="px-2 py-0.5 rounded-md bg-teal-500/20 border border-teal-400/40 text-teal-200 text-[10.5px] font-black">
+              📜 특허 제10호 탑재 (60초 시한부 원샷 + 무오픈 현장 탐색기)
             </span>
           </div>
-          <span className="text-[11px] text-zinc-400 font-bold">
-            ※ 짧게 딸깍(&lt;0.35초) 또는 8px 드래그 시 기존 윈도우 우클릭 100% 보존
-          </span>
+
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-white/10 text-[11px] font-bold text-zinc-300">
+            <span className="text-emerald-300 font-black">🛡️ 레드팀 4대 안전핀:</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
+              ① WM_CANCELMODE 바닥 창 먹통 0%
+            </span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
+              ② 0.00초 드래그 선행 스냅샷 캐싱
+            </span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
+              ③ 열린 상태에서 재우클릭 시 원래 메뉴 통과(Pass-through)
+            </span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10">
+              ④ 5px 이동 및 전체화면 게임·3D CAD 자동 패스
+            </span>
+          </div>
         </div>
 
         {rightClickSummonFeedback && (
