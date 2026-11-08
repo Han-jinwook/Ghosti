@@ -20,6 +20,7 @@ import {
   getAndAdvanceSessionPlaceholderStartIndex,
 } from '../services/weeklyCareAndPlaceholderEngine';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
+import { GhostPassportCandidatesPanel } from './GhostPassportCandidatesPanel';
 import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
 
 const STAGE1_ROLLING_INTERVAL_MS = 10_000; // 10초 자동 롤링
@@ -1103,12 +1104,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
         {/* ═══════════════ [좌측 열] 미니멀 정리 워크스페이스 (기록부 버튼·휴지통 버튼·아코디언 완전 제거) ═══════════════ */}
         <div className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0">
+          {/* [v1.3] 🪪 귀신계 여권 후보 — 귀신비서가 실명을 물을 때만 노출 */}
+          <GhostPassportCandidatesPanel />
           {/* 1. 슬림 헤더: 현재 쾌적한 상태 요약 + [⚡ 원본 남기고 N장 일괄 정리] 버튼만 깔끔하게 유지 */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  <span>✋ 손보기</span>
+                  {/* [v1.3] 전사 대표 슬로건 — 화면 TMI 방지를 위해 제목 마우스 오버 시에만 노출 */}
+                  <span title="컴퓨터 손보기부터 귀신계 여권까지 『귀신비서』가 다 챙겨주고, 잃어버린 파일은 『귀신검색』이 찾아주고, 타이핑 노가다는 『귀신창 초능력』이 대신해 준다!">
+                    👻 귀신비서
+                  </span>
                 </h1>
 
                 <input

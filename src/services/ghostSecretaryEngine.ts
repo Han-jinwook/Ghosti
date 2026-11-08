@@ -196,6 +196,10 @@ export interface GhostSecretaryState {
   lastKnockDate?: string;
   /** 냉정한 사양 처방에서 안내한 부품 규격 (예: DDR3 PC3-12800 8GB) — 구매처 질문 시 복사 대상 */
   lastRecommendedSpec?: string;
+  /** 🪪 귀신계 여권 발급 대행 진행 단계 */
+  passportStep?: 'ask_hint' | 'naming' | 'done' | 'skipped';
+  /** 모바일 옛날 사진 마저 스캔 시점 선택 (30분 뒤 안내 vs 저녁 유휴) */
+  mobileRemainingScanChoice?: 'now_30min' | 'evening';
 }
 
 export const GHOST_SECRETARY_STATE_KEY = 'ghosti_ghost_secretary_state_v1';
@@ -233,6 +237,11 @@ export function loadGhostSecretaryState(): GhostSecretaryState {
 }
 export function saveGhostSecretaryState(st: GhostSecretaryState): void {
   writeJson(GHOST_SECRETARY_STATE_KEY, st);
+  try {
+    window.dispatchEvent(new CustomEvent('ghosti_ghost_secretary_state_updated', { detail: st }));
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -317,10 +326,18 @@ export function canKnockToday(st: GhostSecretaryState, now = new Date()): boolea
 // ─────────────────────────────────────────────────────────────
 // 대화 턴 해석 (대본집 우선 → 없으면 null 반환하여 기존 손보기 라우터로 위임)
 // ─────────────────────────────────────────────────────────────
+export interface PassportNamingResult {
+  selfIndex?: number;
+  names: Array<{ index: number; realName: string }>;
+  rejectedRelationTags: string[];
+}
+
 export interface GhostSecretaryTurn {
   scenarioId: string;
   text: string;
   followUps?: string[];
+  /** 여권 후보 번호별 실명 등록 지시 (컴포넌트가 store.registerFaceMember 로 실제 등록) */
+  passportNaming?: PassportNamingResult;
   nextState: GhostSecretaryState;
   /** 응답과 함께 실제로 클립보드에 복사할 텍스트 (대본이 '복사해 드렸다'고 말하는 경우) */
   clipboardText?: string;
@@ -352,10 +369,60 @@ function nextQuest(step: QuestStep): QuestStep {
   return step === 'labeler' ? 'son_free' : step === 'son_free' ? 'voice' : 'done';
 }
 
-export function resolveGhostSecretaryTurn(rawText: string, st: GhostSecretaryState): GhostSecretaryTurn | null {
+export function resolveGhostSecretaryTurn(
+  rawText: string,
+  st: GhostSecretaryState,
+  ctx: { passportClusterCount?: number } = {}
+): GhostSecretaryTurn | null {
   const text = rawText.trim();
   if (!text) return null;
   const nickname = st.nickname || '';
+
+  // ⓪ 🪪 귀신계 여권 발급 대행 (성별·나이대 힌트 → 후보 번호별 실명 입력)
+  if (st.passportStep === 'ask_hint') {
+    const sc = findScenario('passport_show_top_candidates_ask_real_name');
+    if (sc) {
+      return {
+        scenarioId: sc.id,
+        text: renderPlaybookText(sc.response, { nickname, cluster_count: ctx.passportClusterCount || 0 }),
+        nextState: { ...st, passportStep: 'naming' },
+      };
+    }
+  }
+  if (st.passportStep === 'naming') {
+    const parsed = parsePassportNamingAnswer(text);
+    if (parsed.names.length || parsed.selfIndex !== undefined) {
+      const firstFamily = parsed.names[0]?.realName;
+      const sc = findScenario('passport_complete_suggest_natural_search');
+      const done = firstFamily && sc
+        ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
+        : `${nickname}님 본인 여권을 새겨뒀어요! 이제 아래 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`;
+      const warn = parsed.rejectedRelationTags.length
+        ? `\n(『${parsed.rejectedRelationTags.join('』, 『')}』처럼 관계로만 말씀하신 분은 진짜 이름을 알려주시면 여권을 찍어드릴게요!)`
+        : '';
+      return {
+        scenarioId: sc?.id || 'passport_self_only_done',
+        text: done + warn,
+        passportNaming: parsed,
+        nextState: { ...st, passportStep: 'done' },
+      };
+    }
+    if (parsed.rejectedRelationTags.length) {
+      return {
+        scenarioId: 'passport_need_real_name',
+        text: `${nickname}님, 『${parsed.rejectedRelationTags.join('』, 『')}』 말고 진짜 여권처럼 실제 이름으로 알려주세요! (예: 2번은 한치우)`,
+        nextState: st,
+      };
+    }
+  }
+
+  // ⓪-2 모바일 옛날 사진 스캔 시점 선택 응답
+  if (/30\s*분|지금\s*(천천히|돌려)/.test(text) && /사진|스캔|돌려|천천히|30\s*분/.test(text) && st.passportStep === 'done' && !st.mobileRemainingScanChoice) {
+    return { scenarioId: 'mobile_scan_choice_now', text: '좋아요! 뒤에서 천천히 찾아두고 약 30분 뒤에 채팅으로 알려드릴게요.', nextState: { ...st, mobileRemainingScanChoice: 'now_30min' } };
+  }
+  if (/저녁/.test(text) && st.passportStep === 'done' && !st.mobileRemainingScanChoice) {
+    return { scenarioId: 'mobile_scan_choice_evening', text: '알겠어요! 저녁에 쉬실 때 조용히 해두고, 다음 날 한 번만 채팅으로 알려드릴게요.', nextState: { ...st, mobileRemainingScanChoice: 'evening' } };
+  }
 
   // ① 첫인사 별명 답변
   if (st.awaitingNickname && !st.nickname) {
@@ -437,6 +504,48 @@ export function resolveGhostSecretaryTurn(rawText: string, st: GhostSecretarySta
   }
 
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🪪 귀신계 여권 발급 대행 보조 로직
+// ─────────────────────────────────────────────────────────────
+
+/** 업무용 PC 자동 패스 기준: 인물 사진 20장 미만이면 여권 질문 생략 (마스터기획서 7장 3)-1) */
+export const PASSPORT_MIN_FACE_PHOTOS = 20;
+
+export function decidePassportEntry(facePhotoCount: number, passportInitialized: boolean): 'ask' | 'skip' {
+  if (passportInitialized) return 'skip';
+  return facePhotoCount >= PASSPORT_MIN_FACE_PHOTOS ? 'ask' : 'skip';
+}
+
+const NAME_DESCRIPTOR_RE = /^(우리\s*)?(강아지|고양이|댕댕이|멍멍이|냥이|반려견|반려묘)\s+/;
+const NAME_TAIL_RE = /(이야|야|예요|이에요|입니다|이고|고|임|요)$/;
+
+/** "1번은 나고, 2번은 한치우, 3번은 강아지 초코야" → selfIndex 1, names [2:한치우, 3:초코] (관계 꼬리표만 말하면 거절 목록) */
+export function parsePassportNamingAnswer(text: string): PassportNamingResult {
+  const result: PassportNamingResult = { names: [], rejectedRelationTags: [] };
+  const re = /(\d+)\s*번\s*(?:은|는|이|가)?\s*([^,，.\n]+?)(?=\s*(?:,|，|\.|\n|\s\d+\s*번|$))/g;
+  for (const m of text.matchAll(re)) {
+    const index = Number(m[1]);
+    let name = m[2].trim().replace(/[!?~]+$/, '').trim();
+    name = name.replace(NAME_TAIL_RE, '').trim();
+    name = name.replace(NAME_DESCRIPTOR_RE, '').trim();
+    if (!name) continue;
+    if (/^(나|저|본인|내\s*얼굴)$/.test(name)) {
+      result.selfIndex = index;
+    } else if (isRelationTagOnly(name)) {
+      result.rejectedRelationTags.push(name);
+    } else {
+      result.names.push({ index, realName: name.slice(0, 20) });
+    }
+  }
+  return result;
+}
+
+/** 모바일 단독(무료) 징검다리 탐색 창: 100 → 300 → 500장 (인물 미발견 시 다음 창, 500장 이후 중단) */
+export const MOBILE_STEPPING_STONE_WINDOWS = [100, 300, 500] as const;
+export function nextMobileScanWindow(scannedSoFar: number): number | null {
+  return MOBILE_STEPPING_STONE_WINDOWS.find((w) => w > scannedSoFar) ?? null;
 }
 
 /** 첫 환영 문구: 별명이 없으면 대본집 ask_nickname_first, 있으면 별명 호칭 인사 */

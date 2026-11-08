@@ -50,13 +50,57 @@ import {
   logUnmatchedQuestion,
   canKnockToday,
   todayKey,
+  decidePassportEntry,
+  findScenario,
+  renderPlaybookText,
+  upsertPassportMember,
+  type GhostSecretaryState,
+  type PassportNamingResult,
 } from '../services/ghostSecretaryEngine';
+import { pushGhostPassportsToCloud, pullGhostPassportsFromCloud } from '../services/ghostPassportSync';
+import { rankPassportCandidates, countUniqueFacePhotos } from './GhostPassportCandidatesPanel';
 
 /** [v1.3] 귀신비서 점괘 직후 이어지는 1클릭 검진 문구 — 기존 손보기 라우터가 처리하는 문장과 동일해야 함 */
 const SECRETARY_FIRST_CARE_QUERY = '지금 PC가 좀 느린데 1초 건강검진 해줘';
 
 function nowTimeKo(): string {
   return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function secretaryOwnerEmail(): string {
+  return useSaySeeStore.getState().merlinAuth?.email || '';
+}
+
+/** 홀림 퀘스트 마지막(차 안 음성검색 안내) 직후 → 🪪 귀신계 여권 진입 또는 업무용 PC 자동 패스 */
+function buildPassportEntryTurn(st: GhostSecretaryState): { text: string; nextState: GhostSecretaryState } {
+  const clusters = useSaySeeStore.getState().faceClusters || [];
+  const nickname = st.nickname || '';
+  if (decidePassportEntry(countUniqueFacePhotos(clusters), st.passportStep === 'done') === 'ask') {
+    const sc = findScenario('passport_ask_gender_age_humble');
+    return { text: renderPlaybookText(sc?.response || '', { nickname }), nextState: { ...st, passportStep: 'ask_hint' } };
+  }
+  return {
+    text: `${nickname}님, 기본 세팅은 다 끝났어요! 이제 바로 아래 『👻 귀신검색』에서 10초 만에 직접 불러보는 마법을 따라 해볼까요?`,
+    nextState: { ...st, passportStep: 'skipped' },
+  };
+}
+
+/** 채팅으로 받은 실명을 여권 후보 번호에 등록 (관계 칩 없이 실명만, 본인은 별명+본인 플래그) */
+async function applyPassportNaming(parsed: PassportNamingResult, nickname: string): Promise<void> {
+  const store = useSaySeeStore.getState();
+  const ranked = rankPassportCandidates(store.faceClusters || []);
+  let book = loadGhostPassportBook();
+  if (parsed.selfIndex !== undefined && ranked[parsed.selfIndex - 1]) {
+    await store.registerFaceMember(ranked[parsed.selfIndex - 1].clusterId, nickname, '');
+    book = setPassportSelf(book, nickname);
+  }
+  for (const n of parsed.names) {
+    const cluster = ranked[n.index - 1];
+    if (cluster) await store.registerFaceMember(cluster.clusterId, n.realName, '');
+    book = upsertPassportMember(book, n.realName);
+  }
+  saveGhostPassportBook(book);
+  void pushGhostPassportsToCloud(secretaryOwnerEmail(), isMobileVoiceEnvironment() ? 'mobile' : 'pc');
 }
 
 interface MonsterStandardChatColumnProps {
@@ -122,6 +166,23 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     setSharedMonsterMessages((prev) =>
       prev.map((m) => (m.id === 'monster_welcome_init' && prev.length === 1 ? { ...m, text: turn.text } : m))
     );
+    // [v1.3 #7] 같은 계정의 다른 기기에서 만든 🪪 귀신계 여권 무료 동기화 (로그인 시에만)
+    void pullGhostPassportsFromCloud(secretaryOwnerEmail()).then((res) => {
+      if (!res.ok || res.newNames.length === 0) return;
+      const st = loadGhostSecretaryState();
+      const sc = findScenario('passport_cross_device_supabase_synced');
+      if (!sc) return;
+      setSharedMonsterMessages((prev) => [
+        ...prev,
+        {
+          id: `secretary_passport_sync_${Date.now()}`,
+          role: 'assistant',
+          timestamp: nowTimeKo(),
+          sourceTab: 'trash',
+          text: renderPlaybookText(sc.response, { nickname: st.nickname || '', synced_names: res.newNames.join(', ') }),
+        },
+      ]);
+    });
   }, [sourceTab]);
 
   useEffect(() => {
@@ -233,9 +294,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     // [v1.3] 귀신비서 대본집 우선 응답 (별명 등록 → 매운맛 점괘 / 구매처 거절 / 급한 유저 / 홀림 퀘스트 / 로드맵 희망 답변)
     if (sourceTab === 'trash') {
       const secretaryState = loadGhostSecretaryState();
-      const turn = resolveGhostSecretaryTurn(raw, secretaryState);
+      const turn = resolveGhostSecretaryTurn(raw, secretaryState, {
+        passportClusterCount: rankPassportCandidates(useSaySeeStore.getState().faceClusters || []).length,
+      });
       if (turn) {
         let nextState = turn.nextState;
+        if (turn.passportNaming && nextState.nickname) {
+          await applyPassportNaming(turn.passportNaming, nextState.nickname);
+        }
         const replies: MonsterChatMessage[] = [
           {
             id: `secretary_${Date.now()}`,
@@ -263,6 +329,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             followUpSuggestions: [SECRETARY_FIRST_CARE_QUERY],
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
+        }
+        if (turn.scenarioId === 'quest_mobile_voice_search' && !nextState.passportStep) {
+          const entry = buildPassportEntryTurn(nextState);
+          nextState = entry.nextState;
+          replies.push({
+            id: `secretary_passport_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab,
+            text: entry.text,
+          });
         }
         saveGhostSecretaryState(nextState);
         setSharedMonsterMessages((prev) => [...prev, ...replies]);

@@ -36,7 +36,7 @@ export const DOJO_ITEMS: DojoItemMeta[] = [
   { id: 1, icon: '⌨️', title: '영타➔한타 1초 자동성형', mission: '영문으로 친 문장 끝에서 스페이스바를 누르세요' },
   { id: 2, icon: '🧺', title: '줄바꿈·띄어쓰기 1초 다림질', mission: '뚝뚝 끊긴 문단을 한 번에 펴세요' },
   { id: 3, icon: '🔫', title: '1➔2➔3 연속 복사 순차발사', mission: '빈칸을 차례로 우클릭해 줄줄이 꽂으세요' },
-  { id: 4, icon: '🫧', title: '시커먼 배경·광고꼬리말 서식 세탁기', mission: '지저분한 글을 순수 텍스트로 세탁하세요' },
+  { id: 4, icon: '🧼', title: '시커먼 배경·광고꼬리말 서식 세탁기', mission: '지저분한 글을 순수 텍스트로 세탁하세요' },
   { id: 5, icon: '🔑', title: 'F1~F6 내 상용구 & F7~F12 팀 상용구', mission: '칸을 누르고 F1, F7을 차례로 누르세요' },
   { id: 6, icon: '📋', title: '최근 5개 & 한 달 치 클립보드 검색', mission: '「우리」를 검색해 옛날 계좌를 찾으세요' },
   { id: 7, icon: '📊', title: '화면 캡처 표 ➔ 엑셀 표(TSV) 직행', mission: '드래그 막힌 단가표를 엑셀 표로 바꾸세요' },
