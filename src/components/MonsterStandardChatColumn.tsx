@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Send,
-  Bot,
   User,
   Mic,
   MicOff,
@@ -35,6 +34,30 @@ import {
   loadWeeklyCareSchedule,
   formatScheduleLabelKo,
 } from '../services/weeklyCareAndPlaceholderEngine';
+import {
+  GHOST_SECRETARY_AVATAR_SRC,
+  GHOST_SECRETARY_NAME,
+  buildWelcomeTurn,
+  buildColdReadingText,
+  collectColdReadingContext,
+  resolveGhostSecretaryTurn,
+  loadGhostSecretaryState,
+  saveGhostSecretaryState,
+  loadGhostPassportBook,
+  saveGhostPassportBook,
+  setPassportSelf,
+  questPromptFor,
+  logUnmatchedQuestion,
+  canKnockToday,
+  todayKey,
+} from '../services/ghostSecretaryEngine';
+
+/** [v1.3] 귀신비서 점괘 직후 이어지는 1클릭 검진 문구 — 기존 손보기 라우터가 처리하는 문장과 동일해야 함 */
+const SECRETARY_FIRST_CARE_QUERY = '지금 PC가 좀 느린데 1초 건강검진 해줘';
+
+function nowTimeKo(): string {
+  return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
 
 interface MonsterStandardChatColumnProps {
   sourceTab: 'trash' | 'repair';
@@ -88,6 +111,18 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   const [careScheduleSummary, setCareScheduleSummary] = useState<string>(() =>
     formatScheduleLabelKo(loadWeeklyCareSchedule())
   );
+  const [awaitingNickname, setAwaitingNickname] = useState<boolean>(() => !loadGhostSecretaryState().nickname);
+
+  // [v1.3 귀신비서 1관문] 첫 환영 말풍선: 별명 미등록 시 대본집 ask_nickname_first, 등록 시 별명 호칭 인사
+  useEffect(() => {
+    if (sourceTab !== 'trash') return;
+    const turn = buildWelcomeTurn(loadGhostSecretaryState());
+    saveGhostSecretaryState(turn.nextState);
+    setAwaitingNickname(Boolean(turn.nextState.awaitingNickname));
+    setSharedMonsterMessages((prev) =>
+      prev.map((m) => (m.id === 'monster_welcome_init' && prev.length === 1 ? { ...m, text: turn.text } : m))
+    );
+  }, [sourceTab]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -109,10 +144,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     let cancelled = false;
     const runProactiveCheck = async () => {
       if (cancelled) return;
+      // [v1.3] 전사 단일 웹 알림 = 귀신비서 채팅 노크 (대답할 때까지 하루 1회만)
+      if (!canKnockToday(loadGhostSecretaryState())) return;
       const briefing = await evaluateDualProactiveCareEngine({
         isStoreAppMode: isMobileOrStore,
       });
       if (!briefing || cancelled) return;
+      saveGhostSecretaryState({ ...loadGhostSecretaryState(), lastKnockDate: todayKey() });
       setSharedMonsterMessages((prev) => {
         if (prev.some((m) => m.cardKind === 'WEEKLY_CARE_BRIEFING' && !m.proactiveCareBriefing?.executed)) {
           return prev;
@@ -192,6 +230,47 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     setSharedMonsterMessages((prev) => [...prev, userMsg]);
     setSharedMonsterBusy(true);
 
+    // [v1.3] 귀신비서 대본집 우선 응답 (별명 등록 → 매운맛 점괘 / 구매처 거절 / 급한 유저 / 홀림 퀘스트 / 로드맵 희망 답변)
+    if (sourceTab === 'trash') {
+      const secretaryState = loadGhostSecretaryState();
+      const turn = resolveGhostSecretaryTurn(raw, secretaryState);
+      if (turn) {
+        let nextState = turn.nextState;
+        const replies: MonsterChatMessage[] = [
+          {
+            id: `secretary_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab,
+            text: turn.text,
+            followUpSuggestions: turn.followUps,
+          },
+        ];
+        if (turn.clipboardText) {
+          void navigator.clipboard?.writeText(turn.clipboardText).catch(() => {});
+        }
+        if (turn.needsColdReading && nextState.nickname) {
+          saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), nextState.nickname));
+          setAwaitingNickname(false);
+          const ctx = await collectColdReadingContext();
+          const reading = buildColdReadingText(nextState.nickname, ctx);
+          replies.push({
+            id: `secretary_reading_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab,
+            text: reading.text,
+            followUpSuggestions: [SECRETARY_FIRST_CARE_QUERY],
+          });
+          nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
+        }
+        saveGhostSecretaryState(nextState);
+        setSharedMonsterMessages((prev) => [...prev, ...replies]);
+        setSharedMonsterBusy(false);
+        return;
+      }
+    }
+
     // 음성 입출력 엄격 미러링: 모바일에서 마이크로 말했을 때만 TTS 자동 발화 허용!
     const mirroredTtsEnabled =
       inputMode === 'voice' && isMobileVoiceEnvironment() && Boolean(ttsEnabled);
@@ -204,8 +283,33 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         ttsEnabled: mirroredTtsEnabled,
       });
       setSharedMonsterMessages((prev) => [...prev, assistantMsg]);
+      if (sourceTab === 'trash' && !assistantMsg.cardKind) {
+        // 대본집·손보기 라우터 어디에도 정형 매칭되지 않은 자유 질문 → 주간 대본집 편입 후보로 포집
+        logUnmatchedQuestion(raw, 'no_playbook_match');
+      }
       if (assistantMsg.healthRecordIssued) {
         onHealthRecordAdded(assistantMsg.healthRecordIssued);
+        // [v1.3] 첫 손보기 완료 직후 → 홀림 퀘스트 ① 귀신 라벨러 샘플 제안부터 시작
+        const st = loadGhostSecretaryState();
+        if (sourceTab === 'trash' && !st.questStep) {
+          const quest = questPromptFor('labeler', st.nickname || '');
+          if (quest) {
+            saveGhostSecretaryState({ ...st, questStep: 'labeler' });
+            window.setTimeout(() => {
+              setSharedMonsterMessages((prev) => [
+                ...prev,
+                {
+                  id: `secretary_quest_${Date.now()}`,
+                  role: 'assistant',
+                  timestamp: nowTimeKo(),
+                  sourceTab,
+                  text: quest.text,
+                  followUpSuggestions: quest.followUps,
+                },
+              ]);
+            }, 1200);
+          }
+        }
       }
       if (assistantMsg.repairSymptomQuery) {
         onTriggerOsRepair?.(assistantMsg.repairSymptomQuery);
@@ -513,8 +617,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   </>
                 ) : (
                   <>
-                    <span className="text-[12px] font-extrabold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                      <Bot className="w-3.5 h-3.5" /> 귀신같이 비서
+                    <span className="text-[12px] font-extrabold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                      <img
+                        src={GHOST_SECRETARY_AVATAR_SRC}
+                        alt=""
+                        aria-hidden="true"
+                        className="w-6 h-6 rounded-full object-cover shadow-sm ring-1 ring-emerald-400/40"
+                      />
+                      {GHOST_SECRETARY_NAME}
                     </span>
                     <span className="text-[11px] text-slate-500">{msg.timestamp}</span>
                   </>
@@ -566,6 +676,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 {!isUser &&
                   showWelcomeQuickCareActions &&
                   !isMobileOrStore &&
+                  !awaitingNickname &&
                   msg.id === 'monster_welcome_init' && (
                     <div className="mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
                       <button

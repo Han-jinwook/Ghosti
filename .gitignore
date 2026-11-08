@@ -12,6 +12,9 @@ node_modules/
 *secret*
 # 예외: 귀신비서 대본집(비밀정보 없음, 비서 정본 동기화본) — *secret* 패턴 오탐 방지
 !src/data/ghost_secretary_playbook.json
+# 예외: 귀신비서(Ghost Secretary) 소스 파일명 오탐 방지 — 비밀정보 아님
+!src/**/ghostSecretary*.ts
+!src/**/ghostSecretary*.tsx
 *credential*
 *credentials*
 
