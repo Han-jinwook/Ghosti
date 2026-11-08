@@ -378,6 +378,9 @@ export const DesktopDashboard: React.FC = () => {
     if (!ghostSearchWindowStage) return;
     setActiveLoungeType('personal');
     setDesktopTab('dashboard');
+    // 귀신비서·현장 소환에서 넘겨준 검색어(&q=)가 있으면 기존 찾기 화면에서 바로 검색 실행
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q && q.trim()) void useSaySeeStore.getState().runTextQuery(q.trim());
   }, [ghostSearchWindowStage, setActiveLoungeType, setDesktopTab]);
 
   const isAnySubscribed = useMemo(

@@ -1545,8 +1545,18 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             showWelcomeQuickCareActions={true}
             onHealthRecordAdded={() => {}}
             onJumpToSearch={(kw) => {
-              if (layout === 'mobile') setMobileTab('search');
-              else setDesktopTab('dashboard');
+              if (layout === 'mobile') {
+                setMobileTab('search');
+                void runTextQuery(kw);
+                return;
+              }
+              // [v1.3] 웹 검색창 폐지 이후: 귀신비서가 찾아준 검색어는 『👻 귀신검색』 화면의 귀신검색창(기존 찾기 화면)으로 결과를 띄움
+              try {
+                sessionStorage.setItem('ghosti_pending_ghost_search_query', kw);
+              } catch {
+                /* ignore */
+              }
+              setDesktopTab('dashboard');
               void runTextQuery(kw);
             }}
             onToast={(msg) => useSaySeeStore.setState({ lastQuarantineToast: msg })}

@@ -11,8 +11,20 @@ import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 
 /** 로컬 귀신검색창이 여는 주소와 동일 (기존 웹 「찾기」 화면 100% 승계 전용 모드) */
-export function ghostSearchWindowUrl(stage: GhostSearchStage): string {
-  return `/?preview=legacy&ghostSearchWindow=${stage}`;
+export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): string {
+  const q = query && query.trim() ? `&q=${encodeURIComponent(query.trim())}` : '';
+  return `/?preview=legacy&ghostSearchWindow=${stage}${q}`;
+}
+
+/** 귀신비서 채팅이 넘겨준 검색어 (1회 소비) */
+function consumePendingGhostSearchQuery(): string {
+  try {
+    const q = sessionStorage.getItem('ghosti_pending_ghost_search_query') || '';
+    if (q) sessionStorage.removeItem('ghosti_pending_ghost_search_query');
+    return q;
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -38,10 +50,14 @@ function loadGame(): Partial<Record<GameStepId, boolean>> {
   }
 }
 
-const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void }> = ({ onStep }) => {
+const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void; initialQuery?: string }> = ({
+  onStep,
+  initialQuery = '',
+}) => {
   const monitorRef = useRef<HTMLDivElement | null>(null);
   const [monitorW, setMonitorW] = useState(960);
-  const [stage, setStage] = useState<GhostSearchStage | null>(null);
+  // 귀신비서가 검색어를 넘겨준 경우 바로 중형 귀신검색창으로 결과를 펼쳐 보여줌
+  const [stage, setStage] = useState<GhostSearchStage | null>(initialQuery ? 'medium' : null);
   const [anchor, setAnchor] = useState({ x: 1300, y: 600 });
   const [holdProgress, setHoldProgress] = useState(0);
   const holdRaf = useRef(0);
@@ -163,7 +179,7 @@ const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void }> = 
                 <iframe
                   key={rect.stage}
                   title="귀신검색창"
-                  src={ghostSearchWindowUrl(rect.stage)}
+                  src={ghostSearchWindowUrl(rect.stage, initialQuery)}
                   className="w-full h-full border-0 bg-white"
                 />
               </div>
@@ -178,6 +194,11 @@ const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void }> = 
 export const GhostSearchTrainingPage: React.FC = () => {
   const [game, setGame] = useState(() => loadGame());
   const [connected, setConnected] = useState(zCoreBridge.isConnected);
+  const [pendingQuery] = useState(() => consumePendingGhostSearchQuery());
+  const monitorSectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (pendingQuery) monitorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [pendingQuery]);
 
   useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
 
@@ -210,7 +231,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
         <GhostSuperpowerDojo variant="basics" />
       </section>
 
-      <section className="flex flex-col gap-2">
+      <section ref={monitorSectionRef} className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">STEP 2 · 귀신검색 도장깨기</h2>
           <div className="flex flex-wrap gap-1.5">
@@ -229,7 +250,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
             ))}
           </div>
         </div>
-        <VirtualMonitorSimulator onStep={markStep} />
+        <VirtualMonitorSimulator onStep={markStep} initialQuery={pendingQuery} />
       </section>
 
       <section

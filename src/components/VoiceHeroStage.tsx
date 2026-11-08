@@ -42,7 +42,12 @@ export const VoiceHeroStage: React.FC = () => {
     isStoreAppMode,
   } = useSaySeeStore();
 
-  const [textInput, setTextInput] = useState('');
+  // [v1.3] 로컬 귀신검색창(?ghostSearchWindow=…&q=…)으로 넘어온 검색어는 입력창에도 그대로 보여줌
+  const [textInput, setTextInput] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get('ghostSearchWindow') ? sp.get('q') || '' : '';
+  });
   const mobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
 
