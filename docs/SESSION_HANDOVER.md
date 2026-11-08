@@ -2,34 +2,31 @@
 
 ---
 
-## 🕒 [2026-11-06 15:40 KST 체크아웃 인계 기록]
+## 🕒 [2026-11-09 00:20 KST 체크아웃 인계 기록]
 
-- **세션 제목**: 4호기손보기3대보강·v2.3.4완결
+- **세션 제목**: 귀신3총사v1.3완결
 
 ### 1. 이번 세션에서 완료한 핵심 작업 요약
-1. **[Z-코어 v2.3.4 빌드·패키징 및 4호기 3대 허점 근본 보강]** (commit `b0bc43b`):
-   - **허점 1 (부활형 애드웨어 & 작업 스케줄러 0.2초 네이티브 소탕)**: 
-     - CPU 과부하 시 6초 타임아웃으로 실패하던 PowerShell 루프 대신 `schtasks /End & /DISABLE`, `sc config disabled & stop`, `taskkill /F /IM /T` 단일 네이티브 배치를 0.2초 만에 선제 타격.
-     - `CacheCloud`, `CacheConsole`, `CacheService`, `CloudTaskModule`, `febjb`, `MSLoad`, `NGPlus`, `RayItemGate`, `StorageServiceManager`, `TUCTLSystem`, `Yondisk_macadress`, `PcAppStoreSRV`, `nosstarter.npe` 및 카메라 창 없는 백그라운드 리소스 좀비 `WindowsCamera.exe` 전량 박멸.
-     - 일반 사용자 권한 시 `RunAs` 무소음 승격 배치 + PowerShell 15초 확장으로 LocalSystem 서비스까지 완전 차단.
-   - **허점 2 ("속도 개선된거야?" 후속 질문 라우팅 꼬임 영구 차단)**:
-     - 속도/상태 질문(`속도 개선된거야`, `빨라졌어`, `정리 잘 됐어`, `상태 어때`, `얼마나 세이브`) 시 이전 카드 종류와 무관하게 **100% 0-0A2 전·후 실시간 CPU 부하 / 잔존 상주 애드웨어 0건 여부 / RAM 점유율 비교 브리핑**으로 직결.
-     - 파일 정리(`CLEANUP_FOLDER_REORG`)로 빠져 다운로드 폴더 `.zip` 파일을 스캔/이동하는 버그를 원천 봉쇄.
-   - **허점 3 (저사양 8GB PC 크롬 메모리 병목 진단)**:
-     - `GlobalMemoryStatusEx`로 물리 RAM 총량 및 브라우저(`chrome`, `msedge`, `whale`) 합산 메모리(GB, %) 실측.
-     - 80% 이상 메모리 포화 시 *"💡 애드웨어는 모두 껐지만, 현재 전체 메모리(8GB) 중 크롬 브라우저가 X.XGB(Y%)를 차지하고 있습니다. 안 쓰는 탭만 닫아주시면 즉시 체감 속도가 확 빨라집니다!"* 가이드 자동 출력.
-2. **[Z-코어 중복 실행 방지 & 트레이 누수 차단 & 포트 바인딩 안정화]** (commit `8e338fc`, `0d271bd`):
-   - Windows Named Mutex(`Local\Merlin_Z_Core_SingleInstance_Port_5199`)로 프로세스 중복 실행 및 트레이 아이콘 복제 원천 차단.
-   - 포트 5199 리스너 우선 기동 + `checkHealth()` 9회 자동 재시도로 '실행했어요' 클릭 시 즉시 통과.
-3. **[게스트 로그인 ➔ Z-코어 연결 모달 문구 통일]** (commit `b0bc43b`):
-   - `MerlinZCoreGuideModal` 모든 단계(안내/대기/인덱싱/완료)의 상단 배지 및 제목을 `[⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어)]`로 통일.
-4. **[노션 QA 칸반 및 우체국 답변 완결]**:
-   - 해나라님 버그 티켓 `410f9ffd-2c1d-8189-ac6b-c1d44ea27bd1` 완료 후 `[재테스트 대기]` 하단 이동.
-   - 신규 테스트 미션 카드 `🎯 [귀신같이] 손보기 속도 최적화 3대 보강(스케줄러·서비스 무력화 + 속도 개선된거야 비교 브리핑 + 크롬 메모리 병목 진단) 점검` (`410f9ffd-2c1d-8133-8acf-f659353b4188`) 등록.
-   - 비서실에 `Secretary_Ghosti_답변_4호기손보기테스트_3대허점근본보강지시_20261106_1504.md` 공식 회신 완료.
+1. **[귀신 3총사 v1.3 대개편 전 항목(12/12) 100% 구현·검증·배포 완결]** (commits `3de63d9` ~ `07e8d80`):
+   - **좌측 무료 4대 핵심 메뉴 개편**: `👻 귀신비서` (1관문: 손보기·복원·귀신계 여권 + 전사 대표 슬로건 부제 상시 노출) ➔ `👻 귀신검색` (2관문: 웹 검색 입력창 폐지 ➔ STEP1 소환술 3단 + STEP2 도장깨기 게임 + 3단 변신 로컬 귀신검색창) ➔ `⚡ 귀신창 초능력` (3관문: `4분 30초` ROI 배너 + 9종 초능력 상시 연습장 + 30일 무제한 체험 명시적 동의) ➔ `📸 사진 공유` (4관문).
+   - **👻 귀신비서 & 마스터 대본집(`src/data/ghost_secretary_playbook.json` v1.3.1)**:
+     - 첫인사 별명 등록(`ask_nickname_first` ➔ `🪪 귀신계 여권(나)` 자동 각인) + JS 실측(시간대·해상도·CPU 코어·배터리) 기반 매운맛 콜드리딩 점괘(`ghostSecretaryEngine.ts`).
+     - 부품 구매처/쇼핑몰 링크 요구 시 절대 거절 및 외부 AI 바톤터치 방어, 급한 유저 채팅 응대(스킵 버튼 없음), 홀림 세팅 퀘스트 3종, Wave 2~4 로드맵 희망 답변, 영역 ⑦ 보안·요금·환불 FAQ 3종(손보기 명령어 가로채기 방지 가드 포함), 미등록 질문(`unmatched_questions`) 자동 포집.
+     - 귀신비서 채팅에서 파일·사진 검색 요청(`onJumpToSearch`) 시 `👻 귀신검색` 탭 이동과 동시에 중형 귀신검색창(`?preview=legacy&ghostSearchWindow=medium&q=...`)이 즉시 열려 검색 결과가 바로 노출되도록 직결(`41d2092`).
+   - **🪪 귀신계 여권 (관계도 꼬리표 폐지 & 실명 원칙 & 모바일 징검다리 스캔 & Supabase Production 적용 완료)**:
+     - 관계도 꼬리표(`와이프`, `아들`, `처남(민수)` 등) 및 관계 칩 버튼을 전면 폐지하고, 데모 데이터의 `roomPersonas`까지 실제 이름(`백은숙`, `한치우`, `한지우`, `한천우`, `한민수`, `박준호` / 본인만 별명 `'멀린'` + 실명 `'한진욱'` 세트)으로 100% 통일(`07e8d80`).
+     - 모바일 단독(무료) 환경에서 `executeMobileSteppingStoneScan`(`nextMobileScanWindow`: `100 ➔ 300 ➔ 500장`) 징검다리 스캔 루프를 스토어 스캔 진입(`useSaySeeStore.startOnboardingIndexing`) 및 여권 진입(`MonsterStandardChatColumn.tsx`)에 직결하고, 1차 여권 발급 직후 남은 옛날 사진 스캔 시점(`"지금 천천히 돌려줘 (30분 뒤 안내)"` vs `"저녁에 쉴 때 조용히 해줘"`) 선택권을 자동 제안하도록 완결(`07e8d80`).
+     - `supabase/ghosti_zero_cloud_schema.sql` 하단 `ghost_passports`(128차원 얼굴 벡터 + 10KB 미니 썸네일 포함) 및 `unmatched_questions` DDL을 멀린님께서 Supabase Production SQL Editor에서 직접 실행 완료(`Success. No rows returned`).
+   - **👻 귀신검색창 3단 변신 (`small 520×380` / `medium 960×640` / `large 1440×900`) & 데몬 프레임리스 팝업 동기화**:
+     - 기존 웹 `찾기`(`?preview=legacy`) UI·기능·버튼을 100% 그대로 승계하는 `?ghostSearchWindow=small|medium|large` 전용 프레임리스 라우트 구축(`da929da`).
+     - 비서실 정본 `universal_z_core/seq_paste_daemon.py`(`build_ghost_search_window_url`, `_open_ghost_search_window_popup`, 30일 쿼터 주석·출력 통일) 동기화 및 `--test-quota` (`ALL PASS`) 확인.
+   - **⚡ 원패스 스캔 성능 등급 분류 (`scanPerformanceTier.ts` & `plugin_ghosti_os.py`)**:
+     - 저사양(`코어 <= 4 OR RAM <= 8GB OR HDD`) vs 고성능(`코어 >= 6 AND RAM > 8GB AND SSD`, Windows `DeviceIoControl` `StorageDeviceSeekPenaltyProperty` 0.01초 판정) 분기 및 500MB 메모리 상한 안전망 유지.
+2. **[노션 QA 2-Track 운영 명세 수립 & 기존 알바생 미션 카드 6건 등록·정비 완료]**:
+   - 11월 16일 합류 예정 신규 요원(한소희님, `[UX]`)과 기존 요원(해나라/조은호님, `[로직]`) 2-Track 운영 명세서(`docs/GHOSTI_QA_TWO_TRACK_OPERATION_SPEC.md`) 및 전사 온보딩 앱 소개 가이드(`D:\Secretary\docs\파트_1\Ghosti_귀신같이\GHOSTI_APP_INTRO_AND_VISION_GUIDE.md`) 작성 완료.
+   - 노션 `[테스트 미션]` 컬럼의 귀신같이 카드 6건(`411f9ffd...`, `412f9ffd...` 5종)을 v1.3 최신 메뉴명·체크리스트로 업데이트하고 기존 카드 4건에 v1.3 메뉴 이동 안내 콜아웃을 추가 완료.
 
 ### 2. 다음 세션 최우선 인계 사항 (Next Action)
-1. **내일 해나라님 4호기 출근 즉시 테스트 미션 검증**:
-   - 웹 접속 시 Z-코어 v2.3.4 자동 업데이트 및 `[✋ 손보기]` 대화창에서 원터치 최적화 실행 시 CPU 부하 급감 및 잔존 애드웨어 0건 여부 확인.
-   - "속도 개선된거야?" 질문 시 실시간 전·후 비교 브리핑 및 크롬 탭 닫기 가이드 표출 확인.
-2. 실시간 감시병(`python z_core_watcher.py --watch`) 모니터링 유지.
+1. **노션 QA 테스터(해나라님) v1.3 미션 검증 모니터링**:
+   - `[발견된 버그]` 컬럼으로 이동하는 카드가 발생하는 즉시 단품 완결(Single-Piece Flow)로 패치·검증 후 `[재테스트 대기]`로 반환.
+2. **실시간 감시병(`python z_core_watcher.py --watch`, `IsDaemon=true`) 단일 유지**.
