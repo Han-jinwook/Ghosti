@@ -359,10 +359,26 @@ export const DesktopDashboard: React.FC = () => {
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(true);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
   const [superpowerStatus, setSuperpowerStatus] = useState<SuperpowerTrialStatus | null>(null);
+  /**
+   * [v1.3 · 공문 1611] 로컬 『👻 귀신검색창』 전용 화면 모드: ?ghostSearchWindow=small|medium|large
+   * - 사이드바·상단바 없이 기존 웹 「찾기」(구 ?preview=legacy 화면) 컴포넌트만 그대로 렌더 → 새 UI를 만들지 않고 100% 승계
+   * - Z-코어가 프레임리스 창(520×380 / 960×640 / 1440×900)으로 이 주소를 열면 창 폭에 맞춰 기존 반응형 레이아웃이 그대로 적용됨
+   */
+  const [ghostSearchWindowStage] = useState<'small' | 'medium' | 'large' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const v = new URLSearchParams(window.location.search).get('ghostSearchWindow');
+    return v === 'small' || v === 'medium' || v === 'large' ? v : null;
+  });
   const [isStage1MinimalPreview] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
+    if (new URLSearchParams(window.location.search).get('ghostSearchWindow')) return false;
     return !window.location.search.includes('preview=legacy');
   });
+  useEffect(() => {
+    if (!ghostSearchWindowStage) return;
+    setActiveLoungeType('personal');
+    setDesktopTab('dashboard');
+  }, [ghostSearchWindowStage, setActiveLoungeType, setDesktopTab]);
 
   const isAnySubscribed = useMemo(
     () =>
@@ -936,7 +952,7 @@ export const DesktopDashboard: React.FC = () => {
   return (
     <div className="min-h-screen flex bg-[#09090B] text-zinc-100">
       {/* ─────────────── [PC/데스크톱 lg+] 노션형 좌측 접이식 사이드바 (244px) ─────────────── */}
-      {!isSidebarCollapsed && (
+      {!isSidebarCollapsed && !ghostSearchWindowStage && (
         <aside className="hidden lg:block w-[258px] shrink-0 sticky top-0 h-screen z-40">
           {renderSidebarNavigationContent(false)}
         </aside>
@@ -959,7 +975,7 @@ export const DesktopDashboard: React.FC = () => {
       {/* ─────────────── 우측 메인 도화지(Canvas) 영역 ─────────────── */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* 상단 슬림 바: PC에서는 노션 브레드크럼 + 우상단 고정 앵커(문패/크레딧/테마), 모바일에서는 1줄 5대 라운지 탭 병행 */}
-        <header className="sticky top-0 z-30 backdrop-blur-xl">
+        <header className={`sticky top-0 z-30 backdrop-blur-xl ${ghostSearchWindowStage ? 'hidden' : ''}`}>
           <div
             className={`px-3.5 sm:px-5 md:px-7 py-2 flex flex-col gap-2 border-b transition-colors ${
               themeMode === 'light'

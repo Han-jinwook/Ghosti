@@ -9,12 +9,16 @@ import {
 import { SUMMON_HOLD_MS } from '../../services/ghostDojoEngine';
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
-import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
+
+/** 로컬 귀신검색창이 여는 주소와 동일 (기존 웹 「찾기」 화면 100% 승계 전용 모드) */
+export function ghostSearchWindowUrl(stage: GhostSearchStage): string {
+  return `/?preview=legacy&ghostSearchWindow=${stage}`;
+}
 
 /**
  * 👻 2관문 『귀신검색』 웹 메뉴 (v1.3 — 웹 검색 입력창 폐지)
  *  - STEP 1 소환술 3단 수련 → STEP 2 귀신검색 도장깨기(가상 모니터 시뮬레이터) → 마지막 미션(바탕화면에서 Ctrl+0)
- *  - 가상 모니터 안의 귀신검색창 = 기존 웹 「찾기」 화면(Stage1MinimalSearchPreview) 100% 그대로 승계, 3단 크기 변신
+ *  - 가상 모니터 안의 귀신검색창 = 기존 웹 「찾기」 화면(구 ?preview=legacy) 100% 그대로 승계 — 실제 창과 같은 주소를 실제 픽셀 크기로 띄워 반응형 그대로 적용
  *  - 크기·위치는 데몬 compute_ghost_search_window_3stage_rect 와 동일 규칙(ghostSearchWindowGeometry.ts)
  */
 
@@ -155,8 +159,13 @@ const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void }> = 
                   </button>
                 </div>
               </div>
-              <div className="h-[calc(100%-2rem)] overflow-auto" onMouseDown={(e) => e.stopPropagation()}>
-                <Stage1MinimalSearchPreview />
+              <div className="h-[calc(100%-2rem)]" onMouseDown={(e) => e.stopPropagation()}>
+                <iframe
+                  key={rect.stage}
+                  title="귀신검색창"
+                  src={ghostSearchWindowUrl(rect.stage)}
+                  className="w-full h-full border-0 bg-white"
+                />
               </div>
             </div>
           </div>
