@@ -51,6 +51,8 @@ import {
   canKnockToday,
   todayKey,
   decidePassportEntry,
+  executeMobileSteppingStoneScan,
+  buildMobileRemainingPhotosChoicePrompt,
   findScenario,
   renderPlaybookText,
   upsertPassportMember,
@@ -75,17 +77,60 @@ function secretaryOwnerEmail(): string {
   return useSaySeeStore.getState().merlinAuth?.email || '';
 }
 
-/** 홀림 퀘스트 마지막(차 안 음성검색 안내) 직후 → 🪪 귀신계 여권 진입 또는 업무용 PC 자동 패스 */
-function buildPassportEntryTurn(st: GhostSecretaryState): { text: string; nextState: GhostSecretaryState } {
-  const clusters = useSaySeeStore.getState().faceClusters || [];
+/** 홀림 퀘스트 마지막(차 안 음성검색 안내) 직후 → 🪪 귀신계 여권 진입 또는 업무용 PC 자동 패스 (모바일은 100→300→500장 징검다리 스캔 연결) */
+function buildPassportEntryTurn(
+  st: GhostSecretaryState,
+  isMobileEnv = false
+): { text: string; nextState: GhostSecretaryState } {
+  const state = useSaySeeStore.getState();
+  const clusters = state.faceClusters || [];
+  const photos = state.photos || [];
   const nickname = st.nickname || '';
-  if (decidePassportEntry(countUniqueFacePhotos(clusters), st.passportStep === 'done') === 'ask') {
+
+  let nextSt: GhostSecretaryState = { ...st };
+  let effectiveFacePhotos = countUniqueFacePhotos(clusters);
+
+  if (isMobileEnv) {
+    const orderedPhotos = photos
+      .filter((p) => !p.quarantined)
+      .slice()
+      .sort((a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0));
+    const totalMobilePhotos = Math.max(orderedPhotos.length, effectiveFacePhotos);
+    const faceFileSet = new Set<string>();
+    clusters
+      .filter((c) => !c.excludedAsPasserby)
+      .forEach((c) => (c.matchedPhotoFiles || []).forEach((f) => faceFileSet.add(f)));
+
+    const stepping = executeMobileSteppingStoneScan({
+      totalPhotoCount: totalMobilePhotos,
+      countFacesInWindow: (windowLimit) => {
+        const slice = orderedPhotos.slice(0, windowLimit);
+        const matchedInSlice = slice.filter(
+          (p) => faceFileSet.has(p.name) || (p.tags || []).some((t) => /인물|가족|얼굴|셀카/.test(t))
+        ).length;
+        if (matchedInSlice > 0) return matchedInSlice;
+        return windowLimit >= 100 ? effectiveFacePhotos : 0;
+      },
+      minFacesToStop: 1,
+    });
+    effectiveFacePhotos = Math.max(effectiveFacePhotos, stepping.foundFacesCount);
+    nextSt = {
+      ...nextSt,
+      mobileSteppingStoneScanned: stepping.scannedPhotos,
+      mobileRemainingOldPhotos: stepping.remainingOldPhotos,
+    };
+  }
+
+  if (decidePassportEntry(effectiveFacePhotos, st.passportStep === 'done') === 'ask') {
     const sc = findScenario('passport_ask_gender_age_humble');
-    return { text: renderPlaybookText(sc?.response || '', { nickname }), nextState: { ...st, passportStep: 'ask_hint' } };
+    return {
+      text: renderPlaybookText(sc?.response || '', { nickname }),
+      nextState: { ...nextSt, passportStep: 'ask_hint' },
+    };
   }
   return {
     text: `${nickname}님, 기본 세팅은 다 끝났어요! 이제 바로 아래 『👻 귀신검색』에서 10초 만에 직접 불러보는 마법을 따라 해볼까요?`,
-    nextState: { ...st, passportStep: 'skipped' },
+    nextState: { ...nextSt, passportStep: 'skipped' },
   };
 }
 
@@ -327,6 +372,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             followUpSuggestions: turn.followUps,
           },
         ];
+        if (turn.passportNaming && nextState.nickname && isMobileOrStore && !nextState.mobileRemainingScanChoice) {
+          const remainingPhotos =
+            nextState.mobileRemainingOldPhotos ??
+            Math.max(0, (useSaySeeStore.getState().photos || []).length - (nextState.mobileSteppingStoneScanned || 100));
+          const choicePrompt = buildMobileRemainingPhotosChoicePrompt(nextState.nickname, remainingPhotos);
+          if (choicePrompt) {
+            replies.push({
+              id: `secretary_mobile_remaining_${Date.now()}`,
+              role: 'assistant',
+              timestamp: nowTimeKo(),
+              sourceTab,
+              text: choicePrompt.text,
+              followUpSuggestions: choicePrompt.followUps,
+            });
+          }
+        }
         if (turn.clipboardText) {
           void navigator.clipboard?.writeText(turn.clipboardText).catch(() => {});
         }
@@ -346,7 +407,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
         }
         if (turn.scenarioId === 'quest_mobile_voice_search' && !nextState.passportStep) {
-          const entry = buildPassportEntryTurn(nextState);
+          const entry = buildPassportEntryTurn(nextState, isMobileOrStore);
           nextState = entry.nextState;
           replies.push({
             id: `secretary_passport_${Date.now()}`,

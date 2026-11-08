@@ -136,7 +136,7 @@ export interface FaceMemberCluster {
   passportEmail?: string;
   /** 인물별 독립 타임라인 바구니 (기준 연도 귀속 + 미래 바구니 자동 확장 + 5대 스타일 슬롯) */
   timelineBucket?: PersonTimelineBucketInfo;
-  /** 방별 독립 별명(Persona) 매핑 (예: 우리집='멀린', 처가(친정)='둘째사위', 학생방='지우짱') */
+  /** 방별 이름(Persona) 매핑 — 타인은 실명(예: '한민수', '백은숙') 통일, 나(본인)만 별명+실명('멀린' ↔ '한진욱') 세트 */
   roomPersonas?: RoomPersonaMap;
   /** 크로스-라운지 자율 진화 이력 (타 라운지에서 3중 족쇄·무언 교체로 진화해 전파된 내역) */
   crossLoungeEvolutionNote?: string;

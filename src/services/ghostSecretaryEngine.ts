@@ -204,6 +204,9 @@ export interface GhostSecretaryState {
   passportStep?: 'ask_hint' | 'naming' | 'done' | 'skipped';
   /** 모바일 옛날 사진 마저 스캔 시점 선택 (30분 뒤 안내 vs 저녁 유휴) */
   mobileRemainingScanChoice?: 'now_30min' | 'evening';
+  /** 모바일 징검다리 스캔 결과 (100 → 300 → 500장 탐색 창 및 남은 옛날 사진 수) */
+  mobileSteppingStoneScanned?: number;
+  mobileRemainingOldPhotos?: number;
 }
 
 export const GHOST_SECRETARY_STATE_KEY = 'ghosti_ghost_secretary_state_v1';
@@ -551,6 +554,77 @@ export function parsePassportNamingAnswer(text: string): PassportNamingResult {
 export const MOBILE_STEPPING_STONE_WINDOWS = [100, 300, 500] as const;
 export function nextMobileScanWindow(scannedSoFar: number): number | null {
   return MOBILE_STEPPING_STONE_WINDOWS.find((w) => w > scannedSoFar) ?? null;
+}
+
+export interface MobileSteppingStoneScanResult {
+  windowsTried: number[];
+  scannedPhotos: number;
+  foundFacesCount: number;
+  stoppedAtWindow: number;
+  remainingOldPhotos: number;
+  shouldAskRemainingChoice: boolean;
+}
+
+/**
+ * [v1.3 모바일 징검다리 스캔 루프]
+ * - 모바일 단독(무료) 환경에서 처음부터 수천 장을 한꺼번에 돌리지 않고,
+ *   nextMobileScanWindow(scanned)로 100장 → (미발견 시) 300장 → 500장 순서로 징검다리 탐색을 수행한다.
+ * - 인물 후보가 발견되거나 500장 상한에 도달하면 즉시 멈추고,
+ *   남은 사진(remainingOldPhotos)이 있으면 1차 여권 발급 직후 귀신비서가
+ *   "지금 천천히 찾아두고 약 30분 뒤에 알려드릴까요, 아니면 저녁에 쉬실 때 조용히 해둘까요?" 선택권을 제안한다.
+ */
+export function executeMobileSteppingStoneScan(params: {
+  totalPhotoCount: number;
+  countFacesInWindow: (windowLimit: number) => number;
+  minFacesToStop?: number;
+}): MobileSteppingStoneScanResult {
+  const total = Math.max(0, Math.floor(params.totalPhotoCount));
+  const minFaces = params.minFacesToStop ?? 1;
+  const windowsTried: number[] = [];
+  let scanned = 0;
+  let foundFaces = 0;
+  let stoppedWindow = 0;
+
+  while (true) {
+    const nextWin = nextMobileScanWindow(scanned);
+    if (nextWin === null) break;
+    stoppedWindow = nextWin;
+    windowsTried.push(nextWin);
+    const effectiveLimit = total > 0 ? Math.min(total, nextWin) : nextWin;
+    scanned = nextWin;
+    foundFaces = params.countFacesInWindow(effectiveLimit);
+    if (foundFaces >= minFaces) break;
+    if (total > 0 && effectiveLimit >= total) break;
+  }
+
+  const actualScanned = total > 0 ? Math.min(total, stoppedWindow || 100) : stoppedWindow || 100;
+  const remainingOldPhotos = Math.max(0, total - actualScanned);
+  return {
+    windowsTried,
+    scannedPhotos: actualScanned,
+    foundFacesCount: foundFaces,
+    stoppedAtWindow: stoppedWindow || 100,
+    remainingOldPhotos,
+    shouldAskRemainingChoice: remainingOldPhotos > 0,
+  };
+}
+
+/** 모바일에서 1차 여권 등록 직후 남은 옛날 사진 스캔 시점 선택 질문 생성 */
+export function buildMobileRemainingPhotosChoicePrompt(
+  nickname: string,
+  remainingPhotos: number
+): { scenarioId: string; text: string; followUps: string[] } | null {
+  if (remainingPhotos <= 0) return null;
+  const sc = findScenario('passport_mobile_remaining_photos_choice');
+  if (!sc) return null;
+  return {
+    scenarioId: sc.id,
+    text: renderPlaybookText(sc.response, {
+      nickname,
+      remaining_photos: remainingPhotos.toLocaleString('ko-KR'),
+    }),
+    followUps: ['지금 천천히 돌려줘 (30분 뒤 안내)', '저녁에 쉴 때 조용히 해줘'],
+  };
 }
 
 /** 첫 환영 문구: 별명이 없으면 대본집 ask_nickname_first, 있으면 별명 호칭 인사 */

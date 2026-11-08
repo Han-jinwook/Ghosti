@@ -164,6 +164,11 @@ import {
 } from '../services/conceptLexicon';
 import { loadMerlinAuth, toggleMerlinTier } from '../services/merlinAuth';
 import { loadSyncState, saveSyncPrefs } from '../services/syncEngine';
+import {
+  executeMobileSteppingStoneScan,
+  loadGhostSecretaryState,
+  saveGhostSecretaryState,
+} from '../services/ghostSecretaryEngine';
 
 export type ViewportLayout = 'mobile' | 'desktop';
 export type MobileTab = 'trial' | 'search' | 'trash' | 'settings' | 'share';
@@ -661,7 +666,7 @@ export function getActivePersonaForCluster(
  * [만국공통 귀신같이 여권(Ghosti Face Passport) & 인물별 독립 타임라인 바구니 + 다년도·다각도 자동 추출]
  * 1. 바구니 기준 연도(anchorCreationYear)는 방(Room)이 아닌 각 인물의 시드 최초 생성 연도(예: 기존 가족 2026년 vs 신규 합류 처가 식구 2029년)에 귀속!
  * 2. 성인 10년(2026~2017, 미래 2027~2036) / 미성년 5년(2026~2022, 미래 2027~2031) 바구니 자동 구성
- * 3. 이메일(Email ID) 기반 귀신같이 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 방별 별명(우리집 '멀린' ↔ 처가방 '둘째사위' ↔ 학생방 '지우짱')만 독립 매핑!
+ * 3. 이메일(Email ID) 기반 귀신같이 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 타인은 실제 이름(백은숙·한치우·한지우·한천우·한민수)으로 통일하고 '나(본인)'만 별명+이름 세트('멀린' ↔ '한진욱')로 매핑!
  */
 function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): FaceMemberCluster[] {
   const enriched = rawClusters.map((c) => {
@@ -720,12 +725,12 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '선글라스·역광'],
       };
       roomPersonas = {
-        personal: '은숙',
-        '우리집': '은숙',
-        '처가(친정)': '둘째딸(은숙)',
-        '본가(친가)': '큰며느리',
-        club: '은숙총무',
-        student: '은숙맘',
+        personal: '백은숙',
+        '우리집': '백은숙',
+        '처가(친정)': '백은숙',
+        '본가(친가)': '백은숙',
+        club: '백은숙',
+        student: '백은숙',
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
@@ -747,7 +752,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_5' || c.personKey === 'person_adult_male_host') {
-      // 멀린 (방장·대표님: 우리집='멀린', 처가(친정)='둘째사위', 동호회='멀린프로')
+      // 멀린 (나/본인: 별명 '멀린' + 실명 '한진욱' 세트 유지 — 관계 꼬리표 없이 별명·실명만 사용)
       passportEmail = 'merlin@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
@@ -761,14 +766,14 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       roomPersonas = {
         personal: '멀린',
         '우리집': '멀린',
-        '처가(친정)': '둘째사위',
-        '본가(친가)': '큰아들(진욱)',
-        club: '멀린프로',
-        student: '학부모(멀린)',
+        '처가(친정)': '한진욱',
+        '본가(친가)': '한진욱',
+        club: '멀린',
+        student: '한진욱',
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
-        '⛳ 동호·동창회방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%) ➔ 처가집 방("둘째사위 선글라스") 자동 전파됨';
+        '⛳ 동호·동창회방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%) ➔ 처가집 방("한진욱 선글라스") 자동 전파됨';
 
       if (!baseCuts.some((yc) => yc.year === 2023)) {
         extraCuts.push({
@@ -798,12 +803,12 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을'],
       };
       roomPersonas = {
-        personal: '치우',
-        '우리집': '치우',
-        '처가(친정)': '큰외손자(치우)',
-        '본가(친가)': '큰손자(치우)',
-        club: '치우',
-        student: '치우선배',
+        personal: '한치우',
+        '우리집': '한치우',
+        '처가(친정)': '한치우',
+        '본가(친가)': '한치우',
+        club: '한치우',
+        student: '한치우',
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
@@ -837,12 +842,12 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '야간·실내'],
       };
       roomPersonas = {
-        personal: '지우',
-        '우리집': '지우',
-        '처가(친정)': '외손녀(지우)',
-        '본가(친가)': '손녀(지우)',
-        club: '지우',
-        student: '지우짱',
+        personal: '한지우',
+        '우리집': '한지우',
+        '처가(친정)': '한지우',
+        '본가(친가)': '한지우',
+        club: '한지우',
+        student: '한지우',
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
@@ -876,12 +881,12 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         filledStyleSlots: ['정면·선명', '야외·노을'],
       };
       roomPersonas = {
-        personal: '천우',
-        '우리집': '천우',
-        '처가(친정)': '막내외손자(천우)',
-        '본가(친가)': '막내손자(천우)',
-        club: '천우',
-        student: '천우',
+        personal: '한천우',
+        '우리집': '한천우',
+        '처가(친정)': '한천우',
+        '본가(친가)': '한천우',
+        club: '한천우',
+        student: '한천우',
         ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
@@ -1014,18 +1019,18 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         filledStyleSlots: ['정면·선명', '측면·미소'],
       },
       roomPersonas: {
-        personal: '처남(민수)',
-        '우리집': '처남(민수)',
-        '처가(친정)': '막내아들(민수)',
-        '본가(친가)': '사돈총각',
-        club: '민수프로',
-        student: '외삼촌',
+        personal: '한민수',
+        '우리집': '한민수',
+        '처가(친정)': '한민수',
+        '본가(친가)': '한민수',
+        club: '한민수',
+        student: '한민수',
       },
       crossLoungeEvolutionNote:
         '🗓️ 2029년 신규 합류 멤버 — 기존 26년 가족(2026~2017)과 섞여 있어도 본인 고유 바구니(2029~2020)로 충돌 없이 독립 작동!',
       registeredName: '',
       relationshipTag: '',
-      suggestedChip: '#처남·사촌',
+      suggestedChip: '',
       roleHintKo: '29년 합류 · 동반 새 멤버',
       appearanceLabelKo: '치우·천우·지우와 한 프레임 6회 동반 등장한 미등록 가족/처가 식구',
       isPasserbyCandidate: false,
@@ -2206,12 +2211,57 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setPcAgentPairedMobile: (pcAgentPairedMobile) => set({ pcAgentPairedMobile }),
 
   startOnboardingIndexing: async () => {
-    const { photos, onboardingTargetCount, onboardingUseRealGpu, onboardingRunning } = get();
+    const {
+      photos,
+      faceClusters,
+      onboardingTargetCount,
+      onboardingUseRealGpu,
+      onboardingRunning,
+      isStoreAppMode,
+      layout,
+    } = get();
     if (onboardingRunning) return;
     cancelOnboardingFlag = false;
     set({ onboardingRunning: true, showOnboarding: true });
 
-    const targets = photos.filter((p) => !p.quarantined).slice(0, onboardingTargetCount);
+    const nonQuarantined = photos.filter((p) => !p.quarantined);
+    const isMobileEnv =
+      isStoreAppMode ||
+      layout === 'mobile' ||
+      (typeof window !== 'undefined' &&
+        (Boolean(
+          (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+        ) ||
+          /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+          window.innerWidth < 860));
+
+    let effectiveCap = onboardingTargetCount;
+    if (isMobileEnv) {
+      const faceFileSet = new Set<string>();
+      (faceClusters || [])
+        .filter((c) => !c.excludedAsPasserby)
+        .forEach((c) => (c.matchedPhotoFiles || []).forEach((f) => faceFileSet.add(f)));
+
+      const stepping = executeMobileSteppingStoneScan({
+        totalPhotoCount: nonQuarantined.length,
+        countFacesInWindow: (windowLimit) => {
+          const slice = nonQuarantined.slice(0, windowLimit);
+          return slice.filter(
+            (p) => faceFileSet.has(p.name) || (p.tags || []).some((t) => /인물|가족|얼굴|셀카/.test(t))
+          ).length;
+        },
+        minFacesToStop: 1,
+      });
+      effectiveCap = Math.min(onboardingTargetCount, stepping.stoppedAtWindow);
+      const secSt = loadGhostSecretaryState();
+      saveGhostSecretaryState({
+        ...secSt,
+        mobileSteppingStoneScanned: stepping.scannedPhotos,
+        mobileRemainingOldPhotos: stepping.remainingOldPhotos,
+      });
+    }
+
+    const targets = nonQuarantined.slice(0, effectiveCap);
     await runOnboardingIndexingPipeline({
       targetPhotos: targets,
       useRealWebGpuVision: onboardingUseRealGpu,

@@ -2159,7 +2159,7 @@ export const DesktopDashboard: React.FC = () => {
             <div className="flex flex-col gap-2.5">
               <label className="flex flex-col gap-1">
                 <span className="text-[11.5px] text-zinc-300 font-bold">
-                  이 방에서 쓰실 별명 또는 실명 (예: 박총무, 김사장, 둘째사위)
+                  이 방에서 쓰실 별명 또는 실명 (예: 한민수, 박준호)
                 </span>
                 <input
                   type="text"

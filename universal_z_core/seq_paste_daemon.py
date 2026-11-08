@@ -1455,9 +1455,9 @@ def normalize_feature_id(raw_key: str) -> str:
 
 def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
     """
-    [개별 기능별 첫 사용 후 7일 무제한 ➔ 만료된 기능만 일일 성공 3회 제한 검사]
-    - 아직 개봉 안 했거나(UNOPENED), 첫 사용 후 7일 이내(ACTIVE_7D)이거나, 유료 구독자(SUBSCRIBED)이면 무조건 True!
-    - 해당 기능의 7일 무제한이 만료(EXPIRED_7D)되었고 오늘 만료 기능 합산 성공 횟수가 이미 3회에 도달한 경우에만 False 반환!
+    [개별 기능별 첫 사용 후 30일 무제한 ➔ 만료된 기능만 일일 성공 3회 제한 검사]
+    - 아직 개봉 안 했거나(UNOPENED), 첫 사용 후 30일 이내(ACTIVE_30D)이거나, 유료 구독자(SUBSCRIBED)이면 무조건 True!
+    - 해당 기능의 30일 무제한이 만료(EXPIRED_30D)되었고 오늘 만료 기능 합산 성공 횟수가 이미 3회에 도달한 경우에만 False 반환!
     """
     feat_id = normalize_feature_id(raw_feature_key)
     ledger_path = _MERLIN_APPDATA / "superpower_trial_ledger.json"
@@ -1502,9 +1502,9 @@ def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
 def complete_feature_action_success(raw_feature_key: str) -> dict:
     """
     [오직 '실제 액션이 성공 완수된 시점'에만 호출!]
-    1) 해당 기능이 미개봉(UNOPENED)이면 -> 지금 이 순간부터 해당 기능의 7일 무제한 타이머 개시! (일일 3회 차감 안 함)
-    2) 해당 기능이 7일 무제한 진행 중(ACTIVE_7D)이면 -> 횟수 차감 없이 통과!
-    3) 해당 기능의 7일 무제한이 만료(EXPIRED_7D)되었으면 -> 오늘 일일 무료 횟수(3회 한도)에서 1회 차감!
+    1) 해당 기능이 미개봉(UNOPENED)이면 -> 지금 이 순간부터 해당 기능의 30일 무제한 타이머 개시! (일일 3회 차감 안 함)
+    2) 해당 기능이 30일 무제한 진행 중(ACTIVE_30D)이면 -> 횟수 차감 없이 통과!
+    3) 해당 기능의 30일 무제한이 만료(EXPIRED_30D)되었으면 -> 오늘 일일 무료 횟수(3회 한도)에서 1회 차감!
     """
     feat_id = normalize_feature_id(raw_feature_key)
     record_feature_telemetry(raw_feature_key)
@@ -1553,7 +1553,7 @@ def complete_feature_action_success(raw_feature_key: str) -> dict:
             ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
             return {"status": "ACTIVE_30D", "feature_id": feat_id, "days_left": rem_days, "consumed_daily": False, "daily_remaining": 3}
 
-        # Case 3: 해당 기능의 7일 무제한이 만료된 상태 -> 오늘 성공 횟수 +1 차감!
+        # Case 3: 해당 기능의 30일 무제한이 만료된 상태 -> 오늘 성공 횟수 +1 차감!
         du = m_info.setdefault("dailyUsage", {})
         used_today = int(du.get(today, 0)) + 1
         du[today] = used_today
@@ -1593,6 +1593,68 @@ def record_feature_telemetry(feature_key: str) -> None:
             pass
 
     threading.Thread(target=_save, daemon=True).start()
+
+
+def build_ghost_search_window_url(stage: str = "small", query: str = "", base_url: str | None = None) -> str:
+    """로컬 3단 변신 『👻 귀신검색창』 전용 라우트 URL 생성 (?preview=legacy&ghostSearchWindow=small|medium|large&q=...)"""
+    from urllib.parse import quote
+    norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
+    root_u = (base_url or GHOSTI_WEB_URL).rstrip("/")
+    url = f"{root_u}/?preview=legacy&ghostSearchWindow={norm_stage}"
+    q_clean = (query or "").strip()
+    if q_clean:
+        url += f"&q={quote(q_clean)}"
+    return url
+
+
+def _open_ghost_search_window_popup(stage: str = "small", query: str = "", anchor_x: int | None = None, anchor_y: int | None = None) -> dict:
+    """
+    [v1.3 확정 — 로컬 『👻 귀신검색창』 프레임리스 앱 창(Edge/Chrome --app 모드) 즉시 호출]:
+    compute_ghost_search_window_3stage_rect로 모니터 경계 클램핑된 정확한 좌표·크기를 계산하여
+    기존 웹 「찾기」(?preview=legacy) UI가 100% 그대로 담긴 귀신검색창을 띄웁니다.
+    """
+    pt = wintypes.POINT()
+    if anchor_x is None or anchor_y is None:
+        u32.GetCursorPos(ctypes.byref(pt))
+        ax, ay = pt.x, pt.y
+    else:
+        ax, ay = int(anchor_x), int(anchor_y)
+    work_area = _get_monitor_workarea_for_point(ax, ay)
+    rect = compute_ghost_search_window_3stage_rect(stage, ax, ay, work_area=work_area)
+    target_url = build_ghost_search_window_url(str(rect["stage"]), query=query)
+    record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
+
+    browser_candidates = [
+        Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+        Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+        Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+        Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+    ]
+    launched = False
+    for b_exe in browser_candidates:
+        if b_exe.exists():
+            try:
+                subprocess.Popen(
+                    [
+                        str(b_exe),
+                        f"--app={target_url}",
+                        f"--window-size={rect['width']},{rect['height']}",
+                        f"--window-position={rect['x']},{rect['y']}",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=0x08000000,
+                )
+                launched = True
+                break
+            except Exception:
+                pass
+    if not launched:
+        try:
+            os.startfile(target_url)
+        except Exception:
+            pass
+    return {"url": target_url, "rect": rect, "launched": launched}
 
 
 def _open_ghosti_web() -> None:
@@ -1860,6 +1922,24 @@ def _toast_worker() -> None:
                             _close_win()
                             execute_undo_snapshot(set_clipboard_text)
 
+                        def _on_ghost_search_win_click(_e=None):
+                            q_now = s_entry.get().strip()
+                            _close_win()
+                            _open_ghost_search_window_popup("medium" if q_now else "small", query=q_now)
+
+                        gsearch_btn = tk.Label(
+                            top_search_bar,
+                            text="👻귀신검색창",
+                            fg="#0B1120",
+                            bg="#2DD4BF",
+                            padx=6,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        gsearch_btn.pack(side="right", padx=(4, 0))
+                        gsearch_btn.bind("<Button-1>", _on_ghost_search_win_click)
+
                         clear_btn = tk.Label(
                             top_search_bar,
                             text="🧹비우기",
@@ -2124,9 +2204,7 @@ def _toast_worker() -> None:
                                 q_raw = s_entry.get().strip()
                                 _close_win()
                                 if q_raw:
-                                    set_clipboard_text(q_raw)
-                                    time.sleep(0.03)
-                                    tap_key_combo([VK_CONTROL], VK_V)
+                                    _open_ghost_search_window_popup("medium", query=q_raw)
 
                         s_entry.bind("<Button-1>", _on_entry_click)
                         s_entry.bind("<KeyRelease>", _on_search_key)
@@ -5104,7 +5182,7 @@ Write-Output $res.Text
 
 def run_quota_self_test() -> int:
     """
-    [멀린님 지시 반영: 7일을 기다리지 않고 1초 만에 검증하는 기능별 7일 타이머 & 만료 기능 성공 3회 제한 자동 테스트]
+    [멀린님 지시 반영: 30일을 기다리지 않고 1초 만에 검증하는 기능별 30일 타이머 & 만료 기능 성공 3회 제한 자동 테스트]
     실행: python tools/seq_paste_daemon.py --test-quota
     """
     if hasattr(sys.stdout, "reconfigure"):
@@ -5119,14 +5197,14 @@ def run_quota_self_test() -> int:
         assert ok and st == "UNOPENED", f"Expected UNOPENED, got {ok}, {st}"
         print(f"   ✅ 2번(한영성형) 초기 상태: {st} (미개봉 확인)")
 
-        print("🧪 [2단계] 2번(한영성형) 첫 실제 성공 완수 -> 7일 무제한 타이머 개시 검증...")
+        print("🧪 [2단계] 2번(한영성형) 첫 실제 성공 완수 -> 30일 무제한 타이머 개시 검증...")
         res1 = complete_feature_action_success("superpower_key_2")
         assert res1["status"] == "FIRST_OPENED_30D" and res1["consumed_daily"] is False
         ok2, st2 = check_feature_quota_allowed("superpower_key_2")
         assert ok2 and st2.startswith("ACTIVE_D-")
         print(f"   ✅ 2번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
 
-        print("🧪 [3단계] 2번 기능을 8일 전 사용으로 강제 타임머신 만료 조작 (4번 줄바꿈정리는 미개봉 유지)...")
+        print("🧪 [3단계] 2번 기능을 31일 전 사용으로 강제 타임머신 만료 조작 (4번 줄바꿈정리는 미개봉 유지)...")
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         hwid = _get_machine_hwid_local()
         ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (31 * 86400)
@@ -5145,13 +5223,13 @@ def run_quota_self_test() -> int:
         assert not ok_4th, "4th attempt on expired feature must be blocked!"
         print(f"   ✅ 4번째 만료 기능 차단 확인: {msg_4th}")
 
-        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 4번(줄바꿈정리)'은 7일 무제한으로 즉시 열리는지 검증!")
+        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 4번(줄바꿈정리)'은 30일 무제한으로 즉시 열리는지 검증!")
         ok_unopened, st_unopened = check_feature_quota_allowed("superpower_key_4")
         assert ok_unopened and st_unopened == "UNOPENED"
         r_unopened = complete_feature_action_success("superpower_key_4")
         assert r_unopened["status"] == "FIRST_OPENED_30D" and r_unopened["consumed_daily"] is False
-        print(f"   ✅ 미개봉 4번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 7일 무제한 즉시 개시!)")
-        print("\n🎉 [ALL PASS] 기능별 7일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
+        print(f"   ✅ 미개봉 4번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 30일 무제한 즉시 개시!)")
+        print("\n🎉 [ALL PASS] 기능별 30일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
         return 0
     finally:
         if backup_bytes is not None:
