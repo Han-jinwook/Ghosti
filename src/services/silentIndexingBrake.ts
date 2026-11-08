@@ -29,6 +29,7 @@
 
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 import type { PhotoItem } from '../types/saysee';
+import type { ScanPerformanceTier } from './scanPerformanceTier';
 
 export type IndexingSpeedMode = 'silent' | 'turbo';
 export type UserActivityState = 'active' | 'idle';
@@ -62,6 +63,8 @@ export interface HardwareProtectionStatus {
   thermalOrBatteryPaused: boolean;
   /** 일시정지 사유 (있을 경우) */
   pauseReason: string | null;
+  /** [v1.3 마감] Z-코어 실측 성능 등급: 'high'면 무소음 모드에서도 멈칫 없이 고속 스캔, 'low'면 스텔스 스로틀 (scanPerformanceTier.ts 기준) */
+  performanceTier?: ScanPerformanceTier;
 }
 
 export interface SilentIndexingBrakeSnapshot {
@@ -242,6 +245,9 @@ class SilentIndexingBrakeManager {
         }
         if (typeof json.allowedIndexingCores === 'number') {
           this.state.hardwareGuard.allowedIndexingCores = json.allowedIndexingCores;
+        }
+        if (json.performanceTier === 'high' || json.performanceTier === 'low') {
+          this.state.hardwareGuard.performanceTier = json.performanceTier;
         }
         this.state.hardwareGuard.threadPriorityBelowNormal = true;
         this.emit();
@@ -478,7 +484,8 @@ class SilentIndexingBrakeManager {
     }
 
     // 터보 모드([⚡ 지금 전체 고속 정리])일 때도 스레드 양보(16ms) 및 50% 코어 캡 준수
-    if (this.state.speedMode === 'turbo') {
+    // [v1.3 마감] 고성능 PC(코어 6+ · RAM 8GB 초과 · SSD)는 무소음 모드에서도 멈칫 없이 같은 고속 경로로 처리 (저사양만 아래 스텔스 스로틀)
+    if (this.state.speedMode === 'turbo' || this.state.hardwareGuard.performanceTier === 'high') {
       if (fileIndex % 4 === 0) {
         await new Promise((r) => setTimeout(r, TURBO_YIELD_MS));
       }

@@ -57,7 +57,11 @@ import {
   type GhostSecretaryState,
   type PassportNamingResult,
 } from '../services/ghostSecretaryEngine';
-import { pushGhostPassportsToCloud, pullGhostPassportsFromCloud } from '../services/ghostPassportSync';
+import {
+  pushGhostPassportsToCloud,
+  pullGhostPassportsFromCloud,
+  buildPassportExtrasFromClusters,
+} from '../services/ghostPassportSync';
 import { rankPassportCandidates, countUniqueFacePhotos } from './GhostPassportCandidatesPanel';
 
 /** [v1.3] 귀신비서 점괘 직후 이어지는 1클릭 검진 문구 — 기존 손보기 라우터가 처리하는 문장과 동일해야 함 */
@@ -90,17 +94,28 @@ async function applyPassportNaming(parsed: PassportNamingResult, nickname: strin
   const store = useSaySeeStore.getState();
   const ranked = rankPassportCandidates(store.faceClusters || []);
   let book = loadGhostPassportBook();
+  const named: Array<{ name: string; seedVecPreview?: number[]; avatarUrl?: string; cropUrl?: string }> = [];
   if (parsed.selfIndex !== undefined && ranked[parsed.selfIndex - 1]) {
-    await store.registerFaceMember(ranked[parsed.selfIndex - 1].clusterId, nickname, '');
+    const selfCluster = ranked[parsed.selfIndex - 1];
+    await store.registerFaceMember(selfCluster.clusterId, nickname, '');
     book = setPassportSelf(book, nickname);
+    named.push({ name: (book.self?.realName || nickname).trim(), seedVecPreview: selfCluster.seedVecPreview, avatarUrl: selfCluster.avatarUrl, cropUrl: selfCluster.cropUrl });
   }
   for (const n of parsed.names) {
     const cluster = ranked[n.index - 1];
-    if (cluster) await store.registerFaceMember(cluster.clusterId, n.realName, '');
+    if (cluster) {
+      await store.registerFaceMember(cluster.clusterId, n.realName, '');
+      named.push({ name: n.realName, seedVecPreview: cluster.seedVecPreview, avatarUrl: cluster.avatarUrl, cropUrl: cluster.cropUrl });
+    }
     book = upsertPassportMember(book, n.realName);
   }
   saveGhostPassportBook(book);
-  void pushGhostPassportsToCloud(secretaryOwnerEmail(), isMobileVoiceEnvironment() ? 'mobile' : 'pc');
+  // [v1.3 마감 #4-4] 클러스터에 128차원 벡터·data: 썸네일이 있으면 함께 동기화 (없으면 이름만, null 안전)
+  void pushGhostPassportsToCloud(
+    secretaryOwnerEmail(),
+    isMobileVoiceEnvironment() ? 'mobile' : 'pc',
+    buildPassportExtrasFromClusters(named)
+  );
 }
 
 interface MonsterStandardChatColumnProps {

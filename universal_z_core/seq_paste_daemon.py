@@ -1471,21 +1471,26 @@ def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
             return True, "UNOPENED"
         if m_info.get("isSubscribed"):
             return True, "SUBSCRIBED"
+        if m_info.get("trialOptInStatus") == "ACTIVE_30D" and m_info.get("trialOptInTs"):
+            opt_elapsed = (time.time() - float(m_info["trialOptInTs"])) / 86400.0
+            if opt_elapsed < 30.0:
+                rem_opt = max(1, int(round(30.0 - opt_elapsed + 0.49)))
+                return True, f"ACTIVE_D-{rem_opt}"
         feat_trials = m_info.get("featureTrials", {})
         f_entry = feat_trials.get(feat_id)
         if not isinstance(f_entry, dict) or not f_entry.get("firstUsedTs"):
             return True, "UNOPENED"
         elapsed_days = (time.time() - float(f_entry["firstUsedTs"])) / 86400.0
-        if elapsed_days < 7.0:
-            rem_days = max(1, int(round(7.0 - elapsed_days + 0.49)))
+        if elapsed_days < 30.0:
+            rem_days = max(1, int(round(30.0 - elapsed_days + 0.49)))
             return True, f"ACTIVE_D-{rem_days}"
-        # 7일 만료된 기능인 경우: 오늘 만료 기능 합산 사용량 확인
+        # 30일 만료된 기능인 경우: 오늘 만료 기능 합산 사용량 확인
         today = datetime.date.today().isoformat()
         used_today = int(m_info.get("dailyUsage", {}).get(today, 0))
         if used_today >= 3:
             unopened_cnt = sum(1 for fk in SUPERPOWER_12_FEATURES if fk not in feat_trials)
             msg = (
-                f"👻 오늘 만료 기능 무료(3/3회) 소진! (미개봉 {unopened_cnt}개는 지금도 7일 무제한!) "
+                f"👻 오늘 만료 기능 무료(3/3회) 소진! (미개봉 {unopened_cnt}개는 지금도 30일 무제한!) "
                 f"[내 기기 통합 월 3,900원] 구독 시 전 기능 평생 무제한"
             )
             return False, msg
@@ -1527,9 +1532,9 @@ def complete_feature_action_success(raw_feature_key: str) -> dict:
         feat_trials = m_info.setdefault("featureTrials", {})
         f_entry = feat_trials.get(feat_id)
 
-        # Case 1: 생애 첫 성공 사용! -> 지금부터 이 기능만 7일 무제한 타이머 시작!
+        # Case 1: 생애 첫 성공 사용! -> 지금부터 이 기능만 30일 무제한 타이머 시작!
         if not isinstance(f_entry, dict) or not f_entry.get("firstUsedTs"):
-            exp_dt = now_dt + datetime.timedelta(days=7)
+            exp_dt = now_dt + datetime.timedelta(days=30)
             feat_trials[feat_id] = {
                 "featureName": SUPERPOWER_12_FEATURES.get(feat_id, feat_id),
                 "firstUsedTs": now_ts,
@@ -1538,15 +1543,15 @@ def complete_feature_action_success(raw_feature_key: str) -> dict:
                 "successCount": 1,
             }
             ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
-            return {"status": "FIRST_OPENED_7D", "feature_id": feat_id, "days_left": 7, "consumed_daily": False, "daily_remaining": 3}
+            return {"status": "FIRST_OPENED_30D", "feature_id": feat_id, "days_left": 30, "consumed_daily": False, "daily_remaining": 3}
 
-        # Case 2: 이미 개봉된 기능 -> 7일 경과 여부 판정
+        # Case 2: 이미 개봉된 기능 -> 30일 경과 여부 판정
         f_entry["successCount"] = int(f_entry.get("successCount", 0)) + 1
         elapsed_days = (now_ts - float(f_entry["firstUsedTs"])) / 86400.0
-        if elapsed_days < 7.0:
-            rem_days = max(1, int(round(7.0 - elapsed_days + 0.49)))
+        if elapsed_days < 30.0:
+            rem_days = max(1, int(round(30.0 - elapsed_days + 0.49)))
             ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
-            return {"status": "ACTIVE_7D", "feature_id": feat_id, "days_left": rem_days, "consumed_daily": False, "daily_remaining": 3}
+            return {"status": "ACTIVE_30D", "feature_id": feat_id, "days_left": rem_days, "consumed_daily": False, "daily_remaining": 3}
 
         # Case 3: 해당 기능의 7일 무제한이 만료된 상태 -> 오늘 성공 횟수 +1 차감!
         du = m_info.setdefault("dailyUsage", {})
@@ -5116,7 +5121,7 @@ def run_quota_self_test() -> int:
 
         print("🧪 [2단계] 2번(한영성형) 첫 실제 성공 완수 -> 7일 무제한 타이머 개시 검증...")
         res1 = complete_feature_action_success("superpower_key_2")
-        assert res1["status"] == "FIRST_OPENED_7D" and res1["consumed_daily"] is False
+        assert res1["status"] == "FIRST_OPENED_30D" and res1["consumed_daily"] is False
         ok2, st2 = check_feature_quota_allowed("superpower_key_2")
         assert ok2 and st2.startswith("ACTIVE_D-")
         print(f"   ✅ 2번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
@@ -5124,7 +5129,7 @@ def run_quota_self_test() -> int:
         print("🧪 [3단계] 2번 기능을 8일 전 사용으로 강제 타임머신 만료 조작 (4번 줄바꿈정리는 미개봉 유지)...")
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         hwid = _get_machine_hwid_local()
-        ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (8 * 86400)
+        ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (31 * 86400)
         ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
 
         print("🧪 [4단계] 만료된 2번 기능 3회 연속 성공 차감 검증 (1회 -> 2회 -> 3회)...")
@@ -5144,7 +5149,7 @@ def run_quota_self_test() -> int:
         ok_unopened, st_unopened = check_feature_quota_allowed("superpower_key_4")
         assert ok_unopened and st_unopened == "UNOPENED"
         r_unopened = complete_feature_action_success("superpower_key_4")
-        assert r_unopened["status"] == "FIRST_OPENED_7D" and r_unopened["consumed_daily"] is False
+        assert r_unopened["status"] == "FIRST_OPENED_30D" and r_unopened["consumed_daily"] is False
         print(f"   ✅ 미개봉 4번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 7일 무제한 즉시 개시!)")
         print("\n🎉 [ALL PASS] 기능별 7일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
         return 0

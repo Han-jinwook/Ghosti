@@ -296,7 +296,7 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
     machine_hwid: 'sha256_local_pc_device',
     account_id: accountId,
     trial_status: isSubscribed ? 'SUBSCRIBED' : 'NOT_STARTED',
-    trial_days_left: isSubscribed ? 9999 : 7,
+    trial_days_left: isSubscribed ? 9999 : 30, // [v1.3 마감] 체험 기간 30일 전사 통일
     started_at: null,
     expires_at: null,
     is_subscribed: isSubscribed,
@@ -326,13 +326,13 @@ export async function startSuperpowerTrialAction(accountId: string, isSubscribed
     // 로컬 폴백
   }
   const now = new Date();
-  const exp = new Date(now.getTime() + 7 * 86400 * 1000);
+  const exp = new Date(now.getTime() + 30 * 86400 * 1000); // [v1.3 마감] 30일 무제한 체험 (데몬 ACTIVE_30D 와 동일)
   const fallback: SuperpowerTrialStatus = {
     engine_running: true,
     machine_hwid: 'sha256_local_pc_device',
     account_id: accountId,
     trial_status: isSubscribed ? 'SUBSCRIBED' : 'ACTIVE',
-    trial_days_left: isSubscribed ? 9999 : 7,
+    trial_days_left: isSubscribed ? 9999 : 30,
     started_at: now.toISOString().slice(0, 19).replace('T', ' '),
     expires_at: exp.toISOString().slice(0, 19).replace('T', ' '),
     is_subscribed: isSubscribed,
@@ -586,7 +586,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     playBabyGhostChime();
     useSaySeeStore.setState({
       lastQuarantineToast:
-        '🎉 [귀신 초능력 팩 1주일 무료체험 시작!] 지금부터 7일간 Ctrl + 0 및 2어절 한영 오타 둔갑술이 작동합니다.',
+        '🎉 [모든 귀신 초능력 30일 무제한 무료체험 시작!] 지금부터 30일간 모든 귀신 초능력이 무제한으로 작동합니다. (카드 등록·자동 결제 없음)',
     });
   };
 
@@ -804,7 +804,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             <div className="flex items-center justify-between gap-1">
               <span className="text-[13.5px] font-extrabold">탭 2. 👻 귀신 부르는 Ctrl + 0 체험방</span>
               <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-black">
-                1주일 무료체험
+                30일 무료체험
               </span>
             </div>
             <span className="text-[11px] opacity-80">
@@ -1571,7 +1571,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       ✅ <strong className="text-white">✋ 귀신같이 손보기</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
                     </li>
                     <li>
-                      🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: 기기당 <strong className="text-amber-300">1주일(7일) 전 기능 무료체험</strong> 제공
+                      🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: <strong className="text-amber-300">30일 전 기능 무제한 무료체험</strong> 제공 (31일 차부터 매일 3회 평생 무료)
                     </li>
                   </ul>
                 </div>

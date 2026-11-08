@@ -164,7 +164,8 @@ export const FaceMemberInlineBar: React.FC<{
   } = useSaySeeStore();
 
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
-  const [newPersonDraft, setNewPersonDraft] = useState('처남(민수)');
+  // [v1.3 마감 · 실명 원칙] 더미 이름('처남(민수)') 기본값 제거 — 빈 칸에서 실제 이름을 직접 입력
+  const [newPersonDraft, setNewPersonDraft] = useState('');
   const [isCalloutExpanded, setIsCalloutExpanded] = useState(false);
 
   // 1. 👤 개인 라운지에서는 얼굴/여권 등록 박스 100% 제거 (완전 비노출!)
@@ -240,8 +241,10 @@ export const FaceMemberInlineBar: React.FC<{
     if (currentItem.kind === 'candidate') {
       await applySwarmFaceCandidate(currentItem.candidateId);
     } else {
-      const cleanName = newPersonDraft.trim() || '처남(민수)';
+      const cleanName = newPersonDraft.trim();
+      if (!cleanName) return; // 이름 없이 더미로 등록하지 않음
       await registerFaceMember(currentItem.cluster.clusterId, cleanName, '');
+      setNewPersonDraft('');
     }
   };
 
@@ -367,26 +370,13 @@ export const FaceMemberInlineBar: React.FC<{
             ) : (
               <>
                 <h3 className="font-headline-sm text-[16px] sm:text-[18px] text-white font-extrabold leading-snug">
-                  👋 새로 등장한 이 분의 별명을 적어주세요
+                  👋 새로 등장한 이 분의 실제 이름을 적어주세요
                 </h3>
                 <p className="font-body-sm text-[12px] text-zinc-400 truncate">
                   {currentItem.subText}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                  {['처남(민수)', '막내사위', '사촌', '조카'].map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => setNewPersonDraft(chip)}
-                      className={`px-2 py-0.5 rounded-md font-label-sm text-[11px] font-bold border transition-all ${
-                        newPersonDraft === chip
-                          ? 'bg-primary-container text-zinc-950 border-primary-container'
-                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
-                      }`}
-                    >
-                      #{chip}
-                    </button>
-                  ))}
+                  {/* [v1.3 마감] 관계 칩 버튼('#처남(민수)', '#막내사위', '#사촌', '#조카') 폐지 — 실명 직접 입력만 */}
                   <input
                     type="text"
                     value={newPersonDraft}
@@ -397,7 +387,7 @@ export const FaceMemberInlineBar: React.FC<{
                         void handleConfirmCurrent();
                       }
                     }}
-                    placeholder="별명 직접 입력"
+                    placeholder="실제 이름 입력 (예: 한치우)"
                     className="h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/15 focus:border-primary-container outline-none font-body-sm text-[12px] text-white w-36"
                   />
                 </div>
@@ -426,7 +416,7 @@ export const FaceMemberInlineBar: React.FC<{
           </button>
           <button
             type="button"
-            disabled={retroScanRunning}
+            disabled={retroScanRunning || (currentItem.kind !== 'candidate' && !newPersonDraft.trim())}
             onClick={() => void handleConfirmCurrent()}
             className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 disabled:opacity-50 text-zinc-950 font-label-md text-[13px] font-extrabold shadow-[0_0_16px_rgba(32,247,219,0.25)] transition-all"
           >

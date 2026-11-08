@@ -1926,8 +1926,12 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     for (const cand of unapplied) {
       await get().applySwarmFaceCandidate(cand.candidateId);
     }
-    for (const comp of unregisteredCompanions) {
-      await get().registerFaceMember(comp.clusterId, '처남(민수)', '');
+    // [v1.3 마감 · 관계 꼬리표 폐지 & 실명 원칙] 미등록 인물을 '처남(민수)' 같은 더미 이름으로 일괄 등록하던 구버전 로직 제거.
+    // 미등록 인물은 미등록 상태로 두고, 방장이 실명을 직접 입력하도록 안내만 한다.
+    if (unregisteredCompanions.length > 0) {
+      set({
+        lastQuarantineToast: `🪪 아직 이름이 없는 인물 ${unregisteredCompanions.length}명이 있어요. 얼굴을 눌러 실제 이름을 입력해 주세요.`,
+      });
     }
   },
 

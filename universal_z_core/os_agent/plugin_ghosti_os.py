@@ -1501,6 +1501,127 @@ BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
 THREAD_PRIORITY_BELOW_NORMAL = -1
 MAX_RAM_BYTES_500MB = 500 * 1024 * 1024
 
+# ---------------------------------------------------------------------------
+# ⚡ [v1.3 마감 공문 20261108_2321 #4-3] 원패스 스캔 성능 등급 기준 (웹 src/services/scanPerformanceTier.ts 와 동일 상수)
+#  - 저사양(스텔스 스로틀): 논리 코어 4개 이하 OR RAM 8GB 이하 OR 시스템 드라이브 HDD(비-SSD)
+#  - 고성능(멈칫 없이 즉시 고속 스캔): 코어 6개 이상 AND RAM 8GB 초과 AND SSD
+#  - 그 사이/판정 불가 값은 보수적으로 저사양 보호
+#  ※ 500MB 메모리 상한·20개 단위 GC 같은 하드웨어 안전망은 등급과 무관하게 유지 (레드팀 확정 안전망)
+# ---------------------------------------------------------------------------
+LOW_SPEC_MAX_LOGICAL_CORES = 4
+LOW_SPEC_MAX_RAM_GB = 8
+HIGH_PERF_MIN_LOGICAL_CORES = 6
+_PERF_TIER_CACHE: Dict[str, Any] = {}
+
+
+def _total_ram_gb() -> float | None:
+    if os.name != "nt":
+        return None
+    try:
+        class _MEMSTAT(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+        st = _MEMSTAT()
+        st.dwLength = ctypes.sizeof(_MEMSTAT)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+            return round(st.ullTotalPhys / (1024 ** 3), 1)
+    except Exception:
+        pass
+    return None
+
+
+def _system_drive_is_ssd() -> bool | None:
+    """시스템 드라이브가 SSD인지 판정.
+    1순위: DeviceIoControl(IOCTL_STORAGE_QUERY_PROPERTY · StorageDeviceSeekPenaltyProperty) — 수 ms, 관리자 권한 불필요
+    2순위: PowerShell Get-PhysicalDisk (MediaType / NVMe 버스) — 느릴 수 있어 1순위 실패 시에만
+    판정 불가 시 None (보수적으로 저사양 보호)
+    """
+    if os.name != "nt":
+        return None
+    drive = (os.environ.get("SystemDrive") or "C:").rstrip(":\\")[:1] or "C"
+    try:
+        from ctypes import wintypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateFileW.restype = wintypes.HANDLE
+        handle = k32.CreateFileW(f"\\\\.\\{drive}:", 0, 0x1 | 0x2, None, 3, 0, None)
+        if handle and handle != wintypes.HANDLE(-1).value:
+            try:
+                class _QUERY(ctypes.Structure):
+                    _fields_ = [("PropertyId", ctypes.c_int), ("QueryType", ctypes.c_int), ("Additional", ctypes.c_ubyte * 1)]
+
+                class _SEEK(ctypes.Structure):
+                    _fields_ = [("Version", ctypes.c_ulong), ("Size", ctypes.c_ulong), ("IncursSeekPenalty", ctypes.c_ubyte)]
+
+                q = _QUERY(7, 0)  # StorageDeviceSeekPenaltyProperty, PropertyStandardQuery
+                out = _SEEK()
+                ret = ctypes.c_ulong(0)
+                ok = k32.DeviceIoControl(
+                    handle, 0x2D1400, ctypes.byref(q), ctypes.sizeof(q),
+                    ctypes.byref(out), ctypes.sizeof(out), ctypes.byref(ret), None,
+                )
+                if ok and ret.value >= ctypes.sizeof(out) - 3:
+                    return not bool(out.IncursSeekPenalty)
+            finally:
+                k32.CloseHandle(handle)
+    except Exception:
+        pass
+    ps = (
+        f"$d = Get-Partition -DriveLetter {drive} | Get-Disk | Get-PhysicalDisk; "
+        "Write-Output (\"$($d.MediaType)|$($d.BusType)\")"
+    )
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+            capture_output=True, text=True, timeout=8,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout.strip()
+        media, _, bus = out.partition("|")
+        media, bus = media.strip().upper(), bus.strip().upper()
+        if media == "SSD":
+            return True
+        if media == "HDD":
+            return False
+        if bus == "NVME":
+            return True
+    except Exception:
+        pass
+    return None
+
+
+def classify_scan_performance_tier(
+    logical_cores: int | None, ram_gb: float | None, system_drive_ssd: bool | None
+) -> str:
+    if logical_cores is None or ram_gb is None or system_drive_ssd is None:
+        return "low"
+    if logical_cores <= LOW_SPEC_MAX_LOGICAL_CORES or ram_gb <= LOW_SPEC_MAX_RAM_GB or not system_drive_ssd:
+        return "low"
+    if logical_cores >= HIGH_PERF_MIN_LOGICAL_CORES and ram_gb > LOW_SPEC_MAX_RAM_GB and system_drive_ssd:
+        return "high"
+    return "low"
+
+
+def detect_scan_performance_tier(force: bool = False) -> Dict[str, Any]:
+    """실측 사양으로 성능 등급 판정 (1시간 캐시 — PowerShell 디스크 조회 비용 방지)"""
+    now = time.time()
+    if not force and _PERF_TIER_CACHE.get("ts") and now - _PERF_TIER_CACHE["ts"] < 3600:
+        return dict(_PERF_TIER_CACHE["data"])
+    cores = os.cpu_count()
+    ram = _total_ram_gb()
+    ssd = _system_drive_is_ssd()
+    data = {
+        "performanceTier": classify_scan_performance_tier(cores, ram, ssd),
+        "logicalCores": cores,
+        "ramGb": ram,
+        "systemDriveSsd": ssd,
+    }
+    _PERF_TIER_CACHE.update({"ts": now, "data": data})
+    return dict(data)
+
 
 def apply_hardware_protection_guard(mode: str = "silent", batch_count: int = 0) -> Dict[str, Any]:
     """
@@ -1541,9 +1662,13 @@ def apply_hardware_protection_guard(mode: str = "silent", batch_count: int = 0) 
             except Exception:
                 pass
 
+    tier = detect_scan_performance_tier()
     return {
         "ok": True,
         "mode": mode,
+        # [v1.3 마감] 고성능 PC는 무소음 모드에서도 멈칫 없이 고속 스캔, 저사양만 스텔스 스로틀 (웹 silentIndexingBrake 가 이 값을 따름)
+        **tier,
+        "stealthThrottle": tier["performanceTier"] != "high",
         "threadPriority": "THREAD_PRIORITY_BELOW_NORMAL",
         "priorityApplied": priority_applied,
         "totalLogicalCores": total_cores,

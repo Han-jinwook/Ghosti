@@ -26,8 +26,12 @@ export interface GhostSecretaryPlaybook {
 
 export const GHOST_SECRETARY_PLAYBOOK = playbookJson as unknown as GhostSecretaryPlaybook;
 
-/** 대본집 avatar 경로(/assets/baby_ghost_3d_icon.png)가 public 에 없으므로 공식 애기귀신 앱 아이콘으로 대체 */
-export const GHOST_SECRETARY_AVATAR_SRC = '/gwisinkachi_app_icon_512.png';
+/** 말풍선 애기귀신 아이콘 — 대본집 v1.3.1 persona.avatar(실제 파일 /gwisinkachi_app_icon_512.png) 우선, 비어 있으면 공식 앱 아이콘 */
+export const GHOST_SECRETARY_AVATAR_SRC =
+  (playbookJson as { persona?: { avatar?: string } }).persona?.avatar || '/gwisinkachi_app_icon_512.png';
+
+/** 손보기 명령 문장 판별 — '보안프로그램 정리해줘' 같은 실행 요청이 FAQ(보안·요금) 키워드에 가로채이지 않도록 보호 */
+const CARE_COMMAND_RE = /(정리|지워|삭제|청소|검진|느려|느린|빨라|고쳐|치워|꺼줘|최적화|점검해)/;
 export const GHOST_SECRETARY_NAME = '귀신비서';
 
 export function findScenario(id: string, pb: GhostSecretaryPlaybook = GHOST_SECRETARY_PLAYBOOK): PlaybookScenario | null {
@@ -487,6 +491,7 @@ export function resolveGhostSecretaryTurn(
   for (const list of Object.values(GHOST_SECRETARY_PLAYBOOK.categories)) {
     for (const sc of list) {
       if (sc.id === 'impatient_user_wants_search_now') continue;
+      if (sc.id.startsWith('faq_') && CARE_COMMAND_RE.test(text)) continue;
       const kws = extractTextContainsKeywords(sc.trigger);
       if (kws.length && kws.some((k) => text.includes(k))) {
         return { scenarioId: sc.id, text: renderPlaybookText(sc.response, { nickname }), nextState: st };

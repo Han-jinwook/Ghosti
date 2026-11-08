@@ -1111,11 +1111,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  {/* [v1.3] 전사 대표 슬로건 — 화면 TMI 방지를 위해 제목 마우스 오버 시에만 노출 */}
-                  <span title="컴퓨터 손보기부터 귀신계 여권까지 『귀신비서』가 다 챙겨주고, 잃어버린 파일은 『귀신검색』이 찾아주고, 타이핑 노가다는 『귀신창 초능력』이 대신해 준다!">
-                    👻 귀신비서
-                  </span>
+                  <span>👻 귀신비서</span>
                 </h1>
+                {/* [v1.3 마감 공문 2321 #2] 전사 대표 슬로건 — 제목 바로 아래 1줄 부제로 상시 노출 */}
+                <p className="basis-full -mt-1.5 text-[12.5px] md:text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 leading-snug">
+                  컴퓨터 손보기부터 귀신계 여권까지 『귀신비서』가 다 챙겨주고, 잃어버린 파일은 『귀신검색』이 찾아주고, 타이핑 노가다는 『귀신창 초능력』이 대신해 준다!
+                </p>
 
                 <input
                   ref={trashMobilePhotoInputRef}

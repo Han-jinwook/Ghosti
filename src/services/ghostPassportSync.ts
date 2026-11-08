@@ -72,13 +72,28 @@ export function mergePassportRows(
   return { book, newNames };
 }
 
+/** 로컬 얼굴 클러스터 → 이름별 extras (128차원 벡터 · data: URL 미니 썸네일이 있을 때만, 없으면 null 안전 허용) */
+export function buildPassportExtrasFromClusters(
+  named: Array<{ name: string; seedVecPreview?: number[]; avatarUrl?: string; cropUrl?: string }>
+): Record<string, { vector?: number[]; thumb?: string }> {
+  const extras: Record<string, { vector?: number[]; thumb?: string }> = {};
+  for (const n of named) {
+    if (!n.name) continue;
+    const thumb = [n.avatarUrl, n.cropUrl].find((u) => typeof u === 'string' && u.startsWith('data:') && u.length <= STAMP_THUMB_MAX_CHARS);
+    const vector = Array.isArray(n.seedVecPreview) && n.seedVecPreview.length === 128 ? n.seedVecPreview : undefined;
+    if (thumb || vector) extras[n.name] = { thumb, vector };
+  }
+  return extras;
+}
+
 export async function pushGhostPassportsToCloud(
   ownerEmail: string,
-  device: 'pc' | 'mobile' = 'pc'
+  device: 'pc' | 'mobile' = 'pc',
+  extras: Record<string, { vector?: number[]; thumb?: string }> = {}
 ): Promise<{ ok: boolean; reason?: string; count?: number }> {
   const sb = getGhostiAuthedSupabase();
   if (!sb || !ownerEmail) return { ok: false, reason: 'not_logged_in' };
-  const rows = passportBookToRows(loadGhostPassportBook(), device).map((r) => ({ ...r, owner_email: ownerEmail.toLowerCase() }));
+  const rows = passportBookToRows(loadGhostPassportBook(), device, extras).map((r) => ({ ...r, owner_email: ownerEmail.toLowerCase() }));
   if (!rows.length) return { ok: true, count: 0 };
   const { error } = await sb.from('ghost_passports').upsert(rows, { onConflict: 'owner_email,real_name' });
   return error ? { ok: false, reason: error.message } : { ok: true, count: rows.length };
