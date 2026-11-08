@@ -2,7 +2,7 @@
  * 🪪 귀신계 여권 Supabase 계정 간 무료 동기화 (v1.3 공문 20261108_1600 #7)
  *  - 업로드 대상: 실제 이름 + (있을 때) 128차원 얼굴 벡터 + (있을 때) 10KB 이하 미니 도장 썸네일 — 사진 원본 업로드 없음
  *  - 로그인 토큰이 없으면 아무것도 하지 않고 로컬 여권만 유지 (실패해도 앱 동작에 영향 없음)
- *  - 테이블: supabase/migrations/20261108_ghost_passports_and_unmatched_questions.sql
+ *  - 테이블: supabase/ghosti_zero_cloud_schema.sql (하단 ghost_passports · unmatched_questions 절)
  */
 import { getGhostiAuthedSupabase } from './supabaseClient';
 import {

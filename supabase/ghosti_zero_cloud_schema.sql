@@ -678,3 +678,62 @@ create policy ghosti_realtime_send on realtime.messages
       or realtime.topic() = 'ghosti:pair:' || public.ghosti_current_email()
     )
   );
+
+-- ============================================================================
+-- 🪪 귀신계 여권 (Ghost Passport) 계정 간 무료 동기화 테이블 — v1.3 (공문 20261108_1600 #7)
+-- ----------------------------------------------------------------------------
+-- 원칙
+--  - 사진 원본은 절대 올리지 않는다. [실제 이름 + 128차원 얼굴 특징 벡터(약 2KB) + 여권 도장 미니 썸네일(10KB 이하)]만 저장.
+--  - 관계도 꼬리표('와이프','아들' 등) 컬럼은 의도적으로 두지 않는다 (실명 원칙).
+--  - '나(본인)' 행만 is_self = true 이며 nickname 을 가질 수 있다.
+--  - 같은 계정(email)이면 PC ↔ 모바일 어디서 만들어도 서로 내려받는다 (기기 통합 유료 구독과 무관하게 무료).
+-- 적용: Supabase SQL Editor 에서 1회 실행 (pgvector 확장은 기존 ghosti_zero_cloud_schema.sql 에서 이미 사용 중)
+-- ============================================================================
+
+create table if not exists public.ghost_passports (
+  id uuid primary key default gen_random_uuid(),
+  owner_email text not null,
+  real_name text not null check (char_length(real_name) between 1 and 20),
+  is_self boolean not null default false,
+  nickname text check (nickname is null or char_length(nickname) <= 12),
+  face_vector_128d vector(128),
+  stamp_thumb_data_url text check (stamp_thumb_data_url is null or char_length(stamp_thumb_data_url) <= 14000),
+  source_device text not null default 'pc' check (source_device in ('pc', 'mobile')),
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  constraint ghost_passports_nickname_self_only check (is_self or nickname is null),
+  constraint ghost_passports_owner_name_uniq unique (owner_email, real_name)
+);
+
+-- 계정당 '나(본인)'는 1명
+create unique index if not exists ghost_passports_one_self_per_owner
+  on public.ghost_passports (lower(owner_email)) where is_self;
+
+drop trigger if exists trg_ghost_passports_touch on public.ghost_passports;
+create trigger trg_ghost_passports_touch
+  before update on public.ghost_passports
+  for each row execute function public.ghosti_touch_updated_at();
+
+alter table public.ghost_passports enable row level security;
+
+drop policy if exists ghost_passports_own on public.ghost_passports;
+create policy ghost_passports_own on public.ghost_passports
+  for all using (lower(owner_email) = public.ghosti_current_email())
+  with check (lower(owner_email) = public.ghosti_current_email());
+
+-- ============================================================================
+-- 👻 귀신비서 미등록 질문 포집 (unmatched_questions) — 주 1회 비서 정기 감사로 대본집 편입
+-- ============================================================================
+create table if not exists public.unmatched_questions (
+  id bigserial primary key,
+  owner_email text,
+  question text not null check (char_length(question) <= 300),
+  reason text not null default 'no_playbook_match' check (reason in ('no_playbook_match', 'feature_request')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.unmatched_questions enable row level security;
+
+drop policy if exists unmatched_questions_insert_own on public.unmatched_questions;
+create policy unmatched_questions_insert_own on public.unmatched_questions
+  for insert with check (owner_email is null or lower(owner_email) = public.ghosti_current_email());
