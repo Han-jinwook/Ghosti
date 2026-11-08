@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[내장 소프트웨어 플러그인 4] plugin_ghosti_superpowers.py (v2.7)
-- 귀신 부르는 단축키 Ctrl + 0 ([👻 귀신같이 ↗] 로고 클릭 웹 호출)
+[내장 소프트웨어 플러그인 4] plugin_ghosti_superpowers.py (v2.8)
+- 귀신 부르는 단축키 Ctrl + 0 ([👻 귀신같이 ↗] 로고 클릭 웹 호출 + 리얼 귀신검색창 팝업 직결)
 - 2어절 연속 한영·영한 오타 둔갑술 + 애기귀신 효과음(띠리링~👻) + 한영키 자동 전환
-- Account ID + Machine HWID 기반 기기당 7일 무료체험 원장 및 F1~F5 내 상용구 실시간 저장 API
+- Account ID + Machine HWID 기반 기기당 30일 무료체험 원장 및 F1~F5 내 상용구 실시간 저장 API
 - 단일 표준 포트 http://127.0.0.1:5199 (/api/superpower/*) 직결
 """
 
@@ -85,10 +85,10 @@ def _save_trial_ledger(data: Dict[str, Any]) -> None:
 
 def _compute_feature_trials(feature_trials_ledger: Dict[str, Any], is_subscribed: bool) -> Dict[str, Any]:
     """
-    12개 개별 초능력 각각의 7일 무제한 타이머 상태 산출:
-    - UNOPENED: 아직 한 번도 성공 완수하지 않은 미개봉 상태 (언제든 처음 쓰면 7일 무제한 개시!)
-    - ACTIVE_7D: 첫 사용 후 7일 이내 무제한 상태 (D-7 ~ D-1 잔여일수)
-    - EXPIRED: 7일 무제한 만료 상태 (이 기능들만 합산하여 일일 3회 제한 적용)
+    12개 개별 초능력 각각의 30일 무제한 타이머 상태 산출:
+    - UNOPENED: 아직 한 번도 성공 완수하지 않은 미개봉 상태 (언제든 처음 쓰면 30일 무제한 개시!)
+    - ACTIVE_30D: 첫 사용 후 30일 이내 무제한 상태 (D-30 ~ D-1 잔여일수)
+    - EXPIRED: 30일 무제한 만료 상태 (이 기능들만 합산하여 일일 3회 제한 적용)
     """
     now_ts = time.time()
     trials_map: Dict[str, Any] = {}
@@ -116,7 +116,7 @@ def _compute_feature_trials(feature_trials_ledger: Dict[str, Any], is_subscribed
             trials_map[fid] = {
                 "name": fname,
                 "status": "UNOPENED",
-                "days_left": 7,
+                "days_left": 30,
                 "first_used_at": None,
                 "expires_at": None,
                 "is_unopened": True,
@@ -127,13 +127,13 @@ def _compute_feature_trials(feature_trials_ledger: Dict[str, Any], is_subscribed
         else:
             first_ts = float(entry["firstUsedTs"])
             elapsed_days = (now_ts - first_ts) / 86400.0
-            rem_days = int(max(0, round(7.0 - elapsed_days + 0.49)))
+            rem_days = int(max(0, round(30.0 - elapsed_days + 0.49)))
             first_iso = entry.get("firstUsedAt")
             exp_iso = entry.get("expiresAt")
             if rem_days > 0:
                 trials_map[fid] = {
                     "name": fname,
-                    "status": "ACTIVE_7D",
+                    "status": "ACTIVE_30D",
                     "days_left": rem_days,
                     "first_used_at": first_iso,
                     "expires_at": exp_iso,
@@ -166,8 +166,8 @@ def _compute_feature_trials(feature_trials_ledger: Dict[str, Any], is_subscribed
 
 def _compute_cross_device_trial(cross_ledger: Dict[str, Any], linked_device_count: int, is_subscribed: bool) -> Dict[str, Any]:
     """
-    내 기기 통합 (월 3,900원) 7일 체험:
-    - 2번째 기기 연결 완료 시점(linkedDeviceCount >= 2)부터 7일 카운트다운 자동 시작!
+    내 기기 통합 (월 3,900원) 30일 체험:
+    - 2번째 기기 연결 완료 시점(linkedDeviceCount >= 2)부터 30일 카운트다운 자동 시작!
     """
     if is_subscribed:
         return {
@@ -184,32 +184,32 @@ def _compute_cross_device_trial(cross_ledger: Dict[str, Any], linked_device_coun
     if linked_device_count < 2 and not started_ts:
         return {
             "status": "WAITING_SECOND_DEVICE",
-            "days_left": 7,
+            "days_left": 30,
             "started_at": None,
             "expires_at": None,
             "linked_device_count": linked_device_count,
-            "message": "2번째 기기(폰/집PC/회사PC) 연결 시 7일 무료체험 자동 시작",
+            "message": "2번째 기기(폰/집PC/회사PC) 연결 시 30일 무료체험 자동 시작",
         }
 
     # 2번째 기기 연결 감지 시 체험 개시
     if not started_ts:
         now_dt = datetime.datetime.now()
-        exp_dt = now_dt + datetime.timedelta(days=7)
+        exp_dt = now_dt + datetime.timedelta(days=30)
         cross_ledger["startedAtTs"] = now_ts
         cross_ledger["startedAt"] = now_dt.strftime("%Y-%m-%d %H:%M:%S")
         cross_ledger["expiresAt"] = exp_dt.strftime("%Y-%m-%d %H:%M:%S")
         started_ts = now_ts
 
     elapsed_days = (now_ts - float(started_ts)) / 86400.0
-    rem_days = int(max(0, round(7.0 - elapsed_days + 0.49)))
+    rem_days = int(max(0, round(30.0 - elapsed_days + 0.49)))
     if rem_days > 0:
         return {
-            "status": "ACTIVE_7D",
+            "status": "ACTIVE_30D",
             "days_left": rem_days,
             "started_at": cross_ledger.get("startedAt"),
             "expires_at": cross_ledger.get("expiresAt"),
             "linked_device_count": linked_device_count,
-            "message": f"내 기기 통합 7일 무료체험 진행 중 (잔여 {rem_days}일)",
+            "message": f"내 기기 통합 30일 무료체험 진행 중 (잔여 {rem_days}일)",
         }
     return {
         "status": "EXPIRED",
@@ -243,11 +243,11 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         "isSubscribed": is_subscribed,
     })
 
-    # 1. 개별 기능별 7일 무제한 타이머 원장
+    # 1. 개별 기능별 30일 무제한 타이머 원장
     feature_trials_ledger = m_entry.setdefault("featureTrials", {})
     ft_res = _compute_feature_trials(feature_trials_ledger, is_subscribed or m_entry.get("isSubscribed", False))
 
-    # 2. 내 기기 통합 (2번째 기기 연결 시 7일 무료체험)
+    # 2. 내 기기 통합 (2번째 기기 연결 시 30일 무료체험)
     cross_ledger = m_entry.setdefault("crossDeviceTrial", {})
     cross_res = _compute_cross_device_trial(cross_ledger, linked_device_count, is_subscribed or m_entry.get("isSubscribed", False))
 
@@ -263,8 +263,8 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         trial_days_left = 9999
         daily_free_remaining = 9999
     elif ft_res["unopened_count"] > 0 or ft_res["active_count"] > 0:
-        trial_status = "PER_FEATURE_ACTIVE"  # 미개봉 또는 7일 무제한 기능 보유 중
-        trial_days_left = max([t["days_left"] for t in ft_res["trials"].values() if t["status"] == "ACTIVE_7D"] or [7])
+        trial_status = "PER_FEATURE_ACTIVE"  # 미개봉 또는 30일 무제한 기능 보유 중
+        trial_days_left = max([t["days_left"] for t in ft_res["trials"].values() if t["status"] in ("ACTIVE_30D", "ACTIVE_7D")] or [30])
     else:
         trial_status = "EXPIRED_DAILY_3"  # 모든 기능이 만료되어 매일 3회 평생 무료 적용 중
 
@@ -303,10 +303,10 @@ def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]
 
     now_ts = time.time()
     now_dt = datetime.datetime.now()
-    exp_dt = now_dt + datetime.timedelta(days=7)
+    exp_dt = now_dt + datetime.timedelta(days=30)
 
     # 동일 PC(Machine HWID)에서 이미 체험을 시작한 이력이 있으면 기존 시작 시각을 유지(다계정 꼼수 차단),
-    # 처음 시작하는 PC이면 오늘부터 7일 무료체험 부여!
+    # 처음 시작하는 PC이면 오늘부터 30일 무료체험 부여!
     existing = machines.get(hwid)
     if not existing or not existing.get("startedAtTs"):
         machines[hwid] = {
@@ -321,7 +321,7 @@ def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]
 
     ensure_superpower_daemon_running()
     status = get_superpower_status({"accountId": account_id, "isSubscribed": is_subscribed})
-    status["message"] = "🎉 1주일 무료체험이 시작되었습니다! (구독 회원은 전 기기 평생 무료)"
+    status["message"] = "🎉 30일 무료체험이 시작되었습니다! (구독 회원은 전 기기 평생 무료)"
     return status
 
 
@@ -594,13 +594,13 @@ def update_telemetry(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
 def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
-    [v3.5 퍼널: 12개 초능력 각각 첫 성공 시 7일 무제한 ➔ 만료된 기능만 기기당 일일 3회 제한]
+    [v3.5 퍼널: 12개 초능력 각각 첫 성공 시 30일 무제한 ➔ 만료된 기능만 기기당 일일 3회 제한]
     - 단순히 창을 띄우거나 취소한 것은 절대 차감하지 않음!
-    - 미개봉 기능: 처음 액션 완수 시 그 기능만 7일 무제한 타이머 개시 (consumed: False, 차감 없음)
-    - 7일 이내 기능: 무제한 통과 (consumed: False, 차감 없음)
-    - 7일 만료된 기능: 기기별 오늘 3회 한도 내에서 1회 차감 (consumed: True)
+    - 미개봉 기능: 처음 액션 완수 시 그 기능만 30일 무제한 타이머 개시 (consumed: False, 차감 없음)
+    - 30일 이내 기능: 무제한 통과 (consumed: False, 차감 없음)
+    - 30일 만료된 기능: 기기별 오늘 3회 한도 내에서 1회 차감 (consumed: True)
     - 테스트/시뮬레이션 지원:
-      * simulateExpireFeature: 특정 기능의 firstUsedTs를 8일 전으로 조작해 즉시 만료 테스트
+      * simulateExpireFeature: 특정 기능의 firstUsedTs를 31일 전으로 조작해 즉시 만료 테스트
       * resetTrials: 원장을 초기화하여 전 기능 미개봉 상태로 복원
     """
     data = body or {}
@@ -622,20 +622,20 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         m_entry["crossDeviceTrial"] = {}
         m_entry["dailyUsage"] = {}
         _save_trial_ledger(ledger)
-        return {"ok": True, "message": "🧹 모든 12대 초능력 7일 무제한 타이머 원장을 미개봉 초기 상태로 리셋했습니다."}
+        return {"ok": True, "message": "🧹 모든 12대 초능력 30일 무제한 타이머 원장을 미개봉 초기 상태로 리셋했습니다."}
 
     # 🧪 시뮬레이션 지원: 특정 기능 강제 만료
     sim_expire = data.get("simulateExpireFeature")
     if sim_expire and sim_expire in SUPERPOWER_12_FEATURES:
         ft_ledger = m_entry.setdefault("featureTrials", {})
-        eight_days_ago = time.time() - (8 * 86400)
+        thirty_one_days_ago = time.time() - (31 * 86400)
         ft_ledger[sim_expire] = {
-            "firstUsedTs": eight_days_ago,
-            "firstUsedAt": datetime.datetime.fromtimestamp(eight_days_ago).strftime("%Y-%m-%d %H:%M:%S"),
-            "expiresAt": datetime.datetime.fromtimestamp(eight_days_ago + 7 * 86400).strftime("%Y-%m-%d %H:%M:%S"),
+            "firstUsedTs": thirty_one_days_ago,
+            "firstUsedAt": datetime.datetime.fromtimestamp(thirty_one_days_ago).strftime("%Y-%m-%d %H:%M:%S"),
+            "expiresAt": datetime.datetime.fromtimestamp(thirty_one_days_ago + 30 * 86400).strftime("%Y-%m-%d %H:%M:%S"),
         }
         _save_trial_ledger(ledger)
-        return {"ok": True, "message": f"🧪 [{SUPERPOWER_12_FEATURES[sim_expire]}] 기능을 7일 만료 상태로 시뮬레이션 설정했습니다."}
+        return {"ok": True, "message": f"🧪 [{SUPERPOWER_12_FEATURES[sim_expire]}] 기능을 30일 만료 상태로 시뮬레이션 설정했습니다."}
 
     # 기능 ID 정규화 (feat_1 ~ feat_9, feat_b1 ~ feat_b3 또는 숫자 매핑)
     feature_id = raw_action
@@ -675,15 +675,15 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "message": f"[{feature_name}] 구독 회원 무제한 통과",
         }
 
-    # 2. 해당 기능의 7일 타이머 확인
+    # 2. 해당 기능의 30일 타이머 확인
     ft_ledger = m_entry.setdefault("featureTrials", {})
     entry = ft_ledger.get(feature_id)
     now_ts = time.time()
     now_dt = datetime.datetime.now()
 
-    # Case A: 미개봉 상태인 기능 ➔ 첫 성공 완수 시점부터 7일 무제한 개시! (차감 0)
+    # Case A: 미개봉 상태인 기능 ➔ 첫 성공 완수 시점부터 30일 무제한 개시! (차감 0)
     if not entry or not entry.get("firstUsedTs"):
-        exp_dt = now_dt + datetime.timedelta(days=7)
+        exp_dt = now_dt + datetime.timedelta(days=30)
         ft_ledger[feature_id] = {
             "firstUsedTs": now_ts,
             "firstUsedAt": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
@@ -698,16 +698,16 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "consumed": False,
             "feature_id": feature_id,
             "feature_name": feature_name,
-            "feature_status": "ACTIVE_7D",
-            "days_left": 7,
+            "feature_status": "ACTIVE_30D",
+            "days_left": 30,
             "daily_free_remaining": 9999,
-            "message": f"🎁 [{feature_name}] 첫 실행 축하드립니다! 앞으로 7일간 무제한 무료로 사용하실 수 있습니다.",
+            "message": f"🎁 [{feature_name}] 첫 실행 축하드립니다! 앞으로 30일간 무제한 무료로 사용하실 수 있습니다.",
         }
 
-    # Case B: 이미 개봉되었으나 아직 7일 이내인 기능 ➔ 무제한 통과! (차감 0)
+    # Case B: 이미 개봉되었으나 아직 30일 이내인 기능 ➔ 무제한 통과! (차감 0)
     first_ts = float(entry["firstUsedTs"])
     elapsed_days = (now_ts - first_ts) / 86400.0
-    rem_days = int(max(0, round(7.0 - elapsed_days + 0.49)))
+    rem_days = int(max(0, round(30.0 - elapsed_days + 0.49)))
     if rem_days > 0:
         m_entry["lastActionAt"] = now_dt.isoformat()
         m_entry["lastActionType"] = feature_id
@@ -718,13 +718,13 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "consumed": False,
             "feature_id": feature_id,
             "feature_name": feature_name,
-            "feature_status": "ACTIVE_7D",
+            "feature_status": "ACTIVE_30D",
             "days_left": rem_days,
             "daily_free_remaining": 9999,
-            "message": f"🔥 [{feature_name}] 7일 무제한 혜택 적용 중 (잔여 {rem_days}일)",
+            "message": f"🔥 [{feature_name}] 30일 무제한 혜택 적용 중 (잔여 {rem_days}일)",
         }
 
-    # Case C: 7일 무제한이 만료된 기능 ➔ 기기별 오늘 3회 평생 무료 한도에서 차감!
+    # Case C: 30일 무제한이 만료된 기능 ➔ 기기별 오늘 3회 평생 무료 한도에서 차감!
     today_str = datetime.date.today().isoformat()
     daily_usage = m_entry.setdefault("dailyUsage", {})
     used_today = int(daily_usage.get(today_str, 0))
@@ -740,7 +740,7 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "daily_free_remaining": 0,
             "daily_free_limit": 3,
             "error": "DAILY_LIMIT_EXCEEDED",
-            "message": f"오늘의 [{feature_name}] 무료 변환(기기별 일일 3회)이 모두 소진되었습니다. 아직 사용하지 않은 다른 초능력(미개봉 7일 무제한)을 써보시거나, [내 기기 통합(월 3,900원)] 구독 시 평생 무제한으로 사용하실 수 있습니다!",
+            "message": f"오늘의 [{feature_name}] 무료 변환(기기별 일일 3회)이 모두 소진되었습니다. 아직 사용하지 않은 다른 초능력(미개봉 30일 무제한)을 써보시거나, [내 기기 통합(월 3,900원)] 구독 시 평생 무제한으로 사용하실 수 있습니다!",
         }
 
     # 1회 정상 차감
@@ -761,4 +761,29 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         "daily_free_remaining": rem,
         "daily_free_limit": 3,
         "message": f"[{feature_name}] 액션 완수 (오늘 잔여 무료: {rem}/3회)",
+    }
+
+
+def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    [👻 귀신검색창 로컬 리얼 팝업 직결 API]
+    - 로컬 엔진(127.0.0.1:5199)이 연결되어 있을 때 온보딩 수련장이나 웹 화면에서
+      Ctrl+0, 우클릭 꾹~, 또는 [👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기] 호출 시
+      가짜 시뮬레이터가 아니라 실제 모니터 위에 프레임리스 독립 팝업(소형 520x380 / 중형 960x640 / 갤러리 1440x900)을 즉시 띄웁니다.
+    """
+    data = params or {}
+    stage = str(data.get("stage") or "medium").strip().lower()
+    if stage not in ("small", "medium", "gallery"):
+        stage = "medium"
+    query = str(data.get("query") or data.get("q") or "").strip()
+    anchor_x = data.get("anchor_x") or data.get("x")
+    anchor_y = data.get("anchor_y") or data.get("y")
+    ax = int(anchor_x) if anchor_x is not None and str(anchor_x).lstrip("-").isdigit() else None
+    ay = int(anchor_y) if anchor_y is not None and str(anchor_y).lstrip("-").isdigit() else None
+
+    res = spd._open_ghost_search_window_popup(stage=stage, query=query, anchor_x=ax, anchor_y=ay)
+    return {
+        "ok": True,
+        **res,
+        "message": "👻 내 진짜 PC 사진·서류·여권이 연동된 리얼 귀신검색창을 화면에 즉시 띄웠습니다!",
     }

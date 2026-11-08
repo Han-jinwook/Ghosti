@@ -279,6 +279,10 @@ export interface MonsterChatMessage {
   /** 모바일에서 채팅(타자)으로 설정/고치기 가이드를 요청했을 때 다짜고짜 음성 출력하지 않고 사전 승낙을 구하는 스크립트 */
   voiceConsentPromptKo?: string;
   voiceConsentApproved?: boolean;
+  /** [전환율 보강 ③] 모바일 온보딩 말미: 모바일 ➔ PC 회수 브릿지 (카톡 나에게 PC 실행 링크 보내기 / 주소 복사) 버튼 노출 */
+  showMobileToPcBridgeButton?: boolean;
+  /** [전환율 보강 ④] 귀신계 여권 가족 실명 등록 직후: 가족 사진 카톡방 1초 구경시켜 주기 바이럴 버튼 대상 실명 */
+  passportViralFamilyName?: string;
 }
 
 // ---------------------------------------------------------------------------

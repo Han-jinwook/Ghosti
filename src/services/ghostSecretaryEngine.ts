@@ -345,6 +345,8 @@ export interface GhostSecretaryTurn {
   followUps?: string[];
   /** 여권 후보 번호별 실명 등록 지시 (컴포넌트가 store.registerFaceMember 로 실제 등록) */
   passportNaming?: PassportNamingResult;
+  /** 여권에 등록된 첫 가족 실명 (가족 카톡방 1초 구경시켜 주기 바이럴 브릿지용) */
+  passportViralFamilyName?: string;
   nextState: GhostSecretaryState;
   /** 응답과 함께 실제로 클립보드에 복사할 텍스트 (대본이 '복사해 드렸다'고 말하는 경우) */
   clipboardText?: string;
@@ -404,13 +406,17 @@ export function resolveGhostSecretaryTurn(
       const done = firstFamily && sc
         ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
         : `${nickname}님 본인 여권을 새겨뒀어요! 이제 아래 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`;
+      const viralAsk = firstFamily
+        ? `\n\n방금 찾아낸 『${firstFamily}』 사진들을 가족 카톡방에 로그인 없이 1초 만에 구경시켜 드릴까요?`
+        : '';
       const warn = parsed.rejectedRelationTags.length
         ? `\n(『${parsed.rejectedRelationTags.join('』, 『')}』처럼 관계로만 말씀하신 분은 진짜 이름을 알려주시면 여권을 찍어드릴게요!)`
         : '';
       return {
         scenarioId: sc?.id || 'passport_self_only_done',
-        text: done + warn,
+        text: done + viralAsk + warn,
         passportNaming: parsed,
+        passportViralFamilyName: firstFamily,
         nextState: { ...st, passportStep: 'done' },
       };
     }
@@ -624,6 +630,23 @@ export function buildMobileRemainingPhotosChoicePrompt(
       remaining_photos: remainingPhotos.toLocaleString('ko-KR'),
     }),
     followUps: ['지금 천천히 돌려줘 (30분 뒤 안내)', '저녁에 쉴 때 조용히 해줘'],
+  };
+}
+
+/**
+ * [전환율 보강 ③] 모바일 온보딩 말미 『모바일 ➔ PC 회수 브릿지』 안내 문구 생성
+ */
+export const MOBILE_TO_PC_BRIDGE_TEXT =
+  '지금 스마트폰으로 들어오셨네요! 내일 출근해서 PC로 켜시면 카톡·엑셀 작업 시간을 반으로 줄여주는 『⚡ 귀신창 초능력』을 바로 쓰실 수 있게 카톡(나에게 보내기)에 PC 실행 링크를 넣어두실래요?';
+
+export function buildMobileToPcBridgePrompt(nickname?: string): {
+  scenarioId: string;
+  text: string;
+} {
+  const prefix = nickname ? `${nickname}님, ` : '';
+  return {
+    scenarioId: 'mobile_to_pc_recovery_bridge',
+    text: `${prefix}${MOBILE_TO_PC_BRIDGE_TEXT}`,
   };
 }
 

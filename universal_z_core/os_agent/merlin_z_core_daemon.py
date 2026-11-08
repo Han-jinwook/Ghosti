@@ -305,6 +305,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_superpowers.get_superpower_status(qp))
             return
 
+        if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window"):
+            self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(qp))
+            return
+
         if path == "/api/superpower/snippets":
             self._send_json({"ok": True, "snippets": plugin_ghosti_superpowers.get_snippets()})
             return
@@ -444,6 +448,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/superpower/mailbox-sync":
             self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api(body))
+            return
+
+        if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window"):
+            self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(body))
             return
 
         if path.startswith("/api/senstalk"):

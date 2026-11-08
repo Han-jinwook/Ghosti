@@ -126,6 +126,12 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         }
         setStep((prev) => {
           if (prev === 'intro' || prev === 'waiting_engine') {
+            if (prev === 'waiting_engine') {
+              useSaySeeStore.setState({
+                lastQuarantineToast:
+                  '🎉 멀린 Z-코어(127.0.0.1:5199) 연결 완료! 화살표 안내를 닫고 내 PC 사진·서류를 즉시 불러옵니다!',
+              });
+            }
             setProgress(0);
             return 'indexing';
           }
@@ -292,6 +298,25 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         if (e.target === e.currentTarget && step !== 'indexing') onClose();
       }}
     >
+      {/* 브라우저 우측 상단 다운로드 영역을 가리키는 애니메이션 화살표 배너 (하트비트 감지 시 자동 소멸) */}
+      {step === 'waiting_engine' && !isMobileEnv && !isConnected && (
+        <div
+          className="fixed top-4 right-6 z-[140] max-w-md rounded-2xl border-2 border-amber-400 bg-zinc-950/95 text-white px-4 py-3.5 shadow-2xl shadow-amber-500/30 animate-bounce pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start gap-2.5">
+            <span className="text-2xl leading-none shrink-0">👆</span>
+            <div className="flex flex-col gap-1">
+              <p className="text-[13px] font-black text-amber-300 leading-snug">
+                👆 우측 상단 다운로드 창에서 [열기] ➔ [Merlin_Z_Core_Setup.exe] 실행(더블클릭)까지 딱 한 번만 해주세요!
+              </p>
+              <p className="text-[11.5px] font-bold text-zinc-200 leading-snug">
+                ① 우측 상단 다운로드 파일 열기(압축 풀기) ➔ ② 폴더 안의 <code className="text-teal-300">Merlin_Z_Core_Setup.exe</code> 더블클릭 실행
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <div
         className={`w-full max-w-lg rounded-3xl p-5 sm:p-7 shadow-2xl border transition-all max-h-[92vh] overflow-y-auto no-scrollbar ${
           isLight
@@ -422,12 +447,12 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             >
               <div className="flex items-center gap-2.5 font-black text-[13.5px]">
                 <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping shrink-0" />
-                <span>프로그램을 켜시는 순간 자동으로 사진 목록을 불러옵니다!</span>
+                <span>① 우측 상단 다운로드 파일 열기(압축 풀기) ➔ ② 폴더 안의 Merlin_Z_Core_Setup.exe 더블클릭 실행</span>
               </div>
               <p className="text-xs opacity-85 mt-1.5 leading-relaxed">
-                방금 다운로드된 <strong>Merlin_Z_Core.zip</strong> 압축을 풀고{' '}
+                우측 상단 다운로드 창에서 <strong>Merlin_Z_Core.zip</strong>을 열어 압축을 풀고{' '}
                 <strong>Merlin_Z_Core_Setup.exe</strong> (또는 <strong>Merlin_Z_Core_실행.bat</strong>)을
-                더블클릭해 켜주세요. 웹 화면에서 별도 버튼을 또 누르실 필요가 없습니다.
+                더블클릭해 딱 한 번만 켜주시면, 신호(127.0.0.1:5199) 감지 즉시 자동으로 연결됩니다!
               </p>
             </div>
 

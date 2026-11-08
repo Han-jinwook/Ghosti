@@ -53,6 +53,7 @@ import {
   decidePassportEntry,
   executeMobileSteppingStoneScan,
   buildMobileRemainingPhotosChoicePrompt,
+  buildMobileToPcBridgePrompt,
   findScenario,
   renderPlaybookText,
   upsertPassportMember,
@@ -370,6 +371,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             sourceTab,
             text: turn.text,
             followUpSuggestions: turn.followUps,
+            passportViralFamilyName: turn.passportViralFamilyName,
           },
         ];
         if (turn.passportNaming && nextState.nickname && isMobileOrStore && !nextState.mobileRemainingScanChoice) {
@@ -387,6 +389,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               followUpSuggestions: choicePrompt.followUps,
             });
           }
+        }
+        if (turn.passportNaming && isMobileOrStore) {
+          const pcBridge = buildMobileToPcBridgePrompt(nextState.nickname);
+          replies.push({
+            id: `secretary_mobile_pc_bridge_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab,
+            text: pcBridge.text,
+            showMobileToPcBridgeButton: true,
+          });
         }
         if (turn.clipboardText) {
           void navigator.clipboard?.writeText(turn.clipboardText).catch(() => {});
@@ -416,6 +429,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             sourceTab,
             text: entry.text,
           });
+          if (isMobileOrStore && nextState.passportStep === 'skipped') {
+            const pcBridge = buildMobileToPcBridgePrompt(nextState.nickname);
+            replies.push({
+              id: `secretary_mobile_pc_bridge_${Date.now()}`,
+              role: 'assistant',
+              timestamp: nowTimeKo(),
+              sourceTab,
+              text: pcBridge.text,
+              showMobileToPcBridgeButton: true,
+            });
+          }
         }
         saveGhostSecretaryState(nextState);
         setSharedMonsterMessages((prev) => [...prev, ...replies]);
@@ -807,6 +831,66 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                     onJumpToSearch={onJumpToSearch}
                     onToast={onToast}
                   />
+                )}
+
+                {!isUser && msg.passportViralFamilyName && (
+                  <div className="mt-2.5 pt-2 border-t border-emerald-200 dark:border-emerald-500/30 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const famName = msg.passportViralFamilyName || '';
+                        const st = useSaySeeStore.getState();
+                        st.setActiveLoungeType?.('family');
+                        st.setDesktopTab?.('share');
+                        st.setMobileTab?.('share');
+                        const guestPreviewUrl = `https://ghosti.sundreamer.app/?preview=guest&invite=family_${encodeURIComponent(famName)}`;
+                        const shareText = `📸 [귀신같이] 로그인·앱 설치 없이 1초 만에 열리는 『${famName}』 가족 사진방 구경 오세요!
+👉 ${guestPreviewUrl}`;
+                        if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+                          try {
+                            await navigator.share({
+                              title: `📸 『${famName}』 가족 사진방 1초 미리보기`,
+                              text: `로그인·앱 설치 없이 1초 만에 열리는 『${famName}』 사진들을 구경해 보세요!`,
+                              url: guestPreviewUrl,
+                            });
+                            return;
+                          } catch {
+                            /* Web Share 취소 시 클립보드 복사로 폴백 */
+                          }
+                        }
+                        try {
+                          await navigator.clipboard?.writeText(shareText);
+                        } catch {
+                          /* ignore */
+                        }
+                        onToast?.(
+                          `📸 『${famName}』 가족 사진방 1초 미리보기 링크가 복사되었습니다! 가족 카톡방에 바로 붙여넣어 구경시켜 주세요.`,
+                        );
+                      }}
+                      className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black shadow-sm transition cursor-pointer text-left flex items-center gap-1.5"
+                    >
+                      <span>👨‍👩‍👧‍👦</span>
+                      <span>방금 찾아낸 『{msg.passportViralFamilyName}』 사진 가족 카톡방에 1초 구경시켜 주기</span>
+                    </button>
+                  </div>
+                )}
+
+                {!isUser && msg.showMobileToPcBridgeButton && (
+                  <div className="mt-2.5 pt-2 border-t border-teal-200 dark:border-teal-500/30 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await useSaySeeStore.getState().sharePcMasterUrlToKakao();
+                        onToast?.(
+                          '💻 카톡(나에게 보내기) 및 클립보드에 PC 실행 링크(⚡ 귀신창 초능력)를 담아두었습니다! 내일 출근해서 PC로 바로 켜보세요.',
+                        );
+                      }}
+                      className="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold shadow-sm transition cursor-pointer text-left flex items-center gap-1.5"
+                    >
+                      <span>💬</span>
+                      <span>카톡(나에게 보내기)에 PC 실행 링크 넣어두기 / 📋 주소 복사</span>
+                    </button>
+                  </div>
                 )}
 
                 {!isUser && msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (

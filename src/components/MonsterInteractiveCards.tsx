@@ -759,7 +759,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 8) 발급된 [디지털 건강검진표] (개인 건강검진 기록함 로컬 자동 보관 완료) */}
+      {/* 8) 발급된 [디지털 건강검진표] (개인 건강검진 기록함 로컬 자동 보관 완료 + 우측 하단 은은한 저장/공유 아이콘) */}
       {message.healthRecordIssued && (
         <div className="rounded-xl border border-emerald-400/40 bg-slate-900/90 p-3 space-y-1.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -774,8 +774,37 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           <div className="text-xs text-slate-200 font-bold">
             • {message.healthRecordIssued.title}
           </div>
-          <div className="text-[11px] text-emerald-200">
-            • {message.healthRecordIssued.speedUpSummary} (복원 번호: {message.healthRecordIssued.restoreId})
+          <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
+            <div className="text-[11px] text-emerald-200">
+              • {message.healthRecordIssued.speedUpSummary} (복원 번호: {message.healthRecordIssued.restoreId})
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const rec = message.healthRecordIssued;
+                if (!rec) return;
+                const cardSummary = [
+                  '👻 [귀신같이] 내 PC 점괘·청소 결과 카드',
+                  `• 진단 요약: ${rec.title}`,
+                  `• 확보/최적화: ${rec.reclaimedSizeLabel}`,
+                  `• 상세 결과: ${rec.speedUpSummary}`,
+                  `• 안심 복원 번호: ${rec.restoreId}`,
+                  '👉 내 PC도 1초 점괘·청소 받기: https://ghosti.sundreamer.app',
+                ].join('\n');
+                try {
+                  await navigator.clipboard?.writeText(cardSummary);
+                } catch {
+                  /* ignore */
+                }
+                onToast?.(
+                  '📋 내 PC 점괘·청소 결과 카드가 클립보드에 저장되었습니다! 카톡이나 메모장에 바로 붙여넣어 공유해 보세요.',
+                );
+              }}
+              title="내 PC 점괘·청소 결과 카드 저장/공유"
+              className="px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-emerald-400/30 text-[10.5px] font-bold text-emerald-200/90 hover:text-white transition cursor-pointer shrink-0"
+            >
+              📋 내 PC 점괘·청소 결과 카드 저장/공유
+            </button>
           </div>
         </div>
       )}

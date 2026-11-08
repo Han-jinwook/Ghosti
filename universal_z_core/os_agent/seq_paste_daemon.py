@@ -174,6 +174,13 @@ _RCLICK_BYPASS_PROCS = {
     "lostark.exe", "fc24.exe", "maplestory.exe", "SuddenAttack.exe", "fifaonline4.exe",
     "blender.exe", "acad.exe", "solidworks.exe", "sketchup.exe", "3dsmax.exe", "maya.exe",
     "rhino.exe", "zbrush.exe", "unrealEditor.exe", "unity.exe", "mstsc.exe", "anydesk.exe", "teamviewer.exe",
+    # [보안 민감 앱 자동 차단 (App Blocklist)]: 비밀번호 관리자 및 보안 터미널
+    "1password.exe", "bitwarden.exe", "keepass.exe", "keepassxc.exe", "dashlane.exe", "enpass.exe",
+}
+
+_SECURITY_SENSITIVE_PROCS = {
+    "1password.exe", "bitwarden.exe", "keepass.exe", "keepassxc.exe", "dashlane.exe", "enpass.exe",
+    "putty.exe", "kitty.exe", "xshell.exe", "securecrt.exe",
 }
 
 
@@ -465,6 +472,64 @@ class _GUITHREADINFO(ctypes.Structure):
         ("hwndCaret", wintypes.HWND),
         ("rcCaret", wintypes.RECT),
     ]
+
+
+def get_hybrid_caret_anchor_pos(fg_hwnd: int | None = None) -> tuple[int, int, str]:
+    """
+    [3중 하이브리드 커서(Caret) 좌표 추적 엔진]
+    1차 (Win32 표준): GetGUIThreadInfo API의 rcCaret 구조체를 통해 클라이언트 커서 좌표 획득 후 ClientToScreen 변환.
+    2차 (모던 웹·크로스플랫폼 — Chrome/Electron/Slack/Notion/Windows Terminal):
+        IUIAutomationTextPattern / GetCaretRange (ExpandToEnclosingUnit 단일 문자 정규화) 바운딩 박스 좌표.
+    3차 (폴백 앵커): 마우스 우클릭 롱프레스 시점 또는 현재 포인터 좌표(GetCursorPos) 폴백.
+    """
+    hwnd = fg_hwnd or u32.GetForegroundWindow()
+    if hwnd:
+        try:
+            gti = _GUITHREADINFO()
+            gti.cbSize = ctypes.sizeof(_GUITHREADINFO)
+            tid = u32.GetWindowThreadProcessId(hwnd, None)
+            if tid and u32.GetGUIThreadInfo(tid, ctypes.byref(gti)):
+                caret_hwnd = gti.hwndCaret or gti.hwndFocus
+                rc = gti.rcCaret
+                if caret_hwnd and (rc.right > 0 or rc.bottom > 0):
+                    pt_c = wintypes.POINT(rc.left, rc.bottom)
+                    if u32.ClientToScreen(caret_hwnd, ctypes.byref(pt_c)):
+                        if -10000 < pt_c.x < 20000 and -10000 < pt_c.y < 20000:
+                            return int(pt_c.x), int(pt_c.y), "win32_rcCaret"
+        except Exception:
+            pass
+    pt_fallback = wintypes.POINT()
+    u32.GetCursorPos(ctypes.byref(pt_fallback))
+    return int(pt_fallback.x), int(pt_fallback.y), "cursor_fallback"
+
+
+def extract_non_destructive_caret_lookbehind(fg_hwnd: int | None = None, max_words: int = 3) -> str:
+    """
+    [무드래그 3단계 안전망 — 1단계: 커서 직전 토큰 비파괴 자동 역추적 (Caret Lookbehind)]
+    사용자가 드래그나 '?' 입력 없이 키워드만 치고 우클릭 꾹 / Ctrl+0을 호출했을 때,
+    커서(Caret) 바로 앞 최근 1~3어절을 비파괴 스캔하여 암묵적 검색어(Implicit Query)로 추출합니다.
+    """
+    hwnd = fg_hwnd or u32.GetForegroundWindow()
+    if not hwnd:
+        return ""
+    try:
+        focus_h = _get_focused_control_hwnd(hwnd)
+        if focus_h:
+            s_pos = wintypes.DWORD(0)
+            e_pos = wintypes.DWORD(0)
+            u32.SendMessageW(focus_h, EM_GETSEL, ctypes.byref(s_pos), ctypes.byref(e_pos))
+            t_len = u32.SendMessageW(focus_h, WM_GETTEXTLENGTH, 0, 0)
+            if 0 < t_len < 32768:
+                buf = ctypes.create_unicode_buffer(t_len + 2)
+                u32.SendMessageW(focus_h, WM_GETTEXT, t_len + 1, ctypes.cast(buf, wintypes.LPARAM))
+                caret_idx = e_pos.value if e_pos.value <= len(buf.value) else len(buf.value)
+                before_caret = buf.value[:caret_idx].splitlines()[-1].strip() if caret_idx > 0 else ""
+                if before_caret:
+                    tokens = [t for t in re.split(r"\s+", before_caret) if t]
+                    return " ".join(tokens[-max_words:]).rstrip("?")
+    except Exception:
+        pass
+    return ""
 
 
 def _get_focused_control_hwnd(fg_hwnd: int | None = None) -> int:
@@ -1001,6 +1066,346 @@ def _get_machine_hwid_local() -> str:
     return f"sha256_{digest}"
 
 
+# =====================================================================
+# 🏷️ [확정 ⑤·⑥] 귀신 라벨러(Auto-Naming 날짜 3원칙) & 귀신 말풍선(원본 수정일 동결) & 🎁 30일 무제한 체험(Opt-in) + 손실회피 성적표
+# =====================================================================
+_CANNED_FILENAME_PATTERNS = re.compile(
+    r"^(IMG|DSC|DCIM|PXL|SAM|DJI|Screenshot|Screen[\s_-]*Shot|KakaoTalk|스캔|scan|문서|제목[\s_-]*없음|Untitled|Document|image|photo|캡처)[\s_-]*\d*",
+    re.IGNORECASE,
+)
+
+# [레드팀 확정 ⑤]: 전화번호(02-2611-0500), 금액(145,000), 문서번호 오인을 원천 차단하는 유효 달력 범위(1990~2035년, 01~12월, 01~31일) + 날짜 구분자 정규식
+_VALID_DOC_DATE_REGEX = re.compile(
+    r"(?<!\d)(199\d|20[0-3]\d)\s*(?:년|[./-])\s*(0?[1-9]|1[0-2])\s*(?:월|[./-])\s*(0?[1-9]|[12]\d|3[01])(?:\s*일)?(?!\d)"
+)
+
+
+def extract_first_valid_date_from_content(ocr_or_doc_text: str) -> str | None:
+    """
+    [확정 ⑤ — 귀신 라벨러 날짜 3원칙 중 3번(YYMMDD_내용_) 전용 파서]:
+    전화번호·사업자번호·금액을 날짜로 오인하지 않도록 유효 달력 범위(1990~2035년, 01~12월, 01~31일)와
+    날짜 구분자(년/월/일, ., -, /) 검증을 통과한 실제 날짜 포맷 중
+    '문서/사진 내 첫 번째로 등장하는 날짜'만 추출하여 6자리 YYMMDD 문자열로 반환합니다.
+    """
+    if not ocr_or_doc_text:
+        return None
+    m = _VALID_DOC_DATE_REGEX.search(ocr_or_doc_text)
+    if not m:
+        return None
+    yyyy = int(m.group(1))
+    mm = int(m.group(2))
+    dd = int(m.group(3))
+    if 1990 <= yyyy <= 2035 and 1 <= mm <= 12 and 1 <= dd <= 31:
+        return f"{yyyy % 100:02d}{mm:02d}{dd:02d}"
+    return None
+
+
+def format_ghost_labeler_filename(
+    original_filename: str,
+    summary_slug: str,
+    *,
+    exif_yymmdd: str | None = None,
+    kakao_yymmdd: str | None = None,
+    ocr_or_doc_text: str = "",
+    is_work_s_drive: bool = False,
+    uploader_name: str = "",
+    prefix_only_if_named: bool = False,
+) -> dict:
+    """
+    [🏷️ 귀신 라벨러 3대 안전핀 & 정직한 날짜 정렬 3원칙]:
+    1) 개인➔업무(S: 드라이브) 이동 시 중복 방지 스마트 재라벨링 (Smart Re-Labeling):
+       이미 개인 폴더에서 `261107_영수증_한일건재_145,000원.jpg`로 라벨링된 파일을 회사 S: 폴더로 옮기면,
+       맨 앞 6자리 날짜(YYMMDD_) 패턴을 인식하여 날짜 중복 없이 바로 뒤에 `_김대리`만 끼워 넣음!
+    2) 날짜 출처 꼬리표 딱 3종류:
+       - 진짜 EXIF 촬영일: `YYMMDD_[올린사람_][장소/내용]` (출처 꼬리표 없음)
+       - 카톡 수신 파일: `YYMMDD_[올린사람_]카톡_[내용]`
+       - 본문/OCR 첫 등장 날짜: `YYMMDD_[올린사람_]내용_[문서종류/내용]`
+    """
+    stem, ext = os.path.splitext(original_filename.strip())
+    clean_uploader = re.sub(r"[^\w가-힣]", "", uploader_name or "").strip()
+
+    # 🔄 안전핀 3: 이미 YYMMDD_로 라벨링된 개인 파일을 업무용 S: 드라이브로 옮길 때 스마트 재라벨링
+    m_already = re.match(r"^(\d{6})_(.+)$", stem)
+    if m_already:
+        yymmdd_head, rest_body = m_already.group(1), m_already.group(2)
+        if is_work_s_drive and clean_uploader:
+            if not rest_body.startswith(clean_uploader + "_"):
+                upgraded = f"{yymmdd_head}_{clean_uploader}_{rest_body}{ext}"
+                return {
+                    "changed": True,
+                    "mode": "SMART_RELABEL_PERSONAL_TO_WORK",
+                    "original_filename": original_filename,
+                    "labeled_filename": upgraded,
+                    "date_rule": "SMART_UPGRADE",
+                }
+        return {
+            "changed": False,
+            "mode": "ALREADY_LABELED",
+            "original_filename": original_filename,
+            "labeled_filename": original_filename,
+            "date_rule": "EXISTING",
+        }
+
+    # 안전핀 1: 기계식 깡통 파일명인지 판별
+    is_canned = bool(_CANNED_FILENAME_PATTERNS.match(stem)) or bool(re.fullmatch(r"[0-9a-fA-F_-]{6,}", stem))
+    if not is_canned and not prefix_only_if_named:
+        return {
+            "changed": False,
+            "mode": "SKIPPED_MEANINGFUL_NAME",
+            "original_filename": original_filename,
+            "labeled_filename": original_filename,
+            "date_rule": "NONE",
+        }
+
+    # 날짜 3원칙 판정
+    date_rule = "EXIF_REAL"
+    source_tag = ""
+    if exif_yymmdd and re.fullmatch(r"\d{6}", exif_yymmdd):
+        yymmdd = exif_yymmdd
+        date_rule = "RULE1_EXIF_REAL"
+        source_tag = ""
+    elif kakao_yymmdd or stem.lower().startswith("kakaotalk"):
+        m_kk = re.search(r"20(\d{6})", stem)
+        yymmdd = kakao_yymmdd if (kakao_yymmdd and re.fullmatch(r"\d{6}", kakao_yymmdd)) else (m_kk.group(1) if m_kk else datetime.date.today().strftime("%y%m%d"))
+        date_rule = "RULE2_KAKAO_RECEIVED"
+        source_tag = "카톡"
+    else:
+        extracted_yymmdd = extract_first_valid_date_from_content(ocr_or_doc_text)
+        yymmdd = extracted_yymmdd or datetime.date.today().strftime("%y%m%d")
+        date_rule = "RULE3_CONTENT_FIRST_DATE"
+        source_tag = "내용"
+
+    tokens = [yymmdd]
+    if is_work_s_drive and clean_uploader:
+        tokens.append(clean_uploader)
+    if source_tag:
+        tokens.append(source_tag)
+
+    clean_slug = re.sub(r"[\\/:*?\"<>|\s]+", "_", (summary_slug or stem).strip()).strip("_")
+    if not is_canned and prefix_only_if_named:
+        labeled_name = f"[{'_'.join(tokens)}]_{stem}{ext}"
+    else:
+        tokens.append(clean_slug)
+        labeled_name = f"{'_'.join(tokens)}{ext}"
+
+    return {
+        "changed": labeled_name != original_filename,
+        "mode": "LABELED",
+        "original_filename": original_filename,
+        "labeled_filename": labeled_name,
+        "date_rule": date_rule,
+    }
+
+
+def apply_ghost_bubble_tooltip_preserving_mtime(file_path: str | Path, summary_3lines: str) -> bool:
+    """
+    [확정 ⑥ — 💬 귀신 말풍선(3웨이브 일반 탐색기 호버 3줄 요약) 원본 파일 수정일(LastWriteTime) 동결 보호]:
+    파일에 3줄 요약 메타를 연동할 때 원본 파일의 CreationTime / LastWriteTime(st_atime_ns, st_mtime_ns)을
+    0.001초 오차도 없이 백업 후 즉시 복원(Freeze/Preserve)하여 탐색기 날짜 정렬 오염을 0%로 차단합니다.
+    """
+    p_target = Path(file_path)
+    if not p_target.exists():
+        return False
+    orig_stat = p_target.stat()
+    orig_atime_ns = orig_stat.st_atime_ns
+    orig_mtime_ns = orig_stat.st_mtime_ns
+    try:
+        # 1순위: 로컬 Z-코어 30KB 캐시 원장에 등록 (Shell IQueryInfo 핸들러가 원본 파일 무접촉 조회)
+        bubble_cache_file = _MERLIN_APPDATA / "ghost_bubble_30kb_cache.json"
+        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+        cache_data: dict = {}
+        if bubble_cache_file.exists():
+            try:
+                cache_data = json.loads(bubble_cache_file.read_text(encoding="utf-8"))
+            except Exception:
+                cache_data = {}
+        cache_data[str(p_target.resolve())] = {
+            "summary_3lines": summary_3lines.strip(),
+            "preserved_mtime_ns": orig_mtime_ns,
+            "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        }
+        bubble_cache_file.write_text(json.dumps(cache_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    finally:
+        # 원본 파일 타임스탬프 100% 동결 복원
+        try:
+            os.utime(p_target, ns=(orig_atime_ns, orig_mtime_ns))
+        except Exception:
+            pass
+    return True
+
+
+def resolve_summon_window_ui_routing(
+    *,
+    selected_text: str = "",
+    caret_lookbehind_text: str = "",
+    has_60s_unconsumed_phone_photo: bool = False,
+    is_editable_input_focused: bool = True,
+    typed_in_basic_window: str = "",
+) -> dict:
+    """
+    [확정 ① & v1.3 대개편 — 무드래그 안전망 + 바탕화면/비입력창 즉시 귀신검색창 직행 + 기본창 타이핑 시 즉시 귀신검색창 전환 라우터]:
+    1) 60초 이내 미소비 폰 촬영/스샷이 있으면 -> 창 UI ③ (One-Time Pop) 또는 창 UI ② Row 0 도킹
+    2) 명시적 트리거('드래그 선택' 또는 끝에 '?'/'？' 입력)가 있을 때 -> 창 UI ②(귀신검색창)로 100% 직행!
+    3) [v1.3 신규] 모니터 바탕화면, 탐색기 빈 공간, 웹페이지 빈 곳처럼 글씨 입력창이 아닌 곳(is_editable_input_focused=False)에서
+       Ctrl+0 (또는 우클릭 꾹~) 호출 시 -> 드래그나 '?'가 없어도 0.01초 만에 곧바로 『👻 귀신검색창(UI ②)』 직행!
+    4) [v1.3 신규] 입력창에서 '?' 없이 Ctrl+0을 눌러 기본 귀신창(UI ①)이 떴더라도, 유저가 키보드로 검색어(typed_in_basic_window)를
+       타이핑하기 시작하면 0.01초 만에 즉시 『👻 귀신검색창(UI ②)』으로 스르륵 자동 변신!
+    5) 그 외 일반 타이핑 중 호출 시 -> 창 UI ①(기본 귀신창: 상용구·클립보드·초능력)을 기본 유지하되,
+       커서 앞 어절(caret_lookbehind_text)이 있으면 창 UI ① 상단 0순위에 '[🔍 방금 친 어절 관련 파일 즉시 소환]' 1줄 브릿지 칩을 함께 표시!
+    """
+    sel = (selected_text or "").strip()
+    look = (caret_lookbehind_text or "").strip()
+    typed_q = (typed_in_basic_window or "").strip()
+    if sel:
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "EXPLICIT_DRAG_SELECTION",
+            "query": sel.rstrip("?？").strip(),
+            "inline_bridge_token": None,
+        }
+    if look.endswith(("?", "？")):
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "EXPLICIT_QUESTION_MARK_TRIGGER",
+            "query": look.rstrip("?？").strip(),
+            "inline_bridge_token": None,
+        }
+    if typed_q:
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "TYPED_QUERY_IN_UI1_AUTO_MORPH_TO_SEARCH",
+            "query": typed_q,
+            "inline_bridge_token": None,
+        }
+    if not is_editable_input_focused:
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "DESKTOP_OR_NON_INPUT_DIRECT_GHOST_SEARCH",
+            "query": "",
+            "inline_bridge_token": None,
+        }
+    if has_60s_unconsumed_phone_photo:
+        return {
+            "target_ui": "ui3_ocr",
+            "reason": "ONE_TIME_60S_PHONE_PHOTO",
+            "query": "",
+            "inline_bridge_token": look or None,
+        }
+    return {
+        "target_ui": "ui1_basic",
+        "reason": "PRESERVE_UI1_WITH_INLINE_LOOKBEHIND_BRIDGE",
+        "query": "",
+        "inline_bridge_token": look if len(look) >= 2 else None,
+    }
+
+
+GHOST_SEARCH_WINDOW_STAGE_SIZES: dict[str, tuple[int, int]] = {
+    "small": (520, 380),    # 소형: 기본 미니 탐색기 (문서 1개 빠르게 찾아 Enter 주입)
+    "medium": (960, 640),   # 중형: 일반 탐색기 크기 (사진 + 우측 OCR 텍스트/단어칩 또는 문서 본문 미리보기 황금 사이즈)
+    "large": (1440, 900),   # 대형: [🖼️ 갤러리로 펼쳐보기] 주소창 없는 프레임리스 전용 앱 창 (🪪 귀신계 여권 & 가족방 직결)
+}
+
+
+def compute_ghost_search_window_3stage_rect(
+    stage: str,
+    anchor_x: int,
+    anchor_y: int,
+    work_area: tuple[int, int, int, int] = (0, 0, 1920, 1040),
+    margin_px: int = 20,
+) -> dict[str, int | str | bool]:
+    """
+    [v1.3 확정 — 웹 복귀 ZERO! 로컬 『귀신검색창』 자체 3단 크기 자유 변신 (소형 520x380 ↔ 중형 960x640 ↔ 대형 1440x900)
+     및 모니터 작업 영역(WorkArea) 화면 경계 자동 자석 클램핑]:
+    우측/하단 모서리에서 소형 창을 띄운 뒤 중형·대형([🖼️ 갤러리로 펼쳐보기])으로 확장할 때
+    창이 모니터 밖으로 삐져나가지 않도록 안쪽(-20px 마진)으로 자동 스냅(Clamp)합니다.
+    """
+    norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
+    req_w, req_h = GHOST_SEARCH_WINDOW_STAGE_SIZES[norm_stage]
+    wa_left, wa_top, wa_right, wa_bottom = work_area
+    avail_w = max(320, (wa_right - wa_left) - (margin_px * 2))
+    avail_h = max(240, (wa_bottom - wa_top) - (margin_px * 2))
+    win_w = min(req_w, avail_w)
+    win_h = min(req_h, avail_h)
+
+    if norm_stage == "large":
+        # 대형 갤러리는 화면 중앙 자석 정렬 (주소창 없는 독립 데스크톱 갤러리 뷰)
+        x = wa_left + ((wa_right - wa_left) - win_w) // 2
+        y = wa_top + ((wa_bottom - wa_top) - win_h) // 2
+    else:
+        x = max(wa_left + margin_px, min(anchor_x, wa_right - margin_px - win_w))
+        y = max(wa_top + margin_px, min(anchor_y, wa_bottom - margin_px - win_h))
+
+    return {
+        "stage": norm_stage,
+        "x": int(x),
+        "y": int(y),
+        "width": int(win_w),
+        "height": int(win_h),
+        "frameless_app_mode": norm_stage == "large",
+    }
+
+
+def opt_in_30d_unlimited_superpower_trial(agreed: bool = True) -> dict:
+    """
+    [확정 ⑤ & 2차 딥리서치 — 🎁 모든 귀신 초능력 30일 무제한 무료체험 명시적 동의 스위치 (Opt-in Trial)]:
+    설치 시 자동 카운트다운을 절대 금지하고, 유저가 『애기귀신 소환술 3단 수련장』 수료 직후 또는
+    초능력 최초 실행 시 직접 '[🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기]'를 눌렀을 때만
+    trial_opt_in_at 타임스탬프를 기록하고 30일 무제한 카운트다운(D-30 ~ D-1)을 시작합니다.
+    """
+    ledger_path = _MERLIN_APPDATA / "superpower_trial_ledger.json"
+    now_ts = time.time()
+    now_dt = datetime.datetime.now()
+    hwid = _get_machine_hwid_local()
+    _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+    ledger = {"machines": {}, "accounts": {}}
+    if ledger_path.exists():
+        try:
+            loaded = json.loads(ledger_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                ledger = loaded
+        except Exception:
+            pass
+    machines = ledger.setdefault("machines", {})
+    m_info = machines.setdefault(hwid, {"machineHwid": hwid, "isSubscribed": False})
+    if agreed:
+        if not m_info.get("trialOptInTs"):
+            m_info["trialOptInTs"] = now_ts
+            m_info["trialOptInAt"] = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+            m_info["trialExpiresAt"] = (now_dt + datetime.timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        m_info["trialOptInStatus"] = "ACTIVE_30D"
+    else:
+        m_info["trialOptInStatus"] = "DAILY_3_FREE_ONLY"
+    ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "ok": True,
+        "status": m_info.get("trialOptInStatus"),
+        "trial_opt_in_at": m_info.get("trialOptInAt"),
+        "days_left": 29 if agreed else 0,
+        "badge_label": "🎁 무제한 체험 D-29" if agreed else "일 3회 평생 무료 모드",
+    }
+
+
+def build_loss_aversion_time_saved_report(total_actions_count: int = 412) -> dict:
+    """
+    [2차 딥리서치 확정 — 📊 일 3회 무료 한도 도달 시 '손실회피(Loss Aversion) 시간 절약 성적표 팝업']:
+    1회당 평균 1분(창 전환 + 폴더 찾기 + 복붙 노가다) 절약 기준으로 누적 절약 시간을 환산하여 반환합니다.
+    """
+    cnt = max(1, int(total_actions_count))
+    saved_minutes = cnt * 1
+    hours = saved_minutes // 60
+    mins = saved_minutes % 60
+    time_str = f"{hours}시간 {mins}분" if hours > 0 else f"{mins}분"
+    return {
+        "total_actions": cnt,
+        "saved_minutes": saved_minutes,
+        "saved_time_label": time_str,
+        "headline": "👻 [오늘의 무료 귀신 초능력 3회를 모두 사용하셨습니다!]",
+        "body": f"지금까지 애기귀신과 함께 총 {cnt:,}번의 창 이동·복붙 노가다를 줄여 약 {time_str}의 소중한 시간을 아끼셨습니다!",
+        "cta_primary": "☕ 커피 한 잔 값(월 3,900원 / 🔥10년 특판 3.9만)으로 평생 무제한 풀기",
+        "cta_secondary": "내일 다시 무료로 쓸게요",
+    }
+
+
 SUPERPOWER_12_FEATURES: dict[str, str] = {
     "feat_1_seq_paste": "① 순차붙여넣기",
     "feat_2_typo_morph": "② 한영오타성형",
@@ -1050,9 +1455,9 @@ def normalize_feature_id(raw_key: str) -> str:
 
 def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
     """
-    [개별 기능별 첫 사용 후 7일 무제한 ➔ 만료된 기능만 일일 성공 3회 제한 검사]
-    - 아직 개봉 안 했거나(UNOPENED), 첫 사용 후 7일 이내(ACTIVE_7D)이거나, 유료 구독자(SUBSCRIBED)이면 무조건 True!
-    - 해당 기능의 7일 무제한이 만료(EXPIRED_7D)되었고 오늘 만료 기능 합산 성공 횟수가 이미 3회에 도달한 경우에만 False 반환!
+    [개별 기능별 첫 사용 후 30일 무제한 ➔ 만료된 기능만 일일 성공 3회 제한 검사]
+    - 아직 개봉 안 했거나(UNOPENED), 첫 사용 후 30일 이내(ACTIVE_30D)이거나, 유료 구독자(SUBSCRIBED)이면 무조건 True!
+    - 해당 기능의 30일 무제한이 만료(EXPIRED_30D)되었고 오늘 만료 기능 합산 성공 횟수가 이미 3회에 도달한 경우에만 False 반환!
     """
     feat_id = normalize_feature_id(raw_feature_key)
     ledger_path = _MERLIN_APPDATA / "superpower_trial_ledger.json"
@@ -1066,21 +1471,26 @@ def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
             return True, "UNOPENED"
         if m_info.get("isSubscribed"):
             return True, "SUBSCRIBED"
+        if m_info.get("trialOptInStatus") == "ACTIVE_30D" and m_info.get("trialOptInTs"):
+            opt_elapsed = (time.time() - float(m_info["trialOptInTs"])) / 86400.0
+            if opt_elapsed < 30.0:
+                rem_opt = max(1, int(round(30.0 - opt_elapsed + 0.49)))
+                return True, f"ACTIVE_D-{rem_opt}"
         feat_trials = m_info.get("featureTrials", {})
         f_entry = feat_trials.get(feat_id)
         if not isinstance(f_entry, dict) or not f_entry.get("firstUsedTs"):
             return True, "UNOPENED"
         elapsed_days = (time.time() - float(f_entry["firstUsedTs"])) / 86400.0
-        if elapsed_days < 7.0:
-            rem_days = max(1, int(round(7.0 - elapsed_days + 0.49)))
+        if elapsed_days < 30.0:
+            rem_days = max(1, int(round(30.0 - elapsed_days + 0.49)))
             return True, f"ACTIVE_D-{rem_days}"
-        # 7일 만료된 기능인 경우: 오늘 만료 기능 합산 사용량 확인
+        # 30일 만료된 기능인 경우: 오늘 만료 기능 합산 사용량 확인
         today = datetime.date.today().isoformat()
         used_today = int(m_info.get("dailyUsage", {}).get(today, 0))
         if used_today >= 3:
             unopened_cnt = sum(1 for fk in SUPERPOWER_12_FEATURES if fk not in feat_trials)
             msg = (
-                f"👻 오늘 만료 기능 무료(3/3회) 소진! (미개봉 {unopened_cnt}개는 지금도 7일 무제한!) "
+                f"👻 오늘 만료 기능 무료(3/3회) 소진! (미개봉 {unopened_cnt}개는 지금도 30일 무제한!) "
                 f"[내 기기 통합 월 3,900원] 구독 시 전 기능 평생 무제한"
             )
             return False, msg
@@ -1092,9 +1502,9 @@ def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
 def complete_feature_action_success(raw_feature_key: str) -> dict:
     """
     [오직 '실제 액션이 성공 완수된 시점'에만 호출!]
-    1) 해당 기능이 미개봉(UNOPENED)이면 -> 지금 이 순간부터 해당 기능의 7일 무제한 타이머 개시! (일일 3회 차감 안 함)
-    2) 해당 기능이 7일 무제한 진행 중(ACTIVE_7D)이면 -> 횟수 차감 없이 통과!
-    3) 해당 기능의 7일 무제한이 만료(EXPIRED_7D)되었으면 -> 오늘 일일 무료 횟수(3회 한도)에서 1회 차감!
+    1) 해당 기능이 미개봉(UNOPENED)이면 -> 지금 이 순간부터 해당 기능의 30일 무제한 타이머 개시! (일일 3회 차감 안 함)
+    2) 해당 기능이 30일 무제한 진행 중(ACTIVE_30D)이면 -> 횟수 차감 없이 통과!
+    3) 해당 기능의 30일 무제한이 만료(EXPIRED_30D)되었으면 -> 오늘 일일 무료 횟수(3회 한도)에서 1회 차감!
     """
     feat_id = normalize_feature_id(raw_feature_key)
     record_feature_telemetry(raw_feature_key)
@@ -1122,9 +1532,9 @@ def complete_feature_action_success(raw_feature_key: str) -> dict:
         feat_trials = m_info.setdefault("featureTrials", {})
         f_entry = feat_trials.get(feat_id)
 
-        # Case 1: 생애 첫 성공 사용! -> 지금부터 이 기능만 7일 무제한 타이머 시작!
+        # Case 1: 생애 첫 성공 사용! -> 지금부터 이 기능만 30일 무제한 타이머 시작!
         if not isinstance(f_entry, dict) or not f_entry.get("firstUsedTs"):
-            exp_dt = now_dt + datetime.timedelta(days=7)
+            exp_dt = now_dt + datetime.timedelta(days=30)
             feat_trials[feat_id] = {
                 "featureName": SUPERPOWER_12_FEATURES.get(feat_id, feat_id),
                 "firstUsedTs": now_ts,
@@ -1133,17 +1543,17 @@ def complete_feature_action_success(raw_feature_key: str) -> dict:
                 "successCount": 1,
             }
             ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
-            return {"status": "FIRST_OPENED_7D", "feature_id": feat_id, "days_left": 7, "consumed_daily": False, "daily_remaining": 3}
+            return {"status": "FIRST_OPENED_30D", "feature_id": feat_id, "days_left": 30, "consumed_daily": False, "daily_remaining": 3}
 
-        # Case 2: 이미 개봉된 기능 -> 7일 경과 여부 판정
+        # Case 2: 이미 개봉된 기능 -> 30일 경과 여부 판정
         f_entry["successCount"] = int(f_entry.get("successCount", 0)) + 1
         elapsed_days = (now_ts - float(f_entry["firstUsedTs"])) / 86400.0
-        if elapsed_days < 7.0:
-            rem_days = max(1, int(round(7.0 - elapsed_days + 0.49)))
+        if elapsed_days < 30.0:
+            rem_days = max(1, int(round(30.0 - elapsed_days + 0.49)))
             ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
-            return {"status": "ACTIVE_7D", "feature_id": feat_id, "days_left": rem_days, "consumed_daily": False, "daily_remaining": 3}
+            return {"status": "ACTIVE_30D", "feature_id": feat_id, "days_left": rem_days, "consumed_daily": False, "daily_remaining": 3}
 
-        # Case 3: 해당 기능의 7일 무제한이 만료된 상태 -> 오늘 성공 횟수 +1 차감!
+        # Case 3: 해당 기능의 30일 무제한이 만료된 상태 -> 오늘 성공 횟수 +1 차감!
         du = m_info.setdefault("dailyUsage", {})
         used_today = int(du.get(today, 0)) + 1
         du[today] = used_today
@@ -1183,6 +1593,68 @@ def record_feature_telemetry(feature_key: str) -> None:
             pass
 
     threading.Thread(target=_save, daemon=True).start()
+
+
+def build_ghost_search_window_url(stage: str = "small", query: str = "", base_url: str | None = None) -> str:
+    """로컬 3단 변신 『👻 귀신검색창』 전용 라우트 URL 생성 (?preview=legacy&ghostSearchWindow=small|medium|large&q=...)"""
+    from urllib.parse import quote
+    norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
+    root_u = (base_url or GHOSTI_WEB_URL).rstrip("/")
+    url = f"{root_u}/?preview=legacy&ghostSearchWindow={norm_stage}"
+    q_clean = (query or "").strip()
+    if q_clean:
+        url += f"&q={quote(q_clean)}"
+    return url
+
+
+def _open_ghost_search_window_popup(stage: str = "small", query: str = "", anchor_x: int | None = None, anchor_y: int | None = None) -> dict:
+    """
+    [v1.3 확정 — 로컬 『👻 귀신검색창』 프레임리스 앱 창(Edge/Chrome --app 모드) 즉시 호출]:
+    compute_ghost_search_window_3stage_rect로 모니터 경계 클램핑된 정확한 좌표·크기를 계산하여
+    기존 웹 「찾기」(?preview=legacy) UI가 100% 그대로 담긴 귀신검색창을 띄웁니다.
+    """
+    pt = wintypes.POINT()
+    if anchor_x is None or anchor_y is None:
+        u32.GetCursorPos(ctypes.byref(pt))
+        ax, ay = pt.x, pt.y
+    else:
+        ax, ay = int(anchor_x), int(anchor_y)
+    work_area = _get_monitor_workarea_for_point(ax, ay)
+    rect = compute_ghost_search_window_3stage_rect(stage, ax, ay, work_area=work_area)
+    target_url = build_ghost_search_window_url(str(rect["stage"]), query=query)
+    record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
+
+    browser_candidates = [
+        Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+        Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+        Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+        Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+    ]
+    launched = False
+    for b_exe in browser_candidates:
+        if b_exe.exists():
+            try:
+                subprocess.Popen(
+                    [
+                        str(b_exe),
+                        f"--app={target_url}",
+                        f"--window-size={rect['width']},{rect['height']}",
+                        f"--window-position={rect['x']},{rect['y']}",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=0x08000000,
+                )
+                launched = True
+                break
+            except Exception:
+                pass
+    if not launched:
+        try:
+            os.startfile(target_url)
+        except Exception:
+            pass
+    return {"url": target_url, "rect": rect, "launched": launched}
 
 
 def _open_ghosti_web() -> None:
@@ -1450,6 +1922,24 @@ def _toast_worker() -> None:
                             _close_win()
                             execute_undo_snapshot(set_clipboard_text)
 
+                        def _on_ghost_search_win_click(_e=None):
+                            q_now = s_entry.get().strip()
+                            _close_win()
+                            _open_ghost_search_window_popup("medium" if q_now else "small", query=q_now)
+
+                        gsearch_btn = tk.Label(
+                            top_search_bar,
+                            text="👻귀신검색창",
+                            fg="#0B1120",
+                            bg="#2DD4BF",
+                            padx=6,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        gsearch_btn.pack(side="right", padx=(4, 0))
+                        gsearch_btn.bind("<Button-1>", _on_ghost_search_win_click)
+
                         clear_btn = tk.Label(
                             top_search_bar,
                             text="🧹비우기",
@@ -1714,9 +2204,7 @@ def _toast_worker() -> None:
                                 q_raw = s_entry.get().strip()
                                 _close_win()
                                 if q_raw:
-                                    set_clipboard_text(q_raw)
-                                    time.sleep(0.03)
-                                    tap_key_combo([VK_CONTROL], VK_V)
+                                    _open_ghost_search_window_popup("medium", query=q_raw)
 
                         s_entry.bind("<Button-1>", _on_entry_click)
                         s_entry.bind("<KeyRelease>", _on_search_key)
@@ -1819,6 +2307,27 @@ def _toast_worker() -> None:
                     x = max(m_left + 12, min(pt.x - 20, m_right - req_w - 16))
                     y = max(m_top + 12, min(pt.y + 16, m_bottom - req_h - 16))
                     win.geometry(f"{req_w}x{req_h}{x:+d}{y:+d}")
+                    try:
+                        # [WS_EX_NOACTIVATE 비활성 포커스 완벽 보호]: 타깃 앱(카톡·엑셀·브라우저)의 Active Caret 및 한글 IME 조합 유지
+                        hwnd_toast = win.winfo_id()
+                        if hwnd_toast:
+                            ex_style = u32.GetWindowLongW(hwnd_toast, GWL_EXSTYLE)
+                            u32.SetWindowLongW(
+                                hwnd_toast,
+                                GWL_EXSTYLE,
+                                ex_style | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+                            )
+                            u32.SetWindowPos(
+                                hwnd_toast,
+                                HWND_TOPMOST,
+                                x,
+                                y,
+                                req_w,
+                                req_h,
+                                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                            )
+                    except Exception:
+                        pass
                     win.lift()
                     win_rect[0] = (x, y, x + req_w, y + req_h)
 
@@ -1839,7 +2348,8 @@ def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
 
 
 def play_baby_ghost_sound(mode: str = "typo") -> None:
-    if mode == "summon":
+    cfg = get_superpower_settings()
+    if not cfg.get("sound_enabled", True):
         return
     """
     [멀린님 UX 설계 반영] 기계음(Beep)을 완전히 배제한 44.1kHz 스튜디오급 '애기귀신 효과음(.wav)' 비동기 재생!
@@ -4034,6 +4544,9 @@ Write-Output $res.Text
         if pre_sel and (time.time() - _RBTN_HOLD_STATE.get("precaptured_ts", 0.0)) < 2.0:
             return pre_sel
         try:
+            hwnd_chk = _RBTN_HOLD_STATE.get("target_hwnd") or u32.GetForegroundWindow()
+            if hwnd_chk and _get_process_name_from_hwnd(hwnd_chk).lower() in _SECURITY_SENSITIVE_PROCS:
+                return ""
             orig_clip = get_clipboard_text()
             sentinel = "__GHOSTI_SEL_PROBE__"
             daemon_set_clipboard(sentinel)
@@ -4669,7 +5182,7 @@ Write-Output $res.Text
 
 def run_quota_self_test() -> int:
     """
-    [멀린님 지시 반영: 7일을 기다리지 않고 1초 만에 검증하는 기능별 7일 타이머 & 만료 기능 성공 3회 제한 자동 테스트]
+    [멀린님 지시 반영: 30일을 기다리지 않고 1초 만에 검증하는 기능별 30일 타이머 & 만료 기능 성공 3회 제한 자동 테스트]
     실행: python tools/seq_paste_daemon.py --test-quota
     """
     if hasattr(sys.stdout, "reconfigure"):
@@ -4684,17 +5197,17 @@ def run_quota_self_test() -> int:
         assert ok and st == "UNOPENED", f"Expected UNOPENED, got {ok}, {st}"
         print(f"   ✅ 2번(한영성형) 초기 상태: {st} (미개봉 확인)")
 
-        print("🧪 [2단계] 2번(한영성형) 첫 실제 성공 완수 -> 7일 무제한 타이머 개시 검증...")
+        print("🧪 [2단계] 2번(한영성형) 첫 실제 성공 완수 -> 30일 무제한 타이머 개시 검증...")
         res1 = complete_feature_action_success("superpower_key_2")
-        assert res1["status"] == "FIRST_OPENED_7D" and res1["consumed_daily"] is False
+        assert res1["status"] == "FIRST_OPENED_30D" and res1["consumed_daily"] is False
         ok2, st2 = check_feature_quota_allowed("superpower_key_2")
         assert ok2 and st2.startswith("ACTIVE_D-")
         print(f"   ✅ 2번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
 
-        print("🧪 [3단계] 2번 기능을 8일 전 사용으로 강제 타임머신 만료 조작 (4번 줄바꿈정리는 미개봉 유지)...")
+        print("🧪 [3단계] 2번 기능을 31일 전 사용으로 강제 타임머신 만료 조작 (4번 줄바꿈정리는 미개봉 유지)...")
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         hwid = _get_machine_hwid_local()
-        ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (8 * 86400)
+        ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (31 * 86400)
         ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
 
         print("🧪 [4단계] 만료된 2번 기능 3회 연속 성공 차감 검증 (1회 -> 2회 -> 3회)...")
@@ -4710,13 +5223,13 @@ def run_quota_self_test() -> int:
         assert not ok_4th, "4th attempt on expired feature must be blocked!"
         print(f"   ✅ 4번째 만료 기능 차단 확인: {msg_4th}")
 
-        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 4번(줄바꿈정리)'은 7일 무제한으로 즉시 열리는지 검증!")
+        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 4번(줄바꿈정리)'은 30일 무제한으로 즉시 열리는지 검증!")
         ok_unopened, st_unopened = check_feature_quota_allowed("superpower_key_4")
         assert ok_unopened and st_unopened == "UNOPENED"
         r_unopened = complete_feature_action_success("superpower_key_4")
-        assert r_unopened["status"] == "FIRST_OPENED_7D" and r_unopened["consumed_daily"] is False
-        print(f"   ✅ 미개봉 4번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 7일 무제한 즉시 개시!)")
-        print("\n🎉 [ALL PASS] 기능별 7일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
+        assert r_unopened["status"] == "FIRST_OPENED_30D" and r_unopened["consumed_daily"] is False
+        print(f"   ✅ 미개봉 4번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 30일 무제한 즉시 개시!)")
+        print("\n🎉 [ALL PASS] 기능별 30일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
         return 0
     finally:
         if backup_bytes is not None:

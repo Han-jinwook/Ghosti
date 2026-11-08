@@ -16,6 +16,41 @@ export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): s
   return `/?preview=legacy&ghostSearchWindow=${stage}${q}`;
 }
 
+/**
+ * 로컬 엔진(127.0.0.1:5199 / 51988)이 연결되어 있을 때 가짜 웹 시뮬레이터 대신
+ * 실제 모니터 위에 프레임리스 로컬 『👻 귀신검색창』 독립 팝업을 즉시 띄웁니다.
+ */
+export async function openRealGhostSearchWindowViaDaemon(
+  stage: GhostSearchStage = 'medium',
+  query?: string,
+): Promise<boolean> {
+  const daemonStage = stage === 'large' ? 'gallery' : stage;
+  const q = (query || '').trim();
+  try {
+    const res = await fetch('http://127.0.0.1:5199/api/superpower/open_search_window', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: daemonStage, query: q }),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data && data.ok !== false) return true;
+    }
+  } catch {
+    // 5199 POST 실패 시 GET 또는 51988 폴백 시도
+  }
+  const qs = `stage=${encodeURIComponent(daemonStage)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+  for (const base of ['http://127.0.0.1:5199', 'http://127.0.0.1:51988']) {
+    try {
+      const res = await fetch(`${base}/__merlin/open-ghost-search?${qs}`);
+      if (res.ok) return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}
+
 /** 귀신비서 채팅이 넘겨준 검색어 (1회 소비) */
 function consumePendingGhostSearchQuery(): string {
   try {
@@ -50,9 +85,16 @@ function loadGame(): Partial<Record<GameStepId, boolean>> {
   }
 }
 
-const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void; initialQuery?: string }> = ({
+const VirtualMonitorSimulator: React.FC<{
+  onStep: (id: GameStepId) => void;
+  initialQuery?: string;
+  connected?: boolean;
+  onOpenRealWindow?: (stage: GhostSearchStage, query?: string) => void;
+}> = ({
   onStep,
   initialQuery = '',
+  connected = false,
+  onOpenRealWindow,
 }) => {
   const monitorRef = useRef<HTMLDivElement | null>(null);
   const [monitorW, setMonitorW] = useState(960);
@@ -74,9 +116,13 @@ const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void; init
 
   const summon = (x?: number, y?: number) => {
     if (typeof x === 'number' && typeof y === 'number') setAnchor({ x, y });
-    setStage('small');
+    const nextStage: GhostSearchStage = initialQuery ? 'medium' : 'small';
+    setStage(nextStage);
     playBabyGhostChime('summon');
     onStep('summon');
+    if (connected && onOpenRealWindow) {
+      onOpenRealWindow(nextStage, initialQuery);
+    }
   };
 
   // 페이지 안에서 Ctrl+0 → 가상 귀신검색창 소환 (브라우저 확대 초기화 단축키는 이 화면에서만 가로챔)
@@ -164,6 +210,9 @@ const VirtualMonitorSimulator: React.FC<{ onStep: (id: GameStepId) => void; init
                       onClick={() => {
                         setStage(s);
                         if (s !== 'small') onStep(s);
+                        if (connected && onOpenRealWindow) {
+                          onOpenRealWindow(s, initialQuery);
+                        }
                       }}
                       className={`px-2 py-0.5 rounded ${stage === s ? 'bg-[#2DD4BF] text-zinc-950' : 'bg-zinc-800'}`}
                     >
@@ -195,12 +244,8 @@ export const GhostSearchTrainingPage: React.FC = () => {
   const [game, setGame] = useState(() => loadGame());
   const [connected, setConnected] = useState(zCoreBridge.isConnected);
   const [pendingQuery] = useState(() => consumePendingGhostSearchQuery());
+  const [realPopupToast, setRealPopupToast] = useState<string | null>(null);
   const monitorSectionRef = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (pendingQuery) monitorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [pendingQuery]);
-
-  useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
 
   const markStep = (id: GameStepId) => {
     setGame((prev) => {
@@ -215,6 +260,34 @@ export const GhostSearchTrainingPage: React.FC = () => {
     });
   };
 
+  const triggerRealGhostSearchWindow = async (stage: GhostSearchStage = 'medium', query?: string) => {
+    playBabyGhostChime('summon');
+    markStep('summon');
+    if (stage === 'medium') markStep('medium');
+    if (stage === 'large') {
+      markStep('medium');
+      markStep('large');
+    }
+    const ok = await openRealGhostSearchWindowViaDaemon(stage, query ?? pendingQuery);
+    if (ok) {
+      setRealPopupToast(
+        `👻 내 진짜 PC 파일·사진·여권이 연동된 리얼 귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 모니터에 바로 띄웠습니다!`,
+      );
+      setTimeout(() => setRealPopupToast(null), 5000);
+    }
+  };
+
+  useEffect(() => {
+    if (pendingQuery) {
+      monitorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (zCoreBridge.isConnected) {
+        void triggerRealGhostSearchWindow('medium', pendingQuery);
+      }
+    }
+  }, [pendingQuery]);
+
+  useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
+
   const gameDone = GAME_STEPS.every((s) => game[s.id]);
 
   return (
@@ -226,6 +299,42 @@ export const GhostSearchTrainingPage: React.FC = () => {
         </p>
       </div>
 
+      {connected && (
+        <div className="p-4 rounded-2xl border-2 border-[#2DD4BF] bg-gradient-to-r from-[#2DD4BF]/15 via-teal-500/10 to-indigo-500/10 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[14px] font-extrabold text-zinc-900 dark:text-white flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              ⚡ 로컬 Z-코어 연결됨 · 가짜 시뮬레이터 대신 『내 진짜 PC 파일 리얼 귀신검색창』이 바로 뜹니다!
+            </span>
+            <span className="text-[12.5px] text-zinc-600 dark:text-zinc-300">
+              지금 키보드에서 <strong>Ctrl + 0</strong>을 누르거나 아래 버튼을 누르면 방금 인덱싱된 내 진짜 사진·엑셀·여권이 담긴 실제 귀신검색창이 모니터에 팝업됩니다.
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
+              className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold shadow-md cursor-pointer transition-all"
+            >
+              👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기
+            </button>
+            <button
+              type="button"
+              onClick={() => void triggerRealGhostSearchWindow('large', pendingQuery)}
+              className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white/10 dark:hover:bg-white/20 text-[12.5px] font-bold cursor-pointer transition-all"
+            >
+              🖼️ 갤러리(1440×900)로 바로 띄우기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {realPopupToast && (
+        <div className="px-4 py-3 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-emerald-700 dark:text-emerald-200 text-[13px] font-extrabold">
+          {realPopupToast}
+        </div>
+      )}
+
       <section className="flex flex-col gap-2">
         <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">STEP 1 · 소환술 3단 수련</h2>
         <GhostSuperpowerDojo variant="basics" />
@@ -233,7 +342,9 @@ export const GhostSearchTrainingPage: React.FC = () => {
 
       <section ref={monitorSectionRef} className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">STEP 2 · 귀신검색 도장깨기</h2>
+          <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">
+            STEP 2 · 귀신검색 도장깨기 {connected ? '(Ctrl+0 입력 시 실제 로컬 귀신검색창 동시 팝업)' : '(엔진 미연결 시 웹 가상 모니터 체험)'}
+          </h2>
           <div className="flex flex-wrap gap-1.5">
             {GAME_STEPS.map((s) => (
               <span
@@ -250,7 +361,12 @@ export const GhostSearchTrainingPage: React.FC = () => {
             ))}
           </div>
         </div>
-        <VirtualMonitorSimulator onStep={markStep} initialQuery={pendingQuery} />
+        <VirtualMonitorSimulator
+          onStep={markStep}
+          initialQuery={pendingQuery}
+          connected={connected}
+          onOpenRealWindow={(st, q) => void triggerRealGhostSearchWindow(st, q)}
+        />
       </section>
 
       <section
@@ -261,7 +377,15 @@ export const GhostSearchTrainingPage: React.FC = () => {
         <span className="text-[14.5px] font-extrabold text-zinc-900 dark:text-white">
           🏁 마지막 미션 · 바탕화면으로 나가서 Ctrl + 0 (또는 우클릭 꾹~)을 눌러 내 진짜 파일을 불러보세요!
         </span>
-        {!connected && (
+        {connected ? (
+          <button
+            type="button"
+            onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
+            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer"
+          >
+            👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기
+          </button>
+        ) : (
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
