@@ -3,6 +3,9 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl } from '../services/zCoreBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 
+// [공문 2053·2056] 초능력 수련장 & 9종 도장깨기 체험관 (지연 로드 — OnboardingModal ↔ 도장깨기 순환 import 방지)
+const LazyGhostSuperpowerDojo = React.lazy(() => import('./ghostDojo/GhostSuperpowerDojo'));
+
 export type OnboardingTabId = 'tab1_find_care' | 'tab2_superpower' | 'tab3_share_pro';
 
 export interface SuperpowerTrialStatus {
@@ -1018,6 +1021,11 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
            ───────────────────────────────────────────────────────────── */}
         {activeTab === 'tab2_superpower' && (
           <div className="flex flex-col gap-4">
+            {/* [공문 2056] 귀신창 초능력 파트 상시 연습장: 4분 30초 ROI 배너 + 1단계 소환술 3단 + 2단계 9종 도장깨기 (언제든 재입장 · 종목 골라 재연습) */}
+            <React.Suspense fallback={<div className="h-24 rounded-2xl bg-zinc-900 animate-pulse" />}>
+              <LazyGhostSuperpowerDojo variant="full" />
+            </React.Suspense>
+
             {!inlineSuperpowerOnly && (
               <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/10">
                 <span className="text-[13px] font-extrabold text-white">

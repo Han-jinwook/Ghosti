@@ -29,6 +29,8 @@ import {
 import { PcMasterQuickSendPanel, renderHighlightedDocText } from './PricingModal';
 import { GhostiTopRightHubAnchor, GhostiSidebarBottomFamilyLauncher } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
+import { GhostSuperpowerDojo } from './ghostDojo/GhostSuperpowerDojo';
+import { GhostSearchTrainingPage } from './ghostDojo/GhostSearchTrainingPage';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import {
@@ -197,8 +199,9 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   Array<{ id: DesktopTab; icon: string; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'dashboard', icon: '🔍', label: '찾기', subcaption: '사진 · 영상 · 문서 1초 검색' },
-    { id: 'trash', icon: '✋', label: '손보기', subcaption: '사진 정리 · PC 속도 점검', showTrashCount: true },
+    // [v1.3] 귀신 3총사 명칭·순서 통일: 1순위 귀신비서(구 손보기+채팅) → 2순위 귀신검색(구 찾기)
+    { id: 'trash', icon: '👻', label: '귀신비서', subcaption: '손보기 · 귀신계 여권 · 채팅', showTrashCount: true },
+    { id: 'dashboard', icon: '👻', label: '귀신검색', subcaption: 'Ctrl + 0 현장 소환 수련' },
   ],
   family: [
     { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
@@ -555,6 +558,8 @@ export const DesktopDashboard: React.FC = () => {
             (activeLoungeType === 'personal' && desktopTab === 'sync') || isDeviceIntegrationOpen;
           const isMyDeviceActive =
             activeLoungeType === 'personal' && desktopTab !== 'sync' && !isDeviceIntegrationOpen;
+          const isGhostSecretaryActive = isMyDeviceActive && desktopTab === 'trash';
+          const isGhostSearchActive = isMyDeviceActive && desktopTab === 'dashboard';
           const isPhotoShareActive =
             !isDeviceIntegrationOpen &&
             (activeLoungeType === 'family' ||
@@ -605,72 +610,67 @@ export const DesktopDashboard: React.FC = () => {
             <div className="flex flex-col gap-1.5">
               {/* ━━━ 기본 무료 메뉴 ━━━ */}
 
-              {/* [무료 1] 내 기기 (PC·폰) */}
+              {/* [v1.3 1순위] 👻 귀신비서 — 필수 첫 관문 & 만능 채팅 총괄 (구 손보기 + 채팅 도우미 통합) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeviceIntegrationOpen(false);
+                  setActiveLoungeType('personal');
+                  setDesktopTab('trash');
+                  if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                  else scrollAppToTop();
+                }}
+                className={mainBtnClass(isGhostSecretaryActive)}
+              >
+                <span className="truncate" title="컴퓨터 손보기부터 귀신계 여권까지">
+                  👻 귀신비서
+                </span>
+              </button>
+
+              {/* [v1.3 2순위] 👻 귀신검색 — 웹 검색창 폐지, 소환술 수련 + 도장깨기 + 3단 변신 귀신검색창 (구 찾기) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeviceIntegrationOpen(false);
+                  setActiveLoungeType('personal');
+                  setDesktopTab('dashboard');
+                  resetToZenCanvas();
+                  if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                  else scrollAppToTop();
+                }}
+                className={mainBtnClass(isGhostSearchActive)}
+              >
+                <span className="truncate" title="Ctrl + 0 (우클릭 꾹~ / Ctrl+우클릭)">
+                  👻 귀신검색
+                </span>
+              </button>
+
+              {/* [v1.3 3순위] ⚡ 귀신창 초능력 — 상시 연습장 (1단계 소환술 3단 + 2단계 9종 도장깨기 체험관) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsDeviceIntegrationOpen(false);
+                    setIsDeviceIntegrationOpen(true);
+                    setActiveIntegrationSubTab('superpower');
+                    setGhostWindowTier('pc_free');
+                    setGhostWindowInitialTab('ui1_basic');
                     setActiveLoungeType('personal');
-                    setDesktopTab('dashboard');
-                    resetToZenCanvas();
-                    if (!isMobileDrawer) scrollAppToTop();
+                    setDesktopTab('sync');
+                    if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    else scrollAppToTop();
                   }}
-                  className={mainBtnClass(isMyDeviceActive)}
+                  className={mainBtnClass(isPcFreeSuperpowerActive)}
                 >
-                  <span className="truncate" title="내 폰·PC 속 찾기 및 손보기 (평생 0원)">
-                    내 기기 (PC·폰)
-                  </span>
-                  <span className="text-[10px] opacity-60">{isMyDeviceActive ? '▾' : '▸'}</span>
-                </button>
-
-                {isMyDeviceActive && (
-                  <div className={subWrapClass}>
-                    {LOUNGE_SUBMENU_CONFIG.personal.map((sub) => {
-                      const isSubActive = desktopTab === sub.id && !isDeviceIntegrationOpen;
-                      return (
-                        <button
-                          key={sub.id}
-                          type="button"
-                          onClick={() => {
-                            setIsDeviceIntegrationOpen(false);
-                            setActiveLoungeType('personal');
-                            setDesktopTab(sub.id);
-                            if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                          }}
-                          title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
-                          className={subBtnClass(isSubActive)}
-                        >
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="grayscale opacity-75 shrink-0 text-[13px]">{sub.icon}</span>
-                              <span className="truncate font-bold">{sub.label}</span>
-                            </div>
-                            {sub.subcaption && (
-                              <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
-                                {sub.subcaption}
-                              </span>
-                            )}
-                          </div>
-                          {sub.showTrashCount && (
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold shrink-0 border ${
-                                themeMode === 'light'
-                                  ? 'bg-teal-50 border-teal-200 text-teal-800'
-                                  : 'bg-zinc-800 border-white/10 text-zinc-200'
-                              }`}
-                            >
-                              {activeTrashCount}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-col text-left min-w-0 flex-1">
+                    <span className="truncate text-[14px]">⚡ 귀신창 초능력</span>
+                    <span className="text-[10.5px] opacity-75 font-normal truncate">
+                      🥋 수련장 · 도장깨기 체험관
+                    </span>
                   </div>
-                )}
+                </button>
               </div>
 
-              {/* [무료 2] 사진 공유 (인원·장수 무제한 평생 0원 · 사진/영상 전용) */}
+              {/* [v1.3 4순위] 📸 사진 공유 (가족·동호회·동창회 — 인원·장수 무제한 평생 0원 · 사진/영상 전용) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -689,7 +689,7 @@ export const DesktopDashboard: React.FC = () => {
                   className={mainBtnClass(isPhotoShareActive)}
                 >
                   <span className="truncate" title="인원·장수 무제한 평생 0원 · 사진/영상 전용">
-                    사진 공유
+                    📸 사진 공유
                   </span>
                   <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
                 </button>
@@ -763,31 +763,6 @@ export const DesktopDashboard: React.FC = () => {
                     </button>
                   </div>
                 )}
-              </div>
-
-              {/* [무료 3] ⚡ 귀신창 초능력 : 💻 내 PC (내 PC 문서 현장 소환 무제한 무료 + 초능력 1개월 무제한 ➔ 일 3회 무료) */}
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDeviceIntegrationOpen(true);
-                    setActiveIntegrationSubTab('superpower');
-                    setGhostWindowTier('pc_free');
-                    setGhostWindowInitialTab('ui1_basic');
-                    setActiveLoungeType('personal');
-                    setDesktopTab('sync');
-                    if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                    else scrollAppToTop();
-                  }}
-                  className={mainBtnClass(isPcFreeSuperpowerActive)}
-                >
-                  <div className="flex flex-col text-left min-w-0 flex-1">
-                    <span className="truncate text-[14px]">⚡ 귀신창 초능력 : 💻 내 PC</span>
-                    <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      내 PC 소환 무료 · 초능력 일 3회
-                    </span>
-                  </div>
-                </button>
               </div>
 
               {/* ━━━ 기기 연동 · 팀 확장 (관심 시 클릭하여 펼침 / 4대 조건부 자동 펼침) ━━━ */}
@@ -1295,7 +1270,8 @@ export const DesktopDashboard: React.FC = () => {
         {/* ─────────────── 서브메뉴 2번: 노션형 백지 도화지(Zen Canvas) & 점진적 결과 펼침 ─────────────── */}
         {desktopTab === 'dashboard' &&
           (activeLoungeType === 'personal' && isStage1MinimalPreview ? (
-            <Stage1MinimalSearchPreview />
+            // [v1.3] 웹 검색 입력창 폐지 → 소환술 수련 + 귀신검색 도장깨기(가상 모니터 안 귀신검색창 = 기존 찾기 UI 100% 승계)
+            <GhostSearchTrainingPage />
           ) : (
           <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
             {activeLoungeType === 'work' ? (
@@ -1840,6 +1816,8 @@ export const DesktopDashboard: React.FC = () => {
 
           {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
             <div className="flex flex-col gap-6">
+              {/* [공문 2053 · v1.3 3순위] ⚡ 귀신창 초능력 상시 연습장 = 🥋 초능력 도장깨기 체험관 */}
+              {ghostWindowTier === 'pc_free' && <GhostSuperpowerDojo variant="full" />}
               <GhostWindowThreeStageMockup
                 activeTier={ghostWindowTier}
                 onTierChange={setGhostWindowTier}
