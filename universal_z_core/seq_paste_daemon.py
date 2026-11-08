@@ -1239,16 +1239,23 @@ def resolve_summon_window_ui_routing(
     selected_text: str = "",
     caret_lookbehind_text: str = "",
     has_60s_unconsumed_phone_photo: bool = False,
+    is_editable_input_focused: bool = True,
+    typed_in_basic_window: str = "",
 ) -> dict:
     """
-    [확정 ① — 무드래그 안전망 1단계(Caret Lookbehind) 작동 시 '창 UI ①(기본 귀신창)' 실종 방지 라우터]:
+    [확정 ① & v1.3 대개편 — 무드래그 안전망 + 바탕화면/비입력창 즉시 귀신검색창 직행 + 기본창 타이핑 시 즉시 귀신검색창 전환 라우터]:
     1) 60초 이내 미소비 폰 촬영/스샷이 있으면 -> 창 UI ③ (One-Time Pop) 또는 창 UI ② Row 0 도킹
-    2) 명시적 트리거('드래그 선택' 또는 끝에 '?'/'？' 입력)가 있을 때만 -> 창 UI ②(귀신 미니 탐색기)로 100% 직행!
-    3) 드래그도 없고 '?'도 없이 타이핑 중 호출했을 때는 -> 무조건 창 UI ①(기본 귀신창: 상용구·클립보드·초능력)을 기본 유지하되,
+    2) 명시적 트리거('드래그 선택' 또는 끝에 '?'/'？' 입력)가 있을 때 -> 창 UI ②(귀신검색창)로 100% 직행!
+    3) [v1.3 신규] 모니터 바탕화면, 탐색기 빈 공간, 웹페이지 빈 곳처럼 글씨 입력창이 아닌 곳(is_editable_input_focused=False)에서
+       Ctrl+0 (또는 우클릭 꾹~) 호출 시 -> 드래그나 '?'가 없어도 0.01초 만에 곧바로 『👻 귀신검색창(UI ②)』 직행!
+    4) [v1.3 신규] 입력창에서 '?' 없이 Ctrl+0을 눌러 기본 귀신창(UI ①)이 떴더라도, 유저가 키보드로 검색어(typed_in_basic_window)를
+       타이핑하기 시작하면 0.01초 만에 즉시 『👻 귀신검색창(UI ②)』으로 스르륵 자동 변신!
+    5) 그 외 일반 타이핑 중 호출 시 -> 창 UI ①(기본 귀신창: 상용구·클립보드·초능력)을 기본 유지하되,
        커서 앞 어절(caret_lookbehind_text)이 있으면 창 UI ① 상단 0순위에 '[🔍 방금 친 어절 관련 파일 즉시 소환]' 1줄 브릿지 칩을 함께 표시!
     """
     sel = (selected_text or "").strip()
     look = (caret_lookbehind_text or "").strip()
+    typed_q = (typed_in_basic_window or "").strip()
     if sel:
         return {
             "target_ui": "ui2_summon",
@@ -1263,6 +1270,20 @@ def resolve_summon_window_ui_routing(
             "query": look.rstrip("?？").strip(),
             "inline_bridge_token": None,
         }
+    if typed_q:
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "TYPED_QUERY_IN_UI1_AUTO_MORPH_TO_SEARCH",
+            "query": typed_q,
+            "inline_bridge_token": None,
+        }
+    if not is_editable_input_focused:
+        return {
+            "target_ui": "ui2_summon",
+            "reason": "DESKTOP_OR_NON_INPUT_DIRECT_GHOST_SEARCH",
+            "query": "",
+            "inline_bridge_token": None,
+        }
     if has_60s_unconsumed_phone_photo:
         return {
             "target_ui": "ui3_ocr",
@@ -1275,6 +1296,52 @@ def resolve_summon_window_ui_routing(
         "reason": "PRESERVE_UI1_WITH_INLINE_LOOKBEHIND_BRIDGE",
         "query": "",
         "inline_bridge_token": look if len(look) >= 2 else None,
+    }
+
+
+GHOST_SEARCH_WINDOW_STAGE_SIZES: dict[str, tuple[int, int]] = {
+    "small": (520, 380),    # 소형: 기본 미니 탐색기 (문서 1개 빠르게 찾아 Enter 주입)
+    "medium": (960, 640),   # 중형: 일반 탐색기 크기 (사진 + 우측 OCR 텍스트/단어칩 또는 문서 본문 미리보기 황금 사이즈)
+    "large": (1440, 900),   # 대형: [🖼️ 갤러리로 펼쳐보기] 주소창 없는 프레임리스 전용 앱 창 (🪪 귀신계 여권 & 가족방 직결)
+}
+
+
+def compute_ghost_search_window_3stage_rect(
+    stage: str,
+    anchor_x: int,
+    anchor_y: int,
+    work_area: tuple[int, int, int, int] = (0, 0, 1920, 1040),
+    margin_px: int = 20,
+) -> dict[str, int | str | bool]:
+    """
+    [v1.3 확정 — 웹 복귀 ZERO! 로컬 『귀신검색창』 자체 3단 크기 자유 변신 (소형 520x380 ↔ 중형 960x640 ↔ 대형 1440x900)
+     및 모니터 작업 영역(WorkArea) 화면 경계 자동 자석 클램핑]:
+    우측/하단 모서리에서 소형 창을 띄운 뒤 중형·대형([🖼️ 갤러리로 펼쳐보기])으로 확장할 때
+    창이 모니터 밖으로 삐져나가지 않도록 안쪽(-20px 마진)으로 자동 스냅(Clamp)합니다.
+    """
+    norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
+    req_w, req_h = GHOST_SEARCH_WINDOW_STAGE_SIZES[norm_stage]
+    wa_left, wa_top, wa_right, wa_bottom = work_area
+    avail_w = max(320, (wa_right - wa_left) - (margin_px * 2))
+    avail_h = max(240, (wa_bottom - wa_top) - (margin_px * 2))
+    win_w = min(req_w, avail_w)
+    win_h = min(req_h, avail_h)
+
+    if norm_stage == "large":
+        # 대형 갤러리는 화면 중앙 자석 정렬 (주소창 없는 독립 데스크톱 갤러리 뷰)
+        x = wa_left + ((wa_right - wa_left) - win_w) // 2
+        y = wa_top + ((wa_bottom - wa_top) - win_h) // 2
+    else:
+        x = max(wa_left + margin_px, min(anchor_x, wa_right - margin_px - win_w))
+        y = max(wa_top + margin_px, min(anchor_y, wa_bottom - margin_px - win_h))
+
+    return {
+        "stage": norm_stage,
+        "x": int(x),
+        "y": int(y),
+        "width": int(win_w),
+        "height": int(win_h),
+        "frameless_app_mode": norm_stage == "large",
     }
 
 
