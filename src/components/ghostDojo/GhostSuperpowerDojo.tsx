@@ -146,12 +146,26 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         <span>여기서 우클릭 꾹~</span>
       </div>
       {summoned && (
-        <div className={`${boxCls} border-[#2DD4BF]/60`}>
-          <div className="text-[12px] font-extrabold text-[#2DD4BF] mb-1">👻 기본 귀신창</div>
-          <div className="flex flex-wrap gap-1.5 text-[12px]">
-            <span className="px-2 py-1 rounded-lg bg-zinc-800">F1 내 계좌</span>
-            <span className="px-2 py-1 rounded-lg bg-zinc-800">📋 최근 복사 5개</span>
-            <span className="px-2 py-1 rounded-lg bg-zinc-800">⚡ 초능력</span>
+        <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
+          <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (1~8번 영구 번호 &amp; 우측 분리)</div>
+          <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#5EEAD4] font-bold">
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[Ctrl+V] 순차·칸맞춤</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[1] 한영성형</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[2] 줄바꿈정리</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[3] 서식세탁</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[4] 파일·PDF변환🔒</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-[#E2E8F0]">
+            <div className="flex flex-wrap gap-1.5">
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 글자·표OCR🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[6] 합본🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[7] 번호·일정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[8] 창고정🔒</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-300/50 text-amber-200 font-bold">[⌨️상용구▾]</span>
+              <span className="px-2 py-0.5 rounded bg-teal-400/20 border border-teal-300/50 text-teal-200 font-bold">[💡꿀팁·추가▾]</span>
+            </div>
           </div>
         </div>
       )}

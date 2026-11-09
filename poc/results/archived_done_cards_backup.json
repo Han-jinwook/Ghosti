@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-06T15:05:01.397687",
+  "updated_at": "2026-11-09T10:06:04.544866",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -810,6 +810,22 @@
       "last_edited_time": "2026-11-06T03:39:00.000Z",
       "url": "https://app.notion.com/p/410f9ffd2c1d81ed88d9ce06e7a5b212",
       "archived_at": "2026-11-06T15:05:01.397497"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-80e3-9ca1-d3d763e49566",
+      "title": "🎯 [귀신같이] z코어 연결 알림 토스트창",
+      "app": "",
+      "last_edited_time": "2026-11-06T05:25:00.000Z",
+      "url": "https://app.notion.com/p/z-410f9ffd2c1d80e39ca1d3d763e49566",
+      "archived_at": "2026-11-09T10:06:04.544687"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-8066-9221-fd1c9f61b3bd",
+      "title": "🎯 [귀신같이] 손보기 대화창 답변 반복",
+      "app": "",
+      "last_edited_time": "2026-11-06T05:21:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d80669221fd1c9f61b3bd",
+      "archived_at": "2026-11-09T10:06:04.544701"
     }
   ]
 }

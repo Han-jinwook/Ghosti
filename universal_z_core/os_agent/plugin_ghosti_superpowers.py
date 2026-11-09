@@ -328,18 +328,18 @@ def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]
 SNIPPET_KEYS = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10")
 
 SUPERPOWER_12_FEATURES: Dict[str, str] = {
-    "feat_1_seq_paste": "1번 순차 붙여넣기",
-    "feat_2_typo_morph": "2번 한영·영한 오타 둔갑술",
-    "feat_3_clean_format": "3번 클립보드 서식 세탁",
-    "feat_4_iron_lines": "4번 줄바꿈 다림질 및 NFKC 정규화",
-    "feat_5_ai_search": "5번 복사검색 AI 즉시 질의",
-    "feat_6_screen_ocr": "6번 화면 캡처 OCR 텍스트·표 추출",
-    "feat_7_toggle_topmost": "7번 작업창 최상위 고정 핀",
-    "feat_8_format_numbers": "8번 계좌·전화번호 정형화",
-    "feat_9_image_file": "9번 스샷 이미지·PDF 파일 즉시 생성",
-    "feat_b1_snippets": "보너스 1번 F1~F10 내 상용구 매크로",
-    "feat_b2_excel_split": "보너스 2번 엑셀 다중 셀 쪼개기",
-    "feat_b3_pdf_merge": "보너스 3번 클립보드 PDF 병합/추출",
+    "feat_1_seq_paste": "[Ctrl+V] 순차·칸맞춤",
+    "feat_2_typo_morph": "[1] 한영성형",
+    "feat_4_iron_lines": "[2] 줄바꿈정리",
+    "feat_3_clean_format": "[3] 서식세탁",
+    "feat_9_image_file": "[4] 파일·PDF변환🔒",
+    "feat_6_screen_ocr": "[5] 글자·표OCR🔒",
+    "feat_5_ai_search": "[6] 합본🔒",
+    "feat_8_format_numbers": "[7] 번호·일정🔒",
+    "feat_7_toggle_topmost": "[8] 창고정🔒",
+    "feat_b1_snippets": "[⌨️상용구▾] F1~F12 상용구 슬롯",
+    "feat_b2_excel_split": "[💡꿀팁·추가▾] 엑셀 다중 칸 자동 쪼개기",
+    "feat_b3_pdf_merge": "[💡꿀팁·추가▾] 다중 스샷 300DPI PDF 합본",
 }
 
 

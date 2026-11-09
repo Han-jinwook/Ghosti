@@ -1407,18 +1407,18 @@ def build_loss_aversion_time_saved_report(total_actions_count: int = 412) -> dic
 
 
 SUPERPOWER_12_FEATURES: dict[str, str] = {
-    "feat_1_seq_paste": "① 순차붙여넣기",
-    "feat_2_typo_morph": "② 한영오타성형",
+    "feat_1_seq_paste": "⚡ [Ctrl+V] 순차·칸맞춤",
+    "feat_2_typo_morph": "① 한영성형",
+    "feat_4_iron_lines": "② 줄바꿈정리",
     "feat_3_clean_format": "③ 서식세탁",
-    "feat_4_iron_lines": "④ 줄바꿈정리",
-    "feat_5_merge_search": "⑤ 합본·기억검색",
-    "feat_6_screen_ocr": "⑥ 글자·표OCR",
-    "feat_7_window_pin": "⑦ 창고정",
-    "feat_8_format_numbers": "⑧ 번호·일정성형",
-    "feat_9_image_file": "⑨ 스샷파일변환",
-    "feat_b1_snippets": "🎁 상용구(F1~10)",
-    "feat_b2_excel_split": "🎁 엑셀쪼개기",
-    "feat_b3_pdf_merge": "🎁 다중스샷PDF합본",
+    "feat_9_image_file": "④ 파일·PDF변환🔒",
+    "feat_6_screen_ocr": "⑤ 글자·표OCR🔒",
+    "feat_5_merge_search": "⑥ 합본🔒",
+    "feat_8_format_numbers": "⑦ 번호·일정🔒",
+    "feat_7_window_pin": "⑧ 창고정🔒",
+    "feat_b1_snippets": "⌨️ 상용구(F1~12)",
+    "feat_b2_excel_split": "💡 엑셀쪼개기",
+    "feat_b3_pdf_merge": "💡 다중스샷PDF합본",
 }
 
 
@@ -1426,22 +1426,27 @@ def normalize_feature_id(raw_key: str) -> str:
     k = str(raw_key or "").strip()
     if k in SUPERPOWER_12_FEATURES:
         return k
-    if k in ("superpower_key_1", "seq_paste_smart_match", "1"):
+    if k in ("seq_paste_smart_match", "ctrl_v"):
         return "feat_1_seq_paste"
-    if k in ("superpower_key_2", "auto_typo_morph_2words", "2"):
+    # [영구 고정 번호 1~8 체계]:
+    # [1] 한영성형, [2] 줄바꿈정리, [3] 서식세탁, [4] 파일·PDF변환🔒,
+    # [5] 글자·표OCR🔒, [6] 합본🔒, [7] 번호·일정🔒, [8] 창고정🔒
+    if k in ("superpower_key_1", "auto_typo_morph_2words", "1"):
         return "feat_2_typo_morph"
+    if k in ("superpower_key_2", "2"):
+        return "feat_4_iron_lines"
     if k in ("superpower_key_3", "3"):
         return "feat_3_clean_format"
     if k in ("superpower_key_4", "4"):
-        return "feat_4_iron_lines"
+        return "feat_9_image_file"
     if k in ("superpower_key_5", "5"):
-        return "feat_5_merge_search"
-    if k in ("superpower_key_6", "6"):
         return "feat_6_screen_ocr"
+    if k in ("superpower_key_6", "6"):
+        return "feat_5_merge_search"
     if k in ("superpower_key_7", "7"):
-        return "feat_7_window_pin"
-    if k in ("superpower_key_8", "8"):
         return "feat_8_format_numbers"
+    if k in ("superpower_key_8", "8"):
+        return "feat_7_window_pin"
     if k in ("superpower_key_9", "9"):
         return "feat_9_image_file"
     if k.startswith("snippet_F") or k.upper().startswith("F"):
@@ -2256,26 +2261,143 @@ def _toast_worker() -> None:
                         else:
                             line1_txt, line2_txt = right_part.strip(), ""
 
+                        row1_frame = tk.Frame(menu_box, bg="#0B1120")
+                        row1_frame.pack(fill="x", anchor="w")
+
                         lbl_r1 = tk.Label(
-                            menu_box,
+                            row1_frame,
                             text=line1_txt.strip(),
                             fg="#5EEAD4",
                             bg="#0B1120",
                             font=("Malgun Gothic", 9, "bold"),
                             anchor="w",
                         )
-                        lbl_r1.pack(fill="x", anchor="w")
+                        lbl_r1.pack(side="left", anchor="w")
 
-                        if line2_txt.strip():
-                            lbl_r2 = tk.Label(
-                                menu_box,
-                                text=line2_txt.strip(),
-                                fg="#E2E8F0",
-                                bg="#0B1120",
-                                font=("Malgun Gothic", 9, "bold"),
-                                anchor="w",
-                            )
-                            lbl_r2.pack(fill="x", anchor="w", pady=(1, 0))
+                        row2_frame = tk.Frame(menu_box, bg="#0B1120")
+                        row2_frame.pack(fill="x", anchor="w", pady=(2, 0))
+
+                        lbl_r2 = tk.Label(
+                            row2_frame,
+                            text=line2_txt.strip(),
+                            fg="#E2E8F0",
+                            bg="#0B1120",
+                            font=("Malgun Gothic", 9, "bold"),
+                            anchor="w",
+                        )
+                        lbl_r2.pack(side="left", anchor="w")
+
+                        # 우측 끝 펼침 버튼 2종: [⌨️ 상용구▾]  [💡 꿀팁·추가▾]
+                        extra_panel_box = tk.Frame(container, bg="#0B1120")
+                        panel_state = {"mode": None}  # None | "snippets" | "tips"
+
+                        def _toggle_extra_panel(target_mode: str):
+                            is_hovered[0] = True
+                            for ch in extra_panel_box.winfo_children():
+                                ch.destroy()
+                            if panel_state["mode"] == target_mode:
+                                extra_panel_box.pack_forget()
+                                panel_state["mode"] = None
+                                _update_window_geometry()
+                                return
+                            panel_state["mode"] = target_mode
+                            extra_panel_box.pack(fill="x", pady=(6, 0))
+                            p_inner = tk.Frame(extra_panel_box, bg="#0F172A", highlightbackground="#2DD4BF", highlightthickness=1, padx=8, pady=6)
+                            p_inner.pack(fill="x")
+
+                            if target_mode == "snippets":
+                                tk.Label(
+                                    p_inner,
+                                    text="⌨️ [상용구 사출 & 설정] 귀신창 열린 상태에서 F1~F10 키를 누르거나 아래 슬롯을 클릭하세요",
+                                    fg="#5EEAD4",
+                                    bg="#0F172A",
+                                    font=("Malgun Gothic", 8, "bold"),
+                                    anchor="w",
+                                ).pack(fill="x", pady=(0, 4))
+                                snips_now = ensure_default_snippets()
+                                grid_f = tk.Frame(p_inner, bg="#0F172A")
+                                grid_f.pack(fill="x")
+                                for idx_f in range(1, 7):
+                                    fk = f"F{idx_f}"
+                                    fv = snips_now.get(fk, "")
+                                    disp = (fv[:16] + "…") if len(fv) > 16 else (fv or "(비어있음)")
+                                    b_lbl = tk.Label(
+                                        grid_f,
+                                        text=f"[{fk}] {disp}",
+                                        fg="#F8FAFC",
+                                        bg="#1E293B",
+                                        padx=6,
+                                        pady=2,
+                                        font=("Malgun Gothic", 8),
+                                        cursor="hand2",
+                                        anchor="w",
+                                    )
+                                    b_lbl.grid(row=(idx_f - 1) // 3, column=(idx_f - 1) % 3, padx=3, pady=2, sticky="ew")
+                                    def _fire_f(slot=idx_f):
+                                        _close_win()
+                                        superpower_fixed_snippet(slot, set_clipboard_text)
+                                    b_lbl.bind("<Button-1>", lambda _e, s_n=idx_f: _fire_f(s_n))
+                                tk.Label(
+                                    p_inner,
+                                    text="🔒 [F7~F12 팀 공유 상용구] 회사 계좌·사업자번호·공용 멘트 전 직원 1초 동기화 (업무공유 구독 시 오픈)",
+                                    fg="#94A3B8",
+                                    bg="#0F172A",
+                                    font=("Malgun Gothic", 8),
+                                    anchor="w",
+                                ).pack(fill="x", pady=(4, 0))
+                            else:
+                                tk.Label(
+                                    p_inner,
+                                    text="💡 [단축키 번호 없이 작동하는 숨은 귀신 초능력 & 꿀팁]",
+                                    fg="#FDE047",
+                                    bg="#0F172A",
+                                    font=("Malgun Gothic", 8, "bold"),
+                                    anchor="w",
+                                ).pack(fill="x", pady=(0, 4))
+                                tips_lines = [
+                                    "• ⚡ 타이핑 자동 한영성형 : 귀신창 안 띄워도 영타 2어절 입력 후 [Space]만 치면 0.1초 자동 한글 전환!",
+                                    "• 📊 엑셀 다중 칸 자동 쪼개기 : 엑셀 여러 칸 복사 후 귀신창 띄우면 자동으로 1칸씩 분해되어 [Ctrl+V] 순차 사출!",
+                                    "• 📑 다중 스샷 300DPI PDF 합본 : 스샷 2장 이상 연속 캡처 후 [4]번 누르면 1개 PDF 파일로 자동 합본 첨부!",
+                                    "• 🖱️ 드래그 제자리 다림질 & 원복 : 문장 드래그 후 우클릭 꾹(Ctrl+0) ➔ [2]번 즉시 성형 / 실수 시 [Ctrl+Z] 1초 원복!",
+                                    "• 📱 폰 촬영·스샷 60초 공간이동🔒 : 폰으로 찍자마자 PC 귀신창에서 원본/OCR 단어 즉시 사출 (폰+PC 통합)",
+                                ]
+                                for tl in tips_lines:
+                                    tk.Label(
+                                        p_inner,
+                                        text=tl,
+                                        fg="#E2E8F0",
+                                        bg="#0F172A",
+                                        font=("Malgun Gothic", 8),
+                                        anchor="w",
+                                        justify="left",
+                                    ).pack(fill="x", pady=1)
+                            _update_window_geometry()
+
+                        tips_btn = tk.Label(
+                            row2_frame,
+                            text="💡꿀팁·추가▾",
+                            fg="#FDE047",
+                            bg="#1E293B",
+                            padx=6,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        tips_btn.pack(side="right", padx=(4, 0))
+                        tips_btn.bind("<Button-1>", lambda _e: _toggle_extra_panel("tips"))
+
+                        snip_btn = tk.Label(
+                            row2_frame,
+                            text="⌨️상용구▾",
+                            fg="#5EEAD4",
+                            bg="#1E293B",
+                            padx=6,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        snip_btn.pack(side="right", padx=(8, 0))
+                        snip_btn.bind("<Button-1>", lambda _e: _toggle_extra_panel("snippets"))
                     else:
                         clean_msg = re.sub(r"[👻🔍✨📌★]", "", message).strip()
                         outer = tk.Frame(
@@ -4368,10 +4490,10 @@ Write-Output $res.Text
     def arm_sub_hotkeys() -> None:
         nonlocal menu_armed, menu_armed_until
         if not menu_armed:
-            for num in range(2, 10):
+            for num in range(1, 10):
                 u32.RegisterHotKey(None, 100 + num, MOD_NOREPEAT, 0x30 + num)
                 u32.RegisterHotKey(None, 200 + num, MOD_NOREPEAT, 0x60 + num)
-                # 유저가 Ctrl+0 직후 Ctrl 키에서 손을 미처 다 떼기 전에 숫자 2~9를 눌러도 100% 작동하도록 Ctrl+숫자도 함께 무장!
+                # 유저가 Ctrl+0 직후 Ctrl 키에서 손을 미처 다 떼기 전에 숫자 1~8을 눌러도 100% 작동하도록 Ctrl+숫자도 함께 무장!
                 u32.RegisterHotKey(None, 400 + num, MOD_CONTROL | MOD_NOREPEAT, 0x30 + num)
                 u32.RegisterHotKey(None, 500 + num, MOD_CONTROL | MOD_NOREPEAT, 0x60 + num)
             for fnum in range(1, 11):
@@ -4382,7 +4504,7 @@ Write-Output $res.Text
     def disarm_sub_hotkeys() -> None:
         nonlocal menu_armed
         if menu_armed:
-            for num in range(2, 10):
+            for num in range(1, 10):
                 u32.UnregisterHotKey(None, 100 + num)
                 u32.UnregisterHotKey(None, 200 + num)
                 u32.UnregisterHotKey(None, 400 + num)
@@ -4392,6 +4514,11 @@ Write-Output $res.Text
             menu_armed = False
 
     def _execute_superpower_num(num: int) -> None:
+        """
+        [영구 고정 번호 1~8 체계 (Wave 순서 & 최다 빈도 기준)]:
+        1줄(하늘색 주력): [Ctrl+V] 순차·칸맞춤 | [1] 한영성형 | [2] 줄바꿈정리 | [3] 서식세탁 | [4] 파일·PDF변환🔒
+        2줄(흰색 확장):   [5] 글자·표OCR🔒     | [6] 합본🔒   | [7] 번호·일정🔒 | [8] 창고정🔒   | [⌨️상용구▾] [💡꿀팁·추가▾]
+        """
         nonlocal seq_mode
         disarm_sub_hotkeys()
         close_ghost_toast()
@@ -4401,37 +4528,37 @@ Write-Output $res.Text
         if not allowed:
             show_ghost_toast(q_msg, duration_ms=3200)
             return
-        if num == 2:
+        if num == 1:
             if superpower_2_typo_morph(daemon_set_clipboard, auto_triggered=False):
                 complete_feature_action_success(fkey)
+        elif num == 2:
+            seq_queue.clear()
+            recent_unpasted.clear()
+            superpower_4_iron_lines_and_nfkc(daemon_set_clipboard, raw_src=last_summon_raw_clip)
+            complete_feature_action_success(fkey)
         elif num == 3:
             seq_queue.clear()
             recent_unpasted.clear()
             superpower_3_clean_format(daemon_set_clipboard, raw_src=last_summon_raw_clip)
             complete_feature_action_success(fkey)
-        elif num == 4:
-            seq_queue.clear()
-            recent_unpasted.clear()
-            superpower_4_iron_lines_and_nfkc(daemon_set_clipboard, raw_src=last_summon_raw_clip)
-            complete_feature_action_success(fkey)
+        elif num in (4, 9):
+            is_pdf_m = len(recent_images) >= 2
+            superpower_9_image_or_pdf_file(recent_images)
+            complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else "superpower_key_4")
         elif num == 5:
-            superpower_5_merge_or_ai_search(recent_unpasted, seq_queue, ai_clipboard_history, daemon_set_clipboard)
-            complete_feature_action_success(fkey)
-        elif num == 6:
             superpower_6_screen_ocr(daemon_set_clipboard)
             complete_feature_action_success(fkey)
-        elif num == 7:
-            superpower_7_toggle_topmost(_LAST_TARGET_HWND)
+        elif num == 6:
+            superpower_5_merge_or_ai_search(recent_unpasted, seq_queue, ai_clipboard_history, daemon_set_clipboard)
             complete_feature_action_success(fkey)
-        elif num == 8:
+        elif num == 7:
             seq_queue.clear()
             recent_unpasted.clear()
             superpower_8_format_numbers(daemon_set_clipboard, raw_src=last_summon_raw_clip)
             complete_feature_action_success(fkey)
-        elif num == 9:
-            is_pdf_m = len(recent_images) >= 2
-            superpower_9_image_or_pdf_file(recent_images)
-            complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else fkey)
+        elif num == 8:
+            superpower_7_toggle_topmost(_LAST_TARGET_HWND)
+            complete_feature_action_success(fkey)
 
     def trigger_master_summon() -> None:
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip
@@ -4468,7 +4595,7 @@ Write-Output $res.Text
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [1] 한영성형   [2] 줄바꿈정리   [3] 서식세탁   [4] 파일·PDF변환🔒\n[5] 글자·표OCR🔒   [6] 합본🔒   [7] 번호·일정🔒   [8] 창고정🔒",
                 duration_ms=6500,
             )
         elif len(recent_unpasted) >= 2 and not ("\n" in (live_clip or "") and not has_excel_clipboard_format()):
@@ -4476,14 +4603,14 @@ Write-Output $res.Text
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [1] 한영성형   [2] 줄바꿈정리   [3] 서식세탁   [4] 파일·PDF변환🔒\n[5] 글자·표OCR🔒   [6] 합본🔒   [7] 번호·일정🔒   [8] 창고정🔒",
                 duration_ms=6500,
             )
         else:
             seq_queue.clear()
             arm_sub_hotkeys()
             show_ghost_toast(
-                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [9] 파일·PDF변환   [F1~10] 상용구   [2] 한영성형\n[3] 서식세탁   [4] 줄바꿈정리   [5] 합본   [6] 글자·표OCR   [7] 창고정   [8] 번호·일정",
+                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [1] 한영성형   [2] 줄바꿈정리   [3] 서식세탁   [4] 파일·PDF변환🔒\n[5] 글자·표OCR🔒   [6] 합본🔒   [7] 번호·일정🔒   [8] 창고정🔒",
                 duration_ms=6500,
             )
 
@@ -4678,14 +4805,14 @@ Write-Output $res.Text
                     now_hk = time.time()
                     if (now_hk - last_topmost_ts) > 0.25:
                         last_topmost_ts = now_hk
-                        _execute_superpower_num(7)
+                        _execute_superpower_num(8)
 
                 # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷)
                 elif hk_id == 999:
                     execute_undo_snapshot(daemon_set_clipboard)
 
                 # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
-                elif (102 <= hk_id <= 109) or (202 <= hk_id <= 209) or (402 <= hk_id <= 409) or (502 <= hk_id <= 509):
+                elif (101 <= hk_id <= 109) or (201 <= hk_id <= 209) or (401 <= hk_id <= 409) or (501 <= hk_id <= 509):
                     _execute_superpower_num(hk_id % 100)
 
                 # 3) F1~F10 고정 상용구 발동
@@ -4772,7 +4899,7 @@ Write-Output $res.Text
                     fg_cls_now, _ = _get_win_class_and_title(u32.GetForegroundWindow())
                     if "Tk" not in fg_cls_now:
                         triggered_num = 0
-                        for n_check in range(2, 10):
+                        for n_check in range(1, 10):
                             k_main = (u32.GetAsyncKeyState(0x30 + n_check) & 0x8000) != 0
                             k_numpad = (u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0
                             k_now = k_main or k_numpad
@@ -4783,7 +4910,7 @@ Write-Output $res.Text
                             _execute_superpower_num(triggered_num)
                             continue
                 else:
-                    for n_check in range(2, 10):
+                    for n_check in range(1, 10):
                         was_sub_key_down[n_check] = (
                             ((u32.GetAsyncKeyState(0x30 + n_check) & 0x8000) != 0)
                             or ((u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0)
@@ -4887,7 +5014,7 @@ Write-Output $res.Text
                 if ctrl_alt_t_now and not was_ctrl_alt_t_down:
                     if (now - last_topmost_ts) > 0.25:
                         last_topmost_ts = now
-                        _execute_superpower_num(7)
+                        _execute_superpower_num(8)
                 was_ctrl_alt_t_down = ctrl_alt_t_now
 
                 ctrl_z_now = ctrl_down and not alt_down and not shift_down and z_down
@@ -5193,42 +5320,42 @@ def run_quota_self_test() -> int:
         if ledger_path.exists():
             ledger_path.unlink()
         print("🧪 [1단계] 초기 미개봉 상태 검증...")
-        ok, st = check_feature_quota_allowed("superpower_key_2")
+        ok, st = check_feature_quota_allowed("superpower_key_1")
         assert ok and st == "UNOPENED", f"Expected UNOPENED, got {ok}, {st}"
-        print(f"   ✅ 2번(한영성형) 초기 상태: {st} (미개봉 확인)")
+        print(f"   ✅ 1번(한영성형) 초기 상태: {st} (미개봉 확인)")
 
-        print("🧪 [2단계] 2번(한영성형) 첫 실제 성공 완수 -> 30일 무제한 타이머 개시 검증...")
-        res1 = complete_feature_action_success("superpower_key_2")
+        print("🧪 [2단계] 1번(한영성형) 첫 실제 성공 완수 -> 30일 무제한 타이머 개시 검증...")
+        res1 = complete_feature_action_success("superpower_key_1")
         assert res1["status"] == "FIRST_OPENED_30D" and res1["consumed_daily"] is False
-        ok2, st2 = check_feature_quota_allowed("superpower_key_2")
+        ok2, st2 = check_feature_quota_allowed("superpower_key_1")
         assert ok2 and st2.startswith("ACTIVE_D-")
-        print(f"   ✅ 2번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
+        print(f"   ✅ 1번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
 
-        print("🧪 [3단계] 2번 기능을 31일 전 사용으로 강제 타임머신 만료 조작 (4번 줄바꿈정리는 미개봉 유지)...")
+        print("🧪 [3단계] 1번 기능을 31일 전 사용으로 강제 타임머신 만료 조작 (2번 줄바꿈정리는 미개봉 유지)...")
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         hwid = _get_machine_hwid_local()
         ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (31 * 86400)
         ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        print("🧪 [4단계] 만료된 2번 기능 3회 연속 성공 차감 검증 (1회 -> 2회 -> 3회)...")
+        print("🧪 [4단계] 만료된 1번 기능 3회 연속 성공 차감 검증 (1회 -> 2회 -> 3회)...")
         for i in range(1, 4):
-            ok_exp, st_exp = check_feature_quota_allowed("superpower_key_2")
+            ok_exp, st_exp = check_feature_quota_allowed("superpower_key_1")
             assert ok_exp, f"Should allow #{i}, got {st_exp}"
-            r_exp = complete_feature_action_success("superpower_key_2")
+            r_exp = complete_feature_action_success("superpower_key_1")
             assert r_exp["status"] == "EXPIRED_DAILY_3" and r_exp["consumed_daily"] is True
             print(f"   ✅ 만료 기능 #{i}회째 성공 완수 ➔ 잔여 일일 무료: {r_exp['daily_remaining']}/3회")
 
-        print("🧪 [5단계] 만료된 2번 기능 4번째 시도 시 차단 및 안내 메시지 검증...")
-        ok_4th, msg_4th = check_feature_quota_allowed("superpower_key_2")
+        print("🧪 [5단계] 만료된 1번 기능 4번째 시도 시 차단 및 안내 메시지 검증...")
+        ok_4th, msg_4th = check_feature_quota_allowed("superpower_key_1")
         assert not ok_4th, "4th attempt on expired feature must be blocked!"
         print(f"   ✅ 4번째 만료 기능 차단 확인: {msg_4th}")
 
-        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 4번(줄바꿈정리)'은 30일 무제한으로 즉시 열리는지 검증!")
-        ok_unopened, st_unopened = check_feature_quota_allowed("superpower_key_4")
+        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 2번(줄바꿈정리)'은 30일 무제한으로 즉시 열리는지 검증!")
+        ok_unopened, st_unopened = check_feature_quota_allowed("superpower_key_2")
         assert ok_unopened and st_unopened == "UNOPENED"
-        r_unopened = complete_feature_action_success("superpower_key_4")
+        r_unopened = complete_feature_action_success("superpower_key_2")
         assert r_unopened["status"] == "FIRST_OPENED_30D" and r_unopened["consumed_daily"] is False
-        print(f"   ✅ 미개봉 4번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 30일 무제한 즉시 개시!)")
+        print(f"   ✅ 미개봉 2번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 30일 무제한 즉시 개시!)")
         print("\n🎉 [ALL PASS] 기능별 30일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
         return 0
     finally:

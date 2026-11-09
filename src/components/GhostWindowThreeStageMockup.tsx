@@ -628,7 +628,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
   }, [initialWindowTab]);
 
   // ── 창 UI ① 상태 (2줄 미니멀 바 + 조건부 펼침: 상용구 F1~F12 / 클립보드 Win+V 사이즈) ──
-  const [openHeaderDrawer, setOpenHeaderDrawer] = useState<'none' | 'snippets' | 'clipboard'>('none');
+  const [openHeaderDrawer, setOpenHeaderDrawer] = useState<'none' | 'snippets' | 'clipboard' | 'tips'>('none');
   const [snippets, setSnippets] = useState<SnippetSlotItem[]>(INITIAL_SNIPPET_SLOTS_12);
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -942,73 +942,167 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
               </div>
             </div>
 
-            {/* [2줄 차] 5대 초능력 원클릭 바 */}
-            <div className="px-4 py-2.5 bg-zinc-950/95 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {[
-                  {
-                    id: 1,
-                    label: '① 한영오타 변환',
-                    sampleOut: '안녕하세요 반갑습니다',
-                  },
-                  {
-                    id: 2,
-                    label: '② 순차 붙여넣기(1·2·3)',
-                    sampleOut: '[1번: 홍길동] ➔ [2번: 010-1234-5678] ➔ [3번: 강남구 테헤란로 123]',
-                  },
-                  {
-                    id: 3,
-                    label: '③ 서식 세탁·추출',
-                    sampleOut: '성함: 김철수 / 연락처: 010-1234-5678 / 계좌: 국민 012-3456-7890-11',
-                  },
-                  {
-                    id: 4,
-                    label: '④ 금액 한글↔숫자',
-                    sampleOut: '금 오천만 원정 (₩50,000,000)',
-                  },
-                  {
-                    id: 5,
-                    label: '⑤ 화면 캡처 글자 따기',
-                    sampleOut: '[화면 캡처 OCR] 승인번호 20261107-849201 · 합계 145,000원',
-                  },
-                ].map((ab) => {
-                  const active = activeWave1Ability === ab.id;
-                  return (
-                    <button
-                      key={ab.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveWave1Ability(ab.id);
-                        if (ab.id === 5) {
-                          setWindowTab('ui3_ocr');
-                          return;
-                        }
-                        insertIntoUi1Editor(ab.sampleOut, ab.label);
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all cursor-pointer ${
-                        active
-                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
-                          : 'bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300'
-                      }`}
-                    >
-                      {ab.label}
-                    </button>
-                  );
-                })}
+            {/* [1줄 & 2줄] 귀신창 2줄 영구 고정 레이아웃 ([Ctrl+V], [1]~[4] 하늘색 #5EEAD4 / [5]~[8] 흰색 #E2E8F0 + 우측 [⌨️상용구▾] [💡꿀팁·추가▾]) */}
+            <div className="px-4 py-2.5 bg-zinc-950/95 border-b border-white/10 flex flex-col gap-2">
+              {/* 1줄 (하늘색 #5EEAD4 — 최다 빈도 주력 핵심 무기) */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    {
+                      id: 0,
+                      label: '[Ctrl+V] 순차·칸맞춤',
+                      sampleOut: '[1번: 홍길동] ➔ [2번: 010-1234-5678] ➔ [3번: 강남구 테헤란로 123]',
+                    },
+                    {
+                      id: 1,
+                      label: '[1] 한영성형',
+                      sampleOut: '안녕하세요 반갑습니다',
+                    },
+                    {
+                      id: 2,
+                      label: '[2] 줄바꿈정리',
+                      sampleOut: '본 계약은 갑과 을 사이의 임대차에 관한 사항을 정하며, 계약 기간은 2026년 11월 14일부터 2년으로 한다.',
+                    },
+                    {
+                      id: 3,
+                      label: '[3] 서식세탁',
+                      sampleOut: '정부가 내년부터 소상공인 디지털 전환 지원금을 2배로 늘린다.',
+                    },
+                    {
+                      id: 4,
+                      label: '[4] 파일·PDF변환🔒',
+                      sampleOut: '[스샷 즉시 첨부] 캡처_20261109.png (파일 저장 없이 즉시 첨부 완료)',
+                    },
+                  ].map((ab) => {
+                    const active = activeWave1Ability === ab.id;
+                    return (
+                      <button
+                        key={ab.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveWave1Ability(ab.id);
+                          insertIntoUi1Editor(ab.sampleOut, ab.label);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all cursor-pointer ${
+                          active
+                            ? 'bg-[#5EEAD4]/25 border-[#5EEAD4] text-[#5EEAD4]'
+                            : 'bg-zinc-900/90 hover:bg-zinc-800 border-[#5EEAD4]/35 text-[#5EEAD4]'
+                        }`}
+                      >
+                        {ab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMiniExplorerQuery('사업자등록증');
+                    setWindowTab('ui2_summon');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/40 text-[11.5px] font-black transition-all cursor-pointer"
+                >
+                  🔍 내 파일·사진 바로 소환 ➔
+                </button>
               </div>
 
-              {/* 미니 탐색기 바로가기 1줄 브릿지 */}
-              <button
-                type="button"
-                onClick={() => {
-                  setMiniExplorerQuery('사업자등록증');
-                  setWindowTab('ui2_summon');
-                }}
-                className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/40 text-[11.5px] font-black transition-all cursor-pointer"
-              >
-                🔍 내 파일·사진 바로 소환 ➔
-              </button>
+              {/* 2줄 (흰색 #E2E8F0 — 실무·편의 확장 무기 + 우측 끝 [⌨️상용구▾] · [💡꿀팁·추가▾]) */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    {
+                      id: 5,
+                      label: '[5] 글자·표OCR🔒',
+                      sampleOut: '[화면 캡처 OCR] 승인번호 20261107-849201 · 합계 145,000원',
+                    },
+                    {
+                      id: 6,
+                      label: '[6] 합본🔒',
+                      sampleOut: '[다중 복사 합본] 1. 계약 개요 / 2. 단가 조건 / 3. 특약 사항 통짜 병합 완료',
+                    },
+                    {
+                      id: 7,
+                      label: '[7] 번호·일정🔒',
+                      sampleOut: '성함: 김철수 / 연락처: 010-1234-5678 / 계좌: 국민 012-3456-7890-11',
+                    },
+                    {
+                      id: 8,
+                      label: '[8] 창고정🔒',
+                      sampleOut: '📌 현재 활성 작업창이 화면 최상단(Always on Top)에 고정되었습니다.',
+                    },
+                  ].map((ab) => {
+                    const active = activeWave1Ability === ab.id;
+                    return (
+                      <button
+                        key={ab.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveWave1Ability(ab.id);
+                          if (ab.id === 5) {
+                            setWindowTab('ui3_ocr');
+                            return;
+                          }
+                          insertIntoUi1Editor(ab.sampleOut, ab.label);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all cursor-pointer ${
+                          active
+                            ? 'bg-white/20 border-white text-white'
+                            : 'bg-zinc-900/90 hover:bg-zinc-800 border-white/15 text-[#E2E8F0]'
+                        }`}
+                      >
+                        {ab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenHeaderDrawer((prev) => (prev === 'snippets' ? 'none' : 'snippets'))
+                    }
+                    className={`px-2.5 py-1.5 rounded-xl text-[12px] font-black border transition-all cursor-pointer ${
+                      openHeaderDrawer === 'snippets'
+                        ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-amber-200 border-amber-400/40'
+                    }`}
+                  >
+                    [⌨️상용구▾]
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenHeaderDrawer((prev) => (prev === 'tips' ? 'none' : 'tips'))
+                    }
+                    className={`px-2.5 py-1.5 rounded-xl text-[12px] font-black border transition-all cursor-pointer ${
+                      openHeaderDrawer === 'tips'
+                        ? 'bg-teal-400 text-zinc-950 border-teal-300'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-teal-200 border-teal-400/40'
+                    }`}
+                  >
+                    [💡꿀팁·추가▾]
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {/* [펼침 0] 숨은 자동 초능력 5선 ([💡꿀팁·추가▾]) */}
+            {openHeaderDrawer === 'tips' && (
+              <div className="p-4 bg-[#0D1119] border-b border-white/10 flex flex-col gap-2">
+                <div className="text-[12.5px] font-black text-teal-300">
+                  💡 단축키 번호 없이 작동하는 숨은 자동 초능력 5선
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[12px] text-zinc-200">
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">① 스페이스바 자동 한영성형 (2어절 연속 오타 시 띠리링~ 자동 변환)</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">② 엑셀 다중 칸 자동 쪼개기 (표 복사 후 붙여넣기 시 셀 자동 분할)</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">③ 다중 스샷 300DPI PDF 자동 합본 (여러 장 캡처 후 한 번에 PDF 생성)</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">④ 드래그 제자리 다림질 &amp; Ctrl+Z 원복</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 sm:col-span-2">⑤ 📱 폰 촬영·스샷 60초 공간이동🔒 (폰으로 찍으면 PC 귀신창에 60초간 즉시 대기)</div>
+                </div>
+              </div>
+            )}
 
             {/* [펼침 1] 상용구 (F1~F12) */}
             {openHeaderDrawer === 'snippets' && (
