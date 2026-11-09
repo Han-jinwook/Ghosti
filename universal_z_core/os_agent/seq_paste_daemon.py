@@ -1832,9 +1832,11 @@ def _toast_worker() -> None:
             # 1) 유저가 마우스 커서를 귀신창 바깥(다른 곳)에 클릭하면 즉시 귀신창 닫기!
             lbtn_down = (u32.GetAsyncKeyState(0x01) & 0x8000) != 0
             rbtn_down = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
-            mouse_down = lbtn_down or rbtn_down
+            ctrl_held = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+            # Ctrl+우클릭으로 소환 중인 경우 rbtn_down을 바깥 닫기 클릭으로 오인하지 않도록 원천 보호
+            mouse_down = lbtn_down or (rbtn_down and not ctrl_held)
             if mouse_down and not was_mouse_down[0] and current_win[0] is not None:
-                if (time.time() - opened_at[0]) > 0.12:
+                if (time.time() - opened_at[0]) > 0.45:
                     pt_click = wintypes.POINT()
                     u32.GetCursorPos(ctypes.byref(pt_click))
                     wx1, wy1, wx2, wy2 = win_rect[0]
@@ -4674,6 +4676,9 @@ Write-Output $res.Text
             hwnd_chk = _RBTN_HOLD_STATE.get("target_hwnd") or u32.GetForegroundWindow()
             if hwnd_chk and _get_process_name_from_hwnd(hwnd_chk).lower() in _SECURITY_SENSITIVE_PROCS:
                 return ""
+            # 물리 우클릭 버튼이 눌려 있는 도중 합성 Ctrl+C를 쏘면 브라우저/노션 포커스가 흔들리거나 지연될 수 있으므로 이미 복사된 클립보드 우선 활용
+            if (u32.GetAsyncKeyState(0x02) & 0x8000) != 0:
+                return get_clipboard_text().strip()
             orig_clip = get_clipboard_text()
             sentinel = "__GHOSTI_SEL_PROBE__"
             daemon_set_clipboard(sentinel)
@@ -5003,12 +5008,25 @@ Write-Output $res.Text
                 zero_down = ((u32.GetAsyncKeyState(VK_0) & 0x8000) != 0) or ((u32.GetAsyncKeyState(VK_NUMPAD0) & 0x8000) != 0)
                 z_down = (u32.GetAsyncKeyState(VK_Z) & 0x8000) != 0
                 t_down = (u32.GetAsyncKeyState(0x54) & 0x8000) != 0
+                rbtn_phys_down = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
+                ctrl_rclick_now = ctrl_down and not alt_down and not shift_down and rbtn_phys_down
                 ctrl0_now = (ctrl_down and not alt_down and not shift_down and zero_down) or (alt_down and not ctrl_down and not shift_down and z_down)
-                if ctrl0_now and not was_ctrl0_down:
-                    if (now - last_summon_ts) > 0.25:
+                if (ctrl0_now and not was_ctrl0_down) or (ctrl_rclick_now and not was_key_down.get(0x9902, False)):
+                    if (now - last_summon_ts) > 0.30:
                         last_summon_ts = now
+                        if ctrl_rclick_now:
+                            pt_rc = wintypes.POINT()
+                            u32.GetCursorPos(ctypes.byref(pt_rc))
+                            _RBTN_HOLD_STATE["target_hwnd"] = u32.GetForegroundWindow()
+                            _RBTN_HOLD_STATE["x"] = pt_rc.x
+                            _RBTN_HOLD_STATE["y"] = pt_rc.y
+                            _RBTN_HOLD_STATE["triggered"] = True
+                            _RBTN_HOLD_STATE["suppress_next_up"] = True
+                            _capture_selection_non_polluting()
+                            _release_target_rbutton_stuck(_RBTN_HOLD_STATE.get("target_hwnd"), pt_rc.x, pt_rc.y)
                         trigger_master_summon()
                 was_ctrl0_down = ctrl0_now
+                was_key_down[0x9902] = ctrl_rclick_now
 
                 ctrl_alt_t_now = ctrl_down and alt_down and not shift_down and t_down
                 if ctrl_alt_t_now and not was_ctrl_alt_t_down:

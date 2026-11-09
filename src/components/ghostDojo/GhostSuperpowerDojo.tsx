@@ -78,6 +78,18 @@ function useRightClickHold(onComplete: () => void) {
     onMouseDown: (e: React.MouseEvent) => {
       if (e.button !== 2) return;
       e.preventDefault();
+      cancelAnimationFrame(rafRef.current);
+      // Ctrl + 우클릭 시 0.35초 홀드 대기 없이 즉시(0.01초) 소환!
+      if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+        doneRef.current = true;
+        setProgress(1);
+        onComplete();
+        window.setTimeout(() => {
+          doneRef.current = false;
+          setProgress(0);
+        }, 600);
+        return;
+      }
       doneRef.current = false;
       startRef.current = performance.now();
       rafRef.current = requestAnimationFrame(tick);
@@ -143,7 +155,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         className="select-none h-24 rounded-xl border-2 border-dashed border-[#2DD4BF]/50 bg-zinc-950 flex items-center justify-center gap-3 text-[13px] text-zinc-300 cursor-context-menu"
       >
         <HoldRing progress={progress} />
-        <span>여기서 우클릭 꾹~</span>
+        <span>여기서 우클릭 꾹~ (또는 Ctrl + 우클릭 즉시 소환!)</span>
       </div>
       {summoned && (
         <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>

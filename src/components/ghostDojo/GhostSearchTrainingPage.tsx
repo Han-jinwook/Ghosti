@@ -157,6 +157,13 @@ const VirtualMonitorSimulator: React.FC<{
         onMouseDown={(e) => {
           if (e.button !== 2 || stage) return;
           const pos = toVirtual(e);
+          // Ctrl + 우클릭 시 홀드 대기 없이 즉시(0.01초) 귀신검색창 소환!
+          if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+            cancelAnimationFrame(holdRaf.current);
+            setHoldProgress(0);
+            summon(pos.x, pos.y);
+            return;
+          }
           holdStart.current = performance.now();
           const tick = () => {
             const r = Math.min(1, (performance.now() - holdStart.current) / SUMMON_HOLD_MS);
@@ -186,7 +193,7 @@ const VirtualMonitorSimulator: React.FC<{
         {!stage && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="px-3 py-1.5 rounded-full bg-black/50 text-white text-[13px] font-extrabold">
-              {holdProgress > 0 ? `우클릭 꾹… ${Math.round(holdProgress * 100)}%` : '빈 곳에서 Ctrl + 0 (우클릭 꾹~)'}
+              {holdProgress > 0 ? `우클릭 꾹… ${Math.round(holdProgress * 100)}%` : '빈 곳에서 Ctrl + 0 (우클릭 꾹~ / Ctrl+우클릭)'}
             </span>
           </div>
         )}
