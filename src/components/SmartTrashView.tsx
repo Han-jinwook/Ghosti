@@ -481,7 +481,7 @@ export const SmartTrashView: React.FC = () => {
                       } else {
                         setDecisions((d) => ({ ...d, powerDrain: 'freeze_remove' }));
                         void triggerMonsterQuery(
-                          '은행 관공서 상주 보안 프로그램(AnySign, MagicLine, TouchEn) 동결해서 부팅 속도 높여줘'
+                          '미사용 웹 보안 서비스 동결해서 부팅 속도 높여줘'
                         );
                       }
                     }}
@@ -528,7 +528,7 @@ export const SmartTrashView: React.FC = () => {
                 <span className="font-headline-sm text-[16px] md:text-[16.5px] text-zinc-900 dark:text-white font-extrabold tracking-wide">
                   {isStoreAppMode || layout === 'mobile'
                     ? '🧾 영수증 · 주차메모 · 스크린샷 정리'
-                    : '📦 다운로드 설치파일(.exe·.zip) 찌꺼기 정리'}
+                    : '📦 다운로드 임시 설치파일(.exe·.zip) 정리'}
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
                   <button

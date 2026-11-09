@@ -30,7 +30,7 @@ export const PC_MONSTER_ROLLING_PLACEHOLDERS_10: readonly string[] = [
   '아무것도 안 켜놨는데 CPU 100% 찍는 좀비 프로세스 손봐줘',
   '클릭하고 3초 뒤에 반응하는 답답한 크롬 창 시원하게 뚫어줘',
   '관공서 민원서류 뽑고 났더니 마우스 버벅거려, 원래대로 돌려줘',
-  '바탕화면이랑 다운로드 폴더에 쌓인 설치파일 찌꺼기 털어줘',
+  '바탕화면이랑 다운로드 폴더에 쌓인 임시 설치파일 털어줘',
   '게임 실행할 때 프레임 뚝뚝 떨어지는 백그라운드 앱들 잠재워줘',
   '저장 안 하고 끈 엑셀이랑 방금 사라진 문서 귀신같이 찾아줘',
   '정기 검진 요일 금요일 오후 4시로 귀신같이 바꿔줘',
@@ -149,7 +149,7 @@ export function resolveMemeTitleBySchedule(dayOfWeek: number, hour: number): str
   if (dayOfWeek === 4 && hour === 9) return '목요 9(귀)신제 (목마른 컴에 냉수)';
   if (dayOfWeek === 4 && hour === 14) return '전국 기기 민방위 훈련 (디지털 사이렌)';
   if (dayOfWeek === 5 && hour === 16) return '금요 4(사)령 대청소 (칼퇴 부스터)';
-  if (dayOfWeek === 1 && (hour === 8 || hour === 9)) return '월요 출근 굿판 (부팅 악귀 퇴치)';
+  if (dayOfWeek === 1 && (hour === 8 || hour === 9)) return '월요 출근 케어 (부팅 지연 상주 앱 정리)';
   const dayLabel = DAY_NAMES_KO[dayOfWeek] || '수요일';
   const ampm = hour < 12 ? `오전 ${hour === 0 ? 12 : hour}시` : `오후 ${hour === 12 ? 12 : hour - 12}시`;
   return `매주 ${dayLabel} ${ampm} 정기 손보기 (${dayLabel.slice(0, 1)}요 손 없는 날)`;
@@ -431,7 +431,7 @@ export async function evaluateDualProactiveCareEngine(options?: {
             .join(', ')})를 귀신같이 찾아내 멈춰 세울 준비를 마쳤습니다. 클릭 1초면 오후 업무가 날아갈 듯 가벼워집니다.`
         : `현재 내 PC 메모리 점유율은 ${ramUsedPercent ?? 58}%, 상주 보안프로그램은 0건으로 쾌적합니다.${
             junkFileCount > 0
-              ? ` 다운로드 폴더에 방치된 설치파일 찌꺼기 ${junkFileCount}건만 1초 만에 정리해 드릴까요?`
+              ? ` 다운로드 폴더에 방치된 임시 설치파일 ${junkFileCount}건만 1초 만에 정리해 드릴까요?`
               : ''
           }`;
     return {

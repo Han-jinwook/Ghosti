@@ -949,11 +949,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                         type="button"
                         disabled={busy}
                         onClick={() =>
-                          void handleSend('바탕화면이랑 다운로드 찌꺼기 파일 정리해줘', 'text')
+                          void handleSend('바탕화면이랑 다운로드 임시 설치파일 정리해줘', 'text')
                         }
                         className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
                       >
-                        🗂️ 바탕화면·설치파일 찌꺼기 정리
+                        🗂️ 바탕화면·임시 설치파일 정리
                       </button>
                     </div>
                   )}

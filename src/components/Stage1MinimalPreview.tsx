@@ -986,7 +986,7 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
  * - 1) [🗑️ 휴지통] 상단 알약 버튼 & 5번째 휴지통 카드 & 하단 휴지통 드로어 전면 철거 -> 깔끔한 4열 카테고리 그리드(① 중복·연사, ② 주차·영수증, ③ 스크린샷, ④ 흔들림)만 유지
  * - 2) 상단 난립 배지([🆓 언제나 0원], [📁 서류함 분리 확인], 2중 중복 기록함 등) 철거 -> [🕰️ 손보기·복원 기록] 단 1개로 통합
  * - 3) 좌측 '💬 기기 3대 핵심 건강검진' 아코디언 박스 완전 철거
- * - 4) [레드팀 보완] 우측 [✋ 손보기 대화창] 첫 인사말 말풍선(Welcome Bubble)에 [⚡ 느려진 PC 보안모듈·속도 1초 검진] · [🗂️ 바탕화면·설치파일 찌꺼기 정리] 1클릭 실행 버튼 기본 내장
+ * - 4) [레드팀 보완] 우측 [✋ 손보기 대화창] 첫 인사말 말풍선(Welcome Bubble)에 [⚡ 느려진 PC 보안모듈·속도 1초 검진] · [🗂️ 바탕화면·설치파일 임시 데이터 정리] 1클릭 실행 버튼 기본 내장
  */
 export const Stage1MinimalCarePreview: React.FC = () => {
   const {
@@ -1395,7 +1395,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
             {/* [방어 7·9] 로컬 샌드박스 & 무광고 영구 보증 배지 */}
             <div className="px-3 py-2 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300 font-bold">
-              <span>🔒 100% 내 PC 안에서만 처리 (외부 서버 전송 0바이트 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)</span>
+              <span>🔒 내 파일 원본·문서 본문은 외부 서버로 절대 전송되지 않습니다 (100% 내 PC 로컬 처리 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)</span>
               <span className="text-teal-400">🪶 35KB 독립 플러그인 격리 · 유휴 CPU 0.0%</span>
             </div>
 

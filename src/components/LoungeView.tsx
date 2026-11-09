@@ -2423,7 +2423,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               type="button"
               onClick={triggerNightSleepMode}
               className="px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/45 text-indigo-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
-              title="바탕화면 단축아이콘과 동일: 퇴근·취침 시 모니터 즉시 OFF + 15W 초절전 대기 + 메모리 찌꺼기 청소"
+              title="바탕화면 단축아이콘과 동일: 퇴근·취침 시 모니터 즉시 OFF + 15W 초절전 대기 + 메모리 유휴 캐시 정리"
             >
               <span>🌙 퇴근·야간 초절전 모드 (월 1,800원)</span>
             </button>
@@ -2448,7 +2448,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 🌙 Ghosti 초절전·무소음 야간모드가 가동되었습니다 — 편히 퇴근·취침하세요!
               </span>
               <span className="text-[12px] text-zinc-300">
-                ✓ 램(RAM) 찌꺼기 청소 완료 · ✓ CPU 15W 초저전력 대기 전환(한 달 전기요금 약 1,800원) · <strong className="text-amber-300">이 안내 메시지는 서서히 사라진 뒤 모니터 전원이 꺼집니다...</strong>
+                ✓ 램(RAM) 유휴 캐시 정리 완료 · ✓ CPU 15W 초저전력 대기 전환(한 달 전기요금 약 1,800원) · <strong className="text-amber-300">이 안내 메시지는 서서히 사라진 뒤 모니터 전원이 꺼집니다...</strong>
               </span>
             </div>
             <span className="px-3 py-1 rounded-full bg-indigo-500/30 border border-indigo-300/50 text-indigo-100 font-mono text-[11px] font-bold">

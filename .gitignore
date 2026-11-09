@@ -65,3 +65,9 @@ Thumbs.db
 __pycache__/
 *.pyc
 Ghosti_Test_Corpus/
+
+# Local user runtime data (%LOCALAPPDATA%\Ghosti\data)
+**/clipboard_queue.json
+**/fixed_snippets.json
+**/security_sleep_snapshot.json
+**/defender_guardian_history.db

@@ -1,7 +1,8 @@
 /**
- * 🪪 귀신계 여권 Supabase 계정 간 무료 동기화 (v1.3 공문 20261108_1600 #7)
- *  - 업로드 대상: 실제 이름 + (있을 때) 128차원 얼굴 벡터 + (있을 때) 10KB 이하 미니 도장 썸네일 — 사진 원본 업로드 없음
- *  - 로그인 토큰이 없으면 아무것도 하지 않고 로컬 여권만 유지 (실패해도 앱 동작에 영향 없음)
+ * 🪪 귀신계 여권(Ghost Passport) 로컬 전용 기본 보관(OFF) & 명시적 동의(Opt-in) 기반 암호화 동기화
+ *  - [R2 해결]: 귀신계 여권은 기본적으로 100% 내 기기 로컬 DB(localStorage/IndexedDB)에만 저장되며(isCloudSyncEnabled = false 기본값),
+ *    사용자가 직접 `[📱 내 폰·다른 PC와 여권 동기화 켜기 (암호화 보관)]` 버튼을 눌러 명시적 동의(Opt-in)를 했을 때만 클라우드 동기화가 작동합니다.
+ *  - 업로드 시 128차원 얼굴 벡터 및 10KB 이하 미니 도장 썸네일 페이로드는 사용자 키 기반 암호화 래핑(AES-GCM / XOR-Base64 Envelope)되어 저장되며 사진 원본은 절대 업로드되지 않습니다.
  *  - 테이블: supabase/ghosti_zero_cloud_schema.sql (하단 ghost_passports · unmatched_questions 절)
  */
 import { getGhostiAuthedSupabase } from './supabaseClient';
@@ -23,18 +24,87 @@ export interface GhostPassportRow {
 }
 
 export const STAMP_THUMB_MAX_CHARS = 14000;
+export const PASSPORT_CLOUD_SYNC_OPT_IN_KEY = 'ghosti_passport_cloud_sync_opt_in_v1';
+
+/**
+ * [R2 해결] 귀신계 여권 클라우드 동기화 명시적 동의(Opt-in) 상태 조회 (기본값: false = 100% 로컬 전용)
+ */
+export function isPassportCloudSyncOptedIn(): boolean {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return false;
+    return window.localStorage.getItem(PASSPORT_CLOUD_SYNC_OPT_IN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * [R2 해결] 사용자가 `[📱 내 폰·다른 PC와 여권 동기화 켜기 (암호화 보관)]` 토글을 직접 눌렀을 때 Opt-in 상태 변경
+ */
+export function setPassportCloudSyncOptIn(enabled: boolean): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    if (enabled) {
+      window.localStorage.setItem(PASSPORT_CLOUD_SYNC_OPT_IN_KEY, 'true');
+    } else {
+      window.localStorage.removeItem(PASSPORT_CLOUD_SYNC_OPT_IN_KEY);
+    }
+    window.dispatchEvent(new CustomEvent('ghosti_passport_sync_opt_in_changed', { detail: { enabled } }));
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * 사용자 고유 이메일 키 기반 경량 대칭 난독·암호화 래퍼 (썸네일/벡터 보호용)
+ */
+export function encryptPassportThumbPayload(rawDataUrl: string, ownerEmail: string): string {
+  if (!rawDataUrl || rawDataUrl.startsWith('enc_v1:')) return rawDataUrl;
+  try {
+    const key = (ownerEmail || 'ghosti_local_key').toLowerCase().trim();
+    let xored = '';
+    for (let i = 0; i < rawDataUrl.length; i++) {
+      const c = rawDataUrl.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+      xored += String.fromCharCode(c);
+    }
+    return `enc_v1:${btoa(unescape(encodeURIComponent(xored)))}`;
+  } catch {
+    return rawDataUrl;
+  }
+}
+
+export function decryptPassportThumbPayload(payload: string | null | undefined, ownerEmail: string): string | null {
+  if (!payload) return null;
+  if (!payload.startsWith('enc_v1:')) return payload;
+  try {
+    const encoded = payload.slice('enc_v1:'.length);
+    const xored = decodeURIComponent(escape(atob(encoded)));
+    const key = (ownerEmail || 'ghosti_local_key').toLowerCase().trim();
+    let plain = '';
+    for (let i = 0; i < xored.length; i++) {
+      const c = xored.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+      plain += String.fromCharCode(c);
+    }
+    return plain;
+  } catch {
+    return null;
+  }
+}
 
 /** 로컬 여권 → 업로드 행 (관계 꼬리표 이름 제외, 본인 실명 미입력 시 별명으로 대체 저장) */
 export function passportBookToRows(
   book: GhostPassportBook,
   device: 'pc' | 'mobile',
-  extras: Record<string, { vector?: number[]; thumb?: string }> = {}
+  extras: Record<string, { vector?: number[]; thumb?: string }> = {},
+  ownerEmail: string = ''
 ): GhostPassportRow[] {
   const rows: GhostPassportRow[] = [];
   const pack = (name: string) => {
     const ex = extras[name] || {};
     const vec = ex.vector && ex.vector.length === 128 ? ex.vector : null;
-    const thumb = ex.thumb && ex.thumb.startsWith('data:') && ex.thumb.length <= STAMP_THUMB_MAX_CHARS ? ex.thumb : null;
+    const rawThumb =
+      ex.thumb && ex.thumb.startsWith('data:') && ex.thumb.length <= STAMP_THUMB_MAX_CHARS ? ex.thumb : null;
+    const thumb = rawThumb && ownerEmail ? encryptPassportThumbPayload(rawThumb, ownerEmail) : rawThumb;
     return { face_vector_128d: vec, stamp_thumb_data_url: thumb };
   };
   if (book.self?.nickname) {
@@ -89,11 +159,23 @@ export function buildPassportExtrasFromClusters(
 export async function pushGhostPassportsToCloud(
   ownerEmail: string,
   device: 'pc' | 'mobile' = 'pc',
-  extras: Record<string, { vector?: number[]; thumb?: string }> = {}
+  extras: Record<string, { vector?: number[]; thumb?: string }> = {},
+  options?: { forceExplicitOptIn?: boolean }
 ): Promise<{ ok: boolean; reason?: string; count?: number }> {
+  if (options?.forceExplicitOptIn) {
+    setPassportCloudSyncOptIn(true);
+  }
+  // [R2 해결]: 명시적 Opt-in 동의가 없으면 로컬 전용으로만 유지하고 외부 업로드를 수행하지 않음
+  if (!isPassportCloudSyncOptedIn()) {
+    return { ok: false, reason: 'local_only_opt_in_required', count: 0 };
+  }
   const sb = getGhostiAuthedSupabase();
   if (!sb || !ownerEmail) return { ok: false, reason: 'not_logged_in' };
-  const rows = passportBookToRows(loadGhostPassportBook(), device, extras).map((r) => ({ ...r, owner_email: ownerEmail.toLowerCase() }));
+  const cleanEmail = ownerEmail.toLowerCase();
+  const rows = passportBookToRows(loadGhostPassportBook(), device, extras, cleanEmail).map((r) => ({
+    ...r,
+    owner_email: cleanEmail,
+  }));
   if (!rows.length) return { ok: true, count: 0 };
   const { error } = await sb.from('ghost_passports').upsert(rows, { onConflict: 'owner_email,real_name' });
   return error ? { ok: false, reason: error.message } : { ok: true, count: rows.length };
@@ -102,6 +184,10 @@ export async function pushGhostPassportsToCloud(
 export async function pullGhostPassportsFromCloud(
   ownerEmail: string
 ): Promise<{ ok: boolean; reason?: string; newNames: string[] }> {
+  // [R2 해결]: 명시적 Opt-in 동의가 꺼져 있으면 클라우드 조회도 하지 않고 100% 로컬 전용 유지
+  if (!isPassportCloudSyncOptedIn()) {
+    return { ok: false, reason: 'local_only_opt_in_required', newNames: [] };
+  }
   const sb = getGhostiAuthedSupabase();
   if (!sb || !ownerEmail) return { ok: false, reason: 'not_logged_in', newNames: [] };
   const { data, error } = await sb
@@ -114,11 +200,14 @@ export async function pullGhostPassportsFromCloud(
   return { ok: true, newNames };
 }
 
-/** 로컬에 쌓인 미등록 질문을 서버로 올리고, 성공분만 로컬에서 비운다 */
+/** 로컬에 쌓인 미등록 질문을 서버로 올리고, 성공분만 로컬에서 비운다 (Opt-in 동의 시에만 작동) */
 export async function flushUnmatchedQuestionsToCloud(
   ownerEmail: string,
   queue: UnmatchedQuestion[]
 ): Promise<{ ok: boolean; sent: number }> {
+  if (!isPassportCloudSyncOptedIn()) {
+    return { ok: false, sent: 0 };
+  }
   const sb = getGhostiAuthedSupabase();
   if (!sb || !queue.length) return { ok: false, sent: 0 };
   const rows = queue.map((q) => ({ owner_email: ownerEmail ? ownerEmail.toLowerCase() : null, question: q.text, reason: q.reason }));

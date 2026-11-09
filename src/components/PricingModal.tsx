@@ -511,7 +511,7 @@ export const PricingModal: React.FC = () => {
               🎁 <strong className="underline decoration-amber-300 text-amber-300">유료 기능(3번 내 기기 통합 · 4번 업무 공유) 1개월(30일) 무료체험 기본 제공 + {activeMasterTier.bannerHeadline}</strong>
             </p>
             <span className="text-[11px] text-zinc-300">
-              자동 전환 스케줄: <strong>1차 10년 특판(100명)</strong> ➔ <strong>2차 5년 특판(1,000명)</strong> ➔ <strong>3차 3년 특판(10,000명)</strong> (모두 월 구독료 10개월 치 일시불)
+              출시 기념 특별 혜택: <strong>🔥 선착순 10년 특판 (월 구독료 10개월 치 일시불로 10년 보장)</strong> · 사진 공유(패밀리·동호회·동창회)는 인원·장수 제한 없이 <strong>평생 100% 무제한 무료</strong>
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -1077,6 +1077,7 @@ export const LocalDocPreviewModal: React.FC = () => {
     hasExecutedUserSearch,
   } = useSaySeeStore();
   const [, setVoiceTick] = useState(0);
+  const [revealDocPasswords, setRevealDocPasswords] = useState(false);
 
   useEffect(() => {
     return subscribeGhostiVoicePrefs(() => {
@@ -1169,22 +1170,40 @@ export const LocalDocPreviewModal: React.FC = () => {
             <span className="font-label-mono text-[11px] text-primary-container font-bold">
               🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard?.writeText(selectedDocModal.extractedText);
-                useSaySeeStore.setState({
-                  lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 별표(***) 가림 없이 클립보드에 복사되었습니다.`,
-                });
-              }}
-              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
-            >
-              📋 복사
-            </button>
+            <div className="flex items-center gap-1.5">
+              {/(비밀번호|패스워드|password|계정|비번|암호)/i.test(
+                `${selectedDocModal.title} ${selectedDocModal.extractedText}`
+              ) && (
+                <button
+                  type="button"
+                  onClick={() => setRevealDocPasswords((v) => !v)}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
+                >
+                  {revealDocPasswords ? '🙈 비번 숨기기' : '👁️ 보기'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(selectedDocModal.extractedText);
+                  useSaySeeStore.setState({
+                    lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 복사되었습니다.`,
+                  });
+                }}
+                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
+              >
+                📋 복사
+              </button>
+            </div>
           </div>
           <p className="font-body-md text-[13.5px] sm:text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap break-words">
             {renderHighlightedDocText(
-              selectedDocModal.extractedText,
+              revealDocPasswords
+                ? selectedDocModal.extractedText
+                : selectedDocModal.extractedText.replace(
+                    /((?:비밀번호|패스워드|비번|password|pw)\s*[:=]?\s*)([^\s,\n]+)/gi,
+                    '$1••••••••'
+                  ),
               effectiveQuery,
               selectedDocModal.keywords.slice(0, 4)
             )}

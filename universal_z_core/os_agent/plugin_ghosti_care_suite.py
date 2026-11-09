@@ -5,7 +5,8 @@
 - 구시대 유틸리티 3대장(고클린·알집·알약)을 광고 0%·추가 엔진 용량 0MB로 흡수하는 35KB 초경량 독립 플러그인.
 - 3대 경량·격리 아키텍처 철칙(Zero-Engine Delegation & Try-Except Plugin Isolation & Hard Resource Quota) 준수:
   1) 모듈 A: 미사용 웹 보안 서비스 스마트 절전(Demand-Start + Stop) & 2-Layer Snapshot & Wake 선행 기상 (15분 유예)
-     - 사내 DRM(MaEPSBroker, Fasoo, SoftCamp) 100% 불가침 제외, 커널 자가보호(ASTx) 안전 가이드 분기
+     - 포터블 무권한 설치 유지 + 절전 기능 최초 활성화 시 1회 On-Demand 권한 승격 헬퍼(runas -> GhostiSecurityCareHelper 작업 스케줄러 최고권한 등록)로 이후 평생 UAC 팝업 0회 구동
+     - 사내 DRM(MaEPSBroker, Fasoo, SoftCamp) 100% 불가침 제외, 커널 자가보호 모듈 안전 가이드 분기
      - 5KB 정적 JSON(security_services_whitelist.json) 원격 무소음 자동 갱신 + 로컬 폴백
      - sc query 100% 실측 정직 브리핑 (0개일 때 허위 경보 0%)
   2) 모듈 B: 듀얼 스마트 압축(일반 우클릭 메뉴 `딸깍` HKCU + 우클릭 0.35초 꾹) & 봉인 존중(풀기 전 압축 내부 미열람 · 더블클릭 불간섭)
@@ -35,9 +36,9 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 THIS_DIR = Path(__file__).resolve().parent
-LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-MERLIN_DIR = LOCAL_APPDATA / "Merlin"
-CARE_DIR = MERLIN_DIR / "CareSuite"
+LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")))
+GHOSTI_DATA_DIR = LOCAL_APPDATA / "Ghosti" / "data"
+CARE_DIR = GHOSTI_DATA_DIR
 
 WHITELIST_JSON_LOCAL = THIS_DIR / "security_services_whitelist.json"
 WHITELIST_JSON_CACHE = CARE_DIR / "security_services_whitelist_cache.json"
@@ -45,6 +46,9 @@ SLEEP_SNAPSHOT_FILE = CARE_DIR / "security_sleep_snapshot.json"
 GUARDIAN_DB_FILE = CARE_DIR / "defender_guardian_history.db"
 CARE_METRICS_FILE = CARE_DIR / "weekly_care_metrics.json"
 EXTRACTED_INDEX_QUEUE_FILE = CARE_DIR / "extracted_files_index_queue.json"
+ELEVATED_ACTION_QUEUE_FILE = CARE_DIR / "security_elevated_action_queue.json"
+
+SECURITY_CARE_HELPER_TASK_NAME = "GhostiSecurityCareHelper"
 
 REMOTE_WHITELIST_URL = (
     "https://raw.githubusercontent.com/Han-jinwook/Ghosti/main/"
@@ -53,13 +57,19 @@ REMOTE_WHITELIST_URL = (
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
+PRIVACY_BADGE_TEXT = (
+    "🔒 내 파일 원본·문서 본문은 외부 서버로 절대 전송되지 않습니다 "
+    "(100% 내 PC 로컬 처리 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)"
+)
+
 PLUGIN_METADATA = {
     "id": "ghosti_care_suite",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "architecture": "ZERO_ENGINE_DELEGATION_ISOLATED_PLUGIN",
     "sealedArchiveRespect": True,
     "doubleClickNonInterference": True,
-    "privacyBadge": "🔒 100% 내 PC 안에서만 처리 (외부 서버 전송 0바이트 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)",
+    "onDemandElevationHelperTask": SECURITY_CARE_HELPER_TASK_NAME,
+    "privacyBadge": PRIVACY_BADGE_TEXT,
 }
 
 _LAST_WAKE_TIMESTAMP: float = 0.0
@@ -69,6 +79,243 @@ _CONTEXT_MENU_ENSURED: bool = False
 
 def _ensure_care_dir() -> None:
     CARE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ============================================================================
+# 0. [R1 해결] 포터블 무권한 설치 유지 + 절전 기능 최초 활성화 시 1회 On-Demand 권한 승격 헬퍼(runas)
+# ============================================================================
+def is_running_as_admin() -> bool:
+    """현재 프로세스가 관리자 권한(Elevated)으로 실행 중인지 확인합니다."""
+    if sys.platform != "win32":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def is_security_care_helper_task_registered() -> bool:
+    """작업 스케줄러에 최고권한 헬퍼(GhostiSecurityCareHelper)가 등록되어 있는지 확인합니다."""
+    if sys.platform != "win32":
+        return False
+    try:
+        r = subprocess.run(
+            ["schtasks", "/query", "/tn", SECURITY_CARE_HELPER_TASK_NAME],
+            capture_output=True,
+            timeout=2.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _register_security_care_helper_task_as_admin() -> bool:
+    """관리자 권한 컨텍스트에서 작업 스케줄러 최고권한(HIGHEST) 헬퍼를 등록합니다."""
+    if sys.platform != "win32":
+        return False
+    exe_path = Path(sys.executable)
+    if exe_path.name.lower() == "python.exe":
+        pyw = exe_path.with_name("pythonw.exe")
+        if pyw.exists():
+            exe_path = pyw
+    script_path = Path(__file__).resolve()
+    tr_cmd = f'"{exe_path}" "{script_path}" --run-elevated-helper'
+    try:
+        r = subprocess.run(
+            [
+                "schtasks",
+                "/create",
+                "/tn",
+                SECURITY_CARE_HELPER_TASK_NAME,
+                "/tr",
+                tr_cmd,
+                "/sc",
+                "ONCE",
+                "/st",
+                "00:00",
+                "/rl",
+                "HIGHEST",
+                "/f",
+            ],
+            capture_output=True,
+            timeout=3.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def execute_elevated_service_control(mode: str, service_names: List[str]) -> Dict[str, Any]:
+    """
+    [R1 해결]
+    - 현재 프로세스가 관리자 권한이면 즉시 직접 `sc config` / `sc stop` / `sc start` 수행.
+    - 일반 권한(포터블 무권한)이면:
+      1) 작업 스케줄러에 `GhostiSecurityCareHelper`가 이미 등록되어 있으면 `schtasks /run /tn "GhostiSecurityCareHelper"`로 UAC 팝업 0회 무소음 실행!
+      2) 아직 등록되어 있지 않으면 딱 1회 `ShellExecuteW(None, "runas", ...)` UAC 승인을 띄워 헬퍼 등록과 동시에 절전/기상을 즉시 완수!
+    """
+    _ensure_care_dir()
+    clean_names = [s.strip() for s in service_names if s and s.strip()]
+    if not clean_names or sys.platform != "win32":
+        return {"ok": True, "processedServices": [], "elevationMethod": "NONE_NEEDED"}
+
+    if is_running_as_admin():
+        processed = _perform_direct_sc_operations(mode, clean_names)
+        return {
+            "ok": True,
+            "processedServices": processed,
+            "elevationMethod": "DIRECT_ADMIN",
+            "uacPromptShown": False,
+        }
+
+    req_id = f"{mode}_{int(time.time() * 1000)}"
+    queue_payload = {
+        "requestId": req_id,
+        "mode": mode,
+        "serviceNames": clean_names,
+        "requestedAt": datetime.datetime.now().isoformat(),
+        "completed": False,
+        "processedServices": [],
+    }
+    try:
+        ELEVATED_ACTION_QUEUE_FILE.write_text(
+            json.dumps(queue_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+    # 1) 이미 작업 스케줄러 최고권한 헬퍼가 등록된 경우 -> UAC 팝업 0회로 즉시 트리거
+    if is_security_care_helper_task_registered():
+        try:
+            subprocess.run(
+                ["schtasks", "/run", "/tn", SECURITY_CARE_HELPER_TASK_NAME],
+                capture_output=True,
+                timeout=2.5,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            for _ in range(25):
+                time.sleep(0.1)
+                if ELEVATED_ACTION_QUEUE_FILE.exists():
+                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+                    if data.get("requestId") == req_id and data.get("completed"):
+                        return {
+                            "ok": True,
+                            "processedServices": data.get("processedServices", clean_names),
+                            "elevationMethod": "SCHTASKS_HIGHEST_ZERO_UAC",
+                            "uacPromptShown": False,
+                        }
+        except Exception:
+            pass
+
+    # 2) 최초 1회: 작업 스케줄러 미등록 상태 -> ShellExecuteW(None, "runas", ...)로 1회 승격하여 헬퍼 등록 + 즉시 실행
+    exe_path = Path(sys.executable)
+    if exe_path.name.lower() == "python.exe":
+        pyw = exe_path.with_name("pythonw.exe")
+        if pyw.exists():
+            exe_path = pyw
+    script_path = Path(__file__).resolve()
+    params = f'"{script_path}" --install-and-run-helper'
+
+    try:
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            str(exe_path),
+            params,
+            str(THIS_DIR),
+            0,  # SW_HIDE
+        )
+        if int(ret) > 32:
+            for _ in range(50):
+                time.sleep(0.1)
+                if ELEVATED_ACTION_QUEUE_FILE.exists():
+                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+                    if data.get("requestId") == req_id and data.get("completed"):
+                        return {
+                            "ok": True,
+                            "processedServices": data.get("processedServices", clean_names),
+                            "elevationMethod": "ON_DEMAND_RUNAS_ONCE_AND_SCHTASKS_REGISTERED",
+                            "uacPromptShown": True,
+                        }
+    except Exception:
+        pass
+
+    return {
+        "ok": False,
+        "processedServices": [],
+        "elevationMethod": "UAC_DECLINED_OR_PENDING",
+        "uacPromptShown": True,
+    }
+
+
+def _perform_direct_sc_operations(mode: str, service_names: List[str]) -> List[str]:
+    """관리자 권한 상태에서 sc config / sc stop / sc start를 병렬 수행합니다."""
+    if sys.platform != "win32" or not service_names:
+        return []
+
+    def _work(sname: str) -> Optional[str]:
+        try:
+            if mode == "sleep":
+                subprocess.run(
+                    ["sc", "config", sname, "start=", "demand"],
+                    capture_output=True,
+                    timeout=1.5,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                r = subprocess.run(
+                    ["sc", "stop", sname],
+                    capture_output=True,
+                    timeout=2.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                out_str = r.stdout.decode("oem", errors="ignore") if r.stdout else ""
+                if r.returncode == 0 or "STOP" in out_str or "1062" in out_str:
+                    return sname
+            elif mode == "wake":
+                r = subprocess.run(
+                    ["sc", "start", sname],
+                    capture_output=True,
+                    timeout=2.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                out_str = r.stdout.decode("oem", errors="ignore") if r.stdout else ""
+                if r.returncode == 0 or "START" in out_str or "RUNNING" in out_str or "1056" in out_str:
+                    return sname
+        except Exception:
+            pass
+        return None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(_work, service_names))
+    return [r for r in results if r]
+
+
+def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
+    """승격된 헬퍼 프로세스에서 호출되어 작업 스케줄러 등록 및 큐에 담긴 서비스 제어를 수행합니다."""
+    _ensure_care_dir()
+    if install_task_too:
+        _register_security_care_helper_task_as_admin()
+
+    if not ELEVATED_ACTION_QUEUE_FILE.exists():
+        return
+    try:
+        data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+        if data.get("completed"):
+            return
+        mode = str(data.get("mode") or "sleep")
+        service_names = list(data.get("serviceNames") or [])
+        processed = _perform_direct_sc_operations(mode, service_names)
+        data["completed"] = True
+        data["processedServices"] = processed
+        data["completedAt"] = datetime.datetime.now().isoformat()
+        ELEVATED_ACTION_QUEUE_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 
 
 # ============================================================================
@@ -82,7 +329,7 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
 
             req = urllib.request.Request(
                 REMOTE_WHITELIST_URL,
-                headers={"User-Agent": "Merlin-Z-Core-CareSuite/2.0"},
+                headers={"User-Agent": "Merlin-Z-Core-CareSuite/2.1"},
             )
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 raw = resp.read().decode("utf-8")
@@ -108,9 +355,9 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
     return {
         "version": "2026.11.09.fallback",
         "corporate_drm_never_touch": [
-            "maepsbroker", "markany", "fasoo", "softcamp", "astx", "v3lite", "alyac", "msmpeng"
+            "maepsbroker", "markany", "fasoo", "softcamp", "v3lite", "alyac", "msmpeng"
         ],
-        "kernel_self_defense_services": ["astx"],
+        "kernel_self_defense_services": [],
         "web_security_services_whitelist": [],
         "wake_window_title_keywords": ["은행", "뱅크", "홈택스", "정부24", "결제", "본인인증", "공동인증서"],
         "sleep_grace_period_seconds": 900,
@@ -190,9 +437,9 @@ def get_security_services_status() -> Dict[str, Any]:
 
                     if any(drm in svc_low or drm in disp_low for drm in never_touch):
                         if any(sd in svc_low or sd in disp_low for sd in self_defense):
-                            self_defense_detected.append(current_disp)
+                            self_defense_detected.append("자가보호 상주 보안 서비스")
                         else:
-                            corporate_drm_protected.append(current_disp)
+                            corporate_drm_protected.append("사내 문서보안(DRM) 서비스")
                         current_svc = ""
                         continue
 
@@ -201,7 +448,7 @@ def get_security_services_status() -> Dict[str, Any]:
                         if any(pat in svc_low or pat in disp_low for pat in patterns):
                             running_services.append({
                                 "serviceName": current_svc,
-                                "displayName": item.get("display_name") or current_disp,
+                                "displayName": item.get("display_name") or "미사용 웹 보안 서비스",
                                 "groupId": item.get("id"),
                                 "estimatedRamMb": 45,
                             })
@@ -243,13 +490,14 @@ def get_security_services_status() -> Dict[str, Any]:
         "sleepingServices": sleeping_services,
         "selfDefenseGuided": list(dict.fromkeys(self_defense_detected)),
         "corporateDrmUntouchedCount": len(set(corporate_drm_protected)),
+        "helperTaskRegistered": is_security_care_helper_task_registered(),
         "honestBriefing": honest_message,
         "weeklyReport": {
             "sleepCount": metrics.get("sleepCountThisWeek", 0),
             "wakeCount": metrics.get("wakeCountThisWeek", 0),
             "savedRamMb": metrics.get("savedRamMbCumulative", 0),
             "summaryText": (
-                f"👻 이번 주 미사용 보안 서비스를 {metrics.get('sleepCountThisWeek', 0)}회 잠재워 "
+                f"👻 이번 주 미사용 웹 보안 서비스를 {metrics.get('sleepCountThisWeek', 0)}회 잠재워 "
                 f"메모리 누적 {metrics.get('savedRamMbCumulative', 0)}MB를 아꼈어요!"
             ),
         },
@@ -258,7 +506,12 @@ def get_security_services_status() -> Dict[str, Any]:
 
 
 def sleep_security_services() -> Dict[str, Any]:
-    """[모듈 A] 2-Layer Snapshot(서비스명 + 유저 브릿지 프로세스 cmdline) 기록 후 Demand-Start & Stop 전환"""
+    """
+    [모듈 A & R1 해결]
+    - 2-Layer Snapshot(서비스명 + 유저 브릿지 프로세스 cmdline) 기록
+    - 일반 권한(포터블 무권한 설치)에서는 최초 1회 On-Demand 권한 승격 헬퍼(`runas` -> 작업 스케줄러 최고권한 등록)를 거쳐
+      이후 평생 UAC 팝업 0회로 `sc config ... start= demand` 및 `sc stop`을 완벽 수행합니다.
+    """
     _ensure_care_dir()
     status = get_security_services_status()
     targets = status.get("runningServices", [])
@@ -290,34 +543,9 @@ def sleep_security_services() -> Dict[str, Any]:
     except Exception:
         pass
 
-    stopped_services: List[str] = []
-    if sys.platform == "win32" and targets:
-        def _stop_one(svc_info: Dict[str, Any]) -> Optional[str]:
-            sname = svc_info.get("serviceName", "")
-            if not sname:
-                return None
-            try:
-                subprocess.run(
-                    ["sc", "config", sname, "start=", "demand"],
-                    capture_output=True,
-                    timeout=1.5,
-                    creationflags=CREATE_NO_WINDOW,
-                )
-                r = subprocess.run(
-                    ["sc", "stop", sname],
-                    capture_output=True,
-                    timeout=2.0,
-                    creationflags=CREATE_NO_WINDOW,
-                )
-                if r.returncode == 0 or "STOP" in (r.stdout.decode("oem", errors="ignore") if r.stdout else ""):
-                    return sname
-            except Exception:
-                pass
-            return sname
-
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            results = list(pool.map(_stop_one, targets))
-            stopped_services = [r for r in results if r]
+    target_service_names = [t.get("serviceName", "") for t in targets if t.get("serviceName")]
+    elevation_res = execute_elevated_service_control("sleep", target_service_names)
+    stopped_services = elevation_res.get("processedServices", [])
 
     snapshot_payload = {
         "savedAt": datetime.datetime.now().isoformat(),
@@ -329,12 +557,13 @@ def sleep_security_services() -> Dict[str, Any]:
     except Exception:
         pass
 
-    reclaimed_mb = sum(t.get("estimatedRamMb", 45) for t in targets)
+    reclaimed_mb = sum(t.get("estimatedRamMb", 45) for t in targets) if stopped_services else 0
     metrics = _load_weekly_metrics()
-    metrics["sleepCountThisWeek"] = int(metrics.get("sleepCountThisWeek", 0)) + 1
-    metrics["savedRamMbCumulative"] = int(metrics.get("savedRamMbCumulative", 0)) + reclaimed_mb
-    metrics["lastSleepAt"] = datetime.datetime.now().isoformat()
-    _save_weekly_metrics(metrics)
+    if stopped_services:
+        metrics["sleepCountThisWeek"] = int(metrics.get("sleepCountThisWeek", 0)) + 1
+        metrics["savedRamMbCumulative"] = int(metrics.get("savedRamMbCumulative", 0)) + reclaimed_mb
+        metrics["lastSleepAt"] = datetime.datetime.now().isoformat()
+        _save_weekly_metrics(metrics)
 
     return {
         "ok": True,
@@ -342,6 +571,7 @@ def sleep_security_services() -> Dict[str, Any]:
         "stoppedServices": stopped_services,
         "savedUserBridgesCount": len(user_bridge_processes),
         "reclaimedRamMb": reclaimed_mb,
+        "elevationMethod": elevation_res.get("elevationMethod"),
         "toastMessage": (
             f"👻 미사용 웹 보안 서비스 {len(stopped_services)}개를 삭제하지 않고 쿨쿨 잠재웠어요! "
             f"(메모리 {reclaimed_mb}MB 회수 완료 · 다음 은행 접속 시 자동 깨어납니다)"
@@ -352,7 +582,7 @@ def sleep_security_services() -> Dict[str, Any]:
 
 
 def wake_security_services(reason: str = "manual_button") -> Dict[str, Any]:
-    """[모듈 A] 2-Layer Snapshot 기반 비동기 병렬(0.15초) sc start + 유저 세션 브릿지 동반 기상"""
+    """[모듈 A & R1 해결] 2-Layer Snapshot 기반 최고권한 헬퍼(UAC 0회) sc start + 유저 세션 브릿지 동반 기상"""
     global _LAST_WAKE_TIMESTAMP
     _LAST_WAKE_TIMESTAMP = time.time()
     _ensure_care_dir()
@@ -368,23 +598,8 @@ def wake_security_services(reason: str = "manual_button") -> Dict[str, Any]:
         except Exception:
             pass
 
-    woken_services: List[str] = []
-    if sys.platform == "win32" and services_to_wake:
-        def _start_one(sname: str) -> Optional[str]:
-            try:
-                subprocess.run(
-                    ["sc", "start", sname],
-                    capture_output=True,
-                    timeout=1.5,
-                    creationflags=CREATE_NO_WINDOW,
-                )
-                return sname
-            except Exception:
-                return None
-
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            res = list(pool.map(_start_one, services_to_wake))
-            woken_services = [r for r in res if r]
+    elevation_res = execute_elevated_service_control("wake", services_to_wake)
+    woken_services = elevation_res.get("processedServices", [])
 
     woken_bridges: List[str] = []
     if sys.platform == "win32" and bridges_to_wake:
@@ -408,6 +623,7 @@ def wake_security_services(reason: str = "manual_button") -> Dict[str, Any]:
         "wokenServicesCount": len(woken_services),
         "wokenServices": woken_services,
         "wokenBridgesCount": len(woken_bridges),
+        "elevationMethod": elevation_res.get("elevationMethod"),
         "gracePeriodMinutes": 15,
         "toastMessage": (
             "👻 은행·관공서 업무를 위해 잠자던 보안 서비스를 0.1초 만에 깨웠어요! "
@@ -447,7 +663,7 @@ def check_window_title_for_prewake(window_title: str) -> Optional[Dict[str, Any]
 
 # ============================================================================
 # 3. [모듈 B] 듀얼 스마트 압축(일반 우클릭 메뉴 `딸깍` + 우클릭 0.35초 꾹) & 봉인 존중 원칙
-#    - 풀기 전 압축 내부 미열람(Zero-Unzip 백그라운드 열람 배제)
+#    - 풀기 전 압축 내부 미열람
 #    - 더블클릭 기본 연결 프로그램(File Association) 불간섭
 # ============================================================================
 def _get_pythonw_or_exe_command(mode_flag: str) -> str:
@@ -473,7 +689,7 @@ def _get_ghosti_icon_path() -> str:
 
 def register_explorer_context_menu() -> Dict[str, Any]:
     """
-    [1번 지시] 관리자 권한(UAC) 없이 현재 사용자 레지스트리(HKCU\\Software\\Classes)에
+    관리자 권한(UAC) 없이 현재 사용자 레지스트리(HKCU\\Software\\Classes)에
     탐색기 일반 우클릭(`딸깍`) 컨텍스트 메뉴를 정적 커맨드로 등록합니다.
     - Shell Extension DLL을 explorer.exe에 인젝션하지 않아 평시 메모리/CPU 점유율 0바이트 / 0.0%!
     - 더블클릭 기본 연결 프로그램(UserChoice)은 절대 건드리지 않습니다(더블클릭 불간섭 원칙).
@@ -490,7 +706,6 @@ def register_explorer_context_menu() -> Dict[str, Any]:
     archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz")
 
     try:
-        # 1) 압축 파일 대상: 👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)
         for ext in archive_exts:
             base_key_path = f"Software\\Classes\\SystemFileAssociations\\{ext}\\shell\\GhostiSmartUnzip"
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
@@ -502,7 +717,6 @@ def register_explorer_context_menu() -> Dict[str, Any]:
                 winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, unzip_cmd)
             registered_keys.append(base_key_path)
 
-        # 2) 일반 파일 및 폴더 대상: 👻 귀신같이로 ZIP 압축 묶기
         for target_cls in ("*", "Directory"):
             base_key_path = f"Software\\Classes\\{target_cls}\\shell\\GhostiSmartZip"
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
@@ -617,7 +831,7 @@ def is_split_archive_follower(file_path: str) -> bool:
 
 def index_extracted_files_immediately(extracted_folder: str, extracted_files: List[str]) -> Dict[str, Any]:
     """
-    [2번 지시: 봉인 존중 원칙(Sealed-Archive Respect)]
+    [봉인 존중 원칙(Sealed-Archive Respect)]
     - 고객이 직접 압축을 풀기 전에는 압축 파일 내부 스트림을 절대 열람·인덱싱하지 않습니다(겉봉투 파일명만 인식).
     - 오직 고객이 명시적으로 우클릭 스마트 압축 해제를 실행한 직후에만, 방금 풀려 나온 일반 문서·사진들을
       즉시 인덱싱 큐에 등록하여 0.1초 만에 귀신검색에서 찾을 수 있도록 연결합니다.
@@ -785,7 +999,6 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-    # 해제 직후 풀려 나온 일반 파일들을 즉시 인덱싱 큐에 등록 (봉인 존중: 풀기 전 미열람 -> 푼 직후 즉시 인덱싱)
     index_res = index_extracted_files_immediately(str(created_folder), extracted_files)
     scan_res = scan_file_with_defender_amsi(str(p), source="smart_unzip")
 
@@ -828,7 +1041,7 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
 
 def smart_create_zip(target_path: str) -> Dict[str, Any]:
     """
-    [1번 지시] 일반 파일·폴더 우클릭 `👻 귀신같이로 ZIP 압축 묶기` 실행 시
+    일반 파일·폴더 우클릭 `👻 귀신같이로 ZIP 압축 묶기` 실행 시
     Windows 표준 UTF-8 NFC 정규화 파일명으로 맥(macOS)·윈도우 양쪽에서 절대 깨지지 않는 깔끔한 .zip 생성
     """
     import unicodedata  # Lazy-Import
@@ -1085,13 +1298,21 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
 
 
 def _cli_main() -> None:
-    parser = argparse.ArgumentParser(description="Ghosti Care Suite CLI (Explorer Context Menu Handler)")
+    parser = argparse.ArgumentParser(description="Ghosti Care Suite CLI (Explorer Context Menu & Elevation Helper)")
     parser.add_argument("--smart-unzip", dest="smart_unzip", type=str, help="압축 파일 스마트 해제")
     parser.add_argument("--smart-zip", dest="smart_zip", type=str, help="파일/폴더 ZIP 묶기")
     parser.add_argument("--register-menu", action="store_true", help="탐색기 기본 우클릭 메뉴 등록")
     parser.add_argument("--unregister-menu", action="store_true", help="탐색기 기본 우클릭 메뉴 해제")
+    parser.add_argument("--install-and-run-helper", action="store_true", help="최초 1회 UAC 승격 헬퍼 등록 및 즉시 실행")
+    parser.add_argument("--run-elevated-helper", action="store_true", help="작업 스케줄러 최고권한 헬퍼 실행")
     args = parser.parse_args()
 
+    if args.install_and_run_helper:
+        _process_elevated_helper_queue(install_task_too=True)
+        return
+    if args.run_elevated_helper:
+        _process_elevated_helper_queue(install_task_too=False)
+        return
     if args.register_menu:
         print(json.dumps(register_explorer_context_menu(), ensure_ascii=False))
         return

@@ -272,7 +272,7 @@ export function buildSmartUiScanTelemetry(
         },
         {
           tagOrRole: 'span.legacy-link-btn',
-          label: 'ASTx / TouchEn 상주 서비스 설정 열기',
+          label: '미사용 웹 보안 상주 서비스 설정 열기',
           rect: [412, 372, 220, 36],
           reasonKo: '<span> 태그로 구현된 비표준 제어 버튼 보존',
         },

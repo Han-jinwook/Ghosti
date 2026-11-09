@@ -207,7 +207,8 @@ export const ZERO_COST_ICE_SERVERS: RTCIceServer[] = [
 export const WEBRTC_HOLE_PUNCH_TIMEOUT_MS = 3500;
 
 /**
- * 당사 공식 도메인(`*.sundreamer.app`) 및 로컬/터널 개발 호스트 화이트리스트 검증
+ * 당사 공식 도메인(`*.sundreamer.app`), 고정 도메인 터널(`*.tunnel.ghosti.sundreamer.app`) 및 로컬 개발 호스트 화이트리스트 검증
+ * - iOS는 운영체제 백그라운드 정책상 앱 진입(Foreground 활성화) 시 즉시 동기화가 수행됩니다.
  */
 export function isTrustedMerlinFamilyOrigin(originOrUrl?: string): boolean {
   const raw =
@@ -222,7 +223,7 @@ export function isTrustedMerlinFamilyOrigin(originOrUrl?: string): boolean {
       host === '127.0.0.1' ||
       host.startsWith('192.168.') ||
       host.startsWith('100.') ||
-      host.endsWith('.trycloudflare.com')
+      host.endsWith('.tunnel.ghosti.sundreamer.app')
     ) {
       return true;
     }

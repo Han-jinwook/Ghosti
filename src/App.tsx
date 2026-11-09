@@ -357,6 +357,11 @@ export const App: React.FC = () => {
         </>
       )}
 
+      {/* [R3 해결] 전사 정밀 안심 배지 */}
+      <div className="sr-only" data-privacy-guarantee="true">
+        🔒 내 파일 원본·문서 본문은 외부 서버로 절대 전송되지 않습니다 (100% 내 PC 로컬 처리 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)
+      </div>
+
       {/* 모든 페이지(쇼룸 대문, 모바일, 데스크톱 전 메뉴) 공통 맨 위로 가기 플로팅 버튼 */}
       {showScrollTopBtn && (
         <button

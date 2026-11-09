@@ -767,7 +767,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
         </div>
       )}
 
-      {/* 3-B. 💻 PC 전용: [🚀 부팅·버벅임 케어 (고클린·구라제거기 대체)] & [🛡️ 바이러스·랜섬웨어 안심 점검 (알약 대체)] 2대 핵심 모듈 */}
+      {/* 3-B. 💻 PC 전용: [🚀 부팅·버벅임 케어 (미사용 웹 보안 서비스 정리)] & [🛡️ 바이러스·랜섬웨어 안심 점검] 2대 핵심 모듈 */}
       {setupMonsterPlatform === 'pc' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {/* 모듈 ①: 🚀 부팅·버벅임 케어 (매일 1회 재부팅 기준점 & 보안 쓰레기 정리) */}

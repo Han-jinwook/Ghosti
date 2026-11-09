@@ -104,7 +104,7 @@ AUTO_CLEAN_SECONDS = 300.0
 IMAGE_CLEAN_SECONDS = 90.0
 MENU_ARM_SECONDS = 7.5
 
-BASE_DIR = Path("d:/Secretary") if Path("d:/Secretary").exists() else Path("C:/MerlinTools")
+BASE_DIR = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "Ghosti"
 QUEUE_FILE = BASE_DIR / "data" / "clipboard_queue.json"
 SNIPPETS_FILE = BASE_DIR / "data" / "fixed_snippets.json"
 HISTORY_FILE = BASE_DIR / "data" / "clipboard_ai_history.json"
@@ -845,14 +845,12 @@ _CAND_SOUNDS = [
     Path(__file__).resolve().parent / "assets",
     Path(__file__).resolve().parent.parent / "data" / "baby_ghost_sounds",
     Path("C:/MerlinTools/assets"),
-    Path("d:/Secretary/data/baby_ghost_sounds"),
 ]
 SOUNDS_DIR = next((d for d in _CAND_SOUNDS if (d / "active_summon_sound.wav").exists()), _CAND_SOUNDS[0])
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
-_MERLIN_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Merlin"
+_MERLIN_APPDATA = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "Ghosti" / "data"
 TELEMETRY_FILE = _MERLIN_APPDATA / "superpower_telemetry.json"
-TELEMETRY_SEC_MIRROR = Path("d:/Secretary/data/superpower_telemetry.json")
 TELEMETRY_CONFIG_FILE = _MERLIN_APPDATA / "superpower_telemetry_config.json"
 SUPERPOWER_SETTINGS_FILE = _MERLIN_APPDATA / "superpower_settings.json"
 E2EE_MAILBOX_FILE = _MERLIN_APPDATA / "offline_e2ee_mailbox.json"
@@ -5137,7 +5135,7 @@ def main() -> None:
                             or ((u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0)
                         )
 
-                # 1) 비서가 data/clipboard_queue.json 에 순차 목록을 장전했는지 확인
+                # 1) %LOCALAPPDATA%/Ghosti/data/clipboard_queue.json 에 순차 목록을 장전했는지 확인
                 if QUEUE_FILE.exists():
                     try:
                         mtime = QUEUE_FILE.stat().st_mtime

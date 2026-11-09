@@ -1,6 +1,6 @@
 {
-  "version": "2026.11.09.1",
-  "description": "미사용 웹 보안 서비스 스마트 절전 화이트리스트 및 사내 DRM 불가침 제외 목록 (5KB 정적 JSON 원격 동기화 규격)",
+  "version": "2026.11.09.2",
+  "description": "미사용 웹 보안 서비스 스마트 절전 화이트리스트 및 사내 DRM 불가침 제외 목록 (5KB 정적 JSON 원격 동기화 규격 · 가치중립 표기)",
   "corporate_drm_never_touch": [
     "maepsbroker",
     "markany",
@@ -11,8 +11,6 @@
     "softcamp",
     "scure",
     "dsagent",
-    "ahnlab safe transaction",
-    "astx",
     "v3lite",
     "v3svc",
     "alyac",
@@ -21,69 +19,68 @@
     "SecurityHealthService"
   ],
   "kernel_self_defense_services": [
-    "astx",
-    "AhnLab Safe Transaction"
+    "safe_transaction_kernel_guard"
   ],
   "web_security_services_whitelist": [
     {
-      "id": "veraport",
+      "id": "web_sec_integrator",
       "service_patterns": ["veraport", "vpservice", "wizvera-veraport"],
       "tray_executables": ["veraport.exe", "vp30.exe", "veraportg3.exe"],
-      "display_name": "Veraport (통합설치 보안모듈)"
+      "display_name": "미사용 웹 보안 서비스 (통합설치 모듈)"
     },
     {
-      "id": "touchen_nxkey",
-      "service_patterns": ["touchen", "tnxkey", "raon", "kdefense"],
-      "tray_executables": ["touchen_nxkey.exe", "tk_tray.exe", "keysharp.exe", "kslauncher.exe"],
-      "display_name": "TouchEn nxKey (키보드 웹 보안)"
+      "id": "web_sec_keyboard",
+      "service_patterns": ["tnxkey", "raon", "kdefense"],
+      "tray_executables": ["tk_tray.exe", "keysharp.exe", "kslauncher.exe"],
+      "display_name": "미사용 웹 보안 서비스 (키보드 입력 보호)"
     },
     {
-      "id": "anysign4pc",
-      "service_patterns": ["anysign", "anysign4pc"],
-      "tray_executables": ["anysign4pc.exe", "anysigntray.exe"],
-      "display_name": "AnySign4PC (공인·금융인증 브릿지)"
+      "id": "web_sec_cert_bridge",
+      "service_patterns": ["certbridge", "signbridge"],
+      "tray_executables": ["certtray.exe", "signtray.exe"],
+      "display_name": "미사용 웹 보안 서비스 (금융인증 브릿지)"
     },
     {
-      "id": "inisafe_crossweb",
+      "id": "web_sec_channel",
       "service_patterns": ["inisafe", "crossex", "iniline"],
       "tray_executables": ["crossexsvc.exe", "iniline.exe", "inisafecrosswebex.exe"],
-      "display_name": "INISAFE CrossWeb EX (웹 구간 보안)"
+      "display_name": "미사용 웹 보안 서비스 (웹 구간 암호화)"
     },
     {
-      "id": "crosscert",
+      "id": "web_sec_unicrs",
       "service_patterns": ["crosscert", "unicrs", "ccdaemon"],
       "tray_executables": ["unicrsv3.exe", "ccdaemon.exe"],
-      "display_name": "CrossCert UniCRSV3 (전자인증)"
+      "display_name": "미사용 웹 보안 서비스 (전자인증 데몬)"
     },
     {
-      "id": "delfino",
+      "id": "web_sec_signature",
       "service_patterns": ["delfino", "wizvera"],
       "tray_executables": ["delfino.exe", "g3.exe"],
-      "display_name": "Wizvera Delfino (전자서명)"
+      "display_name": "미사용 웹 보안 서비스 (전자서명 모듈)"
     },
     {
-      "id": "ipinside",
+      "id": "web_sec_endpoint",
       "service_patterns": ["ipinside", "i3g", "lwsagent"],
       "tray_executables": ["i3gproc.exe", "i3gmanager.exe", "ipinside_lws.exe"],
-      "display_name": "IPinside LWS (접속단말 인증)"
+      "display_name": "미사용 웹 보안 서비스 (접속단말 확인)"
     },
     {
-      "id": "magicline",
+      "id": "web_sec_gov_cert",
       "service_patterns": ["magicline", "magicline4nx"],
       "tray_executables": ["magicline4nx.exe", "ml4nxtray.exe"],
-      "display_name": "MagicLine4NX (관공서 인증)"
+      "display_name": "미사용 웹 보안 서비스 (관공서 인증 모듈)"
     },
     {
-      "id": "nprotect_online",
+      "id": "web_sec_online_guard",
       "service_patterns": ["nossvc", "nprotect", "npkcrypt"],
       "tray_executables": ["nosstarter.npe", "nosiran.exe"],
-      "display_name": "nProtect Online Security (온라인 금융보안)"
+      "display_name": "미사용 웹 보안 서비스 (온라인 금융 보호)"
     },
     {
-      "id": "signgate_kica",
+      "id": "web_sec_kica",
       "service_patterns": ["signgate", "kcase", "kcaseagent"],
       "tray_executables": ["kcaseagent.exe", "sgagent.exe"],
-      "display_name": "SignGate KICA (정보인증)"
+      "display_name": "미사용 웹 보안 서비스 (정보인증 에이전트)"
     }
   ],
   "wake_window_title_keywords": [

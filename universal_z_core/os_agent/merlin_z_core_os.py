@@ -53,29 +53,29 @@ GUI_PAYLOAD_FILE = MERLIN_DIR / "gui_task_payload.json"
 OVERLAY_PID_FILE = MERLIN_DIR / "overlay_worker.pid"
 
 KNOWN_SECURITY_PLUGIN_KEYWORDS = {
-    "astx": "AhnLab Safe Transaction (ASTx)",
-    "touchen": "TouchEn nxKey / nxFirewall (라온시큐어)",
-    "anysign": "AnySign4PC (한컴위드 공인인증)",
-    "ipinside": "IPInside LWS Agent (인터리젠)",
-    "veraport": "Veraport (위즈베라 통합설치)",
-    "wizvera": "Wizvera Delfino (위즈베라 전자서명)",
-    "delfino": "Wizvera Delfino (위즈베라 전자서명)",
-    "crossex": "iniLINE CrossEX (이니텍 브라우저 인증/보안)",
-    "inisafe": "INISAFE CrossWeb EX (이니텍)",
-    "crosscert": "CrossCert UniCRSV3 (한국전자인증)",
-    "nprotect": "nProtect Online Security (잉카인터넷)",
-    "keysharp": "KeySharp Biz (라온시큐어)",
-    "kslauncher": "KeySharp Launcher",
-    "nosstarter": "nProtect Starter (nosstarter.npe)",
-    "magicline": "DreamSecurity MagicLine4NX (관공서 인증)",
-    "markany": "MarkAny WebDRM / ePageSafer (문서보안)",
-    "fasoo": "Fasoo DRM / WebCracker (문서보안)",
-    "softcamp": "SoftCamp Document Security",
-    "signgate": "SignGate KICA (한국정보인증)",
-    "kcase": "KCaseAgent (한국정보인증)",
-    "xecure": "SoftForum XecureWeb (구형 보안모듈)",
-    "i3g": "I3GProc / I3GManager (금융 보안모듈)",
-    "tecopy": "TouchEn Anti-Capture (화면보안)",
+    "astx": "미사용 웹 보안 서비스 (온라인 트랜잭션 보호)",
+    "touchen": "미사용 웹 보안 서비스 (키보드·방화벽 보안)",
+    "anysign": "미사용 웹 보안 서비스 (공인·전자서명 인증)",
+    "ipinside": "미사용 웹 보안 서비스 (단말기 접속인증)",
+    "veraport": "미사용 웹 보안 서비스 (통합설치 관리)",
+    "wizvera": "미사용 웹 보안 서비스 (전자서명 보안)",
+    "delfino": "미사용 웹 보안 서비스 (전자서명 모듈)",
+    "crossex": "미사용 웹 보안 서비스 (브라우저 인증 연동)",
+    "inisafe": "미사용 웹 보안 서비스 (웹 구간 암호화)",
+    "crosscert": "미사용 웹 보안 서비스 (전자인증 연동)",
+    "nprotect": "미사용 웹 보안 서비스 (온라인 통합 보안)",
+    "keysharp": "미사용 웹 보안 서비스 (전자서명 인증)",
+    "kslauncher": "미사용 웹 보안 서비스 (인증 런처)",
+    "nosstarter": "미사용 웹 보안 서비스 (보안 스타터)",
+    "magicline": "미사용 웹 보안 서비스 (민원 전자서명 인증)",
+    "markany": "미사용 웹 보안 서비스 (문서 위변조 방지)",
+    "fasoo": "미사용 웹 보안 서비스 (문서 보안 에이전트)",
+    "softcamp": "미사용 웹 보안 서비스 (문서 보안 모듈)",
+    "signgate": "미사용 웹 보안 서비스 (정보인증 연동)",
+    "kcase": "미사용 웹 보안 서비스 (인증 에이전트)",
+    "xecure": "미사용 웹 보안 서비스 (구형 웹 보안모듈)",
+    "i3g": "미사용 웹 보안 서비스 (금융 보안모듈)",
+    "tecopy": "미사용 웹 보안 서비스 (화면 캡처 보안)",
     "alnotify": "ALTools 알림/광고 도우미 (alnotify)",
     "alyac": "알약(ALYac) 백그라운드/광고 모듈",
     "alsee": "알씨(ALSee) 상주 업데이트/광고 에이전트",
@@ -1952,7 +1952,7 @@ Get-Process | Where-Object {
     if needs_reboot:
         summary_ko = (
             f"현재 컴퓨터를 켜둔 지 {uptime_days_int}일 {uptime_rem_hours}시간 (권장 기준: 매일 1회 재부팅)이 지났습니다. "
-            f"하루 이상 켜두어 윈도우에 쌓인 피로는 강제로 찌꺼기 청소를 하면 오히려 열려 있는 브라우저(구글시트 등) 화면이 깨지거나 버벅거림이 남을 수 있습니다. "
+            f"하루 이상 켜두어 윈도우에 쌓인 피로는 강제로 임시 메모리 정리를 하면 오히려 열려 있는 브라우저(구글시트 등) 화면이 깨지거나 버벅거림이 남을 수 있습니다. "
             f"억지 청소 대신 지금 '다시 시작(재부팅)'을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (매일 1회 아침이나 퇴근 전 재부팅을 권장합니다)"
         )
         if sec_plugins:

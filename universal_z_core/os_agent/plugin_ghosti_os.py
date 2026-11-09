@@ -455,7 +455,7 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
       2) .gsheet / .gdoc 202바이트 JSON 메타데이터({"doc_id": "...", "url": "..."}) 파싱
       3) 백신 Infostealer 오진 방지를 위해 브라우저 세션 탈취를 엄금하며, 기본 '파일명 색인 + 1초 열기' 제공 및 본문 검색은 공식 OAuth 연동
       4) 계정/비밀번호(ID/PW) 행 조회 시:
-         - 내 기기 로컬 열람이므로 화면에서 마스킹(••••)하지 않고 ID와 비밀번호 원문을 선명하게 그대로 표시!
+         - 어깨너머 노출 방지를 위해 화면에서는 비밀번호를 기본 마스킹(••••••••) 처리하고 [👁️ 보기] 클릭 시에만 원문을 노출!
          - ID 텍스트 옆(📋)과 비밀번호 텍스트 옆(📋) 모두 인라인 복사 이모지 제공!
          - 단, TTS 음성으로는 비밀번호를 절대 소리 내어 읽지 않으며 외부 AI 바톤터치 대상에서 제외!
     """
@@ -522,9 +522,11 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
             "accountId": "merlin_family@sundreamer.app",
             "accountPw": "Merlin#2026!ZCore",
             "displayFormat": {
-                "maskPasswordOnScreen": False,
+                "maskPasswordOnScreen": True,
+                "maskedPwDisplay": "••••••••",
+                "revealButtonLabel": "👁️ 보기",
                 "idDisplayWithCopyEmoji": "merlin_family@sundreamer.app 📋",
-                "pwDisplayWithCopyEmoji": "Merlin#2026!ZCore 📋",
+                "pwDisplayWithCopyEmoji": "•••••••• [👁️ 보기] 📋",
             },
             "privacyGuard": {
                 "ttsReadPasswordAllowed": False,
@@ -1692,7 +1694,8 @@ MUTATING_ACTIONS = {
 }
 
 
-import threading
+import threading
+
 _INSPECT_CACHE_LOCK = threading.Lock()
 
 _SPEC_CACHE_LOCK = threading.Lock()
