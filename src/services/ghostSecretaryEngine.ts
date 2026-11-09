@@ -187,19 +187,24 @@ export function sanitizeNicknameAnswer(raw: string): string {
   return s.trim().slice(0, 12);
 }
 
+/** 일반 지시대명사·의문사·명령어가 새 별명으로 오인식되지 않도록 차단하는 금지어 정규식 */
+const INVALID_NICKNAME_CANDIDATE_RE =
+  /^(불러|바꿔|변경|수정|이름|별명|닉네임|호칭|뭐|뭘|무엇|다시|새로|다른|다른걸|다른것|다른거|다른이름|다른별명|다른닉네임|딴거|딴걸|아무거나|그거|이거|저거|누구|나|저)$/;
+
 /**
  * 별명(호칭) 변경·수정·조회 의도 판별 (무토큰 대본 DB 1단계)
- * - change: 새 별명이 문장 안에 함께 들어있는 경우 ("아냐 으노 말고 은호라고 해", "은호라고 불러줘", "내 별명 은호로 바꿔줘")
- * - ask: 별명을 바꾸고 싶다고만 말한 경우 ("별명 바꿀래", "내 이름 수정해줘")
+ * - change: 새 별명이 문장 안에 함께 들어있는 경우 ("아냐 으노 말고 은호라고 해", "은숙을 은호로 바꿔줘", "은호로 변경해줘", "내 별명 은호로 수정해줘")
+ * - ask: 별명을 바꾸고 싶다고만 말한 경우 ("별명 바꿀래", "내 이름 수정해줘", "이름 다른걸로 바꿔줘", "닉네임 다른 것으로 변경해줘")
  * - query: 현재 저장된 내 이름/별명을 물어본 경우 ("내 이름이 뭐야?", "내 별명 기억해?")
  */
 export function parseNicknameSettingIntent(
-  raw: string
+  raw: string,
+  currentNickname?: string
 ): { kind: 'change'; newNickname: string } | { kind: 'ask' } | { kind: 'query' } | null {
   const t = raw.trim();
   if (!t || t.length > 50) return null;
-  // 파일·폴더 이름 변경 명령과 혼동 방지
-  if (/파일|폴더|사진|문서|여권|\d+\s*번/.test(t)) return null;
+  // 파일·폴더·요일·시간·귀신창·여권 설정 명령과 혼동 방지
+  if (/파일|폴더|사진|문서|여권|\d+\s*번|요일|시간|소리|효과음|라벨러|검진|알림|귀신창|단축키|상용구/.test(t)) return null;
 
   // 1) 내 이름/별명 조회 ("내 이름이 뭐야?", "내 별명 뭐라고 했지?", "나 누구야?")
   if (
@@ -209,44 +214,70 @@ export function parseNicknameSettingIntent(
     return { kind: 'query' };
   }
 
-  // 2) "A 말고 B라고 해/불러/바꿔" 또는 "아냐 B라고 해/불러"
+  // 2) "이름/별명/닉네임 다른 걸로 바꿔줘/변경해줘/수정해줘" 또는 새 이름 없이 "별명 바꿔줘"만 말한 경우 (최우선 판별하여 '다른걸'님이 되는 사고 원천 차단!)
+  if (
+    /(?:다른\s*(?:걸|것|거|이름|별명|닉네임)|딴\s*(?:걸|거|이름|별명)|새\s*(?:이름|별명|닉네임))(?:으로|로)?\s*(?:바꿔|바꿀|변경|수정|다시|새로|해)/i.test(t) ||
+    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:좀\s*)?(?:다시\s*|새로\s*)?(?:바꿔|바꿀|변경|수정|다시\s*설정|새로\s*설정)(?:줘|주세요|줘요|할래|할게|해줘|해주세요|해)?[.!~?]*$/i.test(t)
+  ) {
+    return { kind: 'ask' };
+  }
+
+  // 3) "A 말고 B라고 해/불러/바꿔/변경/수정" 또는 "A가 아니라 B로 바꿔줘"
   const malgoMatch = t.match(
-    /(?:말고|아닌|아니고)\s+([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고|으로|로)\s*(?:불러|해|바꿔|변경|수정|할게|할래)/i
+    /(?:말고|아닌|아니고|아니라)\s+([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고|으로|로)\s*(?:불러|해|바꿔|변경|수정|할게|할래)/i
   );
   if (malgoMatch) {
     const nick = sanitizeNicknameAnswer(malgoMatch[1]);
-    if (nick && !/^(불러|바꿔|변경|수정|이름|별명|닉네임)$/.test(nick)) {
+    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
       return { kind: 'change', newNickname: nick };
     }
   }
 
-  // 3) "(내 이름/별명) B라고 불러줘 / B로 바꿔줘 / B라고 해"
-  const directCallMatch = t.match(
-    /^(?:아냐\s*|아니야\s*|아니\s*)?(?:앞으로는?\s*|이제부터는?\s*)?(?:내\s*이름(?:은|을)?\s*|제\s*이름(?:은|을)?\s*|내\s*별명(?:은|을)?\s*|별명(?:은|을)?\s*|닉네임(?:은|을)?\s*|호칭(?:은|을)?\s*|그냥\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고)\s*(?:불러\s*(?:줘|주세요|줘요|라)?|해\s*(?:줘|주세요|줘요|라)?|할게|할래)[.!~?]*$/i
+  // 4) "A(을/를/에서) B(으)로 바꿔줘/변경해줘/수정해줘" (예: "은숙을 은호로 바꿔줘", "은숙에서 은호로 변경해줘")
+  const fromToChangeMatch = t.match(
+    /^(?:아냐\s*|아니야\s*)?(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)?\s*([가-힣a-zA-Z0-9]{1,12}?)(?:님)?(?:을|를|에서| 말고)\s*([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:으로|로|이라고|라고)\s*(?:바꿔|변경|수정|설정|저장|불러|해)/i
   );
-  if (directCallMatch) {
-    const nick = sanitizeNicknameAnswer(directCallMatch[1]);
-    if (nick && !/^(불러|바꿔|변경|수정|이름|별명|닉네임|호칭|뭐|다시)$/.test(nick)) {
+  if (fromToChangeMatch) {
+    const nick = sanitizeNicknameAnswer(fromToChangeMatch[2]);
+    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
       return { kind: 'change', newNickname: nick };
     }
   }
 
-  // 4) "내 별명(이름/닉네임)을 B(으)로 바꿔줘/변경해줘/설정해줘"
+  // 5) "내 별명(이름/닉네임)을 B(으)로 바꿔줘/변경해줘/수정해줘/설정해줘"
   const explicitChangeMatch = t.match(
-    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:.+?\s*말고\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:으로|로|이라고|라고)\s*(?:바꿔|변경|수정|등록|설정|저장|해)/i
+    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:.+?\s*말고\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:으로|로|이라고|라고)\s*(?:바꿔|변경|수정|등록|설정|저장|불러|해)/i
   );
   if (explicitChangeMatch) {
     const nick = sanitizeNicknameAnswer(explicitChangeMatch[1]);
-    if (nick && !/^(불러|바꿔|변경|수정|이름|별명|닉네임|호칭|뭐|다시)$/.test(nick)) {
+    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
       return { kind: 'change', newNickname: nick };
     }
   }
 
-  // 5) 새 이름 없이 "별명 바꿔줘", "내 이름 수정할래", "호칭 다시 설정해줘"만 말한 경우
-  if (
-    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)\s*(?:좀\s*)?(?:바꿔|바꿀|변경|수정|다시\s*설정|새로\s*설정)/i.test(t)
-  ) {
-    return { kind: 'ask' };
+  // 6) "(앞으로는/그냥) B라고 불러줘 / B로 바꿔줘 / B로 변경해줘 / B로 수정해줘" (단독 문장)
+  const directCallMatch = t.match(
+    /^(?:아냐\s*|아니야\s*|아니\s*)?(?:앞으로는?\s*|이제부터는?\s*)?(?:내\s*이름(?:은|을)?\s*|제\s*이름(?:은|을)?\s*|내\s*별명(?:은|을)?\s*|별명(?:은|을)?\s*|닉네임(?:은|을)?\s*|호칭(?:은|을)?\s*|그냥\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고|으로|로)\s*(?:불러\s*(?:줘|주세요|줘요|라)?|바꿔\s*(?:줘|주세요|줘요|라)?|변경\s*(?:해\s*줘|해\s*주세요|해)?|수정\s*(?:해\s*줘|해\s*주세요|해)?|해\s*(?:줘|주세요|줘요|라)?|할게|할래)[.!~?]*$/i
+  );
+  if (directCallMatch) {
+    const nick = sanitizeNicknameAnswer(directCallMatch[1]);
+    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+      return { kind: 'change', newNickname: nick };
+    }
+  }
+
+  // 7) 현재 저장된 별명이 포함된 변경 문장 (예: 현재 '은숙'인데 "은숙 말고 은호", "은숙을 은호로 해줘")
+  if (currentNickname && t.includes(currentNickname)) {
+    const curEsc = currentNickname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const curMatch = t.match(
+      new RegExp(`${curEsc}(?:님)?(?:을|를|에서|말고|\s)+([가-힣a-zA-Z0-9]{1,12}?)(?:님)?(?:으로|로|이라고|라고)?\s*(?:바꿔|변경|수정|불러|해)`, 'i')
+    );
+    if (curMatch) {
+      const nick = sanitizeNicknameAnswer(curMatch[1]);
+      if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+        return { kind: 'change', newNickname: nick };
+      }
+    }
   }
 
   return null;
@@ -472,7 +503,7 @@ export function resolveGhostSecretaryTurn(
       const sc = findScenario('passport_complete_suggest_natural_search');
       const done = firstFamily && sc
         ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
-        : `${nickname}님 본인 여권을 새겨뒀어요! 이제 아래 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`;
+        : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`;
       const viralAsk = firstFamily
         ? `\n\n방금 찾아낸 『${firstFamily}』 사진들을 가족 카톡방에 로그인 없이 1초 만에 구경시켜 드릴까요?`
         : '';
@@ -521,7 +552,7 @@ export function resolveGhostSecretaryTurn(
   }
 
   // ①-2 프로필 별명(호칭) 변경·수정·조회 (언제든 무토큰 즉시 반영)
-  const nickIntent = parseNicknameSettingIntent(text);
+  const nickIntent = parseNicknameSettingIntent(text, nickname);
   if (nickIntent) {
     if (nickIntent.kind === 'change') {
       const newNick = nickIntent.newNickname;
