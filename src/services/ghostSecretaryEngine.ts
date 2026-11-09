@@ -157,8 +157,8 @@ export function buildColdReadingText(nickname: string, ctx: ColdReadingContext):
 // ─────────────────────────────────────────────────────────────
 const STORE_LINK_RE = /(어디서\s*(사|구매|팔|파)|구매\s*(처|링크|사이트)|링크\s*(줘|좀|주세요|보내)|쇼핑몰|최저가|어디\s*파)/;
 const FEATURE_REQUEST_RE = /기능.*(안\s*돼|안돼|없어|없나|있어\?|있나|되나|돼\?|가능)|(안\s*돼|안돼|없어|되나)\??\s*$/;
-const YES_RE = /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|켜|해줘|부탁)/i;
-const NO_RE = /^(아니|괜찮|됐어|다음에|싫어|ㄴㄴ|no|안\s*할)/i;
+export const YES_RE = /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|켜|해줘|부탁|알겠|알았|콜|고고)/i;
+export const NO_RE = /^(아니|괜찮|됐어|다음에|다음에요|나중에|나중에요|싫어|ㄴㄴ|no|안\s*할|패스|보류)/i;
 
 export function isStoreLinkIntent(text: string): boolean {
   return STORE_LINK_RE.test(text);
@@ -173,6 +173,14 @@ export function isYes(text: string): boolean {
 }
 export function isNo(text: string): boolean {
   return NO_RE.test(text.trim());
+}
+
+/** 성별·나이대 힌트가 포함된 응답인지 판별 ('여성 40대', '여자 30대', '남성', '40세' 등) */
+const PASSPORT_GENDER_AGE_HINT_RE =
+  /(남성|여성|남자|여자|남\s*\d+|여\s*\d+|\d+\s*(대|세|살)|엄마|아빠|아저씨|아줌마|청년|중년|장년|성인|학생|어린이|할머니|할아버지)/i;
+
+export function isPassportGenderAgeHint(text: string): boolean {
+  return PASSPORT_GENDER_AGE_HINT_RE.test(text.trim());
 }
 
 /** 별명 답변 정제: "저는 멀린이에요", "멀린이라고 불러줘", "아냐 으노 말고 은호라고 해" → "멀린", "은호" */
@@ -487,12 +495,22 @@ export function resolveGhostSecretaryTurn(
 
   // ⓪ 🪪 귀신계 여권 발급 대행 (성별·나이대 힌트 → 후보 번호별 실명 입력)
   if (st.passportStep === 'ask_hint') {
-    const sc = findScenario('passport_show_top_candidates_ask_real_name');
-    if (sc) {
+    if (isPassportGenderAgeHint(text)) {
+      const sc = findScenario('passport_show_top_candidates_ask_real_name');
+      if (sc) {
+        return {
+          scenarioId: sc.id,
+          text: renderPlaybookText(sc.response, { nickname, cluster_count: ctx.passportClusterCount || 0 }),
+          nextState: { ...st, passportStep: 'naming' },
+        };
+      }
+    }
+    if (isYes(text) || isNo(text) || text === QUEST_NO) {
       return {
-        scenarioId: sc.id,
-        text: renderPlaybookText(sc.response, { nickname, cluster_count: ctx.passportClusterCount || 0 }),
-        nextState: { ...st, passportStep: 'naming' },
+        scenarioId: 'passport_reask_gender_age_after_ack',
+        text: `히히, 알겠어요! 그럼 이제 사진첩 속에 ${nickname ? `${nickname}님` : '회원님'} 얼굴이 어디 숨어있는지 찾아드릴 수 있게 성별과 나이대(예: 여성 40대 / 남성 40대)만 살짝 알려주실래요?`,
+        followUps: ['여성 40대', '남성 40대'],
+        nextState: st,
       };
     }
   }
@@ -639,6 +657,40 @@ export function resolveGhostSecretaryTurn(
     };
   }
 
+  // ③-2 유저가 성별·나이대('여성 40대' 등)를 직접 말했을 때 여권 후보 단계로 즉시 진입
+  if (st.passportStep !== 'naming' && isPassportGenderAgeHint(text) && text.length <= 24) {
+    const sc = findScenario('passport_show_top_candidates_ask_real_name');
+    if (sc) {
+      return {
+        scenarioId: sc.id,
+        text: renderPlaybookText(sc.response, { nickname, cluster_count: ctx.passportClusterCount || 6 }),
+        nextState: { ...st, passportStep: 'naming' },
+      };
+    }
+  }
+
+  // ③-3 유저가 "1번은 나고, 2번은 한치우..."처럼 여권 번호+실명을 직접 말했을 때 즉시 여권 등록
+  if (st.passportStep !== 'naming' && /\d+\s*번\s*(?:은|는|이|가)?/.test(text)) {
+    const parsedDirect = parsePassportNamingAnswer(text);
+    if (parsedDirect.names.length || parsedDirect.selfIndex !== undefined) {
+      const firstFamily = parsedDirect.names[0]?.realName;
+      const sc = findScenario('passport_complete_suggest_natural_search');
+      const done = firstFamily && sc
+        ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
+        : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`;
+      const viralAsk = firstFamily
+        ? `\n\n방금 찾아낸 『${firstFamily}』 사진들을 가족 카톡방에 로그인 없이 1초 만에 구경시켜 드릴까요?`
+        : '';
+      return {
+        scenarioId: sc?.id || 'passport_self_only_done',
+        text: done + viralAsk,
+        passportNaming: parsedDirect,
+        passportViralFamilyName: firstFamily,
+        nextState: { ...st, passportStep: 'done' },
+      };
+    }
+  }
+
   // ④ 급한 유저 → 채팅으로 말 걸었을 때만 귀신검색 안내 (버튼 없음)
   if (isImpatientIntent(text)) {
     const sc = findScenario('impatient_user_wants_search_now');
@@ -703,6 +755,18 @@ export function resolveGhostSecretaryTurn(
       logUnmatchedQuestion(text, 'feature_request');
       return { scenarioId: sc.id, text: renderPlaybookText(sc.response, { nickname }), nextState: st };
     }
+  }
+
+  // ⑦ 단답형 긍정/부정·보류('좋아요', '다음에요', '나중에요', '괜찮아요' 등)이 외부 AI 바톤터치로 빠지지 않도록 귀신비서가 직접 응대
+  if (text.length <= 16 && (isYes(text) || isNo(text) || text === QUEST_NO)) {
+    const ackText = isNo(text) || text === QUEST_NO
+      ? `알겠어요 ${nickname ? `${nickname}님` : '회원님'}! 천천히 둘러보시다가 필요하실 때 언제든 말씀해 주세요.`
+      : `좋아요 ${nickname ? `${nickname}님` : '회원님'}! 필요하신 손보기나 설정이 있으시면 편하게 말씀해 주세요.`;
+    return {
+      scenarioId: 'secretary_polite_ack',
+      text: ackText,
+      nextState: st,
+    };
   }
 
   return null;

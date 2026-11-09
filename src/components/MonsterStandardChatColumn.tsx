@@ -426,8 +426,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
         }
-        if (turn.scenarioId === 'quest_mobile_voice_search' && !nextState.passportStep) {
-          const entry = buildPassportEntryTurn(nextState, isMobileOrStore);
+        if (turn.scenarioId === 'quest_mobile_voice_search') {
+          const entry = buildPassportEntryTurn(
+            nextState.passportStep === 'done' || nextState.passportStep === 'skipped'
+              ? { ...nextState, passportStep: undefined }
+              : nextState,
+            isMobileOrStore
+          );
           nextState = entry.nextState;
           replies.push({
             id: `secretary_passport_${Date.now()}`,
@@ -471,14 +476,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         // 대본집·손보기 라우터 어디에도 정형 매칭되지 않은 자유 질문 → 주간 대본집 편입 후보로 포집
         logUnmatchedQuestion(raw, 'no_playbook_match');
       }
+      const isExplicitFirstCareQuery = /(1초\s*건강\s*검진|건강\s*검진\s*(해\s*줘|해\s*주세요|실행|시작))/i.test(raw);
       if (assistantMsg.healthRecordIssued) {
         onHealthRecordAdded(assistantMsg.healthRecordIssued);
-        // [v1.3] 첫 손보기 완료 직후 → 홀림 퀘스트 ① 귀신 라벨러 샘플 제안부터 시작
+      }
+      if (assistantMsg.healthRecordIssued || isExplicitFirstCareQuery) {
+        // [v1.3] 첫 손보기 완료 직후(또는 명시적 '1초 건강검진 해줘' 요청 시) → 홀림 퀘스트 ① 귀신 라벨러 샘플 제안부터 시작
         const st = loadGhostSecretaryState();
-        if (sourceTab === 'trash' && !st.questStep) {
+        if (sourceTab === 'trash' && (!st.questStep || isExplicitFirstCareQuery)) {
           const quest = questPromptFor('labeler', st.nickname || '');
           if (quest) {
-            saveGhostSecretaryState({ ...st, questStep: 'labeler' });
+            saveGhostSecretaryState({
+              ...st,
+              questStep: 'labeler',
+              ...(isExplicitFirstCareQuery ? { passportStep: undefined } : {}),
+            });
             window.setTimeout(() => {
               setSharedMonsterMessages((prev) => [
                 ...prev,
@@ -491,7 +503,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   followUpSuggestions: quest.followUps,
                 },
               ]);
-            }, 1200);
+            }, 900);
           }
         }
       }

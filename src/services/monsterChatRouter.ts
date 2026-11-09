@@ -2366,14 +2366,15 @@ export async function processUnifiedMonsterChatQuery(params: {
     ? llmDecision.followUpSuggestions
     : undefined;
 
-  // 0-0) [즉시 처치] 애드웨어·보안 쓰레기·CPU 과점유·느린 속도/시작프로그램 강제종료 및 최적화 실행 요청
+  // 0-0) [즉시 처치] 애드웨어·보안 쓰레기·CPU 과점유·느린 속도/시작프로그램 강제종료 및 1초 건강검진/최적화 실행 요청
   const isDirectSlowOrAdwareFix =
     /(애드웨어|광고\s*프로그램|보안\s*프로그램|보안\s*모듈|보안\s*쓰레기|구라|시작\s*프로그램|cpu\s*점유|과점유|속도\s*최적화).*?(정리|강제\s*종료|종료|고쳐|해결|꺼|끄|없애|치워|잡아)/i.test(
       clean
     ) ||
-    /(속도|컴퓨터|피씨|pc).*?(느려|느린|느리|버벅|렉).*?(고쳐|해결|정리|손봐|손보|빠르게|잡아)/i.test(
+    /(속도|컴퓨터|피씨|pc).*?(느려|느린|느리|버벅|렉).*?(고쳐|해결|정리|손봐|손보|빠르게|잡아|검진|점검)/i.test(
       clean
-    );
+    ) ||
+    /(1초\s*건강\s*검진|건강\s*검진\s*(해\s*줘|해\s*주세요|실행|시작))/i.test(clean);
 
   if (isDirectSlowOrAdwareFix) {
     const osRes = await executeRealOsAction('boot_lag_clean_bloatware');
