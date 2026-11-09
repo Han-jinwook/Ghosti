@@ -31,6 +31,11 @@ import { GhostiTopRightHubAnchor, GhostiSidebarBottomFamilyLauncher } from './Gh
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { GhostSuperpowerDojo } from './ghostDojo/GhostSuperpowerDojo';
 import { GhostSearchTrainingPage } from './ghostDojo/GhostSearchTrainingPage';
+import {
+  computeGhostSearchWindowRect,
+  GHOST_SEARCH_STAGE_LABELS,
+  type GhostSearchStage,
+} from '../services/ghostSearchWindowGeometry';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import {
@@ -364,11 +369,39 @@ export const DesktopDashboard: React.FC = () => {
    * - 사이드바·상단바 없이 기존 웹 「찾기」(구 ?preview=legacy 화면) 컴포넌트만 그대로 렌더 → 새 UI를 만들지 않고 100% 승계
    * - Z-코어가 프레임리스 창(520×380 / 960×640 / 1440×900)으로 이 주소를 열면 창 폭에 맞춰 기존 반응형 레이아웃이 그대로 적용됨
    */
-  const [ghostSearchWindowStage] = useState<'small' | 'medium' | 'large' | null>(() => {
+  const [ghostSearchWindowStage, setGhostSearchWindowStage] = useState<'small' | 'medium' | 'large' | null>(() => {
     if (typeof window === 'undefined') return null;
     const v = new URLSearchParams(window.location.search).get('ghostSearchWindow');
     return v === 'small' || v === 'medium' || v === 'large' ? v : null;
   });
+  const [isInsideIframe] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  });
+  const switchStandaloneGhostSearchStage = (nextStage: GhostSearchStage) => {
+    setGhostSearchWindowStage(nextStage);
+    try {
+      const rect = computeGhostSearchWindowRect(
+        nextStage,
+        window.screenX || 200,
+        window.screenY || 120,
+        {
+          left: 0,
+          top: 0,
+          right: window.screen?.availWidth || 1920,
+          bottom: window.screen?.availHeight || 1040,
+        }
+      );
+      window.resizeTo(rect.width, rect.height);
+      window.moveTo(rect.x, rect.y);
+    } catch {
+      /* ignore */
+    }
+  };
   const [isStage1MinimalPreview] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     if (new URLSearchParams(window.location.search).get('ghostSearchWindow')) return false;
@@ -979,6 +1012,43 @@ export const DesktopDashboard: React.FC = () => {
 
       {/* ─────────────── 우측 메인 도화지(Canvas) 영역 ─────────────── */}
       <div className="flex-1 min-w-0 flex flex-col">
+        {ghostSearchWindowStage && !isInsideIframe && (
+          <div className="sticky top-0 z-40 h-9 px-3 flex items-center justify-between bg-zinc-900 border-b border-white/15 text-white text-[12px] font-bold">
+            <span className="flex items-center gap-1.5">
+              <span>👻 귀신검색창</span>
+              <span className="text-[11px] text-[#5EEAD4]">
+                {ghostSearchWindowStage === 'large' ? '· 프레임리스 갤러리(1440×900)' : ghostSearchWindowStage === 'medium' ? '· 중형(960×640)' : '· 소형(520×380)'}
+              </span>
+            </span>
+            <div className="flex items-center gap-1.5">
+              {(['small', 'medium', 'large'] as GhostSearchStage[]).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => switchStandaloneGhostSearchStage(st)}
+                  className={`px-2.5 py-0.5 rounded cursor-pointer transition-colors ${
+                    ghostSearchWindowStage === st ? 'bg-[#2DD4BF] text-zinc-950 font-extrabold' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                  }`}
+                >
+                  {GHOST_SEARCH_STAGE_LABELS[st]}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    window.close();
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
         {/* 상단 슬림 바: PC에서는 노션 브레드크럼 + 우상단 고정 앵커(문패/크레딧/테마), 모바일에서는 1줄 5대 라운지 탭 병행 */}
         <header className={`sticky top-0 z-30 backdrop-blur-xl ${ghostSearchWindowStage ? 'hidden' : ''}`}>
           <div
