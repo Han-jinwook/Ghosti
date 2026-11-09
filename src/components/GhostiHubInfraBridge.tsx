@@ -184,7 +184,7 @@ const GhostiHubGlobalModals: React.FC = () => {
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
         appName="귀신같이"
-        appLogoUrl="/icon.svg"
+        appLogoUrl="/gwisinkachi_app_icon_512.png"
         // 귀신같이는 웰컴 코인 비지급 앱(허브 정책: 웰컴 100코인은 SenseTalk 최초 진입 시에만) →
         // 기본값 'coin'이면 첫 방문자에게 "무료 코인 받으세요!" 오안내 + 스토어 심사 리스크 → 'none' 고정
         rewardType="none"
