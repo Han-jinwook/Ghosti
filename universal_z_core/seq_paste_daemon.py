@@ -2592,6 +2592,112 @@ def _toast_worker() -> None:
                         y = max(m_top + 12, min(pt.y + 16, m_bottom - req_h - 16))
                         _apply_win_topmost(win, x, y, req_w, req_h, activate=False)
                         _schedule_close(duration_ms)
+                    # ──────────────────────────────────────────────────────────────────────
+                    # [창 UI ④] 스마트 압축 해제 & 무해제 속마음 투시 + 인라인 공유 브릿지 (우클릭 0.35초 꾹)
+                    # ──────────────────────────────────────────────────────────────────────
+                    elif message.startswith("__UI4_ARCHIVE__|"):
+                        active_mode[0] = "ui4"
+                        arch_path = message.split("|", 1)[1].strip()
+                        arch_name = Path(arch_path).name
+                        outer = tk.Frame(win, bg="#0B1120", highlightbackground="#2DD4BF", highlightthickness=2, padx=12, pady=10)
+                        outer.pack(fill="both", expand=True)
+
+                        hdr = tk.Frame(outer, bg="#0B1120")
+                        hdr.pack(fill="x", pady=(0, 6))
+                        tk.Label(hdr, text=f"📦 {arch_name}", fg="#5EEAD4", bg="#0B1120", font=("Malgun Gothic", 10, "bold"), anchor="w").pack(side="left")
+                        tk.Label(hdr, text="🔒 Read-Only · 광고 0%", fg="#94A3B8", bg="#0F172A", padx=6, pady=1, font=("Malgun Gothic", 8)).pack(side="right")
+
+                        status_lbl = tk.Label(
+                            outer,
+                            text="맥북 한글 자소분리(NFD)·뷁뷁 깨짐 자동 복원 & 바탕화면 압축폭탄 방어 준비 완료",
+                            fg="#E2E8F0",
+                            bg="#0B1120",
+                            font=("Malgun Gothic", 8),
+                            anchor="w",
+                        )
+                        status_lbl.pack(fill="x", pady=(0, 8))
+
+                        btn_row = tk.Frame(outer, bg="#0B1120")
+                        btn_row.pack(fill="x")
+
+                        bridge_box = tk.Frame(outer, bg="#0F172A")
+
+                        def _do_smart_unzip(_e=None):
+                            is_hovered[0] = True
+                            try:
+                                import plugin_ghosti_care_suite as _cs
+                                res = _cs.smart_extract_archive(arch_path)
+                                if res.get("ok"):
+                                    ib = res.get("inlineBridge", {})
+                                    lines = ib.get("summaryLines", [])
+                                    status_lbl.config(text="\n".join(lines), fg="#FDE047")
+                                    for ch in bridge_box.winfo_children():
+                                        ch.destroy()
+                                    bridge_box.pack(fill="x", pady=(8, 0))
+                                    b1 = tk.Label(
+                                        bridge_box,
+                                        text=ib.get("primaryCta", {}).get("label", "🔍 풀린 문서 내용 바로 검색"),
+                                        fg="#0B1120",
+                                        bg="#2DD4BF",
+                                        padx=8,
+                                        pady=4,
+                                        font=("Malgun Gothic", 8, "bold"),
+                                        cursor="hand2",
+                                    )
+                                    b1.pack(fill="x", pady=(0, 4))
+                                    b1.bind("<Button-1>", lambda _ev: _toast_queue.put(("__UI2_SEARCH__|medium|", 10000)))
+                                    b2 = tk.Label(
+                                        bridge_box,
+                                        text=ib.get("secondaryCta", {}).get("label", "📱 내 폰으로 바로 보내기 / 💼 팀 공유폴더(S:) 넣기"),
+                                        fg="#F8FAFC",
+                                        bg="#1E293B",
+                                        padx=8,
+                                        pady=4,
+                                        font=("Malgun Gothic", 8, "bold"),
+                                        cursor="hand2",
+                                    )
+                                    b2.pack(fill="x")
+                                    b2.bind("<Button-1>", lambda _ev: (_close_win(), _open_ghosti_web()))
+                                    win.update_idletasks()
+                                    rw, rh = max(win.winfo_reqwidth(), 380), max(win.winfo_reqheight(), 90)
+                                    _apply_win_topmost(win, win_rect[0][0], win_rect[0][1], rw, rh, activate=False)
+                                else:
+                                    status_lbl.config(text=res.get("message") or res.get("error") or "해제 실패", fg="#FCA5A5")
+                            except Exception as ex:
+                                status_lbl.config(text=f"오류: {ex}", fg="#FCA5A5")
+
+                        ext_btn = tk.Label(
+                            btn_row,
+                            text="📂 한글깨짐/폭탄 없이 1초 만에 풀기",
+                            fg="#0B1120",
+                            bg="#2DD4BF",
+                            padx=10,
+                            pady=5,
+                            font=("Malgun Gothic", 9, "bold"),
+                            cursor="hand2",
+                        )
+                        ext_btn.pack(side="left", padx=(0, 6))
+                        ext_btn.bind("<Button-1>", _do_smart_unzip)
+
+                        peek_btn = tk.Label(
+                            btn_row,
+                            text="👻 압축 안 풀고 속마음 투시",
+                            fg="#5EEAD4",
+                            bg="#1E293B",
+                            padx=10,
+                            pady=5,
+                            font=("Malgun Gothic", 9, "bold"),
+                            cursor="hand2",
+                        )
+                        peek_btn.pack(side="left")
+                        peek_btn.bind("<Button-1>", lambda _e: _toast_queue.put((f"__UI2_SEARCH__|medium|{arch_name}", 10000)))
+
+                        win.update_idletasks()
+                        req_w, req_h = max(win.winfo_reqwidth(), 380), max(win.winfo_reqheight(), 86)
+                        x = max(m_left + 12, min(pt.x - 20, m_right - req_w - 16))
+                        y = max(m_top + 12, min(pt.y + 16, m_bottom - req_h - 16))
+                        _apply_win_topmost(win, x, y, req_w, req_h, activate=False)
+                        _schedule_close(duration_ms)
                     # ── 일반 단문 알림 토스트 ──
                     else:
                         active_mode[0] = "toast"
@@ -4139,10 +4245,24 @@ def should_skip_auto_typo(hwnd: int) -> bool:
     try:
         if not get_superpower_settings().get("auto_typo_enabled", True):
             return True
+        # [방어 18] 비밀번호 입력창(ES_PASSWORD=0x0020) 포커스 시 키보드 버퍼 수집 100% 자동 휴면(Pause)
+        ed_pw = _find_edit_control_child(hwnd)
+        if ed_pw and (u32.GetWindowLongW(ed_pw, -16) & 0x0020):
+            return True
         for target_h in (hwnd, u32.GetAncestor(hwnd, 2)):
             if not target_h:
                 continue
-            proc_name, win_cls, _ = get_window_process_and_class(target_h)
+            proc_name, win_cls, win_title_chk = get_window_process_and_class(target_h)
+            if win_title_chk:
+                try:
+                    import sys as _sys_c
+                    _os_ag = str(Path(__file__).resolve().parent / "os_agent")
+                    if _os_ag not in _sys_c.path and Path(_os_ag).exists():
+                        _sys_c.path.insert(0, _os_ag)
+                    import plugin_ghosti_care_suite as _care_s
+                    _care_s.check_window_title_for_prewake(win_title_chk)
+                except Exception:
+                    pass
             proc_lower = proc_name.lower()
             cls_lower = win_cls.lower()
             if proc_lower in AUTOCORRECT_EXCLUDE_PROCESSES:
@@ -4734,9 +4854,21 @@ def main() -> None:
             show_ghost_toast("__UI3_OCR__|", duration_ms=8000)
             return
 
-        # [분기 2] 바탕화면·일반 화면 빈 곳(전용 입력창이 아닌 곳)에서 소환 시 -> 별개의 [창 UI ② 👻 귀신검색창(소형)] 직행!
+        # [분기 2] 탐색기 압축 파일 객체 위 소환 시 -> [창 UI ④ 스마트 압축 해제 & 투시 미니창] 직행 / 일반 빈 곳은 [창 UI ② 귀신검색창(소형)] 직행!
         if not is_dedicated_input_app:
             disarm_sub_hotkeys()
+            try:
+                import sys as _sys_c2
+                _os_ag2 = str(Path(__file__).resolve().parent / "os_agent")
+                if _os_ag2 not in _sys_c2.path and Path(_os_ag2).exists():
+                    _sys_c2.path.insert(0, _os_ag2)
+                import plugin_ghosti_care_suite as _care_s2
+                sel_paths = _care_s2.get_explorer_selected_paths_non_destructive()
+                if sel_paths and str(sel_paths[0]).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")):
+                    show_ghost_toast(f"__UI4_ARCHIVE__|{sel_paths[0]}", duration_ms=11000)
+                    return
+            except Exception:
+                pass
             show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
             return
 

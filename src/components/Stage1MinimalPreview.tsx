@@ -1020,6 +1020,101 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     query: string;
   } | null>(null);
 
+  // [구 3대장 척결 — 독립 격리 플러그인 plugin_ghosti_care_suite 연동 상태]
+  const [careSecurityStatus, setCareSecurityStatus] = useState<{
+    activeCount: number;
+    estimatedRamMb: number;
+    honestBriefing: string;
+    sleepCount: number;
+    savedRamMb: number;
+  }>({
+    activeCount: 0,
+    estimatedRamMb: 0,
+    honestBriefing: '👻 현재 켜져 있는 미사용 웹 보안 서비스가 0개로 아주 깨끗합니다!',
+    sleepCount: 0,
+    savedRamMb: 0,
+  });
+  const [guardianStatus, setGuardianStatus] = useState<{
+    silentPassCount: number;
+    threatBlockedCount: number;
+    recentItems: Array<{ scannedAt: string; fileName: string; source: string; status: string }>;
+  }>({
+    silentPassCount: 0,
+    threatBlockedCount: 0,
+    recentItems: [],
+  });
+  const [showGuardianModal, setShowGuardianModal] = useState(false);
+  const [careActionBusy, setCareActionBusy] = useState(false);
+
+  const refreshCareSuiteStatus = React.useCallback(async () => {
+    try {
+      const [secRes, defRes] = await Promise.all([
+        fetch('http://127.0.0.1:5199/api/care/security-services/status').then((r) => r.json()).catch(() => null),
+        fetch('http://127.0.0.1:5199/api/care/defender/history').then((r) => r.json()).catch(() => null),
+      ]);
+      if (secRes && secRes.ok) {
+        setCareSecurityStatus({
+          activeCount: Number(secRes.activeCount || 0),
+          estimatedRamMb: Number(secRes.estimatedRamMb || 0),
+          honestBriefing: String(secRes.honestBriefing || ''),
+          sleepCount: Number(secRes.weeklyReport?.sleepCount || 0),
+          savedRamMb: Number(secRes.weeklyReport?.savedRamMb || 0),
+        });
+      }
+      if (defRes && defRes.ok) {
+        setGuardianStatus({
+          silentPassCount: Number(defRes.silentPassCount || 0),
+          threatBlockedCount: Number(defRes.threatBlockedCount || 0),
+          recentItems: Array.isArray(defRes.recentItems) ? defRes.recentItems : [],
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCareSuiteStatus();
+  }, [refreshCareSuiteStatus]);
+
+  const handleSleepSecurityServices = async () => {
+    setCareActionBusy(true);
+    try {
+      const res = await fetch('http://127.0.0.1:5199/api/care/security-services/sleep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }).then((r) => r.json()).catch(() => null);
+      useSaySeeStore.setState({
+        lastQuarantineToast:
+          res?.toastMessage ||
+          '👻 미사용 웹 보안 서비스를 삭제하지 않고 수동 대기(절전)로 전환했습니다! 은행 접속 시 2초 만에 자동 깨어납니다.',
+      });
+      await refreshCareSuiteStatus();
+    } finally {
+      setCareActionBusy(false);
+    }
+  };
+
+  const handleWakeSecurityServicesNow = async () => {
+    setCareActionBusy(true);
+    try {
+      const res = await fetch('http://127.0.0.1:5199/api/care/security-services/wake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'manual_emergency_switch' }),
+      }).then((r) => r.json()).catch(() => null);
+      useSaySeeStore.setState({
+        lastQuarantineToast:
+          res?.toastMessage ||
+          '🏦 은행·관공서 업무를 위해 잠자던 보안 서비스를 모두 깨웠습니다! (업무 종료 15분 뒤 다시 잠듭니다)',
+      });
+      await refreshCareSuiteStatus();
+    } finally {
+      setCareActionBusy(false);
+    }
+  };
+
   // [수정 4] 진입 시 하단이 비어 있지 않도록 기본 선택 탭을 'all'로 자동 초기화하여 즉시 정리 대상 사진을 펼쳐 보여줌
   useEffect(() => {
     if (activeTrashCategoryFilter === 'none') {
@@ -1168,6 +1263,140 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   ✨ 현재 가장 쾌적한 상태입니다 (정리 완료 {quarantinedPhotos.length}장)
                 </span>
               )}
+            </div>
+
+            {/* [구 3대장 척결 — 3대 원클릭 상태 카드(보안서비스 절전 · 안심 수호 히스토리 · 스마트 압축/청소) & 은행 모드 비상 스위치] */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              {/* 카드 1: 미사용 웹 보안서비스 스마트 절전 모드 */}
+              <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-teal-500/30 flex flex-col justify-between gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[12.5px] font-extrabold text-teal-300">
+                      ⚡ 미사용 웹 보안서비스 스마트 절전
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 text-[10.5px] font-bold">
+                      {careSecurityStatus.activeCount > 0
+                        ? `${careSecurityStatus.activeCount}개 구동중 (${careSecurityStatus.estimatedRamMb}MB)`
+                        : '0개 (쾌적)'}
+                    </span>
+                  </div>
+                  <p className="text-[11.5px] text-zinc-400 leading-snug">
+                    {careSecurityStatus.activeCount > 0
+                      ? `삭제 없이 수면 전환 · 은행/홈택스 접속 시 2초 선행 기상`
+                      : `현재 켜진 미사용 보안 서비스 0개 · 이번 주 ${careSecurityStatus.sleepCount}회 자동 절전`}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    disabled={careActionBusy}
+                    onClick={() => void handleSleepSecurityServices()}
+                    className="px-2.5 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-zinc-950 text-[11.5px] font-extrabold transition cursor-pointer"
+                  >
+                    ⚡ 1초 스마트 절전 켜기
+                  </button>
+                  <button
+                    type="button"
+                    disabled={careActionBusy}
+                    onClick={() => void handleWakeSecurityServicesNow()}
+                    title="은행·관공서·결제창 접속 시 자동 깨어나지만, 수동으로 즉시 깨우고 싶을 때 누르세요"
+                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-amber-300 text-[11px] font-extrabold transition cursor-pointer"
+                  >
+                    🏦 은행 모드 즉시 켜기
+                  </button>
+                </div>
+              </div>
+
+              {/* 카드 2: 윈도우 디펜더(AMSI) 안심 수호 히스토리 */}
+              <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-emerald-500/30 flex flex-col justify-between gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[12.5px] font-extrabold text-emerald-300">
+                      🛡️ 안심 수호 히스토리
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10.5px] font-bold">
+                      최근 30일 {guardianStatus.silentPassCount}건 무소음 통과
+                    </span>
+                  </div>
+                  <p className="text-[11.5px] text-zinc-400 leading-snug">
+                    무거운 중복 백신 0MB · Windows Defender(AMSI) 하청 조종으로 평시 알림 팝업 0회
+                  </p>
+                </div>
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowGuardianModal((prev) => !prev)}
+                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-emerald-500/30 text-emerald-300 text-[11.5px] font-extrabold transition cursor-pointer"
+                  >
+                    {showGuardianModal ? '▲ 수호 장부 접기' : '📜 무소음 수호 타임라인 보기'}
+                  </button>
+                  <span className="text-[10.5px] text-zinc-500 font-semibold">CPU 부하 0.0%</span>
+                </div>
+              </div>
+
+              {/* 카드 3: 우클릭 0.35초 스마트 압축 & 용량 청소 */}
+              <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-amber-500/30 flex flex-col justify-between gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[12.5px] font-extrabold text-amber-300">
+                      🧹 스마트 압축 &amp; 용량 청소
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10.5px] font-bold">
+                      우클릭 0.35초 꾹
+                    </span>
+                  </div>
+                  <p className="text-[11.5px] text-zinc-400 leading-snug">
+                    맥북 한글 자소분리(NFD) 복원 · 압축폭탄 방지 · 안 풀고 속마음 투시 검색
+                  </p>
+                </div>
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setDesktopTab('dashboard')}
+                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-amber-500/30 text-amber-300 text-[11.5px] font-extrabold transition cursor-pointer"
+                  >
+                    🔍 압축 속 문서 투시 검색
+                  </button>
+                  <span className="text-[10.5px] text-zinc-500 font-semibold">원본 Read-Only</span>
+                </div>
+              </div>
+            </div>
+
+            {showGuardianModal && (
+              <div className="p-3.5 rounded-xl bg-zinc-950 border border-emerald-500/40 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12.5px] font-extrabold text-emerald-300">
+                    🛡️ 최근 30일 무소음 안전 검문 장부 (평시 팝업 0회 · 위협 감지 시에만 즉시 격리)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowGuardianModal(false)}
+                    className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    닫기 ✕
+                  </button>
+                </div>
+                {guardianStatus.recentItems.length > 0 ? (
+                  <div className="max-h-36 overflow-y-auto space-y-1 text-[11.5px] text-zinc-300">
+                    {guardianStatus.recentItems.slice(0, 8).map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between py-1 border-b border-white/5">
+                        <span className="truncate max-w-[65%]">✅ {item.fileName}</span>
+                        <span className="text-zinc-500 text-[10.5px]">{item.scannedAt.slice(0, 16).replace('T', ' ')} · {item.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11.5px] text-zinc-400">
+                    현재까지 감지된 악성 위협이 0건입니다. 다운로드 및 스마트 압축 해제 시 뒤에서 조용히 수호하고 있습니다.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* [방어 7·9] 로컬 샌드박스 & 무광고 영구 보증 배지 */}
+            <div className="px-3 py-2 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300 font-bold">
+              <span>🔒 100% 내 PC 안에서만 처리 (외부 서버 전송 0바이트 · 상업광고 영구 0%)</span>
+              <span className="text-teal-400">🪶 35KB 독립 플러그인 격리 · 유휴 CPU 0.0%</span>
             </div>
 
             {/* 인라인 1초 되돌리기(Undo) 알림 콜아웃 */}

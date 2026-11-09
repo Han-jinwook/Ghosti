@@ -325,6 +325,26 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api({}))
             return
 
+        # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 (Try-Except Firewall + Lazy-Import)
+        if path.startswith("/api/care/"):
+            try:
+                import plugin_ghosti_care_suite  # Lazy-Import
+                sub = path[len("/api/care/") :].strip("/")
+                if sub in ("security-services/status", "security-status", "status"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("status", qp))
+                    return
+                if sub in ("defender/history", "guardian-history"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("guardian-history", qp))
+                    return
+                if sub in ("archive/peek", "peek-archive"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("peek-archive", qp))
+                    return
+                self._send_json(plugin_ghosti_care_suite.handle_care_suite_request(sub, qp))
+                return
+            except Exception as e:
+                self._send_json({"ok": False, "isolatedFirewall": True, "error": str(e)}, status=200)
+                return
+
         if path.startswith("/api/senstalk"):
             sub = path[len("/api/senstalk") :].strip("/") or "health"
             self._send_json(plugin_senstalk.handle_get(sub))
@@ -449,6 +469,34 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if path == "/api/superpower/mailbox-sync":
             self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api(body))
             return
+
+        # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 POST (Try-Except Firewall + Lazy-Import)
+        if path.startswith("/api/care/"):
+            if self._reject_untrusted():
+                return
+            try:
+                import plugin_ghosti_care_suite  # Lazy-Import
+                sub = path[len("/api/care/") :].strip("/")
+                if sub in ("security-services/sleep", "security-sleep", "sleep"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("sleep", body))
+                    return
+                if sub in ("security-services/wake", "security-wake", "wake"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("wake", body))
+                    return
+                if sub in ("archive/extract", "extract-archive", "smart-unzip"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("extract-archive", body))
+                    return
+                if sub in ("archive/peek", "peek-archive"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("peek-archive", body))
+                    return
+                if sub in ("defender/scan", "amsi-scan"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("amsi-scan", body))
+                    return
+                self._send_json(plugin_ghosti_care_suite.handle_care_suite_request(sub, body))
+                return
+            except Exception as e:
+                self._send_json({"ok": False, "isolatedFirewall": True, "error": str(e)}, status=200)
+                return
 
         if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window"):
             self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(body))
