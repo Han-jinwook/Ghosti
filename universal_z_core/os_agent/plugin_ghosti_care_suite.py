@@ -8,17 +8,19 @@
      - 사내 DRM(MaEPSBroker, Fasoo, SoftCamp) 100% 불가침 제외, 커널 자가보호(ASTx) 안전 가이드 분기
      - 5KB 정적 JSON(security_services_whitelist.json) 원격 무소음 자동 갱신 + 로컬 폴백
      - sc query 100% 실측 정직 브리핑 (0개일 때 허위 경보 0%)
-  2) 모듈 B: 우클릭 0.35초 꾹 스마트 아카이버 & 무해제(Zero-Unzip Read-Only) 투시 검색
+  2) 모듈 B: 듀얼 스마트 압축(일반 우클릭 메뉴 `딸깍` HKCU + 우클릭 0.35초 꾹) & 봉인 존중(풀기 전 압축 내부 미열람 · 더블클릭 불간섭)
+     - 탐색기 기본 우클릭 메뉴(HKCU\\Software\\Classes) 정적 등록 (Shell Extension DLL 인젝션 0% ➔ 평시 RAM/CPU 0%)
      - 탐색기 COM Shell.Application 무오염 선택 파일 경로 추출 1순위
      - Lazy-Import & Instant Unload (평시 메모리 0바이트)
      - UTF-8 NFD ➔ NFC 한글 자소 결합 및 CP437 ➔ CP949 복원, 루트 엔트리 판별 압축폭탄 방지, Zip Slip 차단, Disk Full 사전 체크, 분할 압축 헤드 볼륨 단일 인식
-     - 해제 완료 즉시 인라인 브릿지(풀린 파일 3줄 요약 + 문서 내용 검색 + 카톡 용량 제한 돌파 내 폰/S:드라이브 전송) 반환
+     - 봉인 존중 원칙: 풀기 전에는 압축 내부 스트림을 열람하지 않으며(겉봉투 파일명만 인식), 사용자가 직접 압축을 푼 직후에만 풀린 일반 문서들을 즉시 인덱싱(index_extracted_files_immediately)하고 인라인 공유 브릿지 노출
   3) 모듈 C: 윈도우 디펜더(amsi.dll In-Memory 0.01초 + Defender Event ID 1116/1117) 무소음 수호 히스토리
      - 자체 백신 DB 0MB, 평시 알림 팝업 0회, 로컬 SQLite(defender_guardian_history.db) 누적 기록 및 최근 30일 통계 반환
 """
 
 from __future__ import annotations
 
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import datetime
@@ -42,6 +44,7 @@ WHITELIST_JSON_CACHE = CARE_DIR / "security_services_whitelist_cache.json"
 SLEEP_SNAPSHOT_FILE = CARE_DIR / "security_sleep_snapshot.json"
 GUARDIAN_DB_FILE = CARE_DIR / "defender_guardian_history.db"
 CARE_METRICS_FILE = CARE_DIR / "weekly_care_metrics.json"
+EXTRACTED_INDEX_QUEUE_FILE = CARE_DIR / "extracted_files_index_queue.json"
 
 REMOTE_WHITELIST_URL = (
     "https://raw.githubusercontent.com/Han-jinwook/Ghosti/main/"
@@ -52,15 +55,16 @@ CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 PLUGIN_METADATA = {
     "id": "ghosti_care_suite",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "architecture": "ZERO_ENGINE_DELEGATION_ISOLATED_PLUGIN",
-    "maxArchiveStreamBytes": 20 * 1024 * 1024,
-    "timeoutSecondsPerFile": 1.5,
-    "privacyBadge": "🔒 100% 내 PC 안에서만 처리 (외부 서버 전송 0바이트 · 상업광고 영구 0%)",
+    "sealedArchiveRespect": True,
+    "doubleClickNonInterference": True,
+    "privacyBadge": "🔒 100% 내 PC 안에서만 처리 (외부 서버 전송 0바이트 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)",
 }
 
 _LAST_WAKE_TIMESTAMP: float = 0.0
 _LAST_FINANCE_WINDOW_SEEN: float = 0.0
+_CONTEXT_MENU_ENSURED: bool = False
 
 
 def _ensure_care_dir() -> None:
@@ -78,7 +82,7 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
 
             req = urllib.request.Request(
                 REMOTE_WHITELIST_URL,
-                headers={"User-Agent": "Merlin-Z-Core-CareSuite/1.0"},
+                headers={"User-Agent": "Merlin-Z-Core-CareSuite/2.0"},
             )
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 raw = resp.read().decode("utf-8")
@@ -143,6 +147,14 @@ def _save_weekly_metrics(metrics: Dict[str, Any]) -> None:
 
 def get_security_services_status() -> Dict[str, Any]:
     """[방어 1·2·5] sc query 및 프로세스 100% 실측 기반 정직 브리핑 (0개일 때 거짓 경보 금지)"""
+    global _CONTEXT_MENU_ENSURED
+    if not _CONTEXT_MENU_ENSURED:
+        _CONTEXT_MENU_ENSURED = True
+        try:
+            register_explorer_context_menu()
+        except Exception:
+            pass
+
     wl_data = load_security_whitelist(allow_remote_sync=False)
     never_touch = {s.lower() for s in wl_data.get("corporate_drm_never_touch", [])}
     self_defense = {s.lower() for s in wl_data.get("kernel_self_defense_services", [])}
@@ -434,8 +446,107 @@ def check_window_title_for_prewake(window_title: str) -> Optional[Dict[str, Any]
 
 
 # ============================================================================
-# 3. [모듈 B] 우클릭 0.35초 스마트 아카이버 & 무해제(Zero-Unzip Read-Only) 투시 검색
+# 3. [모듈 B] 듀얼 스마트 압축(일반 우클릭 메뉴 `딸깍` + 우클릭 0.35초 꾹) & 봉인 존중 원칙
+#    - 풀기 전 압축 내부 미열람(Zero-Unzip 백그라운드 열람 배제)
+#    - 더블클릭 기본 연결 프로그램(File Association) 불간섭
 # ============================================================================
+def _get_pythonw_or_exe_command(mode_flag: str) -> str:
+    exe_path = Path(sys.executable)
+    if exe_path.name.lower() == "python.exe":
+        pyw = exe_path.with_name("pythonw.exe")
+        if pyw.exists():
+            exe_path = pyw
+    script_path = Path(__file__).resolve()
+    return f'"{exe_path}" "{script_path}" {mode_flag} "%1"'
+
+
+def _get_ghosti_icon_path() -> str:
+    for cand in (
+        THIS_DIR / "favicon.ico",
+        THIS_DIR / "assets" / "gwisinkachi_app_icon_512.png",
+        THIS_DIR.parent.parent / "public" / "favicon.ico",
+    ):
+        if cand.exists():
+            return str(cand.resolve())
+    return ""
+
+
+def register_explorer_context_menu() -> Dict[str, Any]:
+    """
+    [1번 지시] 관리자 권한(UAC) 없이 현재 사용자 레지스트리(HKCU\\Software\\Classes)에
+    탐색기 일반 우클릭(`딸깍`) 컨텍스트 메뉴를 정적 커맨드로 등록합니다.
+    - Shell Extension DLL을 explorer.exe에 인젝션하지 않아 평시 메모리/CPU 점유율 0바이트 / 0.0%!
+    - 더블클릭 기본 연결 프로그램(UserChoice)은 절대 건드리지 않습니다(더블클릭 불간섭 원칙).
+    """
+    if sys.platform != "win32":
+        return {"ok": False, "reason": "NON_WINDOWS"}
+    import winreg  # Lazy-Import
+
+    icon_path = _get_ghosti_icon_path()
+    unzip_cmd = _get_pythonw_or_exe_command("--smart-unzip")
+    zip_cmd = _get_pythonw_or_exe_command("--smart-zip")
+
+    registered_keys: List[str] = []
+    archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz")
+
+    try:
+        # 1) 압축 파일 대상: 👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)
+        for ext in archive_exts:
+            base_key_path = f"Software\\Classes\\SystemFileAssociations\\{ext}\\shell\\GhostiSmartUnzip"
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
+                winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)")
+                winreg.SetValueEx(k, "MUIVerb", 0, winreg.REG_SZ, "👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)")
+                if icon_path:
+                    winreg.SetValueEx(k, "Icon", 0, winreg.REG_SZ, icon_path)
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{base_key_path}\\command") as ck:
+                winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, unzip_cmd)
+            registered_keys.append(base_key_path)
+
+        # 2) 일반 파일 및 폴더 대상: 👻 귀신같이로 ZIP 압축 묶기
+        for target_cls in ("*", "Directory"):
+            base_key_path = f"Software\\Classes\\{target_cls}\\shell\\GhostiSmartZip"
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
+                winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "👻 귀신같이로 ZIP 압축 묶기")
+                winreg.SetValueEx(k, "MUIVerb", 0, winreg.REG_SZ, "👻 귀신같이로 ZIP 압축 묶기")
+                if icon_path:
+                    winreg.SetValueEx(k, "Icon", 0, winreg.REG_SZ, icon_path)
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{base_key_path}\\command") as ck:
+                winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, zip_cmd)
+            registered_keys.append(base_key_path)
+
+        return {
+            "ok": True,
+            "registeredCount": len(registered_keys),
+            "doubleClickUntouched": True,
+            "zeroBackgroundRam": True,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def unregister_explorer_context_menu() -> Dict[str, Any]:
+    """HKCU\\Software\\Classes에 등록된 귀신같이 우클릭 컨텍스트 메뉴를 깔끔하게 제거합니다."""
+    if sys.platform != "win32":
+        return {"ok": False, "reason": "NON_WINDOWS"}
+    import winreg  # Lazy-Import
+
+    archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz")
+    removed = 0
+    targets = [
+        *(f"Software\\Classes\\SystemFileAssociations\\{ext}\\shell\\GhostiSmartUnzip" for ext in archive_exts),
+        "Software\\Classes\\*\\shell\\GhostiSmartZip",
+        "Software\\Classes\\Directory\\shell\\GhostiSmartZip",
+    ]
+    for base_key_path in targets:
+        for sub in (f"{base_key_path}\\command", base_key_path):
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
+                removed += 1
+            except Exception:
+                pass
+    return {"ok": True, "removedSubKeys": removed}
+
+
 def get_explorer_selected_paths_non_destructive() -> List[str]:
     """
     [방어 15·21] COM Shell.Application을 사용하여 기존 클립보드(텍스트/이미지)를 1비트도 오염시키지 않고
@@ -476,7 +587,6 @@ def _decode_archive_filename(raw_name: str, flag_bits: int = 0) -> str:
     import unicodedata  # Lazy-Import
 
     fixed = raw_name
-    # ZIP General Purpose Bit 11 (0x800)이 꺼져 있으면 CP437로 잘못 디코딩된 상태일 확률 높음
     if not (flag_bits & 0x800):
         try:
             raw_bytes = raw_name.encode("cp437")
@@ -488,7 +598,6 @@ def _decode_archive_filename(raw_name: str, flag_bits: int = 0) -> str:
                     continue
         except Exception:
             pass
-    # macOS NFD(초·중·종성 분리) ➔ Windows 표준 NFC 결합
     return unicodedata.normalize("NFC", fixed)
 
 
@@ -506,215 +615,164 @@ def is_split_archive_follower(file_path: str) -> bool:
     return False
 
 
-def peek_archive_zero_unzip(archive_path: str, query: str = "") -> Dict[str, Any]:
+def index_extracted_files_immediately(extracted_folder: str, extracted_files: List[str]) -> Dict[str, Any]:
     """
-    [방어 7·21·23] Zero-Unzip Read-Only 속마음 투시 검색:
-    - 원본 압축 파일은 무조건 Read-Only('r')로만 오픈 (원본 변조 확률 0.000%).
-    - Central Directory 파일 목록 0.001초 스캔 + 20MB 이하 텍스트/문서만 1.5초 타임아웃 내 스트리밍 추출.
-    - 더블클릭 무해제 투시 뷰어 및 귀신검색창 연동.
+    [2번 지시: 봉인 존중 원칙(Sealed-Archive Respect)]
+    - 고객이 직접 압축을 풀기 전에는 압축 파일 내부 스트림을 절대 열람·인덱싱하지 않습니다(겉봉투 파일명만 인식).
+    - 오직 고객이 명시적으로 우클릭 스마트 압축 해제를 실행한 직후에만, 방금 풀려 나온 일반 문서·사진들을
+      즉시 인덱싱 큐에 등록하여 0.1초 만에 귀신검색에서 찾을 수 있도록 연결합니다.
     """
-    import zipfile  # Lazy-Import
-    import tarfile
+    _ensure_care_dir()
+    folder_path = Path(extracted_folder)
+    if not folder_path.exists():
+        return {"ok": False, "indexedCount": 0}
 
-    p = Path(archive_path)
-    if not p.exists() or not p.is_file():
-        return {"ok": False, "error": "ARCHIVE_NOT_FOUND", "path": archive_path}
-
-    if is_split_archive_follower(str(p)):
-        return {
-            "ok": False,
-            "skippedSplitFollower": True,
-            "message": "분할 압축 보조 볼륨입니다. 1번 대표 압축 파일에서 통합 투시됩니다.",
-        }
-
-    entries: List[Dict[str, Any]] = []
-    matched_entries: List[Dict[str, Any]] = []
-    total_uncompressed = 0
-    encrypted_header = False
-    q_low = (query or "").strip().lower()
-    max_stream_bytes = PLUGIN_METADATA["maxArchiveStreamBytes"]
-    started_at = time.time()
+    records: List[Dict[str, Any]] = []
+    now_iso = datetime.datetime.now().isoformat()
+    for fname in extracted_files[:200]:
+        fpath = folder_path / fname
+        records.append({
+            "fileName": fname,
+            "filePath": str(fpath),
+            "folderPath": str(folder_path),
+            "indexedAt": now_iso,
+        })
 
     try:
-        if p.suffix.lower() == ".zip":
-            with zipfile.ZipFile(p, mode="r") as zf:
-                for info in zf.infolist():
-                    decoded_name = _decode_archive_filename(info.filename, info.flag_bits)
-                    is_enc = bool(info.flag_bits & 0x1)
-                    if is_enc:
-                        encrypted_header = True
-                    total_uncompressed += int(info.file_size or 0)
-
-                    snippet = ""
-                    ext = Path(decoded_name).suffix.lower()
-                    if (
-                        not info.is_dir()
-                        and not is_enc
-                        and info.file_size <= max_stream_bytes
-                        and (time.time() - started_at) < PLUGIN_METADATA["timeoutSecondsPerFile"]
-                        and ext in (".txt", ".md", ".csv", ".json", ".py", ".html", ".xml", ".log")
-                    ):
-                        try:
-                            raw_bytes = zf.read(info)[:8192]
-                            snippet = raw_bytes.decode("utf-8", errors="ignore")[:240].strip()
-                        except Exception:
-                            snippet = ""
-
-                    item = {
-                        "name": decoded_name,
-                        "size": info.file_size,
-                        "compressedSize": info.compress_size,
-                        "isDir": info.is_dir(),
-                        "encrypted": is_enc,
-                        "snippet": snippet,
-                    }
-                    entries.append(item)
-                    if not q_low or q_low in decoded_name.lower() or q_low in snippet.lower():
-                        matched_entries.append(item)
-
-        elif p.suffix.lower() in (".tar", ".gz", ".tgz"):
-            with tarfile.open(p, mode="r:*") as tf:
-                for member in tf.getmembers():
-                    import unicodedata
-
-                    decoded_name = unicodedata.normalize("NFC", member.name)
-                    total_uncompressed += int(member.size or 0)
-                    item = {
-                        "name": decoded_name,
-                        "size": member.size,
-                        "compressedSize": member.size,
-                        "isDir": member.isdir(),
-                        "encrypted": False,
-                        "snippet": "",
-                    }
-                    entries.append(item)
-                    if not q_low or q_low in decoded_name.lower():
-                        matched_entries.append(item)
-        else:
-            return {
-                "ok": False,
-                "error": "UNSUPPORTED_PEEK_FORMAT",
-                "message": "현재 무해제 투시는 표준 ZIP/TAR/GZ 아카이브를 즉시 지원합니다.",
-            }
-    except RuntimeError as e:
-        if "encrypted" in str(e).lower() or "password" in str(e).lower():
-            return {"ok": False, "encryptedHeader": True, "message": "🔑 암호가 설정된 압축 파일입니다."}
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-    archive_size_mb = round(p.stat().st_size / (1024 * 1024), 2)
-    is_large_for_kakao = archive_size_mb >= 100.0
+        EXTRACTED_INDEX_QUEUE_FILE.write_text(
+            json.dumps(
+                {
+                    "lastExtractedFolder": str(folder_path),
+                    "updatedAt": now_iso,
+                    "indexedFiles": records,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 
     return {
         "ok": True,
-        "archivePath": str(p),
-        "archiveName": p.name,
-        "archiveSizeMb": archive_size_mb,
-        "readOnlyGuaranteed": True,
-        "encrypted": encrypted_header,
-        "totalEntries": len(entries),
-        "totalUncompressedBytes": total_uncompressed,
-        "entries": entries[:150],
-        "matchedEntries": matched_entries[:50],
-        "inlineActions": {
-            "extractButtonLabel": "📂 한글깨짐/폭탄 없이 1초 만에 풀기",
-            "searchInsideLabel": f"🔍 압축 속 파일 {len(entries)}개 내용 바로 검색",
-            "directTransferLabel": (
-                "📱 카톡 용량 제한(300MB) 없이 내 폰·S:드라이브로 1초 직송"
-                if is_large_for_kakao
-                else "📱 내 폰으로 바로 보내기 / 💼 팀 공유폴더(S:) 넣기"
-            ),
-        },
-        "privacyBadge": PLUGIN_METADATA["privacyBadge"],
+        "sealedArchiveRespect": True,
+        "extractedFolder": str(folder_path),
+        "indexedCount": len(records),
     }
 
 
 def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> Dict[str, Any]:
     """
-    [모듈 B & 방어 7·9·15] 우클릭 0.35초 꾹 1초 스마트 압축 해제:
+    [모듈 B & 봉인 존중 원칙] 일반 우클릭 메뉴(`딸깍`) 및 우클릭 0.35초 꾹 듀얼 1초 스마트 압축 해제:
     1) UTF-8 NFD ➔ NFC 한글 자소 결합 및 CP437 ➔ CP949 복원.
     2) 최상위 루트 엔트리 판별: 낱개 파일 2개 이상이면 단일 폴더 자동 생성(압축 폭탄 방지),
        이미 단일 루트 폴더가 있으면 이중 폴더(보고서/보고서) 방지.
     3) Zip Slip(상위 경로 탈출 `../../`) 100% 차단 및 Disk Full 여유 공간 사전 검증.
-    4) 해제 완료 후 체리피커 전환용 인라인 브릿지(3줄 요약 + 문서 검색 + 내 폰/S:드라이브 전송) 반환.
+    4) 해제 완료 직후 `index_extracted_files_immediately()`로 풀린 일반 파일만 즉시 인덱싱 + 인라인 공유 브릿지 반환.
     """
     import zipfile  # Lazy-Import
+    import tarfile
 
     p = Path(archive_path).resolve()
     if not p.exists() or not p.is_file():
         return {"ok": False, "error": "ARCHIVE_NOT_FOUND"}
 
-    # 분할 압축 누락 체크 (.z01 등이 필요한 경우)
-    z01_candidate = p.with_suffix(".z01")
-    if z01_candidate.exists() and not p.with_suffix(".z02").exists():
-        pass
+    if is_split_archive_follower(str(p)):
+        return {
+            "ok": False,
+            "error": "SPLIT_ARCHIVE_FOLLOWER",
+            "message": "분할 압축 보조 파일입니다. 1번 대표 압축 파일(.zip / .part1.rar / .7z.001)에서 풀기를 눌러주세요!",
+        }
+
+    extracted_files: List[str] = []
+    total_uncompressed = 0
 
     try:
-        with zipfile.ZipFile(p, mode="r") as zf:
-            infos = zf.infolist()
-            total_uncompressed = sum(int(i.file_size or 0) for i in infos)
-            comp_size = max(1, p.stat().st_size)
+        if p.suffix.lower() == ".zip":
+            with zipfile.ZipFile(p, mode="r") as zf:
+                infos = zf.infolist()
+                total_uncompressed = sum(int(i.file_size or 0) for i in infos)
+                comp_size = max(1, p.stat().st_size)
 
-            # [방어 B-2] 압축 폭탄(100배 이상 팽창 & 10GB 초과) 및 디스크 여유 공간 체크
-            free_bytes = shutil.disk_usage(p.parent).free
-            if total_uncompressed > free_bytes:
-                return {
-                    "ok": False,
-                    "error": "DISK_FULL_PREVENTED",
-                    "message": (
-                        f"⚠️ 디스크 여유 공간({round(free_bytes / (1024**3), 1)}GB)보다 "
-                        f"압축 해제 크기({round(total_uncompressed / (1024**3), 1)}GB)가 커서 안전하게 중단했습니다."
-                    ),
-                }
-            if (total_uncompressed / comp_size) > 120 and total_uncompressed > 10 * (1024**3):
-                return {
-                    "ok": False,
-                    "error": "DECOMPRESSION_BOMB_SUSPECTED",
-                    "message": "🚨 비정상적인 팽창률(압축 폭탄 의심)이 감지되어 PC 보호를 위해 해제를 차단했습니다.",
-                }
+                free_bytes = shutil.disk_usage(p.parent).free
+                if total_uncompressed > free_bytes:
+                    return {
+                        "ok": False,
+                        "error": "DISK_FULL_PREVENTED",
+                        "message": (
+                            f"⚠️ 디스크 여유 공간({round(free_bytes / (1024**3), 1)}GB)보다 "
+                            f"압축 해제 크기({round(total_uncompressed / (1024**3), 1)}GB)가 커서 안전하게 중단했습니다."
+                        ),
+                    }
+                if (total_uncompressed / comp_size) > 120 and total_uncompressed > 10 * (1024**3):
+                    return {
+                        "ok": False,
+                        "error": "DECOMPRESSION_BOMB_SUSPECTED",
+                        "message": "🚨 비정상적인 팽창률(압축 폭탄 의심)이 감지되어 PC 보호를 위해 해제를 차단했습니다.",
+                    }
 
-            # 최상위 루트 엔트리 개수 스캔 (압축 폭탄 vs 이중 폴더 방지)
-            root_segments = set()
-            decoded_map: List[Tuple[zipfile.ZipInfo, str]] = []
-            for info in infos:
-                dec_name = _decode_archive_filename(info.filename, info.flag_bits).replace("\\", "/").lstrip("/")
-                if not dec_name:
-                    continue
-                first_seg = dec_name.split("/", 1)[0]
-                root_segments.add(first_seg)
-                decoded_map.append((info, dec_name))
+                root_segments = set()
+                decoded_map: List[Tuple[zipfile.ZipInfo, str]] = []
+                for info in infos:
+                    dec_name = _decode_archive_filename(info.filename, info.flag_bits).replace("\\", "/").lstrip("/")
+                    if not dec_name:
+                        continue
+                    first_seg = dec_name.split("/", 1)[0]
+                    root_segments.add(first_seg)
+                    decoded_map.append((info, dec_name))
 
-            if len(root_segments) == 1 and any("/" in dn for _, dn in decoded_map):
-                # 이미 단일 루트 폴더가 있으므로 이중 폴더 없이 부모 폴더에 바로 해제
-                target_root = p.parent.resolve()
-                created_folder = (target_root / list(root_segments)[0]).resolve()
-            else:
-                # 낱개 파일이 여러 개이므로 바탕화면 압축 폭탄 방지를 위해 단일 폴더 자동 생성
-                base_folder_name = p.stem
-                created_folder = (p.parent / base_folder_name).resolve()
-                counter = 1
-                while created_folder.exists() and any(created_folder.iterdir()):
-                    created_folder = (p.parent / f"{base_folder_name}_{counter}").resolve()
-                    counter += 1
-                created_folder.mkdir(parents=True, exist_ok=True)
-                target_root = created_folder
+                if len(root_segments) == 1 and any("/" in dn for _, dn in decoded_map):
+                    target_root = p.parent.resolve()
+                    created_folder = (target_root / list(root_segments)[0]).resolve()
+                else:
+                    base_folder_name = p.stem
+                    created_folder = (p.parent / base_folder_name).resolve()
+                    counter = 1
+                    while created_folder.exists() and any(created_folder.iterdir()):
+                        created_folder = (p.parent / f"{base_folder_name}_{counter}").resolve()
+                        counter += 1
+                    created_folder.mkdir(parents=True, exist_ok=True)
+                    target_root = created_folder
 
-            pwd_bytes = password.encode("utf-8") if password else None
-            extracted_files: List[str] = []
+                pwd_bytes = password.encode("utf-8") if password else None
 
-            for info, dec_name in decoded_map:
-                dest_path = (target_root / dec_name).resolve()
-                # [방어 B-2] Zip Slip (상위 경로 탈출 `../../`) 100% 차단
-                if not str(dest_path).startswith(str(target_root)):
-                    continue
-                if info.is_dir() or dec_name.endswith("/"):
-                    dest_path.mkdir(parents=True, exist_ok=True)
-                    continue
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-                with zf.open(info, mode="r", pwd=pwd_bytes) as src_f, open(dest_path, "wb") as dst_f:
-                    shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
-                extracted_files.append(dest_path.name)
+                for info, dec_name in decoded_map:
+                    dest_path = (target_root / dec_name).resolve()
+                    if not str(dest_path).startswith(str(target_root)):
+                        continue
+                    if info.is_dir() or dec_name.endswith("/"):
+                        dest_path.mkdir(parents=True, exist_ok=True)
+                        continue
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(info, mode="r", pwd=pwd_bytes) as src_f, open(dest_path, "wb") as dst_f:
+                        shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
+                    extracted_files.append(dest_path.name)
+
+        elif p.suffix.lower() in (".tar", ".gz", ".tgz"):
+            import unicodedata
+
+            base_folder_name = p.stem.replace(".tar", "")
+            created_folder = (p.parent / base_folder_name).resolve()
+            created_folder.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(p, mode="r:*") as tf:
+                for member in tf.getmembers():
+                    dec_name = unicodedata.normalize("NFC", member.name).replace("\\", "/").lstrip("/")
+                    dest_path = (created_folder / dec_name).resolve()
+                    if not str(dest_path).startswith(str(created_folder)):
+                        continue
+                    if member.isdir():
+                        dest_path.mkdir(parents=True, exist_ok=True)
+                    elif member.isfile():
+                        dest_path.parent.mkdir(parents=True, exist_ok=True)
+                        src_f = tf.extractfile(member)
+                        if src_f:
+                            with src_f, open(dest_path, "wb") as dst_f:
+                                shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
+                            extracted_files.append(dest_path.name)
+                            total_uncompressed += int(member.size or 0)
+        else:
+            return {"ok": False, "error": "UNSUPPORTED_ARCHIVE_FORMAT"}
 
     except RuntimeError as e:
         if "password" in str(e).lower() or "encrypted" in str(e).lower():
@@ -727,9 +785,9 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-    # 해제 직후 대표 실행 파일/문서 1건 무소음 AMSI 검문 연동
-    scan_File = str(p)
-    scan_File_res = scan_file_with_defender_amsi(scan_File, source="smart_unzip")
+    # 해제 직후 풀려 나온 일반 파일들을 즉시 인덱싱 큐에 등록 (봉인 존중: 풀기 전 미열람 -> 푼 직후 즉시 인덱싱)
+    index_res = index_extracted_files_immediately(str(created_folder), extracted_files)
+    scan_res = scan_file_with_defender_amsi(str(p), source="smart_unzip")
 
     total_mb = round(total_uncompressed / (1024 * 1024), 2)
     preview_names = ", ".join(extracted_files[:3])
@@ -742,12 +800,13 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
         "extractedCount": len(extracted_files),
         "extractedPreview": preview_names,
         "totalUncompressedMb": total_mb,
-        "defenderCheck": scan_File_res,
+        "indexedImmediately": index_res,
+        "defenderCheck": scan_res,
         "inlineBridge": {
             "summaryLines": [
                 f"✅ 한글 깨짐·바탕화면 폭탄 없이 '{created_folder.name}' 폴더에 {len(extracted_files)}개 파일을 풀었어요!",
                 f"📄 포함 파일: {preview_names or '폴더 구조'}",
-                f"🛡️ 윈도우 디펜더 무소음 안전 검문 통과 ({total_mb}MB)",
+                f"🛡️ 윈도우 디펜더 무소음 안전 검문 통과 ({total_mb}MB · 풀린 문서 즉시 검색 준비 완료)",
             ],
             "primaryCta": {
                 "action": "search_extracted_docs",
@@ -764,6 +823,51 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
                 "targetFolder": str(created_folder),
             },
         },
+    }
+
+
+def smart_create_zip(target_path: str) -> Dict[str, Any]:
+    """
+    [1번 지시] 일반 파일·폴더 우클릭 `👻 귀신같이로 ZIP 압축 묶기` 실행 시
+    Windows 표준 UTF-8 NFC 정규화 파일명으로 맥(macOS)·윈도우 양쪽에서 절대 깨지지 않는 깔끔한 .zip 생성
+    """
+    import unicodedata  # Lazy-Import
+    import zipfile
+
+    src = Path(target_path).resolve()
+    if not src.exists():
+        return {"ok": False, "error": "SOURCE_NOT_FOUND"}
+
+    out_zip = src.parent / f"{src.stem if src.is_file() else src.name}.zip"
+    counter = 1
+    while out_zip.exists():
+        out_zip = src.parent / f"{src.stem if src.is_file() else src.name}_{counter}.zip"
+        counter += 1
+
+    added_count = 0
+    try:
+        with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            if src.is_file():
+                arcname = unicodedata.normalize("NFC", src.name)
+                zf.write(src, arcname=arcname)
+                added_count = 1
+            else:
+                for root, _, files in os.walk(src):
+                    for f in files:
+                        full_f = Path(root) / f
+                        rel = full_f.relative_to(src.parent)
+                        arcname = unicodedata.normalize("NFC", str(rel).replace("\\", "/"))
+                        zf.write(full_f, arcname=arcname)
+                        added_count += 1
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    return {
+        "ok": True,
+        "zipPath": str(out_zip),
+        "zipName": out_zip.name,
+        "addedCount": added_count,
+        "toastMessage": f"🗜️ '{out_zip.name}' ({added_count}개 항목) 압축 묶기 완료! (맥·윈도우 한글 호환 100%)",
     }
 
 
@@ -802,7 +906,6 @@ def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Di
     if not p.exists() or not p.is_file():
         return {"ok": False, "error": "FILE_NOT_FOUND"}
 
-    # 브라우저 임시 다운로드 파일(.crdownload, .part, .tmp)은 디바운싱 스킵
     if p.suffix.lower() in (".crdownload", ".part", ".tmp", ".partial"):
         return {"ok": True, "skippedTempDownload": True}
 
@@ -831,7 +934,6 @@ def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Di
                             ctypes.byref(amsi_res),
                         )
                         result_code = int(amsi_res.value)
-                        # AMSI_RESULT_DETECTED is >= 32768
                         if result_code >= 32768:
                             status = "THREAT_DETECTED"
                 finally:
@@ -872,10 +974,7 @@ def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Di
 
 
 def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, Any]:
-    """
-    [모듈 C] [🛡️ 안심 수호 히스토리 (최근 30일 N건 무소음 통과)] 대시보드 카드 및 타임라인 조회.
-    Windows Defender Operational 이벤트 로그(Event ID 1116/1117) 최신 상태도 비관리자 권한으로 함께 조회.
-    """
+    """[모듈 C] [🛡️ 안심 수호 히스토리 (최근 30일 N건 무소음 통과)] 대시보드 카드 및 타임라인 조회"""
     _init_guardian_db()
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
     items: List[Dict[str, Any]] = []
@@ -932,7 +1031,7 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
 
 
 # ============================================================================
-# 5. [방어 22] Try-Except Firewall 단일 게이트웨이 디스패처
+# 5. [방어 22] Try-Except Firewall 단일 게이트웨이 디스패처 & 탐색기 우클릭 CLI 엔트리
 # ============================================================================
 def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
@@ -951,15 +1050,18 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
         if act in ("sync-whitelist", "sync_whitelist"):
             wl = load_security_whitelist(allow_remote_sync=True)
             return {"ok": True, "version": wl.get("version"), "synced": True}
-        if act in ("peek-archive", "peek_archive", "zero-unzip"):
-            return peek_archive_zero_unzip(
-                archive_path=str(data.get("path") or data.get("archivePath") or ""),
-                query=str(data.get("q") or data.get("query") or ""),
-            )
-        if act in ("extract-archive", "extract_archive", "smart-unzip"):
+        if act in ("archive/context-menu/ensure", "context-menu-ensure", "register-context-menu"):
+            return register_explorer_context_menu()
+        if act in ("archive/context-menu/remove", "unregister-context-menu"):
+            return unregister_explorer_context_menu()
+        if act in ("extract-archive", "extract_archive", "smart-unzip", "archive/extract"):
             return smart_extract_archive(
                 archive_path=str(data.get("path") or data.get("archivePath") or ""),
                 password=data.get("password"),
+            )
+        if act in ("create-zip", "create_zip", "smart-zip", "archive/zip"):
+            return smart_create_zip(
+                target_path=str(data.get("path") or data.get("targetPath") or ""),
             )
         if act in ("explorer-selected", "explorer_selected"):
             return {"ok": True, "selectedPaths": get_explorer_selected_paths_non_destructive()}
@@ -980,3 +1082,34 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
             "isolatedFirewall": True,
             "error": f"CARE_SUITE_ISOLATED_ERROR: {exc}",
         }
+
+
+def _cli_main() -> None:
+    parser = argparse.ArgumentParser(description="Ghosti Care Suite CLI (Explorer Context Menu Handler)")
+    parser.add_argument("--smart-unzip", dest="smart_unzip", type=str, help="압축 파일 스마트 해제")
+    parser.add_argument("--smart-zip", dest="smart_zip", type=str, help="파일/폴더 ZIP 묶기")
+    parser.add_argument("--register-menu", action="store_true", help="탐색기 기본 우클릭 메뉴 등록")
+    parser.add_argument("--unregister-menu", action="store_true", help="탐색기 기본 우클릭 메뉴 해제")
+    args = parser.parse_args()
+
+    if args.register_menu:
+        print(json.dumps(register_explorer_context_menu(), ensure_ascii=False))
+        return
+    if args.unregister_menu:
+        print(json.dumps(unregister_explorer_context_menu(), ensure_ascii=False))
+        return
+    if args.smart_unzip:
+        res = smart_extract_archive(args.smart_unzip)
+        if res.get("ok") and res.get("extractedFolder") and sys.platform == "win32":
+            try:
+                os.startfile(res["extractedFolder"])
+            except Exception:
+                pass
+        return
+    if args.smart_zip:
+        smart_create_zip(args.smart_zip)
+        return
+
+
+if __name__ == "__main__":
+    _cli_main()

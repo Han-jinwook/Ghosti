@@ -1342,11 +1342,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       🧹 스마트 압축 &amp; 용량 청소
                     </span>
                     <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10.5px] font-bold">
-                      우클릭 0.35초 꾹
+                      일반 우클릭(딸깍) & 0.35초 꾹
                     </span>
                   </div>
                   <p className="text-[11.5px] text-zinc-400 leading-snug">
-                    맥북 한글 자소분리(NFD) 복원 · 압축폭탄 방지 · 안 풀고 속마음 투시 검색
+                    맥북 한글 자소분리(NFD) 복원 · 압축폭탄 방지 · 봉인 존중(풀기 전 내부 미열람)
                   </p>
                 </div>
                 <div className="flex items-center justify-between gap-1.5 pt-1">
@@ -1355,9 +1355,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     onClick={() => setDesktopTab('dashboard')}
                     className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-amber-500/30 text-amber-300 text-[11.5px] font-extrabold transition cursor-pointer"
                   >
-                    🔍 압축 속 문서 투시 검색
+                    🔍 풀린 문서 즉시 검색
                   </button>
-                  <span className="text-[10.5px] text-zinc-500 font-semibold">원본 Read-Only</span>
+                  <span className="text-[10.5px] text-zinc-500 font-semibold">더블클릭 불간섭</span>
                 </div>
               </div>
             </div>
@@ -1395,7 +1395,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
             {/* [방어 7·9] 로컬 샌드박스 & 무광고 영구 보증 배지 */}
             <div className="px-3 py-2 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-zinc-300 font-bold">
-              <span>🔒 100% 내 PC 안에서만 처리 (외부 서버 전송 0바이트 · 상업광고 영구 0%)</span>
+              <span>🔒 100% 내 PC 안에서만 처리 (외부 서버 전송 0바이트 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)</span>
               <span className="text-teal-400">🪶 35KB 독립 플러그인 격리 · 유휴 CPU 0.0%</span>
             </div>
 

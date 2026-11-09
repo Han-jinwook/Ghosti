@@ -2605,7 +2605,7 @@ def _toast_worker() -> None:
                         hdr = tk.Frame(outer, bg="#0B1120")
                         hdr.pack(fill="x", pady=(0, 6))
                         tk.Label(hdr, text=f"📦 {arch_name}", fg="#5EEAD4", bg="#0B1120", font=("Malgun Gothic", 10, "bold"), anchor="w").pack(side="left")
-                        tk.Label(hdr, text="🔒 Read-Only · 광고 0%", fg="#94A3B8", bg="#0F172A", padx=6, pady=1, font=("Malgun Gothic", 8)).pack(side="right")
+                        tk.Label(hdr, text="🔒 풀기 전 내부 미열람 · 광고 0%", fg="#94A3B8", bg="#0F172A", padx=6, pady=1, font=("Malgun Gothic", 8)).pack(side="right")
 
                         status_lbl = tk.Label(
                             outer,
@@ -2679,18 +2679,16 @@ def _toast_worker() -> None:
                         ext_btn.pack(side="left", padx=(0, 6))
                         ext_btn.bind("<Button-1>", _do_smart_unzip)
 
-                        peek_btn = tk.Label(
+                        seal_lbl = tk.Label(
                             btn_row,
-                            text="👻 압축 안 풀고 속마음 투시",
-                            fg="#5EEAD4",
+                            text="🔒 봉인 존중 (풀기 전 내부 미열람 · 푼 직후 즉시 검색 연결)",
+                            fg="#94A3B8",
                             bg="#1E293B",
                             padx=10,
                             pady=5,
-                            font=("Malgun Gothic", 9, "bold"),
-                            cursor="hand2",
+                            font=("Malgun Gothic", 8, "bold"),
                         )
-                        peek_btn.pack(side="left")
-                        peek_btn.bind("<Button-1>", lambda _e: _toast_queue.put((f"__UI2_SEARCH__|medium|{arch_name}", 10000)))
+                        seal_lbl.pack(side="left")
 
                         win.update_idletasks()
                         req_w, req_h = max(win.winfo_reqwidth(), 380), max(win.winfo_reqheight(), 86)
