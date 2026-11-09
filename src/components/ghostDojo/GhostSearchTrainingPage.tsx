@@ -134,7 +134,7 @@ const VirtualMonitorSimulator: React.FC<{
         e.preventDefault();
         summon();
       }
-      if (e.key === 'Escape') setStage(null);
+      // 가상 모니터 시뮬레이터가 열려 있는 동안에는 글로벌 Escape가 창을 꺼버리지 않도록 보호 (닫기는 우상단 ✕ 버튼 전용)
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -217,9 +217,6 @@ const VirtualMonitorSimulator: React.FC<{
                       onClick={() => {
                         setStage(s);
                         if (s !== 'small') onStep(s);
-                        if (connected && onOpenRealWindow) {
-                          onOpenRealWindow(s, initialQuery);
-                        }
                       }}
                       className={`px-2 py-0.5 rounded ${stage === s ? 'bg-[#2DD4BF] text-zinc-950' : 'bg-zinc-800'}`}
                     >
@@ -233,10 +230,9 @@ const VirtualMonitorSimulator: React.FC<{
               </div>
               <div className="h-[calc(100%-2rem)]" onMouseDown={(e) => e.stopPropagation()}>
                 <iframe
-                  key={rect.stage}
                   title="귀신검색창"
-                  src={ghostSearchWindowUrl(rect.stage, initialQuery)}
-                  className="w-full h-full border-0 bg-white"
+                  src={ghostSearchWindowUrl('medium', initialQuery)}
+                  className="w-full h-full border-0 bg-white dark:bg-zinc-950"
                 />
               </div>
             </div>

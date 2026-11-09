@@ -2092,9 +2092,11 @@ def _toast_worker() -> None:
 
         def _resize_for_stage() -> None:
             st_now = st_state["stage"]
-            ax = win_rect[0][0] if win_rect[0][2] > win_rect[0][0] else pt_x
-            ay = win_rect[0][1] if win_rect[0][3] > win_rect[0][1] else pt_y
+            ax = pt_x
+            ay = pt_y
             r3 = compute_ghost_search_window_3stage_rect(st_now, ax, ay, work_area=work_area, margin_px=16)
+            opened_at[0] = time.time()
+            was_mouse_down[0] = True
             _apply_win_topmost(win, int(r3["x"]), int(r3["y"]), int(r3["width"]), int(r3["height"]), activate=True)
             try:
                 s_entry.focus_force()
@@ -2103,6 +2105,8 @@ def _toast_worker() -> None:
 
         def _switch_stage(new_st: str) -> None:
             is_hovered[0] = True
+            opened_at[0] = time.time()
+            was_mouse_down[0] = True
             st_state["stage"] = new_st
             _render_search_results()
             _resize_for_stage()
