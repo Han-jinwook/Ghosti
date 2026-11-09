@@ -1,13 +1,12 @@
 'use client';
 
 /**
- * Version: v2.4.0
+ * Version: v2.5.0
  * Last Updated: 2026-11-06
- * Description: 패밀리 통합 '선물함 & 선물하기' 컴포넌트 (전 패밀리 앱 100% 공통 귀신코인 선물 단일화)
- * - 개별 앱별 파편화된 묶음 상품(분석 10회, 발송 300건 등) 완전 폐지 — 받는 분이 귀신팸 어떤 앱에서든 자유롭게 쓰는 통합 귀신코인 선물로 100% 단일화
- * - 1단계: 충전소와 일체감 있는 귀신코인 누적 선물 컨트롤러 (`+1,000 코인`, `+10,000 코인` 2개 버튼 + `↺ 0 초기화` + `전액`)
- * - 2단계: 별명/이메일 실시간 자동완성 검색(한글 조합 깜빡임 방지) + 외부 클릭 닫기 + 고정 높이(h-8) 수신자 확인줄로 모달 화면 튐 0px 달성
- * - 3단계: 4종 테마 + 일체형 응원 메시지 카드
+ * Description: 패밀리 통합 '코인 선물함 & 코인 선물하기' 컴포넌트 (충전소 완벽 일체형 로고·폰트 & 부족분 충전 후 자동 선물 발송)
+ * - 상단 헤더 및 코인 카드: 충전소와 100% 동일한 아기귀신 마스코트 로고(`ghosti.png` / `GHOST_COIN_WINK_BASE64`) 및 도자기 서체(`Cafe24Ssurround` / `TmoneyRoundWindExtraBold`) 적용
+ * - 탭 및 버튼 명칭 통일: `코인 선물함` / `코인 선물하기`
+ * - 보유 코인 부족 시 스마트 충전 롤백 & 충전 완료 후 기억해 둔 선물 자동 발송(`merlin_pending_gift_v1`) 완벽 지원
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -22,6 +21,7 @@ import {
   X,
   UserCheck,
   Search,
+  ChevronDown,
   PartyPopper,
   Loader2,
 } from 'lucide-react';
@@ -36,8 +36,26 @@ import {
   GiftContact,
 } from './wallet';
 import { useHub } from '../HubProvider';
+import { getConfig } from '../CoreLogic/config';
 import { showToast } from '../CoreLogic/HubNotifier';
 import { triggerHaptic } from '../CoreLogic/haptic';
+import { GHOST_COIN_WINK_BASE64, GHOST_COIN_HUG_BASE64, GHOST_COIN_TITLE_BASE64 } from '../assets/ghostCoinBase64';
+
+export const PENDING_GIFT_STORAGE_KEY = 'merlin_pending_gift_v1';
+
+export interface PendingGiftDraft {
+  receiverEmail: string;
+  receiverId?: string;
+  receiverName: string;
+  receiverDetail: string;
+  giftTitle: string;
+  amount: number;
+  theme: HubGiftThemeId;
+  message: string;
+  shortfallCoins: number;
+  recommendedChargeCoins: number;
+  createdAt: number;
+}
 
 export interface GiftProductItem {
   id: string;
@@ -57,8 +75,9 @@ export interface HubGiftBoxModalProps {
   initialTab?: 'received' | 'sent' | 'send';
   inline?: boolean; // true일 경우 모달 배경 없이 페이지 내 탭 컨텐츠로 렌더링
   appName?: string;
-  customProducts?: GiftProductItem[]; // 하위 호환용 prop 유지 (전 앱 공통 귀신코인 누적 선물로 단일화됨)
+  customProducts?: GiftProductItem[]; // 하위 호환용 prop 유지
   minCustomCoin?: number; // 최소 선물 코인 단위 (기본 1,000C)
+  onRequestChargeForGift?: (recommendedChargeCoins: number, draft: PendingGiftDraft) => void;
 }
 
 /**
@@ -80,7 +99,7 @@ export const AGGRO_GIFT_PRODUCTS: GiftProductItem[] = [
 
 export const SENSETALK_GIFT_PRODUCTS: GiftProductItem[] = AGGRO_GIFT_PRODUCTS;
 
-type HubGiftThemeId = 'CHEER' | 'THANKS' | 'TOGETHER' | 'CONGRATS' | 'HEART';
+export type HubGiftThemeId = 'CHEER' | 'THANKS' | 'TOGETHER' | 'CONGRATS' | 'HEART';
 
 const THEME_OPTIONS: Array<{
   id: HubGiftThemeId;
@@ -132,11 +151,14 @@ const THEME_OPTIONS: Array<{
 export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
   isOpen = true,
   onClose,
-  initialTab = 'received',
+  initialTab = 'send',
   inline = false,
   minCustomCoin = 1000,
+  onRequestChargeForGift,
 }) => {
   const { isLoggedIn, balance, refreshBalance } = useHub();
+  const config = getConfig();
+  const hubBaseUrl = (config?.hubUrl || 'https://os.sundreamer.app').replace(/\/+$/, '');
 
   const minCoin = typeof minCustomCoin === 'number' && minCustomCoin >= 1000 ? minCustomCoin : 1000;
 
@@ -169,6 +191,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
   const dropdownBoxRef = useRef<HTMLDivElement | null>(null);
   const dropdownBtnRef = useRef<HTMLButtonElement | null>(null);
+  const autoExecutedRef = useRef<boolean>(false);
 
   // 추천지인/검색창 드롭다운 바깥 어디든 클릭 시 즉시 닫기 (캡처 단계 감지)
   useEffect(() => {
@@ -219,24 +242,95 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
   useEffect(() => {
     if ((inline || isOpen) && isLoggedIn) {
-      // 선물 보내기 탭으로 열 때는 로딩 스피너로 인한 모달 높이 점프를 원천 차단하기 위해 무음(silent) 로드
       loadGiftData(initialTab === 'send');
     }
   }, [inline, isOpen, initialTab, isLoggedIn, loadGiftData]);
 
-  // 별명/이메일 입력 시 실시간 회원 자동완성 검색 (타이핑 중 레이아웃 흔들림/깜빡임 원천 차단)
+  // 🚀 충전 전에 기억해 두었던 선물 정보 복원 & 충전 완료 시 자동 발송 실행
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isLoggedIn) return;
+    const raw = localStorage.getItem(PENDING_GIFT_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const draft: PendingGiftDraft = JSON.parse(raw);
+      // 30분 이상 지난 오래된 임시 데이터는 자동 폐기
+      if (!draft || !draft.amount || Date.now() - (draft.createdAt || 0) > 30 * 60 * 1000) {
+        localStorage.removeItem(PENDING_GIFT_STORAGE_KEY);
+        return;
+      }
+
+      // 폼 상태에 기억해 둔 선물 정보 그대로 복원
+      setGiftCoinAmount(draft.amount);
+      setRecipientInput(draft.receiverName || draft.receiverEmail);
+      setSelectedContact({
+        email: draft.receiverEmail,
+        nickname: draft.receiverName,
+        userId: draft.receiverId,
+        relation: '지인',
+      });
+      setVerifiedRecipient({
+        displayName: draft.receiverName,
+        email: draft.receiverEmail,
+        detail: draft.receiverDetail || `받는 분: ${draft.receiverName} (${draft.receiverEmail})`,
+      });
+      if (draft.theme) setSelectedTheme(draft.theme);
+      if (draft.message) setGiftMessage(draft.message);
+
+      // 충전이 끝나 보유 코인이 선물할 코인 이상으로 충족되었다면 즉시 자동 선물 발송!
+      if (typeof balance === 'number' && balance >= draft.amount && !autoExecutedRef.current) {
+        autoExecutedRef.current = true;
+        localStorage.removeItem(PENDING_GIFT_STORAGE_KEY);
+
+        (async () => {
+          setIsSending(true);
+          try {
+            const res = await sendGift({
+              receiverEmail: draft.receiverEmail,
+              receiverId: draft.receiverId,
+              receiverName: draft.receiverName,
+              giftTitle: draft.giftTitle || `👻 귀신코인 ${draft.amount.toLocaleString()}C 선물`,
+              giftCategory: 'COIN',
+              amount: draft.amount,
+              theme: draft.theme || 'CHEER',
+              message: draft.message,
+            });
+
+            if (res.success) {
+              triggerHaptic('success');
+              showToast(
+                `🎉 코인 충전 완료! 기억해 둔 ${draft.receiverName}님께 ${draft.amount.toLocaleString()}C 선물을 자동 발송했습니다!`,
+                'info'
+              );
+              setGiftCoinAmount(0);
+              setRecipientInput('');
+              setSelectedContact(null);
+              setVerifiedRecipient(null);
+              refreshBalance();
+              await loadGiftData(true);
+              setActiveTab('sent');
+            } else {
+              showToast(res.error || '충전 후 자동 선물 발송 중 오류가 발생했습니다. 버튼을 눌러 다시 보내주세요.', 'error');
+              setActiveTab('send');
+            }
+          } finally {
+            setIsSending(false);
+          }
+        })();
+      }
+    } catch {
+      localStorage.removeItem(PENDING_GIFT_STORAGE_KEY);
+    }
+  }, [isLoggedIn, balance, refreshBalance, loadGiftData]);
+
+  // 별명/이메일 입력 시 실시간 회원 자동완성 검색 (타이핑 즉시 우측 결과창에 자동 반영)
   useEffect(() => {
     const raw = recipientInput.trim();
-    // 한글 조합 중 미완성 자음/모음(ㄱ~ㅎ, ㅏ~ㅣ) 단독 입력은 검색 생략하여 팝업 튐 방지
-    const cleanQ = raw.replace(/[ㄱ-ㅎㅏ-ㅣ]+$/g, '').trim();
+    const cleanQ = raw.replace(/[ㄱ-ㅎㅏ-ㅣ]+$/g, '').trim() || raw;
 
-    if (!cleanQ || selectedContact) {
-      if (!raw) {
-        setSearchResults([]);
-        if (dropdownMode === 'search') {
-          setIsContactDropdownOpen(false);
-        }
-      }
+    if (!cleanQ) {
+      setSearchResults([]);
+      setIsContactDropdownOpen(false);
       setIsSearchingRecipients(false);
       return;
     }
@@ -251,8 +345,38 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
           setSearchResults(found);
           if (found.length > 0) {
             setDropdownMode('search');
-            setIsContactDropdownOpen(true);
-          } else if (dropdownMode === 'search') {
+            // 첫 번째 일치 회원을 우측 결과창에 즉시 기본 선택하여 바로 확인/드롭다운 선택 가능하게 함
+            const lowerQ = cleanQ.toLowerCase();
+            const bestMatch =
+              found.find(
+                item =>
+                  item.nickname.toLowerCase() === lowerQ ||
+                  item.email.toLowerCase() === lowerQ ||
+                  item.email.split('@')[0].toLowerCase() === lowerQ
+              ) || found[0];
+            setSelectedContact(bestMatch);
+            setVerifiedRecipient({
+              displayName: bestMatch.nickname || bestMatch.email.split('@')[0],
+              email: bestMatch.email,
+              detail: `받는 분: ${bestMatch.nickname || bestMatch.email.split('@')[0]} (${bestMatch.email})`,
+            });
+            setIsContactDropdownOpen(found.length > 1);
+          } else {
+            if (cleanQ.includes('@')) {
+              const cleanEmail = cleanQ.toLowerCase();
+              const nick = cleanEmail.split('@')[0];
+              const emailContact: GiftContact = {
+                email: cleanEmail,
+                nickname: nick,
+                relation: '이메일 지인',
+              };
+              setSelectedContact(emailContact);
+              setVerifiedRecipient({
+                displayName: nick,
+                email: cleanEmail,
+                detail: `받는 분: ${nick} (${cleanEmail})`,
+              });
+            }
             setIsContactDropdownOpen(false);
           }
         }
@@ -261,13 +385,13 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
           setIsSearchingRecipients(false);
         }
       }
-    }, 220);
+    }, 180);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [recipientInput, selectedContact, dropdownMode]);
+  }, [recipientInput]);
 
   if (!inline && !isOpen) return null;
 
@@ -275,6 +399,9 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
   const finalGiftAmount = Math.max(0, Math.floor(giftCoinAmount));
   const finalGiftTitle = `👻 귀신코인 ${finalGiftAmount.toLocaleString()}C 선물`;
   const activeThemeObj = THEME_OPTIONS.find(t => t.id === selectedTheme) || THEME_OPTIONS[0];
+  const isOverBalance = finalGiftAmount > coinBalance;
+  const shortfallCoins = Math.max(0, finalGiftAmount - coinBalance);
+  const recommendedChargeCoins = Math.max(1000, Math.ceil(shortfallCoins / 1000) * 1000);
 
   const handleAddGiftCoin = (delta: number) => {
     triggerHaptic('light');
@@ -346,7 +473,6 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
         return;
       }
 
-      // 아직 가입하지 않은 외부 지인 이메일인 경우 즉시 이메일 수신자로 확정
       if (q.includes('@')) {
         const cleanEmail = q.toLowerCase();
         const nick = cleanEmail.split('@')[0];
@@ -380,29 +506,111 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
       return;
     }
 
-    const rawRecipient = (verifiedRecipient?.email || selectedContact?.email || recipientInput).trim();
-    if (!rawRecipient) {
-      showToast('선물 받으실 분의 별명 또는 이메일을 입력해 주세요.', 'error');
-      return;
+    let resolvedEmail = (verifiedRecipient?.email || selectedContact?.email || '').trim();
+    let resolvedName = (verifiedRecipient?.displayName || selectedContact?.nickname || '').trim();
+    let resolvedId = selectedContact?.userId;
+
+    // 만약 자동완성 선택 전 상태라면 즉시 1회 자동 조회하여 수신자 확정
+    if (!resolvedEmail) {
+      const rawQ = recipientInput.trim();
+      if (!rawQ) {
+        showToast('선물 받으실 분의 별명 또는 이메일을 입력해 주세요.', 'error');
+        return;
+      }
+      if (rawQ.includes('@')) {
+        resolvedEmail = rawQ.toLowerCase();
+        resolvedName = resolvedEmail.split('@')[0];
+      } else {
+        setIsVerifyingRecipient(true);
+        try {
+          const searchRes = await searchGiftUsers(rawQ);
+          const list = searchRes.users || [];
+          const lowerQ = rawQ.toLowerCase();
+          const matched =
+            list.find(
+              item =>
+                item.nickname.toLowerCase() === lowerQ ||
+                item.email.toLowerCase() === lowerQ ||
+                item.email.split('@')[0].toLowerCase() === lowerQ
+            ) || (list.length === 1 ? list[0] : null);
+
+          if (!matched) {
+            if (list.length > 1) {
+              setSearchResults(list);
+              setDropdownMode('search');
+              setIsContactDropdownOpen(true);
+              showToast('검색된 회원 목록에서 받으실 분을 선택해 주세요.', 'info');
+            } else {
+              showToast(`'${rawQ}' 별명으로 등록된 회원을 찾지 못했습니다. 정확한 별명 또는 이메일을 입력해 주세요.`, 'error');
+            }
+            return;
+          }
+          handleSelectContactPill(matched);
+          resolvedEmail = matched.email;
+          resolvedName = matched.nickname || matched.email.split('@')[0];
+          resolvedId = matched.userId;
+        } finally {
+          setIsVerifyingRecipient(false);
+        }
+      }
     }
 
+    const displayTarget = resolvedName || resolvedEmail;
+
+    // 🚨 [핵심 기능] 보유 코인보다 선물할 코인이 많을 때: 선물 내역을 기억해 두고 충전소로 안내 & 충전 직후 자동 발송!
     if (typeof balance === 'number' && finalGiftAmount > balance) {
-      showToast(`보유하신 코인(${balance.toLocaleString()}C)이 부족합니다.`, 'error');
+      const shortage = finalGiftAmount - balance;
+      const chargeNeed = Math.max(1000, Math.ceil(shortage / 1000) * 1000);
+
+      const proceedCharge = window.confirm(
+        `[👻 보유 귀신코인 부족 안내]\n\n` +
+          `• 선물할 코인: ${finalGiftAmount.toLocaleString()} C\n` +
+          `• 현재 보유 코인: ${balance.toLocaleString()} C\n` +
+          `• 부족한 코인: ${shortage.toLocaleString()} C (최소 충전 단위: ${chargeNeed.toLocaleString()} C)\n\n` +
+          `충전 화면으로 이동하여 부족한 코인을 충전하시겠습니까?\n` +
+          `✨ 지금 입력하신 [${displayTarget}님께 ${finalGiftAmount.toLocaleString()}C 선물] 내용을 그대로 기억해 두었다가, 충전이 끝나는 즉시 자동으로 선물을 보내드립니다!`
+      );
+
+      if (!proceedCharge) return;
+
+      const draft: PendingGiftDraft = {
+        receiverEmail: resolvedEmail,
+        receiverId: resolvedId,
+        receiverName: displayTarget,
+        receiverDetail: `받는 분: ${displayTarget} (${resolvedEmail})`,
+        giftTitle: finalGiftTitle,
+        amount: finalGiftAmount,
+        theme: selectedTheme,
+        message: giftMessage.trim() || activeThemeObj.defaultMsg,
+        shortfallCoins: shortage,
+        recommendedChargeCoins: chargeNeed,
+        createdAt: Date.now(),
+      };
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(PENDING_GIFT_STORAGE_KEY, JSON.stringify(draft));
+      }
+
+      if (onRequestChargeForGift) {
+        onRequestChargeForGift(chargeNeed, draft);
+      } else if (typeof window !== 'undefined') {
+        if (onClose) onClose();
+        window.location.href = `/payment/purchase?tab=charge&chargeCoin=${chargeNeed}&autoGift=1`;
+      }
       return;
     }
 
-    const displayTarget = verifiedRecipient?.displayName || selectedContact?.nickname || rawRecipient;
     const confirmSend = window.confirm(
-      `[🎁 귀신코인 선물 발송 확인]\n\n• 받는 분: ${displayTarget}\n• 선물 코인: ${finalGiftAmount.toLocaleString()} C (귀신팸 전 앱 공용)\n• 응원 메시지: "${giftMessage}"\n\n위 내용으로 선물을 보내시겠습니까?\n(상대방이 수령하기 전까지는 [보낸 선물] 탭에서 언제든 취소·환급 가능합니다.)`
+      `[🎁 귀신코인 선물하기 확인]\n\n• 받는 분: ${displayTarget}\n• 선물 코인: ${finalGiftAmount.toLocaleString()} C (귀신팸 전 앱 공용)\n• 응원 메시지: "${giftMessage}"\n\n위 내용으로 코인을 선물하시겠습니까?\n(상대방이 수령하기 전까지는 [보낸 선물] 탭에서 언제든 취소·환급 가능합니다.)`
     );
     if (!confirmSend) return;
 
     setIsSending(true);
     try {
       const res = await sendGift({
-        receiverEmail: rawRecipient,
-        receiverId: selectedContact?.userId,
-        receiverName: verifiedRecipient?.displayName || selectedContact?.nickname || rawRecipient.split('@')[0],
+        receiverEmail: resolvedEmail,
+        receiverId: resolvedId,
+        receiverName: displayTarget,
         giftTitle: finalGiftTitle,
         giftCategory: 'COIN',
         amount: finalGiftAmount,
@@ -415,6 +623,9 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
         return;
       }
 
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(PENDING_GIFT_STORAGE_KEY);
+      }
       triggerHaptic('success');
       showToast(`🎉 ${displayTarget}님께 ${finalGiftAmount.toLocaleString()}C 선물을 성공적으로 보냈습니다!`, 'info');
       setGiftCoinAmount(0);
@@ -494,91 +705,202 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
   const contentNode = (
     <div
-      className={`w-full ${
+      className={`hub-giftbox-modal w-full ${
         inline
-          ? 'rounded-2xl border-2 border-slate-200 shadow-md'
-          : 'max-w-lg rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 my-auto flex flex-col max-h-[90vh]'
-      } bg-white dark:bg-slate-900 overflow-hidden`}
+          ? 'gh-section-box rounded-2xl border border-slate-300 bg-white p-3.5 sm:p-4 shadow-xs'
+          : 'max-w-lg rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 my-auto flex flex-col max-h-[90vh] bg-white dark:bg-slate-900 overflow-hidden'
+      }`}
+      style={{ fontFamily: "'TmoneyRoundWindExtraBold', 'Cafe24Ssurround', sans-serif" }}
       onClick={e => e.stopPropagation()}
     >
-      {/* 1. 상단 헤더 (썬드리머 표준 1줄 심플 헤더 + 균등 3탭) */}
-      <div className="bg-gradient-to-r from-indigo-900 via-indigo-700 to-amber-600 p-4 sm:p-5 text-white relative shrink-0">
-        {!inline && onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors cursor-pointer"
-            aria-label="선물함 닫기"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
+      <style>{`
+        @font-face {
+          font-family: 'Cafe24Ssurround';
+          src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2105_2@1.0/Cafe24Ssurround.woff') format('woff');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'TmoneyRoundWindExtraBold';
+          src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-07@1.0/TmoneyRoundWindExtraBold.woff') format('woff');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+      `}</style>
 
-        <div className="flex items-center gap-3 pr-8">
-          <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center shadow-inner shrink-0">
-            <Gift className="w-5 h-5 text-amber-200" />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-white">귀신코인 선물함</h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-400/25 border border-amber-300/40 text-amber-200 text-xs font-black tabular-nums">
+      {/* 1. 상단 헤더 (인라인 탭일 때는 충전하기 탭과 100% 동일한 `| 코인 선물함` 작은 제목 스타일로 통일!) */}
+      {inline ? (
+        <div className="mb-2.5">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-slate-300 block"></span>
+              <h2 className="text-sm sm:text-base font-semibold text-slate-600">
+                코인 선물함
+              </h2>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold tabular-nums">
               보유 {coinBalance.toLocaleString()} C
             </span>
           </div>
+
+          <div
+            className="gh-light-tab-bar bg-slate-100 p-1 border border-slate-300 rounded-xl grid grid-cols-3 gap-1"
+            style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveTab('received')}
+              className={
+                activeTab === 'received'
+                  ? 'gh-light-tab rounded-lg py-1.5 px-2 text-xs sm:text-sm font-semibold bg-white text-slate-800 border border-slate-200/90 shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5'
+                  : 'rounded-lg py-1.5 px-2 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer flex items-center justify-center gap-1.5'
+              }
+            >
+              <Inbox className="w-3.5 h-3.5" />
+              <span>받은 선물</span>
+              {unclaimedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white animate-pulse">
+                  {unclaimedCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('sent')}
+              className={
+                activeTab === 'sent'
+                  ? 'gh-light-tab rounded-lg py-1.5 px-2 text-xs sm:text-sm font-semibold bg-white text-slate-800 border border-slate-200/90 shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5'
+                  : 'rounded-lg py-1.5 px-2 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer flex items-center justify-center gap-1.5'
+              }
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>보낸 선물</span>
+              {sentGifts.length > 0 && (
+                <span className="text-[10px] opacity-80">({sentGifts.length})</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('send')}
+              className={
+                activeTab === 'send'
+                  ? 'gh-light-tab rounded-lg py-1.5 px-2 text-xs sm:text-sm font-semibold bg-white text-slate-800 border border-slate-200/90 shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5'
+                  : 'rounded-lg py-1.5 px-2 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer flex items-center justify-center gap-1.5'
+              }
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>코인 선물하기</span>
+            </button>
+          </div>
         </div>
+      ) : (
+        <div className="gh-light-banner bg-gradient-to-r from-indigo-50 via-indigo-100/70 to-blue-50 p-4 sm:p-5 text-indigo-950 border-b border-indigo-200 relative shrink-0">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-white/80 hover:bg-white flex items-center justify-center text-indigo-700 transition-colors cursor-pointer shadow-2xs"
+              aria-label="선물함 닫기"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
 
-        {/* 3-Tab 네비게이션 */}
-        <div className="grid grid-cols-3 gap-1.5 mt-4 bg-black/20 p-1 rounded-2xl">
-          <button
-            type="button"
-            onClick={() => setActiveTab('received')}
-            className={`py-2 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'received'
-                ? 'bg-white text-indigo-900 shadow-sm'
-                : 'text-white/85 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            <Inbox className="w-3.5 h-3.5" />
-            <span>받은 선물</span>
-            {unclaimedCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
-                {unclaimedCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center justify-between gap-3 flex-wrap pr-2">
+            <div className="flex items-center gap-3">
+              <img
+                src={`${hubBaseUrl}/ghosti.png`}
+                onError={e => {
+                  const target = e.currentTarget;
+                  if (target.src !== GHOST_COIN_WINK_BASE64) {
+                    target.src = GHOST_COIN_WINK_BASE64;
+                  }
+                }}
+                alt="귀신코인 아기귀신 로고"
+                className="h-11 w-11 sm:h-12 sm:w-12 object-contain rounded-xl border border-indigo-200 shadow-xs bg-white/80 shrink-0"
+              />
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2
+                    className="text-base sm:text-lg font-bold tracking-wide text-indigo-950"
+                    style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                  >
+                    귀신코인 선물함
+                  </h2>
+                  <span
+                    className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-xs font-bold tabular-nums shadow-2xs"
+                    style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                  >
+                    보유 {coinBalance.toLocaleString()} C
+                  </span>
+                </div>
+                <p className="text-[11px] text-indigo-800/80 font-medium mt-0.5">
+                  귀신팸 모든 앱에서 자유롭게 쓰는 통합 귀신코인 선물
+                </p>
+              </div>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('sent')}
-            className={`py-2 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'sent'
-                ? 'bg-white text-indigo-900 shadow-sm'
-                : 'text-white/85 hover:text-white hover:bg-white/10'
-            }`}
+          <div
+            className="grid grid-cols-3 gap-1.5 mt-3.5 bg-white/75 p-1 rounded-xl border border-indigo-200/80"
+            style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
           >
-            <Clock className="w-3.5 h-3.5" />
-            <span>보낸 선물</span>
-            {sentGifts.length > 0 && (
-              <span className="text-[10px] opacity-75">({sentGifts.length})</span>
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('received')}
+              className={`py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'received'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-950/75 hover:text-indigo-950 hover:bg-white'
+              }`}
+            >
+              <Inbox className="w-3.5 h-3.5" />
+              <span>받은 선물</span>
+              {unclaimedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white animate-pulse">
+                  {unclaimedCount}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('send')}
-            className={`py-2 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'send'
-                ? 'bg-amber-400 text-slate-950 shadow-sm'
-                : 'text-amber-200 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>선물 보내기</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('sent')}
+              className={`py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'sent'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-950/75 hover:text-indigo-950 hover:bg-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>보낸 선물</span>
+              {sentGifts.length > 0 && (
+                <span className="text-[10px] opacity-80">({sentGifts.length})</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('send')}
+              className={`py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'send'
+                  ? 'bg-amber-400 text-slate-950 shadow-xs'
+                  : 'text-indigo-950/80 hover:text-indigo-950 hover:bg-amber-50'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>코인 선물하기</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 2. 본문 컨텐츠 영역 */}
-      <div className={`p-4 sm:p-5 ${inline ? '' : 'overflow-y-auto flex-1'} space-y-4 bg-slate-50/60 dark:bg-slate-900`}>
+      <div className={`${inline ? 'space-y-2.5' : 'p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-2.5 bg-slate-50/70 dark:bg-slate-900'}`}>
         {/* 언박싱 축하 배너 */}
         {unboxedBanner && (
           <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-yellow-50 to-emerald-50 border-2 border-amber-300 shadow-md flex items-center justify-between gap-3 animate-fadeIn">
@@ -618,7 +940,10 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                 <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center mx-auto">
                   <Gift className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-black text-slate-700 dark:text-slate-200">
+                <p
+                  className="text-sm text-slate-700 dark:text-slate-200"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
                   아직 도착한 선물이 없습니다
                 </p>
                 <p className="text-xs text-slate-400">
@@ -627,10 +952,11 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('send')}
-                  className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs transition-all cursor-pointer"
+                  className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs shadow-xs transition-all cursor-pointer"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>선물 보내기</span>
+                  <span>코인 선물하기</span>
                 </button>
               </div>
             ) : (
@@ -745,7 +1071,10 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-400 flex items-center justify-center mx-auto">
                   <Send className="w-5 h-5" />
                 </div>
-                <p className="text-sm font-black text-slate-700 dark:text-slate-200">
+                <p
+                  className="text-sm text-slate-700 dark:text-slate-200"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
                   아직 보낸 선물이 없습니다
                 </p>
                 <p className="text-xs text-slate-400">
@@ -821,12 +1150,15 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
             )}
           </div>
         ) : (
-          /* ================= [탭 3: 🎁 선물 보내기 (전 패밀리 앱 공통 귀신코인 누적 선물)] ================= */
-          <div className="space-y-4">
-            {/* STEP 1: 선물할 귀신코인 선택 (+1,000 / +10,000 누적 컨트롤러) */}
-            <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-3">
+          /* ================= [탭 3: 🎁 코인 선물하기 (전 패밀리 앱 공통 귀신코인 누적 선물)] ================= */
+          <div className="space-y-2.5">
+            {/* STEP 1: 선물할 귀신코인 선택 (충전소와 동일한 아기귀신 + 귀신코인 로고 + 1,000 / 10,000 누적 버튼) */}
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-2">
               <div className="flex items-center justify-between flex-wrap gap-1">
-                <span className="text-xs font-black text-slate-900 dark:text-white">
+                <span
+                  className="text-xs sm:text-sm text-slate-800 dark:text-white"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
                   1️⃣ 선물할 귀신코인 선택
                 </span>
                 <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
@@ -834,27 +1166,47 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                 </span>
               </div>
 
-              {/* 선택된 선물 코인 디스플레이 박스 */}
-              <div className="rounded-2xl bg-gradient-to-r from-indigo-50/90 via-indigo-50/50 to-amber-50/60 dark:from-slate-900 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 px-4 py-3.5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-indigo-100 dark:border-slate-700 flex items-center justify-center text-lg shadow-2xs shrink-0">
-                    👻
+              {/* 🏆 충전소와 일체감 있는 다크 네이비·골드 귀신코인 선물 디스플레이 카드 (세로 폭 30% 여유 확대) */}
+              <div
+                data-keep-dark="true"
+                className="gh-dark-card relative rounded-2xl overflow-hidden border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_8px_20px_rgba(13,18,48,0.35)] bg-gradient-to-b from-[#0d1230] via-[#0f173a] to-[#0a0e27] px-4 py-4 sm:py-5 text-white flex items-center justify-between gap-3"
+                style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex flex-col items-center shrink-0">
+                    <img
+                      src={finalGiftAmount >= 30000 ? GHOST_COIN_HUG_BASE64 : GHOST_COIN_WINK_BASE64}
+                      alt="귀신코인"
+                      className="w-14 h-14 sm:w-16 sm:h-16 object-contain filter drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]"
+                    />
+                    <img
+                      src={GHOST_COIN_TITLE_BASE64}
+                      alt="귀신코인"
+                      className="h-5 sm:h-5.5 w-auto object-contain -mt-1 pointer-events-none select-none"
+                    />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-[11px] font-bold text-indigo-900/70 dark:text-slate-400 block">
+                    <span className="text-xs text-cyan-200 block leading-snug">
                       보내실 귀신코인 (보유 {coinBalance.toLocaleString()} C)
                     </span>
-                    <div className="flex items-baseline gap-1 mt-0.5">
+                    <div className="flex items-baseline gap-1.5 mt-1">
                       <span
-                        className="text-xl sm:text-2xl font-black text-indigo-950 dark:text-white tabular-nums tracking-tight"
-                        style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                        className="text-2xl sm:text-3xl text-amber-300 tabular-nums tracking-wide leading-none"
+                        style={{
+                          filter: 'drop-shadow(0 2px 0 #78350f) drop-shadow(0 3px 8px rgba(251,191,36,0.35))',
+                        }}
                       >
                         {finalGiftAmount.toLocaleString()}
                       </span>
-                      <span className="text-xs sm:text-sm font-black text-indigo-700 dark:text-indigo-300">
+                      <span className="text-sm sm:text-base text-cyan-200">
                         코인 (C)
                       </span>
                     </div>
+                    {isOverBalance && (
+                      <span className="text-[11px] text-amber-300/95 block mt-1 leading-tight">
+                        ⚡ 부족분 {shortfallCoins.toLocaleString()}C는 충전 후 자동 선물됩니다
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -863,7 +1215,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                     <button
                       type="button"
                       onClick={handleSelectAllBalance}
-                      className="px-2.5 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200/80 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-700 text-[11px] font-black text-amber-900 dark:text-amber-300 transition-all cursor-pointer active:scale-95"
+                      className="px-3 py-1.5 rounded-full bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/60 text-xs text-amber-200 transition-all cursor-pointer active:scale-95"
                     >
                       전액
                     </button>
@@ -871,7 +1223,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                   <button
                     type="button"
                     onClick={handleResetGiftCoin}
-                    className="px-2.5 py-1.5 rounded-full bg-white hover:bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-[11px] font-bold text-slate-600 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
+                    className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/25 text-xs text-white transition-all cursor-pointer active:scale-95"
                   >
                     ↺ 0 초기화
                   </button>
@@ -879,183 +1231,203 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
               </div>
 
               {/* ⚡ 1,000 / 10,000 단위 2개 누적 버튼 */}
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => handleAddGiftCoin(1000)}
-                  className="py-3 px-4 rounded-xl bg-slate-50 hover:bg-indigo-50/70 dark:bg-slate-900 dark:hover:bg-slate-800 border-2 border-slate-200 hover:border-indigo-400 dark:border-slate-700 text-slate-800 dark:text-white font-black text-sm sm:text-base transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-2xs"
+                  className="py-2 px-3 rounded-xl bg-slate-50 hover:bg-indigo-50/70 dark:bg-slate-900 dark:hover:bg-slate-800 border-2 border-slate-200 hover:border-indigo-400 dark:border-slate-700 text-slate-800 dark:text-white text-sm transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-1 shadow-2xs"
                   style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   <span className="text-indigo-600 dark:text-indigo-400">+1,000</span>
-                  <span className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">코인</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-300">코인</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAddGiftCoin(10000)}
-                  className="py-3 px-4 rounded-xl bg-slate-50 hover:bg-indigo-50/70 dark:bg-slate-900 dark:hover:bg-slate-800 border-2 border-slate-200 hover:border-indigo-400 dark:border-slate-700 text-slate-800 dark:text-white font-black text-sm sm:text-base transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-2xs"
+                  className="py-2 px-3 rounded-xl bg-slate-50 hover:bg-indigo-50/70 dark:bg-slate-900 dark:hover:bg-slate-800 border-2 border-slate-200 hover:border-indigo-400 dark:border-slate-700 text-slate-800 dark:text-white text-sm transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-1 shadow-2xs"
                   style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   <span className="text-indigo-600 dark:text-indigo-400">+10,000</span>
-                  <span className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">코인</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-300">코인</span>
                 </button>
               </div>
             </div>
 
-            {/* STEP 2: 받는 분 지정 (실시간 자동완성 검색, 높이 100% 고정으로 화면 튐 원천 차단) */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-2 relative">
-              <div className="flex items-center justify-between min-h-[28px]">
-                <span className="text-xs font-black text-slate-900 dark:text-white">
+            {/* STEP 2: 받는 분 지정 (좌측 1/2 자동검색 입력창 + 우측 1/2 결과/드롭다운 1줄 배치) */}
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-1.5 relative">
+              <div className="flex items-center justify-between">
+                <span
+                  className="text-xs sm:text-sm text-slate-800 dark:text-white"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
                   2️⃣ 받는 분
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  입력 즉시 우측에 자동 검색됩니다
                 </span>
               </div>
 
-              <div className="space-y-1.5 relative">
-                <div className="flex items-center gap-1.5">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={recipientInput}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleVerifyRecipient();
-                        }
-                      }}
-                      onChange={e => {
-                        const nextVal = e.target.value;
-                        setRecipientInput(nextVal);
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center relative">
+                {/* 좌측 1/2: 검색 버튼 없는 실시간 자동검색 입력창 */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={recipientInput}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleVerifyRecipient();
+                      }
+                    }}
+                    onChange={e => {
+                      const nextVal = e.target.value;
+                      setRecipientInput(nextVal);
+                      setSelectedContact(null);
+                      setVerifiedRecipient(null);
+                      if (!nextVal.trim()) {
+                        setSearchResults([]);
+                        setIsContactDropdownOpen(false);
+                      }
+                    }}
+                    placeholder="별명 또는 이메일 입력"
+                    className="w-full h-9 pl-8 pr-7 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  {isSearchingRecipients || isVerifyingRecipient ? (
+                    <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2" />
+                  ) : recipientInput ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecipientInput('');
                         setSelectedContact(null);
                         setVerifiedRecipient(null);
-                        if (!nextVal.trim()) {
-                          setSearchResults([]);
-                          setIsContactDropdownOpen(false);
-                        }
+                        setSearchResults([]);
+                        setIsContactDropdownOpen(false);
                       }}
-                      placeholder="별명 또는 이메일 입력 시 자동 검색"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleVerifyRecipient}
-                    disabled={isVerifyingRecipient || !recipientInput.trim()}
-                    className="px-3 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white text-xs font-black shrink-0 flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  >
-                    {isVerifyingRecipient || isSearchingRecipients ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Search className="w-3.5 h-3.5" />
-                    )}
-                    <span>검색</span>
-                  </button>
+                      className="text-slate-400 hover:text-slate-600 absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
+                      aria-label="입력 지우기"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  ) : null}
                 </div>
 
-                {/* 👥 실시간 검색 결과 오버레이 드롭다운 (깜빡임/튐 없는 고정 렌더링) */}
-                {isContactDropdownOpen &&
-                  (() => {
-                    const displayList = searchResults;
+                {/* 우측 1/2: 검색 결과 표시 & 클릭 시 후보 드롭다운 */}
+                <div className="relative">
+                  <button
+                    ref={dropdownBtnRef}
+                    type="button"
+                    onClick={() => {
+                      if (searchResults.length > 0) {
+                        setIsContactDropdownOpen(prev => !prev);
+                      }
+                    }}
+                    className={`w-full h-9 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-1.5 transition-all text-left ${
+                      verifiedRecipient
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800/70 text-emerald-800 dark:text-emerald-300 cursor-pointer'
+                        : searchResults.length > 0
+                        ? 'bg-indigo-50/70 border-indigo-200 text-indigo-800 cursor-pointer'
+                        : 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 cursor-default'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      {verifiedRecipient ? (
+                        <>
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="truncate">{verifiedRecipient.detail}</span>
+                        </>
+                      ) : isSearchingRecipients ? (
+                        <span className="truncate text-indigo-600">회원 찾는 중...</span>
+                      ) : recipientInput.trim() ? (
+                        <span className="truncate text-rose-500">일치하는 회원이 없습니다</span>
+                      ) : (
+                        <span className="truncate">좌측 입력 시 자동 표시</span>
+                      )}
+                    </div>
+                    {searchResults.length > 0 && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-md bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 shrink-0">
+                        {searchResults.length}명
+                        <ChevronDown className="w-3 h-3" />
+                      </span>
+                    )}
+                  </button>
 
-                    if (displayList.length === 0) return null;
-
-                    return (
-                      <div
-                        ref={dropdownBoxRef}
-                        className="absolute left-0 right-0 top-11 z-40 rounded-2xl bg-white dark:bg-slate-800 border-2 border-indigo-500/70 dark:border-indigo-400/70 shadow-2xl overflow-hidden"
-                      >
-                        <div className="px-3 py-2 bg-indigo-50/90 dark:bg-slate-900 border-b border-indigo-100 dark:border-slate-700 flex items-center justify-between">
-                          <span className="text-[11px] font-black text-indigo-900 dark:text-indigo-300 flex items-center gap-1">
-                            <Search className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>검색 결과 ({displayList.length}건)</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setIsContactDropdownOpen(false)}
-                            className="text-[11px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-1.5 py-0.5 rounded cursor-pointer"
-                          >
-                            닫기 ✕
-                          </button>
-                        </div>
-
-                        <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/60">
-                          {displayList.map(c => {
-                            const isSelected = selectedContact?.email === c.email;
-                            return (
-                              <button
-                                key={c.email}
-                                type="button"
-                                onClick={() => handleSelectContactPill(c)}
-                                className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                                  isSelected
-                                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
-                                    : 'hover:bg-indigo-50/60 dark:hover:bg-slate-700/50 text-slate-800 dark:text-slate-100'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="text-xs font-black truncate">👤 {c.nickname}</span>
-                                  <span className="text-[10px] text-slate-400 font-mono truncate">
-                                    ({c.email})
-                                  </span>
-                                </div>
-                                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold shrink-0">
-                                  {c.relation}
+                  {/* 👥 우측 결과창 하단 자동완성 드롭다운 */}
+                  {isContactDropdownOpen && searchResults.length > 0 && (
+                    <div
+                      ref={dropdownBoxRef}
+                      className="absolute left-0 right-0 top-10 z-40 rounded-xl bg-white dark:bg-slate-800 border-2 border-indigo-500/70 dark:border-indigo-400/70 shadow-xl overflow-hidden"
+                    >
+                      <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/60">
+                        {searchResults.map(c => {
+                          const isSelected = selectedContact?.email === c.email;
+                          return (
+                            <button
+                              key={c.email}
+                              type="button"
+                              onClick={() => handleSelectContactPill(c)}
+                              className={`w-full px-3 py-2 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                                  : 'hover:bg-indigo-50/60 dark:hover:bg-slate-700/50 text-slate-800 dark:text-slate-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-xs font-black truncate">👤 {c.nickname}</span>
+                                <span className="text-[10px] text-slate-400 font-mono truncate">
+                                  ({c.email})
                                 </span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                              </div>
+                              {isSelected && (
+                                <span className="text-[10px] text-emerald-600 font-bold shrink-0">선택됨</span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
-                    );
-                  })()}
-
-                {/* 고정 높이(h-8) 수신자 확인 표시줄: 선택/입력 중에도 높이 변화 0px 유지 */}
-                <div
-                  className={`h-8 px-3 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-colors ${
-                    verifiedRecipient
-                      ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800/70 text-emerald-800 dark:text-emerald-300'
-                      : 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500'
-                  }`}
-                >
-                  {verifiedRecipient ? (
-                    <>
-                      <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span className="truncate">{verifiedRecipient.detail}</span>
-                    </>
-                  ) : (
-                    <span className="truncate">
-                      별명 또는 이메일 입력 후 자동완성 목록에서 받으실 분을 선택해 주세요
-                    </span>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
 
             {/* STEP 3: 응원 카드 & 메시지 일체형 */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-2.5">
-              <span className="text-xs font-black text-slate-900 dark:text-white block">
-                3️⃣ 응원 메시지 카드
-              </span>
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span
+                  className="text-xs sm:text-sm text-slate-800 dark:text-white"
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
+                  3️⃣ 응원 메시지 카드
+                </span>
 
-              <div className="grid grid-cols-4 gap-1.5">
-                {THEME_OPTIONS.map(t => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => handleSelectTheme(t)}
-                    className={`py-2 px-1.5 rounded-xl text-[11px] font-black border transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                      selectedTheme === t.id
-                        ? `${t.border} ${t.text} ring-2 ring-offset-1 ring-indigo-500/40`
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{t.emoji}</span>
-                    <span className="truncate">{t.label}</span>
-                  </button>
-                ))}
+                <div className="grid grid-cols-4 gap-1 flex-1 sm:flex-initial">
+                  {THEME_OPTIONS.map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => handleSelectTheme(t)}
+                      className={`py-1 px-2 rounded-lg text-[11px] border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        selectedTheme === t.id
+                          ? `${t.border} ${t.text} ring-1 ring-indigo-500/40`
+                          : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                      }`}
+                      style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                    >
+                      <span>{t.emoji}</span>
+                      <span className="truncate">{t.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* 일체형 선물 카드 입력창 (중복 미리보기 제거) */}
-              <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xs">
-                <div className={`bg-gradient-to-r ${activeThemeObj.gradient} px-3.5 py-2 text-white flex items-center justify-between text-xs font-black`}>
+              {/* 일체형 선물 카드 입력창 */}
+              <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xs">
+                <div
+                  className={`bg-gradient-to-r ${activeThemeObj.gradient} px-3 py-1.5 text-white flex items-center justify-between text-xs`}
+                  style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
+                >
                   <span>
                     {activeThemeObj.emoji} {activeThemeObj.label} · 👻 귀신코인 선물
                   </span>
@@ -1066,7 +1438,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                   value={giftMessage}
                   onChange={e => setGiftMessage(e.target.value)}
                   placeholder="응원 메시지를 입력해 주세요..."
-                  className="w-full p-3 bg-amber-50/40 dark:bg-slate-900/60 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none resize-none block"
+                  className="w-full px-3 py-2 bg-amber-50/40 dark:bg-slate-900/60 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none resize-none block leading-snug"
                 />
               </div>
 
@@ -1074,7 +1446,8 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                 type="button"
                 disabled={isSending}
                 onClick={handleSendGiftSubmit}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-amber-600 hover:from-indigo-700 hover:to-amber-700 text-white font-black text-sm shadow-lg transition-all active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                className="gh-dark-cta w-full py-3 rounded-xl bg-gradient-to-b from-[#1b2554] via-[#131b40] to-[#0b1029] hover:from-[#222f68] hover:to-[#101738] text-white border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_8px_18px_rgba(13,18,48,0.3)] text-sm sm:text-base transition-all active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
               >
                 {isSending ? (
                   <>
@@ -1083,9 +1456,9 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                   </>
                 ) : (
                   <>
-                    <Gift className="w-4 h-4" />
+                    <Gift className="w-4 h-4 text-amber-300" />
                     <span>
-                      {finalGiftAmount.toLocaleString()}C 선물 보내기
+                      {finalGiftAmount > 0 ? `${finalGiftAmount.toLocaleString()}C ` : ''}코인 선물하기
                     </span>
                   </>
                 )}

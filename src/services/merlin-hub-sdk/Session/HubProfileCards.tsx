@@ -37,7 +37,7 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
   const [tempNickname, setTempNickname] = useState('');
   const [tempProfileImage, setTempProfileImage] = useState('');
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
-  const [giftInitialTab, setGiftInitialTab] = useState<'received' | 'sent' | 'send'>('received');
+  const [giftInitialTab, setGiftInitialTab] = useState<'received' | 'sent' | 'send'>('send');
   const [unclaimedGiftCount, setUnclaimedGiftCount] = useState(0);
 
   useEffect(() => {
@@ -211,7 +211,7 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
             <button
               type="button"
               onClick={() => {
-                setGiftInitialTab('received');
+                setGiftInitialTab('send');
                 setIsGiftBoxOpen(true);
               }}
               className="flex items-center gap-3 text-left flex-1 cursor-pointer bg-transparent border-none p-0"
@@ -226,7 +226,7 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm font-black text-slate-900">내 선물함</span>
+                  <span className="text-xs sm:text-sm font-black text-slate-900">코인 선물함</span>
                   {unclaimedGiftCount > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-black">
                       새 선물 {unclaimedGiftCount}개!
@@ -234,7 +234,7 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
                   )}
                 </div>
                 <span className="text-[11px] font-medium text-slate-500">
-                  받은 선물 열기 · 지인에게 분석/코인 선물하기
+                  받은 선물 열기 · 지인에게 코인 선물하기
                 </span>
               </div>
             </button>
@@ -243,12 +243,12 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
               <button
                 type="button"
                 onClick={() => {
-                  setGiftInitialTab('received');
+                  setGiftInitialTab('send');
                   setIsGiftBoxOpen(true);
                 }}
                 className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 text-xs font-extrabold transition-colors cursor-pointer"
               >
-                선물함 열기
+                코인 선물함
               </button>
               <button
                 type="button"
@@ -258,7 +258,7 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
                 }}
                 className="px-2.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black shadow-sm transition-colors cursor-pointer"
               >
-                🎁 선물하기
+                🎁 코인 선물하기
               </button>
             </div>
           </div>
@@ -492,28 +492,6 @@ export interface HubLogoutCardProps {
 
 export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({ onLogout, className = '' }) => {
   const { isLoggedIn } = useHub();
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleAccountDelete = async () => {
-    setDeleting(true);
-    try {
-      const { hubFetch, clearSessionToken } = await import('../CoreLogic/client');
-      await hubFetch('/api/auth/account', { method: 'DELETE' }).catch(() => {});
-      clearSessionToken('global');
-    } catch {}
-    if (typeof window !== 'undefined') {
-      localStorage.clear();
-      sessionStorage.clear();
-      document.cookie = 'merlin_session_token=; path=/; max-age=0;';
-      window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
-      window.dispatchEvent(new Event('profileUpdated'));
-      alert('회원 탈퇴 및 개인정보 파기가 즉시 완료되었습니다.');
-      if (onLogout) onLogout();
-      window.location.href = window.location.origin + '/';
-      setTimeout(() => window.location.reload(), 50);
-    }
-  };
 
   const handleLogout = async () => {
     try {
