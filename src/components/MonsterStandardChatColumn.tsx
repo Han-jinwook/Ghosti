@@ -404,9 +404,16 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         if (turn.clipboardText) {
           void navigator.clipboard?.writeText(turn.clipboardText).catch(() => {});
         }
-        if (turn.needsColdReading && nextState.nickname) {
+        if (nextState.nickname) {
           saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), nextState.nickname));
-          setAwaitingNickname(false);
+          try {
+            localStorage.setItem('userNickname', nextState.nickname);
+          } catch {
+            /* ignore */
+          }
+        }
+        setAwaitingNickname(Boolean(nextState.awaitingNickname));
+        if (turn.needsColdReading && nextState.nickname) {
           const ctx = await collectColdReadingContext();
           const reading = buildColdReadingText(nextState.nickname, ctx);
           replies.push({

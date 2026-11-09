@@ -1920,6 +1920,7 @@ def _toast_worker() -> None:
                         # [우측 상단] 클립보드 보관기간(1일/3일/7일/30일) 원클릭 순환 배지 + [🧹비우기] 버튼
                         cur_cfg = get_superpower_settings()
                         cur_days = int(cur_cfg.get("retention_days", 7))
+                        cur_sound = bool(cur_cfg.get("sound_enabled", True))
                         ret_label_map = {1: "보관: 오늘(1일)", 3: "보관: 3일", 7: "보관: 7일", 30: "보관: 30일"}
 
                         def _on_clear_click(_e=None):
@@ -1995,6 +1996,34 @@ def _toast_worker() -> None:
                             s_preview.config(text=f"✅ 클립보드 보관기간이 [{ret_label_map.get(nxt_d)}]로 변경되었습니다!", fg="#5EEAD4")
 
                         ret_btn.bind("<Button-1>", _cycle_retention)
+
+                        mute_btn = tk.Label(
+                            top_search_bar,
+                            text="🔊" if cur_sound else "🔇",
+                            fg="#5EEAD4" if cur_sound else "#64748B",
+                            bg="#1E293B",
+                            padx=4,
+                            pady=1,
+                            font=("Malgun Gothic", 8, "bold"),
+                            cursor="hand2",
+                        )
+                        mute_btn.pack(side="right", padx=(4, 0))
+
+                        def _toggle_sound_mute(_e=None):
+                            is_hovered[0] = True
+                            now_snd = bool(get_superpower_settings().get("sound_enabled", True))
+                            nxt_snd = not now_snd
+                            update_superpower_settings({"sound_enabled": nxt_snd})
+                            mute_btn.config(
+                                text="🔊" if nxt_snd else "🔇",
+                                fg="#5EEAD4" if nxt_snd else "#64748B",
+                            )
+                            s_preview.config(
+                                text="🔊 애기귀신 소환·효과음이 켜졌습니다!" if nxt_snd else "🔇 애기귀신 소환·효과음이 조용히 꺼졌습니다(무음 모드)!",
+                                fg="#5EEAD4" if nxt_snd else "#FDE047",
+                            )
+
+                        mute_btn.bind("<Button-1>", _toggle_sound_mute)
 
                         # [아랫단] 좌측 정본 마스터 로고([심볼]+[3D 워드마크]) + 우측 2줄 전체 메뉴
                         bottom_bar = tk.Frame(container, bg="#0B1120")
@@ -4724,7 +4753,11 @@ Write-Output $res.Text
             if nCode >= 0:
                 if wParam == WM_RBUTTONDOWN:
                     info = ctypes.cast(lParam, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
-                    ctrl_now = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                    ctrl_now = (
+                        ((u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0)
+                        or ((u32.GetAsyncKeyState(0xA2) & 0x8000) != 0)
+                        or ((u32.GetAsyncKeyState(0xA3) & 0x8000) != 0)
+                    )
                     alt_now = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
                     shift_now = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
                     hwnd_fg = u32.GetForegroundWindow()

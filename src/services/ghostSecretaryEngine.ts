@@ -175,14 +175,81 @@ export function isNo(text: string): boolean {
   return NO_RE.test(text.trim());
 }
 
-/** 별명 답변 정제: "저는 멀린이에요", "멀린이라고 불러줘" → "멀린" */
+/** 별명 답변 정제: "저는 멀린이에요", "멀린이라고 불러줘", "아냐 으노 말고 은호라고 해" → "멀린", "은호" */
 export function sanitizeNicknameAnswer(raw: string): string {
   let s = raw.trim().replace(/[!.~?？！。"'`]+/g, '').trim();
-  s = s.replace(/^(저는|전|나는|난|제\s*이름은|제\s*별명은|별명은)\s*/, '');
-  s = s.replace(/\s*(이라고|라고)\s*(불러\s*(줘|주세요|줘요)?|해\s*(줘|주세요)?)?\s*$/, '');
+  s = s.replace(/^(아냐|아니야|아니|잠깐|저기)\s*,?\s*/, '');
+  s = s.replace(/^.+?\s*말고\s+/, '');
+  s = s.replace(/^(저는|전|나는|난|제\s*이름은|내\s*이름은|제\s*별명은|내\s*별명은|이름은|별명은|호칭은|앞으로는|앞으로|이제부터는|이제부터|그냥|다시)\s*/, '');
+  s = s.replace(/\s*(이라고|라고|으로|로)\s*(불러\s*(줘|주세요|줘요|라)?|해\s*(줘|주세요|줘요|라)?|바꿔\s*(줘|주세요|줘요|라)?|변경\s*(해\s*줘|해\s*주세요|해)?|수정\s*(해\s*줘|해\s*주세요|해)?|저장\s*(해\s*줘|해\s*주세요|해)?)?\s*$/, '');
   s = s.replace(/\s*(이에요|예요|입니다|이야|야|요)$/, '');
   s = s.replace(/님$/, '');
   return s.trim().slice(0, 12);
+}
+
+/**
+ * 별명(호칭) 변경·수정·조회 의도 판별 (무토큰 대본 DB 1단계)
+ * - change: 새 별명이 문장 안에 함께 들어있는 경우 ("아냐 으노 말고 은호라고 해", "은호라고 불러줘", "내 별명 은호로 바꿔줘")
+ * - ask: 별명을 바꾸고 싶다고만 말한 경우 ("별명 바꿀래", "내 이름 수정해줘")
+ * - query: 현재 저장된 내 이름/별명을 물어본 경우 ("내 이름이 뭐야?", "내 별명 기억해?")
+ */
+export function parseNicknameSettingIntent(
+  raw: string
+): { kind: 'change'; newNickname: string } | { kind: 'ask' } | { kind: 'query' } | null {
+  const t = raw.trim();
+  if (!t || t.length > 50) return null;
+  // 파일·폴더 이름 변경 명령과 혼동 방지
+  if (/파일|폴더|사진|문서|여권|\d+\s*번/.test(t)) return null;
+
+  // 1) 내 이름/별명 조회 ("내 이름이 뭐야?", "내 별명 뭐라고 했지?", "나 누구야?")
+  if (
+    /(?:내|제)\s*(?:이름|별명|닉네임|호칭).*?(?:뭐|뭔지|누구|알아|기억|뭐라고)/i.test(t) ||
+    /^(?:내가\s*누구게|나\s*누구야|내\s*이름\s*뭐야|내\s*별명\s*뭐야)\??$/i.test(t)
+  ) {
+    return { kind: 'query' };
+  }
+
+  // 2) "A 말고 B라고 해/불러/바꿔" 또는 "아냐 B라고 해/불러"
+  const malgoMatch = t.match(
+    /(?:말고|아닌|아니고)\s+([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고|으로|로)\s*(?:불러|해|바꿔|변경|수정|할게|할래)/i
+  );
+  if (malgoMatch) {
+    const nick = sanitizeNicknameAnswer(malgoMatch[1]);
+    if (nick && !/^(불러|바꿔|변경|수정|이름|별명|닉네임)$/.test(nick)) {
+      return { kind: 'change', newNickname: nick };
+    }
+  }
+
+  // 3) "(내 이름/별명) B라고 불러줘 / B로 바꿔줘 / B라고 해"
+  const directCallMatch = t.match(
+    /^(?:아냐\s*|아니야\s*|아니\s*)?(?:앞으로는?\s*|이제부터는?\s*)?(?:내\s*이름(?:은|을)?\s*|제\s*이름(?:은|을)?\s*|내\s*별명(?:은|을)?\s*|별명(?:은|을)?\s*|닉네임(?:은|을)?\s*|호칭(?:은|을)?\s*|그냥\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고)\s*(?:불러\s*(?:줘|주세요|줘요|라)?|해\s*(?:줘|주세요|줘요|라)?|할게|할래)[.!~?]*$/i
+  );
+  if (directCallMatch) {
+    const nick = sanitizeNicknameAnswer(directCallMatch[1]);
+    if (nick && !/^(불러|바꿔|변경|수정|이름|별명|닉네임|호칭|뭐|다시)$/.test(nick)) {
+      return { kind: 'change', newNickname: nick };
+    }
+  }
+
+  // 4) "내 별명(이름/닉네임)을 B(으)로 바꿔줘/변경해줘/설정해줘"
+  const explicitChangeMatch = t.match(
+    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:.+?\s*말고\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:으로|로|이라고|라고)\s*(?:바꿔|변경|수정|등록|설정|저장|해)/i
+  );
+  if (explicitChangeMatch) {
+    const nick = sanitizeNicknameAnswer(explicitChangeMatch[1]);
+    if (nick && !/^(불러|바꿔|변경|수정|이름|별명|닉네임|호칭|뭐|다시)$/.test(nick)) {
+      return { kind: 'change', newNickname: nick };
+    }
+  }
+
+  // 5) 새 이름 없이 "별명 바꿔줘", "내 이름 수정할래", "호칭 다시 설정해줘"만 말한 경우
+  if (
+    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)\s*(?:좀\s*)?(?:바꿔|바꿀|변경|수정|다시\s*설정|새로\s*설정)/i.test(t)
+  ) {
+    return { kind: 'ask' };
+  }
+
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -437,15 +504,66 @@ export function resolveGhostSecretaryTurn(
     return { scenarioId: 'mobile_scan_choice_evening', text: '알겠어요! 저녁에 쉬실 때 조용히 해두고, 다음 날 한 번만 채팅으로 알려드릴게요.', nextState: { ...st, mobileRemainingScanChoice: 'evening' } };
   }
 
-  // ① 첫인사 별명 답변
-  if (st.awaitingNickname && !st.nickname) {
+  // ① 첫인사 별명 답변 또는 별명 재설정 대기 중인 경우
+  if (st.awaitingNickname) {
     const nick = sanitizeNicknameAnswer(text);
     if (nick) {
+      const isFirstTime = !st.nickname;
       return {
-        scenarioId: 'nickname_registered',
-        text: `${nick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🪪 귀신계 여권(나)에도 새겨뒀어요!`,
+        scenarioId: isFirstTime ? 'nickname_registered' : 'profile_change_nickname',
+        text: isFirstTime
+          ? `${nick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🪪 귀신계 여권(나)에도 새겨뒀어요!`
+          : renderPlaybookText(findScenario('profile_change_nickname')?.response || '', { nickname: nick }),
         nextState: { ...st, nickname: nick, awaitingNickname: false },
-        needsColdReading: true,
+        needsColdReading: isFirstTime,
+      };
+    }
+  }
+
+  // ①-2 프로필 별명(호칭) 변경·수정·조회 (언제든 무토큰 즉시 반영)
+  const nickIntent = parseNicknameSettingIntent(text);
+  if (nickIntent) {
+    if (nickIntent.kind === 'change') {
+      const newNick = nickIntent.newNickname;
+      const sc = findScenario('profile_change_nickname');
+      saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), newNick));
+      try {
+        localStorage.setItem('userNickname', newNick);
+      } catch {
+        /* ignore */
+      }
+      return {
+        scenarioId: sc?.id || 'profile_change_nickname',
+        text: sc
+          ? renderPlaybookText(sc.response, { nickname: newNick })
+          : `앗, 알겠어요! 앞으로는 『${newNick}』님이라고 꼭 기억해서 불러드릴게요! 프로필과 🪪 귀신계 여권(나) 이름도 『${newNick}』님으로 바로 바꿔뒀어요!`,
+        nextState: { ...st, nickname: newNick, awaitingNickname: false },
+      };
+    }
+    if (nickIntent.kind === 'ask') {
+      const sc = findScenario('profile_ask_new_nickname');
+      return {
+        scenarioId: sc?.id || 'profile_ask_new_nickname',
+        text: sc?.response || '좋아요! 앞으로 제가 뭐라고 불러드리면 될까요? 바꾸고 싶으신 새 별명(호칭)을 편하게 말씀해 주세요!',
+        nextState: { ...st, awaitingNickname: true },
+      };
+    }
+    if (nickIntent.kind === 'query') {
+      const sc = findScenario('profile_query_my_nickname');
+      if (nickname) {
+        return {
+          scenarioId: sc?.id || 'profile_query_my_nickname',
+          text: sc
+            ? renderPlaybookText(sc.response, { nickname })
+            : `지금 제 마음속과 🪪 귀신계 여권(나)에는 『${nickname}』님으로 저장되어 있어요! 다른 이름으로 바꾸고 싶으시면 '은호라고 불러줘'처럼 언제든 말씀해 주세요!`,
+          nextState: st,
+        };
+      }
+      const askFirst = findScenario('ask_nickname_first');
+      return {
+        scenarioId: askFirst?.id || 'ask_nickname_first',
+        text: askFirst?.response || '아직 별명을 안 알려주셨어요! 제가 앞으로 뭐라고 불러드리면 좋을까요?',
+        nextState: { ...st, awaitingNickname: true },
       };
     }
   }
@@ -496,14 +614,53 @@ export function resolveGhostSecretaryTurn(
     if (sc) return { scenarioId: sc.id, text: renderPlaybookText(sc.response, { nickname }), nextState: st };
   }
 
-  // ⑤ 로드맵 키워드 (대본집 text_contains 자동 반영)
+  // ④-2 귀신창 음소거/소리 켜기 즉시 제어 (cmd_unmute_ghost_sound / cmd_mute_ghost_sound 우선 처리)
+  if (/(귀신\s*소리|귀신창\s*소리|소리|효과음|음소거|무음|조용히|시끄러)/.test(text)) {
+    const isUnmute = /켜|음소거\s*해제|다시\s*나게/.test(text);
+    const isMute = !isUnmute && /꺼|끄|음소거|무음|조용히|시끄러|안\s*나게/.test(text);
+    if (isMute || isUnmute) {
+      const sc = findScenario(isMute ? 'cmd_mute_ghost_sound' : 'cmd_unmute_ghost_sound');
+      try {
+        if (typeof fetch !== 'undefined') {
+          void fetch('http://127.0.0.1:5199/api/superpower/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sound_enabled: !isMute }),
+          }).catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
+      if (sc) {
+        return {
+          scenarioId: sc.id,
+          text: renderPlaybookText(sc.response, { nickname }),
+          nextState: st,
+        };
+      }
+    }
+  }
+
+  // ⑤ 로드맵 및 앱 설정 키워드 (대본집 text_contains 자동 반영)
   for (const list of Object.values(GHOST_SECRETARY_PLAYBOOK.categories)) {
     for (const sc of list) {
       if (sc.id === 'impatient_user_wants_search_now') continue;
       if (sc.id.startsWith('faq_') && CARE_COMMAND_RE.test(text)) continue;
       const kws = extractTextContainsKeywords(sc.trigger);
       if (kws.length && kws.some((k) => text.includes(k))) {
-        return { scenarioId: sc.id, text: renderPlaybookText(sc.response, { nickname }), nextState: st };
+        const isTurnOff = /꺼|끄|해제|중지|안\s*받|안\s*할/.test(text);
+        const toggleState = isTurnOff ? 'OFF(해제)' : 'ON(켜짐)';
+        let updatedState = st;
+        if (sc.id === 'settings_labeler_toggle') {
+          updatedState = { ...st, consents: { ...(st.consents || {}), labeler: !isTurnOff } };
+        } else if (sc.id === 'settings_son_free_day_toggle') {
+          updatedState = { ...st, consents: { ...(st.consents || {}), sonFreeAndSpeedAlert: !isTurnOff } };
+        }
+        return {
+          scenarioId: sc.id,
+          text: renderPlaybookText(sc.response, { nickname, toggle_state: toggleState }),
+          nextState: updatedState,
+        };
       }
     }
   }

@@ -694,8 +694,8 @@ export async function callMonsterLowCostLlmJson(params: {
     `[현재 유저 입력 (${sourceTab === 'trash' ? '🧹 치우기 탭' : '⚙️ 고치기 탭'})]`,
     `"${query}"`,
     '',
-    '[절대 준수 4대 화법 및 아키텍처 원칙 — 비서 존댓말 · 군더더기 0% · 잡담 정중 거절 · JSON 기능 분리]',
-    '1. [일상 잡담 정중 거절 (비용 절감)]: PC 정리(치우기)·수리(고치기)·파일 복구·사양 진단과 무관한 일상 잡담(날씨, 기분, 반려동물, 농담, 상식 등)에는 일일이 맞장구치지 마세요. 반드시 "intent": "GENERAL_CONVERSATION", "zCoreCommand": { "endpoint": "NONE", "action": "POLITE_DECLINE", "params": {} }로 설정하고, replyKo에는 "죄송합니다만 저는 PC 정리·수리 전담 비서라 일상 대화는 답변드리기 어렵습니다. 기기 정리나 수리가 필요하실 때 말씀해 주세요."라고 정중히 거절하세요.',
+    '[절대 준수 4대 화법 및 아키텍처 원칙 — 비서 존댓말 · 군더더기 0% · 범위 밖 질문 외부 바통터치 · JSON 기능 분리]',
+    '1. [귀신비서 답변 범위(우리 앱·기기·설정·검색·초능력) vs 범위 밖 외부 바통터치]: 우리 앱(귀신같이/귀신창/귀신검색/귀신계 여권/상용구/요금제/연동/설정)이나 PC·스마트폰 정리·수리·파일 복구·사양 진단과 관련된 질문에는 친절하고 정확하게 답변하세요. 반면 우리 앱과 무관한 일반 상식, 일상 잡담, 작문, 번역, 법률/세무 등 귀신비서의 답변 범위를 벗어나는 질문이면 차갑게 거절하지 말고, 반드시 "intent": "BATON_TOUCH_CUTOFF", "zCoreCommand": { "endpoint": "NONE", "action": "OUT_OF_SCOPE_BATON_TOUCH", "params": {} }로 설정하고, replyKo에는 "이 질문은 귀신비서의 답변 범위를 넘어서는 내용이라 말씀하신 대화 내용을 클립보드에 미리 복사해 두었습니다. 아래 버튼을 누르시면 외부 AI로 바로 점프해서 답변받으실 수 있습니다."라고 안내하세요.',
     '2. [과한 인사치레·호들갑 절대 금지]: "어휴~", "정말 좋은 생각이에요!", "제가 귀신같이 비서인데 걱정 마세요!" 같은 수다스러운 인사치레와 자기소개를 절대 쓰지 마세요. 공감은 딱 한두 단어("충분히 가능하십니다.", "답답하셨겠습니다.", "새로 안 사셔도 됩니다.")만 하고 즉시 본론(기능 및 실측 수치)으로 들어가세요.',
     '3. [비서 같은 신뢰감 있는 존댓말 고정]: 유저가 반말("정리해 줄래?", "고마워")로 말해도 절대 반말("응!", "해줄게")을 쓰지 말고, 항상 정중하고 간결한 비서 존댓말("~입니다", "~해 드리겠습니다")로 총 1~2문장 이내로 심플하게 답하세요.',
     '4. [기능은 JSON으로만 완전 분리 & 임의 삭제 표현 금지]: 말풍선(replyKo)은 군더더기 없이 심플하게 끝내고, 실제 실행할 기능은 JSON의 intent와 zCoreCommand에 분리 주입하세요. 폴더·설치파일 정리 시 "자동으로 삭제해 드리겠습니다"라고 하지 말고 "정리 대상 파일 목록을 먼저 스캔해 보여드리겠습니다."라고 안내하세요.',
@@ -1235,8 +1235,8 @@ ${payload.summaryText}`, {
   }
 
   // 4) 귀신창(Ghost Window) 소리 / 노출 시간 / 한영 오타 자동변환 설정 변경
-  if (/(귀신창|애기귀신|효과음|초능력\s*소리).*?(꺼|켜|음소거|무음)/i.test(clean)) {
-    const turnOn = /켜|활성|다시/.test(clean) && !/꺼|음소거|무음/.test(clean);
+  if (/(귀신창|귀신\s*소리|애기귀신|효과음|초능력\s*소리|음소거|무음|조용히).*?(꺼|켜|음소거|무음|해제|해줘|해주세요)/i.test(clean) && !/스피커|블루투스|윈도우\s*소리/i.test(clean)) {
+    const turnOn = /켜|활성|다시|음소거\s*해제/.test(clean) && !/꺼|무음|조용히/.test(clean);
     try {
       await fetch(getZCoreUrl('/api/superpower/settings'), {
         method: 'POST',
@@ -2312,16 +2312,30 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
   }
 
-  // 0-A) 명백한 일상 잡담(PC·파일·설정 키워드 전무)은 LLM 토큰 소모(비용 낭비) 없이 0원으로 즉시 정중히 거절 안내
-  const hasAnyPcOrFileCue =
-    /컴퓨터|피씨|pc|노트북|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|화면|글씨|주사율|팝업|광고|보안|시작프로그램|부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|먹통|멈춤|꺼졌/i.test(
+  // 0-A) 우리 앱·기기·설정 키워드와 무관한 범위 밖 질문은 차갑게 거절하지 않고
+  //      3단계 원칙에 따라 대화 내용을 클립보드에 복사해 두고 외부 AI로 바로 점프시켜 주는 버튼을 제공합니다 (무토큰 0원).
+  const hasAnyAppOrPcCue =
+    /귀신|여권|라벨러|초능력|상용구|별명|닉네임|호칭|프로필|계정|로그인|가입|동기화|연동|요금|구독|결제|환불|해지|특판|무료|유료|모임|라운지|문패|캐스트|리모컨|싱크|알림|검진|손없는\s*날|손\s*없는\s*날|단축키|우클릭|ctrl|컨트롤|클립보드|복사|붙여넣기|오타|한영|서식|줄바꿈|합본|ocr|컴퓨터|피씨|pc|노트북|스마트폰|휴대폰|폰|갤러리|사진첩|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|음성|목소리|화면|글씨|글자|테마|다크|라이트|주사율|팝업|광고|보안|백신|바이러스|랜섬웨어|디펜더|시작프로그램|부팅|재부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|검색|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|버그|먹통|멈춤|꺼졌|스튜디오|문의|건의|제안|아이디어/i.test(
       clean
     );
-  if (!hasAnyPcOrFileCue) {
-    const politeDecline =
-      '죄송합니다만 저는 기기 손보기(정리·수리·검진)를 전담하는 비서라 일상 대화는 답변드리기 어렵습니다. 아래처럼 기기 점검이나 정리·복구가 필요하실 때 편하게 말씀해 주세요.';
-    speak(politeDecline);
-    return reply(sourceTab, `💬 ${politeDecline}`, {
+  if (!hasAnyAppOrPcCue) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(clean).catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+    const outOfScopeMsg =
+      '이 질문은 귀신비서의 답변 범위를 넘어서는 내용이라 말씀하신 대화 내용을 클립보드에 미리 복사해 두었어요! 아래 버튼을 누르시면 평소 쓰시는 외부 AI(제미나이 등)로 바로 점프해서 답변받으실 수 있어요.';
+    speak(outOfScopeMsg);
+    return reply(sourceTab, `💬 ${outOfScopeMsg}`, {
+      cardKind: 'BATON_TOUCH_CUTOFF',
+      batonTouchPayload: {
+        docTitle: '귀신비서 대화 내용 외부 AI 연결',
+        docText: clean,
+        userQuestion: clean,
+      },
       followUpSuggestions: [
         '내 컴퓨터 사양으로 영상편집이나 게임 잘 돌아가는지 봐줘',
         '다운로드 폴더 방치된 설치파일 정리해 줘',
@@ -3121,13 +3135,20 @@ export async function processUnifiedMonsterChatQuery(params: {
       ? resolveTargetDocAndBuildFactAnswer(store.localDocuments, clean).matchedDoc
       : null;
 
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(matchedDoc?.extractedText ? `${matchedDoc.extractedText}\n\n[질문]\n${clean}` : clean).catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
     return reply(
       sourceTab,
-      `${llmIntro}${RED_LINES_TEXT}\n\n🤝 이 질문은 귀신같이 무료 로컬 수리·검색 범위를 넘는 고난도 상담 질문입니다. ${
+      `${llmIntro}🤝 이 질문은 귀신비서의 답변 범위를 넘어서는 내용이라 ${
         matchedDoc
-          ? `찾으신 문서(**${matchedDoc.fileName}**) 본문과 질문을`
-          : '내 기기 실시간 진단 스펙 데이터와 질문을'
-      } 클립보드에 자동 세팅하고, 평소 쓰시는 **단골 AI(기본: Google Gemini)** 라이브 음성 상담 창으로 바로 연결해 드립니다.`,
+          ? `찾으신 문서(**${matchedDoc.fileName}**) 본문과 대화 내용을`
+          : '말씀하신 대화 내용을'
+      } 클립보드에 미리 복사해 두었어요! 아래 버튼을 누르시면 평소 쓰시는 **단골 AI(기본: Google Gemini)**로 바로 점프해서 답변받으실 수 있어요.`,
       {
         cardKind: 'BATON_TOUCH_CUTOFF',
         batonTouchPayload: {
