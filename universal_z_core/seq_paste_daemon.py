@@ -4929,17 +4929,43 @@ Write-Output $res.Text
             pass
         return False
 
+    def _broadcast_cancelmode_tree(hwnd_top: int | None) -> None:
+        if not hwnd_top or not u32.IsWindow(hwnd_top):
+            return
+        try:
+            u32.PostMessageW(hwnd_top, WM_CANCELMODE, 0, 0)
+            h_root = u32.GetAncestor(hwnd_top, 2)  # GA_ROOT = 2
+            if h_root and h_root != hwnd_top:
+                u32.PostMessageW(h_root, WM_CANCELMODE, 0, 0)
+            top_cand = h_root or hwnd_top
+            WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+            def _child_cb(hc: int, _lp: int) -> bool:
+                u32.PostMessageW(hc, WM_CANCELMODE, 0, 0)
+                return True
+
+            u32.EnumChildWindows(top_cand, WNDENUMPROC(_child_cb), 0)
+        except Exception:
+            pass
+
     def _release_target_rbutton_stuck(hwnd_target: int | None, pt_x: int | None = None, pt_y: int | None = None) -> None:
         """
-        비동기 PostMessageW(WM_CANCELMODE)만 사용하여 타깃 스레드/커널 블로킹(WindowFromPoint 교착)을 0%로 원천 차단
+        비동기 PostMessageW(WM_CANCELMODE)를 타깃 창과 모든 자식 컨트롤(SHELLDLL_DefView / SysListView32 / Chrome_RenderWidgetHostHWND)에
+        즉시 브로드캐스트하여, 0.35초 홀드 달성 시점 및 홀드 유지 중에 OS 기본 우클릭 메뉴가 아예 생성되지 않도록 원천 차단!
         """
         try:
-            target = hwnd_target or u32.GetForegroundWindow()
-            if target:
-                u32.PostMessageW(target, WM_CANCELMODE, 0, 0)
-                hwnd_root = u32.GetAncestor(target, 2)  # GA_ROOT = 2
-                if hwnd_root and hwnd_root != target:
-                    u32.PostMessageW(hwnd_root, WM_CANCELMODE, 0, 0)
+            fg_h = u32.GetForegroundWindow()
+            _broadcast_cancelmode_tree(hwnd_target)
+            if fg_h and fg_h != hwnd_target:
+                _broadcast_cancelmode_tree(fg_h)
+            WM_CLOSE = 0x0010
+            MN_CANCELMENUS = 0x01E6
+            for menu_cls in ("#32768", "Xaml_WindowedPopupClass"):
+                h_menu = u32.FindWindowW(menu_cls, None)
+                if h_menu:
+                    u32.PostMessageW(h_menu, MN_CANCELMENUS, 0, 0)
+                    u32.PostMessageW(h_menu, WM_CANCELMODE, 0, 0)
+                    u32.PostMessageW(h_menu, WM_CLOSE, 0, 0)
         except Exception:
             pass
 
@@ -4963,10 +4989,7 @@ Write-Output $res.Text
                     fg_now = u32.GetForegroundWindow()
                     for h_cand in (hwnd_target, fg_now):
                         if h_cand:
-                            u32.PostMessageW(h_cand, WM_CANCELMODE, 0, 0)
-                            h_root = u32.GetAncestor(h_cand, 2)
-                            if h_root and h_root != h_cand:
-                                u32.PostMessageW(h_root, WM_CANCELMODE, 0, 0)
+                            _broadcast_cancelmode_tree(h_cand)
                     for menu_cls in ("#32768", "Xaml_WindowedPopupClass"):
                         h_menu = u32.FindWindowW(menu_cls, None)
                         if h_menu:
@@ -5083,6 +5106,9 @@ Write-Output $res.Text
                             if (now - last_summon_ts) > 0.25:
                                 last_summon_ts = now
                                 trigger_master_summon()
+                    elif _RBTN_HOLD_STATE.get("triggered"):
+                        # 우클릭 0.35초 소환 후 버튼을 계속 누르고 있는 동안에도 OS 기본 메뉴가 늦게 뜨지 않도록 즉시 억제
+                        _release_target_rbutton_stuck(_RBTN_HOLD_STATE.get("target_hwnd"))
                 elif not rbtn_phys_now and was_rbtn_phys:
                     _RBTN_HOLD_STATE["active"] = False
                     if _RBTN_HOLD_STATE.get("dismiss_context_menu_on_up"):
