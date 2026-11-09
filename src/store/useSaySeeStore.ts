@@ -1101,8 +1101,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set({ themeMode: 'light' });
   },
   layout: 'desktop',
-  mobileTab: 'search',
-  desktopTab: 'dashboard',
+  mobileTab: 'trash',
+  desktopTab: 'trash',
   setLayout: (layout) => set({ layout }),
   setMobileTab: (mobileTab) => {
     set({
@@ -4506,16 +4506,21 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       const activeLoungeType: LoungeType =
         requestedLoungeType === 'student' ? 'club' : requestedLoungeType;
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
+      const isSwitchingLounge = state.activeLoungeType !== activeLoungeType;
       return {
         activeLoungeType,
         activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
-        // 해당 라운지가 이미 구독 중이면 [✨ 공유 시작] 탭이 숨김 처리되므로 파워 검색 탭으로 이동
+        // 내 기기(personal) 진입 시 1관문인 '귀신비서(trash)'가 기본 노출되며, 공유 라운지 구독 중이면 [✨ 공유 시작] 대신 메인 피드로 이동
         desktopTab:
-          isTargetLoungeSubscribed && state.desktopTab === 'trial'
+          isSwitchingLounge && activeLoungeType === 'personal'
+            ? 'trash'
+            : isTargetLoungeSubscribed && state.desktopTab === 'trial'
             ? 'dashboard'
             : state.desktopTab,
         mobileTab:
-          isTargetLoungeSubscribed && state.mobileTab === 'trial'
+          isSwitchingLounge && activeLoungeType === 'personal'
+            ? 'trash'
+            : isTargetLoungeSubscribed && state.mobileTab === 'trial'
             ? 'search'
             : state.mobileTab,
         // 방 진입 시 기본 탭은 무조건 [🎞️ 응답하라 1989 (추억)]으로 고정

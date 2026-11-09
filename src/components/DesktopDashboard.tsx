@@ -552,10 +552,12 @@ export const DesktopDashboard: React.FC = () => {
             themeMode={themeMode}
             showBadge={true}
             onClick={() => {
+              setIsDeviceIntegrationOpen(false);
               setActiveLoungeType('personal');
-              setDesktopTab('dashboard');
+              setDesktopTab('trash');
               resetToZenCanvas();
               if (isMobileDrawer) setIsMobileDrawerOpen(false);
+              else scrollAppToTop();
             }}
           />
 
@@ -1014,9 +1016,11 @@ export const DesktopDashboard: React.FC = () => {
                       themeMode={themeMode}
                       showBadge={true}
                       onClick={() => {
+                        setIsDeviceIntegrationOpen(false);
                         setActiveLoungeType('personal');
-                        setDesktopTab('dashboard');
+                        setDesktopTab('trash');
                         resetToZenCanvas();
+                        scrollAppToTop();
                       }}
                       className="hidden lg:inline-flex mr-1"
                     />
@@ -1027,8 +1031,9 @@ export const DesktopDashboard: React.FC = () => {
                   themeMode={themeMode}
                   showBadge={true}
                   onClick={() => {
+                    setIsDeviceIntegrationOpen(false);
                     setActiveLoungeType('personal');
-                    setDesktopTab('dashboard');
+                    setDesktopTab('trash');
                     resetToZenCanvas();
                     scrollAppToTop();
                   }}
@@ -1094,7 +1099,8 @@ export const DesktopDashboard: React.FC = () => {
                     onClick={() => {
                       // 이미 사진 공유(패밀리/동호회·동창회) 안에 있으면 현재 하위 선택 유지
                       if (!active) setActiveLoungeType(menu.defaultLounge);
-                      setDesktopTab('dashboard');
+                      setIsDeviceIntegrationOpen(false);
+                      setDesktopTab(menu.id === 'personal' ? 'trash' : 'dashboard');
                       resetToZenCanvas();
                     }}
                     className={`py-1.5 px-1 rounded-full font-label-md text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap cursor-pointer ${

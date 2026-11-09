@@ -142,8 +142,9 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   Array<{ id: MobileTab; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
   personal: [
-    { id: 'search', label: '🔍 찾기', subcaption: '제목 몰라도 1초 검색' },
-    { id: 'trash', label: '✋ 손보기', subcaption: '정리 · 수리 · 복원', showTrashCount: true },
+    // [v1.3] 1순위 귀신비서(손보기·여권·채팅) → 2순위 귀신검색(찾기)
+    { id: 'trash', label: '👻 귀신비서', subcaption: '손보기 · 여권 · 채팅', showTrashCount: true },
+    { id: 'search', label: '👻 귀신검색', subcaption: '제목 몰라도 1초 검색' },
     { id: 'share', label: '👨‍👩‍👧‍👦 공유', subcaption: '가족 · 모임 · 업무 공유' },
   ],
   family: [
@@ -310,7 +311,7 @@ export const MobileAppView: React.FC = () => {
                 subtitle=""
                 onClick={() => {
                   setActiveLoungeType('personal');
-                  setMobileTab('search');
+                  setMobileTab('trash');
                   useSaySeeStore.setState({
                     hasExecutedUserSearch: false,
                     hasUserSelectedSearchTab: false,
