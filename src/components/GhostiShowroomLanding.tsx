@@ -60,7 +60,7 @@ const COMBO_JUNG: Record<string, string> = {
 
 const COMBO_JONG: Record<string, string> = {
   'ㄱㅅ': 'ㄳ', 'ㄴㅈ': 'ㄵ', 'ㄴㅎ': 'ㄶ',
-  'ㄹㄱ': 'ㄺ', 'ㄹㅁ': 'ㄻ', 'ㄹㅂ': 'ㄼ', 'ㄹㅅ': 'ㄽ', 'ㄹㅌ': 'ㄹㅌ', 'ㄹㅍ': 'ㄿ', 'ㄹㅎ': 'ㅀ',
+  'ㄹㄱ': 'ㄺ', 'ㄹㅁ': 'ㄻ', 'ㄹㅂ': 'ㄼ', 'ㄹㅅ': 'ㄽ', 'ㄹㅌ': 'ㄾ', 'ㄹㅍ': 'ㄿ', 'ㄹㅎ': 'ㅀ',
   'ㅂㅅ': 'ㅄ',
 };
 
@@ -364,10 +364,10 @@ const WEAPON_META: Record<
   clean: {
     chipLabel: '🧹 눈 뜬 사진 1장만 Pick',
     keywordBadge: '#귀신비서',
-    userBubble: '비슷한 연사 사진 중에 눈 뜬 베스트 1장만 남기고 미사용 보안프로그램도 청소해 줘!',
+    userBubble: '비슷한 연사 사진 중에 눈 뜬 베스트 1장만 남기고, 안 쓰는 은행 보안프로그램은 조용히 재워줘!',
     secretaryReply:
-      '눈 감고 흔들린 연사 사진은 걸러서 가장 잘 나온 베스트 1장만 남겨드리고, 나머지는 Windows 정식 휴지통으로 안전 격리해 드려요! 오른쪽에서 [✨ 베스트 1장만 남기고 정리]와 [↩️ 1초 타임머신 복원]을 직접 눌러보세요!',
-    stageTitle: '🧹 눈 뜬 인생샷 1장 Pick & 1초 타임머신 안전 대청소',
+      '눈 감고 흔들린 연사 사진은 걸러서 가장 잘 나온 베스트 1장만 남겨드리고(나머지는 Windows 정식 휴지통 안전 격리), 안 쓰는 은행 보안프로그램은 삭제하지 않고 평소엔 조용히 재워두었다가 은행 갈 때만 자동 기상시켜 드려요!',
+    stageTitle: '🧹 눈 뜬 인생샷 1장 Pick & 보안모듈 수면 관리 (1초 복원)',
     stageBadge: '무기 3 · #귀신비서 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc558_261106.mp4',
   },
@@ -552,6 +552,24 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     }, 200);
   };
 
+  // superpower 탭 진입 시 먼저 영타 원문을 보여준 뒤 400ms 후 자동으로 무버튼 변환 시연
+  useEffect(() => {
+    if (demoTab !== 'superpower') return;
+    const defaultRaw = 'dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.';
+    setTypoOriginalBackup(defaultRaw);
+    setTypoInput(defaultRaw);
+    setTypoConverted(false);
+    const timer = setTimeout(() => {
+      const converted = convertEngTypoToKor(defaultRaw)
+        .replace(/\n{2,}/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+      setTypoInput(converted);
+      setTypoConverted(true);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [demoTab]);
+
   const handleTypoInputChange = (val: string) => {
     if ((val.endsWith(' ') || val.endsWith('\n')) && !typoInput.endsWith(' ')) {
       const converted = convertEngTypoToKor(val)
@@ -700,7 +718,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
               <img
-                src="/gwisinkachi_3d_wordmark_dark.png"
+                src="/gwisinkachi_3d_wordmark_light.png"
                 alt="귀신같이 3D 로고"
                 className="h-10 w-auto object-contain drop-shadow-[0_2px_12px_rgba(0,240,181,0.4)]"
               />
@@ -903,9 +921,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       )}
                     </div>
                     <div
+                      data-keep-dark={isUser ? 'true' : undefined}
+                      style={isUser ? { backgroundColor: '#0D9488', color: '#FFFFFF' } : undefined}
                       className={`max-w-[94%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line shadow-sm break-keep ${
                         isUser
-                          ? 'bg-emerald-500 text-white rounded-tr-sm border border-emerald-600 font-bold'
+                          ? 'bg-teal-600 text-white rounded-tr-sm border border-teal-500 font-bold'
                           : 'bg-zinc-900 border border-white/10 text-zinc-100 rounded-tl-sm font-medium'
                       }`}
                     >
@@ -1150,8 +1170,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <h4 className="text-sm sm:text-base font-black text-white">
                           🧹 연속 촬영한 비슷한 사진 6장 중 눈 뜬 『베스트 1장』만 남기기
                         </h4>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          나머지 흔들리거나 눈 감은 5장은 <b>Windows 정식 휴지통($Recycle.Bin)</b>에 보호 격리되어 1초 만에 복원됩니다.
+                        <p className="text-xs text-zinc-400 mt-0.5 break-keep">
+                          흔들린 5장은 <b>Windows 정식 휴지통($Recycle.Bin)</b>에 안전 격리되어 1초 만에 복원되며, 안 쓰는 은행 보안프로그램은 삭제하지 않고 평소엔 조용히 재워두었다가 은행 갈 때만 자동 기상시킵니다.
                         </p>
                       </div>
                       <button
@@ -1773,9 +1793,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
             <img
-              src="/gwisinkachi_3d_wordmark_dark.png"
+              src="/gwisinkachi_3d_wordmark_light.png"
               alt="귀신같이 3D 로고"
-              className="h-7 w-auto object-contain opacity-80"
+              className="h-7 w-auto object-contain opacity-90"
             />
             <p className="font-bold text-zinc-400">
               (주)썬드림 · 온디바이스 로컬 AI 『귀신같이(Ghosti)』 · 상표출원 제40-2026-0229386호 · Zero-Server 프라이버시 보장
