@@ -31,7 +31,7 @@ export const GHOST_SECRETARY_AVATAR_SRC =
   (playbookJson as { persona?: { avatar?: string } }).persona?.avatar || '/gwisinkachi_app_icon_512.png';
 
 /** 손보기 명령 문장 판별 — '보안프로그램 정리해줘' 같은 실행 요청이 FAQ(보안·요금) 키워드에 가로채이지 않도록 보호 */
-const CARE_COMMAND_RE = /(정리|지워|삭제|청소|검진|느려|느린|빨라|고쳐|치워|꺼줘|최적화|점검해)/;
+const CARE_COMMAND_RE = /(정리|지워|삭제|청소|검진|느려|느린|빨라|고쳐|치워|꺼줘|최적화|점검해|사양|스펙|상태\s*봐|진행해|실행해|적출|언인스톨)/;
 export const GHOST_SECRETARY_NAME = '귀신비서';
 
 export function findScenario(id: string, pb: GhostSecretaryPlaybook = GHOST_SECRETARY_PLAYBOOK): PlaybookScenario | null {
@@ -554,8 +554,13 @@ export function resolveGhostSecretaryTurn(
     return { scenarioId: 'mobile_scan_choice_evening', text: '알겠어요! 저녁에 쉬실 때 조용히 해두고, 다음 날 한 번만 채팅으로 알려드릴게요.', nextState: { ...st, mobileRemainingScanChoice: 'evening' } };
   }
 
-  // ① 첫인사 별명 답변 또는 별명 재설정 대기 중인 경우
-  if (st.awaitingNickname) {
+  const isCareActionApprovalText =
+    /(진행|실행|정리|복구|복원|치워|꺼\s*줘|고쳐|되돌|원복|원래대로|승인|동의|지워|삭제|적출|언인스톨|사양|스펙|상태\s*봐|느려|느린|버벅|애드웨어)/i.test(
+      text
+    );
+
+  // ① 첫인사 별명 답변 또는 별명 재설정 대기 중인 경우 (단, 손보기·사양진단·승인 명령은 별명으로 오인식하지 않고 즉시 손보기 라우터로 통과)
+  if (st.awaitingNickname && !isCareActionApprovalText && !CARE_COMMAND_RE.test(text) && text.length <= 16) {
     const nick = sanitizeNicknameAnswer(text);
     if (nick) {
       const isFirstTime = !st.nickname;
@@ -639,7 +644,6 @@ export function resolveGhostSecretaryTurn(
   }
 
   // ③ 홀림 퀘스트 응답 (단, '응 진행해', '응 정리해줘', '응 복구해줘' 같은 손보기 실행/원복 승인 명령은 손보기 라우터가 우선 처리하도록 제외)
-  const isCareActionApprovalText = /(진행|실행|정리|복구|복원|치워|꺼\s*줘|고쳐|되돌|원복|원래대로|승인|동의)/i.test(text);
   if (
     !isCareActionApprovalText &&
     st.questStep &&
