@@ -1617,11 +1617,11 @@ def record_feature_telemetry(feature_key: str) -> None:
 
 
 def build_ghost_search_window_url(stage: str = "small", query: str = "", base_url: str | None = None) -> str:
-    """로컬 3단 변신 『👻 귀신검색창』 전용 라우트 URL 생성 (?dev=true&preview=legacy&ghostSearchWindow=small|medium|large&q=...)"""
+    """로컬 3단 변신 『👻 귀신검색창』 전용 라우트 URL 생성 (?preview=legacy&ghostSearchWindow=small|medium|large&q=...)"""
     from urllib.parse import quote
     norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
     root_u = (base_url or GHOSTI_WEB_URL).rstrip("/")
-    url = f"{root_u}/?dev=true&preview=legacy&ghostSearchWindow={norm_stage}"
+    url = f"{root_u}/?preview=legacy&ghostSearchWindow={norm_stage}"
     q_clean = (query or "").strip()
     if q_clean:
         url += f"&q={quote(q_clean)}"
@@ -2020,7 +2020,10 @@ def _toast_worker() -> None:
     def _apply_win_topmost(win: tk.Toplevel, x: int, y: int, rw: int, rh: int, activate: bool = False) -> None:
         win.geometry(f"{rw}x{rh}{x:+d}{y:+d}")
         try:
-            hwnd_t = win.winfo_id()
+            win.update_idletasks()
+            win.deiconify()
+            wid = win.winfo_id()
+            hwnd_t = u32.GetParent(wid) or wid if wid else 0
             if hwnd_t:
                 ex_st = u32.GetWindowLongW(hwnd_t, GWL_EXSTYLE)
                 if activate:
@@ -2392,12 +2395,16 @@ def _toast_worker() -> None:
             rbtn_down = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
             ctrl_held = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
             mouse_down = lbtn_down or (rbtn_down and not ctrl_held)
-            if mouse_down and not was_mouse_down[0] and current_win[0] is not None:
-                if (time.time() - opened_at[0]) > 0.45:
-                    pt_click = wintypes.POINT()
-                    u32.GetCursorPos(ctypes.byref(pt_click))
-                    wx1, wy1, wx2, wy2 = win_rect[0]
-                    if not (wx1 <= pt_click.x <= wx2 and wy1 <= pt_click.y <= wy2):
+            if current_win[0] is not None:
+                pt_click = wintypes.POINT()
+                u32.GetCursorPos(ctypes.byref(pt_click))
+                wx1, wy1, wx2, wy2 = win_rect[0]
+                inside_rect = (wx1 <= pt_click.x <= wx2 and wy1 <= pt_click.y <= wy2)
+                if is_hovered[0] and not inside_rect:
+                    _schedule_close(5500)
+                is_hovered[0] = inside_rect
+                if mouse_down and not was_mouse_down[0]:
+                    if (time.time() - opened_at[0]) > 0.45 and not inside_rect:
                         _close_win()
             was_mouse_down[0] = mouse_down
 
@@ -2412,7 +2419,8 @@ def _toast_worker() -> None:
                 elif message == "__LIFT__":
                     if current_win[0] is not None:
                         try:
-                            hwnd_t = current_win[0].winfo_id()
+                            wid = current_win[0].winfo_id()
+                            hwnd_t = u32.GetParent(wid) or wid if wid else 0
                             if hwnd_t:
                                 u32.SetWindowPos(hwnd_t, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW)
                             current_win[0].lift()
@@ -2437,16 +2445,6 @@ def _toast_worker() -> None:
                     win.attributes("-topmost", True)
                     win.attributes("-alpha", 0.98)
                     win.configure(bg="#0B1120")
-
-                    def _on_enter(_e=None):
-                        is_hovered[0] = True
-
-                    def _on_leave(_e=None):
-                        is_hovered[0] = False
-                        _schedule_close(3500)
-
-                    win.bind("<Enter>", _on_enter)
-                    win.bind("<Leave>", _on_leave)
 
                     # ── 분기 2: [창 UI ②] 👻 귀신검색창 (소·중·대 독립 창) ──
                     if message.startswith("__UI2_SEARCH__|"):
@@ -3539,52 +3537,62 @@ def _fix_korean_spacing_general(s: str) -> str:
 def iron_and_polish_korean_text(raw_text: str) -> str:
     """
     [줄바꿈·유령공백(NFKC) 다림질 + 문맥 오타·띄어쓰기 교정 + 문단 의미 분리 통합 엔진]
-    - 번호/불릿 목록(1), 2), ■, -, [)의 줄바꿈은 보존하면서, 문장 중간에 뚝뚝 끊긴 줄바꿈만 매끄럽게 이음!
-    - 정상적인 1음절 단어(및, 후, 뒤, 수, 두, 한, 단 등)의 띄어쓰기를 절대 훼손하지 않으면서 PDF 자간 깨짐만 정밀 복원!
+    - 번호/불릿 목록(1), 2), ■, -, [) 및 빈 줄(\n\n)·문장 종결 줄바꿈은 보존하면서,
+      단어·어미 중간에 뚝뚝 끊긴 비정상 줄바꿈만 매끄럽게 이음!
+    - 정상적인 1음절 단어(및, 후, 뒤, 수, 두, 한, 단 등)나 '한글' 등의 단어를 절대 훼손하지 않으면서 PDF/복붙 자간 깨짐만 정밀 복원!
     """
     if not raw_text or not raw_text.strip():
         return raw_text
-    s = raw_text.replace("\u00B7", "__MIDDOT__").replace("\u318D", "__MIDDOT__")
+
+    # 1) 각 줄 내부에 섞여 있는 영타 오타(예: gksrmf xptmxmdlqslek)가 있으면 줄 단위로 먼저 한영 성형 수행
+    pre_lines = []
+    for raw_ln in raw_text.splitlines():
+        if raw_ln.strip():
+            m_ln, l_dir = morph_korean_english_text_with_direction(raw_ln)
+            if l_dir == "KO" and m_ln != raw_ln:
+                pre_lines.append(m_ln)
+            else:
+                pre_lines.append(raw_ln)
+        else:
+            pre_lines.append("")
+    s = "\n".join(pre_lines)
+
+    s = s.replace("\u00B7", "__MIDDOT__").replace("\u318D", "__MIDDOT__")
     s = unicodedata.normalize("NFKC", s)
     s = s.replace("__MIDDOT__", "·")
     s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
     s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
 
+    # 2) 단어·어미가 줄바꿈으로 쪼개진 구간만 정밀 결합 (문단 빈 줄 \n\n 및 종결 문장 줄바꿈은 100% 보존!)
     s = re.sub(
         r"(?<=[가-힣])[ \t]*\r?\n[ \t]*(?=(?:아서|어서|여서|해서|요|네요|군요|나요|가요|까요|어요|아요|해요|죠|지요|습니다|입니다|다|께|깨)(?=[\s.,?!:;)]|$))",
         "",
         s,
     )
-    s = re.sub(r"(\.\s*\.\s*\.)\s*\r?\n\s*", r"\1 ", s)
-    s = re.sub(r"(?m)^([ \t]*(?:\d+[.)]\s|[-•*■▶※◆○●]\s|\[)[^\r\n.?!]+)\r?\n", r"\1__HDR_NL__", s)
+    # 연결어미/보조용언(고/아서/어서/해서 + 싶/있/없 등) 뒤에서 줄이 끊긴 경우 공백으로 이음
     s = re.sub(
-        r"(?<![\n:!?\r])\r?\n(?!\r?\n)[ \t]*(?!(?:\d+[.)]\s|[-•*■▶※◆○●]\s|\[))",
+        r"(?<=[가-힣])[ \t]*\r?\n[ \t]*(?=(?:싶[ \t]*어|싶어|싶다|싶습|아[ \t]+기|함[ \t]+께))",
         " ",
         s,
     )
-    s = s.replace("__HDR_NL__", "\n")
+    s = re.sub(r"(\.\s*\.\s*\.)[ \t]*\r?\n[ \t]*", r"\1 ", s)
     s = re.sub(r"[ \t]+", " ", s)
 
+    # 3) PDF/복붙 자간 깨짐 복원 (줄바꿈 \n 은 절대 건드리지 않도록 [ \t]+ 만 사용!)
+    s = re.sub(r"(?<![가-힣])날[ \t]+(?=씨가|씨도|씨는|씨를|씨에)", "날", s)
+    s = re.sub(r"(?<![가-힣])아[ \t]+(?=기귀신)", "아", s)
+    s = re.sub(r"(?<=[가-힣])과함[ \t]*께", "과 함께", s)
+    s = re.sub(r"(?<=[가-힣])와함[ \t]*께", "와 함께", s)
+    s = re.sub(r"(?<![가-힣])함[ \t]+께(?=[\s.,?!~^)]|$)", "함께", s)
+    s = re.sub(r"([가-힣]+)[ \t]+고[ \t]+싶[ \t]*(어요|습니다|다|네|은|고)", r"\1고 싶\2", s)
+    s = re.sub(r"([가-힣]+고)[ \t]*싶[ \t]+(어요|습니다|다|네|은|고)", r"\1 싶\2", s)
     s = re.sub(
-        r"([가-힣]{2,})\s+([한된할])\s+([가-힣]{1,3})\s+([가-힣]{1,2})",
-        lambda m: (
-            m.group(0)
-            if (m.group(2) == "한" and m.group(3) in ("번", "번만", "번씩", "번도", "줄", "줄로", "글자", "글자도", "단어", "문장", "페이지", "화면", "사진", "파일", "문서", "영상", "분", "명", "개", "건", "시간", "달", "해"))
-            else f"{m.group(1)}{m.group(2)} {m.group(3)}{m.group(4)}"
-        ),
+        r"([가-힣]+(?:어요|아요|해요|네요|군요|습니다|입니다))(?=[가-힣]{2,})",
+        r"\1 ",
         s,
     )
     s = re.sub(
-        r"([가-힣]{2,})\s+([한된할])([가-힣]{1,3})\s+([가-힣]{1,2})",
-        lambda m: (
-            m.group(0)
-            if (m.group(2) == "한" and m.group(3) in ("번", "번만", "번씩", "번도", "줄", "줄로", "글자", "글자도", "단어", "문장", "페이지", "화면", "사진", "파일", "문서", "영상", "분", "명", "개", "건", "시간", "달", "해"))
-            else f"{m.group(1)}{m.group(2)} {m.group(3)}{m.group(4)}"
-        ),
-        s,
-    )
-    s = re.sub(
-        r"(?<=[가-힣]{2})\s+(?=(?:은|는|이|가|을|를|에서|에게|으로|까지|부터|처럼|보다|지만|거나|면서|니까|습니다|입니다|합니다)(?=[\s.,?!:;)]|$))",
+        r"(?<=[가-힣]{2})[ \t]+(?=(?:은|는|이|가|을|를|에서|에게|으로|까지|부터|처럼|보다|지만|거나|면서|니까|습니다|입니다|합니다)(?=[\s.,?!:;)]|$))",
         "",
         s,
     )
@@ -3594,10 +3602,12 @@ def iron_and_polish_korean_text(raw_text: str) -> str:
         "유", "무", "열", "행", "칸", "줄", "초", "분", "시", "일", "월", "년", "원", "명", "건", "개", "장", "번",
         "및", "후", "뒤", "수", "것", "바", "데", "리", "터", "뿐", "한", "두", "세", "네", "몇", "첫", "새", "헌",
         "단", "등", "약", "매", "중", "내", "외", "상", "하", "좌", "우", "말", "점", "편", "호", "차", "회", "층",
-        "왜", "뭐", "좀", "곧", "막", "딱", "늘", "참", "꽤",
+        "왜", "뭐", "좀", "곧", "막", "딱", "늘", "참", "꽤", "난",
     }
 
     def _join_broken_hangul(line: str) -> str:
+        if not line.strip():
+            return ""
         tokens = line.split(" ")
         if len(tokens) < 3:
             return line
@@ -3622,8 +3632,14 @@ def iron_and_polish_korean_text(raw_text: str) -> str:
             i += 1
         return " ".join(out)
 
-    s = "\n".join(_fix_korean_spacing_general(_join_broken_hangul(ln)) for ln in s.splitlines())
-    s = re.sub(r"\r?\n\s*\r?\n+", "\n\n", s)
+    polished_lines = []
+    for ln in s.splitlines():
+        if not ln.strip():
+            polished_lines.append("")
+        else:
+            polished_lines.append(_fix_korean_spacing_general(_join_broken_hangul(ln)))
+    s = "\n".join(polished_lines)
+    s = re.sub(r"\r?\n[ \t]*\r?\n+", "\n\n", s)
 
     sentences = [seg.strip() for seg in re.split(r"(?<=[.?!])\s+", s) if seg.strip()]
     if len(sentences) >= 5 and "\n" not in s:
@@ -3685,33 +3701,31 @@ def _replace_edit_control_current_line_atomic(
                 target_line = idx_text
             else:
                 target_line = utf16_bytes[s_pos * 2 : e_pos * 2].decode("utf-16-le", errors="ignore")
-        elif not auto_triggered and prefer_full_doc:
-            line_start, line_end = 0, utf16_total
-            use_full_sel = True
-            target_line = idx_text
         else:
             line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
             line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
             line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
-            if line_start < 0 or line_len <= 0:
-                if not auto_triggered and utf16_total > 0:
-                    line_start, line_end = 0, utf16_total
-                    use_full_sel = True
-                    target_line = idx_text
-                else:
-                    return False, "", "", None
-            else:
+            cur_line_str = ""
+            if line_start >= 0 and line_len > 0:
+                cur_line_str = utf16_bytes[line_start * 2 : (line_start + line_len) * 2].decode("utf-16-le", errors="ignore")
+            # 커서가 놓인 현재 줄에 한영 오타(예: gksrmf xptmxm)가 있으면 다른 문장들을 절대 건드리지 않고 현재 줄만 즉시 성형!
+            m_single, l_single = morph_korean_english_text_with_direction(cur_line_str) if cur_line_str else ("", None)
+            if cur_line_str and m_single != cur_line_str and l_single is not None:
                 line_end = line_start + line_len
-                target_line = utf16_bytes[line_start * 2 : line_end * 2].decode("utf-16-le", errors="ignore")
-                if not auto_triggered and "\n" in idx_text:
-                    # 수동 호출([Ctrl+0 ➔ 2]) 시 드래그를 깜빡하고 다중 줄 문단 끝에 커서를 둔 경우 전체 문단 성형 지원
-                    m_cur, l_cur = morph_korean_english_text_with_direction(target_line)
-                    b_cur = m_cur if (m_cur != target_line and l_cur is not None) else target_line
-                    i_cur = iron_and_polish_korean_text(b_cur) if allow_iron else b_cur
-                    if i_cur == target_line and m_cur == target_line:
-                        line_start, line_end = 0, utf16_total
-                        use_full_sel = True
-                        target_line = idx_text
+                target_line = cur_line_str
+            elif not auto_triggered and prefer_full_doc:
+                line_start, line_end = 0, utf16_total
+                use_full_sel = True
+                target_line = idx_text
+            elif line_start >= 0 and line_len > 0:
+                line_end = line_start + line_len
+                target_line = cur_line_str
+            elif not auto_triggered and utf16_total > 0:
+                line_start, line_end = 0, utf16_total
+                use_full_sel = True
+                target_line = idx_text
+            else:
+                return False, "", "", None
 
         if not target_line:
             return False, "", "", None
@@ -4850,7 +4864,7 @@ def main() -> None:
             superpower_7_toggle_topmost(_LAST_TARGET_HWND)
             complete_feature_action_success(fkey)
 
-    def trigger_master_summon() -> None:
+    def trigger_master_summon(summon_by_rclick: bool = False) -> None:
         """
         [마스터 기획 정본 — 단축키 3대 창 완전 분리 분기]:
         1) [창 UI ③ 사진·OCR 창]: 방금(15초 이내) 스샷/사진을 캡처한 직후 소환 시 ➔ 사진·OCR 전용 창 직행!
@@ -4859,10 +4873,25 @@ def main() -> None:
         """
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip
         fg_before = u32.GetForegroundWindow()
+        # 만약 우클릭 소환이면 실제 마우스 커서 아래의 창을 최우선 기준으로 판별 (바탕화면 우클릭 시 직전 메모장 포커스 간섭 원천 차단!)
+        if summon_by_rclick:
+            pt_m = wintypes.POINT()
+            u32.GetCursorPos(ctypes.byref(pt_m))
+            hwnd_under = u32.WindowFromPoint(pt_m)
+            if hwnd_under:
+                root_under = u32.GetAncestor(hwnd_under, 2) or hwnd_under
+                proc_under = _get_process_name_from_hwnd(root_under).lower()
+                if proc_under not in ("python.exe", "pythonw.exe"):
+                    fg_before = root_under
         proc_before = _get_process_name_from_hwnd(fg_before).lower()
-        has_native_edit = bool(_find_edit_control_child(fg_before))
-        is_dedicated_input_app = proc_before in ("notepad.exe", "kakaotalk.exe", "winword.exe", "hwp.exe", "excel.exe", "hcell.exe") or has_native_edit
-        _capture_target_hwnd()
+        cls_before = _get_win_class_only(fg_before)
+        if proc_before in ("explorer.exe", "python.exe", "pythonw.exe") or cls_before in ("Progman", "WorkerW", "Shell_TrayWnd", "CabinetWClass"):
+            is_dedicated_input_app = False
+        else:
+            has_native_edit = bool(_find_edit_control_child(fg_before))
+            is_dedicated_input_app = proc_before in ("notepad.exe", "kakaotalk.exe", "winword.exe", "hwp.exe", "excel.exe", "hcell.exe") or has_native_edit
+        if proc_before not in ("python.exe", "pythonw.exe"):
+            _capture_target_hwnd()
         play_baby_ghost_sound(mode="summon")
         record_feature_telemetry("ctrl0_summon_bar")
         seq_mode = True
@@ -4889,18 +4918,19 @@ def main() -> None:
         # [분기 2] 탐색기 압축 파일 객체 위 소환 시 -> [창 UI ④ 스마트 압축 해제 & 투시 미니창] 직행 / 일반 빈 곳은 [창 UI ② 귀신검색창(소형)] 직행!
         if not is_dedicated_input_app:
             disarm_sub_hotkeys()
-            try:
-                import sys as _sys_c2
-                _os_ag2 = str(Path(__file__).resolve().parent / "os_agent")
-                if _os_ag2 not in _sys_c2.path and Path(_os_ag2).exists():
-                    _sys_c2.path.insert(0, _os_ag2)
-                import plugin_ghosti_care_suite as _care_s2
-                sel_paths = _care_s2.get_explorer_selected_paths_non_destructive()
-                if sel_paths and str(sel_paths[0]).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")):
-                    show_ghost_toast(f"__UI4_ARCHIVE__|{sel_paths[0]}", duration_ms=11000)
-                    return
-            except Exception:
-                pass
+            if proc_before == "explorer.exe" and cls_before in ("CabinetWClass", "ExploreWClass"):
+                try:
+                    import sys as _sys_c2
+                    _os_ag2 = str(Path(__file__).resolve().parent / "os_agent")
+                    if _os_ag2 not in _sys_c2.path and Path(_os_ag2).exists():
+                        _sys_c2.path.insert(0, _os_ag2)
+                    import plugin_ghosti_care_suite as _care_s2
+                    sel_paths = _care_s2.get_explorer_selected_paths_non_destructive()
+                    if sel_paths and str(sel_paths[0]).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")):
+                        show_ghost_toast(f"__UI4_ARCHIVE__|{sel_paths[0]}", duration_ms=11000)
+                        return
+                except Exception:
+                    pass
             show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
             return
 
@@ -5076,7 +5106,7 @@ def main() -> None:
                         _release_target_rbutton_stuck(hwnd_fg_r)
                         if (now - last_summon_ts) > 0.25:
                             last_summon_ts = now
-                            trigger_master_summon()
+                            trigger_master_summon(summon_by_rclick=True)
                     else:
                         _RBTN_HOLD_STATE["active"] = True
                         _RBTN_HOLD_STATE["down_ts"] = now
@@ -5101,7 +5131,7 @@ def main() -> None:
                             _release_target_rbutton_stuck(_RBTN_HOLD_STATE.get("target_hwnd"))
                             if (now - last_summon_ts) > 0.25:
                                 last_summon_ts = now
-                                trigger_master_summon()
+                                trigger_master_summon(summon_by_rclick=True)
                 elif not rbtn_phys_now and was_rbtn_phys:
                     _RBTN_HOLD_STATE["active"] = False
                     if _RBTN_HOLD_STATE.get("dismiss_context_menu_on_up"):
