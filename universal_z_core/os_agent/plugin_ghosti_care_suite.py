@@ -392,6 +392,26 @@ def _save_weekly_metrics(metrics: Dict[str, Any]) -> None:
         pass
 
 
+def _count_downloads_archive_files() -> Dict[str, Any]:
+    """다운로드 폴더 내 압축파일(.zip/.7z/.rar/.tar/.gz) 누적 건수 및 파일명 샘플(풀기 전 내부 미열람 원칙 준수)"""
+    count = 0
+    samples: List[str] = []
+    try:
+        dl_dir = Path.home() / "Downloads"
+        if dl_dir.exists() and dl_dir.is_dir():
+            archive_exts = {".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"}
+            entries = sorted(
+                [p for p in dl_dir.iterdir() if p.is_file() and p.suffix.lower() in archive_exts],
+                key=lambda x: x.stat().st_mtime if x.exists() else 0,
+                reverse=True,
+            )
+            count = len(entries)
+            samples = [p.name for p in entries[:3]]
+    except Exception:
+        pass
+    return {"count": count, "samples": samples}
+
+
 def get_security_services_status() -> Dict[str, Any]:
     """[방어 1·2·5] sc query 및 프로세스 100% 실측 기반 정직 브리핑 (0개일 때 거짓 경보 금지)"""
     global _CONTEXT_MENU_ENSURED
@@ -481,9 +501,10 @@ def get_security_services_status() -> Dict[str, Any]:
         )
 
     metrics = _load_weekly_metrics()
+    dl_archives = _count_downloads_archive_files()
     return {
         "ok": True,
-        "featureTitle": "⚡ 미사용 웹 보안 서비스 스마트 절전 모드",
+        "featureTitle": "🏦 안 쓰는 은행·관공서 보안프로그램 자동 재우기",
         "activeCount": active_count,
         "estimatedRamMb": estimated_ram_mb,
         "runningServices": running_services,
@@ -492,12 +513,14 @@ def get_security_services_status() -> Dict[str, Any]:
         "corporateDrmUntouchedCount": len(set(corporate_drm_protected)),
         "helperTaskRegistered": is_security_care_helper_task_registered(),
         "honestBriefing": honest_message,
+        "downloadsArchiveCount": dl_archives["count"],
+        "downloadsArchiveSamples": dl_archives["samples"],
         "weeklyReport": {
             "sleepCount": metrics.get("sleepCountThisWeek", 0),
             "wakeCount": metrics.get("wakeCountThisWeek", 0),
             "savedRamMb": metrics.get("savedRamMbCumulative", 0),
             "summaryText": (
-                f"👻 이번 주 미사용 웹 보안 서비스를 {metrics.get('sleepCountThisWeek', 0)}회 잠재워 "
+                f"👻 이번 주 안 쓰는 은행 보안프로그램을 {metrics.get('sleepCountThisWeek', 0)}회 잠재워 "
                 f"메모리 누적 {metrics.get('savedRamMbCumulative', 0)}MB를 아꼈어요!"
             ),
         },
@@ -1231,12 +1254,15 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
     except Exception:
         pass
 
+    dl_archives = _count_downloads_archive_files()
     return {
         "ok": True,
-        "cardTitle": f"🛡️ 안심 수호 히스토리 (최근 {days}일 {total_clean_count}건 무소음 통과)",
+        "cardTitle": f"🛡️ 다운로드·문서 조용한 안전 검사 (최근 {days}일 {total_clean_count}건 확인)",
         "days": days,
         "silentPassCount": total_clean_count,
         "threatBlockedCount": threat_count,
+        "downloadsArchiveCount": dl_archives["count"],
+        "downloadsArchiveSamples": dl_archives["samples"],
         "recentItems": items,
         "zeroBloatNote": "자체 무거운 백신 상주 0MB · Windows Defender(AMSI) 하청 조종으로 평시 CPU 0.0% 유지",
         "privacyBadge": PLUGIN_METADATA["privacyBadge"],
@@ -1882,6 +1908,11 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
             return smart_create_zip(
                 target_path=str(data.get("path") or data.get("targetPath") or ""),
             )
+        if act in ("open-downloads", "open_downloads"):
+            dl_dir = Path.home() / "Downloads"
+            if dl_dir.exists() and hasattr(os, "startfile"):
+                os.startfile(str(dl_dir))
+            return {"ok": True, "path": str(dl_dir)}
         if act in ("explorer-selected", "explorer_selected"):
             return {"ok": True, "selectedPaths": get_explorer_selected_paths_non_destructive()}
         if act in ("amsi-scan", "amsi_scan"):

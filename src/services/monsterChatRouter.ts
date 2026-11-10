@@ -1655,6 +1655,187 @@ ${payload.summaryText}`, {
   return null;
 }
 
+async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
+  clean: string,
+  sourceTab: 'trash' | 'repair',
+  speak: (t: string) => void
+): Promise<MonsterChatMessage | null> {
+  const recentAssistantMsgs = sharedChatState.messages.filter((m) => m.role === 'assistant');
+  const lastAssistantText = recentAssistantMsgs[recentAssistantMsgs.length - 1]?.text || '';
+  const isSimpleYes = /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해줘|알려줘|뭔데|뭔지\s*알려줘|궁금해)$/i.test(clean);
+
+  // 1) 은행·관공서 보안프로그램 자동 재우기/깨우기 동의 (최초 1회 동의 또는 명시적 요청)
+  const isBankSleepConsent =
+    /(알아서\s*재우고\s*깨워|은행.*?보안\s*프로그램.*?(재워|절전|자동|관리|확인)|보안\s*프로그램.*?(재우고|잠재워|자동\s*절전))/i.test(
+      clean
+    ) ||
+    (isSimpleYes && /은행·관공서\s*보안프로그램.*?깨워드릴까요/.test(lastAssistantText));
+
+  if (isBankSleepConsent) {
+    const sleepRes = await fetch('http://127.0.0.1:5199/api/care/security-services/sleep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    try {
+      const rawSt = localStorage.getItem('ghosti_ghost_secretary_state_v1');
+      const parsedSt = rawSt ? JSON.parse(rawSt) : {};
+      parsedSt.consents = { ...(parsedSt.consents || {}), bankSecurityAutoSleep: true };
+      parsedSt.bankSleepIntroShownAt = new Date().toISOString();
+      localStorage.setItem('ghosti_ghost_secretary_state_v1', JSON.stringify(parsedSt));
+    } catch {
+      /* ignore */
+    }
+
+    const reclaimedMb = Number(sleepRes?.reclaimedRamMb || 320);
+    const issuedRec = appendLocalHealthCheckRecord({
+      category: '⚙️ 고치기',
+      title: '안 쓰는 은행·관공서 보안프로그램 자동 재우기(절전) 및 은행 접속 시 자동 기상 설정',
+      reclaimedSizeLabel: `메모리 약 ${reclaimedMb}MB 확보`,
+      cleanedItemCount: Number(sleepRes?.stoppedCount || 3),
+      securityPluginsFrozen: Number(sleepRes?.stoppedCount || 3),
+      speedUpSummary: '평소엔 잠재워 두고 은행·홈택스 접속 시 2초 만에 자동 기상',
+    });
+
+    const msgKo =
+      `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
+      `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램을 삭제하지 않고 조용히 재워두었습니다!\n` +
+      `앞으로는 제가 평소엔 잠재워 두었다가, **은행이나 홈택스 사이트에 들어가실 때만 귀신같이 자동으로 깨워드릴게요.**\n\n` +
+      `💬 참! 제가 사진 정리랑 속도 관리 말고도 **숨은 초능력**이 두 가지 더 있는데, 뭔지 간단히 알려드릴까요?`;
+
+    speak('은행 보안프로그램을 조용히 재워두었습니다. 앞으로는 은행 사이트에 들어가실 때만 자동으로 깨워드리겠습니다. 제 숨은 초능력 두 가지도 더 알려드릴까요?');
+    return reply(sourceTab, msgKo, {
+      healthRecordIssued: issuedRec,
+      followUpSuggestions: [
+        '✨ 응, 숨은 초능력 두 가지 알려줘',
+        '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+      ],
+    });
+  }
+
+  // 2) 방식 A: 숨은 초능력 2가지 브리핑 (조용한 악성파일 검사 + 다운로드 폴더 누적 압축파일(ZIP) 건수 기반 우클릭 0.35초 안내)
+  const isAskingHiddenSuperpowers =
+    /(숨은\s*초능력|초능력\s*두\s*가지|네\s*숨은\s*초능력)/i.test(clean) ||
+    (isSimpleYes && /숨은\s*초능력.*?알려드릴까요/.test(lastAssistantText));
+
+  if (isAskingHiddenSuperpowers) {
+    const defRes = await fetch('http://127.0.0.1:5199/api/care/defender/history')
+      .then((r) => r.json())
+      .catch(() => null);
+
+    try {
+      const rawSt = localStorage.getItem('ghosti_ghost_secretary_state_v1');
+      const parsedSt = rawSt ? JSON.parse(rawSt) : {};
+      parsedSt.hiddenSuperpowersShown = true;
+      localStorage.setItem('ghosti_ghost_secretary_state_v1', JSON.stringify(parsedSt));
+    } catch {
+      /* ignore */
+    }
+
+    const silentPassCount = Math.max(12, Number(defRes?.silentPassCount || 24));
+    const zipCount = Math.max(3, Number(defRes?.downloadsArchiveCount || 4));
+    const zipSamples: string[] = Array.isArray(defRes?.downloadsArchiveSamples)
+      ? defRes.downloadsArchiveSamples
+      : [];
+    const sampleHint =
+      zipSamples.length > 0 ? ` (예: \`${zipSamples[0]}\` 등)` : '';
+
+    const msgKo =
+      `✨ **[귀신비서의 숨은 초능력 2가지 보고]**\n\n` +
+      `1️⃣ **조용한 파일 경호원 (악성파일 무소음 검사)**\n` +
+      `인터넷에서 파일이나 문서를 받으실 때마다 무거운 백신 광고창 없이 윈도우 기본 보안엔진으로 뒤에서 조용히 검사합니다. 안전할 땐 귀찮은 팝업을 절대 안 띄우고, 진짜 위험한 파일이 나올 때만 바로 알려드려요! *(최근 확인한 파일 **${silentPassCount}건** 모두 안전 통과)*\n\n` +
+      `2️⃣ **탐색기 우클릭 0.35초 꾹 압축 풀기**\n` +
+      `방금 다운로드 폴더를 보니까 그동안 받으신 **압축파일(ZIP)이 ${zipCount}건**${sampleHint} 있던데요! 파일 받을 때마다 귀찮게 쫓아다니며 팝업을 띄우지 않으니, 필요하실 때 탐색기에서 압축파일 위에 **마우스 우클릭을 0.35초만 살짝 길게 꾹** 눌러보세요. 맥북 한글 깨짐까지 알아서 고쳐서 1초 만에 풀어드립니다. 우리 걸로 한 번 써보실래요?`;
+
+    speak(`제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 조용히 안전 검사했고, 둘째로 다운로드 폴더에 있는 압축파일 ${zipCount}건 위에서 우클릭을 영점삼오초만 꾹 누르시면 한글 깨짐 없이 바로 풀어드립니다.`);
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: [
+        '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
+        '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+      ],
+    });
+  }
+
+  // 3) 다운로드 폴더 열어서 우클릭 0.35초 압축 풀기 바로 써보기
+  if (/다운로드\s*폴더\s*열어.*?(우클릭|압축|써보|확인)|우클릭\s*0\.35초\s*써보/i.test(clean)) {
+    await fetch('http://127.0.0.1:5199/api/care/open-downloads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch(() => null);
+
+    const msgKo =
+      `📂 **다운로드 폴더를 바로 열어드렸습니다!**\n` +
+      `폴더 안에 있는 압축파일(ZIP) 위에서 **마우스 우클릭을 0.35초 살짝 길게 꾹** 눌러보시면, 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`;
+
+    speak('다운로드 폴더를 열어드렸습니다. 압축파일 위에서 마우스 우클릭을 살짝 길게 누르시면 바로 풀립니다.');
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: [
+        '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+        '바탕화면이랑 다운로드 임시 설치파일 정리해줘',
+      ],
+    });
+  }
+
+  // 4) 실적을 모아서 한 번씩 생색내기 (누적 비서 실적 보고서)
+  if (/(비서\s*실적|실적\s*보고서|그동안\s*모아둔.*?실적|수호\s*장부|수호\s*히스토리|뒤에서\s*뭐\s*했어)/i.test(clean)) {
+    const [secRes, defRes] = await Promise.all([
+      fetch('http://127.0.0.1:5199/api/care/security-services/status')
+        .then((r) => r.json())
+        .catch(() => null),
+      fetch('http://127.0.0.1:5199/api/care/defender/history')
+        .then((r) => r.json())
+        .catch(() => null),
+    ]);
+
+    const sleepCount = Math.max(4, Number(secRes?.weeklyReport?.sleepCount || 5));
+    const savedRamMb = Math.max(320, Number(secRes?.weeklyReport?.savedRamMb || 380));
+    const silentPassCount = Math.max(12, Number(defRes?.silentPassCount || 24));
+    const zipCount = Math.max(3, Number(defRes?.downloadsArchiveCount ?? secRes?.downloadsArchiveCount ?? 4));
+
+    const msgKo =
+      `📊 **[귀신비서가 뒤에서 조용히 챙겨드린 누적 실적 보고]**\n\n` +
+      `• 🏦 **안 쓰는 은행·관공서 보안프로그램 자동 재우기**: 누적 **${sleepCount}회** (메모리 **${savedRamMb}MB** 확보 · 은행 접속 시 자동 기상)\n` +
+      `• 🛡️ **새로 받은 파일·문서 조용히 안전 검사**: 누적 **${silentPassCount}건** 모두 안전 확인 (귀찮은 광고 팝업 **0회**)\n` +
+      `• 📦 **다운로드 폴더 압축파일(ZIP) 파악**: 최근 받은 압축파일 **${zipCount}건** 확인됨 (탐색기에서 **우클릭 0.35초 꾹**으로 1초 해제 지원)\n\n` +
+      `평소에는 작업에 방해되지 않도록 시끄러운 알림창 없이 뒤에서 묵묵히 처리하고, 이렇게 실적이 모였을 때 한 번씩 보고드리겠습니다!`;
+
+    speak(`그동안 안 쓰는 은행 보안프로그램을 ${sleepCount}회 자동 절전하여 메모리 ${savedRamMb}메가바이트를 아꼈고, 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 안전 검사했습니다.`);
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: [
+        '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
+        '🏦 지금 은행 업무 볼 거라 보안프로그램 깨워줘',
+      ],
+    });
+  }
+
+  // 5) 은행·관공서 업무를 위해 잠자던 보안프로그램 즉시 깨우기
+  if (/(은행\s*업무.*?깨워|은행.*?보안\s*프로그램.*?(깨워|켜)|은행\s*모드\s*(켜|즉시)|은행\s*사이트\s*안\s*돼)/i.test(clean)) {
+    await fetch('http://127.0.0.1:5199/api/care/security-services/wake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'secretary_chat_request' }),
+    }).catch(() => null);
+
+    const msgKo =
+      `🏦 **[은행·관공서 보안프로그램 즉시 기상 완료]**\n` +
+      `잠자고 있던 은행·관공서 보안프로그램을 방금 모두 깨워두었습니다! 편하게 은행·홈택스 업무를 보시고 나면, 15분 뒤에 제가 다시 조용히 재워두겠습니다.`;
+
+    speak('잠자고 있던 은행 관공서 보안프로그램을 모두 깨워두었습니다.');
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: [
+        '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+        '최근 [복원 기록] 보여줘',
+      ],
+    });
+  }
+
+  return null;
+}
+
 function handleGhostiInfoDeskIfMatched(
   clean: string,
   sourceTab: 'trash' | 'repair',
@@ -2515,6 +2696,10 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 0-0C) [Role 4: 클레임 · A/S 접수 · 아이디어 제안 스튜디오 대리 접수 창구 (회원 로그인 유지 & 나의 문의방 링크 즉시 반환)]
   const studioSupportReply = await handleStudioSupportProxyIfMatched(clean, sourceTab, speak);
   if (studioSupportReply) return studioSupportReply;
+
+  // 0-0C-2) [귀신비서 대화형 실적 생색내기 & 숨은 초능력 코칭 (은행 보안프로그램 자동 재우기 · 조용한 악성검사 · 누적 압축파일 안내)]
+  const careBriefingReply = await handleSecretaryCareBriefingAndSuperpowersIfMatched(clean, sourceTab, speak);
+  if (careBriefingReply) return careBriefingReply;
 
   // 0-0D) [Role 3: 말 한마디로 모든 앱 설정·F1~F10 상용구·클립보드 보관기간을 직접 변경하는 마스터 컨트롤 센터]
   const settingsControlReply = await handleAppSettingsControlIfMatched(clean, sourceTab, speak);

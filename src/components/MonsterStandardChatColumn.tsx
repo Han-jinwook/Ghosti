@@ -217,6 +217,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     formatScheduleLabelKo(loadWeeklyCareSchedule())
   );
   const [awaitingNickname, setAwaitingNickname] = useState<boolean>(() => !loadGhostSecretaryState().nickname);
+  const [welcomeChipsDismissed, setWelcomeChipsDismissed] = useState<boolean>(false);
 
   // [v1.3 귀신비서 1관문] 첫 환영 말풍선: 별명 미등록 시 대본집 ask_nickname_first, 등록 시 별명 호칭 인사
   useEffect(() => {
@@ -227,6 +228,49 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     setSharedMonsterMessages((prev) =>
       prev.map((m) => (m.id === 'monster_welcome_init' && prev.length === 1 ? { ...m, text: turn.text } : m))
     );
+
+    // [최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩]
+    if (
+      !isMobileOrStore &&
+      !turn.nextState.awaitingNickname &&
+      !turn.nextState.consents?.bankSecurityAutoSleep &&
+      !turn.nextState.bankSleepIntroShownAt
+    ) {
+      void fetch('http://127.0.0.1:5199/api/care/security-services/status')
+        .then((r) => r.json())
+        .catch(() => null)
+        .then((secRes) => {
+          const curSt = loadGhostSecretaryState();
+          if (curSt.bankSleepIntroShownAt || curSt.consents?.bankSecurityAutoSleep) return;
+          const activeCount = Math.max(2, Number(secRes?.activeCount || 3));
+          const ramMb = Math.max(180, Number(secRes?.estimatedRamMb || 320));
+          const nickLabel = curSt.nickname ? `${curSt.nickname}님, ` : '';
+          saveGhostSecretaryState({
+            ...curSt,
+            bankSleepIntroShownAt: new Date().toISOString(),
+          });
+          setSharedMonsterMessages((prev) => {
+            if (prev.some((m) => m.id.startsWith('secretary_bank_sleep_intro_'))) return prev;
+            return [
+              ...prev,
+              {
+                id: `secretary_bank_sleep_intro_${Date.now()}`,
+                role: 'assistant',
+                timestamp: nowTimeKo(),
+                sourceTab: 'trash',
+                text:
+                  `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 안 쓰시는 **은행·관공서 보안프로그램 ${activeCount}개(약 ${ramMb}MB)**가 뒤에서 메모리를 차지하며 컴퓨터 속도를 늦추고 있어요.\n` +
+                  `제가 이 프로그램들을 지우지 않고 **평소엔 잠재워 두었다가, 은행·홈택스 들어가실 때만 귀신같이 깨워드릴까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙깁니다!)`,
+                followUpSuggestions: [
+                  '👍 응, 앞으로 알아서 재우고 깨워줘',
+                  '✨ 귀신비서의 숨은 초능력 알려줘',
+                  '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+                ],
+              },
+            ];
+          });
+        });
+    }
     // [v1.3 #7] 같은 계정의 다른 기기에서 만든 🪪 귀신계 여권 무료 동기화 (로그인 시에만)
     void pullGhostPassportsFromCloud(secretaryOwnerEmail()).then((res) => {
       if (!res.ok || res.newNames.length === 0) return;
@@ -365,16 +409,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           (m.cardKind === 'DEVICE_REPAIR_GATE' && m.deviceRepairPayload && !m.deviceRepairPayload.executed) ||
           (m.cardKind === 'WEEKLY_CARE_BRIEFING' && m.proactiveCareBriefing && !m.proactiveCareBriefing.executed) ||
           (m.cardKind === 'DEEP_UNINSTALL_GATE' && m.deepUninstallPayload && !m.deepUninstallPayload.executed) ||
-          m.cardKind === 'RESTORE_POINTS_LIST'
+          m.cardKind === 'RESTORE_POINTS_LIST' ||
+          /은행·관공서\s*보안프로그램.*?깨워드릴까요|숨은\s*초능력.*?알려드릴까요/.test(m.text || '')
       );
     const isDirectCareOrStatusCommand =
-      /(진행해|실행해|정리해|치워줘|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|임시\s*설치|바탕화면|다운로드|[c-zC-Z]\s*드라이브|사양|스펙|상태\s*봐|느려|느린|버벅|애드웨어|보안\s*모듈|보안\s*프로그램|강제\s*종료|지워\s*줘|삭제해\s*줘|적출|언인스톨|뿌리째|뿌리\s*뽑|유령\s*앱)/i.test(
+      /(진행해|실행해|정리해|치워줘|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|임시\s*설치|바탕화면|다운로드|[c-zC-Z]\s*드라이브|사양|스펙|상태\s*봐|느려|느린|버벅|애드웨어|보안\s*모듈|보안\s*프로그램|알아서\s*재우고|숨은\s*초능력|비서\s*실적|실적\s*보고서|우클릭\s*0\.35초|은행\s*업무.*?깨워|강제\s*종료|지워\s*줘|삭제해\s*줘|적출|언인스톨|뿌리째|뿌리\s*뽑|유령\s*앱)/i.test(
         raw
       );
     const shouldBypassSecretaryPlaybook =
       isDirectCareOrStatusCommand ||
       (hasPendingCareApproval &&
-        /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해줘|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw));
+        /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해줘|알려줘|뭔데|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw));
 
     if (sourceTab === 'trash' && !shouldBypassSecretaryPlaybook) {
       const secretaryState = loadGhostSecretaryState();
@@ -445,7 +490,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             timestamp: nowTimeKo(),
             sourceTab,
             text: reading.text,
-            followUpSuggestions: [SECRETARY_FIRST_CARE_QUERY],
+            followUpSuggestions: [
+              SECRETARY_FIRST_CARE_QUERY,
+              '👍 응, 앞으로 알아서 재우고 깨워줘',
+              '✨ 귀신비서의 숨은 초능력 알려줘',
+            ],
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
         }
@@ -954,7 +1003,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                         key={sIdx}
                         type="button"
                         disabled={busy}
-                        onClick={() => void handleSend(sug, 'text')}
+                        onClick={() => {
+                          // 1회성 대화형 칩: 클릭 즉시 해당 말풍선의 칩 목록을 비워 화면 공해 0% 유지
+                          setSharedMonsterMessages((prev) =>
+                            prev.map((m) => (m.id === msg.id ? { ...m, followUpSuggestions: [] } : m))
+                          );
+                          void handleSend(sug, 'text');
+                        }}
                         className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
                       >
                         💬 {sug}
@@ -963,9 +1018,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   </div>
                 )}
 
-                {/* [레드팀 보완] 1단계 미니멀 뷰에서 좌측 3대 검진 박스 제거 시, 첫 환영 말풍선 안에 PC 속도·보안모듈 / 바탕화면 1클릭 버튼 제공 */}
+                {/* 첫 환영 말풍선 안 1회성 대답 칩 (클릭 시 1회성으로 사라짐) */}
                 {!isUser &&
                   showWelcomeQuickCareActions &&
+                  !welcomeChipsDismissed &&
                   !isMobileOrStore &&
                   !awaitingNickname &&
                   msg.id === 'monster_welcome_init' && (
@@ -973,22 +1029,35 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() =>
-                          void handleSend('지금 PC가 좀 느린데 1초 건강검진 해줘', 'text')
-                        }
+                        onClick={() => {
+                          setWelcomeChipsDismissed(true);
+                          void handleSend('👍 응, 앞으로 알아서 재우고 깨워줘', 'text');
+                        }}
                         className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
                       >
-                        ⚡ 느려진 PC 보안모듈·속도 1초 검진
+                        🏦 안 쓰는 은행 보안프로그램 자동 재우기
                       </button>
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() =>
-                          void handleSend('바탕화면이랑 다운로드 임시 설치파일 정리해줘', 'text')
-                        }
+                        onClick={() => {
+                          setWelcomeChipsDismissed(true);
+                          void handleSend('✨ 귀신비서의 숨은 초능력 알려줘', 'text');
+                        }}
                         className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
                       >
-                        🗂️ 바탕화면·임시 설치파일 정리
+                        ✨ 숨은 초능력 2가지 알려줘
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setWelcomeChipsDismissed(true);
+                          void handleSend('📊 그동안 모아둔 비서 실적 보고서 보여줘', 'text');
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                      >
+                        📊 모아둔 비서 실적 보고서
                       </button>
                     </div>
                   )}

@@ -301,7 +301,11 @@ export interface GhostSecretaryState {
   awaitingNickname?: boolean;
   coldReadingShownAt?: string;
   questStep?: QuestStep;
-  consents?: { labeler?: boolean; sonFreeAndSpeedAlert?: boolean };
+  consents?: { labeler?: boolean; sonFreeAndSpeedAlert?: boolean; bankSecurityAutoSleep?: boolean };
+  /** 은행 보안프로그램 최초 1회 속도 저하 브리핑 말풍선 노출 일시 */
+  bankSleepIntroShownAt?: string;
+  /** 숨은 초능력(악성검사·우클릭 0.35초 압축해제) 안내 완료 여부 */
+  hiddenSuperpowersShown?: boolean;
   /** 1일 1회 노크: 마지막으로 먼저 말 건 날짜(YYYY-MM-DD) */
   lastKnockDate?: string;
   /** 냉정한 사양 처방에서 안내한 부품 규격 (예: DDR3 PC3-12800 8GB) — 구매처 질문 시 복사 대상 */
