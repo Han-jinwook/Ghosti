@@ -1335,9 +1335,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             !p.isVaultDocument &&
             p.trashCategory !== 'blurry' &&
             p.trashCategory !== 'screenshot' &&
-            p.trashCategory !== 'memo'
+            p.trashCategory !== 'memo' &&
+            p.trashCategory !== 'duplicate'
         )
-        .slice(0, 350)
         .map((photo) => ({
           photo,
           score: 0.95,
@@ -1347,7 +1347,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       set({
         searchSpace: 'gallery',
         hasUserSelectedSearchTab: true,
-        activeQuery: `전체 갤러리 사진 (${photos.filter((p) => !p.quarantined).length}장)`,
+        activeQuery: `전체 갤러리 사진 (${galleryPhotos.length}장)`,
         matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
         searchResults: galleryPhotos,
       });
@@ -1371,9 +1371,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           !p.isVaultDocument &&
           p.trashCategory !== 'blurry' &&
           p.trashCategory !== 'screenshot' &&
-          p.trashCategory !== 'memo'
+          p.trashCategory !== 'memo' &&
+          p.trashCategory !== 'duplicate'
       )
-      .slice(0, 350)
       .map((photo) => ({
         photo,
         score: 0.95,
@@ -1391,7 +1391,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? `동영상 ${videoSceneItems.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
           : searchSpace === 'vault'
           ? `최근 서류 ${localDocuments.length + vaultPhotos.length}건 통합 (로컬 문서 ${localDocuments.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
-          : `전체 갤러리 사진 (${photos.filter((p) => !p.quarantined).length}장)`,
+          : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
       matchedVideoScenes: videoSceneItems,
       matchedLocalDocs: localDocuments,
       matchedVaultPhotos: vaultPhotos,
@@ -2170,9 +2170,9 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           !p.isVaultDocument &&
           p.trashCategory !== 'blurry' &&
           p.trashCategory !== 'screenshot' &&
-          p.trashCategory !== 'memo'
+          p.trashCategory !== 'memo' &&
+          p.trashCategory !== 'duplicate'
       )
-      .slice(0, 350)
       .map((photo) => ({
         photo,
         score: 0.95,
@@ -2252,7 +2252,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
           : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
           ? `최근 서류 ${indexedDocs.length + initialVaultPhotos.length}건 통합 (로컬 문서 ${indexedDocs.length}건 + 촬영 서류 ${initialVaultPhotos.length}장)`
-          : `전체 갤러리 사진 (${enrichedPhotos.filter((p) => !p.quarantined).length}장)`,
+          : `전체 갤러리 사진 (${initialGalleryPhotos.length}장)`,
         matchedTags: currentHasExecutedUserSearch
           ? get().matchedTags
           : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab

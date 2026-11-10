@@ -21,7 +21,7 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
   const [snap, setSnap] = useState<SilentIndexingBrakeSnapshot>(() =>
     silentIndexingBrake.getSnapshot()
   );
-  const { localDocuments, photos, runTextQuery } = useSaySeeStore();
+  const { localDocuments, photos, videoSceneItems, runTextQuery } = useSaySeeStore();
 
   useEffect(() => {
     return silentIndexingBrake.subscribe(setSnap);
@@ -29,7 +29,27 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
 
   const isTurbo = snap.speedMode === 'turbo';
   const guard = snap.hardwareGuard;
-  const recentCountFormatted = Math.max(snap.recent3MonthsCount, 100).toLocaleString('ko-KR');
+
+  const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
+  const gallerySceneCount = useMemo(
+    () =>
+      activePhotos.filter(
+        (p) =>
+          !p.isVaultDocument &&
+          p.trashCategory !== 'blurry' &&
+          p.trashCategory !== 'screenshot' &&
+          p.trashCategory !== 'memo' &&
+          p.trashCategory !== 'duplicate'
+      ).length,
+    [activePhotos]
+  );
+  const vaultPhotoCount = useMemo(
+    () => activePhotos.filter((p) => p.isVaultDocument).length,
+    [activePhotos]
+  );
+  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
+  const totalVideoCount = videoSceneItems.length;
+  const totalReadyCount = gallerySceneCount + totalVideoCount + totalIndexedDocs;
 
   // 내 PC에서 방금 선행 분석된 최근 문서 1개 + 최근 사진 1개 추출 (무박스 1줄 인라인 브리핑용)
   const recentInlineFiles = useMemo(() => {
@@ -96,7 +116,7 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
           ))}
 
           <span className="font-extrabold text-slate-700 dark:text-zinc-200">
-            외 최근 파일 {recentCountFormatted}개 준비 완료! 지금 바로 찾아보세요
+            포함 보유 파일 총 {totalReadyCount.toLocaleString('ko-KR')}개(사진 {gallerySceneCount.toLocaleString('ko-KR')} · 동영상 {totalVideoCount.toLocaleString('ko-KR')} · 문서 {totalIndexedDocs.toLocaleString('ko-KR')}) 준비 완료! 지금 바로 찾아보세요
           </span>
 
           <span className="text-slate-400 dark:text-zinc-600">·</span>
@@ -106,7 +126,7 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
             </span>
           ) : (
             <span className="text-slate-500 dark:text-zinc-400 font-semibold text-[12px]">
-              {isTurbo ? '⚡ 고속 정리 중' : '🍃 과거 파일 무소음 정리 중'} ({snap.archiveProgressPercent}%)
+              {isTurbo ? '⚡ 고속 인덱싱 가드 가동 중' : '🍃 무소음 하드웨어 보호 가동 중'}
             </span>
           )}
         </div>

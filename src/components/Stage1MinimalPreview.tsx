@@ -934,7 +934,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                     : '전체 사진 목록'}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
-                  총 {groupedResults.length}장
+                  총 {hasExecutedUserSearch ? searchResults.length : gallerySceneCount}장
                 </span>
               </div>
             </div>

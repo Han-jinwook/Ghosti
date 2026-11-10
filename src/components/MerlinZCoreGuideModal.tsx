@@ -57,9 +57,25 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   }, [isLoggedIn, user?.email]);
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
-  const totalPhotoCount = activePhotos.length || 301;
+  const galleryScenePhotos = useMemo(
+    () =>
+      activePhotos.filter(
+        (p) =>
+          !p.isVaultDocument &&
+          p.trashCategory !== 'blurry' &&
+          p.trashCategory !== 'screenshot' &&
+          p.trashCategory !== 'memo' &&
+          p.trashCategory !== 'duplicate'
+      ),
+    [activePhotos]
+  );
+  const vaultPhotoCount = useMemo(
+    () => activePhotos.filter((p) => p.isVaultDocument).length,
+    [activePhotos]
+  );
+  const totalPhotoCount = galleryScenePhotos.length || activePhotos.length || 301;
   const totalVideoCount = videoSceneItems.length || 6;
-  const totalDocCount = (localDocuments.length + matchedVaultPhotos.length) || 26;
+  const totalDocCount = (localDocuments.length + vaultPhotoCount) || 26;
 
   const [isConnected, setIsConnected] = useState<boolean>(zCoreBridge.isConnected);
   const [isChecking, setIsChecking] = useState<boolean>(false);
