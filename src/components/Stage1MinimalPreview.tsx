@@ -1445,7 +1445,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     onClick={() => {
                       setSearchSpace('vault');
                       if (layout === 'mobile') setMobileTab('search');
-                      else setDesktopTab('ghost_search');
+                      else setDesktopTab('dashboard');
                     }}
                     className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-amber-500/30 text-amber-300 text-[11.5px] font-extrabold transition cursor-pointer"
                   >
