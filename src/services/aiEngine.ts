@@ -2232,7 +2232,7 @@ export async function loadInitialPhotoDataset(): Promise<{
       // 독사진(1인 셀카)과 커플 사진(2인 셀카)이 절대 같은 연사 묶음으로 섞이지 않도록 분리
       if (
         (Boolean(last.md5) && last.md5 === cand.md5) ||
-        (sameCluster && dist <= 12) ||
+        (sameCluster && dist <= 12 && dt <= 60 && last.ts > 0) ||
         (dist <= 5 && dt <= 4 && skinDiff <= 5.0 && last.ts > 0) ||
         (sameCluster && dt <= 3 && dist <= 12 && distFromFirst <= 14 && skinDiff <= 5.5 && last.ts > 0)
       ) {
@@ -2757,6 +2757,10 @@ export async function executeTextSearch(
   const isSoloQuery = /독사진|단독|1명|혼자|셀카|프로필/.test(qLower);
   const isSmileQuery = /웃는|웃고|미소|웃음|환하게|해맑|활짝|smile/.test(qLower);
   const isBeachQuery = /해변|바다|바닷가|백사장|모래사장|파도|beach|ocean/.test(qLower);
+  const isFoodQuery =
+    /음식|요리|식사|식도락|먹방|안주|피자|스테이크|국밥|삼겹살|바비큐|샐러드|파스타|초밥|치킨|튀김|food|meal|dish/.test(
+      qLower
+    ) && !/영수증|전표|결제|주문내역/.test(qLower);
   // '개' 단독 글자는 '개월·두 개·개인'과 겹치므로 낱말로 쓰였을 때만 강아지로 판단
   const isDogQuery =
     /강아지|반려견|멍멍이|비글|퍼그|불독|웰시코기|코기|보더콜리|dog|puppy/.test(qLower) ||
@@ -2930,6 +2934,18 @@ export async function executeTextSearch(
           cap
         );
       if (!hasVisibleSeaInCaption) continue;
+    }
+
+    if (isFoodQuery) {
+      const hasVisibleFoodInCaption =
+        Boolean(cap) &&
+        /피자|스테이크|샐러드|감자 요리|바비큐 요리|국밥|고기국|튀김 안주|잔과 안주가 놓여|와인병과 디저트를 앞에|와인과 안주를 앞에|차려진 요리와 음식을 즐기는 식도락/.test(
+          cap
+        ) &&
+        !/불쇼|불꽃을 돌리며|공연을 바라보고|식사를 기다리며|손님들로 붐비고|음식을 담고 있다|접시를 들고 이동하고|맥주 잔이 놓인 테이블에 앉아 미소를|맥주잔을 들며 다정하게|칵테일 잔을 두고|종이컵 음료를 든|라떼아트가 그려진|과일 칵테일 음료가|와인 병의 라벨|식당 간판|휴대전화를 든 채 대화/.test(
+          cap
+        );
+      if (!hasVisibleFoodInCaption) continue;
     }
 
     if (isDogQuery && !isCatQuery && cap) {
