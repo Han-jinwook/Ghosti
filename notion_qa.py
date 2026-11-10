@@ -354,7 +354,7 @@ def fetch_bugs(target_status: Optional[str] = None) -> List[Dict[str, str]]:
     상태가 '발견 버그'(기본값)인 카드를 조회하여
     터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다. (100% 읽기 전용)
     """
-    trim_done_cards(6)
+    trim_done_cards(4)
     bugs = query_bugs_raw(target_status)
     resolved_status = target_status or STATUS_DISCOVERED
 
@@ -587,15 +587,15 @@ def complete_bug(
         print("🔔" * 24)
     else:
         print(f"\n🎉 현재 '{STATUS_DISCOVERED}' 컬럼의 모든 티켓 처리가 끝났습니다!")
-    trim_done_cards(6)
+    trim_done_cards(4)
 
     return True
 
 
-def trim_done_cards(keep_count: int = 6) -> int:
+def trim_done_cards(keep_count: int = 4) -> int:
     """
     '완료' 컬럼의 카드가 무한정 쌓여 보드가 길어지는 문제를 방지하기 위해,
-    최신 N개만 남기고 이전 완료 카드들을 노션 보관함(archived: True)으로 안전하게 이동합니다.
+    최신 4개만 남기고 이전 완료 카드들을 노션 보관함(archived: True)으로 안전하게 이동합니다.
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
@@ -618,19 +618,7 @@ def trim_done_cards(keep_count: int = 6) -> int:
     except Exception:
         return 0
 
-    raw_results = res.json().get("results", [])
-    # 🚨 [헌법 제16조 3항] 귀신창, 멀린비서 및 타 프로젝트 전담 카드는 완료 보관 대상에서 영구 제외
-    results = []
-    for p in raw_results:
-        props = p.get("properties", {})
-        t = extract_plain_text(props.get(SCHEMA.title_prop_name, {}).get("title", []))
-        app_val = props.get("앱", {}).get("select", {})
-        app_name = app_val.get("name", "") if app_val else ""
-        if "귀신창" in t or "멀린비서" in t or "귀신창" in app_name or "멀린비서" in app_name:
-            continue
-        # 오직 Ghosti(귀신같이) 관련 카드만 보관 정돈 대상에 포함
-        results.append(p)
-
+    results = res.json().get("results", [])
     if len(results) <= keep_count:
         return 0
 

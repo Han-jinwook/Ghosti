@@ -241,13 +241,8 @@ export const DesktopDashboard: React.FC = () => {
     setIsZCoreConnected(zCoreBridge.isConnected);
     const onOpenZCoreGuide = () => setShowZCoreGuideModal(true);
     window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
-    let prevConn = zCoreBridge.isConnected;
     const unsub = zCoreBridge.subscribe((conn) => {
       setIsZCoreConnected(conn);
-      if (conn && !prevConn) {
-        void useSaySeeStore.getState().initApp(true);
-      }
-      prevConn = conn;
       if (
         conn &&
         typeof sessionStorage !== 'undefined' &&
@@ -410,9 +405,13 @@ export const DesktopDashboard: React.FC = () => {
     if (!ghostSearchWindowStage) return;
     setActiveLoungeType('personal');
     setDesktopTab('dashboard');
-    // 귀신비서·현장 소환에서 넘겨준 검색어(&q=)가 있으면 기존 찾기 화면에서 바로 검색 실행 (초기화 직후에도 즉시 반영)
-    const q = new URLSearchParams(window.location.search).get('q');
-    if (q && q.trim()) void useSaySeeStore.getState().runTextQuery(q.trim());
+    // 귀신비서·현장 소환에서 넘겨준 검색어(&q=)가 있으면 초기화 완료 후 아직 실행되지 않았을 때만 1회 실행
+    if (!initialized) return;
+    const q = (new URLSearchParams(window.location.search).get('q') || '').trim();
+    const st = useSaySeeStore.getState();
+    if (q && (!st.hasExecutedUserSearch || st.activeQuery !== q)) {
+      void st.runTextQuery(q);
+    }
   }, [ghostSearchWindowStage, initialized, setActiveLoungeType, setDesktopTab]);
 
   const isAnySubscribed = useMemo(

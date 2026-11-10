@@ -2184,64 +2184,87 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const currentSearchSpace = get().searchSpace;
     const currentHasUserSelectedSearchTab = get().hasUserSelectedSearchTab;
     const currentHasExecutedUserSearch = get().hasExecutedUserSearch;
-
-    set({
-      photos: enrichedPhotos,
-      duplicateGroups: dataset.duplicateGroups,
-      localDocuments: indexedDocs,
-      matchedLocalDocs: indexedDocs,
-      matchedVaultPhotos: initialVaultPhotos,
-      videoSceneItems: indexedVideos,
-      matchedVideoScenes: indexedVideos,
-      faceClusters: autoMultiClusters,
-      latestCorpusYear: faceData.latestCorpusYear,
-      onboardingProgress: {
-        ...INITIAL_ONBOARDING_PROGRESS,
-        currentPhotoThumb: fallbackThumb,
-      },
-      telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
-      syncState,
-      sentenceChips: localChips,
-      onboardingAhaItems: localAhaItems,
-      // 유저가 이미 동영상이나 문서 탭을 클릭해 탐색 중이거나 검색한 경우, 백그라운드 재인덱싱/Z코어 재연결 시 사진(gallery) 탭으로 강제 롤백되는 현상을 원천 방지
-      searchSpace: currentHasUserSelectedSearchTab ? currentSearchSpace : 'gallery',
-      hasExecutedUserSearch: currentHasExecutedUserSearch,
-      hasUserSelectedSearchTab: currentHasUserSelectedSearchTab,
-      activeQuery: currentHasExecutedUserSearch
-        ? get().activeQuery
-        : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
-        ? `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
-        : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
-        ? `최근 서류 ${indexedDocs.length + initialVaultPhotos.length}건 통합 (로컬 문서 ${indexedDocs.length}건 + 촬영 서류 ${initialVaultPhotos.length}장)`
-        : `전체 갤러리 사진 (${enrichedPhotos.filter((p) => !p.quarantined).length}장)`,
-      matchedTags: currentHasExecutedUserSearch
-        ? get().matchedTags
-        : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
-        ? ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱']
-        : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
-        ? ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색']
-        : ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
-      searchResults: initialGalleryPhotos,
-      selectedTrashIds: trashIds,
-      initialized: true,
-      initializing: false,
-    });
-
-    // [검색 결과 덮어쓰기 원천 방어]: URL 파라미터(?q=...) 또는 직전 유저 검색어가 활성 상태일 때
-    // initApp(true) 재실행이 전체 350장 갤러리를 그대로 덮어씌우지 않도록 즉시 해당 검색어로 재필터링!
     const preservedQuery = currentHasExecutedUserSearch ? (get().activeQuery || '').trim() : '';
     const urlQuery =
       typeof window !== 'undefined'
         ? (new URLSearchParams(window.location.search).get('q') || '').trim()
         : '';
     const queryToReRun = preservedQuery || urlQuery;
-    if (
+    const shouldPreRunQuery = Boolean(
       queryToReRun &&
-      !queryToReRun.startsWith('전체 갤러리 사진') &&
-      !queryToReRun.startsWith('동영상 ') &&
-      !queryToReRun.startsWith('최근 서류 ')
-    ) {
+        !queryToReRun.startsWith('전체 갤러리 사진') &&
+        !queryToReRun.startsWith('동영상 ') &&
+        !queryToReRun.startsWith('최근 서류 ')
+    );
+
+    if (shouldPreRunQuery) {
+      // [검색 결과 깜빡임(350 ➔ 36) 원천 차단]: URL(?q=...) 또는 기존 검색어가 활성 상태일 때
+      // 전체 갤러리(350장)나 전체 문서(224건) 카운트를 중간에 노출하지 않고,
+      // 원본 코퍼스만 먼저 적재한 뒤 곧바로 runTextQuery를 완료하고 initialized: true로 전환!
+      set({
+        photos: enrichedPhotos,
+        duplicateGroups: dataset.duplicateGroups,
+        localDocuments: indexedDocs,
+        videoSceneItems: indexedVideos,
+        faceClusters: autoMultiClusters,
+        latestCorpusYear: faceData.latestCorpusYear,
+        onboardingProgress: {
+          ...INITIAL_ONBOARDING_PROGRESS,
+          currentPhotoThumb: fallbackThumb,
+        },
+        telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
+        syncState,
+        sentenceChips: localChips,
+        onboardingAhaItems: localAhaItems,
+        selectedTrashIds: trashIds,
+      });
       await get().runTextQuery(queryToReRun);
+      set({
+        initialized: true,
+        initializing: false,
+      });
+    } else {
+      set({
+        photos: enrichedPhotos,
+        duplicateGroups: dataset.duplicateGroups,
+        localDocuments: indexedDocs,
+        matchedLocalDocs: indexedDocs,
+        matchedVaultPhotos: initialVaultPhotos,
+        videoSceneItems: indexedVideos,
+        matchedVideoScenes: indexedVideos,
+        faceClusters: autoMultiClusters,
+        latestCorpusYear: faceData.latestCorpusYear,
+        onboardingProgress: {
+          ...INITIAL_ONBOARDING_PROGRESS,
+          currentPhotoThumb: fallbackThumb,
+        },
+        telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
+        syncState,
+        sentenceChips: localChips,
+        onboardingAhaItems: localAhaItems,
+        // 유저가 이미 동영상이나 문서 탭을 클릭해 탐색 중이거나 검색한 경우, 백그라운드 재인덱싱/Z코어 재연결 시 사진(gallery) 탭으로 강제 롤백되는 현상을 원천 방지
+        searchSpace: currentHasUserSelectedSearchTab ? currentSearchSpace : 'gallery',
+        hasExecutedUserSearch: currentHasExecutedUserSearch,
+        hasUserSelectedSearchTab: currentHasUserSelectedSearchTab,
+        activeQuery: currentHasExecutedUserSearch
+          ? get().activeQuery
+          : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
+          ? `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
+          : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
+          ? `최근 서류 ${indexedDocs.length + initialVaultPhotos.length}건 통합 (로컬 문서 ${indexedDocs.length}건 + 촬영 서류 ${initialVaultPhotos.length}장)`
+          : `전체 갤러리 사진 (${enrichedPhotos.filter((p) => !p.quarantined).length}장)`,
+        matchedTags: currentHasExecutedUserSearch
+          ? get().matchedTags
+          : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
+          ? ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱']
+          : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
+          ? ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색']
+          : ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
+        searchResults: initialGalleryPhotos,
+        selectedTrashIds: trashIds,
+        initialized: true,
+        initializing: false,
+      });
     }
 
     // [의미 검색 엔진 준비] 데스크톱에서만, 앱이 뜬 뒤 백그라운드로 검색어 인코더(약 166MB, 최초 1회 후 OPFS 캐시)를 불러온다.
@@ -2706,10 +2729,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         }))
       : photos;
 
-    // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출
+    // [사진 전용 질의 감지]: 사용자가 명시적으로 "바다 사진", "강아지 사진" 등 '사진/셀카/이미지'를 찾아달라고 한 경우,
+    // 문서 본문 텍스트나 동영상을 불필요하게 뒤지지 않고 사진 검색에만 집중!
+    const isExplicitPhotoOnlyQuery =
+      /(?:사진|셀카|이미지|풍경|인물컷|스냅)/.test(query) &&
+      !/문서|서류|파일|계약|영수증|전표|엑셀|시트|글자|동영상|영상/.test(query);
+
+    // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출 (단, 사진 전용 질의 시 문서·동영상 제외)
     const [docMatches, videoMatches, photoSearchOut] = await Promise.all([
-      searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
-      searchVideoSceneItemsAsync(cleanedSearchQuery || query, videoSceneItems),
+      isExplicitPhotoOnlyQuery
+        ? Promise.resolve([])
+        : searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
+      isExplicitPhotoOnlyQuery
+        ? Promise.resolve([])
+        : searchVideoSceneItemsAsync(cleanedSearchQuery || query, videoSceneItems),
       cleanedSearchQuery
         ? executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
         : Promise.resolve({ results: [], embedMs: 0, searchMs: 0 }),
@@ -2846,18 +2879,20 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         }
       }
     }
-    const vaultPhotoMatches = Array.from(vaultMap.values());
+    const vaultPhotoMatches = isExplicitPhotoOnlyQuery ? [] : Array.from(vaultMap.values());
 
     // [규칙 1 & 2 + 동창회 타임라인 검색 시 갤러리 즉시 표시 + 동영상 전용 질의 시 동영상 탭 자동 포커스]
     const isExplicitVideoIntent =
+      !isExplicitPhotoOnlyQuery &&
       /영상\s*속|동영상|장면|구간|순간|말하는\s*부분|외치는|패러세일링|화이트보드|판서|룰렛|급식/.test(query);
-    let targetSpace: SearchSpaceMode = isTimeRangeOrAlumniQuery
-      ? 'gallery'
-      : isExplicitVideoIntent && videoMatches.length > 0
-      ? 'video'
-      : hasUserSelectedSearchTab
-      ? searchSpace
-      : 'gallery';
+    let targetSpace: SearchSpaceMode =
+      isExplicitPhotoOnlyQuery || isTimeRangeOrAlumniQuery
+        ? 'gallery'
+        : isExplicitVideoIntent && videoMatches.length > 0
+        ? 'video'
+        : hasUserSelectedSearchTab
+        ? searchSpace
+        : 'gallery';
 
     if (targetSpace === 'gallery' && results.length === 0) {
       if (videoMatches.length > 0) targetSpace = 'video';

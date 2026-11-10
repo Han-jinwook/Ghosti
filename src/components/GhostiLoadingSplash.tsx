@@ -8,8 +8,12 @@ import { playAppEnterGiggleSound } from '../services/babyGhostSound';
  * - 화면 아무 곳이나 클릭 시 즉시 닫힘
  */
 export const GhostiLoadingSplash: React.FC = () => {
-  const [dismissed, setDismissed] = useState(false);
-  const [unmounted, setUnmounted] = useState(false);
+  const isPopupSearchWindow =
+    typeof window !== 'undefined' &&
+    (window.location.search.includes('ghostSearchWindow=') ||
+      window.location.search.includes('tab=search_dojo'));
+  const [dismissed, setDismissed] = useState(isPopupSearchWindow);
+  const [unmounted, setUnmounted] = useState(isPopupSearchWindow);
 
   useEffect(() => {
     // 0.3초(300ms) 후 순식간에 페이드아웃 진입

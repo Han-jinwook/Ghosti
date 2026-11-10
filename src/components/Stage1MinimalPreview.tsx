@@ -256,6 +256,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     setSelectedDocModal,
     syncRealVideoDuration,
     toggleBookmark,
+    initialized,
   } = useSaySeeStore();
 
   const [textInput, setTextInput] = useState(() => {
@@ -288,7 +289,8 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     const q = (initialQuery || '').trim();
     if (q) {
       setTextInput(q);
-      if (!hasExecutedUserSearch || activeQuery !== q) {
+      // 초기 코퍼스 적재(initialized) 완료 전에는 빈 배열에 runTextQuery를 호출하지 않아 (0) 깜빡임을 원천 차단!
+      if (initialized && (!hasExecutedUserSearch || activeQuery !== q)) {
         void runTextQuery(q);
       }
       return;
@@ -302,7 +304,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     ) {
       setTextInput(activeQuery);
     }
-  }, [initialQuery, hasExecutedUserSearch, activeQuery, runTextQuery]);
+  }, [initialQuery, initialized, hasExecutedUserSearch, activeQuery, runTextQuery]);
 
   const isMobile = layout === 'mobile';
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
@@ -557,7 +559,11 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                         : 'text-zinc-400 font-bold'
                     }`}
                   >
-                    {hasExecutedUserSearch ? `(${searchResults.length})` : gallerySceneCount}
+                    {!initialized
+                      ? '…'
+                      : hasExecutedUserSearch
+                      ? `(${searchResults.length})`
+                      : gallerySceneCount}
                   </span>
                 </button>
 
@@ -580,7 +586,9 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                         : 'text-zinc-400 font-bold'
                     }`}
                   >
-                    {hasExecutedUserSearch
+                    {!initialized
+                      ? '…'
+                      : hasExecutedUserSearch
                       ? `(${matchedVideoScenes.length})`
                       : `${videoSceneItems.length}`}
                   </span>
@@ -605,7 +613,11 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                         : 'text-zinc-400 font-bold'
                     }`}
                   >
-                    {hasExecutedUserSearch ? `(${matchedTotalDocsCount})` : totalIndexedDocs}
+                    {!initialized
+                      ? '…'
+                      : hasExecutedUserSearch
+                      ? `(${matchedTotalDocsCount})`
+                      : totalIndexedDocs}
                   </span>
                 </button>
               </div>

@@ -461,6 +461,7 @@ export const App: React.FC = () => {
   }, [isDevAuthorized]);
 
   useEffect(() => {
+    const mountInitStartMs = Date.now();
     playAppEnterGiggleSound();
     void initApp();
     const handleZCoreConnected = () => {
@@ -479,7 +480,10 @@ export const App: React.FC = () => {
           lastQuarantineToast: '🎉 멀린 Z-코어(Port 5199) 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
         });
       }
-      void initApp(true);
+      // 앱 마운트 직후(3초 이내)에는 초기 initApp()이 이미 Z-코어를 포함해 로딩 중이므로 중복 initApp(true) 호출 차단
+      if (Date.now() - mountInitStartMs > 3000) {
+        void initApp(true);
+      }
     };
     window.addEventListener('zCoreConnected', handleZCoreConnected);
     return () => window.removeEventListener('zCoreConnected', handleZCoreConnected);

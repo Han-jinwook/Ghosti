@@ -971,12 +971,10 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
       const zJson = await zRes.value.json();
       const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
       const localCandidates = zVids.filter((v) => v && v.videoFileName && !merged.has(v.videoFileName));
-      const probedDurations = await Promise.all(
-        localCandidates.map((v) => probeBrowserVideoDurationSec(v.videoUrl))
-      );
-      localCandidates.forEach((v, idx) => {
-        const realDur = probedDurations[idx];
-        merged.set(v.videoFileName, normalizeLocalVideoSceneItem(v, realDur ?? undefined));
+      // [초고속 초기 로딩 보장] initApp() 단계에서 비디오 바이너리를 다운로드하며 3~4초 블로킹하지 않고
+      // 메타데이터 길이를 즉시 반영한 뒤, 동영상 탭 진입 시 <video onLoadedMetadata>에서 지연 보정합니다.
+      localCandidates.forEach((v) => {
+        merged.set(v.videoFileName, normalizeLocalVideoSceneItem(v));
       });
     }
     return Array.from(merged.values());
@@ -1804,7 +1802,9 @@ export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSea
       const pB = entry.item.photo;
       const dt = Math.abs(entry.tsSec - last.tsSec);
       const dhashDist =
-        pA.dhash && pB.dhash ? hammingDistanceHex64(pA.dhash, pB.dhash) : 64;
+        pA.dhash && pA.dhash !== '0' && pB.dhash && pB.dhash !== '0'
+          ? hammingDistanceHex64(pA.dhash, pB.dhash)
+          : 64;
       const sameDupGroup =
         Boolean(pA.duplicateGroupId) && pA.duplicateGroupId === pB.duplicateGroupId;
       const sameSceneCluster =
@@ -2069,6 +2069,12 @@ export async function loadInitialPhotoDataset(): Promise<{
         ],
         primaryTag: '#회의실·브리핑',
       });
+      semanticByPhoto.set('IMG_20250815_1008.jpg', {
+        captionKo: '식당에서 숙성 생삼겹살 등 외식 식사비를 결제한 영수증 전표 사진입니다.',
+        captionEn: 'Paper restaurant receipt for pork belly meal payment.',
+        keywordsKo: ['영수증', '전표', '삼겹살', '식당', '결제', '카드영수증'],
+        primaryTag: '#주차장·기둥',
+      });
       const existingNames = new Set(fileList.map((f) => f.path));
       const bundledEntries = curatedSampleFiles
         .filter((name) => !existingNames.has(name))
@@ -2196,6 +2202,7 @@ export async function loadInitialPhotoDataset(): Promise<{
 
   for (let i = 0; i < activeAudits.length; i++) {
     const first = activeAudits[i];
+    if (!auditByPhoto.has(first.f) || !first.dhash || first.dhash === '0') continue;
     const firstSem = semanticByPhoto.get(first.f) as any;
     if (visitedDup.has(first.f) || BES2_EXPLICIT_TRASH_TAGS.has(firstSem?.primaryTag)) continue;
 
@@ -2205,6 +2212,7 @@ export async function loadInitialPhotoDataset(): Promise<{
 
     for (let j = i + 1; j < activeAudits.length; j++) {
       const cand = activeAudits[j];
+      if (!auditByPhoto.has(cand.f) || !cand.dhash || cand.dhash === '0') continue;
       const candSem = semanticByPhoto.get(cand.f) as any;
       if (visitedDup.has(cand.f) || BES2_EXPLICIT_TRASH_TAGS.has(candSem?.primaryTag)) continue;
 
@@ -2223,7 +2231,7 @@ export async function loadInitialPhotoDataset(): Promise<{
       // dHash 거리 임계치(<= 12) 및 인물 피부 면적 차이(skinDiff <= 5.5%)를 엄격히 제한하여
       // 독사진(1인 셀카)과 커플 사진(2인 셀카)이 절대 같은 연사 묶음으로 섞이지 않도록 분리
       if (
-        last.md5 === cand.md5 ||
+        (Boolean(last.md5) && last.md5 === cand.md5) ||
         (sameCluster && dist <= 12) ||
         (dist <= 5 && dt <= 4 && skinDiff <= 5.0 && last.ts > 0) ||
         (sameCluster && dt <= 3 && dist <= 12 && distFromFirst <= 14 && skinDiff <= 5.5 && last.ts > 0)
@@ -2914,17 +2922,14 @@ export async function executeTextSearch(
       }
     }
 
-    if (isBeachQuery && cap) {
-      const hasBeachWord =
-        tagAndKwText.includes('해변') ||
-        tagAndKwText.includes('바다') ||
-        tagAndKwText.includes('바닷가') ||
-        tagAndKwText.includes('백사장') ||
-        tagAndKwText.includes('모래사장') ||
-        tagAndKwText.includes('파도') ||
-        cap.includes('해변') ||
-        cap.includes('바다');
-      if (!hasBeachWord) continue;
+    if (isBeachQuery) {
+      const hasVisibleSeaInCaption =
+        Boolean(cap) &&
+        /바다|해변|바닷가|바닷물|파도|백사장|모래사장|수평선/.test(cap) &&
+        !/정자 그늘|잔디밭|나무 그늘|전망대|야자수 나무에 기대어|요트 위 테이블|기둥에 기댄|요트 난간에 기댄|섬을 배경으로 손가락 브이/.test(
+          cap
+        );
+      if (!hasVisibleSeaInCaption) continue;
     }
 
     if (isDogQuery && !isCatQuery && cap) {
