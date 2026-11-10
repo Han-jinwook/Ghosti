@@ -597,29 +597,31 @@ const TrialRewardCard: React.FC = () => {
   const { merlinAuth, activePricingPlan, subscribedLounges } = useSaySeeStore();
   const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
   const isSubscribed = activePricingPlan !== 'free_trial' || Object.values(subscribedLounges).some(Boolean);
-  const [status, setStatus] = useState<SuperpowerTrialStatus | null>(null);
-  const [declined, setDeclined] = useState<boolean>(() => {
+  const [, setStatus] = useState<SuperpowerTrialStatus | null>(null);
+  const [choice, setChoice] = useState<'none' | 'trial' | 'daily3'>(() => {
     try {
-      return localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY) === 'daily3';
+      const saved = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY);
+      if (saved === 'trial' || saved === 'daily3') return saved;
     } catch {
-      return false;
+      /* ignore */
     }
+    return 'none';
   });
 
   useEffect(() => {
     void fetchSuperpowerStatus(accountId, isSubscribed).then(setStatus);
+    const syncChoice = () => {
+      try {
+        const saved = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY);
+        if (saved === 'trial' || saved === 'daily3') setChoice(saved);
+        else setChoice('none');
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener('ghosti_dojo_trial_choice_updated', syncChoice);
+    return () => window.removeEventListener('ghosti_dojo_trial_choice_updated', syncChoice);
   }, [accountId, isSubscribed]);
-
-  const alreadyActive =
-    status && (status.is_subscribed || ['ACTIVE', 'PER_FEATURE_ACTIVE', 'SUBSCRIBED'].includes(status.trial_status));
-
-  if (alreadyActive) {
-    return (
-      <div className="px-4 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-400/40 text-[13px] font-extrabold text-emerald-300">
-        ✨ 체험중 — 모든 귀신 초능력 무제한
-      </div>
-    );
-  }
 
   return (
     <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/15 to-emerald-500/10 border-2 border-amber-400/60 flex flex-col gap-2.5">
@@ -634,37 +636,59 @@ const TrialRewardCard: React.FC = () => {
       <div className="flex flex-wrap gap-2 pt-1">
         <button
           type="button"
-          className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[13px] font-extrabold cursor-pointer"
+          className={`px-4 py-2.5 rounded-xl text-[13px] font-extrabold cursor-pointer transition-all ${
+            choice === 'trial'
+              ? 'bg-emerald-400 text-zinc-950 ring-2 ring-emerald-300 shadow-md'
+              : 'bg-amber-400 hover:bg-amber-300 text-zinc-950'
+          }`}
           onClick={async () => {
-            const st = await startSuperpowerTrialAction(accountId, isSubscribed);
-            setStatus(st);
+            setChoice('trial');
             try {
               localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'trial');
+              window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
             } catch {
               /* ignore */
             }
             playBabyGhostChime('summon');
+            const st = await startSuperpowerTrialAction(accountId, isSubscribed);
+            setStatus(st);
           }}
         >
-          🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기
+          {choice === 'trial'
+            ? '✓ 🚀 오늘부터 30일 무제한 초능력 체험 중!'
+            : '🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기'}
         </button>
         <button
           type="button"
-          className={`px-4 py-2.5 rounded-xl border text-[13px] font-bold cursor-pointer ${
-            declined ? 'border-zinc-500 text-zinc-400' : 'border-white/20 text-zinc-300 hover:bg-white/5'
+          className={`px-4 py-2.5 rounded-xl border text-[13px] font-bold cursor-pointer transition-all ${
+            choice === 'daily3'
+              ? 'border-teal-400 bg-teal-500/20 text-teal-200 ring-1 ring-teal-400'
+              : 'border-white/20 text-zinc-300 hover:bg-white/5'
           }`}
           onClick={() => {
-            setDeclined(true);
+            setChoice('daily3');
             try {
               localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'daily3');
+              window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
             } catch {
               /* ignore */
             }
+            playBabyGhostChime('typo');
           }}
         >
-          {declined ? '✓ 하루 3회씩 쓰는 중 (언제든 다시 시작 가능)' : '그냥 하루 3회씩만 쓸게요'}
+          {choice === 'daily3' ? '✓ 하루 3회씩 쓰는 중 (언제든 왼쪽 버튼으로 시작 가능)' : '그냥 하루 3회씩만 쓸게요'}
         </button>
       </div>
+      {choice === 'trial' && (
+        <div className="px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[12.5px] font-extrabold text-emerald-300">
+          ✨ 체험중 — 오늘부터 30일간 모든 귀신 초능력을 횟수 제한 없이 무제한으로 사용하실 수 있습니다!
+        </div>
+      )}
+      {choice === 'daily3' && (
+        <div className="px-3.5 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-[12.5px] font-extrabold text-teal-200">
+          📌 하루 3회 무료 모드가 적용되었습니다. (30일 무제한 무료체험권은 아껴두었으며 언제든 왼쪽 버튼을 눌러 시작할 수 있습니다!)
+        </div>
+      )}
     </div>
   );
 };

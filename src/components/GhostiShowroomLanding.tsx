@@ -5,6 +5,7 @@ import { syncHubUserToLocalSupabase } from '../services/supabaseClient';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { Z_CORE_ZIP_URL, LATEST_Z_CORE_VERSION } from '../services/zCoreBridge';
 import { simulateSuperpowerLocal, playBabyGhostChime } from './OnboardingModal';
+import { GhostSuperpowerDojo } from './ghostDojo/GhostSuperpowerDojo';
 
 // 특허 출원번호(10-2026-XXXXXXX) 확보 전까지 허위표시 리스크 및 출원 전 공지(신규성 상실) 방지를 위해 false 유지
 export const PATENTS_FILED = false;
@@ -809,7 +810,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                👻 Ctrl+0 초능력 · 기기통합
+                ⚡ 귀신창 초능력
               </button>
             </div>
           </div>
@@ -996,136 +997,21 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             {demoTab === 'superpower' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 1) 2어절 한영·영한 오타 둔갑술 */}
-                  <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-400/35 flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-extrabold text-amber-300">
-                        ① 2어절 한영·영한 오타 둔갑술 (띠리링~👻)
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-black">
-                        Ctrl + 0 · [2]번
-                      </span>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={typoInput}
-                        onChange={(e) => setTypoInput(e.target.value)}
-                        placeholder="예: dkssudgktpdy qksrkqtmqslek"
-                        className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-xs text-white outline-none focus:border-amber-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTypoOutput(simulateSuperpowerLocal('typo', typoInput));
-                          playBabyGhostChime('typo');
-                        }}
-                        className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 cursor-pointer"
-                      >
-                        🪄 둔갑 체험
-                      </button>
-                    </div>
-                    <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-400/30 text-xs">
-                      <span className="text-zinc-400 mr-1.5">변환 결과:</span>
-                      <strong className="text-white">{typoOutput}</strong>
-                    </div>
-                  </div>
+                <GhostSuperpowerDojo variant="full" />
 
-                  {/* 2) 9번 억만금 숫자 양방향 변환 */}
-                  <div className="p-4 rounded-2xl bg-zinc-950 border border-emerald-400/35 flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-extrabold text-emerald-300">
-                        ② 억만금 한글 숫자 ⇄ 아라비아 숫자 변환 (9번)
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/60 via-zinc-950 to-zinc-950 border border-emerald-400/40 flex flex-col justify-between gap-2.5">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-[11px] font-black">
+                        👑 내 기기 통합 (🎁 1개월 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)
                       </span>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMoneyInput('3억 5천만');
-                            setMoneyOutput(simulateSuperpowerLocal('number9', '3억 5천만'));
-                          }}
-                          className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
-                        >
-                          3억 5천만
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMoneyInput('1285000000');
-                            setMoneyOutput(simulateSuperpowerLocal('number9', '1285000000'));
-                          }}
-                          className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
-                        >
-                          1,285,000,000
-                        </button>
-                      </div>
+                      <span className="text-[11px] text-teal-300 font-bold">내 기기·사진 공유는 평생 0원</span>
                     </div>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={moneyInput}
-                        onChange={(e) => {
-                          setMoneyInput(e.target.value);
-                          setMoneyOutput(simulateSuperpowerLocal('number9', e.target.value));
-                        }}
-                        className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-xs text-white outline-none focus:border-emerald-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setMoneyOutput(simulateSuperpowerLocal('number9', moneyInput))}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-black shrink-0 cursor-pointer"
-                      >
-                        변환
-                      </button>
-                    </div>
-                    <div className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-400/30 text-xs">
-                      <span className="text-zinc-400 mr-1.5">결과:</span>
-                      <strong className="text-white font-mono">{moneyOutput}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3) 8번 카톡 통짜 문자 계좌·연락처·일정 구조화 추출 & 무료 vs 내 기기 통합 요약 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-zinc-950 border border-cyan-400/35 flex flex-col gap-2">
-                    <span className="text-xs sm:text-sm font-extrabold text-cyan-300">
-                      ③ 카톡 통짜 문자 계좌·연락처·일정 구조화 추출 (8번)
-                    </span>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={extractInput}
-                        onChange={(e) => setExtractInput(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setExtractOutput(simulateSuperpowerLocal('extract8', extractInput))}
-                        className="px-3.5 py-2 rounded-xl bg-cyan-400 text-slate-950 text-xs font-black shrink-0 cursor-pointer"
-                      >
-                        구조화 추출
-                      </button>
-                    </div>
-                    <pre className="px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-[11px] text-cyan-100 whitespace-pre-wrap font-sans leading-snug">
-                      {extractOutput}
-                    </pre>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/60 via-zinc-950 to-zinc-950 border border-emerald-400/40 flex flex-col justify-between gap-2.5">
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-[11px] font-black">
-                          👑 내 기기 통합 (🎁 1개월 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)
-                        </span>
-                        <span className="text-[11px] text-teal-300 font-bold">내 기기·사진 공유는 평생 0원</span>
-                      </div>
-                      <p className="text-xs text-zinc-200 leading-relaxed">
-                        • <b>1번 내 기기(찾기·손보기) &amp; 2번 사진 공유(가족·동호회·동창회)</b>: 인원 무제한 <b>평생 0원</b> (사진·동영상 전용)<br />
-                        • <b>3번 내 기기 통합 (PC↔폰 연결 + Ctrl+0 귀신창)</b>: <b>1개월 무제한 무료체험 (만료 후에도 일 3회 평생 무료)</b> · 월 3,900원 / 10년 특판 39,000원<br />
-                        • <b>4번 업무 공유 (S: 드라이브 · 문서/계약서 공유)</b>: <b>1개월 무제한 무료체험 (만료 후 일 3회 평생 무료)</b> · 소호 월 9,900원~ / 10년 특판 99,000원~
-                      </p>
-                    </div>
+                    <p className="text-xs text-zinc-200 leading-relaxed">
+                      • <b>1번 내 기기(찾기·손보기) &amp; 2번 사진 공유(가족·동호회·동창회)</b>: 인원 무제한 <b>평생 0원</b> (사진·동영상 전용)<br />
+                      • <b>3번 내 기기 통합 (PC↔폰 연결 + Ctrl+0 귀신창)</b>: <b>1개월 무제한 무료체험 (만료 후에도 일 3회 평생 무료)</b> · 월 3,900원 / 10년 특판 39,000원<br />
+                      • <b>4번 업무 공유 (S: 드라이브 · 문서/계약서 공유)</b>: <b>1개월 무제한 무료체험 (만료 후 일 3회 평생 무료)</b> · 소호 월 9,900원~ / 10년 특판 99,000원~
+                    </p>
                   </div>
                 </div>
 

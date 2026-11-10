@@ -178,7 +178,7 @@ export const BASIC3_CHIPS = ['상호: 썬드림카페', BASIC3_TARGET_CHIP, '합
 // ─────────────────────────────────────────────────────────────
 
 export const DOJO_PROGRESS_STORAGE_KEY = 'ghosti_dojo_progress_v1';
-export const DOJO_TRIAL_CHOICE_STORAGE_KEY = 'ghosti_dojo_trial_choice_v1';
+export const DOJO_TRIAL_CHOICE_STORAGE_KEY = 'ghosti_dojo_trial_choice_v2';
 
 export interface DojoProgress {
   basics: Partial<Record<BasicStepId, boolean>>;
