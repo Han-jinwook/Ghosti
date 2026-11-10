@@ -1702,21 +1702,19 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
     const msgKo =
       `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
-      `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램을 삭제하지 않고 조용히 재워두었습니다!\n` +
-      `앞으로는 제가 평소엔 잠재워 두었다가, **은행이나 홈택스 사이트에 들어가실 때만 귀신같이 자동으로 깨워드릴게요.**\n\n` +
-      `💬 참! 제가 사진 정리랑 속도 관리 말고도 **숨은 초능력**이 두 가지 더 있는데, 뭔지 간단히 알려드릴까요?`;
+      `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램을 삭제하지 않고 조용히 재워두었습니다! (메모리 약 **${reclaimedMb}MB** 확보 완료)\n` +
+      `앞으로는 제가 평소엔 잠재워 두었다가, **은행이나 홈택스 사이트에 들어가실 때만 귀신같이 자동으로 깨워드릴게요!**`;
 
-    speak('은행 보안프로그램을 조용히 재워두었습니다. 앞으로는 은행 사이트에 들어가실 때만 자동으로 깨워드리겠습니다. 제 숨은 초능력 두 가지도 더 알려드릴까요?');
+    speak('은행 보안프로그램을 조용히 재워두었습니다. 앞으로는 은행 사이트에 들어가실 때만 자동으로 깨워드리겠습니다.');
     return reply(sourceTab, msgKo, {
       healthRecordIssued: issuedRec,
       followUpSuggestions: [
-        '✨ 응, 숨은 초능력 두 가지 알려줘',
         '📊 그동안 모아둔 비서 실적 보고서 보여줘',
       ],
     });
   }
 
-  // 2) 방식 A: 숨은 초능력 2가지 브리핑 (조용한 악성파일 검사 + 다운로드 폴더 누적 압축파일(ZIP) 건수 기반 우클릭 0.35초 안내)
+  // 2) 방식 A: 숨은 초능력 2가지 브리핑 (조용한 악성파일 검사 + 다운로드 폴더 누적 압축파일(ZIP) 3건 이상 임계치 분기 안내)
   const isAskingHiddenSuperpowers =
     /(숨은\s*초능력|초능력\s*두\s*가지|네\s*숨은\s*초능력)/i.test(clean) ||
     (isSimpleYes && /숨은\s*초능력.*?알려드릴까요/.test(lastAssistantText));
@@ -1736,42 +1734,64 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     }
 
     const silentPassCount = Math.max(12, Number(defRes?.silentPassCount || 24));
-    const zipCount = Math.max(3, Number(defRes?.downloadsArchiveCount || 4));
+    const zipCount = Number(defRes?.downloadsArchiveCount ?? 0);
+    const thresholdMet = Boolean(defRes?.downloadsArchiveThresholdMet ?? zipCount >= 3);
     const zipSamples: string[] = Array.isArray(defRes?.downloadsArchiveSamples)
       ? defRes.downloadsArchiveSamples
       : [];
     const sampleHint =
       zipSamples.length > 0 ? ` (예: \`${zipSamples[0]}\` 등)` : '';
 
+    const zipSectionKo = thresholdMet
+      ? `2️⃣ **탐색기 우클릭 0.35초 꾹 압축 풀기**\n` +
+        `살펴보니 지금 다운로드 폴더에 그동안 받으신 **압축파일(ZIP)이 총 ${zipCount}건**${sampleHint} 쌓여 있던데요! 파일 받을 때마다 귀찮게 쫓아다니며 팝업을 띄우지 않으니, 필요하실 때 탐색기에서 압축파일 위에 **마우스 우클릭을 0.35초만 살짝 길게 꾹** 눌러보세요. 맥북 한글 깨짐까지 알아서 고쳐서 1초 만에 풀어드립니다. 우리 걸로 한 번 써보실래요?`
+      : `2️⃣ **탐색기 우클릭 0.35초 꾹 압축 풀기**\n` +
+        `파일을 받으실 때마다 귀찮게 쫓아다니며 팝업을 띄우지 않아요! 대신 앞으로 다운로드 폴더에 **압축파일(ZIP)이 3건 이상 쌓이면** 제가 실적을 모아서 알려드릴게요. 언제든 탐색기에서 압축파일 위에 **마우스 우클릭을 0.35초만 살짝 길게 꾹** 누르시면 맥북 한글 깨짐 없이 1초 만에 풀어드립니다.`;
+
     const msgKo =
       `✨ **[귀신비서의 숨은 초능력 2가지 보고]**\n\n` +
       `1️⃣ **조용한 파일 경호원 (악성파일 무소음 검사)**\n` +
       `인터넷에서 파일이나 문서를 받으실 때마다 무거운 백신 광고창 없이 윈도우 기본 보안엔진으로 뒤에서 조용히 검사합니다. 안전할 땐 귀찮은 팝업을 절대 안 띄우고, 진짜 위험한 파일이 나올 때만 바로 알려드려요! *(최근 확인한 파일 **${silentPassCount}건** 모두 안전 통과)*\n\n` +
-      `2️⃣ **탐색기 우클릭 0.35초 꾹 압축 풀기**\n` +
-      `방금 다운로드 폴더를 보니까 그동안 받으신 **압축파일(ZIP)이 ${zipCount}건**${sampleHint} 있던데요! 파일 받을 때마다 귀찮게 쫓아다니며 팝업을 띄우지 않으니, 필요하실 때 탐색기에서 압축파일 위에 **마우스 우클릭을 0.35초만 살짝 길게 꾹** 눌러보세요. 맥북 한글 깨짐까지 알아서 고쳐서 1초 만에 풀어드립니다. 우리 걸로 한 번 써보실래요?`;
+      zipSectionKo;
 
-    speak(`제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 조용히 안전 검사했고, 둘째로 다운로드 폴더에 있는 압축파일 ${zipCount}건 위에서 우클릭을 영점삼오초만 꾹 누르시면 한글 깨짐 없이 바로 풀어드립니다.`);
+    speak(
+      thresholdMet
+        ? `제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 조용히 안전 검사했고, 둘째로 다운로드 폴더에 쌓여 있는 압축파일 ${zipCount}건 위에서 우클릭을 영점삼오초만 꾹 누르시면 한글 깨짐 없이 바로 풀어드립니다.`
+        : `제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 조용히 안전 검사했고, 둘째로 탐색기에서 압축파일 위에 우클릭을 영점삼오초만 꾹 누르시면 한글 깨짐 없이 바로 풀어드립니다.`
+    );
     return reply(sourceTab, msgKo, {
-      followUpSuggestions: [
-        '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
-        '📊 그동안 모아둔 비서 실적 보고서 보여줘',
-      ],
+      followUpSuggestions:
+        zipCount > 0
+          ? [
+              '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
+              '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+            ]
+          : ['📊 그동안 모아둔 비서 실적 보고서 보여줘'],
     });
   }
 
-  // 3) 다운로드 폴더 열어서 우클릭 0.35초 압축 풀기 바로 써보기
+  // 3) 다운로드 폴더 열어서 최근 압축파일 자동 포커스(explorer /select) 후 우클릭 0.35초 압축 풀기 바로 써보기
   if (/다운로드\s*폴더\s*열어.*?(우클릭|압축|써보|확인)|우클릭\s*0\.35초\s*써보/i.test(clean)) {
-    await fetch('http://127.0.0.1:5199/api/care/open-downloads', {
+    const openRes = await fetch('http://127.0.0.1:5199/api/care/open-downloads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-    }).catch(() => null);
+    })
+      .then((r) => r.json())
+      .catch(() => null);
 
-    const msgKo =
-      `📂 **다운로드 폴더를 바로 열어드렸습니다!**\n` +
-      `폴더 안에 있는 압축파일(ZIP) 위에서 **마우스 우클릭을 0.35초 살짝 길게 꾹** 눌러보시면, 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`;
+    const selectedFile = String(openRes?.selectedFile || '').trim();
+    const msgKo = selectedFile
+      ? `📂 **다운로드 폴더를 열고 가장 최근 압축파일(\`${selectedFile}\`)에 파란색 선택 포커스를 딱 맞춰 두었습니다!**\n` +
+        `헤매실 필요 없이 지금 파랗게 선택되어 있는 **\`${selectedFile}\`** 위에서 바로 **마우스 우클릭을 0.35초 살짝 길게 꾹** 눌러보세요! 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`
+      : `📂 **다운로드 폴더를 바로 열어드렸습니다!**\n` +
+        `폴더 안에 있는 압축파일(ZIP) 위에서 **마우스 우클릭을 0.35초 살짝 길게 꾹** 눌러보시면, 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`;
 
-    speak('다운로드 폴더를 열어드렸습니다. 압축파일 위에서 마우스 우클릭을 살짝 길게 누르시면 바로 풀립니다.');
+    speak(
+      selectedFile
+        ? `다운로드 폴더를 열고 ${selectedFile} 파일에 선택 표시를 맞춰 두었습니다. 그 위에서 마우스 우클릭을 살짝 길게 누르시면 바로 풀립니다.`
+        : '다운로드 폴더를 열어드렸습니다. 압축파일 위에서 마우스 우클릭을 살짝 길게 누르시면 바로 풀립니다.'
+    );
     return reply(sourceTab, msgKo, {
       followUpSuggestions: [
         '📊 그동안 모아둔 비서 실적 보고서 보여줘',

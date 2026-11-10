@@ -393,9 +393,11 @@ def _save_weekly_metrics(metrics: Dict[str, Any]) -> None:
 
 
 def _count_downloads_archive_files() -> Dict[str, Any]:
-    """다운로드 폴더 내 압축파일(.zip/.7z/.rar/.tar/.gz) 누적 건수 및 파일명 샘플(풀기 전 내부 미열람 원칙 준수)"""
+    """다운로드 폴더 내 압축파일(.zip/.7z/.rar/.tar/.gz) 누적 건수(3건 이상 임계치 판정) 및 최신 파일 경로(풀기 전 내부 미열람 원칙 준수)"""
     count = 0
     samples: List[str] = []
+    latest_path = ""
+    latest_name = ""
     try:
         dl_dir = Path.home() / "Downloads"
         if dl_dir.exists() and dl_dir.is_dir():
@@ -407,9 +409,18 @@ def _count_downloads_archive_files() -> Dict[str, Any]:
             )
             count = len(entries)
             samples = [p.name for p in entries[:3]]
+            if entries:
+                latest_path = str(entries[0])
+                latest_name = entries[0].name
     except Exception:
         pass
-    return {"count": count, "samples": samples}
+    return {
+        "count": count,
+        "thresholdMet": count >= 3,
+        "samples": samples,
+        "latestPath": latest_path,
+        "latestFileName": latest_name,
+    }
 
 
 def get_security_services_status() -> Dict[str, Any]:
@@ -514,7 +525,9 @@ def get_security_services_status() -> Dict[str, Any]:
         "helperTaskRegistered": is_security_care_helper_task_registered(),
         "honestBriefing": honest_message,
         "downloadsArchiveCount": dl_archives["count"],
+        "downloadsArchiveThresholdMet": dl_archives["thresholdMet"],
         "downloadsArchiveSamples": dl_archives["samples"],
+        "downloadsArchiveLatestFile": dl_archives["latestFileName"],
         "weeklyReport": {
             "sleepCount": metrics.get("sleepCountThisWeek", 0),
             "wakeCount": metrics.get("wakeCountThisWeek", 0),
@@ -1262,7 +1275,9 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
         "silentPassCount": total_clean_count,
         "threatBlockedCount": threat_count,
         "downloadsArchiveCount": dl_archives["count"],
+        "downloadsArchiveThresholdMet": dl_archives["thresholdMet"],
         "downloadsArchiveSamples": dl_archives["samples"],
+        "downloadsArchiveLatestFile": dl_archives["latestFileName"],
         "recentItems": items,
         "zeroBloatNote": "자체 무거운 백신 상주 0MB · Windows Defender(AMSI) 하청 조종으로 평시 CPU 0.0% 유지",
         "privacyBadge": PLUGIN_METADATA["privacyBadge"],
@@ -1910,9 +1925,26 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
             )
         if act in ("open-downloads", "open_downloads"):
             dl_dir = Path.home() / "Downloads"
-            if dl_dir.exists() and hasattr(os, "startfile"):
-                os.startfile(str(dl_dir))
-            return {"ok": True, "path": str(dl_dir)}
+            dl_archives = _count_downloads_archive_files()
+            latest_path = dl_archives.get("latestPath") or ""
+            latest_name = dl_archives.get("latestFileName") or ""
+            if sys.platform == "win32":
+                if latest_path and Path(latest_path).exists():
+                    try:
+                        subprocess.Popen(["explorer.exe", f"/select,{latest_path}"])
+                    except Exception:
+                        if dl_dir.exists() and hasattr(os, "startfile"):
+                            os.startfile(str(dl_dir))
+                elif dl_dir.exists() and hasattr(os, "startfile"):
+                    os.startfile(str(dl_dir))
+            return {
+                "ok": True,
+                "path": str(dl_dir),
+                "selectedFile": latest_name,
+                "selectedPath": latest_path,
+                "downloadsArchiveCount": dl_archives["count"],
+                "downloadsArchiveThresholdMet": dl_archives["thresholdMet"],
+            }
         if act in ("explorer-selected", "explorer_selected"):
             return {"ok": True, "selectedPaths": get_explorer_selected_paths_non_destructive()}
         if act in ("amsi-scan", "amsi_scan"):

@@ -229,7 +229,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       prev.map((m) => (m.id === 'monster_welcome_init' && prev.length === 1 ? { ...m, text: turn.text } : m))
     );
 
-    // [최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩]
+    // [Stage 1: 최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩 (한 턴 연타 금지 · 호흡 분리)]
     if (
       !isMobileOrStore &&
       !turn.nextState.awaitingNickname &&
@@ -263,8 +263,50 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   `제가 이 프로그램들을 지우지 않고 **평소엔 잠재워 두었다가, 은행·홈택스 들어가실 때만 귀신같이 깨워드릴까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙깁니다!)`,
                 followUpSuggestions: [
                   '👍 응, 앞으로 알아서 재우고 깨워줘',
-                  '✨ 귀신비서의 숨은 초능력 알려줘',
-                  '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+                ],
+              },
+            ];
+          });
+        });
+    } else if (
+      // [Stage 2: 호흡 분리 후 다음번 진입 시 — 다운로드 폴더 압축파일 최소 3건 이상(>=3) 누적 시 숨은 초능력 & 압축 풀기 안내]
+      !isMobileOrStore &&
+      !turn.nextState.awaitingNickname &&
+      (turn.nextState.consents?.bankSecurityAutoSleep || turn.nextState.bankSleepIntroShownAt) &&
+      !turn.nextState.hiddenSuperpowersShown
+    ) {
+      void fetch('http://127.0.0.1:5199/api/care/security-services/status')
+        .then((r) => r.json())
+        .catch(() => null)
+        .then((secRes) => {
+          const curSt = loadGhostSecretaryState();
+          if (curSt.hiddenSuperpowersShown) return;
+          const zipCount = Number(secRes?.downloadsArchiveCount ?? 0);
+          if (zipCount < 3) return; // 최소 3건 이상 쌓였을 때만 알람 발동
+          const zipSamples: string[] = Array.isArray(secRes?.downloadsArchiveSamples)
+            ? secRes.downloadsArchiveSamples
+            : [];
+          const sampleHint = zipSamples.length > 0 ? ` (예: \`${zipSamples[0]}\` 등)` : '';
+          const nickLabel = curSt.nickname ? `${curSt.nickname}님, ` : '';
+          saveGhostSecretaryState({
+            ...curSt,
+            hiddenSuperpowersShown: true,
+          });
+          setSharedMonsterMessages((prev) => {
+            if (prev.some((m) => m.id.startsWith('secretary_superpower_zip_intro_'))) return prev;
+            return [
+              ...prev,
+              {
+                id: `secretary_superpower_zip_intro_${Date.now()}`,
+                role: 'assistant',
+                timestamp: nowTimeKo(),
+                sourceTab: 'trash',
+                text:
+                  `👻 ${nickLabel}참! 제가 뒤에서 컴퓨터를 챙기다 보니 지금 다운로드 폴더에 압축파일${sampleHint}이 **총 ${zipCount}건** 쌓여 있더라고요.\n` +
+                  `제가 사진 정리랑 속도 관리 말고도 뒤에서 조용히 돕는 **'숨은 초능력'이 두 가지(광고 없는 파일 경호 & 우클릭 0.35초 압축 풀기)** 더 있는데, 우리 걸로 써보실 수 있게 간단히 알려드릴까요?`,
+                followUpSuggestions: [
+                  '✨ 응, 숨은 초능력 두 가지 알려줘',
+                  '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
                 ],
               },
             ];
