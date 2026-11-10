@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>귀신같이 (Ghosti) & 범용 멀린 Z 코어 — 전사 실무자·QA 마스터 바이블</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: #090d16;
+      color: #f8fafc;
+      scroll-behavior: smooth;
+    }
+    /* 다음번 기획 업데이트부터 변경된 문장에 적용할 표준 하이라이팅 클래스 (.updated-change) */
+    .updated-change {
+      text-decoration: underline;
+      text-decoration-color: #2dd4bf;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 4px;
+      background-color: rgba(45, 212, 191, 0.14);
+      color: #99f6e4;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-28">
+  <!-- 복사 완료 토스트 -->
+  <div id="copyToast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden bg-teal-400 text-slate-950 font-extrabold px-6 py-3 rounded-full shadow-2xl text-sm transition-all">
+    ✅ 마스터 바이블 전문이 복사되었습니다! 노션이나 NotebookLM에 바로 붙여넣으세요.
+  </div>
+
+  <!-- 상단 고정 헤더 (업데이트 일시 & 하이라이팅 규칙 명시) -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-slate-900/95 border-b border-slate-800 px-4 md:px-8 py-4 shadow-xl">
+    <div class="max-w-6xl mx-auto flex flex-col gap-3">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-teal-500/20 text-teal-300 border border-teal-500/40">
+              🕒 최종 업데이트 일시: 2026-11-10 22:35 KST
+            </span>
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              기획 변경 시 가장 최근 변경분만 밑줄(하이라이트) 자동 표시 규칙 적용
+            </span>
+          </div>
+          <h1 class="text-xl md:text-2xl font-extrabold text-white mt-1.5">
+            👻 귀신같이 (Ghosti) &amp; 범용 멀린 Z 코어 — <span class="text-teal-400">전사 실무자·QA 마스터 가이드</span>
+          </h1>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="copyFullGuide()" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 shadow-lg transition cursor-pointer">
+            📋 전체 내용 텍스트 복사
+          </button>
+          <a href="/family-apps.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+            ← 24개 패밀리 앱 전체 목록으로
+          </a>
+        </div>
+      </div>
+
+      <!-- 빠른 이동 목차 바 -->
+      <nav class="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+        <a href="#sec-vision" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-teal-600 text-slate-200 hover:text-white font-bold transition">1. 목적·취지 &amp; 국내외 비전</a>
+        <a href="#sec-onboarding" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-teal-600 text-slate-200 hover:text-white font-bold transition">2. 첫인상 온보딩 구조</a>
+        <a href="#sec-layout" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-teal-600 text-slate-200 hover:text-white font-bold transition">3. 전체 레이아웃·프로필·귀신팸</a>
+        <a href="#sec-menus" class="px-3 py-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:bg-teal-600 hover:text-white font-extrabold transition">4. 단계별·메뉴 순서별 완전 해설 (1~6번)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="guideContent" class="max-w-6xl mx-auto px-4 md:px-8 mt-7 space-y-9">
+
+    <!-- ==================== SECTION 1: 앱의 목적·취지 & 국내외 비전 ==================== -->
+    <section id="sec-vision" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl space-y-6">
+      <div class="border-b border-slate-800 pb-4">
+        <span class="text-xs font-extrabold text-teal-400 tracking-wider uppercase">PART 1 · PURPOSE &amp; VISION</span>
+        <h2 class="text-lg md:text-xl font-extrabold text-white mt-1">
+          🔥 1. 왜 『귀신같이(Ghosti)』를 만드는가? — 앱의 목적·취지 및 국내외 비전
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- 목적과 취지 -->
+        <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-5 space-y-3">
+          <h3 class="text-sm font-extrabold text-amber-300 flex items-center gap-2">
+            <span>🎯</span> <span>앱의 탄생 목적과 취지: 디지털 일상의 3대 고통 해방</span>
+          </h3>
+          <p class="text-xs md:text-sm text-slate-300 leading-relaxed">
+            오늘날 모든 직장인·자영업자·부모님들은 매일 똑같은 세 가지 디지털 스트레스에 시달리고 있습니다.
+          </p>
+          <ul class="space-y-2 text-xs text-slate-300 leading-relaxed">
+            <li>• <b>첫째 (찾기의 고통):</b> 분명 내 컴퓨터와 폰에 있는 계약서·엑셀 단가표·아이 사진인데 파일 이름이 기억나지 않아 수십 개 폴더를 일일이 열어보며 시간을 허비합니다.</li>
+            <li>• <b>둘째 (클라우드 요금과 유출 불안):</b> 사진과 문서가 쌓일수록 매달 클라우드 용량 요금을 내야 하고, 내 사생활 사진이나 회사 기밀 문서를 외부 서버에 올리는 것 자체가 불안합니다.</li>
+            <li>• <b>셋째 (느려진 기기와 반복 타이핑 노가다):</b> 은행 사이트 한 번 다녀오면 보안프로그램들이 뒤에서 돌아 컴퓨터가 느려지고, 한영키 실수·PDF 줄바꿈 깨짐·칸 나눠 붙여넣기 같은 단순 타이핑 노가다에 에너지를 뺏깁니다.</li>
+          </ul>
+          <p class="text-xs text-teal-300 font-bold pt-1">
+            👉 『귀신같이』는 내 파일을 외부 서버로 단 1바이트도 올리지 않는 <b>100% 온디바이스(On-Device) 로컬 AI 엔진(멀린 Z 코어)</b>으로, 개인 기본 기능을 카드 등록도 광고도 없이 평생 무료로 해결해 주는 ‘실전 생활·업무 비서’입니다.
+          </p>
+        </div>
+
+        <!-- 국내외 비전 -->
+        <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-5 space-y-3">
+          <h3 class="text-sm font-extrabold text-teal-300 flex items-center gap-2">
+            <span>🌏</span> <span>국내 및 글로벌 비전: 우리가 함께 가슴 뛰며 만들어가는 목표</span>
+          </h3>
+          <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+            <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div class="font-extrabold text-white mb-1">🇰🇷 [국내 비전] 대한민국 모든 PC와 스마트폰의 필수 기본 유틸리티</div>
+              <p>
+                과거 모든 컴퓨터에 압축 프로그램과 파일 검색 유틸리티가 필수로 깔렸던 것처럼, <b>“파일 내용 찾기, 사진 정리, 컴퓨터 속도 관리, 타이핑 자동화는 귀신같이 하나로 끝난다”</b>는 새로운 표준을 세웁니다. 개인과 일반 PC에서는 조건 없는 무료로 대중적 신뢰를 얻고, 폰↔PC 원격 연동과 사무실 팀 공유(S: 드라이브)로 탄탄한 수익 모델을 완성합니다.
+              </p>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div class="font-extrabold text-white mb-1">🌐 [글로벌 비전] 프라이버시 시대의 가장 실용적인 로컬 AI 표준 (Ghosti AI)</div>
+              <p>
+                전 세계적으로 “내 사진과 회사 문서를 빅테크 클라우드 서버에 올리기 싫다”는 로컬 프라이버시 수요와 매달 나가는 구독료 피로감(Cloud Fatigue)이 폭발하고 있습니다. 서버 비용이 거의 들지 않는 온디바이스 AI 구조와 9개 핵심 특허 기술을 무기로, 북미·일본·유럽 등 글로벌 시장에서도 <b>가장 빠르고 정직한 로컬 AI 워크스페이스</b>로 자리 잡는 것이 우리의 비전입니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SECTION 2: 온보딩 (첫 화면) 구조 ==================== -->
+    <section id="sec-onboarding" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl space-y-5">
+      <div class="border-b border-slate-800 pb-4">
+        <span class="text-xs font-extrabold text-teal-400 tracking-wider uppercase">PART 2 · ONBOARDING EXPERIENCE</span>
+        <h2 class="text-lg md:text-xl font-extrabold text-white mt-1">
+          🚪 2. 온보딩 (유저가 처음 만나는 대문 화면) 설계 원칙
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">
+          유튜브 쇼츠·인스타 릴스·네이버 클립 예고편을 보고 <b>#귀신비서 · #귀신검색 · #귀신창</b>을 검색해 들어온 방문자가 처음 마주하는 화면입니다.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2">
+          <div class="font-extrabold text-teal-300 text-sm">① 좌측 5 : 우측 7 친근한 2단 구조</div>
+          <p class="text-slate-300 leading-relaxed">
+            처음부터 복잡한 기능 수십 개를 늘어놓지 않습니다. <b>좌측(5칸)에는 친근한 『👻 귀신비서』 채팅 가이드</b>가 반갑게 인사를 건네며 4대 무료 핵심 무기 칩을 제시하고, <b>우측(7칸)에는 방문자가 고른 단 1개의 무기 체험 스테이지</b>만 깔끔하게 펼쳐 보여줍니다.
+          </p>
+        </div>
+
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2">
+          <div class="font-extrabold text-amber-300 text-sm">② 무료 4대 핵심 무기 1초 즉시 체험</div>
+          <p class="text-slate-300 leading-relaxed">
+            프로그램을 설치하기 전에도 웹 화면에서 곧바로 ① <b>엑셀·문서 안 열고 0.5초 내용 찾기</b>, ② <b>1만 장 사진·영상 속 걸음마 장면 1초 소환</b>, ③ <b>느려진 PC·폰 대청소 &amp; 보안관</b>, ④ <b>귀신창 무버튼 자동 한영오타·줄바꿈 다림질</b>을 직접 눌러보고 감탄할 수 있게 설계되어 있습니다.
+          </p>
+        </div>
+
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2">
+          <div class="font-extrabold text-indigo-300 text-sm">③ 일반 유저 유료 은닉 &amp; DEV 스위치</div>
+          <p class="text-slate-300 leading-relaxed">
+            정식 오픈 전 일반 방문자에게는 유료 가격표나 복잡한 확장 기능을 100% 숨겨서 <b>“정말 개인·기업 PC 기본 기능이 평생 무료구나!”</b>라는 안심감만 줍니다. 반면 사내 실무자와 개발진은 우측 상단 <b>[🧪 DEV 전체보기]</b>(또는 <code>?dev=true</code>)로 언제든 전체 기능과 내부 워크스페이스를 점검할 수 있습니다.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SECTION 3: 전체 화면 뼈대 · 프로필 · 귀신팸 ==================== -->
+    <section id="sec-layout" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl space-y-5">
+      <div class="border-b border-slate-800 pb-4">
+        <span class="text-xs font-extrabold text-teal-400 tracking-wider uppercase">PART 3 · WORKSPACE ANATOMY, PROFILE &amp; GHOSTI FAM</span>
+        <h2 class="text-lg md:text-xl font-extrabold text-white mt-1">
+          🧭 3. 앱 내부 전체 화면 구조 · 우측 상단 『프로필』 · 좌측 하단 『귀신팸(패밀리앱)』
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">
+          실무자가 앱에 진입했을 때 화면의 상·하·좌·우에 무엇이 배치되어 있는지 한눈에 파악하는 구조도입니다.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <!-- 좌측 사이드바 & 우측 채팅창 -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-5 space-y-2.5">
+          <div class="font-extrabold text-white text-sm flex items-center gap-1.5">
+            <span>📐</span> <span>3단 워크스페이스 기본 골격</span>
+          </div>
+          <ul class="space-y-2 text-slate-300 leading-relaxed">
+            <li>• <b>좌측 사이드바 (메뉴 내비게이션):</b> 위에는 기본 무료 4대 메뉴(귀신비서 / 귀신검색 / 귀신창 초능력 / 사진 공유), 아래 구분선 밑에는 확장 메뉴 2종(내 기기 통합 / 업무 공유 S:)이 순서대로 배치됩니다.</li>
+            <li>• <b>중앙 메인 캔버스 (작업창):</b> 선택한 메뉴의 실제 작업 화면(사진 정리 탭, 귀신검색 수련장, 귀신창 도장깨기, 공유 앨범 등)이 열립니다.</li>
+            <li>• <b>우측 『👻 귀신비서』 상시 채팅창:</b> 화면 오른쪽에서 언제든 비서와 대화하고, 비서가 컴퓨터를 돌본 실적을 모아서 1회성 대답 칩으로 보고하는 똑똑한 비서석입니다.</li>
+          </ul>
+        </div>
+
+        <!-- 우측 상단 프로필 & 귀신여권 -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-5 space-y-2.5">
+          <div class="font-extrabold text-teal-300 text-sm flex items-center gap-1.5">
+            <span>🐾</span> <span>우측 상단 『내 프로필 · 계정 &amp; 귀신여권』</span>
+          </div>
+          <p class="text-slate-300 leading-relaxed">
+            화면 우측 상단 헤더에 있는 프로필 알약 버튼을 누르면 <b>멀린 패밀리 통합 계정 모달</b>이 열립니다.
+          </p>
+          <ul class="space-y-1.5 text-slate-300 leading-relaxed">
+            <li>• <b>1초 이메일 OTP 로그인:</b> 복잡한 비밀번호 없이 이메일 6자리 인증번호만으로 전 패밀리 앱에 동시 로그인(SSO)됩니다.</li>
+            <li>• <b>👑 귀신여권 (가족 얼굴 실명 등록):</b> 프로필 창 우측 상단의 <code>[👑 귀신여권]</code> 버튼을 누르면 내 사진 속 가족·지인 얼굴에 실명과 호칭(예: 엄마, 아들, 나)을 붙여 기기 간 무료로 동기화합니다.</li>
+            <li>• <b>통합 코인·선물함·1:1 문의방·1초 오류신고:</b> 패밀리 코인 잔액 확인, 지인에게 자유 코인 선물하기, 알림 설정, 스튜디오 통합 고객센터 직통 문의방이 한곳에 들어 있습니다.</li>
+          </ul>
+        </div>
+
+        <!-- 사이드바 맨 하단 귀신팸 -->
+        <div class="bg-slate-950/80 border border-indigo-500/30 rounded-xl p-5 space-y-2.5">
+          <div class="font-extrabold text-indigo-300 text-sm flex items-center gap-1.5">
+            <span>🌌</span> <span>좌측 사이드바 맨 하단 『귀신팸 (멀린 패밀리 앱 런처)』</span>
+          </div>
+          <p class="text-slate-300 leading-relaxed">
+            좌측 사이드바 제일 아래쪽에 위치한 <b>멀린 패밀리 생태계 앱 전환기(<code>HubAppSwitcher</code>)</b>입니다. 사내에서는 흔히 <b>‘귀신팸’</b> 영역이라 부릅니다.
+          </p>
+          <ul class="space-y-1.5 text-slate-300 leading-relaxed">
+            <li>• 클릭하면 사이드바 위로 깔끔한 팝업 카드가 펼쳐지며, <b>현재 내가 이용 중인 패밀리 앱(3열 로고 그리드)</b>과 <b>아직 써보지 않은 새로운 패밀리 앱 리스트</b>가 나타납니다.</li>
+            <li>• <b>대표 연결 앱:</b> <code>썬드리머(자외선 케어 1호앱)</code>, <code>오늘뭐먹지(메뉴 룰렛·결정)</code>, <code>어그로필터(유튜브 팩트체크)</code>, <code>오토노트(초고속 메모)</code>, <code>볼터(무클라우드 가계부·세무)</code>, <code>센스톡(6대 메신저 반자동 소통)</code> 등 우리 회사의 다른 형제 앱들로 <b>재로그인 없이 1초 만에 점프</b>할 수 있는 생태계 관문입니다.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SECTION 4: 단계별 · 메뉴 기준 순서대로 하나하나 상세 설명 ==================== -->
+    <section id="sec-menus" class="space-y-5">
+      <div class="bg-gradient-to-r from-teal-950/70 via-slate-900 to-slate-900 border border-teal-500/40 rounded-2xl p-6 shadow-xl">
+        <span class="text-xs font-extrabold text-teal-300 tracking-wider uppercase">PART 4 · STEP-BY-STEP MENU GUIDE</span>
+        <h2 class="text-lg md:text-xl font-extrabold text-white mt-1">
+          📋 4. 좌측 사이드바 메뉴 기준 순서대로 하나하나 완전 해설 (기본 무료 1~4번 + 확장 통합·공유 5~6번)
+        </h2>
+        <p class="text-xs text-slate-300 mt-1">
+          실제 『귀신같이』 좌측 사이드바에 배치된 위에서 아래 순서 그대로, 각 메뉴가 어떤 역할을 하고 어떤 규칙으로 작동하는지 정리했습니다.
+        </p>
+      </div>
+
+      <!-- [메뉴 1] 귀신비서 -->
+      <article class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="px-3 py-1 rounded-lg bg-teal-500/20 text-teal-300 font-extrabold text-xs border border-teal-500/30">메뉴 1순위 · 기본 무료</span>
+            <h3 class="text-base md:text-lg font-extrabold text-white">👻 귀신비서 (내 기기 손보기 · 사진 정리 · 귀신계 여권 · 채팅 보고)</h3>
+          </div>
+          <span class="text-xs text-slate-400">기존 ‘손보기’와 ‘채팅 도우미’가 하나로 통합된 필수 첫 관문</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300 leading-relaxed">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-teal-300">① 좌측 작업창: 사진 용량 정리 4대 탭에만 집중!</div>
+            <p>
+              과거 좌측 상단에 있던 복잡한 수동 보안 버튼들을 전부 걷어내고, 좌측 화면에는 오직 직관적인 <b>사진 정리 4대 탭</b>만 깔끔하게 배치했습니다:
+            </p>
+            <ul class="space-y-1 pl-2">
+              <li>• <b>탭 1. 중복 사진 &amp; 연사:</b> 연속으로 찍힌 비슷한 사진 중 가장 잘 나온 1장(Best Pick)만 남기고 나머지를 한 번에 정리합니다.</li>
+              <li>• <b>탭 2. 문서 · 메모 · 영수증:</b> 사진첩에 뒤섞인 영수증·계약서·칠판 사진만 따로 모아 분류합니다.</li>
+              <li>• <b>탭 3. 스크린샷 · 캡처:</b> 임시로 캡처해 두고 잊어버린 스크린샷 쓰레기를 골라냅니다.</li>
+              <li>• <b>탭 4. 흔들린 사진:</b> 초점이 나갔거나 잘못 찍힌 사진을 찾아 용량을 확보합니다.</li>
+            </ul>
+            <p class="text-amber-300/90 pt-1">
+              ※ 삭제한 파일은 영구 삭제되지 않고 <b>Windows 정식 휴지통 및 타임머신 복원함</b>으로 안전하게 이동하여 언제든 1초 만에 원상복구됩니다.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-amber-300">② 우측 귀신비서 채팅창: ‘실적을 모아서 생색내는’ 1회성 대화 칩 원칙</div>
+            <p>
+              비서가 사사건건 팝업을 띄우며 쫓아다니면 유저가 피로해합니다. 그래서 귀신비서는 <b>뒤에서 조용히 일을 해둔 뒤, 실적이 쌓였을 때 우측 채팅창에서 한 번씩 보고하며 생색내는 원칙</b>으로 작동합니다:
+            </p>
+            <ul class="space-y-1.5 pl-2">
+              <li>• <b>1회성 대답 칩 (클릭 즉시 소멸):</b> 말풍선 아래에 뜨는 추천 대답 버튼을 누르면 그 즉시 버튼이 사라져 채팅창이 지저분해지지 않습니다.</li>
+              <li>• <b>은행·관공서 보안프로그램 자동 절전:</b> 은행 업무를 안 볼 때도 뒤에서 메모리를 먹는 보안프로그램(TouchEn, ASTx, AnySign 등)을 발견하면 <i>“평소엔 재워두고 은행 갈 때만 깨워드릴까요?”</i>라고 물어 1클릭 동의를 받습니다.</li>
+              <li>• <b>다운로드 폴더 ZIP 3건 이상 누적 시 우클릭 0.35초 압축풀기 제안:</b> ZIP 파일을 받을 때마다 귀찮게 말을 걸지 않고, 다운로드 폴더에 압축파일이 <b>3건 이상</b> 쌓였을 때만 <i>“압축파일이 N건 모여 있던데 우리 0.35초 우클릭 압축풀기로 써보실래요?”</i>라고 안내합니다. 버튼을 누르면 탐색기가 열리며 가장 최근 <code>.zip</code> 파일에 파란색 선택 포커스가 자동으로 맞춰집니다.</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- [메뉴 2] 귀신검색 -->
+      <article class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="px-3 py-1 rounded-lg bg-teal-500/20 text-teal-300 font-extrabold text-xs border border-teal-500/30">메뉴 2순위 · 기본 무료</span>
+            <h3 class="text-base md:text-lg font-extrabold text-white">👻 귀신검색 (소환창 명칭: 『귀신검색창』 · 단축키 Ctrl + 0 / 우클릭 꾹~)</h3>
+          </div>
+          <span class="text-xs text-slate-400">웹 검색창을 없애고 바탕화면 어디서나 0.1초 만에 부르는 로컬 투시 검색</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300 leading-relaxed">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-teal-300">① 왜 앱 안의 고정 검색창을 없앴는가? (3대 호출 방식)</div>
+            <p>
+              파일을 찾으려고 굳이 브라우저나 앱 화면을 다시 열 필요가 없습니다. 윈도우 바탕화면이나 탐색기, 엑셀 작업 중 어디서든 아래 3가지 방법으로 <b>『귀신검색창』</b>이 마우스 옆에 즉시 소환됩니다:
+            </p>
+            <ul class="space-y-1 pl-2">
+              <li>• <b>호출 1 (마우스):</b> 빈 공간이나 작업 중 <b>마우스 우클릭을 0.35초 살짝 길게 꾹~</b> 누르기</li>
+              <li>• <b>호출 2 (혼합):</b> <b>Ctrl + 마우스 우클릭</b></li>
+              <li>• <b>호출 3 (키보드):</b> <b>Ctrl + 0</b> 단축키 입력</li>
+            </ul>
+            <p class="text-slate-400 pt-1">
+              ※ 소환된 『귀신검색창』은 상황에 따라 <b>소형(미니 바) ➔ 중형(미리보기) ➔ 대형(전체 갤러리) 3단계</b>로 크기를 변신시킬 수 있으며, 앱 내 <code>[👻 귀신검색]</code> 메뉴는 이 소환술을 3단계로 몸에 익히는 <b>현장 수련장</b> 역할을 합니다.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-amber-300">② 파일 제목을 몰라도 찾는다! 3대 투시 검색 초능력</div>
+            <ul class="space-y-1.5 pl-2">
+              <li>• <b>문서·엑셀·PDF 본문 0.1초 투시:</b> <code>최종_진짜최종.xlsx</code> 수십 개를 일일이 열지 않아도, 본문 안에 적힌 거래처명·단가·특약 단어만 치면 해당 문장을 노란 형광펜으로 짚어줍니다.</li>
+              <li>• <b>동영상 속 장면·대사 분/초 점프:</b> 동영상 1,000개 중에서 <i>“아기 첫 걸음마 장면”</i>이나 특정 대사를 검색하면, 그 장면이 나오는 정확한 <b>분·초(예: 03분 15초)</b> 지점으로 바로 점프해 재생합니다.</li>
+              <li>• <b>가족 얼굴(귀신계 여권) + 자연어 사진 검색:</b> 폴더를 뒤질 필요 없이 <i>“엄마 바닷가에서 웃는 사진”</i>, <i>“작년 제주도 노란 모자”</i>처럼 말로 치면 1초 만에 찾아냅니다.</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- [메뉴 3] 귀신창 초능력 -->
+      <article class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="px-3 py-1 rounded-lg bg-teal-500/20 text-teal-300 font-extrabold text-xs border border-teal-500/30">메뉴 3순위 · 기본 무료</span>
+            <h3 class="text-base md:text-lg font-extrabold text-white">⚡ 귀신창 초능력 (v1.4 표준 — 무버튼 자동 성형 3종 + 순차복사 + 미니 버튼 1~5번)</h3>
+          </div>
+          <span class="text-xs text-slate-400">타이핑 노가다를 없애주는 상시 연습장 &amp; 도장깨기 체험관</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300 leading-relaxed">
+          <div class="bg-slate-950/70 border border-teal-500/30 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-teal-300">① 버튼 누를 필요 ZERO! 『무버튼 완전 자동(Auto) 3종』</div>
+            <p>
+              실무자·테스터가 가장 정확히 알아야 할 핵심 규칙입니다! 아래 3가지는 별도의 수동 버튼을 누르는 것이 아니라, <b>귀신창이 켜져 있으면 타이핑하거나 붙여넣는 즉시 100% 무버튼 자동으로 작동</b>합니다:
+            </p>
+            <ul class="space-y-1.5 pl-2">
+              <li>• <b>자동 1 (한영 오타 자동 성형):</b> 한영키를 안 눌러 <code>dkssudgktpdy 반갑습니다</code>라고 영타로 쳐도 스페이스바를 치는 순간 0.2초 만에 <code>안녕하세요 반갑습니다</code>로 자동 변환됩니다. (단, <code>ok</code>, <code>ai</code> 같은 정상 영단어나 짧은 영문은 건드리지 않고 확실한 한영 오타만 똑똑하게 변환)</li>
+              <li>• <b>자동 2 (자연스러운 띄어쓰기 교정):</b> 급하게 붙여 쓴 문장의 띄어쓰기를 문맥에 맞게 다듬어 줍니다.</li>
+              <li>• <b>자동 3 (깨진 줄바꿈·서식 자동 다림질):</b> PDF나 웹사이트에서 글을 복사해 올 때 문장 중간이 뚝뚝 끊어진 줄바꿈과 지저분한 서식을 자동으로 매끄럽게 이어 붙입니다.</li>
+            </ul>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-amber-300">② 귀신창 하단 수동 미니 툴바 (순차복사 + [1]~[5]번 + 상용구)</div>
+            <p>
+              무버튼 자동 성형 외에도, 실무에서 매일 쓰는 강력한 도구들이 미니 버튼으로 대기합니다:
+            </p>
+            <ul class="space-y-1 pl-2">
+              <li>• <b>[📋 Ctrl+V 순차복사]:</b> 여러 줄이나 여러 항목을 <code>Ctrl+C</code>로 연달아 복사해 두면, 원하는 곳에 <code>Ctrl+V</code>만 누를 때마다 1번부터 순서대로 톡톡 붙여넣어 줍니다.</li>
+              <li>• <b>[1] 🏷️ 파일·라벨러(PDF):</b> 엉망인 파일 이름을 규칙대로 일괄 변경하거나 문서를 깔끔한 PDF로 즉시 변환합니다.</li>
+              <li>• <b>[2] 글자·표 OCR:</b> 이미지나 화면 속 안 긁히는 글자·표를 그대로 추출해 엑셀/텍스트로 가져옵니다.</li>
+              <li>• <b>[3] 합본:</b> 흩어진 여러 장의 스샷·문서·이미지를 하나의 파일로 깔끔하게 묶어줍니다.</li>
+              <li>• <b>[4] 번호·일정:</b> 목록에 자동으로 번호를 매기거나 날짜·일정 양식을 정렬합니다.</li>
+              <li>• <b>[5] 창고정 (항상 위):</b> 보고 치는 참고 창이 뒤로 숨지 않도록 화면 맨 위에 압정처럼 고정합니다.</li>
+              <li>• <b>[⌨️ 상용구]:</b> 자주 쓰는 계좌번호·사업자번호·인사말을 단축키 한 번으로 0.1초 만에 입력합니다.</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- [메뉴 4] 사진 공유 -->
+      <article class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="px-3 py-1 rounded-lg bg-teal-500/20 text-teal-300 font-extrabold text-xs border border-teal-500/30">메뉴 4순위 · 기본 무료</span>
+            <h3 class="text-base md:text-lg font-extrabold text-white">📸 사진 공유 (👨‍👩‍👧‍👦 가족 · ⛰️ 동호회/모임 · 🎓 동창회 — 인원·장수 무제한 평생 0원)</h3>
+          </div>
+          <span class="text-xs text-slate-400">카톡방 사진 유효기간 만료와 유료 클라우드 용량 걱정을 끝내는 무클라우드 공유방</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300 leading-relaxed">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-1.5">
+            <div class="font-extrabold text-white">👨‍👩‍👧‍👦 4-1. 가족 (우리집 · 본가 · 처가)</div>
+            <p>
+              카톡 단톡방에 올린 손주 사진·가족여행 영상이 한 달 뒤 유효기간 만료로 날아가는 일을 막아줍니다. <b>우리집·본가·처가 방을 분리</b>해 인원수나 사진 장수 제한 없이 평생 무료로 원본 화질을 공유하고, <code>귀신계 여권</code> 얼굴 인식으로 특정 가족이 나온 사진만 1초 만에 모아볼 수 있습니다.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-1.5">
+            <div class="font-extrabold text-white">⛰️ 4-2. 동호회 · 모임</div>
+            <p>
+              산악회·골프 모임·조기축구·취미 동호회 총무님들이 행사 끝날 때마다 사진 수백 장을 카톡으로 재전송하느라 진땀 빼지 않도록, <b>모임 전용 무제한 앨범</b>을 평생 0원으로 제공합니다. 날짜별·장소별·인물별 자동 정리가 지원됩니다.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-1.5">
+            <div class="font-extrabold text-white">🎓 4-3. 동창회</div>
+            <p>
+              학창 시절 추억 사진부터 기수별 동창회 행사 영상까지 한곳에 모아두는 <b>영구 타임캡슐 앨범</b>입니다. 클라우드 서버 임대료를 받지 않는 로컬 거점 연동 구조 덕분에 총무가 바뀌어도 비용 부담 없이 영구 유지됩니다.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 구분선 배너: 확장 메뉴 (5번 내 기기 통합 & 6번 업무 공유) -->
+      <div class="pt-3">
+        <div class="bg-indigo-950/40 border border-indigo-500/40 rounded-xl px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
+          <div class="text-xs md:text-sm font-extrabold text-indigo-300">
+            🚀 사이드바 하단 확장 영역 (기기 연동 &amp; 팀 확장 메뉴 — 『내 기기 통합』 &amp; 『업무 공유 S:』)
+          </div>
+          <span class="text-[11px] text-indigo-200/80">개인 유료 구독 및 B2B 사무실 팀 플랜으로 확장되는 핵심 무기 (30일 무제한 무료체험 및 일일 무료 횟수 제공)</span>
+        </div>
+      </div>
+
+      <!-- [메뉴 5] 내 기기 통합 (개인 통합) -->
+      <article class="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-6 space-y-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="px-3 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 font-extrabold text-xs border border-indigo-500/40">메뉴 5순위 · 확장 1 (개인 통합)</span>
+            <h3 class="text-base md:text-lg font-extrabold text-white">🔗 내 기기 통합 (폰 ↔ 집·회사 PC 연동 · 원격 기기 통합 검색 &amp; 공간이동)</h3>
+          </div>
+          <span class="text-xs text-indigo-300">외근 중에도 폰에서 내 집·회사 PC 파일을 1초 만에 찾고 주고받는 개인 통합 허브</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300 leading-relaxed">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-indigo-300">① 🔗 기기 연결 (PC ↔ 폰 원격 통합 검색 &amp; 열람)</div>
+            <p>
+              외근하거나 이동 중인 차 안에서 거래처가 갑자기 <i>“지난달 견적서 단가 얼마였죠? 지금 파일 좀 보내주세요”</i>라고 할 때, 더 이상 사무실에 전화할 필요가 없습니다.
+            </p>
+            <ul class="space-y-1 pl-2">
+              <li>• 내 스마트폰과 집·사무실 PC를 1초 만에 하나로 묶어, <b>폰에서 검색어를 치면 사무실 PC 안에 들어 있는 엑셀·PDF·사진까지 동시에 투시 검색</b>합니다.</li>
+              <li>• 찾은 문서를 폰 화면에서 즉시 열어 내용을 확인하거나 거래처 카톡으로 바로 전달할 수 있습니다.</li>
+            </ul>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-amber-300">② ⚡ 귀신창 : 📱 폰 + PC (카톡 나에게 보내기 영구 퇴출!)</div>
+            <p>
+              휴대폰으로 찍은 영수증·서류 사진이나 캡처 이미지를 컴퓨터로 옮기려고 <b>‘카카오톡 나에게 보내기’</b>를 쓰던 불편함을 완전히 없앱니다.
+            </p>
+            <ul class="space-y-1 pl-2">
+              <li>• <b>60초 공간이동 &amp; 폰 촬영 OCR:</b> 폰으로 종이 서류나 영수증을 찍기만 하면, 1초 만에 내 PC 커서가 깜빡이는 엑셀·워드·메모장 자리로 사진 또는 추출된 글자(OCR)가 꽂힙니다.</li>
+              <li>• 폰에서 복사한 텍스트나 스샷을 PC에서 그대로 <code>Ctrl+V</code>로 붙여넣는 기기 간 일체형 귀신창을 제공합니다.</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- [메뉴 6] 업무 공유 (S: 드라이브) -->
+      <article class="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-6 space-y-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="px-3 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 font-extrabold text-xs border border-indigo-500/40">메뉴 6순위 · 확장 2 (B2B 팀 공유)</span>
+            <h3 class="text-base md:text-lg font-extrabold text-white">💼 업무 공유 (S: 드라이브 · 사내 문서/현장사진 공유 &amp; 팀 귀신창)</h3>
+          </div>
+          <span class="text-xs text-indigo-300">복잡한 NAS 장비나 비싼 클라우드 없이 전 직원 PC에 ‘S: 공유 드라이브’를 1초 만에 장착</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300 leading-relaxed">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-indigo-300">① 💼 S: 드라이브 · 문서 공유 (무클라우드 사내 서버)</div>
+            <p>
+              부동산 중개업소, 카센터·공업사, 사진관, 세무/회계 사무소, 인테리어·제조업 등 중소기업·매장에서 가장 목말라하는 <b>팀원 간 실시간 파일·사진 공유</b>를 해결합니다.
+            </p>
+            <ul class="space-y-1 pl-2">
+              <li>• 수백만 원짜리 시놀로지 NAS를 사거나 매달 인당 요금을 내는 클라우드를 쓸 필요 없이, 사장님(또는 사무실 메인) PC 한 대를 거점으로 삼아 <b>전 직원 윈도우 탐색기에 <code>S: 드라이브</code>를 그대로 생성</b>해 줍니다.</li>
+              <li>• 직원이 현장에서 폰으로 찍은 시공 전후 사진이나 계약서가 사무실 <code>S: 드라이브</code>에 실시간으로 모이고, 모든 직원이 <b>0.1초 귀신검색</b>으로 사내 전체 단가표·도면·차량번호 사진을 동시에 찾습니다.</li>
+              <li>• 직급별·팀원별 폴더 열람/수정 권한 관리와 삭제 방지 보호막이 기본 탑재됩니다.</li>
+            </ul>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="font-extrabold text-amber-300">② ⚡ 귀신창 : 💼 팀 공유 (전 직원 공용 상용구 &amp; 양식 통일)</div>
+            <p>
+              경리·총무에게 매일 묻는 <i>“우리 회사 사업자번호 뭐죠?”, “입금 계좌번호랑 표준 견적 안내문 좀 주세요”</i> 같은 반복 질문을 끝냅니다.
+            </p>
+            <ul class="space-y-1 pl-2">
+              <li>• <b>팀 공용 상용구 (F7~F12):</b> 회사 대표 계좌, 사업자 정보, 고객 응대 표준 멘트, 특약 문구를 한 번만 등록해 두면 전 직원의 귀신창에 실시간 공유되어 단축키 하나로 똑같이 입력됩니다.</li>
+              <li>• <b>팀 공용 파일 라벨러 &amp; PDF 합본:</b> 직원마다 제각각이던 파일명(예: <code>[날짜_거래처_품목].pdf</code>)을 회사 표준 규칙으로 1초 만에 통일시켜 줍니다.</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- 하단 안내 푸터 -->
+    <footer class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center space-y-2">
+      <p class="text-xs text-slate-300 font-bold">
+        💡 본 페이지는 『귀신같이(Ghosti)』의 기획·메뉴가 업데이트될 때마다 상단 일시와 함께 즉시 최신화됩니다.
+      </p>
+      <p class="text-[11px] text-slate-400">
+        다음 업데이트부터는 새로 바뀌거나 추가된 문장에 <span class="updated-change">이처럼 민트색 밑줄과 하이라이팅</span>이 자동으로 표시되어 실무자가 변경 사항만 1초 만에 파악할 수 있습니다.
+      </p>
+    </footer>
+
+  </main>
+
+  <script>
+    function showToast(msg) {
+      const toast = document.getElementById('copyToast');
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2800);
+    }
+
+    function copyFullGuide() {
+      const text = document.getElementById('guideContent').innerText;
+      const header = "[귀신같이(Ghosti) & 범용 멀린 Z 코어 — 전사 실무자·QA 마스터 바이블 | 최종 업데이트: 2026-11-10 22:35 KST]\n\n";
+      navigator.clipboard.writeText(header + text);
+      showToast("✅ 귀신같이 마스터 바이블 전체 텍스트가 클립보드에 복사되었습니다!");
+    }
+  </script>
+</body>
+</html>

@@ -193,16 +193,17 @@
         ko: '귀신같이 & 범용 멀린 Z 코어',
         en: 'Ghosti & Universal Z-Core (D:\\Ghosti)',
         url: 'https://ghosti.sundreamer.app',
-        icon: '👁️',
-        easyDef: '내 컴퓨터·폰 속 수만 장의 사진과 문서를 클라우드 업로드 없이 0.1초 만에 말로 찾아주고, 화면 위에 손가락 화살표(👆)를 띄워주는 만능 AI 비서입니다.',
+        detailUrl: '/ghosti-guide.html',
+        icon: '👻',
+        easyDef: '컴퓨터 손보기부터 귀신계 여권까지 [귀신비서]가 다 챙겨주고, 잃어버린 파일은 [귀신검색]이 0.1초 만에 찾아주고, 타이핑 노가다는 [귀신창 초능력]이 대신해 주는 100% 온디바이스 로컬 AI 비서입니다.',
         features: [
-          '음성/비전 0.1초 AI 내용검색 ("작년 제주도에서 노란 모자 쓴 사진 찾아줘") & 다각도 얼굴 인식 [귀신같이 여권]',
-          '클라우드 요금 0원! 가족·동호회·학교·사무실(S:드라이브)끼리 원본 화질 그대로 공유하는 [5대 무클라우드 라운지]',
-          '흔들린·중복 사진 및 악성앱을 청소하는 [클린 몬스터] & 화면 위에 화살표(👆)를 띄워 클릭할 곳을 알려주는 [설정 몬스터]',
-          '16개 패밀리 웹앱이 로컬 PC/폰 기능을 쓸 수 있게 해주는 공용 엔진 [범용 멀린 Z 코어] (스토어용/사내용 2트랙)'
+          '[1. 👻 귀신비서] 사진 4대 용량 정리 + 은행 보안프로그램 자동 절전 + ZIP 3건 누적 시 우클릭 0.35초 압축풀기 & 1회성 대화칩 실적 보고',
+          '[2. 👻 귀신검색] 바탕화면 Ctrl+0 / 우클릭 꾹 3단 변신 [귀신검색창] — 엑셀·문서 본문, 동영상 걸음마 장면, 가족 얼굴(귀신여권) 0.1초 투시',
+          '[3. ⚡ 귀신창 초능력] 무버튼 자동 3종(한영오타·띄어쓰기·줄바꿈 다림질) + Ctrl+V 순차복사 + [1]파일·라벨러(PDF)~[5]창고정',
+          '[4~6. 공유 & 통합] 평생 0원 [📸 사진 공유(가족·동호회·동창회)] + 유료 확장 [🔗 내 기기 통합(폰↔PC)] & [💼 업무 공유(S: 드라이브)]'
         ],
-        value: '일반 인터넷 창(웹앱)은 절대 못하는 내 컴퓨터 파일 정리, 화면 위 화살표 안내, 자동 붙여넣기를 가능하게 만드는 핵심 기술 무기입니다.',
-        caution: '구 2호앱 "세이씨(SaySee)"가 바로 이 "귀신같이(Ghosti)"로 통합·진화했습니다. 두 개를 별개 앱으로 착각하지 마세요!'
+        value: '내 파일을 외부 클라우드로 단 1바이트도 올리지 않고 내 기기 안에서만 작동하며, 개인 기본 기능은 카드 등록·광고 없이 평생 무료로 제공합니다.',
+        caution: '구 2호앱 "세이씨(SaySee)"와 구 "제트아이(Z-Eye)"는 모두 [귀신같이(Ghosti)]로 단일 통합되었습니다. 별개 앱으로 착각하지 마세요!'
       },
 
       // ==================== 제2부문 ====================
@@ -644,6 +645,7 @@
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="px-2 py-0.5 text-[10px] font-extrabold rounded border ${badgeClass}">#${String(a.num).padStart(2, '0')} ${a.secName}</span>
                     ${a.url ? `<a href="${a.url}" target="_blank" class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition">🌐 사이트 열기 ↗</a>` : ''}
+                    ${a.detailUrl ? `<a href="${a.detailUrl}" target="_blank" class="px-2 py-0.5 text-[10px] font-extrabold rounded bg-teal-400/20 text-teal-300 border border-teal-400/40 hover:bg-teal-400/30 transition">📖 자세히 보기 ↗</a>` : ''}
                   </div>
                   <h3 class="text-sm md:text-base font-extrabold text-white mt-1">${a.ko}</h3>
                   <p class="text-[11px] text-indigo-400 font-medium">${a.en}</p>
@@ -677,6 +679,11 @@
             <div class="text-[11px] ${isSensTalk ? 'text-rose-200 bg-rose-950/60 border-rose-500/50' : 'text-amber-200/90 bg-amber-950/30 border-amber-500/25'} border rounded-lg p-2 leading-snug">
               ⚠️ <b>혼동 주의:</b> ${a.caution}
             </div>
+            ${a.detailUrl ? `
+            <a href="${a.detailUrl}" target="_blank" class="w-full py-2.5 bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 shadow-lg">
+              📖 [${a.ko}] 자세히 보기 (온보딩 · 메뉴 1~6번 · 비전 전체 해설) ↗
+            </a>
+            ` : ''}
             <button onclick="copyAppSummary(${a.num})" class="w-full py-2 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5">
               📌 #${String(a.num).padStart(2, '0')} [${a.ko}] 소개 텍스트 복사
             </button>
