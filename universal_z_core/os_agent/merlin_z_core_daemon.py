@@ -756,19 +756,28 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
     }
 
 
-def ensure_port_free(port: int) -> list[int]:
+def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
     """포트(기본 5199)를 점유 중인 구버전 Z-코어 프로세스를 자동 감지해 즉시 종료하고 포트를 인계받습니다."""
     killed_pids: list[int] = []
     my_pid = os.getpid()
 
-    # 0) 이미 동일 버전(v2.3.3+)의 Z-코어가 정상 실행 중이라면 중복 실행(더블클릭 연타 등)으로 트레이 아이콘이 여러 개 생기지 않도록 즉시 종료!
+    # Fast-path: 포트가 이미 비어 있다면 불필요한 HTTP 타임아웃이나 netstat 스캔(6초 지연) 없이 1ms 만에 즉시 반환!
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/__merlin/health", timeout=0.6) as resp:
-            data = json.loads(resp.read().decode("utf-8", errors="replace"))
-            if data.get("ok") and data.get("version") == CORE_VERSION and not _SELF_UPDATE_IN_PROGRESS:
-                os._exit(0)
-    except Exception:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", port))
+        return []
+    except OSError:
         pass
+
+    # 0) 이미 동일 버전(v2.3.3+)의 Z-코어가 정상 실행 중이고 강제 교체(--replace)가 아니라면 중복 실행 방지를 위해 즉시 종료!
+    if not force_replace:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/__merlin/health", timeout=0.6) as resp:
+                data = json.loads(resp.read().decode("utf-8", errors="replace"))
+                if data.get("ok") and data.get("version") == CORE_VERSION and not _SELF_UPDATE_IN_PROGRESS:
+                    os._exit(0)
+        except Exception:
+            pass
 
     # 1) 우아한 종료 요청 시도 (이전 프로세스가 스스로 Shell_NotifyIcon(NIM_DELETE)로 트레이 아이콘을 지우고 종료하도록 유도)
     try:
@@ -1019,7 +1028,7 @@ def main() -> None:
         except Exception:
             pass
 
-    replaced_pids = ensure_port_free(args.port)
+    replaced_pids = ensure_port_free(args.port, force_replace=bool(getattr(args, "replace", False)))
 
     if os.name == "nt":
         try:

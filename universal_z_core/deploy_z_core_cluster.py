@@ -41,11 +41,17 @@ def update_pc1():
     except Exception as e:
         log(f"1호기 시작프로그램 등록 경고: {e}")
 
-    # 2) 데몬 교체 기동 (Z-코어 5199 + 귀신창 51988)
+    # 2) 데몬 교체 기동 (Z-코어 5199 + 귀신창 51988) - WMI Win32_Process.Create로 부모 프로세스 Job Object 종료 영향 원천 차단
     try:
-        subprocess.Popen([runner, script, "--replace"])
-        subprocess.Popen([runner, spd_src, "--replace"])
-        time.sleep(1.2)
+        for target_script in (script, spd_src):
+            wmi_cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                f"Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList '\"{runner}\" \"{target_script}\" --replace' | Out-Null",
+            ]
+            subprocess.run(wmi_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=8)
+        time.sleep(1.5)
     except Exception as e:
         log(f"1호기 데몬 기동 오류: {e}")
 
@@ -60,9 +66,20 @@ def update_pc1():
     except Exception as e:
         log(f"❌ 1호기 헬스체크 실패: {e}")
 
+def _resolve_ssh_key() -> str:
+    candidates = [
+        os.path.expanduser(r"~/.ssh/id_ai_master"),
+        r"C:\Users\WD\.ssh\id_ai_master",
+        r"C:\Users\chichi\.ssh\id_ai_master",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
 def update_pc4():
     log("\n=== [4호기 (사무실 100.114.100.24)] Z-코어 원격 동기화 및 리로드 시작 ===")
-    key_path = r"C:\Users\chichi\.ssh\id_ai_master"
+    key_path = _resolve_ssh_key()
     if not os.path.exists(key_path):
         log(f"❌ 마스터키 없음: {key_path}")
         return
@@ -72,7 +89,7 @@ def update_pc4():
     remote_dest = "USER@100.114.100.24:C:/MerlinTools/universal_z_core/"
     scp_cmd = ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-r", local_dir, remote_dest]
     log("4호기로 최신 universal_z_core 전송 중 (SCP)...")
-    res = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+    res = subprocess.run(scp_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40)
     if res.returncode != 0:
         log(f"❌ 4호기 SCP 전송 실패: {res.stderr}")
         return
@@ -80,6 +97,8 @@ def update_pc4():
         ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", r"d:\Ghosti\universal_z_core\seq_paste_daemon.py", "USER@100.114.100.24:C:/MerlinTools/seq_paste_daemon.py"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=15,
     )
     log("✅ 4호기 SCP 전송 완료 (universal_z_core + C:/MerlinTools/seq_paste_daemon.py)")
@@ -90,7 +109,7 @@ def update_pc4():
         'curl.exe -s --max-time 2 -X POST -d "{}" http://127.0.0.1:5199/__merlin/shutdown & curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown'
     ]
     try:
-        subprocess.run(shutdown_cmd, capture_output=True, timeout=5)
+        subprocess.run(shutdown_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
     except Exception:
         pass
     time.sleep(0.5)
@@ -100,7 +119,7 @@ def update_pc4():
         'powershell -Command "$p = Get-NetTCPConnection -LocalPort 5199,51988 -State Listen -ErrorAction SilentlyContinue; if ($p) { foreach ($item in $p) { if ($item.OwningProcess -gt 0) { Stop-Process -Id $item.OwningProcess -Force -ErrorAction SilentlyContinue } } }"'
     ]
     try:
-        subprocess.run(kill_cmd, capture_output=True, timeout=10)
+        subprocess.run(kill_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
     except Exception:
         pass
 
@@ -110,7 +129,7 @@ def update_pc4():
             "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
             f"schtasks /run /tn {task_name}"
         ]
-        subprocess.run(run_task_cmd, capture_output=True, timeout=10)
+        subprocess.run(run_task_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
     time.sleep(2.5)
 
     # 4) 4호기 5199 헬스체크 (SSH 경유 curl)
@@ -118,7 +137,7 @@ def update_pc4():
         "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
         "curl.exe -s http://127.0.0.1:5199/api/care/status"
     ]
-    check_res = subprocess.run(check_cmd, capture_output=True, text=True, timeout=10)
+    check_res = subprocess.run(check_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
     if check_res.returncode == 0 and '"ok": true' in check_res.stdout.lower():
         log("✅ 4호기 Z-코어 원격 최신화 및 기동 확인 성공 (5199 케어스위트 응답 완료)")
     else:
