@@ -306,14 +306,8 @@ class Gemma2LightweightEngine:
                                 for ch in clean_k:
                                     self.ko_chars.add(ch)
 
-                    onnx_path = model_dir / "onnx" / "model_quantized.onnx"
-                    if not onnx_path.exists():
-                        onnx_path = model_dir / "onnx" / "model_q4.onnx"
-                    if onnx_path.exists():
-                        import numpy as np
-                        import onnxruntime as ort
-                        self.np = np
-                        self.session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+                    # [초경량 데몬 철칙]: seq_paste_daemon.py에서는 200MB ONNX 세션을 중복 로드하지 않고
+                    # tokenizer.json 사전만 로드하여 CPU 0% · 메모리 25MB 이하 초경량 반응속도를 보장합니다.
             except Exception:
                 pass
             finally:
@@ -1859,14 +1853,17 @@ def _get_lightweight_local_files() -> list[dict]:
                             "img_path": entry.path if fkind == "image" else "",
                             "text": f"[{fd.name}] {name}",
                             "ts": st.st_mtime,
-                            "vec": AI_ENGINE.embed_128d(name[:120]),
+                            "_name": name[:120],
                         })
                     except Exception:
                         pass
         except Exception:
             pass
     collected.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
-    _LOCAL_FILE_CACHE["items"] = collected[:150]
+    top_items = collected[:80]
+    for it_f in top_items:
+        it_f["vec"] = AI_ENGINE.embed_128d(it_f.pop("_name", ""))
+    _LOCAL_FILE_CACHE["items"] = top_items
     _LOCAL_FILE_CACHE["ts"] = now
     return _LOCAL_FILE_CACHE["items"]
 
