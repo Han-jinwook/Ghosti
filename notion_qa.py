@@ -330,9 +330,9 @@ def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
         title_obj = props.get(SCHEMA.title_prop_name, {})
         title_text = extract_plain_text(title_obj.get("title", [])) or "(제목 없음)"
         app_select = (props.get("앱", {}).get("select") or {}).get("name", "")
-        # 센스톡·썬드리머·멀린비서·스튜디오·귀신창 초능력(비서 전담) 카드는 제외하되, '귀신검색창'/'귀신검색'은 Ghosti가 전담!
-        is_ghost_search_card = ("귀신검색창" in title_text) or ("귀신검색" in title_text)
-        if not is_ghost_search_card and (app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub", "귀신창") or any(k in title_text for k in ("[센스톡]", "[썬드리머]", "[멀린비서]", "[스튜디오]", "[멀린허브]", "[MerlinHub]", "[귀신창]", "센스톡", "썬드리머", "멀린비서", "멀린허브", "충전소", "귀신팸", "귀신코인"))):
+        # 센스톡·썬드리머·멀린비서·스튜디오·귀신창 초능력(비서 전담) 카드는 제외하되, '[귀신같이]' 소속 카드는 Ghosti가 전담!
+        is_ghosti_card = ("[귀신같이" in title_text) or ("귀신같이]" in title_text) or (app_select in ("귀신같이", "Ghosti"))
+        if not is_ghosti_card and (app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub", "귀신창") or any(k in title_text for k in ("[센스톡]", "[썬드리머]", "[멀린비서]", "[스튜디오]", "[멀린허브]", "[MerlinHub]", "[귀신창]", "센스톡", "썬드리머", "멀린비서", "멀린허브", "충전소", "귀신팸", "귀신코인"))):
             continue
         body_text = fetch_page_body_text(page_id)
         if not app_select and "[귀신같이]" not in title_text and "귀신같이" not in title_text and any(k in body_text for k in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "sensetalk", "sundreamer")):

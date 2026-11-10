@@ -19,7 +19,7 @@ function ensurePreloaded(): void {
   if (!preloadedGiggleAudio) {
     preloadedGiggleAudio = new Audio(GIGGLE_SOUND_URL);
     preloadedGiggleAudio.preload = 'auto';
-    preloadedGiggleAudio.volume = 0.35;
+    preloadedGiggleAudio.volume = 0.20;
   }
 }
 
@@ -74,7 +74,7 @@ export function playAppEnterGiggleSound(_forceReplay = false): void {
 
   try {
     const audio = preloadedGiggleAudio || new Audio(GIGGLE_SOUND_URL);
-    audio.volume = 0.35;
+    audio.volume = 0.20;
     audio.currentTime = 0;
     const p = audio.play();
     if (p && typeof p.then === 'function') {
@@ -102,7 +102,7 @@ export function playAppEnterGiggleSound(_forceReplay = false): void {
                 // ignore
               }
               const retryAudio = preloadedGiggleAudio || new Audio(GIGGLE_SOUND_URL);
-              retryAudio.volume = 0.35;
+              retryAudio.volume = 0.20;
               retryAudio.currentTime = 0;
               retryAudio.play().catch(() => playFallbackWebAudio());
             }

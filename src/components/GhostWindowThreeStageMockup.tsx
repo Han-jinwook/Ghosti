@@ -689,7 +689,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
           ? '/sounds/active_summon_sound.wav'
           : '/sounds/active_typo_sound.wav';
       const audio = new Audio(src);
-      audio.volume = 0.45;
+      audio.volume = 0.20;
       void audio.play().catch(() => {});
     } catch {
       // ignore audio autoplay block
