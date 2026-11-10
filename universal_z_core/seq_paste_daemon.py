@@ -5196,6 +5196,18 @@ def main() -> None:
             fg_before = _LAST_TARGET_HWND
             proc_before = _get_process_name_from_hwnd(fg_before).lower()
             cls_before = _get_win_class_only(fg_before)
+        # [가상 모니터·수련장 충돌 방지]: 브라우저의 '귀신같이(Ghosti)' 웹페이지 안에서 우클릭 소환을 체험할 때는
+        # 웹페이지 자체 가상 모니터/수련장 UI가 작동하므로 로컬 OS 귀신검색창이 중복으로 튀어나와 가리지 않도록 양보!
+        if summon_by_rclick and proc_before in ("chrome.exe", "msedge.exe", "whale.exe", "brave.exe", "firefox.exe"):
+            try:
+                _tbuf = ctypes.create_unicode_buffer(512)
+                u32.GetWindowTextW(fg_before, _tbuf, 512)
+                _wtitle = (_tbuf.value or "").lower()
+                if "귀신같이" in _wtitle or "ghosti" in _wtitle:
+                    record_feature_telemetry("ctrl0_summon_bar")
+                    return
+            except Exception:
+                pass
         if proc_before in ("explorer.exe", "python.exe", "pythonw.exe") or cls_before in ("Progman", "WorkerW", "Shell_TrayWnd", "CabinetWClass"):
             is_dedicated_input_app = False
         elif not summon_by_rclick:
