@@ -2761,6 +2761,11 @@ export async function executeTextSearch(
     /음식|요리|식사|식도락|먹방|안주|피자|스테이크|국밥|삼겹살|바비큐|샐러드|파스타|초밥|치킨|튀김|food|meal|dish/.test(
       qLower
     ) && !/영수증|전표|결제|주문내역/.test(qLower);
+  const isHikingQuery = /등산|산행|트레킹|국기봉|노고단|호암산|삼성산|산정상|정상석|hike|hiking/.test(qLower);
+  const isSkiQuery = /스키장|스키|스노우보드|보드\s*타는|보딩|슬로프|설원|ski|snowboard/.test(qLower);
+  const isCampingQuery = /캠핑장|캠핑|텐트|타프|불멍|야영|오토캠핑|camping/.test(qLower);
+  const isSoccerQuery = /축구장|축구경기장|축구|월드컵경기장|그라운드|soccer|stadium/.test(qLower);
+  const isPoolQuery = /수영장|풀장|온수풀|선베드|패밀리풀|pool/.test(qLower);
   // '개' 단독 글자는 '개월·두 개·개인'과 겹치므로 낱말로 쓰였을 때만 강아지로 판단
   const isDogQuery =
     /강아지|반려견|멍멍이|비글|퍼그|불독|웰시코기|코기|보더콜리|dog|puppy/.test(qLower) ||
@@ -2939,13 +2944,51 @@ export async function executeTextSearch(
     if (isFoodQuery) {
       const hasVisibleFoodInCaption =
         Boolean(cap) &&
-        /피자|스테이크|샐러드|감자 요리|바비큐 요리|국밥|고기국|튀김 안주|잔과 안주가 놓여|와인병과 디저트를 앞에|와인과 안주를 앞에|차려진 요리와 음식을 즐기는 식도락/.test(
+        /피자|스테이크|샐러드|감자 요리|바비큐 요리|국밥|고기국|튀김 안주|잔과 안주가 놓여|와인병과 디저트를 앞에|와인과 안주를 앞에|차려진 요리와 음식을 즐기는 식도락|차려진 고기 요리와|차려진 인도 커리와|차려진 해물 짬뽕|국물 요리와 반찬을/.test(
           cap
         ) &&
         !/불쇼|불꽃을 돌리며|공연을 바라보고|식사를 기다리며|손님들로 붐비고|음식을 담고 있다|접시를 들고 이동하고|맥주 잔이 놓인 테이블에 앉아 미소를|맥주잔을 들며 다정하게|칵테일 잔을 두고|종이컵 음료를 든|라떼아트가 그려진|과일 칵테일 음료가|와인 병의 라벨|식당 간판|휴대전화를 든 채 대화/.test(
           cap
         );
       if (!hasVisibleFoodInCaption) continue;
+    }
+
+    if (isHikingQuery) {
+      const hasVisibleHikingInCaption =
+        Boolean(cap) &&
+        /등산|산행|국기봉|노고단|호암산|삼성산|바위 산 정상|설산 등산로/.test(cap) &&
+        !/키오스크|패스트푸드|캠핑장|텐트|스키장|슬로프|안내판|표지판|해변|바다|요트|래시가드/.test(cap);
+      if (!hasVisibleHikingInCaption) continue;
+    }
+
+    if (isSkiQuery) {
+      const hasVisibleSkiInCaption =
+        Boolean(cap) &&
+        /스키장|스노우보드|슬로프|보딩|설원/.test(cap) &&
+        !/축구경기장|축구장|그라운드|캠핑장|서핑|호수공원|식당/.test(cap);
+      if (!hasVisibleSkiInCaption) continue;
+    }
+
+    if (isCampingQuery) {
+      const hasVisibleCampingInCaption =
+        Boolean(cap) &&
+        /캠핑장|캠핑|텐트|타프|오토캠핑|불멍/.test(cap) &&
+        !/레일파크|와인동굴|안내 표지판|안내판|해변 그늘막/.test(cap);
+      if (!hasVisibleCampingInCaption) continue;
+    }
+
+    if (isSoccerQuery) {
+      const hasVisibleSoccerInCaption =
+        Boolean(cap) &&
+        /축구경기장|축구장|축구|그라운드|월드컵경기장/.test(cap);
+      if (!hasVisibleSoccerInCaption) continue;
+    }
+
+    if (isPoolQuery) {
+      const hasVisiblePoolInCaption =
+        Boolean(cap) &&
+        /수영장|선베드|패밀리풀|인피니티풀|풀장/.test(cap);
+      if (!hasVisiblePoolInCaption) continue;
     }
 
     if (isDogQuery && !isCatQuery && cap) {
