@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 귀신같이 (Ghosti) 무토큰 3중 통합 점검 및 세션 창 제목 자동 각인 스크립트 (z_core_watcher.py)
@@ -278,24 +278,6 @@ def main() -> None:
         )
         return
 
-    # --watch 모드 진입 시 이미 '발견된 버그'에 대기 중인 카드가 있다면 1건씩 즉시 반환(Single-Piece Flow)을 위해 가장 먼저 처리할 단 1건만 '버그 수정중'으로 이동 후 깨움!
-    if initial_bugs:
-        import notion_qa
-        first_bug = initial_bugs[0]
-        notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) or notion_qa.mark_fixing(first_bug["page_id"])
-        print("\n" + "🚨" * 24)
-        print(
-            f"🔔 [노션 QA 대기 버그 감지 — 1건 단위 즉시 반환(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 선(先) 이동!] (총 대기 {len(initial_bugs)}건 중 1번째 착수)"
-        )
-        print(f"\n[1] 📌 제목: {first_bug['title']}")
-        print(f"    🆔 카드 ID: {first_bug['page_id']} (➔ '버그 수정중' 이동 완료)")
-        print(f"    📝 내용: {first_bug['body']}")
-        if len(initial_bugs) > 1:
-            print(f"\n⏳ (나머지 대기 버그 {len(initial_bugs) - 1}건은 1번 카드를 '재테스트 대기'로 넘긴 직후 순차 착수합니다)")
-        print("\n💬 방금 감지된 1번 노션 버그를 즉시 수정하고 바로 '재테스트 대기'로 넘깁니다!")
-        print("🚨" * 24)
-        return
-
     interval_sec = 25
     for arg in sys.argv[1:]:
         if arg.isdigit():
@@ -306,8 +288,32 @@ def main() -> None:
         f"👀 [Ghosti 무토큰 3중 감시병 가동] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
         f"   1) 전사 중앙 우체국: {POST_OFFICE_DIR}\n"
         f"   2) 비서 전사 코딩강령 이식: {DOCTRINE_FILE.name}\n"
-        f"   3) 노션 QA 칸반 보드: '발견된 버그'([귀신같이]) 컬럼"
+        f"   3) 노션 QA 칸반 보드: '발견된 버그'([귀신같이]) 컬럼",
+        flush=True,
     )
+
+    # [핵심] WaitMsBeforeAsync=500 백그라운드 전환이 먼저 완료되어 에이전트가 직전 카드 완료 보고를 채팅창에 즉시 출력하고 턴을 끝낼 수 있도록 3초 대기 후 다음 카드를 감지·기상시킵니다!
+    time.sleep(3)
+
+    if initial_bugs:
+        import notion_qa
+        first_bug = initial_bugs[0]
+        notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) or notion_qa.mark_fixing(first_bug["page_id"])
+        print("\n" + "🚨" * 24)
+        print(
+            f"🔔 [노션 QA 대기 버그 감지 — 1건 단위(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 선(先) 이동!] (총 대기 {len(initial_bugs)}건 중 1번째 착수)"
+        )
+        print(f"\n[1] 📌 제목: {first_bug['title']}")
+        print(f"    🆔 카드 ID: {first_bug['page_id']} (➔ '버그 수정중' 이동 완료)")
+        print(f"    📝 내용: {first_bug['body']}")
+        if len(initial_bugs) > 1:
+            print(f"\n⏳ (나머지 대기 버그 {len(initial_bugs) - 1}건은 이번 1번 카드를 완료 보고하고 턴을 종료한 뒤 다음 턴에서 순차 착수합니다)")
+        print(
+            "\n🚨 [멀린님 절대 철칙 — 한꺼번에 처리 금지!] 오직 위 1개 카드만 수정·빌드·푸시·'재테스트 대기' 전환(complete_bug)한 뒤, "
+            "절대 같은 턴에서 다음 카드를 이어서 고치지 말고 즉시 감시병(--watch) 재기동 후 멀린님께 간단 완료 보고를 올리고 턴을 종료하세요!"
+        )
+        print("🚨" * 24, flush=True)
+        return
 
     tick = 0
     while True:
@@ -362,15 +368,18 @@ def main() -> None:
             notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) or notion_qa.mark_fixing(first_bug["page_id"])
             print("\n" + "🚨" * 24)
             print(
-                f"🔔 [노션 QA 신규 버그 자동 감지 — 1건 단위 즉시 반환(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 즉시 이동!] (총 {len(new_bugs)}건 중 1번째 착수)"
+                f"🔔 [노션 QA 신규 버그 자동 감지 — 1건 단위(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 즉시 이동!] (총 {len(new_bugs)}건 중 1번째 착수)"
             )
             print(f"\n[1] 📌 제목: {first_bug['title']}")
             print(f"    🆔 카드 ID: {first_bug['page_id']} (➔ '버그 수정중' 이동 완료)")
             print(f"    📝 내용: {first_bug['body']}")
             if len(new_bugs) > 1:
-                print(f"\n⏳ (나머지 대기 버그 {len(new_bugs) - 1}건은 1번 카드를 '재테스트 대기'로 넘긴 직후 순차 착수합니다)")
-            print("\n💬 방금 감지된 1번 노션 버그를 즉시 수정하고 바로 '재테스트 대기'로 넘깁니다!")
-            print("🚨" * 24)
+                print(f"\n⏳ (나머지 대기 버그 {len(new_bugs) - 1}건은 이번 1번 카드를 완료 보고하고 턴을 종료한 뒤 다음 턴에서 순차 착수합니다)")
+            print(
+                "\n🚨 [멀린님 절대 철칙 — 한꺼번에 처리 금지!] 오직 위 1개 카드만 수정·빌드·푸시·'재테스트 대기' 전환(complete_bug)한 뒤, "
+                "절대 같은 턴에서 다음 카드를 이어서 고치지 말고 즉시 감시병(--watch) 재기동 후 멀린님께 간단 완료 보고를 올리고 턴을 종료하세요!"
+            )
+            print("🚨" * 24, flush=True)
             return
 
 
