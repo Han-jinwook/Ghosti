@@ -3886,29 +3886,28 @@ def _restore_target_focus_and_replace_line(
     is_hwp_t = ("hwp" in proc_low_t) or ("hword" in proc_low_t) or ("hnc" in cls_low_t)
 
     if is_excel_t:
-        # 엑셀(Excel/한셀)에서는 시트 그리드 상태에서 Shift+Home이나 Ctrl+V를 치면 다중 셀(A열~현재열)이 드래그 선택되거나
-        # '붙여 넣을 데이터가 선택한 크기와 다릅니다' 경고창이 뜨므로, 먼저 Ctrl+C를 시도해 빈 선택이면 F2(셀 편집 모드)로 진입 후 셀 내부 텍스트만 교체!
+        # 엑셀(Excel/한셀)에서는:
+        # 1) 시트 그리드 상태에서 Ctrl+C를 누르면 Excel '복사 모드(개미 행진 테두리)'가 켜져서 이후 Shift+Home이나 Ctrl+V 시
+        #    다중 셀이 선택되거나 '붙여 넣을 데이터가 선택한 크기와 다릅니다' 경고창이 뜨므로, 절대 먼저 Ctrl+C를 치지 않음!
+        # 2) 현재 포커스 컨트롤 클래스가 'EXCEL6'(인라인 셀 편집 중)가 아닌 'EXCEL7'(그리드 선택 상태)이면에만 F2를 1회 눌러 셀 편집 모드로 진입!
         VK_F2 = 0x71
         VK_END = 0x23
         VK_HOME = 0x24
         release_all_modifiers()
+        focus_h_xl = _get_focused_control_hwnd(target_hwnd)
+        focus_cls_xl = _get_win_class_only(focus_h_xl).upper() if focus_h_xl else ""
+        if focus_cls_xl != "EXCEL6":
+            tap_key_combo([], VK_F2)
+            time.sleep(0.035)
+        tap_key_combo([], VK_END)
+        time.sleep(0.015)
+        tap_key_combo([VK_SHIFT], VK_HOME)
+        time.sleep(0.04)
         daemon_set_cb(sentinel)
         time.sleep(0.015)
         tap_key_combo([VK_CONTROL], VK_C)
         time.sleep(0.045)
         selected = get_clipboard_text()
-        if not selected or selected == sentinel or "\t" in selected or "\n" in selected:
-            tap_key_combo([], VK_F2)
-            time.sleep(0.035)
-            tap_key_combo([], VK_END)
-            time.sleep(0.015)
-            tap_key_combo([VK_SHIFT], VK_HOME)
-            time.sleep(0.04)
-            daemon_set_cb(sentinel)
-            time.sleep(0.015)
-            tap_key_combo([VK_CONTROL], VK_C)
-            time.sleep(0.045)
-            selected = get_clipboard_text()
     else:
         daemon_set_cb(sentinel)
         time.sleep(0.02)
@@ -3916,7 +3915,10 @@ def _restore_target_focus_and_replace_line(
         time.sleep(0.055 if is_hwp_t else 0.045)
         selected = get_clipboard_text()
 
-        if not selected or selected == sentinel:
+        # 노션(Notion) 등에서 무드래그 상태로 Ctrl+C를 치면 블록 전체(끝에 \n 포함)가 복사되면서 텍스트 선택 영역은 잡히지 않으므로,
+        # 단일 줄이면서 끝에 \n이 붙은 경우에는 반드시 End -> Shift+Home으로 실제 텍스트 선택을 잡도록 처리!
+        is_unselected_block_copy = bool(selected and selected != sentinel and selected.endswith(("\n", "\r")) and ("\n" not in selected.rstrip("\r\n")))
+        if not selected or selected == sentinel or is_unselected_block_copy:
             VK_END = 0x23
             VK_HOME = 0x24
             release_all_modifiers()
@@ -4718,21 +4720,25 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
         except Exception:
             pass
 
-    # 2) 일반 입력창(워드/한글/카톡/브라우저) 드래그 또는 현재 줄 원위치 하이픈 성형
+    # 2) 일반 입력창(워드/한글/카톡/브라우저/노션) 드래그 또는 현재 줄 원위치 하이픈 성형
     sentinel = "__GHOSTI_NUM_SEL__"
     orig_clip = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     if target_hwnd and u32.IsWindow(target_hwnd):
+        proc_num_t = _get_process_name_from_hwnd(target_hwnd).lower()
+        cls_num_t = _get_win_class_only(target_hwnd).lower()
+        is_excel_num = proc_num_t in ("excel.exe", "hcell.exe") or ("xlmain" in cls_num_t)
+        VK_F2 = 0x71
+        VK_END = 0x23
+        VK_HOME = 0x24
         release_all_modifiers()
-        daemon_set_cb(sentinel)
-        time.sleep(0.015)
-        tap_key_combo([VK_CONTROL], VK_C)
-        time.sleep(0.045)
-        sel_txt = get_clipboard_text()
-        if not sel_txt or sel_txt == sentinel:
-            VK_END = 0x23
-            VK_HOME = 0x24
+        if is_excel_num:
+            focus_h_xl = _get_focused_control_hwnd(target_hwnd)
+            focus_cls_xl = _get_win_class_only(focus_h_xl).upper() if focus_h_xl else ""
+            if focus_cls_xl != "EXCEL6":
+                tap_key_combo([], VK_F2)
+                time.sleep(0.035)
             tap_key_combo([], VK_END)
-            time.sleep(0.02)
+            time.sleep(0.015)
             tap_key_combo([VK_SHIFT], VK_HOME)
             time.sleep(0.04)
             daemon_set_cb(sentinel)
@@ -4740,6 +4746,25 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
             tap_key_combo([VK_CONTROL], VK_C)
             time.sleep(0.045)
             sel_txt = get_clipboard_text()
+        else:
+            daemon_set_cb(sentinel)
+            time.sleep(0.015)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.045)
+            sel_txt = get_clipboard_text()
+            # 노션(Notion) 등에서 빈 드래그 시 Ctrl+C가 블록 전체(끝에 \n 포함)를 복사해버리면 선택 영역이 풀린 상태이므로
+            # 그대로 Ctrl+V를 치면 원문 뒤에 이어붙여지는('01012345678010-1234-5678') 현상이 발생함!
+            # 따라서 끝에 줄바꿈(\n)이 붙은 블록 복사거나 빈 선택이면 반드시 End -> Shift+Home으로 실제 텍스트 선택을 잡음!
+            if not sel_txt or sel_txt == sentinel or sel_txt.endswith(("\n", "\r")):
+                tap_key_combo([], VK_END)
+                time.sleep(0.025)
+                tap_key_combo([VK_SHIFT], VK_HOME)
+                time.sleep(0.045)
+                daemon_set_cb(sentinel)
+                time.sleep(0.015)
+                tap_key_combo([VK_CONTROL], VK_C)
+                time.sleep(0.045)
+                sel_txt = get_clipboard_text()
         if sel_txt and sel_txt != sentinel:
             fmt_sel = _toggle_korean_number_format(sel_txt)
             if fmt_sel != sel_txt:
@@ -5112,9 +5137,10 @@ def main() -> None:
         elif recent_unpasted:
             last_summon_raw_clip = recent_unpasted[-1]
 
-        # [분기 3] 방금(15초 이내) 스샷을 찍은 직후라면 -> [창 UI ③ 사진·OCR 공간이동창] 직행!
+        # [분기 3] 방금(15초 이내) 스샷을 찍은 직후이더라도, 글자 입력창에서 키보드(Ctrl+0)로 소환한 경우에는
+        # [1]~[8] 단축키가 즉시 작동해야 하므로 우클릭 소환이거나 비입력창(바탕화면·탐색기)일 때만 [창 UI ③ 사진·OCR 공간이동창] 직행!
         now_s = time.time()
-        if recent_images and last_image_ts > last_copy_ts and (now_s - last_image_ts) <= 15.0:
+        if recent_images and last_image_ts > last_copy_ts and (now_s - last_image_ts) <= 15.0 and (summon_by_rclick or not is_dedicated_input_app):
             disarm_sub_hotkeys()
             show_ghost_toast("__UI3_OCR__|", duration_ms=8000)
             return
