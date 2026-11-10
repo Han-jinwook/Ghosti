@@ -705,18 +705,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 className="h-10 w-auto object-contain drop-shadow-[0_2px_12px_rgba(0,240,181,0.4)]"
               />
             </div>
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-[#00F0B5] text-[11px] font-bold">
+            <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-[#00F0B5] text-[11px] font-bold whitespace-nowrap shrink-0">
               <span>✓</span>
-              <span>개인·기업 PC 기본 기능(내 기기 찾기·손보기·귀신창) 영구 무료 (단속 걱정 ZERO)</span>
+              <span>개인·기업 PC 기본 기능 영구 무료</span>
             </div>
           </div>
 
           {/* 중앙 검색 유입 키워드 바로가기 배지 */}
-          <nav className="hidden md:flex items-center gap-2 text-xs font-extrabold">
+          <nav className="hidden md:flex items-center gap-2 text-xs font-extrabold whitespace-nowrap shrink-0">
             <button
               type="button"
               onClick={() => handleSelectWeaponChip('clean')}
-              className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 demoTab === 'clean'
                   ? 'bg-[#00F0B5] text-slate-950 border-[#00F0B5]'
                   : 'bg-zinc-900/90 text-zinc-300 border-white/10 hover:border-teal-400/50'
@@ -727,7 +727,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <button
               type="button"
               onClick={() => handleSelectWeaponChip('video')}
-              className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 demoTab === 'video' || demoTab === 'doc'
                   ? 'bg-[#00F0B5] text-slate-950 border-[#00F0B5]'
                   : 'bg-zinc-900/90 text-zinc-300 border-white/10 hover:border-teal-400/50'
@@ -738,7 +738,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <button
               type="button"
               onClick={() => handleSelectWeaponChip('superpower')}
-              className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 demoTab === 'superpower'
                   ? 'bg-amber-400 text-slate-950 border-amber-400'
                   : 'bg-zinc-900/90 text-zinc-300 border-white/10 hover:border-amber-400/50'
@@ -749,17 +749,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <button
               type="button"
               onClick={() => setCertModalOpen(true)}
-              className="px-3 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-300 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-300 cursor-pointer whitespace-nowrap shrink-0"
             >
               📜 무료 공식 보증서
             </button>
           </nav>
 
           {/* 우측 액션 영역 */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {!isLaunched ? (
               verifiedUserEmail ? (
-                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span>✅</span>
                   <span className="max-w-[140px] truncate">{verifiedUserEmail}</span>
                   <span className="hidden sm:inline">알림 예약됨</span>
@@ -768,7 +768,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <button
                   type="button"
                   onClick={scrollToEmailBox}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-xs sm:text-[13px] font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-xs sm:text-[13px] font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   <span>🔔</span>
                   <span>출시 알림받기</span>
@@ -778,7 +778,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <button
                 type="button"
                 onClick={() => onEnterWorkspace(true)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-xs sm:text-[13px] font-black shadow-[0_0_24px_rgba(0,240,181,0.45)] transition-all cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-xs sm:text-[13px] font-black shadow-[0_0_24px_rgba(0,240,181,0.45)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <span>🚀</span>
                 <span>본 앱 바로 시작하기</span>
@@ -831,14 +831,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <span className="animate-pulse">●</span>
               <span>✓ 개인·기업 PC 기본 기능(내 기기 찾기·손보기·귀신창) 영구 무료 (단속 걱정 ZERO)</span>
             </div>
-            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight break-keep">
               예고편에서 보신 그 마법,{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00F0B5] via-teal-300 to-amber-300">
+              <span className="inline-block text-[#00F0B5]" style={{ color: '#0F766E' }}>
                 『👻 귀신비서』와 지금 바로 눌러보세요!
               </span>
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-zinc-400 font-semibold max-w-md">
+          <p className="text-xs sm:text-sm text-zinc-400 font-semibold max-w-md break-keep">
             복잡한 가입이나 설치 없이 왼쪽 <b className="text-[#00F0B5]">귀신비서 대화창</b>의 4가지 무료 무기를 누르면 오른쪽 도화지에 즉시 펼쳐집니다.
           </p>
         </div>
@@ -864,7 +864,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold shrink-0 cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold shrink-0 cursor-pointer whitespace-nowrap"
               >
                 📜 무료 보증서
               </button>
@@ -873,7 +873,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             {/* 대화 스트림 영역 (노션 스타일 미니멀 버블) */}
             <div
               ref={chatScrollRef}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 min-h-[250px] max-h-[340px] bg-[#090D15]"
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 min-h-[250px] max-h-[340px] bg-zinc-950/80"
             >
               {chatMessages.map((msg) => {
                 const isUser = msg.role === 'user';
@@ -903,10 +903,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       )}
                     </div>
                     <div
-                      className={`max-w-[94%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line shadow-sm ${
+                      className={`max-w-[94%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line shadow-sm break-keep ${
                         isUser
-                          ? 'bg-teal-600 text-white rounded-tr-sm border border-teal-500 font-semibold'
-                          : 'bg-zinc-900 border border-white/10 text-zinc-100 rounded-tl-sm'
+                          ? 'bg-emerald-500 text-white rounded-tr-sm border border-emerald-600 font-bold'
+                          : 'bg-zinc-900 border border-white/10 text-zinc-100 rounded-tl-sm font-medium'
                       }`}
                     >
                       {msg.text}
@@ -1087,7 +1087,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <p className="text-white font-black text-sm sm:text-base">
                           {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].transcript}
                         </p>
-                        <p className="text-xs text-teal-200/80">
+                        <p className="text-xs text-teal-300 font-bold">
                           🎯 AI 장면 인식: {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].sceneDesc}
                         </p>
                       </div>
@@ -1609,10 +1609,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <span>🎬</span>
             <span>유튜브·인스타·네이버 화제의 15초 공식 예고편 쇼룸</span>
           </div>
-          <h2 className="text-2xl sm:text-4xl font-black tracking-tight mb-3">
+          <h2 className="text-2xl sm:text-4xl font-black tracking-tight mb-3 break-keep">
             15초만 보면 바로 이해되는 『귀신같이』 핵심 예고편
           </h2>
-          <p className="text-zinc-400 text-xs sm:text-sm">
+          <p className="text-zinc-400 text-xs sm:text-sm break-keep">
             영상에서 보신 <b className="text-[#00F0B5]">#귀신비서 · #귀신검색 · #귀신창</b> 6편의 쇼츠를 한자리에서 바로 재생해 보세요.
           </p>
 
@@ -1628,7 +1628,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 key={tab.id}
                 type="button"
                 onClick={() => setSelectedCategory(tab.id as any)}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                   selectedCategory === tab.id
                     ? 'bg-[#00F0B5] text-slate-950 shadow-[0_0_20px_rgba(0,240,181,0.4)]'
                     : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700'
@@ -1641,64 +1641,77 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredShorts.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => setActiveShortsModal(item)}
-              className="group rounded-2xl bg-zinc-900/60 border border-white/10 hover:border-teal-400/50 p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(0,240,181,0.15)] cursor-pointer flex flex-col justify-between"
-            >
-              <div>
-                <div
-                  className={`relative aspect-[9/16] max-h-60 w-full rounded-xl bg-gradient-to-br ${item.thumbnailBg} border border-white/10 mb-4 overflow-hidden flex items-center justify-center p-4 text-center`}
-                >
-                  {item.videoUrl ? (
-                    <video
-                      src={item.videoUrl}
-                      muted
-                      playsInline
-                      preload="metadata"
-                      className="absolute inset-0 w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-500"
+          {filteredShorts.map((item) => {
+            const posterUrl = item.videoUrl ? item.videoUrl.replace(/\.mp4(\?.*)?$/, '.jpg') : '';
+            return (
+              <div
+                key={item.id}
+                onClick={() => setActiveShortsModal(item)}
+                className="group rounded-2xl bg-zinc-900/60 border border-white/10 hover:border-teal-400/50 p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(0,240,181,0.15)] cursor-pointer flex flex-col justify-between"
+              >
+                <div>
+                  <div
+                    data-keep-dark="true"
+                    className={`relative aspect-[9/16] max-h-64 w-full rounded-xl bg-slate-950 border border-white/15 mb-4 overflow-hidden flex items-center justify-center p-4 text-center`}
+                  >
+                    {posterUrl ? (
+                      <img
+                        src={posterUrl}
+                        alt={item.title}
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : item.youtubeId ? (
+                      <img
+                        src={`https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`}
+                        alt={item.title}
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : null}
+                    <div
+                      data-keep-dark="true"
+                      className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/40 group-hover:bg-black/20 transition-colors"
                     />
-                  ) : item.youtubeId ? (
-                    <img
-                      src={`https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`}
-                      alt={item.title}
-                      className="absolute inset-0 w-full h-full object-cover opacity-65 group-hover:scale-105 transition-transform duration-500"
-                    />
-                  ) : null}
-                  <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                  <div className="relative z-10">
-                    <div className="w-12 h-12 rounded-full bg-[#00F0B5]/90 flex items-center justify-center mx-auto mb-2 text-slate-950 text-xl font-black shadow-lg group-hover:scale-110 transition-transform">
-                      ▶
+                    <div className="relative z-10">
+                      <div className="w-12 h-12 rounded-full bg-[#00F0B5] flex items-center justify-center mx-auto mb-2 text-slate-950 text-xl font-black shadow-lg group-hover:scale-110 transition-transform">
+                        ▶
+                      </div>
+                      <span
+                        style={{ backgroundColor: 'rgba(15, 23, 42, 0.88)', color: '#5EEAD4' }}
+                        className="text-[11px] font-extrabold px-3 py-1 rounded-full border border-teal-400/50 shadow"
+                      >
+                        15초 영상 바로 재생
+                      </span>
                     </div>
-                    <span className="text-[11px] font-bold text-teal-300 bg-black/70 px-2.5 py-0.5 rounded-full border border-teal-500/30">
-                      15초 영상 바로 재생
+                    <span
+                      style={{ backgroundColor: 'rgba(15, 23, 42, 0.88)', color: '#FFFFFF' }}
+                      className="absolute top-2.5 left-2.5 text-[10.5px] font-extrabold px-2.5 py-1 rounded-md shadow"
+                    >
+                      {item.tag}
                     </span>
                   </div>
-                  <span className="absolute top-2.5 left-2.5 text-[10px] font-extrabold text-white/95 bg-black/70 px-2 py-0.5 rounded">
-                    {item.tag}
+
+                  <h3 className="font-black text-base text-zinc-100 group-hover:text-[#00F0B5] transition-colors leading-snug mb-2 break-keep">
+                    {item.title}
+                  </h3>
+                  <div className="text-xs text-zinc-300 font-semibold mb-1.5 line-clamp-2 break-keep">
+                    {item.hookLine}
+                  </div>
+                  <div className="text-xs text-teal-300 font-extrabold mb-3 line-clamp-2 break-keep">
+                    👉 {item.solutionLine}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400">
+                  <span className="truncate">
+                    검색 키워드: <b className="text-amber-300">{item.recommendedKeyword}</b>
                   </span>
-                </div>
-
-                <h3 className="font-black text-base text-zinc-100 group-hover:text-[#00F0B5] transition-colors leading-snug mb-2">
-                  {item.title}
-                </h3>
-                <div className="text-xs text-rose-300/90 font-medium mb-1 line-clamp-2">
-                  {item.hookLine}
-                </div>
-                <div className="text-xs text-teal-300 font-bold mb-3 line-clamp-2">
-                  👉 {item.solutionLine}
+                  <span className="text-[#00F0B5] font-extrabold shrink-0 ml-2 whitespace-nowrap">재생 ➔</span>
                 </div>
               </div>
-
-              <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400">
-                <span className="truncate">
-                  검색 키워드: <b className="text-amber-300">{item.recommendedKeyword}</b>
-                </span>
-                <span className="text-[#00F0B5] font-extrabold shrink-0 ml-2">재생 ➔</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
