@@ -195,8 +195,7 @@ export const SmartTrashView: React.FC = () => {
 
   const showDuplicatePickSection =
     !isTrashBinTabActive &&
-    currentTab !== 'none' &&
-    (currentTab === 'duplicate' || currentTab === 'all') &&
+    currentTab === 'duplicate' &&
     activeDuplicateGroups.length > 0;
 
   const zCoreOutdated =
@@ -664,9 +663,18 @@ export const SmartTrashView: React.FC = () => {
                   setActiveTrashCategoryFilter(tab.key as TrashCategory);
                 }
               }}
-              className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border ${
+              style={
                 isSelected
-                  ? 'bg-zinc-900 border-primary-container shadow-md ring-2 ring-primary-container'
+                  ? {
+                      backgroundColor: 'rgba(13, 148, 136, 0.14)',
+                      borderColor: '#0D9488',
+                      boxShadow: '0 0 0 2px #0D9488',
+                    }
+                  : undefined
+              }
+              className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border-2 ${
+                isSelected
+                  ? 'bg-teal-500/15 border-[#0D9488] shadow-md ring-2 ring-[#0D9488]/40'
                   : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
               }`}
             >
@@ -684,9 +692,18 @@ export const SmartTrashView: React.FC = () => {
                     {tab.subtitle}
                   </span>
                 </div>
-                <span className="material-symbols-outlined text-[17px] text-zinc-400 shrink-0">
-                  {tab.icon}
-                </span>
+                {isSelected ? (
+                  <span
+                    style={{ backgroundColor: '#0D9488', color: '#FFFFFF' }}
+                    className="px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    ✓ 선택됨 · 접기 ▲
+                  </span>
+                ) : (
+                  <span className="material-symbols-outlined text-[17px] text-zinc-400 shrink-0">
+                    {tab.icon}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-white/10 w-full">
@@ -894,20 +911,31 @@ export const SmartTrashView: React.FC = () => {
 
             {/* PC 3열 / 5열 바둑판 배열 전환 + 전체 카테고리 보기 */}
             <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
-
-
               <button
                 type="button"
-                onClick={() =>
-                  setActiveTrashCategoryFilter(currentTab === 'all' ? 'duplicate' : 'all')
-                }
-                className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border transition-all cursor-pointer ${
-                  currentTab === 'all'
-                    ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                    : 'bg-zinc-900 text-zinc-300 hover:text-white border-white/10'
-                }`}
+                onClick={() => setActiveTrashCategoryFilter('duplicate')}
+                style={{
+                  backgroundColor: '#0D9488',
+                  color: '#FFFFFF',
+                  borderColor: '#0D9488',
+                }}
+                className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border transition-all cursor-pointer shadow-xs"
               >
-                {currentTab === 'all' ? '중복·연사만 보기' : `전체 후보 보기 (${activeTrash.length})`}
+                ✓ 중복·연사만 보기 ({activeDuplicateGroups.length}묶음)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTrashCategoryFilter('all')}
+                className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-300 hover:text-white border-white/10 transition-all cursor-pointer"
+              >
+                전체 후보 보기 ({activeTrash.length}장)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTrashCategoryFilter('none')}
+                className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-400 hover:text-white border-white/10 transition-all cursor-pointer"
+              >
+                목록 접기 ▲
               </button>
             </div>
           </div>
@@ -1059,8 +1087,35 @@ export const SmartTrashView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-
-
+              <button
+                type="button"
+                onClick={() => setActiveTrashCategoryFilter('duplicate')}
+                className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-300 hover:text-white border-white/10 transition-all cursor-pointer"
+              >
+                중복·연사만 보기 ({activeDuplicateGroups.length}묶음)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTrashCategoryFilter('all')}
+                style={
+                  currentTab === 'all'
+                    ? {
+                        backgroundColor: '#0D9488',
+                        color: '#FFFFFF',
+                        borderColor: '#0D9488',
+                      }
+                    : undefined
+                }
+                className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border transition-all cursor-pointer ${
+                  currentTab === 'all'
+                    ? 'font-extrabold shadow-xs'
+                    : 'bg-zinc-900 text-zinc-300 hover:text-white border-white/10'
+                }`}
+              >
+                {currentTab === 'all'
+                  ? `✓ 전체 후보 보기 (${activeTrash.length}장)`
+                  : `전체 후보 보기 (${activeTrash.length}장)`}
+              </button>
               <button
                 type="button"
                 onClick={selectAllTrashInFilter}
@@ -1082,6 +1137,13 @@ export const SmartTrashView: React.FC = () => {
                 className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
               >
                 선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 휴지통 이동
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTrashCategoryFilter('none')}
+                className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-400 hover:text-white border-white/10 transition-all cursor-pointer"
+              >
+                목록 접기 ▲
               </button>
             </div>
           </div>

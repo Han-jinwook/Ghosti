@@ -1523,27 +1523,51 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 <button
                   key={tab.key}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => {
                     if (currentTab === tab.key) {
-                      setActiveTrashCategoryFilter('all');
+                      setActiveTrashCategoryFilter('none');
                     } else {
                       setActiveTrashCategoryFilter(tab.key as TrashCategory);
                     }
                   }}
-                  className={`group text-left cursor-pointer rounded-2xl p-3.5 transition-all flex flex-col justify-between gap-2.5 border ${
+                  style={
                     isSelected
-                      ? 'bg-zinc-900 border-primary-container shadow-md ring-2 ring-primary-container'
+                      ? {
+                          backgroundColor: 'rgba(13, 148, 136, 0.14)',
+                          borderColor: '#0D9488',
+                          boxShadow: '0 0 0 2px #0D9488',
+                        }
+                      : undefined
+                  }
+                  className={`group text-left cursor-pointer rounded-2xl p-3.5 transition-all flex flex-col justify-between gap-2.5 border-2 ${
+                    isSelected
+                      ? 'bg-teal-500/15 border-[#0D9488] shadow-md ring-2 ring-[#0D9488]/40'
                       : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
                   }`}
                 >
-                  <div className="flex flex-col gap-1 w-full">
-                    <div className="flex items-center gap-1 whitespace-nowrap">
-                      <span className="font-headline-sm text-[13px] text-primary-container font-extrabold shrink-0">
-                        {tab.stepNum}
-                      </span>
-                      <span className="font-headline-sm text-[13.5px] xl:text-[14px] text-white font-extrabold tracking-tight">
-                        {tab.shortTitle}
-                      </span>
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <div className="flex items-center justify-between gap-1.5 w-full">
+                      <div className="flex items-center gap-1 whitespace-nowrap">
+                        <span className="font-headline-sm text-[13px] text-primary-container font-extrabold shrink-0">
+                          {tab.stepNum}
+                        </span>
+                        <span className="font-headline-sm text-[13.5px] xl:text-[14px] text-white font-extrabold tracking-tight">
+                          {tab.shortTitle}
+                        </span>
+                      </div>
+                      {isSelected ? (
+                        <span
+                          style={{ backgroundColor: '#0D9488', color: '#FFFFFF' }}
+                          className="px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap shadow-xs shrink-0"
+                        >
+                          ✓ 선택됨 · 접기 ▲
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded-full bg-zinc-800/80 border border-white/10 text-zinc-400 text-[10px] font-bold whitespace-nowrap shrink-0">
+                          펼치기 ▼
+                        </span>
+                      )}
                     </div>
                     <span className="font-body-sm text-[11px] text-zinc-400 leading-snug">
                       {tab.subtitle}
@@ -1594,7 +1618,35 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             })}
           </div>
 
-          {/* 3-A. ① 중복 사진 & 연사 묶음 선택 */}
+          {/* 3-0. 탭을 다시 눌러 접었을 때(currentTab === 'none') 노출되는 깔끔한 접힘 안내 바 */}
+          {currentTab === 'none' && (
+            <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-[18px]">📂</span>
+                <span className="font-body-sm text-[13.5px] text-zinc-300 font-bold">
+                  현재 사진 분류 목록이 접혀 있습니다. 위 4개 탭(①~④)을 누르면 해당 분류 사진이 펼쳐집니다.
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTrashCategoryFilter('duplicate')}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
+                >
+                  📸 중복·연사만 보기 ({activeDuplicateGroups.length}묶음) ▼
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTrashCategoryFilter('all')}
+                  className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
+                >
+                  📋 전체 후보 보기 ({activeTrash.length}장) ▼
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 3-A. ① 중복 사진 & 연사 묶음 선택 (currentTab === 'duplicate'일 때만 순수하게 표시하여 타 탭 사진 혼입 차단) */}
           {showDuplicatePickSection && (
             <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
@@ -1604,7 +1656,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       ① 중복 사진 &amp; 연사 묶음 선택
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[12.5px] font-bold">
-                      {activeDuplicateGroups.length}개 묶음
+                      {activeDuplicateGroups.length}개 묶음 · 정리 대상 {dupCount}장
                     </span>
                   </div>
                   <p className="font-body-sm text-[13px] text-zinc-400">
@@ -1612,131 +1664,158 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveTrashCategoryFilter(currentTab === 'all' ? 'duplicate' : 'all')
-                  }
-                  className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border transition-all cursor-pointer ${
-                    currentTab === 'all'
-                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                      : 'bg-zinc-900 text-zinc-300 hover:text-white border-white/10'
-                  }`}
-                >
-                  {currentTab === 'all' ? '중복·연사만 보기' : `전체 후보 보기 (${activeTrash.length})`}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTrashCategoryFilter('duplicate')}
+                    style={{
+                      backgroundColor: '#0D9488',
+                      color: '#FFFFFF',
+                      borderColor: '#0D9488',
+                    }}
+                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border transition-all cursor-pointer shadow-xs"
+                  >
+                    ✓ 중복·연사만 보기 ({activeDuplicateGroups.length}묶음)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTrashCategoryFilter('all')}
+                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-300 hover:text-white border-white/10 transition-all cursor-pointer"
+                  >
+                    전체 후보 보기 ({activeTrash.length}장)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTrashCategoryFilter('none')}
+                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-400 hover:text-white border-white/10 transition-all cursor-pointer"
+                  >
+                    목록 접기 ▲
+                  </button>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-4">
-                {activeDuplicateGroups.map((group, gIdx) => {
-                  const groupPhotos = group.photoIds
-                    .map((id) => photoById.get(id))
-                    .filter((p): p is NonNullable<typeof p> => Boolean(p && !p.quarantined));
+              {activeDuplicateGroups.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  {activeDuplicateGroups.map((group, gIdx) => {
+                    const groupPhotos = group.photoIds
+                      .map((id) => photoById.get(id))
+                      .filter((p): p is NonNullable<typeof p> => Boolean(p && !p.quarantined));
 
-                  const redundantCount = groupPhotos.filter((p) => p.id !== group.bestPhotoId).length;
-                  const repPhoto = groupPhotos[0];
-                  const sceneLabel =
-                    repPhoto?.tags.find((t) => !t.includes('연사') && !t.includes('원본')) || '#연사묶음';
-                  const isExactDuplicateGroup = gIdx === 0;
+                    const redundantCount = groupPhotos.filter((p) => p.id !== group.bestPhotoId).length;
+                    const repPhoto = groupPhotos[0];
+                    const sceneLabel =
+                      repPhoto?.tags.find((t) => !t.includes('연사') && !t.includes('원본')) || '#연사묶음';
+                    const isExactDuplicateGroup = gIdx === 0;
 
-                  return (
-                    <div
-                      key={group.groupId}
-                      className="p-4 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-col gap-3"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-extrabold">
-                            {isExactDuplicateGroup ? '📑 동일 내용 중복' : '📸 연사 묶음 (1장 선택)'}
-                          </span>
-                          <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                            묶음 #{gIdx + 1} ({groupPhotos.length}장)
-                          </span>
-                          <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium">
-                            {sceneLabel}
-                          </span>
+                    return (
+                      <div
+                        key={group.groupId}
+                        className="p-4 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-col gap-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-extrabold">
+                              {isExactDuplicateGroup ? '📑 동일 내용 중복' : '📸 연사 묶음 (1장 선택)'}
+                            </span>
+                            <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                              묶음 #{gIdx + 1} ({groupPhotos.length}장)
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium">
+                              {sceneLabel}
+                            </span>
+                          </div>
+
+                          <button
+                            disabled={quarantineMoving}
+                            onClick={() =>
+                              void pickBestInDuplicateGroup(group.groupId, group.bestPhotoId, true)
+                            }
+                            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-primary-container text-zinc-100 hover:text-zinc-950 border border-white/10 font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                            <span>
+                              {isExactDuplicateGroup
+                                ? `최고화질 원본 남기고 사본 ${redundantCount}장 정리`
+                                : `선택한 1장 남기고 나머지 ${redundantCount}장 정리`}
+                            </span>
+                          </button>
                         </div>
 
-                        <button
-                          disabled={quarantineMoving}
-                          onClick={() =>
-                            void pickBestInDuplicateGroup(group.groupId, group.bestPhotoId, true)
-                          }
-                          className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-primary-container text-zinc-100 hover:text-zinc-950 border border-white/10 font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                        >
-                          <span className="material-symbols-outlined text-[15px]">check_circle</span>
-                          <span>
-                            {isExactDuplicateGroup
-                              ? `최고화질 원본 남기고 사본 ${redundantCount}장 정리`
-                              : `선택한 1장 남기고 나머지 ${redundantCount}장 정리`}
-                          </span>
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                        {groupPhotos.map((ph, idx) => {
-                          const isBestOriginal = ph.id === group.bestPhotoId;
-                          return (
-                            <div
-                              key={ph.id}
-                              onClick={() =>
-                                void pickBestInDuplicateGroup(group.groupId, ph.id, false)
-                              }
-                              className={`group/card relative aspect-[4/5] rounded-xl overflow-hidden cursor-pointer transition-all ${
-                                isBestOriginal
-                                  ? 'ring-2 ring-primary-container border border-primary-container'
-                                  : 'border border-white/10 opacity-90 hover:opacity-100 hover:border-white/30'
-                              }`}
-                            >
-                              <img
-                                src={ph.thumbUrl}
-                                alt=""
-                                loading="lazy"
-                                className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
-                              />
-
-                              {isBestOriginal ? (
-                                <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[14px]">
-                                    verified_user
-                                  </span>
-                                  <span>👑 보존할 1장</span>
-                                </div>
-                              ) : (
-                                <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/80 backdrop-blur-md border border-white/15 text-zinc-300 font-label-sm text-[11px] font-medium">
-                                  {`#${idx + 1} · 클릭 시 이 사진 보존`}
-                                </div>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedPhoto(ph, groupPhotos);
-                                }}
-                                title="크게 비교 보기"
-                                className="absolute bottom-2.5 right-2.5 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors z-10 cursor-pointer"
+                        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                          {groupPhotos.map((ph, idx) => {
+                            const isBestOriginal = ph.id === group.bestPhotoId;
+                            return (
+                              <div
+                                key={ph.id}
+                                onClick={() =>
+                                  void pickBestInDuplicateGroup(group.groupId, ph.id, false)
+                                }
+                                className={`group/card relative aspect-[4/5] rounded-xl overflow-hidden cursor-pointer transition-all ${
+                                  isBestOriginal
+                                    ? 'ring-2 ring-primary-container border border-primary-container'
+                                    : 'border border-white/10 opacity-90 hover:opacity-100 hover:border-white/30'
+                                }`}
                               >
-                                <span className="material-symbols-outlined text-[16px]">zoom_in</span>
-                              </button>
-                            </div>
-                          );
-                        })}
+                                <img
+                                  src={ph.thumbUrl}
+                                  alt=""
+                                  loading="lazy"
+                                  className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                                />
+
+                                {isBestOriginal ? (
+                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">
+                                      verified_user
+                                    </span>
+                                    <span>👑 보존할 1장</span>
+                                  </div>
+                                ) : (
+                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/80 backdrop-blur-md border border-white/15 text-zinc-300 font-label-sm text-[11px] font-medium">
+                                    {`#${idx + 1} · 클릭 시 이 사진 보존`}
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedPhoto(ph, groupPhotos);
+                                  }}
+                                  title="크게 비교 보기"
+                                  className="absolute bottom-2.5 right-2.5 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors z-10 cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">zoom_in</span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2">
+                  <span className="material-symbols-outlined text-primary-container text-[30px]">
+                    verified
+                  </span>
+                  <span className="font-headline-sm text-[15px] text-white font-bold">
+                    중복·연사 사진 정리가 모두 완료되었습니다!
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* 3-B. 탭 ②·③·④ 개별 선택 그리드 (실제 감지 0장일 때도 예시 샘플 사진 표시) */}
-          {currentTab !== 'duplicate' && (
+          {/* 3-B. 탭 ②·③·④ 및 [전체 후보 보기] 개별 선택 그리드 (실제 감지 0장일 때도 예시 샘플 사진 표시) */}
+          {currentTab !== 'duplicate' && currentTab !== 'none' && (
             <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[16.5px] text-white font-bold">
-                    {TRASH_TABS_4.find((t) => t.key === currentTab)?.title || '전체 정리 후보 사진'}
+                    {TRASH_TABS_4.find((t) => t.key === currentTab)?.title ||
+                      '📋 전체 정리 후보 사진 (① 중복·연사 + ② 메모·영수증 + ③ 캡처 + ④ 흔들림)'}
                   </h2>
                   <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold">
                     {isShowingSamplePreview
@@ -1745,32 +1824,70 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   </span>
                 </div>
 
-                {!isShowingSamplePreview && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={selectAllTrashInFilter}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium cursor-pointer"
-                    >
-                      전체 선택
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearTrashSelection}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 font-label-sm text-[12px] cursor-pointer"
-                    >
-                      선택 해제
-                    </button>
-                    <button
-                      type="button"
-                      disabled={selectedTrashIds.size === 0 || quarantineMoving}
-                      onClick={() => void moveSelectedToQuarantine()}
-                      className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
-                    >
-                      선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 정리
-                    </button>
-                  </div>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTrashCategoryFilter('duplicate')}
+                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-300 hover:text-white border-white/10 transition-all cursor-pointer"
+                  >
+                    중복·연사만 보기 ({activeDuplicateGroups.length}묶음)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTrashCategoryFilter('all')}
+                    style={
+                      currentTab === 'all'
+                        ? {
+                            backgroundColor: '#0D9488',
+                            color: '#FFFFFF',
+                            borderColor: '#0D9488',
+                          }
+                        : undefined
+                    }
+                    className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border transition-all cursor-pointer ${
+                      currentTab === 'all'
+                        ? 'font-extrabold shadow-xs'
+                        : 'bg-zinc-900 text-zinc-300 hover:text-white border-white/10'
+                    }`}
+                  >
+                    {currentTab === 'all'
+                      ? `✓ 전체 후보 보기 (${activeTrash.length}장)`
+                      : `전체 후보 보기 (${activeTrash.length}장)`}
+                  </button>
+                  {!isShowingSamplePreview && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={selectAllTrashInFilter}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium cursor-pointer"
+                      >
+                        전체 선택
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearTrashSelection}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 font-label-sm text-[12px] cursor-pointer"
+                      >
+                        선택 해제
+                      </button>
+                      <button
+                        type="button"
+                        disabled={selectedTrashIds.size === 0 || quarantineMoving}
+                        onClick={() => void moveSelectedToQuarantine()}
+                        className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
+                      >
+                        선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 정리
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTrashCategoryFilter('none')}
+                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-400 hover:text-white border-white/10 transition-all cursor-pointer"
+                  >
+                    목록 접기 ▲
+                  </button>
+                </div>
               </div>
 
               {filteredCandidates.length > 0 ? (
