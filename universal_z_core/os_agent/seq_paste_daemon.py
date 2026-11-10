@@ -594,7 +594,8 @@ def set_ime_language(target_korean: bool) -> None:
     """
     [멀린님 핵심 지시 반영] 오타 변환 직후 윈도우 한/영 입력기(IME) 상태를 목표 언어로 자동 동기화 전환!
     - 최상위 창(GetForegroundWindow)과 내부 포커스 컨트롤(Edit/RichEdit) 양쪽의 IME 컨텍스트를 모두 즉시 동기화합니다.
-    - 아래아한글(hwp.exe/hword.exe)은 자체 한/영 자판 엔진을 사용하여 WM_IME_CONTROL만으로는 전환되지 않으므로 VK_HANGUL 물리 키 토글을 병행합니다.
+    - 아래아한글(hwp.exe/hword.exe)은 WM_IME_CONTROL을 무시하고 자체 내부 한/영 자판 엔진만 쓰므로,
+      HWP에서는 WM_IME_CONTROL을 보내지 않고 오직 물리 VK_HANGUL(0x15) 토글만 전송하여 이중 토글 역전을 원천 차단합니다!
     """
     try:
         hwnd = u32.GetForegroundWindow()
@@ -602,6 +603,12 @@ def set_ime_language(target_korean: bool) -> None:
             proc_low = _get_process_name_from_hwnd(hwnd).lower()
             cls_low = _get_win_class_only(hwnd).lower()
             is_hwp = ("hwp" in proc_low) or ("hword" in proc_low) or ("hnc" in cls_low)
+            if is_hwp:
+                hangul_sc = u32.MapVirtualKeyW(VK_HANGUL, 0)
+                u32.keybd_event(VK_HANGUL, hangul_sc, 0, 0)
+                time.sleep(0.015)
+                u32.keybd_event(VK_HANGUL, hangul_sc, KEYEVENTF_KEYUP, 0)
+                return
             focus_h = _get_focused_control_hwnd(hwnd)
             switched = False
             for h_cand in (focus_h, hwnd):
@@ -615,9 +622,9 @@ def set_ime_language(target_korean: bool) -> None:
                         new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
                         u32.SendMessageW(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode)
                     switched = True
-            if switched and not is_hwp:
+            if switched:
                 return
-        # 폴백 및 아래아한글(HWP) 자체 자판 전환: 한/영 키(VK_HANGUL) 물리 토글
+        # 폴백: 한/영 키(VK_HANGUL) 물리 토글
         u32.keybd_event(VK_HANGUL, 0, 0, 0)
         time.sleep(0.01)
         u32.keybd_event(VK_HANGUL, 0, KEYEVENTF_KEYUP, 0)
@@ -3874,31 +3881,39 @@ def _restore_target_focus_and_replace_line(
         return False, raw_ed, out_ed, None
 
     proc_low_t = _get_process_name_from_hwnd(target_hwnd).lower() if target_hwnd else ""
-    is_excel_t = proc_low_t in ("excel.exe", "hcell.exe")
+    cls_low_t = _get_win_class_only(target_hwnd).lower() if target_hwnd else ""
+    is_excel_t = proc_low_t in ("excel.exe", "hcell.exe") or ("xlmain" in cls_low_t)
+    is_hwp_t = ("hwp" in proc_low_t) or ("hword" in proc_low_t) or ("hnc" in cls_low_t)
 
-    if is_excel_t and not auto_triggered:
-        # 엑셀(Excel/한셀)에서는 시트 그리드 상태에서 End/Shift+Home이나 Ctrl+V를 치면 다중 셀이 선택되어
-        # '붙여 넣을 데이터가 선택한 크기와 다릅니다' 경고창이 뜨므로, 항상 F2(셀 편집 모드) 진입 후 셀 내부 텍스트만 교체!
+    if is_excel_t:
+        # 엑셀(Excel/한셀)에서는 시트 그리드 상태에서 Shift+Home이나 Ctrl+V를 치면 다중 셀(A열~현재열)이 드래그 선택되거나
+        # '붙여 넣을 데이터가 선택한 크기와 다릅니다' 경고창이 뜨므로, 먼저 Ctrl+C를 시도해 빈 선택이면 F2(셀 편집 모드)로 진입 후 셀 내부 텍스트만 교체!
         VK_F2 = 0x71
         VK_END = 0x23
         VK_HOME = 0x24
         release_all_modifiers()
-        tap_key_combo([], VK_F2)
-        time.sleep(0.03)
-        tap_key_combo([], VK_HOME)
-        time.sleep(0.02)
-        tap_key_combo([VK_SHIFT], VK_END)
-        time.sleep(0.04)
         daemon_set_cb(sentinel)
         time.sleep(0.015)
         tap_key_combo([VK_CONTROL], VK_C)
         time.sleep(0.045)
         selected = get_clipboard_text()
+        if not selected or selected == sentinel or "\t" in selected or "\n" in selected:
+            tap_key_combo([], VK_F2)
+            time.sleep(0.035)
+            tap_key_combo([], VK_END)
+            time.sleep(0.015)
+            tap_key_combo([VK_SHIFT], VK_HOME)
+            time.sleep(0.04)
+            daemon_set_cb(sentinel)
+            time.sleep(0.015)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.045)
+            selected = get_clipboard_text()
     else:
         daemon_set_cb(sentinel)
-        time.sleep(0.015)
+        time.sleep(0.02)
         tap_key_combo([VK_CONTROL], VK_C)
-        time.sleep(0.045)
+        time.sleep(0.055 if is_hwp_t else 0.045)
         selected = get_clipboard_text()
 
         if not selected or selected == sentinel:
@@ -3907,14 +3922,21 @@ def _restore_target_focus_and_replace_line(
             release_all_modifiers()
             if not auto_triggered:
                 tap_key_combo([], VK_END)
-                time.sleep(0.025)
+                time.sleep(0.03)
             tap_key_combo([VK_SHIFT], VK_HOME)
-            time.sleep(0.045)
+            time.sleep(0.055 if is_hwp_t else 0.045)
             daemon_set_cb(sentinel)
-            time.sleep(0.015)
+            time.sleep(0.02)
             tap_key_combo([VK_CONTROL], VK_C)
-            time.sleep(0.05)
+            time.sleep(0.065 if is_hwp_t else 0.05)
             selected = get_clipboard_text()
+            if (not selected or selected == sentinel) and is_hwp_t:
+                # HWP 첫 실행 직후 Shift+Home 선택 복사 지연 시 1회 즉시 재시도
+                tap_key_combo([VK_SHIFT], VK_HOME)
+                time.sleep(0.06)
+                tap_key_combo([VK_CONTROL], VK_C)
+                time.sleep(0.07)
+                selected = get_clipboard_text()
 
     if selected and selected != sentinel:
         morphed, target_lang = morph_korean_english_text_with_direction(selected)
@@ -4582,28 +4604,30 @@ def _toggle_korean_number_format(txt: str) -> str:
     - 숫자만 있는 번호면 -> 한국형 표준 하이픈 삽입 (01012345678 -> 010-1234-5678, 사업자번호, 생년월일)
     - 통짜 카톡 문장이면 -> [성함 / 연락처 / 계좌 / 일정] AI 구조화 발라내기!
     """
-    s = txt.strip()
+    s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", txt).strip()
+    s_single = re.sub(r"^(?:[-*•▪▫▶▷]\s*|\d+[.)]\s*)+", "", s).strip()
     # 1-A) 단일 번호에 이미 하이픈이 들어있는 경우 -> 숫자만 남기도록 역토글!
-    if re.fullmatch(r"\d{2,4}-\d{2,4}-\d{4,5}", s):
-        return re.sub(r"\D", "", s)
-    # 1-B) 순수 숫자만 복사된 경우 (휴대폰 10~11자리, 사업자번호 10자리, 생년월일 8자리) -> 하이픈만 깔끔하게 삽입!
-    if re.fullmatch(r"\d{8,11}", s):
-        if re.fullmatch(r"01[016789]\d{7,8}", s):
-            return f"{s[:3]}-{s[3:-4]}-{s[-4:]}"
-        if re.fullmatch(r"02\d{7,8}", s):
-            return f"{s[:2]}-{s[2:-4]}-{s[-4:]}"
-        if len(s) == 10:
-            return f"{s[:3]}-{s[3:5]}-{s[5:]}"
-        if len(s) == 8 and s[:2] in ("19", "20"):
-            return f"{s[:4]}-{s[4:6]}-{s[6:]}"
+    if re.fullmatch(r"\d{2,4}-\d{2,4}-\d{4,5}", s_single):
+        return re.sub(r"\D", "", s_single)
+    # 1-B) 순수 숫자만 입력/복사된 경우 (휴대폰 10~11자리, 사업자번호 10자리, 생년월일 8자리) -> 하이픈만 깔끔하게 삽입!
+    if re.fullmatch(r"\d{8,11}", s_single):
+        if re.fullmatch(r"01[016789]\d{7,8}", s_single):
+            return f"{s_single[:3]}-{s_single[3:-4]}-{s_single[-4:]}"
+        if re.fullmatch(r"02\d{7,8}", s_single):
+            return f"{s_single[:2]}-{s_single[2:-4]}-{s_single[-4:]}"
+        if len(s_single) == 10:
+            return f"{s_single[:3]}-{s_single[3:5]}-{s_single[5:]}"
+        if len(s_single) == 8 and s_single[:2] in ("19", "20"):
+            return f"{s_single[:4]}-{s_single[4:6]}-{s_single[6:]}"
 
-    # 2) 통짜 카톡/메시지(연락처 + 계좌/일정이 함께 들어있는 문장) -> 구조화 추출!
+    # 2) 통짜 카톡/메시지(연락처 + 계좌/일정이 서로 다른 구간에 함께 들어있는 문장) -> 구조화 추출!
     phone_m = re.search(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b", s)
+    s_without_phone = (s[: phone_m.start()] + " " + s[phone_m.end() :]) if phone_m else s
     acct_m = re.search(
-        r"(국민|신한|우리|하나|농협|기업|카카오뱅크|토스뱅크|새마을|우체국|부산|대구|경남|광주|전북|제주|수협|신협|씨티|SC제일)?\s*((?!01[016789][-.\s]?\d{3,4}[-.\s]?\d{4})\d{3,6}[-.\s]?\d{2,6}[-.\s]?\d{3,7})",
-        s,
+        r"(국민|신한|우리|하나|농협|기업|카카오뱅크|토스뱅크|새마을|우체국|부산|대구|경남|광주|전북|제주|수협|신협|씨티|SC제일)?\s*\b((?!01[016789][-.\s]?\d{3,4}[-.\s]?\d{4})\d{3,6}[-.\s]?\d{2,6}[-.\s]?\d{3,7})\b",
+        s_without_phone,
     )
-    sched_m = re.search(r"(오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|[월화수목금토일]요일)\s*(오전|오후)?\s*(\d{1,2}시(\s*\d{1,2}분)?)", s)
+    sched_m = re.search(r"(오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|[월화수목금토일]요일)\s*(오전|오후)?\s*(\d{1,2}시(\s*\d{1,2}분)?)", s_without_phone)
     if len(s) >= 18 and sum(bool(x) for x in (phone_m, acct_m, sched_m)) >= 2:
         name_m = re.search(r"([가-힣]{2,4})(?:입니다|드림|올림|배상|대표|팀장|과장|대리|사원)", s)
         structured = []
@@ -5727,26 +5751,31 @@ def main() -> None:
                                         badge = "한글키 전환" if (lang_ed == "KO") else "영문키 전환"
                                         show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_ed} ➔ {out_ed} | {badge})", duration_ms=1400)
                                 else:
-                                    set_ime_language(target_korean=target_ko)
+                                    proc_fg_auto = _get_process_name_from_hwnd(hwnd_fg).lower() if hwnd_fg else ""
+                                    cls_fg_auto = _get_win_class_only(hwnd_fg).lower() if hwnd_fg else ""
+                                    is_excel_auto = proc_fg_auto in ("excel.exe", "hcell.exe") or ("xlmain" in cls_fg_auto)
                                     orig_c = get_clipboard_text()
                                     sentinel_auto = "__GHOSTI_AUTO_TYPO__"
-                                    daemon_set_clipboard(sentinel_auto)
-                                    time.sleep(0.015)
                                     release_all_modifiers()
                                     VK_HOME = 0x24
                                     VK_END = 0x23
-                                    tap_key_combo([VK_SHIFT], VK_HOME)
-                                    time.sleep(0.035)
-                                    tap_key_combo([VK_CONTROL], VK_C)
-                                    time.sleep(0.04)
-                                    line_sel = get_clipboard_text()
-                                    if line_sel and line_sel != sentinel_auto:
+                                    line_sel = ""
+                                    if not is_excel_auto:
+                                        daemon_set_clipboard(sentinel_auto)
+                                        time.sleep(0.015)
+                                        tap_key_combo([VK_SHIFT], VK_HOME)
+                                        time.sleep(0.035)
+                                        tap_key_combo([VK_CONTROL], VK_C)
+                                        time.sleep(0.04)
+                                        line_sel = get_clipboard_text()
+                                    if line_sel and line_sel != sentinel_auto and "\t" not in line_sel:
                                         morphed_line, _ = morph_korean_english_text_with_direction(line_sel)
                                         morphed_line = re.sub(r"^([가-힣])\1(녕하세요|기귀신)", r"\1\2", morphed_line)
                                         final_paste = morphed_line.rstrip(" ") + " "
                                     else:
-                                        tap_key_combo([], VK_END)
-                                        time.sleep(0.015)
+                                        if not is_excel_auto:
+                                            tap_key_combo([], VK_END)
+                                            time.sleep(0.015)
                                         for _ in range(total_backspaces):
                                             tap_key_combo([], VK_BACK)
                                         time.sleep(0.02)
