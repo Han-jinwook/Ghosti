@@ -2200,9 +2200,20 @@ export async function loadInitialPhotoDataset(): Promise<{
     return peopleCoverageBonus + a.meanCellLap * 1.5 + a.maxCellLap * 0.35;
   };
 
+  // sample_photos_301 합성 샘플 파일 중 의도된 3장 연사 세트(IMG_20250510_1001~1003) 외에
+  // 템플릿 재사용으로 인해 다른 날짜/카테고리 샘플(반려동물·여행·음식 등)끼리 중복 묶음으로 섞이는 현상 원천 차단
+  const isSyntheticSampleFile = (fName: string): boolean =>
+    /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(fName);
+  const INTENTIONAL_SYNTHETIC_BURST_SET = new Set([
+    'IMG_20250510_1001.jpg',
+    'IMG_20250510_1002.jpg',
+    'IMG_20250510_1003.jpg',
+  ]);
+
   for (let i = 0; i < activeAudits.length; i++) {
     const first = activeAudits[i];
     if (!auditByPhoto.has(first.f) || !first.dhash || first.dhash === '0') continue;
+    if (isSyntheticSampleFile(first.f) && !INTENTIONAL_SYNTHETIC_BURST_SET.has(first.f)) continue;
     const firstSem = semanticByPhoto.get(first.f) as any;
     if (visitedDup.has(first.f) || BES2_EXPLICIT_TRASH_TAGS.has(firstSem?.primaryTag)) continue;
 
@@ -2213,6 +2224,13 @@ export async function loadInitialPhotoDataset(): Promise<{
     for (let j = i + 1; j < activeAudits.length; j++) {
       const cand = activeAudits[j];
       if (!auditByPhoto.has(cand.f) || !cand.dhash || cand.dhash === '0') continue;
+      if (isSyntheticSampleFile(cand.f) && !INTENTIONAL_SYNTHETIC_BURST_SET.has(cand.f)) continue;
+      if (
+        INTENTIONAL_SYNTHETIC_BURST_SET.has(first.f) !==
+        INTENTIONAL_SYNTHETIC_BURST_SET.has(cand.f)
+      ) {
+        continue;
+      }
       const candSem = semanticByPhoto.get(cand.f) as any;
       if (visitedDup.has(cand.f) || BES2_EXPLICIT_TRASH_TAGS.has(candSem?.primaryTag)) continue;
 

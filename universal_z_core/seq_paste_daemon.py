@@ -2,7 +2,7 @@
 """
 👻 귀신같이(Ghosti) 유료 구독자 전용 선물 — 『멀린 Z 코어 9대 귀신 초능력 + 3대 보너스 통합 데몬 (v2.5 AI 완전체)』
 ====================================================================================================
-- 단일 마스터 트리거: Ctrl + 0 (보조키: Alt + Z) + 오토매틱(Automatic) 한영 오타 감지 및 한/영 키 자동 전환
+- 귀신호출 3인방: Ctrl + 0 / Ctrl + 우클릭 / 우클릭 0.35초 꾹 + 오토매틱(Automatic) 한영 오타·띄어쓰기 감지 및 한/영 키 자동 전환
 - 온디바이스 AI 엔진: EmbeddingGemma 2 (MRL 128차원 절삭 임베딩 + 262,144 토크나이저 사전 재활용으로 추가 사전 용량 0 Byte)
 - 9대 초능력 + 3대 보너스:
   ① [그냥 Ctrl + V 연타] 순차(1->2->3) 연사 + IUIAutomation & EmbeddingGemma 2 입력칸 라벨 비순차(Out-of-Order) 자동 매칭 + 엑셀 다중 셀 1회 복사 자동 쪼개기
@@ -319,14 +319,29 @@ class Gemma2LightweightEngine:
         "am", "an", "as", "at", "be", "by", "do", "go", "he", "hi",
         "if", "in", "is", "it", "me", "my", "no", "of", "oh", "ok",
         "on", "or", "so", "to", "up", "us", "we",
-        "ai", "os", "pc", "tv", "ui", "ux", "id", "ip", "qa",
-        "pr", "hr", "vr", "ar", "vs", "ex", "mr", "ms", "dr",
+        "ai", "os", "pc", "tv", "ui", "ux", "id", "ip", "qa", "db",
+        "pr", "hr", "vr", "ar", "vs", "ex", "mr", "ms", "dr", "it",
+        "api", "pdf", "url", "usb", "otp", "sns", "vip", "ceo", "faq",
+        "qna", "sql", "csv", "xml", "sdk", "cli", "gui", "cpu", "gpu",
+        "ram", "ssd", "lan", "vpn", "dns", "ssh", "ftp", "jwt", "ocr",
+        "tts", "stt", "llm", "rag", "mvp", "kpi", "roi", "b2b", "b2c",
+        "erp", "crm", "cms", "seo", "app", "web", "git", "dev", "pro",
+        "max", "min", "sum", "avg", "key", "val", "idx", "str", "int",
+        "num", "msg", "err", "req", "res", "src", "dst", "tmp", "cfg",
+        "env", "log", "doc", "img", "pic", "vid", "zip", "txt", "xls",
+        "ppt", "hwp", "mac", "win", "ios", "apk", "aab", "ipa", "exe",
     }
 
     def is_valid_english_word(self, word: str) -> bool:
-        w = word.strip().lower()
+        w_raw = word.strip()
+        # 한글 두벌식에서 Shift가 쓰이지 않는 알파벳(R,E,Q,T,W,O,P 외)을 대문자로 쳤다면 100% 의도적인 영문 약어(DB, PC, AI, API 등)!
+        if len(w_raw) >= 2 and w_raw.isupper() and any(c not in "REQTWOP" for c in w_raw):
+            return True
+        w = w_raw.lower()
+        if len(w) <= 3 and w in self._VALID_SHORT_EN:
+            return True
         if len(w) <= 2:
-            return w in self._VALID_SHORT_EN
+            return False
         if w in self.en_dict:
             return True
         # 일반 영문 접미사(ing, ed, er, es, ly, tion, ment, s) 변형 검사
@@ -2947,7 +2962,7 @@ def _ensure_single_instance_socket_alive(curr_sock: socket.socket | None) -> soc
     """
     [자가치유(Self-Healing) 핫키 & 소켓 워치독]:
     - Windows 예약 작업(StopOnIdleEnd 등)이나 외부에서 구 데몬이 종료되었거나 소켓이 닫혔을 때 즉시 재바인딩하고,
-    - Explorer 재시작 등으로 전역 핫키(Ctrl+0, Alt+Z)가 풀리지 않도록 주기적으로 재보장합니다.
+    - Explorer 재시작 등으로 전역 핫키(Ctrl+0)가 풀리지 않도록 주기적으로 재보장합니다.
     """
     try:
         if curr_sock is not None and curr_sock.fileno() != -1:
@@ -5193,7 +5208,6 @@ def main() -> None:
 
     u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
     u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
-    u32.RegisterHotKey(None, 3, MOD_ALT | MOD_NOREPEAT, VK_Z)
     u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)  # Ctrl + Alt + T (항상 위 창고정/해제)
     u32.SetTimer(None, 1, 25, None)
 
@@ -5313,9 +5327,10 @@ def main() -> None:
     last_consumed_image_ts: float = 0.0
     last_question_mark_ts: float = 0.0
     last_drag_select_ts: float = 0.0
-    lbtn_down_pt: tuple[int, int] = (0, 0)
-    was_lbtn_phys: bool = False
+    lbtn_down_pt: tuple[int, int] | None = None
+    was_lbtn_phys_down: bool = False
     last_alpha_type_ts: float = 0.0
+    last_any_key_ts: float = 0.0
     idle_checked_for_ts: float = 0.0
     was_sub_key_down: dict[int, bool] = {}
 
@@ -5669,7 +5684,8 @@ def main() -> None:
     msg = wintypes.MSG()
     PM_REMOVE = 0x0001
     WM_QUIT_MSG = 0x0012
-    pending_init_show_ts: float = (time.time() + 0.35) if ("--show-now" in sys.argv) else 0.0
+    # [절대 금기]: 데몬 기동·재기동 시 유저가 호출하지 않았는데 귀신창이 혼자 튀어나오는 현상 영구 차단!
+    pending_init_show_ts: float = 0.0
     while True:
         had_hotkey = False
         while u32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE) != 0:
@@ -5681,8 +5697,8 @@ def main() -> None:
                 if msg.message == WM_HOTKEY:
                     had_hotkey = True
                     hk_id = msg.wParam
-                    # 1) 마스터 트리거 (Ctrl + 0 또는 Alt + Z)
-                    if hk_id in (1, 2, 3):
+                    # 1) 마스터 트리거 (오직 Ctrl + 0만!)
+                    if hk_id in (1, 2):
                         now_hk = time.time()
                         if (now_hk - last_summon_ts) > 0.25:
                             last_summon_ts = now_hk
@@ -5729,7 +5745,6 @@ def main() -> None:
                         _ensure_toast_worker()
                         u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
                         u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
-                        u32.RegisterHotKey(None, 3, MOD_ALT | MOD_NOREPEAT, VK_Z)
                         u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)
                         u32.SetTimer(None, 1, 25, None)
                     except Exception:
@@ -5746,10 +5761,6 @@ def main() -> None:
                             _execute_superpower_num(c_num)
                     except Exception:
                         pass
-                if pending_init_show_ts > 0.0 and now >= pending_init_show_ts:
-                    pending_init_show_ts = 0.0
-                    last_summon_ts = now
-                    trigger_master_summon()
                 # [Zero-Hook 마우스 우클릭 감지]: WH_MOUSE_LL 전역 훅 없이 GetAsyncKeyState(0x02) 폴링만으로
                 # ① Ctrl+우클릭 즉시 소환 / ② 우클릭 0.35초 꾹~~ 롱프레스 소환 / ③ 버튼 해제 시 네이티브 메뉴 자동 닫기 수행
                 rbtn_phys_now = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
@@ -5776,6 +5787,10 @@ def main() -> None:
                         if (now - last_summon_ts) > 0.25:
                             last_summon_ts = now
                             trigger_master_summon(summon_by_rclick=True)
+                    elif (now - last_any_key_ts) < 0.45:
+                        # 키보드 타이핑 중 손바닥/터치패드 우클릭 오접촉으로 인한 롱프레스 소환 원천 차단!
+                        _RBTN_HOLD_STATE["active"] = False
+                        _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = False
                     else:
                         _RBTN_HOLD_STATE["active"] = True
                         _RBTN_HOLD_STATE["down_ts"] = now
@@ -5973,7 +5988,7 @@ def main() -> None:
                         except Exception:
                             pass
 
-                # 3) Ctrl + V 및 마스터 트리거(Ctrl + 0 / Alt + Z) 물리 키 입력 감지
+                # 3) Ctrl + V 및 마스터 트리거(Ctrl + 0) 물리 키 입력 감지
                 # - Windows 입력기와 타 앱이 RegisterHotKey(Ctrl+0)를 가로채더라도 GetAsyncKeyState 하드웨어 폴링으로 100% 작동 보장!
                 ctrl_down = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
                 alt_down = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
@@ -5984,11 +5999,11 @@ def main() -> None:
                 # 마우스 좌클릭 드래그(단어 블록 선택) 감지 -> 입력창에서 단어 드래그 후 귀신호출 시 귀신검색창(UI ②) 분기용
                 lbtn_phys_now = (u32.GetAsyncKeyState(0x01) & 0x8000) != 0
                 if lbtn_phys_now and not was_lbtn_phys_down:
-                    pt_ld = POINT()
+                    pt_ld = wintypes.POINT()
                     u32.GetCursorPos(ctypes.byref(pt_ld))
                     lbtn_down_pt = (pt_ld.x, pt_ld.y)
                 elif not lbtn_phys_now and was_lbtn_phys_down and lbtn_down_pt is not None:
-                    pt_lu = POINT()
+                    pt_lu = wintypes.POINT()
                     u32.GetCursorPos(ctypes.byref(pt_lu))
                     if abs(pt_lu.x - lbtn_down_pt[0]) >= 14 or abs(pt_lu.y - lbtn_down_pt[1]) >= 10:
                         last_drag_select_ts = now
@@ -5998,7 +6013,8 @@ def main() -> None:
                 zero_down = ((u32.GetAsyncKeyState(VK_0) & 0x8000) != 0) or ((u32.GetAsyncKeyState(VK_NUMPAD0) & 0x8000) != 0)
                 z_down = (u32.GetAsyncKeyState(VK_Z) & 0x8000) != 0
                 t_down = (u32.GetAsyncKeyState(0x54) & 0x8000) != 0
-                ctrl0_now = (ctrl_down and not alt_down and not shift_down and zero_down) or (alt_down and not ctrl_down and not shift_down and z_down)
+                # 오직 Ctrl + 0 만 하드웨어 폴링으로 마스터 소환!
+                ctrl0_now = ctrl_down and not alt_down and not shift_down and zero_down
                 if ctrl0_now and not was_ctrl0_down:
                     if (now - last_summon_ts) > 0.30:
                         last_summon_ts = now
@@ -6029,6 +6045,7 @@ def main() -> None:
                     # 유저가 직접 한/영 키를 눌렀다면 1단어 대기 버퍼는 즉시 초기화
                     typed_ascii_buf.clear()
                     pending_first_typo = None
+                    last_any_key_ts = now
                 was_key_down[VK_HANGUL] = hangul_down
 
                 # 마우스 클릭이나 방향키·편집키(Left/Up/Right/Down/Home/End/Del/Tab/Esc) 입력 시에는 타이핑 버퍼를 즉시 초기화하여 앞 글자 찌꺼기 현상 원천 차단!
@@ -6040,6 +6057,8 @@ def main() -> None:
                         elif nav_vk == 0x01:
                             # 단순 클릭 시에는 드래그 선택 타임스탬프 해제 (드래그 완료 시에는 위에서 다시 갱신됨)
                             last_drag_select_ts = 0.0
+                        if nav_vk not in (0x01, 0x02):
+                            last_any_key_ts = now
                         typed_ascii_buf.clear()
                         pending_first_typo = None
                     was_key_down[nav_vk] = nav_down
@@ -6051,6 +6070,7 @@ def main() -> None:
                             ch = chr(vk_code) if shift_down else chr(vk_code + 32)
                             typed_ascii_buf.append(ch)
                             last_alpha_type_ts = now
+                            last_any_key_ts = now
                             if len(typed_ascii_buf) > 28:
                                 typed_ascii_buf.pop(0)
                         was_key_down[vk_code] = is_down
@@ -6063,6 +6083,7 @@ def main() -> None:
                     for d_vk in range(0x30, 0x3A):  # 상단 숫자키 0 ~ 9
                         d_down = (u32.GetAsyncKeyState(d_vk) & 0x8000) != 0
                         if d_down and not was_key_down.get(d_vk, False):
+                            last_any_key_ts = now
                             if typed_ascii_buf:
                                 if not shift_down:
                                     typed_ascii_buf.append(chr(d_vk))
@@ -6073,6 +6094,7 @@ def main() -> None:
                     for nd_vk in range(0x60, 0x6A):  # 넘패드 숫자키 0 ~ 9
                         nd_down = (u32.GetAsyncKeyState(nd_vk) & 0x8000) != 0
                         if nd_down and not was_key_down.get(nd_vk, False):
+                            last_any_key_ts = now
                             if typed_ascii_buf:
                                 typed_ascii_buf.append(chr(nd_vk - 0x30))
                         was_key_down[nd_vk] = nd_down
@@ -6094,6 +6116,7 @@ def main() -> None:
                     for p_vk, (norm_ch, sh_ch) in _OEM_PUNCT_MAP.items():
                         p_down = (u32.GetAsyncKeyState(p_vk) & 0x8000) != 0
                         if p_down and not was_key_down.get(p_vk, False):
+                            last_any_key_ts = now
                             if p_vk == 0xBF and shift_down:
                                 last_question_mark_ts = now
                             if typed_ascii_buf:
@@ -6102,6 +6125,7 @@ def main() -> None:
 
                     back_down = (u32.GetAsyncKeyState(VK_BACK) & 0x8000) != 0
                     if back_down and not was_key_down.get(VK_BACK, False):
+                        last_any_key_ts = now
                         if typed_ascii_buf:
                             typed_ascii_buf.pop()
                         else:
@@ -6145,6 +6169,7 @@ def main() -> None:
 
                     space_down = (u32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
                     if space_down and not was_key_down.get(VK_SPACE, False):
+                        last_any_key_ts = now
                         hwnd_fg = u32.GetForegroundWindow()
                         if should_skip_auto_typo(hwnd_fg):
                             typed_ascii_buf.clear()
@@ -6291,6 +6316,7 @@ def main() -> None:
 
                     ret_down = (u32.GetAsyncKeyState(VK_RETURN) & 0x8000) != 0
                     if ret_down and not was_key_down.get(VK_RETURN, False):
+                        last_any_key_ts = now
                         typed_ascii_buf.clear()
                         pending_first_typo = None
                     was_key_down[VK_RETURN] = ret_down

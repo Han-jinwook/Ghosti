@@ -1183,13 +1183,6 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     }
   };
 
-  // [수정 4] 진입 시 하단이 비어 있지 않도록 기본 선택 탭을 'all'로 자동 초기화하여 즉시 정리 대상 사진을 펼쳐 보여줌
-  useEffect(() => {
-    if (activeTrashCategoryFilter === 'none') {
-      setActiveTrashCategoryFilter('all');
-    }
-  }, [activeTrashCategoryFilter, setActiveTrashCategoryFilter]);
-
   const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
   const quarantinedPhotos = photos.filter((p) => p.quarantined);
   const totalTrashBytes = activeTrash.reduce((a, p) => a + p.size, 0);
@@ -1200,18 +1193,19 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const blurryCount = activeTrash.filter((p) => matchesTrashTab(p, 'blurry')).length;
   const memoAndScreenCount = memoCount + screenshotCount;
 
-  const rawTab =
+  const currentTab =
     activeTrashCategoryFilter === 'object' ||
     activeTrashCategoryFilter === 'document' ||
     activeTrashCategoryFilter === 'receipt'
       ? 'memo'
       : activeTrashCategoryFilter;
-  const currentTab = rawTab === 'none' ? 'all' : rawTab;
 
-  const realFilteredCandidates = activeTrash.filter((p) => matchesTrashTab(p, currentTab));
+  const realFilteredCandidates =
+    currentTab === 'none' ? [] : activeTrash.filter((p) => matchesTrashTab(p, currentTab));
   const fallbackSamplesForCurrentTab: PhotoItem[] =
     currentTab === 'all'
       ? [
+          ...FALLBACK_SAMPLE_TRASH_ITEMS.duplicate,
           ...FALLBACK_SAMPLE_TRASH_ITEMS.memo,
           ...FALLBACK_SAMPLE_TRASH_ITEMS.screenshot,
           ...FALLBACK_SAMPLE_TRASH_ITEMS.blurry,
@@ -1223,7 +1217,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       ? FALLBACK_SAMPLE_TRASH_ITEMS[currentTab]
       : [];
   const isShowingSamplePreview =
-    realFilteredCandidates.length === 0 && fallbackSamplesForCurrentTab.length > 0;
+    currentTab !== 'none' &&
+    realFilteredCandidates.length === 0 &&
+    fallbackSamplesForCurrentTab.length > 0;
   const filteredCandidates = isShowingSamplePreview
     ? fallbackSamplesForCurrentTab
     : realFilteredCandidates;
@@ -1240,9 +1236,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     })
   );
 
-  const showDuplicatePickSection =
-    (currentTab === 'duplicate' || currentTab === 'all') &&
-    activeDuplicateGroups.length > 0;
+  const showDuplicatePickSection = currentTab === 'duplicate';
 
   const zCoreOutdated =
     zCoreBridge.isConnected && isZCoreOutdated(zCoreBridge.version);

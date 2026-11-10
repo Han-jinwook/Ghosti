@@ -3102,7 +3102,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   // ─────────────── [스펙 2] Z몬스터 정리 4대 탭 & 바둑판 Pick & 3중 타임머신 안전망 (Undo) ───────────────
   selectedTrashIds: new Set<string>(),
-  activeTrashCategoryFilter: 'none',
+  activeTrashCategoryFilter: 'duplicate',
   quarantineMoving: false,
   lastQuarantineToast: null,
   lastUndoBatch: null,
