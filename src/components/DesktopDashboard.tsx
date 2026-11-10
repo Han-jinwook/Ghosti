@@ -436,13 +436,18 @@ export const DesktopDashboard: React.FC = () => {
     return Boolean(isProOrTrial || isDevicePaired || isDeviceIntegrationManuallyExpanded);
   }, [activePricingPlan, superpowerStatus, pcAgentPairedMobile, isDeviceIntegrationManuallyExpanded]);
 
-  // 조건 1&2: Team 구독 중 또는 수동 Sticky
+  // 조건 1&2: Team 구독 중, 30일 무료체험 중, 모바일(아이폰/안드로이드) 연결 시, 또는 수동 Sticky
   const isWorkShareAutoExpanded = useMemo(() => {
     const isTeamSubscribed =
       activePricingPlan.startsWith('work_') ||
       Boolean(subscribedLounges.work);
-    return Boolean(isTeamSubscribed || isWorkShareManuallyExpanded);
-  }, [activePricingPlan, subscribedLounges.work, isWorkShareManuallyExpanded]);
+    const isProOrTrial =
+      activePricingPlan !== 'free_trial' ||
+      Boolean(superpowerStatus?.is_subscribed) ||
+      (superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED');
+    const isDevicePaired = Boolean(pcAgentPairedMobile);
+    return Boolean(isTeamSubscribed || isProOrTrial || isDevicePaired || isWorkShareManuallyExpanded);
+  }, [activePricingPlan, subscribedLounges.work, superpowerStatus, pcAgentPairedMobile, isWorkShareManuallyExpanded]);
 
   const toggleDeviceIntegrationExpanded = (force?: boolean) => {
     const next = typeof force === 'boolean' ? force : !isDeviceIntegrationAutoExpanded;
@@ -830,7 +835,7 @@ export const DesktopDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          toggleDeviceIntegrationExpanded(!isDeviceIntegrationExpanded);
+                          toggleDeviceIntegrationExpanded(true);
                           setIsDeviceIntegrationOpen(true);
                           setActiveIntegrationSubTab('devices');
                           setGhostWindowTier('phone_pc');
@@ -913,7 +918,7 @@ export const DesktopDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          toggleWorkShareExpanded(!isWorkShareExpanded);
+                          toggleWorkShareExpanded(true);
                           setIsDeviceIntegrationOpen(false);
                           setActiveLoungeType('work');
                           setDesktopTab('dashboard');

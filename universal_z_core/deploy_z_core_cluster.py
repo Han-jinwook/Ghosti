@@ -66,12 +66,25 @@ def update_pc4():
         return
     log("✅ 4호기 SCP 전송 완료")
 
-    # 2) 4호기 기존 5199 프로세스 종료 (있을 경우만)
+    # 2) 4호기 기존 5199 프로세스 우아한 종료 + LISTENING 잔존 프로세스 강제 종료
+    shutdown_cmd = [
+        "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
+        'curl.exe -s --max-time 2 -X POST -d "{}" http://127.0.0.1:5199/__merlin/shutdown'
+    ]
+    try:
+        subprocess.run(shutdown_cmd, capture_output=True, timeout=5)
+    except Exception:
+        pass
+    time.sleep(0.5)
+
     kill_cmd = [
         "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
-        'powershell -Command "$p = Get-NetTCPConnection -LocalPort 5199 -ErrorAction SilentlyContinue; if ($p) { Stop-Process -Id $p.OwningProcess -Force -ErrorAction SilentlyContinue }"'
+        'powershell -Command "$p = Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue; if ($p) { foreach ($item in $p) { if ($item.OwningProcess -gt 0) { Stop-Process -Id $item.OwningProcess -Force -ErrorAction SilentlyContinue } } }"'
     ]
-    subprocess.run(kill_cmd, capture_output=True, timeout=10)
+    try:
+        subprocess.run(kill_cmd, capture_output=True, timeout=10)
+    except Exception:
+        pass
 
     # 3) 4호기 스케줄러를 통한 무간섭 GUI 세션 기동
     run_task_cmd = [
@@ -79,7 +92,7 @@ def update_pc4():
         "schtasks /run /tn StartMerlinZCore5199"
     ]
     subprocess.run(run_task_cmd, capture_output=True, timeout=10)
-    time.sleep(2.0)
+    time.sleep(2.5)
 
     # 4) 4호기 5199 헬스체크 (SSH 경유 curl)
     check_cmd = [

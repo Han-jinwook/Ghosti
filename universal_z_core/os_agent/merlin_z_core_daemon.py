@@ -37,9 +37,13 @@ if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
 try:
-    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    elif hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+    elif hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8")
 except Exception:
     pass
@@ -358,9 +362,13 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
-            if act.lower() in plugin_ghosti_os.MUTATING_ACTIONS and self._reject_untrusted():
+            mutating_set = getattr(plugin_ghosti_os, "MUTATING_ACTIONS", set())
+            if act.lower() in mutating_set and self._reject_untrusted():
                 return
-            self._send_json(plugin_ghosti_os.handle_request(act, qp))
+            try:
+                self._send_json(plugin_ghosti_os.handle_request(act, qp))
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
             return
 
         # [고치기 보조 API — 개발서버 전용이던 기능 데몬 이관]
@@ -515,9 +523,13 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
-            if act.lower() in plugin_ghosti_os.MUTATING_ACTIONS and self._reject_untrusted():
+            mutating_set = getattr(plugin_ghosti_os, "MUTATING_ACTIONS", set())
+            if act.lower() in mutating_set and self._reject_untrusted():
                 return
-            self._send_json(plugin_ghosti_os.handle_request(act, body))
+            try:
+                self._send_json(plugin_ghosti_os.handle_request(act, body))
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
             return
 
         if path in ("/__docs/search", "/api/ghosti/docs/search"):
