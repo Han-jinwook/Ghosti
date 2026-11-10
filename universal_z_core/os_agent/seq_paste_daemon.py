@@ -2886,6 +2886,20 @@ def acquire_single_instance() -> socket.socket | None:
     return None
 
 
+def _ensure_single_instance_socket_alive(curr_sock: socket.socket | None) -> socket.socket | None:
+    """
+    [자가치유(Self-Healing) 핫키 & 소켓 워치독]:
+    - Windows 예약 작업(StopOnIdleEnd 등)이나 외부에서 구 데몬이 종료되었거나 소켓이 닫혔을 때 즉시 재바인딩하고,
+    - Explorer 재시작 등으로 전역 핫키(Ctrl+0, Alt+Z)가 풀리지 않도록 주기적으로 재보장합니다.
+    """
+    try:
+        if curr_sock is not None and curr_sock.fileno() != -1:
+            return curr_sock
+    except Exception:
+        pass
+    return acquire_single_instance()
+
+
 def get_clipboard_text() -> str:
     res = ""
     for _ in range(5):
@@ -5134,6 +5148,7 @@ def main() -> None:
             )
 
     last_summon_ts: float = 0.0
+    last_hotkey_rebind_ts: float = time.time()
     was_ctrl0_down: bool = False
     was_ctrl_alt_t_down: bool = False
     was_ctrl_z_down: bool = False
@@ -5163,37 +5178,58 @@ def main() -> None:
 
     def _release_target_rbutton_stuck(hwnd_target: int | None, pt_x: int | None = None, pt_y: int | None = None) -> None:
         """
-        바탕화면(Progman/WorkerW) 셸은 절대 건드리지 않고, 일반 앱 창에만 WM_CANCELMODE 전송
+        우클릭 0.35초 롱프레스 달성 순간 실제 마우스 커서 아래 컨트롤(SysListView32/SHELLDLL_DefView 등)과
+        상위 창에 WM_CANCELMODE를 전달하여, 우클릭 버튼을 뗄 때 OS 기본 우클릭 메뉴가 아예 생성되지 않도록 차단합니다.
         """
         try:
-            target = hwnd_target or u32.GetForegroundWindow()
-            if target:
-                cls_t = _get_win_class_only(target)
-                if cls_t not in ("Progman", "WorkerW", "Shell_TrayWnd"):
-                    u32.PostMessageW(target, WM_CANCELMODE, 0, 0)
+            pt_c = wintypes.POINT()
+            if pt_x is not None and pt_y is not None:
+                pt_c.x, pt_c.y = int(pt_x), int(pt_y)
+            else:
+                u32.GetCursorPos(ctypes.byref(pt_c))
+            hwnd_pt = u32.WindowFromPoint(pt_c)
+            seen_h: set[int] = set()
+            for cand in (hwnd_pt, u32.GetParent(hwnd_pt) if hwnd_pt else 0, hwnd_target or u32.GetForegroundWindow()):
+                if cand and cand not in seen_h:
+                    seen_h.add(cand)
+                    cls_c = _get_win_class_only(cand)
+                    if cls_c != "Shell_TrayWnd":
+                        u32.PostMessageW(cand, WM_CANCELMODE, 0, 0)
         except Exception:
             pass
 
     def _dismiss_native_context_menu_after_rbtn_up(hwnd_target: int | None) -> None:
         """
-        [바탕화면 검정 먹통 원천 차단]:
+        [바탕화면/앱 기본 우클릭 메뉴 즉시 소거 & 검정 먹통 원천 차단]:
         - explorer.exe 소속 Xaml_WindowedPopupClass나 Progman/WorkerW에 WM_CLOSE를 쏘던 위험 코드를 100% 제거!
-        - 고전 메뉴(#32768)에 MN_CANCELMENUS만 1회 보내고 ESC 1회로 안전하게 기본 메뉴만 닫습니다.
+        - 손을 뗀 직후(5ms~180ms) 고전 메뉴(#32768)가 찰나에라도 생성되면 즉시 MN_CANCELMENUS + WM_CLOSE + ESC로 닫습니다.
         """
         def _worker():
             global _LAST_RBTN_DISMISS_ESC_TS
             try:
                 MN_CANCELMENUS = 0x01E6
+                WM_CLOSE_MSG = 0x0010
                 VK_ESCAPE = 0x1B
                 esc_sc = u32.MapVirtualKeyW(VK_ESCAPE, 0)
-                time.sleep(0.035)
-                h_menu = u32.FindWindowW("#32768", None)
-                if h_menu:
-                    u32.PostMessageW(h_menu, MN_CANCELMENUS, 0, 0)
-                _LAST_RBTN_DISMISS_ESC_TS = time.time()
-                u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
-                time.sleep(0.008)
-                u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
+                sent_esc = False
+                for delay_s in (0.005, 0.015, 0.030, 0.055, 0.090, 0.140):
+                    time.sleep(delay_s)
+                    h_menu = u32.FindWindowW("#32768", None)
+                    if h_menu and u32.IsWindowVisible(h_menu):
+                        u32.PostMessageW(h_menu, MN_CANCELMENUS, 0, 0)
+                        u32.PostMessageW(h_menu, WM_CLOSE_MSG, 0, 0)
+                        if not sent_esc:
+                            sent_esc = True
+                            _LAST_RBTN_DISMISS_ESC_TS = time.time()
+                            u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
+                            time.sleep(0.006)
+                            u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
+                if not sent_esc:
+                    # Win11 Xaml 팝업 메뉴 대응용 안전한 ESC 1회
+                    _LAST_RBTN_DISMISS_ESC_TS = time.time()
+                    u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
+                    time.sleep(0.006)
+                    u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
                 _toast_queue.put(("__LIFT__", 0))
             except Exception:
                 pass
@@ -5243,6 +5279,16 @@ def main() -> None:
 
             elif msg.message == WM_TIMER:
                 now = time.time()
+                if (now - last_hotkey_rebind_ts) > 15.0:
+                    last_hotkey_rebind_ts = now
+                    try:
+                        _ensure_toast_worker()
+                        u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
+                        u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
+                        u32.RegisterHotKey(None, 3, MOD_ALT | MOD_NOREPEAT, VK_Z)
+                        u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)
+                    except Exception:
+                        pass
                 while not _CLICKED_SUPERPOWER_QUEUE.empty():
                     try:
                         c_num = _CLICKED_SUPERPOWER_QUEUE.get_nowait()
