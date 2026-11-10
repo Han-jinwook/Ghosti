@@ -1003,14 +1003,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-[11px] font-black">
-                        👑 내 기기 통합 (🎁 1개월 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)
+                        👑 내 기기 통합 (🎁 30일(1개월) 무제한 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)
                       </span>
                       <span className="text-[11px] text-teal-300 font-bold">내 기기·사진 공유는 평생 0원</span>
                     </div>
                     <p className="text-xs text-zinc-200 leading-relaxed">
                       • <b>1번 내 기기(찾기·손보기) &amp; 2번 사진 공유(가족·동호회·동창회)</b>: 인원 무제한 <b>평생 0원</b> (사진·동영상 전용)<br />
-                      • <b>3번 내 기기 통합 (PC↔폰 연결 + Ctrl+0 귀신창)</b>: <b>1개월 무제한 무료체험 (만료 후에도 일 3회 평생 무료)</b> · 월 3,900원 / 10년 특판 39,000원<br />
-                      • <b>4번 업무 공유 (S: 드라이브 · 문서/계약서 공유)</b>: <b>1개월 무제한 무료체험 (만료 후 일 3회 평생 무료)</b> · 소호 월 9,900원~ / 10년 특판 99,000원~
+                      • <b>3번 내 기기 통합 (PC↔폰 연결 + Ctrl+0 귀신창)</b>: <b>정확히 30일(1개월)간 무제한 무료체험 (30일 만료 후에도 매일 3회씩 평생 무료)</b> · 월 3,900원 / 10년 특판 39,000원<br />
+                      • <b>4번 업무 공유 (S: 드라이브 · 문서/계약서 공유)</b>: <b>정확히 30일(1개월)간 무제한 무료체험 (30일 만료 후 매일 3회씩 평생 무료)</b> · 소호 월 9,900원~ / 10년 특판 99,000원~
                     </p>
                   </div>
                 </div>

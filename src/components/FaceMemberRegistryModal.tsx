@@ -139,6 +139,27 @@ type PendingSingleCardItem =
       subText: string;
     };
 
+const RELATIONSHIP_OR_ROLE_TERMS = new Set([
+  '친구', '절친', '베프', '동창', '동기', '선배', '후배', '지인', '동료', '이웃', '손님', '행인',
+  '처남', '매형', '매제', '사위', '막내사위', '큰사위', '며느리', '큰며느리', '막내며느리',
+  '사촌', '조카', '삼촌', '외삼촌', '큰아빠', '작은아빠', '고모', '고모부', '이모', '이모부', '외숙모', '숙모',
+  '장모', '장모님', '장인', '장인어른', '시어머니', '시아버지', '시엄마', '시아빠',
+  '형', '형님', '오빠', '누나', '언니', '동생', '남동생', '여동생', '막내',
+  '엄마', '어머니', '아빠', '아버지', '부모님', '할머니', '할아버지', '외할머니', '외할아버지',
+  '아들', '큰아들', '작은아들', '막내아들', '딸', '큰딸', '작은딸', '막내딸', '손자', '손녀',
+  '남편', '아내', '와이프', '집사람', '애기', '아기',
+  '팀장', '팀장님', '과장', '과장님', '부장', '부장님', '대리', '대리님', '차장', '차장님', '사장', '사장님', '대표', '대표님', '선생님', '교수님',
+]);
+
+function isRelationshipOrRoleTerm(raw: string): boolean {
+  const cleaned = raw.trim().replace(/^#/, '').replace(/\s+/g, '');
+  if (!cleaned) return false;
+  if (RELATIONSHIP_OR_ROLE_TERMS.has(cleaned)) return true;
+  const strippedNum = cleaned.replace(/[0-9]+$/, '');
+  if (strippedNum && RELATIONSHIP_OR_ROLE_TERMS.has(strippedNum)) return true;
+  return false;
+}
+
 /**
  * [화면 정화(UI Diet) — 1장씩 스무스 전환되는 단일 사각형 확인 카드 (완료 시 Auto-Hide 완전 소멸!)]
  * 1. 👤 개인 라운지에서는 100% 비노출 (null 반환)
@@ -166,6 +187,7 @@ export const FaceMemberInlineBar: React.FC<{
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   // [v1.3 마감 · 실명 원칙] 더미 이름('처남(민수)') 기본값 제거 — 빈 칸에서 실제 이름을 직접 입력
   const [newPersonDraft, setNewPersonDraft] = useState('');
+  const [realNameError, setRealNameError] = useState<string | null>(null);
   const [isCalloutExpanded, setIsCalloutExpanded] = useState(false);
 
   // 1. 👤 개인 라운지에서는 얼굴/여권 등록 박스 100% 제거 (완전 비노출!)
@@ -243,6 +265,13 @@ export const FaceMemberInlineBar: React.FC<{
     } else {
       const cleanName = newPersonDraft.trim();
       if (!cleanName) return; // 이름 없이 더미로 등록하지 않음
+      if (isRelationshipOrRoleTerm(cleanName)) {
+        const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`;
+        setRealNameError(msg);
+        useSaySeeStore.setState({ lastQuarantineToast: msg });
+        return;
+      }
+      setRealNameError(null);
       await registerFaceMember(currentItem.cluster.clusterId, cleanName, '');
       setNewPersonDraft('');
     }
@@ -252,6 +281,7 @@ export const FaceMemberInlineBar: React.FC<{
     if (currentItem.kind === 'candidate') {
       passSwarmFaceCandidateToHostQueue(currentItem.candidateId);
     }
+    setRealNameError(null);
     setDismissedIds((prev) => [...prev, currentItem.id]);
   };
 
@@ -267,7 +297,7 @@ export const FaceMemberInlineBar: React.FC<{
             새 얼굴 확인 대기 <strong className="text-amber-700 dark:text-amber-300 font-extrabold">{remainingCount}건</strong>이 있습니다
             {currentItem.kind === 'candidate'
               ? ` (${currentItem.headlinePrefix} [${currentItem.targetDisplayName}]님 맞죠?)`
-              : ' (새로 등장한 인물 별명 등록)'}
+              : ' (새로 등장한 인물 실제 이름 등록)'}
           </span>
         </div>
 
@@ -375,21 +405,42 @@ export const FaceMemberInlineBar: React.FC<{
                 <p className="font-body-sm text-[12px] text-zinc-400 truncate">
                   {currentItem.subText}
                 </p>
-                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                  {/* [v1.3 마감] 관계 칩 버튼('#처남(민수)', '#막내사위', '#사촌', '#조카') 폐지 — 실명 직접 입력만 */}
-                  <input
-                    type="text"
-                    value={newPersonDraft}
-                    onChange={(e) => setNewPersonDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void handleConfirmCurrent();
-                      }
-                    }}
-                    placeholder="실제 이름 입력 (예: 한치우)"
-                    className="h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/15 focus:border-primary-container outline-none font-body-sm text-[12px] text-white w-36"
-                  />
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* [v1.3 마감] 관계 칩 버튼('#처남(민수)', '#막내사위', '#사촌', '#조카') 폐지 — 실명 직접 입력만 */}
+                    <input
+                      type="text"
+                      value={newPersonDraft}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewPersonDraft(val);
+                        if (isRelationshipOrRoleTerm(val)) {
+                          setRealNameError(
+                            `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`
+                          );
+                        } else {
+                          setRealNameError(null);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleConfirmCurrent();
+                        }
+                      }}
+                      placeholder="실제 이름 입력 (예: 조은호)"
+                      className={`h-8 px-2.5 rounded-lg bg-zinc-900 border ${
+                        realNameError
+                          ? 'border-amber-400 focus:border-amber-400'
+                          : 'border-white/15 focus:border-primary-container'
+                      } outline-none font-body-sm text-[12px] text-white w-44`}
+                    />
+                  </div>
+                  {realNameError && (
+                    <p className="font-label-sm text-[11.5px] text-amber-300 font-bold leading-snug">
+                      {realNameError}
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -460,6 +511,24 @@ export const FaceMemberRegistryModal: React.FC = () => {
 
   const [selectedYearMap, setSelectedYearMap] = useState<Record<string, number>>({});
   const [modalDraftNames, setModalDraftNames] = useState<Record<string, string>>({});
+  const [modalNameErrors, setModalNameErrors] = useState<Record<string, string>>({});
+
+  const handleModalRegisterName = async (clusterId: string, rawName: string) => {
+    const cleanName = rawName.trim();
+    if (!cleanName) return;
+    if (isRelationshipOrRoleTerm(cleanName)) {
+      const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`;
+      setModalNameErrors((prev) => ({ ...prev, [clusterId]: msg }));
+      useSaySeeStore.setState({ lastQuarantineToast: msg });
+      return;
+    }
+    setModalNameErrors((prev) => {
+      const next = { ...prev };
+      delete next[clusterId];
+      return next;
+    });
+    await registerFaceMember(clusterId, cleanName, '');
+  };
 
   const visibleClusters = useMemo(
     () => faceClusters.filter((c) => !c.excludedAsPasserby),
@@ -683,43 +752,67 @@ export const FaceMemberRegistryModal: React.FC = () => {
                     )}
 
                     {/* 기본 여권 이름 수정 또는 처가방 별명 즉시 변경 */}
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <input
-                        type="text"
-                        value={draftVal}
-                        onChange={(e) =>
-                          setModalDraftNames((prev) => ({
-                            ...prev,
-                            [c.clusterId]: e.target.value,
-                          }))
-                        }
-                        placeholder="기본 여권 호칭 입력 후 [등록]"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            void registerFaceMember(c.clusterId, draftVal, '');
-                          }
-                        }}
-                        className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-primary-container text-white font-body-sm text-[11.5px] outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void registerFaceMember(c.clusterId, draftVal, '')}
-                        className="h-8 px-3 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0"
-                      >
-                        여권명 등록
-                      </button>
-                      {c.roomPersonas?.['처가(친정)'] && (
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <input
+                          type="text"
+                          value={draftVal}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setModalDraftNames((prev) => ({
+                              ...prev,
+                              [c.clusterId]: val,
+                            }));
+                            if (isRelationshipOrRoleTerm(val)) {
+                              setModalNameErrors((prev) => ({
+                                ...prev,
+                                [c.clusterId]: `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`,
+                              }));
+                            } else {
+                              setModalNameErrors((prev) => {
+                                const next = { ...prev };
+                                delete next[c.clusterId];
+                                return next;
+                              });
+                            }
+                          }}
+                          placeholder="실제 이름 입력 후 [여권명 등록] (예: 조은호)"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              void handleModalRegisterName(c.clusterId, draftVal);
+                            }
+                          }}
+                          className={`min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-zinc-900 border ${
+                            modalNameErrors[c.clusterId]
+                              ? 'border-amber-400 focus:border-amber-400'
+                              : 'border-white/10 focus:border-primary-container'
+                          } text-white font-body-sm text-[11.5px] outline-none`}
+                        />
                         <button
                           type="button"
-                          onClick={() => {
-                            const persona = c.roomPersonas?.['처가(친정)'] || c.registeredName;
-                            updateRoomPersonaForCluster(c.clusterId, '처가(친정)', persona);
-                            void handleTriggerRealNameSearch(`${persona} 나무 다리`, 'gallery');
-                          }}
-                          className="h-8 px-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/35 text-amber-300 font-label-sm text-[10.5px] font-bold shrink-0"
+                          onClick={() => void handleModalRegisterName(c.clusterId, draftVal)}
+                          className="h-8 px-3 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0"
                         >
-                          처가방 ‘{isCreator ? '👑 ' : ''}{c.roomPersonas['처가(친정)']}’ 검색
+                          여권명 등록
                         </button>
+                        {c.roomPersonas?.['처가(친정)'] && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const persona = c.roomPersonas?.['처가(친정)'] || c.registeredName;
+                              updateRoomPersonaForCluster(c.clusterId, '처가(친정)', persona);
+                              void handleTriggerRealNameSearch(`${persona} 나무 다리`, 'gallery');
+                            }}
+                            className="h-8 px-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/35 text-amber-300 font-label-sm text-[10.5px] font-bold shrink-0"
+                          >
+                            처가방 ‘{isCreator ? '👑 ' : ''}{c.roomPersonas['처가(친정)']}’ 검색
+                          </button>
+                        )}
+                      </div>
+                      {modalNameErrors[c.clusterId] && (
+                        <p className="font-label-sm text-[11px] text-amber-300 font-bold leading-snug">
+                          {modalNameErrors[c.clusterId]}
+                        </p>
                       )}
                     </div>
                   </div>

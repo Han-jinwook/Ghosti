@@ -711,6 +711,10 @@ def kor_word_to_eng(s: str) -> str:
     return "".join(out)
 
 
+eng_to_kor = eng_word_to_kor
+kor_to_eng = kor_word_to_eng
+
+
 def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None]:
     """
     양방향(영->한 KS X 1001 & 한->영 EmbeddingGemma 2 영단어 사전) 스마트 성형 및 목표 언어 방향 반환
@@ -850,6 +854,18 @@ SOUNDS_DIR = next((d for d in _CAND_SOUNDS if (d / "active_summon_sound.wav").ex
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
 _MERLIN_APPDATA = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "Ghosti" / "data"
+_LEGACY_MERLIN_APPDATA = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "Merlin"
+try:
+    _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
+    if _LEGACY_MERLIN_APPDATA.exists():
+        for _mig_name in ("superpower_settings.json", "superpower_trial_ledger.json", "user_snippets.json", "fixed_snippets.json"):
+            _src_m = _LEGACY_MERLIN_APPDATA / _mig_name
+            _dst_m = _MERLIN_APPDATA / _mig_name
+            if _src_m.exists() and not _dst_m.exists():
+                import shutil as _sh_mig
+                _sh_mig.copy2(_src_m, _dst_m)
+except Exception:
+    pass
 TELEMETRY_FILE = _MERLIN_APPDATA / "superpower_telemetry.json"
 TELEMETRY_CONFIG_FILE = _MERLIN_APPDATA / "superpower_telemetry_config.json"
 SUPERPOWER_SETTINGS_FILE = _MERLIN_APPDATA / "superpower_settings.json"
@@ -1601,11 +1617,11 @@ def record_feature_telemetry(feature_key: str) -> None:
 
 
 def build_ghost_search_window_url(stage: str = "small", query: str = "", base_url: str | None = None) -> str:
-    """로컬 3단 변신 『👻 귀신검색창』 전용 라우트 URL 생성 (?preview=legacy&ghostSearchWindow=small|medium|large&q=...)"""
+    """로컬 3단 변신 『👻 귀신검색창』 전용 라우트 URL 생성 (?dev=true&preview=legacy&ghostSearchWindow=small|medium|large&q=...)"""
     from urllib.parse import quote
     norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
     root_u = (base_url or GHOSTI_WEB_URL).rstrip("/")
-    url = f"{root_u}/?preview=legacy&ghostSearchWindow={norm_stage}"
+    url = f"{root_u}/?dev=true&preview=legacy&ghostSearchWindow={norm_stage}"
     q_clean = (query or "").strip()
     if q_clean:
         url += f"&q={quote(q_clean)}"
@@ -2720,10 +2736,22 @@ def _toast_worker() -> None:
     root.mainloop()
 
 
-threading.Thread(target=_toast_worker, daemon=True).start()
+_TOAST_WORKER_STARTED = False
+_TOAST_WORKER_LOCK = threading.Lock()
+
+
+def _ensure_toast_worker() -> None:
+    global _TOAST_WORKER_STARTED
+    if _TOAST_WORKER_STARTED:
+        return
+    with _TOAST_WORKER_LOCK:
+        if not _TOAST_WORKER_STARTED:
+            _TOAST_WORKER_STARTED = True
+            threading.Thread(target=_toast_worker, daemon=True).start()
 
 
 def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
+    _ensure_toast_worker()
     _toast_queue.put((message, duration_ms))
 
 
@@ -4231,6 +4259,13 @@ def get_window_process_and_class(hwnd: int) -> tuple[str, str, str]:
     return proc_name, win_cls, win_title
 
 
+def _get_process_name_from_hwnd(hwnd: int | None) -> str:
+    if not hwnd:
+        return ""
+    proc_name, _, _ = get_window_process_and_class(int(hwnd))
+    return proc_name or ""
+
+
 def should_skip_auto_typo(hwnd: int) -> bool:
     """
     현재 포커스된 창이 자체 오토코렉트(한영 자동 전환) 탑재 프로그램(HWP, MS워드 등)이거나
@@ -4611,6 +4646,7 @@ def main() -> None:
     if lock_sock is None:
         return
 
+    _ensure_toast_worker()
     ensure_default_snippets()
 
     u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
@@ -4969,12 +5005,7 @@ def main() -> None:
         threading.Thread(target=_worker, daemon=True).start()
 
     msg = wintypes.MSG()
-    if "--show-now" in sys.argv:
-        def _delayed_init_summon():
-            time.sleep(0.35)
-            trigger_master_summon()
-        last_summon_ts = time.time()
-        threading.Thread(target=_delayed_init_summon, daemon=True).start()
+    pending_init_show_ts: float = (time.time() + 0.35) if ("--show-now" in sys.argv) else 0.0
     while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
         try:
             if msg.message == WM_HOTKEY:
@@ -5016,6 +5047,10 @@ def main() -> None:
 
             elif msg.message == WM_TIMER:
                 now = time.time()
+                if pending_init_show_ts > 0.0 and now >= pending_init_show_ts:
+                    pending_init_show_ts = 0.0
+                    last_summon_ts = now
+                    trigger_master_summon()
                 # [Zero-Hook 마우스 우클릭 감지]: WH_MOUSE_LL 전역 훅 없이 GetAsyncKeyState(0x02) 폴링만으로
                 # ① Ctrl+우클릭 즉시 소환 / ② 우클릭 0.35초 꾹~~ 롱프레스 소환 / ③ 버튼 해제 시 네이티브 메뉴 자동 닫기 수행
                 rbtn_phys_now = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0

@@ -1595,7 +1595,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     <span className="px-3 py-1 rounded-full bg-emerald-400 text-zinc-950 text-[11.5px] font-black">
                       {isStoreAppMode
                         ? '👑 내 기기 통합 & 데스크톱 연동'
-                        : '👑 3번 내 기기 통합 (🎁 1개월 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)'}
+                        : '👑 3번 내 기기 통합 (🎁 30일(1개월) 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)'}
                     </span>
                     <span className="text-[11.5px] font-extrabold text-emerald-300">
                       이메일 하나로 기기 대수 무제한 통합!
@@ -1612,13 +1612,13 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       🥈 <strong className="text-emerald-300">2위. 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 회사 PC나 폰에서 복사(<code className="text-white">Ctrl+C</code>·스샷)만 해두면, 꺼져 있던 집 PC를 켜는 순간 <code className="text-teal-300">Ctrl+0 [복사검색]</code>에 최근 100개 텍스트·10장 스샷이 자동 장전됩니다!
                     </li>
                     <li>
-                      🥉 <strong className="text-amber-300">3위. 귀신창(Ctrl + 0) 1개월 무제한 체험 + 만료 후에도 일 3회 평생 무료</strong>: 1개월(30일) 무제한 무료체험 후에도 각 기능별 하루 3회는 평생 무료로 유지됩니다.
+                      🥉 <strong className="text-amber-300">3위. 귀신창(Ctrl + 0) 정확히 30일(1개월) 무제한 체험 + 만료 후에도 일 3회 평생 무료</strong>: 30일(1개월) 무제한 무료체험 후에도 각 기능별 하루 3회는 평생 무료로 유지됩니다.
                     </li>
                     <li>
                       👨‍👩‍👧‍👦 <strong className="text-teal-300">
                         {isStoreAppMode
                           ? '2번 사진 공유 (가족 · 동호회 · 동창회) & 4번 업무 공유'
-                          : '2번 사진 공유(가족·동호회·동창회) 인원 무제한 평생 0원 · 4번 업무 공유(1개월 무료체험 / 월 9,900원~)'}
+                          : '2번 사진 공유(가족·동호회·동창회) 인원 무제한 평생 0원 · 4번 업무 공유(30일(1개월) 무료체험 / 월 9,900원~)'}
                       </strong>: 가족·동호회·동창회 사진·동영상 공유는 <strong className="text-white">방장도 멤버도 평생 0원(무료)</strong>입니다.
                     </li>
                   </ul>
@@ -1635,7 +1635,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 >
                   {isStoreAppMode
                     ? '💻 데스크톱(PC) 기기 연동 가이드 보기 →'
-                    : '👑 내 기기 통합(1개월 무료체험 · 10년 특판 3.9만) & 전체 혜택 보기 →'}
+                    : '👑 내 기기 통합(30일 무료체험 · 10년 특판 3.9만) & 전체 혜택 보기 →'}
                 </button>
               </div>
             </div>

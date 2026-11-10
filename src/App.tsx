@@ -113,7 +113,12 @@ export const App: React.FC = () => {
         return true;
       }
       const params = new URLSearchParams(window.location.search);
-      if (params.get('dev') === 'true' || params.get('storeApp') === '1') {
+      if (
+        params.get('dev') === 'true' ||
+        params.get('storeApp') === '1' ||
+        Boolean(params.get('ghostSearchWindow')) ||
+        params.get('preview') === 'legacy'
+      ) {
         return true;
       }
       if (
@@ -140,7 +145,12 @@ export const App: React.FC = () => {
         return 'workspace';
       }
       const params = new URLSearchParams(window.location.search);
-      if (params.get('dev') === 'true' || params.get('storeApp') === '1') {
+      if (
+        params.get('dev') === 'true' ||
+        params.get('storeApp') === '1' ||
+        Boolean(params.get('ghostSearchWindow')) ||
+        params.get('preview') === 'legacy'
+      ) {
         return 'workspace';
       }
       if (

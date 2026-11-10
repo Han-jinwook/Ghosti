@@ -1085,7 +1085,75 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
     });
   }
 
-  return enriched;
+  const savedOverrides = loadCustomFaceRegistrations();
+  return enriched.map((c) => {
+    const ov = savedOverrides[c.clusterId];
+    if (!ov) return c;
+    return {
+      ...c,
+      registeredName: ov.registeredName !== undefined ? ov.registeredName : c.registeredName,
+      relationshipTag: ov.relationshipTag !== undefined ? ov.relationshipTag : c.relationshipTag,
+      excludedAsPasserby:
+        ov.excludedAsPasserby !== undefined ? ov.excludedAsPasserby : c.excludedAsPasserby,
+      roomPersonas: ov.roomPersonas
+        ? { ...(c.roomPersonas ?? {}), ...ov.roomPersonas }
+        : c.roomPersonas,
+    };
+  });
+}
+
+const CUSTOM_FACE_REGISTRATIONS_KEY = 'ghosti_custom_face_registrations_v1';
+
+interface CustomFaceOverride {
+  registeredName?: string;
+  relationshipTag?: string;
+  roomPersonas?: RoomPersonaMap;
+  excludedAsPasserby?: boolean;
+}
+
+function loadCustomFaceRegistrations(): Record<string, CustomFaceOverride> {
+  try {
+    const raw =
+      typeof localStorage !== 'undefined'
+        ? localStorage.getItem(CUSTOM_FACE_REGISTRATIONS_KEY)
+        : null;
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, CustomFaceOverride>;
+  } catch {
+    return {};
+  }
+}
+
+function saveCustomFaceRegistration(clusterId: string, patch: CustomFaceOverride): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const prev = loadCustomFaceRegistrations();
+    const prevItem = prev[clusterId] || {};
+    const nextItem: CustomFaceOverride = {
+      ...prevItem,
+      ...patch,
+      roomPersonas: patch.roomPersonas
+        ? { ...(prevItem.roomPersonas ?? {}), ...patch.roomPersonas }
+        : prevItem.roomPersonas,
+    };
+    prev[clusterId] = nextItem;
+    localStorage.setItem(CUSTOM_FACE_REGISTRATIONS_KEY, JSON.stringify(prev));
+  } catch {
+    /* ignore */
+  }
+}
+
+function restoreAllExcludedCustomFaceRegistrations(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const prev = loadCustomFaceRegistrations();
+    for (const k of Object.keys(prev)) {
+      prev[k] = { ...prev[k], excludedAsPasserby: false };
+    }
+    localStorage.setItem(CUSTOM_FACE_REGISTRATIONS_KEY, JSON.stringify(prev));
+  } catch {
+    /* ignore */
+  }
 }
 
 export const useSaySeeStore = create<SaySeeStore>((set, get) => {
@@ -1636,12 +1704,24 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         }
       : get().lastRetroScanReport!;
 
+    if (targetCluster && cleanName) {
+      saveCustomFaceRegistration(clusterId, {
+        registeredName: targetCluster.registeredName,
+        relationshipTag: targetCluster.relationshipTag,
+        roomPersonas: targetCluster.roomPersonas,
+        excludedAsPasserby: false,
+      });
+    }
+
     set({
       faceClusters: nextClusters,
       photos: updatedPhotos,
       swarmFaceCandidates: nextCandidates,
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: nextReport,
+      lastQuarantineToast: cleanName
+        ? `✅ '${cleanName}'님의 실제 이름이 얼굴 여권에 등록되어 사진과 즉시 매칭되었습니다!`
+        : get().lastQuarantineToast,
     });
 
     if (!isSecondaryRoom) {
@@ -1941,6 +2021,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   excludeFaceCluster: async (clusterId) => {
+    saveCustomFaceRegistration(clusterId, { excludedAsPasserby: true });
     set((state) => ({
       faceClusters: state.faceClusters.map((c) =>
         c.clusterId === clusterId ? { ...c, excludedAsPasserby: true } : c
@@ -1957,6 +2038,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   restoreExcludedFaceClusters: async () => {
+    restoreAllExcludedCustomFaceRegistrations();
     set((state) => ({
       faceClusters: state.faceClusters.map((c) => ({ ...c, excludedAsPasserby: false })),
     }));

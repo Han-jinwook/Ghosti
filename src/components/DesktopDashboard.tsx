@@ -329,6 +329,7 @@ export const DesktopDashboard: React.FC = () => {
     setIsGuestPreviewMode,
     triggerGuestJoinWall,
     completeGuestOneSecJoin,
+    initialized,
   } = useSaySeeStore();
 
   const [guestNicknameDraft, setGuestNicknameDraft] = useState('박총무');
@@ -411,10 +412,10 @@ export const DesktopDashboard: React.FC = () => {
     if (!ghostSearchWindowStage) return;
     setActiveLoungeType('personal');
     setDesktopTab('dashboard');
-    // 귀신비서·현장 소환에서 넘겨준 검색어(&q=)가 있으면 기존 찾기 화면에서 바로 검색 실행
+    // 귀신비서·현장 소환에서 넘겨준 검색어(&q=)가 있으면 기존 찾기 화면에서 바로 검색 실행 (초기화 직후에도 즉시 반영)
     const q = new URLSearchParams(window.location.search).get('q');
     if (q && q.trim()) void useSaySeeStore.getState().runTextQuery(q.trim());
-  }, [ghostSearchWindowStage, setActiveLoungeType, setDesktopTab]);
+  }, [ghostSearchWindowStage, initialized, setActiveLoungeType, setDesktopTab]);
 
   const isAnySubscribed = useMemo(
     () =>

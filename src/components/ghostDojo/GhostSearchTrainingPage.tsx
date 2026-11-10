@@ -13,7 +13,7 @@ import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 /** 로컬 귀신검색창이 여는 주소와 동일 (기존 웹 「찾기」 화면 100% 승계 전용 모드) */
 export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): string {
   const q = query && query.trim() ? `&q=${encodeURIComponent(query.trim())}` : '';
-  return `/?preview=legacy&ghostSearchWindow=${stage}${q}`;
+  return `/?dev=true&preview=legacy&ghostSearchWindow=${stage}${q}`;
 }
 
 /**
