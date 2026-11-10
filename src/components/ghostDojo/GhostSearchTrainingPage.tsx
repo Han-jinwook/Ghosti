@@ -121,7 +121,8 @@ const VirtualMonitorSimulator: React.FC<{
     setStage(nextStage);
     playBabyGhostChime('summon');
     onStep('summon');
-    if (connected && onOpenRealWindow) {
+    if (nextStage === 'medium') onStep('medium');
+    if (connected && onOpenRealWindow && initialQuery) {
       onOpenRealWindow(nextStage, initialQuery);
     }
   };
@@ -217,7 +218,12 @@ const VirtualMonitorSimulator: React.FC<{
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={() => {
                         setStage(s);
-                        if (s !== 'small') onStep(s);
+                        onStep('summon');
+                        if (s === 'medium') onStep('medium');
+                        if (s === 'large') {
+                          onStep('medium');
+                          onStep('large');
+                        }
                       }}
                       className={`px-2 py-0.5 rounded ${stage === s ? 'bg-[#2DD4BF] text-zinc-950' : 'bg-zinc-800'}`}
                     >
@@ -290,6 +296,56 @@ export const GhostSearchTrainingPage: React.FC = () => {
   }, [pendingQuery]);
 
   useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
+
+  // 로컬 OS 귀신검색창(Tkinter / --app 독립창)에서 소환·중형·갤러리를 클릭했을 때도 위쪽 3대 미션 도장(✓)이 실시간 자동 각인되도록 동기화
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === GAME_STORAGE_KEY) {
+        setGame(loadGame());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    let baseline: Record<string, number> | null = null;
+    const pollTelemetry = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:5199/api/superpower/telemetry');
+        if (!res.ok) return;
+        const data = await res.json();
+        const total = (data?.total || {}) as Record<string, number>;
+        if (!baseline) {
+          baseline = { ...total };
+          return;
+        }
+        if (
+          (total.ctrl0_summon_bar || 0) > (baseline.ctrl0_summon_bar || 0) ||
+          (total.ghost_search_window_small || 0) > (baseline.ghost_search_window_small || 0)
+        ) {
+          markStep('summon');
+        }
+        if ((total.ghost_search_window_medium || 0) > (baseline.ghost_search_window_medium || 0)) {
+          markStep('summon');
+          markStep('medium');
+        }
+        if (
+          (total.ghost_search_window_large || 0) > (baseline.ghost_search_window_large || 0) ||
+          (total.ghost_search_window_gallery || 0) > (baseline.ghost_search_window_gallery || 0)
+        ) {
+          markStep('summon');
+          markStep('medium');
+          markStep('large');
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    void pollTelemetry();
+    const timer = window.setInterval(() => void pollTelemetry(), 1200);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const gameDone = GAME_STEPS.every((s) => game[s.id]);
 

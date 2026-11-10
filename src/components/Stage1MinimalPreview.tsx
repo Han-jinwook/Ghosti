@@ -620,6 +620,24 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                       : totalIndexedDocs}
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetPhoto =
+                      searchResults[0]?.photo ||
+                      photos.find((p) => !p.quarantined) ||
+                      photos[0] ||
+                      null;
+                    if (targetPhoto) {
+                      setOcrModalPhoto(targetPhoto);
+                    }
+                  }}
+                  title="사진에서 글자·표·원하는 단어 조각(칩)만 바로 따내기 (창 UI ③)"
+                  className="px-3.5 py-2 rounded-full bg-zinc-950 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-md text-[12.5px] font-black shadow-md flex items-center gap-1 shrink-0 whitespace-nowrap transition-all cursor-pointer"
+                >
+                  <span>📝 OCR 글자 따기</span>
+                </button>
               </div>
 
               {hasExecutedUserSearch && (

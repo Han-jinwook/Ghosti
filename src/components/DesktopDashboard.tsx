@@ -379,6 +379,18 @@ export const DesktopDashboard: React.FC = () => {
   const switchStandaloneGhostSearchStage = (nextStage: GhostSearchStage) => {
     setGhostSearchWindowStage(nextStage);
     try {
+      const prev = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
+      const next = {
+        ...prev,
+        summon: true,
+        ...(nextStage === 'medium' ? { medium: true } : {}),
+        ...(nextStage === 'large' ? { medium: true, large: true } : {}),
+      };
+      localStorage.setItem('ghosti_search_game_v1', JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    try {
       const rect = computeGhostSearchWindowRect(
         nextStage,
         window.screenX || 200,

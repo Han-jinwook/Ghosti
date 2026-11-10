@@ -2094,22 +2094,43 @@ def _toast_worker() -> None:
         mute_btn.bind("<Button-1>", _toggle_snd)
 
         stage_btns: dict[str, tk.Label] = {}
-        for st_key, st_label in (("large", "🖼️갤러리"), ("medium", "중형"), ("small", "소형")):
+        for st_key, st_label in (("large", "🖼️ 갤러리로 펼쳐보기"), ("medium", "중형"), ("small", "소형")):
             b_st = tk.Label(hdr, text=st_label, fg="#E2E8F0", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
             b_st.pack(side="right", padx=(2, 0))
             b_st.bind("<Button-1>", lambda _e, k=st_key: _switch_stage(k))
             stage_btns[st_key] = b_st
 
-        # 2단 필터 바: [전체] [📄문서] [🖼️사진] [🎬영상] + 우측 🎁30일무제한(D-30)
+        # 2단 필터 바: [전체] [🖼️사진] [🎬동영상] [📄문서] + [📝 OCR 글자 따기] + 우측 🎁30일무제한(D-30)
         fbar = tk.Frame(outer, bg="#0B1120")
         fbar.pack(fill="x", pady=(0, 4))
 
         filter_btns: dict[str, tk.Label] = {}
-        for f_key, f_txt in (("all", "전체"), ("doc", "📄문서"), ("image", "🖼️사진"), ("video", "🎬영상")):
+        for f_key, f_txt in (("all", "전체"), ("image", "🖼️사진"), ("video", "🎬동영상"), ("doc", "📄문서")):
             fb = tk.Label(fbar, text=f_txt, fg="#E2E8F0", bg="#1E293B", padx=6, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
             fb.pack(side="left", padx=(0, 4))
             fb.bind("<Button-1>", lambda _e, fk=f_key: _switch_filter(fk))
             filter_btns[f_key] = fb
+
+        def _open_selected_ocr(_e=None) -> None:
+            items_now = st_state.get("items") or []
+            sel_i = min(st_state.get("sel_idx", 0), max(0, len(items_now) - 1))
+            rec_now = items_now[sel_i] if items_now else {}
+            ip = rec_now.get("img_path") or rec_now.get("file_path") or ""
+            txt_p = rec_now.get("text") or ""
+            _toast_queue.put((f"__UI3_OCR__|{ip}||{txt_p}", 15000))
+
+        ocr_top_btn = tk.Label(
+            fbar,
+            text="📝 OCR 글자 따기",
+            fg="#0B1120",
+            bg="#2DD4BF",
+            padx=6,
+            pady=1,
+            font=("Malgun Gothic", 8, "bold"),
+            cursor="hand2",
+        )
+        ocr_top_btn.pack(side="left", padx=(2, 4))
+        ocr_top_btn.bind("<Button-1>", _open_selected_ocr)
 
         trial_lbl = tk.Label(fbar, text="🎁 30일 무제한(D-30·차감없음)", fg="#FDE047", bg="#0B1120", font=("Malgun Gothic", 8, "bold"))
         trial_lbl.pack(side="right")
@@ -2118,13 +2139,17 @@ def _toast_worker() -> None:
         body_frame = tk.Frame(outer, bg="#0B1120")
         body_frame.pack(fill="both", expand=True)
 
+        anchor_pt = [pt_x, pt_y]
+
         def _resize_for_stage() -> None:
             st_now = st_state["stage"]
-            ax = pt_x
-            ay = pt_y
+            ax, ay = anchor_pt[0], anchor_pt[1]
             r3 = compute_ghost_search_window_3stage_rect(st_now, ax, ay, work_area=work_area, margin_px=16)
-            opened_at[0] = time.time()
+            opened_at[0] = time.time() + 1.0
             was_mouse_down[0] = True
+            is_hovered[0] = True
+            _schedule_close(25000)
+            record_feature_telemetry(f"ghost_search_window_{st_now}")
             _apply_win_topmost(win, int(r3["x"]), int(r3["y"]), int(r3["width"]), int(r3["height"]), activate=True)
             try:
                 s_entry.focus_force()
@@ -2132,8 +2157,11 @@ def _toast_worker() -> None:
                 pass
 
         def _switch_stage(new_st: str) -> None:
+            pt_curr = wintypes.POINT()
+            u32.GetCursorPos(ctypes.byref(pt_curr))
+            anchor_pt[0], anchor_pt[1] = pt_curr.x, pt_curr.y
             is_hovered[0] = True
-            opened_at[0] = time.time()
+            opened_at[0] = time.time() + 1.2
             was_mouse_down[0] = True
             st_state["stage"] = new_st
             _render_search_results()
@@ -2141,6 +2169,8 @@ def _toast_worker() -> None:
 
         def _switch_filter(new_flt: str) -> None:
             is_hovered[0] = True
+            opened_at[0] = time.time() + 0.8
+            _schedule_close(25000)
             st_state["filter"] = new_flt
             st_state["sel_idx"] = 0
             _render_search_results()
@@ -2175,7 +2205,19 @@ def _toast_worker() -> None:
             snip_len = 36 if st_now == "small" else (48 if st_now == "medium" else 34)
 
             if not q:
-                candidates = pool[:max_cnt]
+                if flt_now == "all":
+                    img_cands = [r for r in pool if r.get("kind") == "image"]
+                    other_cands = [r for r in pool if r.get("kind") != "image"]
+                    interleaved: list[dict] = []
+                    for r_im in img_cands[:2]:
+                        interleaved.append(r_im)
+                    for r_ot in other_cands:
+                        interleaved.append(r_ot)
+                    for r_im in img_cands[2:]:
+                        interleaved.append(r_im)
+                    candidates = interleaved[:max_cnt]
+                else:
+                    candidates = pool[:max_cnt]
                 trial_lbl.config(text="🎁 30일 무제한(D-30·차감없음)", fg="#FDE047")
             else:
                 q_low = q.lower()
@@ -2254,10 +2296,23 @@ def _toast_worker() -> None:
                     except Exception:
                         pass
 
-                if kind == "image":
-                    ocr_b = tk.Label(card, text="📝OCR", fg="#FDE047", bg="#0B1120", padx=4, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
-                    ocr_b.pack(side="right", padx=(4, 0))
-                    ocr_b.bind("<Button-1>", lambda _e, r=rec: _toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)))
+                def _open_row_ocr(_e=None, r=rec):
+                    ip = r.get("img_path") or r.get("file_path") or ""
+                    txt_p = r.get("text") or ""
+                    _toast_queue.put((f"__UI3_OCR__|{ip}||{txt_p}", 15000))
+
+                ocr_b = tk.Label(
+                    card,
+                    text="📝 OCR 글자 따기",
+                    fg="#0B1120",
+                    bg="#2DD4BF",
+                    padx=5,
+                    pady=1,
+                    font=("Malgun Gothic", 8, "bold"),
+                    cursor="hand2",
+                )
+                ocr_b.pack(side="right", padx=(4, 0))
+                ocr_b.bind("<Button-1>", _open_row_ocr)
 
                 time_l = tk.Label(card, text=rel_t, fg="#64748B", bg=c_bg, font=("Malgun Gothic", 8))
                 time_l.pack(side="right", padx=(4, 0))
@@ -2280,10 +2335,14 @@ def _toast_worker() -> None:
                 act_b = tk.Label(preview_pane, text="📎 현재 커서에 바로 꽂기 (Enter)", fg="#0B1120", bg="#2DD4BF", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
                 act_b.pack(fill="x", pady=2)
                 act_b.bind("<Button-1>", lambda _e, r=sel_rec: _paste_to_target(r.get("text", ""), r.get("file_path") or r.get("img_path") or ""))
-                if sel_rec.get("kind") == "image":
-                    ocr_jump = tk.Label(preview_pane, text="📝 사진·OCR 단어칩 창으로 열기", fg="#FDE047", bg="#1E293B", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
-                    ocr_jump.pack(fill="x", pady=2)
-                    ocr_jump.bind("<Button-1>", lambda _e, r=sel_rec: _toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)))
+                ocr_jump = tk.Label(preview_pane, text="📝 OCR 글자 따기 (단어칩 추출)", fg="#0B1120", bg="#FDE047", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
+                ocr_jump.pack(fill="x", pady=2)
+                ocr_jump.bind(
+                    "<Button-1>",
+                    lambda _e, r=sel_rec: _toast_queue.put(
+                        (f"__UI3_OCR__|{r.get('img_path') or r.get('file_path') or ''}||{r.get('text') or ''}", 15000)
+                    ),
+                )
 
         def _on_key_rel(event=None):
             is_hovered[0] = True
@@ -2327,6 +2386,10 @@ def _toast_worker() -> None:
         active_mode[0] = "ui3"
         m_left, m_top, m_right, m_bottom = work_area
 
+        passed_text = ""
+        if "||" in img_path_arg:
+            img_path_arg, passed_text = img_path_arg.split("||", 1)
+
         target_rec = None
         for r in reversed(GLOBAL_AI_HISTORY):
             if r.get("kind") == "image":
@@ -2348,7 +2411,7 @@ def _toast_worker() -> None:
 
         to_s_b = tk.Label(hdr, text="👻귀신검색창으로", fg="#E2E8F0", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         to_s_b.pack(side="right")
-        to_s_b.bind("<Button-1>", lambda _e: _toast_queue.put(("__UI2_SEARCH__|small|", 8000)))
+        to_s_b.bind("<Button-1>", lambda _e: _toast_queue.put(("__UI2_SEARCH__|small|", 15000)))
 
         body = tk.Frame(outer, bg="#0B1120")
         body.pack(fill="both", expand=True)
@@ -2360,21 +2423,26 @@ def _toast_worker() -> None:
         right_p.pack(side="left", fill="both", expand=True)
 
         img_p_str = (target_rec.get("img_path") if target_rec else "") or img_path_arg
-        if target_rec and target_rec.get("png_bytes") and Image is not None:
+        if Image is not None:
             try:
-                im_o = Image.open(io.BytesIO(target_rec["png_bytes"])).convert("RGBA")
-                im_o.thumbnail((190, 125), Image.Resampling.LANCZOS)
-                ph_o = ImageTk.PhotoImage(im_o, master=root)
-                thumb_refs.append(ph_o)
-                tk.Label(left_p, image=ph_o, bg="#0F172A").pack(pady=(0, 6))
+                im_o = None
+                if target_rec and target_rec.get("png_bytes"):
+                    im_o = Image.open(io.BytesIO(target_rec["png_bytes"])).convert("RGBA")
+                elif img_p_str and Path(img_p_str).exists() and Path(img_p_str).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"):
+                    im_o = Image.open(img_p_str).convert("RGBA")
+                if im_o is not None:
+                    im_o.thumbnail((190, 125), Image.Resampling.LANCZOS)
+                    ph_o = ImageTk.PhotoImage(im_o, master=root)
+                    thumb_refs.append(ph_o)
+                    tk.Label(left_p, image=ph_o, bg="#0F172A").pack(pady=(0, 6))
             except Exception:
                 pass
 
         b_orig = tk.Label(left_p, text="🖼️ 원본 사진 그대로 넣기", fg="#0B1120", bg="#2DD4BF", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         b_orig.pack(fill="x", pady=2)
-        b_orig.bind("<Button-1>", lambda _e: _paste_to_target(file_path=img_p_str))
+        b_orig.bind("<Button-1>", lambda _e: _paste_to_target(file_path=img_p_str, text_val=passed_text))
 
-        raw_ocr_t = (target_rec.get("text", "") if target_rec else "") or get_clipboard_text()
+        raw_ocr_t = passed_text or (target_rec.get("text", "") if target_rec else "") or get_clipboard_text()
         b_tsv = tk.Label(left_p, text="📊 표 전체 엑셀(TSV)로 넣기", fg="#F8FAFC", bg="#1E293B", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         b_tsv.pack(fill="x", pady=2)
         b_tsv.bind("<Button-1>", lambda _e: _paste_to_target(text_val=re.sub(r"  +", "	", _clean_ocr_noise(raw_ocr_t))))

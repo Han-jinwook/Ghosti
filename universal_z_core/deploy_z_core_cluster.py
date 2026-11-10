@@ -18,6 +18,17 @@ def log(msg: str):
 
 def update_pc1():
     log("=== [1호기 (로컬)] Z-코어 최신화 및 리로드 시작 ===")
+    import shutil
+    spd_src = r"d:\Ghosti\universal_z_core\seq_paste_daemon.py"
+    spd_os_agent = r"d:\Ghosti\universal_z_core\os_agent\seq_paste_daemon.py"
+    if os.path.exists(spd_src):
+        try:
+            shutil.copy2(spd_src, spd_os_agent)
+            if os.path.exists(r"C:\MerlinTools"):
+                shutil.copy2(spd_src, r"C:\MerlinTools\seq_paste_daemon.py")
+        except Exception as e:
+            log(f"1호기 seq_paste_daemon 복사 경고: {e}")
+
     script = r"d:\Ghosti\universal_z_core\os_agent\merlin_z_core_daemon.py"
     py_exe = sys.executable
     pyw_exe = os.path.join(os.path.dirname(py_exe), "pythonw.exe")
@@ -30,9 +41,10 @@ def update_pc1():
     except Exception as e:
         log(f"1호기 시작프로그램 등록 경고: {e}")
 
-    # 2) 데몬 교체 기동
+    # 2) 데몬 교체 기동 (Z-코어 5199 + 귀신창 51988)
     try:
         subprocess.Popen([runner, script, "--replace"])
+        subprocess.Popen([runner, spd_src, "--replace"])
         time.sleep(1.2)
     except Exception as e:
         log(f"1호기 데몬 기동 오류: {e}")
@@ -55,7 +67,7 @@ def update_pc4():
         log(f"❌ 마스터키 없음: {key_path}")
         return
 
-    # 1) SCP 파일 복사
+    # 1) SCP 파일 복사 (universal_z_core 및 C:/MerlinTools/seq_paste_daemon.py 동시 최신화)
     local_dir = r"d:\Ghosti\universal_z_core\*"
     remote_dest = "USER@100.114.100.24:C:/MerlinTools/universal_z_core/"
     scp_cmd = ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-r", local_dir, remote_dest]
@@ -64,12 +76,18 @@ def update_pc4():
     if res.returncode != 0:
         log(f"❌ 4호기 SCP 전송 실패: {res.stderr}")
         return
-    log("✅ 4호기 SCP 전송 완료")
+    subprocess.run(
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", r"d:\Ghosti\universal_z_core\seq_paste_daemon.py", "USER@100.114.100.24:C:/MerlinTools/seq_paste_daemon.py"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    log("✅ 4호기 SCP 전송 완료 (universal_z_core + C:/MerlinTools/seq_paste_daemon.py)")
 
-    # 2) 4호기 기존 5199 프로세스 우아한 종료 + LISTENING 잔존 프로세스 강제 종료
+    # 2) 4호기 기존 5199/51988 프로세스 우아한 종료 + LISTENING 잔존 프로세스 강제 종료
     shutdown_cmd = [
         "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
-        'curl.exe -s --max-time 2 -X POST -d "{}" http://127.0.0.1:5199/__merlin/shutdown'
+        'curl.exe -s --max-time 2 -X POST -d "{}" http://127.0.0.1:5199/__merlin/shutdown & curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown'
     ]
     try:
         subprocess.run(shutdown_cmd, capture_output=True, timeout=5)
@@ -79,19 +97,20 @@ def update_pc4():
 
     kill_cmd = [
         "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
-        'powershell -Command "$p = Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue; if ($p) { foreach ($item in $p) { if ($item.OwningProcess -gt 0) { Stop-Process -Id $item.OwningProcess -Force -ErrorAction SilentlyContinue } } }"'
+        'powershell -Command "$p = Get-NetTCPConnection -LocalPort 5199,51988 -State Listen -ErrorAction SilentlyContinue; if ($p) { foreach ($item in $p) { if ($item.OwningProcess -gt 0) { Stop-Process -Id $item.OwningProcess -Force -ErrorAction SilentlyContinue } } }"'
     ]
     try:
         subprocess.run(kill_cmd, capture_output=True, timeout=10)
     except Exception:
         pass
 
-    # 3) 4호기 스케줄러를 통한 무간섭 GUI 세션 기동
-    run_task_cmd = [
-        "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
-        "schtasks /run /tn StartMerlinZCore5199"
-    ]
-    subprocess.run(run_task_cmd, capture_output=True, timeout=10)
+    # 3) 4호기 스케줄러를 통한 무간섭 GUI 세션 기동 (5199 + 51988)
+    for task_name in ("StartMerlinZCore5199", "MerlinSeqPasteStart"):
+        run_task_cmd = [
+            "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
+            f"schtasks /run /tn {task_name}"
+        ]
+        subprocess.run(run_task_cmd, capture_output=True, timeout=10)
     time.sleep(2.5)
 
     # 4) 4호기 5199 헬스체크 (SSH 경유 curl)
