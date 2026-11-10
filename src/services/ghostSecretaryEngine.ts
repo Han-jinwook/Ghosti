@@ -389,10 +389,11 @@ export function saveGhostPassportBook(b: GhostPassportBook): void {
   }
 }
 
-/** 관계 꼬리표가 섞인 입력을 거른다 (실명 원칙 위반 방지) */
-const RELATION_TAG_RE = /^(와이프|아내|남편|아들|딸|엄마|아빠|어머니|아버지|할머니|할아버지|형|누나|오빠|언니|동생|자녀|애기|아기|첫째|둘째|막내)$/;
+/** 관계 꼬리표가 섞인 입력을 거른다 (실명 원칙 위반 방지 · 큰고모/작은외삼촌/큰아버지/둘째숙모 등 복합 호칭 포함) */
+const RELATION_TAG_RE =
+  /^(?:(?:큰|작은|막내|첫째|둘째|셋째|넷째|다섯째|친|외|시|처|새|왕|대|증조|고조)*)(?:와이프|아내|남편|신랑|부인|집사람|아들|딸|엄마|아빠|어머니|아버지|부모님|할머니|할아버지|형|형님|누나|오빠|언니|동생|남동생|여동생|자녀|애기|아기|첫째|둘째|셋째|넷째|막내|고모|고모부|이모|이모부|삼촌|외삼촌|숙모|외숙모|숙부|외숙부|백부|백모|사촌|육촌|조카|외조카|처남|처형|처제|동서|형수|제수|올케|시누이|시동생|매형|매제|매부|자형|사위|며느리|손자|손녀|외손자|외손녀|장인|장인어른|장모|시아버지|시어머니|사돈|친구|절친|베프|동창|동기|선배|후배|지인|동료|이웃|팀장|과장|부장|차장|대리|사장|회장|대표|원장|실장|소장|선생님|교수님)(?:님|씨|분|네|댁|어른|[0-9]+번?)*$/;
 export function isRelationTagOnly(name: string): boolean {
-  return RELATION_TAG_RE.test(name.trim());
+  return RELATION_TAG_RE.test(name.trim().replace(/^#/, '').replace(/\s+/g, ''));
 }
 
 export function upsertPassportMember(book: GhostPassportBook, realName: string, now = new Date()): GhostPassportBook {
@@ -539,7 +540,7 @@ export function resolveGhostSecretaryTurn(
     if (parsed.rejectedRelationTags.length) {
       return {
         scenarioId: 'passport_need_real_name',
-        text: `${nickname}님, 『${parsed.rejectedRelationTags.join('』, 『')}』 말고 진짜 여권처럼 실제 이름으로 알려주세요! (예: 2번은 한치우)`,
+        text: `${nickname}님, 『${parsed.rejectedRelationTags.join('』, 『')}』 말고 진짜 여권처럼 실제 이름으로 알려주세요! (예: 2번은 홍길동, 3번은 김철수)`,
         nextState: st,
       };
     }

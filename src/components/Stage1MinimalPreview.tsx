@@ -226,7 +226,9 @@ function matchesTrashTab(photo: PhotoItem, tabKey: string): boolean {
  * - 2) [❐ 동일 연사 묶어보기 ON] 스위치 버튼 삭제 & "전체 사진 목록 · 총 N장" 단순화 (썸네일 클릭 시 상세 모달에서 연사 나란히 비교 보장)
  * - 3) 문서·영상 목록 상단 TMI 설명 배지("실생활 필수 문서 N건 · 별표 가림 없이...") -> "총 N건" 단순화
  */
-export const Stage1MinimalSearchPreview: React.FC = () => {
+export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = ({
+  initialQuery = '',
+}) => {
   const {
     layout,
     photos,
@@ -256,7 +258,23 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
     toggleBookmark,
   } = useSaySeeStore();
 
-  const [textInput, setTextInput] = useState('');
+  const [textInput, setTextInput] = useState(() => {
+    if (initialQuery && initialQuery.trim()) return initialQuery.trim();
+    if (typeof window !== 'undefined') {
+      const qParam = new URLSearchParams(window.location.search).get('q');
+      if (qParam && qParam.trim()) return qParam.trim();
+    }
+    if (
+      hasExecutedUserSearch &&
+      activeQuery &&
+      !activeQuery.startsWith('전체 갤러리 사진') &&
+      !activeQuery.startsWith('동영상 ') &&
+      !activeQuery.startsWith('최근 서류 ')
+    ) {
+      return activeQuery;
+    }
+    return '';
+  });
   const [ocrModalPhoto, setOcrModalPhoto] = useState<PhotoItem | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const mobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -265,6 +283,26 @@ export const Stage1MinimalSearchPreview: React.FC = () => {
   useEffect(() => {
     return zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
   }, []);
+
+  useEffect(() => {
+    const q = (initialQuery || '').trim();
+    if (q) {
+      setTextInput(q);
+      if (!hasExecutedUserSearch || activeQuery !== q) {
+        void runTextQuery(q);
+      }
+      return;
+    }
+    if (
+      hasExecutedUserSearch &&
+      activeQuery &&
+      !activeQuery.startsWith('전체 갤러리 사진') &&
+      !activeQuery.startsWith('동영상 ') &&
+      !activeQuery.startsWith('최근 서류 ')
+    ) {
+      setTextInput(activeQuery);
+    }
+  }, [initialQuery, hasExecutedUserSearch, activeQuery, runTextQuery]);
 
   const isMobile = layout === 'mobile';
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);

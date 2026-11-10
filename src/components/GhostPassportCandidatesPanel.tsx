@@ -111,7 +111,7 @@ export const GhostPassportCandidatesPanel: React.FC = () => {
         ))}
       </div>
       <span className="text-[12px] text-zinc-400">
-        오른쪽 채팅에 "1번은 나, 2번은 한치우"처럼 진짜 이름으로 알려주세요. (동기화 토글을 켜기 전에는 이 기기 안에서만 보관됩니다)
+        오른쪽 채팅에 &ldquo;1번은 나, 2번은 홍길동, 3번은 김철수&rdquo;처럼 진짜 이름으로 알려주세요. (동기화 토글을 켜기 전에는 이 기기 안에서만 보관됩니다)
       </span>
     </section>
   );

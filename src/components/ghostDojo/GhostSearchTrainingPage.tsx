@@ -9,6 +9,7 @@ import {
 import { SUMMON_HOLD_MS } from '../../services/ghostDojoEngine';
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
+import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
 
 /** 로컬 귀신검색창이 여는 주소와 동일 (기존 웹 「찾기」 화면 100% 승계 전용 모드) */
 export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): string {
@@ -228,12 +229,11 @@ const VirtualMonitorSimulator: React.FC<{
                   </button>
                 </div>
               </div>
-              <div className="h-[calc(100%-2rem)]" onMouseDown={(e) => e.stopPropagation()}>
-                <iframe
-                  title="귀신검색창"
-                  src={ghostSearchWindowUrl('medium', initialQuery)}
-                  className="w-full h-full border-0 bg-white dark:bg-zinc-950"
-                />
+              <div
+                className="h-[calc(100%-2rem)] overflow-y-auto bg-zinc-950"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <Stage1MinimalSearchPreview initialQuery={initialQuery} />
               </div>
             </div>
           </div>

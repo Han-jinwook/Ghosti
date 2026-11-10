@@ -241,11 +241,13 @@ export const DesktopDashboard: React.FC = () => {
     setIsZCoreConnected(zCoreBridge.isConnected);
     const onOpenZCoreGuide = () => setShowZCoreGuideModal(true);
     window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
+    let prevConn = zCoreBridge.isConnected;
     const unsub = zCoreBridge.subscribe((conn) => {
       setIsZCoreConnected(conn);
-      if (conn) {
+      if (conn && !prevConn) {
         void useSaySeeStore.getState().initApp(true);
       }
+      prevConn = conn;
       if (
         conn &&
         typeof sessionStorage !== 'undefined' &&
@@ -255,15 +257,11 @@ export const DesktopDashboard: React.FC = () => {
       }
     });
 
-    const timer = window.setTimeout(async () => {
-      // 본페이지 첫 진입 시 게스트 상태에서도 다짜고짜 로그인 팝업이나 연결 팝업을 자동 호출하지 않고 백그라운드 헬스체크만 수행
-      await zCoreBridge.checkHealth();
-    }, 850);
+    void zCoreBridge.checkHealth();
 
     return () => {
       window.removeEventListener('openZCoreGuideModal', onOpenZCoreGuide);
       unsub();
-      clearTimeout(timer);
     };
   }, []);
   const {
@@ -1393,6 +1391,14 @@ export const DesktopDashboard: React.FC = () => {
           (activeLoungeType === 'personal' && isStage1MinimalPreview ? (
             // [v1.3] 웹 검색 입력창 폐지 → 소환술 수련 + 귀신검색 도장깨기(가상 모니터 안 귀신검색창 = 기존 찾기 UI 100% 승계)
             <GhostSearchTrainingPage />
+          ) : activeLoungeType === 'personal' && ghostSearchWindowStage ? (
+            <Stage1MinimalSearchPreview
+              initialQuery={
+                typeof window !== 'undefined'
+                  ? new URLSearchParams(window.location.search).get('q') || ''
+                  : ''
+              }
+            />
           ) : (
           <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
             {activeLoungeType === 'work' ? (

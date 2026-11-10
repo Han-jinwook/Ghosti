@@ -110,6 +110,14 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         typeof sessionStorage !== 'undefined' &&
         sessionStorage.getItem('ghosti_one_stop_agreed') === '1';
       setStep(agreedBefore && !isMobileEnv ? 'waiting_engine' : 'intro');
+      void zCoreBridge.checkHealth().then((alive) => {
+        if (alive) {
+          setIsConnected(true);
+          setVersion(zCoreBridge.version);
+          setProgress(0);
+          setStep('indexing');
+        }
+      });
     }
   }, [isOpen, initialStep, isMobileEnv]);
 
@@ -217,13 +225,15 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     }
   };
 
-  const handleOneStopAgreeAndDownload = () => {
+  const handleOneStopAgreeAndDownload = async () => {
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem('ghosti_one_stop_agreed', '1');
     }
 
-    // 1) 이미 Z-코어가 연결되어 있으면 바로 인덱싱(목록 불러오기) 실행
-    if (isConnected) {
+    // 1) 이미 Z-코어가 연결되어 있거나 실시간 헬스체크에서 살아있으면 다운로드 없이 바로 인덱싱(목록 불러오기) 실행
+    const aliveNow = isConnected || zCoreBridge.isConnected || (await zCoreBridge.checkHealth());
+    if (aliveNow) {
+      setIsConnected(true);
       hasTriggeredInitRef.current = false;
       initPromiseRef.current = null;
       setProgress(0);

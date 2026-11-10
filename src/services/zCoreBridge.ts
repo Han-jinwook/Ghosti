@@ -51,6 +51,19 @@ class ZCoreBridgeManager {
 
   private constructor() {
     if (typeof window !== 'undefined') {
+      try {
+        const parentBridge =
+          window.parent && window.parent !== window
+            ? (window.parent as any).__GHOSTI_ZCORE_BRIDGE__
+            : null;
+        if (parentBridge?.isConnected) {
+          this.isConnected = true;
+          this.version = parentBridge.version || LATEST_Z_CORE_VERSION;
+        }
+        (window as any).__GHOSTI_ZCORE_BRIDGE__ = this;
+      } catch {
+        /* ignore cross-origin */
+      }
       this.startHealthPolling();
     }
   }
@@ -105,9 +118,31 @@ class ZCoreBridgeManager {
   }
 
   public async checkHealth(): Promise<boolean> {
+    const markConnected = (data: Partial<ZCoreHealthResponse>) => {
+      this.consecutiveFailures = 0;
+      const wasConnected = this.isConnected;
+      const prevVersion = this.version;
+      this.isConnected = true;
+      this.version = data.version || this.version || LATEST_Z_CORE_VERSION;
+      if (isZCoreOutdated(this.version)) {
+        void this.triggerSilentSelfUpdate();
+      } else {
+        this.selfUpdateRequested = false;
+      }
+      if (!wasConnected) {
+        this.notify();
+        window.dispatchEvent(
+          new CustomEvent('zCoreConnected', { detail: { ok: true, ...data } })
+        );
+      } else if (prevVersion !== this.version) {
+        this.notify();
+      }
+      return true;
+    };
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(`${Z_CORE_ORIGIN}/__merlin/health`, {
         method: 'GET',
         mode: 'cors',
@@ -118,29 +153,36 @@ class ZCoreBridgeManager {
       if (res.ok) {
         const data: ZCoreHealthResponse = await res.json();
         if (data.ok) {
-          this.consecutiveFailures = 0;
-          const wasConnected = this.isConnected;
-          const prevVersion = this.version;
-          this.isConnected = true;
-          this.version = data.version || null;
-          if (isZCoreOutdated(this.version)) {
-            void this.triggerSilentSelfUpdate();
-          } else {
-            this.selfUpdateRequested = false;
-          }
-          if (!wasConnected) {
-            this.notify();
-            window.dispatchEvent(
-              new CustomEvent('zCoreConnected', { detail: data })
-            );
-          } else if (prevVersion !== this.version) {
-            this.notify();
-          }
-          return true;
+          return markConnected(data);
         }
       }
     } catch {
-      /* disconnected or network error */
+      /* fallback below */
+    }
+
+    // [보조 데몬/구버전 포트 폴백]: 5199 또는 51988의 /api/superpower/status가 살아있으면 이미 Z-코어가 실행 중인 상태로 즉시 인정 (중복 다운로드 원천 방지)
+    for (const fallbackUrl of [
+      `${Z_CORE_ORIGIN}/api/superpower/status`,
+      'http://127.0.0.1:51988/api/superpower/status',
+    ]) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const res = await fetch(fallbackUrl, {
+          method: 'GET',
+          mode: 'cors',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data && (data.ok || data.engine_running)) {
+            return markConnected({ version: LATEST_Z_CORE_VERSION });
+          }
+        }
+      } catch {
+        /* ignore */
+      }
     }
 
     this.consecutiveFailures += 1;
@@ -187,6 +229,20 @@ export const zCoreBridge = ZCoreBridgeManager.getInstance();
 export function requestConnectMyComputer(): void {
   if (typeof window === 'undefined') return;
 
+  // 가상 모니터(iframe) 내부에서 호출된 경우 상위 창으로 이벤트를 위임하여 모달이 작은 창에 갇히거나 중복 다운로드를 유발하지 않게 함
+  try {
+    if (window.top && window.top !== window.self) {
+      const topReq = (window.top as any).__GHOSTI_REQUEST_CONNECT_MY_COMPUTER__;
+      if (typeof topReq === 'function') {
+        topReq();
+        return;
+      }
+    }
+    (window as any).__GHOSTI_REQUEST_CONNECT_MY_COMPUTER__ = requestConnectMyComputer;
+  } catch {
+    /* ignore */
+  }
+
   const hasLoginToken = Boolean(
     localStorage.getItem('merlin_session_token') ||
       localStorage.getItem('ghosti_prelaunch_verified_email') ||
@@ -203,7 +259,14 @@ export function requestConnectMyComputer(): void {
     return;
   }
 
-  window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+  // 이미 Z-코어가 실행 중이면 다운로드 안내 대신 즉시 헬스체크 후 연결 완료 처리
+  void zCoreBridge.checkHealth().then((alive) => {
+    if (alive) {
+      window.dispatchEvent(new CustomEvent('zCoreConnected', { detail: { ok: true } }));
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+  });
 }
 
 /**

@@ -2227,6 +2227,23 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       initializing: false,
     });
 
+    // [검색 결과 덮어쓰기 원천 방어]: URL 파라미터(?q=...) 또는 직전 유저 검색어가 활성 상태일 때
+    // initApp(true) 재실행이 전체 350장 갤러리를 그대로 덮어씌우지 않도록 즉시 해당 검색어로 재필터링!
+    const preservedQuery = currentHasExecutedUserSearch ? (get().activeQuery || '').trim() : '';
+    const urlQuery =
+      typeof window !== 'undefined'
+        ? (new URLSearchParams(window.location.search).get('q') || '').trim()
+        : '';
+    const queryToReRun = preservedQuery || urlQuery;
+    if (
+      queryToReRun &&
+      !queryToReRun.startsWith('전체 갤러리 사진') &&
+      !queryToReRun.startsWith('동영상 ') &&
+      !queryToReRun.startsWith('최근 서류 ')
+    ) {
+      await get().runTextQuery(queryToReRun);
+    }
+
     // [의미 검색 엔진 준비] 데스크톱에서만, 앱이 뜬 뒤 백그라운드로 검색어 인코더(약 166MB, 최초 1회 후 OPFS 캐시)를 불러온다.
     // 준비 전·실패 시에는 기존 키워드·태그 검색으로 그대로 동작한다. (모바일·데이터 절약 모드는 자동 다운로드하지 않음)
     try {

@@ -141,22 +141,42 @@ type PendingSingleCardItem =
 
 const RELATIONSHIP_OR_ROLE_TERMS = new Set([
   '친구', '절친', '베프', '동창', '동기', '선배', '후배', '지인', '동료', '이웃', '손님', '행인',
-  '처남', '매형', '매제', '사위', '막내사위', '큰사위', '며느리', '큰며느리', '막내며느리',
-  '사촌', '조카', '삼촌', '외삼촌', '큰아빠', '작은아빠', '고모', '고모부', '이모', '이모부', '외숙모', '숙모',
-  '장모', '장모님', '장인', '장인어른', '시어머니', '시아버지', '시엄마', '시아빠',
-  '형', '형님', '오빠', '누나', '언니', '동생', '남동생', '여동생', '막내',
-  '엄마', '어머니', '아빠', '아버지', '부모님', '할머니', '할아버지', '외할머니', '외할아버지',
-  '아들', '큰아들', '작은아들', '막내아들', '딸', '큰딸', '작은딸', '막내딸', '손자', '손녀',
-  '남편', '아내', '와이프', '집사람', '애기', '아기',
-  '팀장', '팀장님', '과장', '과장님', '부장', '부장님', '대리', '대리님', '차장', '차장님', '사장', '사장님', '대표', '대표님', '선생님', '교수님',
+  '처남', '처형', '처제', '동서', '형수', '제수', '올케', '시누이', '시동생', '매형', '매제', '매부', '자형',
+  '사위', '막내사위', '큰사위', '작은사위', '며느리', '큰며느리', '막내며느리', '작은며느리',
+  '사촌', '육촌', '팔촌', '조카', '외조카', '삼촌', '외삼촌', '큰삼촌', '작은삼촌', '큰외삼촌', '작은외삼촌',
+  '큰아빠', '작은아빠', '큰아버지', '작은아버지', '큰어머니', '작은어머니', '큰엄마', '작은엄마', '백부', '백모', '숙부', '외숙부',
+  '고모', '고모부', '큰고모', '작은고모', '막내고모', '큰고모부', '작은고모부', '대고모', '왕고모',
+  '이모', '이모부', '큰이모', '작은이모', '막내이모', '큰이모부', '작은이모부', '이모할머니', '고모할머니',
+  '외숙모', '숙모', '큰숙모', '작은숙모', '큰외숙모', '작은외숙모', '둘째숙모', '셋째숙모', '막내숙모',
+  '장모', '장모님', '장인', '장인어른', '시어머니', '시아버지', '시엄마', '시아빠', '시부모님', '처부모님', '사돈', '안사돈', '바깥사돈',
+  '형', '형님', '오빠', '누나', '언니', '동생', '남동생', '여동생', '막내', '첫째', '둘째', '셋째', '넷째', '장남', '차남', '장녀', '차녀',
+  '엄마', '어머니', '아빠', '아버지', '부모님', '할머니', '할아버지', '외할머니', '외할아버지', '친할머니', '친할아버지', '증조할머니', '증조할아버지',
+  '아들', '큰아들', '작은아들', '막내아들', '딸', '큰딸', '작은딸', '막내딸', '자녀', '손자', '손녀', '외손자', '외손녀',
+  '남편', '신랑', '아내', '와이프', '집사람', '부인', '애기', '아기', '남친', '여친', '애인',
+  '팀장', '팀장님', '과장', '과장님', '부장', '부장님', '대리', '대리님', '차장', '차장님', '주임', '주임님', '계장', '계장님',
+  '사장', '사장님', '회장', '회장님', '대표', '대표님', '원장', '원장님', '실장', '실장님', '소장', '소장님', '본부장', '이사', '이사님', '상무', '전무',
+  '선생', '선생님', '교수', '교수님', '박사', '박사님', '목사님', '신부님', '스님', '총무', '간사',
 ]);
 
-function isRelationshipOrRoleTerm(raw: string): boolean {
-  const cleaned = raw.trim().replace(/^#/, '').replace(/\s+/g, '');
+const RELATIONSHIP_PREFIX_RE =
+  /^(?:큰|작은|막내|첫째|둘째|셋째|넷째|다섯째|여섯째|일곱째|장|차|친|외|시|처|새|왕|대|증조|고조|외증조|진외|사돈|큰집|작은집|외가|친가|시가|처가|본가|고향|학교|대학|군대|회사|직장|동네|모임|교회|성당|절|우리|내|저희)+/;
+
+const RELATIONSHIP_CORE_END_RE =
+  /(?:고모|고모부|이모|이모부|삼촌|외삼촌|숙모|외숙모|숙부|외숙부|백부|백모|아버지|어머니|아빠|엄마|할아버지|할머니|조부|조모|증조부|증조모|형님|오빠|누나|언니|동생|남동생|여동생|사촌|육촌|팔촌|조카|처남|처형|처제|동서|형수|제수|올케|시누이|시동생|매형|매제|매부|자형|남편|신랑|아내|와이프|부인|집사람|사위|며느리|손자|손녀|외손자|외손녀|장인|장인어른|장모|시아버지|시어머니|시부|시모|사돈|친구|절친|베프|동창|동기|선배|후배|지인|동료|이웃|손님|행인|팀장|과장|부장|차장|대리|주임|계장|사원|사장|회장|대표|원장|실장|소장|본부장|이사|상무|전무|부사장|선생님|선생|교수님|교수|박사님|목사님|스님|신부님|총무|간사)(?:님|씨|분|네|댁|어른|[0-9]+번?)*$/;
+
+export function isRelationshipOrRoleTerm(raw: string): boolean {
+  const cleaned = raw
+    .trim()
+    .replace(/^#/, '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, '');
   if (!cleaned) return false;
   if (RELATIONSHIP_OR_ROLE_TERMS.has(cleaned)) return true;
-  const strippedNum = cleaned.replace(/[0-9]+$/, '');
-  if (strippedNum && RELATIONSHIP_OR_ROLE_TERMS.has(strippedNum)) return true;
+  const strippedTrail = cleaned.replace(/(?:님|씨|분|네|댁|어른|[0-9]+번?)+$/, '');
+  if (strippedTrail && RELATIONSHIP_OR_ROLE_TERMS.has(strippedTrail)) return true;
+  const strippedBoth = strippedTrail.replace(RELATIONSHIP_PREFIX_RE, '');
+  if (strippedBoth && RELATIONSHIP_OR_ROLE_TERMS.has(strippedBoth)) return true;
+  if (RELATIONSHIP_CORE_END_RE.test(cleaned)) return true;
   return false;
 }
 
@@ -266,7 +286,7 @@ export const FaceMemberInlineBar: React.FC<{
       const cleanName = newPersonDraft.trim();
       if (!cleanName) return; // 이름 없이 더미로 등록하지 않음
       if (isRelationshipOrRoleTerm(cleanName)) {
-        const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`;
+        const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`;
         setRealNameError(msg);
         useSaySeeStore.setState({ lastQuarantineToast: msg });
         return;
@@ -416,7 +436,7 @@ export const FaceMemberInlineBar: React.FC<{
                         setNewPersonDraft(val);
                         if (isRelationshipOrRoleTerm(val)) {
                           setRealNameError(
-                            `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`
+                            `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`
                           );
                         } else {
                           setRealNameError(null);
@@ -428,7 +448,7 @@ export const FaceMemberInlineBar: React.FC<{
                           void handleConfirmCurrent();
                         }
                       }}
-                      placeholder="실제 이름 입력 (예: 조은호)"
+                      placeholder="실제 이름 입력 (예: 홍길동)"
                       className={`h-8 px-2.5 rounded-lg bg-zinc-900 border ${
                         realNameError
                           ? 'border-amber-400 focus:border-amber-400'
@@ -517,7 +537,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
     const cleanName = rawName.trim();
     if (!cleanName) return;
     if (isRelationshipOrRoleTerm(cleanName)) {
-      const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`;
+      const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`;
       setModalNameErrors((prev) => ({ ...prev, [clusterId]: msg }));
       useSaySeeStore.setState({ lastQuarantineToast: msg });
       return;
@@ -766,7 +786,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                             if (isRelationshipOrRoleTerm(val)) {
                               setModalNameErrors((prev) => ({
                                 ...prev,
-                                [c.clusterId]: `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 조은호·한치우)으로 입력해 주세요!`,
+                                [c.clusterId]: `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`,
                               }));
                             } else {
                               setModalNameErrors((prev) => {
@@ -776,7 +796,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                               });
                             }
                           }}
-                          placeholder="실제 이름 입력 후 [여권명 등록] (예: 조은호)"
+                          placeholder="실제 이름 입력 후 [여권명 등록] (예: 홍길동)"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               void handleModalRegisterName(c.clusterId, draftVal);

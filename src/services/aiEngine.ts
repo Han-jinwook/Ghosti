@@ -1862,6 +1862,60 @@ export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSea
  * EmbeddingGemma 2 시맨틱 벡터 점수(/__poc/precomputed) 및 Bes2 쓰레기 정의를 결합하여
  * 연사/중복 그룹(DuplicateGroup) 및 4대 쓰레기 카테고리를 수학적으로 자동 분류합니다.
  */
+let _staticCorpusCachePromise: Promise<{
+  pocJson: any;
+  auditJson: any;
+  semJson: any;
+}> | null = null;
+
+function getStaticCorpusCached(): Promise<{ pocJson: any; auditJson: any; semJson: any }> {
+  if (typeof window !== 'undefined') {
+    try {
+      const parentCache =
+        window.parent && window.parent !== window
+          ? (window.parent as any).__GHOSTI_STATIC_CORPUS_CACHE__
+          : null;
+      if (parentCache) {
+        (window as any).__GHOSTI_STATIC_CORPUS_CACHE__ = parentCache;
+        return Promise.resolve(parentCache);
+      }
+      if ((window as any).__GHOSTI_STATIC_CORPUS_CACHE__) {
+        return Promise.resolve((window as any).__GHOSTI_STATIC_CORPUS_CACHE__);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!_staticCorpusCachePromise) {
+    _staticCorpusCachePromise = (async () => {
+      const [pocRes, auditRes, semRes] = await Promise.all([
+        fetch('/poc/results/precomputed.json').catch(() => fetch(getZCoreUrl('/__poc/precomputed'))),
+        fetch('/poc/results/corpus_physical_audit.json').catch(() =>
+          fetch(getZCoreUrl('/__photos/physical-audit'))
+        ),
+        fetch('/poc/results/corpus_550_semantic_index.json').catch(() =>
+          fetch(getZCoreUrl('/__photos/semantic-index'))
+        ),
+      ]);
+      const [pocJson, auditJson, semJson] = await Promise.all([
+        pocRes.json().catch(() => null),
+        auditRes.json().catch(() => null),
+        semRes.json().catch(() => null),
+      ]);
+      const bundle = { pocJson, auditJson, semJson };
+      if (typeof window !== 'undefined') {
+        try {
+          (window as any).__GHOSTI_STATIC_CORPUS_CACHE__ = bundle;
+        } catch {
+          /* ignore */
+        }
+      }
+      return bundle;
+    })();
+  }
+  return _staticCorpusCachePromise;
+}
+
 export async function loadInitialPhotoDataset(): Promise<{
   photos: PhotoItem[];
   duplicateGroups: DuplicateGroup[];
@@ -1887,24 +1941,17 @@ export async function loadInitialPhotoDataset(): Promise<{
   >();
 
   try {
-    const [pocRes, auditRes, semRes] = await Promise.all([
-      fetch('/poc/results/precomputed.json').catch(() => fetch(getZCoreUrl('/__poc/precomputed'))),
-      fetch('/poc/results/corpus_physical_audit.json').catch(() => fetch(getZCoreUrl('/__photos/physical-audit'))),
-      fetch('/poc/results/corpus_550_semantic_index.json').catch(() => fetch(getZCoreUrl('/__photos/semantic-index'))),
-    ]);
-    const pocJson = await pocRes.json();
+    const { pocJson, auditJson, semJson } = await getStaticCorpusCached();
     const pocData = pocJson?.data ?? pocJson;
     if (pocData && Array.isArray(pocData.searches)) {
       precomputedSearches = pocData.searches ?? [];
       precomputedAudioRows = pocData.audioBench?.rows ?? [];
     }
-    const auditJson = await auditRes.json();
     if (auditJson && Array.isArray(auditJson.items)) {
       for (const item of auditJson.items) {
         auditByPhoto.set(item.f, item);
       }
     }
-    const semJson = await semRes.json();
     if (semJson) {
       if (semJson.photos && typeof semJson.photos === 'object') {
         for (const [name, meta] of Object.entries(semJson.photos)) {
