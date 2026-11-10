@@ -159,20 +159,17 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       </div>
       {summoned && (
         <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
-          <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (1~8번 영구 번호 &amp; 우측 분리)</div>
+          <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (한영·띄어쓰기·줄바꿈은 100% 자동, 수동 무기는 1~5번)</div>
           <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#5EEAD4] font-bold">
             <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[Ctrl+V] 순차·칸맞춤</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[1] 한영성형</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[2] 줄바꿈정리</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[3] 서식세탁</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[4] 파일·PDF변환🔒</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[1] 🏷️파일·라벨러(PDF)🔒</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[2] 글자·표OCR🔒</span>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-[#E2E8F0]">
             <div className="flex flex-wrap gap-1.5">
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 글자·표OCR🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[6] 합본🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[7] 번호·일정🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[8] 창고정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[3] 합본🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 번호·일정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 창고정🔒</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-300/50 text-amber-200 font-bold">[⌨️상용구▾]</span>
@@ -508,6 +505,9 @@ const Dojo8: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [renamed, setRenamed] = useState(false);
   return (
     <div className="flex flex-col gap-2">
+      <div className="text-[11.5px] text-teal-200 font-bold">
+        💡 실제 사용법: 탐색기에서 사진·카톡사진·문서 복사(Ctrl+C) 후 귀신창(Ctrl+0)에서 숫자 <span className="underline text-amber-300">[1]번 (🏷️파일·라벨러)</span> 클릭!
+      </div>
       <div className="flex flex-col gap-1">
         {DOJO8_LABELER_SAMPLES.map((s) => (
           <div key={s.before} className={`${boxCls} flex items-center justify-between gap-2`}>
@@ -528,7 +528,7 @@ const Dojo8: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           onDone();
         }}
       >
-        🏷️ 라벨러 실행
+        🏷️ 귀신창 [1]번 (파일·라벨러) 실행 체험
       </button>
     </div>
   );

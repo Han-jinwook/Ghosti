@@ -102,7 +102,7 @@ EM_LINELENGTH = 0x00C1
 LOCK_PORT = 51988
 AUTO_CLEAN_SECONDS = 300.0
 IMAGE_CLEAN_SECONDS = 90.0
-MENU_ARM_SECONDS = 3600.0
+MENU_ARM_SECONDS = 7.5
 
 BASE_DIR = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "Ghosti"
 QUEUE_FILE = BASE_DIR / "data" / "clipboard_queue.json"
@@ -853,8 +853,6 @@ _toast_queue: "queue.Queue[tuple[str, int]]" = queue.Queue()
 GHOSTI_WEB_URL = os.environ.get("GHOSTI_WEB_URL", "https://ghosti.sundreamer.app")
 _CAND_SOUNDS = [
     Path(__file__).resolve().parent / "assets",
-    Path(__file__).resolve().parent / "data" / "baby_ghost_sounds",
-    Path(__file__).resolve().parent / "os_agent" / "assets",
     Path(__file__).resolve().parent.parent / "data" / "baby_ghost_sounds",
     Path("C:/MerlinTools/assets"),
 ]
@@ -1098,29 +1096,42 @@ _CANNED_FILENAME_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# [레드팀 확정 ⑤]: 전화번호(02-2611-0500), 금액(145,000), 문서번호 오인을 원천 차단하는 유효 달력 범위(1990~2035년, 01~12월, 01~31일) + 날짜 구분자 정규식
+# [레드팀 확정 ⑤]: 전화번호(010-2026-1234, 02-2611-0500), 금액(145,000원), 사업자번호 오인을 원천 차단하는 전처리 필터 + 유효 달력 범위 정규식
+_PHONE_OR_MONEY_NOISE_REGEX = re.compile(
+    r"(?:\b0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}\b|\b1[568]\d{2}[-.\s]?\d{4}\b|\b\d{3}-\d{2}-\d{5}\b|\b\d{1,3}(?:,\d{3})+(?:\s*원)?\b|\b\d+\s*원\b)"
+)
 _VALID_DOC_DATE_REGEX = re.compile(
     r"(?<!\d)(199\d|20[0-3]\d)\s*(?:년|[./-])\s*(0?[1-9]|1[0-2])\s*(?:월|[./-])\s*(0?[1-9]|[12]\d|3[01])(?:\s*일)?(?!\d)"
+)
+_VALID_DOC_SHORT_YEAR_REGEX = re.compile(
+    r"(?<!\d)(2[0-9])\s*년\s*(0?[1-9]|1[0-2])\s*월\s*(0?[1-9]|[12]\d|3[01])\s*일?(?!\d)"
 )
 
 
 def extract_first_valid_date_from_content(ocr_or_doc_text: str) -> str | None:
     """
     [확정 ⑤ — 귀신 라벨러 날짜 3원칙 중 3번(YYMMDD_내용_) 전용 파서]:
-    전화번호·사업자번호·금액을 날짜로 오인하지 않도록 유효 달력 범위(1990~2035년, 01~12월, 01~31일)와
-    날짜 구분자(년/월/일, ., -, /) 검증을 통과한 실제 날짜 포맷 중
-    '문서/사진 내 첫 번째로 등장하는 날짜'만 추출하여 6자리 YYMMDD 문자열로 반환합니다.
+    전화번호(010-2026-1234 등)·사업자번호·금액(145,000원 등)을 먼저 마스킹 제거한 뒤,
+    유효 달력 범위(1990~2035년, 01~12월, 01~31일)와 날짜 구분자(년/월/일, ., -, /) 검증을 통과한
+    '문서/사진 내 첫 번째로 등장하는 진짜 날짜'만 추출하여 6자리 YYMMDD 문자열로 반환합니다.
     """
     if not ocr_or_doc_text:
         return None
-    m = _VALID_DOC_DATE_REGEX.search(ocr_or_doc_text)
-    if not m:
-        return None
-    yyyy = int(m.group(1))
-    mm = int(m.group(2))
-    dd = int(m.group(3))
-    if 1990 <= yyyy <= 2035 and 1 <= mm <= 12 and 1 <= dd <= 31:
-        return f"{yyyy % 100:02d}{mm:02d}{dd:02d}"
+    sanitized = _PHONE_OR_MONEY_NOISE_REGEX.sub(" ", ocr_or_doc_text)
+    m = _VALID_DOC_DATE_REGEX.search(sanitized)
+    if m:
+        yyyy = int(m.group(1))
+        mm = int(m.group(2))
+        dd = int(m.group(3))
+        if 1990 <= yyyy <= 2035 and 1 <= mm <= 12 and 1 <= dd <= 31:
+            return f"{yyyy % 100:02d}{mm:02d}{dd:02d}"
+    m2 = _VALID_DOC_SHORT_YEAR_REGEX.search(sanitized)
+    if m2:
+        yy = int(m2.group(1))
+        mm = int(m2.group(2))
+        dd = int(m2.group(3))
+        if 1 <= mm <= 12 and 1 <= dd <= 31:
+            return f"{yy:02d}{mm:02d}{dd:02d}"
     return None
 
 
@@ -1184,15 +1195,15 @@ def format_ghost_labeler_filename(
     # 날짜 3원칙 판정
     date_rule = "EXIF_REAL"
     source_tag = ""
-    if exif_yymmdd and re.fullmatch(r"\d{6}", exif_yymmdd):
-        yymmdd = exif_yymmdd
-        date_rule = "RULE1_EXIF_REAL"
-        source_tag = ""
-    elif kakao_yymmdd or stem.lower().startswith("kakaotalk"):
+    if kakao_yymmdd or ("kakaotalk" in stem.lower()) or ("카톡" in stem):
         m_kk = re.search(r"20(\d{6})", stem)
         yymmdd = kakao_yymmdd if (kakao_yymmdd and re.fullmatch(r"\d{6}", kakao_yymmdd)) else (m_kk.group(1) if m_kk else datetime.date.today().strftime("%y%m%d"))
         date_rule = "RULE2_KAKAO_RECEIVED"
         source_tag = "카톡"
+    elif exif_yymmdd and re.fullmatch(r"\d{6}", exif_yymmdd):
+        yymmdd = exif_yymmdd
+        date_rule = "RULE1_EXIF_REAL"
+        source_tag = ""
     else:
         extracted_yymmdd = extract_first_valid_date_from_content(ocr_or_doc_text)
         yymmdd = extracted_yymmdd or datetime.date.today().strftime("%y%m%d")
@@ -1206,11 +1217,11 @@ def format_ghost_labeler_filename(
         tokens.append(source_tag)
 
     clean_slug = re.sub(r"[\\/:*?\"<>|\s]+", "_", (summary_slug or stem).strip()).strip("_")
-    if not is_canned and prefix_only_if_named:
-        labeled_name = f"[{'_'.join(tokens)}]_{stem}{ext}"
+    if not is_canned and prefix_only_if_named and clean_slug == stem:
+        tokens.append(stem)
     else:
         tokens.append(clean_slug)
-        labeled_name = f"{'_'.join(tokens)}{ext}"
+    labeled_name = f"{'_'.join(tokens)}{ext}"
 
     return {
         "changed": labeled_name != original_filename,
@@ -2008,8 +2019,6 @@ def _toast_worker() -> None:
         after_id[0] = root.after(ms, _on_timer_expire)
 
     def _on_timer_expire() -> None:
-        if active_mode[0] in ("ui1", "ui2", "ui3", "ui4") and current_win[0] is not None:
-            return
         if is_hovered[0] and current_win[0] is not None:
             after_id[0] = root.after(800, _on_timer_expire)
             return
@@ -2109,6 +2118,19 @@ def _toast_worker() -> None:
             b_st.pack(side="right", padx=(2, 0))
             b_st.bind("<Button-1>", lambda _e, k=st_key: _switch_stage(k))
             stage_btns[st_key] = b_st
+
+        lbl_quick_btn = tk.Label(
+            hdr,
+            text="🏷️[1]파일라벨러",
+            fg="#0B1120",
+            bg="#5EEAD4",
+            padx=6,
+            pady=1,
+            font=("Malgun Gothic", 8, "bold"),
+            cursor="hand2",
+        )
+        lbl_quick_btn.pack(side="right", padx=(4, 2))
+        lbl_quick_btn.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(1)))
 
         # 2단 필터 바: [전체] [📄문서] [🖼️사진] [🎬영상] + 우측 🎁30일무제한(D-30)
         fbar = tk.Frame(outer, bg="#0B1120")
@@ -2424,13 +2446,10 @@ def _toast_worker() -> None:
                 u32.GetCursorPos(ctypes.byref(pt_click))
                 wx1, wy1, wx2, wy2 = win_rect[0]
                 inside_rect = (wx1 <= pt_click.x <= wx2 and wy1 <= pt_click.y <= wy2)
-                if is_hovered[0] and not inside_rect and active_mode[0] == "toast":
+                if is_hovered[0] and not inside_rect:
                     _schedule_close(5500)
                 is_hovered[0] = inside_rect
-                esc_down = (u32.GetAsyncKeyState(0x1B) & 0x8000) != 0
-                if esc_down and (time.time() - opened_at[0]) > 0.45 and (time.time() - _LAST_RBTN_DISMISS_ESC_TS) > 0.35:
-                    _close_win()
-                elif mouse_down and not was_mouse_down[0]:
+                if mouse_down and not was_mouse_down[0]:
                     if (time.time() - opened_at[0]) > 0.45 and not inside_rect:
                         _close_win()
             was_mouse_down[0] = mouse_down
@@ -2640,6 +2659,7 @@ def _toast_worker() -> None:
                                 else:
                                     tk.Label(p_inner, text="💡 [숨은 귀신 초능력 & 꿀팁]", fg="#FDE047", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 4))
                                     for tl in (
+                                        "• 🏷️ [1]번 귀신 라벨러 : 탐색기에서 사진·카톡·문서 복사(Ctrl+C) 후 [1]번 클릭 시 [YYMMDD_장소 / YYMMDD_카톡_내용 / YYMMDD_내용_제목] 자동 작명!",
                                         "• ⚡ 타이핑 자동 한영·띄어쓰기 성형 : 2어절 입력 시 단축키 없이 0.1초 자동 교정!",
                                         "• 🧹 복사(Ctrl+C) 자동 줄바꿈 다림질 : 끊어진 PDF·웹 문장 복사 시 자동 줄정리 (Ctrl+Z 원복)!",
                                         "• 🔄 귀신호출 한 번 더(토글) : 호출 이어서 바로 한 번 더 누르면 [기본 귀신창 ⇄ 귀신검색창] 즉시 전환!",
@@ -2825,37 +2845,6 @@ def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
     _toast_queue.put((message, duration_ms))
 
 
-def _ensure_soft_wav(src_wav: Path, target_peak: int = 8500) -> Path:
-    """
-    귀신창 효과음(.wav) 볼륨이 과도하게 크지 않도록 피크 진폭을 부드러운 수준(약 26% Full-Scale)으로 자동 감쇄·캐싱합니다.
-    """
-    try:
-        import wave
-        soft_dir = _MERLIN_APPDATA / "soft_sounds_v2"
-        soft_dir.mkdir(parents=True, exist_ok=True)
-        dst_wav = soft_dir / src_wav.name
-        if dst_wav.exists() and dst_wav.stat().st_mtime >= src_wav.stat().st_mtime:
-            return dst_wav
-        with wave.open(str(src_wav), "rb") as wf:
-            params = wf.getparams()
-            frames = wf.readframes(wf.getnframes())
-        if params.sampwidth == 2 and len(frames) >= 2:
-            count = len(frames) // 2
-            samples = struct.unpack("<" + "h" * count, frames)
-            peak = max((abs(s) for s in samples), default=0)
-            if peak > target_peak and peak > 0:
-                scale = target_peak / float(peak)
-                scaled = [max(-32768, min(32767, int(s * scale))) for s in samples]
-                frames = struct.pack("<" + "h" * count, *scaled)
-            with wave.open(str(dst_wav), "wb") as out_wf:
-                out_wf.setparams(params)
-                out_wf.writeframes(frames)
-            return dst_wav
-    except Exception:
-        pass
-    return src_wav
-
-
 def play_baby_ghost_sound(mode: str = "typo") -> None:
     cfg = get_superpower_settings()
     if not cfg.get("sound_enabled", True):
@@ -2873,8 +2862,7 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
             if not wav_path.exists():
                 wav_path = SOUNDS_DIR / ("sample6_ctrl0_summon.wav" if mode == "summon" else "sample2_cute_ghost_pop.wav")
             if wav_path.exists():
-                soft_path = _ensure_soft_wav(wav_path, target_peak=8500)
-                winsound.PlaySound(str(soft_path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+                winsound.PlaySound(str(wav_path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
         except Exception:
             pass
 
@@ -3010,12 +2998,41 @@ def set_clipboard_text(text: str) -> None:
         time.sleep(0.015)
 
 
-def set_clipboard_hdrop_file(filepath: str) -> bool:
-    """실물 파일 경로를 윈도우 탐색기 파일 복사 포맷(CF_HDROP)으로 클립보드에 주입"""
-    abs_path = str(Path(filepath).resolve())
+def get_clipboard_hdrop_files() -> list[str]:
+    """클립보드에 복사(Ctrl+C)되어 있는 탐색기 파일 경로(CF_HDROP) 목록 추출"""
+    files: list[str] = []
+    shell32 = ctypes.windll.shell32
+    shell32.DragQueryFileW.argtypes = [wintypes.HANDLE, wintypes.UINT, wintypes.LPWSTR, wintypes.UINT]
+    shell32.DragQueryFileW.restype = wintypes.UINT
+    for _ in range(5):
+        if u32.OpenClipboard(None):
+            try:
+                if u32.IsClipboardFormatAvailable(CF_HDROP):
+                    hdrop = u32.GetClipboardData(CF_HDROP)
+                    if hdrop:
+                        cnt = shell32.DragQueryFileW(hdrop, 0xFFFFFFFF, None, 0)
+                        for idx in range(cnt):
+                            length = shell32.DragQueryFileW(hdrop, idx, None, 0)
+                            if length > 0:
+                                buf = ctypes.create_unicode_buffer(length + 2)
+                                shell32.DragQueryFileW(hdrop, idx, buf, length + 2)
+                                if buf.value:
+                                    files.append(buf.value)
+            finally:
+                u32.CloseClipboard()
+            break
+        time.sleep(0.01)
+    return files
+
+
+def set_clipboard_hdrop_files(filepaths: list[str]) -> bool:
+    """다중 실물 파일 경로를 윈도우 탐색기 파일 복사 포맷(CF_HDROP)으로 클립보드에 주입"""
+    valid_paths = [str(Path(fp).resolve()) for fp in filepaths if fp]
+    if not valid_paths:
+        return False
     header = struct.pack("<IiiII", 20, 0, 0, 0, 1)
-    encoded_path = abs_path.encode("utf-16-le") + b"\x00\x00\x00\x00"
-    payload = header + encoded_path
+    encoded_body = b"".join(p.encode("utf-16-le") + b"\x00\x00" for p in valid_paths) + b"\x00\x00"
+    payload = header + encoded_body
 
     for _ in range(8):
         if u32.OpenClipboard(None):
@@ -3034,6 +3051,11 @@ def set_clipboard_hdrop_file(filepath: str) -> bool:
             break
         time.sleep(0.015)
     return False
+
+
+def set_clipboard_hdrop_file(filepath: str) -> bool:
+    """실물 파일 경로를 윈도우 탐색기 파일 복사 포맷(CF_HDROP)으로 클립보드에 주입"""
+    return set_clipboard_hdrop_files([filepath])
 
 
 KEYEVENTF_EXTENDEDKEY = 0x0001
@@ -4934,16 +4956,165 @@ def _generate_smart_filename_prefix() -> str:
     return clean_title[:18]
 
 
+def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, str | None, str, str]:
+    """
+    실물 파일(사진·카톡·문서)에서 (exif_yymmdd, kakao_yymmdd, ocr_or_doc_text, summary_slug)를 추출합니다.
+    - 전화번호(010-2026-1234 등)나 금액(145,000원)은 extract_first_valid_date_from_content 내부에서 100% 배제됩니다.
+    """
+    stem = fpath.stem
+    ext_low = fpath.suffix.lower()
+    exif_yymmdd: str | None = None
+    kakao_yymmdd: str | None = None
+    doc_text = ""
+    slug = ""
+
+    # 1) 카톡 수신 파일명 감지 (KakaoTalk_20261106_... 또는 파일명에 카톡 포함)
+    if "kakaotalk" in stem.lower() or "카톡" in stem:
+        m_k = re.search(r"20(\d{6})", stem)
+        if m_k:
+            kakao_yymmdd = m_k.group(1)
+        else:
+            try:
+                kakao_yymmdd = datetime.datetime.fromtimestamp(fpath.stat().st_mtime).strftime("%y%m%d")
+            except Exception:
+                kakao_yymmdd = datetime.date.today().strftime("%y%m%d")
+
+    # 2) 이미지 파일인 경우 EXIF 촬영일(DateTimeOriginal=36867, DateTime=306) 추출
+    if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".tif", ".tiff"):
+        try:
+            from PIL import Image
+            with Image.open(fpath) as im:
+                exif = im.getexif()
+                if exif:
+                    dt_raw = str(exif.get(36867) or exif.get(36868) or exif.get(306) or "").strip()
+                    m_ex = re.search(r"20(\d{2})[:.\-/](\d{2})[:.\-/](\d{2})", dt_raw)
+                    if m_ex:
+                        exif_yymmdd = f"{m_ex.group(1)}{m_ex.group(2)}{m_ex.group(3)}"
+        except Exception:
+            pass
+
+    # 3) 일반 문서(.txt, .md, .csv, .json, .html, .xml, .docx, .pdf, .hwp) 본문 첫 날짜 및 제목 추출
+    if ext_low in (".txt", ".md", ".csv", ".json", ".log", ".html", ".xml"):
+        try:
+            doc_text = fpath.read_text(encoding="utf-8", errors="ignore")[:8000]
+        except Exception:
+            pass
+    elif ext_low == ".docx":
+        try:
+            import zipfile
+            with zipfile.ZipFile(fpath, "r") as zf:
+                if "word/document.xml" in zf.namelist():
+                    raw_xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+                    doc_text = re.sub(r"<[^>]+>", " ", raw_xml)[:8000]
+        except Exception:
+            pass
+    elif ext_low in (".pdf", ".hwp"):
+        try:
+            raw_b = fpath.read_bytes()[:65536]
+            doc_text = raw_b.decode("utf-8", errors="ignore") + " " + raw_b.decode("utf-16-le", errors="ignore")
+        except Exception:
+            pass
+
+    # 의미 있는 요약 제목(slug) 생성
+    if doc_text:
+        clean_doc = _PHONE_OR_MONEY_NOISE_REGEX.sub(" ", doc_text)
+        clean_doc = _VALID_DOC_DATE_REGEX.sub(" ", clean_doc)
+        words = [w for w in re.findall(r"[가-힣A-Za-z]{2,10}", clean_doc) if w not in ("작성일", "일자", "날짜", "연락처", "전화번호", "금액")]
+        if words:
+            slug = "_".join(words[:2])[:16]
+
+    if not slug:
+        # 기존 파일명에서 기계식 접두사(IMG_, KakaoTalk_2026... 등) 제거 후 남은 의미 단어가 있으면 보존
+        rem = re.sub(r"^(IMG|DSC|DCIM|PXL|SAM|DJI|Screenshot|KakaoTalk|스캔|scan|문서|캡처)[\s_-]*\d*[\s_-]*\d*", "", stem, flags=re.IGNORECASE).strip("_- ")
+        if rem and not re.fullmatch(r"[\d_-]+", rem):
+            slug = rem[:16]
+        else:
+            slug = "사진" if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".heic") else "문서"
+
+    return exif_yymmdd, kakao_yymmdd, doc_text, slug
+
+
 def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes]) -> None:
     """
-    [⑨번 & 보너스 C] 스샷/웹 이미지 -> 실물 파일(CF_HDROP) 1초 변환 + AI 스마트 파일명 자동 작명
-    - 연속 캡처한 스샷이 2장 이상이면: 1개의 합본 .pdf 파일로 묶어서 변환!
-    - 스샷 1장이거나 웹 이미지 URL이면: 단일 .png 파일로 변환!
+    [①번 — 🏷️ 귀신 라벨러(사진·카톡·문서 날짜별 파일명 자동 정리) & 스샷/웹 이미지 실물 파일(.png/.pdf) 1초 변환]:
+    1) 탐색기에서 파일(사진·카톡사진·문서)을 선택하거나 복사(Ctrl+C)한 상태면:
+       - 직접 찍은 사진(EXIF 보유): `YYMMDD_장소/내용.jpg`
+       - 카톡 수신 사진: `YYMMDD_카톡_내용.jpg`
+       - 일반 문서(전화번호 010-2026-1234·금액 오인 방지): `YYMMDD_내용_제목.ext`
+       형태로 파일명을 즉시 자동 변경(Rename)하고 클립보드에 담아줍니다!
+    2) 스샷 2장 이상이면 합본 .pdf, 1장이면 단일 .png 파일로 변환하며 귀신 라벨러 날짜 규칙으로 자동 작명합니다!
     """
     try:
+        # 0) 탐색기 복사 파일(CF_HDROP) 또는 현재 탐색기 선택 파일이 있으면 [🏷️ 귀신 라벨러] 즉시 실행!
+        target_files = get_clipboard_hdrop_files()
+        if not target_files:
+            try:
+                import sys as _sys_lbl
+                _os_ag_lbl = str(Path(__file__).resolve().parent / "os_agent")
+                if _os_ag_lbl not in _sys_lbl.path and Path(_os_ag_lbl).exists():
+                    _sys_lbl.path.insert(0, _os_ag_lbl)
+                import plugin_ghosti_care_suite as _care_lbl
+                sel_f = _care_lbl.get_explorer_selected_paths_non_destructive()
+                if sel_f:
+                    target_files = [str(x) for x in sel_f if Path(str(x)).is_file()]
+            except Exception:
+                pass
+
+        if target_files:
+            renamed_paths: list[str] = []
+            rename_pairs: list[tuple[str, str]] = []
+            for tf in target_files:
+                p_orig = Path(tf)
+                if not p_orig.exists() or not p_orig.is_file():
+                    continue
+                exif_dt, kakao_dt, doc_txt, slug_txt = _extract_file_date_and_slug_for_labeler(p_orig)
+                is_s_drv = str(p_orig.drive).upper().startswith("S:")
+                res_lbl = format_ghost_labeler_filename(
+                    p_orig.name,
+                    slug_txt,
+                    exif_yymmdd=exif_dt,
+                    kakao_yymmdd=kakao_dt,
+                    ocr_or_doc_text=doc_txt,
+                    is_work_s_drive=is_s_drv,
+                    prefix_only_if_named=True,
+                )
+                new_name = res_lbl.get("labeled_filename") or p_orig.name
+                p_new = p_orig.with_name(new_name)
+                if p_new != p_orig:
+                    idx_dup = 2
+                    while p_new.exists() and p_new.resolve() != p_orig.resolve():
+                        p_new = p_orig.with_name(f"{Path(new_name).stem}_{idx_dup}{p_orig.suffix}")
+                        idx_dup += 1
+                    try:
+                        p_orig.rename(p_new)
+                        renamed_paths.append(str(p_new))
+                        rename_pairs.append((p_orig.name, p_new.name))
+                    except Exception:
+                        renamed_paths.append(str(p_orig))
+                else:
+                    renamed_paths.append(str(p_orig))
+                    rename_pairs.append((p_orig.name, p_orig.name))
+
+            if renamed_paths:
+                set_clipboard_hdrop_files(renamed_paths)
+                first_old, first_new = rename_pairs[0]
+                more_sfx = f" 외 {len(rename_pairs) - 1}건" if len(rename_pairs) > 1 else ""
+                show_ghost_toast(f"🏷️ 귀신 라벨러 완료: {first_old} ➔ {first_new}{more_sfx} (Ctrl+V 첨부 가능)", duration_ms=3400)
+                return
+
         from PIL import Image, ImageGrab
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         tag = _generate_smart_filename_prefix()
+        ctx_now = get_focused_field_context()
+        is_kakao_ctx = ("카카오톡" in ctx_now) or ("kakaotalk" in ctx_now.lower()) or ("카톡" in tag)
+        today_yymmdd = datetime.date.today().strftime("%y%m%d")
+        lbl_info = format_ghost_labeler_filename(
+            f"캡처_{tag}.png",
+            tag,
+            kakao_yymmdd=today_yymmdd if is_kakao_ctx else None,
+            ocr_or_doc_text=ctx_now,
+            prefix_only_if_named=True,
+        )
+        base_labeled_stem = Path(lbl_info.get("labeled_filename", f"{today_yymmdd}_내용_{tag}.png")).stem
 
         # 1) 연속 캡처한 스샷이 2장 이상 쌓여 있는 경우 -> 초고화질(300 DPI + 소형 캡처 2배 업스케일) PDF 1개로 합본 변환!
         if len(recent_png_bytes) >= 2:
@@ -4954,22 +5125,22 @@ def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes]) -> None:
                     scale = 2 if im.width >= 600 else 3
                     im = im.resize((im.width * scale, im.height * scale), Image.Resampling.LANCZOS)
                 pil_imgs.append(im)
-            pdf_path = Path(tempfile.gettempdir()) / f"귀신같이_합본_{tag}_{ts}.pdf"
+            pdf_path = Path(tempfile.gettempdir()) / f"{base_labeled_stem}_합본.pdf"
             pil_imgs[0].save(pdf_path, "PDF", resolution=300.0, quality=100, subsampling=0, save_all=True, append_images=pil_imgs[1:])
             if set_clipboard_hdrop_file(str(pdf_path)):
                 count = len(pil_imgs)
                 recent_png_bytes.clear()
-                show_ghost_toast(f"👻 귀신같이 PDF합본변환 ({count}장)")
+                show_ghost_toast(f"🏷️ 귀신 라벨러·PDF합본 ({pdf_path.name}, {count}장)", duration_ms=3000)
                 return
 
-        # 2) 단일 스샷 이미지 변환
-        out_path = Path(tempfile.gettempdir()) / f"귀신같이_{tag}_{ts}.png"
+        # 2) 단일 스샷 이미지 변환 (귀신 라벨러 날짜 규칙 적용)
+        out_path = Path(tempfile.gettempdir()) / f"{base_labeled_stem}.png"
         clip_obj = ImageGrab.grabclipboard()
         if isinstance(clip_obj, Image.Image):
             clip_obj.save(out_path, "PNG")
             if set_clipboard_hdrop_file(str(out_path)):
                 recent_png_bytes.clear()
-                show_ghost_toast("👻 귀신같이 파일변환")
+                show_ghost_toast(f"🏷️ 귀신 라벨러·파일변환 ({out_path.name})", duration_ms=3000)
                 return
 
         # 3) 웹 이미지 URL 다운로드 후 파일 변환
@@ -4979,12 +5150,12 @@ def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes]) -> None:
             with urllib.request.urlopen(req, timeout=5) as resp:
                 out_path.write_bytes(resp.read())
             if set_clipboard_hdrop_file(str(out_path)):
-                show_ghost_toast("👻 귀신같이 파일변환")
+                show_ghost_toast(f"🏷️ 귀신 라벨러·파일변환 ({out_path.name})", duration_ms=3000)
                 return
 
-        show_ghost_toast("👻 귀신같이 파일변환 (먼저 스샷이나 이미지를 복사해주세요)")
+        show_ghost_toast("🏷️ 귀신 라벨러: 먼저 탐색기에서 파일(사진·문서)을 복사(Ctrl+C)하거나 스샷을 찍어주세요", duration_ms=3200)
     except Exception:
-        show_ghost_toast("👻 귀신같이 파일변환")
+        show_ghost_toast("🏷️ 귀신 라벨러·파일변환")
 
 
 def superpower_fixed_snippet(slot_num: int, daemon_set_cb) -> None:
@@ -5227,7 +5398,7 @@ def main() -> None:
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [1] 파일·PDF변환🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
+                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🏷️파일·라벨러(PDF)🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
                 duration_ms=6500,
             )
         elif len(recent_unpasted) >= 2 and not ("\n" in (live_clip_val or "") and not has_excel_clipboard_format()):
@@ -5235,14 +5406,14 @@ def main() -> None:
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [1] 파일·PDF변환🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
+                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🏷️파일·라벨러(PDF)🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
                 duration_ms=6500,
             )
         else:
             seq_queue.clear()
             arm_sub_hotkeys()
             show_ghost_toast(
-                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [1] 파일·PDF변환🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
+                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [1] 🏷️파일·라벨러(PDF)🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
                 duration_ms=6500,
             )
 
@@ -5657,7 +5828,7 @@ def main() -> None:
                     empty_os_clipboard()
                     last_seq_num = u32.GetClipboardSequenceNumber()
                     close_ghost_toast()
-                if menu_armed and (now > menu_armed_until or ((now - last_summon_ts) > 0.6 and _CURRENT_OPEN_UI_MODE != "ui1")):
+                if menu_armed and now > menu_armed_until:
                     disarm_sub_hotkeys()
 
                 # 귀신창이 열려 있을 때(menu_armed) UWP 계산기 등이 WM_HOTKEY를 가로채더라도 하드웨어 키 폴링으로 숫자 2~9 즉시 발동!
