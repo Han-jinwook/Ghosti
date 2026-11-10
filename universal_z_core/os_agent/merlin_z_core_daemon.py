@@ -362,6 +362,16 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
+            if act.lower() in ("deep-uninstall-scan", "deep-uninstall-execute"):
+                if self._reject_untrusted():
+                    return
+                try:
+                    import plugin_ghosti_care_suite  # Lazy-Import
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request(act.lower(), body))
+                    return
+                except Exception as exc:
+                    self._send_json({"ok": False, "error": str(exc)}, status=200)
+                    return
             mutating_set = getattr(plugin_ghosti_os, "MUTATING_ACTIONS", set())
             if act.lower() in mutating_set and self._reject_untrusted():
                 return
@@ -523,6 +533,16 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
+            if act.lower() in ("deep-uninstall-scan", "deep-uninstall-execute"):
+                if self._reject_untrusted():
+                    return
+                try:
+                    import plugin_ghosti_care_suite  # Lazy-Import
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request(act.lower(), body))
+                    return
+                except Exception as exc:
+                    self._send_json({"ok": False, "error": str(exc)}, status=200)
+                    return
             mutating_set = getattr(plugin_ghosti_os, "MUTATING_ACTIONS", set())
             if act.lower() in mutating_set and self._reject_untrusted():
                 return

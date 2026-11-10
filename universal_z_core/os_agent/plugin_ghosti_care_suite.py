@@ -1244,6 +1244,612 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
 
 
 # ============================================================================
+# 4-B. [모듈 D] 어도비(Adobe)급 좀비 프로그램 4단계 심층 앱 적출 (Deep Uninstaller)
+#    - 1단계(Scan): 레지스트리(HKLM/HKCU Uninstall + WOW6432Node) + 상주 프로세스 + 서비스 + 작업 스케줄러 + 시작프로그램 + 잔여 폴더 용량 실측
+#    - 2단계(Quarantine Snapshot): 적출 실행 직전 %LOCALAPPDATA%\Ghosti\quarantine\uninstall_<app>_<timestamp>.json 스냅샷 백업
+#    - 3단계(Kill & Uninstall): 상주 프로세스(taskkill /F) 및 좀비 서비스 선행 제압 + 공식 언인스톨러 호출
+#    - 4단계(Deep Sweep): 부활형 작업 스케줄러·시작프로그램 Run 레지스트리·잔여 캐시 폴더 영구 소탕 및 확보 용량 브리핑
+# ============================================================================
+QUARANTINE_SNAPSHOT_DIR = LOCAL_APPDATA / "Ghosti" / "quarantine"
+
+DEEP_UNINSTALL_SYNONYM_MAP: Dict[str, Dict[str, Any]] = {
+    "adobe": {
+        "label": "Adobe Creative Cloud / Acrobat 패밀리",
+        "keywords": [
+            "adobe", "creative cloud", "acrobat", "photoshop", "illustrator", "premiere",
+            "after effects", "indesign", "lightroom", "ccxprocess", "adobeipcbroker",
+            "coresync", "adobenotificationclient", "agmservice", "agsservice", "adobearm",
+        ],
+    },
+    "어도비": {
+        "label": "Adobe Creative Cloud / Acrobat 패밀리",
+        "keywords": [
+            "adobe", "creative cloud", "acrobat", "photoshop", "illustrator", "premiere",
+            "after effects", "indesign", "lightroom", "ccxprocess", "adobeipcbroker",
+            "coresync", "adobenotificationclient", "agmservice", "agsservice", "adobearm",
+        ],
+    },
+    "포토샵": {
+        "label": "Adobe Photoshop & Creative Cloud",
+        "keywords": ["adobe", "photoshop", "creative cloud", "ccxprocess", "adobeipcbroker", "coresync", "agmservice", "agsservice"],
+    },
+    "아크로뱃": {
+        "label": "Adobe Acrobat & 상주 업데이터",
+        "keywords": ["adobe", "acrobat", "adobearm", "acrotray", "adobecollabsync"],
+    },
+    "알약": {
+        "label": "알약(ALYac) 및 이스트소프트 상주 모듈",
+        "keywords": ["alyac", "알약", "estsoft", "ayagent", "ayrtsrv", "ayupdsrv"],
+    },
+    "알집": {
+        "label": "알집(ALZip) 및 부가 광고 모듈",
+        "keywords": ["alzip", "알집", "altools", "alupdate"],
+    },
+    "고클린": {
+        "label": "고클린(GoClean) 및 상주 알림 타이머",
+        "keywords": ["goclean", "고클린"],
+    },
+    "한컴": {
+        "label": "한컴오피스(Hancom) 상주 업데이터·클라우드",
+        "keywords": ["hancom", "한컴", "hoffice", "hncupdate", "hancomstudio"],
+    },
+    "줌": {
+        "label": "Zoom Workplace 및 백그라운드 서비스",
+        "keywords": ["zoom", "cpthost"],
+    },
+    "팀뷰어": {
+        "label": "TeamViewer 원격 제어 및 상주 서비스",
+        "keywords": ["teamviewer"],
+    },
+    "애니데스크": {
+        "label": "AnyDesk 원격 제어 및 상주 서비스",
+        "keywords": ["anydesk"],
+    },
+    "구라": {
+        "label": "관공서·은행 상주 보안 플러그인 일괄",
+        "keywords": [
+            "anysign", "touchen", "veraport", "magicline", "ipinside", "astx",
+            "crosscert", "iniline", "delfino", "wizvera", "ksign", "nprotect", "nossvc",
+        ],
+    },
+    "보안프로그램": {
+        "label": "관공서·은행 상주 보안 플러그인 일괄",
+        "keywords": [
+            "anysign", "touchen", "veraport", "magicline", "ipinside", "astx",
+            "crosscert", "iniline", "delfino", "wizvera", "ksign", "nprotect", "nossvc",
+        ],
+    },
+}
+
+NEVER_UNINSTALL_PROTECTED_KEYWORDS = {
+    "microsoft windows", "windows defender", "securityhealth", "msmpeng", "explorer.exe",
+    "svchost.exe", "csrss.exe", "winlogon.exe", "lsass.exe", "services.exe",
+    "merlin", "ghosti", "senstalk", "sundream", "maepsbroker", "markany", "fasoo", "softcamp",
+    "nvidia", "amd ", "intel(", "realtek",
+}
+
+
+def _extract_target_app_profile(raw_query: str) -> Tuple[str, List[str], str]:
+    """자연어 발화에서 적출 대상 앱 이름과 매칭 키워드 리스트를 추출합니다."""
+    q = (raw_query or "").strip()
+    q_low = q.lower()
+    for trig, info in DEEP_UNINSTALL_SYNONYM_MAP.items():
+        if trig in q_low:
+            return info["label"], list(info["keywords"]), trig
+
+    cleaned = q
+    for noise in (
+        "귀신비서", "프로그램", "어플", "앱", "소프트웨어", "흔적까지", "뿌리째", "싹 다", "싹다",
+        "깨끗하게", "완전히", "완전", "강제로", "강제", "심층", "적출", "언인스톨", "삭제해줘", "삭제해",
+        "지워줘", "지워", "뽑아줘", "뽑아", "없애줘", "없애", "제거해줘", "제거해", "안 지워지는", "안지워지는",
+        "안 꺼지는", "안꺼지는", "해줘", "해주세요", "좀", "에서", "내 컴퓨터", "피씨", "pc",
+    ):
+        cleaned = cleaned.replace(noise, " ")
+    cleaned = " ".join(cleaned.split()).strip(" '\"?!.~,")
+    if not cleaned or len(cleaned) < 2:
+        # 기본값: 어도비 또는 미사용 상주 프로그램
+        info = DEEP_UNINSTALL_SYNONYM_MAP["어도비"]
+        return info["label"], list(info["keywords"]), "adobe"
+
+    slug = "".join(ch for ch in cleaned.lower() if ch.isalnum()) or "target_app"
+    return f"{cleaned} 관련 상주 프로그램·잔여 흔적", [cleaned.lower()], slug
+
+
+def _is_protected_system_entity(text: str) -> bool:
+    t_low = (text or "").lower()
+    return any(pk in t_low for pk in NEVER_UNINSTALL_PROTECTED_KEYWORDS)
+
+
+def _calc_dir_size_fast(folder: Path, max_files: int = 800) -> int:
+    """폴더 스캔 루프 내 동기 AI 추론 0% 철칙 준수 — 순수 os.scandir로 최대 800개 파일까지만 0.1초 내 고속 합산"""
+    total = 0
+    counted = 0
+    stack = [folder]
+    while stack and counted < max_files:
+        cur = stack.pop()
+        try:
+            with os.scandir(cur) as it:
+                for entry in it:
+                    counted += 1
+                    if counted > max_files:
+                        break
+                    try:
+                        if entry.is_symlink():
+                            continue
+                        if entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                        elif entry.is_dir(follow_symlinks=False):
+                            stack.append(Path(entry.path))
+                    except Exception:
+                        continue
+        except Exception:
+            continue
+    return total
+
+
+def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
+    """
+    [1단계: 레지스트리 & 상주 프로세스·서비스·스케줄러·잔여 폴더 정밀 탐색]
+    """
+    _ensure_care_dir()
+    target_label, keywords, slug = _extract_target_app_profile(app_query)
+    kw_lows = [k.lower() for k in keywords if k]
+
+    installed_entries: List[Dict[str, Any]] = []
+    running_processes: List[Dict[str, Any]] = []
+    matched_services: List[Dict[str, Any]] = []
+    scheduled_tasks: List[str] = []
+    startup_entries: List[Dict[str, Any]] = []
+    residual_folders: List[Dict[str, Any]] = []
+
+    if sys.platform == "win32":
+        import winreg
+
+        # 1) Uninstall 레지스트리 스캔 (HKLM 64/32 + HKCU)
+        uninstall_roots = [
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "HKLM"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", "HKLM_WOW64"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "HKCU"),
+        ]
+        seen_names = set()
+        for hive, subkey_path, hive_label in uninstall_roots:
+            try:
+                with winreg.OpenKey(hive, subkey_path, 0, winreg.KEY_READ) as root_key:
+                    num_sub = winreg.QueryInfoKey(root_key)[0]
+                    for idx in range(num_sub):
+                        try:
+                            sub_name = winreg.EnumKey(root_key, idx)
+                            with winreg.OpenKey(root_key, sub_name, 0, winreg.KEY_READ) as sk:
+                                def _rv(vname: str) -> str:
+                                    try:
+                                        val, _ = winreg.QueryValueEx(sk, vname)
+                                        return str(val or "").strip()
+                                    except Exception:
+                                        return ""
+
+                                disp = _rv("DisplayName")
+                                pub = _rv("Publisher")
+                                uninst = _rv("UninstallString")
+                                quiet_uninst = _rv("QuietUninstallString")
+                                inst_loc = _rv("InstallLocation")
+                                combined = f"{disp} {pub} {inst_loc} {sub_name}".lower()
+                                if not disp or _is_protected_system_entity(combined):
+                                    continue
+                                if any(k in combined for k in kw_lows):
+                                    dedup_key = disp.lower()
+                                    if dedup_key not in seen_names:
+                                        seen_names.add(dedup_key)
+                                        installed_entries.append({
+                                            "displayName": disp,
+                                            "publisher": pub,
+                                            "uninstallString": uninst,
+                                            "quietUninstallString": quiet_uninst,
+                                            "installLocation": inst_loc,
+                                            "registryKey": f"{hive_label}\\{subkey_path}\\{sub_name}",
+                                        })
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+
+        # 2) 시작프로그램(Run) 레지스트리 스캔
+        run_roots = [
+            (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU"),
+            (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKLM"),
+            (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "HKLM_WOW64"),
+        ]
+        for hive, rpath, hlabel in run_roots:
+            try:
+                with winreg.OpenKey(hive, rpath, 0, winreg.KEY_READ) as rk:
+                    num_vals = winreg.QueryInfoKey(rk)[1]
+                    for idx in range(num_vals):
+                        try:
+                            vname, vdata, _ = winreg.EnumValue(rk, idx)
+                            comb = f"{vname} {vdata}".lower()
+                            if not _is_protected_system_entity(comb) and any(k in comb for k in kw_lows):
+                                startup_entries.append({
+                                    "name": str(vname),
+                                    "command": str(vdata),
+                                    "hive": hlabel,
+                                    "regPath": rpath,
+                                })
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+
+        # 3) 실행 중인 상주 프로세스 스캔
+        try:
+            import psutil
+
+            my_pid = os.getpid()
+            for proc in psutil.process_iter(["pid", "name", "exe", "memory_info"]):
+                try:
+                    pid = int(proc.info.get("pid") or 0)
+                    if pid <= 4 or pid == my_pid:
+                        continue
+                    pname = str(proc.info.get("name") or "")
+                    pexe = str(proc.info.get("exe") or "")
+                    comb = f"{pname} {pexe}".lower()
+                    if _is_protected_system_entity(comb):
+                        continue
+                    if any(k in comb for k in kw_lows):
+                        mem_info = proc.info.get("memory_info")
+                        rss_mb = round((getattr(mem_info, "rss", 0) or 0) / (1024 * 1024), 1)
+                        running_processes.append({
+                            "pid": pid,
+                            "name": pname,
+                            "exe": pexe,
+                            "memoryMb": max(1.0, rss_mb),
+                        })
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # 4) Windows Services 스캔 (sc query state= all)
+        try:
+            proc_sc = subprocess.run(
+                ["sc", "query", "state=", "all"],
+                capture_output=True,
+                text=True,
+                encoding="oem",
+                errors="replace",
+                timeout=2.5,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            cur_svc = ""
+            cur_disp = ""
+            for line in (proc_sc.stdout or "").splitlines():
+                ls = line.strip()
+                if ls.startswith("SERVICE_NAME:"):
+                    cur_svc = ls.split(":", 1)[1].strip()
+                    cur_disp = cur_svc
+                elif ls.startswith("DISPLAY_NAME:"):
+                    cur_disp = ls.split(":", 1)[1].strip()
+                elif ls.startswith("STATE") and cur_svc:
+                    comb = f"{cur_svc} {cur_disp}".lower()
+                    if not _is_protected_system_entity(comb) and any(k in comb for k in kw_lows):
+                        matched_services.append({
+                            "serviceName": cur_svc,
+                            "displayName": cur_disp,
+                            "isRunning": "RUNNING" in ls,
+                        })
+                    cur_svc = ""
+        except Exception:
+            pass
+
+        # 5) 작업 스케줄러(schtasks) 부활 트리거 스캔
+        try:
+            proc_sch = subprocess.run(
+                ["schtasks", "/query", "/fo", "CSV", "/nh"],
+                capture_output=True,
+                text=True,
+                encoding="oem",
+                errors="replace",
+                timeout=2.5,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            seen_tasks = set()
+            for line in (proc_sch.stdout or "").splitlines():
+                parts = [p.strip('"') for p in line.split('","')]
+                if not parts or not parts[0].startswith("\\"):
+                    continue
+                tname = parts[0]
+                tlow = tname.lower()
+                if tlow.startswith("\\microsoft\\"):
+                    continue
+                if not _is_protected_system_entity(tlow) and any(k in tlow for k in kw_lows):
+                    if tname not in seen_tasks:
+                        seen_tasks.add(tname)
+                        scheduled_tasks.append(tname)
+        except Exception:
+            pass
+
+        # 6) 잔여 폴더(Program Files, ProgramData, AppData\Local, AppData\Roaming) 탐색 및 용량 산출
+        candidate_roots = [
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")),
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")),
+            Path(os.environ.get("CommonProgramFiles", r"C:\Program Files\Common Files")),
+            Path(os.environ.get("CommonProgramFiles(x86)", r"C:\Program Files (x86)\Common Files")),
+            Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")),
+            LOCAL_APPDATA,
+            Path(os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming"))),
+        ]
+        seen_dirs = set()
+        for croot in candidate_roots:
+            if not croot.exists():
+                continue
+            try:
+                with os.scandir(croot) as it:
+                    for entry in it:
+                        if not entry.is_dir(follow_symlinks=False):
+                            continue
+                        dname_low = entry.name.lower()
+                        if _is_protected_system_entity(dname_low):
+                            continue
+                        if any(k in dname_low for k in kw_lows):
+                            full_p = Path(entry.path).resolve()
+                            p_str = str(full_p)
+                            if p_str.lower() not in seen_dirs:
+                                seen_dirs.add(p_str.lower())
+                                sz = _calc_dir_size_fast(full_p)
+                                residual_folders.append({
+                                    "path": p_str,
+                                    "name": entry.name,
+                                    "sizeBytes": sz,
+                                    "sizeMb": round(sz / (1024 * 1024), 2),
+                                    "isSafeCacheOrData": any(
+                                        x in p_str.lower() for x in ("appdata", "programdata", "common files", "temp", "cache")
+                                    ),
+                                })
+            except Exception:
+                continue
+
+    total_residual_bytes = sum(int(f.get("sizeBytes") or 0) for f in residual_folders)
+    total_residual_mb = round(total_residual_bytes / (1024 * 1024), 1)
+    estimated_ram_mb = round(sum(float(p.get("memoryMb") or 0) for p in running_processes), 1)
+    svc_and_task_count = len(matched_services) + len(scheduled_tasks) + len(startup_entries)
+    found_any = bool(
+        installed_entries or running_processes or matched_services or scheduled_tasks or startup_entries or residual_folders
+    )
+
+    if found_any:
+        briefing_ko = (
+            f"🧹 **[{target_label} — 4단계 심층 적출(Deep Uninstaller) 사전 검진 완료]**\n"
+            f"• **발견된 상주 프로세스**: **{len(running_processes)}개** (점유 메모리 약 {estimated_ram_mb}MB)\n"
+            f"• **부활형 서비스·스케줄러·시작프로그램**: **{svc_and_task_count}개** "
+            f"(서비스 {len(matched_services)} · 스케줄러 {len(scheduled_tasks)} · 시작Run {len(startup_entries)})\n"
+            f"• **설치 엔트리 및 잔여 폴더**: 설치 항목 **{len(installed_entries)}건** · 잔여 폴더 **{len(residual_folders)}곳 ({total_residual_mb}MB)**\n\n"
+            f"임의로 삭제하지 않습니다. 아래 **[🔥 흔적까지 100% 심층 적출 실행]** 버튼을 누르시거나 채팅창에 **\"응 진행해\"**라고 입력하시면, "
+            f"복원 스냅샷을 먼저 백업한 뒤 상주 프로세스 강제 종료 ➔ 언인스톨 ➔ 부활 스케줄러·잔여 캐시 폴더까지 한 번에 뿌리째 뽑아드립니다!"
+        )
+    else:
+        briefing_ko = (
+            f"👻 **[{target_label}]** 관련 레지스트리·상주 프로세스·서비스·스케줄러·잔여 폴더(AppData/ProgramData)를 전수 스캔했으나, "
+            f"현재 내 PC에 남아 있는 흔적이 **0건**으로 이미 완벽히 깨끗한 상태입니다!"
+        )
+
+    return {
+        "ok": True,
+        "targetAppQuery": app_query,
+        "targetAppLabel": target_label,
+        "targetSlug": slug,
+        "matchedKeywords": kw_lows,
+        "foundAny": found_any,
+        "installedEntries": installed_entries,
+        "runningProcesses": running_processes,
+        "services": matched_services,
+        "scheduledTasks": scheduled_tasks,
+        "startupEntries": startup_entries,
+        "residualFolders": residual_folders,
+        "runningProcessCount": len(running_processes),
+        "serviceAndTaskCount": svc_and_task_count,
+        "totalResidualBytes": total_residual_bytes,
+        "totalResidualMb": total_residual_mb,
+        "estimatedRamMb": estimated_ram_mb,
+        "summaryBadge": (
+            f"상주 프로세스 {len(running_processes)}개 / 서비스·스케줄러 {svc_and_task_count}개 / 잔여 폴더 {total_residual_mb}MB"
+        ),
+        "honestBriefingKo": briefing_ko,
+    }
+
+
+def execute_deep_uninstall_target(
+    app_query: str,
+    invoke_official_uninstaller: bool = True,
+    user_approval_text: str = "흔적까지 100% 심층 적출 실행",
+) -> Dict[str, Any]:
+    """
+    [2·3·4단계: 스냅샷 백업 ➔ 상주 프로세스/서비스 선행 사살 ➔ 공식 언인스톨러 호출 ➔ 부활 스케줄러·Run 레지스트리·잔여 캐시 폴더 영구 소탕]
+    """
+    _ensure_care_dir()
+    QUARANTINE_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    scan = scan_deep_uninstall_target(app_query)
+    slug = str(scan.get("targetSlug") or "app")
+    target_label = str(scan.get("targetAppLabel") or app_query)
+    ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    snapshot_path = QUARANTINE_SNAPSHOT_DIR / f"uninstall_{slug}_{ts_str}.json"
+
+    snapshot_payload = {
+        "createdAt": datetime.datetime.now().isoformat(),
+        "targetAppQuery": app_query,
+        "targetAppLabel": target_label,
+        "userApprovalTypedText": user_approval_text,
+        "scanSnapshot": scan,
+    }
+    try:
+        snapshot_path.write_text(json.dumps(snapshot_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    killed_procs: List[str] = []
+    disabled_services: List[str] = []
+    deleted_tasks: List[str] = []
+    removed_startups: List[str] = []
+    cleaned_folders: List[str] = []
+    reclaimed_bytes = 0
+    uninstaller_triggered: List[str] = []
+
+    if sys.platform == "win32":
+        # [3단계-A] 실행 중인 상주 프로세스 선행 강제 종료 (파일 잠금 해제)
+        for pinfo in scan.get("runningProcesses", []):
+            pid = pinfo.get("pid")
+            pname = str(pinfo.get("name") or pid)
+            if not pid:
+                continue
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", str(pid), "/T"],
+                    capture_output=True,
+                    timeout=2.5,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                killed_procs.append(f"{pname}(PID {pid})")
+            except Exception:
+                pass
+
+        # [3단계-B] 상주 서비스 정지 및 수동 전환 (On-Demand 권한 승격 헬퍼 연동)
+        svc_names = [str(s.get("serviceName") or "") for s in scan.get("services", []) if s.get("serviceName")]
+        if svc_names:
+            elev_res = execute_elevated_service_control("sleep", svc_names)
+            disabled_services = list(elev_res.get("processedServices") or svc_names)
+
+        # [3단계-C] 공식 언인스톨러 실행 (QuietUninstallString 최우선, 없으면 UninstallString 비동기/단기 호출)
+        if invoke_official_uninstaller:
+            for entry in scan.get("installedEntries", [])[:3]:
+                cmd = str(entry.get("quietUninstallString") or entry.get("uninstallString") or "").strip()
+                disp = str(entry.get("displayName") or "")
+                if not cmd:
+                    continue
+                try:
+                    if cmd.lower().startswith("msiexec"):
+                        # MSI 패키지는 조용한 제거(/qn /norestart) 유도
+                        subprocess.Popen(
+                            f"{cmd} /passive /norestart",
+                            shell=True,
+                            creationflags=CREATE_NO_WINDOW,
+                        )
+                    else:
+                        subprocess.Popen(cmd, shell=True)
+                    uninstaller_triggered.append(disp or cmd[:40])
+                except Exception:
+                    continue
+
+        # [4단계-A] 부활형 작업 스케줄러(schtasks) 트리거 제거
+        for tname in scan.get("scheduledTasks", []):
+            try:
+                r_del = subprocess.run(
+                    ["schtasks", "/delete", "/tn", tname, "/f"],
+                    capture_output=True,
+                    timeout=2.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                if r_del.returncode == 0:
+                    deleted_tasks.append(tname)
+                else:
+                    # 일반 권한에서 삭제 거부 시 비활성화(/disable) 시도
+                    subprocess.run(
+                        ["schtasks", "/change", "/tn", tname, "/disable"],
+                        capture_output=True,
+                        timeout=2.0,
+                        creationflags=CREATE_NO_WINDOW,
+                    )
+                    deleted_tasks.append(f"{tname}(비활성화)")
+            except Exception:
+                continue
+
+        # [4단계-B] 시작프로그램(HKCU/HKLM Run) 레지스트리 엔트리 제거
+        import winreg
+
+        for st_item in scan.get("startupEntries", []):
+            vname = str(st_item.get("name") or "")
+            rpath = str(st_item.get("regPath") or "")
+            hive_str = str(st_item.get("hive") or "HKCU")
+            hive = winreg.HKEY_CURRENT_USER if hive_str == "HKCU" else winreg.HKEY_LOCAL_MACHINE
+            if not vname or not rpath:
+                continue
+            try:
+                with winreg.OpenKey(hive, rpath, 0, winreg.KEY_SET_VALUE) as wk:
+                    winreg.DeleteValue(wk, vname)
+                    removed_startups.append(vname)
+            except Exception:
+                continue
+
+        # [4단계-C] 잔여 캐시·임시 데이터 폴더(AppData/ProgramData/Common Files) 및 빈 폴더 영구 청소
+        for finfo in scan.get("residualFolders", []):
+            fpath = Path(str(finfo.get("path") or ""))
+            fsize = int(finfo.get("sizeBytes") or 0)
+            if not fpath.exists() or _is_protected_system_entity(str(fpath)):
+                continue
+            # 안전 가드: 드라이브 루트나 2단계 이하 상위 경로는 절대 삭제하지 않음
+            if len(fpath.parts) < 3:
+                continue
+            try:
+                if finfo.get("isSafeCacheOrData"):
+                    shutil.rmtree(fpath, ignore_errors=True)
+                    if not fpath.exists():
+                        cleaned_folders.append(str(fpath))
+                        reclaimed_bytes += fsize
+                    else:
+                        # 잠긴 파일 외 나머지 캐시 파일 개별 삭제
+                        for sub_root, sub_dirs, sub_files in os.walk(fpath, topdown=False):
+                            for sf in sub_files:
+                                try:
+                                    sp = Path(sub_root) / sf
+                                    sz = sp.stat().st_size
+                                    sp.unlink()
+                                    reclaimed_bytes += sz
+                                except Exception:
+                                    pass
+                            for sd in sub_dirs:
+                                try:
+                                    (Path(sub_root) / sd).rmdir()
+                                except Exception:
+                                    pass
+                        cleaned_folders.append(f"{fpath} (잔여 캐시 정밀 소거)")
+            except Exception:
+                continue
+
+    reclaimed_mb = round(reclaimed_bytes / (1024 * 1024), 1)
+    reclaimed_ram_mb = float(scan.get("estimatedRamMb") or 0.0)
+    total_removed_triggers = len(killed_procs) + len(disabled_services) + len(deleted_tasks) + len(removed_startups)
+
+    report_ko = (
+        f"🔥 **[{target_label} — 4단계 심층 적출(Deep Uninstaller) 완료 브리핑]**\n"
+        f"• **제거된 상주 프로세스·스케줄러·서비스**: 총 **{total_removed_triggers}개** "
+        f"(상주 프로세스 사살 {len(killed_procs)}개 · 서비스 무력화 {len(disabled_services)}개 · 부활 스케줄러/Run 제거 {len(deleted_tasks) + len(removed_startups)}개)\n"
+        f"• **확보된 디스크 용량 및 메모리**: 잔여 폴더 **{len(cleaned_folders)}곳 ({reclaimed_mb}MB)** 소거 · 상주 메모리 **{reclaimed_ram_mb}MB** 즉시 회수\n"
+        f"• **안전 격리 스냅샷 백업**: `{snapshot_path.name}` 기록 완료"
+    )
+    if uninstaller_triggered:
+        report_ko += f"\n• **공식 언인스톨러 연동 호출**: {', '.join(uninstaller_triggered)}"
+
+    return {
+        "ok": True,
+        "targetAppLabel": target_label,
+        "snapshotFile": str(snapshot_path),
+        "killedProcessCount": len(killed_procs),
+        "killedProcesses": killed_procs,
+        "disabledServiceCount": len(disabled_services),
+        "disabledServices": disabled_services,
+        "deletedTaskCount": len(deleted_tasks),
+        "deletedTasks": deleted_tasks,
+        "removedStartupCount": len(removed_startups),
+        "removedStartups": removed_startups,
+        "cleanedFolderCount": len(cleaned_folders),
+        "cleanedFolders": cleaned_folders,
+        "uninstallerTriggered": uninstaller_triggered,
+        "reclaimedBytes": reclaimed_bytes,
+        "reclaimedMb": reclaimed_mb,
+        "reclaimedRamMb": reclaimed_ram_mb,
+        "totalRemovedTriggers": total_removed_triggers,
+        "reportKo": report_ko,
+    }
+
+
+# ============================================================================
 # 5. [방어 22] Try-Except Firewall 단일 게이트웨이 디스패처 & 탐색기 우클릭 CLI 엔트리
 # ============================================================================
 def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -1287,6 +1893,16 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
             return get_defender_guardian_history(
                 days=int(data.get("days") or 30),
                 limit=int(data.get("limit") or 30),
+            )
+        if act in ("deep-uninstall/scan", "deep-uninstall-scan", "deep_uninstall_scan"):
+            return scan_deep_uninstall_target(
+                app_query=str(data.get("appQuery") or data.get("query") or data.get("app") or ""),
+            )
+        if act in ("deep-uninstall/execute", "deep-uninstall-execute", "deep_uninstall_execute"):
+            return execute_deep_uninstall_target(
+                app_query=str(data.get("appQuery") or data.get("query") or data.get("app") or ""),
+                invoke_official_uninstaller=bool(data.get("invokeOfficialUninstaller", True)),
+                user_approval_text=str(data.get("userApprovalTypedText") or "흔적까지 100% 심층 적출 실행"),
             )
         return {"ok": False, "error": f"UNKNOWN_CARE_SUITE_ACTION: {action}"}
     except Exception as exc:

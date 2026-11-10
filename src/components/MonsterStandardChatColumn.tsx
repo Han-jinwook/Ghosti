@@ -364,6 +364,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           (m.cardKind === 'PC_SPEC_CONSULTATION' && m.pcSpecPayload && !m.pcSpecPayload.bloatwareCleaned) ||
           (m.cardKind === 'DEVICE_REPAIR_GATE' && m.deviceRepairPayload && !m.deviceRepairPayload.executed) ||
           (m.cardKind === 'WEEKLY_CARE_BRIEFING' && m.proactiveCareBriefing && !m.proactiveCareBriefing.executed) ||
+          (m.cardKind === 'DEEP_UNINSTALL_GATE' && m.deepUninstallPayload && !m.deepUninstallPayload.executed) ||
           m.cardKind === 'RESTORE_POINTS_LIST'
       );
     const isDirectCareOrStatusCommand =

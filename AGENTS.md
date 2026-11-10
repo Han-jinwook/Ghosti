@@ -43720,3 +43720,13 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
    - Z-코어 업데이트 완료 즉시 python d:\Ghosti\universal_z_core\deploy_z_core_cluster.py를 실행하여:
      - **1호기(로컬)**: 시작프로그램 레지스트리 자동실행(MerlinZCoreDaemon) 등록 + 데몬 교체(--replace) + http://127.0.0.1:5199/api/care/status 헬스체크.
      - **4호기(원격 100.114.100.24)**: 마스터키(C:\Users\chichi\.ssh\id_ai_master) 기반 SCP 전수 복사 + 기존 5199 프로세스 교체 + 스케줄러(StartMerlinZCore5199) 무간섭 GUI 기동 + SSH curl 헬스체크까지 100% 무인 완결합니다.
+
+
+---
+
+### 🚨 [전사 엄중 경고 및 영구 철칙: 보조 데몬·플러그인 내 ONNX/AI 모델 중복 로드 영구 금지 및 폴더 스캔 루프 내 동기 추론 금지 (2026-11-10 제정)]
+1. **Z-코어 보조 데몬·플러그인 내 ONNX/AI 모델(`InferenceSession`, `onnxruntime`, `session.run`) 중복 로드 영구 금지**:
+   - `universal_z_core/` 내의 보조 데몬 및 서브 플러그인(`seq_paste_daemon.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_os.py`, `plugin_ghosti_superpowers.py` 등)에서 200MB급 ONNX 모델(`onnxruntime.InferenceSession`)이나 무거운 AI 가중치를 직접 메모리에 로드하는 행위를 **영구 금지**합니다.
+   - 보조 데몬에서 한영 오타 검증이나 경량 유사도가 필요한 경우 오직 정적 사전(`tokenizer.json`) 또는 0바이트 문자 N-gram 해시만 사용하여 평시 메모리 25MB 이하·CPU 0.0%를 엄격히 유지합니다.
+2. **디스크/폴더 스캔 루프(`os.scandir`, `os.walk`, `rglob`) 및 UI 이벤트 핸들러 내 동기 추론(Synchronous Inference) 절대 금지**:
+   - 폴더·파일 스캔 루프나 단축키/마우스 훅/UI 스레드 내부에서 `embed()`, `session.run()` 등 무거운 동기 AI 추론을 호출하여 CPU 60~100% 폭주 및 UI 프리징(Not Responding)을 유발하는 코드를 절대 작성하지 않습니다.

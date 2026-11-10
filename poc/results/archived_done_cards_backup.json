@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-09T14:36:32.507728",
+  "updated_at": "2026-11-10T11:13:07.165999",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -890,6 +890,22 @@
       "last_edited_time": "2026-11-09T03:51:00.000Z",
       "url": "https://app.notion.com/p/413f9ffd2c1d809ebc17d6ba13e00fd2",
       "archived_at": "2026-11-09T14:36:32.507591"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-8189-ac6b-c1d44ea27bd1",
+      "title": "🎯 [귀신같이] 게스트 첫 입장 내 컴퓨터 연결 클릭 시 로그인 -> Z-코어 연결 모달 자동 바톤터치 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-09T03:57:00.000Z",
+      "url": "https://app.notion.com/p/Z-410f9ffd2c1d8189ac6bc1d44ea27bd1",
+      "archived_at": "2026-11-10T11:13:07.165806"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-80cb-a23d-ca833a195d8d",
+      "title": "🎯 [귀신같이] 작업표시줄 숨겨진 아이콘에서 Z코어가 여러개 뜨는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-09T03:54:00.000Z",
+      "url": "https://app.notion.com/p/Z-410f9ffd2c1d80cba23dca833a195d8d",
+      "archived_at": "2026-11-10T11:13:07.165816"
     }
   ]
 }

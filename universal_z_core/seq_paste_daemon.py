@@ -306,14 +306,8 @@ class Gemma2LightweightEngine:
                                 for ch in clean_k:
                                     self.ko_chars.add(ch)
 
-                    onnx_path = model_dir / "onnx" / "model_quantized.onnx"
-                    if not onnx_path.exists():
-                        onnx_path = model_dir / "onnx" / "model_q4.onnx"
-                    if onnx_path.exists():
-                        import numpy as np
-                        import onnxruntime as ort
-                        self.np = np
-                        self.session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+                    # [초경량 데몬 철칙]: seq_paste_daemon.py에서는 200MB ONNX 세션을 중복 로드하지 않고
+                    # tokenizer.json 사전만 로드하여 CPU 0% · 메모리 25MB 이하 초경량 반응속도를 보장합니다.
             except Exception:
                 pass
             finally:
@@ -365,31 +359,7 @@ class Gemma2LightweightEngine:
         return ids[:128]
 
     def embed_128d(self, text: str) -> list[float]:
-        """MRL(Matryoshka Representation Learning) 상위 128차원 절삭 및 L2 정규화 임베딩 산출"""
-        if self.session is not None and self.np is not None:
-            try:
-                np = self.np
-                ids = self.encode_tokens(text)
-                inp_ids = np.array([ids], dtype=np.int64)
-                att = np.ones_like(inp_ids, dtype=np.int64)
-                empty = np.zeros((0, 512), dtype=np.float32)
-                out = self.session.run(
-                    ["sentence_embedding"],
-                    {
-                        "input_ids": inp_ids,
-                        "attention_mask": att,
-                        "image_features": empty,
-                        "video_features": empty,
-                        "audio_features": empty,
-                    },
-                )[0][0][:128]
-                norm = float(np.linalg.norm(out))
-                if norm > 0:
-                    out = out / norm
-                return [float(x) for x in out]
-            except Exception:
-                pass
-        # 초경량 문자 N-gram 해시 폴백 벡터 (128차원)
+        """초경량 문자 N-gram 해시 벡터 (128차원) — 보조 데몬 내 ONNX 중복 로드 및 동기 추론 0% 철칙 준수"""
         vec = [0.0] * 128
         s = text.lower().strip()
         for idx in range(len(s)):
@@ -600,10 +570,14 @@ def set_ime_language(target_korean: bool) -> None:
     """
     [멀린님 핵심 지시 반영] 오타 변환 직후 윈도우 한/영 입력기(IME) 상태를 목표 언어로 자동 동기화 전환!
     - 최상위 창(GetForegroundWindow)과 내부 포커스 컨트롤(Edit/RichEdit) 양쪽의 IME 컨텍스트를 모두 즉시 동기화합니다.
+    - 아래아한글(hwp.exe/hword.exe)은 자체 한/영 자판 엔진을 사용하여 WM_IME_CONTROL만으로는 전환되지 않으므로 VK_HANGUL 물리 키 토글을 병행합니다.
     """
     try:
         hwnd = u32.GetForegroundWindow()
         if hwnd:
+            proc_low = _get_process_name_from_hwnd(hwnd).lower()
+            cls_low = _get_win_class_only(hwnd).lower()
+            is_hwp = ("hwp" in proc_low) or ("hword" in proc_low) or ("hnc" in cls_low)
             focus_h = _get_focused_control_hwnd(hwnd)
             switched = False
             for h_cand in (focus_h, hwnd):
@@ -617,9 +591,9 @@ def set_ime_language(target_korean: bool) -> None:
                         new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
                         u32.SendMessageW(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode)
                     switched = True
-            if switched:
+            if switched and not is_hwp:
                 return
-        # 폴백: 한/영 키(VK_HANGUL) 물리 토글
+        # 폴백 및 아래아한글(HWP) 자체 자판 전환: 한/영 키(VK_HANGUL) 물리 토글
         u32.keybd_event(VK_HANGUL, 0, 0, 0)
         time.sleep(0.01)
         u32.keybd_event(VK_HANGUL, 0, KEYEVENTF_KEYUP, 0)
@@ -1855,14 +1829,17 @@ def _get_lightweight_local_files() -> list[dict]:
                             "img_path": entry.path if fkind == "image" else "",
                             "text": f"[{fd.name}] {name}",
                             "ts": st.st_mtime,
-                            "vec": AI_ENGINE.embed_128d(name[:120]),
+                            "_name": name[:120],
                         })
                     except Exception:
                         pass
         except Exception:
             pass
     collected.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
-    _LOCAL_FILE_CACHE["items"] = collected[:150]
+    top_items = collected[:80]
+    for it_f in top_items:
+        it_f["vec"] = AI_ENGINE.embed_128d(it_f.pop("_name", ""))
+    _LOCAL_FILE_CACHE["items"] = top_items
     _LOCAL_FILE_CACHE["ts"] = now
     return _LOCAL_FILE_CACHE["items"]
 
@@ -1894,6 +1871,9 @@ def _extract_word_chips_from_text(text: str) -> list[str]:
         if len(chips) >= 14:
             break
     return chips[:14]
+
+
+_CLICKED_SUPERPOWER_QUEUE: queue.Queue = queue.Queue()
 
 
 def _toast_worker() -> None:
@@ -2409,8 +2389,16 @@ def _toast_worker() -> None:
             was_mouse_down[0] = mouse_down
 
             msg_item = None
+            need_lift = False
             while not _toast_queue.empty():
-                msg_item = _toast_queue.get_nowait()
+                q_it = _toast_queue.get_nowait()
+                if q_it[0] == "__LIFT__":
+                    need_lift = True
+                else:
+                    msg_item = q_it
+
+            if msg_item is None and need_lift:
+                msg_item = ("__LIFT__", 0)
 
             if msg_item is not None:
                 message, duration_ms = msg_item
@@ -2543,13 +2531,36 @@ def _toast_worker() -> None:
                         menu_box.pack(side="left", fill="both", expand=True)
                         line1_txt, line2_txt = (right_part.strip().split("\n", 1) if "\n" in right_part else (right_part.strip(), ""))
 
+                        def _bind_row_buttons(parent_frame: tk.Frame, raw_line: str, fg_color: str) -> None:
+                            tokens = [t.strip() for t in re.split(r"\s{2,}", raw_line.strip()) if t.strip()]
+                            for tok in tokens:
+                                m_num = re.match(r"^\[([1-9])\]", tok)
+                                is_ctrlv = tok.startswith("[Ctrl+V]")
+                                b_item = tk.Label(
+                                    parent_frame,
+                                    text=tok,
+                                    fg=fg_color,
+                                    bg="#0B1120",
+                                    padx=4,
+                                    pady=1,
+                                    font=("Malgun Gothic", 9, "bold"),
+                                    anchor="w",
+                                    cursor="hand2" if (m_num or is_ctrlv) else "arrow",
+                                )
+                                b_item.pack(side="left", anchor="w", padx=(0, 6))
+                                if m_num:
+                                    sp_num = int(m_num.group(1))
+                                    b_item.bind("<Button-1>", lambda _e, n=sp_num: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(n)))
+                                elif is_ctrlv:
+                                    b_item.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(0)))
+
                         row1_frame = tk.Frame(menu_box, bg="#0B1120")
                         row1_frame.pack(fill="x", anchor="w")
-                        tk.Label(row1_frame, text=line1_txt.strip(), fg="#5EEAD4", bg="#0B1120", font=("Malgun Gothic", 9, "bold"), anchor="w").pack(side="left", anchor="w")
+                        _bind_row_buttons(row1_frame, line1_txt, "#5EEAD4")
 
                         row2_frame = tk.Frame(menu_box, bg="#0B1120")
                         row2_frame.pack(fill="x", anchor="w", pady=(2, 0))
-                        tk.Label(row2_frame, text=line2_txt.strip(), fg="#E2E8F0", bg="#0B1120", font=("Malgun Gothic", 9, "bold"), anchor="w").pack(side="left", anchor="w")
+                        _bind_row_buttons(row2_frame, line2_txt, "#E2E8F0")
 
                         extra_panel_box = tk.Frame(container, bg="#0B1120")
                         panel_state = {"mode": None}
@@ -2849,6 +2860,20 @@ def acquire_single_instance() -> socket.socket | None:
                 except Exception:
                     pass
     return None
+
+
+def _ensure_single_instance_socket_alive(curr_sock: socket.socket | None) -> socket.socket | None:
+    """
+    [자가치유(Self-Healing) 핫키 & 소켓 워치독]:
+    - Windows 예약 작업(StopOnIdleEnd 등)이나 외부에서 구 데몬이 종료되었거나 소켓이 닫혔을 때 즉시 재바인딩하고,
+    - Explorer 재시작 등으로 전역 핫키(Ctrl+0, Alt+Z)가 풀리지 않도록 주기적으로 재보장합니다.
+    """
+    try:
+        if curr_sock is not None and curr_sock.fileno() != -1:
+            return curr_sock
+    except Exception:
+        pass
+    return acquire_single_instance()
 
 
 def get_clipboard_text() -> str:
@@ -3824,26 +3849,48 @@ def _restore_target_focus_and_replace_line(
             return True, raw_ed, out_ed, lang_ed
         return False, raw_ed, out_ed, None
 
-    daemon_set_cb(sentinel)
-    time.sleep(0.015)
-    tap_key_combo([VK_CONTROL], VK_C)
-    time.sleep(0.045)
-    selected = get_clipboard_text()
+    proc_low_t = _get_process_name_from_hwnd(target_hwnd).lower() if target_hwnd else ""
+    is_excel_t = proc_low_t in ("excel.exe", "hcell.exe")
 
-    if not selected or selected == sentinel:
+    if is_excel_t and not auto_triggered:
+        # 엑셀(Excel/한셀)에서는 시트 그리드 상태에서 End/Shift+Home이나 Ctrl+V를 치면 다중 셀이 선택되어
+        # '붙여 넣을 데이터가 선택한 크기와 다릅니다' 경고창이 뜨므로, 항상 F2(셀 편집 모드) 진입 후 셀 내부 텍스트만 교체!
+        VK_F2 = 0x71
         VK_END = 0x23
         VK_HOME = 0x24
         release_all_modifiers()
-        if not auto_triggered:
-            tap_key_combo([], VK_END)
-            time.sleep(0.025)
-        tap_key_combo([VK_SHIFT], VK_HOME)
-        time.sleep(0.045)
+        tap_key_combo([], VK_F2)
+        time.sleep(0.03)
+        tap_key_combo([], VK_HOME)
+        time.sleep(0.02)
+        tap_key_combo([VK_SHIFT], VK_END)
+        time.sleep(0.04)
         daemon_set_cb(sentinel)
         time.sleep(0.015)
         tap_key_combo([VK_CONTROL], VK_C)
-        time.sleep(0.05)
+        time.sleep(0.045)
         selected = get_clipboard_text()
+    else:
+        daemon_set_cb(sentinel)
+        time.sleep(0.015)
+        tap_key_combo([VK_CONTROL], VK_C)
+        time.sleep(0.045)
+        selected = get_clipboard_text()
+
+        if not selected or selected == sentinel:
+            VK_END = 0x23
+            VK_HOME = 0x24
+            release_all_modifiers()
+            if not auto_triggered:
+                tap_key_combo([], VK_END)
+                time.sleep(0.025)
+            tap_key_combo([VK_SHIFT], VK_HOME)
+            time.sleep(0.045)
+            daemon_set_cb(sentinel)
+            time.sleep(0.015)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.05)
+            selected = get_clipboard_text()
 
     if selected and selected != sentinel:
         morphed, target_lang = morph_korean_english_text_with_direction(selected)
@@ -3858,11 +3905,11 @@ def _restore_target_focus_and_replace_line(
         if morphed != selected and target_lang is not None:
             final_out = (morphed if morphed.endswith(" ") else morphed + " ") if auto_triggered else morphed
             arm_undo_snapshot(target_hwnd, edit_child, selected, final_out, mode="clip_replace")
-            set_ime_language(target_korean=(target_lang == "KO"))
             daemon_set_cb(final_out)
             time.sleep(0.02)
             tap_key_combo([VK_CONTROL], VK_V)
             time.sleep(0.04)
+            set_ime_language(target_korean=(target_lang == "KO"))
             if orig_clip and orig_clip != sentinel:
                 daemon_set_cb(orig_clip)
             return True, selected.strip(), final_out.strip(), target_lang
@@ -4557,8 +4604,109 @@ def _toggle_korean_number_format(txt: str) -> str:
 
 
 def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> None:
+    """
+    [⑦번 번호·일정성형 — 메모장·입력창 원위치(In-Place) 즉시 하이픈 성형 + 클립보드 동시 반영]:
+    - 메모장이나 입력창에서 숫자를 치고 바로 [7번]을 누르거나 드래그한 상태에서 [7번]을 누르면
+      복사/붙여넣기할 필요 없이 그 자리에서 즉시 '010-1234-5678' / '123-45-67890' 형태로 하이픈이 삽입됩니다!
+    """
+    target_hwnd = _LAST_TARGET_HWND or u32.GetForegroundWindow()
+    edit_child = 0
+    if target_hwnd and u32.IsWindow(target_hwnd):
+        try:
+            fg_now = u32.GetForegroundWindow()
+            cur_tid = k32.GetCurrentThreadId()
+            tgt_tid = u32.GetWindowThreadProcessId(target_hwnd, None)
+            if cur_tid != tgt_tid and tgt_tid:
+                u32.AttachThreadInput(cur_tid, tgt_tid, True)
+            if fg_now != target_hwnd:
+                u32.SetForegroundWindow(target_hwnd)
+            edit_child = _find_edit_control_child(target_hwnd)
+            if edit_child:
+                u32.SetFocus(edit_child)
+            if cur_tid != tgt_tid and tgt_tid:
+                u32.AttachThreadInput(cur_tid, tgt_tid, False)
+            time.sleep(0.025)
+        except Exception:
+            pass
+
+    # 1) 메모장(Edit/RichEditD2DPT) 원위치 즉시 하이픈 성형
+    if edit_child and u32.IsWindow(edit_child):
+        try:
+            full_text, idx_text, is_rich = _get_edit_full_text_and_index_str(edit_child)
+            if idx_text:
+                utf16_bytes = idx_text.encode("utf-16-le")
+                utf16_total = len(utf16_bytes) // 2
+                s_dw = wintypes.DWORD(0)
+                e_dw = wintypes.DWORD(0)
+                u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
+                s_pos, e_pos = s_dw.value, e_dw.value
+                if s_pos != e_pos and 0 <= s_pos < e_pos <= utf16_total:
+                    line_start, line_end = s_pos, e_pos
+                    target_str = utf16_bytes[s_pos * 2 : e_pos * 2].decode("utf-16-le", errors="ignore")
+                else:
+                    line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
+                    line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
+                    line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
+                    cur_line = ""
+                    if line_start >= 0 and line_len > 0:
+                        cur_line = utf16_bytes[line_start * 2 : (line_start + line_len) * 2].decode("utf-16-le", errors="ignore")
+                    if cur_line and _toggle_korean_number_format(cur_line) != cur_line:
+                        line_end = line_start + line_len
+                        target_str = cur_line
+                    else:
+                        line_start, line_end = 0, utf16_total
+                        target_str = idx_text
+                formatted_ed = _toggle_korean_number_format(target_str)
+                if formatted_ed != target_str:
+                    final_ed = formatted_ed.replace("\r\n", "\n").replace("\n", "\r\n") if (not is_rich and "\n" in formatted_ed) else formatted_ed
+                    u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_end)
+                    rbuf = ctypes.create_unicode_buffer(final_ed)
+                    u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                    full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
+                    arm_undo_snapshot(target_hwnd, edit_child, target_str, final_ed, mode="edit_replace", full_doc_before=full_text, full_doc_after=full_after)
+                    daemon_set_cb(formatted_ed)
+                    show_ghost_toast(f"👻 귀신같이 번호·일정성형 ({formatted_ed.splitlines()[0][:22]})")
+                    return
+        except Exception:
+            pass
+
+    # 2) 일반 입력창(워드/한글/카톡/브라우저) 드래그 또는 현재 줄 원위치 하이픈 성형
+    sentinel = "__GHOSTI_NUM_SEL__"
     orig_clip = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
-    if orig_clip and orig_clip.strip():
+    if target_hwnd and u32.IsWindow(target_hwnd):
+        release_all_modifiers()
+        daemon_set_cb(sentinel)
+        time.sleep(0.015)
+        tap_key_combo([VK_CONTROL], VK_C)
+        time.sleep(0.045)
+        sel_txt = get_clipboard_text()
+        if not sel_txt or sel_txt == sentinel:
+            VK_END = 0x23
+            VK_HOME = 0x24
+            tap_key_combo([], VK_END)
+            time.sleep(0.02)
+            tap_key_combo([VK_SHIFT], VK_HOME)
+            time.sleep(0.04)
+            daemon_set_cb(sentinel)
+            time.sleep(0.015)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.045)
+            sel_txt = get_clipboard_text()
+        if sel_txt and sel_txt != sentinel:
+            fmt_sel = _toggle_korean_number_format(sel_txt)
+            if fmt_sel != sel_txt:
+                arm_undo_snapshot(target_hwnd, 0, sel_txt, fmt_sel, mode="clip_replace")
+                daemon_set_cb(fmt_sel)
+                time.sleep(0.02)
+                tap_key_combo([VK_CONTROL], VK_V)
+                time.sleep(0.04)
+                show_ghost_toast(f"👻 귀신같이 번호·일정성형 ({fmt_sel.splitlines()[0][:22]})")
+                return
+            else:
+                tap_key_combo([], 0x27)
+
+    # 3) 클립보드 폴백
+    if orig_clip and orig_clip.strip() and orig_clip != sentinel:
         formatted = _toggle_korean_number_format(orig_clip)
         daemon_set_cb(formatted)
         show_ghost_toast(f"👻 귀신같이 번호·일정성형 ({formatted.splitlines()[0][:22]})")
@@ -4885,8 +5033,16 @@ def main() -> None:
                     fg_before = root_under
         proc_before = _get_process_name_from_hwnd(fg_before).lower()
         cls_before = _get_win_class_only(fg_before)
+        if (proc_before in ("python.exe", "pythonw.exe") or not fg_before) and _LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND):
+            fg_before = _LAST_TARGET_HWND
+            proc_before = _get_process_name_from_hwnd(fg_before).lower()
+            cls_before = _get_win_class_only(fg_before)
         if proc_before in ("explorer.exe", "python.exe", "pythonw.exe") or cls_before in ("Progman", "WorkerW", "Shell_TrayWnd", "CabinetWClass"):
             is_dedicated_input_app = False
+        elif not summon_by_rclick:
+            # [키보드 Ctrl+0 / Alt+Z 소환]: 바탕화면·탐색기가 아닌 일반 앱(크롬·엣지·Antigravity·노션 등 Electron/Chromium 포함)에서
+            # 키보드로 부른 경우 사용자는 항상 글자 입력 중이므로 무조건 [창 UI ① 기본 귀신창]으로 직행!
+            is_dedicated_input_app = True
         else:
             has_native_edit = bool(_find_edit_control_child(fg_before))
             is_dedicated_input_app = proc_before in ("notepad.exe", "kakaotalk.exe", "winword.exe", "hwp.exe", "excel.exe", "hcell.exe") or has_native_edit
@@ -4968,6 +5124,7 @@ def main() -> None:
             )
 
     last_summon_ts: float = 0.0
+    last_hotkey_rebind_ts: float = time.time()
     was_ctrl0_down: bool = False
     was_ctrl_alt_t_down: bool = False
     was_ctrl_z_down: bool = False
@@ -4997,37 +5154,58 @@ def main() -> None:
 
     def _release_target_rbutton_stuck(hwnd_target: int | None, pt_x: int | None = None, pt_y: int | None = None) -> None:
         """
-        바탕화면(Progman/WorkerW) 셸은 절대 건드리지 않고, 일반 앱 창에만 WM_CANCELMODE 전송
+        우클릭 0.35초 롱프레스 달성 순간 실제 마우스 커서 아래 컨트롤(SysListView32/SHELLDLL_DefView 등)과
+        상위 창에 WM_CANCELMODE를 전달하여, 우클릭 버튼을 뗄 때 OS 기본 우클릭 메뉴가 아예 생성되지 않도록 차단합니다.
         """
         try:
-            target = hwnd_target or u32.GetForegroundWindow()
-            if target:
-                cls_t = _get_win_class_only(target)
-                if cls_t not in ("Progman", "WorkerW", "Shell_TrayWnd"):
-                    u32.PostMessageW(target, WM_CANCELMODE, 0, 0)
+            pt_c = wintypes.POINT()
+            if pt_x is not None and pt_y is not None:
+                pt_c.x, pt_c.y = int(pt_x), int(pt_y)
+            else:
+                u32.GetCursorPos(ctypes.byref(pt_c))
+            hwnd_pt = u32.WindowFromPoint(pt_c)
+            seen_h: set[int] = set()
+            for cand in (hwnd_pt, u32.GetParent(hwnd_pt) if hwnd_pt else 0, hwnd_target or u32.GetForegroundWindow()):
+                if cand and cand not in seen_h:
+                    seen_h.add(cand)
+                    cls_c = _get_win_class_only(cand)
+                    if cls_c != "Shell_TrayWnd":
+                        u32.PostMessageW(cand, WM_CANCELMODE, 0, 0)
         except Exception:
             pass
 
     def _dismiss_native_context_menu_after_rbtn_up(hwnd_target: int | None) -> None:
         """
-        [바탕화면 검정 먹통 원천 차단]:
+        [바탕화면/앱 기본 우클릭 메뉴 즉시 소거 & 검정 먹통 원천 차단]:
         - explorer.exe 소속 Xaml_WindowedPopupClass나 Progman/WorkerW에 WM_CLOSE를 쏘던 위험 코드를 100% 제거!
-        - 고전 메뉴(#32768)에 MN_CANCELMENUS만 1회 보내고 ESC 1회로 안전하게 기본 메뉴만 닫습니다.
+        - 손을 뗀 직후(5ms~180ms) 고전 메뉴(#32768)가 찰나에라도 생성되면 즉시 MN_CANCELMENUS + WM_CLOSE + ESC로 닫습니다.
         """
         def _worker():
             global _LAST_RBTN_DISMISS_ESC_TS
             try:
                 MN_CANCELMENUS = 0x01E6
+                WM_CLOSE_MSG = 0x0010
                 VK_ESCAPE = 0x1B
                 esc_sc = u32.MapVirtualKeyW(VK_ESCAPE, 0)
-                time.sleep(0.035)
-                h_menu = u32.FindWindowW("#32768", None)
-                if h_menu:
-                    u32.PostMessageW(h_menu, MN_CANCELMENUS, 0, 0)
-                _LAST_RBTN_DISMISS_ESC_TS = time.time()
-                u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
-                time.sleep(0.008)
-                u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
+                sent_esc = False
+                for delay_s in (0.005, 0.015, 0.030, 0.055, 0.090, 0.140):
+                    time.sleep(delay_s)
+                    h_menu = u32.FindWindowW("#32768", None)
+                    if h_menu and u32.IsWindowVisible(h_menu):
+                        u32.PostMessageW(h_menu, MN_CANCELMENUS, 0, 0)
+                        u32.PostMessageW(h_menu, WM_CLOSE_MSG, 0, 0)
+                        if not sent_esc:
+                            sent_esc = True
+                            _LAST_RBTN_DISMISS_ESC_TS = time.time()
+                            u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
+                            time.sleep(0.006)
+                            u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
+                if not sent_esc:
+                    # Win11 Xaml 팝업 메뉴 대응용 안전한 ESC 1회
+                    _LAST_RBTN_DISMISS_ESC_TS = time.time()
+                    u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
+                    time.sleep(0.006)
+                    u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
                 _toast_queue.put(("__LIFT__", 0))
             except Exception:
                 pass
@@ -5077,6 +5255,28 @@ def main() -> None:
 
             elif msg.message == WM_TIMER:
                 now = time.time()
+                if (now - last_hotkey_rebind_ts) > 15.0:
+                    last_hotkey_rebind_ts = now
+                    try:
+                        _ensure_toast_worker()
+                        u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
+                        u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
+                        u32.RegisterHotKey(None, 3, MOD_ALT | MOD_NOREPEAT, VK_Z)
+                        u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)
+                    except Exception:
+                        pass
+                while not _CLICKED_SUPERPOWER_QUEUE.empty():
+                    try:
+                        c_num = _CLICKED_SUPERPOWER_QUEUE.get_nowait()
+                        if c_num == 0:
+                            if _LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND):
+                                u32.SetForegroundWindow(_LAST_TARGET_HWND)
+                                time.sleep(0.025)
+                            tap_key_combo([VK_CONTROL], VK_V)
+                        elif 1 <= c_num <= 9:
+                            _execute_superpower_num(c_num)
+                    except Exception:
+                        pass
                 if pending_init_show_ts > 0.0 and now >= pending_init_show_ts:
                     pending_init_show_ts = 0.0
                     last_summon_ts = now
