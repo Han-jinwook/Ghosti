@@ -5052,6 +5052,10 @@ def main() -> None:
             cls_before = _get_win_class_only(fg_before)
         if proc_before in ("explorer.exe", "python.exe", "pythonw.exe") or cls_before in ("Progman", "WorkerW", "Shell_TrayWnd", "CabinetWClass"):
             is_dedicated_input_app = False
+        elif not summon_by_rclick:
+            # [키보드 Ctrl+0 / Alt+Z 소환]: 바탕화면·탐색기가 아닌 일반 앱(크롬·엣지·Antigravity·노션 등 Electron/Chromium 포함)에서
+            # 키보드로 부른 경우 사용자는 항상 글자 입력 중이므로 무조건 [창 UI ① 기본 귀신창]으로 직행!
+            is_dedicated_input_app = True
         else:
             has_native_edit = bool(_find_edit_control_child(fg_before))
             is_dedicated_input_app = proc_before in ("notepad.exe", "kakaotalk.exe", "winword.exe", "hwp.exe", "excel.exe", "hcell.exe") or has_native_edit
