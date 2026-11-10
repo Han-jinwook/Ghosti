@@ -2770,24 +2770,35 @@ def _toast_worker() -> None:
                         _schedule_close(duration_ms)
         except Exception:
             pass
-        root.after(30, _poll_queue)
+        finally:
+            try:
+                root.after(30, _poll_queue)
+            except Exception:
+                pass
 
     root.after(30, _poll_queue)
-    root.mainloop()
+    while True:
+        try:
+            root.mainloop()
+            break
+        except Exception:
+            time.sleep(0.2)
 
 
 _TOAST_WORKER_STARTED = False
+_TOAST_WORKER_THREAD: threading.Thread | None = None
 _TOAST_WORKER_LOCK = threading.Lock()
 
 
 def _ensure_toast_worker() -> None:
-    global _TOAST_WORKER_STARTED
-    if _TOAST_WORKER_STARTED:
+    global _TOAST_WORKER_STARTED, _TOAST_WORKER_THREAD
+    if _TOAST_WORKER_STARTED and _TOAST_WORKER_THREAD is not None and _TOAST_WORKER_THREAD.is_alive():
         return
     with _TOAST_WORKER_LOCK:
-        if not _TOAST_WORKER_STARTED:
+        if _TOAST_WORKER_THREAD is None or not _TOAST_WORKER_THREAD.is_alive():
             _TOAST_WORKER_STARTED = True
-            threading.Thread(target=_toast_worker, daemon=True).start()
+            _TOAST_WORKER_THREAD = threading.Thread(target=_toast_worker, daemon=True)
+            _TOAST_WORKER_THREAD.start()
 
 
 def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
@@ -3835,6 +3846,35 @@ def _replace_edit_control_current_line_atomic(
         return False, "", "", None
 
 
+def _get_focused_control_hwnd(target_hwnd: int) -> int:
+    """AttachThreadInput 없이 GUITHREADINFO 커널 구조체로 0ms 만에 대상 창의 포커스 컨트롤 핸들(hwndFocus) 조회"""
+    if not target_hwnd or not u32.IsWindow(target_hwnd):
+        return 0
+    try:
+        tid = u32.GetWindowThreadProcessId(target_hwnd, None)
+        if not tid:
+            return 0
+        class GUITHREADINFO(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("flags", wintypes.DWORD),
+                ("hwndActive", wintypes.HWND),
+                ("hwndFocus", wintypes.HWND),
+                ("hwndCapture", wintypes.HWND),
+                ("hwndMenuOwner", wintypes.HWND),
+                ("hwndMoveSize", wintypes.HWND),
+                ("hwndCaret", wintypes.HWND),
+                ("rcCaret", wintypes.RECT),
+            ]
+        gti = GUITHREADINFO()
+        gti.cbSize = ctypes.sizeof(GUITHREADINFO)
+        if u32.GetGUIThreadInfo(tid, ctypes.byref(gti)):
+            return int(gti.hwndFocus or gti.hwndActive or 0)
+    except Exception:
+        pass
+    return 0
+
+
 def _restore_target_focus_and_replace_line(
     target_hwnd: int,
     daemon_set_cb,
@@ -3857,18 +3897,10 @@ def _restore_target_focus_and_replace_line(
     if target_hwnd and u32.IsWindow(target_hwnd):
         try:
             fg_now = u32.GetForegroundWindow()
-            cur_tid = k32.GetCurrentThreadId()
-            tgt_tid = u32.GetWindowThreadProcessId(target_hwnd, None)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, True)
             if fg_now != target_hwnd:
                 u32.SetForegroundWindow(target_hwnd)
             edit_child = _find_edit_control_child(target_hwnd)
-            if edit_child:
-                u32.SetFocus(edit_child)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, False)
-            time.sleep(0.025)
+            time.sleep(0.02)
         except Exception:
             pass
 
@@ -4415,7 +4447,7 @@ def should_skip_auto_typo(hwnd: int) -> bool:
 
 
 def _apply_window_topmost(hwnd: int, topmost: bool) -> bool:
-    """Win10/Win11 UWP(계산기 ApplicationFrameWindow) 및 일반 창(메모장) 공통 하드웨어급 Topmost 적용·검증"""
+    """Win10/Win11 UWP(계산기 ApplicationFrameWindow) 및 일반 창(메모장) 공통 하드웨어급 Topmost 적용·검증 (AttachThreadInput 배제)"""
     if not hwnd or not u32.IsWindow(hwnd):
         return False
     ins_after = HWND_TOPMOST if topmost else HWND_NOTOPMOST
@@ -4423,13 +4455,7 @@ def _apply_window_topmost(hwnd: int, topmost: bool) -> bool:
     ex = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     if bool(ex & WS_EX_TOPMOST) != topmost:
         try:
-            cur_tid = k32.GetCurrentThreadId()
-            tgt_tid = u32.GetWindowThreadProcessId(hwnd, None)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, True)
             u32.SetWindowPos(hwnd, ins_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, False)
         except Exception:
             pass
     return bool(u32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) == topmost
@@ -4664,18 +4690,10 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
     if target_hwnd and u32.IsWindow(target_hwnd):
         try:
             fg_now = u32.GetForegroundWindow()
-            cur_tid = k32.GetCurrentThreadId()
-            tgt_tid = u32.GetWindowThreadProcessId(target_hwnd, None)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, True)
             if fg_now != target_hwnd:
                 u32.SetForegroundWindow(target_hwnd)
             edit_child = _find_edit_control_child(target_hwnd)
-            if edit_child:
-                u32.SetFocus(edit_child)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, False)
-            time.sleep(0.025)
+            time.sleep(0.02)
         except Exception:
             pass
 
@@ -5287,47 +5305,61 @@ def main() -> None:
         threading.Thread(target=_worker, daemon=True).start()
 
     msg = wintypes.MSG()
+    PM_REMOVE = 0x0001
+    WM_QUIT_MSG = 0x0012
     pending_init_show_ts: float = (time.time() + 0.35) if ("--show-now" in sys.argv) else 0.0
-    while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+    while True:
+        had_hotkey = False
+        while u32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE) != 0:
+            if msg.message == WM_QUIT_MSG:
+                # 외부에서 실수로 WM_QUIT가 전달되더라도 데몬이 죽지 않고 타이머를 재무장하여 영구 생존 보장!
+                u32.SetTimer(None, 1, 25, None)
+                continue
+            try:
+                if msg.message == WM_HOTKEY:
+                    had_hotkey = True
+                    hk_id = msg.wParam
+                    # 1) 마스터 트리거 (Ctrl + 0 또는 Alt + Z)
+                    if hk_id in (1, 2, 3):
+                        now_hk = time.time()
+                        if (now_hk - last_summon_ts) > 0.25:
+                            last_summon_ts = now_hk
+                            trigger_master_summon()
+
+                    # 1-B) 창 고정/원복 전용 핫키 (Ctrl + Alt + T)
+                    elif hk_id == 4:
+                        now_hk = time.time()
+                        if (now_hk - last_topmost_ts) > 0.25:
+                            last_topmost_ts = now_hk
+                            _execute_superpower_num(8)
+
+                    # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷)
+                    elif hk_id == 999:
+                        execute_undo_snapshot(daemon_set_clipboard)
+
+                    # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
+                    elif (101 <= hk_id <= 109) or (201 <= hk_id <= 209) or (401 <= hk_id <= 409) or (501 <= hk_id <= 509):
+                        _execute_superpower_num(hk_id % 100)
+
+                    # 3) F1~F10 고정 상용구 발동
+                    elif 301 <= hk_id <= 310:
+                        fslot = hk_id - 300
+                        disarm_sub_hotkeys()
+                        seq_mode = False
+                        fkey = f"snippet_F{fslot}"
+                        allowed, q_msg = check_feature_quota_allowed(fkey)
+                        if not allowed:
+                            show_ghost_toast(q_msg, duration_ms=3200)
+                        else:
+                            superpower_fixed_snippet(fslot, daemon_set_clipboard)
+                            complete_feature_action_success(fkey)
+            except Exception:
+                pass
+            u32.TranslateMessage(ctypes.byref(msg))
+            u32.DispatchMessageW(ctypes.byref(msg))
+
         try:
-            if msg.message == WM_HOTKEY:
-                hk_id = msg.wParam
-                # 1) 마스터 트리거 (Ctrl + 0 또는 Alt + Z)
-                if hk_id in (1, 2, 3):
-                    now_hk = time.time()
-                    if (now_hk - last_summon_ts) > 0.25:
-                        last_summon_ts = now_hk
-                        trigger_master_summon()
-
-                # 1-B) 창 고정/원복 전용 핫키 (Ctrl + Alt + T)
-                elif hk_id == 4:
-                    now_hk = time.time()
-                    if (now_hk - last_topmost_ts) > 0.25:
-                        last_topmost_ts = now_hk
-                        _execute_superpower_num(8)
-
-                # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷)
-                elif hk_id == 999:
-                    execute_undo_snapshot(daemon_set_clipboard)
-
-                # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
-                elif (101 <= hk_id <= 109) or (201 <= hk_id <= 209) or (401 <= hk_id <= 409) or (501 <= hk_id <= 509):
-                    _execute_superpower_num(hk_id % 100)
-
-                # 3) F1~F10 고정 상용구 발동
-                elif 301 <= hk_id <= 310:
-                    fslot = hk_id - 300
-                    disarm_sub_hotkeys()
-                    seq_mode = False
-                    fkey = f"snippet_F{fslot}"
-                    allowed, q_msg = check_feature_quota_allowed(fkey)
-                    if not allowed:
-                        show_ghost_toast(q_msg, duration_ms=3200)
-                    else:
-                        superpower_fixed_snippet(fslot, daemon_set_clipboard)
-                        complete_feature_action_success(fkey)
-
-            elif msg.message == WM_TIMER:
+            if True:
                 now = time.time()
                 if (now - last_hotkey_rebind_ts) > 15.0:
                     last_hotkey_rebind_ts = now
@@ -5337,6 +5369,7 @@ def main() -> None:
                         u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
                         u32.RegisterHotKey(None, 3, MOD_ALT | MOD_NOREPEAT, VK_Z)
                         u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)
+                        u32.SetTimer(None, 1, 25, None)
                     except Exception:
                         pass
                 while not _CLICKED_SUPERPOWER_QUEUE.empty():
@@ -5866,8 +5899,8 @@ def main() -> None:
         except Exception:
             pass
 
-        u32.TranslateMessage(ctypes.byref(msg))
-        u32.DispatchMessageW(ctypes.byref(msg))
+        if not had_hotkey:
+            time.sleep(0.015)
 
 
 def run_quota_self_test() -> int:

@@ -359,7 +359,31 @@ class Gemma2LightweightEngine:
         return ids[:128]
 
     def embed_128d(self, text: str) -> list[float]:
-        """초경량 문자 N-gram 해시 벡터 (128차원) — 보조 데몬 내 ONNX 중복 로드 및 동기 추론 0% 철칙 준수"""
+        """MRL(Matryoshka Representation Learning) 상위 128차원 절삭 및 L2 정규화 임베딩 산출"""
+        if self.session is not None and self.np is not None:
+            try:
+                np = self.np
+                ids = self.encode_tokens(text)
+                inp_ids = np.array([ids], dtype=np.int64)
+                att = np.ones_like(inp_ids, dtype=np.int64)
+                empty = np.zeros((0, 512), dtype=np.float32)
+                out = self.session.run(
+                    ["sentence_embedding"],
+                    {
+                        "input_ids": inp_ids,
+                        "attention_mask": att,
+                        "image_features": empty,
+                        "video_features": empty,
+                        "audio_features": empty,
+                    },
+                )[0][0][:128]
+                norm = float(np.linalg.norm(out))
+                if norm > 0:
+                    out = out / norm
+                return [float(x) for x in out]
+            except Exception:
+                pass
+        # 초경량 문자 N-gram 해시 폴백 벡터 (128차원)
         vec = [0.0] * 128
         s = text.lower().strip()
         for idx in range(len(s)):
@@ -570,7 +594,8 @@ def set_ime_language(target_korean: bool) -> None:
     """
     [멀린님 핵심 지시 반영] 오타 변환 직후 윈도우 한/영 입력기(IME) 상태를 목표 언어로 자동 동기화 전환!
     - 최상위 창(GetForegroundWindow)과 내부 포커스 컨트롤(Edit/RichEdit) 양쪽의 IME 컨텍스트를 모두 즉시 동기화합니다.
-    - 아래아한글(hwp.exe/hword.exe)은 자체 한/영 자판 엔진을 사용하여 WM_IME_CONTROL만으로는 전환되지 않으므로 VK_HANGUL 물리 키 토글을 병행합니다.
+    - 아래아한글(hwp.exe/hword.exe)은 WM_IME_CONTROL을 무시하고 자체 내부 한/영 자판 엔진만 쓰므로,
+      HWP에서는 WM_IME_CONTROL을 보내지 않고 오직 물리 VK_HANGUL(0x15) 토글만 전송하여 이중 토글 역전을 원천 차단합니다!
     """
     try:
         hwnd = u32.GetForegroundWindow()
@@ -578,6 +603,12 @@ def set_ime_language(target_korean: bool) -> None:
             proc_low = _get_process_name_from_hwnd(hwnd).lower()
             cls_low = _get_win_class_only(hwnd).lower()
             is_hwp = ("hwp" in proc_low) or ("hword" in proc_low) or ("hnc" in cls_low)
+            if is_hwp:
+                hangul_sc = u32.MapVirtualKeyW(VK_HANGUL, 0)
+                u32.keybd_event(VK_HANGUL, hangul_sc, 0, 0)
+                time.sleep(0.015)
+                u32.keybd_event(VK_HANGUL, hangul_sc, KEYEVENTF_KEYUP, 0)
+                return
             focus_h = _get_focused_control_hwnd(hwnd)
             switched = False
             for h_cand in (focus_h, hwnd):
@@ -591,9 +622,9 @@ def set_ime_language(target_korean: bool) -> None:
                         new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
                         u32.SendMessageW(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode)
                     switched = True
-            if switched and not is_hwp:
+            if switched:
                 return
-        # 폴백 및 아래아한글(HWP) 자체 자판 전환: 한/영 키(VK_HANGUL) 물리 토글
+        # 폴백: 한/영 키(VK_HANGUL) 물리 토글
         u32.keybd_event(VK_HANGUL, 0, 0, 0)
         time.sleep(0.01)
         u32.keybd_event(VK_HANGUL, 0, KEYEVENTF_KEYUP, 0)
@@ -2739,24 +2770,35 @@ def _toast_worker() -> None:
                         _schedule_close(duration_ms)
         except Exception:
             pass
-        root.after(30, _poll_queue)
+        finally:
+            try:
+                root.after(30, _poll_queue)
+            except Exception:
+                pass
 
     root.after(30, _poll_queue)
-    root.mainloop()
+    while True:
+        try:
+            root.mainloop()
+            break
+        except Exception:
+            time.sleep(0.2)
 
 
 _TOAST_WORKER_STARTED = False
+_TOAST_WORKER_THREAD: threading.Thread | None = None
 _TOAST_WORKER_LOCK = threading.Lock()
 
 
 def _ensure_toast_worker() -> None:
-    global _TOAST_WORKER_STARTED
-    if _TOAST_WORKER_STARTED:
+    global _TOAST_WORKER_STARTED, _TOAST_WORKER_THREAD
+    if _TOAST_WORKER_STARTED and _TOAST_WORKER_THREAD is not None and _TOAST_WORKER_THREAD.is_alive():
         return
     with _TOAST_WORKER_LOCK:
-        if not _TOAST_WORKER_STARTED:
+        if _TOAST_WORKER_THREAD is None or not _TOAST_WORKER_THREAD.is_alive():
             _TOAST_WORKER_STARTED = True
-            threading.Thread(target=_toast_worker, daemon=True).start()
+            _TOAST_WORKER_THREAD = threading.Thread(target=_toast_worker, daemon=True)
+            _TOAST_WORKER_THREAD.start()
 
 
 def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
@@ -3804,6 +3846,35 @@ def _replace_edit_control_current_line_atomic(
         return False, "", "", None
 
 
+def _get_focused_control_hwnd(target_hwnd: int) -> int:
+    """AttachThreadInput 없이 GUITHREADINFO 커널 구조체로 0ms 만에 대상 창의 포커스 컨트롤 핸들(hwndFocus) 조회"""
+    if not target_hwnd or not u32.IsWindow(target_hwnd):
+        return 0
+    try:
+        tid = u32.GetWindowThreadProcessId(target_hwnd, None)
+        if not tid:
+            return 0
+        class GUITHREADINFO(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("flags", wintypes.DWORD),
+                ("hwndActive", wintypes.HWND),
+                ("hwndFocus", wintypes.HWND),
+                ("hwndCapture", wintypes.HWND),
+                ("hwndMenuOwner", wintypes.HWND),
+                ("hwndMoveSize", wintypes.HWND),
+                ("hwndCaret", wintypes.HWND),
+                ("rcCaret", wintypes.RECT),
+            ]
+        gti = GUITHREADINFO()
+        gti.cbSize = ctypes.sizeof(GUITHREADINFO)
+        if u32.GetGUIThreadInfo(tid, ctypes.byref(gti)):
+            return int(gti.hwndFocus or gti.hwndActive or 0)
+    except Exception:
+        pass
+    return 0
+
+
 def _restore_target_focus_and_replace_line(
     target_hwnd: int,
     daemon_set_cb,
@@ -3826,18 +3897,10 @@ def _restore_target_focus_and_replace_line(
     if target_hwnd and u32.IsWindow(target_hwnd):
         try:
             fg_now = u32.GetForegroundWindow()
-            cur_tid = k32.GetCurrentThreadId()
-            tgt_tid = u32.GetWindowThreadProcessId(target_hwnd, None)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, True)
             if fg_now != target_hwnd:
                 u32.SetForegroundWindow(target_hwnd)
             edit_child = _find_edit_control_child(target_hwnd)
-            if edit_child:
-                u32.SetFocus(edit_child)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, False)
-            time.sleep(0.025)
+            time.sleep(0.02)
         except Exception:
             pass
 
@@ -3850,20 +3913,27 @@ def _restore_target_focus_and_replace_line(
         return False, raw_ed, out_ed, None
 
     proc_low_t = _get_process_name_from_hwnd(target_hwnd).lower() if target_hwnd else ""
-    is_excel_t = proc_low_t in ("excel.exe", "hcell.exe")
+    cls_low_t = _get_win_class_only(target_hwnd).lower() if target_hwnd else ""
+    is_excel_t = proc_low_t in ("excel.exe", "hcell.exe") or ("xlmain" in cls_low_t)
+    is_hwp_t = ("hwp" in proc_low_t) or ("hword" in proc_low_t) or ("hnc" in cls_low_t)
 
-    if is_excel_t and not auto_triggered:
-        # 엑셀(Excel/한셀)에서는 시트 그리드 상태에서 End/Shift+Home이나 Ctrl+V를 치면 다중 셀이 선택되어
-        # '붙여 넣을 데이터가 선택한 크기와 다릅니다' 경고창이 뜨므로, 항상 F2(셀 편집 모드) 진입 후 셀 내부 텍스트만 교체!
+    if is_excel_t:
+        # 엑셀(Excel/한셀)에서는:
+        # 1) 시트 그리드 상태에서 Ctrl+C를 누르면 Excel '복사 모드(개미 행진 테두리)'가 켜져서 이후 Shift+Home이나 Ctrl+V 시
+        #    다중 셀이 선택되거나 '붙여 넣을 데이터가 선택한 크기와 다릅니다' 경고창이 뜨므로, 절대 먼저 Ctrl+C를 치지 않음!
+        # 2) 현재 포커스 컨트롤 클래스가 'EXCEL6'(인라인 셀 편집 중)가 아닌 'EXCEL7'(그리드 선택 상태)이면에만 F2를 1회 눌러 셀 편집 모드로 진입!
         VK_F2 = 0x71
         VK_END = 0x23
         VK_HOME = 0x24
         release_all_modifiers()
-        tap_key_combo([], VK_F2)
-        time.sleep(0.03)
-        tap_key_combo([], VK_HOME)
-        time.sleep(0.02)
-        tap_key_combo([VK_SHIFT], VK_END)
+        focus_h_xl = _get_focused_control_hwnd(target_hwnd)
+        focus_cls_xl = _get_win_class_only(focus_h_xl).upper() if focus_h_xl else ""
+        if focus_cls_xl != "EXCEL6":
+            tap_key_combo([], VK_F2)
+            time.sleep(0.035)
+        tap_key_combo([], VK_END)
+        time.sleep(0.015)
+        tap_key_combo([VK_SHIFT], VK_HOME)
         time.sleep(0.04)
         daemon_set_cb(sentinel)
         time.sleep(0.015)
@@ -3872,25 +3942,35 @@ def _restore_target_focus_and_replace_line(
         selected = get_clipboard_text()
     else:
         daemon_set_cb(sentinel)
-        time.sleep(0.015)
+        time.sleep(0.02)
         tap_key_combo([VK_CONTROL], VK_C)
-        time.sleep(0.045)
+        time.sleep(0.055 if is_hwp_t else 0.045)
         selected = get_clipboard_text()
 
-        if not selected or selected == sentinel:
+        # 노션(Notion) 등에서 무드래그 상태로 Ctrl+C를 치면 블록 전체(끝에 \n 포함)가 복사되면서 텍스트 선택 영역은 잡히지 않으므로,
+        # 단일 줄이면서 끝에 \n이 붙은 경우에는 반드시 End -> Shift+Home으로 실제 텍스트 선택을 잡도록 처리!
+        is_unselected_block_copy = bool(selected and selected != sentinel and selected.endswith(("\n", "\r")) and ("\n" not in selected.rstrip("\r\n")))
+        if not selected or selected == sentinel or is_unselected_block_copy:
             VK_END = 0x23
             VK_HOME = 0x24
             release_all_modifiers()
             if not auto_triggered:
                 tap_key_combo([], VK_END)
-                time.sleep(0.025)
+                time.sleep(0.03)
             tap_key_combo([VK_SHIFT], VK_HOME)
-            time.sleep(0.045)
+            time.sleep(0.055 if is_hwp_t else 0.045)
             daemon_set_cb(sentinel)
-            time.sleep(0.015)
+            time.sleep(0.02)
             tap_key_combo([VK_CONTROL], VK_C)
-            time.sleep(0.05)
+            time.sleep(0.065 if is_hwp_t else 0.05)
             selected = get_clipboard_text()
+            if (not selected or selected == sentinel) and is_hwp_t:
+                # HWP 첫 실행 직후 Shift+Home 선택 복사 지연 시 1회 즉시 재시도
+                tap_key_combo([VK_SHIFT], VK_HOME)
+                time.sleep(0.06)
+                tap_key_combo([VK_CONTROL], VK_C)
+                time.sleep(0.07)
+                selected = get_clipboard_text()
 
     if selected and selected != sentinel:
         morphed, target_lang = morph_korean_english_text_with_direction(selected)
@@ -4367,7 +4447,7 @@ def should_skip_auto_typo(hwnd: int) -> bool:
 
 
 def _apply_window_topmost(hwnd: int, topmost: bool) -> bool:
-    """Win10/Win11 UWP(계산기 ApplicationFrameWindow) 및 일반 창(메모장) 공통 하드웨어급 Topmost 적용·검증"""
+    """Win10/Win11 UWP(계산기 ApplicationFrameWindow) 및 일반 창(메모장) 공통 하드웨어급 Topmost 적용·검증 (AttachThreadInput 배제)"""
     if not hwnd or not u32.IsWindow(hwnd):
         return False
     ins_after = HWND_TOPMOST if topmost else HWND_NOTOPMOST
@@ -4375,13 +4455,7 @@ def _apply_window_topmost(hwnd: int, topmost: bool) -> bool:
     ex = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     if bool(ex & WS_EX_TOPMOST) != topmost:
         try:
-            cur_tid = k32.GetCurrentThreadId()
-            tgt_tid = u32.GetWindowThreadProcessId(hwnd, None)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, True)
             u32.SetWindowPos(hwnd, ins_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, False)
         except Exception:
             pass
     return bool(u32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) == topmost
@@ -4558,28 +4632,30 @@ def _toggle_korean_number_format(txt: str) -> str:
     - 숫자만 있는 번호면 -> 한국형 표준 하이픈 삽입 (01012345678 -> 010-1234-5678, 사업자번호, 생년월일)
     - 통짜 카톡 문장이면 -> [성함 / 연락처 / 계좌 / 일정] AI 구조화 발라내기!
     """
-    s = txt.strip()
+    s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", txt).strip()
+    s_single = re.sub(r"^(?:[-*•▪▫▶▷]\s*|\d+[.)]\s*)+", "", s).strip()
     # 1-A) 단일 번호에 이미 하이픈이 들어있는 경우 -> 숫자만 남기도록 역토글!
-    if re.fullmatch(r"\d{2,4}-\d{2,4}-\d{4,5}", s):
-        return re.sub(r"\D", "", s)
-    # 1-B) 순수 숫자만 복사된 경우 (휴대폰 10~11자리, 사업자번호 10자리, 생년월일 8자리) -> 하이픈만 깔끔하게 삽입!
-    if re.fullmatch(r"\d{8,11}", s):
-        if re.fullmatch(r"01[016789]\d{7,8}", s):
-            return f"{s[:3]}-{s[3:-4]}-{s[-4:]}"
-        if re.fullmatch(r"02\d{7,8}", s):
-            return f"{s[:2]}-{s[2:-4]}-{s[-4:]}"
-        if len(s) == 10:
-            return f"{s[:3]}-{s[3:5]}-{s[5:]}"
-        if len(s) == 8 and s[:2] in ("19", "20"):
-            return f"{s[:4]}-{s[4:6]}-{s[6:]}"
+    if re.fullmatch(r"\d{2,4}-\d{2,4}-\d{4,5}", s_single):
+        return re.sub(r"\D", "", s_single)
+    # 1-B) 순수 숫자만 입력/복사된 경우 (휴대폰 10~11자리, 사업자번호 10자리, 생년월일 8자리) -> 하이픈만 깔끔하게 삽입!
+    if re.fullmatch(r"\d{8,11}", s_single):
+        if re.fullmatch(r"01[016789]\d{7,8}", s_single):
+            return f"{s_single[:3]}-{s_single[3:-4]}-{s_single[-4:]}"
+        if re.fullmatch(r"02\d{7,8}", s_single):
+            return f"{s_single[:2]}-{s_single[2:-4]}-{s_single[-4:]}"
+        if len(s_single) == 10:
+            return f"{s_single[:3]}-{s_single[3:5]}-{s_single[5:]}"
+        if len(s_single) == 8 and s_single[:2] in ("19", "20"):
+            return f"{s_single[:4]}-{s_single[4:6]}-{s_single[6:]}"
 
-    # 2) 통짜 카톡/메시지(연락처 + 계좌/일정이 함께 들어있는 문장) -> 구조화 추출!
+    # 2) 통짜 카톡/메시지(연락처 + 계좌/일정이 서로 다른 구간에 함께 들어있는 문장) -> 구조화 추출!
     phone_m = re.search(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b", s)
+    s_without_phone = (s[: phone_m.start()] + " " + s[phone_m.end() :]) if phone_m else s
     acct_m = re.search(
-        r"(국민|신한|우리|하나|농협|기업|카카오뱅크|토스뱅크|새마을|우체국|부산|대구|경남|광주|전북|제주|수협|신협|씨티|SC제일)?\s*((?!01[016789][-.\s]?\d{3,4}[-.\s]?\d{4})\d{3,6}[-.\s]?\d{2,6}[-.\s]?\d{3,7})",
-        s,
+        r"(국민|신한|우리|하나|농협|기업|카카오뱅크|토스뱅크|새마을|우체국|부산|대구|경남|광주|전북|제주|수협|신협|씨티|SC제일)?\s*\b((?!01[016789][-.\s]?\d{3,4}[-.\s]?\d{4})\d{3,6}[-.\s]?\d{2,6}[-.\s]?\d{3,7})\b",
+        s_without_phone,
     )
-    sched_m = re.search(r"(오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|[월화수목금토일]요일)\s*(오전|오후)?\s*(\d{1,2}시(\s*\d{1,2}분)?)", s)
+    sched_m = re.search(r"(오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|[월화수목금토일]요일)\s*(오전|오후)?\s*(\d{1,2}시(\s*\d{1,2}분)?)", s_without_phone)
     if len(s) >= 18 and sum(bool(x) for x in (phone_m, acct_m, sched_m)) >= 2:
         name_m = re.search(r"([가-힣]{2,4})(?:입니다|드림|올림|배상|대표|팀장|과장|대리|사원)", s)
         structured = []
@@ -4614,18 +4690,10 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
     if target_hwnd and u32.IsWindow(target_hwnd):
         try:
             fg_now = u32.GetForegroundWindow()
-            cur_tid = k32.GetCurrentThreadId()
-            tgt_tid = u32.GetWindowThreadProcessId(target_hwnd, None)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, True)
             if fg_now != target_hwnd:
                 u32.SetForegroundWindow(target_hwnd)
             edit_child = _find_edit_control_child(target_hwnd)
-            if edit_child:
-                u32.SetFocus(edit_child)
-            if cur_tid != tgt_tid and tgt_tid:
-                u32.AttachThreadInput(cur_tid, tgt_tid, False)
-            time.sleep(0.025)
+            time.sleep(0.02)
         except Exception:
             pass
 
@@ -4670,21 +4738,25 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
         except Exception:
             pass
 
-    # 2) 일반 입력창(워드/한글/카톡/브라우저) 드래그 또는 현재 줄 원위치 하이픈 성형
+    # 2) 일반 입력창(워드/한글/카톡/브라우저/노션) 드래그 또는 현재 줄 원위치 하이픈 성형
     sentinel = "__GHOSTI_NUM_SEL__"
     orig_clip = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     if target_hwnd and u32.IsWindow(target_hwnd):
+        proc_num_t = _get_process_name_from_hwnd(target_hwnd).lower()
+        cls_num_t = _get_win_class_only(target_hwnd).lower()
+        is_excel_num = proc_num_t in ("excel.exe", "hcell.exe") or ("xlmain" in cls_num_t)
+        VK_F2 = 0x71
+        VK_END = 0x23
+        VK_HOME = 0x24
         release_all_modifiers()
-        daemon_set_cb(sentinel)
-        time.sleep(0.015)
-        tap_key_combo([VK_CONTROL], VK_C)
-        time.sleep(0.045)
-        sel_txt = get_clipboard_text()
-        if not sel_txt or sel_txt == sentinel:
-            VK_END = 0x23
-            VK_HOME = 0x24
+        if is_excel_num:
+            focus_h_xl = _get_focused_control_hwnd(target_hwnd)
+            focus_cls_xl = _get_win_class_only(focus_h_xl).upper() if focus_h_xl else ""
+            if focus_cls_xl != "EXCEL6":
+                tap_key_combo([], VK_F2)
+                time.sleep(0.035)
             tap_key_combo([], VK_END)
-            time.sleep(0.02)
+            time.sleep(0.015)
             tap_key_combo([VK_SHIFT], VK_HOME)
             time.sleep(0.04)
             daemon_set_cb(sentinel)
@@ -4692,6 +4764,25 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
             tap_key_combo([VK_CONTROL], VK_C)
             time.sleep(0.045)
             sel_txt = get_clipboard_text()
+        else:
+            daemon_set_cb(sentinel)
+            time.sleep(0.015)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.045)
+            sel_txt = get_clipboard_text()
+            # 노션(Notion) 등에서 빈 드래그 시 Ctrl+C가 블록 전체(끝에 \n 포함)를 복사해버리면 선택 영역이 풀린 상태이므로
+            # 그대로 Ctrl+V를 치면 원문 뒤에 이어붙여지는('01012345678010-1234-5678') 현상이 발생함!
+            # 따라서 끝에 줄바꿈(\n)이 붙은 블록 복사거나 빈 선택이면 반드시 End -> Shift+Home으로 실제 텍스트 선택을 잡음!
+            if not sel_txt or sel_txt == sentinel or sel_txt.endswith(("\n", "\r")):
+                tap_key_combo([], VK_END)
+                time.sleep(0.025)
+                tap_key_combo([VK_SHIFT], VK_HOME)
+                time.sleep(0.045)
+                daemon_set_cb(sentinel)
+                time.sleep(0.015)
+                tap_key_combo([VK_CONTROL], VK_C)
+                time.sleep(0.045)
+                sel_txt = get_clipboard_text()
         if sel_txt and sel_txt != sentinel:
             fmt_sel = _toggle_korean_number_format(sel_txt)
             if fmt_sel != sel_txt:
@@ -5064,9 +5155,10 @@ def main() -> None:
         elif recent_unpasted:
             last_summon_raw_clip = recent_unpasted[-1]
 
-        # [분기 3] 방금(15초 이내) 스샷을 찍은 직후라면 -> [창 UI ③ 사진·OCR 공간이동창] 직행!
+        # [분기 3] 방금(15초 이내) 스샷을 찍은 직후이더라도, 글자 입력창에서 키보드(Ctrl+0)로 소환한 경우에는
+        # [1]~[8] 단축키가 즉시 작동해야 하므로 우클릭 소환이거나 비입력창(바탕화면·탐색기)일 때만 [창 UI ③ 사진·OCR 공간이동창] 직행!
         now_s = time.time()
-        if recent_images and last_image_ts > last_copy_ts and (now_s - last_image_ts) <= 15.0:
+        if recent_images and last_image_ts > last_copy_ts and (now_s - last_image_ts) <= 15.0 and (summon_by_rclick or not is_dedicated_input_app):
             disarm_sub_hotkeys()
             show_ghost_toast("__UI3_OCR__|", duration_ms=8000)
             return
@@ -5213,47 +5305,61 @@ def main() -> None:
         threading.Thread(target=_worker, daemon=True).start()
 
     msg = wintypes.MSG()
+    PM_REMOVE = 0x0001
+    WM_QUIT_MSG = 0x0012
     pending_init_show_ts: float = (time.time() + 0.35) if ("--show-now" in sys.argv) else 0.0
-    while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+    while True:
+        had_hotkey = False
+        while u32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE) != 0:
+            if msg.message == WM_QUIT_MSG:
+                # 외부에서 실수로 WM_QUIT가 전달되더라도 데몬이 죽지 않고 타이머를 재무장하여 영구 생존 보장!
+                u32.SetTimer(None, 1, 25, None)
+                continue
+            try:
+                if msg.message == WM_HOTKEY:
+                    had_hotkey = True
+                    hk_id = msg.wParam
+                    # 1) 마스터 트리거 (Ctrl + 0 또는 Alt + Z)
+                    if hk_id in (1, 2, 3):
+                        now_hk = time.time()
+                        if (now_hk - last_summon_ts) > 0.25:
+                            last_summon_ts = now_hk
+                            trigger_master_summon()
+
+                    # 1-B) 창 고정/원복 전용 핫키 (Ctrl + Alt + T)
+                    elif hk_id == 4:
+                        now_hk = time.time()
+                        if (now_hk - last_topmost_ts) > 0.25:
+                            last_topmost_ts = now_hk
+                            _execute_superpower_num(8)
+
+                    # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷)
+                    elif hk_id == 999:
+                        execute_undo_snapshot(daemon_set_clipboard)
+
+                    # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
+                    elif (101 <= hk_id <= 109) or (201 <= hk_id <= 209) or (401 <= hk_id <= 409) or (501 <= hk_id <= 509):
+                        _execute_superpower_num(hk_id % 100)
+
+                    # 3) F1~F10 고정 상용구 발동
+                    elif 301 <= hk_id <= 310:
+                        fslot = hk_id - 300
+                        disarm_sub_hotkeys()
+                        seq_mode = False
+                        fkey = f"snippet_F{fslot}"
+                        allowed, q_msg = check_feature_quota_allowed(fkey)
+                        if not allowed:
+                            show_ghost_toast(q_msg, duration_ms=3200)
+                        else:
+                            superpower_fixed_snippet(fslot, daemon_set_clipboard)
+                            complete_feature_action_success(fkey)
+            except Exception:
+                pass
+            u32.TranslateMessage(ctypes.byref(msg))
+            u32.DispatchMessageW(ctypes.byref(msg))
+
         try:
-            if msg.message == WM_HOTKEY:
-                hk_id = msg.wParam
-                # 1) 마스터 트리거 (Ctrl + 0 또는 Alt + Z)
-                if hk_id in (1, 2, 3):
-                    now_hk = time.time()
-                    if (now_hk - last_summon_ts) > 0.25:
-                        last_summon_ts = now_hk
-                        trigger_master_summon()
-
-                # 1-B) 창 고정/원복 전용 핫키 (Ctrl + Alt + T)
-                elif hk_id == 4:
-                    now_hk = time.time()
-                    if (now_hk - last_topmost_ts) > 0.25:
-                        last_topmost_ts = now_hk
-                        _execute_superpower_num(8)
-
-                # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷)
-                elif hk_id == 999:
-                    execute_undo_snapshot(daemon_set_clipboard)
-
-                # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
-                elif (101 <= hk_id <= 109) or (201 <= hk_id <= 209) or (401 <= hk_id <= 409) or (501 <= hk_id <= 509):
-                    _execute_superpower_num(hk_id % 100)
-
-                # 3) F1~F10 고정 상용구 발동
-                elif 301 <= hk_id <= 310:
-                    fslot = hk_id - 300
-                    disarm_sub_hotkeys()
-                    seq_mode = False
-                    fkey = f"snippet_F{fslot}"
-                    allowed, q_msg = check_feature_quota_allowed(fkey)
-                    if not allowed:
-                        show_ghost_toast(q_msg, duration_ms=3200)
-                    else:
-                        superpower_fixed_snippet(fslot, daemon_set_clipboard)
-                        complete_feature_action_success(fkey)
-
-            elif msg.message == WM_TIMER:
+            if True:
                 now = time.time()
                 if (now - last_hotkey_rebind_ts) > 15.0:
                     last_hotkey_rebind_ts = now
@@ -5263,6 +5369,7 @@ def main() -> None:
                         u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
                         u32.RegisterHotKey(None, 3, MOD_ALT | MOD_NOREPEAT, VK_Z)
                         u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)
+                        u32.SetTimer(None, 1, 25, None)
                     except Exception:
                         pass
                 while not _CLICKED_SUPERPOWER_QUEUE.empty():
@@ -5703,26 +5810,31 @@ def main() -> None:
                                         badge = "한글키 전환" if (lang_ed == "KO") else "영문키 전환"
                                         show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_ed} ➔ {out_ed} | {badge})", duration_ms=1400)
                                 else:
-                                    set_ime_language(target_korean=target_ko)
+                                    proc_fg_auto = _get_process_name_from_hwnd(hwnd_fg).lower() if hwnd_fg else ""
+                                    cls_fg_auto = _get_win_class_only(hwnd_fg).lower() if hwnd_fg else ""
+                                    is_excel_auto = proc_fg_auto in ("excel.exe", "hcell.exe") or ("xlmain" in cls_fg_auto)
                                     orig_c = get_clipboard_text()
                                     sentinel_auto = "__GHOSTI_AUTO_TYPO__"
-                                    daemon_set_clipboard(sentinel_auto)
-                                    time.sleep(0.015)
                                     release_all_modifiers()
                                     VK_HOME = 0x24
                                     VK_END = 0x23
-                                    tap_key_combo([VK_SHIFT], VK_HOME)
-                                    time.sleep(0.035)
-                                    tap_key_combo([VK_CONTROL], VK_C)
-                                    time.sleep(0.04)
-                                    line_sel = get_clipboard_text()
-                                    if line_sel and line_sel != sentinel_auto:
+                                    line_sel = ""
+                                    if not is_excel_auto:
+                                        daemon_set_clipboard(sentinel_auto)
+                                        time.sleep(0.015)
+                                        tap_key_combo([VK_SHIFT], VK_HOME)
+                                        time.sleep(0.035)
+                                        tap_key_combo([VK_CONTROL], VK_C)
+                                        time.sleep(0.04)
+                                        line_sel = get_clipboard_text()
+                                    if line_sel and line_sel != sentinel_auto and "\t" not in line_sel:
                                         morphed_line, _ = morph_korean_english_text_with_direction(line_sel)
                                         morphed_line = re.sub(r"^([가-힣])\1(녕하세요|기귀신)", r"\1\2", morphed_line)
                                         final_paste = morphed_line.rstrip(" ") + " "
                                     else:
-                                        tap_key_combo([], VK_END)
-                                        time.sleep(0.015)
+                                        if not is_excel_auto:
+                                            tap_key_combo([], VK_END)
+                                            time.sleep(0.015)
                                         for _ in range(total_backspaces):
                                             tap_key_combo([], VK_BACK)
                                         time.sleep(0.02)
@@ -5787,8 +5899,8 @@ def main() -> None:
         except Exception:
             pass
 
-        u32.TranslateMessage(ctypes.byref(msg))
-        u32.DispatchMessageW(ctypes.byref(msg))
+        if not had_hotkey:
+            time.sleep(0.015)
 
 
 def run_quota_self_test() -> int:
