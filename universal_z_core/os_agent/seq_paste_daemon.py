@@ -4816,10 +4816,10 @@ def _toggle_korean_number_format(txt: str) -> str:
     return out
 
 
-def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> None:
+def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None, has_recent_drag: bool = False) -> None:
     """
-    [⑦번 번호·일정성형 — 메모장·입력창 원위치(In-Place) 즉시 하이픈 성형 + 클립보드 동시 반영]:
-    - 메모장이나 입력창에서 숫자를 치고 바로 [7번]을 누르거나 드래그한 상태에서 [7번]을 누르면
+    [④번(구 ⑦번) 번호·일정성형 — 메모장·노션·입력창 원위치(In-Place) 즉시 하이픈 성형 + 클립보드 동시 반영]:
+    - 메모장이나 노션·입력창에서 숫자를 치고 바로 [4번](또는 구 [7번])을 누르거나 드래그한 상태에서 누르면
       복사/붙여넣기할 필요 없이 그 자리에서 즉시 '010-1234-5678' / '123-45-67890' 형태로 하이픈이 삽입됩니다!
     """
     target_hwnd = _LAST_TARGET_HWND or u32.GetForegroundWindow()
@@ -4875,7 +4875,11 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
         except Exception:
             pass
 
-    # 2) 일반 입력창(워드/한글/카톡/브라우저/노션) 드래그 또는 현재 줄 원위치 하이픈 성형
+    # 2) 일반 입력창(노션/브라우저/워드/한글/카톡/엑셀) 원위치 하이픈 성형
+    # 🚨 핵심(노션 블록 복사 방지): 노션에서 드래그 없이 Ctrl+C를 먼저 보내면 '노션 블록 전체 선택 모드(아랫줄까지 통째 복사)'로 빠져버려
+    #    이후 Shift+Home이 먹히지 않고 원문 뒤에 중복 붙여넣기(01012345678010-1234-5678)가 발생함!
+    #    따라서 유저가 마우스로 직접 드래그한 경우(has_recent_drag=True)가 아니면 절대 빈 Ctrl+C를 먼저 치지 않고,
+    #    반드시 커서가 살아있는 상태에서 Shift+Home을 먼저 눌러 '현재 줄 글자만' 텍스트 선택한 뒤 Ctrl+C -> Ctrl+V로 깔끔히 교체!
     sentinel = "__GHOSTI_NUM_SEL__"
     orig_clip = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
     if target_hwnd and u32.IsWindow(target_hwnd):
@@ -4901,29 +4905,28 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None) -> No
             tap_key_combo([VK_CONTROL], VK_C)
             time.sleep(0.045)
             sel_txt = get_clipboard_text()
-        else:
+        elif has_recent_drag:
             daemon_set_cb(sentinel)
             time.sleep(0.015)
             tap_key_combo([VK_CONTROL], VK_C)
             time.sleep(0.045)
             sel_txt = get_clipboard_text()
-            # 노션(Notion) 등에서 빈 드래그 시 Ctrl+C가 블록 전체(끝에 \n 포함)를 복사해버리면 선택 영역이 풀린 상태이므로
-            # 그대로 Ctrl+V를 치면 원문 뒤에 이어붙여지는('01012345678010-1234-5678') 현상이 발생함!
-            # 따라서 끝에 줄바꿈(\n)이 붙은 블록 복사거나 빈 선택이면 반드시 End -> Shift+Home으로 실제 텍스트 선택을 잡음!
-            if not sel_txt or sel_txt == sentinel or sel_txt.endswith(("\n", "\r")):
-                tap_key_combo([], VK_END)
-                time.sleep(0.025)
-                tap_key_combo([VK_SHIFT], VK_HOME)
-                time.sleep(0.045)
-                daemon_set_cb(sentinel)
-                time.sleep(0.015)
-                tap_key_combo([VK_CONTROL], VK_C)
-                time.sleep(0.045)
-                sel_txt = get_clipboard_text()
+        else:
+            # 드래그 없이 입력 직후 호출: 빈 Ctrl+C 금지 -> 즉시 Shift+Home으로 현재 줄만 텍스트 선택 후 Ctrl+C!
+            tap_key_combo([VK_SHIFT], VK_HOME)
+            time.sleep(0.04)
+            daemon_set_cb(sentinel)
+            time.sleep(0.015)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.045)
+            sel_txt = get_clipboard_text()
         if sel_txt and sel_txt != sentinel:
-            fmt_sel = _toggle_korean_number_format(sel_txt)
-            if fmt_sel != sel_txt:
-                arm_undo_snapshot(target_hwnd, 0, sel_txt, fmt_sel, mode="clip_replace")
+            # 첫 줄만 안전하게 분리 (실수로 줄바꿈이 섞여 들어왔더라도 아랫줄 문장은 절대 건드리지 않음)
+            clean_sel = sel_txt.splitlines()[0].strip() if "\n" in sel_txt else sel_txt
+            clean_sel = re.sub(r"^>\s*", "", clean_sel)
+            fmt_sel = _toggle_korean_number_format(clean_sel)
+            if fmt_sel != clean_sel:
+                arm_undo_snapshot(target_hwnd, 0, clean_sel, fmt_sel, mode="clip_replace")
                 daemon_set_cb(fmt_sel)
                 time.sleep(0.02)
                 tap_key_combo([VK_CONTROL], VK_V)
@@ -5377,7 +5380,11 @@ def main() -> None:
         elif num in (4, 7):
             seq_queue.clear()
             recent_unpasted.clear()
-            superpower_8_format_numbers(daemon_set_clipboard, raw_src=last_summon_raw_clip)
+            superpower_8_format_numbers(
+                daemon_set_clipboard,
+                raw_src=last_summon_raw_clip,
+                has_recent_drag=(time.time() - last_drag_select_ts) <= 8.0,
+            )
             complete_feature_action_success("superpower_key_7")
         elif num in (5, 8):
             superpower_7_toggle_topmost(_LAST_TARGET_HWND)
@@ -6251,42 +6258,21 @@ def main() -> None:
                                         badge = "한글키 전환" if (lang_ed == "KO") else "영문키 전환"
                                         show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_ed} ➔ {out_ed} | {badge})", duration_ms=1400)
                                 else:
-                                    proc_fg_auto = _get_process_name_from_hwnd(hwnd_fg).lower() if hwnd_fg else ""
-                                    cls_fg_auto = _get_win_class_only(hwnd_fg).lower() if hwnd_fg else ""
-                                    is_excel_auto = proc_fg_auto in ("excel.exe", "hcell.exe") or ("xlmain" in cls_fg_auto)
+                                    # [노션·엑셀·브라우저·카톡 무충돌 원자적 백스페이스 교체]:
+                                    # Shift+Home / Ctrl+C를 보내면 노션 블록 선택 모드(gksrmfxptmxm한글테스트 중복)나 엑셀 다중 셀 드래그가 발생하므로,
+                                    # 방금 타이핑한 글자 수(total_backspaces)만큼 정확히 Backspace 후 변환 문자열을 Ctrl+V로 즉시 사출!
                                     orig_c = get_clipboard_text()
-                                    sentinel_auto = "__GHOSTI_AUTO_TYPO__"
                                     release_all_modifiers()
-                                    VK_HOME = 0x24
-                                    VK_END = 0x23
-                                    line_sel = ""
-                                    if not is_excel_auto:
-                                        daemon_set_clipboard(sentinel_auto)
-                                        time.sleep(0.015)
-                                        tap_key_combo([VK_SHIFT], VK_HOME)
-                                        time.sleep(0.035)
-                                        tap_key_combo([VK_CONTROL], VK_C)
-                                        time.sleep(0.04)
-                                        line_sel = get_clipboard_text()
-                                    if line_sel and line_sel != sentinel_auto and "\t" not in line_sel:
-                                        morphed_line, _ = morph_korean_english_text_with_direction(line_sel)
-                                        morphed_line = _fix_korean_spacing_general(morphed_line)
-                                        morphed_line = re.sub(r"^([가-힣])\1(녕하세요|기귀신)", r"\1\2", morphed_line)
-                                        final_paste = morphed_line.rstrip(" ") + " "
-                                    else:
-                                        if not is_excel_auto:
-                                            tap_key_combo([], VK_END)
-                                            time.sleep(0.015)
-                                        for _ in range(total_backspaces):
-                                            tap_key_combo([], VK_BACK)
-                                        time.sleep(0.02)
-                                        final_paste = _fix_korean_spacing_general(combined_conv.strip()) + " "
+                                    for _ in range(total_backspaces):
+                                        tap_key_combo([], VK_BACK)
+                                    time.sleep(0.02)
+                                    final_paste = _fix_korean_spacing_general(combined_conv.strip()) + " "
                                     daemon_set_clipboard(final_paste)
                                     time.sleep(0.02)
                                     tap_key_combo([VK_CONTROL], VK_V)
                                     time.sleep(0.035)
                                     set_ime_language(target_korean=target_ko)
-                                    if orig_c and orig_c != sentinel_auto:
+                                    if orig_c:
                                         daemon_set_clipboard(orig_c)
                                     complete_feature_action_success("auto_typo_morph_2words")
                                     badge = "한글키 전환" if target_ko else "영문키 전환"
