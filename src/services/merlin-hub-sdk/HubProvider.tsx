@@ -181,7 +181,7 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
         urlParams.delete('sso_token');
         const searchStr = urlParams.toString();
         const newUrl = window.location.pathname + (searchStr ? '?' + searchStr : '') + window.location.hash;
-        window.history.replaceState({}, '', newUrl);
+        window.history.replaceState(window.history.state || {}, '', newUrl);
       }
     }
 

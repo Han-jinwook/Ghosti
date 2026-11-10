@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { useSaySeeStore } from './store/useSaySeeStore';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSaySeeStore, type DesktopTab, type MobileTab } from './store/useSaySeeStore';
+import type { FamilyRoomId, LoungeType } from './types/saysee';
 import { playAppEnterGiggleSound } from './services/babyGhostSound';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
@@ -28,6 +29,10 @@ export const App: React.FC = () => {
   const {
     layout,
     initApp,
+    activeLoungeType,
+    desktopTab,
+    mobileTab,
+    activeFamilyRoom,
     lastQuarantineToast,
     dismissQuarantineToast,
     lastUndoBatch,
@@ -145,11 +150,16 @@ export const App: React.FC = () => {
         return 'workspace';
       }
       const params = new URLSearchParams(window.location.search);
+      if (params.get('view') === 'showroom') {
+        return 'showroom';
+      }
       if (
         params.get('dev') === 'true' ||
         params.get('storeApp') === '1' ||
         Boolean(params.get('ghostSearchWindow')) ||
-        params.get('preview') === 'legacy'
+        params.get('preview') === 'legacy' ||
+        Boolean(params.get('lounge')) ||
+        Boolean(params.get('tab'))
       ) {
         return 'workspace';
       }
@@ -171,6 +181,244 @@ export const App: React.FC = () => {
     }
     return 'showroom';
   });
+
+  // ─────────────────────────────────────────────────────────────
+  // 🧭 [PC·안드로이드·아이폰 통합 브라우저 히스토리(뒤로가기/앞으로가기) 라우터]
+  // - 메뉴/탭 전환 시 window.history.pushState 및 URL(?lounge=...&tab=...) 동기화
+  // - 뒤로가기 시 구글 첫 화면으로 튕기거나 안드로이드에서 창이 닫히는 현상 원천 차단
+  // - 아이폰 Safari에서 뒤로가기(<)·앞으로가기(>) 버튼 즉시 활성화 및 페이지 복원 보장
+  // ─────────────────────────────────────────────────────────────
+  const isApplyingPopStateRef = useRef(false);
+  const isHistoryInitializedRef = useRef(false);
+  const lastPushedNavKeyRef = useRef('');
+
+  const buildNavUrl = (nav: {
+    viewMode: 'showroom' | 'workspace';
+    lounge: LoungeType;
+    desktopTab: DesktopTab;
+    familyRoom: FamilyRoomId;
+  }): string => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (nav.viewMode === 'showroom') {
+        params.set('view', 'showroom');
+        params.delete('lounge');
+        params.delete('tab');
+        params.delete('room');
+      } else {
+        params.delete('view');
+        params.set('lounge', nav.lounge);
+        params.set('tab', nav.desktopTab);
+        if (nav.lounge === 'family') {
+          params.set('room', nav.familyRoom);
+        } else {
+          params.delete('room');
+        }
+      }
+      const qs = params.toString();
+      return `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || ''}`;
+    } catch {
+      return window.location.href;
+    }
+  };
+
+  const desktopTabToMobileTab = (dt: DesktopTab): MobileTab =>
+    dt === 'trial'
+      ? 'trial'
+      : dt === 'dashboard'
+      ? 'search'
+      : dt === 'trash'
+      ? 'trash'
+      : dt === 'share'
+      ? 'share'
+      : 'settings';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // 1) 초기 진입 또는 외부 페이지(구글 등)에서 앞으로가기/뒤로가기로 복귀 시 URL·history.state에서 정확한 페이지 복원
+    try {
+      const savedNav = window.history.state?.ghostiNav;
+      const params = new URLSearchParams(window.location.search);
+      const urlLounge = params.get('lounge') as LoungeType | null;
+      const urlTab = params.get('tab') as DesktopTab | null;
+      const urlRoom = params.get('room') as FamilyRoomId | null;
+      const urlView = params.get('view') as 'showroom' | 'workspace' | null;
+
+      const targetLounge: LoungeType =
+        savedNav?.lounge ||
+        (urlLounge && ['personal', 'family', 'club', 'student', 'work'].includes(urlLounge)
+          ? urlLounge
+          : useSaySeeStore.getState().activeLoungeType);
+      const targetDesktopTab: DesktopTab =
+        savedNav?.desktopTab ||
+        (urlTab &&
+        ['trial', 'dashboard', 'trash', 'share', 'settings', 'sync', 'superpower_dojo', 'search_dojo'].includes(urlTab)
+          ? urlTab
+          : useSaySeeStore.getState().desktopTab);
+      const targetMobileTab: MobileTab = savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
+      const targetRoom: FamilyRoomId =
+        savedNav?.familyRoom ||
+        (urlRoom && ['home', 'parents', 'inlaws'].includes(urlRoom)
+          ? urlRoom
+          : useSaySeeStore.getState().activeFamilyRoom);
+      const targetView: 'showroom' | 'workspace' =
+        savedNav?.viewMode || (urlView === 'showroom' ? 'showroom' : viewMode);
+
+      isApplyingPopStateRef.current = true;
+      if (targetView !== viewMode) {
+        setViewMode(targetView);
+      }
+      useSaySeeStore.setState({
+        activeLoungeType: targetLounge === 'student' ? 'club' : targetLounge,
+        desktopTab: targetDesktopTab,
+        mobileTab: targetMobileTab,
+        activeFamilyRoom: targetRoom,
+      });
+
+      const initialNav = {
+        viewMode: targetView,
+        lounge: (targetLounge === 'student' ? 'club' : targetLounge) as LoungeType,
+        desktopTab: targetDesktopTab,
+        mobileTab: targetMobileTab,
+        familyRoom: targetRoom,
+      };
+      const initKey = `${initialNav.viewMode}:${initialNav.lounge}:${initialNav.desktopTab}:${initialNav.familyRoom}`;
+      lastPushedNavKeyRef.current = initKey;
+
+      // 루트 가드 엔트리(ghostiRootGuard) + 현재 엔트리(ghostiActiveEntry) 이중 구성:
+      // - 안드로이드에서 뒤로가기 시 앱/탭이 닫히거나 PC에서 구글 첫 화면으로 튕기는 현상 차단
+      // - 아이폰 Safari에서 뒤로가기(<) 버튼 즉시 활성화
+      const initUrl = buildNavUrl(initialNav);
+      if (!window.history.state?.ghostiNav) {
+        const rootHomeNav = {
+          viewMode: 'workspace' as const,
+          lounge: 'personal' as LoungeType,
+          desktopTab: 'trash' as DesktopTab,
+          mobileTab: 'trash' as MobileTab,
+          familyRoom: 'home' as FamilyRoomId,
+        };
+        window.history.replaceState(
+          { ...(window.history.state || {}), ghostiRootGuard: true, ghostiNav: rootHomeNav },
+          '',
+          buildNavUrl(rootHomeNav)
+        );
+        window.history.pushState(
+          { ...(window.history.state || {}), ghostiRootGuard: false, ghostiActiveEntry: true, ghostiNav: initialNav },
+          '',
+          initUrl
+        );
+      } else {
+        window.history.replaceState(
+          { ...(window.history.state || {}), ghostiNav: initialNav },
+          '',
+          initUrl
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      isHistoryInitializedRef.current = true;
+      window.setTimeout(() => {
+        isApplyingPopStateRef.current = false;
+      }, 0);
+    }
+
+    const onNavPopState = (event: PopStateEvent) => {
+      const st = useSaySeeStore.getState();
+      const modalWasOpen = Boolean(
+        st.selectedPhoto ||
+          st.selectedVideoModal ||
+          st.selectedDocModal ||
+          st.showProModal ||
+          st.showSetupMonsterModal ||
+          st.showOnboarding ||
+          st.showFaceRegistryModal ||
+          st.doorplatePickerClusterId
+      );
+      if (modalWasOpen) {
+        return;
+      }
+
+      const stateObj = event.state || {};
+      const nav = stateObj.ghostiNav;
+      const params = new URLSearchParams(window.location.search);
+      const fallbackLounge = (params.get('lounge') as LoungeType) || 'personal';
+      const fallbackTab = (params.get('tab') as DesktopTab) || 'trash';
+      const fallbackRoom = (params.get('room') as FamilyRoomId) || 'home';
+      const fallbackView = params.get('view') === 'showroom' ? 'showroom' : 'workspace';
+
+      const targetNav = nav || {
+        viewMode: fallbackView,
+        lounge: fallbackLounge,
+        desktopTab: fallbackTab,
+        mobileTab: desktopTabToMobileTab(fallbackTab),
+        familyRoom: fallbackRoom,
+      };
+
+      isApplyingPopStateRef.current = true;
+      setViewMode(targetNav.viewMode === 'showroom' ? 'showroom' : 'workspace');
+      useSaySeeStore.setState({
+        activeLoungeType: targetNav.lounge === 'student' ? 'club' : targetNav.lounge,
+        desktopTab: targetNav.desktopTab,
+        mobileTab: targetNav.mobileTab || desktopTabToMobileTab(targetNav.desktopTab),
+        activeFamilyRoom: targetNav.familyRoom || 'home',
+      });
+      lastPushedNavKeyRef.current = `${targetNav.viewMode}:${targetNav.lounge}:${targetNav.desktopTab}:${targetNav.familyRoom}`;
+
+      // 만약 루트 가드(ghostiRootGuard)까지 뒤로 왔다면, 구글 첫 화면으로 나가거나 안드로이드 창이 닫히지 않도록 안전하게 루트 엔트리를 재장전
+      if (stateObj.ghostiRootGuard) {
+        try {
+          window.history.pushState(
+            { ghostiRootGuard: false, ghostiActiveEntry: true, ghostiNav: targetNav },
+            '',
+            buildNavUrl(targetNav)
+          );
+        } catch {
+          // ignore
+        }
+      }
+
+      window.setTimeout(() => {
+        isApplyingPopStateRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener('popstate', onNavPopState);
+    return () => window.removeEventListener('popstate', onNavPopState);
+  }, []);
+
+  // 2) 유저가 앱 내 탭/라운지/대문을 전환할 때마다 히스토리 스택에 pushState 기록
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isHistoryInitializedRef.current) return;
+    if (isApplyingPopStateRef.current) return;
+
+    const nextNav = {
+      viewMode,
+      lounge: activeLoungeType,
+      desktopTab,
+      mobileTab,
+      familyRoom: activeFamilyRoom,
+    };
+    const nextKey = `${nextNav.viewMode}:${nextNav.lounge}:${nextNav.desktopTab}:${nextNav.familyRoom}`;
+    if (nextKey === lastPushedNavKeyRef.current) return;
+    lastPushedNavKeyRef.current = nextKey;
+
+    try {
+      window.history.pushState(
+        {
+          ...(window.history.state || {}),
+          ghostiRootGuard: false,
+          ghostiActiveEntry: true,
+          ghostiNav: nextNav,
+        },
+        '',
+        buildNavUrl(nextNav)
+      );
+    } catch {
+      // ignore
+    }
+  }, [viewMode, activeLoungeType, desktopTab, mobileTab, activeFamilyRoom]);
 
   const handleEnterWorkspace = (forceAllow = false) => {
     if (!OFFICIAL_LAUNCH_LIVE && !isDevAuthorized && !forceAllow) {
