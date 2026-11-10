@@ -957,7 +957,7 @@ def set_hidden(p: Path, hide: bool) -> bool:
 # 대화형 폴더 정리: 실제 스캔 미리보기 → 승인된 경로만 이동
 # ---------------------------------------------------------------------------
 
-_INSTALLER_EXTS = {".exe", ".msi", ".apk", ".msix", ".appx"}
+_INSTALLER_EXTS = {".exe", ".msi", ".apk", ".msix", ".appx", ".zip", ".7z", ".rar"}
 _PARTIAL_EXTS = {".crdownload", ".part", ".tmp", ".download"}
 _DESKTOP_JUNK_EXTS = {".tmp", ".bak", ".log", ".crdownload", ".part", ".zip", ".7z", ".rar", ".exe", ".msi", ".apk"}
 _NEVER_TOUCH_EXTS = {".lnk", ".url", ".ini", ".sys", ".dll"}
@@ -965,7 +965,7 @@ _NEVER_TOUCH_EXTS = {".lnk", ".url", ".ini", ".sys", ".dll"}
 
 def _cleanup_roots(kind: str) -> List[Path]:
     if kind == "DOWNLOAD_INSTALLERS":
-        return [known_folder("downloads")]
+        return [known_folder("downloads"), known_folder("desktop")]
     return [known_folder("desktop"), known_folder("downloads")]
 
 
@@ -973,42 +973,58 @@ def scan_cleanup_candidates(kind: str, min_age_days: float = 3.0, max_items: int
     """바탕화면·다운로드 '바로 아래' 파일만 본다(하위 폴더·바로가기·시스템 파일 제외). 파일 본문은 읽지 않는다."""
     kind = kind if kind in ("DOWNLOAD_INSTALLERS", "FOLDER_REORG") else "FOLDER_REORG"
     t0 = time.perf_counter()
-    items: List[Dict[str, Any]] = []
     now = time.time()
-    for root in _cleanup_roots(kind):
-        if not root.exists():
-            continue
-        try:
-            entries = list(root.iterdir())
-        except Exception:
-            continue
-        for e in entries:
+
+    def _collect(age_threshold: float) -> List[Dict[str, Any]]:
+        collected: List[Dict[str, Any]] = []
+        seen_paths = set()
+        for root in _cleanup_roots(kind):
+            if not root.exists():
+                continue
             try:
-                if not e.is_file() or e.name.startswith("~$") or e.name.lower() == "desktop.ini":
-                    continue
-                ext = e.suffix.lower()
-                if ext in _NEVER_TOUCH_EXTS:
-                    continue
-                st = e.stat()
-                age = (now - st.st_mtime) / 86400.0
-                if kind == "DOWNLOAD_INSTALLERS":
-                    hit = ext in _INSTALLER_EXTS and age >= min_age_days or ext in _PARTIAL_EXTS and age >= 1
-                else:
-                    hit = ext in _DESKTOP_JUNK_EXTS and age >= min_age_days
-                if not hit:
-                    continue
-                items.append(
-                    {
-                        "name": e.name,
-                        "fullPath": str(e.resolve()),
-                        "folderLabel": "바탕화면" if is_within(e, known_folder("desktop")) else "다운로드",
-                        "sizeBytes": int(st.st_size),
-                        "ageDays": round(age, 1),
-                        "modifiedAt": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
-                    }
-                )
+                entries = list(root.iterdir())
             except Exception:
                 continue
+            for e in entries:
+                try:
+                    if not e.is_file() or e.name.startswith("~$") or e.name.lower() == "desktop.ini":
+                        continue
+                    ext = e.suffix.lower()
+                    if ext in _NEVER_TOUCH_EXTS:
+                        continue
+                    resolved = str(e.resolve())
+                    if resolved in seen_paths:
+                        continue
+                    st = e.stat()
+                    age = max(0.0, (now - st.st_mtime) / 86400.0)
+                    if kind == "DOWNLOAD_INSTALLERS":
+                        hit = (ext in _INSTALLER_EXTS and age >= age_threshold) or (ext in _PARTIAL_EXTS and age >= min(1.0, age_threshold))
+                    else:
+                        hit = ext in _DESKTOP_JUNK_EXTS and age >= age_threshold
+                    if not hit:
+                        continue
+                    seen_paths.add(resolved)
+                    collected.append(
+                        {
+                            "name": e.name,
+                            "fullPath": resolved,
+                            "folderLabel": "바탕화면" if is_within(e, known_folder("desktop")) else "다운로드",
+                            "sizeBytes": int(st.st_size),
+                            "ageDays": round(age, 1),
+                            "modifiedAt": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+                        }
+                    )
+                except Exception:
+                    continue
+        return collected
+
+    items = _collect(min_age_days)
+    effective_min_age = min_age_days
+    if not items and min_age_days > 0:
+        items = _collect(0.0)
+        if items:
+            effective_min_age = 0.0
+
     items.sort(key=lambda x: x["sizeBytes"], reverse=True)
     items = items[:max_items]
     total = sum(x["sizeBytes"] for x in items)
@@ -1019,7 +1035,7 @@ def scan_cleanup_candidates(kind: str, min_age_days: float = 3.0, max_items: int
         "items": items,
         "count": len(items),
         "totalBytes": total,
-        "minAgeDays": min_age_days,
+        "minAgeDays": effective_min_age,
         "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
     }
 

@@ -353,7 +353,29 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     setSharedMonsterBusy(true);
 
     // [v1.3] 귀신비서 대본집 우선 응답 (별명 등록 → 매운맛 점괘 / 구매처 거절 / 급한 유저 / 홀림 퀘스트 / 로드맵 희망 답변)
-    if (sourceTab === 'trash') {
+    // 단, 직전 대화에 승인 대기 중인 손보기 카드(정리·바로가기·복구·사양진단·수리)나 복원 목록이 있을 때의 긍정/승인/확인 발화는 손보기 라우터가 직접 처리!
+    const hasPendingCareApproval = [...getSharedMonsterChatState().messages]
+      .reverse()
+      .some(
+        (m) =>
+          (m.cleanupPreview && !m.cleanupPreview.approved) ||
+          (m.shortcutPreview && !m.shortcutPreview.approved) ||
+          (m.missingFilePayload && !m.missingFilePayload.restored) ||
+          (m.cardKind === 'PC_SPEC_CONSULTATION' && m.pcSpecPayload && !m.pcSpecPayload.bloatwareCleaned) ||
+          (m.cardKind === 'DEVICE_REPAIR_GATE' && m.deviceRepairPayload && !m.deviceRepairPayload.executed) ||
+          (m.cardKind === 'WEEKLY_CARE_BRIEFING' && m.proactiveCareBriefing && !m.proactiveCareBriefing.executed) ||
+          m.cardKind === 'RESTORE_POINTS_LIST'
+      );
+    const isDirectCareOrStatusCommand =
+      /(진행해|실행해|정리해|치워줘|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|임시\s*설치|바탕화면|다운로드|[c-zC-Z]\s*드라이브)/i.test(
+        raw
+      );
+    const shouldBypassSecretaryPlaybook =
+      isDirectCareOrStatusCommand ||
+      (hasPendingCareApproval &&
+        /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해줘|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw));
+
+    if (sourceTab === 'trash' && !shouldBypassSecretaryPlaybook) {
       const secretaryState = loadGhostSecretaryState();
       const turn = resolveGhostSecretaryTurn(raw, secretaryState, {
         passportClusterCount: rankPassportCandidates(useSaySeeStore.getState().faceClusters || []).length,
@@ -780,15 +802,27 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </span>
       </div>
 
-      {/* 1. 상단 슬림 원복 안내 (모바일에서만 성우 컨트롤 우측 병기) */}
+      {/* 1. 상단 슬림 원복 안내 + 우측 상단 [🕰️ 복원 기록] 원클릭 버튼 */}
       <div className="px-3.5 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
-          <span className="font-bold text-emerald-800 dark:text-emerald-300">
+          <span className="font-bold text-emerald-800 dark:text-emerald-300 truncate">
             손보기 후 원하는 시점으로 복원 가능
           </span>
         </div>
-        {isMobileOrStore && <VoiceActorControlPill compact />}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
+            title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
+            className="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[11.5px] font-extrabold shadow-xs transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+          >
+            <span>🕰️</span>
+            <span>복원 기록</span>
+          </button>
+          {isMobileOrStore && <VoiceActorControlPill compact />}
+        </div>
       </div>
 
       {/* 2. 본문 대화 스트림 (노션 스타일 미니멀 버블) */}

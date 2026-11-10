@@ -1691,11 +1691,15 @@ export async function processUnifiedMonsterChatQuery(params: {
         )
       );
       const msgText = res.ok
-        ? `${res.message}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${res.restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 원래 위치로 1초 원복됩니다.`
+        ? `✅ **정리가 완료되었습니다!**\n${res.message}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${res.restoreId}\`\n언제든 우측 상단 **[🕰️ 복원 기록]** 버튼을 누르시거나 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 원래 위치로 1초 원복됩니다.`
         : res.message;
       speak(res.ok ? '승인 말씀이 블랙박스에 기록되었으며 정리를 완료했습니다.' : res.message);
       return reply(sourceTab, msgText, {
         healthRecordIssued: res.healthRecord,
+        followUpSuggestions: [
+          '최근 [복원 기록] 보여줘',
+          '방금 한 거 원래대로 되돌려줘',
+        ],
       });
     }
 
@@ -1900,9 +1904,153 @@ export async function processUnifiedMonsterChatQuery(params: {
     }
   }
 
-  // 0-0A2) [속도·상태 확인 질문("속도 개선된거야?", "빨라졌어?", "메모리 얼마나 세이브된거야?", "정리 잘 됐어?", "지금 상태 어때?") 0토큰 즉시 비교 브리핑]
-  // 서류 검색(SEARCH_ROUTING)으로 잘못 빠져나가거나 LLM이 CLEANUP_FOLDER_REORG로 오분류해 다운로드 .zip 파일을 정리함으로 옮기는 사고를 원천 차단합니다!
+  // 0-0A1) [대기 카드가 없을 때 "응 진행해" / "응 정리해줘" 입력 시 즉시 스캔·실행 완료 보장]
   const recentAssistantMsgsEarly = sharedChatState.messages.filter((m) => m.role === 'assistant');
+  const lastApprovedCleanupMsgEarly = [...recentAssistantMsgsEarly]
+    .reverse()
+    .find((m) => m.cleanupPreview && m.cleanupPreview.approved);
+
+  if (
+    !pendingApprovalMsg &&
+    isNaturalAffirmativeConsent &&
+    /(진행해|실행해|정리해|치워|그대로|응|네|그래|좋아)/i.test(clean)
+  ) {
+    const scanNow = await zcoreJson<{
+      ok: boolean;
+      items?: MonsterCleanupItem[];
+      totalBytes?: number;
+      minAgeDays?: number;
+    }>('/__zcore/cleanup-scan', postJson({ kind: 'FOLDER_REORG' }));
+    const scanNowData = scanNow.ok ? scanNow.data : undefined;
+    const scannedItems = scanNowData?.ok ? scanNowData.items || [] : [];
+    if (scannedItems.length > 0) {
+      const totalBytes = Number(scanNowData?.totalBytes ?? 0);
+      const preview: MonsterCleanupPreviewPayload = {
+        cleanupType: 'FOLDER_REORG',
+        summaryTitle: '바탕화면·다운로드 임시·설치파일 정리',
+        userPrompt: clean,
+        targetFolderLabel: '바탕화면·다운로드 폴더',
+        moveCount: scannedItems.length,
+        totalBytes,
+        reclaimSizeLabel: `총 ${formatBytes(totalBytes)}`,
+        items: scannedItems,
+        sampleFiles: scannedItems.map(
+          (i) => `${i.name} (${i.folderLabel} · ${formatBytes(i.sizeBytes)} · ${i.ageDays}일 전)`
+        ),
+        previewDescriptionKo: `바탕화면·다운로드 폴더에서 임시·압축·설치파일 ${scannedItems.length}건을 '기타_정리함'으로 안전 이동했습니다.`,
+      };
+      const execRes = await executeMonsterCleanupApproval(preview, clean);
+      const approvedPreview: MonsterCleanupPreviewPayload = {
+        ...preview,
+        approved: execRes.ok,
+        approvedTypedText: clean,
+        createdRestoreId: execRes.restoreId,
+        executionError: execRes.ok ? undefined : execRes.message,
+      };
+      const msgText = execRes.ok
+        ? `✅ **정리가 완료되었습니다!**\n${execRes.message}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${execRes.restoreId}\`\n언제든 우측 상단 **[🕰️ 복원 기록]** 버튼을 누르시거나 채팅창에 **"원래대로 되돌려줘"**라고 입력하시면 원래 위치로 1초 원복됩니다.`
+        : execRes.message;
+      speak(execRes.ok ? '정리가 완료되었으며 복원 기록에 안전하게 보관했습니다.' : execRes.message);
+      return reply(sourceTab, msgText, {
+        cardKind: 'CLEANUP_PREVIEW_GATE',
+        cleanupPreview: approvedPreview,
+        healthRecordIssued: execRes.healthRecord,
+        followUpSuggestions: [
+          '최근 [복원 기록] 보여줘',
+          '방금 한 거 원래대로 되돌려줘',
+        ],
+      });
+    }
+    if (lastApprovedCleanupMsgEarly?.cleanupPreview) {
+      const prevRid = lastApprovedCleanupMsgEarly.cleanupPreview.createdRestoreId || '#1';
+      const doneMsg = `✅ **이미 바탕화면·다운로드 임시 설치파일 정리가 완료되었습니다!**\n• 정리 건수: **${lastApprovedCleanupMsgEarly.cleanupPreview.moveCount}건** (\`'기타_정리함'\` 안전 보관 완료)\n• 복원 번호: **\`[${prevRid} 복원 기록]\`**\n우측 상단 **[🕰️ 복원 기록]** 버튼을 누르시거나 채팅창에 **"원래대로 되돌려줘"**라고 입력하시면 1초 만에 원래 위치로 복원됩니다.`;
+      speak('이미 정리가 완료되어 복원 기록에 보관되어 있습니다.');
+      return reply(sourceTab, doneMsg, {
+        followUpSuggestions: [
+          '최근 [복원 기록] 보여줘',
+          '방금 한 거 원래대로 되돌려줘',
+        ],
+      });
+    }
+    const doneCleanMsg =
+      '✅ **바탕화면·다운로드 폴더 스캔 및 정리가 완료되었습니다!**\n현재 이동할 불필요 임시·설치파일이 **0건**으로 모든 파일이 깨끗하게 정리된 상태입니다. 우측 상단 **[🕰️ 복원 기록]** 버튼에서 언제든 이전 정리·복원 내역을 확인하고 원래 위치로 되돌리실 수 있습니다.';
+    speak('바탕화면과 다운로드 폴더 정리가 완료되었습니다.');
+    return reply(sourceTab, doneCleanMsg, {
+      followUpSuggestions: [
+        '최근 [복원 기록] 보여줘',
+        '지금 PC가 좀 느린데 1초 건강검진 해줘',
+      ],
+    });
+  }
+
+  // 0-0A2) [정리/진행 상태 확인 질문("진행된거야?", "진행한거야?", "정리된거야?", "정리한거야?", "다 된거야?") 및 속도 확인 0토큰 즉답]
+  // 서류 검색(SEARCH_ROUTING)이나 외부 AI 바톤터치(BATON_TOUCH_CUTOFF)로 빠지는 현상을 원천 차단합니다!
+  const isCleanupActionStatusVerification =
+    !/속도|cpu|메모리|램|ram|빨라/i.test(clean) &&
+    /(진행\s*된\s*거|진행된거|진행\s*한\s*거|진행한거|진행\s*됐|진행됐|진행\s*했|진행했|정리\s*된\s*거|정리된거|정리\s*한\s*거|정리한거|정리\s*됐|정리됐|정리\s*했|정리했|다\s*된\s*거|다된거|다\s*됐|다됐|완료\s*된\s*거|완료된거|완료\s*됐|완료됐|끝난\s*거|끝났어)/i.test(
+      clean
+    );
+
+  if (isCleanupActionStatusVerification) {
+    if (pendingApprovalMsg?.cleanupPreview && !pendingApprovalMsg.cleanupPreview.approved) {
+      const preview = pendingApprovalMsg.cleanupPreview;
+      const res = await executeMonsterCleanupApproval(preview, clean);
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.cleanupPreview
+            ? {
+                ...m,
+                cleanupPreview: {
+                  ...m.cleanupPreview,
+                  approved: res.ok,
+                  approvedTypedText: clean,
+                  createdRestoreId: res.restoreId,
+                  executionError: res.ok ? undefined : res.message,
+                },
+                healthRecordIssued: res.healthRecord || m.healthRecordIssued,
+              }
+            : m
+        )
+      );
+      const msgText = res.ok
+        ? `✅ **네! 방금 말씀하신 바탕화면·다운로드 정리(${preview.moveCount}건)를 즉시 실행 완료했습니다!**\n• ${res.message}\n• 📋 **블랙박스 승인 기록 완료** — 복원 번호: \`${res.restoreId}\`\n우측 상단 **[🕰️ 복원 기록]** 버튼을 누르시거나 **"원래대로 되돌려줘"**라고 입력하시면 1초 만에 원래 자리로 복원됩니다.`
+        : res.message;
+      speak(res.ok ? '네, 방금 정리를 완료하고 복원 기록에 안전하게 보관했습니다.' : res.message);
+      return reply(sourceTab, msgText, {
+        healthRecordIssued: res.healthRecord,
+        followUpSuggestions: [
+          '최근 [복원 기록] 보여줘',
+          '방금 한 거 원래대로 되돌려줘',
+        ],
+      });
+    }
+    if (lastApprovedCleanupMsgEarly?.cleanupPreview) {
+      const cp = lastApprovedCleanupMsgEarly.cleanupPreview;
+      const rid = cp.createdRestoreId || '#1';
+      const verifiedMsg = `✅ **네! 바탕화면·다운로드 임시파일 정리가 정상적으로 완료되었습니다.**\n• 정리 내역: **${cp.summaryTitle}** (${cp.moveCount}건 ➔ \`'기타_정리함'\` 안전 이동 완료)\n• 복원 번호: **\`[${rid} 복원 기록]\`** (승인 발화: \`"${cp.approvedTypedText || '응 진행해'}"\`)\n• 우측 상단 **[🕰️ 복원 기록]** 버튼을 누르시거나 채팅창에 **"원래대로 되돌려줘"**라고 입력하시면 1초 만에 원래 위치로 복원됩니다!`;
+      speak(`네, 정리가 완료되어 ${rid} 복원 기록에 안전하게 보관되어 있습니다.`);
+      return reply(sourceTab, verifiedMsg, {
+        followUpSuggestions: [
+          '최근 [복원 기록] 보여줘',
+          '방금 한 거 원래대로 되돌려줘',
+        ],
+      });
+    }
+    const { points } = await fetchRestorePointsWithPrecheck();
+    if (points.length > 0) {
+      const latestPt = points[0];
+      const verifiedFromDiskMsg = `✅ **네! 최근 손보기·정리 작업이 완료되어 \`[${latestPt.restoreId} 복원 기록]\`에 보관되어 있습니다.**\n• 최근 기록: **${latestPt.summary}** (${latestPt.createdAt})\n• 상태: ${latestPt.statusBadge}\n우측 상단 **[🕰️ 복원 기록]** 버튼을 누르시거나 아래 기록 카드에서 **[↩️ 원래 위치로 1초 복원]**을 누르시면 즉시 되돌릴 수 있습니다.`;
+      speak(`네, 최근 정리 작업이 완료되어 ${latestPt.restoreId} 복원 기록에 보관되어 있습니다.`);
+      return reply(sourceTab, verifiedFromDiskMsg, {
+        cardKind: 'RESTORE_POINTS_LIST',
+        restorePoints: points,
+        followUpSuggestions: [
+          '1번 복원해줘',
+          '바탕화면이랑 다운로드 임시 설치파일 정리해줘',
+        ],
+      });
+    }
+  }
   const lastSpecMsgEarly = [...recentAssistantMsgsEarly]
     .reverse()
     .find((m) => m.cardKind === 'PC_SPEC_CONSULTATION' && m.pcSpecPayload);
@@ -2326,7 +2474,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 0-A) 우리 앱·기기·설정 키워드와 무관한 범위 밖 질문은 차갑게 거절하지 않고
   //      3단계 원칙에 따라 대화 내용을 클립보드에 복사해 두고 외부 AI로 바로 점프시켜 주는 버튼을 제공합니다 (무토큰 0원).
   const hasAnyAppOrPcCue =
-    /귀신|여권|라벨러|초능력|상용구|별명|닉네임|호칭|프로필|계정|로그인|가입|동기화|연동|요금|구독|결제|환불|해지|특판|무료|유료|모임|라운지|문패|캐스트|리모컨|싱크|알림|검진|손없는\s*날|손\s*없는\s*날|단축키|우클릭|ctrl|컨트롤|클립보드|복사|붙여넣기|오타|한영|서식|줄바꿈|합본|ocr|컴퓨터|피씨|pc|노트북|스마트폰|휴대폰|폰|갤러리|사진첩|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|음성|목소리|화면|글씨|글자|테마|다크|라이트|주사율|팝업|광고|보안|백신|바이러스|랜섬웨어|디펜더|시작프로그램|부팅|재부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|검색|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|버그|먹통|멈춤|꺼졌|스튜디오|문의|건의|제안|아이디어/i.test(
+    /귀신|여권|라벨러|초능력|상용구|별명|닉네임|호칭|프로필|계정|로그인|가입|동기화|연동|요금|구독|결제|환불|해지|특판|무료|유료|모임|라운지|문패|캐스트|리모컨|싱크|알림|검진|손없는\s*날|손\s*없는\s*날|단축키|우클릭|ctrl|컨트롤|클립보드|복사|붙여넣기|오타|한영|서식|줄바꿈|합본|ocr|컴퓨터|피씨|pc|노트북|스마트폰|휴대폰|폰|갤러리|사진첩|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|음성|목소리|화면|글씨|글자|테마|다크|라이트|주사율|팝업|광고|보안|백신|바이러스|랜섬웨어|디펜더|시작프로그램|부팅|재부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|검색|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|버그|먹통|멈춤|꺼졌|스튜디오|문의|건의|제안|아이디어|진행|실행|완료|끝났|된\s*거야|된거야|한\s*거야|한거야|됐어|했어|승인|동의/i.test(
       clean
     );
   if (!hasAnyAppOrPcCue) {

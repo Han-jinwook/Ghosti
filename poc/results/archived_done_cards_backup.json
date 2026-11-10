@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-09T10:06:04.544866",
+  "updated_at": "2026-11-09T14:36:32.507728",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -826,6 +826,70 @@
       "last_edited_time": "2026-11-06T05:21:00.000Z",
       "url": "https://app.notion.com/p/410f9ffd2c1d80669221fd1c9f61b3bd",
       "archived_at": "2026-11-09T10:06:04.544701"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-8168-b8b8-e28dec031ff7",
+      "title": "🎯 [귀신같이] 모바일-홈 화면 소리 횟수, 버튼 잘림, 뒤로가기 시 창꺼짐, 메뉴 트리 클릭 후 이동 문제",
+      "app": "",
+      "last_edited_time": "2026-11-06T05:55:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d8168b8b8e28dec031ff7",
+      "archived_at": "2026-11-09T12:47:22.419627"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-8041-911d-d42bb7f0bdf9",
+      "title": "🎯 [센스톡] 카톡 친구창이 백지로 뜨고 친구를 찾지 못하는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-06T05:53:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d8041911dd42bb7f0bdf9",
+      "archived_at": "2026-11-09T12:47:22.419638"
+    },
+    {
+      "page_id": "413f9ffd-2c1d-8030-843d-d9fd0f529b67",
+      "title": "🎯 [귀신같이] 귀신비서 대신 귀신검색 메뉴가 제일 처음에 뜨는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-09T01:01:00.000Z",
+      "url": "https://app.notion.com/p/413f9ffd2c1d8030843dd9fd0f529b67",
+      "archived_at": "2026-11-09T12:58:23.094041"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-8010-89ce-ebfec9bf76a2",
+      "title": "🎯 [귀신같이] 손보기 대화창에서 엔터 누르고 화면이 내 기기 찾기 화면으로 전환되는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-09T01:02:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d801089ceebfec9bf76a2",
+      "archived_at": "2026-11-09T13:19:43.809498"
+    },
+    {
+      "page_id": "413f9ffd-2c1d-8024-95c4-c09847d525de",
+      "title": "🎯 [센스톡] 카톡 단체 발송 시작이 아예 안되는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-09T03:45:00.000Z",
+      "url": "https://app.notion.com/p/413f9ffd2c1d802495c4c09847d525de",
+      "archived_at": "2026-11-09T13:19:56.057030"
+    },
+    {
+      "page_id": "40ff9ffd-2c1d-8083-b716-dd862634ecbc",
+      "title": "🎯 [센스톡] 자동 업데이트 미실행 및 카톡 전송시 속도가 느려지는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-09T02:11:00.000Z",
+      "url": "https://app.notion.com/p/40ff9ffd2c1d8083b716dd862634ecbc",
+      "archived_at": "2026-11-09T13:19:56.057040"
+    },
+    {
+      "page_id": "410f9ffd-2c1d-8072-ba66-c0467dfb4529",
+      "title": "🎯 [센스톡] 카톡에서 친구 검색시 대화방/연락처 없는 경우",
+      "app": "",
+      "last_edited_time": "2026-11-09T03:51:00.000Z",
+      "url": "https://app.notion.com/p/410f9ffd2c1d8072ba66c0467dfb4529",
+      "archived_at": "2026-11-09T14:36:32.507578"
+    },
+    {
+      "page_id": "413f9ffd-2c1d-809e-bc17-d6ba13e00fd2",
+      "title": "🎯 [귀신같이] 귀신비서의 답변 관련 오류",
+      "app": "",
+      "last_edited_time": "2026-11-09T03:51:00.000Z",
+      "url": "https://app.notion.com/p/413f9ffd2c1d809ebc17d6ba13e00fd2",
+      "archived_at": "2026-11-09T14:36:32.507591"
     }
   ]
 }

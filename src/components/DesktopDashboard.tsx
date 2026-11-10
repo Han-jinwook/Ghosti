@@ -1118,9 +1118,29 @@ export const DesktopDashboard: React.FC = () => {
 
               </div>
 
-              {/* 우측 상단 심플 앵커: 1·2단계 신형/구형 비교 스위치 + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
+              {/* 우측 상단 심플 앵커: [🕰️ 복원 기록] + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="가이드 공유 및 프로필 영역">
-
+                {activeLoungeType === 'personal' && desktopTab === 'trash' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.dispatchEvent(
+                        new CustomEvent('ghosti_toss_to_monster_chat', {
+                          detail: { query: '최근 [복원 기록] 보여줘' },
+                        })
+                      );
+                    }}
+                    title="최근 손보기·정리 복원 기록 조회 및 원래대로 1초 되돌리기"
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-extrabold text-[12px] border transition-all cursor-pointer ${
+                      themeMode === 'light'
+                        ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100'
+                        : 'bg-violet-950/70 border-violet-500/40 text-violet-200 hover:bg-violet-900/80'
+                    }`}
+                  >
+                    <span className="text-[13px]">🕰️</span>
+                    <span>복원 기록</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

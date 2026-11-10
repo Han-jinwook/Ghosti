@@ -1015,7 +1015,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   } = useSaySeeStore();
 
   const trashMobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [externalQueryTrigger] = useState<{
+  const [externalQueryTrigger, setExternalQueryTrigger] = useState<{
     id: number;
     query: string;
   } | null>(null);
@@ -1237,14 +1237,28 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 )}
               </div>
 
-              <button
-                type="button"
-                disabled={activeTrash.length === 0 || quarantineMoving}
-                onClick={() => void moveAllTrashToQuarantine()}
-                className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
-              >
-                <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExternalQueryTrigger({
+                      id: Date.now() + Math.random(),
+                      query: '최근 [복원 기록] 보여줘',
+                    })
+                  }
+                  className="px-3.5 py-2.5 rounded-xl bg-violet-950/90 hover:bg-violet-900 border border-violet-500/50 text-violet-200 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shadow-sm"
+                >
+                  <span>🕰️ [복원 기록] 타임머신</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={activeTrash.length === 0 || quarantineMoving}
+                  onClick={() => void moveAllTrashToQuarantine()}
+                  className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
+                >
+                  <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
+                </button>
+              </div>
             </div>
 
             <div className="font-headline-md text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">

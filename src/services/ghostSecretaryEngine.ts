@@ -637,8 +637,14 @@ export function resolveGhostSecretaryTurn(
     };
   }
 
-  // ③ 홀림 퀘스트 응답
-  if (st.questStep && st.questStep !== 'done' && (isYes(text) || isNo(text) || text === QUEST_YES_LABELER || text === QUEST_YES_ALERT || text === QUEST_NO)) {
+  // ③ 홀림 퀘스트 응답 (단, '응 진행해', '응 정리해줘', '응 복구해줘' 같은 손보기 실행/원복 승인 명령은 손보기 라우터가 우선 처리하도록 제외)
+  const isCareActionApprovalText = /(진행|실행|정리|복구|복원|치워|꺼\s*줘|고쳐|되돌|원복|원래대로|승인|동의)/i.test(text);
+  if (
+    !isCareActionApprovalText &&
+    st.questStep &&
+    st.questStep !== 'done' &&
+    (isYes(text) || isNo(text) || text === QUEST_YES_LABELER || text === QUEST_YES_ALERT || text === QUEST_NO)
+  ) {
     const yes = text === QUEST_YES_LABELER || text === QUEST_YES_ALERT || (isYes(text) && text !== QUEST_NO);
     const consents = { ...(st.consents || {}) };
     if (st.questStep === 'labeler') consents.labeler = yes;
@@ -758,7 +764,8 @@ export function resolveGhostSecretaryTurn(
   }
 
   // ⑦ 단답형 긍정/부정·보류('좋아요', '다음에요', '나중에요', '괜찮아요' 등)이 외부 AI 바톤터치로 빠지지 않도록 귀신비서가 직접 응대
-  if (text.length <= 16 && (isYes(text) || isNo(text) || text === QUEST_NO)) {
+  // 단, '응 진행해', '응 정리해줘' 등 손보기 실행 승인 발화는 MonsterChatRouter가 실제 파일 정리·최적화를 수행하도록 위임
+  if (!isCareActionApprovalText && text.length <= 16 && (isYes(text) || isNo(text) || text === QUEST_NO)) {
     const ackText = isNo(text) || text === QUEST_NO
       ? `알겠어요 ${nickname ? `${nickname}님` : '회원님'}! 천천히 둘러보시다가 필요하실 때 언제든 말씀해 주세요.`
       : `좋아요 ${nickname ? `${nickname}님` : '회원님'}! 필요하신 손보기나 설정이 있으시면 편하게 말씀해 주세요.`;

@@ -20,6 +20,7 @@ import {
   formatBytes,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
   executeMissingFileRecovery,
+  executeMonsterCleanupApproval,
   executeRestorePointRollback,
 } from '../services/monsterChatRouter';
 import { useSaySeeStore } from '../store/useSaySeeStore';
@@ -258,17 +259,63 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  실행 및 블랙박스 기록 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId}]
+                  ✅ 정리 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId || '#1'}]
                 </span>
-                {message.cleanupPreview.approvedTypedText && (
-                  <span className="text-[11px] text-emerald-200 font-mono">
-                    승인 발화: &ldquo;{message.cleanupPreview.approvedTypedText}&rdquo;
-                  </span>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {message.cleanupPreview.approvedTypedText && (
+                    <span className="text-[11px] text-emerald-200 font-mono">
+                      승인 발화: &ldquo;{message.cleanupPreview.approvedTypedText}&rdquo;
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busyId === 'cleanup_undo'}
+                    onClick={async () => {
+                      const rid = message.cleanupPreview?.createdRestoreId || '#1';
+                      setBusyId('cleanup_undo');
+                      const res = await executeRestorePointRollback(rid, '원래대로 되돌리기 버튼 클릭');
+                      setBusyId(null);
+                      onToast?.(res.message);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-extrabold cursor-pointer shadow-xs transition"
+                  >
+                    {busyId === 'cleanup_undo' ? '복원 중...' : '↩️ 원래대로 되돌리기'}
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed">
-                ✍️ 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력해 주세요.
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  ✍️ 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요.
+                </span>
+                <button
+                  type="button"
+                  disabled={busyId === 'cleanup_approve'}
+                  onClick={async () => {
+                    if (!message.cleanupPreview) return;
+                    setBusyId('cleanup_approve');
+                    const res = await executeMonsterCleanupApproval(
+                      message.cleanupPreview,
+                      '응 진행해 (버튼 승인)'
+                    );
+                    setBusyId(null);
+                    onUpdateMessage({
+                      ...message,
+                      cleanupPreview: {
+                        ...message.cleanupPreview,
+                        approved: res.ok,
+                        approvedTypedText: '응 진행해',
+                        createdRestoreId: res.restoreId,
+                        executionError: res.ok ? undefined : res.message,
+                      },
+                      healthRecordIssued: res.healthRecord || message.healthRecordIssued,
+                    });
+                    onToast?.(res.message);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition"
+                >
+                  {busyId === 'cleanup_approve' ? '정리 중...' : '✅ 승인 및 안전 정리 실행'}
+                </button>
               </div>
             )}
           </div>
@@ -414,7 +461,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                         >
                           {busyId === `rb-${pt.restoreId}`
                             ? '복원 중...'
-                            : '↩️ 원래 위치로 1초 복원'}
+                            : '↩️ 원래대로 되돌리기 (1초 복원)'}
                         </button>
                       </div>
                     )}
