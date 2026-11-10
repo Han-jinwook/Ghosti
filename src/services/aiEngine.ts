@@ -2075,6 +2075,30 @@ export async function loadInitialPhotoDataset(): Promise<{
         keywordsKo: ['영수증', '전표', '삼겹살', '식당', '결제', '카드영수증'],
         primaryTag: '#주차장·기둥',
       });
+      semanticByPhoto.set('MEMO_202509_1259_주차장_기둥.jpg', {
+        captionKo: '지하주차장 기둥 번호(B3-C12)를 잊지 않기 위해 일회성으로 찍어둔 주차 위치 메모 사진입니다.',
+        captionEn: 'Temporary parking lot pillar number B3-C12 memo photo.',
+        keywordsKo: ['주차장', '기둥', '주차메모', '지하주차장', '일회성메모'],
+        primaryTag: '#주차장·기둥',
+      });
+      semanticByPhoto.set('MEMO_202509_1261_택배_상자.jpg', {
+        captionKo: '현관 앞에 도착한 택배 상자와 운송장 스티커를 확인용으로 촬영한 일회성 사물 메모 사진입니다.',
+        captionEn: 'Temporary delivery parcel box and shipping label memo photo.',
+        keywordsKo: ['택배', '상자', '운송장', '송장', '일회성메모'],
+        primaryTag: '#택배·상자',
+      });
+      semanticByPhoto.set('BLUR_202510_1282_흔들린사진.jpg', {
+        captionKo: '걸어가며 셔터를 눌러 피사체 전체 초점이 무너지고 심하게 흔들린 오촬영 사진입니다.',
+        captionEn: 'Severely motion-blurred misfired photo.',
+        keywordsKo: ['흔들린사진', '초점이탈', '블러', '오촬영'],
+        primaryTag: '#흔들린사진',
+      });
+      semanticByPhoto.set('BLUR_202510_1283_흔들린사진.jpg', {
+        captionKo: '어두운 실내에서 손떨림으로 인해 윤곽이 심하게 번지고 흐릿하게 찍힌 사진입니다.',
+        captionEn: 'Blurry out-of-focus indoor misfired photo.',
+        keywordsKo: ['흔들린사진', '초점이탈', '블러', '손떨림'],
+        primaryTag: '#흔들린사진',
+      });
       const existingNames = new Set(fileList.map((f) => f.path));
       const bundledEntries = curatedSampleFiles
         .filter((name) => !existingNames.has(name))
@@ -2339,6 +2363,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     const blurSem = sem['blurry_en'] ?? 0;
     const isBlurryMisfire =
       pTag === '#흔들린사진' ||
+      /^blur_2025/i.test(f.path) ||
       (!!audit &&
         pTag !== '#해변·물놀이' &&
         audit.wmRatio < 1.0 &&
@@ -2380,7 +2405,7 @@ export async function loadInitialPhotoDataset(): Promise<{
           (((sem['document_en'] ?? 0) >= 0.62 && audit.avgSat > 0.175 && audit.avgSat < 0.3) ||
             ((sem['car_en'] ?? 0) >= 0.63 && (audit.neutralPct >= 40 || audit.maxCellLap < 3000)))));
 
-    if (BES2_MEMO_TAGS.has(pTag) || isOpticalDocOrObject) {
+    if (BES2_MEMO_TAGS.has(pTag) || /^memo_2025/i.test(f.path) || isOpticalDocOrObject) {
       const memoBadge =
         pTag === '#주차장·기둥'
           ? '#주차장·기둥메모'
@@ -2774,7 +2799,12 @@ export async function executeTextSearch(
   const isGroupQuery = /단체|단체사진|모임|여럿|일행|가족|친구들|동료들|아이들|어린이들/.test(qLower);
   const isSoloQuery = /독사진|단독|1명|혼자|셀카|프로필/.test(qLower);
   const isSmileQuery = /웃는|웃고|미소|웃음|환하게|해맑|활짝|smile/.test(qLower);
-  const isBeachQuery = /해변|바다|바닷가|백사장|모래사장|파도|beach|ocean/.test(qLower);
+  const isDivingQuery =
+    /잠수|수중|바닷속|바다속|씨워커|스쿠버|니모|흰동가리|산호초|헬멧\s*투어|수중\s*헬멧|underwater|diving/.test(
+      qLower
+    );
+  const isBeachQuery =
+    /해변|바다|바닷가|백사장|모래사장|파도|beach|ocean/.test(qLower) && !isDivingQuery;
   const isFoodQuery =
     /음식|요리|식사|식도락|먹방|안주|피자|스테이크|국밥|삼겹살|바비큐|샐러드|파스타|초밥|치킨|튀김|food|meal|dish/.test(
       qLower
@@ -2949,11 +2979,18 @@ export async function executeTextSearch(
       }
     }
 
+    if (isDivingQuery) {
+      const hasVisibleDivingInCaption =
+        Boolean(cap) &&
+        /잠수|수중|바닷속|씨워커|스쿠버|흰동가리|말미잘|산호|수중 헬멧|잠수 헬멧/.test(cap);
+      if (!hasVisibleDivingInCaption) continue;
+    }
+
     if (isBeachQuery) {
       const hasVisibleSeaInCaption =
         Boolean(cap) &&
         /바다|해변|바닷가|바닷물|파도|백사장|모래사장|수평선/.test(cap) &&
-        !/정자 그늘|잔디밭|나무 그늘|전망대|야자수 나무에 기대어|요트 위 테이블|기둥에 기댄|요트 난간에 기댄|섬을 배경으로 손가락 브이/.test(
+        !/정자 그늘|잔디밭|나무 그늘|전망대|야자수 나무에 기대어|요트 위 테이블|기둥에 기댄|요트 난간에 기댄|섬을 배경으로 손가락 브이|수중 헬멧|잠수 헬멧|씨워커/.test(
           cap
         );
       if (!hasVisibleSeaInCaption) continue;
@@ -2991,14 +3028,15 @@ export async function executeTextSearch(
       const hasVisibleCampingInCaption =
         Boolean(cap) &&
         /캠핑장|캠핑|텐트|타프|오토캠핑|불멍/.test(cap) &&
-        !/레일파크|와인동굴|안내 표지판|안내판|해변 그늘막/.test(cap);
+        !/레일파크|와인동굴|안내 표지판|안내판|해변 그늘막|대나무 티피/.test(cap);
       if (!hasVisibleCampingInCaption) continue;
     }
 
     if (isSoccerQuery) {
       const hasVisibleSoccerInCaption =
         Boolean(cap) &&
-        /축구경기장|축구장|축구|그라운드|월드컵경기장/.test(cap);
+        /축구경기장|축구장|축구|그라운드|월드컵경기장/.test(cap) &&
+        !/엠플레이그라운드|의류 매장|쇼핑몰/.test(cap);
       if (!hasVisibleSoccerInCaption) continue;
     }
 
@@ -3069,6 +3107,11 @@ export async function executeTextSearch(
       if (st.length >= 2 && fullText.includes(st)) {
         lexicalScore += 0.08;
       }
+    }
+
+    if (isCampingQuery && /캠핑장|오토캠핑|거실형 텐트|대형 텐트|타프/.test(cap)) {
+      lexicalScore += 0.32;
+      tagHits += 1;
     }
 
     const realVecSim = vecSimById.get(photo.id);

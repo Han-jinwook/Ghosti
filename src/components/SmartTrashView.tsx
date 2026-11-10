@@ -194,9 +194,7 @@ export const SmartTrashView: React.FC = () => {
   );
 
   const showDuplicatePickSection =
-    !isTrashBinTabActive &&
-    currentTab === 'duplicate' &&
-    activeDuplicateGroups.length > 0;
+    !isTrashBinTabActive && currentTab === 'duplicate';
 
   const zCoreOutdated =
     zCoreBridge.isConnected && isZCoreOutdated(zCoreBridge.version);
@@ -889,6 +887,34 @@ export const SmartTrashView: React.FC = () => {
             </div>
           )}
         </section>
+      )}
+
+      {/* ─────────────── 3-C. 탭을 다시 눌러 접었을 때(currentTab === 'none') 노출되는 깔끔한 접힘 안내 바 ─────────────── */}
+      {!isTrashBinTabActive && currentTab === 'none' && (
+        <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[18px]">📂</span>
+            <span className="font-body-sm text-[13.5px] text-zinc-300 font-bold">
+              현재 사진 분류 목록이 접혀 있습니다. 위 4개 탭(①~④)을 누르면 해당 분류 사진이 펼쳐집니다.
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTrashCategoryFilter('duplicate')}
+              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
+            >
+              📸 중복·연사만 보기 ({activeDuplicateGroups.length}묶음) ▼
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTrashCategoryFilter('all')}
+              className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
+            >
+              📋 전체 후보 보기 ({activeTrash.length}장) ▼
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ─────────────── 4-A. ① 동일 내용 중복(최고화질 원본 보존) · 연사(유저 1장 직접 선택) 바둑판 Pick 뷰 ─────────────── */}

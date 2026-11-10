@@ -387,7 +387,9 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     unlockMobileAudioOnUserGesture();
-    const q = (textInput.trim() || currentExampleSentence).trim();
+    const fallbackExample =
+      searchSpace === 'video' ? '룰렛 돌리는 장면' : currentExampleSentence;
+    const q = (textInput.trim() || fallbackExample).trim();
     if (!q) return;
     setTextInput(q);
     await runTextQuery(q);
@@ -396,7 +398,9 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
 
   const handleRunExampleInstant = async () => {
     unlockMobileAudioOnUserGesture();
-    const q = currentExampleSentence.trim();
+    const fallbackExample =
+      searchSpace === 'video' ? '룰렛 돌리는 장면' : currentExampleSentence;
+    const q = fallbackExample.trim();
     if (!q) return;
     setTextInput(q);
     await runTextQuery(q);
@@ -437,7 +441,11 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                   onFocus={() => setIsInputFocused(true)}
                   onBlur={() => setIsInputFocused(false)}
                   onChange={(e) => setTextInput(e.target.value)}
-                  placeholder={`예) ${currentExampleSentence}`}
+                  placeholder={
+                    searchSpace === 'video'
+                      ? '내 영상 속 찾고 싶은 특정 장면이나 대사를 입력해 보세요 (그 순간부터 바로 재생됩니다)'
+                      : `예) ${currentExampleSentence}`
+                  }
                   className="w-full h-11 md:h-13 pl-10 pr-[110px] sm:pr-[264px] rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
                 />
 

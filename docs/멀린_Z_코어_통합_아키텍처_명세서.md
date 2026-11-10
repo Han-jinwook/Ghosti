@@ -579,3 +579,16 @@ exit
 
 > **🚨 전사 인프라 절대 원칙:**  
 > **“현재 로컬 서버와 PC 코어에 사용 중인 젬마 2 및 비전/임베딩 모델 가중치 원본 파일들을 외부(HuggingFace 등)에서 매번 당겨오지 말고, 우리 자체 스토리지(백업 하드디스크 및 R2 CDN)에 ‘마스터 사본’으로 영구 보관해 두어라.”**
+
+---
+
+## 🚀 5. 1호기(로컬) & 4호기(`100.114.100.24`) Z-코어 클러스터 자동 배포 (`deploy_z_core_cluster.py`) 및 1ms 포트 바인딩 아키텍처 (2026-11-10 확정)
+
+1. **`ensure_port_free()` 1ms 소켓 바인딩 Fast-Path (`merlin_z_core_daemon.py`)**:
+   - 포트 `5199`가 이미 비어 있는 상태(최초 설치 또는 정상 종료 직후)에서 불필요한 HTTP 타임아웃(`/__merlin/health`, `/__merlin/shutdown`) 및 `netstat -ano` 전수 스캔으로 인해 기동이 6초 이상 지연되던 문제를 해결하기 위해, `ensure_port_free(port, force_replace)` 진입 즉시 `socket.bind(("127.0.0.1", port))`로 1ms 만에 빈 포트를 판별하고 즉시 HTTP 서버를 바인딩합니다.
+   - `--replace` 플래그 전달 시(`force_replace=True`) 동일 `CORE_VERSION`이라도 기존 프로세스를 우아하게 종료하고 최신 코드로 즉시 교체 기동합니다.
+2. **1호기 WMI 독립 프로세스 기동 & 4호기 SSH/SCP 무간섭 리로드 (`universal_z_core/deploy_z_core_cluster.py`)**:
+   - **1호기**: 백그라운드 툴 세션 종료 시 자식 프로세스가 함께 종료(Job Object Kill)되는 현상을 차단하기 위해 `Invoke-WmiMethod -Class Win32_Process -Name Create`로 `merlin_z_core_daemon.py`(`5199`)와 `seq_paste_daemon.py`(`51988`)를 독립 기동합니다.
+   - **4호기 (`100.114.100.24`)**: `~/.ssh/id_ai_master` 키를 동적 탐색하여 `C:/MerlinTools/universal_z_core/` 및 `C:/MerlinTools/seq_paste_daemon.py`를 SCP로 전수 동기화하고, 작업 스케줄러(`StartMerlinZCore5199`, `MerlinSeqPasteStart`)를 트리거하여 테스터(해나라님)의 화면을 방해하지 않고 백그라운드에서 무간섭 리로드 및 `/api/care/status` 헬스체크를 수행합니다.
+3. **35KB 경량 케어스위트 플러그인 (`plugin_ghosti_care_suite.py`, `/api/care/*`)**:
+   - `/api/care/status`, `/api/care/ToggleBankMode`, `/api/care/DeepUninstall` 엔드포인트를 단일 포트 `5199`에 통합하여 은행 보안모듈 동결/해제, Windows Defender(AMSI) 무소음 수호 히스토리, 우클릭 스마트 압축 해제, 어도비급 4단계 딥 언인스톨을 제공합니다.

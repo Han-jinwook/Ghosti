@@ -55,16 +55,22 @@ def update_pc1():
     except Exception as e:
         log(f"1호기 데몬 기동 오류: {e}")
 
-    # 3) 헬스체크
-    try:
-        with urllib.request.urlopen("http://127.0.0.1:5199/api/care/status", timeout=2.5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            if data.get("ok"):
-                log("✅ 1호기 Z-코어 정상 기동 확인 (5199 포트 / 케어스위트 응답 성공)")
-            else:
-                log(f"⚠️ 1호기 응답 내용 비정상: {data}")
-    except Exception as e:
-        log(f"❌ 1호기 헬스체크 실패: {e}")
+    # 3) 헬스체크 (교체 기동 시 구 프로세스 소켓 종료 직후 바인딩되므로 최대 5회 재시도)
+    ok_pc1 = False
+    last_err = None
+    for _ in range(5):
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:5199/api/care/status", timeout=2.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("ok"):
+                    log("✅ 1호기 Z-코어 정상 기동 확인 (5199 포트 / 케어스위트 응답 성공)")
+                    ok_pc1 = True
+                    break
+        except Exception as e:
+            last_err = e
+            time.sleep(0.6)
+    if not ok_pc1:
+        log(f"❌ 1호기 헬스체크 실패: {last_err}")
 
 def _resolve_ssh_key() -> str:
     candidates = [

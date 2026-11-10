@@ -192,6 +192,7 @@ def scan_post_office_files() -> Dict[str, str]:
     """전사 중앙 우체국(D:\\Secretary\\post_office\\) 내 Ghosti / ALL 수신 문서의 경로와 해시를 반환합니다."""
     if not POST_OFFICE_DIR.exists():
         return {}
+    receipts_dir = POST_OFFICE_DIR / "receipts"
     result: Dict[str, str] = {}
     for p in sorted(POST_OFFICE_DIR.glob("*.md")):
         if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
@@ -201,6 +202,9 @@ def scan_post_office_files() -> Dict[str, str]:
         sender = parts[1].lower() if len(parts) > 1 else ""
         if sender == "ghosti":
             continue
+        if prefix == "all":
+            if (receipts_dir / f"{p.stem}.Ghosti.read").exists() or (receipts_dir / f"{p.name}.Ghosti.read").exists():
+                continue
         if prefix in ("ghosti", "all"):
             result[p.name] = file_md5(p)
     return result

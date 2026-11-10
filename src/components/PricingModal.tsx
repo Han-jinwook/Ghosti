@@ -1328,13 +1328,16 @@ export const VideoScenePreviewModal: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecRef = useRef<number | null>(null);
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
+  const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
 
   useEffect(() => {
     if (!selectedVideoModal) {
       setResolvedVideoSrc('');
+      setVideoPlaybackError(false);
       return;
     }
-    const rawUrl = selectedVideoModal.videoUrl;
+    const rawUrl = selectedVideoModal.videoUrl || '';
+    setVideoPlaybackError(false);
     pendingSeekSecRef.current = selectedVideoModal.matchedSeekSec ?? 0;
 
     const cachedBlob = videoBlobUrlCache.get(rawUrl);
@@ -1343,27 +1346,8 @@ export const VideoScenePreviewModal: React.FC = () => {
       return;
     }
 
-    let cancelled = false;
+    // Z-코어 /__photos/file 은 HTTP 206 Range 스트리밍을 기본 지원하므로 전체 파일 다운로드 대기 없이 즉시 재생 시작
     setResolvedVideoSrc(rawUrl);
-    fetch(rawUrl)
-      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('blob fetch failed'))))
-      .then((blob) => {
-        if (blob.size > 0) {
-          const objUrl = URL.createObjectURL(blob);
-          videoBlobUrlCache.set(rawUrl, objUrl);
-          if (!cancelled) {
-            pendingSeekSecRef.current = selectedVideoModal.matchedSeekSec ?? 0;
-            setResolvedVideoSrc(objUrl);
-          }
-        }
-      })
-      .catch(() => {
-        // fallback to rawUrl
-      });
-
-    return () => {
-      cancelled = true;
-    };
   }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl]);
 
   useEffect(() => {
@@ -1450,13 +1434,15 @@ export const VideoScenePreviewModal: React.FC = () => {
         </div>
 
         <div className="relative rounded-2xl overflow-hidden bg-black border border-primary-container/40 aspect-video flex items-center justify-center">
-          {resolvedVideoSrc.startsWith('blob:') ? (
+          {resolvedVideoSrc && !videoPlaybackError ? (
             <video
               ref={videoRef}
               src={resolvedVideoSrc}
               poster={currentFrameThumbUrl}
               controls
               playsInline
+              autoPlay
+              onError={() => setVideoPlaybackError(true)}
               onLoadedMetadata={(e) => {
                 const realDur = Math.round(e.currentTarget.duration);
                 if (realDur > 0 && Number.isFinite(realDur)) {
