@@ -906,11 +906,12 @@ def create_mission(
     title: str,
     steps_text: str,
     initial_status: Optional[str] = None,
+    rule_summary_text: Optional[str] = None,
 ) -> Optional[str]:
     """
-    멀린님과 AI가 새 기능/UI를 만든 직후, 비개발자 해나라님이
-    '오늘 뭐 테스트할까요?'라고 물어보지 않도록 노션 보드 맨 앞 '미션' 칸에
-    친절한 체크리스트 미션 카드를 자동 생성합니다.
+    [전사 강령 제16조 제5항 준수]
+    1) 📌 [1. 우리 내부 로직·작동 규칙 핵심 요약] 상단 선(先) 제시
+    2) 🧪 [2. 항목별 구체적 테스트 방법 (체크리스트)] 하단 단계별 제시
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
@@ -928,30 +929,46 @@ def create_mission(
     else:
         status_prop = {"select": {"name": resolved_status}}
 
-    # 줄바꿈 또는 번호로 구분된 체크리스트 블록 생성
     raw_lines = [
         ln.strip()
         for ln in steps_text.replace("\\n", "\n").splitlines()
         if ln.strip()
     ]
 
+    summary_body = (
+        rule_summary_text.strip()
+        if rule_summary_text and rule_summary_text.strip()
+        else "📌 [1. 우리 내부 로직·작동 규칙 핵심 요약]\n새로 추가·개선된 기능이 내부 설계 규칙대로 정확하고 안전하게 작동하는지 검증하는 미션입니다."
+    )
+
     children_blocks: List[Dict[str, Any]] = [
         {
             "object": "block",
             "type": "callout",
             "callout": {
-                "icon": {"type": "emoji", "emoji": "😊"},
+                "icon": {"type": "emoji", "emoji": "📌"},
+                "color": "blue_background",
                 "rich_text": [
                     {
                         "type": "text",
-                        "text": {
-                            "content": "안녕하세요! 새로 추가·개선된 화면이 잘 작동하는지 아래 순서대로 편하게 눌러보며 확인 부탁드립니다."
-                        },
-                        "annotations": {"bold": True},
+                        "text": {"content": summary_body[:1950]},
                     }
                 ],
             },
-        }
+        },
+        {
+            "object": "block",
+            "type": "heading_3",
+            "heading_3": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {"content": "🧪 [2. 항목별 구체적 테스트 방법 (체크리스트)]"},
+                        "annotations": {"bold": True},
+                    }
+                ]
+            },
+        },
     ]
 
     for step_line in raw_lines:

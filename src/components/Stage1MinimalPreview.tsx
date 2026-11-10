@@ -1085,6 +1085,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     dismissUndoBatch,
     setDesktopTab,
     setMobileTab,
+    setSearchSpace,
     runTextQuery,
     isStoreAppMode,
     importMobileLocalPhotos,
@@ -1121,6 +1122,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   });
   const [showGuardianModal, setShowGuardianModal] = useState(false);
   const [careActionBusy, setCareActionBusy] = useState(false);
+  const [careActionFeedback, setCareActionFeedback] = useState<string | null>(null);
 
   const refreshCareSuiteStatus = React.useCallback(async () => {
     try {
@@ -1161,10 +1163,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       }).then((r) => r.json()).catch(() => null);
+      const msg =
+        res?.toastMessage ||
+        '👻 미사용 웹 보안 서비스를 삭제하지 않고 수동 대기(절전)로 전환했습니다! 은행 접속 시 2초 만에 자동 깨어납니다.';
+      setCareActionFeedback(msg);
       useSaySeeStore.setState({
-        lastQuarantineToast:
-          res?.toastMessage ||
-          '👻 미사용 웹 보안 서비스를 삭제하지 않고 수동 대기(절전)로 전환했습니다! 은행 접속 시 2초 만에 자동 깨어납니다.',
+        lastQuarantineToast: msg,
       });
       await refreshCareSuiteStatus();
     } finally {
@@ -1180,10 +1184,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: 'manual_emergency_switch' }),
       }).then((r) => r.json()).catch(() => null);
+      const msg =
+        res?.toastMessage ||
+        '🏦 은행·관공서 업무를 위해 잠자던 보안 서비스를 모두 깨웠습니다! (업무 종료 15분 뒤 다시 잠듭니다)';
+      setCareActionFeedback(msg);
       useSaySeeStore.setState({
-        lastQuarantineToast:
-          res?.toastMessage ||
-          '🏦 은행·관공서 업무를 위해 잠자던 보안 서비스를 모두 깨웠습니다! (업무 종료 15분 뒤 다시 잠듭니다)',
+        lastQuarantineToast: msg,
       });
       await refreshCareSuiteStatus();
     } finally {
@@ -1436,7 +1442,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 <div className="flex items-center justify-between gap-1.5 pt-1">
                   <button
                     type="button"
-                    onClick={() => setDesktopTab('dashboard')}
+                    onClick={() => {
+                      setSearchSpace('vault');
+                      if (layout === 'mobile') setMobileTab('search');
+                      else setDesktopTab('ghost_search');
+                    }}
                     className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-amber-500/30 text-amber-300 text-[11.5px] font-extrabold transition cursor-pointer"
                   >
                     🔍 풀린 문서 즉시 검색
@@ -1445,6 +1455,19 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {careActionFeedback && (
+              <div className="p-3 rounded-xl bg-teal-950/80 border border-teal-400/50 flex items-center justify-between gap-2 text-[12px] text-teal-200 font-bold">
+                <span>✅ {careActionFeedback}</span>
+                <button
+                  type="button"
+                  onClick={() => setCareActionFeedback(null)}
+                  className="text-[11px] text-teal-300 hover:text-white cursor-pointer shrink-0"
+                >
+                  닫기 ✕
+                </button>
+              </div>
+            )}
 
             {showGuardianModal && (
               <div className="p-3.5 rounded-xl bg-zinc-950 border border-emerald-500/40 flex flex-col gap-2">

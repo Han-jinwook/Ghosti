@@ -368,7 +368,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           m.cardKind === 'RESTORE_POINTS_LIST'
       );
     const isDirectCareOrStatusCommand =
-      /(진행해|실행해|정리해|치워줘|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|임시\s*설치|바탕화면|다운로드|[c-zC-Z]\s*드라이브|사양|스펙|상태\s*봐|느려|느린|버벅|애드웨어|보안\s*모듈|보안\s*프로그램|강제\s*종료|지워\s*줘|삭제해\s*줘|적출|언인스톨|뿌리째)/i.test(
+      /(진행해|실행해|정리해|치워줘|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|임시\s*설치|바탕화면|다운로드|[c-zC-Z]\s*드라이브|사양|스펙|상태\s*봐|느려|느린|버벅|애드웨어|보안\s*모듈|보안\s*프로그램|강제\s*종료|지워\s*줘|삭제해\s*줘|적출|언인스톨|뿌리째|뿌리\s*뽑|유령\s*앱)/i.test(
         raw
       );
     const shouldBypassSecretaryPlaybook =
