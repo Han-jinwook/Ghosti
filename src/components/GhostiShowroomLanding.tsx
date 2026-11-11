@@ -428,6 +428,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [typoInput, setTypoInput] = useState<string>('dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.');
   const [typoOriginalBackup, setTypoOriginalBackup] = useState<string>('dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.');
   const [typoConverted, setTypoConverted] = useState<boolean>(false);
+  const [selectedToolbarKey, setSelectedToolbarKey] = useState<'seq' | '1' | '2' | '3' | '4' | '5'>('1');
+  const [labelerDemoApplied, setLabelerDemoApplied] = useState<boolean>(false);
 
   // DEV 전체보기 전용 내부 상태 보존 (코드 삭제 없이 일반 방문자에게만 은닉)
   const {
@@ -521,8 +523,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       matchedTab = 'doc';
     } else if (/사진|청소|보안|느려|용량|정리|복원/.test(q)) {
       matchedTab = 'clean';
-    } else if (/영타|오타|한영|줄바꿈|귀신창|dkssud/i.test(q)) {
+    } else if (/영타|오타|한영|줄바꿈|귀신창|라벨러|합본|창고정|순차|dkssud/i.test(q)) {
       matchedTab = 'superpower';
+      if (/라벨러|파일명|pdf/i.test(q)) setSelectedToolbarKey('1');
+      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('2');
+      else if (/합본/i.test(q)) setSelectedToolbarKey('3');
+      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('4');
+      else if (/창고정|고정/i.test(q)) setSelectedToolbarKey('5');
+      else if (/순차/i.test(q)) setSelectedToolbarKey('seq');
     }
 
     setDemoTab(matchedTab);
@@ -1275,41 +1283,199 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       }`}
                     />
 
-                    {/* 귀신창 v1.4 표준 하단 미니 툴바 (수동 [1]한영성형 버튼 철거 ➔ [1]파일·라벨러 ~ [5]창고정 반영) */}
-                    <div className="rounded-xl bg-zinc-900/90 border border-white/10 p-2.5 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="px-2.5 py-1 rounded-lg bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[11px] font-black">
-                          📋 Ctrl+V 순차복사
-                        </span>
-                        {[
-                          '[1] 🏷️파일·라벨러(PDF)',
-                          '[2] 글자·표OCR',
-                          '[3] 합본',
-                          '[4] 번호·일정',
-                          '[5] 창고정',
-                        ].map((btnLabel) => (
-                          <span
-                            key={btnLabel}
-                            className="px-2 py-1 rounded-lg bg-zinc-950 border border-white/10 text-zinc-300 text-[11px] font-bold"
+                    {/* 귀신창 v1.4 표준 하단 미니 툴바 ([1]파일·라벨러 ~ [5]창고정 인터랙티브 클릭 탭 + 실물 예시 패널) */}
+                    <div className="rounded-2xl bg-zinc-900/95 border border-white/15 p-3 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="귀신창 미니 툴바 기능 설명">
+                          {(
+                            [
+                              { key: 'seq', label: '📋 Ctrl+V 순차복사' },
+                              { key: '1', label: '[1] 🏷️파일·라벨러(PDF)' },
+                              { key: '2', label: '[2] 글자·표OCR' },
+                              { key: '3', label: '[3] 합본' },
+                              { key: '4', label: '[4] 번호·일정' },
+                              { key: '5', label: '[5] 창고정' },
+                            ] as const
+                          ).map((item) => {
+                            const isSelected = selectedToolbarKey === item.key;
+                            return (
+                              <button
+                                key={item.key}
+                                type="button"
+                                role="tab"
+                                aria-selected={isSelected}
+                                onClick={() => {
+                                  playBabyGhostChime();
+                                  setSelectedToolbarKey(item.key);
+                                  if (item.key !== '1') setLabelerDemoApplied(false);
+                                }}
+                                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.35)] scale-[1.02]'
+                                    : 'bg-zinc-950 hover:bg-zinc-800 border-white/15 text-zinc-200 hover:border-amber-400/50'
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {typoConverted && (
+                            <span className="text-xs font-black text-[#00F0B5]">
+                              ✨ 무버튼 0.2ms 자동 성형 완료!
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleTypoUndo}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold cursor-pointer"
                           >
-                            {btnLabel}
-                          </span>
-                        ))}
+                            ↩️ 원본 보기(Ctrl+Z)
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {typoConverted && (
-                          <span className="text-xs font-black text-[#00F0B5]">
-                            ✨ 무버튼 0.2ms 자동 성형 완료!
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={handleTypoUndo}
-                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold cursor-pointer"
-                        >
-                          ↩️ 원본 보기(Ctrl+Z)
-                        </button>
-                      </div>
+
+                      {/* 선택된 미니 툴바 번호의 상세 설명 + Before ➔ After 실물 예시 카드 */}
+                      {selectedToolbarKey === '1' && (
+                        <div className="rounded-xl bg-zinc-950/95 border border-amber-400/35 p-3 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                              🏷️ [1] 파일·라벨러(PDF) — 사진·카톡·문서 날짜별 파일명 1초 자동 정리 & 스샷 PDF 합본
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playBabyGhostChime();
+                                setLabelerDemoApplied((prev) => !prev);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                                labelerDemoApplied
+                                  ? 'bg-[#00F0B5] text-slate-950'
+                                  : 'bg-amber-400/20 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/40'
+                              }`}
+                            >
+                              {labelerDemoApplied ? '✨ 3건 일괄 작명 완료! (원본 비교)' : '⚡ 숫자 [1]키 눌러 이름 변환 체험'}
+                            </button>
+                          </div>
+                          <p className="text-[11.5px] text-zinc-300 leading-relaxed font-semibold">
+                            탐색기에서 사진·문서 선택(또는 <span className="text-white font-extrabold">Ctrl+C</span> 복사) 후 귀신창 호출(<span className="text-amber-300 font-extrabold">Ctrl+0</span> / <span className="text-amber-300 font-extrabold">우클릭 꾹</span>) ➔ <span className="text-[#00F0B5] font-extrabold">숫자 1키!</span> (스샷 2장 이상 캡처 후 1키를 누르면 고화질 PDF 1개로 합본 변환)
+                          </p>
+                          <div className="grid grid-cols-1 gap-1.5 pt-0.5">
+                            {[
+                              {
+                                badge: '① 직접 찍은 사진 (EXIF 촬영일)',
+                                before: 'IMG_4821.JPG',
+                                after: '261107_제주가족여행.jpg',
+                              },
+                              {
+                                badge: '② 카톡 수신 사진 (파일명 날짜 인식)',
+                                before: 'KakaoTalk_20261106_1422.jpg',
+                                after: '261106_카톡_영수증.jpg',
+                              },
+                              {
+                                badge: '③ 일반 문서 (본문 첫 날짜 추출 · 전화번호 010-2026-1234/금액 오인 방어)',
+                                before: '문서_001.txt',
+                                after: '250315_내용_임대차계약서.txt',
+                              },
+                            ].map((row, idx) => (
+                              <div
+                                key={idx}
+                                className="rounded-lg bg-zinc-900/90 border border-white/10 px-2.5 py-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]"
+                              >
+                                <span className="text-zinc-400 font-bold">{row.badge}</span>
+                                <div className="flex items-center gap-1.5 font-mono font-bold">
+                                  <span className={labelerDemoApplied ? 'line-through text-zinc-500' : 'text-zinc-300'}>
+                                    {row.before}
+                                  </span>
+                                  <span className="text-amber-400">➔</span>
+                                  <span className="text-[#00F0B5] font-extrabold">{row.after}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedToolbarKey !== '1' && (
+                        <div className="rounded-xl bg-zinc-950/95 border border-white/15 p-3 space-y-1.5">
+                          {selectedToolbarKey === 'seq' && (
+                            <>
+                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                                📋 Ctrl+V 순차·칸맞춤 복사 — 여러 줄 복사해 두고 Ctrl+V만 연타하면 순서대로 착착!
+                              </div>
+                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                                이름·연락처·주소를 차례대로 <span className="text-white font-extrabold">Ctrl+C</span> 해 두면 창을 왔다 갔다 할 필요 없이 입력칸마다 <span className="text-[#00F0B5] font-extrabold">Ctrl+V</span>만 눌러 순서대로 자동 입력합니다.
+                              </p>
+                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                                <span className="text-zinc-400">홍길동 · 010-1234-5678 · 강남구 연속 복사</span>
+                                <span className="text-amber-400">➔</span>
+                                <span className="text-[#00F0B5]">신청서 빈칸마다 Ctrl+V 3번으로 1초 입력 끝</span>
+                              </div>
+                            </>
+                          )}
+                          {selectedToolbarKey === '2' && (
+                            <>
+                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                                🔍 [2] 글자·표OCR — 복사 막힌 이미지·스캔 표도 드래그 한 번에 텍스트 추출
+                              </div>
+                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                                귀신창 호출 후 <span className="text-[#00F0B5] font-extrabold">숫자 2키</span>를 누르고 화면의 이미지·스캔 문서 영역을 드래그하면 표와 글자를 1초 만에 추출해 복사합니다.
+                              </p>
+                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                                <span className="text-zinc-400">드래그 안 되는 스캔 견적서·이미지 표</span>
+                                <span className="text-amber-400">➔</span>
+                                <span className="text-[#00F0B5]">엑셀·메모장에 바로 붙여넣는 깔끔한 표·글자 변환</span>
+                              </div>
+                            </>
+                          )}
+                          {selectedToolbarKey === '3' && (
+                            <>
+                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                                📎 [3] 합본 — 여러 번 따로 복사한 문장 조각들을 깔끔한 1개 본문으로 합치기
+                              </div>
+                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                                문서 여러 곳에서 <span className="text-white font-extrabold">Ctrl+C</span>로 모아 둔 문장 조각들을 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 3키</span> 한 번으로 줄바꿈 정리된 단일 문단으로 합칩니다.
+                              </p>
+                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                                <span className="text-zinc-400">보고서·기사 핵심 문단 3곳 각각 복사</span>
+                                <span className="text-amber-400">➔</span>
+                                <span className="text-[#00F0B5]">숫자 3키 한 번에 1개의 통합 본문으로 완성</span>
+                              </div>
+                            </>
+                          )}
+                          {selectedToolbarKey === '4' && (
+                            <>
+                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                                📅 [4] 번호·일정 — 기존 글자 색상·굵기 서식 100% 보존 하이픈·요일 자동 성형
+                              </div>
+                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                                연달아 친 전화번호·날짜 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 4키</span>를 누르면 노션·워드의 파란색/빨간색 글자 서식을 그대로 유지한 채 표준 형식으로 바꿉니다.
+                              </p>
+                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                                <span className="text-zinc-400">01012345678 / 20260508</span>
+                                <span className="text-amber-400">➔</span>
+                                <span className="text-[#00F0B5]">010-1234-5678 / 2026-05-08(금)</span>
+                              </div>
+                            </>
+                          )}
+                          {selectedToolbarKey === '5' && (
+                            <>
+                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                                📌 [5] 창고정 — 참고 중인 창이 절대 뒤로 숨지 않게 화면 맨 위에 압정 고정
+                              </div>
+                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                                계산기·영수증·메모장 창 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 5키</span>를 누르면 다른 프로그램에 타이핑해도 창이 가려지지 않도록 최상단에 고정(재입력 시 해제)합니다.
+                              </p>
+                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                                <span className="text-zinc-400">타이핑할 때마다 뒤로 숨는 참고 창</span>
+                                <span className="text-amber-400">➔</span>
+                                <span className="text-[#00F0B5]">숫자 5키로 화면 맨 위 고정(📌) 후 편하게 대조 입력</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

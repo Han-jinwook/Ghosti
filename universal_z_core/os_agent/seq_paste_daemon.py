@@ -5394,7 +5394,62 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
     return exif_yymmdd, kakao_yymmdd, doc_text, slug
 
 
-def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes]) -> None:
+def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[str]:
+    """
+    [무오염 탐색기 선택 파일 경로 추출 — 모든 설치 경로(Ghosti/MerlinTools/Secretary) 100% 호환]:
+    1) COM Shell.Application을 직접 조회하여 target_hwnd(또는 현재 포그라운드 탐색기 창)에서
+       클릭 선택(SelectedItems)되어 있는 파일 경로만 정확히 추출합니다.
+       ※ FocusedItem은 빈 공간을 클릭했을 때도 직전 포커스 잔재가 남을 수 있으므로 오직 명시적 SelectedItems만 사용!
+    2) 필요 시 plugin_ghosti_care_suite 후보 경로 폴백까지 지원합니다.
+    """
+    if sys.platform != "win32":
+        return []
+    paths: list[str] = []
+    try:
+        import win32com.client  # type: ignore
+
+        chk_hwnd = int(target_hwnd) if target_hwnd else int(u32.GetForegroundWindow())
+        shell = win32com.client.Dispatch("Shell.Application")
+        for window in shell.Windows():
+            try:
+                if int(window.HWND) == chk_hwnd:
+                    doc = window.Document
+                    sel = doc.SelectedItems()
+                    for idx in range(sel.Count):
+                        item_path = sel.Item(idx).Path
+                        if item_path and os.path.exists(item_path):
+                            paths.append(str(item_path))
+                    break
+            except Exception:
+                continue
+        if paths:
+            return paths
+    except Exception:
+        pass
+
+    try:
+        base_dir = Path(__file__).resolve().parent
+        cand_dirs = [
+            base_dir / "os_agent",
+            base_dir / "universal_z_core" / "os_agent",
+            Path("C:/MerlinTools/universal_z_core/os_agent"),
+            Path("D:/Ghosti/universal_z_core/os_agent"),
+        ]
+        for cd in cand_dirs:
+            cd_s = str(cd)
+            if cd.exists() and cd_s not in sys.path:
+                sys.path.insert(0, cd_s)
+        import plugin_ghosti_care_suite as _care_fb  # type: ignore
+
+        sel_fb = _care_fb.get_explorer_selected_paths_non_destructive()
+        if sel_fb:
+            return [str(x) for x in sel_fb if os.path.exists(str(x))]
+    except Exception:
+        pass
+    return []
+
+
+def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes], target_hwnd: int | None = None) -> None:
     """
     [①번 — 🏷️ 귀신 라벨러(사진·카톡·문서 날짜별 파일명 자동 정리) & 스샷/웹 이미지 실물 파일(.png/.pdf) 1초 변환]:
     1) 탐색기에서 파일(사진·카톡사진·문서)을 선택하거나 복사(Ctrl+C)한 상태면:
@@ -5405,20 +5460,11 @@ def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes]) -> None:
     2) 스샷 2장 이상이면 합본 .pdf, 1장이면 단일 .png 파일로 변환하며 귀신 라벨러 날짜 규칙으로 자동 작명합니다!
     """
     try:
-        # 0) 탐색기 복사 파일(CF_HDROP) 또는 현재 탐색기 선택 파일이 있으면 [🏷️ 귀신 라벨러] 즉시 실행!
-        target_files = get_clipboard_hdrop_files()
+        # 0) 현재 탐색기에서 명시적으로 선택한 파일이 있으면 1순위, 없으면 복사된 파일(CF_HDROP)로 [🏷️ 귀신 라벨러] 즉시 실행!
+        sel_f = _get_explorer_selected_paths_safe(target_hwnd)
+        target_files = [str(x) for x in sel_f if Path(str(x)).is_file()] if sel_f else []
         if not target_files:
-            try:
-                import sys as _sys_lbl
-                _os_ag_lbl = str(Path(__file__).resolve().parent / "os_agent")
-                if _os_ag_lbl not in _sys_lbl.path and Path(_os_ag_lbl).exists():
-                    _sys_lbl.path.insert(0, _os_ag_lbl)
-                import plugin_ghosti_care_suite as _care_lbl
-                sel_f = _care_lbl.get_explorer_selected_paths_non_destructive()
-                if sel_f:
-                    target_files = [str(x) for x in sel_f if Path(str(x)).is_file()]
-            except Exception:
-                pass
+            target_files = get_clipboard_hdrop_files()
 
         if target_files:
             renamed_paths: list[str] = []
@@ -5667,6 +5713,7 @@ def main() -> None:
 
     last_summon_raw_clip: str = ""
     last_consumed_image_ts: float = 0.0
+    last_hdrop_copy_ts: float = 0.0
     last_question_mark_ts: float = 0.0
     last_drag_select_ts: float = 0.0
     lbtn_down_pt: tuple[int, int] | None = None
@@ -5727,7 +5774,7 @@ def main() -> None:
             return
         if num in (1, 9):
             is_pdf_m = len(recent_images) >= 2
-            superpower_9_image_or_pdf_file(recent_images)
+            superpower_9_image_or_pdf_file(recent_images, target_hwnd=_LAST_TARGET_HWND)
             complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else "superpower_key_4")
         elif num == 2:
             superpower_6_screen_ocr(daemon_set_clipboard)
@@ -5856,22 +5903,37 @@ def main() -> None:
             show_ghost_toast("__UI3_OCR__|", duration_ms=8000)
             return
 
-        # [분기 2: 빈 곳 / 탐색기] 압축 파일 위면 [창 UI ④ 스마트 압축 해제창], 일반 빈 곳이면 [창 UI ② 귀신검색창(소형)] 직행!
+        # [분기 2: 빈 곳 / 탐색기]
+        # - 압축 파일(.zip/.7z 등) 선택 시 ➔ [창 UI ④ 스마트 압축 해제창] 직행!
+        # - 탐색기에서 일반 파일(사진·카톡사진·문서)을 클릭 선택(SelectedItems)하거나 최근 복사(CF_HDROP)한 상태에서 호출 시 ➔ [창 UI ① 기본 귀신창] 직행!
+        #   (숫자 [1]번만 누르면 검색창에 '1'이 입력되는 일 없이 즉시 🏷️ 귀신 라벨러가 실행되도록 보장!)
+        # - 아무 파일도 선택하지 않은 빈 바탕화면/빈 폴더에서 호출 시 ➔ [창 UI ② 귀신검색창(소형)] 직행!
         if not is_dedicated_input_app:
-            disarm_sub_hotkeys()
             if proc_before == "explorer.exe" and cls_before in ("CabinetWClass", "ExploreWClass"):
                 try:
-                    import sys as _sys_c2
-                    _os_ag2 = str(Path(__file__).resolve().parent / "os_agent")
-                    if _os_ag2 not in _sys_c2.path and Path(_os_ag2).exists():
-                        _sys_c2.path.insert(0, _os_ag2)
-                    import plugin_ghosti_care_suite as _care_s2
-                    sel_paths = _care_s2.get_explorer_selected_paths_non_destructive()
-                    if sel_paths and str(sel_paths[0]).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")):
-                        show_ghost_toast(f"__UI4_ARCHIVE__|{sel_paths[0]}", duration_ms=11000)
-                        return
+                    sel_paths = _get_explorer_selected_paths_safe(fg_before)
+                    if sel_paths:
+                        first_sel = str(sel_paths[0]).lower()
+                        if first_sel.endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")):
+                            disarm_sub_hotkeys()
+                            show_ghost_toast(f"__UI4_ARCHIVE__|{sel_paths[0]}", duration_ms=11000)
+                            return
+                        if any(Path(str(sp)).is_file() for sp in sel_paths):
+                            _show_default_ui1_bar(live_clip)
+                            return
                 except Exception:
                     pass
+            # 탐색기 또는 바탕화면에서 Ctrl+C로 파일(CF_HDROP)을 복사해 둔 직후(120초 이내, 또는 현재 탐색기 창 활성 시)에도 기본 귀신창([1]번 파일·라벨러)으로 직행!
+            hdrop_now = get_clipboard_hdrop_files()
+            if hdrop_now:
+                if (proc_before == "explorer.exe" and cls_before in ("CabinetWClass", "ExploreWClass")) or (now_s - last_hdrop_copy_ts) <= 120.0:
+                    if any(str(hp).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")) for hp in hdrop_now):
+                        disarm_sub_hotkeys()
+                        show_ghost_toast(f"__UI4_ARCHIVE__|{hdrop_now[0]}", duration_ms=11000)
+                        return
+                    _show_default_ui1_bar(live_clip)
+                    return
+            disarm_sub_hotkeys()
             show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
             return
 
@@ -6331,6 +6393,9 @@ def main() -> None:
                                     recent_unpasted.append(copied)
                                 last_copy_ts = now
                     else:
+                        # 파일 복사(CF_HDROP) 시각 기록 (바탕화면·탐색기 파일 Ctrl+C 직후 귀신창 호출 시 기본 귀신창 [1]번 파일·라벨러 직행 보장)
+                        if get_clipboard_hdrop_files():
+                            last_hdrop_copy_ts = now
                         # 텍스트가 아닌 경우 스샷 이미지(Bitmap)인지 확인하여 다중 스샷->PDF 버퍼에 적재
                         try:
                             from PIL import Image, ImageGrab
