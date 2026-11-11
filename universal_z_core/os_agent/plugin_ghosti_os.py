@@ -647,10 +647,7 @@ _CUSTOM_SCAN_ROOTS_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_custom_scan_roots.j
 
 
 def _is_cloud_virtual_or_unpinned_file(p: Path) -> bool:
-    """G: 드라이브 등 가상 클라우드 마운트 경로이거나 클라우드 미동기화(Recall-on-access) 파일인지 판별하여 대량 스캔 시 강제 다운로드를 방지합니다."""
-    s = str(p).lower()
-    if s.startswith("g:"):
-        return True
+    """클라우드 미동기화(Offline / Recall-on-access) 파일인지 판별하여 대량 스캔 시 강제 다운로드를 방지합니다 (로컬 캐시된 G: 파일은 허용)."""
     try:
         attrs = getattr(p.stat(), "st_file_attributes", 0)
         # FILE_ATTRIBUTE_OFFLINE (0x1000) | FILE_ATTRIBUTE_RECALL_ON_OPEN (0x40000) | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS (0x400000)
@@ -1242,8 +1239,8 @@ def _parse_mvhd_chunk(buf: bytes) -> float | None:
                     timescale, duration = struct.unpack(">II", buf[idx + 16:idx + 24])
                 else:
                     timescale, duration = struct.unpack(">IQ", buf[idx + 24:idx + 36])
-                if timescale > 0 and 0.5 <= (duration / timescale) <= 86400:
-                    return round(duration / timescale, 1)
+                if timescale > 0 and 0.4 <= (duration / timescale) <= 86400:
+                    return round(duration / timescale, 3)
             except Exception:
                 pass
         pos = idx + 4
@@ -1276,7 +1273,7 @@ def _probe_video_duration_via_ffmpeg(file_path: Path) -> float | None:
         if m:
             sec = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
             if 0.4 <= sec <= 86400:
-                return round(sec, 1)
+                return round(sec, 3)
     except Exception:
         pass
     return None
@@ -1337,7 +1334,7 @@ def _build_proportional_timeline_frames(
     total_sec: float
 ) -> List[Dict[str, Any]]:
     """동영상의 실제 전체 길이에 비례하여 균형 잡힌 타임라인 구간(도입부, 중반부, 후반부 등)을 동적으로 생성합니다."""
-    t_sec = max(2, int(round(total_sec)))
+    t_sec = max(2, int(total_sec))
 
     def _fmt(s: int) -> str:
         return f"{int(s // 60):02d}:{int(s % 60):02d}"
@@ -1661,7 +1658,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
         job_map: Dict[str, tuple[str, int]] = {}
         per_vid_meta: Dict[str, Dict[str, Any]] = {}
         for idx, (cache_sig, vpath, dur_sec) in enumerate(video_entries):
-            t_int = max(2, int(round(dur_sec)))
+            t_int = max(2, int(dur_sec))
             if t_int <= 12:
                 secs = [max(1, int(round(t_int * 0.35)))]
             elif t_int <= 45:
@@ -1843,7 +1840,8 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 if real_dur_sec <= 0:
                     # moov atom 누락 등 재생 불가능한 손상 더미 파일은 목록에서 자동 제외
                     continue
-                int_dur = max(1, int(round(real_dur_sec)))
+                # HTML5 <video> 플레이어(Chrome/Edge) 하단 컨트롤바의 전체 길이 표기(초 단위 버림: 20.7s -> 0:20, 17.7s -> 0:17)와 100% 일치
+                int_dur = max(1, int(real_dur_sec))
                 dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
 
                 codec_tag = _detect_video_codec_fast(resolved)

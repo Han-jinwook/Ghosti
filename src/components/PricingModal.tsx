@@ -1483,7 +1483,7 @@ export const VideoScenePreviewModal: React.FC = () => {
                 if (el.videoWidth === 0 && trySwitchToTranscodeStream()) {
                   return;
                 }
-                const realDur = Math.round(el.duration);
+                const realDur = Math.floor(el.duration);
                 if (realDur > 0 && Number.isFinite(realDur) && (!resolvedVideoSrc.includes('/__videos/stream') || !resolvedVideoSrc.includes('&t='))) {
                   syncRealVideoDuration(selectedVideoModal.id, realDur);
                 }

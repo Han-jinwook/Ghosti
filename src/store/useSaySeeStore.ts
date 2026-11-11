@@ -1259,8 +1259,8 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     set({ selectedVideoModal });
   },
   syncRealVideoDuration: (videoId, realDurationSec) => {
-    const dur = Math.round(realDurationSec);
-    if (!Number.isFinite(dur) || dur < 2) return;
+    const dur = Math.floor(realDurationSec);
+    if (!Number.isFinite(dur) || dur < 1) return;
     const { videoSceneItems, matchedVideoScenes, selectedVideoModal } = get();
     const target = videoSceneItems.find((v) => v.id === videoId);
     if (

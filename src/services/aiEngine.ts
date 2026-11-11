@@ -559,7 +559,7 @@ export function resolveVideoCardThumbUrl(vid: VideoSceneItem): string {
 }
 
 export function formatVideoDurationText(sec: number): string {
-  const safeSec = Math.max(0, Math.round(sec));
+  const safeSec = Math.max(0, Math.floor(sec));
   const mm = Math.floor(safeSec / 60);
   const ss = safeSec % 60;
   return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
@@ -735,7 +735,7 @@ export function normalizeLocalVideoSceneItem(
   if (!realDurationSecOverride && effectiveDurSec <= 0) {
     effectiveDurSec = estimateFallbackVideoDurationFromMeta(video);
   }
-  effectiveDurSec = Math.max(1, Math.round(effectiveDurSec));
+  effectiveDurSec = Math.max(1, Math.floor(effectiveDurSec));
   const nextDurationText = formatVideoDurationText(effectiveDurSec);
 
   const sem = deriveLocalVideoSemanticEnrichment(video);
@@ -803,7 +803,7 @@ function parseMp4MvhdDurationFromBuffer(buffer: ArrayBuffer): number | null {
             const duration = view.getUint32(i + 16, false);
             if (timescale > 0 && duration > 0) {
               const sec = duration / timescale;
-              if (sec >= 0.5 && sec < 36000) return Math.round(sec);
+              if (sec >= 0.4 && sec < 36000) return Math.max(1, Math.floor(sec));
             }
           } else if (version === 1 && i + 28 <= len) {
             const timescale = view.getUint32(i + 20, false);
@@ -812,7 +812,7 @@ function parseMp4MvhdDurationFromBuffer(buffer: ArrayBuffer): number | null {
             const duration = durHigh * 4294967296 + durLow;
             if (timescale > 0 && duration > 0) {
               const sec = duration / timescale;
-              if (sec >= 0.5 && sec < 36000) return Math.round(sec);
+              if (sec >= 0.4 && sec < 36000) return Math.max(1, Math.floor(sec));
             }
           }
         }
@@ -867,8 +867,8 @@ export async function probeBrowserVideoDurationSec(
     const timer = window.setTimeout(() => finish(null), timeoutMs);
     vid.onloadedmetadata = () => {
       const d = vid.duration;
-      if (Number.isFinite(d) && d > 0.5) {
-        finish(Math.round(d));
+      if (Number.isFinite(d) && d > 0.4) {
+        finish(Math.max(1, Math.floor(d)));
       } else {
         finish(null);
       }
@@ -966,7 +966,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
         if (v.isAllBlack) continue;
         const existing = merged.get(v.videoFileName);
         if (existing) {
-          const realDur = Number(v.durationSec) > 0 ? Math.round(Number(v.durationSec)) : existing.durationSec;
+          const realDur = Number(v.durationSec) > 0 ? Math.max(1, Math.floor(Number(v.durationSec))) : existing.durationSec;
           const staticDur = Math.max(1, Number(existing.durationSec) || realDur || 1);
           const rescFrames = (existing.timelineFrames || []).map((f) => {
             let nextSec = Number(f.timeSec) || 0;
