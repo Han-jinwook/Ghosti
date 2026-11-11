@@ -745,6 +745,35 @@ eng_to_kor = eng_word_to_kor
 kor_to_eng = kor_word_to_eng
 
 
+def _is_protected_account_or_email_token(tok: str) -> bool:
+    """
+    [이메일·URL·계정 아이디·비밀번호 원천 보호 필터]
+    - 이메일 기호(@: dmsgydmlapdlf@, user@naver.com), URL/도메인(.com/.kr/.app 등),
+      중간 기호 결합 아이디(eunho.mail, user_01, qwer!1234), 숫자 3자리 이상 결합 토큰(gnsrn95459712)은
+      실시간 한영 자동전환 및 문장 성형에서 100% 원문 그대로 보호합니다!
+    """
+    if not tok:
+        return False
+    s = tok.strip()
+    if not s:
+        return False
+    if "@" in s or "://" in s or s.lower().startswith("www."):
+        return True
+    if re.search(r"[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b", s, re.IGNORECASE):
+        return True
+    if re.search(r"[A-Za-z0-9][._!+-][A-Za-z0-9]", s) and not re.search(r"[가-힣]", s):
+        return True
+    stripped_punct = s.strip(".,?!:;\"'()[]{}")
+    if re.search(r"[A-Za-z]", stripped_punct) and not re.search(r"[가-힣\u3131-\u318E]", stripped_punct):
+        if re.search(r"\d{3,}", stripped_punct):
+            return True
+        if re.search(r"[_@#$%^&*+=\\/|~`]", stripped_punct):
+            return True
+        if re.search(r"\d+[A-Za-z]", stripped_punct):
+            return True
+    return False
+
+
 def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None]:
     """
     양방향(영->한 KS X 1001 & 한->영 EmbeddingGemma 2 영단어 사전) 스마트 성형 및 목표 언어 방향 반환
@@ -763,30 +792,13 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
 
     cleaned_lead = re.sub(r"(?<![A-Za-z0-9_:/.-])([a-zA-Z])([가-힣]{2,})", _strip_leading_single_eng, text)
 
-    # [핵심 보호막]: URL, 이메일(user@domain.com), 파일경로, 비밀번호/영숫자+특수기호 복합 토큰(예: gnsrn95459712, Abc!1234, test_id01)은
+    # [핵심 보호막]: URL, 이메일(user@domain.com, user@), 파일경로, 비밀번호/영숫자+특수기호 복합 토큰(예: gnsrn95459712, Abc!1234, test_id01)은
     # 절대 영타 오타로 쪼개서 한글 변환하지 않고 원문 100% 그대로 보호합니다!
     def _morph_whitespace_chunk(chunk_m: re.Match) -> str:
         nonlocal target_lang
         w_tok = chunk_m.group(0)
-        # 1) 이메일(@ 포함), URL/스키마(://, www.), 도메인 형태(영숫자.영문2자이상) 100% 보호
-        if (
-            "@" in w_tok
-            or "://" in w_tok
-            or w_tok.lower().startswith("www.")
-            or re.search(r"[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b", w_tok, re.IGNORECASE)
-        ):
+        if _is_protected_account_or_email_token(w_tok):
             return w_tok
-        # 2) 영문 + 숫자/기호가 뒤섞인 계정 아이디·비밀번호 패턴 보호:
-        #    - 중간에 숫자·언더스코어·특수문자(!@#$%^&*+-=)가 끼어 있거나(예: user_01, qwer!234, gnsrn95459712)
-        #    - 영문+숫자 조합 중 숫자 길이가 3자리 이상(예: lictor37857, dmsrn85421298)이면 100% 계정/비번으로 간주하여 보호!
-        stripped_punct = w_tok.strip(".,?!:;\"'()[]{}")
-        if re.search(r"[A-Za-z]", stripped_punct) and not re.search(r"[가-힣\u3131-\u318E]", stripped_punct):
-            if re.search(r"\d{3,}", stripped_punct):
-                return w_tok
-            if re.search(r"[_@#$%^&*+=\\/|~`]", stripped_punct):
-                return w_tok
-            if re.search(r"\d+[A-Za-z]", stripped_punct):
-                return w_tok
 
         def replace_token(m: re.Match) -> str:
             nonlocal target_lang
@@ -4052,27 +4064,30 @@ def iron_and_polish_korean_text(raw_text: str, allow_typo_morph: bool = True) ->
     s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
     s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
 
-    # 2-A) 단어·숫자·영문·괄호가 줄바꿈으로 쪼개진 구간을 무공백 정밀 결합 (문단 빈 줄 \n\n 및 종결 문장 줄바꿈은 100% 보존!)
+    # 2-A) 단어·숫자·영문·괄호가 줄바꿈(단일 \n 또는 단어 중간 빈줄 \n\n 포함)으로 쪼개진 구간을 무공백 정밀 결합 (종결 문장 뒤 줄바꿈 및 불릿 목록은 100% 보존!)
+    #  ⓪ 문장부호(, . ; : ? ! ) ]) 바로 앞에 끼어든 줄바꿈 무공백 제거 ('있으므로\n, 본 자동' -> '있으므로, 본 자동')
+    s = re.sub(r"[ \t]*(?:\r?\n[ \t]*)+(?=[,.;:?!\)\]\}])", "", s)
     #  ① 숫자 쪼개짐 ('1\n00%' -> '100%', '202\n6' -> '2026')
-    s = re.sub(r"(?<=\d)[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?=\d+[%원개명건일월년시분초번층호]?)", "", s)
+    s = re.sub(r"(?<=\d)[ \t]*(?:\r?\n[ \t]*)+(?=\d+[%원개명건일월년시분초번층호]?)", "", s)
     #  ② 영단어/단축키 쪼개짐 ('C\ntrl+V' -> 'Ctrl+V')
-    s = re.sub(r"(?<=[A-Za-z])[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?=[A-Za-z])", "", s)
+    s = re.sub(r"(?<=[A-Za-z])[ \t]*(?:\r?\n[ \t]*)+(?=[A-Za-z])", "", s)
     #  ③ 닫는 괄호 직후 조사/어미 쪼개짐 ('(또는 6글자 이상 긴 오타)\n를' -> '(또는 6글자 이상 긴 오타)를')
     s = re.sub(
-        r"(?<=[\)\]\}])[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?=(?:을|를|은|는|이|가|에|에서|으로|로|와|과|의|도|만|부터|까지)(?=[\s.,?!:;)]|$))",
+        r"(?<=[\)\]\}])[ \t]*(?:\r?\n[ \t]*)+(?=(?:을|를|은|는|이|가|에|에서|으로|로|와|과|의|도|만|부터|까지)(?=[\s.,?!:;)]|$))",
         "",
         s,
     )
-    #  ④ 한글 단어 내부 또는 어미가 줄바꿈으로 쪼개진 구간 무공백 결합 ('한\n영 성형' -> '한영 성형', '자동변\n환' -> '자동변환', '먹\n습니다' -> '먹습니다')
+    #  ④ 한글 단어 내부 또는 어미가 줄바꿈(\n 또는 \n\n)으로 쪼개진 구간 무공백 결합 ('한\n\n영 성형' -> '한영 성형', '자동변\n\n환' -> '자동변환', '붙\n\n여넣어집니다' -> '붙여넣어집니다')
     def _join_midword_hangul_newline(m_nl: re.Match) -> str:
         left_w = m_nl.group(1)
         right_w = m_nl.group(2)
         # 앞부분 끝이 문장 종결어미('다/요/죠/까')이면 줄바꿈 보존
         if left_w.endswith(("다", "요", "죠", "까")):
             return m_nl.group(0)
-        # 뒷부분이 조사·어미이거나, 앞+뒤 결합 단어가 AI 서브워드/어절 시작 사전에 존재하는 하나의 단어('한영', '변환', '자동변환' 등)이면 무공백 결합!
+        # 뒷부분이 조사·어미·보조용언('여넣어집니다', '넣어집니다', '어집니다', '집니다', '세요', '으로' 등)이거나,
+        # 앞+뒤 결합 단어가 AI 서브워드/어절 시작 사전에 존재하는 하나의 단어('한영', '변환', '자동변환' 등)이면 무공백 결합!
         if re.match(
-            r"^(?:아서|어서|여서|해서|요|네요|군요|나요|가요|까요|어요|아요|해요|죠|지요|습니다|입니다|합니다|다|께|깨|을|를|은|는|이|가|에서|에게|으로|까지|부터)$",
+            r"^(?:아서|어서|여서|해서|여넣|넣어|어지|어집|집니|습니|입니|합니|됩니|세요|어요|아요|해요|네요|군요|나요|가요|까요|죠|지요|습니다|입니다|합니다|됩니다|여넣어집니다|넣어집니다|어집니다|집니다|다|께|깨|을|를|은|는|이|가|에서|에게|으로|로|까지|부터|므로|도록|지만|거나|면서|니까)",
             right_w,
         ):
             return f"{left_w}{right_w}"
@@ -4094,15 +4109,15 @@ def iron_and_polish_korean_text(raw_text: str, allow_typo_morph: bool = True) ->
         return f"{left_w} {right_w}"
 
     s = re.sub(
-        r"([가-힣]+)[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?!(?:[-*•▪▫▶▷■◆◇※#\[\(]|\d+[.)]|\([0-9가-힣]+\)|[①-⑳]))([가-힣]+)",
+        r"([가-힣]+)[ \t]*(?:\r?\n[ \t]*)+(?!(?:[-*•▪▫▶▷■◆◇※#\[\(⚠️📌🧪①-⑳]|\d+[.)]|\([0-9가-힣]+\)))([가-힣]+)",
         _join_midword_hangul_newline,
         s,
     )
-    # 2-B) 문장 중간(쉼표·닫는괄호·영숫자·비종결 한글 끝)에서 PDF/웹 폭 때문에 뚝 끊긴 단일 줄바꿈(\n)을 공백 1칸으로 매끄럽게 다림질!
-    #      단, ① 빈 줄(\n\n), ② 마침표·물음표·느낌표·콜론(:) 등 문장/헤더 종결 부호 뒤, ③ 종결어미('다/요/죠/까') 뒤,
-    #      ④ 다음 줄이 번호/불릿 목록(1., 1), -, *, •, ■, ▶, ⚠️, 📌, 🧪, [)으로 시작하는 경우는 줄바꿈을 100% 보존합니다.
+    # 2-B) 문장 중간(쉼표·닫는괄호·영숫자·비종결 한글 끝)에서 PDF/웹 폭 때문에 뚝 끊긴 줄바꿈(\n 또는 비종결 \n\n)을 공백 1칸으로 매끄럽게 다림질!
+    #      단, ① 마침표·물음표·느낌표·콜론(:) 등 문장/헤더 종결 부호 뒤, ② 종결어미('다/요/죠/까') 뒤,
+    #      ③ 다음 줄이 번호/불릿 목록(1., 1), -, *, •, ■, ▶, ⚠️, 📌, 🧪, [)으로 시작하는 경우는 줄바꿈을 100% 보존합니다.
     s = re.sub(
-        r"(?<=[가-힣A-Za-z0-9,\)%])[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?!(?:[-*•▪▫▶▷■◆◇※#\[\(⚠️📌🧪①-⑳]|\d+[.)]|\([0-9가-힣]+\)))"
+        r"(?<=[가-힣A-Za-z0-9,\)%])[ \t]*(?:\r?\n[ \t]*)+(?!(?:[-*•▪▫▶▷■◆◇※#\[\(⚠️📌🧪①-⑳]|\d+[.)]|\([0-9가-힣]+\)))"
         r"(?=[가-힣A-Za-z0-9\(\['\"])",
         lambda m: "\n" if s[max(0, m.start() - 2) : m.start()].endswith(("다", "요", "죠", "까")) else " ",
         s,
@@ -5723,6 +5738,7 @@ def main() -> None:
     last_paste_ts: float = 0.0
     idle_checked_for_ts: float = 0.0
     was_sub_key_down: dict[int, bool] = {}
+    last_auto_morph_state: dict[str, object] = {"active": False}
 
     def arm_sub_hotkeys() -> None:
         nonlocal menu_armed, menu_armed_until
@@ -6487,6 +6503,7 @@ def main() -> None:
                             last_any_key_ts = now
                         typed_ascii_buf.clear()
                         pending_first_typo = None
+                        last_auto_morph_state["active"] = False
                     was_key_down[nav_vk] = nav_down
 
                 if not ctrl_down and not alt_down and not menu_armed:
@@ -6498,7 +6515,8 @@ def main() -> None:
                             last_alpha_type_ts = now
                             last_any_key_ts = now
                             last_drag_select_ts = 0.0
-                            if len(typed_ascii_buf) > 28:
+                            last_auto_morph_state["active"] = False
+                            if len(typed_ascii_buf) > 64:
                                 typed_ascii_buf.pop(0)
                         was_key_down[vk_code] = is_down
 
@@ -6512,7 +6530,55 @@ def main() -> None:
                         if d_down and not was_key_down.get(d_vk, False):
                             last_any_key_ts = now
                             last_drag_select_ts = 0.0
-                            if typed_ascii_buf:
+                            if shift_down and d_vk == 0x32:
+                                # 이메일 기호(@) 입력 감지 시 대기 중이던 한영 자동전환 즉시 해제!
+                                pending_first_typo = None
+                                # 만약 방금 Space로 1어절 자동변환된 직후 공백을 지우고(Backspace) 바로 '@'를 붙였다면(예: dmsgydmlapdlf -> 은호의메일@) 영문 아이디로 즉시 원복!
+                                if (
+                                    last_auto_morph_state.get("active")
+                                    and last_auto_morph_state.get("space_removed_by_bs")
+                                    and (now - float(last_auto_morph_state.get("ts", 0.0))) <= 6.0
+                                    and last_auto_morph_state.get("hwnd") == u32.GetForegroundWindow()
+                                ):
+                                    raw_rest = str(last_auto_morph_state.get("raw", "")).strip() + "@"
+                                    conv_prev = str(last_auto_morph_state.get("conv", "")).strip()
+                                    ed_prev = int(last_auto_morph_state.get("edit_child") or 0)
+                                    last_auto_morph_state["active"] = False
+                                    time.sleep(0.02)
+                                    restored_ok = False
+                                    if ed_prev and u32.IsWindow(ed_prev):
+                                        cur_ln_at = _get_edit_control_current_line(ed_prev) or ""
+                                        if cur_ln_at.endswith(conv_prev + "@"):
+                                            new_ln_at = cur_ln_at[: -(len(conv_prev) + 1)] + raw_rest
+                                            s_at = wintypes.DWORD(0)
+                                            e_at = wintypes.DWORD(0)
+                                            u32.SendMessageW(ed_prev, EM_GETSEL, ctypes.addressof(s_at), ctypes.addressof(e_at))
+                                            ln_idx_at = u32.SendMessageW(ed_prev, EM_LINEFROMCHAR, s_at.value, 0)
+                                            ln_st_at = u32.SendMessageW(ed_prev, EM_LINEINDEX, ln_idx_at, 0)
+                                            ln_len_at = u32.SendMessageW(ed_prev, EM_LINELENGTH, ln_st_at, 0)
+                                            if ln_st_at >= 0 and ln_len_at > 0:
+                                                u32.SendMessageW(ed_prev, EM_SETSEL, ln_st_at, ln_st_at + ln_len_at)
+                                                rb_at = ctypes.create_unicode_buffer(new_ln_at)
+                                                u32.SendMessageW(ed_prev, EM_REPLACESEL, 1, ctypes.addressof(rb_at))
+                                                restored_ok = True
+                                    if not restored_ok and conv_prev:
+                                        release_all_modifiers()
+                                        bs_sc_at = u32.MapVirtualKeyW(VK_BACK, 0)
+                                        for _ in range(len(conv_prev) + 1):
+                                            u32.keybd_event(VK_BACK, bs_sc_at, 0, 0)
+                                            time.sleep(0.008)
+                                            u32.keybd_event(VK_BACK, bs_sc_at, KEYEVENTF_KEYUP, 0)
+                                            time.sleep(0.005)
+                                        time.sleep(0.02)
+                                        send_unicode_text_preserve_style(raw_rest)
+                                    set_ime_language(target_korean=False)
+                                    typed_ascii_buf.clear()
+                                    typed_ascii_buf.extend(list(raw_rest))
+                                    show_ghost_toast(f"👻 이메일(@) 감지 ➔ 영문 원복 ({raw_rest})", duration_ms=1400)
+                                else:
+                                    typed_ascii_buf.append("@")
+                            elif typed_ascii_buf:
+                                last_auto_morph_state["active"] = False
                                 if not shift_down:
                                     typed_ascii_buf.append(chr(d_vk))
                                 elif d_vk in _SHIFT_DIGIT_MAP:
@@ -6524,6 +6590,7 @@ def main() -> None:
                         if nd_down and not was_key_down.get(nd_vk, False):
                             last_any_key_ts = now
                             last_drag_select_ts = 0.0
+                            last_auto_morph_state["active"] = False
                             if typed_ascii_buf:
                                 typed_ascii_buf.append(chr(nd_vk - 0x30))
                         was_key_down[nd_vk] = nd_down
@@ -6547,8 +6614,11 @@ def main() -> None:
                         if p_down and not was_key_down.get(p_vk, False):
                             last_any_key_ts = now
                             last_drag_select_ts = 0.0
+                            last_auto_morph_state["active"] = False
                             if p_vk == 0xBF and shift_down:
                                 last_question_mark_ts = now
+                            if p_vk == 0xBD and shift_down:
+                                pending_first_typo = None
                             if typed_ascii_buf:
                                 typed_ascii_buf.append(sh_ch if shift_down else norm_ch)
                         was_key_down[p_vk] = p_down
@@ -6557,6 +6627,10 @@ def main() -> None:
                     if back_down and not was_key_down.get(VK_BACK, False):
                         last_any_key_ts = now
                         last_drag_select_ts = 0.0
+                        if last_auto_morph_state.get("active") and not last_auto_morph_state.get("space_removed_by_bs"):
+                            last_auto_morph_state["space_removed_by_bs"] = True
+                        else:
+                            last_auto_morph_state["active"] = False
                         if typed_ascii_buf:
                             typed_ascii_buf.pop()
                         else:
@@ -6564,7 +6638,9 @@ def main() -> None:
                             pending_first_typo = None
                     was_key_down[VK_BACK] = back_down
 
-                    # [스페이스바 없이도 2어절 연속 오타 또는 4음절(9자) 이상 긴 오타 후 0.55초 멈추면 자동 성형 (메모장 + 노션·엑셀·카톡·브라우저 전 앱 공통)]:
+                    # [스페이스바 없는 0.55초 멈춤 자동 성형 — 오직 '2어절 이상 연속 한영 오타'일 때만 발동!]:
+                    # ※ 1어절 단독 긴 영타(예: dmsgydmlapdlf@naver.com 입력 중 dmsgydmlapdlf에서 멈칫하는 경우)는
+                    #    0.55초 멈춤에서 절대 자동 변환하지 않으며, 반드시 Space를 눌렀을 때만 변환하여 이메일·아이디 오변환을 100% 차단합니다!
                     if (
                         typed_ascii_buf
                         and len(typed_ascii_buf) >= 2
@@ -6572,36 +6648,36 @@ def main() -> None:
                         and (now - last_alpha_type_ts) >= 0.55
                         and (now - last_alpha_type_ts) < 1.5
                     ):
+                        raw_idle_buf_chk = "".join(typed_ascii_buf)
                         hwnd_idle = u32.GetForegroundWindow()
-                        if not should_skip_auto_typo(hwnd_idle):
+                        if not _is_protected_account_or_email_token(raw_idle_buf_chk) and not should_skip_auto_typo(hwnd_idle):
                             edit_idle = _find_edit_control_child(hwnd_idle)
                             if edit_idle:
                                 idle_line = _get_edit_control_current_line(edit_idle)
-                                if idle_line and not idle_line.endswith(" "):
+                                if idle_line and not idle_line.endswith(" ") and (now - last_paste_ts) > 2.0:
                                     idle_tokens = idle_line.strip().split()
-                                    idle_eng_typo_cnt = 0
-                                    last_idle_eng_len = 0
-                                    last_idle_kor_len = 0
-                                    for itok in idle_tokens:
-                                        for ichunk in re.findall(r"[A-Za-z]+", itok):
-                                            if len(ichunk) >= 2 and not AI_ENGINE.is_valid_english_word(ichunk):
-                                                ik = eng_word_to_kor(ichunk)
-                                                if ik and is_valid_korean_word(ik):
-                                                    idle_eng_typo_cnt += 1
-                                                    last_idle_eng_len = len(ichunk)
-                                                    last_idle_kor_len = len(ik)
-                                    if idle_eng_typo_cnt >= 2 or (idle_eng_typo_cnt == 1 and last_idle_eng_len >= 9 and last_idle_kor_len >= 4):
-                                        ok_id, raw_id, out_id, lang_id = _replace_edit_control_current_line_atomic(edit_idle, auto_triggered=True)
-                                        if ok_id:
-                                            typed_ascii_buf.clear()
-                                            pending_first_typo = None
-                                            last_alpha_type_ts = 0.0
-                                            complete_feature_action_success("auto_typo_morph_2words")
-                                            badge = "한글키 전환" if (lang_id == "KO") else "영문키 전환"
-                                            show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_id} ➔ {out_id} | {badge})", duration_ms=1400)
+                                    if len(idle_tokens) >= 2 and not _is_protected_account_or_email_token(idle_tokens[-1]):
+                                        idle_eng_typo_cnt = 0
+                                        for itok in idle_tokens:
+                                            if _is_protected_account_or_email_token(itok):
+                                                continue
+                                            for ichunk in re.findall(r"[A-Za-z]+", itok):
+                                                if len(ichunk) >= 2 and not AI_ENGINE.is_valid_english_word(ichunk):
+                                                    ik = eng_word_to_kor(ichunk)
+                                                    if ik and is_valid_korean_word(ik):
+                                                        idle_eng_typo_cnt += 1
+                                        if idle_eng_typo_cnt >= 2:
+                                            ok_id, raw_id, out_id, lang_id = _replace_edit_control_current_line_atomic(edit_idle, auto_triggered=True)
+                                            if ok_id:
+                                                typed_ascii_buf.clear()
+                                                pending_first_typo = None
+                                                last_alpha_type_ts = 0.0
+                                                complete_feature_action_success("auto_typo_morph_2words")
+                                                badge = "한글키 전환" if (lang_id == "KO") else "영문키 전환"
+                                                show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_id} ➔ {out_id} | {badge})", duration_ms=1400)
                             else:
-                                # [노션·엑셀·브라우저·카톡 등 비-Edit 컨트롤에서도 2단어째 오타 후 스페이스 없이 0.55초 멈추면 즉시 자동 성형!]
-                                raw_idle_str = "".join(typed_ascii_buf)
+                                # [노션·엑셀·브라우저·카톡 등 비-Edit 컨트롤에서도 2단어째 연속 오타 후 0.55초 멈추면 즉시 자동 성형!]
+                                raw_idle_str = raw_idle_buf_chk
                                 m_id = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", raw_idle_str)
                                 w_id = m_id.group(2) if m_id else re.sub(r"[^A-Za-z]", "", raw_idle_str)
                                 ime_kor_id = get_ime_is_korean(hwnd_idle)
@@ -6613,7 +6689,7 @@ def main() -> None:
                                             and pending_first_typo.get("target_ko") is True
                                             and pending_first_typo.get("hwnd") == hwnd_idle
                                         )
-                                        if has_prev_id or (len(w_id) >= 9 and len(k_id) >= 4):
+                                        if has_prev_id:
                                             prev_r_id = pending_first_typo["raw"] if has_prev_id else ""
                                             prev_c_id = pending_first_typo["conv"] if has_prev_id else ""
                                             total_bs_id = (pending_first_typo["disp_len"] if has_prev_id else 0) + len(raw_idle_str)
@@ -6672,12 +6748,16 @@ def main() -> None:
                                 time.sleep(0.006)
                                 cur_line = _get_edit_control_current_line(edit_child)
 
+                        last_tok = ""
                         if cur_line is not None:
                             cur_stripped = cur_line.rstrip(" ")
                             last_tok = cur_stripped.split()[-1] if cur_stripped.strip() else ""
                             m_last_eng = re.match(r"^([^A-Za-z가-힣\s]*)([A-Za-z]+)([^A-Za-z가-힣\s]*)$", last_tok)
-                            # [붙여넣기 보호]: 유저가 직접 키보드로 친 적 없는(raw_buf_str 비어있음) 붙여넣기 영타는 절대 자동 한영변환 대상로 잡지 않음!
-                            if m_last_eng and bool(raw_buf_str):
+                            # [붙여넣기 및 이메일·계정 보호]: 붙여넣기 영타(raw_buf_str 비어있음) 또는 이메일(@)/계정 토큰은 절대 자동 한영변환 대상으로 잡지 않음!
+                            if _is_protected_account_or_email_token(last_tok) or _is_protected_account_or_email_token(raw_buf_str):
+                                typed_as_eng = False
+                                typed_as_kor = False
+                            elif m_last_eng and bool(raw_buf_str):
                                 typed_as_eng = True
                                 typed_as_kor = False
                                 lead_punct, word_cand, trail_punct = m_last_eng.groups()
@@ -6687,9 +6767,13 @@ def main() -> None:
                                 typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
                                 typed_as_kor = bool(raw_buf_str) and not typed_as_eng
                         else:
-                            ime_kor = get_ime_is_korean(hwnd_fg)
-                            typed_as_eng = not ime_kor
-                            typed_as_kor = ime_kor
+                            if _is_protected_account_or_email_token(raw_buf_str):
+                                typed_as_eng = False
+                                typed_as_kor = False
+                            else:
+                                ime_kor = get_ime_is_korean(hwnd_fg)
+                                typed_as_eng = not ime_kor
+                                typed_as_kor = ime_kor
 
                         curr_typo: dict | None = None
                         if typed_as_eng and len(word_cand) >= 2 and not AI_ENGINE.is_valid_english_word(word_cand):
@@ -6728,6 +6812,8 @@ def main() -> None:
                                 if len(line_tokens) >= 2:
                                     prev_is_eng_typo = False
                                     for prev_tok in line_tokens[:-1]:
+                                        if _is_protected_account_or_email_token(prev_tok):
+                                            continue
                                         for p_chunk in re.findall(r"[A-Za-z]+", prev_tok):
                                             if len(p_chunk) >= 2 and not AI_ENGINE.is_valid_english_word(p_chunk):
                                                 pk = eng_word_to_kor(p_chunk)
@@ -6762,6 +6848,18 @@ def main() -> None:
                                 if edit_child:
                                     ok_ed, raw_ed, out_ed, lang_ed = _replace_edit_control_current_line_atomic(edit_child, auto_triggered=True)
                                     if ok_ed:
+                                        if target_ko and not prev_raw:
+                                            last_auto_morph_state = {
+                                                "active": True,
+                                                "raw": curr_typo["raw"],
+                                                "conv": curr_typo["conv"],
+                                                "space_removed_by_bs": False,
+                                                "hwnd": hwnd_fg,
+                                                "edit_child": edit_child,
+                                                "ts": time.time(),
+                                            }
+                                        else:
+                                            last_auto_morph_state["active"] = False
                                         complete_feature_action_success("auto_typo_morph_2words")
                                         badge = "한글키 전환" if (lang_ed == "KO") else "영문키 전환"
                                         show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_ed} ➔ {out_ed} | {badge})", duration_ms=1400)
@@ -6790,6 +6888,18 @@ def main() -> None:
                                         if orig_c and not seq_mode:
                                             threading.Timer(0.28, lambda c=orig_c: daemon_set_clipboard(c)).start()
                                     set_ime_language(target_korean=target_ko)
+                                    if target_ko and not prev_raw:
+                                        last_auto_morph_state = {
+                                            "active": True,
+                                            "raw": curr_typo["raw"],
+                                            "conv": final_paste.strip(),
+                                            "space_removed_by_bs": False,
+                                            "hwnd": hwnd_fg,
+                                            "edit_child": 0,
+                                            "ts": time.time(),
+                                        }
+                                    else:
+                                        last_auto_morph_state["active"] = False
                                     complete_feature_action_success("auto_typo_morph_2words")
                                     badge = "한글키 전환" if target_ko else "영문키 전환"
                                     show_ghost_toast(f"👻 귀신같이 오토한영 ({combined_raw} ➔ {final_paste.strip()} | {badge})", duration_ms=1400)
@@ -6798,7 +6908,13 @@ def main() -> None:
                                 pending_first_typo = curr_typo
                         else:
                             pending_first_typo = None
-                            if edit_child and cur_line is not None and re.search(r"[가-힣]", cur_line) and (now - last_paste_ts) > 2.0:
+                            if (
+                                edit_child
+                                and cur_line is not None
+                                and not _is_protected_account_or_email_token(last_tok)
+                                and re.search(r"[가-힣]", cur_line)
+                                and (now - last_paste_ts) > 2.0
+                            ):
                                 ok_sp, raw_sp, out_sp, _ = _replace_edit_control_current_line_atomic(
                                     edit_child, auto_triggered=True, allow_typo_morph=False
                                 )

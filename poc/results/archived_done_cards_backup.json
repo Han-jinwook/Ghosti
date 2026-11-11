@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-11T10:40:23.313321",
+  "updated_at": "2026-11-11T10:50:45.285742",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -1066,6 +1066,14 @@
       "last_edited_time": "2026-11-11T00:24:00.000Z",
       "url": "https://app.notion.com/p/v1-3-30-FAQ-413f9ffd2c1d81838484d7ed35a2e4ed",
       "archived_at": "2026-11-11T10:40:23.313103"
+    },
+    {
+      "page_id": "414f9ffd-2c1d-8094-a48c-ffd0bbfdf738",
+      "title": "🎯 [귀신같이] 귀신 비서-사진 분류 및 중복사진&연사묶음 탭 변환되지 않는 오류",
+      "app": "",
+      "last_edited_time": "2026-11-11T00:28:00.000Z",
+      "url": "https://app.notion.com/p/414f9ffd2c1d8094a48cffd0bbfdf738",
+      "archived_at": "2026-11-11T10:50:45.285513"
     }
   ]
 }

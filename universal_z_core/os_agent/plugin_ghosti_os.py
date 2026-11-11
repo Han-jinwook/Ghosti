@@ -604,6 +604,8 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
 
 import re
 import subprocess
+import tempfile
+import threading
 import urllib.parse
 import zipfile
 
@@ -1027,8 +1029,8 @@ def _guess_image_mime(p: Path, name: str) -> str:
     }.get(ext, "application/octet-stream")
 
 
-def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes | None, str, int]:
-    """로컬 사진 및 동영상 바이너리와 Content-Type을 읽어옵니다."""
+def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path | None, str, int]:
+    """로컬 사진 및 동영상의 실물 Path와 Content-Type만 즉시 반환합니다 (전체 파일 RAM 로드 없음)."""
     data = params or {}
     rel = str(data.get("p") or data.get("path") or "").strip()
     if not rel:
@@ -1036,17 +1038,12 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
 
     base_name = Path(rel).name
     if str(data.get("loc") or "").strip() == "quarantine":
-        # 휴지통으로 옮긴 사진 미리보기: 귀신같이 휴지통 장부에 기록된 $R 실물만 읽는다
         row = safe.ledger_find(base_name)
         q_path = Path(row.get("recycleDataFile") or "") if row else None
         if q_path and row.get("recycleDataFile") and q_path.exists() and q_path.is_file():
-            full_path_q: Path | None = q_path
-        else:
-            return None, "text/plain", 404
-        try:
-            return full_path_q.read_bytes(), _guess_image_mime(full_path_q, base_name), 200
-        except Exception:
-            return None, "text/plain", 500
+            return q_path, _guess_image_mime(q_path, base_name), 200
+        return None, "text/plain", 404
+
     full_path: Path | None = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
 
     if full_path is None or not full_path.exists():
@@ -1054,7 +1051,7 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
         if direct_p.exists() and direct_p.is_file():
             full_path = direct_p
         else:
-            for d in _iter_scan_dirs(_get_user_scan_roots(), max_depth=2):
+            for d in _iter_scan_dirs(_get_user_scan_roots(), max_depth=3):
                 cand = d / base_name
                 if cand.exists() and cand.is_file():
                     full_path = cand.resolve()
@@ -1072,7 +1069,7 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
         ".bmp": "image/bmp",
         ".gif": "image/gif",
         ".mp4": "video/mp4",
-        ".mov": "video/quicktime",
+        ".mov": "video/mp4",
         ".webm": "video/webm",
         ".m4v": "video/mp4",
         ".avi": "video/x-msvideo",
@@ -1080,7 +1077,14 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
     }
     ext = full_path.suffix.lower()
     content_type = mime_map.get(ext, "application/octet-stream")
+    return full_path, content_type, 200
 
+
+def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes | None, str, int]:
+    """로컬 사진 및 동영상 바이너리와 Content-Type을 읽어옵니다 (레거시 호출 호환용)."""
+    full_path, content_type, status = resolve_local_media_file(params)
+    if full_path is None or status != 200:
+        return None, content_type, status
     try:
         with open(full_path, "rb") as fp:
             return fp.read(), content_type, 200
