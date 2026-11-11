@@ -6,7 +6,11 @@ import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import type { GpuHelperTierId, LoungeType } from '../types/saysee';
-import { groupBurstSearchResults, probeBrowserVideoDurationSec } from '../services/aiEngine';
+import {
+  cleanVideoTimestampLabel,
+  groupBurstSearchResults,
+  resolveVideoCardThumbUrl,
+} from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
@@ -545,7 +549,10 @@ export const MobileAppView: React.FC = () => {
 
                 {/* [처방 4] 모바일 스크롤 지옥 해방: 세로 나열 대신 좌우 스와이프 카드덱(Horizontal Snap Carousel)! */}
                 <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 no-scrollbar">
-                  {matchedVideoScenes.map((vid, idx) => (
+                  {matchedVideoScenes.map((vid) => {
+                    const cardThumbUrl = resolveVideoCardThumbUrl(vid);
+                    const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
+                    return (
                     <article
                       key={vid.id}
                       onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
@@ -554,33 +561,22 @@ export const MobileAppView: React.FC = () => {
                       } snap-center rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 flex flex-col cursor-pointer shrink-0`}
                     >
                       <div className="relative aspect-video w-full bg-black">
-                        <video
-                          key={`${vid.id}-${vid.matchedSeekSec}`}
-                          src={`${vid.videoUrl}#t=${vid.matchedSeekSec}`}
-                          poster={vid.thumbUrl}
-                          preload="metadata"
-                          muted
-                          playsInline
-                          onLoadedMetadata={(e) => {
-                            try {
-                              const realDur = Math.round(e.currentTarget.duration);
-                              if (realDur > 0 && Number.isFinite(realDur)) {
-                                syncRealVideoDuration(vid.id, realDur);
-                              }
-                              e.currentTarget.currentTime = vid.matchedSeekSec;
-                            } catch {
-                              // ignore
-                            }
-                          }}
-                          onError={() => {
-                            void probeBrowserVideoDurationSec(vid.videoUrl, 2500).then((realDur) => {
-                              if (realDur && realDur > 0) {
-                                syncRealVideoDuration(vid.id, realDur);
-                              }
-                            });
-                          }}
-                          className="w-full h-full object-cover pointer-events-none"
-                        />
+                        {cardThumbUrl ? (
+                          <img
+                            src={cardThumbUrl}
+                            alt={vid.title}
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = 'none';
+                            }}
+                            className="w-full h-full object-cover pointer-events-none"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-zinc-400 gap-1 p-3 text-center">
+                            <span className="material-symbols-outlined text-2xl text-primary-container/80">movie</span>
+                            <span className="text-[11px] font-medium truncate max-w-[85%]">{vid.title}</span>
+                          </div>
+                        )}
                         <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                           <div className="w-10 h-10 rounded-full bg-black/75 border border-white/20 text-white flex items-center justify-center">
                             <span className="material-symbols-outlined text-[22px]">play_arrow</span>
@@ -588,7 +584,7 @@ export const MobileAppView: React.FC = () => {
                         </div>
                         {hasExecutedUserSearch && activeQuery && (
                           <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-zinc-950/90 border border-primary-container/50 text-primary-container font-label-mono text-[10.5px] font-bold">
-                            🎯 {vid.matchedTimestamp} 장면 포착
+                            🎯 {cleanTs} 장면 포착
                           </div>
                         )}
                         <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded bg-zinc-950/90 border border-white/15 text-white font-label-mono text-[10.5px] font-extrabold">
@@ -612,13 +608,14 @@ export const MobileAppView: React.FC = () => {
                           <span>📍 {vid.locationKo}</span>
                           <span className="text-primary-container font-bold">
                             {hasExecutedUserSearch && activeQuery
-                              ? `▶ ${vid.matchedTimestamp} 바로 재생`
+                              ? `▶ ${cleanTs} 바로 재생`
                               : '▶ 재생'}
                           </span>
                         </span>
                       </div>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             ) : searchSpace === 'vault' ? (

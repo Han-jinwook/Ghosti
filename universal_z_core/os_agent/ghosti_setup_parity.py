@@ -223,10 +223,26 @@ def tts_prewarm(body: Dict[str, Any] | None) -> Dict[str, Any]:
 FACE_REGISTRY_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_face_clusters.json"
 _STOP_WORDS_KO = {
     "찾아줘", "보여줘", "사진", "문서", "파일", "서류", "서류함", "영상", "동영상", "장면", "모습", "및", "사본",
+    "돌리는", "돌아가는", "나오는", "보이는", "찍은", "찍는", "촬영", "화면", "구간", "순간", "부분", "전구간",
+    "타임라인", "해부", "속에서", "속에", "있는", "하는",
 }
 _PARTICLE_TAIL_RE = re.compile(
     r"(에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도|이|가|로|만)$"
 )
+_ASCII_TOKEN_RE = re.compile(r"^[a-z0-9]+$")
+
+
+def _match_query_token(tk: str, corpus: str, corpus_nospace: str = "") -> bool:
+    """영문/숫자 토큰(예: 'ai')이 다른 영단어(예: 'airplane', 'detail', 'main') 내부 부분문자열로 오탐되는 현상을 원천 차단합니다."""
+    if not tk:
+        return False
+    if _ASCII_TOKEN_RE.match(tk):
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(tk)}(?![a-z0-9])", corpus))
+    if tk in corpus:
+        return True
+    if len(tk) >= 2 and corpus_nospace and tk in corpus_nospace:
+        return True
+    return False
 
 
 def _tokenize_ko_query(q: str) -> list[str]:
@@ -263,7 +279,7 @@ def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
         corpus_nospace = re.sub(r"\s+", "", corpus)
         hits = 0
         for tk in tokens:
-            if tk in corpus or (len(tk) >= 2 and tk in corpus_nospace):
+            if _match_query_token(tk, corpus, corpus_nospace):
                 hits += 1
         if hits >= req_hits:
             scored.append((hits, d))
@@ -291,8 +307,11 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
     import plugin_ghosti_os
 
     q = str((body or {}).get("query") or "").strip()
+    if q and "전 구간" not in q and hasattr(plugin_ghosti_os, "ensure_local_videos_ocr_indexed"):
+        plugin_ghosti_os.ensure_local_videos_ocr_indexed(sync_wait_sec=2.8)
+
     listed = plugin_ghosti_os.list_local_videos({})
-    videos = list(listed.get("videos") or [])
+    videos = [v for v in (listed.get("videos") or []) if not v.get("isAllBlack")]
     seen_vnames = {str(v.get("videoFileName") or "") for v in videos}
     static_vjson = _load_static_json("video_timeline_index.json")
     if isinstance(static_vjson, dict) and isinstance(static_vjson.get("videos"), list):
@@ -300,7 +319,10 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
             vname = str(sv.get("videoFileName") or "")
             if vname and vname not in seen_vnames:
                 seen_vnames.add(vname)
-                videos.append(sv)
+                sv_copy = dict(sv)
+                raw_ts = str(sv_copy.get("matchedTimestamp") or "00:00")
+                sv_copy["matchedTimestamp"] = raw_ts.replace("🎯", "").replace("구간 포착", "").replace("장면 포착", "").strip() or "00:00"
+                videos.append(sv_copy)
     if not q or "전 구간" in q:
         return {"ok": True, "videos": videos}
 
@@ -308,9 +330,11 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
     if not tokens:
         return {"ok": True, "videos": videos}
 
-    req_hits = 1 if len(tokens) <= 2 else max(1, int((len(tokens) * 0.45) + 0.999))
+    req_hits = len(tokens) if len(tokens) <= 2 else max(2, int((len(tokens) * 0.67) + 0.999))
     scored: list[tuple[int, Dict[str, Any]]] = []
     for v in videos:
+        if v.get("isAllBlack"):
+            continue
         vkws = " ".join(str(x) for x in (v.get("keywords") or []))
         vbase = f"{v.get('title', '')} {v.get('sceneDescription', '')} {v.get('summaryCaption', '')} {v.get('locationKo', '')} {v.get('locationTag', '')} {vkws}".lower()
         frames = list(v.get("timelineFrames") or [])
@@ -319,7 +343,8 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
         for fr in frames:
             fkws = " ".join(str(x) for x in (fr.get("keywords") or []))
             fcorpus = f"{fr.get('sceneCaption', '')} {fkws}".lower()
-            fhits = sum(1 for tk in tokens if tk in fcorpus)
+            fcorpus_ns = re.sub(r"\s+", "", fcorpus)
+            fhits = sum(1 for tk in tokens if _match_query_token(tk, fcorpus, fcorpus_ns))
             if fhits > best_frame_hits:
                 best_frame_hits = fhits
                 best_frame = fr
@@ -327,13 +352,21 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
             f"{fr.get('sceneCaption', '')} {' '.join(str(x) for x in (fr.get('keywords') or []))}".lower()
             for fr in frames
         )
-        matched_tokens = sum(1 for tk in tokens if tk in full_corpus)
+        full_corpus_ns = re.sub(r"\s+", "", full_corpus)
+        matched_tokens = sum(1 for tk in tokens if _match_query_token(tk, full_corpus, full_corpus_ns))
         if matched_tokens >= req_hits:
             vid_out = dict(v)
             if best_frame and best_frame_hits > 0:
-                vid_out["matchedSeekSec"] = best_frame.get("timeSec", 0)
-                vid_out["matchedTimestamp"] = f"🎯 {best_frame.get('timestampText', '00:00')} 구간 포착"
+                seek_sec = int(best_frame.get("timeSec") or 0)
+                vid_out["matchedSeekSec"] = seek_sec
+                raw_ts = str(best_frame.get("timestampText") or "00:00")
+                vid_out["matchedTimestamp"] = raw_ts.replace("🎯", "").replace("구간 포착", "").replace("장면 포착", "").strip() or "00:00"
                 vid_out["matchedFrameCaption"] = best_frame.get("sceneCaption", "")
+                if best_frame.get("thumbUrl"):
+                    vid_out["thumbUrl"] = best_frame["thumbUrl"]
+            else:
+                raw_ts = str(vid_out.get("matchedTimestamp") or "00:00")
+                vid_out["matchedTimestamp"] = raw_ts.replace("🎯", "").replace("구간 포착", "").replace("장면 포착", "").strip() or "00:00"
             scored.append((matched_tokens * 5 + best_frame_hits * 3, vid_out))
 
     scored.sort(key=lambda x: x[0], reverse=True)

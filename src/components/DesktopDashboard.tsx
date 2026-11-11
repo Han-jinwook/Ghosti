@@ -9,7 +9,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore, getActivePersonaForCluster, type DesktopTab } from '../store/useSaySeeStore';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
-import { groupBurstSearchResults, probeBrowserVideoDurationSec } from '../services/aiEngine';
+import {
+  cleanVideoTimestampLabel,
+  groupBurstSearchResults,
+  resolveVideoCardThumbUrl,
+} from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { SmartTrashView } from './SmartTrashView';
@@ -1560,41 +1564,23 @@ export const DesktopDashboard: React.FC = () => {
                 ) : (
                   /* 컴팩트 화면에서는 좌우 스와이프(Carousel), 데스크톱에서는 깔끔한 카드 그리드 */
                   <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
-                    {matchedVideoScenes.map((vid) => (
+                    {matchedVideoScenes.map((vid) => {
+                      const cardThumbUrl = resolveVideoCardThumbUrl(vid);
+                      const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
+                      return (
                       <article
                         key={vid.id}
                         onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
                         className="min-w-[85%] sm:min-w-[340px] md:min-w-0 snap-center group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
                       >
                         <div className="relative aspect-video w-full overflow-hidden bg-black">
-                          {vid.thumbUrl ? (
+                          {cardThumbUrl ? (
                             <img
-                              src={vid.thumbUrl}
+                              src={cardThumbUrl}
                               alt={vid.title}
                               loading="lazy"
                               onError={(e) => {
                                 (e.currentTarget as HTMLElement).style.display = 'none';
-                              }}
-                              className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
-                            />
-                          ) : vid.videoUrl ? (
-                            <video
-                              src={`${vid.videoUrl}#t=${vid.matchedSeekSec || 0.1}`}
-                              preload="metadata"
-                              muted
-                              playsInline
-                              onLoadedMetadata={(e) => {
-                                const realDur = Math.round(e.currentTarget.duration);
-                                if (realDur > 0 && Number.isFinite(realDur)) {
-                                  syncRealVideoDuration(vid.id, realDur);
-                                }
-                              }}
-                              onError={() => {
-                                void probeBrowserVideoDurationSec(vid.videoUrl, 2500).then((realDur) => {
-                                  if (realDur && realDur > 0) {
-                                    syncRealVideoDuration(vid.id, realDur);
-                                  }
-                                });
                               }}
                               className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
                             />
@@ -1612,7 +1598,7 @@ export const DesktopDashboard: React.FC = () => {
 
                           {hasExecutedUserSearch && activeQuery && (
                             <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container/50 text-primary-container font-label-mono text-[11px] font-bold">
-                              🎯 {vid.matchedTimestamp} 장면 포착
+                              🎯 {cleanTs} 장면 포착
                             </div>
                           )}
 
@@ -1655,13 +1641,14 @@ export const DesktopDashboard: React.FC = () => {
                             <span>{vid.date}</span>
                             <span className="text-primary-container font-bold">
                               {hasExecutedUserSearch && activeQuery
-                                ? `▶ ${vid.matchedTimestamp} 바로 재생 →`
+                                ? `▶ ${cleanTs} 바로 재생 →`
                                 : '▶ 재생 →'}
                             </span>
                           </div>
                         </div>
                       </article>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </section>

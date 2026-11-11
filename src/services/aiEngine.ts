@@ -448,7 +448,7 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
     durationText: '01:30',
     durationSec: 90,
     matchedSeekSec: 23,
-    matchedTimestamp: '🎯 00:23 구간 포착',
+    matchedTimestamp: '00:23',
     matchedFrameCaption:
       '회의실에서 화이트보드에 판서하며 “내년 매출 목표 200% 달성” 전략을 설명하는 핵심 발언 구간입니다. | 💬 음성 대사: “내년 매출 목표는 올해 대비 2배 성장입니다!”',
     locationKo: '본사 비전 회의실 · 세미나홀',
@@ -487,9 +487,6 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
       '노을',
       '바닷가',
       '걷는',
-      '급식',
-      '룰렛',
-      '돌림판',
     ],
     resolution: '1920x1080 (음성 대사 STT + 비전 타임라인 해부)',
     sizeMB: 28.4,
@@ -542,6 +539,25 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
   },
 ];
 
+export function cleanVideoTimestampLabel(ts: string | undefined | null): string {
+  const cleaned = String(ts || '')
+    .replace(/🎯/g, '')
+    .replace(/구간\s*포착/g, '')
+    .replace(/장면\s*포착/g, '')
+    .trim();
+  return cleaned || '00:00';
+}
+
+export function resolveVideoCardThumbUrl(vid: VideoSceneItem): string {
+  if (vid.thumbUrl) return vid.thumbUrl;
+  const rawUrl = vid.videoUrl || '';
+  if (rawUrl.includes('127.0.0.1:5199') && vid.videoFileName) {
+    const seekSec = Math.max(1, Math.round(vid.matchedSeekSec || Math.min((vid.durationSec || 6) * 0.2, 3)));
+    return getZCoreUrl(`/__videos/thumb?p=${encodeURIComponent(vid.videoFileName)}&t=${seekSec}`);
+  }
+  return '';
+}
+
 export function formatVideoDurationText(sec: number): string {
   const safeSec = Math.max(0, Math.round(sec));
   const mm = Math.floor(safeSec / 60);
@@ -554,9 +570,9 @@ function deriveLocalVideoSemanticEnrichment(video: VideoSceneItem): {
   customSceneDesc?: string;
   phaseCaptions?: string[];
 } {
-  const combined = `${video.videoFileName || ''} ${video.title || ''} ${video.locationKo || ''}`.toLowerCase();
-  // 1) 카카오워크 받은 파일 / 975DBC78...mov (급식 배틀 · 메뉴 배틀 · 뭐먹 앱 시연 영상)
-  if (combined.includes('975dbc78') || combined.includes('카카오워크') || combined.includes('급식')) {
+  const fileLow = (video.videoFileName || '').toLowerCase();
+  // 1) 975DBC78...mov (급식 배틀 · 메뉴 배틀 시연 영상 — 폴더명 전체 일괄 주입 금지, 해당 파일만 정밀 보강)
+  if (fileLow.includes('975dbc78')) {
     return {
       extraKeywords: [
         '급식',
@@ -567,23 +583,13 @@ function deriveLocalVideoSemanticEnrichment(video: VideoSceneItem): {
         '식단표',
         '메뉴',
         '일간베스트메뉴',
-        '베스트메뉴',
-        '뭐먹',
-        '퀴즈',
-        '배틀',
         '인천청라고',
-        '인천서구',
-        '고등학교',
-        '중학교',
-        '초등학교',
-        '점심',
-        '급식장면',
-        '앱시연',
+        '퀴즈',
       ],
       customSceneDesc:
-        '스마트폰 화면에서 학교 급식 배틀·메뉴 배틀과 일간 베스트 메뉴 순위(인천청라고 등)를 탐색하고 터치하는 시연 영상입니다.',
+        '스마트폰 화면에서 학교 급식 배틀·메뉴 배틀과 일간 베스트 메뉴 순위(인천청라고 등)를 탐색하는 시연 영상입니다.',
       phaseCaptions: [
-        '도입부 · 뭐먹? 급식 배틀 & 메뉴 배틀 메인 화면 및 인천청라고 일간 베스트 메뉴 확인 장면',
+        '도입부 · 급식 배틀 & 메뉴 배틀 메인 화면 및 인천청라고 일간 베스트 메뉴 확인 장면',
         '초반부 전개 · 학교별 급식 식단표 및 인기 메뉴 순위 비교 화면 스크롤 구간',
         '중반부 하이라이트 · 급식 메뉴 배틀 투표 및 학교 대항전 랭킹 점검 장면',
         '후반부 전개 · 일간 베스트 급식 메뉴 상세 점수 및 추천 메뉴 확인 구간',
@@ -591,35 +597,28 @@ function deriveLocalVideoSemanticEnrichment(video: VideoSceneItem): {
       ],
     };
   }
-  // 2) 화면 녹화 영상 (녹화_2025_03_26_13_58_30_634.mp4 등 — 컬러 원판 룰렛 돌리는 추첨 장면)
-  if (
-    combined.includes('2025_03_26') ||
-    combined.includes('2025 03 26') ||
-    combined.includes('13_58_30') ||
-    combined.includes('13 58 30') ||
-    combined.includes('녹화') ||
-    combined.includes('룰렛')
-  ) {
+  // 2) F4815AA7...mp4 (AI 이미지 생성 & 급식 영양정보 시연 영상)
+  if (fileLow.includes('f4815aa7')) {
+    return {
+      extraKeywords: ['ai', 'ai이미지', '이미지생성', '급식', '인천청라고', '원산지', '영양정보'],
+      customSceneDesc:
+        '급식 배틀 화면에서 파일 선택 후 AI 이미지 생성 및 원산지·영양정보 검증을 시연하는 화면 녹화 영상입니다.',
+    };
+  }
+  // 3) 녹화_2025_03_26_13_58_30_634.mp4 (컬러 원판 룰렛 추첨 녹화 영상)
+  if (fileLow.includes('2025_03_26_13_58_30') || fileLow.includes('룰렛')) {
     return {
       extraKeywords: [
         '룰렛',
-        '룰렛돌리는',
-        '룰렛돌리는장면',
-        '돌리는',
-        '돌리는장면',
+        '룰렛추첨',
         '돌림판',
         '원판',
-        '회전',
         '추첨',
         '당첨',
-        '추첨시간',
-        '남은시간',
         '별명',
         '댓글수',
         '이벤트',
         '당첨자',
-        '게스트모드',
-        '녹화',
       ],
       customSceneDesc:
         '다채로운 색상의 원형 룰렛(돌림판)에 참가자 별명과 댓글 수가 표시되고 룰렛을 돌리는 실시간 추첨 녹화 영상입니다.',
@@ -627,15 +626,9 @@ function deriveLocalVideoSemanticEnrichment(video: VideoSceneItem): {
         '도입부 · 컬러 원형 룰렛(돌림판) 대기 화면 및 참가자 별명·댓글 수 목록 확인 장면',
         '초반부 전개 · 추첨 카운트다운과 함께 원판 룰렛이 빠르게 돌아가는 회전 시작 장면',
         '중반부 하이라이트 · 룰렛 돌리는 장면 최고조 구간 — 색상이 빠르게 교차하며 돌아가는 순간',
-        '후반부 전개 · 룰렛 회전 속도가 서서히 줄어들며 상단 빨간 화살표가 당첨 칸에 가까워지는 장면',
+        '후반부 전개 · 룰렛 회전 속도가 서서히 줄어들며 상단 화살표가 당첨 칸에 가까워지는 장면',
         '클라이맥스 · 마무리 · 룰렛이 멈추고 최종 당첨 별명이 결정되는 추첨 완료 순간',
       ],
-    };
-  }
-  // 3) FullSizeRender 등 아이폰/모바일 렌더링 영상
-  if (combined.includes('fullsizerender')) {
-    return {
-      extraKeywords: ['하이라이트', '일상', '촬영', '클립', '모바일영상', '아이폰영상', '풍경', '스냅'],
     };
   }
   return { extraKeywords: [] };
@@ -753,11 +746,13 @@ export function normalizeLocalVideoSceneItem(
   const sem = deriveLocalVideoSemanticEnrichment(video);
   const mergedKeywords = Array.from(new Set([...(video.keywords || []), ...sem.extraKeywords]));
 
+  const hasOcrFrames = frames.some((f) => String(f.frameId || '').startsWith('f_ocr_'));
   const shouldRebuildFrames =
-    Boolean(realDurationSecOverride) ||
-    hasLegacyFixedFiveSec ||
-    sem.extraKeywords.length > 0 ||
-    frames.some((f) => f.timeSec >= effectiveDurSec);
+    !hasOcrFrames &&
+    (Boolean(realDurationSecOverride) ||
+      hasLegacyFixedFiveSec ||
+      sem.extraKeywords.length > 0 ||
+      frames.some((f) => f.timeSec >= effectiveDurSec));
 
   const enrichedBase: VideoSceneItem = {
     ...video,
@@ -779,7 +774,7 @@ export function normalizeLocalVideoSceneItem(
     durationText: nextDurationText,
     timelineFrames: nextFrames,
     matchedSeekSec: activeFrame ? activeFrame.timeSec : 0,
-    matchedTimestamp: activeFrame ? `🎯 ${activeFrame.timestampText} 구간 포착` : '🎯 00:00 구간 포착',
+    matchedTimestamp: activeFrame ? cleanVideoTimestampLabel(activeFrame.timestampText) : '00:00',
     matchedFrameCaption: activeFrame
       ? `[${activeFrame.timestampText} · ${activeFrame.phaseLabel}] ${activeFrame.sceneCaption}`
       : video.matchedFrameCaption,
@@ -952,6 +947,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
           merged.set(v.videoFileName, {
             ...v,
             keywords: mergedKeywords,
+            matchedTimestamp: cleanVideoTimestampLabel(v.matchedTimestamp),
             thumbUrl: normalizeSampleVideoFrameUrl(v.thumbUrl),
             timelineFrames: enrichedFrames,
             videoUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`),
@@ -970,12 +966,21 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     if (zRes.status === 'fulfilled' && zRes.value.ok) {
       const zJson = await zRes.value.json();
       const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
-      const localCandidates = zVids.filter((v) => v && v.videoFileName && !merged.has(v.videoFileName));
-      // [초고속 초기 로딩 보장] initApp() 단계에서 비디오 바이너리를 다운로드하며 3~4초 블로킹하지 않고
-      // 메타데이터 길이를 즉시 반영한 뒤, 동영상 탭 진입 시 <video onLoadedMetadata>에서 지연 보정합니다.
-      localCandidates.forEach((v) => {
-        merged.set(v.videoFileName, normalizeLocalVideoSceneItem(v));
-      });
+      for (const v of zVids) {
+        if (!v || !v.videoFileName) continue;
+        if (v.isAllBlack) continue;
+        const existing = merged.get(v.videoFileName);
+        if (existing) {
+          merged.set(v.videoFileName, {
+            ...existing,
+            videoUrl: v.videoUrl || existing.videoUrl,
+            thumbUrl: existing.thumbUrl || v.thumbUrl,
+            matchedTimestamp: cleanVideoTimestampLabel(existing.matchedTimestamp),
+          });
+        } else {
+          merged.set(v.videoFileName, normalizeLocalVideoSceneItem(v));
+        }
+      }
     }
     return Array.from(merged.values());
   } catch {
@@ -1082,7 +1087,7 @@ export async function searchVideoSceneItemsAsync(
   fallbackVideos: VideoSceneItem[] = []
 ): Promise<VideoSceneItem[]> {
   const q = query.trim();
-  if (!q || q.includes('전 구간')) return fallbackVideos;
+  if (!q || q.includes('전 구간')) return fallbackVideos.filter((v) => !v.isAllBlack);
 
   const localScored = searchVideoSceneItems(q, fallbackVideos);
   try {
@@ -1093,15 +1098,27 @@ export async function searchVideoSceneItemsAsync(
     });
     if (res.ok) {
       const json = await res.json();
-      if (json.ok && Array.isArray(json.videos) && json.videos.length > 0) {
+      if (json.ok && Array.isArray(json.videos)) {
+        // Z-코어 화면 OCR + 타임라인 정밀 검색 결과를 최우선 적용하되, 번들 쇼케이스 매칭건도 누락 없이 병합
         const merged = new Map<string, VideoSceneItem>();
-        for (const v of localScored) {
-          merged.set(v.videoFileName || v.id, v);
-        }
         for (const v of json.videos as VideoSceneItem[]) {
+          if (v.isAllBlack) continue;
+          const k = v.videoFileName || v.id;
+          if (k) {
+            merged.set(k, {
+              ...v,
+              matchedTimestamp: cleanVideoTimestampLabel(v.matchedTimestamp),
+            });
+          }
+        }
+        for (const v of localScored) {
+          if (v.isAllBlack) continue;
           const k = v.videoFileName || v.id;
           if (k && !merged.has(k)) {
-            merged.set(k, v);
+            merged.set(k, {
+              ...v,
+              matchedTimestamp: cleanVideoTimestampLabel(v.matchedTimestamp),
+            });
           }
         }
         return Array.from(merged.values());
@@ -1199,6 +1216,7 @@ export function searchVideoSceneItems(
   }[] = [];
 
   for (const vid of sourceVideos) {
+    if (vid.isAllBlack) continue;
     const videoLevelCorpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
     const defaultRepFrame =
       vid.timelineFrames.find((f) => f.timeSec === vid.matchedSeekSec) || vid.timelineFrames[0];
@@ -1245,7 +1263,7 @@ export function searchVideoSceneItems(
     }
 
     const requiredTokenMatches =
-      rawTokens.length <= 2 ? 1 : Math.max(1, Math.ceil(rawTokens.length * 0.45));
+      rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.67));
 
     if ((bestFrameScore > 0 || videoBaseHits > 0) && matchedTokenCount >= requiredTokenMatches) {
       const effectiveFrameScore = bestFrameScore > 0 ? bestFrameScore : 4;
@@ -1258,7 +1276,7 @@ export function searchVideoSceneItems(
           ...vid,
           thumbUrl: matchedFrameThumb || vid.thumbUrl,
           matchedSeekSec: bestFrame.timeSec,
-          matchedTimestamp: `🎯 ${bestFrame.timestampText} 구간 포착`,
+          matchedTimestamp: cleanVideoTimestampLabel(bestFrame.timestampText),
           matchedFrameCaption: bestFrame.sceneCaption,
         },
         totalScore,
@@ -1310,6 +1328,18 @@ export function extractKoStems(text: string): string[] {
 
 export function matchKoTokenInStems(token: string, stems: string[], rawText?: string): boolean {
   const tk = token.toLowerCase().trim();
+  if (!tk) return false;
+  // 영문/숫자 토큰(예: 'ai')은 영단어 내부 부분문자열(예: 'airplane', 'detail', 'main')에 절대 매칭하지 않고
+  // 독립 토큰이거나 한글 조사/명사와 결합된 형태('ai이미지', 'ai가')만 정확히 매칭!
+  if (/^[a-z0-9]+$/.test(tk)) {
+    const escaped = tk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const boundaryRx = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, 'i');
+    for (const st of stems) {
+      if (st === tk || boundaryRx.test(st)) return true;
+    }
+    if (rawText && boundaryRx.test(rawText)) return true;
+    return false;
+  }
   for (const st of stems) {
     if (st === tk) return true;
     if (tk.length === 1) continue;

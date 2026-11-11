@@ -451,10 +451,16 @@ class SilentIndexingBrakeManager {
     const q = (query || '').trim().toLowerCase();
     if (!q) return 0;
 
+    const isShortAscii = /^[a-z0-9]{1,3}$/.test(q);
+    const asciiBoundaryRx = isShortAscii
+      ? new RegExp(`(?<![a-z0-9])${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9])`, 'i')
+      : null;
+
     // 과거 연도(예: 2019~2025, 작년, 재작년, 옛날, 학창시절 등) 또는 파일명/폴더 매칭 확인
     const matchedOlder = allPhotos.filter((p) => {
       const hay = `${p.name} ${p.date} ${p.locationKo || ''} ${(p.tags || []).join(' ')}`.toLowerCase();
-      return hay.includes(q) || /201\d|202[0-5]|작년|재작년|옛날|과거|어릴|졸업|수학여행/.test(q);
+      const textHit = asciiBoundaryRx ? asciiBoundaryRx.test(hay) : hay.includes(q);
+      return textHit || /201\d|202[0-5]|작년|재작년|옛날|과거|어릴|졸업|수학여행/.test(q);
     });
 
     if (matchedOlder.length > 0) {

@@ -50,6 +50,8 @@ export interface VideoSceneItem {
   keywords: string[];
   resolution: string;
   sizeMB: number;
+  isAllBlack?: boolean;
+  codecTag?: string;
   timelineFrames: VideoTimelineFrame[];
 }
 

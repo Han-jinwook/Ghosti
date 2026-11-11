@@ -222,6 +222,130 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_file_stream(self, file_path: Path, content_type: str = "application/octet-stream", cache_max_age: int = 3600) -> None:
+        """대용량 동영상·이미지를 전체 RAM 로드 없이 디스크 seek + 256KB 청크(HTTP 206 Range)로 즉시 스트리밍합니다."""
+        try:
+            total_len = os.path.getsize(file_path)
+        except Exception:
+            self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=404)
+            return
+
+        start = 0
+        end = max(0, total_len - 1)
+        is_partial = False
+        range_header = self.headers.get("Range")
+        if total_len > 0 and range_header and range_header.strip().lower().startswith("bytes="):
+            try:
+                spec = range_header.strip()[6:].split(",")[0].strip()
+                start_s, end_s = spec.split("-", 1)
+                if start_s == "" and end_s != "":
+                    suffix_len = int(end_s)
+                    start = max(0, total_len - suffix_len)
+                    end = total_len - 1
+                else:
+                    start = int(start_s) if start_s else 0
+                    end = int(end_s) if end_s else total_len - 1
+                if start >= total_len:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{total_len}")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    return
+                start = max(0, start)
+                end = max(start, min(end, total_len - 1))
+                is_partial = True
+            except Exception:
+                start = 0
+                end = max(0, total_len - 1)
+                is_partial = False
+
+        send_len = (end - start + 1) if total_len > 0 else 0
+        try:
+            self.send_response(206 if is_partial else 200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Accept-Ranges", "bytes")
+            if is_partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{total_len}")
+            self.send_header("Content-Length", str(send_len))
+            if cache_max_age > 0:
+                self.send_header("Cache-Control", f"public, max-age={cache_max_age}")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+            self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.end_headers()
+
+            if send_len > 0:
+                remaining = send_len
+                with open(file_path, "rb") as fp:
+                    if start > 0:
+                        fp.seek(start)
+                    while remaining > 0:
+                        chunk = fp.read(min(262144, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            pass
+
+    def _send_transcoded_video_stream(self, file_path: Path, seek_sec: float = 0.0) -> None:
+        """Windows 크롬에서 코덱 미지원으로 화면이 멈추는 HEVC(hvc1) 영상 등을 실시간 H.264 Fragmented MP4로 즉시 스트리밍합니다."""
+        ff = plugin_ghosti_os.find_ffmpeg_exe()
+        if not ff:
+            self._send_file_stream(file_path, content_type="video/mp4")
+            return
+
+        creationflags = 0x08000000 if os.name == "nt" else 0
+        cmd = [ff, "-hide_banner", "-loglevel", "error"]
+        if seek_sec > 0.2:
+            cmd.extend(["-ss", f"{seek_sec:.2f}"])
+        cmd.extend([
+            "-i", str(file_path),
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-tune", "zerolatency",
+            "-crf", "25",
+            "-pix_fmt", "yuv420p",
+            "-vf", "scale='min(1280,iw)':-2",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+            "-f", "mp4",
+            "pipe:1",
+        ])
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                creationflags=creationflags,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.end_headers()
+            if proc.stdout:
+                while True:
+                    chunk = proc.stdout.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            pass
+        finally:
+            if proc is not None and proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
     def _read_body(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or 0)
         if length <= 0:
@@ -263,11 +387,31 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/__photos/file", "/api/ghosti/photos/file"):
-            content, mime, status = plugin_ghosti_os.read_local_photo_file(qp)
-            if content is not None:
-                self._send_bytes(content, content_type=mime, status=status)
+            f_path, mime, status = plugin_ghosti_os.resolve_local_media_file(qp)
+            if f_path is not None and status == 200:
+                self._send_file_stream(f_path, content_type=mime)
             else:
                 self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=status)
+            return
+
+        if path in ("/__videos/thumb", "/api/ghosti/videos/thumb"):
+            t_path, status = plugin_ghosti_os.get_or_create_video_thumb(qp)
+            if t_path is not None and status == 200:
+                self._send_file_stream(t_path, content_type="image/jpeg", cache_max_age=86400)
+            else:
+                self._send_json({"ok": False, "error": "THUMB_NOT_FOUND"}, status=status)
+            return
+
+        if path in ("/__videos/stream", "/api/ghosti/videos/stream"):
+            f_path, _, status = plugin_ghosti_os.resolve_local_media_file(qp)
+            if f_path is not None and status == 200:
+                try:
+                    seek_t = max(0.0, float(qp.get("t") or 0.0))
+                except Exception:
+                    seek_t = 0.0
+                self._send_transcoded_video_stream(f_path, seek_sec=seek_t)
+            else:
+                self._send_json({"ok": False, "error": "VIDEO_NOT_FOUND"}, status=status)
             return
 
         if path in ("/__videos/frame", "/api/ghosti/videos/frame"):

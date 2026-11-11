@@ -1293,24 +1293,24 @@ def _build_proportional_timeline_frames(
         return f"{int(s // 60):02d}:{int(s % 60):02d}"
 
     if t_sec < 6:
-        secs = [0, max(1, t_sec - 1)]
+        secs = [1, max(2, t_sec - 1)]
         labels = ["도입부", "후반부"]
     elif t_sec <= 14:
         mid = max(2, int(round(t_sec * 0.5)))
-        secs = [0, mid, max(mid + 1, t_sec - 1)]
+        secs = [1, mid, max(mid + 1, t_sec - 1)]
         labels = ["도입부", "중반부", "후반부"]
     elif t_sec <= 35:
         p1 = max(2, int(round(t_sec * 0.25)))
         p2 = max(p1 + 2, int(round(t_sec * 0.5)))
         p3 = max(p2 + 2, int(round(t_sec * 0.75)))
-        secs = [0, p1, p2, p3]
+        secs = [2, p1, p2, p3]
         labels = ["도입부", "초반 전개", "중반부 핵심", "후반 마무리"]
     else:
-        p1 = max(3, int(round(t_sec * 0.2)))
+        p1 = max(4, int(round(t_sec * 0.2)))
         p2 = max(p1 + 3, int(round(t_sec * 0.45)))
         p3 = max(p2 + 3, int(round(t_sec * 0.7)))
         p4 = max(p3 + 3, int(round(t_sec * 0.9)))
-        secs = [0, p1, p2, p3, p4]
+        secs = [3, p1, p2, p3, p4]
         labels = ["도입부", "초반 전개", "중반부 하이라이트", "후반 전개", "클라이맥스/마무리"]
 
     frames = []
@@ -1328,11 +1328,344 @@ def _build_proportional_timeline_frames(
     return frames
 
 
+_VIDEO_THUMBS_DIR = MERLIN_DIR / "video_thumbs"
+_VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
+_VIDEO_OCR_LOCK = threading.Lock()
+_VIDEO_OCR_BG_RUNNING = False
+_FFMPEG_EXE_CACHE: str | None = ""
+
+
+def find_ffmpeg_exe() -> str | None:
+    global _FFMPEG_EXE_CACHE
+    if _FFMPEG_EXE_CACHE != "":
+        return _FFMPEG_EXE_CACHE
+    found = shutil.which("ffmpeg")
+    if not found and os.name == "nt":
+        try:
+            winget_root = LOCAL_APPDATA / "Microsoft" / "WinGet" / "Packages"
+            if winget_root.exists():
+                for cand in winget_root.glob("*FFmpeg*/*/bin/ffmpeg.exe"):
+                    if cand.is_file():
+                        found = str(cand)
+                        break
+        except Exception:
+            pass
+    _FFMPEG_EXE_CACHE = found
+    return found
+
+
+def _detect_video_codec_fast(file_path: Path) -> str:
+    """0.5ms 내에 MP4/MOV 헤더/트레일러에서 비디오 코덱(hvc1/hev1 vs avc1)을 판별합니다."""
+    ext = file_path.suffix.lower()
+    if ext not in (".mp4", ".mov", ".m4v") or _is_cloud_virtual_or_unpinned_file(file_path):
+        return "avc1"
+    try:
+        sz = file_path.stat().st_size
+        with open(file_path, "rb") as fp:
+            head = fp.read(min(sz, 131072))
+            tail = b""
+            if sz > 131072:
+                tail_len = min(sz, 524288)
+                fp.seek(max(0, sz - tail_len))
+                tail = fp.read(tail_len)
+        blob = head + tail
+        if b"hvc1" in blob or b"hev1" in blob:
+            return "hevc"
+    except Exception:
+        pass
+    return "avc1"
+
+
+def _clean_timestamp_badge(ts: str) -> str:
+    cleaned = str(ts or "").replace("🎯", "").replace("구간 포착", "").replace("장면 포착", "").strip()
+    return cleaned or "00:00"
+
+
+def get_or_create_video_thumb(params: Dict[str, Any] | None = None) -> tuple[Path | None, int]:
+    """로컬 동영상의 지정 시각(초) 프레임을 고속 추출·캐싱하여 JPEG 파일 경로로 반환합니다 (검은 도입부 자동 회피)."""
+    full_path, _, status = resolve_local_media_file(params)
+    if full_path is None or status != 200:
+        return None, status
+    ff = find_ffmpeg_exe()
+    if not ff or _is_cloud_virtual_or_unpinned_file(full_path):
+        return None, 404
+
+    data = params or {}
+    try:
+        req_t = float(data.get("t") or 0.0)
+    except Exception:
+        req_t = 0.0
+
+    dur = _get_fast_video_duration_sec(full_path)
+    if req_t <= 0.2:
+        seek_t = round(max(0.8, min(dur * 0.22, 3.5)), 1) if dur >= 3.0 else 0.5
+    else:
+        seek_t = round(max(0.0, min(req_t, max(0.0, dur - 0.5))), 1)
+
+    try:
+        st = full_path.stat()
+        cache_key = hashlib.sha1(f"{full_path}|{st.st_size}|{int(st.st_mtime)}|{seek_t:.1f}".encode("utf-8", errors="ignore")).hexdigest()[:20]
+        _VIDEO_THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+        out_jpg = _VIDEO_THUMBS_DIR / f"vt_{cache_key}.jpg"
+        if out_jpg.exists() and out_jpg.stat().st_size > 1500:
+            return out_jpg, 200
+
+        creationflags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW
+        probe_times = [seek_t]
+        if req_t <= 0.2 and dur >= 6.0:
+            probe_times.extend([round(dur * 0.45, 1), round(dur * 0.7, 1)])
+
+        best_tmp: Path | None = None
+        best_sz = 0
+        for idx, pt in enumerate(probe_times):
+            tmp_jpg = _VIDEO_THUMBS_DIR / f"tmp_{os.getpid()}_{threading.get_ident()}_{idx}.jpg"
+            subprocess.run(
+                [
+                    ff, "-y", "-ss", str(pt), "-i", str(full_path),
+                    "-frames:v", "1", "-vf", "scale='min(640,iw)':-2", "-q:v", "4", str(tmp_jpg),
+                ],
+                capture_output=True,
+                timeout=7,
+                creationflags=creationflags,
+            )
+            if tmp_jpg.exists():
+                sz = tmp_jpg.stat().st_size
+                if sz > best_sz:
+                    if best_tmp and best_tmp.exists():
+                        best_tmp.unlink(missing_ok=True)
+                    best_tmp = tmp_jpg
+                    best_sz = sz
+                else:
+                    tmp_jpg.unlink(missing_ok=True)
+                # 충분한 디테일이 있는 프레임(검은 화면은 640px q=4 기준 대개 3~5KB 미만)이면 즉시 확정
+                if sz >= 9500:
+                    break
+
+        if best_tmp and best_tmp.exists() and best_sz > 1000:
+            try:
+                best_tmp.replace(out_jpg)
+            except Exception:
+                shutil.copyfile(best_tmp, out_jpg)
+                best_tmp.unlink(missing_ok=True)
+            return out_jpg, 200
+    except Exception:
+        pass
+    return None, 404
+
+
+def _load_video_ocr_cache() -> Dict[str, Any]:
+    try:
+        if _VIDEO_OCR_CACHE_FILE.exists():
+            raw = json.loads(_VIDEO_OCR_CACHE_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+    except Exception:
+        pass
+    return {}
+
+
+def _save_video_ocr_cache(cache_data: Dict[str, Any]) -> None:
+    try:
+        _ensure_merlin_dir()
+        tmp = _VIDEO_OCR_CACHE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cache_data, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(_VIDEO_OCR_CACHE_FILE)
+    except Exception:
+        pass
+
+
+def _enrich_ocr_semantic_keywords(ocr_text: str) -> List[str]:
+    """화면 OCR 인식 오타 보정 및 핵심 검색 키워드 정규화"""
+    if not ocr_text:
+        return []
+    low = ocr_text.lower()
+    kws: List[str] = []
+    for w in re.findall(r"[가-힣a-z0-9]{2,}", low):
+        if len(w) <= 24:
+            kws.append(w)
+    if "를렛" in low or "룰렛" in low or ("당첨자" in low and "별명" in low):
+        kws.extend(["룰렛", "룰렛추첨", "돌림판", "추첨", "당첨", "이벤트"])
+    if "이미지 생성" in low or "이미지생성" in low or "ai 이미지" in low:
+        kws.extend(["ai", "ai이미지", "이미지생성", "인공지능"])
+    if "veo" in low:
+        kws.extend(["ai", "veo"])
+    if "급식" in low or "lunbat" in low or "메뉴 배틀" in low or "메뉴배틀" in low or "영양정보" in low:
+        kws.extend(["급식", "학교급식", "급식배틀", "식단", "영양정보"])
+    return list(dict.fromkeys(kws))[:40]
+
+
+def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
+    """미인덱싱 로컬 동영상에서 대표 구간 프레임을 고속 추출하여 Windows 내장 OCR로 화면 텍스트를 영구 인덱싱합니다."""
+    global _VIDEO_OCR_BG_RUNNING
+    ff = find_ffmpeg_exe()
+    if not ff or os.name != "nt" or not video_entries:
+        with _VIDEO_OCR_LOCK:
+            _VIDEO_OCR_BG_RUNNING = False
+        return
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_vid_ocr_"))
+    creationflags = 0x08000000
+    try:
+        job_map: Dict[str, tuple[str, int]] = {}
+        per_vid_meta: Dict[str, Dict[str, Any]] = {}
+        for idx, (cache_sig, vpath, dur_sec) in enumerate(video_entries):
+            t_int = max(2, int(round(dur_sec)))
+            if t_int <= 12:
+                secs = [max(1, int(round(t_int * 0.35)))]
+            elif t_int <= 45:
+                secs = [max(2, int(round(t_int * 0.2))), max(4, int(round(t_int * 0.65)))]
+            else:
+                secs = [
+                    max(2, int(round(t_int * 0.08))),
+                    max(5, int(round(t_int * 0.42))),
+                    max(10, int(round(t_int * 0.78))),
+                ]
+            per_vid_meta[cache_sig] = {"frames": [], "maxJpgBytes": 0}
+            for s in secs:
+                fname = f"v{idx:03d}_s{s:04d}.jpg"
+                out_jpg = tmp_dir / fname
+                subprocess.run(
+                    [
+                        ff, "-y", "-ss", str(s), "-i", str(vpath),
+                        "-frames:v", "1", "-vf", "scale='min(960,iw)':-2", "-q:v", "4", str(out_jpg),
+                    ],
+                    capture_output=True,
+                    timeout=7,
+                    creationflags=creationflags,
+                )
+                if out_jpg.exists():
+                    sz = out_jpg.stat().st_size
+                    if sz > per_vid_meta[cache_sig]["maxJpgBytes"]:
+                        per_vid_meta[cache_sig]["maxJpgBytes"] = sz
+                    job_map[fname] = (cache_sig, s)
+
+        ocr_by_file: Dict[str, str] = {}
+        if job_map:
+            ps_script = (
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+                "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
+                "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Storage.StorageFile, Windows.Foundation, ContentType = WindowsRuntime]\n"
+                "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+                "function Await($WinRtTask, $ResultType) {\n"
+                "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
+                "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
+                "    $netTask.Wait(-1) | Out-Null\n"
+                "    $netTask.Result\n"
+                "}\n"
+                "$lang = New-Object Windows.Globalization.Language('ko')\n"
+                "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
+                "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
+                "Get-ChildItem -LiteralPath $args[0] -Filter '*.jpg' | Sort-Object Name | ForEach-Object {\n"
+                "    $f = $_\n"
+                "    try {\n"
+                "        $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($f.FullName)) ([Windows.Storage.StorageFile])\n"
+                "        $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
+                "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
+                "        $bmp = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+                "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
+                "        $stream.Dispose()\n"
+                "        Write-Output \"$($f.Name)`t$($res.Text)\"\n"
+                "    } catch {}\n"
+                "}\n"
+            )
+            ps_file = tmp_dir / "ocr.ps1"
+            ps_file.write_text(ps_script, encoding="utf-8-sig")
+            ocr_proc = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_file), str(tmp_dir)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=35,
+                creationflags=creationflags,
+            )
+            for line in ocr_proc.stdout.splitlines():
+                if "\t" in line:
+                    fn, txt = line.split("\t", 1)
+                    ocr_by_file[fn.strip()] = re.sub(r"\s+", " ", txt).strip()
+
+        for fname, (cache_sig, sec_val) in sorted(job_map.items()):
+            txt = ocr_by_file.get(fname, "")
+            kws = _enrich_ocr_semantic_keywords(txt)
+            per_vid_meta[cache_sig]["frames"].append({
+                "timeSec": sec_val,
+                "ocrText": txt[:240],
+                "keywords": kws,
+            })
+
+        with _VIDEO_OCR_LOCK:
+            cur_cache = _load_video_ocr_cache()
+            for cache_sig, val in per_vid_meta.items():
+                all_kws: List[str] = []
+                for fr in val["frames"]:
+                    all_kws.extend(fr.get("keywords") or [])
+                cur_cache[cache_sig] = {
+                    "frames": val["frames"],
+                    "keywords": list(dict.fromkeys(all_kws))[:50],
+                    "isAllBlack": bool(val["maxJpgBytes"] > 0 and val["maxJpgBytes"] < 4200),
+                }
+            _save_video_ocr_cache(cur_cache)
+    except Exception:
+        pass
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        with _VIDEO_OCR_LOCK:
+            _VIDEO_OCR_BG_RUNNING = False
+
+
+def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
+    """검색 요청 시 아직 OCR 캐시가 없는 동영상들을 백그라운드(또는 짧은 동기 대기)로 인덱싱합니다."""
+    global _VIDEO_OCR_BG_RUNNING
+    ff = find_ffmpeg_exe()
+    if not ff or os.name != "nt":
+        return
+    scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
+    cache = _load_video_ocr_cache()
+    missing: List[tuple[str, Path, float]] = []
+    seen_names: set[str] = set()
+    for d in scan_dirs:
+        try:
+            for entry in sorted(d.iterdir(), key=lambda x: x.name):
+                if not entry.is_file() or entry.suffix.lower() not in _VIDEO_EXTS:
+                    continue
+                if entry.name in seen_names:
+                    continue
+                seen_names.add(entry.name)
+                resolved = entry.resolve()
+                if _is_cloud_virtual_or_unpinned_file(resolved):
+                    continue
+                st = resolved.stat()
+                sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
+                if sig not in cache:
+                    missing.append((sig, resolved, _get_fast_video_duration_sec(resolved)))
+                if len(seen_names) >= 120:
+                    break
+        except Exception:
+            pass
+    if not missing:
+        return
+
+    batch = missing[:16]
+    worker: threading.Thread | None = None
+    with _VIDEO_OCR_LOCK:
+        if not _VIDEO_OCR_BG_RUNNING:
+            _VIDEO_OCR_BG_RUNNING = True
+            worker = threading.Thread(target=_run_batch_video_ocr, args=(batch,), daemon=True)
+            worker.start()
+    if worker is not None and sync_wait_sec > 0:
+        worker.join(timeout=sync_wait_sec)
+
+
 def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     videos: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
+    ff = find_ffmpeg_exe()
+    ocr_cache = _load_video_ocr_cache()
+    missing_for_bg: List[tuple[str, Path, float]] = []
 
     for d in scan_dirs:
         try:
@@ -1352,38 +1685,92 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 date_str = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d")
                 stem = entry.stem.replace("_", " ").replace("-", " ").strip()
                 enc_name = urllib.parse.quote(entry.name)
-                vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
-                raw_kw_tokens = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} 동영상 영상") if len(w) >= 2]
-                comb_low = f"{entry.name} {d.name}".lower()
-                if "975dbc78" in comb_low or "카카오워크" in comb_low:
-                    raw_kw_tokens.extend(["급식", "학교급식", "급식배틀", "메뉴배틀", "일간베스트메뉴", "인천청라고", "식단", "메뉴", "뭐먹"])
-                if "2025_03_26" in comb_low or "13_58_30" in comb_low or "녹화" in comb_low:
-                    raw_kw_tokens.extend(["룰렛", "룰렛돌리는", "룰렛돌리는장면", "돌리는", "돌림판", "원판", "추첨", "당첨", "별명"])
-                kw_list = list(dict.fromkeys(raw_kw_tokens))[:24]
 
                 real_dur_sec = _get_fast_video_duration_sec(resolved)
                 int_dur = max(1, int(round(real_dur_sec)))
                 dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
+
+                codec_tag = _detect_video_codec_fast(resolved)
+                if codec_tag == "hevc" and ff:
+                    vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
+                else:
+                    vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
+
+                default_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
+                thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={default_seek}" if ff else ""
+
+                # 폴더명 전체에 일괄 키워드를 덧씌우던 오탐 로직 제거 — 순수 파일명 토큰 + 실제 프레임 OCR 키워드만 반영
+                raw_kw_tokens = [
+                    w for w in re.split(r"[\s_\-.,()\[\]]+", stem)
+                    if len(w) >= 2 and not re.fullmatch(r"[0-9a-fA-F]{4,}", w) and not re.fullmatch(r"\d+", w)
+                ]
+                name_low = entry.name.lower()
+                if "975dbc78" in name_low:
+                    raw_kw_tokens.extend(["급식", "학교급식", "급식배틀", "메뉴배틀", "인천청라고", "식단"])
+                if "2025_03_26_13_58_30" in name_low:
+                    raw_kw_tokens.extend(["룰렛", "룰렛추첨", "돌림판", "추첨", "당첨", "별명"])
+                if "f4815aa7" in name_low:
+                    raw_kw_tokens.extend(["ai", "ai이미지", "이미지생성", "급식", "인천청라고", "영양정보"])
+
+                sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
+                cached_ocr = ocr_cache.get(sig)
+                if cached_ocr is None and ff and not _is_cloud_virtual_or_unpinned_file(resolved):
+                    missing_for_bg.append((sig, resolved, real_dur_sec))
+
+                is_all_black = bool((cached_ocr or {}).get("isAllBlack", False))
+                if cached_ocr and isinstance(cached_ocr.get("keywords"), list):
+                    raw_kw_tokens.extend(str(k) for k in cached_ocr["keywords"])
+
+                kw_list = list(dict.fromkeys(raw_kw_tokens))[:45]
                 timeline_frames = _build_proportional_timeline_frames(stem, kw_list, d.name, len(videos) + 1, real_dur_sec)
 
+                # 프레임별 OCR 텍스트가 캐싱되어 있으면 실제 추출 시각(timeSec)과 캡션·썸네일을 타임라인에 정밀 매핑
+                if cached_ocr and isinstance(cached_ocr.get("frames"), list) and cached_ocr["frames"]:
+                    ocr_frames_out: List[Dict[str, Any]] = []
+                    for f_idx, ofr in enumerate(cached_ocr["frames"]):
+                        s_val = int(ofr.get("timeSec") or 0)
+                        ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
+                        ocr_txt = str(ofr.get("ocrText") or "").strip()
+                        f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *raw_kw_tokens[:10]]))
+                        ocr_frames_out.append({
+                            "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
+                            "timeSec": s_val,
+                            "timestampText": ts_str,
+                            "phaseLabel": "장면 포착",
+                            "sceneCaption": ocr_txt if ocr_txt else f"{stem} 장면 ({ts_str})",
+                            "keywords": f_kws,
+                            "tags": ["#내PC동영상", f"#{d.name}"],
+                            "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else "",
+                        })
+                    if ocr_frames_out:
+                        timeline_frames = ocr_frames_out
+
+                if ff:
+                    for tf in timeline_frames:
+                        if not tf.get("thumbUrl"):
+                            tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={int(tf.get('timeSec') or 0)}"
+
+                def_ts = f"{int(default_seek // 60):02d}:{int(default_seek % 60):02d}"
                 videos.append({
                     "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
                     "videoFileName": entry.name,
                     "title": f"{stem} ({d.name})",
                     "keyframePhotoId": entry.name,
-                    "thumbUrl": "",
+                    "thumbUrl": thumb_url,
                     "videoUrl": vid_url,
                     "date": date_str,
                     "durationText": dur_text,
                     "durationSec": int_dur,
-                    "matchedSeekSec": 0,
-                    "matchedTimestamp": "🎯 00:00 구간 포착",
+                    "matchedSeekSec": default_seek,
+                    "matchedTimestamp": def_ts,
                     "matchedFrameCaption": f"[{d.name}] 폴더에서 발견된 내 PC 로컬 동영상 ({entry.name})",
                     "locationKo": f"내 PC · {d.name}",
                     "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
                     "keywords": list(dict.fromkeys(kw_list)),
                     "resolution": "1920x1080",
                     "sizeMB": size_mb,
+                    "isAllBlack": is_all_black,
+                    "codecTag": codec_tag,
                     "timelineFrames": timeline_frames,
                 })
                 if len(videos) >= 120:
@@ -1393,9 +1780,14 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         if len(videos) >= 120:
             break
 
+    if missing_for_bg:
+        global _VIDEO_OCR_BG_RUNNING
+        with _VIDEO_OCR_LOCK:
+            if not _VIDEO_OCR_BG_RUNNING:
+                _VIDEO_OCR_BG_RUNNING = True
+                threading.Thread(target=_run_batch_video_ocr, args=(missing_for_bg[:16],), daemon=True).start()
+
     # [동영상 1초 직행 타임라인 인덱스 & 정본 썸네일 고도화 결합]
-    # - 번들 샘플 3종(코타키나발루 등)이 로컬 PC 스캔 경로에 존재할 경우, 단순 파일명 뼈대 목록이 아니라
-    #   해당 영상의 20개 타임라인 해부 구간 및 실제 추출된 정본 썸네일(thumbUrl) 메타데이터를 우선 보강합니다.
     static_index = None
     candidates = []
     if not getattr(os.sys, "frozen", False):
@@ -1420,17 +1812,29 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 enriched = dict(sv)
                 enriched["id"] = v.get("id") or enriched.get("id")
                 enriched["videoUrl"] = v.get("videoUrl") or enriched.get("videoUrl")
+                enriched["matchedTimestamp"] = _clean_timestamp_badge(enriched.get("matchedTimestamp", "00:00"))
                 if not enriched.get("thumbUrl") and sv.get("thumbUrl"):
                     enriched["thumbUrl"] = sv.get("thumbUrl")
+                if str(enriched.get("thumbUrl") or "").startswith("/"):
+                    enriched["thumbUrl"] = f"http://127.0.0.1:5199{enriched['thumbUrl']}"
+                for tf in enriched.get("timelineFrames") or []:
+                    if str(tf.get("thumbUrl") or "").startswith("/"):
+                        tf["thumbUrl"] = f"http://127.0.0.1:5199{tf['thumbUrl']}"
                 videos[idx] = enriched
 
-        # 만약 로컬 폴더에 아직 동영상 파일이 없는 환경이라도, 기본 3대 번들 영상은 즉시 체험 가능하도록 자동 합류
         seen_now = {v.get("videoFileName") for v in videos}
         for sv in static_index["videos"]:
             sv_name = sv.get("videoFileName")
             if sv_name and sv_name not in seen_now:
                 seen_now.add(sv_name)
-                videos.append(sv)
+                sv_copy = dict(sv)
+                sv_copy["matchedTimestamp"] = _clean_timestamp_badge(sv_copy.get("matchedTimestamp", "00:00"))
+                if str(sv_copy.get("thumbUrl") or "").startswith("/"):
+                    sv_copy["thumbUrl"] = f"http://127.0.0.1:5199{sv_copy['thumbUrl']}"
+                for tf in sv_copy.get("timelineFrames") or []:
+                    if str(tf.get("thumbUrl") or "").startswith("/"):
+                        tf["thumbUrl"] = f"http://127.0.0.1:5199{tf['thumbUrl']}"
+                videos.append(sv_copy)
 
     return {
         "ok": True,

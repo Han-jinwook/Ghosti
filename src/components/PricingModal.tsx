@@ -14,6 +14,7 @@ import {
 } from '../services/setupMonsterTts';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../services/voiceSearchAndAiBatonEngine';
+import { cleanVideoTimestampLabel, resolveVideoCardThumbUrl } from '../services/aiEngine';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 1번 내 기기 (PC·폰) + 2번 사진 공유 (가족·동호회·동창회) : 평생 0원 (3·4번 유료 기능 🎁 1개월 무료체험 포함)',
@@ -1330,6 +1331,7 @@ export const VideoScenePreviewModal: React.FC = () => {
   } = useSaySeeStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecRef = useRef<number | null>(null);
+  const triedTranscodeFallbackRef = useRef<boolean>(false);
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
   const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
 
@@ -1337,51 +1339,65 @@ export const VideoScenePreviewModal: React.FC = () => {
     if (!selectedVideoModal) {
       setResolvedVideoSrc('');
       setVideoPlaybackError(false);
+      triedTranscodeFallbackRef.current = false;
       return;
     }
     const rawUrl = selectedVideoModal.videoUrl || '';
+    const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
     setVideoPlaybackError(false);
-    pendingSeekSecRef.current = selectedVideoModal.matchedSeekSec ?? 0;
+    triedTranscodeFallbackRef.current = false;
 
     const cachedBlob = videoBlobUrlCache.get(rawUrl);
     if (cachedBlob) {
+      pendingSeekSecRef.current = targetSec;
       setResolvedVideoSrc(cachedBlob);
       return;
     }
 
-    // Z-코어 /__photos/file 은 HTTP 206 Range 스트리밍을 기본 지원하므로 전체 파일 다운로드 대기 없이 즉시 재생 시작
-    setResolvedVideoSrc(rawUrl);
-  }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl]);
-
-  useEffect(() => {
-    if (!selectedVideoModal) return;
-    const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
-    pendingSeekSecRef.current = targetSec;
-    const vidEl = videoRef.current;
-    if (!vidEl) return;
-
-    if (vidEl.readyState >= 1) {
-      try {
-        vidEl.currentTime = targetSec;
-        void vidEl.play().catch(() => {});
-      } catch {
-        // ignore
-      }
+    if (rawUrl.includes('/__videos/stream')) {
+      // H.264 실시간 트랜스코딩 스트림은 서버에서 targetSec부터 즉시 송출하므로 클라이언트 중복 탐색 불필요
+      pendingSeekSecRef.current = 0;
+      const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
+      const sep = baseStreamUrl.includes('?') ? '&' : '?';
+      setResolvedVideoSrc(targetSec > 0 ? `${baseStreamUrl}${sep}t=${targetSec}` : baseStreamUrl);
+      return;
     }
-  }, [selectedVideoModal?.id, selectedVideoModal?.matchedSeekSec, resolvedVideoSrc]);
+
+    pendingSeekSecRef.current = targetSec;
+    setResolvedVideoSrc(rawUrl);
+  }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl, selectedVideoModal?.matchedSeekSec]);
 
   if (!selectedVideoModal) return null;
 
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
+  const cleanTs = cleanVideoTimestampLabel(selectedVideoModal.matchedTimestamp);
   const currentFrameObj =
     selectedVideoModal.timelineFrames.find((f) => f.timeSec === selectedVideoModal.matchedSeekSec) ||
     selectedVideoModal.timelineFrames[0];
-  const currentFrameThumbUrl = currentFrameObj?.thumbUrl || selectedVideoModal.thumbUrl;
+  const currentFrameThumbUrl =
+    currentFrameObj?.thumbUrl || resolveVideoCardThumbUrl(selectedVideoModal);
 
-  const applyPendingSeek = (vidEl: HTMLVideoElement) => {
-    const targetSec = pendingSeekSecRef.current ?? selectedVideoModal.matchedSeekSec ?? 0;
+  const trySwitchToTranscodeStream = (): boolean => {
+    if (triedTranscodeFallbackRef.current) return false;
+    const rawUrl = selectedVideoModal.videoUrl || '';
+    if (!rawUrl.includes('127.0.0.1:5199') || !selectedVideoModal.videoFileName) return false;
+    triedTranscodeFallbackRef.current = true;
+    pendingSeekSecRef.current = 0;
+    const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
+    setVideoPlaybackError(false);
+    setResolvedVideoSrc(
+      `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(
+        selectedVideoModal.videoFileName
+      )}&t=${targetSec}`
+    );
+    return true;
+  };
+
+  const applyPendingSeekOnce = (vidEl: HTMLVideoElement) => {
+    const targetSec = pendingSeekSecRef.current;
+    pendingSeekSecRef.current = null;
     try {
-      if (Math.abs(vidEl.currentTime - targetSec) > 0.4) {
+      if (targetSec !== null && targetSec > 0 && Math.abs(vidEl.currentTime - targetSec) > 0.4) {
         vidEl.currentTime = targetSec;
       }
       void vidEl.play().catch(() => {});
@@ -1404,7 +1420,7 @@ export const VideoScenePreviewModal: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               {hasExecutedUserSearch && activeQuery && (
                 <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
-                  🎯 {selectedVideoModal.matchedTimestamp} 장면 포착
+                  🎯 {cleanTs} 장면 포착
                 </span>
               )}
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[11px] font-bold">
@@ -1445,27 +1461,23 @@ export const VideoScenePreviewModal: React.FC = () => {
               controls
               playsInline
               autoPlay
-              onError={() => setVideoPlaybackError(true)}
+              preload="auto"
+              onError={() => {
+                if (!trySwitchToTranscodeStream()) {
+                  setVideoPlaybackError(true);
+                }
+              }}
               onLoadedMetadata={(e) => {
-                const realDur = Math.round(e.currentTarget.duration);
-                if (realDur > 0 && Number.isFinite(realDur)) {
+                const el = e.currentTarget;
+                // Windows 브라우저에서 HEVC(hvc1) 코덱 미지원으로 소리만 나고 화면(videoWidth===0)이 멈추는 현상 즉시 자동 전환!
+                if (el.videoWidth === 0 && trySwitchToTranscodeStream()) {
+                  return;
+                }
+                const realDur = Math.round(el.duration);
+                if (realDur > 0 && Number.isFinite(realDur) && !resolvedVideoSrc.includes('/__videos/stream')) {
                   syncRealVideoDuration(selectedVideoModal.id, realDur);
                 }
-                applyPendingSeek(e.currentTarget);
-              }}
-              onCanPlay={(e) => {
-                if (pendingSeekSecRef.current !== null) {
-                  const target = pendingSeekSecRef.current;
-                  pendingSeekSecRef.current = null;
-                  try {
-                    if (Math.abs(e.currentTarget.currentTime - target) > 0.4) {
-                      e.currentTarget.currentTime = target;
-                    }
-                    void e.currentTarget.play().catch(() => {});
-                  } catch {
-                    // ignore
-                  }
-                }
+                applyPendingSeekOnce(el);
               }}
               className="w-full h-full object-contain"
             />
@@ -1478,7 +1490,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           )}
           {hasExecutedUserSearch && activeQuery && (
             <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">
-              🎯 {selectedVideoModal.matchedTimestamp} 장면부터 바로 재생
+              🎯 {cleanTs} 장면부터 바로 재생
             </div>
           )}
         </div>
@@ -1486,7 +1498,7 @@ export const VideoScenePreviewModal: React.FC = () => {
         {hasExecutedUserSearch && activeQuery && (
           <div className="p-3.5 rounded-2xl bg-primary-container/10 border border-primary-container/45 flex flex-col gap-1">
             <span className="font-label-mono text-[11px] text-primary-container font-black">
-              🎯 찾으신 장면 ({selectedVideoModal.matchedTimestamp}):
+              🎯 찾으신 장면 ({cleanTs}):
             </span>
             <p className="font-body-md text-[13.5px] text-white font-bold leading-relaxed">
               {renderHighlightedDocText(
