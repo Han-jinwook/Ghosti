@@ -377,7 +377,6 @@ def fetch_bugs(target_status: Optional[str] = None) -> List[Dict[str, str]]:
     상태가 '발견 버그'(기본값)인 카드를 조회하여
     터미널에 카드 ID, 제목, 본문 내용을 출력하고 리스트로 반환합니다. (100% 읽기 전용)
     """
-    trim_done_cards(4)
     bugs = query_bugs_raw(target_status)
     resolved_status = target_status or STATUS_DISCOVERED
 

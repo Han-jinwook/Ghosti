@@ -424,6 +424,7 @@ export const App: React.FC = () => {
     if (!OFFICIAL_LAUNCH_LIVE && !isDevAuthorized && !forceAllow) {
       return;
     }
+    playAppEnterGiggleSound(true);
     try {
       localStorage.setItem('ghosti_onboarding_completed', 'true');
       localStorage.setItem('ghosti_view_mode', 'workspace');

@@ -683,6 +683,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(body))
             return
 
+        if path in ("/__merlin/play-enter-giggle", "/api/superpower/play-enter-giggle"):
+            self._send_json(plugin_ghosti_superpowers.play_web_enter_giggle_api(body))
+            return
+
         if path.startswith("/api/senstalk"):
             sub = path[len("/api/senstalk") :].strip("/") or "health"
             self._send_json(plugin_senstalk.handle_post(sub, body))

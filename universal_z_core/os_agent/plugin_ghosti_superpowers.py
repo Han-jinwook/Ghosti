@@ -791,3 +791,57 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
         **res,
         "message": "👻 내 진짜 PC 사진·서류·여권이 연동된 리얼 귀신검색창을 화면에 즉시 띄웠습니다!",
     }
+
+
+_LAST_WEB_ENTER_GIGGLE_TS = 0.0
+_WEB_ENTER_GIGGLE_LOCK = threading.Lock()
+
+
+def play_web_enter_giggle_api(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    [👻 웹 처음 진입 시 애기귀신 시그니처 효과음 OS 네이티브 브릿지]
+    - 크롬 게스트 모드 / 시크릿 모드 / 첫 새 탭 접속 시 브라우저 Autoplay Policy(MEI=0)로 인해
+      클릭 전 HTMLAudioElement 자동재생이 차단될 때, 로컬 Z-코어(127.0.0.1:5199)가 동작 중이면
+      sample3_baby_ghost_giggle.wav를 은은한 볼륨으로 즉시 1회 재생합니다.
+    - 1.2초 디바운스로 StrictMode 이중 호출 및 중복 재생을 원천 차단합니다.
+    """
+    global _LAST_WEB_ENTER_GIGGLE_TS
+    data = params or {}
+    cfg = spd.get_superpower_settings()
+    if not cfg.get("sound_enabled", True):
+        return {"ok": True, "played": False, "reason": "muted"}
+
+    now_ts = time.time()
+    with _WEB_ENTER_GIGGLE_LOCK:
+        if now_ts - _LAST_WEB_ENTER_GIGGLE_TS < 1.2:
+            return {"ok": True, "played": True, "deduped": True}
+        _LAST_WEB_ENTER_GIGGLE_TS = now_ts
+
+    vol = float(data.get("volume") or cfg.get("sound_volume", 0.25) or 0.25)
+    target_ratio = max(0.05, min(0.45, 0.56 * vol))
+
+    cand_paths = [
+        THIS_DIR / "baby_ghost_sounds" / "sample3_baby_ghost_giggle.wav",
+        THIS_DIR / "assets" / "sample3_baby_ghost_giggle.wav",
+        THIS_DIR.parent / "data" / "baby_ghost_sounds" / "sample3_baby_ghost_giggle.wav",
+        THIS_DIR.parent / "assets" / "sample3_baby_ghost_giggle.wav",
+        spd.SOUNDS_DIR / "sample3_baby_ghost_giggle.wav",
+    ]
+    wav_path = next((p for p in cand_paths if p.exists()), None)
+    if not wav_path:
+        return {"ok": False, "played": False, "reason": "wav_not_found"}
+
+    def _play_giggle() -> None:
+        try:
+            import winsound
+            play_path = spd._prepare_soft_wav_file(wav_path, target_peak_ratio=target_ratio)
+            winsound.PlaySound(
+                str(play_path),
+                winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_play_giggle, daemon=True).start()
+    return {"ok": True, "played": True}
+
