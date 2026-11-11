@@ -128,19 +128,21 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
           <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  void speakWithHyunsuOrSunhi(
-                    message.missingFilePayload!.fiveLinePreview.join('. '),
-                    'sunhi_doc_reader'
-                  )
-                }
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <Volume2 className="w-3.5 h-3.5 text-amber-400" />
-                👩 음성으로 미리듣기
-              </button>
+              {isMobileVoiceEnvironment() && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void speakWithHyunsuOrSunhi(
+                      message.missingFilePayload!.fiveLinePreview.join('. '),
+                      'sunhi_doc_reader'
+                    )
+                  }
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                  👩 음성으로 미리듣기
+                </button>
+              )}
 
               {message.missingFilePayload.currentLocation && (
                 <button

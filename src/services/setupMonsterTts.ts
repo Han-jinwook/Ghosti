@@ -96,16 +96,17 @@ export function setPreferredVoiceEnabled(enabled: boolean): void {
 }
 
 /**
- * [멀린님 지침] PC(데스크톱)에서는 마이크 입력 및 음성 출력(TTS)을 모두 제거하고,
- * 오직 모바일(스마트폰/태블릿) 환경에서만 음성 인식 및 현수·선희 성우 음성 출력을 가동합니다.
+ * [멀린님 지침 & QA 검증] PC(데스크톱)에서는 창 크기를 작게 줄였을 때(예: 귀신검색 소형창 520px, 분할 창 등)도
+ * 마이크 입력 및 음성 출력(TTS/성우 캡슐)을 100% 제거하고,
+ * 오직 실제 모바일(스마트폰/태블릿 User-Agent 또는 네이티브 스토어 앱) 환경에서만 음성 기능을 가동합니다.
  */
 export function isMobileVoiceEnvironment(): boolean {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
   if (/Android|iPhone|iPad|iPod|Mobile|KakaoTalk/i.test(ua)) return true;
-  if (typeof window.matchMedia === 'function') {
-    if (window.matchMedia('(max-width: 767px)').matches) return true;
-  }
+  // iPadOS 데스크톱 UA 대응 (MacIntel + 멀티터치)
+  if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+  if (Boolean((window as any).Capacitor?.isNativePlatform?.())) return true;
   return false;
 }
 
@@ -714,7 +715,7 @@ export function triggerSetupMonsterTtsPrewarm(
  * 유저가 검색 직후 [남] 또는 [여] 버튼을 누르는 즉시 대기 시간 0초로 재생합니다.
  */
 export function prefetchVoiceActorCacheInBackground(text?: string, rate: string = SETUP_MONSTER_TTS_RATE_DEFAULT): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !isMobileVoiceEnvironment()) return;
   const targets: Array<{ t: string; v: string }> = [
     { t: normalizeTtsText(VOICE_PREVIEW_PHRASE_MALE), v: SETUP_MONSTER_TTS_VOICE_HYUNSU },
     { t: normalizeTtsText(VOICE_PREVIEW_PHRASE_FEMALE), v: SETUP_MONSTER_TTS_VOICE_SUNHI },

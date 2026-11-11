@@ -13,7 +13,7 @@ import {
 } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
-import { unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
+import { isMobileVoiceEnvironment, unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
 import {
   SEARCH_STAGE_PC_ROLLING_PLACEHOLDERS_10,
   SEARCH_STAGE_MOBILE_ROLLING_PLACEHOLDERS_10,
@@ -308,6 +308,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
 
   const isMobile = layout === 'mobile';
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
+  const allowMobileVoice = isMobileVoiceEnvironment() || Boolean(isStoreAppMode);
   const searchPlaceholderPool = useMemo(
     () =>
       isMobileOrStore
@@ -497,34 +498,36 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                 </div>
               </div>
 
-              <div className="md:hidden flex items-center gap-1.5 shrink-0 ml-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    unlockMobileAudioOnUserGesture();
-                    void toggleMicRecording();
-                  }}
-                  title="모바일 마이크로 말해서 검색·낭독·손보기"
-                  className={`h-10 px-3 rounded-2xl border flex items-center gap-1 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
-                    isListening
-                      ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
-                      : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
-                  }`}
-                >
-                  <span
-                    className={`material-symbols-outlined text-[18px] ${
-                      isListening ? 'text-zinc-950' : 'text-primary-container'
+              {allowMobileVoice && (
+                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      unlockMobileAudioOnUserGesture();
+                      void toggleMicRecording();
+                    }}
+                    title="모바일 마이크로 말해서 검색·낭독·손보기"
+                    className={`h-10 px-3 rounded-2xl border flex items-center gap-1 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                      isListening
+                        ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
+                        : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
                     }`}
                   >
-                    {isListening ? 'stop_circle' : 'mic'}
-                  </span>
-                  <span>{isListening ? '듣는 중' : '말하기'}</span>
-                </button>
-                <VoiceActorControlPill />
-              </div>
+                    <span
+                      className={`material-symbols-outlined text-[18px] ${
+                        isListening ? 'text-zinc-950' : 'text-primary-container'
+                      }`}
+                    >
+                      {isListening ? 'stop_circle' : 'mic'}
+                    </span>
+                    <span>{isListening ? '듣는 중' : '말하기'}</span>
+                  </button>
+                  <VoiceActorControlPill />
+                </div>
+              )}
             </form>
 
-            {isListening && (
+            {allowMobileVoice && isListening && (
               <div className="px-3.5 py-2 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="flex items-center gap-0.5 h-4 shrink-0">

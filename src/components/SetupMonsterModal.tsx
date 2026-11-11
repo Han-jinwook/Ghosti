@@ -176,11 +176,11 @@ export const SetupFloatingOverlayGuide: React.FC = () => {
             </div>
           </div>
 
-          {/* 하단 음성 안내 및 [뒤로 가기(Back) 초행길 헤맴] + [다음 단계] 버튼 */}
+          {/* 하단 단계별 안내 및 [뒤로 가기(Back) 초행길 헤맴] + [다음 단계] 버튼 */}
           <div className="p-3.5 rounded-xl bg-rose-950/30 border border-rose-400/30 flex flex-col gap-3">
             <div className="flex flex-col gap-0.5">
               <span className="font-label-sm text-[11px] text-rose-300 font-extrabold">
-                🔊 실시간 AI 동행 음성 안내
+                👆 단계별 동행 클릭 안내
               </span>
               <p className="font-body-sm text-[12.5px] text-white">
                 “{currentStep.voiceGuideText}”

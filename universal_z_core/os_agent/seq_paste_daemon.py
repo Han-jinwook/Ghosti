@@ -763,57 +763,80 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
 
     cleaned_lead = re.sub(r"(?<![A-Za-z0-9_:/.-])([a-zA-Z])([가-힣]{2,})", _strip_leading_single_eng, text)
 
-    def replace_token(m: re.Match) -> str:
+    # [핵심 보호막]: URL, 이메일(user@domain.com), 파일경로, 비밀번호/영숫자+특수기호 복합 토큰(예: gnsrn95459712, Abc!1234, test_id01)은
+    # 절대 영타 오타로 쪼개서 한글 변환하지 않고 원문 100% 그대로 보호합니다!
+    def _morph_whitespace_chunk(chunk_m: re.Match) -> str:
         nonlocal target_lang
-        tok = m.group(0)
-        if tok.startswith(("http://", "https://", "www.")):
-            return tok
+        w_tok = chunk_m.group(0)
+        # 1) 이메일(@ 포함), URL/스키마(://, www.), 도메인 형태(영숫자.영문2자이상) 100% 보호
+        if (
+            "@" in w_tok
+            or "://" in w_tok
+            or w_tok.lower().startswith("www.")
+            or re.search(r"[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b", w_tok, re.IGNORECASE)
+        ):
+            return w_tok
+        # 2) 영문 + 숫자/기호가 뒤섞인 계정 아이디·비밀번호 패턴 보호:
+        #    - 중간에 숫자·언더스코어·특수문자(!@#$%^&*+-=)가 끼어 있거나(예: user_01, qwer!234, gnsrn95459712)
+        #    - 영문+숫자 조합 중 숫자 길이가 3자리 이상(예: lictor37857, dmsrn85421298)이면 100% 계정/비번으로 간주하여 보호!
+        stripped_punct = w_tok.strip(".,?!:;\"'()[]{}")
+        if re.search(r"[A-Za-z]", stripped_punct) and not re.search(r"[가-힣\u3131-\u318E]", stripped_punct):
+            if re.search(r"\d{3,}", stripped_punct):
+                return w_tok
+            if re.search(r"[_@#$%^&*+=\\/|~`]", stripped_punct):
+                return w_tok
+            if re.search(r"\d+[A-Za-z]", stripped_punct):
+                return w_tok
 
-        # 1) 영문 알파벳 토큰인 경우 (뒤에 숫자 '25'나 모든 특수문자 '~!@#$%^&*()_+-=:;/?.,' 등이 붙어 있어도 영문 파트만 단독 매칭되어 100% 변환됨!)
-        if re.fullmatch(r"[A-Za-z]+", tok):
-            # 1-A) Caps Lock 역전 오타 (예: tHANKS -> Thanks)
-            if len(tok) >= 2 and tok[0].islower() and tok[1:].isupper():
-                fixed_caps = tok[0].upper() + tok[1:].lower()
-                if AI_ENGINE.is_valid_english_word(fixed_caps):
+        def replace_token(m: re.Match) -> str:
+            nonlocal target_lang
+            tok = m.group(0)
+
+            # 1) 영문 알파벳 토큰인 경우
+            if re.fullmatch(r"[A-Za-z]+", tok):
+                # 1-A) Caps Lock 역전 오타 (예: tHANKS -> Thanks)
+                if len(tok) >= 2 and tok[0].islower() and tok[1:].isupper():
+                    fixed_caps = tok[0].upper() + tok[1:].lower()
+                    if AI_ENGINE.is_valid_english_word(fixed_caps):
+                        target_lang = "EN"
+                        return fixed_caps
+
+                # 1-B) 상습 영문 오타 (teh -> the)
+                if tok.lower() in CAPS_TYPO_MAP:
                     target_lang = "EN"
-                    return fixed_caps
+                    return CAPS_TYPO_MAP[tok.lower()]
 
-            # 1-B) 상습 영문 오타 (teh -> the)
-            if tok.lower() in CAPS_TYPO_MAP:
-                target_lang = "EN"
-                return CAPS_TYPO_MAP[tok.lower()]
+                # 1-C) EmbeddingGemma 2 영단어 사전(65,743어)에 존재하는 정상 영단어는 100% 보호!
+                if AI_ENGINE.is_valid_english_word(tok):
+                    return tok
 
-            # 1-C) EmbeddingGemma 2 영단어 사전(65,743어)에 존재하는 정상 영단어는 100% 보호!
-            if AI_ENGINE.is_valid_english_word(tok):
+                # 1-D) 두벌식 한글 변환 후 KS X 1001 2,350자 무결성 검증 통과 시에만 한글로 성형!
+                converted = eng_word_to_kor(tok)
+                if converted and is_valid_korean_word(converted):
+                    target_lang = "KO"
+                    return converted
                 return tok
 
-            # 1-D) 두벌식 한글 변환 후 KS X 1001 2,350자 무결성 검증 통과 시에만 한글로 성형!
-            converted = eng_word_to_kor(tok)
-            if converted and is_valid_korean_word(converted):
-                target_lang = "KO"
-                return converted
-            return tok
-
-        # 2) 낱자 자모(ㅡㄷ갸ㅜ, ㅗ디ㅣㅐ 등)가 섞인 한글 오타 -> 영문 복원!
-        if any(0x3131 <= ord(c) <= 0x318E for c in tok):
-            eng_cand = kor_word_to_eng(tok)
-            if eng_cand:
-                target_lang = "EN"
-                return eng_cand
-
-        # 3) 완성형 한글이지만 영문 타이핑 오타로 의심되는 경우 -> 변환 결과가 실제 영단어 사전에 있으면 영문 복원!
-        if all(0xAC00 <= ord(c) <= 0xD7A3 for c in tok):
-            eng_cand = kor_word_to_eng(tok)
-            if len(eng_cand) >= 3 and AI_ENGINE.is_valid_english_word(eng_cand):
-                # 만약 원본 한글이 KS X 1001 밖의 희귀 음절을 포함하거나 대표 영단어인 경우 변환
-                if not is_valid_korean_word(tok) or eng_cand.lower() in FALLBACK_EN_WORDS:
+            # 2) 낱자 자모(ㅡㄷ갸ㅜ, ㅗ디ㅣㅐ 등)가 섞인 한글 오타 -> 영문 복원!
+            if any(0x3131 <= ord(c) <= 0x318E for c in tok):
+                eng_cand = kor_word_to_eng(tok)
+                if eng_cand:
                     target_lang = "EN"
                     return eng_cand
 
-        return tok
+            # 3) 완성형 한글이지만 영문 타이핑 오타로 의심되는 경우 -> 변환 결과가 실제 영단어 사전에 있으면 영문 복원!
+            if all(0xAC00 <= ord(c) <= 0xD7A3 for c in tok):
+                eng_cand = kor_word_to_eng(tok)
+                if len(eng_cand) >= 3 and AI_ENGINE.is_valid_english_word(eng_cand):
+                    if not is_valid_korean_word(tok) or eng_cand.lower() in FALLBACK_EN_WORDS:
+                        target_lang = "EN"
+                        return eng_cand
 
-    # URL만 보호하고 어떤 특수문자(~, @, #, $, %, ^, &, *, _, :, / 등)가 붙어 있든 영문 구간([A-Za-z]+)과 한글 구간을 100% 독립 성형
-    morphed = re.sub(r"https?://\S+|www\.\S+|[A-Za-z]+|[\u3131-\u318E\uAC00-\uD7A3]+", replace_token, cleaned_lead)
+            return tok
+
+        return re.sub(r"[A-Za-z]+|[\u3131-\u318E\uAC00-\uD7A3]+", replace_token, w_tok)
+
+    morphed = re.sub(r"\S+", _morph_whitespace_chunk, cleaned_lead)
     return morphed, target_lang
 
 
@@ -3275,6 +3298,81 @@ def tap_key_combo(modifiers: list[int], vk: int) -> None:
         u32.keybd_event(mod, mod_sc, KEYEVENTF_KEYUP, 0)
 
 
+class _KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ("wVk", wintypes.WORD),
+        ("wScan", wintypes.WORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+class _MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+class _INPUT_UNION(ctypes.Union):
+    _fields_ = [("mi", _MOUSEINPUT), ("ki", _KEYBDINPUT)]
+
+
+class _INPUT(ctypes.Structure):
+    _fields_ = [("type", wintypes.DWORD), ("u", _INPUT_UNION)]
+
+
+INPUT_KEYBOARD = 1
+KEYEVENTF_UNICODE = 0x0004
+
+
+def send_unicode_text_preserve_style(text: str) -> bool:
+    """
+    [서식·색상 100% 보존 무클립보드 유니코드 직접 타이핑 사출 (SendInput KEYEVENTF_UNICODE)]
+    - 노션·워드·브라우저 등 리치 텍스트 편집기에서 Ctrl+V(플레인 텍스트 붙여넣기)를 하면
+      기존 인라인 글자 색상(파란색·빨간색 등)·굵기·배경 서식이 초기화되는 문제를 원천 해결합니다!
+    - 선택된 영역 또는 커서 위치에서 사용자가 직접 키보드로 글자를 친 것과 동일하게 작동하므로
+      기존 글자 색상과 인라인 스타일이 100% 그대로 유지됩니다.
+    """
+    if not text:
+        return False
+    try:
+        u32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(_INPUT), ctypes.c_int]
+        u32.SendInput.restype = wintypes.UINT
+        events: list[_INPUT] = []
+        norm_text = text.replace("\r\n", "\n").replace("\r", "\n")
+        for ch in norm_text:
+            if ch == "\n":
+                # 리치 에디터 내 줄바꿈은 Shift+Enter 또는 Enter 키로 전달
+                sc_ret = u32.MapVirtualKeyW(VK_RETURN, 0)
+                kd = _INPUT(type=INPUT_KEYBOARD)
+                kd.u.ki = _KEYBDINPUT(wVk=VK_RETURN, wScan=sc_ret, dwFlags=0, time=0, dwExtraInfo=0)
+                ku = _INPUT(type=INPUT_KEYBOARD)
+                ku.u.ki = _KEYBDINPUT(wVk=VK_RETURN, wScan=sc_ret, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=0)
+                events.extend((kd, ku))
+            else:
+                utf16_units = ch.encode("utf-16-le")
+                for i in range(0, len(utf16_units), 2):
+                    code_unit = int.from_bytes(utf16_units[i : i + 2], "little")
+                    kd = _INPUT(type=INPUT_KEYBOARD)
+                    kd.u.ki = _KEYBDINPUT(wVk=0, wScan=code_unit, dwFlags=KEYEVENTF_UNICODE, time=0, dwExtraInfo=0)
+                    ku = _INPUT(type=INPUT_KEYBOARD)
+                    ku.u.ki = _KEYBDINPUT(wVk=0, wScan=code_unit, dwFlags=KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, time=0, dwExtraInfo=0)
+                    events.extend((kd, ku))
+        if not events:
+            return False
+        arr = (_INPUT * len(events))(*events)
+        sent = u32.SendInput(len(events), arr, ctypes.sizeof(_INPUT))
+        return int(sent) == len(events)
+    except Exception:
+        return False
+
+
 def get_focused_field_context() -> str:
     """
     [제7호 특허 청구항 제1항] OS UI 접근성 트리 및 활성 창 컨텍스트 추출
@@ -3919,28 +4017,32 @@ def _fix_korean_spacing_general(s: str) -> str:
     return re.sub(r" +", " ", s).strip()
 
 
-def iron_and_polish_korean_text(raw_text: str) -> str:
+def iron_and_polish_korean_text(raw_text: str, allow_typo_morph: bool = True) -> str:
     """
     [줄바꿈·유령공백(NFKC) 다림질 + 문맥 오타·띄어쓰기 교정 + 문단 의미 분리 통합 엔진]
     - 번호/불릿 목록(1), 2), ■, -, [) 및 빈 줄(\n\n)·문장 종결 줄바꿈은 보존하면서,
       단어·어미·문장 중간에 뚝뚝 끊긴 비정상 줄바꿈을 매끄럽게 이음!
     - 정상적인 1음절 단어(및, 후, 뒤, 수, 두, 한, 단 등)나 '한글' 등의 단어를 절대 훼손하지 않으면서 PDF/복붙 자간 깨짐만 정밀 복원!
+    - allow_typo_morph=False(예: 클립보드 자동 복사 시점)일 때는 이메일·비밀번호·영문 토큰이 절대 한글로 자동 변환되지 않도록 영타 한영 변환을 원천 차단합니다!
     """
     if not raw_text or not raw_text.strip():
         return raw_text
 
-    # 1) 각 줄 내부에 섞여 있는 영타 오타(예: gksrmf xptmxmdlqslek)가 있으면 줄 단위로 먼저 한영 성형 수행
-    pre_lines = []
-    for raw_ln in raw_text.splitlines():
-        if raw_ln.strip():
-            m_ln, l_dir = morph_korean_english_text_with_direction(raw_ln)
-            if l_dir == "KO" and m_ln != raw_ln:
-                pre_lines.append(m_ln)
+    # 1) 각 줄 내부에 섞여 있는 영타 오타(예: gksrmf xptmxmdlqslek)가 있으면 줄 단위로 먼저 한영 성형 수행 (단, 클립보드 복사 시에는 allow_typo_morph=False로 차단!)
+    if allow_typo_morph:
+        pre_lines = []
+        for raw_ln in raw_text.splitlines():
+            if raw_ln.strip():
+                m_ln, l_dir = morph_korean_english_text_with_direction(raw_ln)
+                if l_dir == "KO" and m_ln != raw_ln:
+                    pre_lines.append(m_ln)
+                else:
+                    pre_lines.append(raw_ln)
             else:
-                pre_lines.append(raw_ln)
-        else:
-            pre_lines.append("")
-    s = "\n".join(pre_lines)
+                pre_lines.append("")
+        s = "\n".join(pre_lines)
+    else:
+        s = raw_text
 
     s = s.replace("\u00B7", "__MIDDOT__").replace("\u318D", "__MIDDOT__")
     s = unicodedata.normalize("NFKC", s)
@@ -4054,6 +4156,7 @@ def _replace_edit_control_current_line_atomic(
     auto_triggered: bool = False,
     allow_iron: bool = True,
     prefer_full_doc: bool = False,
+    allow_typo_morph: bool = True,
 ) -> tuple[bool, str, str, str | None]:
     """
     [메모장(Edit/RichEditD2DPT) 0.2ms 무지연 원자적(Atomic) 줄·드래그 성형 엔진]
@@ -4117,13 +4220,16 @@ def _replace_edit_control_current_line_atomic(
         if not target_line:
             return False, "", "", None
 
-        morphed, target_lang = morph_korean_english_text_with_direction(target_line)
+        if allow_typo_morph:
+            morphed, target_lang = morph_korean_english_text_with_direction(target_line)
+        else:
+            morphed, target_lang = target_line, None
         if allow_iron:
             base_for_iron = morphed if (morphed != target_line and target_lang is not None) else target_line
             if auto_triggered:
                 ironed = _fix_korean_spacing_general(base_for_iron.rstrip(" "))
             else:
-                ironed = iron_and_polish_korean_text(base_for_iron)
+                ironed = iron_and_polish_korean_text(base_for_iron, allow_typo_morph=allow_typo_morph)
             if ironed.strip() != base_for_iron.strip():
                 morphed = ironed
                 if target_lang is None:
@@ -5098,9 +5204,15 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None, has_r
             if fmt_sel != clean_sel:
                 arm_undo_snapshot(target_hwnd, 0, clean_sel, fmt_sel, mode="clip_replace")
                 daemon_set_cb(fmt_sel)
-                time.sleep(0.025)
-                tap_key_combo([VK_CONTROL], VK_V)
-                time.sleep(0.05)
+                time.sleep(0.02)
+                # [노션·리치에디터 글자 색상·서식 100% 보존 교체]:
+                # 단일 줄이고 적정 길이(<=160자)이면 Ctrl+V(플레인 텍스트 붙여넣기로 인한 기존 글자 색상 증발) 대신
+                # SendInput(KEYEVENTF_UNICODE) 직접 타이핑으로 교체하여 기존 파란색/빨간색/굵기 서식을 그대로 유지합니다!
+                if "\n" not in fmt_sel and len(fmt_sel) <= 160 and send_unicode_text_preserve_style(fmt_sel):
+                    time.sleep(0.04)
+                else:
+                    tap_key_combo([VK_CONTROL], VK_V)
+                    time.sleep(0.05)
                 show_ghost_toast(f"👻 귀신같이 번호·일정성형 ({fmt_sel.splitlines()[0][:22]})")
                 return
             else:
@@ -5516,6 +5628,7 @@ def main() -> None:
     was_lbtn_phys_down: bool = False
     last_alpha_type_ts: float = 0.0
     last_any_key_ts: float = 0.0
+    last_paste_ts: float = 0.0
     idle_checked_for_ts: float = 0.0
     was_sub_key_down: dict[int, bool] = {}
 
@@ -6108,22 +6221,28 @@ def main() -> None:
 
                             # [완전 자동화 다림질]: PDF·웹페이지 등에서 한글 문장(또는 끊어진 여러 줄)을 Ctrl+C 복사하는 즉시
                             # 단축키 없이도 줄바꿈 다림질 + 기본 띄어쓰기 교정을 클립보드에 자동 적용하여 Ctrl+V 한 번에 깔끔히 붙여넣기!
-                            # ※ 주의: 엑셀 표(표 서식 보유), URL, 코드, 비밀번호(단일 영문+숫자 토큰)는 절대 변조하지 않음!
+                            # ※ 주의: 복사-붙여넣기 시에는 이메일·아이디·비밀번호·영문 토큰이 절대 한글로 자동 변환되지 않도록
+                            #    allow_typo_morph=False 로 고정하고, 이메일(@)/비밀번호/코드/URL 포함 텍스트는 원문 100% 그대로 보존!
                             try:
                                 _is_excel_clip = has_excel_clipboard_format()
                                 _stripped_cp = copied.strip()
                                 _is_url_or_code = bool(re.match(r"^(https?://|www\.|[A-Za-z]:\\|\\\\)", _stripped_cp)) or (
                                     any(k in _stripped_cp for k in ("def ", "function ", "import ", "const ", "SELECT ", "<?xml", "{", "}"))
                                 )
-                                _is_single_token_pw = (" " not in _stripped_cp and "\n" not in _stripped_cp and len(_stripped_cp) < 32 and not re.search(r"[가-힣]", _stripped_cp))
+                                _has_email_or_cred = bool(
+                                    re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", _stripped_cp)
+                                    or re.search(r"(?:비밀번호|비번|패스워드|password|passwd|pwd|아이디|id|계정|토큰|인증번호)\s*[:：=]?\s*[A-Za-z0-9!@#$%^&*_+-]{3,}", _stripped_cp, flags=re.IGNORECASE)
+                                )
+                                _is_single_token_pw = (" " not in _stripped_cp and "\n" not in _stripped_cp and len(_stripped_cp) < 64 and not re.search(r"[가-힣]", _stripped_cp))
                                 if (
                                     not _is_excel_clip
                                     and not _is_url_or_code
+                                    and not _has_email_or_cred
                                     and not _is_single_token_pw
                                     and re.search(r"[가-힣]", _stripped_cp)
                                     and ("\n" in _stripped_cp or len(_stripped_cp) >= 6)
                                 ):
-                                    ironed_auto = iron_and_polish_korean_text(copied)
+                                    ironed_auto = iron_and_polish_korean_text(copied, allow_typo_morph=False)
                                     if ironed_auto and ironed_auto.strip() != _stripped_cp:
                                         _UNDO_SNAPSHOT["active"] = True
                                         _UNDO_SNAPSHOT["raw_text"] = copied
@@ -6397,13 +6516,16 @@ def main() -> None:
                                                 u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
                                                 time.sleep(0.005)
                                             time.sleep(0.025)
-                                            daemon_set_clipboard(comb_conv_id)
-                                            time.sleep(0.025)
-                                            tap_key_combo([VK_CONTROL], VK_V)
-                                            time.sleep(0.08)
+                                            if send_unicode_text_preserve_style(comb_conv_id):
+                                                time.sleep(0.04)
+                                            else:
+                                                daemon_set_clipboard(comb_conv_id)
+                                                time.sleep(0.025)
+                                                tap_key_combo([VK_CONTROL], VK_V)
+                                                time.sleep(0.08)
+                                                if orig_c_id and not seq_mode:
+                                                    threading.Timer(0.28, lambda c=orig_c_id: daemon_set_clipboard(c)).start()
                                             set_ime_language(target_korean=True)
-                                            if orig_c_id and not seq_mode:
-                                                threading.Timer(0.28, lambda c=orig_c_id: daemon_set_clipboard(c)).start()
                                             complete_feature_action_success("auto_typo_morph_2words")
                                             show_ghost_toast(f"👻 귀신같이 오토한영 ({comb_raw_id} ➔ {comb_conv_id} | 한글키 전환)", duration_ms=1400)
 
@@ -6438,7 +6560,8 @@ def main() -> None:
                             cur_stripped = cur_line.rstrip(" ")
                             last_tok = cur_stripped.split()[-1] if cur_stripped.strip() else ""
                             m_last_eng = re.match(r"^([^A-Za-z가-힣\s]*)([A-Za-z]+)([^A-Za-z가-힣\s]*)$", last_tok)
-                            if m_last_eng:
+                            # [붙여넣기 보호]: 유저가 직접 키보드로 친 적 없는(raw_buf_str 비어있음) 붙여넣기 영타는 절대 자동 한영변환 대상로 잡지 않음!
+                            if m_last_eng and bool(raw_buf_str):
                                 typed_as_eng = True
                                 typed_as_kor = False
                                 lead_punct, word_cand, trail_punct = m_last_eng.groups()
@@ -6446,7 +6569,7 @@ def main() -> None:
                                 raw_buf_str = last_tok
                             else:
                                 typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
-                                typed_as_kor = not typed_as_eng
+                                typed_as_kor = bool(raw_buf_str) and not typed_as_eng
                         else:
                             ime_kor = get_ime_is_korean(hwnd_fg)
                             typed_as_eng = not ime_kor
@@ -6541,13 +6664,16 @@ def main() -> None:
                                         time.sleep(0.005)
                                     time.sleep(0.025)
                                     final_paste = _fix_korean_spacing_general(combined_conv.strip()) + " "
-                                    daemon_set_clipboard(final_paste)
-                                    time.sleep(0.025)
-                                    tap_key_combo([VK_CONTROL], VK_V)
-                                    time.sleep(0.08)
+                                    if send_unicode_text_preserve_style(final_paste):
+                                        time.sleep(0.04)
+                                    else:
+                                        daemon_set_clipboard(final_paste)
+                                        time.sleep(0.025)
+                                        tap_key_combo([VK_CONTROL], VK_V)
+                                        time.sleep(0.08)
+                                        if orig_c and not seq_mode:
+                                            threading.Timer(0.28, lambda c=orig_c: daemon_set_clipboard(c)).start()
                                     set_ime_language(target_korean=target_ko)
-                                    if orig_c and not seq_mode:
-                                        threading.Timer(0.28, lambda c=orig_c: daemon_set_clipboard(c)).start()
                                     complete_feature_action_success("auto_typo_morph_2words")
                                     badge = "한글키 전환" if target_ko else "영문키 전환"
                                     show_ghost_toast(f"👻 귀신같이 오토한영 ({combined_raw} ➔ {final_paste.strip()} | {badge})", duration_ms=1400)

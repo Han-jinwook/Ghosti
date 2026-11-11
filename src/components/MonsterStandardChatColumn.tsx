@@ -199,11 +199,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
   const isStoreAppMode = useSaySeeStore((s) => s.isStoreAppMode);
   const layout = useSaySeeStore((s) => s.layout);
+  // PC 창을 좁게 줄였을 때도 음성/성우 UI가 절대 노출되지 않도록 실제 모바일 기기(UA/네이티브 앱)만 모바일로 판별
   const isMobileOrStore =
-    isStoreAppMode ||
-    layout === 'mobile' ||
-    (typeof window !== 'undefined' &&
-      (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860));
+    Boolean(isStoreAppMode) || layout === 'mobile' || isMobileVoiceEnvironment();
 
   // [멀린님 확정 명세 ③] 추천 칩 그리드 전면 폐지 ➔ 입력창 내 '연한 색 1줄 롤링 플레이스홀더 10선 (3분 주기 + 재로그인 로테이션)'
   const activePlaceholderPool = isMobileOrStore
@@ -1137,21 +1135,23 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             }
             className="flex-1 min-w-0 px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-emerald-600 focus:outline-none text-[13px] sm:text-[13.5px] text-slate-900 dark:text-white placeholder:text-slate-400/75 dark:placeholder:text-slate-500/75 transition-all"
           />
-          {/* PC는 텍스트 채팅 올인, 모바일에서만 [음성] 마이크 버튼 노출 */}
-          <button
-            type="button"
-            onClick={toggleChatMicRecording}
-            disabled={busy}
-            title="모바일 음성으로 말하기 (음성 입력 시에만 성우 음성으로 응답합니다)"
-            className={`md:hidden px-2 sm:px-3 py-2.5 rounded-xl text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer border ${
-              isMicListening
-                ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
-                : 'bg-white hover:bg-emerald-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-emerald-400/60 dark:border-emerald-500/40'
-            }`}
-          >
-            {isMicListening ? <MicOff className="w-4 h-4 shrink-0" /> : <Mic className="w-4 h-4 shrink-0" />}
-            <span className="shrink-0">{isMicListening ? '듣는중' : '음성'}</span>
-          </button>
+          {/* PC는 창 크기를 줄여도 100% 무음 텍스트 채팅 올인, 실제 모바일 기기에서만 [음성] 마이크 버튼 노출 */}
+          {isMobileOrStore && (
+            <button
+              type="button"
+              onClick={toggleChatMicRecording}
+              disabled={busy}
+              title="모바일 음성으로 말하기 (음성 입력 시에만 성우 음성으로 응답합니다)"
+              className={`px-2 sm:px-3 py-2.5 rounded-xl text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer border ${
+                isMicListening
+                  ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
+                  : 'bg-white hover:bg-emerald-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-emerald-400/60 dark:border-emerald-500/40'
+              }`}
+            >
+              {isMicListening ? <MicOff className="w-4 h-4 shrink-0" /> : <Mic className="w-4 h-4 shrink-0" />}
+              <span className="shrink-0">{isMicListening ? '듣는중' : '음성'}</span>
+            </button>
+          )}
           <button
             type="submit"
             disabled={busy || !inputText.trim()}

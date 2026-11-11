@@ -14,6 +14,7 @@ import {
   speakSetupMonsterTts,
   subscribeGhostiVoicePrefs,
   prefetchVoiceActorCacheInBackground,
+  isMobileVoiceEnvironment,
   type GhostiVoiceGender,
 } from '../services/setupMonsterTts';
 import { useSaySeeStore } from '../store/useSaySeeStore';
@@ -36,13 +37,18 @@ export const VoiceActorControlPill: React.FC<VoiceActorControlPillProps> = ({
   compact = false,
 }) => {
   const [, setTick] = useState(0);
+  const isStoreAppMode = useSaySeeStore((s) => s.isStoreAppMode);
+  const allowMobileVoice = isMobileVoiceEnvironment() || Boolean(isStoreAppMode);
 
   useEffect(() => {
+    if (!allowMobileVoice) return;
     prefetchVoiceActorCacheInBackground();
     return subscribeGhostiVoicePrefs(() => {
       setTick((t) => t + 1);
     });
-  }, []);
+  }, [allowMobileVoice]);
+
+  if (!allowMobileVoice) return null;
 
   const gender = getPreferredVoiceGender();
   const enabled = getPreferredVoiceEnabled();

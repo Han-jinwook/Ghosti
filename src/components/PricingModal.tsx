@@ -10,6 +10,7 @@ import {
   replayLastSetupMonsterTts,
   subscribeGhostiVoicePrefs,
   getPreferredVoiceGender,
+  isMobileVoiceEnvironment,
 } from '../services/setupMonsterTts';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../services/voiceSearchAndAiBatonEngine';
@@ -1221,20 +1222,22 @@ export const LocalDocPreviewModal: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-low/95 backdrop-blur-md">
-          <div className="md:hidden flex flex-wrap items-center gap-1.5">
-            <VoiceActorControlPill fallbackReplayText={fallbackDocVoiceText} compact />
-            <button
-              type="button"
-              onClick={() => void handleToggleModalVoice()}
-              className={`px-3 py-2 rounded-xl font-label-md text-[12px] font-extrabold flex items-center gap-1 cursor-pointer transition-all ${
-                isSpeakingNow
-                  ? 'bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200'
-                  : 'bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200'
-              }`}
-            >
-              <span>{isSpeakingNow ? '🔇 음성 중단' : '🔊 다시 듣기'}</span>
-            </button>
-          </div>
+          {isMobileVoiceEnvironment() && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <VoiceActorControlPill fallbackReplayText={fallbackDocVoiceText} compact />
+              <button
+                type="button"
+                onClick={() => void handleToggleModalVoice()}
+                className={`px-3 py-2 rounded-xl font-label-md text-[12px] font-extrabold flex items-center gap-1 cursor-pointer transition-all ${
+                  isSpeakingNow
+                    ? 'bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200'
+                    : 'bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200'
+                }`}
+              >
+                <span>{isSpeakingNow ? '🔇 음성 중단' : '🔊 다시 듣기'}</span>
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
             {!/(비밀번호|패스워드|password|계정\s*정리|아이디.*비번|암호\s*목록)/i.test(

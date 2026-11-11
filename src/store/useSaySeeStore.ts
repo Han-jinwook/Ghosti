@@ -2544,18 +2544,26 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           : matchedDoc
           ? [matchedDoc]
           : localDocuments;
+      const isMobileVoice = isMobileVoiceEnvironment();
       set({
         searchSpace: 'vault',
         hasExecutedUserSearch: true,
         activeQuery: query,
-        matchedTags: [
-          `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
-          '#무토큰로컬브리핑',
-          '#현수남성성우안내',
-        ],
+        matchedTags: isMobileVoice
+          ? [
+              `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
+              '#무토큰로컬브리핑',
+              '#현수남성성우안내',
+            ]
+          : [
+              `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
+              '#무토큰문서즉답',
+            ],
         matchedLocalDocs: finalDocs,
         selectedDocModal: matchedDoc || finalDocs[0] || null,
-        lastQuarantineToast: `🎙️ [0토큰 문서 즉답 브리핑 · 현수 성우] ${factAnswerKo}`,
+        lastQuarantineToast: isMobileVoice
+          ? `🎙️ [0토큰 문서 즉답 브리핑 · 현수 성우] ${factAnswerKo}`
+          : `📄 [0토큰 문서 즉답 요약] ${factAnswerKo}`,
       });
       return;
     }
@@ -2578,15 +2586,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           ? `${simPrefix}${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`
           : `${simPrefix}찾으신 '${matchedDoc?.title || '문서'}' 내용입니다. ${fullText || factAnswerKo}`;
 
-      void speakWithHyunsuOrSunhi(readScript, 'sunhi_doc_reader');
+      const isMobileVoice = isMobileVoiceEnvironment();
+      if (isMobileVoice) {
+        void speakWithHyunsuOrSunhi(readScript, 'sunhi_doc_reader');
+      }
       set({
         searchSpace: 'vault',
         hasExecutedUserSearch: true,
         activeQuery: query,
-        matchedTags: ['#키워드문장발췌낭독', '#선희아나운서낭독', '#0토큰무료'],
+        matchedTags: isMobileVoice
+          ? ['#키워드문장발췌낭독', '#선희아나운서낭독', '#0토큰무료']
+          : ['#키워드문장발췌', '#0토큰무료'],
         matchedLocalDocs: rankedDocs.length > 0 ? rankedDocs : matchedDoc ? [matchedDoc] : localDocuments,
         selectedDocModal: matchedDoc || null,
-        lastQuarantineToast: `🎙️ [선희 아나운서 조항·문장 낭독] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 낭독')}`,
+        lastQuarantineToast: isMobileVoice
+          ? `🎙️ [선희 아나운서 조항·문장 낭독] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 낭독')}`
+          : `📄 [문서 핵심 조항 발췌] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 요약')}`,
       });
       return;
     }
@@ -2598,15 +2613,22 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         [],
         'DOC_SUMMARY_READ'
       );
-      void speakWithHyunsuOrSunhi(factAnswerKo, 'sunhi_doc_reader');
+      const isMobileVoice = isMobileVoiceEnvironment();
+      if (isMobileVoice) {
+        void speakWithHyunsuOrSunhi(factAnswerKo, 'sunhi_doc_reader');
+      }
       set({
         searchSpace: 'vault',
         hasExecutedUserSearch: true,
         activeQuery: query,
-        matchedTags: ['#사전요약본즉시낭독', '#선희아나운서', '#0토큰무료'],
+        matchedTags: isMobileVoice
+          ? ['#사전요약본즉시낭독', '#선희아나운서', '#0토큰무료']
+          : ['#사전요약본즉답', '#0토큰무료'],
         matchedLocalDocs: rankedDocs.length > 0 ? rankedDocs : matchedDoc ? [matchedDoc] : localDocuments,
         selectedDocModal: matchedDoc || null,
-        lastQuarantineToast: `🎙️ [선희 아나운서 문서 요약 낭독] ${factAnswerKo}`,
+        lastQuarantineToast: isMobileVoice
+          ? `🎙️ [선희 아나운서 문서 요약 낭독] ${factAnswerKo}`
+          : `📄 [문서 핵심 요약] ${factAnswerKo}`,
       });
       return;
     }
@@ -2621,13 +2643,18 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         docText: matchedDoc?.extractedText || '',
         userQuestion: query,
       });
+      const isMobileVoice = isMobileVoiceEnvironment();
       set({
         searchSpace: 'vault',
         hasExecutedUserSearch: true,
         activeQuery: query,
-        matchedTags: [`#${batonRes.detectedAiLabel}바톤터치`, '#라이브음성상담', '#0토큰무료'],
+        matchedTags: isMobileVoice
+          ? [`#${batonRes.detectedAiLabel}바톤터치`, '#라이브음성상담', '#0토큰무료']
+          : [`#${batonRes.detectedAiLabel}바톤터치`, '#심층문서분석', '#0토큰무료'],
         matchedLocalDocs: matchedDoc ? [matchedDoc] : localDocuments,
-        lastQuarantineToast: `🤝 [${batonRes.detectedAiLabel} 라이브 음성 바톤터치] ${batonRes.ttsBriefingKo}`,
+        lastQuarantineToast: isMobileVoice
+          ? `🤝 [${batonRes.detectedAiLabel} 라이브 음성 바톤터치] ${batonRes.ttsBriefingKo}`
+          : `🤝 [${batonRes.detectedAiLabel} 심층 상담 바톤터치] ${batonRes.ttsBriefingKo}`,
       });
       return;
     }
