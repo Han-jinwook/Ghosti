@@ -1283,6 +1283,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       }`}
                     />
 
+                    {/* 확정 기준점 한 줄 핵심 요약 안내 */}
+                    <div className="rounded-xl bg-emerald-950/35 border border-emerald-500/30 px-3 py-2 text-[11.5px] text-emerald-200 font-bold leading-relaxed break-keep">
+                      🛡️ <span className="text-[#00F0B5] font-extrabold">2어절 연속 오타 시 Space/0.55초 자동전환</span> · <span className="text-amber-300 font-extrabold">9타/4음절 긴 오타는 Space 시 전환</span> · <span className="text-white font-extrabold">이메일(@)/복붙/비번 100% 보호</span>
+                    </div>
+
                     {/* 귀신창 v1.4 표준 하단 미니 툴바 ([1]파일·라벨러 ~ [5]창고정 인터랙티브 클릭 탭 + 실물 예시 패널) */}
                     <div className="rounded-2xl bg-zinc-900/95 border border-white/15 p-3 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
