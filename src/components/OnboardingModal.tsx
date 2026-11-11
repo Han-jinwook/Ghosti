@@ -1005,10 +1005,23 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   </p>
                   <button
                     type="button"
-                    onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
+                    onClick={() => {
+                      const isAuthed = Boolean(
+                        merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
+                      );
+                      if (!isAuthed) {
+                        window.dispatchEvent(new CustomEvent('openLoginModal'));
+                        return;
+                      }
+                      setPcAgentPairedMobile(!pcAgentPairedMobile);
+                    }}
                     className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer"
                   >
-                    {pcAgentPairedMobile ? '● 내 폰 앱 설치·이메일 연결됨' : '○ 연결 상태 토글'}
+                    {merlinAuth?.email && merlinAuth.userId !== 'guest' && pcAgentPairedMobile
+                      ? '● 내 폰 앱 설치·이메일 연결됨'
+                      : merlinAuth?.email && merlinAuth.userId !== 'guest'
+                      ? '○ 연결 상태 토글'
+                      : '🔑 먼저 이메일 로그인하기'}
                   </button>
                 </div>
               </div>

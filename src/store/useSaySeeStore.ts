@@ -2323,14 +2323,29 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   onboardingUseRealGpu: false,
   onboardingTargetCount: 24,
   onboardingTrackMode: typeof window !== 'undefined' && window.innerWidth < 1024 ? 'cloud_rental' : 'pc_local',
-  pcAgentPairedMobile: true,
+  pcAgentPairedMobile: false,
   onboardingProgress: INITIAL_ONBOARDING_PROGRESS,
 
   setShowOnboarding: (showOnboarding) => set({ showOnboarding }),
   setOnboardingUseRealGpu: (onboardingUseRealGpu) => set({ onboardingUseRealGpu }),
   setOnboardingTargetCount: (onboardingTargetCount) => set({ onboardingTargetCount }),
   setOnboardingTrackMode: (onboardingTrackMode) => set({ onboardingTrackMode }),
-  setPcAgentPairedMobile: (pcAgentPairedMobile) => set({ pcAgentPairedMobile }),
+  setPcAgentPairedMobile: (pcAgentPairedMobile) => {
+    const { merlinAuth } = get();
+    const isAuthed = Boolean(merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest');
+    const nextPaired = isAuthed ? pcAgentPairedMobile : false;
+    if (isAuthed && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          `ghosti_mobile_paired_${merlinAuth.email.trim().toLowerCase()}`,
+          nextPaired ? '1' : '0'
+        );
+      } catch {
+        /* ignore storage error */
+      }
+    }
+    set({ pcAgentPairedMobile: nextPaired });
+  },
 
   startOnboardingIndexing: async () => {
     const {

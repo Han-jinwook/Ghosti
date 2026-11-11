@@ -441,6 +441,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     setTrialScanPermission,
     pcAgentPairedMobile,
     setPcAgentPairedMobile,
+    merlinAuth,
   } = useSaySeeStore();
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(() => {
     try {
@@ -1844,10 +1845,23 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <span className="text-[11px] font-extrabold text-teal-300">📱 스마트폰 QR 연결</span>
                   <button
                     type="button"
-                    onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
+                    onClick={() => {
+                      const isAuthed = Boolean(
+                        merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
+                      );
+                      if (!isAuthed) {
+                        window.dispatchEvent(new CustomEvent('openLoginModal'));
+                        return;
+                      }
+                      setPcAgentPairedMobile(!pcAgentPairedMobile);
+                    }}
                     className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer"
                   >
-                    {pcAgentPairedMobile ? '● 내 폰 연결됨' : '○ 연결 상태 토글'}
+                    {merlinAuth?.email && merlinAuth.userId !== 'guest' && pcAgentPairedMobile
+                      ? '● 내 폰 연결됨'
+                      : merlinAuth?.email && merlinAuth.userId !== 'guest'
+                      ? '○ 연결 상태 토글'
+                      : '🔑 먼저 로그인하기'}
                   </button>
                 </div>
               </div>

@@ -494,29 +494,48 @@ export const DesktopDashboard: React.FC = () => {
     [activePricingPlan, subscribedLounges, superpowerStatus?.is_subscribed]
   );
 
+  const isAuthenticatedUser = Boolean(
+    merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
+  );
+
   // [4대 조건부 자동 펼침 판별]
-  // 조건 1&2: Pro/체험 중, 모바일 페어링 이력, 또는 수동 Sticky
+  // 조건 1&2: 로그인된 상태에서 Pro/체험 중, 모바일 페어링 이력, 또는 수동 Sticky
   const isDeviceIntegrationAutoExpanded = useMemo(() => {
     const isProOrTrial =
-      activePricingPlan !== 'free_trial' ||
-      Boolean(superpowerStatus?.is_subscribed) ||
-      (superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED');
-    const isDevicePaired = Boolean(pcAgentPairedMobile);
+      isAuthenticatedUser &&
+      (activePricingPlan !== 'free_trial' ||
+        Boolean(superpowerStatus?.is_subscribed) ||
+        (superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED'));
+    const isDevicePaired = isAuthenticatedUser && Boolean(pcAgentPairedMobile);
     return Boolean(isProOrTrial || isDevicePaired || isDeviceIntegrationManuallyExpanded);
-  }, [activePricingPlan, superpowerStatus, pcAgentPairedMobile, isDeviceIntegrationManuallyExpanded]);
+  }, [
+    isAuthenticatedUser,
+    activePricingPlan,
+    superpowerStatus,
+    pcAgentPairedMobile,
+    isDeviceIntegrationManuallyExpanded,
+  ]);
 
-  // 조건 1&2: Team 구독 중, 30일 무료체험 중, 모바일(아이폰/안드로이드) 연결 시, 또는 수동 Sticky
+  // 조건 1&2: 로그인된 상태에서 Team 구독 중, 30일 무료체험 중, 모바일(아이폰/안드로이드) 연결 시, 또는 수동 Sticky
   const isWorkShareAutoExpanded = useMemo(() => {
     const isTeamSubscribed =
-      activePricingPlan.startsWith('work_') ||
-      Boolean(subscribedLounges.work);
+      isAuthenticatedUser &&
+      (activePricingPlan.startsWith('work_') || Boolean(subscribedLounges.work));
     const isProOrTrial =
-      activePricingPlan !== 'free_trial' ||
-      Boolean(superpowerStatus?.is_subscribed) ||
-      (superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED');
-    const isDevicePaired = Boolean(pcAgentPairedMobile);
+      isAuthenticatedUser &&
+      (activePricingPlan !== 'free_trial' ||
+        Boolean(superpowerStatus?.is_subscribed) ||
+        (superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED'));
+    const isDevicePaired = isAuthenticatedUser && Boolean(pcAgentPairedMobile);
     return Boolean(isTeamSubscribed || isProOrTrial || isDevicePaired || isWorkShareManuallyExpanded);
-  }, [activePricingPlan, subscribedLounges.work, superpowerStatus, pcAgentPairedMobile, isWorkShareManuallyExpanded]);
+  }, [
+    isAuthenticatedUser,
+    activePricingPlan,
+    subscribedLounges.work,
+    superpowerStatus,
+    pcAgentPairedMobile,
+    isWorkShareManuallyExpanded,
+  ]);
 
   const toggleDeviceIntegrationExpanded = (force?: boolean) => {
     const next = typeof force === 'boolean' ? force : !isDeviceIntegrationAutoExpanded;

@@ -120,7 +120,17 @@ const GhostiHubGlobalModals: React.FC = () => {
       typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') || '' : '';
 
     if (isLoggedIn && user?.id && user?.email) {
+      let restoredMobilePaired = false;
+      if (typeof window !== 'undefined') {
+        try {
+          restoredMobilePaired =
+            localStorage.getItem(`ghosti_mobile_paired_${user.email.trim().toLowerCase()}`) === '1';
+        } catch {
+          restoredMobilePaired = false;
+        }
+      }
       useSaySeeStore.setState((state) => ({
+        pcAgentPairedMobile: restoredMobilePaired,
         merlinAuth: {
           ...state.merlinAuth,
           token,
@@ -139,8 +149,9 @@ const GhostiHubGlobalModals: React.FC = () => {
     } else if (!isLoggedIn) {
       // 로그아웃(로그인 → 게스트 전환) 시에만 귀신같이 Supabase 단기 토큰 폐기 (최초 세션 복원 대기 중 오삭제 방지)
       if (wasLoggedInRef.current) clearGhostiSupabaseSession();
-      // 비로그인 게스트 상태에서는 코인 오표시(5,200C 등) 원천 차단 -> 0 C 고정
+      // 비로그인 게스트 상태에서는 코인 오표시(5,200C 등) 및 기기 허위 연결 표시 원천 차단
       useSaySeeStore.setState((state) => ({
+        pcAgentPairedMobile: false,
         merlinAuth: {
           ...state.merlinAuth,
           token: '',

@@ -11,6 +11,7 @@ import { PcMasterQuickSendPanel } from './PricingModal';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { GhostCastLiveToolbar } from './GhostCastAndLiveSystem';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
+import { zCoreBridge } from '../services/zCoreBridge';
 
 const LOUNGE_TABS: Array<{
   id: LoungeType;
@@ -4179,6 +4180,32 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [showQuickSendDrawer, setShowQuickSendDrawer] = useState(false);
   const [mobileInstallLinkCopied, setMobileInstallLinkCopied] = useState(false);
   const [subPcLinkCopied, setSubPcLinkCopied] = useState(false);
+  const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
+
+  useEffect(() => {
+    setIsZCoreConnected(zCoreBridge.isConnected);
+    const unsub = zCoreBridge.subscribe((conn) => setIsZCoreConnected(conn));
+    void zCoreBridge.checkHealth();
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  const isLoggedInUser = Boolean(
+    merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
+  );
+  const isMainPcConnected = isLoggedInUser && isZCoreConnected;
+  const isMobileConnected = isLoggedInUser && Boolean(pcAgentPairedMobile);
+  const openLoginModal = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openLoginModal'));
+    }
+  };
+  const openZCoreGuideModal = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+    }
+  };
 
   const renderRoomCreationAndExitPolicyBox = () => (
     <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
@@ -4344,18 +4371,34 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setPcAgentPairedMobile(!pcAgentPairedMobile)}
+                onClick={() => {
+                  if (!isLoggedInUser) {
+                    openLoginModal();
+                    return;
+                  }
+                  setPcAgentPairedMobile(!pcAgentPairedMobile);
+                }}
                 className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold cursor-pointer border transition-all ${
-                  pcAgentPairedMobile
+                  isMobileConnected
                     ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
                     : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200'
                 }`}
               >
-                {pcAgentPairedMobile ? '● 내 스마트폰 연결됨' : '○ 연결 상태 확인'}
+                {!isLoggedInUser
+                  ? '🔑 먼저 이메일 로그인하기'
+                  : isMobileConnected
+                  ? '● 내 스마트폰 연결됨'
+                  : '○ 연결 상태 확인'}
               </button>
               <button
                 type="button"
-                onClick={() => setShowQuickSendDrawer((v) => !v)}
+                onClick={() => {
+                  if (!isLoggedInUser) {
+                    openLoginModal();
+                    return;
+                  }
+                  setShowQuickSendDrawer((v) => !v);
+                }}
                 className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-extrabold cursor-pointer"
               >
                 {showQuickSendDrawer ? '📤 파일 전송 닫기 ▴' : '📤 폰↔PC 파일 1초 전송 ▾'}
@@ -4366,34 +4409,97 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
         {/* 3대 기기 연결 슬롯 현황 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-white/10">
-          <div className="p-4 rounded-xl bg-zinc-950/80 border border-primary-container/40 flex flex-col justify-between gap-2">
+          <div
+            onClick={() => {
+              if (!isLoggedInUser) {
+                openLoginModal();
+              } else if (!isZCoreConnected) {
+                openZCoreGuideModal();
+              }
+            }}
+            className={`p-4 rounded-xl bg-zinc-950/80 border flex flex-col justify-between gap-2 transition-all ${
+              isMainPcConnected
+                ? 'border-primary-container/40'
+                : 'border-white/10 hover:border-primary-container/40 hover:bg-zinc-900/80 cursor-pointer'
+            }`}
+          >
             <div className="flex items-center justify-between">
-              <span className="text-[12px] font-extrabold text-primary-container">💻 기기 1 · 메인 PC (현재 기기)</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">연결됨</span>
+              <span
+                className={`text-[12px] font-extrabold ${
+                  isMainPcConnected ? 'text-primary-container' : 'text-zinc-200'
+                }`}
+              >
+                💻 기기 1 · 메인 PC (현재 기기)
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                  isMainPcConnected
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : isLoggedInUser
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-zinc-800 text-zinc-300'
+                }`}
+              >
+                {isMainPcConnected
+                  ? '연결됨'
+                  : isLoggedInUser
+                  ? 'Z-코어 실행 대기'
+                  : '미연결'}
+              </span>
             </div>
             <p className="text-[13px] text-white font-bold">내 데스크톱 / 노트북 원본 보관소</p>
-            <span className="text-[11.5px] text-zinc-400">로컬 디스크 원본 100% 직결 탐색</span>
+            <span
+              className={`text-[11.5px] ${
+                isMainPcConnected
+                  ? 'text-zinc-400'
+                  : 'text-primary-container font-bold'
+              }`}
+            >
+              {isMainPcConnected
+                ? '로컬 디스크 원본 100% 직결 탐색'
+                : isLoggedInUser
+                ? '👉 클릭하여 PC Z-코어 1초 실행 가이드 보기'
+                : '👉 클릭하여 이메일 1초 로그인 후 이 PC 연결하기'}
+            </span>
           </div>
 
           <div
-            onClick={() => setShowInlineQrPanel((v) => !v)}
-            className="p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border border-white/10 hover:border-primary-container/40 flex flex-col justify-between gap-2 cursor-pointer transition-all"
+            onClick={() => {
+              if (!isLoggedInUser) {
+                openLoginModal();
+                return;
+              }
+              setShowInlineQrPanel((v) => !v);
+            }}
+            className={`p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border flex flex-col justify-between gap-2 cursor-pointer transition-all ${
+              isMobileConnected
+                ? 'border-primary-container/40'
+                : 'border-white/10 hover:border-primary-container/40'
+            }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-[12px] font-extrabold text-zinc-200">📱 기기 2 · 내 스마트폰 (갤럭시 / 아이폰)</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
-                  pcAgentPairedMobile
+                  isMobileConnected
                     ? 'bg-emerald-500/20 text-emerald-300'
-                    : 'bg-amber-500/20 text-amber-300'
+                    : isLoggedInUser
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-zinc-800 text-zinc-300'
                 }`}
               >
-                {pcAgentPairedMobile ? '연결됨' : 'QR 1초 연동 대기'}
+                {isMobileConnected
+                  ? '연결됨'
+                  : isLoggedInUser
+                  ? 'QR 1초 연동 대기'
+                  : '미연결'}
               </span>
             </div>
             <p className="text-[13px] text-white font-bold">폰 사진 자동 백업 &amp; 밖에서 내 PC 검색</p>
             <span className="text-[11.5px] text-primary-container font-bold">
-              👉 클릭하여 앱 설치 QR · 이메일 1초 연결 보기
+              {isLoggedInUser
+                ? '👉 클릭하여 앱 설치 QR · 이메일 1초 연결 보기'
+                : '👉 클릭하여 먼저 이메일 로그인 후 스마트폰 연결하기'}
             </span>
           </div>
 
@@ -4431,11 +4537,17 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </div>
         </div>
 
-        {/* [수술 3 완료] 개발자 암호 '모드 A / 모드 B' 용어 삭제 ➔ 직관적 1줄 상태 표시 */}
+        {/* [수술 3 완료] 개발자 암호 '모드 A / 모드 B' 용어 삭제 ➔ 직관적 1줄 상태 표시 (비로그인 시 허위 연동 수치 차단) */}
         <div className="px-4 py-3 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
             <span className="text-zinc-200 font-bold">
-              {isShadowMode
+              {!isLoggedInUser
+                ? '🔒 아직 연결된 기기가 없습니다 — 우측 상단에서 로그인하면 내 PC와 스마트폰이 안전하게 연결됩니다.'
+                : !isMobileConnected
+                ? isShadowMode
+                  ? '📱 스마트폰 연결 대기 중 — 연결 시 원본은 PC에 보관하고 스마트폰 용량을 99% 이상 절약합니다.'
+                  : '💾 스마트폰 연결 대기 중 — 연결 시 폰·PC 양쪽에 100% 원본을 동일하게 보관합니다.'
+                : isShadowMode
                 ? `⚡ 스마트폰 용량 99.4% 절약 중 (원본은 PC 안전 보관 · 폰 점유 ${syncState.packSizeMB}MB)`
                 : `💾 폰·PC 양쪽 100% 원본 보관 중 (${syncState.originalSizeGB}GB)`}
             </span>
@@ -4467,14 +4579,24 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               </button>
             </div>
 
-            <button
-              type="button"
-              disabled={syncState.syncing}
-              onClick={() => void triggerSyncNow()}
-              className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 whitespace-nowrap"
-            >
-              {syncState.syncing ? '동기화 중...' : '⚡ 지금 일치시키기'}
-            </button>
+            {!isLoggedInUser ? (
+              <button
+                type="button"
+                onClick={openLoginModal}
+                className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
+              >
+                🔑 로그인하여 기기 연결
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={syncState.syncing || (!isMainPcConnected && !isMobileConnected)}
+                onClick={() => void triggerSyncNow()}
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              >
+                {syncState.syncing ? '동기화 중...' : '⚡ 지금 일치시키기'}
+              </button>
+            )}
           </div>
         </div>
 
