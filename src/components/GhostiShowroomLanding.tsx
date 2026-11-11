@@ -376,7 +376,7 @@ const WEAPON_META: Record<
     keywordBadge: '#귀신창',
     userBubble: 'dkssudgktpdy 영타 오타랑 깨진 줄바꿈, 백스페이스 안 누르고 고쳐줘!',
     secretaryReply:
-      '버튼 누를 필요 없어요! 영타나 깨진 줄바꿈을 치기만 하면 귀신창이 0.2초 만에 무버튼 자동으로 다림질해 줍니다! 하단에는 Ctrl+V 순차복사와 [1] 파일·라벨러(PDF) ~ [5] 창고정 미니 버튼이 대기해요!',
+      '버튼 누를 필요 없어요! 예문 칩에서 전/후 비교를 한눈에 보시거나, 입력칸을 클릭해 직접 영타를 치고 스페이스바를 누르면 0.2초 만에 무버튼 자동으로 다림질해 줍니다! 하단에는 Ctrl+V 순차복사와 [1] 파일·라벨러(PDF) ~ [5] 창고정 미니 버튼이 대기해요!',
     stageTitle: '⌨️ dkssud 영타·줄바꿈 0.2초 무버튼 완전 자동(Auto) 성형',
     stageBadge: '무기 4 · #귀신창 v1.4 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_dkssudgktp_261110.mp4',
@@ -425,9 +425,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [cleanDemoDone, setCleanDemoDone] = useState(false);
 
   // 무기 4 (귀신창 v1.4 — 100% 무버튼 자동 성형 체험 상태)
+  const [typoSampleIdx, setTypoSampleIdx] = useState<number>(0);
   const [typoInput, setTypoInput] = useState<string>('dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.');
   const [typoOriginalBackup, setTypoOriginalBackup] = useState<string>('dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.');
   const [typoConverted, setTypoConverted] = useState<boolean>(false);
+  const [typoIsPresetSample, setTypoIsPresetSample] = useState<boolean>(true);
+  const typoDemoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedToolbarKey, setSelectedToolbarKey] = useState<'seq' | '1' | '2' | '3' | '4' | '5'>('1');
   const [labelerDemoApplied, setLabelerDemoApplied] = useState<boolean>(false);
 
@@ -544,42 +547,86 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     ]);
   };
 
-  // 무기 4 (귀신창 v1.4) 무버튼 0.2초 자동 성형 트리거
-  const triggerTypoAutoIron = (rawText: string) => {
+  const TYPO_SAMPLES = [
+    {
+      label: '⚡ 예문 1: dkssudgktpdy 영타 무버튼 자동성형',
+      raw: 'dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.',
+    },
+    {
+      label: '⚡ 예문 2: 카톡 영타 외계어 0.2초 자동교정',
+      raw: 'rmqgkRp 카톡 Tmr다가 gksdudzl 안 눌러서 멘붕...',
+    },
+    {
+      label: '⚡ 예문 3: PDF 깨진 줄바꿈 무버튼 다림질',
+      raw: '계약서에서 복사할 때마다\n\n줄바꿈이 마구 깨져서\n\n일일이 백스페이스 누르셨죠?',
+    },
+  ];
+
+  const formatTypoAfterPreview = (rawText: string) =>
+    convertEngTypoToKor(rawText)
+      .replace(/\n{2,}/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+
+  // 무기 4 (귀신창 v1.4) 예문 칩 클릭 시 Before ➔ After 비교 배너 표시 + 여유 있는 0.9초 시연
+  const triggerTypoAutoIron = (rawText: string, sIdx = 0) => {
+    if (typoDemoTimerRef.current) clearTimeout(typoDemoTimerRef.current);
     playBabyGhostChime();
+    setTypoSampleIdx(sIdx);
     setTypoOriginalBackup(rawText);
     setTypoInput(rawText);
     setTypoConverted(false);
-    setTimeout(() => {
-      const converted = convertEngTypoToKor(rawText)
-        .replace(/\n{2,}/g, ' ')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
+    setTypoIsPresetSample(true);
+    typoDemoTimerRef.current = setTimeout(() => {
+      const converted = formatTypoAfterPreview(rawText);
       setTypoInput(converted);
       setTypoConverted(true);
-    }, 200);
+    }, 850);
   };
 
-  // superpower 탭 진입 시 먼저 영타 원문을 보여준 뒤 400ms 후 자동으로 무버튼 변환 시연
+  // superpower 탭 진입 시 먼저 영타 원문을 보여준 뒤 850ms 후 자동으로 무버튼 변환 시연 (상단 Before ➔ After 동시 제공)
   useEffect(() => {
     if (demoTab !== 'superpower') return;
-    const defaultRaw = 'dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.';
+    const defaultRaw = TYPO_SAMPLES[0].raw;
+    setTypoSampleIdx(0);
     setTypoOriginalBackup(defaultRaw);
     setTypoInput(defaultRaw);
     setTypoConverted(false);
+    setTypoIsPresetSample(true);
     const timer = setTimeout(() => {
-      const converted = convertEngTypoToKor(defaultRaw)
-        .replace(/\n{2,}/g, ' ')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
+      const converted = formatTypoAfterPreview(defaultRaw);
       setTypoInput(converted);
       setTypoConverted(true);
-    }, 400);
+    }, 850);
+    typoDemoTimerRef.current = timer;
     return () => clearTimeout(timer);
   }, [demoTab]);
 
+  const handleTypoTextareaFocus = () => {
+    if (typoIsPresetSample) {
+      if (typoDemoTimerRef.current) {
+        clearTimeout(typoDemoTimerRef.current);
+        typoDemoTimerRef.current = null;
+      }
+      setTypoInput('');
+      setTypoConverted(false);
+      setTypoIsPresetSample(false);
+    }
+  };
+
   const handleTypoInputChange = (val: string) => {
-    if ((val.endsWith(' ') || val.endsWith('\n')) && !typoInput.endsWith(' ')) {
+    if (typoDemoTimerRef.current) {
+      clearTimeout(typoDemoTimerRef.current);
+      typoDemoTimerRef.current = null;
+    }
+    setTypoIsPresetSample(false);
+
+    // 이메일(@), URL, 도메인, 숫자 3자리 이상 계정/비번 토큰은 확정 보호막에 따라 자동 변환하지 않음
+    const trimmed = val.trim();
+    const hasProtectedToken =
+      /@|:\/\/|www\.|\.(com|kr|net|org|app|io)\b|[A-Za-z]{2,}\d{3,}/i.test(trimmed);
+
+    if (!hasProtectedToken && (val.endsWith(' ') || val.endsWith('\n')) && !typoInput.endsWith(' ')) {
       const converted = convertEngTypoToKor(val)
         .replace(/\n{2,}/g, ' ')
         .replace(/[ \t]{2,}/g, ' ');
@@ -596,6 +643,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   };
 
   const handleTypoUndo = () => {
+    if (typoDemoTimerRef.current) {
+      clearTimeout(typoDemoTimerRef.current);
+      typoDemoTimerRef.current = null;
+    }
     setTypoInput(typoOriginalBackup);
     setTypoConverted(false);
   };
@@ -1238,7 +1289,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <div className="rounded-2xl bg-zinc-950 border border-amber-400/40 p-5 space-y-3.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-bold text-zinc-300">
-                        ⌨️ <strong className="text-amber-300">수동 버튼 ZERO!</strong> 아래 예문 칩을 누르거나 영타를 치고 스페이스바만 누르면 0.2초 만에 무버튼 자동 다림질됩니다:
+                        ⌨️ <strong className="text-amber-300">수동 버튼 ZERO!</strong> 예문 칩에서 전·후 변화를 한눈에 보시거나, 아래 입력칸을 클릭해 직접 영타를 치고 스페이스바만 눌러보세요:
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-[11px] font-black text-emerald-300">
                         ⚡ 100% 무버튼 Auto 성형 가동 중
@@ -1246,42 +1297,78 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </div>
 
                     <div className="flex flex-wrap gap-1.5">
-                      {[
-                        {
-                          label: '⚡ 예문 1: dkssudgktpdy 영타 무버튼 자동성형',
-                          raw: 'dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.',
-                        },
-                        {
-                          label: '⚡ 예문 2: 카톡 영타 외계어 0.2초 자동교정',
-                          raw: 'rmqgkRp 카톡 Tmr다가 gksdudzl 안 눌러서 멘붕...',
-                        },
-                        {
-                          label: '⚡ 예문 3: PDF 깨진 줄바꿈 무버튼 다림질',
-                          raw: '계약서에서 복사할 때마다\n\n줄바꿈이 마구 깨져서\n\n일일이 백스페이스 누르셨죠?',
-                        },
-                      ].map((sample, sIdx) => (
-                        <button
-                          key={sIdx}
-                          type="button"
-                          onClick={() => triggerTypoAutoIron(sample.raw)}
-                          className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-amber-400 hover:text-slate-950 text-zinc-200 text-xs font-extrabold border border-white/15 transition-all cursor-pointer"
-                        >
-                          {sample.label}
-                        </button>
-                      ))}
+                      {TYPO_SAMPLES.map((sample, sIdx) => {
+                        const isSelectedSample = typoSampleIdx === sIdx && typoIsPresetSample;
+                        return (
+                          <button
+                            key={sIdx}
+                            type="button"
+                            onClick={() => triggerTypoAutoIron(sample.raw, sIdx)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                              isSelectedSample
+                                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
+                                : 'bg-zinc-900 hover:bg-amber-400 hover:text-slate-950 text-zinc-200 border-white/15'
+                            }`}
+                          >
+                            {sample.label}
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    <textarea
-                      value={typoInput}
-                      onChange={(e) => handleTypoInputChange(e.target.value)}
-                      rows={3}
-                      placeholder="여기에 dkssudgktpdy 등 영타 오타를 치고 스페이스바만 눌러보세요! (버튼 클릭 없이 0.2ms 자동 변환)"
-                      className={`w-full rounded-2xl p-3.5 text-sm sm:text-base font-extrabold transition-all outline-none border-2 ${
-                        typoConverted
-                          ? 'bg-emerald-950/60 border-[#00F0B5] text-emerald-100 shadow-[0_0_20px_rgba(0,240,181,0.15)]'
-                          : 'bg-zinc-900 border-amber-400/40 text-white'
-                      }`}
-                    />
+                    {/* Before ➔ After 한눈에 비교하는 상시 프리뷰 배너 */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-2xl bg-zinc-900/90 border border-white/10 p-3 text-xs">
+                      <div className="rounded-xl bg-zinc-950/90 border border-rose-400/25 p-2.5 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-rose-300">
+                          <span>Before · 영타/깨진 줄바꿈 원문</span>
+                          <span className="text-[10px] text-zinc-500">한영키 실수</span>
+                        </div>
+                        <p className="font-mono text-zinc-300 font-semibold whitespace-pre-line leading-relaxed break-keep">
+                          {typoOriginalBackup || TYPO_SAMPLES[typoSampleIdx].raw}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-emerald-950/45 border border-[#00F0B5]/40 p-2.5 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-[#00F0B5]">
+                          <span>After · 0.2초 무버튼 자동 성형</span>
+                          <span>✨ 스페이스바 즉시</span>
+                        </div>
+                        <p className="text-emerald-100 font-extrabold leading-relaxed break-keep">
+                          {formatTypoAfterPreview(typoOriginalBackup || TYPO_SAMPLES[typoSampleIdx].raw)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between px-1 text-[11px]">
+                        <span className="font-extrabold text-amber-300">
+                          👇 직접 테스트 입력칸 {typoIsPresetSample ? '(마우스로 클릭하면 예시가 지워지고 바로 입력할 수 있어요!)' : '(영타 입력 후 스페이스바를 탁 눌러보세요!)'}
+                        </span>
+                        {!typoIsPresetSample && typoInput && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTypoInput('');
+                              setTypoConverted(false);
+                            }}
+                            className="text-zinc-400 hover:text-white underline font-bold cursor-pointer"
+                          >
+                            비우기
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        value={typoInput}
+                        onFocus={handleTypoTextareaFocus}
+                        onChange={(e) => handleTypoInputChange(e.target.value)}
+                        rows={2}
+                        placeholder="직접 영타를 치고 스페이스바를 눌러보세요! (예: dkssudgktpdy ␣ 또는 gksrmf xptmxm ␣)"
+                        className={`w-full rounded-2xl p-3.5 text-sm sm:text-base font-extrabold transition-all outline-none border-2 ${
+                          typoConverted
+                            ? 'bg-emerald-950/60 border-[#00F0B5] text-emerald-100 shadow-[0_0_20px_rgba(0,240,181,0.15)]'
+                            : 'bg-zinc-900 border-amber-400/40 focus:border-[#00F0B5] text-white placeholder-zinc-500'
+                        }`}
+                      />
+                    </div>
 
                     {/* 확정 기준점 한 줄 핵심 요약 안내 */}
                     <div className="rounded-xl bg-emerald-950/35 border border-emerald-500/30 px-3 py-2 text-[11.5px] text-emerald-200 font-bold leading-relaxed break-keep">
@@ -1328,7 +1415,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <div className="flex items-center gap-2">
                           {typoConverted && (
                             <span className="text-xs font-black text-[#00F0B5]">
-                              ✨ 무버튼 0.2ms 자동 성형 완료!
+                              ✨ 무버튼 0.2초 자동 성형 완료!
                             </span>
                           )}
                           <button
