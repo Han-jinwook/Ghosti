@@ -468,6 +468,132 @@ def find_inline_target_block_id(
     return None
 
 
+def build_feedback_blocks(
+    guide_text: str,
+    header_label: str = "↳ 🛠️ [AI 수정 완료 및 재테스트 안내]",
+    header_color: str = "green",
+    timestamp_str: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    [전사 QA 일관성 규칙] 재테스트 안내문을 단일 통문단(paragraph)으로 뭉개지 않고:
+    1) 상단 헤더 + 📌 [1. 내부 로직·작동 규칙 요약]은 깔끔한 안내 문단으로,
+    2) 🧪 [2. 항목별 구체적 테스트 방법] 아래의 각 테스트 항목(1), 1., ①, ☐, - [ ] 등)은
+       반드시 실제 클릭 가능한 노션 체크박스 블록("type": "to_do")으로 분리 생성합니다.
+       (테스터가 수동으로 취소선을 긋지 않고 체크박스 클릭 한 번으로 완료 표시 가능)
+    """
+    ts = timestamp_str or datetime.now().strftime("%Y-%m-%d %H:%M")
+    raw_lines = [ln.rstrip() for ln in guide_text.replace("\\n", "\n").splitlines()]
+
+    # 이미 guide_text 첫 줄에 중복 헤더가 들어있는 경우 제거
+    cleaned_lines: List[str] = []
+    for idx, ln in enumerate(raw_lines):
+        s = ln.strip()
+        if idx == 0 and s.startswith("↳") and ("AI" in s and ("안내]" in s or "완료]" in s)):
+            continue
+        cleaned_lines.append(ln)
+
+    blocks: List[Dict[str, Any]] = []
+    intro_lines: List[str] = []
+    in_checklist_section = False
+    checklist_heading_text: Optional[str] = None
+    todo_items: List[Tuple[str, bool]] = []
+
+    item_start_re = re.compile(
+        r"^(?:[☐☑✅]\s*|[-*•]\s*\[\s*[xX ]?\s*\]\s*|(?:[-*•]\s*)?(?:\d+[.)]|[①-⑳])\s+|[-*•]\s+)"
+    )
+    explicit_box_re = re.compile(r"^(?:[☐☑✅]\s*|[-*•]\s*\[\s*[xX ]?\s*\]\s*)")
+    is_retest_mode = ("재테스트" in header_label) or ("🧪" in guide_text)
+
+    for ln in cleaned_lines:
+        s = ln.strip()
+        if not s:
+            continue
+        if "🧪" in s or re.match(r"^\[?2\.\s*항목별", s):
+            in_checklist_section = True
+            checklist_heading_text = s
+            continue
+
+        is_checked = s.startswith(("☑", "✅")) or bool(re.match(r"^[-*•]\s*\[[xX]\]", s))
+
+        if in_checklist_section:
+            if item_start_re.match(s) or not todo_items:
+                # 앞쪽 죽은 체크기호(☐, - [ ], • )만 벗겨내고 번호(1), 2) 등)는 유지
+                clean_item = explicit_box_re.sub("", s).strip()
+                clean_item = re.sub(r"^[-*•]\s+(?=(?:\d+[.)]|[①-⑳]))", "", clean_item).strip()
+                clean_item = re.sub(r"^[-*•]\s+", "", clean_item).strip() if not re.match(r"^(?:\d+[.)]|[①-⑳])", clean_item) else clean_item
+                todo_items.append((clean_item, is_checked))
+            else:
+                # 번호 없이 줄바꿈된 이어지는 문장은 직전 체크박스 항목에 자연스럽게 병합
+                prev_txt, prev_chk = todo_items[-1]
+                todo_items[-1] = (f"{prev_txt} {s}", prev_chk)
+        elif explicit_box_re.match(s) or (is_retest_mode and re.match(r"^(?:\d+[.)]|[①-⑳])\s+", s) and "📌" not in "\n".join(intro_lines[-1:])):
+            # 🧪 헤더 없이 바로 체크박스/번호 목록으로 작성된 재테스트 안내도 to_do로 변환 (단, 📌 요약 내부의 1) 2)는 제외)
+            if explicit_box_re.match(s) or ("📌" not in guide_text):
+                in_checklist_section = True
+                clean_item = explicit_box_re.sub("", s).strip()
+                todo_items.append((clean_item, is_checked))
+            else:
+                intro_lines.append(s)
+        else:
+            intro_lines.append(s)
+
+    header_rich_text: List[Dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": {"content": f"{header_label} ({ts})" + ("\n" if intro_lines else "")},
+            "annotations": {"bold": True, "color": header_color},
+        }
+    ]
+    if intro_lines:
+        header_rich_text.append(
+            {
+                "type": "text",
+                "text": {"content": "\n".join(intro_lines)[:1850]},
+            }
+        )
+
+    blocks.append(
+        {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {"rich_text": header_rich_text},
+        }
+    )
+
+    if checklist_heading_text:
+        blocks.append(
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {"content": checklist_heading_text[:1900]},
+                            "annotations": {"bold": True},
+                        }
+                    ]
+                },
+            }
+        )
+
+    for item_txt, chk in todo_items:
+        if not item_txt:
+            continue
+        blocks.append(
+            {
+                "object": "block",
+                "type": "to_do",
+                "to_do": {
+                    "rich_text": [{"type": "text", "text": {"content": item_txt[:1900]}}],
+                    "checked": bool(chk),
+                },
+            }
+        )
+
+    return blocks
+
+
 def insert_inline_ai_feedback(
     page_id: str,
     guide_text: str,
@@ -478,7 +604,8 @@ def insert_inline_ai_feedback(
 ) -> bool:
     """
     카드 맨 밑에 구분선(divider)과 함께 누적시키는 대신,
-    해당 단계(to_do) 또는 테스터의 붉은색 코멘트 바로 아래(`after: target_block_id`)에 인라인으로 기록합니다.
+    해당 단계(to_do) 또는 테스터의 붉은색 코멘트 바로 아래(`after: target_block_id`)에
+    실제 클릭 가능한 노션 체크박스(`to_do`) 블록 구조로 인라인 기록합니다.
     """
     clean_page_id = page_id.strip()
     blocks_url = f"{NOTION_API_BASE}/blocks/{clean_page_id}/children"
@@ -489,27 +616,12 @@ def insert_inline_ai_feedback(
         blocks = _fetch_page_top_blocks(clean_page_id)
         target_after_id = find_inline_target_block_id(blocks, step_num=step_num)
 
-    children_payload = [
-        {
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {
-                            "content": f"{header_label} ({timestamp_str})\n"
-                        },
-                        "annotations": {"bold": True, "color": header_color},
-                    },
-                    {
-                        "type": "text",
-                        "text": {"content": guide_text.strip()[:1900]},
-                    },
-                ]
-            },
-        }
-    ]
+    children_payload = build_feedback_blocks(
+        guide_text=guide_text,
+        header_label=header_label,
+        header_color=header_color,
+        timestamp_str=timestamp_str,
+    )
 
     req_body: Dict[str, Any] = {"children": children_payload}
     if target_after_id:
