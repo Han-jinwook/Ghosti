@@ -250,6 +250,8 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
     work_root = Path(os.environ.get("TEMP", str(THIS_DIR))) / "merlin_z_core_build"
     icon_file = THIS_DIR / "favicon.ico"
     logo_png = THIS_DIR / "logo-symbol.png"
+    lexicon_zlib = THIS_DIR / "assets" / "ko_en_lexicon.zlib"
+    baby_ghost_sounds_dir = THIS_DIR / "baby_ghost_sounds"
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile",
@@ -262,6 +264,8 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         *(["--icon", str(icon_file)] if icon_file.exists() else []),
         *(["--add-data", f"{icon_file};."] if icon_file.exists() else []),
         *(["--add-data", f"{logo_png};."] if logo_png.exists() else []),
+        *(["--add-data", f"{lexicon_zlib};assets"] if lexicon_zlib.exists() else []),
+        *(["--add-data", f"{baby_ghost_sounds_dir};baby_ghost_sounds"] if baby_ghost_sounds_dir.exists() else []),
         "--hidden-import", "plugin_ghosti_os",
         "--hidden-import", "plugin_ghosti_superpowers",
         "--hidden-import", "seq_paste_daemon",

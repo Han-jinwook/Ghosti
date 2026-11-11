@@ -284,11 +284,43 @@ class Gemma2LightweightEngine:
                 return c
         return None
 
+    def _find_lexicon_zlib(self) -> Path | None:
+        base_here = Path(__file__).resolve().parent
+        candidates = [
+            base_here / "assets" / "ko_en_lexicon.zlib",
+            base_here.parent / "assets" / "ko_en_lexicon.zlib",
+            Path("C:/MerlinTools/assets/ko_en_lexicon.zlib"),
+            Path("D:/Secretary/tools/assets/ko_en_lexicon.zlib"),
+        ]
+        for c in candidates:
+            if c.exists():
+                return c
+        return None
+
     def _lazy_init(self) -> None:
         with self._lock:
             if self._loaded:
                 return
             try:
+                lex_path = self._find_lexicon_zlib()
+                if lex_path:
+                    try:
+                        import zlib
+                        lex_data = json.loads(zlib.decompress(lex_path.read_bytes()).decode("utf-8"))
+                        for ew in lex_data.get("en", ()):
+                            self.en_dict.add(ew)
+                        for ks in lex_data.get("ko_starts", ()):
+                            self.ko_word_starts.add(ks)
+                            self.ko_subwords.add(ks)
+                            for ch in ks:
+                                self.ko_chars.add(ch)
+                        for ksub in lex_data.get("ko_subs", ()):
+                            self.ko_subwords.add(ksub)
+                            for ch in ksub:
+                                self.ko_chars.add(ch)
+                    except Exception:
+                        pass
+
                 model_dir = self._find_model_dir()
                 if model_dir:
                     tok_path = model_dir / "tokenizer.json"
@@ -308,7 +340,7 @@ class Gemma2LightweightEngine:
                                 self.ko_chars.add(ch)
 
                     # [초경량 데몬 철칙]: seq_paste_daemon.py에서는 200MB ONNX 세션을 중복 로드하지 않고
-                    # tokenizer.json 사전만 로드하여 CPU 0% · 메모리 25MB 이하 초경량 반응속도를 보장합니다.
+                    # 내장 압축 사전(ko_en_lexicon.zlib) + tokenizer.json 사전만 로드하여 CPU 0% · 메모리 25MB 이하 초경량 반응속도를 보장합니다.
             except Exception:
                 pass
             finally:
@@ -333,6 +365,8 @@ class Gemma2LightweightEngine:
     }
 
     def is_valid_english_word(self, word: str) -> bool:
+        if not self._loaded:
+            self._lazy_init()
         w_raw = word.strip()
         # 한글 두벌식에서 Shift가 쓰이지 않는 알파벳(R,E,Q,T,W,O,P 외)을 대문자로 쳤다면 100% 의도적인 영문 약어(DB, PC, AI, API 등)!
         if len(w_raw) >= 2 and w_raw.isupper() and any(c not in "REQTWOP" for c in w_raw):
@@ -449,21 +483,13 @@ COMPOUND_JONG = {
 }
 REV_COMPOUND_JONG = {v: k for k, v in COMPOUND_JONG.items()}
 
-# 소문자만 쳤을 때 자주 발생하는 쌍자음 어휘 자동 보정 사전
+# 소문자만 쳤을 때 자주 발생하는 쌍자음 어휘 자동 보정 사전 ('조금'->'조끔', '아바타'->'아빠타' 등 정상 어휘 훼손 원천 방지!)
 SHIFTLESS_DOUBLE_CONSONANT_FIX = {
     "진자": "진짜",
     "진자야": "진짜야",
     "진자요": "진짜요",
-    "어더": "어떠",
     "어더케": "어떻게",
     "어덯게": "어떻게",
-    "오바": "오빠",
-    "아바": "아빠",
-    "바바": "바빠",
-    "이브": "이쁘",
-    "예브": "예쁘",
-    "기브": "기쁘",
-    "조금": "조끔",
     "아기귄시님": "아기귀신님",
     "날시가": "날씨가",
     "날시": "날씨",
@@ -475,6 +501,17 @@ SHIFTLESS_DOUBLE_CONSONANT_FIX = {
     "덕복이가": "떡볶이가",
     "덕볶이가": "떡볶이가",
     "떡복이가": "떡볶이가",
+}
+
+SHIFTLESS_SAFE_PREFIX_FIX = {
+    "어더케": "어떻게",
+    "어덯게": "어떻게",
+    "날시가": "날씨가",
+    "날시는": "날씨는",
+    "날시도": "날씨도",
+    "덕복이": "떡볶이",
+    "덕볶이": "떡볶이",
+    "떡복이": "떡볶이",
 }
 
 
@@ -706,7 +743,7 @@ def eng_word_to_kor(s: str) -> str:
     out = "".join(res)
     if out in SHIFTLESS_DOUBLE_CONSONANT_FIX:
         return SHIFTLESS_DOUBLE_CONSONANT_FIX[out]
-    for k_wrong, k_right in SHIFTLESS_DOUBLE_CONSONANT_FIX.items():
+    for k_wrong, k_right in SHIFTLESS_SAFE_PREFIX_FIX.items():
         if out.startswith(k_wrong):
             out = k_right + out[len(k_wrong) :]
             break
@@ -3766,6 +3803,8 @@ def _fix_korean_spacing_general(s: str) -> str:
     - 의존명사('성공할수있습니다'->'성공할 수 있습니다', '확인하실 수있습니다'->'확인하실 수 있습니다', '바뀐 것같은데'->'바뀐 것 같은데') 및
       체언+부사('이번프로젝트는꼭'->'이번 프로젝트는 꼭', '오늘3시 에 미팅있습니다'->'오늘 3시에 미팅 있습니다') 정밀 교정
     """
+    if not AI_ENGINE._loaded:
+        AI_ENGINE._lazy_init()
     s = re.sub(r"([가-힣]+(?:아|어|여|해|지|네|군|나|가|까))\s+(요)(?=[가-힣])", r"\1\2 ", s)
     # 1) 깨진 어미·조사 복원 ('주셔 서' -> '주셔서', '해 서' -> '해서', '와 서' -> '와서', '봐 서' -> '봐서')
     s = re.sub(r"([가-힣]*(?:주셔|보셔|하셔|오셔|가셔|계셔|드려|올려|내려|보내|만들|받으|찾으|읽으|쓰셔|해|와|봐|가|나|써|꺼|켜))\s+서(?=[가-힣\s.,?!~^]|$)", r"\1서", s)
@@ -3781,15 +3820,25 @@ def _fix_korean_spacing_general(s: str) -> str:
         r"\1 ",
         s,
     )
-    # 4) '-하게 / -롭게 / -스레 / -히 / -도록' 부사형·연결어미 + 용언 붙여쓰기('예리하게캐치해' -> '예리하게 캐치해') 분리
+    # 4) '-하게 / -롭게 / -있게 / -쁘게 / -르게 / -도록' 부사형·연결어미 + 용언 붙여쓰기('예리하게캐치해' -> '예리하게 캐치해', '맛있게드세요' -> '맛있게 드세요') 분리
     s = re.sub(
-        r"([가-힣]{2,}(?:하게|롭게|스레|답게|도록|게끔|주셔서|해주셔서|주시고|해주시고))(?=(?!주|보|드|지|도|는|만|요)[가-힣]{2,})",
+        r"([가-힣]{1,8}(?:하게|롭게|스럽게|있게|없게|쁘게|르게|겁게|볍게|렵게|쉽게|짧게|길게|크게|작게|높게|낮게|깊게|넓게|밝게|맑게|같게|스레|답게|도록|게끔))(?=(?!(?:도|는|만|요)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})",
         r"\1 ",
         s,
     )
-    # 5) 범용 관형사형('-스러운 / -로운 / -다운') + 명사 붙여쓰기 분리 ('자연스러운어절' -> '자연스러운 어절', '새로운문장' -> '새로운 문장')
+    s = re.sub(
+        r"([가-힣]{2,}(?:주셔서|해주셔서|주시고|해주시고))(?=(?!주|보|지|도|는|만|요)[가-힣]{2,})",
+        r"\1 ",
+        s,
+    )
+    # 5) 범용 관형사형('-스러운 / -로운 / -다운' 및 상용 형용사 관형사형) + 명사 붙여쓰기 분리 ('자연스러운어절' -> '자연스러운 어절', '좋은하루보내세요' -> '좋은 하루 보내세요')
     s = re.sub(
         r"(?<![가-힣])([가-힣]{2,}스러운|[가-힣]{1,6}로운|[가-힣]{2,}다운)(?=[가-힣]{2,})",
+        r"\1 ",
+        s,
+    )
+    s = re.sub(
+        r"(?<![가-힣])(좋은|새로운|즐거운|행복한|중요한|필요한|간단한|정확한|깔끔한|편리한|안전한|빠른|느린|많은|적은|작은|큰|긴|짧은|예쁜|맛있는|맛없는|멋진|귀여운|따뜻한|시원한|깨끗한|자세한|다양한|특별한|비슷한|동일한|유명한|소중한|어려운|쉬운|힘든|바쁜)(?=(?!(?:데|지|걸|줄|바|가요|지요|데요|요|다)(?=[\s.,?!:;~^)]|$))[가-힣]{2,})",
         r"\1 ",
         s,
     )
@@ -3851,35 +3900,26 @@ def _fix_korean_spacing_general(s: str) -> str:
     s = re.sub(r"병언(에|에서|으로|이|가|은|는|을|를|\s|$|[.,?!~^])", r"병원\1", s)
     s = re.sub(r"되요(?=\s|$|[.,?!~^])", "돼요", s)
     s = re.sub(r"안\s*되요(?=\s|$|[.,?!~^])", "안 돼요", s)
-    # 과거시제 선어말어미 받침 'ㅅ' -> 'ㅆ' 범용 교정 ('들어갓던' -> '들어갔던', '햇습니다' -> '했습니다', '봣어' -> '봤어', '왓다' -> '왔다' 등)
-    s = re.sub(
-        r"([가-힣]*[가나다가라바사아자차카타파하와봐쏴놔둬줘춰궈눠뤄뭐숴쭤켜펴혀었았였했됐갔왔봤났잤샀탔찼팠컸썼껐렸졌쳤졌췄줬뒀눴뤘웠겼녔뎠렸몄볐셨졌쳤켰텼폈혔])(?=[습어았었였겠더던다네지고는데니니까면며면서길래자마자구나군죠요])",
-        lambda m: m.group(0),
-        s,
-    )
+    # 과거시제 선어말어미 받침 'ㅅ' -> 'ㅆ' 안전 교정 ('들어갓던' -> '들어갔던', '햇습니다' -> '했습니다', '봣어' -> '봤어', '왓다' -> '왔다' 등 / '벗어나다', '더 낫지', '헛고생', '덧니' 등 정상 어휘 100% 보존!)
+    _SAFE_SINGLE_S_PAST_SYLLABLES = {
+        "햇", "됫", "봣", "왓", "갓", "삿", "찻", "탓", "팟", "썻", "껏", "렷",
+        "졋", "쳣", "췃", "줫", "둿", "웟", "겻", "셧", "엿", "엇", "앗",
+    }
+
     def _fix_single_s_past_tense(match: re.Match) -> str:
         ch = match.group(1)
         suf = match.group(2)
-        code = ord(ch) - 0xAC00
-        jong = code % 28
-        # 받침 ㅅ(19)이고 중성이 ㅏ(0), ㅓ(4), ㅕ(6), ㅐ(1), ㅔ(5), ㅘ(9), ㅝ(14), ㅙ(10), ㅞ(15)인 용언 과거형 어간 -> ㅆ(20)으로 교정
-        jung = (code // 28) % 21
-        if jong == 19 and jung in (0, 1, 4, 5, 6, 9, 10, 14, 15):
-            # 명사 예외 ('버섯', '다섯', '여섯', '일곱', '무엇', '그것', '이것', '저것', '잘못', '이웃', '비롯', '사뭇', '얼핏', '자칫', '언뜻', '문득') 제외
-            word_prefix = match.group(0)
-            if ch in ("섯", "엇", "것", "못", "웃", "롯", "뭇", "핏", "칫", "뜻"):
-                return match.group(0)
-            fixed_ch = chr(ord(ch) + 1)
-            return fixed_ch + suf
+        if ch in _SAFE_SINGLE_S_PAST_SYLLABLES:
+            return chr(ord(ch) + 1) + suf
         return match.group(0)
 
     s = re.sub(
-        r"([가-힣])(습|어|어요|어서|더니|던|다|네|네요|지|지요|고|는데|니|니까|면|며|면서|길래|자마자|구나|군|죠)(?=[가-힣\s.,?!~^)]|$)",
+        r"(?<!빼)(?<!바)([가-힣])(습니다|습니까|어요|어서|더니|던데|던|다|네|네요|지|지요|고|는데|니까|면|며|면서|길래|자마자|구나|군|죠)(?=[\s.,?!:;~^)]|$)",
         _fix_single_s_past_tense,
         s,
     )
-    s = re.sub(r"됬(습|어|다|네|지|고|는데|던|더니|니|니까|면)", r"됐\1", s)
-    s = re.sub(r"햇(습|어|다|네|지|고|는데|던|더니|니|니까|면)", r"했\1", s)
+    s = re.sub(r"됬(습니다|습니까|어요|어서|어|다|네|네요|지|지요|고|는데|던|더니|니|니까|면)(?=[\s.,?!:;~^)]|$)", r"됐\1", s)
+    s = re.sub(r"햇(습니다|습니까|어요|어서|어|다|네|네요|지|지요|고|는데|던|더니|니|니까|면)(?=[\s.,?!:;~^)]|$)", r"했\1", s)
     s = re.sub(r"몇\s*일(?=\s|$|[.,?!~^간동안전후째])", "며칠", s)
     s = re.sub(r"어떻해", "어떡해", s)
     s = re.sub(r"어떡게", "어떻게", s)
@@ -3926,7 +3966,29 @@ def _fix_korean_spacing_general(s: str) -> str:
         s,
     )
 
+    def _split_adverb_prefix(m_adv: re.Match) -> str:
+        adv_w = m_adv.group(1)
+        rem_w = m_adv.group(2)
+        if rem_w in ("는", "은", "도", "만", "요", "이나", "이라", "입니", "이다"):
+            return m_adv.group(0)
+        if rem_w[0] == "만" and not rem_w.startswith(("만들", "만드", "만든", "만듭", "만나", "만났", "만난", "만날", "만져", "만지", "만진", "만질", "만족")):
+            return m_adv.group(0)
+        if rem_w[0] == "도" and not rem_w.startswith(("도와", "도왔", "도운", "도우", "도착", "도전", "도움", "도입", "돌아")):
+            return m_adv.group(0)
+        if rem_w[0] in ("는", "은"):
+            return m_adv.group(0)
+        if rem_w[0] == "요" and not rem_w.startswith(("요리", "요청", "요약", "요구", "요금")):
+            return m_adv.group(0)
+        if rem_w.startswith(("입니", "입니까", "이다", "이지", "이라", "이에", "예요", "이나", "부터", "까지")):
+            return m_adv.group(0)
+        return f"{adv_w} {rem_w}"
+
     for _ in range(2):
+        s = re.sub(
+            r"(?<![가-힣])(지금|바로|다시|먼저|함께|같이|직접|손수|정성껏|자주|항상|계속|빨리|천천히|열심히|충분히|완전히|정확히|확실히|반드시|잠깐|잠시|방금|아까|벌써|아직|이미|일단|우선|서로|따로|스스로|갑자기|조용히|꼼꼼히|자세히|간단히|특별히|솔직히|다행히)([가-힣]{2,})",
+            _split_adverb_prefix,
+            s,
+        )
         s = re.sub(
             r"([가-힣]+(?:어요|아요|해요|워요|봐요|와요|자요|줘요|돼요|네요|군요|거든요|잖아요|래요|대요|까요|나요|습니다|입니다|ㅂ니다|세요))(?=[가-힣]{2,})",
             r"\1 ",
@@ -3963,7 +4025,7 @@ def _fix_korean_spacing_general(s: str) -> str:
             s,
         )
         s = re.sub(
-            r"([가-힣]+(?:아서|어서|여서|해서|와서|가서|봐서|파서|커서|써서|나서|돼서|니까|지만|고))(?=(?!싶|있|없|보|주|버리|말|나가|들어가)[가-힣]{1,4}(?:에서|에게|한테|으로|은|는|이|가|을|를|에|와|과|도)(?=[가-힣\s.,?!:;)]|$))",
+            r"([가-힣]+(?:아서|어서|여서|해서|와서|가서|봐서|파서|커서|써서|나서|돼서|니까|지만|하고|되고|있고|없고|가고|오고|먹고|마시고|입고|쓰고|읽고|듣고|찾고|잡고|열고|닫고|놓고|두고|주고|받고|팔고|만들고|끝나고|마치고|았고|었고|였고|했고|됐고|갔고|왔고|봤고|났고|썼고|쳤고|졌고|렸고|겼고|웠고))(?=(?!싶|있|없|보|주|버리|말|나가|들어가)[가-힣]{1,4}(?:에서|에게|한테|으로|은|는|이|가|을|를|에|와|과|도)(?=[가-힣\s.,?!:;)]|$))",
             r"\1 ",
             s,
         )
@@ -3983,13 +4045,22 @@ def _fix_korean_spacing_general(s: str) -> str:
             s,
         )
         s = re.sub(
-            r"([가-힣]{1,5}[이가은는도])(?=(?:좋|나쁘|나빠|맑|흐리|흐려|춥|추워|덥|더워|따뜻|시원|많|적|크|커|작|높|낮|길|짧|빠르|빨라|느리|느려|예쁘|예뻐|아프|아파|고프|고파|슬프|슬퍼|기쁘|기뻐|힘들|어렵|어려워|쉽|쉬워|있|없|안되|안돼|되|돼|오|와|불|내리|내려)[가-힣]*(?=[\s.,?!:;가-힣)]|$))",
+            r"([가-힣]{1,5}[이가은는도])(?!(?<=도)(?:와주|와드|와달|왔|운|우))(?=(?:좋|나쁘|나빠|맑|흐리|흐려|춥|추워|덥|더워|따뜻|시원|많|적|크|커|작|높|낮|길|짧|빠르|빨라|느리|느려|예쁘|예뻐|아프|아파|고프|고파|슬프|슬퍼|기쁘|기뻐|힘들|어렵|어려워|쉽|쉬워|있|없|안되|안돼|되|돼|오|와|불|내리|내려)[가-힣]*(?=[\s.,?!:;가-힣)]|$))",
             r"\1 ",
             s,
         )
         s = re.sub(
             r"([가-힣]+(?:고|아서|어서|여서|해서))(?=(?:싶어|싶다|싶습니다|싶네|싶은|싶고|싶으니|있어|있다|있습니다|있네|보세요|보아요|봐요|주세|주어|줘요|버렸|버려)(?=[\s.,?!:;가-힣)]|$))",
             r"\1 ",
+            s,
+        )
+        s = re.sub(
+            r"([가-힣]{2,})(?=(?:보세요|보아요|봐요|보셨나요|보셨어요)(?=[\s.,?!:;~^)]|$))",
+            lambda m_b: (
+                f"{m_b.group(1)} "
+                if ((ord(m_b.group(1)[-1]) - 0xAC00) % 28 == 0 and ((ord(m_b.group(1)[-1]) - 0xAC00) // 28) % 21 in (0, 1, 4, 5, 6, 9, 10, 14, 15) and not m_b.group(1).endswith(("바", "초", "후", "일", "신", "여")))
+                else m_b.group(0)
+            ),
             s,
         )
         # ── [범용 한국어 형태소 경계 + EmbeddingGemma 2 (262,144 서브워드 '▁' 어절 시작점) 결합 엔진] ──
@@ -4082,10 +4153,28 @@ def _fix_korean_spacing_general(s: str) -> str:
         )
         s = re.sub(r"(?<=\s)(뒤|후|전)(?=(?![에의는도만\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
         s = re.sub(r"(?<=\s)((?:뒤|후|전)(?:에|에는|에도))(?=[가-힣]{2,})", r"\1 ", s)
-        # 상용 부사('바로/다시/먼저/함께/같이/직접/자주/항상/계속/빨리/천천히/충분히/반드시') 뒤 용언 붙여쓰기 분리 ('바로말씀해주세요' -> '바로 말씀해 주세요')
+        # 상용 부사('바로/다시/먼저/함께/같이/직접/손수/자주/항상/계속/빨리/천천히/충분히/반드시') 뒤 용언·명사 붙여쓰기 분리 ('직접만드신요리입니다' -> '직접 만드신 요리입니다', '직접요리했습니다' -> '직접 요리했습니다')
+        # ※ '만드신/만들어/만나/도와/도착/요리/요청/이동/이용' 등 용언·명사 첫 글자('만/도/요/이')를 조사로 오인해 분리를 포기하지 않도록 정밀 분기!
+        def _split_adverb_prefix(m_adv: re.Match) -> str:
+            adv_w = m_adv.group(1)
+            rem_w = m_adv.group(2)
+            if rem_w in ("는", "도", "만", "요", "이나", "이라", "입니", "이다"):
+                return m_adv.group(0)
+            if rem_w[0] == "만" and not rem_w.startswith(("만들", "만드", "만든", "만듭", "만나", "만났", "만난", "만날", "만져", "만지", "만진", "만질", "만족")):
+                return m_adv.group(0)
+            if rem_w[0] == "도" and not rem_w.startswith(("도와", "도왔", "도운", "도우", "도착", "도전", "도움", "도입", "돌아")):
+                return m_adv.group(0)
+            if rem_w[0] in ("는", "은"):
+                return m_adv.group(0)
+            if rem_w[0] == "요" and not rem_w.startswith(("요리", "요청", "요약", "요구", "요금")):
+                return m_adv.group(0)
+            if rem_w.startswith(("입니", "입니까", "이다", "이지", "이라", "이에", "예요", "이나")):
+                return m_adv.group(0)
+            return f"{adv_w} {rem_w}"
+
         s = re.sub(
-            r"(?<![가-힣])(바로|다시|먼저|함께|같이|직접|자주|항상|계속|빨리|천천히|열심히|충분히|완전히|정확히|확실히|반드시)(?=(?![는도만요이\s.,?!:;~^)])[가-힣]{2,})",
-            r"\1 ",
+            r"(?<![가-힣])(바로|다시|먼저|함께|같이|직접|손수|정성껏|자주|항상|계속|빨리|천천히|열심히|충분히|완전히|정확히|확실히|반드시|잠깐|잠시|방금|아까|벌써|아직|이미|일단|우선|서로|따로|스스로|갑자기|조용히|꼼꼼히|자세히|간단히|특별히|솔직히|다행히)([가-힣]{2,})",
+            _split_adverb_prefix,
             s,
         )
         # '에 대해서도 / 에 대한 / 에 따라 / 에 의해 / 에 비해 / 에 맞춰' 분리 ('문장에대해서도' -> '문장에 대해서도')
@@ -4097,7 +4186,24 @@ def _fix_korean_spacing_general(s: str) -> str:
         s = re.sub(r"([가-힣]{2,})(?=(?:못해서|못하|못했|못한|못할|못받|못가|못오|못보|못먹|못자|안해서|안하|안했|안한|안할|안되|안돼|안됐|끝나면|끝나고|끝나서|마치면|마치고|먹으러|마시러|보러|사러|찾으러|놀러|위해서는|위해서|위해)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
         s = re.sub(r"(?<![가-힣])(못|안)(?=(?:해서|하|했|한|할|받|가|오|보|먹|자|되|돼|됐)[가-힣]*(?=[\s.,?!:;~^)]|$))", r"\1 ", s)
         s = re.sub(r"(?<![가-힣])(위해서는|위해서|위해)(?=[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"([가-힣]{2,})(?=(?:중이라서|중이라|중이니|중인데|중입니|중이에|중이오)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
+        s = re.sub(
+            r"([가-힣]{2,})(?<!집)(?<!도)(?<!연)(?<!시)(?<!대)(?<!공)(?<!수)(?<!체)(?<!비)(?<!가)(?<!존)(?<!소)(?<!신)(?=(?:중입니다|중입니까|중이에요|중예요|중이라서|중이라|중이니|중인데|중입니|중이에|중이오)(?=[\s.,?!:;~^가-힣)]|$))",
+            r"\1 ",
+            s,
+        )
+        # 의존명사 '것 / 거 / 분 / 길 / 줄' 및 무조사 일상 서술어('확인부탁드립니다', '감기조심하세요', '고생많으셨습니다') 분리
+        s = re.sub(
+            r"([가-힣]*(?:[가-힣](?:는|은|던|할|될|볼|갈|올|살|먹을|마실|입을)|한|된|본|간|온|산|준|만든|만드신|보내주신|오시는|가시는|하시는))(?=(?:것(?:이|은|을|도|만|같|입니|이다|이에|예요)|거(?:예요|야|지|죠|같|라)|분(?:들|께|이|은|을|도|만|입니)|길(?:입니|이에|에|로)|줄(?:알|모르|몰랐|알았))(?=[\s.,?!:;~^가-힣)]|$))",
+            r"\1 ",
+            s,
+        )
+        s = re.sub(r"(?<=\s)(것|거)(?=같(?:아요|습니다|아|은|다|네|지))", r"\1 ", s)
+        s = re.sub(r"(?<=\s)(줄)(?=(?:알았|알아|모르|몰랐|압니|모릅니))", r"\1 ", s)
+        s = re.sub(
+            r"([가-힣]{2,})(?<![고서어아여해게지니며면])(?=(?:부탁드립|부탁드려|부탁합니|부탁해요|조심하세|조심해|많으셨습|많으셨어|보내세요|보내시길|되세요|되시길)(?=[\s.,?!:;~^가-힣)]|$))",
+            r"\1 ",
+            s,
+        )
         # G1) 2음절 이상 복합 조사('에서/에게/한테/께서/으로/부터/까지/보다/처럼/만큼/조차/마저/에는/에도/에서는/으로는/이라서/라서/이나/이랑') 및 시간·장소+'에' 뒤 범용 어절 분리
         s = re.sub(
             r"([가-힣]{1,12}(?:에서|에게|한테|께서는|께서|으로는|으로도|으로서|으로써|으로부터|으로|부터|까지|보다|처럼|만큼|조차|마저|에는|에도|에서는|이라서|라서|이라도|이나마))(?=(?![는도만요의가을를\s.,?!:;~^)])[가-힣]{2,})",
@@ -4109,7 +4215,30 @@ def _fix_korean_spacing_general(s: str) -> str:
             r"\1 ",
             s,
         )
-        # G2) 연결어미·관형사형 어미 뒤 범용 어절 분리 ('대해서도정확하게' -> '대해서도 정확하게')
+        # G2) 연결어미·존칭 관형사형('-[으]신', '만드신 요리입니다', '말씀하신 내용을', '받으신 파일을') 뒤 범용 어절 분리
+        _SHIN_NOUN_EXCLUSIONS = {
+            "귀신", "아기귀신", "자신", "당신", "정신", "출신", "통신", "백신", "혁신", "확신", "불신", "배신",
+            "수신", "발신", "회신", "갱신", "전신", "임신", "미신", "여신", "남신", "혼신", "헌신", "투신",
+            "변신", "분신", "문신", "소신", "사신", "외신", "내신", "신뢰", "신호",
+        }
+
+        def _split_honorific_shin_modifier(m_sh: re.Match) -> str:
+            left_sh = m_sh.group(1)
+            right_sh = m_sh.group(2)
+            if left_sh in _SHIN_NOUN_EXCLUSIONS or any(left_sh.endswith(ex) for ex in ("귀신", "자신", "당신", "정신", "출신", "통신", "백신", "확신", "수신", "발신", "회신")):
+                return m_sh.group(0)
+            if re.match(
+                r"^(?:이|가|은|는|을|를|의|에|에서|으로|로|와|과|도|만|께|한테|에게|부터|까지|랑|이나|입니|입니까|이다|이지|이라|이에|예요|가요|지요|데요|데|걸|다$|단|지$|듯|체|채|바)",
+                right_sh,
+            ):
+                return m_sh.group(0)
+            return f"{left_sh} {right_sh}"
+
+        s = re.sub(
+            r"(?<![가-힣])([가-힣]+(?:으신|[가나다라마바사아자차카타파하러워여해되보주오가드쓰크트프흐기리미비시지치키피히우추푸루누두무부수]신))([가-힣]{2,})",
+            _split_honorific_shin_modifier,
+            s,
+        )
         s = re.sub(
             r"([가-힣]+(?:아서도|어서도|여서도|해서도|아서는|어서는|여서는|해서는|아서만|어서만|여서만|해서만|아서|어서|여서|해서|봐서|와서|가서|나서|돼서|내려서|올라서|열려서|닫혀서|밀려서|막혀서|걸려서|풀려서|니까|지만|는데|은데|던데|면서|자마자|려고|도록|으러|길래|거든|잖아|끝나면|끝나고|마치면|마치고|으시면|시면|나면|으면|다면|오면|가면|보면|하면|되면|주신|하신|오신|가신|보신|드신|만든|먹은|입은|들은))(?=(?![요서도만는\s.,?!:;~^)])[가-힣]{2,})",
             r"\1 ",
@@ -4207,9 +4336,16 @@ def _fix_korean_spacing_general(s: str) -> str:
                     continue
                 if right[0] in "이가은는을를의에로와과도만" and (left + right[0])[:-1] in ("떡볶이", "핫도그", "고양이", "강아지", "호랑이", "원숭이", "어린이", "할머니", "할아버지", "선생님"):
                     continue
-                if josa == "만" and right.startswith(("족", "큼", "남", "두", "화", "점", "원", "명", "개", "건")):
+                if josa == "만" and right.startswith(("들", "드", "든", "듭", "나", "났", "난", "날", "져", "지", "진", "질", "족", "큼", "남", "두", "화", "점", "약", "료", "기", "능", "성", "원", "명", "개", "건", "세", "찬")):
                     continue
-                if josa == "도" and right.startswith("록"):
+                if josa == "도" and right.startswith(("록", "와", "왔", "운", "우", "착", "전", "움", "입", "로", "시", "구", "서", "망", "달", "출")):
+                    continue
+                if josa == "의" and left.endswith(("문의", "논의", "협의", "동의", "합의", "주의", "유의", "정의", "강의", "건의", "항의", "결의", "심의", "발의", "제의", "의뢰")) and right.startswith(("하", "해", "했", "한", "할", "합", "드", "주", "받", "되", "된", "될", "됨")):
+                    continue
+                if josa == "와" and (
+                    left.endswith(("나와", "들어와", "올라와", "내려와", "돌아와", "다녀와", "찾아와", "가져와", "데려와", "사과", "통화", "대화", "변화", "강화", "완화", "진화", "소화", "조화", "평화", "문화", "영화", "만화", "전화", "신화", "동화", "백화"))
+                    and re.match(r"^(?:서|요|다$|주|보|드|하|해|했|한|할|합|되|된|될|됨|점)", right)
+                ):
                     continue
                 if josa in ("는", "은") and right.startswith(("지", "데", "가", "걸", "다", "바", "군", "구나", "구먼", "듯", "마는")):
                     continue
@@ -4225,7 +4361,7 @@ def _fix_korean_spacing_general(s: str) -> str:
                         continue
                 if josa == "가" and (
                     left.endswith(("나가", "들어가", "올라가", "내려가", "돌아가", "지나가", "다가가", "따라가", "가져가"))
-                    or re.match(r"^(?:서|고|며|면|면서|니까|지만|는데|다$|요$|자$|라$|니$|야$|지$|네$|군|겠|았|었|셨)", right)
+                    or re.match(r"^(?:서|고|며|면|면서|니까|지만|는데|다$|요$|자$|라$|니$|야$|지$|네$|군|겠|았|었|셨|져|진|질|지고|지러|르쳐|르치|리켜|능하|능한|득하|만히)", right)
                 ):
                     continue
                 if josa in ("을", "를") and left in _NOUN_FALSE_EUL_WORDS:
@@ -4490,6 +4626,7 @@ def _replace_edit_control_current_line_atomic(
     allow_iron: bool = True,
     prefer_full_doc: bool = False,
     allow_typo_morph: bool = True,
+    ensure_trailing_space: bool = False,
 ) -> tuple[bool, str, str, str | None]:
     """
     [메모장(Edit/RichEditD2DPT) 0.2ms 무지연 원자적(Atomic) 줄·드래그 성형 엔진]
@@ -4571,7 +4708,11 @@ def _replace_edit_control_current_line_atomic(
         if morphed.rstrip(" ") == target_line.rstrip(" ") or target_lang is None:
             return False, target_line, target_line, None
 
-        final_out = (morphed.rstrip(" ") + " ") if auto_triggered else morphed
+        if auto_triggered:
+            want_sp = ensure_trailing_space or target_line.endswith(" ")
+            final_out = (morphed.rstrip(" ") + " ") if want_sp else morphed.rstrip(" ")
+        else:
+            final_out = morphed
         if not is_rich and "\n" in final_out:
             final_out_win = final_out.replace("\r\n", "\n").replace("\n", "\r\n")
         else:
@@ -4611,38 +4752,39 @@ def _replace_edit_control_current_line_atomic(
 def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bool = False) -> bool:
     """
     [메모장(notepad.exe) 전용 Enter(줄바꿈) 직전 줄 무충돌 띄어쓰기·성형 엔진]
-    - 메신저·브라우저(Enter=전송)는 절대 건드리지 않고 오직 메모장 멀티라인 Edit/RichEditD2DPT에서만 발동합니다.
-    - 스페이스바 없이 줄 끝에서 바로 Enter를 쳤을 때('한국어교착어음운규칙과' + Enter) 방금 완성된 윗줄을 0.2ms 원자적으로 띄어쓰기하고
-      커서는 새 줄 맨 앞 위치를 그대로 유지합니다.
+    - 메신저·카톡(Enter=전송)이나 노션 블록 에디터(Enter=새 블록 생성)는 절대 건드리지 않고 오직 메모장(notepad.exe)에서만 발동합니다.
+    - 한글 IME 조합 확정 및 Win11 탭 메모장(RichEditD2DPT) 줄바꿈 커밋이 실제로 완료되어 커서가 아랫줄 맨 앞(s_pos == cur_line_start)으로
+      내려온 시점을 정확히 확인한 뒤, 방금 완성된 윗줄(cur_line_idx - 1)을 0.2ms 원자적으로 띄어쓰기·성형합니다.
     """
     if not edit_child or not u32.IsWindow(edit_child):
         return False
     try:
-        if (u32.GetWindowLongW(edit_child, -16) & 0x0004) == 0:
-            return False
-        time.sleep(0.014)
-        full_text, idx_text, is_rich = _get_edit_full_text_and_index_str(edit_child)
-        if not idx_text:
-            return False
+        full_text = ""
+        idx_text = ""
+        s_pos = 0
+        e_pos = 0
+        cur_line_idx = 0
+        ready = False
         s_dw = wintypes.DWORD(0)
         e_dw = wintypes.DWORD(0)
-        u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
-        s_pos, e_pos = s_dw.value, e_dw.value
-        if s_pos != e_pos:
-            return False
-        cur_line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
-        if cur_line_idx < 1:
-            time.sleep(0.012)
-            full_text, idx_text, is_rich = _get_edit_full_text_and_index_str(edit_child)
+        for _ in range(7):
+            time.sleep(0.014)
+            full_text, idx_text, _ = _get_edit_full_text_and_index_str(edit_child)
             if not idx_text:
-                return False
+                continue
             u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
             s_pos, e_pos = s_dw.value, e_dw.value
             if s_pos != e_pos:
-                return False
+                continue
             cur_line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
             if cur_line_idx < 1:
-                return False
+                continue
+            cur_line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, cur_line_idx, 0)
+            if cur_line_start >= 0 and s_pos == cur_line_start:
+                ready = True
+                break
+        if not ready:
+            return False
 
         prev_idx = cur_line_idx - 1
         prev_start = u32.SendMessageW(edit_child, EM_LINEINDEX, prev_idx, 0)
@@ -4671,7 +4813,7 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
                         k_chk = eng_word_to_kor(e_chk)
                         if k_chk and is_valid_korean_word(k_chk):
                             eng_typo_cnt += 1
-                            if len(e_chk) >= 9 and len(k_chk) >= 4:
+                            if len(e_chk) >= 8 and len(k_chk) >= 4:
                                 has_long_4syl_eng = True
             if eng_typo_cnt >= 2 or has_long_4syl_eng:
                 morphed_p, lang_p = morph_korean_english_text_with_direction(prev_str)
@@ -7263,7 +7405,7 @@ def main() -> None:
 
                         if curr_typo is not None:
                             should_trigger = False
-                            is_long_4syl = bool(curr_typo["target_ko"] and len(word_cand) >= 9 and curr_typo.get("kor_len", 0) >= 4)
+                            is_long_4syl = bool(curr_typo["target_ko"] and len(word_cand) >= 8 and curr_typo.get("kor_len", 0) >= 4)
                             if cur_line is not None:
                                 line_tokens = cur_line.strip().split()
                                 if len(line_tokens) >= 2:
@@ -7303,7 +7445,9 @@ def main() -> None:
                                 pending_first_typo = None
 
                                 if edit_child:
-                                    ok_ed, raw_ed, out_ed, lang_ed = _replace_edit_control_current_line_atomic(edit_child, auto_triggered=True)
+                                    ok_ed, raw_ed, out_ed, lang_ed = _replace_edit_control_current_line_atomic(
+                                        edit_child, auto_triggered=True, ensure_trailing_space=True
+                                    )
                                     if ok_ed:
                                         if target_ko and not prev_raw:
                                             last_auto_morph_state = {
@@ -7369,7 +7513,7 @@ def main() -> None:
                                 and (now - last_paste_ts) > 2.0
                             ):
                                 ok_sp, raw_sp, out_sp, _ = _replace_edit_control_current_line_atomic(
-                                    edit_child, auto_triggered=True, allow_typo_morph=False
+                                    edit_child, auto_triggered=True, allow_typo_morph=False, ensure_trailing_space=True
                                 )
                                 if ok_sp:
                                     complete_feature_action_success("auto_typo_morph_2words")
