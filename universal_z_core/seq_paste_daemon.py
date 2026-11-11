@@ -3785,15 +3785,20 @@ def _fix_korean_spacing_general(s: str) -> str:
         r"\1 ",
         s,
     )
-    # 4) '-하게 / -롭게 / -스레 / -히' 부사형 어미 + 용언 붙여쓰기('예리하게캐치해' -> '예리하게 캐치해') 분리
+    # 4) '-하게 / -롭게 / -스레 / -히 / -도록' 부사형·연결어미 + 용언 붙여쓰기('예리하게캐치해' -> '예리하게 캐치해') 분리
     s = re.sub(
-        r"([가-힣]{2,}(?:하게|롭게|스레|답게|주셔서|해주셔서|주시고|해주시고))(?=(?!주|보|드|지|도|는|만|요)[가-힣]{2,})",
+        r"([가-힣]{2,}(?:하게|롭게|스레|답게|도록|게끔|주셔서|해주셔서|주시고|해주시고))(?=(?!주|보|드|지|도|는|만|요)[가-힣]{2,})",
         r"\1 ",
         s,
     )
-    # 5) 관형사형('완전한', '정확한', '깔끔한', '안전한', '익숙한', '다양한', '특별한', '중요한', '필요한', '간단한', '복잡한', '자세한', '상세한', '동일한', '유일한', '확실한', '분명한', '명확한', '충분한', '적절한', '유용한', '강력한', '새로운', '아름다운', '자연스러운') + 명사 붙여쓰기 분리
+    # 5) 범용 관형사형('-스러운 / -로운 / -다운') + 명사 붙여쓰기 분리 ('자연스러운어절' -> '자연스러운 어절', '새로운문장' -> '새로운 문장')
     s = re.sub(
-        r"(?<![가-힣])([가-힣]{2,}(?:한|된|할|로운|스러운|같은|없는|있는))(?=(?:자막|목소리|성우|영상|음성|글자|문장|문단|문서|파일|폴더|화면|창|기능|성능|효과|결과|상태|모습|느낌|분위기|마음|생각|의견|내용|정보|자료|데이터|시스템|서비스|프로그램|어플|앱|모델|기술|방법|방식|구조|설계|기획|특허|사업|아이템|시장|고객|유저|사람|회원|멤버|동료|가족|친구|선생님|대표님|매니저님|문제|오류|버그|원인|해결책|대안|선택|결정|판단|기준|원칙|규칙|조건|환경|상황|과정|절차|단계|순서|시간|기간|일정|계획|목표|성공|승리|변화|발전|성장|기회|가치|이익|수익|비용|가격|요금|할인|혜택|선물|보상|응원|관심|사랑|행복|건강|피부|비타민|햇빛|자외선|산책|운동|음식|식단|습관|생활|일상|하루|오늘|내일|미래|세상)[을를이가은는도의에로와과도만\s.,?!:;)]|$)",
+        r"(?<![가-힣])([가-힣]{2,}스러운|[가-힣]{1,6}로운|[가-힣]{2,}다운)(?=[가-힣]{2,})",
+        r"\1 ",
+        s,
+    )
+    s = re.sub(
+        r"(?<![가-힣])([가-힣]{2,}(?:한|된|할|같은|없는|있는))(?=(?:자막|목소리|성우|영상|음성|글자|어절|단어|문장|문단|문서|파일|폴더|화면|창|기능|성능|효과|결과|상태|모습|느낌|분위기|마음|생각|의견|내용|정보|자료|데이터|시스템|서비스|프로그램|어플|앱|모델|기술|방법|방식|구조|설계|기획|특허|사업|아이템|시장|고객|유저|사람|회원|멤버|동료|가족|친구|선생님|대표님|매니저님|문제|오류|버그|원인|해결책|대안|선택|결정|판단|기준|원칙|규칙|조건|환경|상황|과정|절차|단계|순서|단위|시간|기간|일정|계획|목표|성공|승리|변화|발전|성장|기회|가치|이익|수익|비용|가격|요금|할인|혜택|선물|보상|응원|관심|사랑|행복|건강|피부|비타민|햇빛|자외선|산책|운동|음식|식단|습관|생활|일상|하루|오늘|내일|미래|세상)(?=[을를이가은는도의에로와과도만\s.,?!:;가-힣)]|$))",
         r"\1 ",
         s,
     )
@@ -3803,8 +3808,19 @@ def _fix_korean_spacing_general(s: str) -> str:
         r"\1 ",
         s,
     )
-    # 7) 용언 어간 + 보조용언 '주셔서/주시고/주세요/주시면' 띄어쓰기 또는 붙여쓰기 정규화 ('캐치해 주셔 서' -> '캐치해 주셔서')
-    s = re.sub(r"([가-힣]+(?:아|어|여|해))\s*(주셔서|주시고|주세요|주시면|주신|주실|주셨)", r"\1 \2", s)
+    # 7) 용언 어간(-아/-어/-여/-해/-러/-와/-봐/-줘 등 모음조화 연결형) + 보조용언 '주셔서/주시고/주세요/주시면' 띄어쓰기 정규화 ('불러주세요' -> '불러 주세요', '확인해주세요' -> '확인해 주세요')
+    def _space_aux_juseyo(m: re.Match) -> str:
+        stem_part = m.group(1)
+        aux_part = m.group(2)
+        last_ch = stem_part[-1]
+        c_code = ord(last_ch) - 0xAC00
+        jong_c = c_code % 28
+        jung_c = (c_code // 28) % 21
+        if jong_c == 0 and jung_c in (0, 1, 4, 5, 6, 9, 10, 14, 15):
+            return f"{stem_part} {aux_part}"
+        return m.group(0)
+
+    s = re.sub(r"([가-힣]{2,})\s*(주셔서|주시고|주세요|주시면|주신|주실|주셨)", _space_aux_juseyo, s)
     s = re.sub(r"날씨가\s*조아서", "날씨가 좋아서", s)
     s = re.sub(r"조아서(?=\s|$|[.,?!~^]|[가-힣])", "좋아서", s)
     s = re.sub(r"조아요(?=\s|$|[.,?!~^])", "좋아요", s)
@@ -3984,35 +4000,122 @@ def _fix_korean_spacing_general(s: str) -> str:
         # 개별 단어를 일일이 정규식으로 등록하지 않아도, 한국어 교착어 문법(조사·어미 닫힌 집합)과
         # AI 토크나이저 어절 시작 사전을 교차 검증하여 미등록 문장까지 범용으로 띄어쓰기 교정!
         s = re.sub(r"띄워\s*쓰기", "띄어쓰기", s)
-        # 잘못 띄어진 서술격조사 선어말어미('말이 었지' -> '말이었지') 및 1음절 격조사·보조사 복원 ('떡볶이 가나왔어요' -> '떡볶이가 나왔어요', '핫도 그가 나왔어요' -> '핫도그가 나왔어요', '내일 의메뉴는' -> '내일의 메뉴는')
+        # 잘못 띄어진 서술격조사·연결어미·보조사 복원 ('말이 었지' -> '말이었지', '되는 지확인해' -> '되는지 확인해', '메모장이 나노션에서' -> '메모장이나 노션에서')
         s = re.sub(r"([가-힣]+이)\s+((?:었|셨|겠)[가-힣]+)", r"\1\2", s)
-        # 단, 뒷부분이 실제 연결어미('가서', '와서', '봐서', '해서', '나서')인 경우('병원에 가서')는 절대 앞 단어에 붙이지 않음!
-        s = re.sub(r"([가-힣]{2,})\s+([이가은는을를의])(?=(?!(?:서|니까|지만|면|며|면서|고|야|요|다|네|군|라|자)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})", r"\1\2 ", s)
+        s = re.sub(
+            r"([가-힣]+(?:는|은|던|건|할|될|볼|갈|올|줄|실|일|을))\s+지(?=\s*(?:확인|점검|체크|검증|테스트|알|모르|몰라|보|봐|궁금|생각|판단|비교|살펴|찾아|물어|여쭤))",
+            r"\1지 ",
+            s,
+        )
+        s = re.sub(
+            r"([가-힣]{2,}이)\s+나(?=(?!(?:타나|타났|오|와|왔|온|올|가|갔|간|갈|서|선|누|눠|눴|빠|쁜|쁘|아|았))[가-힣]{1,8}(?:에서|에게|한테|으로|로|에|은|는|이|가|을|를|의|도|만|과|와))",
+            r"\1나 ",
+            s,
+        )
+        # 단, 뒷부분 자체가 정상 한국어 어휘('이동했습니다', '가족들과', '이번주', '가능합니다', '의견을', '은행에서')이거나 앞 어절이 이미 조사·어미로 끝나면 절대 앞 단어에 붙이지 않음!
+        def _rejoin_broken_single_josa(m_rj: re.Match) -> str:
+            left_w, j_ch, rest_w = m_rj.group(1), m_rj.group(2), m_rj.group(3)
+            if left_w.endswith(("에", "로", "는", "은", "이", "가", "을", "를", "도", "만", "와", "과", "고", "서", "면", "지", "께", "한테", "에게", "에서", "으로", "부터", "까지")):
+                return m_rj.group(0)
+            if left_w in ("오늘", "내일", "어제", "모레", "이번", "다음", "지난", "올해", "작년", "내년", "지금", "방금", "바로", "다시", "먼저", "함께", "같이") and j_ch != "의":
+                return m_rj.group(0)
+            l_jong = (ord(left_w[-1]) - 0xAC00) % 28
+            if j_ch in ("이", "은", "을") and l_jong == 0:
+                return m_rj.group(0)
+            if j_ch in ("가", "는", "를") and l_jong != 0:
+                return m_rj.group(0)
+            full_r = j_ch + rest_w
+            if full_r[:2] in ("이동", "이번", "이제", "이유", "이름", "이상", "이용", "이해", "이후", "이미", "이슈", "이론", "이하", "이전", "이곳", "이날", "이때", "가족", "가방", "가격", "가게", "가능", "가장", "가을", "가수", "가지", "가져", "가까", "가끔", "가슴", "가운데", "가정", "의견", "의미", "의사", "의자", "의료", "의류", "의무", "의문", "의식", "의지", "은행", "은혜"):
+                return m_rj.group(0)
+            if full_r in AI_ENGINE.ko_word_starts or full_r in AI_ENGINE.ko_subwords:
+                return m_rj.group(0)
+            for ws_chk in AI_ENGINE.ko_word_starts:
+                if len(ws_chk) >= 2 and full_r.startswith(ws_chk):
+                    return m_rj.group(0)
+            return f"{left_w}{j_ch} {rest_w}"
+
+        s = re.sub(
+            r"([가-힣]{2,})\s+([이가은는을를의])((?!(?:서|니까|지만|면|며|면서|고|야|요|다|네|군|라|자)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})",
+            _rejoin_broken_single_josa,
+            s,
+        )
         s = re.sub(r"(?<![가-힣])핫도\s+그(?=[가은는을를도만로\s.,?!:;~^)]|$)", "핫도그", s)
         s = re.sub(r"(?<![가-힣])떡볶\s+이(?=[가은는을를도만로\s.,?!:;~^)]|$)", "떡볶이", s)
         # 지시관형사('그/이/저') + 일반 인칭·사물 명사 분리 ('그사람' -> '그 사람')
         s = re.sub(r"(?<![가-힣])(그|이|저)(?=(?:사람|분|친구|아이|애|남자|여자|학생|선생님|가게|식당|카페|회사|병원|학교|집|방|곳|문제|일|말|생각|마음|이야기|얘기|소식|영화|책|노래|음식|메뉴)[이가은는을를의에에서으로로와과도만\s.,?!:;~^)])", r"\1 ", s)
         s = re.sub(r"(?<![가-힣])(내가|네가|제가|우리가|누가|나는|너는|저는|우리는|나의|너의|저의|우리의|그의|그녀의|오늘의|내일의|어제의|올해의|이번의)(?=[가-힣]{2,})", r"\1 ", s)
         s = re.sub(r"(?<![가-힣])(오늘|내일|모레|어제|그제)(?=(?![은는이가의도만부터까지날\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"(띄어쓰기)(?=(?![가을를은는도만의에로와과\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
+        # 자율 명사·어휘 경계 분리 ('띄어쓰기되는지' -> '띄어쓰기 되는지', '복사붙여넣기' -> '복사 붙여넣기', '한국어교착어음운규칙과' -> '한국어 교착어 음운 규칙과', '어절단위로' -> '어절 단위로')
+        s = re.sub(r"(띄어쓰기)(?=(?![가을를은는도만의에로와과이나\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
+        s = re.sub(r"(복사)(?=(?:붙여넣기|하기|해서|한|할|후)(?=[가-힣\s.,?!:;~^)]|$))", r"\1 ", s)
+        s = re.sub(
+            r"(?<![가-힣])(한국어|교착어|외래어|외국어|표준어|고유어|한자어|일본어|중국어|프랑스어|독일어|스페인어|러시아어|베트남어)(?=(?!(?:가|는|를|의|와|로|에|에서|도|만|나|랑|보다|처럼|부터|까지|입니|이다|이지|이라)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        s = re.sub(
+            r"(음운|형태소|어절|문장|문단|단어|글자|자음|모음|받침|항목|단계|메모장|탐색기|바탕화면|클립보드|스페이스바|백스페이스|귀신창|귀신검색창)(?=(?:규칙|단위|기준|순서|구조|체계|현상|변화|결합|분리|경계|목록|기능|오류|버그|설정|방법|안내|설명|점검|확인|테스트)(?=[이가은는을를의에에서으로로와과도만이나\s.,?!:;~^)]|$))",
+            r"\1 ",
+            s,
+        )
+        s = re.sub(r"([가-힣]{2,})(?=그대로(?=[가-힣\s.,?!:;~^)]|$))", r"\1 ", s)
+        s = re.sub(r"(?<![가-힣])(그대로)(?=(?![는도만요이다입\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
+        # 간접의문·연결어미 '-는지 / -은지 / -던지 / -건지 / -ㄹ지' 뒤 분리 ('되는지확인해' -> '되는지 확인해')
+        s = re.sub(
+            r"([가-힣]{1,12}(?:는지|은지|던지|건지|할지|될지|볼지|갈지|올지|줄지|실지|일지|을지))(?=(?![라요도만는가\s.,?!:;~^)])[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        # 의존명사 '때' ('눌렀을때' -> '눌렀을 때', '할때에는원문' -> '할 때에는 원문') 및 관형사형 + '뒤/후/전' ('선택한뒤귀신창을' -> '선택한 뒤 귀신창을')
+        s = re.sub(
+            r"([가-힣]{1,12}(?:았을|었을|였을|했을|렀을|웠을|쳤을|졌을|겼을|렸을|섰을|났을|왔을|갔을|봤을|썼을|탔을|줬을|뒀을|먹었을|있을|없을|할|될|볼|갈|올|살|실))(?=때(?:에는|에도|에|는|도|만|마다|부터|까지)?(?=[\s.,?!:;~^가-힣)]|$))",
+            r"\1 ",
+            s,
+        )
+        s = re.sub(r"(?<=\s)(때(?:에는|에도|에|는|도|만|마다|부터|까지))(?=[가-힣]{2,})", r"\1 ", s)
+        s = re.sub(r"(?<=\s)(때)(?=(?![에는도만마부까이가을를의\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
+        s = re.sub(
+            r"([가-힣]{2,}(?:한|된)|[가-힣]*(?:누른|고른|만든|읽은|보낸|받은|찍은|열린|닫힌|바뀐|끝난|마친|하기|되기))\s*(뒤|후)(?=(?:에|에는|에도)?(?=[\s.,?!:;~^가-힣)]|$))",
+            r"\1 \2",
+            s,
+        )
+        s = re.sub(
+            r"([가-힣]*(?:선택한|입력한|클릭한|복사한|저장한|설치한|실행한|수정한|배포한|완료한|확인한|변경한|삭제한|추가한|호출한|하기|되기))\s*(전)(?=(?:에|에는|에도)?(?=[\s.,?!:;~^가-힣)]|$))",
+            r"\1 \2",
+            s,
+        )
+        s = re.sub(r"(?<=\s)(뒤|후|전)(?=(?![에의는도만\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
+        s = re.sub(r"(?<=\s)((?:뒤|후|전)(?:에|에는|에도))(?=[가-힣]{2,})", r"\1 ", s)
+        # 상용 부사('바로/다시/먼저/함께/같이/직접/자주/항상/계속/빨리/천천히/충분히/반드시') 뒤 용언 붙여쓰기 분리 ('바로말씀해주세요' -> '바로 말씀해 주세요')
+        s = re.sub(
+            r"(?<![가-힣])(바로|다시|먼저|함께|같이|직접|자주|항상|계속|빨리|천천히|열심히|충분히|완전히|정확히|확실히|반드시)(?=(?![는도만요이\s.,?!:;~^)])[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        # '에 대해서도 / 에 대한 / 에 따라 / 에 의해 / 에 비해 / 에 맞춰' 분리 ('문장에대해서도' -> '문장에 대해서도')
+        s = re.sub(
+            r"([가-힣]{2,}에)(?=(?:대해서도|대해서는|대해서|대해도|대해|대한|관해서도|관해서는|관해서|관해|관한|따라서|따라|따른|의해서|의해|의한|비해서|비해|비한|맞춰서|맞춰|맞춘)(?=[가-힣\s.,?!:;~^)]|$))",
+            r"\1 ",
+            s,
+        )
         s = re.sub(r"([가-힣]{2,})(?=(?:못해서|못하|못했|못한|못할|못받|못가|못오|못보|못먹|못자|안해서|안하|안했|안한|안할|안되|안돼|안됐|끝나면|끝나고|끝나서|마치면|마치고|먹으러|마시러|보러|사러|찾으러|놀러|위해서는|위해서|위해)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
         s = re.sub(r"(?<![가-힣])(못|안)(?=(?:해서|하|했|한|할|받|가|오|보|먹|자|되|돼|됐)[가-힣]*(?=[\s.,?!:;~^)]|$))", r"\1 ", s)
         s = re.sub(r"(?<![가-힣])(위해서는|위해서|위해)(?=[가-힣]{2,})", r"\1 ", s)
         s = re.sub(r"([가-힣]{2,})(?=(?:중이라서|중이라|중이니|중인데|중입니|중이에|중이오)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
-        # G1) 2음절 이상 복합 조사('에서/에게/한테/께서/으로/부터/까지/보다/처럼/만큼/조차/마저/에는/에도/에서는/으로는/이라서/라서') 및 시간·장소+'에' 뒤 범용 어절 분리
+        # G1) 2음절 이상 복합 조사('에서/에게/한테/께서/으로/부터/까지/보다/처럼/만큼/조차/마저/에는/에도/에서는/으로는/이라서/라서/이나/이랑') 및 시간·장소+'에' 뒤 범용 어절 분리
         s = re.sub(
-            r"([가-힣]{1,6}(?:에서|에게|한테|께서는|께서|으로|부터|까지|보다|처럼|만큼|조차|마저|에는|에도|에서는|으로는|이라서|라서))(?=(?![는도만요의가을를\s.,?!:;~^)])[가-힣]{2,})",
+            r"([가-힣]{1,12}(?:에서|에게|한테|께서는|께서|으로는|으로도|으로서|으로써|으로부터|으로|부터|까지|보다|처럼|만큼|조차|마저|에는|에도|에서는|이라서|라서|이라도|이나마))(?=(?![는도만요의가을를\s.,?!:;~^)])[가-힣]{2,})",
             lambda m: m.group(0) if (m.group(0) in AI_ENGINE.ko_subwords) else (m.group(1) + " "),
             s,
         )
         s = re.sub(
-            r"(?<![가-힣])((?:아침|점심|저녁|새벽|주말|평일|오전|오후|이번|다음|중간|마지막|학교|회사|병원|은행|식당|카페|공원|시장|매장|현장|사무실|회의실|집|방|교실|거실|부엌|화장실|역|공항|도서관|백화점|마트|약국|헬스장|운동장)에)(?=(?![는도만서\s.,?!:;~^)])[가-힣]{2,})",
+            r"(?<![가-힣])((?:아침|점심|저녁|새벽|낮|밤|봄|여름|가을|겨울|주말|평일|주중|평소|최근|요즘|처음|나중|오전|오후|이번|다음|중간|마지막|학교|회사|병원|은행|식당|카페|공원|시장|매장|현장|사무실|회의실|집|방|교실|거실|부엌|화장실|역|공항|도서관|백화점|마트|약국|헬스장|운동장)에)(?=(?![는도만서\s.,?!:;~^)])[가-힣]{2,})",
             r"\1 ",
             s,
         )
-        # G2) 연결어미·관형사형 어미 뒤 범용 어절 분리
+        # G2) 연결어미·관형사형 어미 뒤 범용 어절 분리 ('대해서도정확하게' -> '대해서도 정확하게')
         s = re.sub(
-            r"([가-힣]+(?:아서|어서|여서|해서|봐서|와서|가서|나서|돼서|내려서|올라서|열려서|닫혀서|밀려서|막혀서|걸려서|풀려서|니까|지만|는데|은데|던데|면서|자마자|려고|도록|으러|길래|거든|잖아|끝나면|끝나고|마치면|마치고|으시면|시면|나면|으면|다면|오면|가면|보면|하면|되면|주신|하신|오신|가신|보신|드신|만든|먹은|입은|들은))(?=(?![요서도만\s.,?!:;~^)])[가-힣]{2,})",
+            r"([가-힣]+(?:아서도|어서도|여서도|해서도|아서는|어서는|여서는|해서는|아서만|어서만|여서만|해서만|아서|어서|여서|해서|봐서|와서|가서|나서|돼서|내려서|올라서|열려서|닫혀서|밀려서|막혀서|걸려서|풀려서|니까|지만|는데|은데|던데|면서|자마자|려고|도록|으러|길래|거든|잖아|끝나면|끝나고|마치면|마치고|으시면|시면|나면|으면|다면|오면|가면|보면|하면|되면|주신|하신|오신|가신|보신|드신|만든|먹은|입은|들은))(?=(?![요서도만는\s.,?!:;~^)])[가-힣]{2,})",
             r"\1 ",
             s,
         )
@@ -4060,14 +4163,44 @@ def _fix_korean_spacing_general(s: str) -> str:
             "이전", "이제", "이차", "이하", "이해", "이후", "그가", "그는", "그의", "그를", "그에", "그도", "그만",
         }
 
+        _NOUN_FALSE_RO_WORDS = {
+            "도로", "경로", "통로", "회로", "진로", "과로", "피로", "종로", "구로", "선로", "항로", "활로",
+            "난로", "화로", "폭로", "토로", "노로", "포로", "별도로", "스스로", "따로", "바로", "서로", "새로",
+            "세로", "가로", "제로", "프로", "인트로", "매크로", "마이크로",
+        }
+        _NOUN_FALSE_EUL_WORDS = {
+            "가을", "마을", "겨울", "노을", "방울", "거울", "저울", "구슬", "이슬", "사슬",
+            "하늘", "마늘", "바늘", "그늘", "오늘",
+        }
+        _EXTRA_KO_WORD_STARTS = {
+            "띄어쓰기", "붙여넣기", "새로고침", "스페이스바", "백스페이스", "클립보드", "바탕화면", "탐색기", "메모장", "노션",
+            "귀신창", "귀신검색창", "비밀번호", "아이디", "이메일", "한국어", "교착어", "외래어", "음운", "형태소", "어절",
+            "문장", "문단", "단어", "글자", "규칙", "단위", "원문", "확인", "점검", "적용", "작동", "실행", "유지", "복구",
+        }
+        _NA_VERB_PREFIX_RE = re.compile(r"^나(?:왔|와|오|온|올|타나|타났|타난|타날|가|갔|간|갈|서|선|설|누|눠|눴|빠|쁜|쁘|아|았|은)")
+
         def _split_unspaced_chunk_by_grammar_and_vocab(match_chunk: re.Match) -> str:
             chunk = match_chunk.group(0)
-            if len(chunk) < 4 or chunk in AI_ENGINE.ko_subwords or chunk in AI_ENGINE.ko_word_starts:
+            if len(chunk) < 4 or chunk in AI_ENGINE.ko_subwords or chunk in AI_ENGINE.ko_word_starts or chunk in _EXTRA_KO_WORD_STARTS:
                 return chunk
             candidate_splits: list[int] = []
-            for idx in range(2, min(len(chunk) - 1, 7)):
+            for idx in range(2, len(chunk)):
                 left = chunk[:idx]
                 right = chunk[idx:]
+                if right[0] in "었았였겠셨":
+                    continue
+
+                # (A) 2음절 보조사·격조사('이나/이랑') 우선 경계 판별 ('메모장이나노션에서' -> '메모장이나 노션에서', 단 '고기반찬이나왔어요'는 '나왔어요' 동사이므로 제외!)
+                if len(left) >= 3 and left.endswith(("이나", "이랑")) and len(right) >= 2:
+                    if left.endswith("이나") and _NA_VERB_PREFIX_RE.match("나" + right):
+                        pass
+                    else:
+                        stem2 = left[:-2]
+                        s2_jong = (ord(stem2[-1]) - 0xAC00) % 28
+                        if s2_jong != 0 and not right.startswith(("마", "요")) and right[0] not in "이가은는을를의에로와과도만":
+                            candidate_splits.append(idx)
+                            break
+
                 stem = left[:-1]
                 josa = left[-1]
                 if left in _NOUN_FALSE_JOSA_WORDS:
@@ -4080,67 +4213,98 @@ def _fix_korean_spacing_general(s: str) -> str:
                     continue
                 if josa == "만" and right.startswith(("족", "큼", "남", "두", "화", "점", "원", "명", "개", "건")):
                     continue
-                # 선어말어미('었/았/였/겠/셨')는 독립 어절의 첫 글자가 될 수 없으므로 분리 영구 차단 ('말이었지', '선생님이셨어요' 등)
-                if right[0] in "었았였겠셨":
+                if josa == "도" and right.startswith("록"):
                     continue
-                # 서술격조사 '이다' 활용형('말이었지/학생이다/사람이고/말이지/사실이네/학생이라서/뜻이야/사람이에요/학생이니까/말이지만') 오분리 차단
-                if josa == "이" and re.match(
-                    r"^(?:었|았|였|겠|셨|다$|고$|지$|네$|군$|구나$|구먼$|라(?:서|며|고|도|니|야|는|ㄴ)?$|야$|에?요$|예?요$|니까$|니$|며$|면서$|면$|지만$|나$|든$|든지$|거나$|므로$|기[에는도만야]?$|자$)",
-                    right,
+                if josa in ("는", "은") and right.startswith(("지", "데", "가", "걸", "다", "바", "군", "구나", "구먼", "듯", "마는")):
+                    continue
+                # 서술격조사 '이다' 활용형 및 2음절 조사('이나/이라도/이라서/이랑/이며/이고/이자/이든/이거나/이야/이지만/이니까') 오분리 차단 (단, '나왔어요/나타났다' 등 '나-' 동사는 분리 허용!)
+                if josa == "이":
+                    if right.startswith("나"):
+                        if not _NA_VERB_PREFIX_RE.match(right):
+                            continue
+                    elif re.match(
+                        r"^(?:라도|라서|라|란|라는|랑|며|고|자|든|든지|거나|야|지만|니까|니|면|면서|므로|기|에|에요|예요|다$|지$|네$|군|구[나먼]|었|았|였|겠|셨|ㅂ니다|입니다|습니까|입니까)",
+                        right,
+                    ):
+                        continue
+                if josa == "가" and (
+                    left.endswith(("나가", "들어가", "올라가", "내려가", "돌아가", "지나가", "다가가", "따라가", "가져가"))
+                    or re.match(r"^(?:서|고|며|면|면서|니까|지만|는데|다$|요$|자$|라$|니$|야$|지$|네$|군|겠|았|었|셨)", right)
                 ):
                     continue
-                if josa in "을를은는이가의도만와과" and len(right) >= 2:
+                if josa in ("을", "를") and left in _NOUN_FALSE_EUL_WORDS:
+                    continue
+                if josa == "로" and (
+                    left in _NOUN_FALSE_RO_WORDS
+                    or left.endswith(("프로", "트로", "크로", "브로", "드로", "플로", "글로", "슬로", "클로", "업로", "다운로"))
+                    or right[0] in "는도만서써부"
+                ):
+                    continue
+
+                if josa in "을를은는이가의도만와과로" and (len(right) >= 2 or (len(right) == 1 and josa in ("을", "를") and right in ("할", "될", "볼", "갈", "올", "줄", "살", "한", "된", "본", "간", "온", "산", "준", "실"))):
                     stem_code = ord(stem[-1]) - 0xAC00
-                    has_jong = (stem_code % 28) != 0
-                    if josa == "이" and not has_jong:
+                    jong_val = stem_code % 28
+                    has_jong = jong_val != 0
+                    if josa in ("이", "은", "을", "과") and not has_jong:
                         continue
-                    if josa == "가" and has_jong:
+                    if josa in ("가", "는", "를", "와") and has_jong:
                         continue
-                    if josa == "은" and not has_jong:
+                    if josa == "로" and jong_val not in (0, 8):
                         continue
-                    if josa == "는" and has_jong:
-                        continue
-                    if josa == "을" and not has_jong:
-                        continue
-                    if josa == "를" and has_jong:
-                        continue
-                    if josa == "과" and not has_jong:
-                        continue
-                    if josa == "와" and has_jong:
-                        continue
+
+                    if len(right) == 1:
+                        candidate_splits.append(idx)
+                        break
 
                     is_right_pred = bool(
                         re.search(
-                            r"(?:습니다|입니다|ㅂ니다|습니까|입니까|ㅂ니까|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|네요|군요|거든요|잖아요|까요|나요|세요|셨어요|셨습니다|왔어요|갔어요|났어요|봤어요|했어요|됐어요|썼어요|탔어요|췄어요|졌어요|렸어요|겼어요|웠어요|았어요|었어요|였어요|아서|어서|여서|해서|니까|지만|는데|은데|던데|면서|려고|도록|으러|고|며|지|다|네|군|자|라|어|아|해|워|봐|와)$",
+                            r"(?:습니다|입니다|됩니다|합니다|ㅂ니다|습니까|입니까|ㅂ니까|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|네요|군요|거든요|잖아요|까요|나요|세요|셨어요|셨습니다|왔어요|갔어요|났어요|봤어요|했어요|됐어요|썼어요|탔어요|췄어요|졌어요|렸어요|겼어요|웠어요|았어요|었어요|였어요|았을|었을|였을|했을|렀을|웠을|쳤을|졌을|겼을|렸을|났을|왔을|갔을|봤을|썼을|아서|어서|여서|해서|니까|지만|는데|은데|던데|는지|은지|면서|려고|도록|하게|으러|고|며|지|다|네|군|자|라|어|아|해|워|봐|와)$",
                             right,
                         )
                     )
-                    # 뒷부분이 또 다른 체언(1~4음절) + 조사('은/는/이/가/을/를/의/에/에서/으로/로/도/만')로 끝나는 경우 (예: '강아지가' + '공원에서', '고양이가' + '잠을', '선생님이' + '숙제를')
-                    is_right_noun_josa = bool(
-                        re.fullmatch(
-                            r"[가-힣]{1,4}(?:에서|에게|한테|으로|에는|에도|은|는|이|가|을|를|의|에|로|도|만|와|과)",
-                            right,
+                    # 뒷부분이 또 다른 체언(1~10음절) + 조사로 끝나거나 체언+조사+후속절로 시작하는 경우 ('강아지가공원에서', '스페이스바를눌렀을', '문서를선택한')
+                    is_right_noun_josa = (
+                        bool(
+                            re.match(
+                                r"^[가-힣]{1,10}(?:에서|에게|한테|으로|에는|에도|이나|이랑|은|는|이|가|을|를|의|에|로|도|만|와|과)(?:[가-힣]{2,}|$)",
+                                right,
+                            )
                         )
-                    ) and right[0] not in "이가은는을를의에로와과도만"
+                        and right[0] not in "이가은는을를의에로와과도만"
+                    )
+                    is_right_obj_verb = (
+                        josa in ("을", "를")
+                        and len(stem) >= 2
+                        and right[0] not in "이가은는을를의에로와과도만"
+                    )
                     is_right_vocab_start = False
                     if right not in _RIGHT_BAD_JOSA_STARTS:
-                        if right in AI_ENGINE.ko_word_starts:
+                        if right in AI_ENGINE.ko_word_starts or right in _EXTRA_KO_WORD_STARTS:
                             is_right_vocab_start = True
                         else:
-                            for ws in AI_ENGINE.ko_word_starts:
-                                if len(ws) >= 2 and ws not in _RIGHT_BAD_JOSA_STARTS and right.startswith(ws):
+                            for ws in _EXTRA_KO_WORD_STARTS:
+                                if right.startswith(ws):
                                     is_right_vocab_start = True
                                     break
-                    if is_right_pred or is_right_noun_josa or is_right_vocab_start:
+                            if not is_right_vocab_start:
+                                for ws in AI_ENGINE.ko_word_starts:
+                                    if len(ws) >= 2 and ws not in _RIGHT_BAD_JOSA_STARTS and right.startswith(ws):
+                                        is_right_vocab_start = True
+                                        break
+                    if is_right_pred or is_right_noun_josa or is_right_obj_verb or is_right_vocab_start:
                         candidate_splits.append(idx)
+                        break
 
             if candidate_splits:
                 best_idx = candidate_splits[0]
                 return f"{chunk[:best_idx]} {chunk[best_idx:]}"
             return chunk
 
-        for _ in range(2):
-            s = re.sub(r"[가-힣]{4,}", _split_unspaced_chunk_by_grammar_and_vocab, s)
+        for _ in range(8):
+            next_s = re.sub(r"[가-힣]{4,}", _split_unspaced_chunk_by_grammar_and_vocab, s)
+            if next_s == s:
+                break
+            s = next_s
     return re.sub(r" +", " ", s).strip()
 
 
@@ -4446,6 +4610,109 @@ def _replace_edit_control_current_line_atomic(
         return True, target_line.strip(), final_out.strip(), target_lang
     except Exception:
         return False, "", "", None
+
+
+def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bool = False) -> bool:
+    """
+    [메모장(notepad.exe) 전용 Enter(줄바꿈) 직전 줄 무충돌 띄어쓰기·성형 엔진]
+    - 메신저·브라우저(Enter=전송)는 절대 건드리지 않고 오직 메모장 멀티라인 Edit/RichEditD2DPT에서만 발동합니다.
+    - 스페이스바 없이 줄 끝에서 바로 Enter를 쳤을 때('한국어교착어음운규칙과' + Enter) 방금 완성된 윗줄을 0.2ms 원자적으로 띄어쓰기하고
+      커서는 새 줄 맨 앞 위치를 그대로 유지합니다.
+    """
+    if not edit_child or not u32.IsWindow(edit_child):
+        return False
+    try:
+        if (u32.GetWindowLongW(edit_child, -16) & 0x0004) == 0:
+            return False
+        time.sleep(0.014)
+        full_text, idx_text, is_rich = _get_edit_full_text_and_index_str(edit_child)
+        if not idx_text:
+            return False
+        s_dw = wintypes.DWORD(0)
+        e_dw = wintypes.DWORD(0)
+        u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
+        s_pos, e_pos = s_dw.value, e_dw.value
+        if s_pos != e_pos:
+            return False
+        cur_line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
+        if cur_line_idx < 1:
+            time.sleep(0.012)
+            full_text, idx_text, is_rich = _get_edit_full_text_and_index_str(edit_child)
+            if not idx_text:
+                return False
+            u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
+            s_pos, e_pos = s_dw.value, e_dw.value
+            if s_pos != e_pos:
+                return False
+            cur_line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
+            if cur_line_idx < 1:
+                return False
+
+        prev_idx = cur_line_idx - 1
+        prev_start = u32.SendMessageW(edit_child, EM_LINEINDEX, prev_idx, 0)
+        prev_len = u32.SendMessageW(edit_child, EM_LINELENGTH, prev_start, 0)
+        if prev_start < 0 or prev_len < 4:
+            return False
+        utf16_bytes = idx_text.encode("utf-16-le")
+        if (prev_start + prev_len) * 2 > len(utf16_bytes):
+            return False
+        prev_str = utf16_bytes[prev_start * 2 : (prev_start + prev_len) * 2].decode("utf-16-le", errors="ignore")
+        prev_stripped = prev_str.strip()
+        if not prev_stripped or _is_protected_account_or_email_token(prev_stripped.split()[-1]):
+            return False
+
+        base_line = prev_str
+        target_lang: str | None = None
+        if allow_typo_morph:
+            toks_chk = prev_stripped.split()
+            eng_typo_cnt = 0
+            has_long_4syl_eng = False
+            for t_chk in toks_chk:
+                if _is_protected_account_or_email_token(t_chk):
+                    continue
+                for e_chk in re.findall(r"[A-Za-z]+", t_chk):
+                    if len(e_chk) >= 2 and not AI_ENGINE.is_valid_english_word(e_chk):
+                        k_chk = eng_word_to_kor(e_chk)
+                        if k_chk and is_valid_korean_word(k_chk):
+                            eng_typo_cnt += 1
+                            if len(e_chk) >= 9 and len(k_chk) >= 4:
+                                has_long_4syl_eng = True
+            if eng_typo_cnt >= 2 or has_long_4syl_eng:
+                morphed_p, lang_p = morph_korean_english_text_with_direction(prev_str)
+                if morphed_p != prev_str and lang_p is not None:
+                    base_line = morphed_p
+                    target_lang = lang_p
+
+        if not re.search(r"[가-힣]", base_line):
+            return False
+        polished = _fix_korean_spacing_general(base_line.rstrip(" "))
+        if polished == prev_str.rstrip(" "):
+            return False
+        if target_lang is None:
+            target_lang = "KO"
+
+        set_ime_language(target_korean=(target_lang == "KO"))
+        u32.SendMessageW(edit_child, EM_SETSEL, prev_start, prev_start + prev_len)
+        rbuf = ctypes.create_unicode_buffer(polished)
+        u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+        delta_utf16 = (len(polished.encode("utf-16-le")) // 2) - prev_len
+        new_caret = max(0, s_pos + delta_utf16)
+        u32.SendMessageW(edit_child, EM_SETSEL, new_caret, new_caret)
+
+        full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
+        root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
+        arm_undo_snapshot(
+            root_hwnd,
+            edit_child,
+            prev_str,
+            polished,
+            mode="edit_replace",
+            full_doc_before=full_text,
+            full_doc_after=full_after,
+        )
+        return True
+    except Exception:
+        return False
 
 
 def _restore_target_focus_and_replace_line(
@@ -7096,8 +7363,16 @@ def main() -> None:
                     if ret_down and not was_key_down.get(VK_RETURN, False):
                         last_any_key_ts = now
                         last_drag_select_ts = 0.0
+                        had_ascii_before_ret = bool(typed_ascii_buf)
                         typed_ascii_buf.clear()
                         pending_first_typo = None
+                        hwnd_ret = u32.GetForegroundWindow()
+                        if hwnd_ret and not should_skip_auto_typo(hwnd_ret) and (now - last_paste_ts) > 2.0:
+                            proc_ret, _, _ = get_window_process_and_class(hwnd_ret)
+                            if proc_ret == "notepad.exe":
+                                ed_ret = _find_edit_control_child(hwnd_ret)
+                                if ed_ret and _polish_notepad_previous_line_on_enter(ed_ret, allow_typo_morph=had_ascii_before_ret):
+                                    complete_feature_action_success("auto_typo_morph_2words")
                     was_key_down[VK_RETURN] = ret_down
                 else:
                     typed_ascii_buf.clear()
