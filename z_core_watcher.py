@@ -211,15 +211,14 @@ def scan_post_office_files() -> Dict[str, str]:
 
 
 def check_notion_new_bugs(seen_bug_ids: Set[str]) -> list:
-    """notion_qa 모듈을 통해 '완료' 컬럼 4개 상시 유지를 수행하고 신규 '발견된 버그'가 있는지 조용히 확인합니다."""
+    """notion_qa 모듈을 통해 신규 '발견된 버그'가 있는지 조용히 확인합니다 (노션 보드 완료 컬럼 스크립트 자동 아카이빙 해제)."""
     try:
         import notion_qa
 
         if not notion_qa.NOTION_TOKEN or notion_qa.NOTION_TOKEN.startswith("[여기에"):
             return []
-        notion_qa.trim_done_cards(4)
         bugs = [] if notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED)
-        return [b for b in bugs if b["page_id"] not in seen_bug_ids]
+        return [b for b in bugs if b.get("page_id", b.get("id")) not in seen_bug_ids]
     except Exception:
         return []
 

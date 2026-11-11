@@ -214,7 +214,7 @@ const DEFAULT_SHORTS_DATA: ShortsItem[] = [
     title: 'dkssudgktpdy 치고 백스페이스 누르지 마세요! 무버튼 0.2ms 자동 성형!',
     hookTime: '00:00 ~ 00:03 (훅)',
     hookLine: '“급하게 메신저나 보고서 쓰다가 한영키 안 눌러서 영타 외계어 치고 다 지우셨죠?”',
-    solutionLine: '버튼 누를 필요 ZERO! 치기만 하면 귀신창이 영타 오타와 깨진 줄바꿈을 0.2ms 만에 무버튼 자동 다림질!',
+    solutionLine: '영타·띄어쓰기는 치기만 하면 0.2ms 무버튼 자동 성형! 깨진 줄바꿈·서식은 귀신창 [1]번으로 1초 다림질(평소 복붙은 원문 100% 보존)!',
     recommendedKeyword: '귀신같이 귀신창',
     tag: '⌨️ #귀신창 · 무버튼 0.2ms 자동 한영성형',
     youtubeId: 'tVZ_J4sGJPw',
@@ -375,10 +375,10 @@ const WEAPON_META: Record<
   superpower: {
     chipLabel: '⌨️ 영타 오타 1초 한글 둔갑',
     keywordBadge: '#귀신창',
-    userBubble: 'dkssudgktpdy 영타 오타랑 깨진 줄바꿈, 백스페이스 안 누르고 고쳐줘!',
+    userBubble: 'dkssudgktpdy 영타 오타랑 PDF 깨진 줄바꿈, 백스페이스 안 누르고 고쳐줘!',
     secretaryReply:
-      '버튼 누를 필요 없어요! 예문 칩에서 전/후 비교를 한눈에 보시거나, 입력칸을 클릭해 직접 영타를 치고 스페이스바를 누르면 0.2초 만에 무버튼 자동으로 다림질해 줍니다! 하단에는 Ctrl+V 순차복사와 [1] 파일·라벨러(PDF) ~ [5] 창고정 미니 버튼이 대기해요!',
-    stageTitle: '⌨️ dkssud 영타·줄바꿈 0.2초 무버튼 완전 자동(Auto) 성형',
+      '영타·띄어쓰기는 버튼 누를 필요 없이 스페이스바만 누르면 0.2초 만에 무버튼 자동으로 바꿔드리고, 평소 복붙 시에는 원문 서식·줄바꿈을 100% 그대로 지켜드려요! 깨진 줄바꿈·지저분한 서식은 하단 [1] 🧹서식·줄바꿈(수동)부터 [2] 파일·라벨러(PDF) ~ [6] 창고정 미니 버튼으로 1초 해결!',
+    stageTitle: '⌨️ dkssud 영타 0.2초 무버튼 자동(Auto) 성형 & [1] 서식·줄바꿈 수동 다림질',
     stageBadge: '무기 4 · #귀신창 v1.4 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_dkssudgktp_261110.mp4',
   },
@@ -432,7 +432,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [typoConverted, setTypoConverted] = useState<boolean>(false);
   const [typoIsPresetSample, setTypoIsPresetSample] = useState<boolean>(true);
   const typoDemoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedToolbarKey, setSelectedToolbarKey] = useState<'seq' | '1' | '2' | '3' | '4' | '5'>('1');
+  const [selectedToolbarKey, setSelectedToolbarKey] = useState<'seq' | '1' | '2' | '3' | '4' | '5' | '6'>('1');
   const [labelerDemoApplied, setLabelerDemoApplied] = useState<boolean>(false);
 
   // DEV 전체보기 전용 내부 상태 보존 (코드 삭제 없이 일반 방문자에게만 은닉)
@@ -528,13 +528,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       matchedTab = 'doc';
     } else if (/사진|청소|보안|느려|용량|정리|복원/.test(q)) {
       matchedTab = 'clean';
-    } else if (/영타|오타|한영|줄바꿈|귀신창|라벨러|합본|창고정|순차|dkssud/i.test(q)) {
+    } else if (/영타|오타|한영|서식|줄바꿈|귀신창|라벨러|합본|창고정|순차|dkssud/i.test(q)) {
       matchedTab = 'superpower';
-      if (/라벨러|파일명|pdf/i.test(q)) setSelectedToolbarKey('1');
-      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('2');
-      else if (/합본/i.test(q)) setSelectedToolbarKey('3');
-      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('4');
-      else if (/창고정|고정/i.test(q)) setSelectedToolbarKey('5');
+      if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('1');
+      else if (/라벨러|파일명|pdf/i.test(q)) setSelectedToolbarKey('2');
+      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('3');
+      else if (/합본/i.test(q)) setSelectedToolbarKey('4');
+      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('5');
+      else if (/창고정|고정/i.test(q)) setSelectedToolbarKey('6');
       else if (/순차/i.test(q)) setSelectedToolbarKey('seq');
     }
 
@@ -559,7 +560,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       raw: 'rmqgkRp 카톡 Tmr다가 gksdudzl 안 눌러서 멘붕...',
     },
     {
-      label: '⚡ 예문 3: PDF 깨진 줄바꿈 무버튼 다림질',
+      label: '🧹 예문 3: PDF 깨진 줄바꿈 (귀신창 [1]번 수동 다림질)',
       raw: '계약서에서 복사할 때마다\n\n줄바꿈이 마구 깨져서\n\n일일이 백스페이스 누르셨죠?',
     },
   ];
@@ -1378,21 +1379,22 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
                     {/* 확정 기준점 한 줄 핵심 요약 안내 */}
                     <div className="rounded-xl bg-emerald-950/35 border border-emerald-500/30 px-3 py-2 text-[11.5px] text-emerald-200 font-bold leading-relaxed break-keep">
-                      🛡️ <span className="text-[#00F0B5] font-extrabold">2어절 연속 오타 시 Space/0.55초 자동전환</span> · <span className="text-amber-300 font-extrabold">9타/4음절 긴 오타는 Space 시 전환</span> · <span className="text-white font-extrabold">이메일(@)/복붙/비번 100% 보호</span>
+                      🛡️ <span className="text-[#00F0B5] font-extrabold">2어절 연속 오타 시 Space/0.55초 자동전환</span> · <span className="text-amber-300 font-extrabold">평소 복붙(Ctrl+C/V) 시 원문 서식·줄바꿈 100% 보존</span> · <span className="text-white font-extrabold">서식·줄바꿈 다림질은 귀신창 [1]번 수동 작동</span>
                     </div>
 
-                    {/* 귀신창 v1.4 표준 하단 미니 툴바 ([1]파일·라벨러 ~ [5]창고정 인터랙티브 클릭 탭 + 실물 예시 패널) */}
+                    {/* 귀신창 v1.4 표준 하단 미니 툴바 ([1]서식·줄바꿈 ~ [6]창고정 인터랙티브 클릭 탭 + 실물 예시 패널) */}
                     <div className="rounded-2xl bg-zinc-900/95 border border-white/15 p-3 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="귀신창 미니 툴바 기능 설명">
                           {(
                             [
                               { key: 'seq', label: '📋 Ctrl+V 순차복사' },
-                              { key: '1', label: '[1] 🏷️파일·라벨러(PDF)' },
-                              { key: '2', label: '[2] 글자·표OCR' },
-                              { key: '3', label: '[3] 합본' },
-                              { key: '4', label: '[4] 번호·일정' },
-                              { key: '5', label: '[5] 창고정' },
+                              { key: '1', label: '[1] 🧹서식·줄바꿈' },
+                              { key: '2', label: '[2] 🏷️파일·라벨러(PDF)' },
+                              { key: '3', label: '[3] 글자·표OCR' },
+                              { key: '4', label: '[4] 합본' },
+                              { key: '5', label: '[5] 번호·일정' },
+                              { key: '6', label: '[6] 창고정' },
                             ] as const
                           ).map((item) => {
                             const isSelected = selectedToolbarKey === item.key;
@@ -1405,7 +1407,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 onClick={() => {
                                   playBabyGhostChime();
                                   setSelectedToolbarKey(item.key);
-                                  if (item.key !== '1') setLabelerDemoApplied(false);
+                                  if (item.key !== '2') setLabelerDemoApplied(false);
                                 }}
                                 className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer border ${
                                   isSelected
@@ -1435,11 +1437,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       </div>
 
                       {/* 선택된 미니 툴바 번호의 상세 설명 + Before ➔ After 실물 예시 카드 */}
-                      {selectedToolbarKey === '1' && (
+                      {selectedToolbarKey === '2' && (
                         <div className="rounded-xl bg-zinc-950/95 border border-amber-400/35 p-3 space-y-2.5">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="text-xs sm:text-[13px] font-black text-amber-300">
-                              🏷️ [1] 파일·라벨러(PDF) — 사진·카톡·문서 날짜별 파일명 1초 자동 정리 & 스샷 PDF 합본
+                              🏷️ [2] 파일·라벨러(PDF) — 사진·카톡·문서 날짜별 파일명 1초 자동 정리 &amp; 스샷 PDF 합본
                             </div>
                             <button
                               type="button"
@@ -1453,11 +1455,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   : 'bg-amber-400/20 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/40'
                               }`}
                             >
-                              {labelerDemoApplied ? '✨ 3건 일괄 작명 완료! (원본 비교)' : '⚡ 숫자 [1]키 눌러 이름 변환 체험'}
+                              {labelerDemoApplied ? '✨ 3건 일괄 작명 완료! (원본 비교)' : '⚡ 숫자 [2]키 눌러 이름 변환 체험'}
                             </button>
                           </div>
                           <p className="text-[11.5px] text-zinc-300 leading-relaxed font-semibold">
-                            탐색기에서 사진·문서 선택(또는 <span className="text-white font-extrabold">Ctrl+C</span> 복사) 후 귀신창 호출(<span className="text-amber-300 font-extrabold">Ctrl+0</span> / <span className="text-amber-300 font-extrabold">우클릭 꾹</span>) ➔ <span className="text-[#00F0B5] font-extrabold">숫자 1키!</span> (스샷 2장 이상 캡처 후 1키를 누르면 고화질 PDF 1개로 합본 변환)
+                            탐색기에서 사진·문서 선택(또는 <span className="text-white font-extrabold">Ctrl+C</span> 복사) 후 귀신창 호출(<span className="text-amber-300 font-extrabold">Ctrl+0</span> / <span className="text-amber-300 font-extrabold">우클릭 꾹</span>) ➔ <span className="text-[#00F0B5] font-extrabold">숫자 2키!</span> (스샷 2장 이상 캡처 후 2키를 누르면 고화질 PDF 1개로 합본 변환)
                           </p>
                           <div className="grid grid-cols-1 gap-1.5 pt-0.5">
                             {[
@@ -1495,7 +1497,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         </div>
                       )}
 
-                      {selectedToolbarKey !== '1' && (
+                      {selectedToolbarKey !== '2' && (
                         <div className="rounded-xl bg-zinc-950/95 border border-white/15 p-3 space-y-1.5">
                           {selectedToolbarKey === 'seq' && (
                             <>
@@ -1512,13 +1514,28 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               </div>
                             </>
                           )}
-                          {selectedToolbarKey === '2' && (
+                          {selectedToolbarKey === '1' && (
                             <>
                               <div className="text-xs sm:text-[13px] font-black text-amber-300">
-                                🔍 [2] 글자·표OCR — 복사 막힌 이미지·스캔 표도 드래그 한 번에 텍스트 추출
+                                🧹 [1] 서식·줄바꿈 다림질 — 평소 복붙은 원문 100% 보존, 원할 때만 [1]키로 1초 세탁·다림질!
                               </div>
                               <p className="text-[11.5px] text-zinc-300 font-semibold">
-                                귀신창 호출 후 <span className="text-[#00F0B5] font-extrabold">숫자 2키</span>를 누르고 화면의 이미지·스캔 문서 영역을 드래그하면 표와 글자를 1초 만에 추출해 복사합니다.
+                                일반 <span className="text-white font-extrabold">Ctrl+C ➔ Ctrl+V</span> 시에는 원문 줄바꿈과 서식을 그대로 지켜주고, PDF 깨진 줄바꿈이나 뉴스 광고 꼬리말을 펴고 싶을 때만 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 1키</span>를 누르면 제자리 교체 또는 클립보드 다림질(<span className="text-amber-300 font-extrabold">Ctrl+Z</span> 원복 지원)을 수행합니다.
+                              </p>
+                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                                <span className="text-zinc-400">PDF 끊어진 문단 · 시커먼 배경 서식 · 광고 꼬리말</span>
+                                <span className="text-amber-400">➔</span>
+                                <span className="text-[#00F0B5]">숫자 1키 한 번에 매끈한 순수 본문으로 1초 다림질</span>
+                              </div>
+                            </>
+                          )}
+                          {selectedToolbarKey === '3' && (
+                            <>
+                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                                🔍 [3] 글자·표OCR — 복사 막힌 이미지·스캔 표도 드래그 한 번에 텍스트 추출
+                              </div>
+                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                                귀신창 호출 후 <span className="text-[#00F0B5] font-extrabold">숫자 3키</span>를 누르고 화면의 이미지·스캔 문서 영역을 드래그하면 표와 글자를 1초 만에 추출해 복사합니다.
                               </p>
                               <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">드래그 안 되는 스캔 견적서·이미지 표</span>
@@ -1527,28 +1544,28 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               </div>
                             </>
                           )}
-                          {selectedToolbarKey === '3' && (
+                          {selectedToolbarKey === '4' && (
                             <>
                               <div className="text-xs sm:text-[13px] font-black text-amber-300">
-                                📎 [3] 합본 — 여러 번 따로 복사한 문장 조각들을 깔끔한 1개 본문으로 합치기
+                                📎 [4] 합본 — 여러 번 따로 복사한 문장 조각들을 깔끔한 1개 본문으로 합치기
                               </div>
                               <p className="text-[11.5px] text-zinc-300 font-semibold">
-                                문서 여러 곳에서 <span className="text-white font-extrabold">Ctrl+C</span>로 모아 둔 문장 조각들을 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 3키</span> 한 번으로 줄바꿈 정리된 단일 문단으로 합칩니다.
+                                문서 여러 곳에서 <span className="text-white font-extrabold">Ctrl+C</span>로 모아 둔 문장 조각들을 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 4키</span> 한 번으로 줄바꿈 정리된 단일 문단으로 합칩니다.
                               </p>
                               <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">보고서·기사 핵심 문단 3곳 각각 복사</span>
                                 <span className="text-amber-400">➔</span>
-                                <span className="text-[#00F0B5]">숫자 3키 한 번에 1개의 통합 본문으로 완성</span>
+                                <span className="text-[#00F0B5]">숫자 4키 한 번에 1개의 통합 본문으로 완성</span>
                               </div>
                             </>
                           )}
-                          {selectedToolbarKey === '4' && (
+                          {selectedToolbarKey === '5' && (
                             <>
                               <div className="text-xs sm:text-[13px] font-black text-amber-300">
-                                📅 [4] 번호·일정 — 기존 글자 색상·굵기 서식 100% 보존 하이픈·요일 자동 성형
+                                📅 [5] 번호·일정 — 기존 글자 색상·굵기 서식 100% 보존 하이픈·요일 자동 성형
                               </div>
                               <p className="text-[11.5px] text-zinc-300 font-semibold">
-                                연달아 친 전화번호·날짜 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 4키</span>를 누르면 노션·워드의 파란색/빨간색 글자 서식을 그대로 유지한 채 표준 형식으로 바꿉니다.
+                                연달아 친 전화번호·날짜 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 5키</span>를 누르면 노션·워드의 파란색/빨간색 글자 서식을 그대로 유지한 채 표준 형식으로 바꿉니다.
                               </p>
                               <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">01012345678 / 20260508</span>
@@ -1557,18 +1574,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               </div>
                             </>
                           )}
-                          {selectedToolbarKey === '5' && (
+                          {selectedToolbarKey === '6' && (
                             <>
                               <div className="text-xs sm:text-[13px] font-black text-amber-300">
-                                📌 [5] 창고정 — 참고 중인 창이 절대 뒤로 숨지 않게 화면 맨 위에 압정 고정
+                                📌 [6] 창고정 — 참고 중인 창이 절대 뒤로 숨지 않게 화면 맨 위에 압정 고정
                               </div>
                               <p className="text-[11.5px] text-zinc-300 font-semibold">
-                                계산기·영수증·메모장 창 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 5키</span>를 누르면 다른 프로그램에 타이핑해도 창이 가려지지 않도록 최상단에 고정(재입력 시 해제)합니다.
+                                계산기·영수증·메모장 창 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 6키</span>(또는 Ctrl+Alt+T)를 누르면 다른 프로그램에 타이핑해도 창이 가려지지 않도록 최상단에 고정(재입력 시 해제)합니다.
                               </p>
                               <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">타이핑할 때마다 뒤로 숨는 참고 창</span>
                                 <span className="text-amber-400">➔</span>
-                                <span className="text-[#00F0B5]">숫자 5키로 화면 맨 위 고정(📌) 후 편하게 대조 입력</span>
+                                <span className="text-[#00F0B5]">숫자 6키로 화면 맨 위 고정(📌) 후 편하게 대조 입력</span>
                               </div>
                             </>
                           )}
@@ -1771,7 +1788,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <div className="p-4 rounded-2xl bg-zinc-950 border border-white/10 space-y-1.5">
                 <div className="font-black text-[#00F0B5]">🟢 1단계 무료 오픈 (현재 일반 노출)</div>
                 <p className="text-zinc-300 leading-relaxed">
-                  내 PC·폰 로컬 검색 + 내 기기 스마트 청소/보안관 + 귀신창 v1.4 (무버튼 자동 한영·띄어쓰기·줄바꿈 성형 + Ctrl+V 순차복사 + [1]파일·라벨러 ~ [5]창고정)
+                  내 PC·폰 로컬 검색 + 내 기기 스마트 청소/보안관 + 귀신창 v1.4 (무버튼 자동 한영·띄어쓰기 성형 + 평소 복붙 원문 보존 + Ctrl+V 순차복사 + [1]서식·줄바꿈 ~ [6]창고정)
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-zinc-950 border border-white/10 space-y-1.5">

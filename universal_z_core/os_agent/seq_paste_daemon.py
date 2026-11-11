@@ -1543,14 +1543,14 @@ def build_loss_aversion_time_saved_report(total_actions_count: int = 412) -> dic
 
 SUPERPOWER_12_FEATURES: dict[str, str] = {
     "feat_1_seq_paste": "⚡ [Ctrl+V] 순차·칸맞춤",
-    "feat_2_typo_morph": "① 한영성형",
-    "feat_4_iron_lines": "② 줄바꿈정리",
-    "feat_3_clean_format": "③ 서식세탁",
-    "feat_9_image_file": "④ 파일·PDF변환🔒",
-    "feat_6_screen_ocr": "⑤ 글자·표OCR🔒",
-    "feat_5_merge_search": "⑥ 합본🔒",
-    "feat_8_format_numbers": "⑦ 번호·일정🔒",
-    "feat_7_window_pin": "⑧ 창고정🔒",
+    "feat_2_typo_morph": "⚡ 자동 한영·띄어쓰기",
+    "feat_4_iron_lines": "① 서식·줄바꿈 다림질",
+    "feat_3_clean_format": "🧹 서식세탁",
+    "feat_9_image_file": "② 파일·라벨러(PDF)🔒",
+    "feat_6_screen_ocr": "③ 글자·표OCR🔒",
+    "feat_5_merge_search": "④ 합본🔒",
+    "feat_8_format_numbers": "⑤ 번호·일정🔒",
+    "feat_7_window_pin": "⑥ 창고정🔒",
     "feat_b1_snippets": "⌨️ 상용구(F1~12)",
     "feat_b2_excel_split": "💡 엑셀쪼개기",
     "feat_b3_pdf_merge": "💡 다중스샷PDF합본",
@@ -1563,27 +1563,23 @@ def normalize_feature_id(raw_key: str) -> str:
         return k
     if k in ("seq_paste_smart_match", "ctrl_v"):
         return "feat_1_seq_paste"
-    # [영구 고정 번호 1~8 체계]:
-    # [1] 한영성형, [2] 줄바꿈정리, [3] 서식세탁, [4] 파일·PDF변환🔒,
-    # [5] 글자·표OCR🔒, [6] 합본🔒, [7] 번호·일정🔒, [8] 창고정🔒
-    if k in ("superpower_key_1", "auto_typo_morph_2words", "1"):
+    # [수동 단축키 1~6 체계 (한영·띄어쓰기는 타이핑 자동 감지)]:
+    # [1] 🧹서식·줄바꿈, [2] 🏷️파일·라벨러(PDF)🔒, [3] 글자·표OCR🔒,
+    # [4] 합본🔒, [5] 번호·일정🔒, [6] 창고정🔒
+    if k == "auto_typo_morph_2words":
         return "feat_2_typo_morph"
-    if k in ("superpower_key_2", "2"):
+    if k in ("superpower_key_1", "1"):
         return "feat_4_iron_lines"
+    if k in ("superpower_key_2", "superpower_key_9", "2", "9"):
+        return "feat_9_image_file"
     if k in ("superpower_key_3", "3"):
-        return "feat_3_clean_format"
-    if k in ("superpower_key_4", "4"):
-        return "feat_9_image_file"
-    if k in ("superpower_key_5", "5"):
         return "feat_6_screen_ocr"
-    if k in ("superpower_key_6", "6"):
+    if k in ("superpower_key_4", "4"):
         return "feat_5_merge_search"
-    if k in ("superpower_key_7", "7"):
+    if k in ("superpower_key_5", "5"):
         return "feat_8_format_numbers"
-    if k in ("superpower_key_8", "8"):
+    if k in ("superpower_key_6", "superpower_key_8", "6", "8"):
         return "feat_7_window_pin"
-    if k in ("superpower_key_9", "9"):
-        return "feat_9_image_file"
     if k.startswith("snippet_F") or k.upper().startswith("F"):
         return "feat_b1_snippets"
     if "excel" in k.lower():
@@ -2195,7 +2191,7 @@ def _toast_worker() -> None:
         outer = tk.Frame(win, bg="#0B1120", highlightbackground="#38BDF8", highlightthickness=2, padx=8, pady=6)
         outer.pack(fill="both", expand=True)
 
-        # 1단 헤더: 👻귀신검색창 + 라이브 검색창 + 우측 [🏷️[1]파일라벨러][⤢ 크게(갤러리) / ⤡ 작게][🔊][✕]
+        # 1단 헤더: 👻귀신검색창 + 라이브 검색창 + 우측 [🏷️[2]파일라벨러][⤢ 크게(갤러리) / ⤡ 작게][🔊][✕]
         hdr = tk.Frame(outer, bg="#0F172A", highlightbackground="#14B8A6", highlightthickness=1, padx=6, pady=4)
         hdr.pack(fill="x", pady=(0, 4))
 
@@ -2242,7 +2238,7 @@ def _toast_worker() -> None:
 
         lbl_quick_btn = tk.Label(
             hdr,
-            text="🏷️[1]파일라벨러",
+            text="🏷️[2]파일라벨러",
             fg="#0B1120",
             bg="#5EEAD4",
             padx=6,
@@ -2251,7 +2247,7 @@ def _toast_worker() -> None:
             cursor="hand2",
         )
         lbl_quick_btn.pack(side="right", padx=(4, 2))
-        lbl_quick_btn.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(1)))
+        lbl_quick_btn.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(2)))
 
         # 2단 필터 바: [전체] [📄문서] [🖼️사진] [🎬영상] + 우측 🎁30일무제한(D-30)
         fbar = tk.Frame(outer, bg="#0B1120")
@@ -2836,9 +2832,9 @@ def _toast_worker() -> None:
                                 else:
                                     tk.Label(p_inner, text="💡 [숨은 귀신 초능력 & 꿀팁]", fg="#FDE047", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 4))
                                     for tl in (
-                                        "• 🏷️ [1]번 귀신 라벨러 : 탐색기에서 사진·카톡·문서 복사(Ctrl+C) 후 [1]번 클릭 시 [YYMMDD_장소 / YYMMDD_카톡_내용 / YYMMDD_내용_제목] 자동 작명!",
+                                        "• 🧹 [1]번 서식·줄바꿈 다림질 : 문장 복사(Ctrl+C)나 드래그 후 [1]번 클릭 시 서식세탁·끊어진 줄바꿈 즉시 정리 (Ctrl+Z 원복)!",
+                                        "• 🏷️ [2]번 귀신 라벨러 : 탐색기에서 사진·카톡·문서 선택/복사 후 [2]번 클릭 시 [YYMMDD_장소 / YYMMDD_카톡_내용 / YYMMDD_내용_제목] 자동 작명!",
                                         "• ⚡ 타이핑 자동 한영·띄어쓰기 성형 : 2어절 입력 시 단축키 없이 0.1초 자동 교정!",
-                                        "• 🧹 복사(Ctrl+C) 자동 줄바꿈 다림질 : 끊어진 PDF·웹 문장 복사 시 자동 줄정리 (Ctrl+Z 원복)!",
                                         "• 🔄 귀신호출 한 번 더(토글) : 호출 이어서 바로 한 번 더 누르면 [기본 귀신창 ⇄ 귀신검색창] 즉시 전환!",
                                     ):
                                         tk.Label(p_inner, text=tl, fg="#E2E8F0", bg="#0F172A", font=("Malgun Gothic", 8), anchor="w").pack(fill="x", pady=1)
@@ -4047,7 +4043,7 @@ def _fix_korean_spacing_general(s: str) -> str:
         s = re.sub(r"(?<![가-힣])(오늘|내일|모레|어제|그제)(?=(?![은는이가의도만부터까지날\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
         # 자율 명사·어휘 경계 분리 ('띄어쓰기되는지' -> '띄어쓰기 되는지', '복사붙여넣기' -> '복사 붙여넣기', '한국어교착어음운규칙과' -> '한국어 교착어 음운 규칙과', '어절단위로' -> '어절 단위로')
         s = re.sub(r"(띄어쓰기)(?=(?![가을를은는도만의에로와과이나\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"(복사)(?=(?:붙여넣기|하기|해서|한|할|후)(?=[가-힣\s.,?!:;~^)]|$))", r"\1 ", s)
+        s = re.sub(r"(복사)(?=(?:붙여넣기|후)(?=[가-힣\s.,?!:;~^)]|$))", r"\1 ", s)
         s = re.sub(
             r"(?<![가-힣])(한국어|교착어|외래어|외국어|표준어|고유어|한자어|일본어|중국어|프랑스어|독일어|스페인어|러시아어|베트남어)(?=(?!(?:가|는|를|의|와|로|에|에서|도|만|나|랑|보다|처럼|부터|까지|입니|이다|이지|이라)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})",
             r"\1 ",
@@ -4902,65 +4898,149 @@ AD_ANCHOR_PHRASES = [
 ]
 
 
+def _strip_copyright_and_ad_boilerplate(raw_txt: str) -> str:
+    if not raw_txt:
+        return ""
+    cleaned = re.sub(r"(무단\s*전재\s*및\s*재배포\s*금지.*|저작권자\s*\(c\).*|ⓒ\s*.*무단.*)", "", raw_txt, flags=re.IGNORECASE)
+    lines = [ln for ln in cleaned.splitlines()]
+    if len(lines) >= 3:
+        ad_vecs = [AI_ENGINE.embed_128d(p) for p in AD_ANCHOR_PHRASES]
+        while lines and len(lines) >= 2:
+            tail = lines[-1].strip()
+            if not tail:
+                lines.pop()
+                continue
+            if re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", tail) and ("기자" in tail or "특파원" in tail):
+                lines.pop()
+                continue
+            tail_vec = AI_ENGINE.embed_128d(tail)
+            max_sim = max(AI_ENGINE.cosine_sim(tail_vec, av) for av in ad_vecs)
+            if max_sim >= 0.82:
+                lines.pop()
+            else:
+                break
+    return "\n".join(lines).strip()
+
+
+def clean_and_iron_text(raw_txt: str) -> str:
+    """서식 세탁(순수 텍스트화 + 광고·저작권 꼬리말 절삭) + 줄바꿈·유령공백(NFKC)·띄어쓰기 다림질 통합"""
+    if not raw_txt or not raw_txt.strip():
+        return raw_txt or ""
+    stripped_body = _strip_copyright_and_ad_boilerplate(raw_txt)
+    if not stripped_body:
+        return ""
+    return iron_and_polish_korean_text(stripped_body, allow_typo_morph=False)
+
+
+def superpower_1_clean_and_iron_lines(
+    daemon_set_cb,
+    raw_src: str | None = None,
+    has_recent_drag: bool = False,
+) -> bool:
+    """
+    [①번 — 수동 서식·줄바꿈 다림질 (자동 발동 폐지 ➔ 단축키 1번 수동 전환)]:
+    1) 메모장(Edit/RichEditD2DPT)에서 드래그 선택 영역이 있거나, 방금 붙여넣은 본문과 동일한 경우 그 자리에서 0.2ms 원자적 다림질!
+    2) 웹·노션·카톡 등에서 문장을 드래그 선택한 직후 호출한 경우 선택 영역을 즉시 원위치 다림질!
+    3) 일반 복사(Ctrl+C) 후 [1]번을 누른 경우 HTML/RTF 서식 세탁 + 광고·저작권 꼬리말 제거 + 끊어진 줄바꿈·띄어쓰기 다림질을
+       클립보드에 장전하여 Ctrl+V 한 번으로 깔끔히 붙여넣을 수 있게 준비합니다 (Ctrl+Z 원복 지원).
+    """
+    clip_txt = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
+    ed_target = _find_edit_control_child(_LAST_TARGET_HWND) if (_LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND)) else 0
+
+    # 1) 메모장(Edit / RichEditD2DPT) 내부 선택 영역 또는 본문 일치 시 원위치(In-Place) 즉시 다림질
+    if ed_target:
+        try:
+            full_before, idx_text, is_rich = _get_edit_full_text_and_index_str(ed_target)
+            if idx_text:
+                utf16_b = idx_text.encode("utf-16-le")
+                utf16_total = len(utf16_b) // 2
+                s_dw = wintypes.DWORD(0)
+                e_dw = wintypes.DWORD(0)
+                u32.SendMessageW(ed_target, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
+                s_pos, e_pos = s_dw.value, e_dw.value
+                norm_doc = full_before.replace("\r\n", "\n").replace("\r", "\n").strip()
+                norm_clip = (clip_txt or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+                has_sel = (0 <= s_pos < e_pos <= utf16_total)
+                should_inplace_doc = has_sel or (not norm_clip and bool(norm_doc)) or (bool(norm_doc) and norm_doc == norm_clip)
+                if should_inplace_doc:
+                    if has_sel:
+                        src_seg = utf16_b[s_pos * 2 : e_pos * 2].decode("utf-16-le", errors="ignore")
+                    else:
+                        src_seg = idx_text
+                    out_seg = clean_and_iron_text(src_seg)
+                    out_win = out_seg.replace("\r\n", "\n").replace("\n", "\r\n") if not is_rich else out_seg
+                    if out_seg.strip() != src_seg.strip():
+                        if has_sel:
+                            u32.SendMessageW(ed_target, EM_SETSEL, s_pos, e_pos)
+                            rbuf = ctypes.create_unicode_buffer(out_win)
+                            u32.SendMessageW(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                            rep_u16 = len(out_seg.encode("utf-16-le")) // 2
+                            u32.SendMessageW(ed_target, EM_SETSEL, s_pos, s_pos + rep_u16)
+                        else:
+                            u32.SendMessageW(ed_target, EM_SETSEL, 0, -1)
+                            rbuf = ctypes.create_unicode_buffer(out_win)
+                            u32.SendMessageW(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                        full_after, _, _ = _get_edit_full_text_and_index_str(ed_target)
+                        root_h = u32.GetAncestor(ed_target, 2) or ed_target
+                        arm_undo_snapshot(
+                            root_h,
+                            ed_target,
+                            src_seg,
+                            out_win,
+                            mode="edit_replace",
+                            full_doc_before=full_before,
+                            full_doc_after=full_after,
+                        )
+                    clip_ready = out_seg.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+                    daemon_set_cb(clip_ready)
+                    show_ghost_toast("👻 귀신같이 [1] 서식·줄바꿈 다림질 완료 (Ctrl+Z 원복)")
+                    return True
+        except Exception:
+            pass
+
+    # 2) 일반 앱(노션·브라우저·워드 등)에서 마우스로 문장을 드래그 선택한 직후 [1]번 호출 시 원위치 교체
+    if not ed_target and has_recent_drag and _LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND):
+        try:
+            sentinel = "__GHOSTI_IRON_SEL__"
+            release_all_modifiers()
+            daemon_set_cb(sentinel)
+            time.sleep(0.015)
+            tap_key_combo([VK_CONTROL], VK_C)
+            time.sleep(0.05)
+            sel_copied = get_clipboard_text()
+            if sel_copied and sel_copied != sentinel:
+                out_sel = clean_and_iron_text(sel_copied)
+                out_sel_win = out_sel.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+                daemon_set_cb(out_sel_win)
+                time.sleep(0.02)
+                tap_key_combo([VK_CONTROL], VK_V)
+                arm_undo_snapshot(_LAST_TARGET_HWND, 0, sel_copied, out_sel_win, mode="clipboard_paste")
+                show_ghost_toast("👻 귀신같이 [1] 선택 영역 서식·줄바꿈 다림질 완료 (Ctrl+Z 원복)")
+                return True
+            elif clip_txt:
+                daemon_set_cb(clip_txt)
+        except Exception:
+            pass
+
+    # 3) 클립보드 복사(Ctrl+C) 텍스트의 HTML/RTF 서식 세탁 + 줄바꿈 다림질 장전 (Ctrl+V 한 번으로 깔끔히 붙여넣기!)
+    if clip_txt and clip_txt.strip():
+        out_clip = clean_and_iron_text(clip_txt)
+        out_clip_win = out_clip.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+        arm_undo_snapshot(_LAST_TARGET_HWND, ed_target, clip_txt, out_clip_win, mode="pre_iron")
+        daemon_set_cb(out_clip_win)
+        show_ghost_toast("👻 귀신같이 [1] 서식·줄바꿈 다림질 완료 (Ctrl+V로 붙여넣기)")
+        return True
+
+    show_ghost_toast("👻 다림질할 문장을 복사(Ctrl+C)하거나 드래그한 뒤 [1]번을 눌러주세요")
+    return False
+
+
 def superpower_3_clean_format(daemon_set_cb, raw_src: str | None = None) -> None:
-    """
-    [③번] 서식 100% 세탁 + EmbeddingGemma 2 시맨틱 광고·저작권 꼬리말 자동 절삭
-    """
-    txt = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
-    if txt:
-        cleaned = re.sub(r"(무단\s*전재\s*및\s*재배포\s*금지.*|저작권자\s*\(c\).*|ⓒ\s*.*무단.*)", "", txt, flags=re.IGNORECASE)
-        lines = [ln for ln in cleaned.splitlines()]
-        if len(lines) >= 3:
-            ad_vecs = [AI_ENGINE.embed_128d(p) for p in AD_ANCHOR_PHRASES]
-            while lines and len(lines) >= 2:
-                tail = lines[-1].strip()
-                if not tail:
-                    lines.pop()
-                    continue
-                if re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", tail) and ("기자" in tail or "특파원" in tail):
-                    lines.pop()
-                    continue
-                tail_vec = AI_ENGINE.embed_128d(tail)
-                max_sim = max(AI_ENGINE.cosine_sim(tail_vec, av) for av in ad_vecs)
-                if max_sim >= 0.82:
-                    lines.pop()
-                else:
-                    break
-        out_s = "\n".join(lines).strip()
-        arm_undo_snapshot(_LAST_TARGET_HWND, _find_edit_control_child(_LAST_TARGET_HWND), txt, out_s, mode="pre_iron")
-        daemon_set_cb(out_s)
-        show_ghost_toast("👻 귀신같이 서식세탁")
+    superpower_1_clean_and_iron_lines(daemon_set_cb, raw_src=raw_src, has_recent_drag=False)
 
 
 def superpower_4_iron_lines_and_nfkc(daemon_set_cb, raw_src: str | None = None) -> None:
-    """
-    [④번] 드래그 영역 원위치 즉시 다림질 + 줄바꿈·유령공백(NFKC)·문맥오타·띄어쓰기 교정 + 문단 의미 분리
-    - 유저가 마우스로 드래그한 문장/문단(또는 메모장 내 텍스트)이 있으면 복사·창전환 없이 그 자리에서 즉시 교체!
-    - 이미 원위치 성형이 끝난 문장에서 연속 호출된 경우 기존 Undo 스냅샷과 클립보드 원문을 100% 보존합니다.
-    """
-    txt = raw_src if (raw_src and raw_src.strip()) else get_clipboard_text()
-    ok_inplace, raw_in, out_in, _ = _restore_target_focus_and_replace_line(
-        _LAST_TARGET_HWND,
-        daemon_set_cb,
-        fallback_text=None,
-        auto_triggered=False,
-        allow_iron=True,
-        prefer_full_doc=True,
-    )
-    if ok_inplace:
-        show_ghost_toast(f"👻 귀신같이 즉시 다림질 완료 ({raw_in[:14]} ➔ {out_in[:14]})")
-        return
-
-    if raw_in:
-        show_ghost_toast("👻 귀신같이 줄바꿈·띄어쓰기 다림질 완료")
-        return
-
-    if txt:
-        morphed_c, _ = morph_korean_english_text_with_direction(txt)
-        s = iron_and_polish_korean_text(morphed_c if morphed_c != txt else txt)
-        arm_undo_snapshot(_LAST_TARGET_HWND, _find_edit_control_child(_LAST_TARGET_HWND), txt, s, mode="pre_iron")
-        daemon_set_cb(s)
-        show_ghost_toast("👻 귀신같이 줄바꿈·띄어쓰기 다림질 완료")
+    superpower_1_clean_and_iron_lines(daemon_set_cb, raw_src=raw_src, has_recent_drag=False)
 
 
 def superpower_5_merge_or_ai_search(recent_list: list[str], seq_q: list[str], ai_history: list[dict], daemon_set_cb) -> None:
@@ -6145,10 +6225,10 @@ def main() -> None:
     def arm_sub_hotkeys() -> None:
         nonlocal menu_armed, menu_armed_until
         if not menu_armed:
-            for num in range(1, 6):
+            for num in range(1, 7):
                 u32.RegisterHotKey(None, 100 + num, MOD_NOREPEAT, 0x30 + num)
                 u32.RegisterHotKey(None, 200 + num, MOD_NOREPEAT, 0x60 + num)
-                # 유저가 Ctrl+0 직후 Ctrl 키에서 손을 미처 다 떼기 전에 숫자 1~5를 눌러도 100% 작동하도록 Ctrl+숫자도 함께 무장!
+                # 유저가 Ctrl+0 직후 Ctrl 키에서 손을 미처 다 떼기 전에 숫자 1~6을 눌러도 100% 작동하도록 Ctrl+숫자도 함께 무장!
                 u32.RegisterHotKey(None, 400 + num, MOD_CONTROL | MOD_NOREPEAT, 0x30 + num)
                 u32.RegisterHotKey(None, 500 + num, MOD_CONTROL | MOD_NOREPEAT, 0x60 + num)
             for fnum in range(1, 11):
@@ -6170,9 +6250,9 @@ def main() -> None:
 
     def _execute_superpower_num(num: int) -> None:
         """
-        [v1.4 완전 자동화 개편 — 한영성형·띄어쓰기·줄바꿈정리는 100% 무버튼 자동화, 수동 초능력은 1~5번으로 심플화]:
-        1줄(하늘색 주력): [Ctrl+V] 순차·칸맞춤 | [1] 파일·PDF변환🔒 | [2] 글자·표OCR🔒
-        2줄(흰색 확장):   [3] 합본🔒           | [4] 번호·일정🔒    | [5] 창고정🔒   | [⌨️상용구▾] [💡꿀팁·추가▾]
+        [귀신창 수동 초능력 1~6번 체계 (한영·띄어쓰기는 타이핑 자동 감지, 서식·줄바꿈 다림질은 1번 수동 전환)]:
+        1줄(하늘색 주력): [Ctrl+V] 순차·칸맞춤 | [1] 🧹서식·줄바꿈   | [2] 🏷️파일·라벨러(PDF)🔒
+        2줄(흰색 확장):   [3] 글자·표OCR🔒     | [4] 합본🔒          | [5] 번호·일정🔒          | [6] 창고정🔒   | [⌨️상용구▾] [💡꿀팁·추가▾]
         """
         nonlocal seq_mode, last_hdrop_copy_ts
         disarm_sub_hotkeys()
@@ -6190,18 +6270,30 @@ def main() -> None:
         if not allowed:
             show_ghost_toast(q_msg, duration_ms=3200)
             return
-        if num in (1, 9):
+        if num == 1:
+            did_iron = superpower_1_clean_and_iron_lines(
+                daemon_set_clipboard,
+                raw_src=last_summon_raw_clip,
+                has_recent_drag=(last_drag_select_ts > last_any_key_ts and (time.time() - last_drag_select_ts) <= 6.0),
+            )
+            if did_iron:
+                ironed_now = get_clipboard_text()
+                if ironed_now:
+                    recent_unpasted[:] = [ironed_now]
+                    seq_queue.clear()
+                complete_feature_action_success("superpower_key_1")
+        elif num in (2, 9):
             last_hdrop_copy_ts = 0.0
             is_pdf_m = len(recent_images) >= 2
             superpower_9_image_or_pdf_file(recent_images, target_hwnd=_LAST_TARGET_HWND)
-            complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else "superpower_key_4")
-        elif num == 2:
+            complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else "superpower_key_2")
+        elif num == 3:
             superpower_6_screen_ocr(daemon_set_clipboard)
-            complete_feature_action_success("superpower_key_5")
-        elif num in (3, 6):
+            complete_feature_action_success("superpower_key_3")
+        elif num == 4:
             superpower_5_merge_or_ai_search(recent_unpasted, seq_queue, ai_clipboard_history, daemon_set_clipboard)
-            complete_feature_action_success("superpower_key_6")
-        elif num in (4, 7):
+            complete_feature_action_success("superpower_key_4")
+        elif num in (5, 7):
             seq_queue.clear()
             recent_unpasted.clear()
             superpower_8_format_numbers(
@@ -6209,10 +6301,10 @@ def main() -> None:
                 raw_src=last_summon_raw_clip,
                 has_recent_drag=(last_drag_select_ts > last_any_key_ts and (time.time() - last_drag_select_ts) <= 6.0),
             )
-            complete_feature_action_success("superpower_key_7")
-        elif num in (5, 8):
+            complete_feature_action_success("superpower_key_5")
+        elif num in (6, 8):
             superpower_7_toggle_topmost(_LAST_TARGET_HWND)
-            complete_feature_action_success("superpower_key_8")
+            complete_feature_action_success("superpower_key_6")
 
     def _show_default_ui1_bar(live_clip_val: str | None) -> None:
         nonlocal seq_queue
@@ -6229,7 +6321,7 @@ def main() -> None:
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🏷️파일·라벨러(PDF)🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
+                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 🏷️파일·라벨러(PDF)🔒\n[3] 글자·표OCR🔒   [4] 합본🔒   [5] 번호·일정🔒   [6] 창고정🔒",
                 duration_ms=6500,
             )
         elif len(recent_unpasted) >= 2 and not ("\n" in (live_clip_val or "") and not has_excel_clipboard_format()):
@@ -6237,14 +6329,14 @@ def main() -> None:
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🏷️파일·라벨러(PDF)🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
+                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 🏷️파일·라벨러(PDF)🔒\n[3] 글자·표OCR🔒   [4] 합본🔒   [5] 번호·일정🔒   [6] 창고정🔒",
                 duration_ms=6500,
             )
         else:
             seq_queue.clear()
             arm_sub_hotkeys()
             show_ghost_toast(
-                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [1] 🏷️파일·라벨러(PDF)🔒   [2] 글자·표OCR🔒\n[3] 합본🔒   [4] 번호·일정🔒   [5] 창고정🔒",
+                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 🏷️파일·라벨러(PDF)🔒\n[3] 글자·표OCR🔒   [4] 합본🔒   [5] 번호·일정🔒   [6] 창고정🔒",
                 duration_ms=6500,
             )
 
@@ -6691,12 +6783,12 @@ def main() -> None:
                     elif (now - last_summon_ts) > 0.35 or now > menu_armed_until:
                         disarm_sub_hotkeys()
 
-                # 귀신창이 열려 있을 때(menu_armed) UWP 계산기 등이 WM_HOTKEY를 가로채더라도 하드웨어 키 폴링으로 숫자 1~5 즉시 발동!
+                # 귀신창이 열려 있을 때(menu_armed) UWP 계산기 등이 WM_HOTKEY를 가로채더라도 하드웨어 키 폴링으로 숫자 1~6 즉시 발동!
                 if menu_armed and (now - last_summon_ts) > 0.14:
                     fg_cls_now = _get_win_class_only(u32.GetForegroundWindow())
                     if "Tk" not in fg_cls_now:
                         triggered_num = 0
-                        for n_check in range(1, 6):
+                        for n_check in range(1, 7):
                             k_main = (u32.GetAsyncKeyState(0x30 + n_check) & 0x8000) != 0
                             k_numpad = (u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0
                             k_now = k_main or k_numpad
@@ -6716,7 +6808,7 @@ def main() -> None:
                                     _toast_queue.put(("__MORPH_SEARCH__", 0))
                                     break
                 else:
-                    for n_check in range(1, 6):
+                    for n_check in range(1, 7):
                         was_sub_key_down[n_check] = (
                             ((u32.GetAsyncKeyState(0x30 + n_check) & 0x8000) != 0)
                             or ((u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0)
@@ -6740,7 +6832,7 @@ def main() -> None:
                     except Exception:
                         pass
 
-                # 2) 클립보드 변경(새로운 복사 또는 스샷 캡처) 감지 + 오토매틱(Automatic) 줄바꿈·띄어쓰기 다림질
+                # 2) 클립보드 변경(새로운 복사 또는 스샷 캡처) 감지 — 원문·서식 100% 그대로 보존 (서식·줄바꿈 다림질은 귀신창 [1]번 수동 실행 전용!)
                 curr_seq = u32.GetClipboardSequenceNumber()
                 if curr_seq != last_seq_num:
                     last_seq_num = curr_seq
@@ -6752,49 +6844,6 @@ def main() -> None:
                             last_self_text = None
                             last_summon_raw_clip = copied
                             disarm_sub_hotkeys()
-
-                            # [완전 자동화 다림질]: PDF·웹페이지 등에서 한글 문장(또는 끊어진 여러 줄)을 Ctrl+C 복사하는 즉시
-                            # 단축키 없이도 줄바꿈 다림질 + 기본 띄어쓰기 교정을 클립보드에 자동 적용하여 Ctrl+V 한 번에 깔끔히 붙여넣기!
-                            # ※ 주의: 복사-붙여넣기 시에는 이메일·아이디·비밀번호·영문 토큰이 절대 한글로 자동 변환되지 않도록
-                            #    allow_typo_morph=False 로 고정하고, 이메일(@)/비밀번호/코드/URL 포함 텍스트는 원문 100% 그대로 보존!
-                            try:
-                                _is_excel_clip = has_excel_clipboard_format()
-                                _stripped_cp = copied.strip()
-                                _is_url_or_code = bool(re.match(r"^(https?://|www\.|[A-Za-z]:\\|\\\\)", _stripped_cp)) or (
-                                    any(k in _stripped_cp for k in ("def ", "function ", "import ", "const ", "SELECT ", "<?xml", "{", "}"))
-                                )
-                                _has_email_or_cred = bool(
-                                    re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", _stripped_cp)
-                                    or re.search(r"(?:비밀번호|비번|패스워드|password|passwd|pwd|아이디|id|계정|토큰|인증번호)\s*[:：=]?\s*[A-Za-z0-9!@#$%^&*_+-]{3,}", _stripped_cp, flags=re.IGNORECASE)
-                                )
-                                _is_single_token_pw = (" " not in _stripped_cp and "\n" not in _stripped_cp and len(_stripped_cp) < 64 and not re.search(r"[가-힣]", _stripped_cp))
-                                if (
-                                    not _is_excel_clip
-                                    and not _is_url_or_code
-                                    and not _has_email_or_cred
-                                    and not _is_single_token_pw
-                                    and re.search(r"[가-힣]", _stripped_cp)
-                                    and ("\n" in _stripped_cp or len(_stripped_cp) >= 6)
-                                ):
-                                    ironed_auto = iron_and_polish_korean_text(copied, allow_typo_morph=False)
-                                    if ironed_auto and ironed_auto.strip() != _stripped_cp:
-                                        # Win11 메모장(RichEditD2DPT)은 줄바꿈을 \r\n으로 붙여넣어야 줄바꿈이 먹히므로 OS 표준 \r\n 정규화 후 클립보드 주입
-                                        ironed_clip = ironed_auto.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
-                                        _UNDO_SNAPSHOT["active"] = True
-                                        _UNDO_SNAPSHOT["raw_text"] = copied
-                                        _UNDO_SNAPSHOT["hwnd"] = u32.GetForegroundWindow()
-                                        _UNDO_SNAPSHOT["ts"] = now
-                                        _UNDO_SNAPSHOT["mode"] = "pre_iron"
-                                        # 타겟 앱(크롬·노션·아크로뱃)이 지연 렌더링(Delayed Rendering)을 마칠 수 있도록 25ms 후 재적용 검증 포함
-                                        daemon_set_clipboard(ironed_clip)
-                                        time.sleep(0.025)
-                                        if get_clipboard_text() != ironed_clip:
-                                            daemon_set_clipboard(ironed_clip)
-                                        copied = ironed_clip
-                                        show_ghost_toast("👻 귀신같이 자동 줄바꿈·띄어쓰기 다림질 완료 (Ctrl+Z 원복)", duration_ms=1300)
-                            except Exception:
-                                pass
-
                             record_ai_history(copied)
 
                             if seq_mode:
@@ -7432,19 +7481,19 @@ def run_quota_self_test() -> int:
         print("🧪 [1단계] 초기 미개봉 상태 검증...")
         ok, st = check_feature_quota_allowed("superpower_key_1")
         assert ok and st == "UNOPENED", f"Expected UNOPENED, got {ok}, {st}"
-        print(f"   ✅ 1번(한영성형) 초기 상태: {st} (미개봉 확인)")
+        print(f"   ✅ 1번(서식·줄바꿈 다림질) 초기 상태: {st} (미개봉 확인)")
 
-        print("🧪 [2단계] 1번(한영성형) 첫 실제 성공 완수 -> 30일 무제한 타이머 개시 검증...")
+        print("🧪 [2단계] 1번(서식·줄바꿈 다림질) 첫 실제 성공 완수 -> 30일 무제한 타이머 개시 검증...")
         res1 = complete_feature_action_success("superpower_key_1")
         assert res1["status"] == "FIRST_OPENED_30D" and res1["consumed_daily"] is False
         ok2, st2 = check_feature_quota_allowed("superpower_key_1")
         assert ok2 and st2.startswith("ACTIVE_D-")
         print(f"   ✅ 1번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
 
-        print("🧪 [3단계] 1번 기능을 31일 전 사용으로 강제 타임머신 만료 조작 (2번 줄바꿈정리는 미개봉 유지)...")
+        print("🧪 [3단계] 1번 기능을 31일 전 사용으로 강제 타임머신 만료 조작 (2번 파일·라벨러는 미개봉 유지)...")
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         hwid = _get_machine_hwid_local()
-        ledger["machines"][hwid]["featureTrials"]["feat_2_typo_morph"]["firstUsedTs"] = time.time() - (31 * 86400)
+        ledger["machines"][hwid]["featureTrials"]["feat_4_iron_lines"]["firstUsedTs"] = time.time() - (31 * 86400)
         ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
 
         print("🧪 [4단계] 만료된 1번 기능 3회 연속 성공 차감 검증 (1회 -> 2회 -> 3회)...")
@@ -7460,12 +7509,12 @@ def run_quota_self_test() -> int:
         assert not ok_4th, "4th attempt on expired feature must be blocked!"
         print(f"   ✅ 4번째 만료 기능 차단 확인: {msg_4th}")
 
-        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 2번(줄바꿈정리)'은 30일 무제한으로 즉시 열리는지 검증!")
+        print("🧪 [6단계] 만료 기능이 3회 모두 소진된 상태에서도 '미개봉 2번(파일·라벨러)'은 30일 무제한으로 즉시 열리는지 검증!")
         ok_unopened, st_unopened = check_feature_quota_allowed("superpower_key_2")
         assert ok_unopened and st_unopened == "UNOPENED"
         r_unopened = complete_feature_action_success("superpower_key_2")
         assert r_unopened["status"] == "FIRST_OPENED_30D" and r_unopened["consumed_daily"] is False
-        print(f"   ✅ 미개봉 2번(줄바꿈정리) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 30일 무제한 즉시 개시!)")
+        print(f"   ✅ 미개봉 2번(파일·라벨러) 실행 결과: {r_unopened['status']} (만료 기능 한도와 무관하게 30일 무제한 즉시 개시!)")
         print("\n🎉 [ALL PASS] 기능별 30일 무제한 타이머 & 만료된 기능만 일일 성공 3회 제한 시뮬레이션 100% 통과!")
         return 0
     finally:

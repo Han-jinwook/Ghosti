@@ -955,12 +955,17 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                     },
                     {
                       id: 1,
-                      label: '[1] 🏷️파일·라벨러(PDF)🔒',
-                      sampleOut: '[🏷️ 귀신 라벨러 완료] IMG_4829.jpg ➔ 261107_제주애월_가족산책.jpg / KakaoTalk.jpg ➔ 261106_카톡_할머니생신.jpg / 계약서.pdf ➔ 250315_내용_임대차계약서.pdf',
+                      label: '[1] 🧹서식·줄바꿈',
+                      sampleOut: '[🧹 서식·줄바꿈 다림질 완료] 평소 복붙은 원문 100% 보존 · [1]키로 끊어진 줄바꿈·광고 꼬리말 1초 순수 본문 정리 완료',
                     },
                     {
                       id: 2,
-                      label: '[2] 글자·표OCR🔒',
+                      label: '[2] 🏷️파일·라벨러(PDF)🔒',
+                      sampleOut: '[🏷️ 귀신 라벨러 완료] IMG_4829.jpg ➔ 261107_제주애월_가족산책.jpg / KakaoTalk.jpg ➔ 261106_카톡_할머니생신.jpg / 계약서.pdf ➔ 250315_내용_임대차계약서.pdf',
+                    },
+                    {
+                      id: 3,
+                      label: '[3] 글자·표OCR🔒',
                       sampleOut: '[화면 캡처 OCR] 승인번호 20261107-849201 · 합계 145,000원',
                     },
                   ].map((ab) => {
@@ -971,7 +976,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                         type="button"
                         onClick={() => {
                           setActiveWave1Ability(ab.id);
-                          if (ab.id === 2) {
+                          if (ab.id === 3) {
                             setWindowTab('ui3_ocr');
                             return;
                           }
@@ -1006,18 +1011,18 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[
                     {
-                      id: 3,
-                      label: '[3] 합본🔒',
+                      id: 4,
+                      label: '[4] 합본🔒',
                       sampleOut: '[다중 복사 합본] 1. 계약 개요 / 2. 단가 조건 / 3. 특약 사항 통짜 병합 완료',
                     },
                     {
-                      id: 4,
-                      label: '[4] 번호·일정🔒',
+                      id: 5,
+                      label: '[5] 번호·일정🔒',
                       sampleOut: '성함: 김철수 / 연락처: 010-1234-5678 / 계좌: 국민 012-3456-7890-11',
                     },
                     {
-                      id: 5,
-                      label: '[5] 창고정🔒',
+                      id: 6,
+                      label: '[6] 창고정🔒',
                       sampleOut: '📌 현재 활성 작업창이 화면 최상단(Always on Top)에 고정되었습니다.',
                     },
                   ].map((ab) => {
@@ -1843,7 +1848,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
             <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col justify-between gap-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[12.5px] font-black text-teal-300">
-                  🏷️ 귀신 라벨러 — 귀신창 [1]번 (사진·카톡·문서 날짜별 파일명 자동 정리)
+                  🏷️ 귀신 라벨러 — 귀신창 [2]번 (사진·카톡·문서 날짜별 파일명 자동 정리)
                 </span>
                 <div className="flex items-center gap-1">
                   <button
@@ -1873,7 +1878,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
 
               <div className="px-3 py-2 rounded-lg bg-teal-500/10 border border-teal-400/30 text-[11.5px] text-zinc-200 leading-relaxed">
                 <div className="font-extrabold text-teal-200">
-                  💡 어떻게 쓰나요? ➔ 파일 선택·복사(Ctrl+C) 후 귀신창(Ctrl+0)에서 숫자 <span className="underline text-amber-300">[1]번 (🏷️파일·라벨러)</span> 클릭!
+                  💡 어떻게 쓰나요? ➔ 파일 선택·복사(Ctrl+C) 후 귀신창(Ctrl+0)에서 숫자 <span className="underline text-amber-300">[2]번 (🏷️파일·라벨러)</span> 클릭!
                 </div>
                 <div className="text-[11px] text-zinc-300 mt-0.5">
                   • 직접 찍은 사진: <b>YYMMDD_장소/내용</b> | 카톡 수신 사진: <b>YYMMDD_카톡_내용</b> | 일반 문서: <b>YYMMDD_내용_제목</b>
