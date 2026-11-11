@@ -772,10 +772,14 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
       가짜 시뮬레이터가 아니라 실제 모니터 위에 프레임리스 독립 팝업(소형 520x380 / 중형 960x640 / 갤러리 1440x900)을 즉시 띄웁니다.
     """
     data = params or {}
-    stage = str(data.get("stage") or "medium").strip().lower()
-    if stage not in ("small", "medium", "gallery"):
-        stage = "medium"
     query = str(data.get("query") or data.get("q") or "").strip()
+    stage = str(data.get("stage") or ("medium" if query else "small")).strip().lower()
+    if stage in ("gallery", "large"):
+        stage = "large"
+    elif stage not in ("small", "medium", "compact"):
+        stage = "medium" if query else "small"
+    if stage == "compact":
+        stage = "medium" if query else "small"
     anchor_x = data.get("anchor_x") or data.get("x")
     anchor_y = data.get("anchor_y") or data.get("y")
     ax = int(anchor_x) if anchor_x is not None and str(anchor_x).lstrip("-").isdigit() else None

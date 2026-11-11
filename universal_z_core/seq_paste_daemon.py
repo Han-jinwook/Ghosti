@@ -905,6 +905,7 @@ DEFAULT_SUPERPOWER_SETTINGS: dict = {
     "retention_days": 7,  # 1(오늘만 24시간), 3(3일), 7(기본 7일·300개), 30(한 달 30일·1000개)
     "max_items": 300,
     "sound_enabled": True,
+    "sound_volume": 0.25,  # 0.05 ~ 1.0 (기본 25% 은은한 볼륨 강제 스케일링)
     "window_duration_ms": 6500,
     "auto_typo_enabled": True,
     "e2ee_mailbox_enabled": True,
@@ -937,6 +938,11 @@ def update_superpower_settings(patch: dict) -> dict:
         cfg["max_items"] = 1000 if cfg["retention_days"] >= 30 else 300
     if "sound_enabled" in patch and patch["sound_enabled"] is not None:
         cfg["sound_enabled"] = bool(patch["sound_enabled"])
+    if "sound_volume" in patch and patch["sound_volume"] is not None:
+        try:
+            cfg["sound_volume"] = max(0.05, min(1.0, float(patch["sound_volume"])))
+        except Exception:
+            pass
     if "window_duration_ms" in patch and patch["window_duration_ms"] is not None:
         cfg["window_duration_ms"] = max(2000, min(20000, int(patch["window_duration_ms"])))
     if "auto_typo_enabled" in patch and patch["auto_typo_enabled"] is not None:
@@ -1369,24 +1375,49 @@ GHOST_SEARCH_WINDOW_STAGE_SIZES: dict[str, tuple[int, int]] = {
 }
 
 
+def resolve_ghost_search_auto_stage(
+    mode: str,
+    has_query: bool,
+    matched_count: int,
+    has_rich_preview: bool = False,
+) -> tuple[str, int | None]:
+    """
+    [v1.4 확정 — 『👻 귀신검색창』 크게/작게 2모드 + 작게 모드 내 소↔중 자율 반응형 판별기]
+    - mode == 'large': 대화면 갤러리(1440×900) 고정
+    - mode != 'large' ('compact' 작게 모드):
+      * 검색어가 있고 결과가 4건 이상이거나 사진/문서 미리보기(OCR) 항목이 잡히면 ➔ 중형(960×640) 자율 확장
+      * 그 외(초기 소환·검색어 입력 전·단답 1~3건) ➔ 소형(520) + 항목 수에 맞춘 슬림 높이(220~380px)
+    """
+    if mode == "large":
+        return ("large", None)
+    if has_query and (matched_count >= 4 or (matched_count >= 1 and has_rich_preview)):
+        return ("medium", None)
+    clamped = max(1, min(5, matched_count if matched_count > 0 else (1 if has_query else 4)))
+    slim_h = min(380, max(220, 118 + clamped * 44)) if has_query else 330
+    return ("small", slim_h)
+
+
 def compute_ghost_search_window_3stage_rect(
     stage: str,
     anchor_x: int,
     anchor_y: int,
     work_area: tuple[int, int, int, int] = (0, 0, 1920, 1040),
     margin_px: int = 20,
+    custom_height: int | None = None,
 ) -> dict[str, int | str | bool]:
     """
-    [v1.3 확정 — 웹 복귀 ZERO! 로컬 『귀신검색창』 자체 3단 크기 자유 변신 (소형 520x380 ↔ 중형 960x640 ↔ 대형 1440x900)
+    [v1.4 확정 — 로컬 『귀신검색창』 크게/작게 2모드 & 작게 모드 내 소↔중 반응형 자율 크기 조절
      및 모니터 작업 영역(WorkArea) 화면 경계 자동 자석 클램핑]:
-    우측/하단 모서리에서 소형 창을 띄운 뒤 중형·대형([🖼️ 갤러리로 펼쳐보기])으로 확장할 때
-    창이 모니터 밖으로 삐져나가지 않도록 안쪽(-20px 마진)으로 자동 스냅(Clamp)합니다.
+    우측/하단 모서리에서 슬림 창을 띄운 뒤 중형(자율 확장)·대형([⤢ 크게(갤러리)])으로 확장할 때
+    상단 입력창(Top-Left 앵커)을 고정하되 모니터 밖으로 삐져나가지 않도록 안쪽(-20px 마진)으로 자동 스냅합니다.
     """
     norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
     req_w, req_h = GHOST_SEARCH_WINDOW_STAGE_SIZES[norm_stage]
+    if norm_stage == "small" and custom_height is not None:
+        req_h = int(custom_height)
     wa_left, wa_top, wa_right, wa_bottom = work_area
     avail_w = max(320, (wa_right - wa_left) - (margin_px * 2))
-    avail_h = max(240, (wa_bottom - wa_top) - (margin_px * 2))
+    avail_h = max(220, (wa_bottom - wa_top) - (margin_px * 2))
     win_w = min(req_w, avail_w)
     win_h = min(req_h, avail_h)
 
@@ -1664,9 +1695,14 @@ def record_feature_telemetry(feature_key: str) -> None:
 
 
 def build_ghost_search_window_url(stage: str = "small", query: str = "", base_url: str | None = None) -> str:
-    """로컬 3단 변신 『👻 귀신검색창』 전용 라우트 URL 생성 (?preview=legacy&ghostSearchWindow=small|medium|large&q=...)"""
+    """로컬 2모드(크게/작게 + 자율 반응형) 『👻 귀신검색창』 전용 라우트 URL 생성"""
     from urllib.parse import quote
-    norm_stage = stage if stage in GHOST_SEARCH_WINDOW_STAGE_SIZES else "small"
+    if stage in ("large", "gallery"):
+        norm_stage = "large"
+    elif stage in GHOST_SEARCH_WINDOW_STAGE_SIZES:
+        norm_stage = stage
+    else:
+        norm_stage = "small"
     root_u = (base_url or GHOSTI_WEB_URL).rstrip("/")
     url = f"{root_u}/?preview=legacy&ghostSearchWindow={norm_stage}"
     q_clean = (query or "").strip()
@@ -1677,9 +1713,8 @@ def build_ghost_search_window_url(stage: str = "small", query: str = "", base_ur
 
 def _open_ghost_search_window_popup(stage: str = "small", query: str = "", anchor_x: int | None = None, anchor_y: int | None = None) -> dict:
     """
-    [v1.3 확정 — 로컬 『👻 귀신검색창』 프레임리스 앱 창(Edge/Chrome --app 모드) 즉시 호출]:
-    compute_ghost_search_window_3stage_rect로 모니터 경계 클램핑된 정확한 좌표·크기를 계산하여
-    기존 웹 「찾기」(?preview=legacy) UI가 100% 그대로 담긴 귀신검색창을 띄웁니다.
+    [v1.4 확정 — 로컬 『👻 귀신검색창』 프레임리스 앱 창(Edge/Chrome --app 모드) 즉시 호출]:
+    크게(large)/작게(자율 반응형 small↔medium) 규격에 맞춰 모니터 경계 클램핑된 정확한 좌표·크기로 띄웁니다.
     """
     pt = wintypes.POINT()
     if anchor_x is None or anchor_y is None:
@@ -1688,7 +1723,9 @@ def _open_ghost_search_window_popup(stage: str = "small", query: str = "", ancho
     else:
         ax, ay = int(anchor_x), int(anchor_y)
     work_area = _get_monitor_workarea_for_point(ax, ay)
-    rect = compute_ghost_search_window_3stage_rect(stage, ax, ay, work_area=work_area)
+    norm_in = "large" if stage in ("large", "gallery") else ("medium" if (stage == "medium" or query.strip()) else "small")
+    custom_h = 340 if norm_in == "small" and not query.strip() else None
+    rect = compute_ghost_search_window_3stage_rect(norm_in, ax, ay, work_area=work_area, custom_height=custom_h)
     target_url = build_ghost_search_window_url(str(rect["stage"]), query=query)
     record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
 
@@ -2095,7 +2132,7 @@ def _toast_worker() -> None:
         win_rect[0] = (x, y, x + rw, y + rh)
 
     # =================================================================
-    # [창 UI ②] 👻 귀신검색창 (소형 520×380 ↔ 중형 960×640 ↔ 대형 갤러리)
+    # [창 UI ②] 👻 귀신검색창 (크게/작게 2모드 · 작게 모드 내 소520 ↔ 중960 검색량 반응형 자율 조절)
     # - [창 UI ① 기본 귀신창]과 100% 분리된 독립 창 ([1]~[8] 버튼 없음!)
     # =================================================================
     def _build_ui2_search_window(win: tk.Toplevel, init_stage: str, init_query: str, pt_x: int, pt_y: int, work_area: tuple[int, int, int, int]) -> None:
@@ -2103,12 +2140,21 @@ def _toast_worker() -> None:
         active_mode[0] = "ui2"
         _CURRENT_OPEN_UI_MODE = "ui2"
         m_left, m_top, m_right, m_bottom = work_area
-        st_state = {"stage": init_stage if init_stage in ("small", "medium", "large") else "small", "filter": "all", "sel_idx": 0, "items": []}
+        init_mode = "large" if init_stage in ("large", "gallery") else "compact"
+        st_state = {
+            "mode": init_mode,
+            "stage": "large" if init_mode == "large" else ("medium" if init_query.strip() else "small"),
+            "custom_h": None if init_mode == "large" else 330,
+            "filter": "all",
+            "sel_idx": 0,
+            "items": [],
+            "debounce_job": None,
+        }
 
         outer = tk.Frame(win, bg="#0B1120", highlightbackground="#38BDF8", highlightthickness=2, padx=8, pady=6)
         outer.pack(fill="both", expand=True)
 
-        # 1단 헤더: 👻귀신검색창 + 라이브 검색창 + 우측 [소형][중형][🖼️갤러리][🔊][✕]
+        # 1단 헤더: 👻귀신검색창 + 라이브 검색창 + 우측 [🏷️[1]파일라벨러][⤢ 크게(갤러리) / ⤡ 작게][🔊][✕]
         hdr = tk.Frame(outer, bg="#0F172A", highlightbackground="#14B8A6", highlightthickness=1, padx=6, pady=4)
         hdr.pack(fill="x", pady=(0, 4))
 
@@ -2140,12 +2186,18 @@ def _toast_worker() -> None:
 
         mute_btn.bind("<Button-1>", _toggle_snd)
 
-        stage_btns: dict[str, tk.Label] = {}
-        for st_key, st_label in (("large", "🖼️갤러리"), ("medium", "중형"), ("small", "소형")):
-            b_st = tk.Label(hdr, text=st_label, fg="#E2E8F0", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
-            b_st.pack(side="right", padx=(2, 0))
-            b_st.bind("<Button-1>", lambda _e, k=st_key: _switch_stage(k))
-            stage_btns[st_key] = b_st
+        mode_toggle_btn = tk.Label(
+            hdr,
+            text="⤡ 작게" if init_mode == "large" else "⤢ 크게(갤러리)",
+            fg="#0B1120" if init_mode == "large" else "#5EEAD4",
+            bg="#2DD4BF" if init_mode == "large" else "#1E293B",
+            padx=6,
+            pady=1,
+            font=("Malgun Gothic", 8, "bold"),
+            cursor="hand2",
+        )
+        mode_toggle_btn.pack(side="right", padx=(2, 0))
+        mode_toggle_btn.bind("<Button-1>", lambda _e: _toggle_window_mode())
 
         lbl_quick_btn = tk.Label(
             hdr,
@@ -2178,42 +2230,52 @@ def _toast_worker() -> None:
         body_frame = tk.Frame(outer, bg="#0B1120")
         body_frame.pack(fill="both", expand=True)
 
-        def _resize_for_stage() -> None:
+        def _resize_for_stage(activate: bool = True) -> None:
             st_now = st_state["stage"]
             ax = pt_x
             ay = pt_y
-            r3 = compute_ghost_search_window_3stage_rect(st_now, ax, ay, work_area=work_area, margin_px=16)
+            r3 = compute_ghost_search_window_3stage_rect(
+                st_now,
+                ax,
+                ay,
+                work_area=work_area,
+                margin_px=16,
+                custom_height=st_state.get("custom_h"),
+            )
             opened_at[0] = time.time()
             was_mouse_down[0] = True
-            _apply_win_topmost(win, int(r3["x"]), int(r3["y"]), int(r3["width"]), int(r3["height"]), activate=True)
-            try:
-                s_entry.focus_force()
-            except Exception:
-                pass
+            _apply_win_topmost(win, int(r3["x"]), int(r3["y"]), int(r3["width"]), int(r3["height"]), activate=activate)
+            if activate:
+                try:
+                    s_entry.focus_force()
+                except Exception:
+                    pass
 
-        def _switch_stage(new_st: str) -> None:
+        def _toggle_window_mode(_e=None) -> str:
             is_hovered[0] = True
             opened_at[0] = time.time()
             was_mouse_down[0] = True
-            st_state["stage"] = new_st
+            st_state["mode"] = "compact" if st_state["mode"] == "large" else "large"
+            record_feature_telemetry(
+                "ghost_search_window_large" if st_state["mode"] == "large" else "ghost_search_window_small"
+            )
             _render_search_results()
-            _resize_for_stage()
+            _resize_for_stage(activate=True)
+            return "break"
 
         def _switch_filter(new_flt: str) -> None:
             is_hovered[0] = True
             st_state["filter"] = new_flt
             st_state["sel_idx"] = 0
             _render_search_results()
+            _resize_for_stage(activate=False)
 
         def _render_search_results() -> None:
             for ch in body_frame.winfo_children():
                 ch.destroy()
             thumb_refs.clear()
 
-            st_now = st_state["stage"]
             flt_now = st_state["filter"]
-            for k, b in stage_btns.items():
-                b.config(fg="#0B1120" if k == st_now else "#E2E8F0", bg="#2DD4BF" if k == st_now else "#1E293B")
             for k, b in filter_btns.items():
                 b.config(fg="#0B1120" if k == flt_now else "#E2E8F0", bg="#5EEAD4" if k == flt_now else "#1E293B")
 
@@ -2231,18 +2293,12 @@ def _toast_worker() -> None:
             elif flt_now == "video":
                 pool = [r for r in pool if r.get("kind") == "video"]
 
-            max_cnt = 5 if st_now == "small" else (8 if st_now == "medium" else 10)
-            snip_len = 36 if st_now == "small" else (48 if st_now == "medium" else 34)
-
-            if not q:
-                candidates = pool[:max_cnt]
-                trial_lbl.config(text="🎁 30일 무제한(D-30·차감없음)", fg="#FDE047")
-            else:
+            matched: list[tuple[float, dict]] = []
+            if q:
                 q_low = q.lower()
                 q_cho = _extract_chosung(q_low)
                 q_kor_alt = eng_to_kor(q) if re.search(r"[A-Za-z]", q) else ""
                 q_eng_alt = kor_to_eng(q) if re.search(r"[가-힣ㄱ-ㅎㅏ-ㅣ]", q) else ""
-                matched: list[tuple[float, dict]] = []
                 for idx_p, r in enumerate(pool):
                     raw_t = r.get("text", "")
                     clean_t = _clean_ocr_noise(raw_t) if r.get("kind") == "image" else raw_t
@@ -2259,11 +2315,45 @@ def _toast_worker() -> None:
                         matched.append((sc - idx_p * 0.0001, r))
                 if matched:
                     matched.sort(key=lambda x: x[0], reverse=True)
-                    candidates = [m[1] for m in matched[:max_cnt]]
-                    trial_lbl.config(text=f"🔍 '{q[:8]}' {len(matched)}건", fg="#5EEAD4")
-                else:
-                    candidates = pool[:max_cnt]
-                    trial_lbl.config(text=f"🔍 '{q[:6]}' 일치 없음(최근목록)", fg="#FDE047")
+
+            # [자율 크기 판별]: '작게(compact)' 모드일 때 검색량·미리보기 성격에 맞춰 소(520) ↔ 중(960) 자동 전환
+            has_rich = any(m[1].get("kind") in ("image", "doc") for m in matched[:5]) or (flt_now == "image" and len(pool) > 0 and bool(q))
+            auto_stage, auto_slim_h = resolve_ghost_search_auto_stage(
+                mode=st_state["mode"],
+                has_query=bool(q),
+                matched_count=len(matched) if q else len(pool[:5]),
+                has_rich_preview=has_rich,
+            )
+            prev_stage = st_state["stage"]
+            prev_h = st_state.get("custom_h")
+            st_state["stage"] = auto_stage
+            st_state["custom_h"] = auto_slim_h
+            if auto_stage == "medium" and prev_stage != "medium":
+                record_feature_telemetry("ghost_search_window_medium")
+
+            st_now = st_state["stage"]
+            is_large_mode = st_state["mode"] == "large"
+            mode_toggle_btn.config(
+                text="⤡ 작게" if is_large_mode else "⤢ 크게(갤러리)",
+                fg="#0B1120" if is_large_mode else "#5EEAD4",
+                bg="#2DD4BF" if is_large_mode else "#1E293B",
+            )
+
+            max_cnt = 5 if st_now == "small" else (8 if st_now == "medium" else 10)
+            snip_len = 36 if st_now == "small" else (48 if st_now == "medium" else 34)
+
+            if not q:
+                candidates = pool[:max_cnt]
+                trial_lbl.config(text="✨ 크기 자율 호흡 · 🎁 30일 무제한", fg="#FDE047")
+            elif matched:
+                candidates = [m[1] for m in matched[:max_cnt]]
+                trial_lbl.config(text=f"🔍 '{q[:8]}' {len(matched)}건" + (" · 자율확장" if st_now == "medium" else ""), fg="#5EEAD4")
+            else:
+                candidates = pool[:max_cnt]
+                trial_lbl.config(text=f"🔍 '{q[:6]}' 일치 없음(최근목록)", fg="#FDE047")
+
+            if (prev_stage != st_now or prev_h != auto_slim_h) and current_win[0] is win:
+                _resize_for_stage(activate=False)
 
             st_state["items"] = candidates
             st_state["sel_idx"] = min(st_state["sel_idx"], max(0, len(candidates) - 1))
@@ -2347,10 +2437,22 @@ def _toast_worker() -> None:
 
         def _on_key_rel(event=None):
             is_hovered[0] = True
-            if event and event.keysym in ("Up", "Down", "Return", "Escape"):
+            if event and event.keysym in ("Up", "Down", "Return", "Escape", "Tab"):
                 return
             st_state["sel_idx"] = 0
-            _render_search_results()
+            prev_job = st_state.get("debounce_job")
+            if prev_job is not None:
+                try:
+                    win.after_cancel(prev_job)
+                except Exception:
+                    pass
+
+            def _apply_debounced() -> None:
+                st_state["debounce_job"] = None
+                if current_win[0] is win:
+                    _render_search_results()
+
+            st_state["debounce_job"] = win.after(120, _apply_debounced)
 
         def _on_down(_e=None):
             if st_state["items"]:
@@ -2374,6 +2476,8 @@ def _toast_worker() -> None:
         s_entry.bind("<Down>", _on_down)
         s_entry.bind("<Up>", _on_up)
         s_entry.bind("<Return>", _on_ret)
+        s_entry.bind("<Tab>", _toggle_window_mode)
+        s_entry.bind("<Alt-Return>", _toggle_window_mode)
         s_entry.bind("<Escape>", lambda _e: None if (time.time() - _LAST_RBTN_DISMISS_ESC_TS) < 0.45 else _close_win())
 
         _render_search_results()
@@ -2873,6 +2977,55 @@ def show_ghost_toast(message: str, duration_ms: int = 1100) -> None:
     _toast_queue.put((message, duration_ms))
 
 
+_SOFT_SOUND_CACHE_LOCK = threading.Lock()
+_SOFT_SOUND_CACHE: dict[tuple[str, float, int], Path] = {}
+
+
+def _prepare_soft_wav_file(src_wav: Path, target_peak_ratio: float = 0.14) -> Path:
+    """
+    원본 .wav 파일의 Peak가 높더라도(예: 구버전 85% WAV가 남아있는 PC 등)
+    데몬 런타임에서 항상 은은한 목표 진폭(기본 14%, peak ≈ 4587)으로 정규화한 캐시 WAV를 반환합니다.
+    """
+    try:
+        st = src_wav.stat()
+        cache_key = (str(src_wav), round(target_peak_ratio, 3), int(st.st_mtime))
+        with _SOFT_SOUND_CACHE_LOCK:
+            cached = _SOFT_SOUND_CACHE.get(cache_key)
+            if cached and cached.exists():
+                return cached
+
+        import struct
+        import wave
+
+        with wave.open(str(src_wav), "rb") as wf:
+            params = wf.getparams()
+            raw = wf.readframes(params.nframes)
+
+        if params.sampwidth == 2 and len(raw) >= 2:
+            count = len(raw) // 2
+            samples = struct.unpack(f"<{count}h", raw[: count * 2])
+            cur_peak = max((abs(s) for s in samples), default=0)
+            target_peak = int(32767 * max(0.03, min(0.85, target_peak_ratio)))
+            if cur_peak > 0:
+                gain = target_peak / float(cur_peak)
+                # 이미 충분히 작고 차이가 미미하면(±12% 이내) 그대로 사용하되, 크면 즉시 감쇠
+                if not (0.88 <= gain <= 1.12):
+                    scaled = [max(-32768, min(32767, int(round(s * gain)))) for s in samples]
+                    raw_out = struct.pack(f"<{count}h", *scaled)
+                    out_dir = _MERLIN_APPDATA / "sound_cache"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_wav = out_dir / f"soft_{int(target_peak_ratio * 1000)}_{src_wav.name}"
+                    with wave.open(str(out_wav), "wb") as wf_out:
+                        wf_out.setparams(params)
+                        wf_out.writeframes(raw_out)
+                    with _SOFT_SOUND_CACHE_LOCK:
+                        _SOFT_SOUND_CACHE[cache_key] = out_wav
+                    return out_wav
+    except Exception:
+        pass
+    return src_wav
+
+
 def play_baby_ghost_sound(mode: str = "typo") -> None:
     cfg = get_superpower_settings()
     if not cfg.get("sound_enabled", True):
@@ -2882,6 +3035,10 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
     - mode="typo": 2단어 한영 오타 자동성형 시 ('애기귀신 퐁~ 띠링!' / 오르골 / 웃음소리 등 선택된 WAV)
     - mode="summon": Ctrl+0 귀신 부르는 단축키 발동 시 ('스윽~ 팅✨' 요정 소환음)
     """
+    vol = float(cfg.get("sound_volume", 0.25) or 0.25)
+    # 기본 vol=0.25 기준 peak 진폭 14% (~4587 / 32767)로 은은하게 재생 (구버전 85% WAV도 자동 감쇠)
+    target_ratio = max(0.04, min(0.60, 0.56 * vol))
+
     def _sound():
         try:
             import winsound
@@ -2890,7 +3047,8 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
             if not wav_path.exists():
                 wav_path = SOUNDS_DIR / ("sample6_ctrl0_summon.wav" if mode == "summon" else "sample2_cute_ghost_pop.wav")
             if wav_path.exists():
-                winsound.PlaySound(str(wav_path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+                play_path = _prepare_soft_wav_file(wav_path, target_peak_ratio=target_ratio)
+                winsound.PlaySound(str(play_path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
         except Exception:
             pass
 

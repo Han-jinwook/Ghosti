@@ -33,7 +33,7 @@ import { GhostSuperpowerDojo } from './ghostDojo/GhostSuperpowerDojo';
 import { GhostSearchTrainingPage } from './ghostDojo/GhostSearchTrainingPage';
 import {
   computeGhostSearchWindowRect,
-  GHOST_SEARCH_STAGE_LABELS,
+  resolveGhostSearchResponsiveSpec,
   type GhostSearchStage,
 } from '../services/ghostSearchWindowGeometry';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
@@ -359,14 +359,19 @@ export const DesktopDashboard: React.FC = () => {
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
   const [superpowerStatus, setSuperpowerStatus] = useState<SuperpowerTrialStatus | null>(null);
   /**
-   * [v1.3 · 공문 1611] 로컬 『👻 귀신검색창』 전용 화면 모드: ?ghostSearchWindow=small|medium|large
-   * - 사이드바·상단바 없이 기존 웹 「찾기」(구 ?preview=legacy 화면) 컴포넌트만 그대로 렌더 → 새 UI를 만들지 않고 100% 승계
-   * - Z-코어가 프레임리스 창(520×380 / 960×640 / 1440×900)으로 이 주소를 열면 창 폭에 맞춰 기존 반응형 레이아웃이 그대로 적용됨
+   * [v1.4 확정] 로컬 『👻 귀신검색창』 전용 화면 모드: ?ghostSearchWindow=small|medium|large|compact
+   * - 상단 수동 버튼은 일반 창처럼 [⤢ 크게(갤러리)] ↔ [⤡ 작게] 단 1개 토글(2모드)만 노출
+   * - 평소 '작게(compact)' 모드일 때는 검색량·미리보기(사진/문서 OCR) 유무에 따라 소형(520) ↔ 중형(960×640)으로 자율 반응형 조절
    */
   const [ghostSearchWindowStage, setGhostSearchWindowStage] = useState<'small' | 'medium' | 'large' | null>(() => {
     if (typeof window === 'undefined') return null;
     const v = new URLSearchParams(window.location.search).get('ghostSearchWindow');
+    if (v === 'compact') return 'small';
     return v === 'small' || v === 'medium' || v === 'large' ? v : null;
+  });
+  const [ghostSearchAnchor] = useState<{ x: number; y: number }>(() => {
+    if (typeof window === 'undefined') return { x: 200, y: 120 };
+    return { x: window.screenX || 200, y: window.screenY || 120 };
   });
   const [isInsideIframe] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -376,7 +381,7 @@ export const DesktopDashboard: React.FC = () => {
       return true;
     }
   });
-  const switchStandaloneGhostSearchStage = (nextStage: GhostSearchStage) => {
+  const applyStandaloneWindowGeometry = (nextStage: GhostSearchStage, customHeight?: number) => {
     setGhostSearchWindowStage(nextStage);
     try {
       const prev = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
@@ -393,14 +398,16 @@ export const DesktopDashboard: React.FC = () => {
     try {
       const rect = computeGhostSearchWindowRect(
         nextStage,
-        window.screenX || 200,
-        window.screenY || 120,
+        ghostSearchAnchor.x,
+        ghostSearchAnchor.y,
         {
           left: 0,
           top: 0,
           right: window.screen?.availWidth || 1920,
           bottom: window.screen?.availHeight || 1040,
-        }
+        },
+        20,
+        customHeight
       );
       window.resizeTo(rect.width, rect.height);
       window.moveTo(rect.x, rect.y);
@@ -408,6 +415,55 @@ export const DesktopDashboard: React.FC = () => {
       /* ignore */
     }
   };
+  const toggleStandaloneGhostSearchLargeMode = () => {
+    if (!ghostSearchWindowStage) return;
+    if (ghostSearchWindowStage === 'large') {
+      const totalMatched =
+        searchResults.length + matchedLocalDocs.length + matchedVaultPhotos.length + matchedVideoScenes.length;
+      const spec = resolveGhostSearchResponsiveSpec({
+        mode: 'compact',
+        hasQuery: Boolean(hasExecutedUserSearch && activeQuery.trim()),
+        resultCount: totalMatched,
+        hasRichPreview: searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
+      });
+      applyStandaloneWindowGeometry(spec.stage, spec.customHeight);
+    } else {
+      applyStandaloneWindowGeometry('large');
+    }
+  };
+  // '작게(소↔중 자율)' 모드일 때 검색 결과 양에 따라 120ms 디바운스로 창 크기를 자동 조절 (Top-Left 앵커 고정)
+  useEffect(() => {
+    if (!ghostSearchWindowStage || ghostSearchWindowStage === 'large' || isInsideIframe) return;
+    const timer = window.setTimeout(() => {
+      const cleanQ =
+        hasExecutedUserSearch &&
+        activeQuery &&
+        !activeQuery.startsWith('전체 갤러리 사진') &&
+        !activeQuery.startsWith('동영상 ') &&
+        !activeQuery.startsWith('최근 서류 ')
+          ? activeQuery.trim()
+          : '';
+      const totalMatched =
+        searchResults.length + matchedLocalDocs.length + matchedVaultPhotos.length + matchedVideoScenes.length;
+      const spec = resolveGhostSearchResponsiveSpec({
+        mode: 'compact',
+        hasQuery: Boolean(cleanQ),
+        resultCount: totalMatched,
+        hasRichPreview: searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
+      });
+      applyStandaloneWindowGeometry(spec.stage, spec.customHeight);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [
+    ghostSearchWindowStage,
+    isInsideIframe,
+    hasExecutedUserSearch,
+    activeQuery,
+    searchResults.length,
+    matchedLocalDocs.length,
+    matchedVaultPhotos.length,
+    matchedVideoScenes.length,
+  ]);
   const [isStage1MinimalPreview] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     if (new URLSearchParams(window.location.search).get('ghostSearchWindow')) return false;
@@ -1032,22 +1088,26 @@ export const DesktopDashboard: React.FC = () => {
             <span className="flex items-center gap-1.5">
               <span>👻 귀신검색창</span>
               <span className="text-[11px] text-[#5EEAD4]">
-                {ghostSearchWindowStage === 'large' ? '· 프레임리스 갤러리(1440×900)' : ghostSearchWindowStage === 'medium' ? '· 중형(960×640)' : '· 소형(520×380)'}
+                {ghostSearchWindowStage === 'large'
+                  ? '· 크게 (갤러리 1440×900)'
+                  : ghostSearchWindowStage === 'medium'
+                    ? '· 작게 (검색량 반응형 확장 · 960×640)'
+                    : '· 작게 (자율 슬림 · 520px)'}
               </span>
             </span>
             <div className="flex items-center gap-1.5">
-              {(['small', 'medium', 'large'] as GhostSearchStage[]).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => switchStandaloneGhostSearchStage(st)}
-                  className={`px-2.5 py-0.5 rounded cursor-pointer transition-colors ${
-                    ghostSearchWindowStage === st ? 'bg-[#2DD4BF] text-zinc-950 font-extrabold' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
-                  }`}
-                >
-                  {GHOST_SEARCH_STAGE_LABELS[st]}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={toggleStandaloneGhostSearchLargeMode}
+                title="크게(갤러리) / 작게(자율 반응형) 전환"
+                className={`px-2.5 py-0.5 rounded cursor-pointer transition-colors ${
+                  ghostSearchWindowStage === 'large'
+                    ? 'bg-[#2DD4BF] text-zinc-950 font-extrabold'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] font-extrabold border border-[#2DD4BF]/40'
+                }`}
+              >
+                {ghostSearchWindowStage === 'large' ? '⤡ 작게' : '⤢ 크게(갤러리)'}
+              </button>
               <button
                 type="button"
                 onClick={() => {

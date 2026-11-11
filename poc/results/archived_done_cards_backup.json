@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-10T14:46:35.093257",
+  "updated_at": "2026-11-11T09:35:49.264485",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -1034,6 +1034,30 @@
       "last_edited_time": "2026-11-10T05:10:00.000Z",
       "url": "https://app.notion.com/p/D-4-413f9ffd2c1d8141a96ddb46f8b33a79",
       "archived_at": "2026-11-10T14:46:35.093064"
+    },
+    {
+      "page_id": "413f9ffd-2c1d-818a-b3b5-c1c17ae940d6",
+      "title": "🎯 [귀신같이 ⑦] 손보기 속도 최적화 3대 보강(스케줄러·서비스 무력화 + 속도 비교 브리핑 + 크롬 메모리 진단) 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-10T05:16:00.000Z",
+      "url": "https://app.notion.com/p/3-413f9ffd2c1d818ab3b5c1c17ae940d6",
+      "archived_at": "2026-11-11T09:24:31.157243"
+    },
+    {
+      "page_id": "413f9ffd-2c1d-812a-80c6-d1dea1904a49",
+      "title": "🎯 [귀신같이 ③] 👻 귀신검색 수련장 & 3단 변신 귀신검색창 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-10T05:24:00.000Z",
+      "url": "https://app.notion.com/p/3-413f9ffd2c1d812a80c6d1dea1904a49",
+      "archived_at": "2026-11-11T09:28:35.662390"
+    },
+    {
+      "page_id": "414f9ffd-2c1d-804c-9970-de4e01b86b2c",
+      "title": "🎯 [귀신같이] 귀신검색의 스텝2 창에 대한 다른 아이디어",
+      "app": "",
+      "last_edited_time": "2026-11-10T05:27:00.000Z",
+      "url": "https://app.notion.com/p/2-414f9ffd2c1d804c9970de4e01b86b2c",
+      "archived_at": "2026-11-11T09:35:49.264277"
     }
   ]
 }

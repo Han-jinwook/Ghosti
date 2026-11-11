@@ -2,14 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { zCoreBridge } from '../../services/zCoreBridge';
 import {
   computeGhostSearchWindowRect,
+  resolveGhostSearchResponsiveSpec,
   GHOST_SEARCH_STAGE_LABELS,
   DEFAULT_WORK_AREA,
   type GhostSearchStage,
+  type GhostSearchWindowMode,
 } from '../../services/ghostSearchWindowGeometry';
 import { SUMMON_HOLD_MS } from '../../services/ghostDojoEngine';
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
+import { useSaySeeStore } from '../../store/useSaySeeStore';
 
 /** 로컬 귀신검색창이 여는 주소와 동일 (기존 웹 「찾기」 화면 100% 승계 전용 모드) */
 export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): string {
@@ -73,9 +76,9 @@ function consumePendingGhostSearchQuery(): string {
 const GAME_STORAGE_KEY = 'ghosti_search_game_v1';
 type GameStepId = 'summon' | 'medium' | 'large';
 const GAME_STEPS: Array<{ id: GameStepId; label: string }> = [
-  { id: 'summon', label: '빈 곳에서 Ctrl + 0 (우클릭 꾹~)' },
-  { id: 'medium', label: '중형으로 키워 사진·OCR 보기' },
-  { id: 'large', label: '🖼️ 갤러리로 펼쳐보기' },
+  { id: 'summon', label: '① 빈 곳에서 Ctrl + 0 소환 (작게·슬림)' },
+  { id: 'medium', label: '② 검색량에 따라 자율 확장 체험' },
+  { id: 'large', label: '③ [⤢ 크게(갤러리)] 전환' },
 ];
 
 function loadGame(): Partial<Record<GameStepId, boolean>> {
@@ -99,32 +102,32 @@ const AUTO_MORPH_SCRIPT: Array<{
     stage: null,
     cursorPct: { x: 62, y: 54 },
     clicking: true,
-    badge: '🎬 자동 움짤 1/4 · 바탕화면 우클릭 꾹~ (Ctrl+0)',
-    desc: '가상 모니터 빈 곳에서 우클릭 꾹~(0.35초) 또는 Ctrl+0을 누르면 마우스 위치에 귀신검색창이 소환됩니다.',
+    badge: '🎬 자동 시연 1/4 · 바탕화면 우클릭 꾹~ (Ctrl+0)',
+    desc: '가상 모니터 빈 곳에서 우클릭 꾹~(0.35초) 또는 Ctrl+0을 누르면 마우스 위치에 슬림한 귀신검색창이 소환됩니다.',
   },
   {
     phase: 1,
     stage: 'small',
-    cursorPct: { x: 64, y: 39 },
+    cursorPct: { x: 58, y: 34 },
     clicking: false,
-    badge: '🎬 자동 움짤 2/4 · [1단 소형 520×380] 초고속 검색창 소환!',
-    desc: '변신하는 도중에도 상단 [소형] · [중형] · [🖼️ 갤러리로 펼쳐보기]나 안쪽 버튼을 직접 마우스로 눌러보세요!',
+    badge: '🎬 자동 시연 2/4 · [작게 모드 · 자율 슬림 520px] 시야 방해 없는 빠른 검색!',
+    desc: '소환 직후나 단답 결과(1~3건)일 때는 시야를 가리지 않는 슬림한 크기를 스스로 유지합니다.',
   },
   {
     phase: 2,
     stage: 'medium',
-    cursorPct: { x: 69, y: 24 },
-    clicking: true,
-    badge: '🎬 자동 움짤 3/4 · [2단 중형 960×640] 사진·문서 미리보기 & 📝 OCR 글자 따기!',
-    desc: '[중형]으로 변신하면 우측 미리보기 패널과 [📝 OCR 글자 따기] 버튼이 함께 펼쳐집니다.',
+    cursorPct: { x: 56, y: 28 },
+    clicking: false,
+    badge: '🎬 자동 시연 3/4 · [작게 모드 · 자율 확장 960×640] 검색 결과·사진에 맞춰 알아서 스르륵!',
+    desc: '수동 버튼 없이도 검색 결과가 많아지거나 사진·문서 미리보기(OCR)가 잡히면 창이 알아서 쾌적하게 넓어집니다.',
   },
   {
     phase: 3,
     stage: 'large',
-    cursorPct: { x: 76, y: 12 },
+    cursorPct: { x: 82, y: 12 },
     clicking: true,
-    badge: '🎬 자동 움짤 4/4 · [3단 대형 1440×900] 🖼️ 갤러리로 펼쳐보기 완성!',
-    desc: '[🖼️ 갤러리로 펼쳐보기]를 누르면 내 PC의 모든 사진·문서를 한눈에 보는 대화면 갤러리로 변신합니다.',
+    badge: '🎬 자동 시연 4/4 · [⤢ 크게(갤러리) 1440×900] 일반 창처럼 크게/작게 단 2가지 모드!',
+    desc: '수동 버튼은 우측 상단 [⤢ 크게(갤러리) ↔ ⤡ 작게] 단 1개뿐! 한눈에 크게 볼 때만 눌러주세요.',
   },
 ];
 
@@ -135,9 +138,19 @@ const VirtualMonitorSimulator: React.FC<{
   onStep,
   initialQuery = '',
 }) => {
+  const {
+    hasExecutedUserSearch,
+    activeQuery,
+    searchResults,
+    matchedLocalDocs,
+    matchedVaultPhotos,
+    matchedVideoScenes,
+  } = useSaySeeStore();
   const monitorRef = useRef<HTMLDivElement | null>(null);
   const [monitorW, setMonitorW] = useState(960);
+  const [windowMode, setWindowMode] = useState<GhostSearchWindowMode>('compact');
   const [stage, setStage] = useState<GhostSearchStage | null>(initialQuery ? 'medium' : 'small');
+  const [customSlimHeight, setCustomSlimHeight] = useState<number | undefined>(initialQuery ? undefined : 340);
   const [anchor, setAnchor] = useState({ x: 1300, y: 600 });
   const [holdProgress, setHoldProgress] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(!initialQuery);
@@ -154,11 +167,13 @@ const VirtualMonitorSimulator: React.FC<{
     return () => ro.disconnect();
   }, []);
 
-  // 자동 변신 움짤(시뮬레이션) 루프: 사용자가 직접 클릭하기 전까지 소환 -> 소형 -> 중형 -> 갤러리 3단 변신을 자동 시연
+  // 자동 변신 시연 루프: 소환 -> 자율 슬림(520) -> 검색량 반응형 자율 확장(960) -> [⤢ 크게(갤러리)]
   useEffect(() => {
     if (!isAutoPlaying) return;
     const stepInfo = AUTO_MORPH_SCRIPT[autoPhase] || AUTO_MORPH_SCRIPT[1];
     setStage(stepInfo.stage);
+    setWindowMode(stepInfo.stage === 'large' ? 'large' : 'compact');
+    setCustomSlimHeight(stepInfo.stage === 'small' ? 340 : undefined);
     if (stepInfo.stage === 'small') {
       onStep('summon');
     } else if (stepInfo.stage === 'medium') {
@@ -176,32 +191,90 @@ const VirtualMonitorSimulator: React.FC<{
     return () => window.clearTimeout(timer);
   }, [isAutoPlaying, autoPhase]);
 
-  const switchToManualStage = (nextStage: GhostSearchStage | null, customAnchor?: { x: number; y: number }) => {
+  // 직접 조작 중 & '작게(compact)' 모드일 때: 창 안 검색어의 검색량·미리보기에 따라 소(520) ↔ 중(960) 자동 반응형 조절!
+  useEffect(() => {
+    if (isAutoPlaying || !stage || windowMode === 'large') return;
+    const timer = window.setTimeout(() => {
+      const cleanQ =
+        hasExecutedUserSearch &&
+        activeQuery &&
+        !activeQuery.startsWith('전체 갤러리 사진') &&
+        !activeQuery.startsWith('동영상 ') &&
+        !activeQuery.startsWith('최근 서류 ')
+          ? activeQuery.trim()
+          : '';
+      const totalMatched =
+        searchResults.length + matchedLocalDocs.length + matchedVaultPhotos.length + matchedVideoScenes.length;
+      const spec = resolveGhostSearchResponsiveSpec({
+        mode: 'compact',
+        hasQuery: Boolean(cleanQ),
+        resultCount: totalMatched,
+        hasRichPreview: searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
+      });
+      setStage(spec.stage);
+      setCustomSlimHeight(spec.customHeight);
+      if (spec.stage === 'medium') {
+        onStep('summon');
+        onStep('medium');
+      }
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [
+    isAutoPlaying,
+    stage,
+    windowMode,
+    hasExecutedUserSearch,
+    activeQuery,
+    searchResults.length,
+    matchedLocalDocs.length,
+    matchedVaultPhotos.length,
+    matchedVideoScenes.length,
+  ]);
+
+  const setManualMode = (nextMode: GhostSearchWindowMode | null, customAnchor?: { x: number; y: number }) => {
     setIsAutoPlaying(false);
     if (customAnchor) setAnchor(customAnchor);
-    setStage(nextStage);
-    if (nextStage) {
-      playBabyGhostChime('summon');
-      onStep('summon');
-      if (nextStage === 'medium') {
-        setAutoPhase(2);
-        onStep('medium');
-      } else if (nextStage === 'large') {
-        setAutoPhase(3);
-        onStep('medium');
-        onStep('large');
-      } else {
-        setAutoPhase(1);
-      }
-    } else {
+    if (nextMode === null) {
+      setStage(null);
       setAutoPhase(0);
+      return;
+    }
+    setWindowMode(nextMode);
+    playBabyGhostChime('summon');
+    onStep('summon');
+    if (nextMode === 'large') {
+      setStage('large');
+      setCustomSlimHeight(undefined);
+      setAutoPhase(3);
+      onStep('medium');
+      onStep('large');
+    } else {
+      const cleanQ =
+        hasExecutedUserSearch &&
+        activeQuery &&
+        !activeQuery.startsWith('전체 갤러리 사진') &&
+        !activeQuery.startsWith('동영상 ') &&
+        !activeQuery.startsWith('최근 서류 ')
+          ? activeQuery.trim()
+          : initialQuery.trim();
+      const totalMatched =
+        searchResults.length + matchedLocalDocs.length + matchedVaultPhotos.length + matchedVideoScenes.length;
+      const spec = resolveGhostSearchResponsiveSpec({
+        mode: 'compact',
+        hasQuery: Boolean(cleanQ),
+        resultCount: totalMatched,
+        hasRichPreview: searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
+      });
+      setStage(spec.stage);
+      setCustomSlimHeight(spec.customHeight);
+      setAutoPhase(spec.stage === 'medium' ? 2 : 1);
+      if (spec.stage === 'medium') onStep('medium');
     }
   };
 
   const summon = (x?: number, y?: number) => {
-    const nextStage: GhostSearchStage = initialQuery ? 'medium' : 'small';
-    switchToManualStage(
-      nextStage,
+    setManualMode(
+      'compact',
       typeof x === 'number' && typeof y === 'number' ? { x, y } : undefined,
     );
   };
@@ -221,7 +294,7 @@ const VirtualMonitorSimulator: React.FC<{
   });
 
   const scale = monitorW / DEFAULT_WORK_AREA.right;
-  const rect = stage ? computeGhostSearchWindowRect(stage, anchor.x, anchor.y) : null;
+  const rect = stage ? computeGhostSearchWindowRect(stage, anchor.x, anchor.y, DEFAULT_WORK_AREA, 20, customSlimHeight) : null;
   const currentScript = AUTO_MORPH_SCRIPT[autoPhase] || AUTO_MORPH_SCRIPT[1];
 
   const toVirtual = (e: React.MouseEvent) => {
@@ -264,22 +337,19 @@ const VirtualMonitorSimulator: React.FC<{
             <span className="text-[10px] text-zinc-400 font-bold tracking-wider">CAM</span>
           </div>
 
-          {/* 우측 단계 즉시 이동 & 움짤 재생/일시정지 컨트롤 */}
+          {/* 우측 2모드(작게/크게) 토글 & 자동 시연 재생/일시정지 컨트롤 */}
           <div className="flex items-center gap-1.5">
-            {(['small', 'medium', 'large'] as GhostSearchStage[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => switchToManualStage(s)}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold cursor-pointer transition-all ${
-                  stage === s
-                    ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-white/10'
-                }`}
-              >
-                {GHOST_SEARCH_STAGE_LABELS[s]}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => setManualMode(stage === 'large' ? 'compact' : 'large')}
+              className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold cursor-pointer transition-all ${
+                stage === 'large'
+                  ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
+              }`}
+            >
+              {stage === 'large' ? '⤡ 작게 (자율 모드)' : '⤢ 크게 (갤러리)'}
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -296,7 +366,7 @@ const VirtualMonitorSimulator: React.FC<{
                   : 'bg-emerald-400/20 border-emerald-300/60 text-emerald-200 hover:bg-emerald-400/30'
               }`}
             >
-              {isAutoPlaying ? '⏸ 움짤 일시정지' : '▶ 자동 움짤 다시 재생'}
+              {isAutoPlaying ? '⏸ 시연 일시정지' : '▶ 자동 시연 다시 재생'}
             </button>
           </div>
         </div>
@@ -358,7 +428,7 @@ const VirtualMonitorSimulator: React.FC<{
             ].map((item) => (
               <div
                 key={item.name}
-                onClick={() => switchToManualStage(stage || 'small')}
+                onClick={() => setManualMode(windowMode)}
                 className="flex flex-col items-center gap-0.5 w-20 p-1.5 rounded-lg bg-black/25 hover:bg-white/15 border border-white/10 cursor-pointer transition-colors text-center"
               >
                 <span className="text-[18px] leading-none">{item.icon}</span>
@@ -367,7 +437,7 @@ const VirtualMonitorSimulator: React.FC<{
             ))}
           </div>
 
-          {/* 상단 현재 변신 단계 캡션 배너 (움짤 설명 + 직접 클릭 안내) */}
+          {/* 상단 현재 변신 단계 캡션 배너 (시연 설명 + 직접 클릭 안내) */}
           <div
             data-keep-dark="true"
             className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center gap-0.5 px-3.5 py-1.5 rounded-full bg-black/75 border border-[#2DD4BF]/50 text-white shadow-lg backdrop-blur-sm max-w-[92%]"
@@ -375,12 +445,12 @@ const VirtualMonitorSimulator: React.FC<{
             <span className="text-[11.5px] font-extrabold text-[#5EEAD4] truncate">
               {isAutoPlaying
                 ? currentScript.badge
-                : `👆 직접 조작 중 · 현재 [${stage ? GHOST_SEARCH_STAGE_LABELS[stage] : '바탕화면 대기'}] 화면입니다`}
+                : `👆 직접 조작 중 · 현재 [${stage ? GHOST_SEARCH_STAGE_LABELS[stage] : '바탕화면 대기'}] 상태입니다`}
             </span>
             <span className="text-[10.5px] text-zinc-200 truncate hidden sm:inline">
               {isAutoPlaying
                 ? currentScript.desc
-                : '상단 [소형] · [중형] · [🖼️ 갤러리로 펼쳐보기] 또는 창 안의 [📝 OCR 글자 따기]를 직접 눌러보세요!'}
+                : '검색어를 입력하면 결과 양에 맞춰 소↔중 크기가 자동 조절되며, 수동 버튼은 [⤢ 크게(갤러리) / ⤡ 작게] 딱 하나입니다!'}
             </span>
           </div>
 
@@ -400,7 +470,7 @@ const VirtualMonitorSimulator: React.FC<{
             </div>
           )}
 
-          {/* ─── 3단 변신 가상 귀신검색창 (부드러운 애니메이션 + 변신 중 직접 클릭 100% 지원) ─── */}
+          {/* ─── 자율 반응형(소↔중) + 크게/작게 2모드 가상 귀신검색창 ─── */}
           {rect && (
             <div
               data-keep-dark="true"
@@ -426,32 +496,34 @@ const VirtualMonitorSimulator: React.FC<{
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-[#2DD4BF] font-extrabold">
-                      👻 귀신검색창 {rect.framelessAppMode ? '· 대화면 스마트 갤러리 (1440×900)' : stage === 'medium' ? '· 중형 사진·OCR (960×640)' : '· 소형 빠른 검색 (520×380)'}
+                      👻 귀신검색창{' '}
+                      {rect.framelessAppMode
+                        ? '· 크게 (스마트 갤러리 1440×900)'
+                        : stage === 'medium'
+                          ? '· 작게 (검색량 반응형 확장 · 960×640)'
+                          : '· 작게 (자율 슬림 · 520px)'}
                     </span>
                     <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold">
-                      👆 직접 클릭 가능
+                      {rect.framelessAppMode ? '🖼️ 전체 갤러리' : '✨ 크기 자율 호흡 중'}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {(['small', 'medium', 'large'] as GhostSearchStage[]).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={() => switchToManualStage(s)}
-                        className={`px-2.5 py-0.5 rounded font-extrabold cursor-pointer transition-all ${
-                          stage === s
-                            ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm ring-2 ring-[#5EEAD4]/60'
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
-                        }`}
-                      >
-                        {GHOST_SEARCH_STAGE_LABELS[s]}
-                      </button>
-                    ))}
                     <button
                       type="button"
                       onMouseDown={(e) => e.stopPropagation()}
-                      onClick={() => switchToManualStage(null)}
+                      onClick={() => setManualMode(stage === 'large' ? 'compact' : 'large')}
+                      className={`px-2.5 py-0.5 rounded font-extrabold cursor-pointer transition-all ${
+                        stage === 'large'
+                          ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm ring-2 ring-[#5EEAD4]/60'
+                          : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
+                      }`}
+                    >
+                      {stage === 'large' ? '⤡ 작게' : '⤢ 크게(갤러리)'}
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => setManualMode(null)}
                       className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-rose-600 text-zinc-200 cursor-pointer"
                     >
                       ✕
@@ -471,7 +543,7 @@ const VirtualMonitorSimulator: React.FC<{
             </div>
           )}
 
-          {/* 자동 움짤 모드일 때 움직이는 가상 마우스 커서 & 클릭 파동 이펙트 */}
+          {/* 자동 시연 모드일 때 움직이는 가상 마우스 커서 & 클릭 파동 이펙트 */}
           {isAutoPlaying && (
             <div
               data-keep-dark="true"
@@ -491,10 +563,10 @@ const VirtualMonitorSimulator: React.FC<{
                 {autoPhase === 0
                   ? '우클릭 꾹~ 소환!'
                   : autoPhase === 1
-                    ? '소형 → [중형] 클릭'
+                    ? '작게 모드 · 자율 슬림(520px)'
                     : autoPhase === 2
-                      ? '중형(사진·OCR) → [갤러리] 클릭'
-                      : '3단 갤러리 변신 완료!'}
+                      ? '검색 결과↑ → 알아서 960×640 확장!'
+                      : '[⤢ 크게(갤러리)] 클릭 전환!'}
               </span>
             </div>
           )}
@@ -671,7 +743,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
       <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">
-            STEP 2 · 귀신검색 도장깨기 (🖥️ 가상 모니터 3단 변신 움짤 &amp; 직접 클릭 체험)
+            STEP 2 · 귀신검색 도장깨기 (🖥️ 자율 반응형 크기 조절 &amp; [크게 / 작게] 2모드 체험)
           </h2>
           <div className="flex flex-wrap gap-1.5">
             {GAME_STEPS.map((s) => (
@@ -717,7 +789,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
         {connected ? (
           <button
             type="button"
-            onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
+            onClick={() => void triggerRealGhostSearchWindow(pendingQuery ? 'medium' : 'small', pendingQuery)}
             className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer"
           >
             👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기
