@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { silencePendingEnterGiggleOnLogoClick } from '../services/babyGhostSound';
 
 export interface GhostiBrandLogoProps {
   /** 'desktop' (기본: 36x36px 아이콘) | 'mobile' (32x32px 아이콘) | 'modal' (모달 상단용) */
@@ -76,7 +77,11 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
 
   return (
     <div
-      onClick={onClick}
+      data-ghosti-brand-logo="true"
+      onClick={() => {
+        silencePendingEnterGiggleOnLogoClick();
+        onClick?.();
+      }}
       title="귀신같이 — 1초 AI 내용검색 사진·영상·문서 찾기"
       className={`inline-flex items-center gap-2 select-none ${
         onClick ? 'cursor-pointer group' : ''

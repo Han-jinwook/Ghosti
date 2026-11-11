@@ -469,6 +469,12 @@ SHIFTLESS_DOUBLE_CONSONANT_FIX = {
     "날시": "날씨",
     "박으로": "밖으로",
     "박에": "밖에",
+    "덕복이": "떡볶이",
+    "덕볶이": "떡볶이",
+    "떡복이": "떡볶이",
+    "덕복이가": "떡볶이가",
+    "덕볶이가": "떡볶이가",
+    "떡복이가": "떡볶이가",
 }
 
 
@@ -3248,8 +3254,12 @@ def get_clipboard_hdrop_files() -> list[str]:
     return files
 
 
+_SELF_HDROP_UNTIL: float = 0.0
+
+
 def set_clipboard_hdrop_files(filepaths: list[str]) -> bool:
     """다중 실물 파일 경로를 윈도우 탐색기 파일 복사 포맷(CF_HDROP)으로 클립보드에 주입"""
+    global _SELF_HDROP_UNTIL
     valid_paths = [str(Path(fp).resolve()) for fp in filepaths if fp]
     if not valid_paths:
         return False
@@ -3267,6 +3277,7 @@ def set_clipboard_hdrop_files(filepaths: list[str]) -> bool:
                     if ptr:
                         ctypes.memmove(ptr, payload, len(payload))
                         k32.GlobalUnlock(hmem)
+                        _SELF_HDROP_UNTIL = time.time() + 1.2
                         u32.SetClipboardData(CF_HDROP, hmem)
                         return True
             finally:
@@ -3973,61 +3984,163 @@ def _fix_korean_spacing_general(s: str) -> str:
         # 개별 단어를 일일이 정규식으로 등록하지 않아도, 한국어 교착어 문법(조사·어미 닫힌 집합)과
         # AI 토크나이저 어절 시작 사전을 교차 검증하여 미등록 문장까지 범용으로 띄어쓰기 교정!
         s = re.sub(r"띄워\s*쓰기", "띄어쓰기", s)
-        s = re.sub(r"(?<![가-힣])(내가|네가|제가|우리가|누가|나는|너는|저는|우리는)(?=[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"(?<![가-힣])(오늘|내일|모레|어제|그제)(?=(?![은는이가도만부터까지날\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
+        # 잘못 띄어진 서술격조사 선어말어미('말이 었지' -> '말이었지') 및 1음절 격조사·보조사 복원 ('떡볶이 가나왔어요' -> '떡볶이가 나왔어요', '핫도 그가 나왔어요' -> '핫도그가 나왔어요', '내일 의메뉴는' -> '내일의 메뉴는')
+        s = re.sub(r"([가-힣]+이)\s+((?:었|셨|겠)[가-힣]+)", r"\1\2", s)
+        # 단, 뒷부분이 실제 연결어미('가서', '와서', '봐서', '해서', '나서')인 경우('병원에 가서')는 절대 앞 단어에 붙이지 않음!
+        s = re.sub(r"([가-힣]{2,})\s+([이가은는을를의])(?=(?!(?:서|니까|지만|면|며|면서|고|야|요|다|네|군|라|자)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})", r"\1\2 ", s)
+        s = re.sub(r"(?<![가-힣])핫도\s+그(?=[가은는을를도만로\s.,?!:;~^)]|$)", "핫도그", s)
+        s = re.sub(r"(?<![가-힣])떡볶\s+이(?=[가은는을를도만로\s.,?!:;~^)]|$)", "떡볶이", s)
+        # 지시관형사('그/이/저') + 일반 인칭·사물 명사 분리 ('그사람' -> '그 사람')
+        s = re.sub(r"(?<![가-힣])(그|이|저)(?=(?:사람|분|친구|아이|애|남자|여자|학생|선생님|가게|식당|카페|회사|병원|학교|집|방|곳|문제|일|말|생각|마음|이야기|얘기|소식|영화|책|노래|음식|메뉴)[이가은는을를의에에서으로로와과도만\s.,?!:;~^)])", r"\1 ", s)
+        s = re.sub(r"(?<![가-힣])(내가|네가|제가|우리가|누가|나는|너는|저는|우리는|나의|너의|저의|우리의|그의|그녀의|오늘의|내일의|어제의|올해의|이번의)(?=[가-힣]{2,})", r"\1 ", s)
+        s = re.sub(r"(?<![가-힣])(오늘|내일|모레|어제|그제)(?=(?![은는이가의도만부터까지날\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
         s = re.sub(r"(띄어쓰기)(?=(?![가을를은는도만의에로와과\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"([가-힣]{2,})(?=(?:못해서|못하|못했|못한|못할|안해서|안하|안했|안한|안할|안되|안돼|안됐|끝나면|끝나고|끝나서|마치면|마치고|먹으러|마시러|보러|사러|찾으러|놀러)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
-        # G1) 2음절 이상 복합 조사('에서/에게/한테/께서/으로/부터/까지/보다/처럼/만큼/조차/마저/에는/에도/에서는/으로는') 및 시간·장소+'에' 뒤 범용 어절 분리
+        s = re.sub(r"([가-힣]{2,})(?=(?:못해서|못하|못했|못한|못할|못받|못가|못오|못보|못먹|못자|안해서|안하|안했|안한|안할|안되|안돼|안됐|끝나면|끝나고|끝나서|마치면|마치고|먹으러|마시러|보러|사러|찾으러|놀러|위해서는|위해서|위해)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
+        s = re.sub(r"(?<![가-힣])(못|안)(?=(?:해서|하|했|한|할|받|가|오|보|먹|자|되|돼|됐)[가-힣]*(?=[\s.,?!:;~^)]|$))", r"\1 ", s)
+        s = re.sub(r"(?<![가-힣])(위해서는|위해서|위해)(?=[가-힣]{2,})", r"\1 ", s)
+        s = re.sub(r"([가-힣]{2,})(?=(?:중이라서|중이라|중이니|중인데|중입니|중이에|중이오)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
+        # G1) 2음절 이상 복합 조사('에서/에게/한테/께서/으로/부터/까지/보다/처럼/만큼/조차/마저/에는/에도/에서는/으로는/이라서/라서') 및 시간·장소+'에' 뒤 범용 어절 분리
         s = re.sub(
-            r"([가-힣]{1,6}(?:에서|에게|한테|께서는|께서|으로|부터|까지|보다|처럼|만큼|조차|마저|에는|에도|에서는|으로는))(?=(?![는도만요의가을를\s.,?!:;~^)])[가-힣]{2,})",
+            r"([가-힣]{1,6}(?:에서|에게|한테|께서는|께서|으로|부터|까지|보다|처럼|만큼|조차|마저|에는|에도|에서는|으로는|이라서|라서))(?=(?![는도만요의가을를\s.,?!:;~^)])[가-힣]{2,})",
             lambda m: m.group(0) if (m.group(0) in AI_ENGINE.ko_subwords) else (m.group(1) + " "),
             s,
         )
         s = re.sub(
-            r"(?<![가-힣])((?:아침|점심|저녁|새벽|주말|평일|오전|오후|이번|다음|중간|마지막|학교|회사|병원|은행|식당|카페|공원|시장|매장|현장|사무실|회의실)에)(?=(?![는도만서\s.,?!:;~^)])[가-힣]{2,})",
+            r"(?<![가-힣])((?:아침|점심|저녁|새벽|주말|평일|오전|오후|이번|다음|중간|마지막|학교|회사|병원|은행|식당|카페|공원|시장|매장|현장|사무실|회의실|집|방|교실|거실|부엌|화장실|역|공항|도서관|백화점|마트|약국|헬스장|운동장)에)(?=(?![는도만서\s.,?!:;~^)])[가-힣]{2,})",
             r"\1 ",
             s,
         )
-        # G2) 연결어미('-아서/-어서/-해서/-봐서/-와서/-가서/-나서/-돼서/-니까/-지만/-는데/-은데/-던데/-면서/-자마자/-려고/-도록/-으러/-길래/-거든/-잖아/-나면/-으면/-다면/-오면/-가면/-보면/-하면/-되면') 뒤 범용 어절 분리
+        # G2) 연결어미·관형사형 어미 뒤 범용 어절 분리
         s = re.sub(
-            r"([가-힣]+(?:아서|어서|여서|해서|봐서|와서|가서|나서|돼서|니까|지만|는데|은데|던데|면서|자마자|려고|도록|으러|길래|거든|잖아|끝나면|끝나고|마치면|마치고|으시면|시면|나면|으면|다면|오면|가면|보면|하면|되면))(?=(?![요서도만\s.,?!:;~^)])[가-힣]{2,})",
+            r"([가-힣]+(?:아서|어서|여서|해서|봐서|와서|가서|나서|돼서|내려서|올라서|열려서|닫혀서|밀려서|막혀서|걸려서|풀려서|니까|지만|는데|은데|던데|면서|자마자|려고|도록|으러|길래|거든|잖아|끝나면|끝나고|마치면|마치고|으시면|시면|나면|으면|다면|오면|가면|보면|하면|되면|주신|하신|오신|가신|보신|드신|만든|먹은|입은|들은))(?=(?![요서도만\s.,?!:;~^)])[가-힣]{2,})",
             r"\1 ",
             s,
         )
-        # G3) 1음절 격조사('을/를/은/는/이/가/도/만/와/과') + 용언/서술어 또는 EmbeddingGemma 2 '▁' 시작 어절 경계 범용 분리
+        s = re.sub(
+            r"(?<![가-힣])(해서|가서|와서|봐서|나서|돼서|주신|하신|오신|가신|보신|드신)(?=(?![는도만요\s.,?!:;~^)])[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        s = re.sub(
+            r"([가-힣]{2,}(?:하고|먹고|보고|듣고|쓰고|읽고|사고|팔고|만나|모여|찾아|잡아|열고|닫고))(?=(?![서도만는요있없싶나\s.,?!:;~^)])[가-힣]{2,})",
+            r"\1 ",
+            s,
+        )
+        s = re.sub(
+            r"([가-힣]+(?:잘|못|안))(?=(?:거예요|거야|겁니다|건가요|할게요|할래요|할까요))",
+            r"\1 ",
+            s,
+        )
+        # G3) 1음절 격조사('을/를/은/는/이/가/의/도/만/와/과') + 용언/서술어 또는 일반 명사(체언+조사) 경계 범용 분리
         _COMPOUND_NO_SPLIT_PREFIX = (
             "이유", "이번", "이런", "이렇", "그런", "저런", "가능", "가운데", "가방", "가족", "가게", "가격", "가치",
             "가장", "가끔", "가슴", "가을", "도움", "도착", "도전", "도구", "도시", "도로", "도서관", "만약", "만족",
-            "만큼", "만남", "만들", "은혜", "은행", "오늘", "내일", "모레", "어제",
+            "만큼", "만남", "만들", "은혜", "은행", "오늘", "내일", "모레", "어제", "핫도", "떡볶", "의견", "의미",
+            "의사", "의자", "의류", "의료", "의무", "의문", "의식", "의지", "의존", "와인", "과일", "과자", "과정", "과학",
         )
+        # 조사로 잘못 쪼개지면 안 되는 단일 명사(끝 글자가 조사와 우연히 겹치는 명사 원형)
+        _NOUN_FALSE_JOSA_WORDS = {
+            "핫도", "떡볶", "고양", "강아", "호랑", "원숭", "코끼", "어린", "할머", "할아버", "아주머", "아저",
+            "고객만", "불만", "백만", "천만", "얼마만", "오랜만", "잠깐만", "비만", "낭만", "교만", "거만", "충만", "자만",
+            "회의", "논의", "합의", "동의", "건의", "항의", "강의", "정의", "예의", "성의", "유의", "주의", "결의", "선의", "악의", "고의", "편의", "어의", "상의", "하의", "내의", "우의", "수의",
+            "기타", "기차", "기자", "기사", "기회", "기억", "기분", "기본", "기술", "기준", "기업", "기관", "기간", "기능",
+            "도마", "도구", "도시", "도로", "도움", "도전", "도착", "도서", "도표", "도형",
+            "만두", "만화", "만남", "만족", "만약", "만점",
+            "가지", "가방", "가족", "가게", "가격", "가수", "가슴", "가을", "가운데",
+            "사과", "치과", "안과", "내과", "외과", "일과", "교과", "성과", "결과", "효과", "통과", "초과",
+            "내려", "올라", "들어가", "나가", "돌아가", "지나가", "다가가", "따라가",
+        }
+        # 뒷부분 첫 글자가 조사('가/이/은/는/을/를/의/에/로/와/과/도/만')인 경우 실제로는 앞 체언의 조사인데 뒷부분으로 넘어간 오분할 방지
+        _RIGHT_BAD_JOSA_STARTS = {
+            "가게", "가격", "가까", "가는", "가능", "가면", "가서", "가수", "가장", "가정", "가져", "가족", "가지", "가진",
+            "과거", "과정", "과학", "도로", "도시", "도와", "도움", "도입", "도전", "도착", "도형", "로그",
+            "만나", "만든", "만들", "만족", "만큼", "에게", "에서", "은행", "의견", "의료", "의미", "의한", "의해",
+            "이거", "이건", "이걸", "이것", "이게", "이곳", "이날", "이는", "이동", "이때", "이러", "이런", "이론",
+            "이루", "이르", "이를", "이름", "이미", "이번", "이상", "이슈", "이야", "이어", "이에", "이용", "이유",
+            "이전", "이제", "이차", "이하", "이해", "이후", "그가", "그는", "그의", "그를", "그에", "그도", "그만",
+        }
 
         def _split_unspaced_chunk_by_grammar_and_vocab(match_chunk: re.Match) -> str:
             chunk = match_chunk.group(0)
             if len(chunk) < 4 or chunk in AI_ENGINE.ko_subwords or chunk in AI_ENGINE.ko_word_starts:
                 return chunk
-            # 1) 앞부분이 1~5음절 체언 + 격조사(을/를/은/는/이/가/도/만)이고 뒷부분이 서술어 어미 또는 AI 어절 시작 단어인 경우
+            candidate_splits: list[int] = []
             for idx in range(2, min(len(chunk) - 1, 7)):
                 left = chunk[:idx]
                 right = chunk[idx:]
+                stem = left[:-1]
+                josa = left[-1]
+                if left in _NOUN_FALSE_JOSA_WORDS:
+                    continue
                 if left.startswith(_COMPOUND_NO_SPLIT_PREFIX) and len(left) <= 3:
                     continue
-                if left[-1] in "을를은는이가도만" and len(right) >= 2:
-                    # 뒷부분이 용언/형용사 활용형이거나 EmbeddingGemma 2 어절 시작점('▁') 사전에 존재하는 경우
+                if stem in ("핫", "떡", "고", "강", "선", "선생", "어", "할") and josa in "도볶양아생린이머":
+                    continue
+                if right[0] in "이가은는을를의에로와과도만" and (left + right[0])[:-1] in ("떡볶이", "핫도그", "고양이", "강아지", "호랑이", "원숭이", "어린이", "할머니", "할아버지", "선생님"):
+                    continue
+                if josa == "만" and right.startswith(("족", "큼", "남", "두", "화", "점", "원", "명", "개", "건")):
+                    continue
+                # 선어말어미('었/았/였/겠/셨')는 독립 어절의 첫 글자가 될 수 없으므로 분리 영구 차단 ('말이었지', '선생님이셨어요' 등)
+                if right[0] in "었았였겠셨":
+                    continue
+                # 서술격조사 '이다' 활용형('말이었지/학생이다/사람이고/말이지/사실이네/학생이라서/뜻이야/사람이에요/학생이니까/말이지만') 오분리 차단
+                if josa == "이" and re.match(
+                    r"^(?:었|았|였|겠|셨|다$|고$|지$|네$|군$|구나$|구먼$|라(?:서|며|고|도|니|야|는|ㄴ)?$|야$|에?요$|예?요$|니까$|니$|며$|면서$|면$|지만$|나$|든$|든지$|거나$|므로$|기[에는도만야]?$|자$)",
+                    right,
+                ):
+                    continue
+                if josa in "을를은는이가의도만와과" and len(right) >= 2:
+                    stem_code = ord(stem[-1]) - 0xAC00
+                    has_jong = (stem_code % 28) != 0
+                    if josa == "이" and not has_jong:
+                        continue
+                    if josa == "가" and has_jong:
+                        continue
+                    if josa == "은" and not has_jong:
+                        continue
+                    if josa == "는" and has_jong:
+                        continue
+                    if josa == "을" and not has_jong:
+                        continue
+                    if josa == "를" and has_jong:
+                        continue
+                    if josa == "과" and not has_jong:
+                        continue
+                    if josa == "와" and has_jong:
+                        continue
+
                     is_right_pred = bool(
                         re.search(
-                            r"(?:습니다|입니다|ㅂ니다|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|네요|군요|거든요|잖아요|까요|나요|세요|아서|어서|여서|해서|니까|지만|는데|은데|던데|면서|려고|도록|으러|고|며|지|다|네|군|자|라|어|아|해|워|봐|와)$",
+                            r"(?:습니다|입니다|ㅂ니다|습니까|입니까|ㅂ니까|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|네요|군요|거든요|잖아요|까요|나요|세요|셨어요|셨습니다|왔어요|갔어요|났어요|봤어요|했어요|됐어요|썼어요|탔어요|췄어요|졌어요|렸어요|겼어요|웠어요|았어요|었어요|였어요|아서|어서|여서|해서|니까|지만|는데|은데|던데|면서|려고|도록|으러|고|며|지|다|네|군|자|라|어|아|해|워|봐|와)$",
                             right,
                         )
                     )
-                    is_right_vocab_start = (
-                        right in AI_ENGINE.ko_word_starts
-                        or any(right.startswith(ws) for ws in AI_ENGINE.ko_word_starts if len(ws) >= 2)
-                    )
-                    if is_right_pred or is_right_vocab_start:
-                        return f"{left} {right}"
+                    # 뒷부분이 또 다른 체언(1~4음절) + 조사('은/는/이/가/을/를/의/에/에서/으로/로/도/만')로 끝나는 경우 (예: '강아지가' + '공원에서', '고양이가' + '잠을', '선생님이' + '숙제를')
+                    is_right_noun_josa = bool(
+                        re.fullmatch(
+                            r"[가-힣]{1,4}(?:에서|에게|한테|으로|에는|에도|은|는|이|가|을|를|의|에|로|도|만|와|과)",
+                            right,
+                        )
+                    ) and right[0] not in "이가은는을를의에로와과도만"
+                    is_right_vocab_start = False
+                    if right not in _RIGHT_BAD_JOSA_STARTS:
+                        if right in AI_ENGINE.ko_word_starts:
+                            is_right_vocab_start = True
+                        else:
+                            for ws in AI_ENGINE.ko_word_starts:
+                                if len(ws) >= 2 and ws not in _RIGHT_BAD_JOSA_STARTS and right.startswith(ws):
+                                    is_right_vocab_start = True
+                                    break
+                    if is_right_pred or is_right_noun_josa or is_right_vocab_start:
+                        candidate_splits.append(idx)
+
+            if candidate_splits:
+                best_idx = candidate_splits[0]
+                return f"{chunk[:best_idx]} {chunk[best_idx:]}"
             return chunk
 
-        s = re.sub(r"[가-힣]{4,}", _split_unspaced_chunk_by_grammar_and_vocab, s)
+        for _ in range(2):
+            s = re.sub(r"[가-힣]{4,}", _split_unspaced_chunk_by_grammar_and_vocab, s)
     return re.sub(r" +", " ", s).strip()
 
 
@@ -4816,6 +4929,7 @@ AUTOCORRECT_EXCLUDE_PROCESSES: set[str] = {
     "ichitaro.exe",
     "atok.exe",
     # 4. 개발자 코딩 IDE (영문 코드 작성 시 오타 판정 간섭 원천 방지)
+    "antigravity.exe",
     "code.exe",
     "devenv.exe",
     "cursor.exe",
@@ -5411,11 +5525,13 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
 
 def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[str]:
     """
-    [무오염 탐색기 선택 파일 경로 추출 — 모든 설치 경로(Ghosti/MerlinTools/Secretary) 100% 호환]:
-    1) COM Shell.Application을 직접 조회하여 target_hwnd(또는 현재 포그라운드 탐색기 창)에서
-       클릭 선택(SelectedItems)되어 있는 파일 경로만 정확히 추출합니다.
-       ※ FocusedItem은 빈 공간을 클릭했을 때도 직전 포커스 잔재가 남을 수 있으므로 오직 명시적 SelectedItems만 사용!
-    2) 필요 시 plugin_ghosti_care_suite 후보 경로 폴백까지 지원합니다.
+    [무오염 탐색기·바탕화면 선택 파일 경로 추출 — 모든 설치 경로(Ghosti/MerlinTools/Secretary) 100% 호환]:
+    1) 바탕화면(Progman/WorkerW): Shell.Application.Windows().FindWindowSW(SWC_DESKTOP=8)의 SelectedItems만 조회하며,
+       바탕화면 프로그램 바로가기(.lnk, .url)는 라벨링 대상에서 제외해 빈 바탕화면 검색창 소환을 방해하지 않습니다.
+    2) 탐색기 폴더 창(CabinetWClass/ExploreWClass): Win11 멀티탭 활성 탭(ShellTabWindowClass)을 정확히 매칭하여
+       클릭 선택(SelectedItems)되어 있는 파일 경로만 추출합니다.
+    3) ※ 절대 금기: 빈 공간을 클릭해 선택을 해제했을 때(sel.Count == 0) FocusedItem 폴백을 호출하면
+       직전 점선 포커스 파일이 딸려 나와 검색창 대신 귀신창이 뜨므로, 창 매칭 성공 시 빈 배열([])을 즉시 반환합니다!
     """
     if sys.platform != "win32":
         return []
@@ -5424,44 +5540,62 @@ def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[st
         import win32com.client  # type: ignore
 
         chk_hwnd = int(target_hwnd) if target_hwnd else int(u32.GetForegroundWindow())
+        cls_chk = _get_win_class_only(chk_hwnd)
         shell = win32com.client.Dispatch("Shell.Application")
+
+        # 1) 바탕화면(Progman / WorkerW) 선택 아이콘 직접 조회
+        if cls_chk in ("Progman", "WorkerW"):
+            desk_win = shell.Windows().FindWindowSW(0, 0, 8, 0, 1)
+            if desk_win is not None:
+                sel_d = desk_win.Document.SelectedItems()
+                for idx in range(sel_d.Count):
+                    dp = sel_d.Item(idx).Path
+                    if dp and os.path.exists(dp):
+                        if Path(str(dp)).suffix.lower() not in (".lnk", ".url"):
+                            paths.append(str(dp))
+                return paths
+
+        # 2) 탐색기 폴더 창(CabinetWClass / ExploreWClass) — Win11 멀티탭 활성 탭 우선 매칭
+        active_tab_hwnd = int(u32.FindWindowExW(chk_hwnd, 0, "ShellTabWindowClass", None) or 0) if chk_hwnd else 0
+        matched_window = None
+        fallback_window = None
         for window in shell.Windows():
             try:
-                if int(window.HWND) == chk_hwnd:
-                    doc = window.Document
-                    sel = doc.SelectedItems()
-                    for idx in range(sel.Count):
-                        item_path = sel.Item(idx).Path
-                        if item_path and os.path.exists(item_path):
-                            paths.append(str(item_path))
+                if int(window.HWND) != chk_hwnd:
+                    continue
+                if fallback_window is None:
+                    fallback_window = window
+                if active_tab_hwnd:
+                    try:
+                        import pythoncom  # type: ignore
+
+                        SID_STopLevelBrowser = pythoncom.MakeIID("{4C96BE40-915C-11CF-99D3-00AA004AE837}")
+                        sp = window._oleobj_.QueryInterface(pythoncom.IID_IServiceProvider)
+                        ole_win = sp.QueryService(SID_STopLevelBrowser, pythoncom.IID_IOleWindow)
+                        if int(ole_win.GetWindow()) == active_tab_hwnd:
+                            matched_window = window
+                            break
+                    except Exception:
+                        matched_window = window
+                        break
+                else:
+                    matched_window = window
                     break
             except Exception:
                 continue
-        if paths:
+
+        chosen_win = matched_window or fallback_window
+        if chosen_win is not None:
+            doc = chosen_win.Document
+            sel = doc.SelectedItems()
+            for idx in range(sel.Count):
+                item_path = sel.Item(idx).Path
+                if item_path and os.path.exists(item_path):
+                    paths.append(str(item_path))
             return paths
     except Exception:
         pass
-
-    try:
-        base_dir = Path(__file__).resolve().parent
-        cand_dirs = [
-            base_dir / "os_agent",
-            base_dir / "universal_z_core" / "os_agent",
-            Path("C:/MerlinTools/universal_z_core/os_agent"),
-            Path("D:/Ghosti/universal_z_core/os_agent"),
-        ]
-        for cd in cand_dirs:
-            cd_s = str(cd)
-            if cd.exists() and cd_s not in sys.path:
-                sys.path.insert(0, cd_s)
-        import plugin_ghosti_care_suite as _care_fb  # type: ignore
-
-        sel_fb = _care_fb.get_explorer_selected_paths_non_destructive()
-        if sel_fb:
-            return [str(x) for x in sel_fb if os.path.exists(str(x))]
-    except Exception:
-        pass
-    return []
+    return paths
 
 
 def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes], target_hwnd: int | None = None) -> None:
@@ -5729,6 +5863,7 @@ def main() -> None:
     last_summon_raw_clip: str = ""
     last_consumed_image_ts: float = 0.0
     last_hdrop_copy_ts: float = 0.0
+    last_lbtn_click_ts: float = 0.0
     last_question_mark_ts: float = 0.0
     last_drag_select_ts: float = 0.0
     lbtn_down_pt: tuple[int, int] | None = None
@@ -5772,7 +5907,7 @@ def main() -> None:
         1줄(하늘색 주력): [Ctrl+V] 순차·칸맞춤 | [1] 파일·PDF변환🔒 | [2] 글자·표OCR🔒
         2줄(흰색 확장):   [3] 합본🔒           | [4] 번호·일정🔒    | [5] 창고정🔒   | [⌨️상용구▾] [💡꿀팁·추가▾]
         """
-        nonlocal seq_mode
+        nonlocal seq_mode, last_hdrop_copy_ts
         disarm_sub_hotkeys()
         close_ghost_toast()
         if _LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND):
@@ -5789,6 +5924,7 @@ def main() -> None:
             show_ghost_toast(q_msg, duration_ms=3200)
             return
         if num in (1, 9):
+            last_hdrop_copy_ts = 0.0
             is_pdf_m = len(recent_images) >= 2
             superpower_9_image_or_pdf_file(recent_images, target_hwnd=_LAST_TARGET_HWND)
             complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else "superpower_key_4")
@@ -5855,7 +5991,7 @@ def main() -> None:
            - 입력창 내부라도 '단어를 드래그 선택'했거나 '단어 끝에 ?를 입력'한 뒤 소환 시 ➔ 해당 단어로 귀신검색창 직행!
         3) [창 UI ① 기본 귀신창]: 일반 입력창에서 드래그/물음표 없이 소환 시 ➔ 기본 귀신창 직행 (타이핑 시작 시 검색창 자동 변신)!
         """
-        nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_question_mark_ts, last_drag_select_ts
+        nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts
         now_s = time.time()
 
         # [0순위: 연속 재호출 토글] 현재 열린 창이 의도와 다를 때 바로 한 번 더 호출하면 즉시 반대 창으로 스왑!
@@ -5921,28 +6057,36 @@ def main() -> None:
 
         # [분기 2: 빈 곳 / 탐색기]
         # - 압축 파일(.zip/.7z 등) 선택 시 ➔ [창 UI ④ 스마트 압축 해제창] 직행!
-        # - 탐색기에서 일반 파일(사진·카톡사진·문서)을 클릭 선택(SelectedItems)하거나 최근 복사(CF_HDROP)한 상태에서 호출 시 ➔ [창 UI ① 기본 귀신창] 직행!
-        #   (숫자 [1]번만 누르면 검색창에 '1'이 입력되는 일 없이 즉시 🏷️ 귀신 라벨러가 실행되도록 보장!)
-        # - 아무 파일도 선택하지 않은 빈 바탕화면/빈 폴더에서 호출 시 ➔ [창 UI ② 귀신검색창(소형)] 직행!
+        # - 탐색기·바탕화면에서 일반 파일(사진·카톡사진·문서)을 클릭 선택(SelectedItems)한 상태이거나,
+        #   방금(20초 이내) 유저가 Ctrl+C로 파일을 복사한 직후 빈 공간 클릭 없이 바로 호출한 경우 ➔ [창 UI ① 기본 귀신창] 직행!
+        # - 파일 선택을 해제한 탐색기 빈 공간이나 빈 바탕화면에서 호출 시 ➔ [창 UI ② 귀신검색창(소형)] 100% 직행!
         if not is_dedicated_input_app:
-            if proc_before == "explorer.exe" and cls_before in ("CabinetWClass", "ExploreWClass"):
+            if (proc_before == "explorer.exe" and cls_before in ("CabinetWClass", "ExploreWClass")) or cls_before in ("Progman", "WorkerW"):
                 try:
                     sel_paths = _get_explorer_selected_paths_safe(fg_before)
                     if sel_paths:
                         first_sel = str(sel_paths[0]).lower()
                         if first_sel.endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")):
+                            last_hdrop_copy_ts = 0.0
                             disarm_sub_hotkeys()
                             show_ghost_toast(f"__UI4_ARCHIVE__|{sel_paths[0]}", duration_ms=11000)
                             return
                         if any(Path(str(sp)).is_file() for sp in sel_paths):
+                            last_hdrop_copy_ts = 0.0
                             _show_default_ui1_bar(live_clip)
                             return
                 except Exception:
                     pass
-            # 탐색기 또는 바탕화면에서 Ctrl+C로 파일(CF_HDROP)을 복사해 둔 직후(120초 이내, 또는 현재 탐색기 창 활성 시)에도 기본 귀신창([1]번 파일·라벨러)으로 직행!
-            hdrop_now = get_clipboard_hdrop_files()
-            if hdrop_now:
-                if (proc_before == "explorer.exe" and cls_before in ("CabinetWClass", "ExploreWClass")) or (now_s - last_hdrop_copy_ts) <= 120.0:
+            # 유저가 Ctrl+C로 파일(CF_HDROP)을 복사한 직후(20초 이내) 아직 빈 공간을 클릭하지 않은 상태에서만 1회성 기본 귀신창 직행!
+            if (
+                not summon_by_rclick
+                and last_hdrop_copy_ts > 0.0
+                and last_hdrop_copy_ts > last_lbtn_click_ts
+                and (now_s - last_hdrop_copy_ts) <= 20.0
+            ):
+                hdrop_now = get_clipboard_hdrop_files()
+                if hdrop_now:
+                    last_hdrop_copy_ts = 0.0
                     if any(str(hp).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")) for hp in hdrop_now):
                         disarm_sub_hotkeys()
                         show_ghost_toast(f"__UI4_ARCHIVE__|{hdrop_now[0]}", duration_ms=11000)
@@ -6409,8 +6553,8 @@ def main() -> None:
                                     recent_unpasted.append(copied)
                                 last_copy_ts = now
                     else:
-                        # 파일 복사(CF_HDROP) 시각 기록 (바탕화면·탐색기 파일 Ctrl+C 직후 귀신창 호출 시 기본 귀신창 [1]번 파일·라벨러 직행 보장)
-                        if get_clipboard_hdrop_files():
+                        # 유저의 직접 파일 복사(CF_HDROP) 시각 기록 (데몬 자체 라벨러 CF_HDROP 재주입은 _SELF_HDROP_UNTIL로 제외)
+                        if now >= _SELF_HDROP_UNTIL and get_clipboard_hdrop_files():
                             last_hdrop_copy_ts = now
                         # 텍스트가 아닌 경우 스샷 이미지(Bitmap)인지 확인하여 다중 스샷->PDF 버퍼에 적재
                         try:
@@ -6438,9 +6582,10 @@ def main() -> None:
                 v_down = (u32.GetAsyncKeyState(VK_V) & 0x8000) != 0
                 ctrl_v_now = ctrl_down and v_down
 
-                # 마우스 좌클릭 드래그(단어 블록 선택) 감지 -> 입력창에서 단어 드래그 후 귀신호출 시 귀신검색창(UI ②) 분기용
+                # 마우스 좌클릭 드래그(단어 블록 선택) 및 빈 공간 선택 해제 클릭 시각 감지
                 lbtn_phys_now = (u32.GetAsyncKeyState(0x01) & 0x8000) != 0
                 if lbtn_phys_now and not was_lbtn_phys_down:
+                    last_lbtn_click_ts = now
                     pt_ld = wintypes.POINT()
                     u32.GetCursorPos(ctypes.byref(pt_ld))
                     lbtn_down_pt = (pt_ld.x, pt_ld.y)
@@ -6574,7 +6719,6 @@ def main() -> None:
                                     set_ime_language(target_korean=False)
                                     typed_ascii_buf.clear()
                                     typed_ascii_buf.extend(list(raw_rest))
-                                    show_ghost_toast(f"👻 이메일(@) 감지 ➔ 영문 원복 ({raw_rest})", duration_ms=1400)
                                 else:
                                     typed_ascii_buf.append("@")
                             elif typed_ascii_buf:
@@ -6673,8 +6817,6 @@ def main() -> None:
                                                 pending_first_typo = None
                                                 last_alpha_type_ts = 0.0
                                                 complete_feature_action_success("auto_typo_morph_2words")
-                                                badge = "한글키 전환" if (lang_id == "KO") else "영문키 전환"
-                                                show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_id} ➔ {out_id} | {badge})", duration_ms=1400)
                             else:
                                 # [노션·엑셀·브라우저·카톡 등 비-Edit 컨트롤에서도 2단어째 연속 오타 후 0.55초 멈추면 즉시 자동 성형!]
                                 raw_idle_str = raw_idle_buf_chk
@@ -6719,7 +6861,6 @@ def main() -> None:
                                                     threading.Timer(0.28, lambda c=orig_c_id: daemon_set_clipboard(c)).start()
                                             set_ime_language(target_korean=True)
                                             complete_feature_action_success("auto_typo_morph_2words")
-                                            show_ghost_toast(f"👻 귀신같이 오토한영 ({comb_raw_id} ➔ {comb_conv_id} | 한글키 전환)", duration_ms=1400)
 
                     space_down = (u32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
                     if space_down and not was_key_down.get(VK_SPACE, False):
@@ -6861,8 +7002,6 @@ def main() -> None:
                                         else:
                                             last_auto_morph_state["active"] = False
                                         complete_feature_action_success("auto_typo_morph_2words")
-                                        badge = "한글키 전환" if (lang_ed == "KO") else "영문키 전환"
-                                        show_ghost_toast(f"👻 귀신같이 오토한영 ({raw_ed} ➔ {out_ed} | {badge})", duration_ms=1400)
                                 else:
                                     # [노션·엑셀·브라우저·카톡 무충돌 원자적 백스페이스 교체]:
                                     # 방금 친 Space가 타겟 앱에 먼저 반영되도록 25ms 대기 후,
@@ -6901,8 +7040,6 @@ def main() -> None:
                                     else:
                                         last_auto_morph_state["active"] = False
                                     complete_feature_action_success("auto_typo_morph_2words")
-                                    badge = "한글키 전환" if target_ko else "영문키 전환"
-                                    show_ghost_toast(f"👻 귀신같이 오토한영 ({combined_raw} ➔ {final_paste.strip()} | {badge})", duration_ms=1400)
                             else:
                                 # 1단어째 오타는 바꾸지 않고 조용히 기억만 해둠 (유저가 스스로 고치는지 2단어로 넘어가는지 관찰)
                                 pending_first_typo = curr_typo
@@ -6920,7 +7057,39 @@ def main() -> None:
                                 )
                                 if ok_sp:
                                     complete_feature_action_success("auto_typo_morph_2words")
-                                    show_ghost_toast(f"👻 귀신같이 오토띄어쓰기 ({raw_sp[-18:]} ➔ {out_sp[-18:]})", duration_ms=1400)
+                            elif (
+                                not edit_child
+                                and typed_as_kor
+                                and len(word_cand) >= 4
+                                and not _is_protected_account_or_email_token(raw_buf_str)
+                                and (now - last_paste_ts) > 2.0
+                            ):
+                                # [노션·브라우저·카톡 등 비-Edit 창 한글 무공백 어절(예: '떡볶이가나왔어요 ', '내일의메뉴는 ') 입력 시 Space 즉시 오토띄어쓰기!]
+                                kor_typed_tok = lead_punct + eng_word_to_kor(word_cand) + trail_digits + trail_punct
+                                spaced_tok = _fix_korean_spacing_general(kor_typed_tok).strip()
+                                if " " in spaced_tok and spaced_tok != kor_typed_tok.strip() and is_valid_korean_word(re.sub(r"[^가-힣]", "", spaced_tok)):
+                                    total_bs_sp = len(kor_typed_tok) + 1
+                                    orig_c_sp = get_clipboard_text()
+                                    time.sleep(0.025)
+                                    release_all_modifiers()
+                                    bs_sc = u32.MapVirtualKeyW(VK_BACK, 0)
+                                    for _ in range(total_bs_sp):
+                                        u32.keybd_event(VK_BACK, bs_sc, 0, 0)
+                                        time.sleep(0.008)
+                                        u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
+                                        time.sleep(0.005)
+                                    time.sleep(0.025)
+                                    final_sp_paste = spaced_tok + " "
+                                    if send_unicode_text_preserve_style(final_sp_paste):
+                                        time.sleep(0.04)
+                                    else:
+                                        daemon_set_clipboard(final_sp_paste)
+                                        time.sleep(0.025)
+                                        tap_key_combo([VK_CONTROL], VK_V)
+                                        time.sleep(0.08)
+                                        if orig_c_sp and not seq_mode:
+                                            threading.Timer(0.28, lambda c=orig_c_sp: daemon_set_clipboard(c)).start()
+                                    complete_feature_action_success("auto_typo_morph_2words")
                     was_key_down[VK_SPACE] = space_down
 
                     ret_down = (u32.GetAsyncKeyState(VK_RETURN) & 0x8000) != 0

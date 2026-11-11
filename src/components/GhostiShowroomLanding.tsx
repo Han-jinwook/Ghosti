@@ -5,6 +5,7 @@ import { syncHubUserToLocalSupabase } from '../services/supabaseClient';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { Z_CORE_ZIP_URL, LATEST_Z_CORE_VERSION } from '../services/zCoreBridge';
 import { playBabyGhostChime } from './OnboardingModal';
+import { silencePendingEnterGiggleOnLogoClick } from '../services/babyGhostSound';
 import { GhostSuperpowerDojo } from './ghostDojo/GhostSuperpowerDojo';
 
 // 특허 출원번호(10-2026-XXXXXXX) 확보 전까지 허위표시 리스크 및 출원 전 공지(신규성 상실) 방지를 위해 false 유지
@@ -773,8 +774,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           {/* 좌측 브랜드 로고 & 권위 배지 */}
           <div className="flex items-center gap-3">
             <div
+              data-ghosti-brand-logo="true"
               className="flex items-center gap-2 cursor-pointer"
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              onClick={() => {
+                silencePendingEnterGiggleOnLogoClick();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             >
               <img
                 src="/gwisinkachi_3d_wordmark_light.png"

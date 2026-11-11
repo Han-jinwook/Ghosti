@@ -1,18 +1,21 @@
 /**
  * 👻 귀신같이(Ghosti) 아기귀신 시그니처 사운드 엔진 (SSOT 44.1kHz WAV + 70ms 무음 프리롤)
- * - 앱/웹 처음 입장 시 딱 1회만 애기귀신 웃음소리 재생 (sample3_baby_ghost_giggle.wav)
- * - 좌측 메인/서브메뉴 및 탭 클릭 시 맑은 애기귀신 호출소리 재생 (sample1_magic_summon_glissando.wav)
+ * - 웹 페이지에 진입(최초 방문 및 새로고침 포함)할 때마다 딱 1회만 애기귀신 웃음소리 재생 (sample3_baby_ghost_giggle.wav)
+ * - 진입 후 상단/사이드바 로고를 클릭하거나 메뉴를 눌러도 중복 효과음이 절대 나지 않음
  */
 
 const GIGGLE_SOUND_URL = '/sounds/baby_ghost/sample3_baby_ghost_giggle.wav';
-const SUMMON_SOUND_URL = '/sounds/baby_ghost/sample1_magic_summon_glissando.wav';
 
 let preloadedGiggleAudio: HTMLAudioElement | null = null;
-let activeSummonAudio: HTMLAudioElement | null = null;
 let hasPlayedAppEnterGiggle = false;
 let isAttemptingGiggle = false;
 let unlockListenerBound = false;
-let lastSummonSoundAt = 0;
+
+function isLogoClickEvent(evt: Event): boolean {
+  const target = evt.target as HTMLElement | null;
+  if (!target || typeof target.closest !== 'function') return false;
+  return Boolean(target.closest('[data-ghosti-brand-logo="true"]'));
+}
 
 function ensurePreloaded(): void {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
@@ -51,22 +54,22 @@ function playFallbackWebAudio(): void {
 }
 
 /**
- * 👻 웹/앱 처음 입장 시 딱 1회만 재생되는 '애기귀신 웃음소리' (sample3_baby_ghost_giggle.wav)
- * - 브라우저 자동재생 정책(Autoplay Policy)에 의해 첫 로드 시 차단되면,
- *   유저의 첫 화면 터치/클릭 순간 딱 1회만 재생하고 이후에는 절대 재생하지 않습니다.
- * - StrictMode 이중 마운트 및 세션 내 중복 호출을 sessionStorage + 동기 플래그로 100% 차단합니다.
+ * 👻 웹/앱 처음 들어갈 때 딱 1회만 재생되는 '애기귀신 웃음소리' (sample3_baby_ghost_giggle.wav)
+ * - 페이지 로드(새로고침 포함) 시 즉시 재생하며, 이미 열린 페이지 안에서는 StrictMode 이중 마운트 및 로고 클릭 등 어떤 동작에서도 중복 재생되지 않습니다.
+ * - 만약 새 탭 직접 URL 입력 등으로 브라우저 Autoplay Policy가 첫 자동재생을 보류한 경우에는
+ *   로고 클릭을 제외한 첫 일반 클릭/키 입력 순간에 1회만 재생하고 즉시 해제합니다 (로고를 눌렀을 때 소리가 나는 오해 100% 방지).
  */
 export function playAppEnterGiggleSound(_forceReplay = false): void {
   if (typeof window === 'undefined') return;
   if (hasPlayedAppEnterGiggle || isAttemptingGiggle) return;
 
-  try {
-    if (sessionStorage.getItem('ghosti_app_enter_giggle_played') === '1') {
-      hasPlayedAppEnterGiggle = true;
-      return;
-    }
-  } catch {
-    // ignore
+  // 팝업 귀신검색창(Ctrl+0 소형창)에서는 별도 소환음이 있으므로 중복 재생 제외
+  if (
+    window.location.search.includes('ghostSearchWindow=') ||
+    window.location.search.includes('tab=search_dojo')
+  ) {
+    hasPlayedAppEnterGiggle = true;
+    return;
   }
 
   isAttemptingGiggle = true;
@@ -81,26 +84,24 @@ export function playAppEnterGiggleSound(_forceReplay = false): void {
       p.then(() => {
         hasPlayedAppEnterGiggle = true;
         isAttemptingGiggle = false;
-        try {
-          sessionStorage.setItem('ghosti_app_enter_giggle_played', '1');
-        } catch {
-          // ignore
-        }
       }).catch(() => {
         isAttemptingGiggle = false;
-        // 브라우저 자동재생 차단 시 첫 클릭/터치에 딱 1회 자동 언락 바인딩
         if (!unlockListenerBound) {
           unlockListenerBound = true;
-          const onFirstInteract = () => {
+          const cleanupUnlock = () => {
             window.removeEventListener('pointerdown', onFirstInteract, true);
             window.removeEventListener('keydown', onFirstInteract, true);
+          };
+          const onFirstInteract = (evt: Event) => {
+            // 로고 클릭 시에는 절대 효과음을 내보내지 않고 입장 효과음 대기 상태도 즉시 종료
+            if (isLogoClickEvent(evt)) {
+              hasPlayedAppEnterGiggle = true;
+              cleanupUnlock();
+              return;
+            }
+            cleanupUnlock();
             if (!hasPlayedAppEnterGiggle) {
               hasPlayedAppEnterGiggle = true;
-              try {
-                sessionStorage.setItem('ghosti_app_enter_giggle_played', '1');
-              } catch {
-                // ignore
-              }
               const retryAudio = preloadedGiggleAudio || new Audio(GIGGLE_SOUND_URL);
               retryAudio.volume = 0.20;
               retryAudio.currentTime = 0;
@@ -120,6 +121,10 @@ export function playAppEnterGiggleSound(_forceReplay = false): void {
     isAttemptingGiggle = false;
     playFallbackWebAudio();
   }
+}
+
+export function silencePendingEnterGiggleOnLogoClick(): void {
+  hasPlayedAppEnterGiggle = true;
 }
 
 /**
