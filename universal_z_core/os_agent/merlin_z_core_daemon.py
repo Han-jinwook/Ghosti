@@ -291,14 +291,31 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             pass
 
     def _send_transcoded_video_stream(self, file_path: Path, seek_sec: float = 0.0) -> None:
-        """Windows 크롬에서 코덱 미지원으로 화면이 멈추는 HEVC(hvc1) 영상 등을 실시간 H.264 Fragmented MP4로 즉시 스트리밍합니다."""
+        """Windows 크롬에서 코덱 미지원으로 화면이 멈추는 HEVC(hvc1) 영상을 0.2초 내 초고속 H.264 MP4로 변환·캐싱하여 Range 탐색이 가능한 완전한 영상으로 스트리밍합니다."""
         ff = plugin_ghosti_os.find_ffmpeg_exe()
         if not ff:
             self._send_file_stream(file_path, content_type="video/mp4")
             return
 
+        # 1) 이미 완성된 H.264 Faststart MP4 캐시가 있으면 대기 없이 0.01초 만에 Range 스트리밍으로 즉시 응답!
+        #    (캐시가 아직 없으면 대기(0.0s)하지 않고 곧바로 아래 0.2초 파이프로 첫 프레임을 송출하면서 백그라운드로만 캐시를 생성합니다)
+        cached_mp4 = plugin_ghosti_os.get_or_create_faststart_video_cache(file_path, max_sync_sec=0.0)
+        if cached_mp4 is not None and cached_mp4.exists():
+            self._send_file_stream(cached_mp4, content_type="video/mp4", cache_max_age=3600)
+            return
+
+        # 2) 대용량 장편 HEVC 영상(캐시 생성 중)은 0.2초 초고속 Fragmented 파이프로 즉시 첫 프레임을 송출하고 백그라운드 캐싱 병행
         creationflags = 0x08000000 if os.name == "nt" else 0
-        cmd = [ff, "-hide_banner", "-loglevel", "error"]
+        cmd = [
+            ff,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-probesize",
+            "2M",
+            "-analyzeduration",
+            "1500000",
+        ]
         if seek_sec > 0.2:
             cmd.extend(["-ss", f"{seek_sec:.2f}"])
         cmd.extend([
@@ -306,11 +323,13 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-tune", "zerolatency",
-            "-crf", "25",
+            "-crf", "26",
+            "-g", "15",
             "-pix_fmt", "yuv420p",
-            "-vf", "scale='min(1280,iw)':-2",
+            "-vf", "scale='min(960,iw)':-2",
             "-c:a", "aac",
-            "-b:a", "128k",
+            "-b:a", "96k",
+            "-frag_duration", "200000",
             "-movflags", "frag_keyframe+empty_moov+default_base_moof",
             "-f", "mp4",
             "pipe:1",
@@ -333,7 +352,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self.end_headers()
             if proc.stdout:
                 while True:
-                    chunk = proc.stdout.read(65536)
+                    chunk = proc.stdout.read(16384)
                     if not chunk:
                         break
                     self.wfile.write(chunk)

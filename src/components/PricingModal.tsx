@@ -1355,17 +1355,19 @@ export const VideoScenePreviewModal: React.FC = () => {
     }
 
     if (rawUrl.includes('/__videos/stream')) {
-      // H.264 실시간 트랜스코딩 스트림은 서버에서 targetSec부터 즉시 송출하므로 클라이언트 중복 탐색 불필요
-      pendingSeekSecRef.current = 0;
+      // H.264 Faststart 캐시 히트 시 전체 길이가 그대로 유지되며 Range 탐색이 가능하므로,
+      // 전체 목록 열람 시에는 0초부터 재생하고 검색어 포착 진입 시에만 targetSec으로 점프합니다.
+      const seekTarget = hasExecutedUserSearch && activeQuery ? targetSec : 0;
+      pendingSeekSecRef.current = seekTarget;
       const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
       const sep = baseStreamUrl.includes('?') ? '&' : '?';
-      setResolvedVideoSrc(targetSec > 0 ? `${baseStreamUrl}${sep}t=${targetSec}` : baseStreamUrl);
+      setResolvedVideoSrc(seekTarget > 0 ? `${baseStreamUrl}${sep}t=${seekTarget}` : baseStreamUrl);
       return;
     }
 
-    pendingSeekSecRef.current = targetSec;
+    pendingSeekSecRef.current = hasExecutedUserSearch && activeQuery ? targetSec : 0;
     setResolvedVideoSrc(rawUrl);
-  }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl, selectedVideoModal?.matchedSeekSec]);
+  }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl, selectedVideoModal?.matchedSeekSec, hasExecutedUserSearch, activeQuery]);
 
   if (!selectedVideoModal) return null;
 
@@ -1382,13 +1384,13 @@ export const VideoScenePreviewModal: React.FC = () => {
     const rawUrl = selectedVideoModal.videoUrl || '';
     if (!rawUrl.includes('127.0.0.1:5199') || !selectedVideoModal.videoFileName) return false;
     triedTranscodeFallbackRef.current = true;
-    pendingSeekSecRef.current = 0;
-    const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
+    const seekTarget = hasExecutedUserSearch && activeQuery ? (selectedVideoModal.matchedSeekSec ?? 0) : 0;
+    pendingSeekSecRef.current = seekTarget;
     setVideoPlaybackError(false);
     setResolvedVideoSrc(
-      `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(
-        selectedVideoModal.videoFileName
-      )}&t=${targetSec}`
+      seekTarget > 0
+        ? `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(selectedVideoModal.videoFileName)}&t=${seekTarget}`
+        : `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(selectedVideoModal.videoFileName)}`
     );
     return true;
   };
@@ -1397,8 +1399,16 @@ export const VideoScenePreviewModal: React.FC = () => {
     const targetSec = pendingSeekSecRef.current;
     pendingSeekSecRef.current = null;
     try {
-      if (targetSec !== null && targetSec > 0 && Math.abs(vidEl.currentTime - targetSec) > 0.4) {
-        vidEl.currentTime = targetSec;
+      // 전체 길이가 유한(Number.isFinite)한 일반/Faststart 캐시 영상일 때만 클라이언트 탐색 수행
+      // (장편 실시간 파이프 스트림은 vidEl.duration === Infinity이며 서버가 이미 -ss 지점부터 송출함)
+      if (
+        targetSec !== null &&
+        targetSec > 0 &&
+        Number.isFinite(vidEl.duration) &&
+        vidEl.duration > 1 &&
+        Math.abs(vidEl.currentTime - targetSec) > 0.4
+      ) {
+        vidEl.currentTime = Math.min(targetSec, Math.max(0, vidEl.duration - 0.5));
       }
       void vidEl.play().catch(() => {});
     } catch {
@@ -1474,7 +1484,7 @@ export const VideoScenePreviewModal: React.FC = () => {
                   return;
                 }
                 const realDur = Math.round(el.duration);
-                if (realDur > 0 && Number.isFinite(realDur) && !resolvedVideoSrc.includes('/__videos/stream')) {
+                if (realDur > 0 && Number.isFinite(realDur) && (!resolvedVideoSrc.includes('/__videos/stream') || !resolvedVideoSrc.includes('&t='))) {
                   syncRealVideoDuration(selectedVideoModal.id, realDur);
                 }
                 applyPendingSeekOnce(el);

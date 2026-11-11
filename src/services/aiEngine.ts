@@ -732,15 +732,10 @@ export function normalizeLocalVideoSceneItem(
   }
 
   let effectiveDurSec = Number(realDurationSecOverride) || Number(video.durationSec) || 0;
-  if (
-    !realDurationSecOverride &&
-    (effectiveDurSec <= 0 ||
-      effectiveDurSec === 240 ||
-      (effectiveDurSec === 15 && hasLegacyFixedFiveSec))
-  ) {
+  if (!realDurationSecOverride && effectiveDurSec <= 0) {
     effectiveDurSec = estimateFallbackVideoDurationFromMeta(video);
   }
-  effectiveDurSec = Math.max(3, Math.round(effectiveDurSec));
+  effectiveDurSec = Math.max(1, Math.round(effectiveDurSec));
   const nextDurationText = formatVideoDurationText(effectiveDurSec);
 
   const sem = deriveLocalVideoSemanticEnrichment(video);
@@ -971,11 +966,37 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
         if (v.isAllBlack) continue;
         const existing = merged.get(v.videoFileName);
         if (existing) {
+          const realDur = Number(v.durationSec) > 0 ? Math.round(Number(v.durationSec)) : existing.durationSec;
+          const staticDur = Math.max(1, Number(existing.durationSec) || realDur || 1);
+          const rescFrames = (existing.timelineFrames || []).map((f) => {
+            let nextSec = Number(f.timeSec) || 0;
+            if (realDur > 1 && Math.abs(realDur - staticDur) >= 2) {
+              nextSec = Math.min(realDur - 1, Math.max(0, Math.round(nextSec * (realDur / staticDur))));
+            } else if (realDur > 0 && nextSec >= realDur) {
+              nextSec = Math.max(0, realDur - 1);
+            }
+            return {
+              ...f,
+              timeSec: nextSec,
+              timestampText: formatVideoDurationText(nextSec),
+            };
+          });
+          let nextSeek = Number(existing.matchedSeekSec) || 0;
+          if (realDur > 1 && Math.abs(realDur - staticDur) >= 2) {
+            nextSeek = Math.min(realDur - 1, Math.max(0, Math.round(nextSeek * (realDur / staticDur))));
+          } else if (realDur > 0 && nextSeek >= realDur) {
+            nextSeek = Math.max(0, realDur - 1);
+          }
           merged.set(v.videoFileName, {
             ...existing,
             videoUrl: v.videoUrl || existing.videoUrl,
             thumbUrl: existing.thumbUrl || v.thumbUrl,
-            matchedTimestamp: cleanVideoTimestampLabel(existing.matchedTimestamp),
+            sizeMB: v.sizeMB || existing.sizeMB,
+            durationSec: realDur,
+            durationText: v.durationText || formatVideoDurationText(realDur),
+            timelineFrames: rescFrames,
+            matchedSeekSec: nextSeek,
+            matchedTimestamp: formatVideoDurationText(nextSeek),
           });
         } else {
           merged.set(v.videoFileName, normalizeLocalVideoSceneItem(v));

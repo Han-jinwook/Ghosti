@@ -722,8 +722,7 @@ def complete_bug(
         print("🔔" * 24)
     else:
         print(f"\n🎉 현재 '{STATUS_DISCOVERED}' 컬럼의 모든 티켓 처리가 끝났습니다!")
-    trim_done_cards(4)
-
+    # [노션 순정 필터·뷰 관리 전환] 스크립트에서 완료 카드를 임의로 보관함(archived: true)으로 숨기지 않음
     return True
 
 
@@ -754,13 +753,18 @@ def trim_done_cards(keep_count: int = 4) -> int:
         return 0
 
     results = res.json().get("results", [])
+    if len(results) <= keep_count:
+        return 0
+
+    excess_total = len(results) - keep_count
     ghosti_results = []
     for p in results:
         props = p.get("properties", {})
         t = extract_plain_text(props.get(SCHEMA.title_prop_name, {}).get("title", []))
         app_val = props.get("앱", {}).get("select") or {}
         app_name = app_val.get("name", "") if isinstance(app_val, dict) else ""
-        # [헌법 제4조 4항 준수] 오직 순수 '[귀신같이]' / 'Ghosti' 소속 완료 카드만 집계·보관하며 타 프로젝트('[스튜디오', '온보딩' 등) 카드는 절대 건드리지 않음!
+        # [헌법 제4조 4항 준수] 보드 전체 '완료' 컬럼 총량(len(results))을 기준으로 keep_count(4개) 초과분을 계산하되,
+        # 보관(archived: true) 실행은 오직 순수 '[귀신같이]' / 'Ghosti' 소속 완료 카드만 대상으로 처리하여 타 프로젝트 카드는 절대 건드리지 않음!
         is_other_owner = (
             app_name in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub", "귀신창")
             or any(
@@ -774,10 +778,12 @@ def trim_done_cards(keep_count: int = 4) -> int:
         if is_ghosti_only:
             ghosti_results.append(p)
 
-    if len(ghosti_results) <= keep_count:
+    if not ghosti_results:
         return 0
 
-    to_archive = ghosti_results[keep_count:]
+    # 보드 전체 '완료' 초과분(excess_total)만큼, 가장 오래된 '[귀신같이]' 카드부터 우선 양보하여 보관 처리
+    archive_qty = min(excess_total, len(ghosti_results))
+    to_archive = ghosti_results[-archive_qty:]
     backup_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc", "results", "archived_done_cards_backup.json")
     os.makedirs(os.path.dirname(backup_file), exist_ok=True)
 
@@ -862,7 +868,6 @@ def archive_done(
 
     # 2단계: 카드의 상태를 '완료'로 변경
     ok = update_bug_status(clean_page_id, STATUS_DONE)
-    trim_done_cards(6)
     return ok
 
 

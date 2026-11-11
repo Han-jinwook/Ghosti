@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-11T10:50:45.285742",
+  "updated_at": "2026-11-11T13:22:55.246028",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -1074,6 +1074,22 @@
       "last_edited_time": "2026-11-11T00:28:00.000Z",
       "url": "https://app.notion.com/p/414f9ffd2c1d8094a48cffd0bbfdf738",
       "archived_at": "2026-11-11T10:50:45.285513"
+    },
+    {
+      "page_id": "413f9ffd-2c1d-814e-ac42-fe65ad845448",
+      "title": "🎯 [귀신같이 ⑨] 신규 300장 실물 사진·영상·서류 자연어 투시 검색 점검 (스키장·호캉스·수중잠수·썬드림 서류)",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-11T00:35:00.000Z",
+      "url": "https://app.notion.com/p/300-413f9ffd2c1d814eac42fe65ad845448",
+      "archived_at": "2026-11-11T13:19:07.779285"
+    },
+    {
+      "page_id": "415f9ffd-2c1d-80e3-8605-d17df3df2e32",
+      "title": "🎯 [귀신같이] PC 귀신검색-소형창의 음성 기능",
+      "app": "",
+      "last_edited_time": "2026-11-11T01:28:00.000Z",
+      "url": "https://app.notion.com/p/PC-415f9ffd2c1d80e38605d17df3df2e32",
+      "archived_at": "2026-11-11T13:22:55.245743"
     }
   ]
 }
