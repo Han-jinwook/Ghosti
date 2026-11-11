@@ -6682,8 +6682,10 @@ def main() -> None:
                                 pending_first_typo = curr_typo
                         else:
                             pending_first_typo = None
-                            if edit_child and cur_line is not None and re.search(r"[가-힣]", cur_line):
-                                ok_sp, raw_sp, out_sp, _ = _replace_edit_control_current_line_atomic(edit_child, auto_triggered=True)
+                            if edit_child and cur_line is not None and re.search(r"[가-힣]", cur_line) and (now - last_paste_ts) > 2.0:
+                                ok_sp, raw_sp, out_sp, _ = _replace_edit_control_current_line_atomic(
+                                    edit_child, auto_triggered=True, allow_typo_morph=False
+                                )
                                 if ok_sp:
                                     complete_feature_action_success("auto_typo_morph_2words")
                                     show_ghost_toast(f"👻 귀신같이 오토띄어쓰기 ({raw_sp[-18:]} ➔ {out_sp[-18:]})", duration_ms=1400)
@@ -6698,8 +6700,14 @@ def main() -> None:
                     was_key_down[VK_RETURN] = ret_down
                 else:
                     typed_ascii_buf.clear()
+                    if ctrl_down:
+                        pending_first_typo = None
 
                 if ctrl_v_now and not was_ctrl_v_down:
+                    last_paste_ts = now
+                    typed_ascii_buf.clear()
+                    pending_first_typo = None
+                    last_alpha_type_ts = 0.0
                     disarm_sub_hotkeys()
                     if seq_mode and seq_queue:
                         pasting_started = True
