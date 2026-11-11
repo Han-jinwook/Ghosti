@@ -2596,7 +2596,9 @@ def _toast_worker() -> None:
             rbtn_down = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
             ctrl_held = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
             esc_down = (u32.GetAsyncKeyState(0x1B) & 0x8000) != 0
-            mouse_down = lbtn_down or (rbtn_down and not ctrl_held)
+            # [핵심 수리]: 우클릭(rbtn_down)은 '우클릭 0.35초 꾹 연속 재호출 토글(기본 귀신창 ⇄ 귀신검색창)' 입력 수단이므로,
+            # 외부 마우스 클릭 닫기는 오직 좌클릭(lbtn_down)일 때만 발동시켜 우클릭 꾹 연속 토글이 100% 작동하도록 보장!
+            mouse_down = lbtn_down
             if current_win[0] is not None:
                 pt_click = wintypes.POINT()
                 u32.GetCursorPos(ctypes.byref(pt_click))
@@ -4050,20 +4052,63 @@ def iron_and_polish_korean_text(raw_text: str, allow_typo_morph: bool = True) ->
     s = re.sub(r"[\u00A0\u200B-\u200D\uFEFF]", " ", s)
     s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
 
-    # 2-A) 단어·어미가 줄바꿈으로 쪼개진 구간만 무공백 정밀 결합 (문단 빈 줄 \n\n 및 종결 문장 줄바꿈은 100% 보존!)
+    # 2-A) 단어·숫자·영문·괄호가 줄바꿈으로 쪼개진 구간을 무공백 정밀 결합 (문단 빈 줄 \n\n 및 종결 문장 줄바꿈은 100% 보존!)
+    #  ① 숫자 쪼개짐 ('1\n00%' -> '100%', '202\n6' -> '2026')
+    s = re.sub(r"(?<=\d)[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?=\d+[%원개명건일월년시분초번층호]?)", "", s)
+    #  ② 영단어/단축키 쪼개짐 ('C\ntrl+V' -> 'Ctrl+V')
+    s = re.sub(r"(?<=[A-Za-z])[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?=[A-Za-z])", "", s)
+    #  ③ 닫는 괄호 직후 조사/어미 쪼개짐 ('(또는 6글자 이상 긴 오타)\n를' -> '(또는 6글자 이상 긴 오타)를')
     s = re.sub(
-        r"(?<=[가-힣])[ \t]*\r?\n[ \t]*(?=(?:아서|어서|여서|해서|요|네요|군요|나요|가요|까요|어요|아요|해요|죠|지요|습니다|입니다|다|께|깨)(?=[\s.,?!:;)]|$))",
+        r"(?<=[\)\]\}])[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?=(?:을|를|은|는|이|가|에|에서|으로|로|와|과|의|도|만|부터|까지)(?=[\s.,?!:;)]|$))",
         "",
         s,
     )
-    # 2-B) 문장 중간(비종결 어절 끝)에서 PDF/웹 폭 때문에 뚝 끊긴 단일 줄바꿈(\n)을 공백 1칸으로 매끄럽게 다림질!
-    #      단, ① 빈 줄(\n\n), ② 마침표·물음표·느낌표 등 문장 종결 부호 뒤, ③ 종결어미('다/요/죠/까') 뒤,
-    #      ④ 다음 줄이 번호/불릿 목록(1., 1), -, *, •, ■, ▶, ※, [)으로 시작하는 경우는 줄바꿈을 100% 보존합니다.
+    #  ④ 한글 단어 내부 또는 어미가 줄바꿈으로 쪼개진 구간 무공백 결합 ('한\n영 성형' -> '한영 성형', '자동변\n환' -> '자동변환', '먹\n습니다' -> '먹습니다')
+    def _join_midword_hangul_newline(m_nl: re.Match) -> str:
+        left_w = m_nl.group(1)
+        right_w = m_nl.group(2)
+        # 앞부분 끝이 문장 종결어미('다/요/죠/까')이면 줄바꿈 보존
+        if left_w.endswith(("다", "요", "죠", "까")):
+            return m_nl.group(0)
+        # 뒷부분이 조사·어미이거나, 앞+뒤 결합 단어가 AI 서브워드/어절 시작 사전에 존재하는 하나의 단어('한영', '변환', '자동변환' 등)이면 무공백 결합!
+        if re.match(
+            r"^(?:아서|어서|여서|해서|요|네요|군요|나요|가요|까요|어요|아요|해요|죠|지요|습니다|입니다|합니다|다|께|깨|을|를|은|는|이|가|에서|에게|으로|까지|부터)$",
+            right_w,
+        ):
+            return f"{left_w}{right_w}"
+        tail_2 = left_w[-2:] if len(left_w) >= 2 else left_w
+        head_2 = right_w[:2] if len(right_w) >= 2 else right_w
+        cand_pair = left_w[-1] + right_w[0]
+        cand_full = tail_2 + head_2
+        if (
+            cand_pair in AI_ENGINE.ko_subwords
+            or cand_pair in AI_ENGINE.ko_word_starts
+            or cand_full in AI_ENGINE.ko_subwords
+            or (len(left_w) == 1 and left_w not in {"나", "너", "저", "그", "이", "더", "덜", "안", "못", "잘", "또", "꼭", "다", "새", "첫", "두", "세", "네", "각", "전", "현"})
+            or (len(right_w) == 1 and right_w in "영환형기성화법문장력도율점권선창값칸줄번개명건원일월년분초")
+        ):
+            # 단, 앞부분이 이미 격조사('을/를/은/는/이/가/에/로/도/만/와/과')로 끝난 완결 어절이면 무공백이 아니라 공백 1칸으로 이음!
+            if len(left_w) >= 2 and left_w[-1] in "을를은는이가에로도만와과":
+                return f"{left_w} {right_w}"
+            return f"{left_w}{right_w}"
+        return f"{left_w} {right_w}"
+
     s = re.sub(
-        r"(?<=[가-힣,])[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?!(?:[-*•▪▫▶▷■◆◇※#\[\(]|\d+[.)]|\([0-9가-힣]+\)|[①-⑳]))(?=[가-힣A-Za-z0-9])",
+        r"([가-힣]+)[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?!(?:[-*•▪▫▶▷■◆◇※#\[\(]|\d+[.)]|\([0-9가-힣]+\)|[①-⑳]))([가-힣]+)",
+        _join_midword_hangul_newline,
+        s,
+    )
+    # 2-B) 문장 중간(쉼표·닫는괄호·영숫자·비종결 한글 끝)에서 PDF/웹 폭 때문에 뚝 끊긴 단일 줄바꿈(\n)을 공백 1칸으로 매끄럽게 다림질!
+    #      단, ① 빈 줄(\n\n), ② 마침표·물음표·느낌표·콜론(:) 등 문장/헤더 종결 부호 뒤, ③ 종결어미('다/요/죠/까') 뒤,
+    #      ④ 다음 줄이 번호/불릿 목록(1., 1), -, *, •, ■, ▶, ⚠️, 📌, 🧪, [)으로 시작하는 경우는 줄바꿈을 100% 보존합니다.
+    s = re.sub(
+        r"(?<=[가-힣A-Za-z0-9,\)%])[ \t]*\r?\n(?!\s*\r?\n)[ \t]*(?!(?:[-*•▪▫▶▷■◆◇※#\[\(⚠️📌🧪①-⑳]|\d+[.)]|\([0-9가-힣]+\)))"
+        r"(?=[가-힣A-Za-z0-9\(\['\"])",
         lambda m: "\n" if s[max(0, m.start() - 2) : m.start()].endswith(("다", "요", "죠", "까")) else " ",
         s,
     )
+    # 단어 내부 오타성 공백('2어 절' -> '2어절') 정밀 복원
+    s = re.sub(r"(\d+\s*어)[ \t]+절", r"\1절", s)
     s = re.sub(r"(\.\s*\.\s*\.)[ \t]*\r?\n[ \t]*", r"\1 ", s)
     s = re.sub(r"[ \t]+", " ", s)
 
@@ -6244,13 +6289,19 @@ def main() -> None:
                                 ):
                                     ironed_auto = iron_and_polish_korean_text(copied, allow_typo_morph=False)
                                     if ironed_auto and ironed_auto.strip() != _stripped_cp:
+                                        # Win11 메모장(RichEditD2DPT)은 줄바꿈을 \r\n으로 붙여넣어야 줄바꿈이 먹히므로 OS 표준 \r\n 정규화 후 클립보드 주입
+                                        ironed_clip = ironed_auto.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
                                         _UNDO_SNAPSHOT["active"] = True
                                         _UNDO_SNAPSHOT["raw_text"] = copied
                                         _UNDO_SNAPSHOT["hwnd"] = u32.GetForegroundWindow()
                                         _UNDO_SNAPSHOT["ts"] = now
                                         _UNDO_SNAPSHOT["mode"] = "pre_iron"
-                                        daemon_set_clipboard(ironed_auto)
-                                        copied = ironed_auto
+                                        # 타겟 앱(크롬·노션·아크로뱃)이 지연 렌더링(Delayed Rendering)을 마칠 수 있도록 25ms 후 재적용 검증 포함
+                                        daemon_set_clipboard(ironed_clip)
+                                        time.sleep(0.025)
+                                        if get_clipboard_text() != ironed_clip:
+                                            daemon_set_clipboard(ironed_clip)
+                                        copied = ironed_clip
                                         show_ghost_toast("👻 귀신같이 자동 줄바꿈·띄어쓰기 다림질 완료 (Ctrl+Z 원복)", duration_ms=1300)
                             except Exception:
                                 pass
