@@ -619,10 +619,21 @@ def trim_done_cards(keep_count: int = 4) -> int:
         return 0
 
     results = res.json().get("results", [])
-    if len(results) <= keep_count:
+    ghosti_results = []
+    for p in results:
+        props = p.get("properties", {})
+        t = extract_plain_text(props.get(SCHEMA.title_prop_name, {}).get("title", []))
+        app_val = props.get("앱", {}).get("select") or {}
+        app_name = app_val.get("name", "") if isinstance(app_val, dict) else ""
+        # [헌법 제4조 4항 준수] 오직 '[귀신같이]' / 'Ghosti' 소속 완료 카드만 집계·보관하며 타 프로젝트 카드는 절대 건드리지 않음!
+        is_ghosti_only = ("[귀신같이" in t) or ("귀신같이]" in t) or (app_name in ("귀신같이", "Ghosti"))
+        if is_ghosti_only:
+            ghosti_results.append(p)
+
+    if len(ghosti_results) <= keep_count:
         return 0
 
-    to_archive = results[keep_count:]
+    to_archive = ghosti_results[keep_count:]
     backup_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc", "results", "archived_done_cards_backup.json")
     os.makedirs(os.path.dirname(backup_file), exist_ok=True)
 
