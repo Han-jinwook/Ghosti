@@ -2781,31 +2781,6 @@ def _toast_worker() -> None:
                         container = tk.Frame(win, bg="#0B1120", highlightbackground="#2DD4BF", highlightthickness=2, padx=8, pady=6)
                         container.pack(fill="both", expand=True)
 
-                        # [방안 1 — 8초 이내 귀신 변환 원복 최상단 배너]:
-                        # 방금 귀신 자동/수동 변환이 일어난 직후(8초 이내) 귀신창을 호출하면 최상단에 즉시 되돌리기 배너를 노출!
-                        if is_recent_undo_available(8.0):
-                            raw_prev_u = str(_UNDO_SNAPSHOT.get("raw_text") or "").replace("\r", " ").replace("\n", " ").strip()
-                            mor_prev_u = str(_UNDO_SNAPSHOT.get("morphed_text") or "").replace("\r", " ").replace("\n", " ").strip()
-                            if len(raw_prev_u) > 18:
-                                raw_prev_u = raw_prev_u[:18] + "…"
-                            if len(mor_prev_u) > 18:
-                                mor_prev_u = mor_prev_u[:18] + "…"
-                            preview_u = f"  ({mor_prev_u} ➔ {raw_prev_u})" if (raw_prev_u and mor_prev_u) else ""
-                            undo_banner = tk.Frame(container, bg="#422006", highlightbackground="#FACC15", highlightthickness=2, padx=8, pady=4, cursor="hand2")
-                            undo_banner.pack(fill="x", pady=(0, 5))
-                            undo_banner_lbl = tk.Label(
-                                undo_banner,
-                                text=f"↩ 방금 귀신 변환 되돌리기 [한 번 더 Ctrl+0 · Z · 클릭]{preview_u}",
-                                fg="#FEF08A",
-                                bg="#422006",
-                                font=("Malgun Gothic", 9, "bold"),
-                                anchor="w",
-                                cursor="hand2",
-                            )
-                            undo_banner_lbl.pack(fill="x")
-                            for uw_w in (undo_banner, undo_banner_lbl):
-                                uw_w.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(-1)))
-
                         top_bar = tk.Frame(container, bg="#0F172A", highlightbackground="#14B8A6", highlightthickness=1, padx=6, pady=3)
                         top_bar.pack(fill="x", pady=(0, 5))
 
@@ -2823,7 +2798,7 @@ def _toast_worker() -> None:
                         clear_btn.pack(side="right", padx=(3, 0))
                         clear_btn.bind("<Button-1>", lambda _e: clear_clipboard_history())
 
-                        undo_btn = tk.Label(top_bar, text="↩원복(Ctrl+Z)", fg="#FDE047" if _UNDO_SNAPSHOT.get("active") else "#94A3B8", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
+                        undo_btn = tk.Label(top_bar, text="↩원복", fg="#FDE047" if _UNDO_SNAPSHOT.get("active") else "#94A3B8", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
                         undo_btn.pack(side="right", padx=(3, 0))
                         undo_btn.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(-1)))
 
@@ -3626,11 +3601,10 @@ _UNDO_SNAPSHOT: dict = {
     "mode": "",  # "edit_replace", "clip_replace", "pre_iron", "snippet", "backspace_replace"
     "typed_count_after": 0,
     "prev_ime_kor": None,
-    "hotkey_999_armed": False,
 }
 
-RECENT_GHOST_UNDO_WINDOW_SEC: float = 8.0
-CTRL_Z_HOTKEY_WINDOW_SEC: float = 10.0
+RECENT_GHOST_UNDO_WINDOW_SEC: float = 5.0
+IDLE_PAUSE_AUTO_MORPH_SEC: float = 1.0
 _NATIVE_EDIT_CLASSES: tuple[str, ...] = (
     "Edit",
     "RichEditD2DPT",
@@ -3642,21 +3616,32 @@ _NATIVE_EDIT_CLASSES: tuple[str, ...] = (
 
 
 def is_recent_undo_available(max_sec: float = RECENT_GHOST_UNDO_WINDOW_SEC) -> bool:
-    """방금(기본 8초 이내) 귀신 자동/수동 변환이 수행되어 되돌릴 스냅샷이 살아 있는지 반환"""
+    """방금(기본 5초 이내) 귀신 자동/수동 변환이 수행되어 Ctrl+0 1회로 즉시 되돌릴 스냅샷이 살아 있는지 반환"""
     if not _UNDO_SNAPSHOT.get("active"):
         return False
     ts_u = float(_UNDO_SNAPSHOT.get("ts") or 0.0)
     return ts_u > 0.0 and (time.time() - ts_u) <= max_sec
 
 
-def release_ctrl_z_hotkey_only() -> None:
-    """10초 경과 또는 후속 장문 입력 시 스냅샷은 유지하되 전역 Ctrl+Z 가로채기(999)만 OS로 반환"""
-    if _UNDO_SNAPSHOT.get("hotkey_999_armed"):
-        _UNDO_SNAPSHOT["hotkey_999_armed"] = False
-        try:
-            u32.UnregisterHotKey(None, 999)
-        except Exception:
-            pass
+def on_native_ctrl_z_observed() -> None:
+    """
+    [Ctrl+Z 순정 100% 보존 원칙]:
+    - Ctrl+Z 키 자체는 절대 가로채지 않고 메모장·앱 고유 실행취소(Undo)가 그대로 동작하게 둡니다.
+    - 단, 귀신 변환 직후 유저가 순정 Ctrl+Z를 누른 것을 옆에서 관찰하면 해당 원문에 재변환 면역 락(2분)을 걸고
+      이전 한/영 키보드 상태만 조용히 복원하여 다시 한글로 뒤집히지 않도록 보조합니다.
+    """
+    if not _UNDO_SNAPSHOT.get("active"):
+        return
+    snap = dict(_UNDO_SNAPSHOT)
+    disarm_undo_snapshot()
+    age = time.time() - float(snap.get("ts") or 0.0)
+    if age <= 15.0:
+        raw_t = str(snap.get("raw_text") or "")
+        if raw_t:
+            _mark_undo_immunity(raw_t)
+        prev_ime_kor = snap.get("prev_ime_kor")
+        if prev_ime_kor is not None:
+            set_ime_language(target_korean=bool(prev_ime_kor))
 
 
 def arm_undo_snapshot(
@@ -3670,9 +3655,9 @@ def arm_undo_snapshot(
     prev_ime_kor: bool | None = None,
 ) -> None:
     """
-    [Ctrl+Z 즉시 원복 & 8초 내 Ctrl+0 귀신창 원복 통합 스냅샷 엔진]
+    [5초 내 Ctrl+0 1회 즉시 원복 스냅샷 엔진 — Ctrl+Z 가로채기 Zero]
     - 자동 한영·띄어쓰기 변환, [1] 다림질, [4] 합본, [5] 번호매기기, 상용구 사출 직후 원문 + 이전 한/영 키 상태를 보존합니다.
-    - 변환 직후 Ctrl+Z(또는 8초 내 Ctrl+0 -> 재호출/클릭) 시 원문 복원 + 재변환 방지 면역 락을 즉시 부여합니다.
+    - Ctrl+Z는 각 프로그램 순정 기능에 100% 맡기고, 귀신 전용 원복은 변환 후 5초 이내 Ctrl+0 1회 호출(창 미오픈)로 즉시 수행합니다.
     """
     global _UNDO_SNAPSHOT
     now_ts = time.time()
@@ -3694,12 +3679,6 @@ def arm_undo_snapshot(
         elif full_doc_before and prev_doc_after and full_doc_before.replace("\r\n", "\n") == prev_doc_after.replace("\r\n", "\n"):
             keep_chain = True
 
-    armed_hk = False
-    try:
-        armed_hk = bool(u32.RegisterHotKey(None, 999, MOD_CONTROL | MOD_NOREPEAT, VK_Z))
-    except Exception:
-        pass
-
     _UNDO_SNAPSHOT = {
         "active": True,
         "ts": now_ts,
@@ -3712,13 +3691,11 @@ def arm_undo_snapshot(
         "mode": mode,
         "typed_count_after": 0,
         "prev_ime_kor": (prev_ime_saved if (keep_chain and prev_ime_saved is not None) else prev_ime_kor),
-        "hotkey_999_armed": armed_hk or True,
     }
 
 
 def disarm_undo_snapshot() -> None:
     global _UNDO_SNAPSHOT
-    release_ctrl_z_hotkey_only()
     if _UNDO_SNAPSHOT.get("active"):
         _UNDO_SNAPSHOT["active"] = False
 
@@ -3829,56 +3806,71 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
 
     ed = snap.get("edit_child", 0) or _find_edit_control_child(fg_now)
 
-    # 1) 네이티브 Edit / RichEdit 컨트롤 내부에서 커서 위치 보존 + 0.2ms 원자적 복원!
+    # 1) 네이티브 Edit / RichEdit 컨트롤 내부에서 윗줄 무간섭 '바뀐 해당 구간만' 정밀 복원 (EM_SETSEL(0,-1) 전체 선택 금지!)
     if ed and u32.IsWindow(ed) and mode != "backspace_replace":
         try:
             cur_full, idx_text, is_rich = _get_edit_full_text_and_index_str(ed)
-            cur_norm = cur_full.replace("\r\n", "\n")
-            search_m = morphed_t.replace("\r\n", "\n")
-            search_m_strip = search_m.strip()
-            target_pos = -1
-            target_len = 0
-            if search_m and search_m in cur_norm:
-                target_pos = cur_norm.rfind(search_m)
-                target_len = len(search_m)
-            elif search_m_strip and search_m_strip in cur_norm:
-                target_pos = cur_norm.rfind(search_m_strip)
-                target_len = len(search_m_strip)
+            m_idx = (
+                morphed_t.replace("\r\n", "\n")
+                if is_rich
+                else morphed_t.replace("\r\n", "\n").replace("\n", "\r\n")
+            )
+            m_idx_strip = m_idx.strip(" ")
+            char_pos = -1
+            match_len = 0
+            if m_idx and m_idx in idx_text:
+                char_pos = idx_text.rfind(m_idx)
+                match_len = len(m_idx)
+            elif m_idx_strip and m_idx_strip in idx_text:
+                char_pos = idx_text.rfind(m_idx_strip)
+                match_len = len(m_idx_strip)
 
-            if target_pos >= 0 and target_len > 0:
-                rep_norm = "" if mode == "snippet" else raw_t.replace("\r\n", "\n")
-                if search_m != search_m_strip and target_len == len(search_m_strip) and not rep_norm.endswith(" "):
-                    rep_norm = rep_norm.rstrip(" ")
-                new_norm = cur_norm[:target_pos] + rep_norm + cur_norm[target_pos + target_len :]
-                restore_doc = new_norm.replace("\n", "\r\n") if not is_rich else new_norm
-                caret_str = cur_norm[:target_pos] + rep_norm
-                caret_str_win = caret_str.replace("\n", "\r\n") if not is_rich else caret_str
-                caret_u16 = len(caret_str_win.encode("utf-16-le")) // 2
-                u32.SendMessageW(ed, EM_SETSEL, 0, -1)
-                rbuf = ctypes.create_unicode_buffer(restore_doc)
+            if char_pos >= 0 and match_len > 0:
+                rep_base = "" if mode == "snippet" else raw_t
+                if m_idx != m_idx_strip and match_len == len(m_idx_strip) and not rep_base.endswith(" "):
+                    rep_base = rep_base.rstrip(" ")
+                elif m_idx != m_idx_strip and match_len == len(m_idx_strip) and rep_base.endswith(" ") and idx_text[char_pos + match_len : char_pos + match_len + 1] == " ":
+                    rep_base = rep_base.rstrip(" ")
+                rep_win = (
+                    rep_base.replace("\r\n", "\n")
+                    if is_rich
+                    else rep_base.replace("\r\n", "\n").replace("\n", "\r\n")
+                )
+                start_u16 = len(idx_text[:char_pos].encode("utf-16-le")) // 2
+                end_u16 = len(idx_text[: char_pos + match_len].encode("utf-16-le")) // 2
+                rep_u16 = len(rep_win.encode("utf-16-le")) // 2
+                if is_rich:
+                    u32.SendMessageW(ed, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
+                u32.SendMessageW(ed, EM_SETSEL, start_u16, end_u16)
+                rbuf = ctypes.create_unicode_buffer(rep_win)
                 u32.SendMessageW(ed, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
-                u32.SendMessageW(ed, EM_SETSEL, caret_u16, caret_u16)
+                u32.SendMessageW(ed, EM_SETSEL, start_u16 + rep_u16, start_u16 + rep_u16)
+                if is_rich:
+                    u32.SendMessageW(ed, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
                 if mode == "pre_iron" and raw_t:
                     daemon_set_cb(raw_t)
                 if prev_ime_kor is not None:
                     set_ime_language(target_korean=bool(prev_ime_kor))
-                show_ghost_toast("👻 귀신같이 원상복구 완료 (원문·키보드 복원 + 재변환 잠금)", duration_ms=1700)
+                show_ghost_toast("👻 귀신같이 원상복구 완료 (원문·키보드 복원 + 재변환 잠금)", duration_ms=1600)
                 return True
 
             if full_before and mode != "pre_iron":
+                cur_norm = cur_full.replace("\r\n", "\n")
                 after_norm_check = full_after.replace("\r\n", "\n") if full_after else ""
                 if not after_norm_check or cur_norm == after_norm_check:
                     restore_doc = (
                         full_before.replace("\r\n", "\n").replace("\n", "\r\n")
                         if not is_rich
-                        else full_before
+                        else full_before.replace("\r\n", "\n")
                     )
+                    end_doc_u16 = len(restore_doc.encode("utf-16-le")) // 2
                     u32.SendMessageW(ed, EM_SETSEL, 0, -1)
                     rbuf = ctypes.create_unicode_buffer(restore_doc)
                     u32.SendMessageW(ed, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                    u32.SendMessageW(ed, EM_SETSEL, end_doc_u16, end_doc_u16)
                     if prev_ime_kor is not None:
                         set_ime_language(target_korean=bool(prev_ime_kor))
-                    show_ghost_toast("👻 귀신같이 원상복구 완료 (원문·키보드 복원 + 재변환 잠금)", duration_ms=1700)
+                    show_ghost_toast("👻 귀신같이 원상복구 완료 (원문·키보드 복원 + 재변환 잠금)", duration_ms=1600)
                     return True
         except Exception:
             pass
@@ -4361,6 +4353,8 @@ def _replace_edit_control_current_line_atomic(
         root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
         prev_ime_kor = get_ime_is_korean(root_hwnd)
         set_ime_language(target_korean=(target_lang == "KO"))
+        if is_rich:
+            u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
         if use_full_sel or (line_start == 0 and line_end >= utf16_total):
             u32.SendMessageW(edit_child, EM_SETSEL, 0, -1)
             rbuf = ctypes.create_unicode_buffer(final_out_win)
@@ -4374,6 +4368,8 @@ def _replace_edit_control_current_line_atomic(
             if not auto_triggered and s_pos != e_pos:
                 rep_utf16_len = len(final_out.encode("utf-16-le")) // 2
                 u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_start + rep_utf16_len)
+        if is_rich:
+            u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
 
         full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
         arm_undo_snapshot(
@@ -4474,12 +4470,14 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
         root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
         prev_ime_kor = get_ime_is_korean(root_hwnd)
         set_ime_language(target_korean=(target_lang == "KO"))
+        u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
         u32.SendMessageW(edit_child, EM_SETSEL, prev_start, prev_start + prev_len)
         rbuf = ctypes.create_unicode_buffer(polished)
         u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
         delta_utf16 = (len(polished.encode("utf-16-le")) // 2) - prev_len
         new_caret = max(0, s_pos + delta_utf16)
         u32.SendMessageW(edit_child, EM_SETSEL, new_caret, new_caret)
+        u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
 
         full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
         arm_undo_snapshot(
@@ -6079,7 +6077,6 @@ def main() -> None:
     idle_checked_for_ts: float = 0.0
     was_sub_key_down: dict[int, bool] = {}
     last_auto_morph_state: dict[str, object] = {"active": False}
-    _ui1_undo_ready_on_repress: bool = False
 
     def arm_sub_hotkeys() -> None:
         nonlocal menu_armed, menu_armed_until
@@ -6092,14 +6089,11 @@ def main() -> None:
                 u32.RegisterHotKey(None, 500 + num, MOD_CONTROL | MOD_NOREPEAT, 0x60 + num)
             for fnum in range(1, 11):
                 u32.RegisterHotKey(None, 300 + fnum, MOD_NOREPEAT, VK_F1 + fnum - 1)
-            if is_recent_undo_available(RECENT_GHOST_UNDO_WINDOW_SEC):
-                u32.RegisterHotKey(None, 199, MOD_NOREPEAT, VK_Z)
             menu_armed = True
         menu_armed_until = time.time() + MENU_ARM_SECONDS
 
     def disarm_sub_hotkeys() -> None:
-        nonlocal menu_armed, _ui1_undo_ready_on_repress
-        _ui1_undo_ready_on_repress = False
+        nonlocal menu_armed
         if menu_armed:
             for num in range(1, 10):
                 u32.UnregisterHotKey(None, 100 + num)
@@ -6108,7 +6102,6 @@ def main() -> None:
                 u32.UnregisterHotKey(None, 500 + num)
             for fnum in range(1, 11):
                 u32.UnregisterHotKey(None, 300 + fnum)
-            u32.UnregisterHotKey(None, 199)
             menu_armed = False
 
     def _execute_superpower_num(num: int) -> None:
@@ -6170,8 +6163,7 @@ def main() -> None:
             complete_feature_action_success("superpower_key_6")
 
     def _show_default_ui1_bar(live_clip_val: str | None) -> None:
-        nonlocal seq_queue, _ui1_undo_ready_on_repress
-        _ui1_undo_ready_on_repress = is_recent_undo_available(RECENT_GHOST_UNDO_WINDOW_SEC)
+        nonlocal seq_queue
         excel_cells = []
         if recent_unpasted:
             excel_cells = split_excel_cells(recent_unpasted[-1])
@@ -6214,17 +6206,25 @@ def main() -> None:
            - 입력창 내부라도 '단어를 드래그 선택'했거나 '단어 끝에 ?를 입력'한 뒤 소환 시 ➔ 해당 단어로 귀신검색창 직행!
         3) [창 UI ① 기본 귀신창]: 일반 입력창에서 드래그/물음표 없이 소환 시 ➔ 기본 귀신창 직행 (타이핑 시작 시 검색창 자동 변신)!
         """
-        nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts
+        nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts, last_alpha_type_ts, pending_first_typo
         now_s = time.time()
 
-        # [0순위: 8초 이내 귀신 변환 직후 재호출 원복(방안 1) 또는 연속 재호출 토글]
+        # [0-A순위: 귀신 변환 직후 5초 이내 Ctrl+0(또는 귀신호출) 1회 입력 ➔ 귀신창을 띄우지 않고 즉시 원상복구!]
+        if (
+            not _CURRENT_OPEN_UI_MODE
+            and is_recent_undo_available(RECENT_GHOST_UNDO_WINDOW_SEC)
+            and int(_UNDO_SNAPSHOT.get("typed_count_after") or 0) <= 2
+            and last_copy_ts <= float(_UNDO_SNAPSHOT.get("ts") or 0.0)
+            and last_drag_select_ts <= float(_UNDO_SNAPSHOT.get("ts") or 0.0)
+        ):
+            typed_ascii_buf.clear()
+            pending_first_typo = None
+            last_alpha_type_ts = 0.0
+            execute_undo_snapshot(daemon_set_clipboard)
+            return
+
+        # [0-B순위: 연속 재호출 토글] 이미 귀신창이 떠 있을 때 한 번 더 호출하면 즉시 반대 창으로 스왑!
         if _CURRENT_OPEN_UI_MODE == "ui1":
-            if _ui1_undo_ready_on_repress and _UNDO_SNAPSHOT.get("active"):
-                _ui1_undo_ready_on_repress = False
-                disarm_sub_hotkeys()
-                close_ghost_toast()
-                execute_undo_snapshot(daemon_set_clipboard)
-                return
             play_baby_ghost_sound(mode="summon")
             disarm_sub_hotkeys()
             show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
@@ -6508,13 +6508,6 @@ def main() -> None:
                             last_topmost_ts = now_hk
                             _execute_superpower_num(8)
 
-                    # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷 또는 귀신창 오픈 상태 Z 단축키)
-                    elif hk_id in (999, 199):
-                        _ui1_undo_ready_on_repress = False
-                        disarm_sub_hotkeys()
-                        close_ghost_toast()
-                        execute_undo_snapshot(daemon_set_clipboard)
-
                     # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
                     elif (101 <= hk_id <= 109) or (201 <= hk_id <= 209) or (401 <= hk_id <= 409) or (501 <= hk_id <= 509):
                         _execute_superpower_num(hk_id % 100)
@@ -6553,7 +6546,6 @@ def main() -> None:
                     try:
                         c_num = _CLICKED_SUPERPOWER_QUEUE.get_nowait()
                         if c_num == -1:
-                            _ui1_undo_ready_on_repress = False
                             disarm_sub_hotkeys()
                             close_ghost_toast()
                             execute_undo_snapshot(daemon_set_clipboard)
@@ -6627,14 +6619,8 @@ def main() -> None:
                         _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = False
                         _dismiss_native_context_menu_after_rbtn_up(_RBTN_HOLD_STATE.get("target_hwnd"))
                 was_key_down[0x9901] = rbtn_phys_now
-                if _UNDO_SNAPSHOT.get("active"):
-                    age_u = now - float(_UNDO_SNAPSHOT.get("ts") or 0.0)
-                    if _UNDO_SNAPSHOT.get("hotkey_999_armed") and (
-                        age_u > CTRL_Z_HOTKEY_WINDOW_SEC or int(_UNDO_SNAPSHOT.get("typed_count_after") or 0) > 14
-                    ):
-                        release_ctrl_z_hotkey_only()
-                    if age_u > 60.0:
-                        disarm_undo_snapshot()
+                if _UNDO_SNAPSHOT.get("active") and (now - float(_UNDO_SNAPSHOT.get("ts") or 0.0)) > 60.0:
+                    disarm_undo_snapshot()
                 if _PINNED_HWNDS:
                     enforce_pinned_windows()
                 global _CLEAR_ALL_REQUESTED
@@ -6689,13 +6675,7 @@ def main() -> None:
                             for vk_alpha in range(0x41, 0x5B):
                                 a_down = (u32.GetAsyncKeyState(vk_alpha) & 0x8000) != 0
                                 if a_down and not was_key_down.get(vk_alpha, False):
-                                    if vk_alpha == VK_Z and _ui1_undo_ready_on_repress and _UNDO_SNAPSHOT.get("active"):
-                                        _ui1_undo_ready_on_repress = False
-                                        disarm_sub_hotkeys()
-                                        close_ghost_toast()
-                                        execute_undo_snapshot(daemon_set_clipboard)
-                                    else:
-                                        _toast_queue.put(("__MORPH_SEARCH__", 0))
+                                    _toast_queue.put(("__MORPH_SEARCH__", 0))
                                     break
                 else:
                     for n_check in range(1, 7):
@@ -6821,10 +6801,13 @@ def main() -> None:
                         _execute_superpower_num(8)
                 was_ctrl_alt_t_down = ctrl_alt_t_now
 
+                # Ctrl+Z는 가로채지 않고 앱 순정 기능에 100% 맡기되, 변환 직후 순정 Ctrl+Z 입력 시 재변환 잠금·이전 키보드만 보조!
                 ctrl_z_now = ctrl_down and not alt_down and not shift_down and z_down
                 if ctrl_z_now and not was_ctrl_z_down:
-                    if _UNDO_SNAPSHOT.get("active") and _UNDO_SNAPSHOT.get("hotkey_999_armed"):
-                        execute_undo_snapshot(daemon_set_clipboard)
+                    typed_ascii_buf.clear()
+                    pending_first_typo = None
+                    last_alpha_type_ts = 0.0
+                    on_native_ctrl_z_observed()
                 was_ctrl_z_down = ctrl_z_now
 
                 # [②번 양방향 오토매틱 타이핑 감지 (2어절 연속 오타 감지 + 0.2ms 원자적 교체 + 한/영 키 즉시 동기화)]:
@@ -6995,16 +6978,20 @@ def main() -> None:
                             pending_first_typo = None
                     was_key_down[VK_BACK] = back_down
 
-                    # [스페이스바 없는 0.55초 멈춤 자동 성형 — 오직 '2어절 이상 연속 한영 오타'일 때만 발동!]:
-                    # ※ 1어절 단독 긴 영타(예: dmsgydmlapdlf@naver.com 입력 중 dmsgydmlapdlf에서 멈칫하는 경우)는
-                    #    0.55초 멈춤에서 절대 자동 변환하지 않으며, 반드시 Space를 눌렀을 때만 변환하여 이메일·아이디 오변환을 100% 차단합니다!
+                    # [무(無)스페이스 1.0초 멈춤 자동 성형]:
+                    # 1) 2어절 이상 연속 한영 오타(예: 'dhsmf ghldml') 입력 후 1.0초 멈춤 시, 또는
+                    # 2) 띄어쓰기 없이 한 덩어리로 붙여 친 문장(영문 알파벳 12타 이상 & 한글 5음절 이상, 예: 'dkssudgktpdy' ➔ '안녕하세요') 입력 후 1.0초 멈춤 시
+                    #    스페이스를 치지 않아도 즉시 한글로 자동 변환 + 띄어쓰기 교정 + 한글키 전환!
+                    #    (짧은 영문 아이디 'ghdrlfehd'[9타]나 이메일 '@', 수식 '=' 등은 멈춰도 절대 성급히 바뀌지 않음)
                     if (
                         typed_ascii_buf
                         and len(typed_ascii_buf) >= 2
                         and last_alpha_type_ts > 0
-                        and (now - last_alpha_type_ts) >= 0.55
-                        and (now - last_alpha_type_ts) < 1.5
+                        and idle_checked_for_ts != last_alpha_type_ts
+                        and (now - last_alpha_type_ts) >= IDLE_PAUSE_AUTO_MORPH_SEC
+                        and (now - last_alpha_type_ts) < 2.5
                     ):
+                        idle_checked_for_ts = last_alpha_type_ts
                         raw_idle_buf_chk = "".join(typed_ascii_buf)
                         hwnd_idle = u32.GetForegroundWindow()
                         if should_skip_auto_typo(hwnd_idle):
@@ -7022,7 +7009,7 @@ def main() -> None:
                                     and (now - last_paste_ts) > 2.0
                                 ):
                                     idle_tokens = idle_line.strip().split()
-                                    if len(idle_tokens) >= 2 and not _is_protected_account_or_email_token(idle_tokens[-1]):
+                                    if idle_tokens and not _is_protected_account_or_email_token(idle_tokens[-1]):
                                         idle_eng_typo_cnt = 0
                                         for itok in idle_tokens:
                                             if _is_protected_account_or_email_token(itok):
@@ -7030,7 +7017,21 @@ def main() -> None:
                                             m_itok, dir_itok = morph_korean_english_text_with_direction(itok)
                                             if dir_itok == "KO" and m_itok != itok:
                                                 idle_eng_typo_cnt += 1
-                                        if idle_eng_typo_cnt >= 2:
+                                        last_itok = idle_tokens[-1]
+                                        m_last_i, d_last_i = morph_korean_english_text_with_direction(last_itok)
+                                        last_eng_len = sum(
+                                            len(c_x)
+                                            for c_x in re.findall(r"[A-Za-z]+", last_itok)
+                                            if len(c_x) >= 2 and not AI_ENGINE.is_valid_english_word(c_x)
+                                        )
+                                        last_kor_len = len(re.findall(r"[가-힣]", m_last_i)) if d_last_i == "KO" else 0
+                                        is_long_unspaced = (
+                                            d_last_i == "KO"
+                                            and m_last_i != last_itok
+                                            and last_eng_len >= 12
+                                            and last_kor_len >= 5
+                                        )
+                                        if idle_eng_typo_cnt >= 2 or is_long_unspaced:
                                             ok_id, raw_id, out_id, lang_id = _replace_edit_control_current_line_atomic(edit_idle, auto_triggered=True)
                                             if ok_id:
                                                 typed_ascii_buf.clear()
@@ -7038,18 +7039,25 @@ def main() -> None:
                                                 last_alpha_type_ts = 0.0
                                                 complete_feature_action_success("auto_typo_morph_2words")
                             else:
-                                # [엑셀 셀 편집(EXCEL6)·카톡 채팅창 등 검증된 비-Edit 입력칸에서 2단어 연속 오타 후 0.55초 멈춤 자동 성형]
+                                # [엑셀 셀 편집(EXCEL6)·카톡 채팅창 등 검증된 비-Edit 입력칸에서 1.0초 멈춤 자동 성형]
                                 raw_idle_str = raw_idle_buf_chk
                                 ime_kor_id = get_ime_is_korean(hwnd_idle)
                                 if not ime_kor_id and re.search(r"[A-Za-z]{2,}", raw_idle_str):
                                     conv_id, dir_id = morph_korean_english_text_with_direction(raw_idle_str)
                                     if dir_id == "KO" and conv_id != raw_idle_str and re.search(r"[가-힣]", conv_id):
+                                        eng_len_id = sum(
+                                            len(c_x)
+                                            for c_x in re.findall(r"[A-Za-z]+", raw_idle_str)
+                                            if len(c_x) >= 2 and not AI_ENGINE.is_valid_english_word(c_x)
+                                        )
+                                        kor_len_id = len(re.findall(r"[가-힣]", conv_id))
+                                        is_long_unspaced_id = eng_len_id >= 12 and kor_len_id >= 5
                                         has_prev_id = (
                                             pending_first_typo is not None
                                             and pending_first_typo.get("target_ko") is True
                                             and pending_first_typo.get("hwnd") == hwnd_idle
                                         )
-                                        if has_prev_id:
+                                        if has_prev_id or is_long_unspaced_id:
                                             prev_r_id = pending_first_typo["raw"] if has_prev_id else ""
                                             prev_c_id = pending_first_typo["conv"] if has_prev_id else ""
                                             total_bs_id = (pending_first_typo["disp_len"] if has_prev_id else 0) + len(raw_idle_str)

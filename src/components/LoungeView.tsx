@@ -165,14 +165,14 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
             ⛳ {bannerTitle}
           </span>
           <span className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-300/30 text-amber-300 text-[11px] font-bold">
-            🏅 김철수 총무님 후원 · 회원 무료
+            🏅 총무님 후원 · 전 회원 평생 0원
           </span>
           <button
             type="button"
             onClick={() => setShowRetroCover((v) => !v)}
             className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[12.5px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
           >
-            {showRetroCover ? '추억 간판 접기 ▴' : '🏫 추억 간판·초대장 열기 ▾'}
+            {showRetroCover ? '간판 접기 ▴' : '🏫 간판·초대장 열기 ▾'}
           </button>
         </div>
 
@@ -293,7 +293,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
                 {bannerTitle}
               </h2>
               <span className="text-[12px] text-amber-200/95 font-medium">
-                🏅 김철수 총무님의 후원으로 회원 전원 무료 운영 중
+                🏅 총무님 후원 · 전 회원 평생 0원 운영 중
               </span>
             </div>
 
@@ -3133,6 +3133,25 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const [showStorageCheckBanner, setShowStorageCheckBanner] = useState(false);
   const [simulateLowStorage, setSimulateLowStorage] = useState(false);
   const [downloadDirPath, setDownloadDirPath] = useState('D:\\Ghosti\\다운로드_원본');
+  const [showClubCover, setShowClubCover] = useState(false);
+  const [clubBannerBgTheme, setClubBannerBgTheme] = useState<'forest' | 'sunset'>('forest');
+  const [clubBannerTitle, setClubBannerTitle] = useState('주말 산악 · 골프 · 취미 동호회 모임방');
+  const [editingClubTitle, setEditingClubTitle] = useState(false);
+  const [clubTitleDraft, setClubTitleDraft] = useState('주말 산악 · 골프 · 취미 동호회 모임방');
+  const [clubInviteCopied, setClubInviteCopied] = useState(false);
+
+  const handleCopyClubInviteHook = async () => {
+    const copyTxt = `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! (총무님 후원으로 전 회원 평생 0원 무료입니다)`;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(copyTxt);
+      }
+    } catch {
+      // ignore
+    }
+    setClubInviteCopied(true);
+    setTimeout(() => setClubInviteCopied(false), 2600);
+  };
 
   const renderOriginalAutoSyncControl = () => (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
@@ -3386,17 +3405,25 @@ export const LoungeFeedContextBanner: React.FC = () => {
   }
 
   if (activeLoungeType === 'club') {
+    const isForestTheme = clubBannerBgTheme === 'forest';
     return (
       <div className="flex flex-col gap-2.5">
-        {/* 동호회·모임 전용 헤더 바 (동창회 화면과 완전 분리) */}
+        {/* 동호회·모임 전용 헤더 바 (동창회와 동일한 간판·초대장 열기/접기 및 후원 문구 통일) */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold tracking-tight">
-              ⛰️ 주말 산악 · 골프 · 취미 동호회 모임방
+              ⛰️ {clubBannerTitle}
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-300 text-[11px] font-bold">
-              🏅 모임 총무님 후원 · 전 회원 평생 0원
+              🏅 총무님 후원 · 전 회원 평생 0원
             </span>
+            <button
+              type="button"
+              onClick={() => setShowClubCover((v) => !v)}
+              className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[12.5px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
+            >
+              {showClubCover ? '간판 접기 ▴' : '🏕️ 간판·초대장 열기 ▾'}
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -3441,6 +3468,90 @@ export const LoungeFeedContextBanner: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* 사용자가 [🏕️ 간판·초대장 열기 ▾]를 눌렀을 때 펼쳐지는 동호회·모임 간판 */}
+        {showClubCover && (
+          <div
+            data-keep-dark="true"
+            className={`relative rounded-xl overflow-hidden border px-5 py-4 transition-all ${
+              isForestTheme
+                ? 'bg-gradient-to-r from-[#163325] via-[#1E4432] to-[#142B1F] border-[#6A9E82]/60 shadow-[inset_0_0_32px_rgba(0,0,0,0.45)]'
+                : 'bg-gradient-to-r from-[#4A221D] via-[#7A3522] to-[#361D33] border-amber-300/50 shadow-[inset_0_0_32px_rgba(0,0,0,0.4)]'
+            }`}
+          >
+            <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3.5">
+              <div className="flex flex-wrap items-center gap-3 text-[12px] text-white/85">
+                <button
+                  type="button"
+                  onClick={() => setClubBannerBgTheme(isForestTheme ? 'sunset' : 'forest')}
+                  className="underline hover:text-white cursor-pointer font-bold whitespace-nowrap"
+                >
+                  {isForestTheme ? '🌅 노을 캠핑 배경으로 변경' : '🌲 숲속 필드 배경으로 변경'}
+                </button>
+
+                <span className="text-white/40">|</span>
+
+                {editingClubTitle ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const trimmed = clubTitleDraft.trim();
+                      if (trimmed) setClubBannerTitle(trimmed);
+                      setEditingClubTitle(false);
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <input
+                      type="text"
+                      value={clubTitleDraft}
+                      onChange={(e) => setClubTitleDraft(e.target.value)}
+                      placeholder="예: 주말 산악 · 골프 모임방"
+                      className="px-2.5 py-1 rounded bg-black/60 border border-amber-300/70 text-white text-[12px] font-bold w-44 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="px-2.5 py-1 rounded bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer"
+                    >
+                      적용
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClubTitleDraft(clubBannerTitle);
+                      setEditingClubTitle(true);
+                    }}
+                    className="underline text-amber-200 hover:text-amber-100 cursor-pointer font-bold whitespace-nowrap"
+                  >
+                    ✏️ 모임 이름 변경
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5">
+                <h2 className="font-headline-md text-[22px] md:text-[25px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] whitespace-nowrap">
+                  {clubBannerTitle}
+                </h2>
+                <span className="text-[12px] text-amber-200/95 font-medium">
+                  🏅 총무님 후원 · 전 회원 평생 0원 운영 중
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleCopyClubInviteHook()}
+                className={`px-4 py-2 rounded-xl font-label-sm text-[12px] font-extrabold transition-all shadow-md shrink-0 whitespace-nowrap cursor-pointer ${
+                  clubInviteCopied
+                    ? 'bg-emerald-400 text-zinc-950'
+                    : 'bg-amber-300 hover:bg-amber-200 text-zinc-950'
+                }`}
+              >
+                {clubInviteCopied ? '✓ 단톡방 초대장 복사됨!' : '💌 단톡방 초대 문구 복사'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 하단 1줄: 모임 인물 빠른 검색 + 각자의 페이지 [원본 자동 동기화] 버튼 & (새로 9장 추가) 풍선 */}
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
