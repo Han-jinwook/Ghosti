@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { zCoreBridge } from '../../services/zCoreBridge';
+import { zCoreBridge, hasActiveGhostiLoginSession } from '../../services/zCoreBridge';
 import {
   computeGhostSearchWindowRect,
   resolveGhostSearchResponsiveSpec,
@@ -679,6 +679,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
 
     let baseline: Record<string, number> | null = null;
     const pollTelemetry = async () => {
+      if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return;
       try {
         const res = await fetch('http://127.0.0.1:5199/api/superpower/telemetry');
         if (!res.ok) return;

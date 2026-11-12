@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSaySeeStore, type DesktopTab, type MobileTab } from './store/useSaySeeStore';
 import type { FamilyRoomId, LoungeType } from './types/saysee';
 import { playAppEnterGiggleSound } from './services/babyGhostSound';
+import { zCoreBridge } from './services/zCoreBridge';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
@@ -359,7 +360,7 @@ export const App: React.FC = () => {
       isApplyingPopStateRef.current = true;
       setViewMode(targetNav.viewMode === 'showroom' ? 'showroom' : 'workspace');
       useSaySeeStore.setState({
-        activeLoungeType: targetNav.lounge === 'student' ? 'club' : targetNav.lounge,
+        activeLoungeType: targetNav.lounge,
         desktopTab: targetNav.desktopTab,
         mobileTab: targetNav.mobileTab || desktopTabToMobileTab(targetNav.desktopTab),
         activeFamilyRoom: targetNav.familyRoom || 'home',
@@ -446,6 +447,7 @@ export const App: React.FC = () => {
       try {
         localStorage.setItem('ghosti_onboarding_completed', 'true');
       } catch {}
+      void zCoreBridge.checkHealth(true);
       // 정식 출시 상태이거나 개발자 권한이 있을 때 온보딩에서 로그인을 완료하면 즉시 본진 워크스페이스로 자동 진입
       if (OFFICIAL_LAUNCH_LIVE || isDevAuthorized) {
         setViewMode('workspace');
@@ -462,7 +464,6 @@ export const App: React.FC = () => {
   }, [isDevAuthorized]);
 
   useEffect(() => {
-    const mountInitStartMs = Date.now();
     playAppEnterGiggleSound();
     void initApp();
     const handleZCoreConnected = () => {
@@ -481,10 +482,7 @@ export const App: React.FC = () => {
           lastQuarantineToast: '🎉 멀린 Z-코어(Port 5199) 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
         });
       }
-      // 앱 마운트 직후(3초 이내)에는 초기 initApp()이 이미 Z-코어를 포함해 로딩 중이므로 중복 initApp(true) 호출 차단
-      if (Date.now() - mountInitStartMs > 3000) {
-        void initApp(true);
-      }
+      void initApp(true);
     };
     window.addEventListener('zCoreConnected', handleZCoreConnected);
     return () => window.removeEventListener('zCoreConnected', handleZCoreConnected);

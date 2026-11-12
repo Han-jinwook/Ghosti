@@ -21,12 +21,6 @@ export const LATEST_Z_CORE_VERSION = '2.3.5';
  */
 export function hasActiveGhostiLoginSession(): boolean {
   if (typeof window === 'undefined') return false;
-  if (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-  ) {
-    return true;
-  }
   const params = new URLSearchParams(window.location.search);
   if (params.get('ghostSearchWindow')) {
     return true;

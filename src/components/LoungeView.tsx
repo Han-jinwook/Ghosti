@@ -1076,10 +1076,10 @@ export const LoungeView: React.FC = () => {
             <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                  ⛳ 동호회 · 동창회 (사진 공유) — 4050 동창회 · 골프 · 산악회 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(총무 1인 결제 ➔ 전 회원 무료)'}
+                  ⛰️ 동호회·모임 (사진 공유) — 주말 산악회 · 골프 · 취미 모임 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(방장·회원 전원 평생 0원)'}
                 </h1>
                 <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                  동창회·모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 썸네일 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
+                  모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 썸네일 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
                 </p>
               </div>
               <button
@@ -3123,13 +3123,16 @@ export const LoungeFeedContextBanner: React.FC = () => {
     setDoorplatePickerClusterId,
     setDesktopTab,
     setMobileTab,
+    clubFeedTrack,
+    setClubFeedTrack,
+    isGuestPreviewMode,
+    triggerGuestJoinWall,
   } = useSaySeeStore();
 
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(true);
   const [showStorageCheckBanner, setShowStorageCheckBanner] = useState(false);
   const [simulateLowStorage, setSimulateLowStorage] = useState(false);
   const [downloadDirPath, setDownloadDirPath] = useState('D:\\Ghosti\\다운로드_원본');
-  const [monthlyReportDismissed, setMonthlyReportDismissed] = useState(false);
 
   const renderOriginalAutoSyncControl = () => (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
@@ -3290,7 +3293,25 @@ export const LoungeFeedContextBanner: React.FC = () => {
   }
 
   const renderMemberPersonaPills = (labelText: string) => {
-    if (namedClusters.length === 0) return null;
+    if (namedClusters.length === 0) {
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-label-sm text-[11.5px] text-zinc-400 mr-0.5 whitespace-nowrap">
+            {labelText}
+          </span>
+          <span className="px-2.5 py-1 rounded-full bg-zinc-900/70 border border-white/10 text-zinc-400 font-label-sm text-[11.5px] font-medium whitespace-nowrap">
+            아직 등록된 여권 인물이 없습니다
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowFaceRegistryModal(true)}
+            className="px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
+          >
+            🛂 인물 여권 등록
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-label-sm text-[11.5px] text-zinc-400 mr-0.5 whitespace-nowrap">
@@ -3353,8 +3374,6 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return (
       <div className="flex flex-col gap-2.5">
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
-
-
           <div className="flex flex-wrap items-center gap-2">
             {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}
             {renderOriginalAutoSyncControl()}
@@ -3369,12 +3388,59 @@ export const LoungeFeedContextBanner: React.FC = () => {
   if (activeLoungeType === 'club') {
     return (
       <div className="flex flex-col gap-2.5">
-        <AlumniRetroBannerAndTwoTrackBar
-          onOpenWaitingRoom={() => {
-            setDesktopTab('trash');
-            setMobileTab('trash');
-          }}
-        />
+        {/* 동호회·모임 전용 헤더 바 (동창회 화면과 완전 분리) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold tracking-tight">
+              ⛰️ 주말 산악 · 골프 · 취미 동호회 모임방
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-300 text-[11px] font-bold">
+              🏅 모임 총무님 후원 · 전 회원 평생 0원
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex p-0.5 rounded-xl bg-zinc-900 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setClubFeedTrack('recent_now')}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                  clubFeedTrack === 'recent_now'
+                    ? 'bg-primary-container text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                🏕️ 정기 모임·라운딩
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setClubFeedTrack('memories_1989')}
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                  clubFeedTrack === 'memories_1989'
+                    ? 'bg-primary-container text-zinc-950 shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                🍻 번개 · 추억 앨범
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (isGuestPreviewMode) {
+                  triggerGuestJoinWall('🎯 내 얼굴이 나온 모임 사진만 1초 만에 다 찾기');
+                  return;
+                }
+                void runTextQuery('바다 노을');
+              }}
+              className="px-3 py-1.5 rounded-xl bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
+            >
+              🎯 내 모임 사진 1초 찾기
+            </button>
+          </div>
+        </div>
 
         {/* 하단 1줄: 모임 인물 빠른 검색 + 각자의 페이지 [원본 자동 동기화] 버튼 & (새로 9장 추가) 풍선 */}
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
@@ -3382,7 +3448,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
           {renderOriginalAutoSyncControl()}
         </div>
 
-        <GhostCastLiveToolbar loungeLabel="⛳ 동호회 · 동창회 사진 공유방" />
+        <GhostCastLiveToolbar loungeLabel="⛰️ 동호회·모임 사진 공유방" />
 
         {/* 남은 용량 대비 가능/불가능 안내 및 내 기기 저장 폴더 열기 */}
         {renderStorageCheckAndSyncDetail()}
@@ -3394,37 +3460,24 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return <WorkLoungeB2BHub />;
   }
 
-  // student ('⛳ 동호회 · 동창회 (사진 공유)')
+  // student ('🎓 동창회 (사진 공유)')
   return (
-    <div className="flex flex-col gap-2">
-      {!monthlyReportDismissed && (
-        <div className="px-3.5 py-2 rounded-xl bg-zinc-900/60 border border-emerald-400/30 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className="px-2 py-0.5 rounded bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold whitespace-nowrap">
-              🎉 용량 정리
-            </span>
-            <span className="font-body-sm text-[12px] text-zinc-200 truncate">
-              이번 달 우리반 원본 사진 {photos.length}장 &amp; 영상이 방장 PC로 보관되어{' '}
-              <strong className="text-emerald-300">내 폰 여유 공간 +14.2GB</strong> 확보!
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMonthlyReportDismissed(true)}
-            className="text-zinc-400 hover:text-white font-label-sm text-[11px] shrink-0 whitespace-nowrap cursor-pointer"
-          >
-            ✕ 닫기
-          </button>
-        </div>
-      )}
+    <div className="flex flex-col gap-2.5">
+      <AlumniRetroBannerAndTwoTrackBar
+        onOpenWaitingRoom={() => {
+          setDesktopTab('trash');
+          setMobileTab('trash');
+        }}
+      />
 
       <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
-        <span className="font-label-sm text-[12.5px] text-zinc-400">
-          🎒 우리 반 사진과 영상을 친구 이름이나 장면으로 바로 찾아보세요
-        </span>
-        {renderMemberPersonaPills('친구 이름 검색:')}
+        {renderMemberPersonaPills('동창 이름 검색:')}
+        {renderOriginalAutoSyncControl()}
       </div>
-      <GhostCastLiveToolbar loungeLabel="⛳ 동호회 · 동창회 사진 공유방" />
+
+      <GhostCastLiveToolbar loungeLabel="🎓 동창회 사진 공유방" />
+
+      {renderStorageCheckAndSyncDetail()}
     </div>
   );
 };
@@ -4787,11 +4840,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
               <GhostiBrandLogo size="mobile" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-                👥 동호회 · 동창회 관리
+                ⛰️ 동호회·모임 관리
               </span>
             </div>
             <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
-              ⛳ 동호회 · 🎓 동창회 초대 &amp; 회원 관리
+              ⛰️ 동호회·모임 초대 &amp; 회원 관리
             </h2>
           </div>
 
@@ -5000,14 +5053,10 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-            {isStoreAppMode
-              ? '⛳ 동호회 · 동창회 (사진 공유) (초·중·고 우리반·동아리 100% 무료 합류)'
-              : '⛳ 동호회 · 동창회 (사진 공유) (초·중·고 반/동아리 특가 월 900원)'}
+            🎓 동창회 관리 &amp; 동기 초대 (평생 0원)
           </span>
           <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-            {isStoreAppMode
-              ? '하교 후 방장 게이밍 PC 자동 인덱싱 & 학생증 로컬 OCR 0.1초 인증'
-              : '하교 후 방장 게이밍 PC 자동 인덱싱 & 초·중·고 반/동아리 인원 무제한 월 900원 학생인증'}
+            🎓 동창회 초대 &amp; 동기 회원 관리 (학교/학년/반 타임캡슐 · 평생 0원)
           </h2>
           <p className="font-body-sm text-[12.5px] text-zinc-300">
             낮에 학교·학원에서 찍은 우리반 사진·영상은 대기실에 모아두었다가, 하교 후 방장 집 게이밍 PC가 켜지면 그래픽카드(GPU) 파워로 1초 만에 색인·압축 배포합니다.

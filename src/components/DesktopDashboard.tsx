@@ -192,7 +192,7 @@ const MOBILE_QUICK_MENUS: Array<{
 
 const PHOTO_SHARE_GROUPS: Array<{ id: LoungeType; label: string }> = [
   { id: 'family', label: '👨‍👩‍👧‍👦 가족' },
-  { id: 'club', label: '⛰️ 동호회' },
+  { id: 'club', label: '⛰️ 동호회·모임' },
   { id: 'student', label: '🎓 동창회' },
 ];
 
@@ -218,16 +218,16 @@ const LOUNGE_SUBMENU_CONFIG: Record<
     { id: 'sync', icon: '⚙️', label: '가족 초대 & 방 관리' },
   ],
   club: [
-    { id: 'trial', icon: '⛳', label: '동호·동창회 시작' },
-    { id: 'dashboard', icon: '🖼️', label: '모임·동창 앨범 & 원본 다운로드' },
+    { id: 'trial', icon: '⛰️', label: '동호회·모임 시작' },
+    { id: 'dashboard', icon: '🖼️', label: '동호회·모임 앨범 & 원본 다운로드' },
     { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
     { id: 'sync', icon: '⚙️', label: '모임 관리 & 회원 초대' },
   ],
   student: [
-    { id: 'trial', icon: '⛳', label: '동호·동창회 시작' },
-    { id: 'dashboard', icon: '🖼️', label: '타임캡슐 앨범 & 영상 검색' },
+    { id: 'trial', icon: '🎓', label: '동창회 시작' },
+    { id: 'dashboard', icon: '🖼️', label: '동창회 앨범 & 원본 다운로드' },
     { id: 'trash', icon: '🧹', label: '새 사진·영상 정리함' },
-    { id: 'sync', icon: '⚙️', label: '우리반 관리 & 학생인증' },
+    { id: 'sync', icon: '⚙️', label: '동창회 관리 & 동기 초대' },
   ],
   work: [
     { id: 'trial', icon: '💼', label: '업무 공유(S:) 시작' },
@@ -1312,9 +1312,7 @@ export const DesktopDashboard: React.FC = () => {
             {resolveQuickMenuId(activeLoungeType) === 'photo_share' && (
               <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar">
                 {PHOTO_SHARE_GROUPS.map((group) => {
-                  const groupActive =
-                    activeLoungeType === group.id ||
-                    (group.id === 'club' && activeLoungeType === 'student');
+                  const groupActive = activeLoungeType === group.id;
                   return (
                     <button
                       key={group.id}
@@ -1388,7 +1386,11 @@ export const DesktopDashboard: React.FC = () => {
                       : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
                   }`}
                 >
-                  {activeLoungeType === 'work' ? '📂 업무 공유(S:) 메인' : '🖼️ 모임·동창 앨범 홈'}
+                  {activeLoungeType === 'work'
+                    ? '📂 업무 공유(S:) 메인'
+                    : activeLoungeType === 'club'
+                    ? '⛰️ 동호회·모임 앨범 홈'
+                    : '🎓 동창회 앨범 홈'}
                 </button>
               )}
             </div>
@@ -1510,8 +1512,8 @@ export const DesktopDashboard: React.FC = () => {
                           : activeLoungeType === 'family'
                           ? `👨‍👩‍👧‍👦 ${activeFamilyRoom} 패밀리 앨범`
                           : activeLoungeType === 'club'
-                          ? '⛳ 모임 추억 & 원본 보관함'
-                          : '🎒 우리반 타임캡슐'}
+                          ? '⛰️ 동호회·모임 추억 & 원본 보관함'
+                          : '🎓 동창회 추억 & 원본 보관함'}
                       </h1>
                     </div>
                   </div>

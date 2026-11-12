@@ -134,8 +134,9 @@ const MAIN_LOUNGE_MENUS: Array<{
 ];
 
 const PHOTO_SHARE_GROUPS: Array<{ id: LoungeType; label: string }> = [
-  { id: 'family', label: '패밀리 (우리집·본가·처가)' },
-  { id: 'club', label: '동호회·동창회' },
+  { id: 'family', label: '👨‍👩‍👧‍👦 가족' },
+  { id: 'club', label: '⛰️ 동호회·모임' },
+  { id: 'student', label: '🎓 동창회' },
 ];
 
 const resolveMainMenuId = (lounge: LoungeType): MainMenuId =>
@@ -158,16 +159,16 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
     { id: 'settings', label: '가족 초대 & 방 설정' },
   ],
   club: [
-    { id: 'trial', label: '⛳ 동호·동창회 시작' },
+    { id: 'trial', label: '⛰️ 동호회·모임 시작' },
     { id: 'search', label: '모임 피드 & 원본 동기화' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'settings', label: '동호·동창회 관리 & 방 설정' },
+    { id: 'settings', label: '모임 관리 & 회원 초대' },
   ],
   student: [
-    { id: 'trial', label: '⛳ 동호·동창회 시작' },
-    { id: 'search', label: '타임캡슐 피드 & 씬 검색' },
+    { id: 'trial', label: '🎓 동창회 시작' },
+    { id: 'search', label: '동창회 피드 & 원본 동기화' },
     { id: 'trash', label: 'AI 인덱싱 대기실' },
-    { id: 'settings', label: '게이밍 PC & 학생인증' },
+    { id: 'settings', label: '동창회 관리 & 동기 초대' },
   ],
   work: [
     { id: 'trial', label: '💼 업무 공유(S:) 시작' },
@@ -415,9 +416,7 @@ export const MobileAppView: React.FC = () => {
           {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
             <div className="flex items-center gap-1.5 -mt-0.5 overflow-x-auto no-scrollbar">
               {PHOTO_SHARE_GROUPS.map((group) => {
-                const groupActive =
-                  activeLoungeType === group.id ||
-                  (group.id === 'club' && activeLoungeType === 'student');
+                const groupActive = activeLoungeType === group.id;
                 return (
                   <button
                     key={group.id}

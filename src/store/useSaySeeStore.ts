@@ -669,6 +669,10 @@ export function getActivePersonaForCluster(
  * 3. 이메일(Email ID) 기반 귀신같이 여권에 영구 귀속되어 어느 방에 가든 무질문 자동 장착되며, 타인은 실제 이름(백은숙·한치우·한지우·한천우·한민수)으로 통일하고 '나(본인)'만 별명+이름 세트('멀린' ↔ '한진욱')로 매핑!
  */
 function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): FaceMemberCluster[] {
+  if (!Array.isArray(rawClusters) || rawClusters.length === 0) {
+    return [];
+  }
+  const savedOverrides = loadCustomFaceRegistrations();
   const enriched = rawClusters.map((c) => {
     const baseCuts: YearlyFaceBestCut[] =
       Array.isArray(c.yearlyBestCuts) && c.yearlyBestCuts.length > 0
@@ -707,13 +711,14 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
       forwardBucketActive: true,
       filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을'],
     };
-    let roomPersonas: RoomPersonaMap = c.roomPersonas || {};
+    const userOverride = savedOverrides[c.clusterId];
+    const hasUserRegisteredName = Boolean(userOverride?.registeredName?.trim());
+    let roomPersonas: RoomPersonaMap = hasUserRegisteredName ? userOverride?.roomPersonas || {} : {};
     let crossLoungeEvolutionNote =
       c.crossLoungeEvolutionNote ||
       '🛂 이메일 여권 영구 귀속 · 전 라운지 무질문 자동 연동됨';
 
     if (c.clusterId === 'face_member_3' || c.personKey === 'person_adult_female_partner') {
-      // 은숙 (성인 10년 주기: 기준 2026년 -> 2026~2017 + 미래 바구니 2027~2036)
       passportEmail = 'eunsook@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
@@ -723,15 +728,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         forwardBucketRange: '2027~2036',
         forwardBucketActive: true,
         filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '선글라스·역광'],
-      };
-      roomPersonas = {
-        personal: '백은숙',
-        '우리집': '백은숙',
-        '처가(친정)': '백은숙',
-        '본가(친가)': '백은숙',
-        club: '백은숙',
-        student: '백은숙',
-        ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
         '🏠 처가방 여행 사진에서 [야외·노을] 슬롯 진화 ➔ 전 라운지 여권 자동 동기화됨';
@@ -752,7 +748,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_5' || c.personKey === 'person_adult_male_host') {
-      // 멀린 (나/본인: 별명 '멀린' + 실명 '한진욱' 세트 유지 — 관계 꼬리표 없이 별명·실명만 사용)
       passportEmail = 'merlin@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
@@ -762,15 +757,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         forwardBucketRange: '2027~2036',
         forwardBucketActive: true,
         filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을', '선글라스·역광'],
-      };
-      roomPersonas = {
-        personal: '멀린',
-        '우리집': '멀린',
-        '처가(친정)': '한진욱',
-        '본가(친가)': '한진욱',
-        club: '멀린',
-        student: '한진욱',
-        ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
         '⛳ 동호·동창회방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%) ➔ 처가집 방("한진욱 선글라스") 자동 전파됨';
@@ -791,7 +777,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_1' || c.personKey === 'person_youth_glasses_2') {
-      // 치우 (미성년/청년 5년 주기: 기준 2026년 -> 2026~2022 + 미래 바구니 2027~2031)
       passportEmail = 'chiwoo@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
@@ -801,15 +786,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         forwardBucketRange: '2027~2031',
         forwardBucketActive: true,
         filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을'],
-      };
-      roomPersonas = {
-        personal: '한치우',
-        '우리집': '한치우',
-        '처가(친정)': '한치우',
-        '본가(친가)': '한치우',
-        club: '한치우',
-        student: '한치우',
-        ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
         '📱 게스트 폰 동반 등장(4회)으로 [측면·미소] 슬롯 여권 자동 진화됨';
@@ -830,7 +806,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_4') {
-      // 지우 (미성년 5년 주기: 친구 모임방에서 진화해 우리집 가족방으로 역전파되는 대표 사례!)
       passportEmail = 'jiwoo@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
@@ -840,15 +815,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         forwardBucketRange: '2027~2031',
         forwardBucketActive: true,
         filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '야간·실내'],
-      };
-      roomPersonas = {
-        personal: '한지우',
-        '우리집': '한지우',
-        '처가(친정)': '한지우',
-        '본가(친가)': '한지우',
-        club: '한지우',
-        student: '한지우',
-        ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
         '🎒 친구 모임방(동호회 · 동창회)에서 [야간·실내] 슬롯 진화(유사도 93.8%) ➔ 우리집 가족방 과거 사진 +7장 자동 구출됨!';
@@ -869,7 +835,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         });
       }
     } else if (c.clusterId === 'face_member_2') {
-      // 천우 (미성년 5년 주기: 기준 2026년 -> 2026~2022)
       passportEmail = 'cheonwoo@ghosti.ai';
       timelineBucket = {
         anchorCreationYear: 2026,
@@ -879,15 +844,6 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
         forwardBucketRange: '2027~2031',
         forwardBucketActive: false,
         filledStyleSlots: ['정면·선명', '야외·노을'],
-      };
-      roomPersonas = {
-        personal: '한천우',
-        '우리집': '한천우',
-        '처가(친정)': '한천우',
-        '본가(친가)': '한천우',
-        club: '한천우',
-        student: '한천우',
-        ...c.roomPersonas,
       };
       crossLoungeEvolutionNote =
         '🛂 가족방 초벌 여권 이메일 귀속 완료 (어느 방에 가든 무질문 자동 작동)';
@@ -988,6 +944,13 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
 
     return {
       ...c,
+      // 여권 등록을 직접 하지 않은 상태에서는 실제 가족 인물이 미리 등록되어 있지 않도록 초기화
+      registeredName: userOverride?.registeredName ?? '',
+      relationshipTag: userOverride?.relationshipTag ?? '',
+      excludedAsPasserby:
+        userOverride?.excludedAsPasserby !== undefined
+          ? userOverride.excludedAsPasserby
+          : c.excludedAsPasserby,
       passportEmail,
       timelineBucket: {
         ...timelineBucket,
@@ -1003,103 +966,7 @@ function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberCluster[]): 
     };
   });
 
-  // 새로운 동반 등장 인물(2029년 처가방/동반 신규 세팅 멤버 예시 — 기준 연도 2029~2020 독립 바구니!)
-  if (!enriched.some((c) => c.clusterId === 'face_companion_auto_6')) {
-    enriched.push({
-      clusterId: 'face_companion_auto_6',
-      personKey: 'person_companion_discovered_6',
-      passportEmail: 'inlaw2029@ghosti.ai',
-      timelineBucket: {
-        anchorCreationYear: 2029,
-        bucketSpanYears: 10,
-        ageCategoryLabel: '성인 10년 주기',
-        primaryBucketRange: '2029~2020',
-        forwardBucketRange: '2030~2039',
-        forwardBucketActive: false,
-        filledStyleSlots: ['정면·선명', '측면·미소'],
-      },
-      roomPersonas: {
-        personal: '한민수',
-        '우리집': '한민수',
-        '처가(친정)': '한민수',
-        '본가(친가)': '한민수',
-        club: '한민수',
-        student: '한민수',
-      },
-      crossLoungeEvolutionNote:
-        '🗓️ 2029년 신규 합류 멤버 — 기존 26년 가족(2026~2017)과 섞여 있어도 본인 고유 바구니(2029~2020)로 충돌 없이 독립 작동!',
-      registeredName: '',
-      relationshipTag: '',
-      suggestedChip: '',
-      roleHintKo: '29년 합류 · 동반 새 멤버',
-      appearanceLabelKo: '치우·천우·지우와 한 프레임 6회 동반 등장한 미등록 가족/처가 식구',
-      isPasserbyCandidate: false,
-      excludedAsPasserby: false,
-      isCompanionDiscovered: true,
-      coOccurredWithSummary: '2029~2020 고유 바구니 · 동반 6회',
-      representativePhoto: '20260926_131225.jpg',
-      representativeYear: 2026,
-      representativeDate: '2026.09.26',
-      frontalScore: 0.95,
-      opticalSharpness: 32400,
-      activeDoorplateSlotIndex: 0,
-      doorplateSlotLabelKo: '① 정면',
-      avatarUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
-      cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
-      boundingBox: [445, 180, 525, 236],
-      yearlyBestCuts: [
-        {
-          year: 2026,
-          representativePhoto: '20260926_131225.jpg',
-          representativeDate: '2026.09.26',
-          frontalScore: 0.95,
-          opticalSharpness: 32400,
-          avatarUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
-          cropUrl: '/__faces/crop?file=20260926_131225.jpg&box=445,180,525,236',
-          boundingBox: [445, 180, 525, 236],
-          conditionTag: '정면·선명',
-          conditionShortKo: '정면',
-          sourceDeviceKo: '천우 폰 동반발굴',
-        },
-        {
-          year: 2024,
-          representativePhoto: '20260926_160221.jpg',
-          representativeDate: '2024.09.26',
-          frontalScore: 0.91,
-          opticalSharpness: 27900,
-          avatarUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
-          cropUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
-          boundingBox: [475, 598, 558, 650],
-          conditionTag: '측면·미소',
-          conditionShortKo: '측면',
-          sourceDeviceKo: '은숙 폰 자동결합',
-        },
-      ],
-      detectedSampleCount: 6,
-      matchedPhotoCount: 19,
-      matchedPhotoFiles: ['20260926_131225.jpg', '20260926_160221.jpg'],
-      matchedVideoSegmentCount: 1,
-      matchedVideoSegments: [],
-      seedDates: ['2026.09.26', '2024.09.26'],
-      seedVecPreview: [0.05, -0.02, 0.09, 0.04],
-    });
-  }
-
-  const savedOverrides = loadCustomFaceRegistrations();
-  return enriched.map((c) => {
-    const ov = savedOverrides[c.clusterId];
-    if (!ov) return c;
-    return {
-      ...c,
-      registeredName: ov.registeredName !== undefined ? ov.registeredName : c.registeredName,
-      relationshipTag: ov.relationshipTag !== undefined ? ov.relationshipTag : c.relationshipTag,
-      excludedAsPasserby:
-        ov.excludedAsPasserby !== undefined ? ov.excludedAsPasserby : c.excludedAsPasserby,
-      roomPersonas: ov.roomPersonas
-        ? { ...(c.roomPersonas ?? {}), ...ov.roomPersonas }
-        : c.roomPersonas,
-    };
-  });
+  return enriched;
 }
 
 const CUSTOM_FACE_REGISTRATIONS_KEY = 'ghosti_custom_face_registrations_v1';
@@ -1439,86 +1306,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     sampleSpace: 'gallery',
     timestampText: '자동 동기화됨 (1초 만에)',
   },
-  swarmFaceCandidates: [
-    {
-      candidateId: 'swarm_cand_merlin_sunglasses',
-      candidateType: 'year_bridge',
-      contributorLabel: '📱 아내(은숙) 아이폰 방금 업로드',
-      sourcePhoto: '20240721_183234.jpg',
-      shootingYear: 2023,
-      shootingDate: '2023.07.21',
-      conditionBadgeKo: '2023년 선글라스·역광',
-      conditionShortKo: '선글라스',
-      boundingBox: [165, 198, 390, 325],
-      cropUrl: '/__faces/crop?file=20240721_183234.jpg&box=165,198,390,325',
-      coOccurredWithNames: ['은숙', '천우'],
-      coOccurrenceCount: 18,
-      targetClusterId: 'face_member_5',
-      suggestedMemberName: '멀린',
-      appearanceSummaryKo: '석양 해변에서 선글라스와 패턴 셔츠를 착용한 베스트 컷',
-      bridgeReasonKo: '방금 올린 사진에서 발견된 선글라스·역광 조건 베스트 컷',
-      rescuedHostPhotoCount: 12,
-      rescuedMemberPhoneCount: 19,
-      rescuedVideoSegmentCount: 3,
-      extraPhotoFiles: ['20240721_183234.jpg', '20240720_184614.jpg'],
-      sampleSearchQuery: '멀린 바다',
-      sampleSearchSpace: 'gallery',
-      passedToHostQueue: false,
-      applied: false,
-    },
-    {
-      candidateId: 'swarm_cand_eunsook_sunset',
-      candidateType: 'year_bridge',
-      contributorLabel: '📱 아들(치우) 갤럭시 방금 업로드',
-      sourcePhoto: '20240720_182301.jpg',
-      shootingYear: 2025,
-      shootingDate: '2025.07.20',
-      conditionBadgeKo: '2025년 야외·노을',
-      conditionShortKo: '야외·노을',
-      boundingBox: [148, 408, 268, 486],
-      cropUrl: '/__faces/crop?file=20240720_182401.jpg&box=148,408,268,486'.replace('182401', '182301'),
-      coOccurredWithNames: ['멀린', '천우'],
-      coOccurrenceCount: 9,
-      targetClusterId: 'face_member_3',
-      suggestedMemberName: '은숙',
-      appearanceSummaryKo: '노을 지는 보트 갑판에 앉아 카메라를 바라보는 야외 베스트 컷',
-      bridgeReasonKo: '방금 올린 사진에서 발견된 2025년 야외·노을 조명 베스트 컷',
-      rescuedHostPhotoCount: 11,
-      rescuedMemberPhoneCount: 16,
-      rescuedVideoSegmentCount: 4,
-      extraPhotoFiles: ['20240720_182301.jpg', '20240721_122820.jpg'],
-      sampleSearchQuery: '은숙 테라스',
-      sampleSearchSpace: 'video',
-      passedToHostQueue: false,
-      applied: false,
-    },
-    {
-      candidateId: 'swarm_cand_chiwoo_bridge',
-      candidateType: 'year_bridge',
-      contributorLabel: '👵 본가 할머니 폰 (패스 업로드분)',
-      sourcePhoto: '20260926_160221.jpg',
-      shootingYear: 2024,
-      shootingDate: '2024.09.26',
-      conditionBadgeKo: '2024년 야외·측면',
-      conditionShortKo: '측면·야외',
-      boundingBox: [475, 598, 558, 650],
-      cropUrl: '/__faces/crop?file=20260926_160221.jpg&box=475,598,558,650',
-      coOccurredWithNames: ['지우', '천우'],
-      coOccurrenceCount: 4,
-      targetClusterId: 'face_member_1',
-      suggestedMemberName: '치우',
-      appearanceSummaryKo: '캠핑의자에 앉아 미소 짓는 안경 쓴 청년 (야외 측면 베스트 컷)',
-      bridgeReasonKo: '할머니가 [그냥 사진만 올리기]로 패스한 사진 속에서 AI가 검출하여 👑 방장 뒷정리 대기열로 자동 보존됨',
-      rescuedHostPhotoCount: 9,
-      rescuedMemberPhoneCount: 14,
-      rescuedVideoSegmentCount: 2,
-      extraPhotoFiles: ['20260926_160221.jpg', '20260815_142553.jpg', '20240720_111346.jpg'],
-      sampleSearchQuery: '치우 박물관',
-      sampleSearchSpace: 'gallery',
-      passedToHostQueue: true,
-      applied: false,
-    },
-  ],
+  swarmFaceCandidates: [],
   setShowFaceRegistryModal: (showFaceRegistryModal) => set({ showFaceRegistryModal }),
   setDoorplatePickerClusterId: (doorplatePickerClusterId) => set({ doorplatePickerClusterId }),
   selectDoorplateStyleSlot: (clusterId, slotIndex) => {
@@ -4677,10 +4465,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   setActiveLoungeType: (requestedLoungeType) => {
     set((state) => {
-      // [1차 출시 3대 메뉴 체계] 구버전 'student(스쿨)' 진입은 '사진 공유 › 동호회·동창회(club)'로 일원화
-      // (스쿨 화면 코드는 추후 동창회 '우리반 타임캡슐' 메뉴 이식용 자산으로 보존, 라우팅만 차단)
-      const activeLoungeType: LoungeType =
-        requestedLoungeType === 'student' ? 'club' : requestedLoungeType;
+      const activeLoungeType: LoungeType = requestedLoungeType;
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
       const isSwitchingLounge = state.activeLoungeType !== activeLoungeType;
       return {
@@ -4699,10 +4484,15 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
             : isTargetLoungeSubscribed && state.mobileTab === 'trial'
             ? 'search'
             : state.mobileTab,
-        // 방 진입 시 기본 탭은 무조건 [🎞️ 응답하라 1989 (추억)]으로 고정
-        clubFeedTrack: activeLoungeType === 'club' ? 'memories_1989' : state.clubFeedTrack,
+        // 동창회(student) 진입 시 기본 탭은 [🎞️ 1989 추억], 동호회·모임(club) 진입 시 [🍻 최근 모임]으로 설정
+        clubFeedTrack:
+          activeLoungeType === 'student'
+            ? 'memories_1989'
+            : activeLoungeType === 'club'
+            ? 'recent_now'
+            : state.clubFeedTrack,
         gpuHelperActiveTier:
-          activeLoungeType === 'club'
+          activeLoungeType === 'club' || activeLoungeType === 'student'
             ? state.clubSizeTier === 'large'
               ? 'club_large_3000'
               : state.clubSizeTier === 'medium'

@@ -233,7 +233,7 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
 
 export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
   try {
-    const canProbeLocal = hasActiveGhostiLoginSession();
+    const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
     const [zRes, sRes] = await Promise.allSettled([
       canProbeLocal ? fetch(getZCoreUrl('/__docs/list')) : Promise.reject(new Error('guest_no_local_probe')),
       fetch('/poc/results/docs_semantic_index.json'),
@@ -909,7 +909,7 @@ export async function probeBrowserVideoDurationSec(
 
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
-    const canProbeLocal = hasActiveGhostiLoginSession();
+    const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
     const [sRes, zRes] = await Promise.allSettled([
       fetch('/poc/results/video_timeline_index.json'),
       canProbeLocal ? fetch(getZCoreUrl('/__videos/list')) : Promise.reject(new Error('guest_no_local_probe')),
@@ -1053,9 +1053,12 @@ export async function fetchAutonomousFaceClusters(): Promise<{
   latestCorpusYear: number;
   clusters: FaceMemberCluster[];
 }> {
+  if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) {
+    return { latestCorpusYear: 2026, clusters: [] };
+  }
   try {
-    const res = await fetch('/poc/results/face_clusters_index.json').catch(() =>
-      hasActiveGhostiLoginSession() ? fetch(getZCoreUrl('/__faces/index')) : Promise.reject(new Error('guest'))
+    const res = await fetch(getZCoreUrl('/__faces/index')).catch(() =>
+      fetch('/poc/results/face_clusters_index.json')
     );
     if (!res.ok) return { latestCorpusYear: 2026, clusters: [] };
     const json = await res.json();
@@ -1987,7 +1990,7 @@ export async function loadInitialPhotoDataset(): Promise<{
   const auditByPhoto = new Map<string, PhysicalAuditRecord>();
 
   try {
-    if (hasActiveGhostiLoginSession()) {
+    if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
       const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch(getZCoreUrl('/__photos/list')));
       const json = await res.json();
       fileList = json.files ?? [];
@@ -2025,6 +2028,7 @@ export async function loadInitialPhotoDataset(): Promise<{
           semanticByPhoto.set(name, meta as any);
         }
       }
+      const isConnectedSession = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
       const curatedSampleFiles = [
         // 초정예 명품 쇼윈도 갤러리 8장 (1번 해변 가족 노을은 3장 연사 묶음 1세트 포함)
         'IMG_20250510_1001.jpg',
@@ -2044,11 +2048,15 @@ export async function loadInitialPhotoDataset(): Promise<{
         'Screenshot_20250802_1002_배달주문내역.jpg',
         'BLUR_202510_1282_흔들린사진.jpg',
         'BLUR_202510_1283_흔들린사진.jpg',
-        // 동영상 키프레임 스틸컷 4장 (코타키나발루 패러세일링 · 리조트 테라스 · 비행기 창밖 일출 · 회의실 브리핑)
-        '20240719_105706_t12.jpg',
-        '20240720_134808_t06.jpg',
-        '20240722_052422_t00.jpg',
-        '20260918_202442_t00.jpg',
+        // 동영상 키프레임 스틸컷 4장 (로그인 및 엔진 연결 시에만 추가)
+        ...(isConnectedSession
+          ? [
+              '20240719_105706_t12.jpg',
+              '20240720_134808_t06.jpg',
+              '20240722_052422_t00.jpg',
+              '20260918_202442_t00.jpg',
+            ]
+          : []),
       ];
       semanticByPhoto.set('20240719_105706_t12.jpg', {
         captionKo:
