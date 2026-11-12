@@ -13,6 +13,7 @@ let preloadedGiggleAudio: HTMLAudioElement | null = null;
 let hasPlayedAppEnterGiggle = false;
 let isAttemptingGiggle = false;
 let titleSignalCleanupTimer: number | null = null;
+const PAGE_ENTER_GIGGLE_WIN_KEY = '__GHOSTI_ENTER_GIGGLE_PLAYED_ONCE__';
 
 function ensurePreloaded(): void {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
@@ -92,10 +93,11 @@ async function tryPlayViaLocalZCore(): Promise<boolean> {
  */
 export function playAppEnterGiggleSound(forceOnModeTransition = false): void {
   if (typeof window === 'undefined') return;
+  const winFlag = Boolean((window as unknown as Record<string, unknown>)[PAGE_ENTER_GIGGLE_WIN_KEY]);
   if (forceOnModeTransition) {
     // 쇼룸 대문에서 [본 앱 바로 시작하기] 등으로 게스트 워크스페이스에 진입할 때 아직 재생되지 않았다면 즉시 재생 보장
-    if (hasPlayedAppEnterGiggle) return;
-  } else if (hasPlayedAppEnterGiggle || isAttemptingGiggle) {
+    if (hasPlayedAppEnterGiggle || winFlag) return;
+  } else if (hasPlayedAppEnterGiggle || isAttemptingGiggle || winFlag) {
     return;
   }
 
@@ -105,10 +107,12 @@ export function playAppEnterGiggleSound(forceOnModeTransition = false): void {
     window.location.search.includes('tab=search_dojo')
   ) {
     hasPlayedAppEnterGiggle = true;
+    (window as unknown as Record<string, unknown>)[PAGE_ENTER_GIGGLE_WIN_KEY] = true;
     return;
   }
 
   hasPlayedAppEnterGiggle = true;
+  (window as unknown as Record<string, unknown>)[PAGE_ENTER_GIGGLE_WIN_KEY] = true;
   isAttemptingGiggle = true;
   ensurePreloaded();
 

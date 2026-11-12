@@ -860,10 +860,11 @@ def start_ghosti_browser_entry_sound_watcher() -> None:
       2) Chrome 142+ 로컬 네트워크 액세스(LNA) 정책상 비로그인 게스트에는 127.0.0.1 요청을 보내지 않으므로
          웹 페이지 내부 JS만으로는 권한 팝업 없이 무클릭 첫 진입/새로고침 사운드를 낼 수 없습니다.
     - 따라서:
-      A) 웹 페이지가 자동재생 차단을 감지한 순간 document.title에 각인하는 무가시 제로폭(Zero-Width) 시그널을
-         OS 데몬이 0.15초 주기로 감지하여(최초 진입 및 F5 새로고침 시 자동재생이 막혔을 때만 정확히 1회 재생),
-      B) 또는 귀신같이 웹 창이 처음 열릴 때 즉시 아기귀신 효과음을 1회 재생합니다.
-    - 입장/새로고침 이후 화면 아무 데나 마우스 커서를 클릭할 때 뒷북으로 효과음이 나는 현상을 원천 차단합니다!
+      A) 웹 페이지가 자동재생 차단(audio.play().catch)을 감지한 순간에만 document.title에 각인하는
+         무가시 제로폭(Zero-Width) 시그널(\u200b\u200c...\u200c\u200b)을 OS 데몬이 0.15초 주기로 감지하여
+         정확히 자동재생이 막혔을 때만 1회 재생합니다!
+      B) 일반 브라우저 탭(MEI 충족)에서 <audio>.play()가 정상 재생된 경우에는 제로폭 시그널이 발생하지 않으므로
+         브라우저 1회 + OS 데몬 1회 총 2회 중복 재생(에코 현상)이 원천 차단됩니다!
     """
     global _GHOSTI_BROWSER_WATCHER_STARTED
     if os.name != "nt":
@@ -937,8 +938,11 @@ def start_ghosti_browser_entry_sound_watcher() -> None:
 
             h_int = int(hwnd)
             alive_hwnds.add(h_int)
+            _SEEN_GHOSTI_BROWSER_HWNDS.add(h_int)
 
-            # 1) 무가시 제로폭(Zero-Width) 타이틀 시그널 감지 (최초 진입 또는 F5 새로고침 시 브라우저 자동재생이 막혔을 때)
+            # 무가시 제로폭(Zero-Width) 타이틀 시그널 감지:
+            # 브라우저에서 audio.play() 자동재생이 막혔을 때(.catch)만 웹이 document.title에 시그널을 각인하므로,
+            # 오직 이 시그널이 새로 감지되었을 때만 OS 사운드를 재생하여 2회 중복 재생을 100% 원천 차단합니다.
             zw_match = _ZW_SIGNAL_RE.search(title)
             if zw_match:
                 sig = zw_match.group(0)
@@ -946,17 +950,11 @@ def start_ghosti_browser_entry_sound_watcher() -> None:
                     _LAST_ZW_SIGNAL_BY_HWND[h_int] = sig
                     if not seed_only:
                         newly_entered = True
-
-            # 2) 새 브라우저 창/탭 최초 진입 감지
-            if h_int not in _SEEN_GHOSTI_BROWSER_HWNDS:
-                _SEEN_GHOSTI_BROWSER_HWNDS.add(h_int)
-                if not seed_only:
-                    newly_entered = True
             return True
 
         try:
             u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
-            # 닫히거나 다른 사이트로 이동한 창 HWND는 목록에서 정리하여 재방문 시 다시 1회 울리도록 보장
+            # 닫히거나 다른 사이트로 이동한 창 HWND는 목록에서 정리
             stale = [h for h in list(_SEEN_GHOSTI_BROWSER_HWNDS) if h not in alive_hwnds]
             for h in stale:
                 _SEEN_GHOSTI_BROWSER_HWNDS.discard(h)
