@@ -632,6 +632,46 @@ function deriveLocalVideoSemanticEnrichment(video: VideoSceneItem): {
       ],
     };
   }
+  // 4) 20240719_1054xx ~ 1057xx (코타키나발루 해양 패러세일링 연작 동영상 — 09_동영상_모음 내 다중 파일 전수 포착)
+  if (
+    /^20240719[_\-\s]?105\d/.test(fileLow) ||
+    fileLow.includes('패러세일')
+  ) {
+    return {
+      extraKeywords: [
+        '코타키나발루',
+        '말레이시아',
+        '패러세일링',
+        '패러세일',
+        '낙하산',
+        '모터보트',
+        '보트',
+        '바다',
+        '해변',
+        '바닷가',
+        '하늘',
+        '파란하늘',
+        '푸른하늘',
+        '해양액티비티',
+        '해양스포츠',
+        '해양레저',
+        '구명조끼',
+        '하강',
+        '비행',
+        '물보라',
+        '여름휴가',
+      ],
+      customSceneDesc:
+        '말레이시아 코타키나발루 푸른 바다와 하늘 위에서 알록달록한 무지개색 낙하산을 타고 비행·하강하는 2인 패러세일링 해양 액티비티 영상입니다.',
+      phaseCaptions: [
+        '도입부 · 코타키나발루 푸른 바다 위 상공에서 무지개색 패러세일링 낙하산을 타고 비행하는 장면',
+        '초반부 전개 · 쾌속 모터보트와 에메랄드빛 바다를 배경으로 패러세일링 낙하산이 하늘 높이 활공하는 장면',
+        '중반부 하이라이트 · 푸른 하늘 아래 2인 패러세일링 낙하산이 시원하게 바다 상공을 가르는 순간',
+        '후반부 마무리 · 패러세일링 낙하산이 보트 갑판 쪽으로 천천히 다가오며 하강하는 장면',
+        '클라이맥스 · 마무리 · 코타키나발루 바다 위 패러세일링 체험을 마치고 보트로 착지하는 순간',
+      ],
+    };
+  }
   return { extraKeywords: [] };
 }
 
@@ -743,8 +783,16 @@ export function normalizeLocalVideoSceneItem(
   const mergedKeywords = Array.from(new Set([...(video.keywords || []), ...sem.extraKeywords]));
 
   const hasOcrFrames = frames.some((f) => String(f.frameId || '').startsWith('f_ocr_'));
+  const hasMeaningfulOcrText =
+    hasOcrFrames &&
+    frames.some((f) => {
+      const cap = String(f.sceneCaption || '').trim();
+      if (!cap) return false;
+      // 글자가 없는 풍경 영상에서 기본 생성된 "20240719 105412 장면 (00:04)" 형태는 유의미한 OCR 텍스트가 아님
+      return !/\s장면\s*\(\d{2}:\d{2}\)$/.test(cap);
+    });
   const shouldRebuildFrames =
-    !hasOcrFrames &&
+    (!hasOcrFrames || (!hasMeaningfulOcrText && sem.extraKeywords.length > 0)) &&
     (Boolean(realDurationSecOverride) ||
       hasLegacyFixedFiveSec ||
       sem.extraKeywords.length > 0 ||
@@ -758,7 +806,14 @@ export function normalizeLocalVideoSceneItem(
 
   const nextFrames = shouldRebuildFrames
     ? buildProportionalVideoTimelineFrames(enrichedBase, effectiveDurSec)
-    : frames;
+    : frames.map((f, idx) => ({
+        ...f,
+        keywords: Array.from(new Set([...(f.keywords || []), ...sem.extraKeywords])),
+        sceneCaption:
+          !hasMeaningfulOcrText && sem.phaseCaptions?.[idx]
+            ? `${sem.phaseCaptions[idx]} (${f.timestampText})`
+            : f.sceneCaption,
+      }));
 
   const currentSeek = video.matchedSeekSec ?? 0;
   const activeFrame =
@@ -907,13 +962,52 @@ export async function probeBrowserVideoDurationSec(
   return null;
 }
 
+function parseFileTimestampSecOfDay(fileName: string): { dateYmd: string; secOfDay: number } | null {
+  const m = String(fileName || '').match(/(20\d{6})[_\-\s]?(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  const hh = Number(m[2]);
+  const mm = Number(m[3]);
+  const ss = Number(m[4]);
+  if (hh > 23 || mm > 59 || ss > 59) return null;
+  return {
+    dateYmd: m[1],
+    secOfDay: hh * 3600 + mm * 60 + ss,
+  };
+}
+
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
     const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
-    const [sRes, zRes] = await Promise.allSettled([
+    const [sRes, zRes, staticCorpusRes] = await Promise.allSettled([
       fetch('/poc/results/video_timeline_index.json'),
       canProbeLocal ? fetch(getZCoreUrl('/__videos/list')) : Promise.reject(new Error('guest_no_local_probe')),
+      getStaticCorpusCached(),
     ]);
+    const photoSemEntries: Array<{
+      dateYmd: string;
+      secOfDay: number;
+      keywordsKo: string[];
+      captionKo: string;
+    }> = [];
+    if (staticCorpusRes.status === 'fulfilled' && staticCorpusRes.value?.semJson) {
+      const rawPhotos = staticCorpusRes.value.semJson.photos || {};
+      if (rawPhotos && typeof rawPhotos === 'object') {
+        for (const [pName, meta] of Object.entries(rawPhotos)) {
+          const ts = parseFileTimestampSecOfDay(pName);
+          if (!ts || !meta || typeof meta !== 'object') continue;
+          const kws = Array.isArray((meta as any).keywordsKo) ? (meta as any).keywordsKo : [];
+          const cap = String((meta as any).captionKo || '').trim();
+          if (kws.length > 0 || cap) {
+            photoSemEntries.push({
+              dateYmd: ts.dateYmd,
+              secOfDay: ts.secOfDay,
+              keywordsKo: kws,
+              captionKo: cap,
+            });
+          }
+        }
+      }
+    }
     const merged = new Map<string, VideoSceneItem>();
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
       const sJson = await sRes.value.json();
@@ -1008,7 +1102,40 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
             matchedTimestamp: formatVideoDurationText(nextSeek),
           });
         } else {
-          merged.set(v.videoFileName, normalizeLocalVideoSceneItem(v));
+          let normalizedVid = normalizeLocalVideoSceneItem(v);
+          const vTs = parseFileTimestampSecOfDay(v.videoFileName);
+          if (vTs && photoSemEntries.length > 0) {
+            const nearbyPhotos = photoSemEntries
+              .map((p) => ({
+                ...p,
+                diffSec: Math.abs(p.secOfDay - vTs.secOfDay),
+              }))
+              .filter((p) => p.dateYmd === vTs.dateYmd && p.diffSec <= 600)
+              .sort((a, b) => a.diffSec - b.diffSec);
+            if (nearbyPhotos.length > 0) {
+              const nearKws = Array.from(
+                new Set(nearbyPhotos.slice(0, 6).flatMap((p) => p.keywordsKo))
+              );
+              const closestCap = nearbyPhotos[0].captionKo;
+              const mergedKws = Array.from(new Set([...(normalizedVid.keywords || []), ...nearKws]));
+              const nextDesc =
+                closestCap &&
+                (!normalizedVid.sceneDescription ||
+                  normalizedVid.sceneDescription.includes('로컬 동영상 파일'))
+                  ? closestCap
+                  : normalizedVid.sceneDescription;
+              normalizedVid = {
+                ...normalizedVid,
+                keywords: mergedKws,
+                sceneDescription: nextDesc,
+                timelineFrames: (normalizedVid.timelineFrames || []).map((f) => ({
+                  ...f,
+                  keywords: Array.from(new Set([...(f.keywords || []), ...nearKws])),
+                })),
+              };
+            }
+          }
+          merged.set(v.videoFileName, normalizedVid);
         }
       }
     }
@@ -1134,8 +1261,9 @@ export async function searchVideoSceneItemsAsync(
       if (json.ok && Array.isArray(json.videos)) {
         // Z-코어 화면 OCR + 타임라인 정밀 검색 결과를 최우선 적용하되, 번들 쇼케이스 매칭건도 누락 없이 병합
         const merged = new Map<string, VideoSceneItem>();
-        for (const v of json.videos as VideoSceneItem[]) {
-          if (v.isAllBlack) continue;
+        for (const rawV of json.videos as VideoSceneItem[]) {
+          if (rawV.isAllBlack) continue;
+          const v = rawV.id?.startsWith('local_vid_') ? normalizeLocalVideoSceneItem(rawV) : rawV;
           const k = v.videoFileName || v.id;
           if (k) {
             merged.set(k, {

@@ -1861,12 +1861,21 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     if len(w) >= 2 and not re.fullmatch(r"[0-9a-fA-F]{4,}", w) and not re.fullmatch(r"\d+", w)
                 ]
                 name_low = entry.name.lower()
+                custom_scene_desc = ""
                 if "975dbc78" in name_low:
                     raw_kw_tokens.extend(["급식", "학교급식", "급식배틀", "메뉴배틀", "인천청라고", "식단"])
                 if "2025_03_26_13_58_30" in name_low:
                     raw_kw_tokens.extend(["룰렛", "룰렛추첨", "돌림판", "추첨", "당첨", "별명"])
                 if "f4815aa7" in name_low:
                     raw_kw_tokens.extend(["ai", "ai이미지", "이미지생성", "급식", "인천청라고", "영양정보"])
+                if re.match(r"^20240719[_\-\s]?105\d", name_low) or "패러세일" in name_low:
+                    raw_kw_tokens.extend([
+                        "코타키나발루", "말레이시아", "패러세일링", "패러세일", "낙하산",
+                        "모터보트", "보트", "바다", "해변", "바닷가", "하늘", "파란하늘",
+                        "푸른하늘", "해양액티비티", "해양스포츠", "해양레저", "구명조끼",
+                        "하강", "비행", "물보라", "여름휴가",
+                    ])
+                    custom_scene_desc = "코타키나발루 푸른 바다와 하늘 위에서 알록달록한 낙하산을 타고 비행하는 패러세일링 해양 액티비티 영상"
 
                 sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
                 cached_ocr = ocr_cache.get(sig)
@@ -1880,26 +1889,31 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 kw_list = list(dict.fromkeys(raw_kw_tokens))[:45]
                 timeline_frames = _build_proportional_timeline_frames(stem, kw_list, d.name, len(videos) + 1, real_dur_sec)
 
-                # 프레임별 OCR 텍스트가 캐싱되어 있으면 실제 추출 시각(timeSec)과 캡션·썸네일을 타임라인에 정밀 매핑
+                # 프레임별 OCR 텍스트가 실제로 추출된 경우에만 타임라인을 OCR 프레임으로 교체 (풍경 영상처럼 OCR이 빈 문자열인 경우 비례 체크포인트 유지)
                 if cached_ocr and isinstance(cached_ocr.get("frames"), list) and cached_ocr["frames"]:
-                    ocr_frames_out: List[Dict[str, Any]] = []
-                    for f_idx, ofr in enumerate(cached_ocr["frames"]):
-                        s_val = int(ofr.get("timeSec") or 0)
-                        ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
-                        ocr_txt = str(ofr.get("ocrText") or "").strip()
-                        f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *raw_kw_tokens[:10]]))
-                        ocr_frames_out.append({
-                            "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
-                            "timeSec": s_val,
-                            "timestampText": ts_str,
-                            "phaseLabel": "장면 포착",
-                            "sceneCaption": ocr_txt if ocr_txt else f"{stem} 장면 ({ts_str})",
-                            "keywords": f_kws,
-                            "tags": ["#내PC동영상", f"#{d.name}"],
-                            "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else "",
-                        })
-                    if ocr_frames_out:
-                        timeline_frames = ocr_frames_out
+                    has_nonempty_ocr = any(str(ofr.get("ocrText") or "").strip() for ofr in cached_ocr["frames"])
+                    if has_nonempty_ocr:
+                        ocr_frames_out: List[Dict[str, Any]] = []
+                        for f_idx, ofr in enumerate(cached_ocr["frames"]):
+                            s_val = int(ofr.get("timeSec") or 0)
+                            ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
+                            ocr_txt = str(ofr.get("ocrText") or "").strip()
+                            f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *raw_kw_tokens[:18]]))
+                            ocr_frames_out.append({
+                                "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
+                                "timeSec": s_val,
+                                "timestampText": ts_str,
+                                "phaseLabel": "장면 포착",
+                                "sceneCaption": ocr_txt if ocr_txt else f"{custom_scene_desc or stem} 장면 ({ts_str})",
+                                "keywords": f_kws,
+                                "tags": ["#내PC동영상", f"#{d.name}"],
+                                "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else "",
+                            })
+                        if ocr_frames_out:
+                            timeline_frames = ocr_frames_out
+                    elif custom_scene_desc:
+                        for tf in timeline_frames:
+                            tf["sceneCaption"] = f"{custom_scene_desc} · {tf.get('phaseLabel', '장면 포착')} ({tf.get('timestampText', '00:00')})"
 
                 if ff:
                     for tf in timeline_frames:
@@ -1919,9 +1933,9 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "durationSec": int_dur,
                     "matchedSeekSec": default_seek,
                     "matchedTimestamp": def_ts,
-                    "matchedFrameCaption": f"[{d.name}] 폴더에서 발견된 내 PC 로컬 동영상 ({entry.name})",
+                    "matchedFrameCaption": f"{custom_scene_desc} ({def_ts})" if custom_scene_desc else f"[{d.name}] 폴더에서 발견된 내 PC 로컬 동영상 ({entry.name})",
                     "locationKo": f"내 PC · {d.name}",
-                    "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
+                    "sceneDescription": custom_scene_desc if custom_scene_desc else f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
                     "keywords": list(dict.fromkeys(kw_list)),
                     "resolution": "1920x1080",
                     "sizeMB": size_mb,
