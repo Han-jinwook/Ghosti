@@ -312,17 +312,6 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
 
     listed = plugin_ghosti_os.list_local_videos({})
     videos = [v for v in (listed.get("videos") or []) if not v.get("isAllBlack")]
-    seen_vnames = {str(v.get("videoFileName") or "") for v in videos}
-    static_vjson = _load_static_json("video_timeline_index.json")
-    if isinstance(static_vjson, dict) and isinstance(static_vjson.get("videos"), list):
-        for sv in static_vjson["videos"]:
-            vname = str(sv.get("videoFileName") or "")
-            if vname and vname not in seen_vnames:
-                seen_vnames.add(vname)
-                sv_copy = dict(sv)
-                raw_ts = str(sv_copy.get("matchedTimestamp") or "00:00")
-                sv_copy["matchedTimestamp"] = raw_ts.replace("🎯", "").replace("구간 포착", "").replace("장면 포착", "").strip() or "00:00"
-                videos.append(sv_copy)
     if not q or "전 구간" in q:
         return {"ok": True, "videos": videos}
 
@@ -375,10 +364,6 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
 
 def _load_face_clusters() -> Dict[str, Any]:
     candidates = [FACE_REGISTRY_FILE]
-    if not getattr(os.sys, "frozen", False):
-        repo_root = Path(__file__).resolve().parents[2]
-        candidates.append(repo_root / "poc" / "results" / "face_clusters_index.json")
-        candidates.append(repo_root / "public" / "poc" / "results" / "face_clusters_index.json")
     for p in candidates:
         try:
             if p.exists():

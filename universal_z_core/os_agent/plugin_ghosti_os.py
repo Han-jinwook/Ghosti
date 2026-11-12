@@ -722,6 +722,8 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         onedrive / "문서" / "카카오톡 받은 파일",
         onedrive / "Pictures",
         onedrive / "사진",
+        onedrive / "Videos",
+        onedrive / "동영상",
         *_load_custom_scan_roots(),
     ]
     seen_resolved: set[str] = set()
@@ -761,32 +763,40 @@ def _is_code_repo_dir(d: Path) -> bool:
 def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
     result: List[Path] = []
     seen: set[str] = set()
-
-    def _walk(curr: Path, depth: int) -> None:
-        if depth > max_depth or len(result) >= 120:
-            return
-        try:
-            r_str = str(curr.resolve()).lower()
-            if r_str in seen:
-                return
-            seen.add(r_str)
-            result.append(curr)
-            if depth == max_depth:
-                return
-            for sub in sorted(curr.iterdir(), key=lambda x: x.name):
-                if len(result) >= 120:
-                    break
-                if (
-                    sub.is_dir()
-                    and (not sub.name.startswith(".") or sub.name == ".shortcut-targets-by-id")
-                    and sub.name.lower() not in _SKIP_DIR_NAMES
-                    and not _is_code_repo_dir(sub)
-                ):
-                    _walk(sub, depth + 1)
-        except Exception:
-            pass
+    max_total = 400
+    per_root_cap = 80
 
     for r in roots:
+        if len(result) >= max_total:
+            break
+        root_count = 0
+
+        def _walk(curr: Path, depth: int) -> None:
+            nonlocal root_count
+            if depth > max_depth or root_count >= per_root_cap or len(result) >= max_total:
+                return
+            try:
+                r_str = str(curr.resolve()).lower()
+                if r_str in seen:
+                    return
+                seen.add(r_str)
+                result.append(curr)
+                root_count += 1
+                if depth == max_depth:
+                    return
+                for sub in sorted(curr.iterdir(), key=lambda x: x.name):
+                    if root_count >= per_root_cap or len(result) >= max_total:
+                        break
+                    if (
+                        sub.is_dir()
+                        and (not sub.name.startswith(".") or sub.name == ".shortcut-targets-by-id")
+                        and sub.name.lower() not in _SKIP_DIR_NAMES
+                        and not _is_code_repo_dir(sub)
+                    ):
+                        _walk(sub, depth + 1)
+            except Exception:
+                pass
+
         _walk(r, 0)
     return result
 
@@ -1847,27 +1857,15 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 default_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
                 thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={default_seek}" if ff else ""
 
-                # 폴더명 전체에 일괄 키워드를 덧씌우던 오탐 로직 제거 — 순수 파일명 토큰 + 실제 프레임 OCR 키워드만 반영
+                # 순수 파일명·폴더명 의미어 토큰 + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
                 raw_kw_tokens = [
                     w for w in re.split(r"[\s_\-.,()\[\]]+", stem)
                     if len(w) >= 2 and not re.fullmatch(r"[0-9a-fA-F]{4,}", w) and not re.fullmatch(r"\d+", w)
                 ]
-                name_low = entry.name.lower()
-                custom_scene_desc = ""
-                if "975dbc78" in name_low:
-                    raw_kw_tokens.extend(["급식", "학교급식", "급식배틀", "메뉴배틀", "인천청라고", "식단"])
-                if "2025_03_26_13_58_30" in name_low:
-                    raw_kw_tokens.extend(["룰렛", "룰렛추첨", "돌림판", "추첨", "당첨", "별명"])
-                if "f4815aa7" in name_low:
-                    raw_kw_tokens.extend(["ai", "ai이미지", "이미지생성", "급식", "인천청라고", "영양정보"])
-                if re.match(r"^20240719[_\-\s]?105\d", name_low) or "패러세일" in name_low:
-                    raw_kw_tokens.extend([
-                        "코타키나발루", "말레이시아", "패러세일링", "패러세일", "낙하산",
-                        "모터보트", "보트", "바다", "해변", "바닷가", "하늘", "파란하늘",
-                        "푸른하늘", "해양액티비티", "해양스포츠", "해양레저", "구명조끼",
-                        "하강", "비행", "물보라", "여름휴가",
-                    ])
-                    custom_scene_desc = "코타키나발루 푸른 바다와 하늘 위에서 알록달록한 낙하산을 타고 비행하는 패러세일링 해양 액티비티 영상"
+                if d.name and not re.match(r"^(videos|pictures|photos|desktop|downloads|documents|문서|사진|동영상|바탕\s*화면|다운로드|카카오톡\s*받은\s*파일|\d{2}_.+)$", d.name, re.IGNORECASE):
+                    for fw in re.split(r"[\s_\-.,()\[\]&]+", d.name):
+                        if len(fw) >= 2 and not re.fullmatch(r"\d+", fw):
+                            raw_kw_tokens.append(fw)
 
                 sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
                 cached_ocr = ocr_cache.get(sig)
@@ -1881,31 +1879,38 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 kw_list = list(dict.fromkeys(raw_kw_tokens))[:45]
                 timeline_frames = _build_proportional_timeline_frames(stem, kw_list, d.name, len(videos) + 1, real_dur_sec)
 
-                # 프레임별 OCR 텍스트가 실제로 추출된 경우에만 타임라인을 OCR 프레임으로 교체 (풍경 영상처럼 OCR이 빈 문자열인 경우 비례 체크포인트 유지)
+                # 프레임별 OCR 텍스트가 추출된 구간은 비례 타임라인 프레임과 병합하여 시각(비전) 체크포인트와 OCR 텍스트를 모두 보존
                 if cached_ocr and isinstance(cached_ocr.get("frames"), list) and cached_ocr["frames"]:
                     has_nonempty_ocr = any(str(ofr.get("ocrText") or "").strip() for ofr in cached_ocr["frames"])
                     if has_nonempty_ocr:
-                        ocr_frames_out: List[Dict[str, Any]] = []
+                        existing_secs = {int(tf.get("timeSec") or 0): tf for tf in timeline_frames}
                         for f_idx, ofr in enumerate(cached_ocr["frames"]):
                             s_val = int(ofr.get("timeSec") or 0)
                             ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
                             ocr_txt = str(ofr.get("ocrText") or "").strip()
+                            if not ocr_txt:
+                                continue
                             f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *raw_kw_tokens[:18]]))
-                            ocr_frames_out.append({
-                                "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
-                                "timeSec": s_val,
-                                "timestampText": ts_str,
-                                "phaseLabel": "장면 포착",
-                                "sceneCaption": ocr_txt if ocr_txt else f"{custom_scene_desc or stem} 장면 ({ts_str})",
-                                "keywords": f_kws,
-                                "tags": ["#내PC동영상", f"#{d.name}"],
-                                "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else "",
-                            })
-                        if ocr_frames_out:
-                            timeline_frames = ocr_frames_out
-                    elif custom_scene_desc:
-                        for tf in timeline_frames:
-                            tf["sceneCaption"] = f"{custom_scene_desc} · {tf.get('phaseLabel', '장면 포착')} ({tf.get('timestampText', '00:00')})"
+                            nearest_sec = min(existing_secs.keys(), key=lambda x: abs(x - s_val)) if existing_secs else None
+                            if nearest_sec is not None and abs(nearest_sec - s_val) <= 2:
+                                target_tf = existing_secs[nearest_sec]
+                                target_tf["timeSec"] = s_val
+                                target_tf["timestampText"] = ts_str
+                                target_tf["sceneCaption"] = ocr_txt
+                                target_tf["keywords"] = list(dict.fromkeys([*(target_tf.get("keywords") or []), *f_kws]))
+                                target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else ""
+                            else:
+                                timeline_frames.append({
+                                    "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
+                                    "timeSec": s_val,
+                                    "timestampText": ts_str,
+                                    "phaseLabel": "장면 포착",
+                                    "sceneCaption": ocr_txt,
+                                    "keywords": f_kws,
+                                    "tags": ["#내PC동영상", f"#{d.name}"],
+                                    "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else "",
+                                })
+                        timeline_frames.sort(key=lambda x: int(x.get("timeSec") or 0))
 
                 if ff:
                     for tf in timeline_frames:
@@ -1921,13 +1926,14 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "thumbUrl": thumb_url,
                     "videoUrl": vid_url,
                     "date": date_str,
+                    "mtimeMs": int(st.st_mtime * 1000),
                     "durationText": dur_text,
                     "durationSec": int_dur,
                     "matchedSeekSec": default_seek,
                     "matchedTimestamp": def_ts,
-                    "matchedFrameCaption": f"{custom_scene_desc} ({def_ts})" if custom_scene_desc else f"[{d.name}] 폴더에서 발견된 내 PC 로컬 동영상 ({entry.name})",
+                    "matchedFrameCaption": f"[{d.name}] 폴더의 내 PC 동영상 ({entry.name})",
                     "locationKo": f"내 PC · {d.name}",
-                    "sceneDescription": custom_scene_desc if custom_scene_desc else f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
+                    "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
                     "keywords": list(dict.fromkeys(kw_list)),
                     "resolution": "1920x1080",
                     "sizeMB": size_mb,
@@ -1935,12 +1941,14 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "codecTag": codec_tag,
                     "timelineFrames": timeline_frames,
                 })
-                if len(videos) >= 120:
+                if len(videos) >= 300:
                     break
         except Exception:
             pass
-        if len(videos) >= 120:
+        if len(videos) >= 300:
             break
+
+    videos.sort(key=lambda v: int(v.get("mtimeMs") or 0), reverse=True)
 
     if prewarm_targets:
         threading.Thread(target=_prewarm_hevc_stream_caches, args=(prewarm_targets,), daemon=True).start()
@@ -1952,80 +1960,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 _VIDEO_OCR_BG_RUNNING = True
                 threading.Thread(target=_run_batch_video_ocr, args=(missing_for_bg[:16],), daemon=True).start()
 
-    # [동영상 1초 직행 타임라인 인덱스 & 정본 썸네일 고도화 결합 — 실제 파일 길이(durationSec) 항상 보존]
-    static_index = None
-    candidates = []
-    if not getattr(os.sys, "frozen", False):
-        repo_root = Path(__file__).resolve().parents[2]
-        candidates.append(repo_root / "poc" / "results" / "video_timeline_index.json")
-        candidates.append(repo_root / "public" / "poc" / "results" / "video_timeline_index.json")
-        candidates.append(Path(__file__).resolve().parent / "video_timeline_index.json")
-    for cand in candidates:
-        try:
-            if cand.exists():
-                static_index = json.loads(cand.read_text(encoding="utf-8"))
-                break
-        except Exception:
-            pass
-
-    if isinstance(static_index, dict) and isinstance(static_index.get("videos"), list):
-        static_map = {str(sv.get("videoFileName")): sv for sv in static_index["videos"] if sv.get("videoFileName")}
-        for idx, v in enumerate(videos):
-            vname = v.get("videoFileName")
-            if vname in static_map:
-                sv = static_map[vname]
-                enriched = dict(sv)
-                enriched["id"] = v.get("id") or enriched.get("id")
-                enriched["videoUrl"] = v.get("videoUrl") or enriched.get("videoUrl")
-                enriched["sizeMB"] = v.get("sizeMB") or enriched.get("sizeMB")
-                real_sec = int(v.get("durationSec") or enriched.get("durationSec") or 1)
-                static_sec = max(1, int(sv.get("durationSec") or real_sec))
-                enriched["durationSec"] = real_sec
-                enriched["durationText"] = v.get("durationText") or f"{int(real_sec // 60):02d}:{int(real_sec % 60):02d}"
-
-                scaled_frames = []
-                for tf in enriched.get("timelineFrames") or []:
-                    tf_copy = dict(tf)
-                    orig_t = int(tf_copy.get("timeSec") or 0)
-                    if abs(real_sec - static_sec) >= 2 and real_sec > 1:
-                        orig_t = min(real_sec - 1, max(0, int(round(orig_t * (real_sec / static_sec)))))
-                    elif orig_t >= real_sec:
-                        orig_t = max(0, real_sec - 1)
-                    tf_copy["timeSec"] = orig_t
-                    tf_copy["timestampText"] = f"{int(orig_t // 60):02d}:{int(orig_t % 60):02d}"
-                    if str(tf_copy.get("thumbUrl") or "").startswith("/"):
-                        tf_copy["thumbUrl"] = f"http://127.0.0.1:5199{tf_copy['thumbUrl']}"
-                    scaled_frames.append(tf_copy)
-                enriched["timelineFrames"] = scaled_frames
-
-                raw_seek = int(enriched.get("matchedSeekSec") or 0)
-                if abs(real_sec - static_sec) >= 2 and real_sec > 1:
-                    raw_seek = min(real_sec - 1, max(0, int(round(raw_seek * (real_sec / static_sec)))))
-                elif raw_seek >= real_sec:
-                    raw_seek = max(0, real_sec - 1)
-                enriched["matchedSeekSec"] = raw_seek
-                enriched["matchedTimestamp"] = f"{int(raw_seek // 60):02d}:{int(raw_seek % 60):02d}"
-
-                if not enriched.get("thumbUrl") and sv.get("thumbUrl"):
-                    enriched["thumbUrl"] = sv.get("thumbUrl")
-                if str(enriched.get("thumbUrl") or "").startswith("/"):
-                    enriched["thumbUrl"] = f"http://127.0.0.1:5199{enriched['thumbUrl']}"
-                videos[idx] = enriched
-
-        seen_now = {v.get("videoFileName") for v in videos}
-        for sv in static_index["videos"]:
-            sv_name = sv.get("videoFileName")
-            if sv_name and sv_name not in seen_now:
-                seen_now.add(sv_name)
-                sv_copy = dict(sv)
-                sv_copy["matchedTimestamp"] = _clean_timestamp_badge(sv_copy.get("matchedTimestamp", "00:00"))
-                if str(sv_copy.get("thumbUrl") or "").startswith("/"):
-                    sv_copy["thumbUrl"] = f"http://127.0.0.1:5199{sv_copy['thumbUrl']}"
-                for tf in sv_copy.get("timelineFrames") or []:
-                    if str(tf.get("thumbUrl") or "").startswith("/"):
-                        tf["thumbUrl"] = f"http://127.0.0.1:5199{tf['thumbUrl']}"
-                videos.append(sv_copy)
-
+    # [실물 파일 순수성 철칙] 정적 샘플(poc/results/video_timeline_index.json) 병합을 전면 배제하고 100% 실제 내 PC 동영상만 반환!
     return {
         "ok": True,
         "total": len(videos),

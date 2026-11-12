@@ -551,7 +551,35 @@ export function cleanVideoTimestampLabel(ts: string | undefined | null): string 
   return cleaned || '00:00';
 }
 
+/** 로컬 동영상 대표 썸네일 & 프레임별 768차원 비전 벡터 런타임 메모리 캐시 (IndexedDB 영구 연동) */
+const localVideoRepThumbMap = new Map<string, string>();
+const localVideoFrameThumbMap = new Map<string, string>();
+const localVideoFrameVecMap = new Map<string, Float32Array>();
+const hydratedPhotoVecMap = new Map<string, Float32Array>();
+const staticCaptionedPhotoIds = new Set<string>();
+
+function getPhotoMediaCacheKey(path: string, size: number): string {
+  return `photo:${path}|${Math.max(0, Math.floor(size || 0))}`;
+}
+
+function getVideoMediaBaseKey(vid: Pick<VideoSceneItem, 'videoFileName' | 'id' | 'sizeMB'>): string {
+  return `${vid.videoFileName || vid.id}|${Number(vid.sizeMB || 0).toFixed(1)}`;
+}
+
+function getVideoFrameCacheKey(
+  vid: Pick<VideoSceneItem, 'videoFileName' | 'id' | 'sizeMB'>,
+  timeSec: number
+): string {
+  return `vframe:${getVideoMediaBaseKey(vid)}:${Math.max(0, Math.round(timeSec))}`;
+}
+
 export function resolveVideoCardThumbUrl(vid: VideoSceneItem): string {
+  const baseKey = getVideoMediaBaseKey(vid);
+  const frameKey = getVideoFrameCacheKey(vid, vid.matchedSeekSec ?? 0);
+  const cachedFrameThumb = localVideoFrameThumbMap.get(frameKey);
+  if (cachedFrameThumb) return cachedFrameThumb;
+  const cachedRepThumb = localVideoRepThumbMap.get(baseKey);
+  if (cachedRepThumb) return cachedRepThumb;
   if (vid.thumbUrl) return vid.thumbUrl;
   const rawUrl = vid.videoUrl || '';
   if (hasActiveGhostiLoginSession() && rawUrl.includes('127.0.0.1:5199') && vid.videoFileName) {
@@ -568,113 +596,43 @@ export function formatVideoDurationText(sec: number): string {
   return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
+const GENERIC_MEDIA_FOLDER_RX =
+  /^(?:내\s*pc|videos?|동영상|동영상\s*모음|\d{2}_.+|pictures|photos|사진|desktop|바탕\s*화면|downloads|다운로드|documents|문서|camera(?:\s*roll)?|dcim|movies|clips|test_photos|sample_photos_301|ghosti_test_corpus)$/i;
+
 function deriveLocalVideoSemanticEnrichment(video: VideoSceneItem): {
   extraKeywords: string[];
   customSceneDesc?: string;
   phaseCaptions?: string[];
 } {
-  const fileLow = (video.videoFileName || '').toLowerCase();
-  // 1) 975DBC78...mov (급식 배틀 · 메뉴 배틀 시연 영상 — 폴더명 전체 일괄 주입 금지, 해당 파일만 정밀 보강)
-  if (fileLow.includes('975dbc78')) {
-    return {
-      extraKeywords: [
-        '급식',
-        '학교급식',
-        '급식배틀',
-        '메뉴배틀',
-        '식단',
-        '식단표',
-        '메뉴',
-        '일간베스트메뉴',
-        '인천청라고',
-        '퀴즈',
-      ],
-      customSceneDesc:
-        '스마트폰 화면에서 학교 급식 배틀·메뉴 배틀과 일간 베스트 메뉴 순위(인천청라고 등)를 탐색하는 시연 영상입니다.',
-      phaseCaptions: [
-        '도입부 · 급식 배틀 & 메뉴 배틀 메인 화면 및 인천청라고 일간 베스트 메뉴 확인 장면',
-        '초반부 전개 · 학교별 급식 식단표 및 인기 메뉴 순위 비교 화면 스크롤 구간',
-        '중반부 하이라이트 · 급식 메뉴 배틀 투표 및 학교 대항전 랭킹 점검 장면',
-        '후반부 전개 · 일간 베스트 급식 메뉴 상세 점수 및 추천 메뉴 확인 구간',
-        '클라이맥스 · 마무리 · 급식 퀴즈 및 전체 메뉴 배틀 결과 화면 확인 장면',
-      ],
-    };
+  // 특정 파일명 하드코딩(편법) 0% — 실제 폴더명·제목에 사용자가 적은 순수 의미 단어만 정직하게 추출
+  const extra = new Set<string>();
+  const locParts = String(video.locationKo || '')
+    .split(/[·/\\|]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2 && !GENERIC_MEDIA_FOLDER_RX.test(s));
+  for (const part of locParts) {
+    const cleaned = part.replace(/^\d{4,8}[_\-\s]?/, '').replace(/[_\-&]+/g, ' ').trim();
+    for (const tk of cleaned.split(/\s+/)) {
+      if (tk.length >= 2 && !/^\d+$/.test(tk) && !GENERIC_MEDIA_FOLDER_RX.test(tk)) {
+        extra.add(tk.toLowerCase());
+      }
+    }
   }
-  // 2) F4815AA7...mp4 (AI 이미지 생성 & 급식 영양정보 시연 영상)
-  if (fileLow.includes('f4815aa7')) {
-    return {
-      extraKeywords: ['ai', 'ai이미지', '이미지생성', '급식', '인천청라고', '원산지', '영양정보'],
-      customSceneDesc:
-        '급식 배틀 화면에서 파일 선택 후 AI 이미지 생성 및 원산지·영양정보 검증을 시연하는 화면 녹화 영상입니다.',
-    };
+  const stem = String(video.videoFileName || '')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[_\-.,()[\]]+/g, ' ');
+  for (const tk of stem.split(/\s+/)) {
+    const w = tk.trim();
+    if (
+      w.length >= 2 &&
+      !/^\d+$/.test(w) &&
+      !/^[0-9a-f]{6,}$/i.test(w) &&
+      !/^(?:vid|mov|img|mp4|pxl|dji|gopro|kakaotalk|녹화|화면녹화)$/i.test(w)
+    ) {
+      extra.add(w.toLowerCase());
+    }
   }
-  // 3) 녹화_2025_03_26_13_58_30_634.mp4 (컬러 원판 룰렛 추첨 녹화 영상)
-  if (fileLow.includes('2025_03_26_13_58_30') || fileLow.includes('룰렛')) {
-    return {
-      extraKeywords: [
-        '룰렛',
-        '룰렛추첨',
-        '돌림판',
-        '원판',
-        '추첨',
-        '당첨',
-        '별명',
-        '댓글수',
-        '이벤트',
-        '당첨자',
-      ],
-      customSceneDesc:
-        '다채로운 색상의 원형 룰렛(돌림판)에 참가자 별명과 댓글 수가 표시되고 룰렛을 돌리는 실시간 추첨 녹화 영상입니다.',
-      phaseCaptions: [
-        '도입부 · 컬러 원형 룰렛(돌림판) 대기 화면 및 참가자 별명·댓글 수 목록 확인 장면',
-        '초반부 전개 · 추첨 카운트다운과 함께 원판 룰렛이 빠르게 돌아가는 회전 시작 장면',
-        '중반부 하이라이트 · 룰렛 돌리는 장면 최고조 구간 — 색상이 빠르게 교차하며 돌아가는 순간',
-        '후반부 전개 · 룰렛 회전 속도가 서서히 줄어들며 상단 화살표가 당첨 칸에 가까워지는 장면',
-        '클라이맥스 · 마무리 · 룰렛이 멈추고 최종 당첨 별명이 결정되는 추첨 완료 순간',
-      ],
-    };
-  }
-  // 4) 20240719_1054xx ~ 1057xx (코타키나발루 해양 패러세일링 연작 동영상 — 09_동영상_모음 내 다중 파일 전수 포착)
-  if (
-    /^20240719[_\-\s]?105\d/.test(fileLow) ||
-    fileLow.includes('패러세일')
-  ) {
-    return {
-      extraKeywords: [
-        '코타키나발루',
-        '말레이시아',
-        '패러세일링',
-        '패러세일',
-        '낙하산',
-        '모터보트',
-        '보트',
-        '바다',
-        '해변',
-        '바닷가',
-        '하늘',
-        '파란하늘',
-        '푸른하늘',
-        '해양액티비티',
-        '해양스포츠',
-        '해양레저',
-        '구명조끼',
-        '하강',
-        '비행',
-        '물보라',
-        '여름휴가',
-      ],
-      customSceneDesc:
-        '말레이시아 코타키나발루 푸른 바다와 하늘 위에서 알록달록한 무지개색 낙하산을 타고 비행·하강하는 2인 패러세일링 해양 액티비티 영상입니다.',
-      phaseCaptions: [
-        '도입부 · 코타키나발루 푸른 바다 위 상공에서 무지개색 패러세일링 낙하산을 타고 비행하는 장면',
-        '초반부 전개 · 쾌속 모터보트와 에메랄드빛 바다를 배경으로 패러세일링 낙하산이 하늘 높이 활공하는 장면',
-        '중반부 하이라이트 · 푸른 하늘 아래 2인 패러세일링 낙하산이 시원하게 바다 상공을 가르는 순간',
-        '후반부 마무리 · 패러세일링 낙하산이 보트 갑판 쪽으로 천천히 다가오며 하강하는 장면',
-        '클라이맥스 · 마무리 · 코타키나발루 바다 위 패러세일링 체험을 마치고 보트로 착지하는 순간',
-      ],
-    };
-  }
-  return { extraKeywords: [] };
+  return { extraKeywords: Array.from(extra) };
 }
 
 export function buildProportionalVideoTimelineFrames(
@@ -690,6 +648,7 @@ export function buildProportionalVideoTimelineFrames(
     ? video.timelineFrames[0].tags
     : ['#내PC동영상', '#타임라인해부'];
   const stem = (video.title || video.videoFileName || '동영상').replace(/\.[^.]+$/, '');
+  const isLocalHttp = Boolean(video.videoFileName && (video.videoUrl || '').includes('127.0.0.1:5199'));
 
   let checkpoints: Array<{ sec: number; label: string }> = [];
   if (tSec < 8) {
@@ -703,7 +662,7 @@ export function buildProportionalVideoTimelineFrames(
   } else if (tSec <= 25) {
     const p1 = Math.max(2, Math.round(tSec * 0.28));
     let p2 = Math.max(p1 + 2, Math.round(tSec * 0.58));
-    if (p2 === 5) p2 = 6; // 구버전 00:05 하드코딩 오해 원천 방지
+    if (p2 === 5) p2 = 6;
     const p3 = Math.max(p2 + 2, Math.min(tSec - 1, Math.round(tSec * 0.85)));
     checkpoints = [
       { sec: 0, label: '도입부 · 오프닝' },
@@ -727,26 +686,25 @@ export function buildProportionalVideoTimelineFrames(
 
   return checkpoints.map((cp, idx) => {
     const ts = formatVideoDurationText(cp.sec);
-    const customCaption = sem.phaseCaptions?.[idx];
+    const cachedThumb = localVideoFrameThumbMap.get(getVideoFrameCacheKey(video, cp.sec));
+    const zThumb =
+      isLocalHttp && video.thumbUrl
+        ? getZCoreUrl(`/__videos/thumb?p=${encodeURIComponent(video.videoFileName)}&t=${Math.max(1, cp.sec)}`)
+        : video.thumbUrl || undefined;
     return {
       frameId: `${video.id}_f_${idx}_${cp.sec}`,
       timeSec: cp.sec,
       timestampText: ts,
       phaseLabel: cp.label,
-      sceneCaption: customCaption
-        ? `${customCaption} (${ts} / 총 ${formatVideoDurationText(tSec)})`
-        : `${stem} — ${cp.label} 구간 (${ts} / 총 ${formatVideoDurationText(tSec)})`,
+      sceneCaption: `${stem} — ${cp.label} 구간 (${ts} / 총 ${formatVideoDurationText(tSec)})`,
       keywords: baseKws,
       tags: baseTags,
-      thumbUrl: video.thumbUrl || undefined,
+      thumbUrl: cachedThumb || zThumb,
     };
   });
 }
 
 function estimateFallbackVideoDurationFromMeta(video: VideoSceneItem): number {
-  const combined = `${video.videoFileName || ''} ${video.title || ''}`.toLowerCase();
-  if (combined.includes('975dbc78')) return 124; // 02:04 실측값
-  if (combined.includes('2025_03_26') || combined.includes('13_58_30')) return 85;
   const sizeMb = Number(video.sizeMB) || 4.5;
   let hash = 0;
   const name = video.videoFileName || video.id || '';
@@ -784,48 +742,56 @@ export function normalizeLocalVideoSceneItem(
   const sem = deriveLocalVideoSemanticEnrichment(video);
   const mergedKeywords = Array.from(new Set([...(video.keywords || []), ...sem.extraKeywords]));
 
-  const hasOcrFrames = frames.some((f) => String(f.frameId || '').startsWith('f_ocr_'));
-  const hasMeaningfulOcrText =
-    hasOcrFrames &&
-    frames.some((f) => {
-      const cap = String(f.sceneCaption || '').trim();
-      if (!cap) return false;
-      // 글자가 없는 풍경 영상에서 기본 생성된 "20240719 105412 장면 (00:04)" 형태는 유의미한 OCR 텍스트가 아님
-      return !/\s장면\s*\(\d{2}:\d{2}\)$/.test(cap);
-    });
-  const shouldRebuildFrames =
-    (!hasOcrFrames || (!hasMeaningfulOcrText && sem.extraKeywords.length > 0)) &&
-    (Boolean(realDurationSecOverride) ||
-      hasLegacyFixedFiveSec ||
-      sem.extraKeywords.length > 0 ||
-      frames.some((f) => f.timeSec >= effectiveDurSec));
-
   const enrichedBase: VideoSceneItem = {
     ...video,
     keywords: mergedKeywords,
     sceneDescription: sem.customSceneDesc || video.sceneDescription,
   };
 
-  const nextFrames = shouldRebuildFrames
-    ? buildProportionalVideoTimelineFrames(enrichedBase, effectiveDurSec)
-    : frames.map((f, idx) => ({
-        ...f,
-        keywords: Array.from(new Set([...(f.keywords || []), ...sem.extraKeywords])),
-        sceneCaption:
-          !hasMeaningfulOcrText && sem.phaseCaptions?.[idx]
-            ? `${sem.phaseCaptions[idx]} (${f.timestampText})`
-            : f.sceneCaption,
-      }));
+  // 비례 타임라인 체크포인트를 기본 골격으로 생성하되, 기존 OCR 프레임이 있으면 가장 가까운 체크포인트(또는 추가 프레임)에 보존 병합
+  const propFrames = buildProportionalVideoTimelineFrames(enrichedBase, effectiveDurSec);
+  const ocrFrames = frames.filter((f) => String(f.frameId || '').startsWith('f_ocr_'));
+  for (const ofr of ocrFrames) {
+    const oCap = String(ofr.sceneCaption || '').trim();
+    const isDefaultStub = !oCap || /\s장면\s*\(\d{2}:\d{2}\)$/.test(oCap);
+    let nearest = propFrames[0];
+    let minDiff = Infinity;
+    for (const pf of propFrames) {
+      const d = Math.abs(pf.timeSec - (ofr.timeSec ?? 0));
+      if (d < minDiff) {
+        minDiff = d;
+        nearest = pf;
+      }
+    }
+    if (nearest && minDiff <= Math.max(3, Math.round(effectiveDurSec * 0.18))) {
+      nearest.keywords = Array.from(new Set([...(nearest.keywords || []), ...(ofr.keywords || [])]));
+      if (!isDefaultStub) {
+        nearest.sceneCaption = oCap;
+      }
+      if (ofr.thumbUrl && !nearest.thumbUrl) {
+        nearest.thumbUrl = ofr.thumbUrl;
+      }
+    } else if (!isDefaultStub) {
+      propFrames.push({
+        ...ofr,
+        keywords: Array.from(new Set([...(ofr.keywords || []), ...sem.extraKeywords])),
+      });
+    }
+  }
+  propFrames.sort((a, b) => a.timeSec - b.timeSec);
 
+  const baseKey = getVideoMediaBaseKey(enrichedBase);
+  const repThumb = localVideoRepThumbMap.get(baseKey) || enrichedBase.thumbUrl;
   const currentSeek = video.matchedSeekSec ?? 0;
   const activeFrame =
-    nextFrames.find((f) => f.timeSec === currentSeek) || nextFrames[0];
+    propFrames.find((f) => f.timeSec === currentSeek) || propFrames[1] || propFrames[0];
 
   return {
     ...enrichedBase,
+    thumbUrl: repThumb || activeFrame?.thumbUrl || '',
     durationSec: effectiveDurSec,
     durationText: nextDurationText,
-    timelineFrames: nextFrames,
+    timelineFrames: propFrames,
     matchedSeekSec: activeFrame ? activeFrame.timeSec : 0,
     matchedTimestamp: activeFrame ? cleanVideoTimestampLabel(activeFrame.timestampText) : '00:00',
     matchedFrameCaption: activeFrame
@@ -1012,6 +978,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     }
     // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태에서는 쇼윈도 샘플 영상을 절대 섞지 않고 100% 내 진짜 PC 영상만 반환!
     if (canProbeLocal) {
+      await hydrateRealMediaVectorCacheOnce();
       if (zRes.status === 'fulfilled' && zRes.value.ok) {
         const zJson = await zRes.value.json();
         const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
@@ -1201,9 +1168,8 @@ export async function fetchAutonomousFaceClusters(): Promise<{
     return { latestCorpusYear: 2026, clusters: [] };
   }
   try {
-    const res = await fetch(getZCoreUrl('/__faces/index')).catch(() =>
-      fetch('/poc/results/face_clusters_index.json')
-    );
+    // [실물 파일 순수성 철칙]: 엔진 연결 상태에서는 정적 샘플 얼굴(face_clusters_index.json)로 절대 폴백하지 않음
+    const res = await fetch(getZCoreUrl('/__faces/index'));
     if (!res.ok) return { latestCorpusYear: 2026, clusters: [] };
     const json = await res.json();
     return {
@@ -1261,15 +1227,35 @@ export async function detectLiveFacesFromPhoto(
 
 export async function searchVideoSceneItemsAsync(
   query: string,
-  fallbackVideos: VideoSceneItem[] = []
+  fallbackVideos: VideoSceneItem[] = [],
+  contextPhotos: PhotoItem[] = []
 ): Promise<VideoSceneItem[]> {
   const q = query.trim();
-  if (!q || q.includes('전 구간')) return fallbackVideos.filter((v) => !v.isAllBlack);
+  const nonBlackVideos = fallbackVideos.filter((v) => !v.isAllBlack);
+  if (!q || q.includes('전 구간')) return nonBlackVideos;
 
-  const localScored = searchVideoSceneItems(q, fallbackVideos);
+  const localScored = searchVideoSceneItems(q, nonBlackVideos);
   if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) {
     return localScored;
   }
+
+  await hydrateRealMediaVectorCacheOnce();
+
+  const realFileNameSet = new Set(
+    nonBlackVideos.map((v) => v.videoFileName).filter((n): n is string => Boolean(n))
+  );
+  const lexicalByKey = new Map<string, VideoSceneItem>();
+  for (const lv of localScored) {
+    const k = lv.videoFileName || lv.id;
+    if (k) {
+      lexicalByKey.set(k, {
+        ...lv,
+        matchedTimestamp: cleanVideoTimestampLabel(lv.matchedTimestamp),
+      });
+    }
+  }
+
+  // 1) 로컬 Z-코어 화면 OCR 텍스트 검색 결과 병합 (구버전 데몬의 정적 샘플 혼입 방지를 위해 실제 PC 동영상 목록과 교차 검증)
   try {
     const res = await fetch(getZCoreUrl('/__videos/search'), {
       method: 'POST',
@@ -1279,35 +1265,225 @@ export async function searchVideoSceneItemsAsync(
     if (res.ok) {
       const json = await res.json();
       if (json.ok && Array.isArray(json.videos)) {
-        const merged = new Map<string, VideoSceneItem>();
         for (const rawV of json.videos as VideoSceneItem[]) {
-          if (rawV.isAllBlack) continue;
-          const v = rawV.id?.startsWith('local_vid_') ? normalizeLocalVideoSceneItem(rawV) : rawV;
+          if (!rawV || rawV.isAllBlack) continue;
+          if (realFileNameSet.size > 0 && rawV.videoFileName && !realFileNameSet.has(rawV.videoFileName)) {
+            continue;
+          }
+          if (!String(rawV.id || '').startsWith('local_vid_') && realFileNameSet.size > 0) {
+            continue;
+          }
+          const v = normalizeLocalVideoSceneItem(rawV);
           const k = v.videoFileName || v.id;
-          if (k) {
-            merged.set(k, {
+          if (k && !lexicalByKey.has(k)) {
+            lexicalByKey.set(k, {
               ...v,
               matchedTimestamp: cleanVideoTimestampLabel(v.matchedTimestamp),
             });
           }
         }
-        for (const v of localScored) {
-          if (v.isAllBlack) continue;
-          const k = v.videoFileName || v.id;
-          if (k && !merged.has(k)) {
-            merged.set(k, {
-              ...v,
-              matchedTimestamp: cleanVideoTimestampLabel(v.matchedTimestamp),
-            });
-          }
-        }
-        return Array.from(merged.values());
       }
     }
   } catch {
-    /* offline fallback below */
+    /* OCR search optional */
   }
-  return localScored;
+
+  // 2) [진짜 멀티모달 768차원 키프레임 시각 검색]: 화면 내 글자(OCR)가 전혀 없는 야외 액티비티·가족·반려동물 동영상도
+  //    EmbeddingGemma 2 비전 인코더 키프레임 벡터 + 적응형 코사인 유사도로 전 구간 다중 클립을 정직하게 포착
+  if (nonBlackVideos.length === 0) {
+    return Array.from(lexicalByKey.values());
+  }
+
+  await ensureVideoKeyframesEmbeddedForSearch(nonBlackVideos, 28);
+  const queryVecs = await encodeMultimodalSearchQueryVecs(q);
+  if (queryVecs.length === 0) {
+    return Array.from(lexicalByKey.values());
+  }
+
+  // 동일 날짜·인접 시각(±10분) 실제 촬영 사진 중 쿼리와 시각적/어휘적으로 강하게 일치하는 앵커 시각 수집
+  const matchedPhotoBursts: Array<{ dateYmd: string; secOfDay: number; sim: number }> = [];
+  if (contextPhotos.length > 0) {
+    const qLow = q.toLowerCase();
+    for (const p of contextPhotos) {
+      if (p.quarantined) continue;
+      const pts = parseFileTimestampSecOfDay(p.name);
+      if (!pts) continue;
+      let pSim = 0;
+      if (p.vec && p.vec.length === DEFAULT_DIM) {
+        for (const qv of queryVecs) {
+          const s = cosineSimilarity(qv, p.vec);
+          if (s > pSim) pSim = s;
+        }
+      }
+      const pCorpus = `${p.tags.join(' ')} ${(p.keywordsKo || []).join(' ')} ${p.captionKo || ''}`.toLowerCase();
+      const hasPhotoLex = qLow.length >= 2 && pCorpus.includes(qLow);
+      if (hasPhotoLex || pSim >= 0.695) {
+        matchedPhotoBursts.push({ dateYmd: pts.dateYmd, secOfDay: pts.secOfDay, sim: hasPhotoLex ? 0.74 : pSim });
+      }
+    }
+  }
+
+  interface VideoVisualEval {
+    vid: VideoSceneItem;
+    key: string;
+    bestSim: number;
+    bestSec: number;
+    bestTsText: string;
+    bestPhaseLabel: string;
+    bestThumb: string;
+    tsInfo: { dateYmd: string; secOfDay: number } | null;
+  }
+
+  const evals: VideoVisualEval[] = [];
+  for (const rawVid of nonBlackVideos) {
+    const vid = normalizeLocalVideoSceneItem(rawVid);
+    const key = vid.videoFileName || vid.id;
+    const baseKey = getVideoMediaBaseKey(vid);
+    let bestSim = -1;
+    let bestSec = vid.matchedSeekSec ?? 0;
+    let bestTsText = formatVideoDurationText(bestSec);
+    let bestPhaseLabel = '장면 포착';
+    let bestThumb = localVideoRepThumbMap.get(baseKey) || vid.thumbUrl || '';
+
+    for (const frame of vid.timelineFrames) {
+      const fKey = getVideoFrameCacheKey(vid, frame.timeSec);
+      const fVec = localVideoFrameVecMap.get(fKey);
+      if (!fVec || fVec.length !== DEFAULT_DIM) continue;
+      let fSim = -1;
+      for (const qv of queryVecs) {
+        const s = cosineSimilarity(qv, fVec);
+        if (s > fSim) fSim = s;
+      }
+      if (fSim > bestSim) {
+        bestSim = fSim;
+        bestSec = frame.timeSec;
+        bestTsText = frame.timestampText || formatVideoDurationText(frame.timeSec);
+        bestPhaseLabel = frame.phaseLabel || '장면 포착';
+        bestThumb =
+          localVideoFrameThumbMap.get(fKey) ||
+          frame.thumbUrl ||
+          localVideoRepThumbMap.get(baseKey) ||
+          vid.thumbUrl ||
+          '';
+      }
+    }
+
+    // 대표 썸네일 단일 벡터만 존재하는 경우 보조 확인
+    const repVec = localVideoFrameVecMap.get(`vrep:${baseKey}`);
+    if (repVec && repVec.length === DEFAULT_DIM) {
+      let rSim = -1;
+      for (const qv of queryVecs) {
+        const s = cosineSimilarity(qv, repVec);
+        if (s > rSim) rSim = s;
+      }
+      if (rSim > bestSim) {
+        bestSim = rSim;
+      }
+    }
+
+    if (bestSim > 0) {
+      evals.push({
+        vid,
+        key,
+        bestSim,
+        bestSec,
+        bestTsText,
+        bestPhaseLabel,
+        bestThumb,
+        tsInfo: parseFileTimestampSecOfDay(vid.videoFileName),
+      });
+    }
+  }
+
+  if (evals.length === 0) {
+    return Array.from(lexicalByKey.values());
+  }
+
+  const sortedSims = evals.map((e) => e.bestSim).sort((a, b) => b - a);
+  const topSim = sortedSims[0] ?? 0;
+  const medianSim = sortedSims[Math.floor(sortedSims.length * 0.5)] ?? 0;
+  const hasCorpusSeparation =
+    sortedSims.length >= 6
+      ? topSim >= 0.625 && topSim - medianSim >= 0.02
+      : topSim >= 0.648;
+  const admitThreshold =
+    sortedSims.length >= 6
+      ? Math.max(0.625, topSim - 0.045, medianSim + 0.022)
+      : Math.max(0.642, topSim - 0.045);
+
+  // 강하게 매칭된 핵심 동영상 촬영 시각(동일 폴더·5분 이내 연속 촬영 연작 클립 보강용)
+  const strongVideoBursts = hasCorpusSeparation
+    ? evals
+        .filter((e) => e.tsInfo && e.bestSim >= admitThreshold && e.bestSim >= topSim - 0.025)
+        .map((e) => ({
+          dateYmd: e.tsInfo!.dateYmd,
+          secOfDay: e.tsInfo!.secOfDay,
+          loc: e.vid.locationKo,
+        }))
+    : [];
+
+  const finalScored: Array<{ item: VideoSceneItem; rankScore: number }> = [];
+  const addedKeys = new Set<string>();
+
+  for (const ev of evals) {
+    const lexHit = lexicalByKey.get(ev.key);
+    let effectiveSim = ev.bestSim;
+
+    // 연속 촬영 세션(±5분 이내 형제 동영상 또는 ±10분 이내 일치 실사진)이 존재하고,
+    // 현재 클립 자체도 시각적 일관성(admitThreshold - 0.028 이상)을 갖춘 경우에만 연작 클립 누락 방지 보너스 부여
+    if (ev.tsInfo && ev.bestSim >= Math.max(0.615, admitThreshold - 0.028)) {
+      const hasNearStrongVid = strongVideoBursts.some(
+        (b) =>
+          b.dateYmd === ev.tsInfo!.dateYmd &&
+          b.loc === ev.vid.locationKo &&
+          Math.abs(b.secOfDay - ev.tsInfo!.secOfDay) <= 300
+      );
+      const hasNearMatchedPhoto = matchedPhotoBursts.some(
+        (p) =>
+          p.dateYmd === ev.tsInfo!.dateYmd &&
+          Math.abs(p.secOfDay - ev.tsInfo!.secOfDay) <= 600
+      );
+      if (hasNearStrongVid || hasNearMatchedPhoto) {
+        effectiveSim += 0.024;
+      }
+    }
+
+    const passesVisual = hasCorpusSeparation && effectiveSim >= admitThreshold;
+    if (!lexHit && !passesVisual) continue;
+
+    addedKeys.add(ev.key);
+    if (lexHit) {
+      finalScored.push({
+        item: {
+          ...lexHit,
+          thumbUrl: ev.bestThumb || lexHit.thumbUrl,
+        },
+        rankScore: effectiveSim + 0.15,
+      });
+    } else {
+      const matchPct = Math.min(99, Math.max(78, Math.round((effectiveSim / Math.max(0.76, topSim)) * 96)));
+      const cleanTs = cleanVideoTimestampLabel(ev.bestTsText);
+      finalScored.push({
+        item: {
+          ...ev.vid,
+          thumbUrl: ev.bestThumb || ev.vid.thumbUrl,
+          matchedSeekSec: ev.bestSec,
+          matchedTimestamp: cleanTs,
+          matchedFrameCaption: `[${cleanTs} · ${ev.bestPhaseLabel}] AI 시각 장면 분석 일치 (${matchPct}%) — “${q}” 관련 장면 포착`,
+        },
+        rankScore: effectiveSim,
+      });
+    }
+  }
+
+  for (const [k, lexItem] of lexicalByKey.entries()) {
+    if (!addedKeys.has(k)) {
+      finalScored.push({ item: lexItem, rankScore: 0.8 });
+    }
+  }
+
+  finalScored.sort((a, b) => b.rankScore - a.rankScore);
+  return finalScored.map((s) => s.item);
 }
 
 export async function searchLocalDocumentFilesAsync(
@@ -2138,6 +2314,7 @@ export async function loadInitialPhotoDataset(): Promise<{
 
   try {
     if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
+      await hydrateRealMediaVectorCacheOnce();
       const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch(getZCoreUrl('/__photos/list')));
       const json = await res.json();
       fileList = json.files ?? [];
@@ -2727,6 +2904,13 @@ export async function loadInitialPhotoDataset(): Promise<{
     const canonicalMtimeMs =
       audit?.ts && audit.ts > 946684800000 ? audit.ts : f.mtimeMs;
 
+    if (semMeta?.captionKo) {
+      staticCaptionedPhotoIds.add(f.path);
+    } else {
+      staticCaptionedPhotoIds.delete(f.path);
+    }
+    const cachedRealPhotoVec = hydratedPhotoVecMap.get(getPhotoMediaCacheKey(f.path, f.size));
+
     return {
       id: f.path,
       name: f.path,
@@ -2739,7 +2923,7 @@ export async function loadInitialPhotoDataset(): Promise<{
       vec:
         Array.isArray(semMeta?.vec) && semMeta.vec.length > 0
           ? new Float32Array(semMeta.vec)
-          : undefined,
+          : cachedRealPhotoVec,
       clusterId: semMeta?.clusterId,
       locationKo: semMeta?.locationKo || (folderTokens.length > 0 ? folderTokens.join(' · ') : f.deviceSource),
       captionKo:
@@ -3080,34 +3264,45 @@ export async function executeTextSearch(
   const activeTokens = hardTokens.length > 0 ? hardTokens : softTokens;
   const compoundQuery = activeTokens.join('');
 
-  let queryVec: Float32Array | null = null;
-  const qModel = searchModel && tokenizer ? searchModel : textQueryModel;
-  const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
-  if (qModel && qTok && activePhotos.some((p) => p.vec)) {
-    try {
-      const inputs = await qTok([QUERY_PREFIX + qRaw], { padding: true, truncation: true });
-      const out = await qModel(inputs);
-      queryVec = normalizeVector(toRows(out.sentence_embedding)[0], DEFAULT_DIM);
-    } catch {
-      /* 벡터 생성 실패 시 키워드·태그 검색만 사용 */
-    }
+  let queryVecs: Float32Array[] = [];
+  if (activePhotos.some((p) => p.vec && p.vec.length === DEFAULT_DIM)) {
+    queryVecs = await encodeMultimodalSearchQueryVecs(qRaw);
   }
   const embedMs = +(performance.now() - t0).toFixed(1);
   const s0 = performance.now();
 
-  // 벡터 유사도 사전 계산 → 질의별 상위 유사도 기준으로 '의미상 가까운 사진'만 통과 (고정 임계값 대신 적응형)
+  // 벡터 유사도 사전 계산 → 질의별 중앙값(median) 대비 분리도 & 상위 유사도 기준으로 의미상 가까운 실사진 통과
   const vecSimById = new Map<string, number>();
+  const allPhotoVecSims: number[] = [];
   let topVecSim = 0;
-  if (queryVec) {
+  if (queryVecs.length > 0) {
     for (const p of activePhotos) {
-      if (p.vec && p.vec.length === queryVec.length) {
-        const s = cosineSimilarity(queryVec, p.vec);
-        vecSimById.set(p.id, s);
-        if (s > topVecSim) topVecSim = s;
+      if (p.vec && p.vec.length === DEFAULT_DIM) {
+        let bestS = -1;
+        for (const qv of queryVecs) {
+          const s = cosineSimilarity(qv, p.vec);
+          if (s > bestS) bestS = s;
+        }
+        if (bestS > 0) {
+          vecSimById.set(p.id, bestS);
+          allPhotoVecSims.push(bestS);
+          if (bestS > topVecSim) topVecSim = bestS;
+        }
       }
     }
   }
-  const vecAdmitThreshold = Math.max(0.7, topVecSim - 0.05);
+  allPhotoVecSims.sort((a, b) => b - a);
+  const medianVecSim =
+    allPhotoVecSims.length > 0 ? allPhotoVecSims[Math.floor(allPhotoVecSims.length * 0.5)] : 0;
+  const hasPhotoVecSeparation =
+    allPhotoVecSims.length >= 8
+      ? topVecSim >= 0.625 && topVecSim - medianVecSim >= 0.022
+      : topVecSim >= 0.65;
+  const vecAdmitThreshold = !hasPhotoVecSeparation
+    ? 1.01
+    : allPhotoVecSims.length >= 8
+    ? Math.max(0.625, topVecSim - 0.045, medianVecSim + 0.024)
+    : Math.max(0.648, topVecSim - 0.045);
 
   const scored: {
     photo: PhotoItem;
@@ -3131,6 +3326,7 @@ export async function executeTextSearch(
 
     const cap = (photo.captionKo || '').toLowerCase();
     const capEn = (photo.captionEn || '').toLowerCase();
+    const hasStaticVisualCaption = staticCaptionedPhotoIds.has(photo.id) && Boolean(cap);
     const kws = (photo.keywordsKo ?? []).map((k) => k.toLowerCase());
     const ontoPrimary = (photo.ontologyPrimaryTags ?? []).map((k) => k.toLowerCase());
     const ontoCaption = (photo.ontologyCaptionTags ?? []).map((k) => k.toLowerCase());
@@ -3141,9 +3337,8 @@ export async function executeTextSearch(
     const tagAndKwText = `${cleanTags.join(' ')} ${kws.join(' ')} ${ontoPrimary.join(' ')} ${photo.locationKo || ''} ${photo.vaultCategoryLabel || ''}`.toLowerCase();
     const fullText = `${tagAndKwText} ${cap} ${capEn}`.toLowerCase();
 
-    // 2) 시맨틱 가드레일 (단체 vs 1인 단독, 웃는 vs 무표정/실루엣, 해변, 강아지 vs 고양이)
-    //    캡션이 있는 사진에만 적용: 캡션이 없는 실사진(아직 설명 미생성)은 '단어가 없다'는 이유로 탈락시키지 않고 벡터 유사도로 판단
-    if (isGroupQuery && cap) {
+    // 2) 시맨틱 가드레일 (정적 AI 시각 캡션이 사전 생성된 샘플 사진에만 적용 — 캡션 미생성 실사용 PC 사진은 768차원 비전 벡터로 정직하게 판정!)
+    if (isGroupQuery && hasStaticVisualCaption) {
       const hasSoloWord =
         cap.includes('1명') ||
         cap.includes('한 명') ||
@@ -3169,7 +3364,7 @@ export async function executeTextSearch(
       }
     }
 
-    if (isSoloQuery && cap) {
+    if (isSoloQuery && hasStaticVisualCaption) {
       const hasSoloWord =
         tagAndKwText.includes('독사진') ||
         tagAndKwText.includes('단독') ||
@@ -3179,7 +3374,7 @@ export async function executeTextSearch(
       if (!hasSoloWord) continue;
     }
 
-    if (isSmileQuery && cap) {
+    if (isSmileQuery && hasStaticVisualCaption) {
       const isNegativeSmile =
         cap.includes('웃지 않') ||
         cap.includes('무표정') ||
@@ -3200,16 +3395,14 @@ export async function executeTextSearch(
       }
     }
 
-    if (isDivingQuery) {
+    if (isDivingQuery && hasStaticVisualCaption) {
       const hasVisibleDivingInCaption =
-        Boolean(cap) &&
         /잠수|수중|바닷속|씨워커|스쿠버|흰동가리|말미잘|산호|수중 헬멧|잠수 헬멧/.test(cap);
       if (!hasVisibleDivingInCaption) continue;
     }
 
-    if (isBeachQuery) {
+    if (isBeachQuery && hasStaticVisualCaption) {
       const hasVisibleSeaInCaption =
-        Boolean(cap) &&
         /바다|해변|바닷가|바닷물|파도|백사장|모래사장|수평선/.test(cap) &&
         !/정자 그늘|잔디밭|나무 그늘|전망대|야자수 나무에 기대어|요트 위 테이블|기둥에 기댄|요트 난간에 기댄|섬을 배경으로 손가락 브이|수중 헬멧|잠수 헬멧|씨워커/.test(
           cap
@@ -3217,9 +3410,8 @@ export async function executeTextSearch(
       if (!hasVisibleSeaInCaption) continue;
     }
 
-    if (isFoodQuery) {
+    if (isFoodQuery && hasStaticVisualCaption) {
       const hasVisibleFoodInCaption =
-        Boolean(cap) &&
         /피자|스테이크|샐러드|감자 요리|바비큐 요리|국밥|고기국|튀김 안주|잔과 안주가 놓여|와인병과 디저트를 앞에|와인과 안주를 앞에|차려진 요리와 음식을 즐기는 식도락|차려진 고기 요리와|차려진 인도 커리와|차려진 해물 짬뽕|국물 요리와 반찬을/.test(
           cap
         ) &&
@@ -3229,46 +3421,41 @@ export async function executeTextSearch(
       if (!hasVisibleFoodInCaption) continue;
     }
 
-    if (isHikingQuery) {
+    if (isHikingQuery && hasStaticVisualCaption) {
       const hasVisibleHikingInCaption =
-        Boolean(cap) &&
         /등산|산행|국기봉|노고단|호암산|삼성산|바위 산 정상|설산 등산로/.test(cap) &&
         !/키오스크|패스트푸드|캠핑장|텐트|스키장|슬로프|안내판|표지판|해변|바다|요트|래시가드/.test(cap);
       if (!hasVisibleHikingInCaption) continue;
     }
 
-    if (isSkiQuery) {
+    if (isSkiQuery && hasStaticVisualCaption) {
       const hasVisibleSkiInCaption =
-        Boolean(cap) &&
         /스키장|스노우보드|슬로프|보딩|설원/.test(cap) &&
         !/축구경기장|축구장|그라운드|캠핑장|서핑|호수공원|식당/.test(cap);
       if (!hasVisibleSkiInCaption) continue;
     }
 
-    if (isCampingQuery) {
+    if (isCampingQuery && hasStaticVisualCaption) {
       const hasVisibleCampingInCaption =
-        Boolean(cap) &&
         /캠핑장|캠핑|텐트|타프|오토캠핑|불멍/.test(cap) &&
         !/레일파크|와인동굴|안내 표지판|안내판|해변 그늘막|대나무 티피/.test(cap);
       if (!hasVisibleCampingInCaption) continue;
     }
 
-    if (isSoccerQuery) {
+    if (isSoccerQuery && hasStaticVisualCaption) {
       const hasVisibleSoccerInCaption =
-        Boolean(cap) &&
         /축구경기장|축구장|축구|그라운드|월드컵경기장/.test(cap) &&
         !/엠플레이그라운드|의류 매장|쇼핑몰/.test(cap);
       if (!hasVisibleSoccerInCaption) continue;
     }
 
-    if (isPoolQuery) {
+    if (isPoolQuery && hasStaticVisualCaption) {
       const hasVisiblePoolInCaption =
-        Boolean(cap) &&
         /수영장|선베드|패밀리풀|인피니티풀|풀장/.test(cap);
       if (!hasVisiblePoolInCaption) continue;
     }
 
-    if (isDogQuery && !isCatQuery && cap) {
+    if (isDogQuery && !isCatQuery && hasStaticVisualCaption) {
       const hasDogWord =
         tagAndKwText.includes('강아지') ||
         tagAndKwText.includes('반려견') ||
@@ -3277,7 +3464,7 @@ export async function executeTextSearch(
       if (!hasDogWord) continue;
     }
 
-    if (isCatQuery && !isDogQuery && cap) {
+    if (isCatQuery && !isDogQuery && hasStaticVisualCaption) {
       const hasCatWord =
         tagAndKwText.includes('고양이') ||
         tagAndKwText.includes('반려묘') ||
@@ -4079,5 +4266,612 @@ export async function runOnboardingIndexingPipeline(params: {
       liveVector64: Array.from({ length: 64 }, () => 0.85),
       modelStatusText: 'Zero-STT 오디오 & 시맨틱 검색 준비 완료',
     });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🚀 [실사용 PC 사진·동영상 무소음 768차원 멀티모달 비전 인덱서 + IndexedDB 영구 캐시]
+// - 샘플 데이터 0% · 파일명 하드코딩 0%: 화면 글자(OCR)가 없는 야외 액티비티·가족·반려동물 동영상 및 실사진을
+//   EmbeddingGemma 2 비전 인코더로 실제 키프레임 시각 임베딩하여 다중 동영상·사진을 정직하게 검색합니다.
+// - PC에 ffmpeg가 설치되지 않은 일반 사용자 환경에서도 HTML5 <video> HTTP 206 Range 탐색 + Canvas 디코더로
+//   키프레임 썸네일 및 768차원 비전 벡터를 100% 무인 추출합니다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const REAL_MEDIA_VEC_DB_NAME = 'ghosti_real_media_vecs_v1';
+const REAL_MEDIA_VEC_STORE = 'media_vectors';
+
+interface StoredMediaVecRecord {
+  key: string;
+  vecBuffer: ArrayBuffer;
+  thumbDataUrl?: string;
+  updatedAt: number;
+}
+
+let mediaVecDbPromise: Promise<IDBDatabase | null> | null = null;
+let mediaCacheHydratePromise: Promise<void> | null = null;
+
+function openRealMediaVecDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (mediaVecDbPromise) return mediaVecDbPromise;
+  mediaVecDbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(REAL_MEDIA_VEC_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(REAL_MEDIA_VEC_STORE)) {
+          db.createObjectStore(REAL_MEDIA_VEC_STORE, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return mediaVecDbPromise;
+}
+
+export function hydrateRealMediaVectorCacheOnce(): Promise<void> {
+  if (mediaCacheHydratePromise) return mediaCacheHydratePromise;
+  mediaCacheHydratePromise = (async () => {
+    const db = await openRealMediaVecDb();
+    if (!db) return;
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(REAL_MEDIA_VEC_STORE, 'readonly');
+        const store = tx.objectStore(REAL_MEDIA_VEC_STORE);
+        const req = store.getAll();
+        req.onsuccess = () => {
+          const rows = (req.result as StoredMediaVecRecord[]) || [];
+          for (const row of rows) {
+            if (!row || !row.key) continue;
+            let vec: Float32Array | null = null;
+            if (row.vecBuffer && row.vecBuffer.byteLength === DEFAULT_DIM * 4) {
+              vec = new Float32Array(row.vecBuffer);
+            }
+            if (row.key.startsWith('photo:') && vec) {
+              hydratedPhotoVecMap.set(row.key, vec);
+            } else if (row.key.startsWith('vframe:')) {
+              if (vec) localVideoFrameVecMap.set(row.key, vec);
+              if (row.thumbDataUrl) localVideoFrameThumbMap.set(row.key, row.thumbDataUrl);
+            } else if (row.key.startsWith('vrep:')) {
+              if (vec) localVideoFrameVecMap.set(row.key, vec);
+              if (row.thumbDataUrl) localVideoRepThumbMap.set(row.key.slice(5), row.thumbDataUrl);
+            }
+          }
+          resolve();
+        };
+        req.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+  })();
+  return mediaCacheHydratePromise;
+}
+
+async function persistMediaCacheEntry(
+  key: string,
+  vec: Float32Array | null,
+  thumbDataUrl?: string
+): Promise<void> {
+  const db = await openRealMediaVecDb();
+  if (!db) return;
+  try {
+    const copyBuf = vec ? new Float32Array(vec).buffer : new ArrayBuffer(0);
+    const tx = db.transaction(REAL_MEDIA_VEC_STORE, 'readwrite');
+    tx.objectStore(REAL_MEDIA_VEC_STORE).put({
+      key,
+      vecBuffer: copyBuf,
+      thumbDataUrl,
+      updatedAt: Date.now(),
+    } satisfies StoredMediaVecRecord);
+  } catch {
+    /* ignore quota/storage error */
+  }
+}
+
+/**
+ * 한국어 외래어·일상 활동 검색어의 멀티모달(Vision↔Text) 교차 정렬 정밀도를 높이기 위한 순수 언어 확장 사전
+ * (파일명·경로 의존성 0% — 오직 사용자의 검색 질의 문장만 시각 묘사로 보조 확장)
+ */
+const VISUAL_QUERY_CONCEPT_EXPANSIONS: Array<[RegExp, string]> = [
+  [/패러세일링|패러세일|낙하산\s*보트|해양\s*낙하산/, '바다 하늘 무지개 낙하산 모터보트 패러세일링 parasailing colorful parachute flying in sky over ocean boat'],
+  [/씨워커|스노클링|스쿠버|바닷속|수중/, '바닷속 수중 잠수 스노클링 산호 물고기 underwater snorkeling scuba diving coral fish'],
+  [/서핑|패들보드|카약|래프팅/, '바다 파도 서핑 보드 수상레저 surfing paddleboard kayak on water'],
+  [/바다|해변|바닷가|해수욕장|백사장/, '푸른 바다 해변 파도 백사장 물놀이 blue ocean sea beach waves'],
+  [/룰렛|돌림판|원판\s*추첨/, '컬러 원형 룰렛 돌림판 추첨 화면 colorful spinning roulette wheel screen'],
+  [/급식|식단표|메뉴\s*배틀/, '학교 급식 메뉴 배틀 식단표 스마트폰 화면 school lunch menu app screen'],
+  [/생일|케이크|촛불/, '생일 파티 케이크 촛불 축하 birthday cake with lit candles celebration'],
+  [/강아지|반려견|멍멍이/, '귀여운 강아지 반려견 개 cute dog puppy pet'],
+  [/고양이|반려묘|냥이/, '귀여운 고양이 반려묘 cute cat kitten pet'],
+  [/캠핑|글램핑|불멍|텐트/, '야외 캠핑장 텐트 타프 모닥불 outdoor camping tent campfire'],
+  [/등산|산행|트레킹|정상석/, '산 정상 등산로 숲길 바위 mountain hiking trail peak'],
+  [/스키|스노우보드|설원|슬로프/, '겨울 눈 덮인 스키장 슬로프 스노우보드 snowy ski slope snowboarding'],
+  [/음식|식사|맛집|요리|삼겹살|바비큐/, '식탁 위 맛있는 음식 요리 식사 delicious food dishes on dining table'],
+];
+
+export async function encodeMultimodalSearchQueryVecs(rawQuery: string): Promise<Float32Array[]> {
+  const q = rawQuery.trim();
+  if (!q) return [];
+  if (!isTextQueryEncoderReady()) {
+    await ensureTextQueryEncoderLoaded();
+  }
+  const qModel = searchModel && tokenizer ? searchModel : textQueryModel;
+  const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
+  if (!qModel || !qTok) return [];
+
+  const prompts = [QUERY_PREFIX + q];
+  const qLow = q.toLowerCase();
+  for (const [rx, visualDesc] of VISUAL_QUERY_CONCEPT_EXPANSIONS) {
+    if (rx.test(qLow)) {
+      prompts.push(`${QUERY_PREFIX}${q} ${visualDesc}`);
+      break;
+    }
+  }
+
+  try {
+    const inputs = await qTok(prompts, { padding: true, truncation: true });
+    const out = await qModel(inputs);
+    const rows = toRows(out.sentence_embedding);
+    return rows.map((r) => normalizeVector(r, DEFAULT_DIM));
+  } catch {
+    return [];
+  }
+}
+
+let sharedVisionModel: any = null;
+let sharedVisionProcessor: any = null;
+let sharedVisionLoadPromise: Promise<boolean> | null = null;
+let sharedVisionIdleTimer: ReturnType<typeof setTimeout> | null = null;
+let visionInferChain: Promise<unknown> = Promise.resolve();
+let priorityVideoSearchDepth = 0;
+let silentMediaIndexingRunning = false;
+
+function bumpSharedVisionIdleDispose(ms = 30000): void {
+  if (sharedVisionIdleTimer) {
+    clearTimeout(sharedVisionIdleTimer);
+  }
+  sharedVisionIdleTimer = setTimeout(() => {
+    sharedVisionIdleTimer = null;
+    if (priorityVideoSearchDepth > 0 || silentMediaIndexingRunning) {
+      bumpSharedVisionIdleDispose(ms);
+      return;
+    }
+    if (sharedVisionModel) {
+      const m = sharedVisionModel;
+      sharedVisionModel = null;
+      sharedVisionProcessor = null;
+      Promise.resolve(m.dispose?.()).catch(() => {});
+    }
+  }, ms);
+}
+
+async function acquireSharedVisionEncoder(): Promise<boolean> {
+  if (sharedVisionModel && sharedVisionProcessor) {
+    bumpSharedVisionIdleDispose();
+    return true;
+  }
+  if (sharedVisionLoadPromise) return sharedVisionLoadPromise;
+
+  sharedVisionLoadPromise = (async () => {
+    try {
+      enableOpfsCache();
+      const targetDtype = getOptimalEmbeddingDtype();
+      const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
+      const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
+      config.audio_config = null;
+
+      sharedVisionModel = await loadWithR2Fallback(() =>
+        AutoModel.from_pretrained(MODEL_ID, {
+          config,
+          device: hasGpu ? 'webgpu' : 'wasm',
+          dtype: {
+            model: targetDtype,
+            vision_encoder: targetDtype,
+          },
+        } as any)
+      );
+      sharedVisionProcessor = await loadWithR2Fallback(() => AutoProcessor.from_pretrained(MODEL_ID));
+      sharedVisionProcessor.image_processor.max_soft_tokens = VISION_TOKEN_BUDGET;
+      bumpSharedVisionIdleDispose();
+      return true;
+    } catch (e) {
+      console.warn('[Ghosti Engine] 멀티모달 비전 인코더 로드 실패:', e);
+      sharedVisionModel = null;
+      sharedVisionProcessor = null;
+      return false;
+    } finally {
+      sharedVisionLoadPromise = null;
+    }
+  })();
+
+  return sharedVisionLoadPromise;
+}
+
+function embedRawImageWithSharedVision(rawImg: RawImage): Promise<Float32Array | null> {
+  const run = async (): Promise<Float32Array | null> => {
+    const ok = await acquireSharedVisionEncoder();
+    if (!ok || !sharedVisionModel || !sharedVisionProcessor) return null;
+    try {
+      const inputs = await sharedVisionProcessor(null, [[rawImg]]);
+      const out = await sharedVisionModel(inputs);
+      bumpSharedVisionIdleDispose();
+      return normalizeVector(toRows(out.sentence_embedding)[0], DEFAULT_DIM);
+    } catch {
+      return null;
+    }
+  };
+  const next = visionInferChain.then(run, run);
+  visionInferChain = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
+interface DecodedKeyframeImage {
+  timeSec: number;
+  rawImg: RawImage;
+  thumbDataUrl: string;
+}
+
+function createCanvas2D(w: number, h: number): {
+  canvas: OffscreenCanvas | HTMLCanvasElement;
+  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
+} {
+  if (typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    return { canvas: c, ctx: c.getContext('2d', { willReadFrequently: true }) };
+  }
+  const oc = new OffscreenCanvas(w, h);
+  return { canvas: oc, ctx: oc.getContext('2d') };
+}
+
+function canvasToJpegDataUrl(canvas: OffscreenCanvas | HTMLCanvasElement): string {
+  try {
+    if ('toDataURL' in canvas && typeof canvas.toDataURL === 'function') {
+      return canvas.toDataURL('image/jpeg', 0.76);
+    }
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
+async function decodeImageBlobToRawAndThumb(blob: Blob): Promise<{ rawImg: RawImage; thumbDataUrl: string } | null> {
+  try {
+    const bmp = await createImageBitmap(blob, {
+      imageOrientation: 'from-image',
+      resizeWidth: DECODE_SIDE,
+      resizeQuality: 'medium',
+    } as ImageBitmapOptions);
+    const scale = Math.min(1, 384 / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const { canvas, ctx } = createCanvas2D(w, h);
+    if (!ctx) {
+      bmp.close();
+      return null;
+    }
+    ctx.drawImage(bmp, 0, 0, w, h);
+    const imgData = ctx.getImageData(0, 0, w, h).data;
+    bmp.close();
+    const rawImg = new RawImage(new Uint8ClampedArray(imgData.buffer), w, h, 4).rgb();
+    const thumbDataUrl = canvasToJpegDataUrl(canvas);
+    return { rawImg, thumbDataUrl };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * PC에 ffmpeg가 있으면 Z-코어 `/__videos/thumb`으로 초고속 추출하고,
+ * ffmpeg가 없는 일반 사용자 PC(404)에서는 브라우저 내장 HTML5 `<video crossOrigin="anonymous">` HTTP 206 Range 탐색으로
+ * 키프레임 이미지와 썸네일을 100% 자체 추출합니다.
+ */
+async function captureLocalVideoKeyframesUniversal(
+  vid: VideoSceneItem,
+  targetSecs: number[]
+): Promise<DecodedKeyframeImage[]> {
+  if (!vid.videoFileName || targetSecs.length === 0) return [];
+  const results: DecodedKeyframeImage[] = [];
+
+  // 1차 고속 경로: Z-코어 /__videos/thumb 시도
+  let zThumbSupported = true;
+  for (let i = 0; i < targetSecs.length; i++) {
+    const sec = Math.max(0, Math.round(targetSecs[i]));
+    const url = getZCoreUrl(`/__videos/thumb?p=${encodeURIComponent(vid.videoFileName)}&t=${Math.max(1, sec)}`);
+    try {
+      const res = await fetch(url);
+      const ct = res.headers.get('content-type') || '';
+      if (!res.ok || !ct.includes('image')) {
+        if (i === 0) {
+          zThumbSupported = false;
+          break;
+        }
+        continue;
+      }
+      const blob = await res.blob();
+      if (blob.size < 800) continue;
+      const decoded = await decodeImageBlobToRawAndThumb(blob);
+      if (decoded) {
+        results.push({ timeSec: sec, ...decoded });
+      }
+    } catch {
+      if (i === 0) {
+        zThumbSupported = false;
+        break;
+      }
+    }
+  }
+
+  if (zThumbSupported && results.length > 0) {
+    return results;
+  }
+
+  // 2차 범용 경로: HTML5 <video> + Canvas (ffmpeg 미설치 PC 완벽 호환)
+  if (typeof document === 'undefined') return results;
+  const streamSrc =
+    vid.videoUrl || getZCoreUrl(`/__photos/file?p=${encodeURIComponent(vid.videoFileName)}`);
+  if (!streamSrc) return results;
+
+  const videoEl = document.createElement('video');
+  videoEl.muted = true;
+  videoEl.playsInline = true;
+  videoEl.crossOrigin = 'anonymous';
+  videoEl.preload = 'auto';
+
+  try {
+    const metaLoaded = await new Promise<boolean>((resolve) => {
+      let done = false;
+      const finish = (ok: boolean) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(ok);
+      };
+      const timer = setTimeout(() => finish(false), 4000);
+      videoEl.onloadedmetadata = () => finish(videoEl.videoWidth > 0 && videoEl.videoHeight > 0);
+      videoEl.onerror = () => finish(false);
+      videoEl.src = streamSrc;
+    });
+
+    if (!metaLoaded) return results;
+    const realDur = Number.isFinite(videoEl.duration) && videoEl.duration > 0.5 ? videoEl.duration : vid.durationSec || 8;
+    const scale = Math.min(1, 384 / Math.max(videoEl.videoWidth, videoEl.videoHeight));
+    const w = Math.max(1, Math.round(videoEl.videoWidth * scale));
+    const h = Math.max(1, Math.round(videoEl.videoHeight * scale));
+    const { canvas, ctx } = createCanvas2D(w, h);
+    if (!ctx) return results;
+
+    const seekAndCapture = async (sec: number): Promise<DecodedKeyframeImage | null> => {
+      const clamped = Math.max(0.3, Math.min(sec <= 0 ? Math.min(1.2, realDur * 0.18) : sec, Math.max(0.3, realDur - 0.3)));
+      const seekOk = await new Promise<boolean>((resolve) => {
+        let done = false;
+        const finish = (ok: boolean) => {
+          if (done) return;
+          done = true;
+          clearTimeout(tId);
+          videoEl.onseeked = null;
+          resolve(ok);
+        };
+        const tId = setTimeout(() => finish(false), 2600);
+        videoEl.onseeked = () => finish(true);
+        try {
+          videoEl.currentTime = clamped;
+        } catch {
+          finish(false);
+        }
+      });
+      if (!seekOk) return null;
+      ctx.drawImage(videoEl, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      // 검은 페이드인 프레임 감지 시 밝기 점검
+      let lumSum = 0;
+      const step = Math.max(4, Math.floor(data.length / 400) * 4);
+      let count = 0;
+      for (let p = 0; p < data.length; p += step) {
+        lumSum += data[p] * 0.299 + data[p + 1] * 0.587 + data[p + 2] * 0.114;
+        count++;
+      }
+      if (count > 0 && lumSum / count < 6 && clamped + 1.2 < realDur) {
+        return null;
+      }
+      const rawImg = new RawImage(new Uint8ClampedArray(data.buffer), w, h, 4).rgb();
+      const thumbDataUrl = canvasToJpegDataUrl(canvas);
+      return { timeSec: Math.max(0, Math.round(sec)), rawImg, thumbDataUrl };
+    };
+
+    for (const rawSec of targetSecs) {
+      let captured = await seekAndCapture(rawSec);
+      if (!captured && rawSec + 1.2 < realDur) {
+        captured = await seekAndCapture(rawSec + 1.2);
+      }
+      if (captured) {
+        results.push({ ...captured, timeSec: Math.max(0, Math.round(rawSec)) });
+      }
+    }
+  } finally {
+    try {
+      videoEl.pause();
+      videoEl.removeAttribute('src');
+      videoEl.load();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return results;
+}
+
+function selectTargetFrameSecsForVideo(vid: VideoSceneItem, maxCheckpoints: number): number[] {
+  const frames = vid.timelineFrames || [];
+  if (frames.length === 0) {
+    const d = Math.max(3, vid.durationSec || 8);
+    return maxCheckpoints <= 2
+      ? [Math.max(1, Math.round(d * 0.25)), Math.max(2, Math.round(d * 0.65))]
+      : [0, Math.max(1, Math.round(d * 0.35)), Math.max(2, Math.round(d * 0.75))];
+  }
+  if (frames.length <= maxCheckpoints) {
+    return frames.map((f) => f.timeSec);
+  }
+  if (maxCheckpoints === 2) {
+    const f1 = frames[Math.min(1, frames.length - 1)];
+    const f2 = frames[Math.min(frames.length - 1, Math.max(2, Math.floor(frames.length * 0.66)))];
+    return Array.from(new Set([f1.timeSec, f2.timeSec]));
+  }
+  const f0 = frames[Math.min(1, frames.length - 1)];
+  const fMid = frames[Math.floor(frames.length * 0.5)];
+  const fEnd = frames[frames.length - 1];
+  return Array.from(new Set([f0.timeSec, fMid.timeSec, fEnd.timeSec]));
+}
+
+async function embedSingleLocalVideoIfNeeded(
+  vid: VideoSceneItem,
+  maxCheckpoints: number,
+  onVideoThumbHydrated?: (videoFileName: string, thumbUrl: string) => void
+): Promise<boolean> {
+  if (!vid.videoFileName || vid.isAllBlack) return false;
+  const normVid = normalizeLocalVideoSceneItem(vid);
+  const baseKey = getVideoMediaBaseKey(normVid);
+  const targetSecs = selectTargetFrameSecsForVideo(normVid, maxCheckpoints);
+  const missingSecs = targetSecs.filter((s) => !localVideoFrameVecMap.has(getVideoFrameCacheKey(normVid, s)));
+  if (missingSecs.length === 0) return false;
+
+  const decodedFrames = await captureLocalVideoKeyframesUniversal(normVid, missingSecs);
+  if (decodedFrames.length === 0) return false;
+
+  let updatedAny = false;
+  for (let i = 0; i < decodedFrames.length; i++) {
+    const df = decodedFrames[i];
+    const fKey = getVideoFrameCacheKey(normVid, df.timeSec);
+    if (df.thumbDataUrl) {
+      localVideoFrameThumbMap.set(fKey, df.thumbDataUrl);
+      if (!localVideoRepThumbMap.has(baseKey)) {
+        localVideoRepThumbMap.set(baseKey, df.thumbDataUrl);
+        onVideoThumbHydrated?.(normVid.videoFileName, df.thumbDataUrl);
+      }
+    }
+    const vec = await embedRawImageWithSharedVision(df.rawImg);
+    if (vec) {
+      localVideoFrameVecMap.set(fKey, vec);
+      await persistMediaCacheEntry(fKey, vec, df.thumbDataUrl);
+      if (i === 0 || !localVideoFrameVecMap.has(`vrep:${baseKey}`)) {
+        localVideoFrameVecMap.set(`vrep:${baseKey}`, vec);
+        await persistMediaCacheEntry(`vrep:${baseKey}`, vec, localVideoRepThumbMap.get(baseKey));
+      }
+      updatedAny = true;
+    }
+  }
+  return updatedAny;
+}
+
+export async function ensureVideoKeyframesEmbeddedForSearch(
+  videos: VideoSceneItem[],
+  maxVideos = 28
+): Promise<void> {
+  if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return;
+  await hydrateRealMediaVectorCacheOnce();
+
+  const targets = videos
+    .filter((v) => !v.isAllBlack && String(v.id || '').startsWith('local_vid_'))
+    .slice(0, maxVideos)
+    .filter((v) => {
+      const nv = normalizeLocalVideoSceneItem(v);
+      const secs = selectTargetFrameSecsForVideo(nv, 2);
+      return secs.some((s) => !localVideoFrameVecMap.has(getVideoFrameCacheKey(nv, s)));
+    });
+
+  if (targets.length === 0) return;
+
+  priorityVideoSearchDepth += 1;
+  try {
+    for (const vid of targets) {
+      await embedSingleLocalVideoIfNeeded(vid, 2);
+    }
+  } finally {
+    priorityVideoSearchDepth = Math.max(0, priorityVideoSearchDepth - 1);
+    bumpSharedVisionIdleDispose();
+  }
+}
+
+/**
+ * [귀신비서 엔진 연결 직후 무소음 백그라운드 실미디어 비전 인덱서]
+ * - 1순위: 내 PC 로컬 동영상 대표 타임라인 키프레임(썸네일 + 768차원 벡터) 추출 및 IndexedDB 영구 캐싱
+ * - 2순위: 아직 벡터가 없는 내 PC 실사진(최근 90일 우선) 480px 고속 썸네일 기반 768차원 벡터 추출 및 영구 캐싱
+ */
+export async function startSilentRealMediaVisionIndexing(params: {
+  photos: PhotoItem[];
+  videos: VideoSceneItem[];
+  onVideoThumbHydrated?: (videoFileName: string, thumbUrl: string) => void;
+}): Promise<void> {
+  if (silentMediaIndexingRunning) return;
+  if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return;
+
+  const isCoarsePointer =
+    typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+  const saveData =
+    typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
+  if (isCoarsePointer || saveData) return;
+
+  silentMediaIndexingRunning = true;
+  try {
+    await hydrateRealMediaVectorCacheOnce();
+    void ensureTextQueryEncoderLoaded();
+
+    // 1) 동영상 키프레임 우선 인덱싱 (화면 글자 없는 패러세일링·일상 동영상 전체 즉시 검색 보장)
+    const localVids = params.videos.filter(
+      (v) => !v.isAllBlack && String(v.id || '').startsWith('local_vid_')
+    );
+    for (let i = 0; i < localVids.length; i++) {
+      if (!zCoreBridge.isConnected) break;
+      await silentIndexingBrake.waitForIndexingSlot(i);
+      await embedSingleLocalVideoIfNeeded(localVids[i], 3, params.onVideoThumbHydrated);
+    }
+
+    // 2) 미색인 실사용 PC 사진 조용한 백그라운드 벡터 인덱싱 (최근 90일 우선, 최대 320장 순차 캐싱)
+    const unindexedPhotos = silentIndexingBrake
+      .sortPhotosRecent90DaysFirst(
+        params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
+      )
+      .slice(0, 320);
+
+    for (let i = 0; i < unindexedPhotos.length; i++) {
+      if (!zCoreBridge.isConnected) break;
+      while (priorityVideoSearchDepth > 0) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      await silentIndexingBrake.waitForIndexingSlot(i);
+      const item = unindexedPhotos[i];
+      const pKey = getPhotoMediaCacheKey(item.name, item.size);
+      const cached = hydratedPhotoVecMap.get(pKey);
+      if (cached && cached.length === DEFAULT_DIM) {
+        item.vec = cached;
+        continue;
+      }
+      const t0 = performance.now();
+      try {
+        const res = await fetch(item.thumbUrl || item.fullUrl);
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const decoded = await decodeImageBlobToRawAndThumb(blob);
+        if (!decoded) continue;
+        const vec = await embedRawImageWithSharedVision(decoded.rawImg);
+        if (vec) {
+          item.vec = vec;
+          hydratedPhotoVecMap.set(pKey, vec);
+          await persistMediaCacheEntry(pKey, vec);
+          silentIndexingBrake.recordInferenceLatencyMs(performance.now() - t0);
+        }
+      } catch {
+        /* skip unreadable file */
+      }
+    }
+  } finally {
+    silentMediaIndexingRunning = false;
+    bumpSharedVisionIdleDispose(15000);
   }
 }

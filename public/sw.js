@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ghosti-pwa-v20261112-v9';
+const CACHE_NAME = 'ghosti-pwa-v20261112-v10';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -26,7 +26,12 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/__') || url.hostname.includes('huggingface.co')) {
+  if (
+    url.hostname === '127.0.0.1' ||
+    url.hostname === 'localhost' ||
+    url.pathname.startsWith('/__') ||
+    url.hostname.includes('huggingface.co')
+  ) {
     return;
   }
   // Always bypass browser HTTP cache for HTML navigation requests so deploys reflect 100% immediately

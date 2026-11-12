@@ -1612,9 +1612,13 @@ export const DesktopDashboard: React.FC = () => {
                         <div className="relative aspect-video w-full overflow-hidden bg-black">
                           {cardThumbUrl ? (
                             <img
+                              key={cardThumbUrl}
                               src={cardThumbUrl}
                               alt={vid.title}
                               loading="lazy"
+                              onLoad={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = '';
+                              }}
                               onError={(e) => {
                                 (e.currentTarget as HTMLElement).style.display = 'none';
                               }}

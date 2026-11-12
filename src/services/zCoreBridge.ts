@@ -21,6 +21,9 @@ export const LATEST_Z_CORE_VERSION = '2.3.5';
  */
 export function hasActiveGhostiLoginSession(): boolean {
   if (typeof window === 'undefined') return false;
+  if ((window as any).__GHOSTI_ZCORE_BRIDGE__?.isConnected === true) {
+    return true;
+  }
   const params = new URLSearchParams(window.location.search);
   if (params.get('ghostSearchWindow')) {
     return true;
@@ -161,6 +164,11 @@ class ZCoreBridgeManager {
       const prevVersion = this.version;
       this.isConnected = true;
       this.version = data.version || this.version || LATEST_Z_CORE_VERSION;
+      try {
+        sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+      } catch {
+        /* ignore storage error */
+      }
       if (isZCoreOutdated(this.version)) {
         void this.triggerSilentSelfUpdate();
       } else {

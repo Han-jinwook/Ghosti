@@ -155,6 +155,7 @@ import {
   runOnboardingIndexingPipeline,
   searchLocalDocumentFilesAsync,
   searchVideoSceneItemsAsync,
+  startSilentRealMediaVisionIndexing,
   updateFaceClusterRegistry,
 } from '../services/aiEngine';
 import {
@@ -2055,17 +2056,36 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       });
     }
 
-    // [의미 검색 엔진 준비] 데스크톱에서만, 앱이 뜬 뒤 백그라운드로 검색어 인코더(약 166MB, 최초 1회 후 OPFS 캐시)를 불러온다.
-    // 준비 전·실패 시에는 기존 키워드·태그 검색으로 그대로 동작한다. (모바일·데이터 절약 모드는 자동 다운로드하지 않음)
+    // [의미 검색 엔진 준비 & 실사용 PC 미디어 무소음 비전 인덱싱]
+    // 데스크톱에서 Z-코어가 연결되면 내 PC 실제 동영상 키프레임 및 실사진의 768차원 비전 벡터를 조용히 인덱싱·캐싱합니다.
     try {
       const hasVectors = enrichedPhotos.some((p) => p.vec && p.vec.length > 0);
       const isCoarsePointer =
         typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
       const saveData = typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
-      if (hasVectors && !isCoarsePointer && !saveData && typeof window !== 'undefined') {
-        window.setTimeout(() => {
-          void ensureTextQueryEncoderLoaded();
-        }, 4000);
+      if (!isCoarsePointer && !saveData && typeof window !== 'undefined') {
+        if (zCoreBridge.isConnected) {
+          window.setTimeout(() => {
+            void startSilentRealMediaVisionIndexing({
+              photos: get().photos,
+              videos: get().videoSceneItems,
+              onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+                set((state) => ({
+                  videoSceneItems: state.videoSceneItems.map((v) =>
+                    v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+                  ),
+                  matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                    v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+                  ),
+                }));
+              },
+            });
+          }, 900);
+        } else if (hasVectors) {
+          window.setTimeout(() => {
+            void ensureTextQueryEncoderLoaded();
+          }, 4000);
+        }
       }
     } catch {
       /* 키워드 검색으로 계속 동작 */
@@ -2572,7 +2592,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         : searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
       isExplicitPhotoOnlyQuery
         ? Promise.resolve([])
-        : searchVideoSceneItemsAsync(cleanedSearchQuery || query, videoSceneItems),
+        : searchVideoSceneItemsAsync(cleanedSearchQuery || query, videoSceneItems, photosForSearch),
       cleanedSearchQuery
         ? executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
         : Promise.resolve({ results: [], embedMs: 0, searchMs: 0 }),
@@ -2885,7 +2905,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     const [docMatches, videoMatches] = await Promise.all([
       searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments),
-      searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems),
+      searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems, photos),
     ]);
     const vaultPhotoMatches = results.filter((r) => r.photo.isVaultDocument);
     const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'video';
