@@ -1,4 +1,4 @@
-import { getZCoreUrl } from './zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession } from './zCoreBridge';
 
 /**
  * 👻 『귀신같이 (Ghosti)』 [✋ 손보기] 2중 자동 검진 엔진 & 1줄 롤링 플레이스홀더 마스터 모듈
@@ -366,45 +366,52 @@ export async function evaluateDualProactiveCareEngine(options?: {
     };
   }
 
-  // PC 환경: Z-코어 실측 조회
+  // 비로그인 게스트(크롬 게스트 모드 / 시크릿 창)에서 자동 검진은 로컬 127.0.0.1 요청(LNA 팝업 유발)을 생략
+  if (!options?.forceManual && !hasActiveGhostiLoginSession()) {
+    return null;
+  }
+
+  // PC 환경: Z-코어 실측 조회 (로그인 상태이거나 수동 검진 요청 시에만)
   let ramUsedPercent: number | null = null;
   let cpuLoadPercent: number | null = null;
   let bloatwareNames: string[] = [];
   let junkFileCount = 0;
 
   try {
-    const [specRes, osRes, scanRes] = await Promise.all([
-      fetch(getZCoreUrl('/__zcore/pc-spec'), { signal: AbortSignal.timeout(3500) })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-      fetch(getZCoreUrl('/__zcore/os-inspect'), { signal: AbortSignal.timeout(3500) })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-      fetch(getZCoreUrl('/__zcore/cleanup-scan'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'DOWNLOAD_INSTALLERS' }),
-        signal: AbortSignal.timeout(3500),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-    ]);
+    if (hasActiveGhostiLoginSession()) {
+      const [specRes, osRes, scanRes] = await Promise.all([
+        fetch(getZCoreUrl('/__zcore/pc-spec'), { signal: AbortSignal.timeout(3500) })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+        fetch(getZCoreUrl('/__zcore/os-inspect'), { signal: AbortSignal.timeout(3500) })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+        fetch(getZCoreUrl('/__zcore/cleanup-scan'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'DOWNLOAD_INSTALLERS' }),
+          signal: AbortSignal.timeout(3500),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ]);
 
-    if (specRes && typeof specRes.ramUsedPercent === 'number') {
-      ramUsedPercent = specRes.ramUsedPercent;
-    }
-    if (osRes?.spoolerAndSecurity) {
-      if (typeof osRes.spoolerAndSecurity.cpuLoadPercent === 'number') {
-        cpuLoadPercent = osRes.spoolerAndSecurity.cpuLoadPercent;
+      if (specRes && typeof specRes.ramUsedPercent === 'number') {
+        ramUsedPercent = specRes.ramUsedPercent;
       }
-      if (Array.isArray(osRes.spoolerAndSecurity.activeSecurityPlugins)) {
-        bloatwareNames = osRes.spoolerAndSecurity.activeSecurityPlugins
-          .map((p: any) => String(p?.label || p?.keyword || '').trim())
-          .filter(Boolean);
+      if (osRes?.spoolerAndSecurity) {
+        if (typeof osRes.spoolerAndSecurity.cpuLoadPercent === 'number') {
+          cpuLoadPercent = osRes.spoolerAndSecurity.cpuLoadPercent;
+        }
+        if (Array.isArray(osRes.spoolerAndSecurity.activeSecurityPlugins)) {
+          bloatwareNames = osRes.spoolerAndSecurity.activeSecurityPlugins
+            .map((p: any) => String(p?.label || p?.keyword || '').trim())
+            .filter(Boolean);
+        }
       }
-    }
-    if (scanRes && typeof scanRes.moveCount === 'number') {
-      junkFileCount = scanRes.moveCount;
+      if (scanRes && typeof scanRes.moveCount === 'number') {
+        junkFileCount = scanRes.moveCount;
+      }
     }
   } catch {
     /* offline fallback */

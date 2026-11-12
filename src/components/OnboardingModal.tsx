@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { getZCoreUrl } from '../services/zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession } from '../services/zCoreBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 
 // [공문 2053·2056] 초능력 수련장 & 9종 도장깨기 체험관 (지연 로드 — OnboardingModal ↔ 도장깨기 순환 import 방지)
@@ -259,24 +259,26 @@ function loadLocalSnippets(): Record<string, string> {
 export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boolean): Promise<SuperpowerTrialStatus> {
   const localSnippets = loadLocalSnippets();
   const hasLocalSavedSnippets = Boolean(localStorage.getItem(SNIPPETS_STORAGE_KEY));
-  try {
-    const q = new URLSearchParams({ accountId, isSubscribed: String(isSubscribed) });
-    const res = await fetch(getZCoreUrl(`/api/superpower/status?${q.toString()}`), {
-      signal: AbortSignal.timeout(1500),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.ok) {
-        const mergedSnippets = hasLocalSavedSnippets
-          ? { ...DEFAULT_SNIPPETS, ...(data.snippets || {}), ...localSnippets }
-          : { ...DEFAULT_SNIPPETS, ...(data.snippets || {}) };
-        const mergedData = { ...data, snippets: mergedSnippets };
-        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
-        return mergedData as SuperpowerTrialStatus;
+  if (hasActiveGhostiLoginSession()) {
+    try {
+      const q = new URLSearchParams({ accountId, isSubscribed: String(isSubscribed) });
+      const res = await fetch(getZCoreUrl(`/api/superpower/status?${q.toString()}`), {
+        signal: AbortSignal.timeout(1500),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          const mergedSnippets = hasLocalSavedSnippets
+            ? { ...DEFAULT_SNIPPETS, ...(data.snippets || {}), ...localSnippets }
+            : { ...DEFAULT_SNIPPETS, ...(data.snippets || {}) };
+          const mergedData = { ...data, snippets: mergedSnippets };
+          localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
+          return mergedData as SuperpowerTrialStatus;
+        }
       }
+    } catch {
+      // 로컬 폴백
     }
-  } catch {
-    // 로컬 폴백
   }
   const savedRaw = localStorage.getItem(TRIAL_STORAGE_KEY);
   const snippets = localSnippets;

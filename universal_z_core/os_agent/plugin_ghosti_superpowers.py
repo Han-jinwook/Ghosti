@@ -795,15 +795,16 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
 
 _LAST_WEB_ENTER_GIGGLE_TS = 0.0
 _WEB_ENTER_GIGGLE_LOCK = threading.Lock()
+_SEEN_GHOSTI_BROWSER_HWNDS: set[int] = set()
+_GHOSTI_BROWSER_WATCHER_STARTED = False
 
 
 def play_web_enter_giggle_api(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     [👻 웹 처음 진입 시 애기귀신 시그니처 효과음 OS 네이티브 브릿지]
-    - 크롬 게스트 모드 / 시크릿 모드 / 첫 새 탭 접속 시 브라우저 Autoplay Policy(MEI=0)로 인해
-      클릭 전 HTMLAudioElement 자동재생이 차단될 때, 로컬 Z-코어(127.0.0.1:5199)가 동작 중이면
-      sample3_baby_ghost_giggle.wav를 은은한 볼륨으로 즉시 1회 재생합니다.
-    - 1.2초 디바운스로 StrictMode 이중 호출 및 중복 재생을 원천 차단합니다.
+    - 크롬 게스트 모드 / 시크릿 모드 / 첫 새 탭 접속 시 브라우저 Autoplay Policy(MEI=0) 및
+      Chrome Local Network Access(LNA) 권한 팝업 대기 중에도 무클릭 즉시 1회 재생합니다.
+    - 1.2초 디바운스로 브라우저 워처·웹 fetch 동시 호출 및 StrictMode 중복 재생을 원천 차단합니다.
     """
     global _LAST_WEB_ENTER_GIGGLE_TS
     data = params or {}
@@ -820,7 +821,10 @@ def play_web_enter_giggle_api(params: Dict[str, Any] | None = None) -> Dict[str,
     vol = float(data.get("volume") or cfg.get("sound_volume", 0.25) or 0.25)
     target_ratio = max(0.05, min(0.45, 0.56 * vol))
 
+    bundle_dir = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
     cand_paths = [
+        bundle_dir / "baby_ghost_sounds" / "sample3_baby_ghost_giggle.wav",
+        bundle_dir / "assets" / "sample3_baby_ghost_giggle.wav",
         THIS_DIR / "baby_ghost_sounds" / "sample3_baby_ghost_giggle.wav",
         THIS_DIR / "assets" / "sample3_baby_ghost_giggle.wav",
         THIS_DIR.parent / "data" / "baby_ghost_sounds" / "sample3_baby_ghost_giggle.wav",
@@ -844,4 +848,113 @@ def play_web_enter_giggle_api(params: Dict[str, Any] | None = None) -> Dict[str,
 
     threading.Thread(target=_play_giggle, daemon=True).start()
     return {"ok": True, "played": True}
+
+
+def start_ghosti_browser_entry_sound_watcher() -> None:
+    """
+    [👻 OS 레벨 귀신같이 브라우저 창 진입 감지기 — 권한 팝업·자동재생 차단 100% 무관]
+    - 크롬 게스트 모드나 시크릿 모드에서는:
+      1) 브라우저 미디어 자동재생 차단(MEI=0)으로 클릭 전 <audio>.play()가 막히고,
+      2) Chrome 142+ 로컬 네트워크 액세스(LNA) 정책상 비로그인 게스트에는 127.0.0.1 요청을 보내지 않거나 권한 허용 전까지 대기하므로
+         웹 페이지 내부 JS만으로는 권한 허용 없이 무클릭 첫 진입 사운드를 낼 수 없습니다.
+    - 따라서 OS 데몬이 Win32 활성 브라우저 창(chrome/msedge/whale/brave/firefox)의 타이틀을 가볍게 감시하여,
+      해당 창에서 귀신같이 공식 웹 타이틀('귀신같이(Ghosti) — 귀신비서')이 처음 열릴 때
+      브라우저 권한 팝업 없이도 즉시 아기귀신 효과음을 딱 1회 재생합니다! (Ctrl+0 소형 팝업창 제외, 이후 로고 클릭 무음 유지)
+    """
+    global _GHOSTI_BROWSER_WATCHER_STARTED
+    if os.name != "nt":
+        return
+    with _WEB_ENTER_GIGGLE_LOCK:
+        if _GHOSTI_BROWSER_WATCHER_STARTED:
+            return
+        _GHOSTI_BROWSER_WATCHER_STARTED = True
+
+    def _collect_ghosti_browser_windows(seed_only: bool = False) -> None:
+        import ctypes
+        from ctypes import wintypes
+
+        u32 = ctypes.windll.user32
+        k32 = ctypes.windll.kernel32
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        BROWSER_EXES = ("chrome.exe", "msedge.exe", "whale.exe", "brave.exe", "firefox.exe", "opera.exe")
+        SIGNATURE_MARKERS = (
+            "귀신같이(ghosti) —",
+            "귀신같이 (ghosti) —",
+            "ghosti.sundreamer.app",
+        )
+
+        alive_hwnds: set[int] = set()
+        newly_entered = False
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def _enum_cb(hwnd: int, _lparam: int) -> bool:
+            nonlocal newly_entered
+            hw = wintypes.HWND(hwnd)
+            if not u32.IsWindowVisible(hw):
+                return True
+            tlen = u32.GetWindowTextLengthW(hw)
+            if tlen <= 0 or tlen > 512:
+                return True
+            buf = ctypes.create_unicode_buffer(tlen + 2)
+            u32.GetWindowTextW(hw, buf, tlen + 1)
+            title = (buf.value or "").strip()
+            if not title:
+                return True
+            t_low = title.lower()
+            if not any(m in t_low for m in SIGNATURE_MARKERS):
+                return True
+
+            # Ctrl+0 귀신검색 소형/중형 독립 팝업창(폭 <= 1020, 높이 <= 700)은 자체 소환음이 있으므로 제외
+            rect = wintypes.RECT()
+            if u32.GetWindowRect(hw, ctypes.byref(rect)):
+                w = rect.right - rect.left
+                h = rect.bottom - rect.top
+                if 0 < w <= 1020 and 0 < h <= 700:
+                    alive_hwnds.add(int(hwnd))
+                    _SEEN_GHOSTI_BROWSER_HWNDS.add(int(hwnd))
+                    return True
+
+            pid = wintypes.DWORD(0)
+            u32.GetWindowThreadProcessId(hw, ctypes.byref(pid))
+            exe_name = ""
+            if pid.value:
+                hproc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+                if hproc:
+                    try:
+                        pbuf = ctypes.create_unicode_buffer(520)
+                        psize = wintypes.DWORD(520)
+                        if k32.QueryFullProcessImageNameW(hproc, 0, pbuf, ctypes.byref(psize)):
+                            exe_name = os.path.basename(pbuf.value).lower()
+                    finally:
+                        k32.CloseHandle(hproc)
+            if exe_name and exe_name not in BROWSER_EXES:
+                return True
+
+            alive_hwnds.add(int(hwnd))
+            if int(hwnd) not in _SEEN_GHOSTI_BROWSER_HWNDS:
+                _SEEN_GHOSTI_BROWSER_HWNDS.add(int(hwnd))
+                if not seed_only:
+                    newly_entered = True
+            return True
+
+        try:
+            u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
+            # 닫히거나 다른 사이트로 이동한 창 HWND는 목록에서 정리하여 재방문 시 다시 1회 울리도록 보장
+            stale = [h for h in list(_SEEN_GHOSTI_BROWSER_HWNDS) if h not in alive_hwnds]
+            for h in stale:
+                _SEEN_GHOSTI_BROWSER_HWNDS.discard(h)
+            if newly_entered and not seed_only:
+                play_web_enter_giggle_api({"source": "os_browser_watcher"})
+        except Exception:
+            pass
+
+    def _watcher_loop() -> None:
+        # 데몬 시작/재기동 시점에 이미 열려 있는 기존 탭에서는 갑자기 소리가 울리지 않도록 초기 시드 등록
+        _collect_ghosti_browser_windows(seed_only=True)
+        while True:
+            time.sleep(0.35)
+            _collect_ghosti_browser_windows(seed_only=False)
+
+    threading.Thread(target=_watcher_loop, daemon=True).start()
 

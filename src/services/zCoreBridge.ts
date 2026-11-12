@@ -12,7 +12,35 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 exe 버전과 반드시 일치시킬 것) */
-export const LATEST_Z_CORE_VERSION = '2.3.4';
+export const LATEST_Z_CORE_VERSION = '2.3.5';
+
+/**
+ * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
+ * - 비로그인 게스트 상태에서는 백그라운드에서 `http://127.0.0.1:5199`로 요청을 보내지 않아야
+ *   Chrome 142+ 로컬 네트워크 액세스(LNA: "이 기기의 다른 앱 및 서비스에 액세스") 권한 팝업이 뜨지 않습니다!
+ */
+export function hasActiveGhostiLoginSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
+    return true;
+  }
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('ghostSearchWindow')) {
+    return true;
+  }
+  try {
+    return Boolean(
+      localStorage.getItem('merlin_session_token') ||
+        localStorage.getItem('ghosti_prelaunch_verified_email') ||
+        localStorage.getItem('userEmail')
+    );
+  } catch {
+    return false;
+  }
+}
 
 /** 연결된 Z-코어가 최신 배포 버전보다 낮은지 판정 (버전 정보가 없으면 구버전으로 간주) */
 export function isZCoreOutdated(version: string | null | undefined): boolean {
@@ -117,7 +145,16 @@ class ZCoreBridgeManager {
     }
   }
 
-  public async checkHealth(): Promise<boolean> {
+  public async checkHealth(forceProbe: boolean = false): Promise<boolean> {
+    if (!forceProbe && !hasActiveGhostiLoginSession()) {
+      if (this.isConnected) {
+        this.isConnected = false;
+        this.notify();
+        window.dispatchEvent(new CustomEvent('zCoreDisconnected'));
+      }
+      return false;
+    }
+
     const markConnected = (data: Partial<ZCoreHealthResponse>) => {
       this.consecutiveFailures = 0;
       const wasConnected = this.isConnected;
@@ -260,7 +297,7 @@ export function requestConnectMyComputer(): void {
   }
 
   // 이미 Z-코어가 실행 중이면 다운로드 안내 대신 즉시 헬스체크 후 연결 완료 처리
-  void zCoreBridge.checkHealth().then((alive) => {
+  void zCoreBridge.checkHealth(true).then((alive) => {
     if (alive) {
       window.dispatchEvent(new CustomEvent('zCoreConnected', { detail: { ok: true } }));
       return;
@@ -312,7 +349,7 @@ export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
       return true;
     }
     // 아직 헬스체크 전이거나 꺼져 있으면 0.1초 즉시 확인 후 미설치/미실행일 때만 조용히 안내
-    void zCoreBridge.checkHealth().then((ok) => {
+    void zCoreBridge.checkHealth(true).then((ok) => {
       if (!ok) {
         window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
       }

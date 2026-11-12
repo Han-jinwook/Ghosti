@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.4"
+CORE_VERSION = "2.3.5"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1222,6 +1222,10 @@ def main() -> None:
     def _start_auxiliary_watchers() -> None:
         try:
             plugin_ghosti_superpowers.ensure_superpower_daemon_running()
+        except Exception:
+            pass
+        try:
+            plugin_ghosti_superpowers.start_ghosti_browser_entry_sound_watcher()
         except Exception:
             pass
         try:

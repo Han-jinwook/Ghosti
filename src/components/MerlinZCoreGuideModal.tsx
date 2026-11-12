@@ -126,7 +126,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         typeof sessionStorage !== 'undefined' &&
         sessionStorage.getItem('ghosti_one_stop_agreed') === '1';
       setStep(agreedBefore && !isMobileEnv ? 'waiting_engine' : 'intro');
-      void zCoreBridge.checkHealth().then((alive) => {
+      void zCoreBridge.checkHealth(true).then((alive) => {
         if (alive) {
           setIsConnected(true);
           setVersion(zCoreBridge.version);
@@ -165,7 +165,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     });
 
     const pollId = setInterval(() => {
-      void zCoreBridge.checkHealth();
+      void zCoreBridge.checkHealth(true);
     }, 1000);
 
     return () => {
@@ -288,7 +288,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     setManualCheckHint('🔍 Z-코어 실행 신호를 확인하고 있습니다 (최초 실행 시 압축 해제에 4~6초가 걸릴 수 있습니다)...');
     let ok = false;
     for (let attempt = 0; attempt < 9; attempt++) {
-      ok = await zCoreBridge.checkHealth();
+      ok = await zCoreBridge.checkHealth(true);
       if (ok) break;
       await new Promise((r) => window.setTimeout(r, 900));
     }

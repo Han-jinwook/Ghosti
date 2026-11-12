@@ -25,6 +25,7 @@ import {
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 import { normalizeSpokenKoreanQuery } from '../services/voiceSearchAndAiBatonEngine';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { hasActiveGhostiLoginSession } from '../services/zCoreBridge';
 import {
   PC_MONSTER_ROLLING_PLACEHOLDERS_10,
   MOBILE_CLEAN_ROLLING_PLACEHOLDERS_10,
@@ -230,6 +231,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     // [Stage 1: 최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩 (한 턴 연타 금지 · 호흡 분리)]
     if (
       !isMobileOrStore &&
+      hasActiveGhostiLoginSession() &&
       !turn.nextState.awaitingNickname &&
       !turn.nextState.consents?.bankSecurityAutoSleep &&
       !turn.nextState.bankSleepIntroShownAt
@@ -269,6 +271,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     } else if (
       // [Stage 2: 호흡 분리 후 다음번 진입 시 — 다운로드 폴더 압축파일 최소 3건 이상(>=3) 누적 시 숨은 초능력 & 압축 풀기 안내]
       !isMobileOrStore &&
+      hasActiveGhostiLoginSession() &&
       !turn.nextState.awaitingNickname &&
       (turn.nextState.consents?.bankSecurityAutoSleep || turn.nextState.bankSleepIntroShownAt) &&
       !turn.nextState.hiddenSuperpowersShown

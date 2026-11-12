@@ -146,6 +146,13 @@ const GhostiHubGlobalModals: React.FC = () => {
         nickname: user.nickname,
         hubToken: token,
       });
+
+      // 로그인 확인 시점에 즉시 로컬 Z-코어 헬스체크 및 실물 파일 동기화 수행
+      void zCoreBridge.checkHealth(true).then((alive) => {
+        if (alive) {
+          void useSaySeeStore.getState().initApp(true);
+        }
+      });
     } else if (!isLoggedIn) {
       // 로그아웃(로그인 → 게스트 전환) 시에만 귀신같이 Supabase 단기 토큰 폐기 (최초 세션 복원 대기 중 오삭제 방지)
       if (wasLoggedInRef.current) clearGhostiSupabaseSession();
@@ -231,7 +238,7 @@ const GhostiHubGlobalModals: React.FC = () => {
                 window.innerWidth < 860);
             if (hasPendingZCoreConnect && !isMobileEnv) {
               void (async () => {
-                const ok = zCoreBridge.isConnected || (await zCoreBridge.checkHealth());
+                const ok = zCoreBridge.isConnected || (await zCoreBridge.checkHealth(true));
                 if (ok) {
                   void useSaySeeStore.getState().initApp(true);
                   window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));

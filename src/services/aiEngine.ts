@@ -19,7 +19,7 @@ import {
   load_audio,
 } from '@huggingface/transformers';
 import { cacheStats, opfsCache, opfsSupported, requestPersist, resetCacheStats, storageInfo } from './opfsCache';
-import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
+import { getZCoreUrl, zCoreBridge, hasActiveGhostiLoginSession } from './zCoreBridge';
 import { normalizeSpokenKoreanQuery } from './voiceSearchAndAiBatonEngine';
 import { silentIndexingBrake } from './silentIndexingBrake';
 import type {
@@ -233,8 +233,9 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
 
 export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
   try {
+    const canProbeLocal = hasActiveGhostiLoginSession();
     const [zRes, sRes] = await Promise.allSettled([
-      fetch(getZCoreUrl('/__docs/list')),
+      canProbeLocal ? fetch(getZCoreUrl('/__docs/list')) : Promise.reject(new Error('guest_no_local_probe')),
       fetch('/poc/results/docs_semantic_index.json'),
     ]);
 
@@ -551,7 +552,7 @@ export function cleanVideoTimestampLabel(ts: string | undefined | null): string 
 export function resolveVideoCardThumbUrl(vid: VideoSceneItem): string {
   if (vid.thumbUrl) return vid.thumbUrl;
   const rawUrl = vid.videoUrl || '';
-  if (rawUrl.includes('127.0.0.1:5199') && vid.videoFileName) {
+  if (hasActiveGhostiLoginSession() && rawUrl.includes('127.0.0.1:5199') && vid.videoFileName) {
     const seekSec = Math.max(1, Math.round(vid.matchedSeekSec || Math.min((vid.durationSec || 6) * 0.2, 3)));
     return getZCoreUrl(`/__videos/thumb?p=${encodeURIComponent(vid.videoFileName)}&t=${seekSec}`);
   }
@@ -842,6 +843,9 @@ export async function probeBrowserVideoDurationSec(
   timeoutMs = 1100
 ): Promise<number | null> {
   if (typeof document === 'undefined' || !videoUrl) return null;
+  if (videoUrl.includes('127.0.0.1:') && !hasActiveGhostiLoginSession()) {
+    return null;
+  }
   if (probedDurationMemoryCache.has(videoUrl)) {
     return probedDurationMemoryCache.get(videoUrl)!;
   }
@@ -905,9 +909,10 @@ export async function probeBrowserVideoDurationSec(
 
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
+    const canProbeLocal = hasActiveGhostiLoginSession();
     const [sRes, zRes] = await Promise.allSettled([
       fetch('/poc/results/video_timeline_index.json'),
-      fetch(getZCoreUrl('/__videos/list')),
+      canProbeLocal ? fetch(getZCoreUrl('/__videos/list')) : Promise.reject(new Error('guest_no_local_probe')),
     ]);
     const merged = new Map<string, VideoSceneItem>();
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
@@ -945,7 +950,9 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
             matchedTimestamp: cleanVideoTimestampLabel(v.matchedTimestamp),
             thumbUrl: normalizeSampleVideoFrameUrl(v.thumbUrl),
             timelineFrames: enrichedFrames,
-            videoUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`),
+            videoUrl: canProbeLocal
+              ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`)
+              : v.videoUrl || '',
           });
         }
       }
@@ -954,7 +961,9 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
       if (!merged.has(showcaseVid.videoFileName)) {
         merged.set(showcaseVid.videoFileName, {
           ...showcaseVid,
-          videoUrl: getZCoreUrl(`/__photos/file?p=${encodeURIComponent(showcaseVid.videoFileName)}`),
+          videoUrl: canProbeLocal
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(showcaseVid.videoFileName)}`)
+            : showcaseVid.videoUrl || '',
         });
       }
     }
@@ -1046,7 +1055,7 @@ export async function fetchAutonomousFaceClusters(): Promise<{
 }> {
   try {
     const res = await fetch('/poc/results/face_clusters_index.json').catch(() =>
-      fetch(getZCoreUrl('/__faces/index'))
+      hasActiveGhostiLoginSession() ? fetch(getZCoreUrl('/__faces/index')) : Promise.reject(new Error('guest'))
     );
     if (!res.ok) return { latestCorpusYear: 2026, clusters: [] };
     const json = await res.json();
@@ -1978,10 +1987,12 @@ export async function loadInitialPhotoDataset(): Promise<{
   const auditByPhoto = new Map<string, PhysicalAuditRecord>();
 
   try {
-    const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch(getZCoreUrl('/__photos/list')));
-    const json = await res.json();
-    fileList = json.files ?? [];
-    quarantinedList = json.quarantined ?? [];
+    if (hasActiveGhostiLoginSession()) {
+      const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch(getZCoreUrl('/__photos/list')));
+      const json = await res.json();
+      fileList = json.files ?? [];
+      quarantinedList = json.quarantined ?? [];
+    }
   } catch {
     /* offline fallback */
   }

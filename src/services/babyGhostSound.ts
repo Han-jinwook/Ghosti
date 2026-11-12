@@ -4,6 +4,8 @@
  * - 진입 후 상단/사이드바 로고를 클릭하거나 메뉴를 눌러도 중복 효과음이 절대 나지 않음
  */
 
+import { hasActiveGhostiLoginSession } from './zCoreBridge';
+
 const GIGGLE_SOUND_URL = '/sounds/baby_ghost/sample3_baby_ghost_giggle.wav';
 const Z_CORE_GIGGLE_URL = 'http://127.0.0.1:5199/__merlin/play-enter-giggle';
 
@@ -30,6 +32,9 @@ function ensurePreloaded(): void {
 
 async function tryPlayViaLocalZCore(): Promise<boolean> {
   if (typeof window === 'undefined' || typeof fetch === 'undefined') return false;
+  // 비로그인(크롬 게스트 모드 / 시크릿 창)에서는 127.0.0.1 요청 시 Chrome LNA 권한 팝업이 뜨므로
+  // 웹 fetch를 생략합니다. (설치된 PC에서는 OS 레벨 브라우저 진입 감지기가 무팝업으로 즉시 1회 재생합니다!)
+  if (!hasActiveGhostiLoginSession()) return false;
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timeoutId = controller ? window.setTimeout(() => controller.abort(), 650) : null;
   try {
