@@ -271,50 +271,68 @@ const INTERACTIVE_SCENARIOS = {
   video: [
     {
       query: '아기 첫 걸음마',
-      file: 'VID_20250914_거실촬영.mp4 (14분 20초)',
+      file: 'VID_20250914_가족산책.mp4 (14분 20초)',
       timestamp: '03분 12초',
-      transcript: '“우와~ 우리 아기 혼자 두 발로 걷는다! 여보 빨리 봐봐!”',
-      sceneDesc: '거실 매트 위에서 아기가 소파를 잡고 일어서서 세 걸음 내딛는 순간 포착',
+      progressPct: 24,
+      thumbUrl: '/sample_photos_301/IMG_20250515_1053.jpg',
+      transcript: '“우와~ 우리 아기 두 발로 아장아장 걷는다! 여보 빨리 찍어!”',
+      sceneDesc: '잔디밭에서 손을 잡고 아장아장 걸음마를 떼는 하이라이트 장면 포착',
       latency: '0.008초',
     },
     {
-      query: '제주도 갈치조림',
+      query: '여행 맛집 고기상',
       file: 'VID_20250502_가족여행.mp4 (08분 45초)',
       timestamp: '05분 41초',
-      transcript: '“이 집 갈치조림 양념이 진짜 대박이네, 밥 두 공기 각이다!”',
-      sceneDesc: '식당 테이블 위 보글보글 끓는 통갈치조림 클로즈업 장면 및 식당 간판 인식',
+      progressPct: 65,
+      thumbUrl: '/sample_photos_301/TRV_20250720_1139.jpg',
+      transcript: '“이 집 플레이팅이랑 육즙이 진짜 대박이네, 인생 맛집 인정!”',
+      sceneDesc: '식당 테이블 위 메인 요리 클로즈업 구간 및 음식 장면 자동 인식',
       latency: '0.011초',
     },
     {
-      query: '생일 케이크 촛불',
-      file: 'MOV_20251224_파티.mov (06분 10초)',
+      query: '노을 바다 가족사진',
+      file: 'MOV_20250720_여름휴가.mov (06분 10초)',
       timestamp: '02분 19초',
-      transcript: '“생일 축하합니다~ 자 이제 소원 빌고 후 불어!”',
-      sceneDesc: '초코 케이크 위 숫자 초를 온 가족이 박수치며 부는 하이라이트 구간',
+      progressPct: 38,
+      thumbUrl: '/sample_photos_301/TRV_20250720_1136.jpg',
+      transcript: '“해 질 녘 파도 색깔 너무 예쁘다~ 다 같이 바다 보면서 하나 둘 셋!”',
+      sceneDesc: '황금빛 석양과 에메랄드 파도가 만나는 해변 하이라이트 구간',
       latency: '0.007초',
     },
   ],
   doc: [
     {
       query: '지체상금 0.15%',
-      file: 'D:\\업무문서\\2026_물품공급_표준계약서_최종수정3.pdf (24페이지)',
-      location: '제14조 (지체상금 및 면책) — 9페이지 12번째 줄',
-      previewSnippet: '“을이 납품기한 내에 물품을 납품하지 못할 때에는 지체일수 매 1일당 계약금액의 0.15%(천분의 1.5)에 해당하는 지체상금을...”',
-      latency: '0.006초 (파일 안 열고 즉시 포착)',
+      docType: 'PDF 계약서',
+      badgeColor: '#EF4444',
+      file: 'D:\\업무문서\\2026_물품공급_표준계약서_최종수정3.pdf (24p)',
+      location: '제14조 (지체상금) · 9페이지 12행',
+      highlightKey: '0.15%',
+      previewSnippet: '“을이 납품기한 내에 물품을 납품하지 못할 때에는 매 1일당 계약금액의 [0.15%] 지체상금을...”',
+      latency: '0.006초 무열람 투시',
+      thumbUrl: '',
     },
     {
-      query: '부가세 환급 내역',
+      query: '부가세 환급 428만',
+      docType: 'XLSX 정산표',
+      badgeColor: '#10B981',
       file: 'D:\\세무자료\\2026_상반기_매입매출_정산_진짜최종.xlsx (시트 4개)',
-      location: '[2분기_세금계산서] 시트 — E28 셀',
-      previewSnippet: '“공급가액 합계: 42,800,000원 | 부가세 환급 예정액: 4,280,000원 (홈택스 전자세금계산서 대조 완료)”',
-      latency: '0.005초 (엑셀 실행 없이 셀 값 직독)',
+      location: '[2분기_세금계산서] 시트 · E28 셀',
+      highlightKey: '4,280,000원',
+      previewSnippet: '“공급가액 합계: 42,800,000원 | 부가세 환급 예정액: [4,280,000원] (대조 완료)”',
+      latency: '0.005초 셀 직독',
+      thumbUrl: '',
     },
     {
-      query: '사업자등록번호',
-      file: 'D:\\스캔보관함\\scan_20260311_004.jpg (스캔 이미지)',
-      location: '온디바이스 OCR 판독 — 상단 3번째 줄',
-      previewSnippet: '“상호: (주)썬드림스튜디오 | 등록번호: 123-86-XXXXX | 개업연월일: 2026년...”',
-      latency: '0.012초 (이미지 속 글자 즉시 추출)',
+      query: '영수증 사업자번호',
+      docType: 'IMG 스캔본',
+      badgeColor: '#F59E0B',
+      file: 'D:\\영수증보관함\\IMG_20250815_1008.jpg (실물 영수증 촬영본)',
+      location: '온디바이스 OCR · 상단 2행 & 결제금액',
+      highlightKey: '123-86-49201',
+      previewSnippet: '“청라 한우·삼겹살 명가 | 사업자: [123-86-49201] | 합계 결제금액: 128,000원”',
+      latency: '0.012초 이미지 글자 추출',
+      thumbUrl: '/sample_photos_301/IMG_20250815_1008.jpg',
     },
   ],
 };
@@ -333,7 +351,9 @@ interface SafeOnboardingChatMsg {
 const WEAPON_META: Record<
   OnboardingWeaponTab,
   {
+    icon: string;
     chipLabel: string;
+    chipSub: string;
     keywordBadge: string;
     userBubble: string;
     secretaryReply: string;
@@ -343,41 +363,49 @@ const WEAPON_META: Record<
   }
 > = {
   video: {
-    chipLabel: '🎬 영상 속 대사 1초 점프',
+    icon: '🎬',
+    chipLabel: '영상 장면 1초 점프',
+    chipSub: '안 틀어보고 대사·장면 소환',
     keywordBadge: '#귀신검색',
-    userBubble: '동영상 수백 개 중에 아기 첫 걸음마 장면이 몇 분 몇 초에 나오는지 찾아줘!',
+    userBubble: '동영상 수백 개 중에 아기 첫 걸음마 장면만 바로 찾아줘!',
     secretaryReply:
-      '영상이 수백 개라도 일일이 틀어보실 필요 없어요! 오른쪽 화면에서 찾고 싶은 장면 키워드(“아기 첫 걸음마”, “제주도 갈치조림”)를 눌러보세요. 0.008초 만에 해당 초(Sec) 구간으로 바로 점프해 드릴게요!',
-    stageTitle: '🎬 동영상 안 틀어보고 대사·장면 1초 타임스탬프 점프',
+      '일일이 돌려보실 필요 없어요! 👻\n오른쪽에서 키워드만 톡 누르면 0.008초 만에 그 장면(03분 12초)으로 점프합니다!',
+    stageTitle: '🎬 동영상 안 틀어보고 원하는 장면 1초 점프',
     stageBadge: '무기 1 · #귀신검색 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc552_1793284451.mp4',
   },
   doc: {
-    chipLabel: '📊 엑셀·문서 안 열고 찾기',
+    icon: '📊',
+    chipLabel: '엑셀·문서 무열람 투시',
+    chipSub: '더블클릭 없이 표·영수증 직독',
     keywordBadge: '#귀신검색',
-    userBubble: '최종_진짜최종.xlsx 파일 안 열고 표 안의 숫자나 계약서 조항 바로 찾아줘!',
+    userBubble: '최종_진짜최종 엑셀이랑 영수증 사진 안 열고 내용 바로 찾아줘!',
     secretaryReply:
-      '엑셀이나 PDF 파일을 더블클릭해서 열지 마세요! 오른쪽 화면에서 찾을 단어를 누르면 닫힌 파일 내부의 몇 번째 시트, 몇 번 셀인지 0.005초 만에 투시해서 바로 보여드립니다!',
-    stageTitle: '📊 엑셀·PDF·스캔 서류 더블클릭 없이 본문 0.01초 투시',
+      '파일 더블클릭 금지! 🔍\n닫힌 PDF·엑셀 셀 숫자부터 찍어둔 영수증 글자까지 0.005초 만에 투시해 드려요!',
+    stageTitle: '📊 닫힌 엑셀·계약서·영수증 사진 0.01초 X-Ray 투시',
     stageBadge: '무기 2 · #귀신검색 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc555_1793284492.mp4',
   },
   clean: {
-    chipLabel: '🧹 눈 뜬 사진 1장만 Pick',
+    icon: '🧹',
+    chipLabel: '인생샷 1장 Pick 청소',
+    chipSub: '흔들린 연사 격리 · 보안앱 수면',
     keywordBadge: '#귀신비서',
-    userBubble: '비슷한 연사 사진 중에 눈 뜬 베스트 1장만 남기고, 안 쓰는 은행 보안프로그램은 조용히 재워줘!',
+    userBubble: '비슷한 연사 사진 중 잘 나온 1장만 남기고 무거운 보안앱 좀 재워줘!',
     secretaryReply:
-      '눈 감고 흔들린 연사 사진은 걸러서 가장 잘 나온 베스트 1장만 남겨드리고(나머지는 Windows 정식 휴지통 안전 격리), 안 쓰는 은행 보안프로그램은 삭제하지 않고 평소엔 조용히 재워두었다가 은행 갈 때만 자동 기상시켜 드려요!',
-    stageTitle: '🧹 눈 뜬 인생샷 1장 Pick & 보안모듈 수면 관리 (1초 복원)',
+      '선명한 인생샷 1장만 남기고 흔들린 5장은 안전 휴지통으로 쏙! ✨\n은행 보안모듈도 삭제 대신 조용히 재워드려요!',
+    stageTitle: '🧹 눈 뜬 인생샷 1장 Pick & 보안모듈 수면 관리',
     stageBadge: '무기 3 · #귀신비서 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc558_261106.mp4',
   },
   superpower: {
-    chipLabel: '⌨️ 영타 오타 1초 한글 둔갑',
+    icon: '⚡',
+    chipLabel: '영타 오타 자동 성형',
+    chipSub: '무버튼 0.2ms 한영 · [1] 줄바꿈',
     keywordBadge: '#귀신창',
     userBubble: 'dkssudgktpdy 영타 오타랑 PDF 깨진 줄바꿈, 백스페이스 안 누르고 고쳐줘!',
     secretaryReply:
-      '영타·띄어쓰기는 버튼 누를 필요 없이 스페이스바만 누르면 0.2초 만에 무버튼 자동으로 바꿔드리고, 평소 복붙 시에는 원문 서식·줄바꿈을 100% 그대로 지켜드려요! 깨진 줄바꿈·지저분한 서식은 하단 [1] 🧹서식·줄바꿈(수동)부터 [2] 파일·라벨러(PDF) ~ [6] 창고정 미니 버튼으로 1초 해결!',
+      '영타는 스페이스바만 누르면 0.2초 무버튼 자동 변환! ⚡\n평소 복붙은 원문 100% 보존, 깨진 줄바꿈은 하단 [1]~[6] 버튼으로 1초 해결!',
     stageTitle: '⌨️ dkssud 영타 0.2초 무버튼 자동(Auto) 성형 & [1] 서식·줄바꿈 수동 다림질',
     stageBadge: '무기 4 · #귀신창 v1.4 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_dkssudgktp_261110.mp4',
@@ -413,7 +441,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     {
       id: 'init-welcome',
       role: 'secretary',
-      text: '반가워요! 저는 컴퓨터·폰 손보기부터 파일 찾기까지 평생 무료로 챙겨드리는 전속 『👻 귀신비서』예요!\n예고편 영상에서 보신 마법 중 어떤 걸 제일 먼저 직접 눌러보고 싶으세요? 아래 4가지 무료 무기 칩 중 하나를 톡 눌러보세요!',
+      text: '반가워요! 전속 『👻 아기귀신 비서』가 대기 중이에요 ✨\n아래 4가지 무료 초능력 카드를 톡 누르면 오른쪽 화면에서 바로 체험할 수 있어요!',
       timestamp: nowTimeStr(),
     },
   ]);
@@ -773,20 +801,25 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       {/* 1. 최상단 마스터 GNB */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#070B11]/85 border-b border-white/10 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between gap-4">
-          {/* 좌측 브랜드 로고 & 권위 배지 */}
+          {/* 좌측 브랜드 로고 (아기귀신 심볼 + 캘리그라피 워드마크) & 권위 배지 */}
           <div className="flex items-center gap-3">
             <div
               data-ghosti-brand-logo="true"
-              className="flex items-center gap-2 cursor-pointer"
+              className="flex items-center gap-2.5 cursor-pointer group"
               onClick={() => {
                 silencePendingEnterGiggleOnLogoClick();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >
               <img
-                src="/gwisinkachi_3d_wordmark_light.png"
-                alt="귀신같이 3D 로고"
-                className="h-10 w-auto object-contain drop-shadow-[0_2px_12px_rgba(0,240,181,0.4)]"
+                src="/gwisinkachi_app_icon_512.png"
+                alt="대표 아기귀신 마스코트"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover shadow-md ring-2 ring-[#00F0B5]/60 group-hover:scale-105 transition-transform"
+              />
+              <img
+                src="/gwisinkachi_wordmark_dark_ink.png"
+                alt="귀신같이 캘리그라피 로고"
+                className="h-7 sm:h-8 w-auto object-contain"
               />
             </div>
             <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-[#00F0B5] text-[11px] font-bold whitespace-nowrap shrink-0">
@@ -905,59 +938,216 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       </header>
 
       {/* =====================================================================
-          2. 메인 온보딩 섹션: 좌측 친근한 『👻 귀신비서 채팅창 (5)』 ⇄ 우측 『단일 인터랙티브 스테이지 (7)』
+          2. 메인 온보딩 섹션: 대표 아기귀신 비주얼 히어로 + 좌측 『👻 귀신비서(5)』 ⇄ 우측 『단일 스테이지(7)』
          ===================================================================== */}
-      <section className="relative pt-8 pb-16 px-4 sm:px-6 max-w-7xl mx-auto space-y-8">
-        {/* 상단 헤드라인 */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-black mb-3">
-              <span className="animate-pulse">●</span>
-              <span>✓ 개인·기업 PC 기본 기능(내 기기 찾기·손보기·귀신창) 영구 무료 (단속 걱정 ZERO)</span>
+      <section className="relative pt-6 pb-16 px-4 sm:px-6 max-w-7xl mx-auto space-y-7">
+        {/* 🎨 대표 아기귀신 마스코트 & 3D·캘리 타이포그래피 메인 비주얼 쇼케이스 배너 */}
+        <div
+          data-keep-dark="true"
+          style={{
+            background: 'linear-gradient(135deg, #060D1A 0%, #0A242C 52%, #071222 100%)',
+          }}
+          className="relative rounded-3xl border-2 border-teal-400/35 p-6 sm:p-8 lg:p-9 shadow-[0_24px_65px_rgba(6,13,26,0.28)] overflow-hidden"
+        >
+          {/* 배경 오로라 글로우 */}
+          <div
+            data-keep-dark="true"
+            className="pointer-events-none absolute -top-24 -right-16 w-80 h-80 rounded-full bg-[#00F0B5]/20 blur-[90px]"
+          />
+          <div
+            data-keep-dark="true"
+            className="pointer-events-none absolute -bottom-24 -left-16 w-72 h-72 rounded-full bg-amber-400/10 blur-[80px]"
+          />
+
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+            {/* 좌측 (7칸): 임팩트 타이포그래피 & 한눈에 보는 3대 초능력 스탯 카드 */}
+            <div className="lg:col-span-7 space-y-4">
+              <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-xs font-black">
+                <span className="animate-pulse">●</span>
+                <span>✓ 개인·기업 PC 기본 기능 영구 무료 · 외부 서버 전송 0 Byte</span>
+              </div>
+
+              {/* 붓글씨 캘리그라피 + 3D 볼륨 타이포그래피 콤비네이션 */}
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <img
+                    src="/gwisinkachi_wordmark_white_ink.png"
+                    alt="귀신같이 붓글씨 타이포그래피"
+                    className="h-11 sm:h-14 lg:h-16 w-auto object-contain drop-shadow-[0_4px_18px_rgba(0,240,181,0.35)]"
+                  />
+                  <span
+                    data-keep-dark="true"
+                    style={{ backgroundColor: 'rgba(0, 240, 181, 0.16)', color: '#5EEAD4' }}
+                    className="px-3 py-1 rounded-xl border border-[#00F0B5]/40 text-xs sm:text-sm font-black tracking-tight"
+                  >
+                    온디바이스 AI 비서
+                  </span>
+                </div>
+
+                <h1 className="text-2xl sm:text-4xl lg:text-[40px] font-black tracking-tight leading-[1.22] text-white break-keep">
+                  파일 안 열고{' '}
+                  <span style={{ color: '#00F0B5' }} className="underline decoration-[#00F0B5]/50 underline-offset-4">
+                    0.1초 투시!
+                  </span>
+                  <br className="hidden sm:inline" />{' '}
+                  전속 아기귀신과 지금 눌러보세요
+                </h1>
+              </div>
+
+              <p className="text-xs sm:text-sm text-zinc-300 font-semibold break-keep max-w-xl">
+                긴 설명 읽을 필요 없이 아래 <b style={{ color: '#00F0B5' }}>3가지 초능력 카드</b>나 대화창 버튼을 톡 누르면 바로 아래 화면에서 마법이 작동합니다.
+              </p>
+
+              {/* 한눈에 쏙 들어오는 3대 초능력 빅 타이포 스탯 카드 */}
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3 pt-1">
+                {[
+                  {
+                    tab: 'video' as OnboardingWeaponTab,
+                    stat: '0.01초',
+                    title: '#귀신검색',
+                    sub: '영상·문서 무열람 투시',
+                    accent: '#00F0B5',
+                  },
+                  {
+                    tab: 'clean' as OnboardingWeaponTab,
+                    stat: '1초 Pick',
+                    title: '#귀신비서',
+                    sub: '인생샷 선별·보안앱 수면',
+                    accent: '#34D399',
+                  },
+                  {
+                    tab: 'superpower' as OnboardingWeaponTab,
+                    stat: '0.2ms',
+                    title: '#귀신창',
+                    sub: '무버튼 영타 자동성형',
+                    accent: '#FBBF24',
+                  },
+                ].map((card) => {
+                  const active =
+                    card.tab === 'video'
+                      ? demoTab === 'video' || demoTab === 'doc'
+                      : demoTab === card.tab;
+                  return (
+                    <button
+                      key={card.title}
+                      type="button"
+                      onClick={() => handleSelectWeaponChip(card.tab)}
+                      data-keep-dark="true"
+                      style={{
+                        backgroundColor: active ? 'rgba(0, 240, 181, 0.16)' : 'rgba(255, 255, 255, 0.06)',
+                        borderColor: active ? card.accent : 'rgba(255, 255, 255, 0.14)',
+                      }}
+                      className="p-3 rounded-2xl border text-left transition-all hover:scale-[1.02] cursor-pointer group"
+                    >
+                      <div
+                        style={{ color: card.accent }}
+                        className="text-base sm:text-2xl font-black tracking-tight leading-none mb-1"
+                      >
+                        {card.stat}
+                      </div>
+                      <div className="text-xs sm:text-sm font-black text-white">{card.title}</div>
+                      <div className="text-[11px] text-zinc-300 font-semibold truncate mt-0.5">
+                        {card.sub}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight break-keep">
-              예고편에서 보신 그 마법,{' '}
-              <span className="inline-block text-[#00F0B5]" style={{ color: '#0F766E' }}>
-                『👻 귀신비서』와 지금 바로 눌러보세요!
-              </span>
-            </h1>
+
+            {/* 우측 (5칸): 대표 3D 『아기귀신』 캐릭터 & 3D 네온 로고 쇼케이스 아트 */}
+            <div className="lg:col-span-5 flex flex-col items-center">
+              <div
+                data-keep-dark="true"
+                onClick={() => handleSelectWeaponChip('video')}
+                style={{ backgroundColor: '#050914' }}
+                className="relative w-full max-w-md rounded-2xl overflow-hidden border-2 border-[#00F0B5]/50 shadow-[0_0_40px_rgba(0,240,181,0.28)] cursor-pointer group"
+              >
+                <img
+                  src="/gwisinkachi_hero_banner_neon_after.jpg"
+                  alt="대표 3D 아기귀신 캐릭터와 귀신같이 입체 타이포그래피"
+                  className="w-full h-auto object-cover animate-float-slow group-hover:scale-105 transition-transform duration-500"
+                />
+                {/* 은은한 레이저 스캔 효과 */}
+                <div
+                  data-keep-dark="true"
+                  className="pointer-events-none absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#00F0B5]/80 to-transparent animate-scan-beam"
+                />
+                <div
+                  data-keep-dark="true"
+                  style={{ backgroundColor: 'rgba(5, 9, 20, 0.86)' }}
+                  className="px-3.5 py-2 border-t border-white/15 flex items-center justify-between gap-2 text-xs"
+                >
+                  <span className="font-black text-[#00F0B5] flex items-center gap-1.5">
+                    <span>👻</span>
+                    <span>전속 아기귀신 스탠바이!</span>
+                  </span>
+                  <span className="text-amber-300 font-extrabold whitespace-nowrap">
+                    클릭해서 바로 체험 👇
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-xs sm:text-sm text-zinc-400 font-semibold max-w-md break-keep">
-            복잡한 가입이나 설치 없이 왼쪽 <b className="text-[#00F0B5]">귀신비서 대화창</b>의 4가지 무료 무기를 누르면 오른쪽 도화지에 즉시 펼쳐집니다.
-          </p>
         </div>
 
         {/* 2단 분할 온보딩 그리드 (좌측 5 : 우측 7) */}
         <div id="interactive-demo" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* -----------------------------------------------------------------
-              👈 좌측 (5칸): 친근한 『👻 귀신비서』 표준 채팅창 (100% 안전 격리 복제본)
+              👈 좌측 (5칸): 친근한 『👻 귀신비서』 캐릭터 채팅창 (100% 안전 격리 복제본)
              ----------------------------------------------------------------- */}
           <aside className="lg:col-span-5 flex flex-col rounded-3xl border border-teal-500/35 bg-zinc-950/95 shadow-[0_20px_60px_rgba(0,0,0,0.65)] overflow-hidden">
-            {/* 상단 배너 1: 수요 손 없는 날 & 과부하 자동 검진 (본진 채팅창 동일 스타일) */}
-            <div className="px-4 py-2.5 border-b border-emerald-500/20 bg-emerald-950/40 flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] font-extrabold text-emerald-300">
-              <span>🗓️ 매주 수요일 오후 1시 「수요 손 없는 날」</span>
-              <span className="text-teal-300 font-bold">⚡ 20% 과부하 시 자동 검진</span>
-            </div>
-
-            {/* 상단 배너 2: 복원 안전 보장 & 공식 무료 보증서 버튼 */}
-            <div className="px-4 py-2 bg-zinc-900/90 border-b border-white/10 flex items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-1.5 min-w-0 text-emerald-200 font-bold truncate">
-                <span>🛡️</span>
-                <span className="truncate">내 파일 외부 서버 전송 0 Byte · 1초 타임머신 복원</span>
+            {/* 캐릭터 프로필 비주얼 헤더 */}
+            <div
+              data-keep-dark="true"
+              style={{
+                background: 'linear-gradient(135deg, #071923 0%, #0D2E33 100%)',
+              }}
+              className="px-4 py-3.5 border-b border-teal-400/30 flex items-center justify-between gap-3"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative shrink-0">
+                  <img
+                    src="/gwisinkachi_app_icon_original.png"
+                    alt="아기귀신 프로필"
+                    className="w-12 h-12 rounded-2xl object-cover ring-2 ring-[#00F0B5] shadow-[0_0_16px_rgba(0,240,181,0.4)] animate-float-slow"
+                  />
+                  <span
+                    style={{ backgroundColor: '#00F0B5' }}
+                    className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-slate-950"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-black text-white truncate">전속 아기귀신 비서</span>
+                    <span
+                      style={{ backgroundColor: 'rgba(0, 240, 181, 0.2)', color: '#5EEAD4' }}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-black shrink-0"
+                    >
+                      평생 무료
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-teal-200 font-bold truncate mt-0.5">
+                    🛡️ 외부 전송 0 Byte · 수요일 1시 자동 검진
+                  </div>
+                </div>
               </div>
+
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold shrink-0 cursor-pointer whitespace-nowrap"
+                data-keep-dark="true"
+                style={{ backgroundColor: '#FBBF24', color: '#020617' }}
+                className="px-2.5 py-1.5 rounded-xl font-black text-[11px] shrink-0 cursor-pointer whitespace-nowrap shadow hover:opacity-90"
               >
                 📜 무료 보증서
               </button>
             </div>
 
-            {/* 대화 스트림 영역 (노션 스타일 미니멀 버블) */}
+            {/* 대화 스트림 영역 (짧고 경쾌한 메신저 버블) */}
             <div
               ref={chatScrollRef}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 min-h-[250px] max-h-[340px] bg-zinc-950/80"
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-[220px] max-h-[300px] bg-zinc-950/80"
             >
               {chatMessages.map((msg) => {
                 const isUser = msg.role === 'user';
@@ -980,7 +1170,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               alt="귀신비서"
                               className="w-6 h-6 rounded-full object-cover shadow-sm ring-1 ring-[#00F0B5]/50"
                             />
-                            귀신비서
+                            아기귀신 비서
                           </span>
                           <span className="text-[10.5px] text-zinc-500">{msg.timestamp}</span>
                         </>
@@ -989,10 +1179,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <div
                       data-keep-dark={isUser ? 'true' : undefined}
                       style={isUser ? { backgroundColor: '#0D9488', color: '#FFFFFF' } : undefined}
-                      className={`max-w-[94%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line shadow-sm break-keep ${
+                      className={`max-w-[94%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-line shadow-sm break-keep ${
                         isUser
                           ? 'bg-teal-600 text-white rounded-tr-sm border border-teal-500 font-bold'
-                          : 'bg-zinc-900 border border-white/10 text-zinc-100 rounded-tl-sm font-medium'
+                          : 'bg-zinc-900 border border-white/10 text-zinc-100 rounded-tl-sm font-semibold'
                       }`}
                     >
                       {msg.text}
@@ -1002,13 +1192,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               })}
             </div>
 
-            {/* 4대 무료 핵심 무기 선택 칩 (클릭 시 우측 단일 스테이지 즉시 전환) */}
+            {/* 4대 무료 핵심 무기 스킬 카드 (클릭 시 우측 단일 스테이지 즉시 전환) */}
             <div className="p-3.5 bg-zinc-900/90 border-t border-white/10 space-y-2">
               <div className="text-[11px] font-extrabold text-teal-300 flex items-center justify-between px-1">
-                <span>👇 4가지 무료 초능력 중 하나를 눌러보세요!</span>
-                <span className="text-zinc-400">우측 화면에 즉시 펼쳐집니다</span>
+                <span>👇 보고 싶은 초능력 카드를 톡 눌러보세요!</span>
+                <span className="text-zinc-400">우측 즉시 시연</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {(['video', 'doc', 'clean', 'superpower'] as OnboardingWeaponTab[]).map((tabKey) => {
                   const item = WEAPON_META[tabKey];
                   const isActive = demoTab === tabKey;
@@ -1017,25 +1207,32 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       key={tabKey}
                       type="button"
                       onClick={() => handleSelectWeaponChip(tabKey)}
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                      className={`p-2.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
                         isActive
-                          ? 'bg-teal-950/80 border-[#00F0B5] shadow-[0_0_20px_rgba(0,240,181,0.25)] scale-[1.01]'
-                          : 'bg-zinc-950/80 hover:bg-zinc-900 border-white/10 hover:border-white/25'
+                          ? 'bg-teal-950/80 border-[#00F0B5] shadow-[0_6px_20px_rgba(13,148,136,0.2)] scale-[1.01]'
+                          : 'bg-zinc-950/80 hover:bg-zinc-900 border-white/10 hover:border-teal-400/50'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-black text-white truncate">
-                          {item.chipLabel}
-                        </span>
+                        <span className="text-base leading-none">{item.icon}</span>
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 ${
+                          style={
                             isActive
-                              ? 'bg-[#00F0B5] text-slate-950'
-                              : 'bg-white/10 text-zinc-300'
+                              ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
+                              : undefined
+                          }
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
+                            isActive ? '' : 'bg-white/10 text-zinc-300'
                           }`}
                         >
                           {item.keywordBadge}
                         </span>
+                      </div>
+                      <div className="text-xs font-black text-white truncate mt-0.5">
+                        {item.chipLabel}
+                      </div>
+                      <div className="text-[10.5px] text-zinc-400 font-semibold truncate">
+                        {item.chipSub}
                       </div>
                     </button>
                   );
@@ -1052,12 +1249,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="귀신비서에게 물어보세요 (예: 엑셀 안 열고 찾기, 영타 자동성형)"
+                placeholder="궁금한 기능 입력 (예: 영상 점프, 영수증 찾기, 영타)"
                 className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 focus:border-[#00F0B5] text-xs sm:text-[13px] text-white placeholder-zinc-500 outline-none"
               />
               <button
                 type="submit"
-                className="px-3.5 py-2 rounded-xl bg-[#00F0B5] hover:bg-teal-300 text-slate-950 font-black text-xs shrink-0 cursor-pointer"
+                style={{ backgroundColor: '#0D9488', color: '#FFFFFF' }}
+                className="px-3.5 py-2 rounded-xl hover:opacity-90 font-black text-xs shrink-0 cursor-pointer"
               >
                 전송
               </button>
@@ -1065,16 +1263,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           </aside>
 
           {/* -----------------------------------------------------------------
-              👉 우측 (7칸): 단일 인터랙티브 체험 스테이지 (클릭한 1개만 큼직하게 펼침 + 사전등록 직결)
+              👉 우측 (7칸): 비주얼 인터랙티브 체험 스테이지 (실제 사진·프리뷰 탑재)
              ----------------------------------------------------------------- */}
-          <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 border-2 border-teal-500/40 p-5 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.65)] space-y-6">
+          <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 border-2 border-teal-500/40 p-5 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.65)] space-y-5">
             {/* 스테이지 상단 헤더 */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
               <div>
                 <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#00F0B5]/20 text-[#00F0B5] text-[11px] font-black mb-1">
                   {activeMeta.stageBadge}
                 </span>
-                <h2 className="text-lg sm:text-2xl font-black text-white">
+                <h2 className="text-lg sm:text-2xl font-black text-white break-keep">
                   {activeMeta.stageTitle}
                 </h2>
               </div>
@@ -1082,21 +1280,34 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <button
                 type="button"
                 onClick={() => setShowStageShortVideo((v) => !v)}
+                style={
+                  showStageShortVideo
+                    ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
+                    : undefined
+                }
                 className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center gap-1.5 ${
                   showStageShortVideo
-                    ? 'bg-[#00F0B5] text-slate-950 border-[#00F0B5]'
+                    ? 'border-teal-600 shadow'
                     : 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border-amber-400/40'
                 }`}
               >
                 <span>▶</span>
-                <span>{showStageShortVideo ? '⚡ 직접 눌러보는 체험 모드로 복귀' : '🎥 15초 실제 예고편 영상 보기'}</span>
+                <span>{showStageShortVideo ? '⚡ 체험 화면으로 돌아가기' : '🎥 15초 예고편 영상 보기'}</span>
               </button>
             </div>
 
-            {/* 스테이지 본문: 15초 예고편 비디오 뷰 또는 단일 인터랙티브 체험 */}
+            {/* 스테이지 본문: 15초 예고편 비디오 뷰 또는 비주얼 인터랙티브 체험 */}
             {showStageShortVideo ? (
-              <div className="rounded-2xl bg-black/80 border border-white/15 p-4 flex flex-col sm:flex-row items-center gap-5">
-                <div className="w-52 sm:w-56 aspect-[9/16] rounded-xl overflow-hidden border border-white/20 shrink-0 bg-zinc-950">
+              <div
+                data-keep-dark="true"
+                style={{ backgroundColor: '#070D19' }}
+                className="rounded-2xl border border-teal-400/30 p-4 flex flex-col sm:flex-row items-center gap-5"
+              >
+                <div
+                  data-keep-dark="true"
+                  style={{ backgroundColor: '#000000' }}
+                  className="w-52 sm:w-56 aspect-[9/16] rounded-xl overflow-hidden border border-white/20 shrink-0"
+                >
                   <video
                     key={activeMeta.shortVideoUrl}
                     src={activeMeta.shortVideoUrl}
@@ -1108,136 +1319,289 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   />
                 </div>
                 <div className="space-y-3 text-left">
-                  <span className="px-2.5 py-1 rounded-full bg-teal-500/20 text-[#00F0B5] text-xs font-black">
+                  <span
+                    style={{ backgroundColor: 'rgba(0, 240, 181, 0.18)', color: '#5EEAD4' }}
+                    className="inline-block px-2.5 py-1 rounded-full text-xs font-black"
+                  >
                     🎬 공식 15초 쇼츠 예고편 ({activeMeta.keywordBadge})
                   </span>
-                  <h3 className="text-lg font-black text-white leading-snug">
+                  <h3 className="text-lg font-black text-white leading-snug break-keep">
                     {activeMeta.stageTitle}
                   </h3>
-                  <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                  <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed break-keep">
                     클라우드 업로드 0 Byte! 내 PC와 스마트폰 안에서 100% 무료로 즉시 작동합니다.
                   </p>
                   <button
                     type="button"
                     onClick={() => setShowStageShortVideo(false)}
-                    className="px-4 py-2.5 rounded-xl bg-[#00F0B5] hover:bg-teal-300 text-slate-950 font-black text-xs cursor-pointer"
+                    style={{ backgroundColor: '#00F0B5', color: '#020617' }}
+                    className="px-4 py-2.5 rounded-xl font-black text-xs cursor-pointer shadow-lg"
                   >
-                    ⚡ 내가 직접 버튼 눌러서 체험해 보기 ➔
+                    ⚡ 직접 버튼 눌러서 체험해 보기 ➔
                   </button>
                 </div>
               </div>
             ) : (
               <div>
-                {/* ① 동영상 장면 1초 점프 (#귀신검색) */}
+                {/* ① 동영상 장면 1초 점프 (#귀신검색) — 실제 프레임 썸네일 & 타임라인 스크러버 */}
                 {demoTab === 'video' && (
-                  <div className="space-y-4">
+                  <div className="space-y-3.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold text-zinc-400 mr-1">
-                        🔍 찾을 대사·장면 클릭:
+                      <span className="text-xs font-extrabold text-zinc-400 mr-1">
+                        🔍 찾을 장면 클릭:
                       </span>
-                      {INTERACTIVE_SCENARIOS.video.map((item, idx) => (
-                        <button
-                          key={item.query}
-                          type="button"
-                          onClick={() => {
-                            playBabyGhostChime();
-                            setSelectedVideoScenarioIdx(idx);
-                          }}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
-                            selectedVideoScenarioIdx === idx
-                              ? 'bg-[#00F0B5] text-slate-950 border-[#00F0B5] shadow-[0_0_15px_rgba(0,240,181,0.35)]'
-                              : 'bg-zinc-900 text-zinc-300 border-white/10 hover:border-white/30'
-                          }`}
-                        >
-                          “{item.query}”
-                        </button>
-                      ))}
+                      {INTERACTIVE_SCENARIOS.video.map((item, idx) => {
+                        const active = selectedVideoScenarioIdx === idx;
+                        return (
+                          <button
+                            key={item.query}
+                            type="button"
+                            onClick={() => {
+                              playBabyGhostChime();
+                              setSelectedVideoScenarioIdx(idx);
+                            }}
+                            style={
+                              active
+                                ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
+                                : undefined
+                            }
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                              active
+                                ? 'border-teal-600 shadow-md scale-[1.02]'
+                                : 'bg-zinc-900 text-zinc-300 border-white/10 hover:border-teal-400/50'
+                            }`}
+                          >
+                            “{item.query}”
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-5 shadow-inner space-y-3">
-                      <div className="flex items-center justify-between text-xs text-zinc-400 pb-2.5 border-b border-white/10">
+                    <div
+                      data-keep-dark="true"
+                      style={{
+                        background: 'linear-gradient(145deg, #07131E 0%, #0B1F2A 100%)',
+                      }}
+                      className="rounded-2xl border border-teal-400/40 p-4 sm:p-5 shadow-lg space-y-3.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs pb-2.5 border-b border-white/15">
                         <span className="font-mono text-teal-300 font-bold truncate">
-                          📁 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].file}
+                          🎬 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].file}
                         </span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-extrabold shrink-0">
+                        <span
+                          style={{ backgroundColor: 'rgba(16, 185, 129, 0.22)', color: '#6EE7B7' }}
+                          className="px-2.5 py-0.5 rounded-full font-black shrink-0"
+                        >
                           ⚡ {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].latency} 포착
                         </span>
                       </div>
-                      <div className="rounded-xl bg-gradient-to-br from-teal-950/90 via-slate-900 to-zinc-950 border border-teal-500/30 p-4 space-y-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00F0B5] text-slate-950 text-xs font-black">
-                          <span>▶</span>
-                          <span>
-                            정확히 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].timestamp} 구간으로 자동 점프!
+
+                      {/* 비주얼 비디오 프레임 + 타임라인 바 */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                        <div
+                          data-keep-dark="true"
+                          className="sm:col-span-5 relative aspect-[16/10] rounded-xl overflow-hidden border-2 border-[#00F0B5] shadow-[0_0_20px_rgba(0,240,181,0.25)]"
+                        >
+                          <img
+                            src={INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].thumbUrl}
+                            alt={INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].query}
+                            className="w-full h-full object-cover"
+                          />
+                          <div
+                            data-keep-dark="true"
+                            className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/30"
+                          />
+                          <span
+                            style={{ backgroundColor: '#00F0B5', color: '#020617' }}
+                            className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[11px] font-black shadow"
+                          >
+                            ▶ {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].timestamp} 점프!
                           </span>
+                          <img
+                            src="/gwisinkachi_app_icon_512.png"
+                            alt="아기귀신 포착"
+                            className="absolute bottom-2 right-2 w-8 h-8 rounded-full ring-2 ring-[#00F0B5] shadow-lg"
+                          />
                         </div>
-                        <p className="text-white font-black text-sm sm:text-base">
-                          {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].transcript}
-                        </p>
-                        <p className="text-xs text-teal-300 font-bold">
-                          🎯 AI 장면 인식: {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].sceneDesc}
-                        </p>
+
+                        <div className="sm:col-span-7 space-y-2.5">
+                          <div
+                            style={{ backgroundColor: 'rgba(255, 255, 255, 0.07)' }}
+                            className="rounded-xl p-3.5 border border-white/15 space-y-1.5"
+                          >
+                            <div className="text-[11px] font-extrabold text-[#00F0B5]">
+                              🗣️ 음성·대사 자동 매칭
+                            </div>
+                            <p className="text-white font-black text-sm sm:text-base leading-snug break-keep">
+                              {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].transcript}
+                            </p>
+                            <p className="text-xs text-zinc-300 font-semibold break-keep">
+                              🎯 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].sceneDesc}
+                            </p>
+                          </div>
+
+                          {/* 시각적 재생 타임라인 스크러버 */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[11px] font-mono text-zinc-400">
+                              <span>00:00</span>
+                              <span style={{ color: '#00F0B5' }} className="font-black">
+                                📍 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].timestamp} 하이라이트
+                              </span>
+                              <span>END</span>
+                            </div>
+                            <div
+                              style={{ backgroundColor: 'rgba(255,255,255,0.14)' }}
+                              className="relative h-2.5 rounded-full overflow-hidden"
+                            >
+                              <div
+                                style={{
+                                  width: `${INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].progressPct}%`,
+                                  backgroundColor: '#00F0B5',
+                                }}
+                                className="h-full rounded-full transition-all duration-300"
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* ② 엑셀·문서 안 열고 찾기 (#귀신검색) */}
+                {/* ② 엑셀·문서·영수증 안 열고 찾기 (#귀신검색) — X-Ray 스캔 비주얼 카드 */}
                 {demoTab === 'doc' && (
-                  <div className="space-y-4">
+                  <div className="space-y-3.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold text-zinc-400 mr-1">
-                        📄 파일 안 열고 찾을 단어 클릭:
+                      <span className="text-xs font-extrabold text-zinc-400 mr-1">
+                        📄 닫힌 파일 속 찾을 키워드:
                       </span>
-                      {INTERACTIVE_SCENARIOS.doc.map((item, idx) => (
-                        <button
-                          key={item.query}
-                          type="button"
-                          onClick={() => {
-                            playBabyGhostChime();
-                            setSelectedDocScenarioIdx(idx);
-                          }}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
-                            selectedDocScenarioIdx === idx
-                              ? 'bg-[#00F0B5] text-slate-950 border-[#00F0B5] shadow-[0_0_15px_rgba(0,240,181,0.35)]'
-                              : 'bg-zinc-900 text-zinc-300 border-white/10 hover:border-white/30'
-                          }`}
-                        >
-                          “{item.query}”
-                        </button>
-                      ))}
+                      {INTERACTIVE_SCENARIOS.doc.map((item, idx) => {
+                        const active = selectedDocScenarioIdx === idx;
+                        return (
+                          <button
+                            key={item.query}
+                            type="button"
+                            onClick={() => {
+                              playBabyGhostChime();
+                              setSelectedDocScenarioIdx(idx);
+                            }}
+                            style={
+                              active
+                                ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
+                                : undefined
+                            }
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                              active
+                                ? 'border-teal-600 shadow-md scale-[1.02]'
+                                : 'bg-zinc-900 text-zinc-300 border-white/10 hover:border-teal-400/50'
+                            }`}
+                          >
+                            “{item.query}”
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-5 shadow-inner space-y-3">
-                      <div className="flex items-center justify-between text-xs text-zinc-400 pb-2.5 border-b border-white/10">
-                        <span className="font-mono text-teal-300 font-bold truncate">
-                          📄 {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].file}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-extrabold shrink-0">
+                    <div
+                      data-keep-dark="true"
+                      style={{
+                        background: 'linear-gradient(145deg, #081224 0%, #0C2130 100%)',
+                      }}
+                      className="rounded-2xl border border-teal-400/40 p-4 sm:p-5 shadow-lg space-y-3.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-2.5 border-b border-white/15">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            style={{
+                              backgroundColor: INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].badgeColor,
+                              color: '#FFFFFF',
+                            }}
+                            className="px-2 py-0.5 rounded font-black text-[11px] shrink-0"
+                          >
+                            {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].docType}
+                          </span>
+                          <span className="font-mono text-teal-200 font-bold truncate">
+                            {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].file}
+                          </span>
+                        </div>
+                        <span
+                          style={{ backgroundColor: 'rgba(16, 185, 129, 0.22)', color: '#6EE7B7' }}
+                          className="px-2.5 py-0.5 rounded-full font-black shrink-0"
+                        >
                           ⚡ {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].latency}
                         </span>
                       </div>
-                      <div className="rounded-xl bg-gradient-to-br from-blue-950/70 via-slate-900 to-zinc-950 border border-teal-500/30 p-4 space-y-2">
-                        <span className="inline-block px-2.5 py-1 rounded bg-amber-400/20 text-amber-300 text-xs font-extrabold">
-                          📍 발견 위치: {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].location}
-                        </span>
-                        <p className="text-white font-bold text-xs sm:text-sm leading-relaxed bg-black/50 p-3.5 rounded-xl border border-white/10">
-                          {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].previewSnippet}
-                        </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                        {/* 좌측 X-Ray 문서/실물 영수증 미니 뷰 */}
+                        <div
+                          data-keep-dark="true"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+                          className="sm:col-span-4 rounded-xl border border-[#00F0B5]/40 p-3 flex flex-col items-center justify-center relative overflow-hidden min-h-[132px]"
+                        >
+                          {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].thumbUrl ? (
+                            <img
+                              src={INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].thumbUrl}
+                              alt="영수증 OCR 스캔"
+                              className="w-full h-28 object-cover rounded-lg border border-white/20"
+                            />
+                          ) : (
+                            <div className="w-full space-y-1.5 text-left font-mono text-[11px]">
+                              <div className="flex items-center justify-between text-zinc-400">
+                                <span>🔒 닫힌 파일 내부</span>
+                                <span style={{ color: '#00F0B5' }}>X-RAY ON</span>
+                              </div>
+                              <div
+                                style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+                                className="p-2 rounded border border-white/10 text-zinc-400 truncate"
+                              >
+                                ── 상단 조항 생략 ──
+                              </div>
+                              <div
+                                style={{ backgroundColor: 'rgba(251, 191, 36, 0.22)', color: '#FDE68A' }}
+                                className="p-2 rounded border border-amber-400 font-black truncate"
+                              >
+                                🎯 {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].highlightKey}
+                              </div>
+                            </div>
+                          )}
+                          <img
+                            src="/gwisinkachi_app_icon_512.png"
+                            alt="아기귀신 투시"
+                            className="absolute bottom-2 right-2 w-7 h-7 rounded-full ring-2 ring-amber-400 shadow"
+                          />
+                        </div>
+
+                        {/* 우측 하이라이트 본문 발췌 */}
+                        <div className="sm:col-span-8 space-y-2">
+                          <span
+                            style={{ backgroundColor: 'rgba(251, 191, 36, 0.2)', color: '#FCD34D' }}
+                            className="inline-block px-2.5 py-1 rounded-lg text-xs font-black"
+                          >
+                            📍 {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].location}
+                          </span>
+                          <p
+                            style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+                            className="text-white font-bold text-xs sm:text-sm leading-relaxed p-3.5 rounded-xl border border-white/15 break-keep"
+                          >
+                            {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].previewSnippet}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* ③ 눈 뜬 사진 1장만 Pick (#귀신비서) */}
+                {/* ③ 눈 뜬 사진 1장만 Pick (#귀신비서) — 실제 연사 사진 6장 썸네일 갤러리 */}
                 {demoTab === 'clean' && (
-                  <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-5 space-y-4">
+                  <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-4 sm:p-5 space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <h4 className="text-sm sm:text-base font-black text-white">
-                          🧹 연속 촬영한 비슷한 사진 6장 중 눈 뜬 『베스트 1장』만 남기기
+                        <h4 className="text-sm sm:text-base font-black text-white break-keep">
+                          📸 연속 촬영 6장 중 가장 선명한 『인생샷 1장』만 1초 Pick!
                         </h4>
                         <p className="text-xs text-zinc-400 mt-0.5 break-keep">
-                          흔들린 5장은 <b>Windows 정식 휴지통($Recycle.Bin)</b>에 안전 격리되어 1초 만에 복원되며, 안 쓰는 은행 보안프로그램은 삭제하지 않고 평소엔 조용히 재워두었다가 은행 갈 때만 자동 기상시킵니다.
+                          흔들린 5장은 <b>Windows 정식 휴지통</b>으로 안전 격리(1초 복원)됩니다.
                         </p>
                       </div>
                       <button
@@ -1246,47 +1610,119 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           playBabyGhostChime();
                           setCleanDemoDone(!cleanDemoDone);
                         }}
-                        className={`px-4 py-2.5 rounded-xl font-black text-xs transition-all cursor-pointer shrink-0 ${
+                        style={
                           cleanDemoDone
-                            ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg'
-                            : 'bg-[#00F0B5] hover:bg-teal-300 text-slate-950 shadow-[0_0_20px_rgba(0,240,181,0.4)]'
-                        }`}
+                            ? { backgroundColor: '#FBBF24', color: '#020617' }
+                            : { backgroundColor: '#0D9488', color: '#FFFFFF' }
+                        }
+                        className="px-4 py-2.5 rounded-xl font-black text-xs transition-all cursor-pointer shrink-0 shadow-md hover:opacity-95"
                       >
-                        {cleanDemoDone ? '↩️ 1초 타임머신으로 5장 복원하기' : '✨ 베스트 1장만 남기고 5장 정리 체험'}
+                        {cleanDemoDone ? '↩️ 1초 타임머신으로 5장 복원' : '✨ 베스트 1장만 남기고 정리 체험'}
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
+                    {/* 실제 샘플 사진 6장 비교 그리드 */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {[
-                        { id: 1, label: '컷 #1 (흔들림)', best: false },
-                        { id: 2, label: '컷 #2 (눈 감음)', best: false },
-                        { id: 3, label: '컷 #3 (베스트!)', best: true },
-                        { id: 4, label: '컷 #4 (초점 흐림)', best: false },
-                        { id: 5, label: '컷 #5 (고개 돌아감)', best: false },
-                        { id: 6, label: '컷 #6 (역광)', best: false },
+                        {
+                          id: 1,
+                          label: '연사 #1 · 흔들림',
+                          img: '/sample_photos_301/BLUR_202510_1282_흔들린사진.jpg',
+                          imgClass: '',
+                          best: false,
+                        },
+                        {
+                          id: 2,
+                          label: '연사 #2 · 어두움',
+                          img: '/sample_photos_301/IMG_20250510_1001.jpg',
+                          imgClass: 'brightness-50 contrast-75',
+                          best: false,
+                        },
+                        {
+                          id: 3,
+                          label: '👑 베스트 인생샷!',
+                          img: '/sample_photos_301/IMG_20250510_1002.jpg',
+                          imgClass: 'brightness-105 saturate-125',
+                          best: true,
+                        },
+                        {
+                          id: 4,
+                          label: '연사 #4 · 초점 나감',
+                          img: '/sample_photos_301/BLUR_202510_1283_흔들린사진.jpg',
+                          imgClass: '',
+                          best: false,
+                        },
+                        {
+                          id: 5,
+                          label: '연사 #5 · 구도 흔들림',
+                          img: '/sample_photos_301/IMG_20250510_1003.jpg',
+                          imgClass: 'blur-[2px] scale-105',
+                          best: false,
+                        },
+                        {
+                          id: 6,
+                          label: '연사 #6 · 빛 번짐',
+                          img: '/sample_photos_301/BLUR_202510_1282_흔들린사진.jpg',
+                          imgClass: 'brightness-125',
+                          best: false,
+                        },
                       ].map((shot) => {
                         const isMovedToTrash = cleanDemoDone && !shot.best;
                         return (
                           <div
                             key={shot.id}
-                            className={`p-2.5 rounded-xl border text-center transition-all duration-300 ${
+                            data-keep-dark="true"
+                            style={{ backgroundColor: '#09111E' }}
+                            className={`relative rounded-xl overflow-hidden border-2 transition-all duration-300 ${
                               shot.best
-                                ? 'bg-teal-950/70 border-2 border-[#00F0B5] shadow-[0_0_15px_rgba(0,240,181,0.25)] scale-[1.02]'
+                                ? 'border-[#00F0B5] shadow-[0_0_20px_rgba(0,240,181,0.35)] ring-2 ring-[#00F0B5]/40 scale-[1.02]'
                                 : isMovedToTrash
-                                ? 'bg-zinc-900/30 border-white/5 opacity-35 scale-95'
-                                : 'bg-zinc-900/80 border-white/10'
+                                ? 'border-white/10 opacity-35 scale-95 grayscale'
+                                : 'border-white/15'
                             }`}
                           >
-                            <div className="text-xl mb-1">
-                              {shot.best ? '👑' : isMovedToTrash ? '🗑️' : '🖼️'}
+                            <div className="aspect-[16/10] w-full overflow-hidden">
+                              <img
+                                src={shot.img}
+                                alt={shot.label}
+                                className={`w-full h-full object-cover transition-all ${shot.imgClass}`}
+                              />
                             </div>
-                            <div className="text-[11px] font-extrabold text-white">
-                              {shot.best ? '베스트 Pick' : isMovedToTrash ? '휴지통 격리' : `연사 #${shot.id}`}
+                            <div
+                              data-keep-dark="true"
+                              style={{
+                                backgroundColor: shot.best
+                                  ? 'rgba(6, 78, 59, 0.92)'
+                                  : 'rgba(9, 17, 30, 0.88)',
+                              }}
+                              className="px-2.5 py-1.5 flex items-center justify-between gap-1 text-[11px]"
+                            >
+                              <span
+                                style={{ color: shot.best ? '#5EEAD4' : '#E2E8F0' }}
+                                className="font-black truncate"
+                              >
+                                {isMovedToTrash ? '🗑️ 휴지통 안전 격리' : shot.label}
+                              </span>
+                              {shot.best && (
+                                <span
+                                  style={{ backgroundColor: '#00F0B5', color: '#020617' }}
+                                  className="px-1.5 py-0.5 rounded text-[10px] font-black shrink-0"
+                                >
+                                  보존
+                                </span>
+                              )}
                             </div>
-                            <div className="text-[10px] text-zinc-400 mt-0.5">{shot.label}</div>
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* 은행 보안모듈 수면 관리 한 줄 비주얼 배지 */}
+                    <div className="rounded-xl bg-zinc-900/90 border border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="font-extrabold text-white">
+                        💤 안 쓰는 은행 보안프로그램 20개 ➔ <b className="text-[#00F0B5]">삭제 대신 조용히 수면 모드</b>
+                      </span>
+                      <span className="text-zinc-400 font-bold">은행 접속 시 자동 기상 ⚡</span>
                     </div>
                   </div>
                 )}
@@ -1919,15 +2355,29 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
          ===================================================================== */}
       <section id="shorts" className="py-16 px-4 sm:px-6 max-w-7xl mx-auto border-t border-white/5">
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-400 text-xs font-bold mb-3">
-            <span>🎬</span>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/25 text-teal-400 text-xs font-black mb-3">
+            <img
+              src="/gwisinkachi_app_icon_512.png"
+              alt="아기귀신"
+              className="w-5 h-5 rounded-full object-cover"
+            />
             <span>유튜브·인스타·네이버 화제의 15초 공식 예고편 쇼룸</span>
           </div>
-          <h2 className="text-2xl sm:text-4xl font-black tracking-tight mb-3 break-keep">
-            15초만 보면 바로 이해되는 『귀신같이』 핵심 예고편
-          </h2>
-          <p className="text-zinc-400 text-xs sm:text-sm break-keep">
-            영상에서 보신 <b className="text-[#00F0B5]">#귀신비서 · #귀신검색 · #귀신창</b> 6편의 쇼츠를 한자리에서 바로 재생해 보세요.
+          <div className="flex flex-wrap items-center justify-center gap-2.5 mb-2">
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight break-keep">
+              15초면 끝! 한눈에 보는
+            </h2>
+            <img
+              src="/gwisinkachi_wordmark_dark_ink.png"
+              alt="귀신같이 캘리그라피"
+              className="h-8 sm:h-11 w-auto object-contain"
+            />
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight break-keep">
+              핵심 예고편
+            </h2>
+          </div>
+          <p className="text-zinc-400 text-xs sm:text-sm font-semibold break-keep">
+            글 대신 영상으로 가볍게 즐기세요! <b className="text-[#00F0B5]">#귀신비서 · #귀신검색 · #귀신창</b> 6편 즉시 재생
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
@@ -2033,26 +2483,54 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           4. 📜 개인·기업 PC 기본 기능 영구 무료 공식 보증서 배너 (#security)
          ===================================================================== */}
       <section id="security" className="py-12 px-4 sm:px-6 max-w-7xl mx-auto border-t border-white/5">
-        <div className="rounded-3xl bg-gradient-to-r from-zinc-900 via-teal-950/60 to-zinc-900 border-2 border-amber-400/40 p-6 sm:p-9 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center shadow-2xl">
-          <div className="lg:col-span-8 space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-black">
+        <div
+          data-keep-dark="true"
+          style={{
+            background: 'linear-gradient(135deg, #07131E 0%, #0D292C 55%, #091322 100%)',
+          }}
+          className="rounded-3xl border-2 border-amber-400/50 p-6 sm:p-9 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center shadow-2xl"
+        >
+          <div className="lg:col-span-8 space-y-4">
+            <div
+              style={{ backgroundColor: 'rgba(251, 191, 36, 0.18)', color: '#FCD34D' }}
+              className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-amber-400/40 text-xs font-black"
+            >
               <span>📜</span>
               <span>대표이사 직인 날인 · 법적 효력 공식 보증서 발급</span>
             </div>
-            <h3 className="text-xl sm:text-3xl font-black text-white leading-tight">
+            <h3 className="text-xl sm:text-3xl font-black text-white leading-tight break-keep">
               “회사 컴퓨터에 깔아도 저작권 단속 안 오나요?”<br />
-              <span className="text-[#00F0B5]">
-                ✓ 개인·기업 PC 기본 기능(내 기기 찾기·손보기·귀신창) 영구 무료 (단속 걱정 ZERO)
+              <span style={{ color: '#00F0B5' }}>
+                ✓ 개인·기업 PC 기본 기능 영구 무료! (단속 걱정 ZERO)
               </span>
             </h3>
-            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              개인 사용자는 물론 <b>민간 기업(법인·개인사업자·소상공인·병원·세무회계사무소 등)</b>의 사내 업무용 PC에서도 내 기기 로컬 기본 기능(찾기·손보기·귀신창)은 라이선스 비용 0원, 광고 0%, 내용증명·법무법인 단속 영구 0건을 공식 보증합니다. (※ 사내 다자간 팀 서버 공유 등 별도 확장 옵션 및 공공기관 제외)
+
+            {/* 빽빽한 줄글 대신 한눈에 읽히는 3대 안심 체크 배지 */}
+            <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+              {[
+                '🏢 법인·개인사업자·병원·세무사 사내 PC 무료',
+                '🛡️ 라이선스 비용 0원 · 광고 0%',
+                '⚖️ 법무법인 내용증명·단속 영구 0건 보장',
+              ].map((pill) => (
+                <span
+                  key={pill}
+                  style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', color: '#E2E8F0' }}
+                  className="px-3 py-1.5 rounded-xl border border-white/15"
+                >
+                  {pill}
+                </span>
+              ))}
+            </div>
+            <p className="text-[11px] text-zinc-400 font-semibold break-keep">
+              ※ 내 기기 로컬 기본 기능(찾기·손보기·귀신창) 영구 무료 보증 (사내 다자간 팀 서버 공유 등 확장 옵션 및 공공기관 제외)
             </p>
+
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
-                className="px-5 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm cursor-pointer shadow-lg"
+                style={{ backgroundColor: '#FBBF24', color: '#020617' }}
+                className="px-5 py-3 rounded-xl hover:opacity-95 font-black text-xs sm:text-sm cursor-pointer shadow-lg"
               >
                 📜 공식 무료 라이선스 보증서 크게 보기
               </button>
@@ -2060,7 +2538,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 href="/showroom/certificates/ghosti_b2b_free_certificate.html"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs sm:text-sm"
+                style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF' }}
+                className="px-4 py-3 rounded-xl hover:opacity-90 border border-white/25 font-bold text-xs sm:text-sm"
               >
                 🖨️ 인쇄·비치용 보증서 새 창 열기 ↗
               </a>
@@ -2085,12 +2564,19 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       {/* 5. 최하단 마스터 푸터 */}
       <footer className="border-t border-white/10 py-10 px-4 sm:px-6 max-w-7xl mx-auto text-xs text-zinc-500">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-            <img
-              src="/gwisinkachi_3d_wordmark_light.png"
-              alt="귀신같이 3D 로고"
-              className="h-7 w-auto object-contain opacity-90"
-            />
+          <div className="flex flex-col sm:flex-row items-center gap-3.5 text-center sm:text-left">
+            <div className="flex items-center gap-2">
+              <img
+                src="/gwisinkachi_app_icon_512.png"
+                alt="아기귀신 심볼"
+                className="w-7 h-7 rounded-lg object-cover shadow-sm"
+              />
+              <img
+                src="/gwisinkachi_wordmark_dark_ink.png"
+                alt="귀신같이 로고"
+                className="h-6 w-auto object-contain opacity-90"
+              />
+            </div>
             <p className="font-bold text-zinc-400">
               (주)썬드림 · 온디바이스 로컬 AI 『귀신같이(Ghosti)』 · 상표출원 제40-2026-0229386호 · Zero-Server 프라이버시 보장
             </p>
