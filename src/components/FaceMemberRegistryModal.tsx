@@ -662,8 +662,15 @@ export const FaceMemberRegistryModal: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {visibleClusters.map((c) => {
+            {!isEngineReady && visibleClusters.length === 0 ? (
+              <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/30 text-zinc-300 font-body-sm text-[12.5px] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span>
+                  💡 현재 엔진 미연결(체험 모드) 상태입니다. 내 PC 엔진을 연결하면 실제 사진 속 가족·모임 인물을 자동으로 찾아 여권에 등록해 드립니다.
+                </span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {visibleClusters.map((c) => {
                 const yearlyCuts = getClusterYearlyCuts(c);
                 const activeYear = selectedYearMap[c.clusterId] ?? yearlyCuts[0].year;
                 const activeCut =
@@ -857,7 +864,8 @@ export const FaceMemberRegistryModal: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
+              </div>
+            )}
           </section>
 
           {/* ✨ AI 얼굴 자동 매칭 도우미: 원터치 [⭕ 맞아요! 등록] vs [⚡ 확인 건너뛰고 사진만 바로 올리기] */}
@@ -877,7 +885,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                 </p>
               </div>
 
-              {memberActiveHints.length > 0 && (
+              {isEngineReady && memberActiveHints.length > 0 && (
                 <button
                   type="button"
                   onClick={() => passAllSwarmCandidatesToHostQueue()}
@@ -888,7 +896,13 @@ export const FaceMemberRegistryModal: React.FC = () => {
               )}
             </div>
 
-            {memberActiveHints.length === 0 ? (
+            {!isEngineReady && visibleClusters.length === 0 ? (
+              <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/30 text-zinc-300 font-body-sm text-[12.5px] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span>
+                  💡 현재 엔진 미연결(체험 모드) 상태입니다. 내 PC 엔진을 연결하면 실제 사진 속 가족·모임 인물을 자동으로 찾아 여권에 등록해 드립니다.
+                </span>
+              </div>
+            ) : memberActiveHints.length === 0 ? (
               <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-zinc-300 font-body-sm text-[12px] flex items-center justify-between">
                 <span>
                   ✓ 현재 멤버 업로드 화면의 AI 힌트가 모두 처리되었습니다. (건너뛴 항목은 아래 👑 방장 누락분 뒷정리 대기열로 안전하게 보관되었습니다.)
