@@ -5426,6 +5426,23 @@ AUTOCORRECT_EXCLUDE_PROCESSES: set[str] = {
     "pycharm64.exe",
     "idea64.exe",
     "webstorm64.exe",
+    # 5. 웹 브라우저 및 Chromium/Electron TSF 리치 에디터 (노션·구글독스·웹 입력창 IME 조합 및 백스페이스 충돌 원천 차단)
+    "chrome.exe",
+    "msedge.exe",
+    "whale.exe",
+    "brave.exe",
+    "firefox.exe",
+    "opera.exe",
+    "vivaldi.exe",
+    "arc.exe",
+    "iexplore.exe",
+    "notion.exe",
+    "obsidian.exe",
+    "slack.exe",
+    "discord.exe",
+    "teams.exe",
+    "ms-teams.exe",
+    "figma.exe",
 }
 
 AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
@@ -5435,6 +5452,12 @@ AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
     "opusapp",
     "_wwg",
     "pptframeclass",
+)
+
+WEB_TSF_NON_EDIT_CLASS_PREFIXES: tuple[str, ...] = (
+    "chrome_widgetwin_",
+    "chrome_renderwidgethosthwnd",
+    "mozillawindowclass",
 )
 
 
@@ -5503,6 +5526,8 @@ def should_skip_auto_typo(hwnd: int) -> bool:
             if proc_lower in AUTOCORRECT_EXCLUDE_PROCESSES:
                 return True
             if any(kw in cls_lower for kw in AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS):
+                return True
+            if not ed_pw and any(cls_lower.startswith(pfx) for pfx in WEB_TSF_NON_EDIT_CLASS_PREFIXES):
                 return True
         return False
     except Exception:
@@ -7234,7 +7259,12 @@ def main() -> None:
                         else:
                             last_auto_morph_state["active"] = False
                         if typed_ascii_buf:
-                            typed_ascii_buf.pop()
+                            if _find_edit_control_child(u32.GetForegroundWindow()):
+                                typed_ascii_buf.pop()
+                            else:
+                                # 비-Edit 창에서는 한글 1음절 삭제(2~4타)와 영타 1타 삭제 길이가 달라 버퍼 어긋남이 발생하므로 버퍼 전체 초기화!
+                                typed_ascii_buf.clear()
+                                pending_first_typo = None
                         else:
                             # 유저가 1단어 직후 백스페이스를 쳤다면 스스로 수동 교정 중이므로 자동 개입 취소!
                             pending_first_typo = None
@@ -7252,7 +7282,11 @@ def main() -> None:
                     ):
                         raw_idle_buf_chk = "".join(typed_ascii_buf)
                         hwnd_idle = u32.GetForegroundWindow()
-                        if not _is_protected_account_or_email_token(raw_idle_buf_chk) and not should_skip_auto_typo(hwnd_idle):
+                        if should_skip_auto_typo(hwnd_idle):
+                            typed_ascii_buf.clear()
+                            pending_first_typo = None
+                            last_alpha_type_ts = 0.0
+                        elif not _is_protected_account_or_email_token(raw_idle_buf_chk):
                             edit_idle = _find_edit_control_child(hwnd_idle)
                             if edit_idle:
                                 idle_line = _get_edit_control_current_line(edit_idle)
@@ -7505,6 +7539,8 @@ def main() -> None:
                                 pending_first_typo = curr_typo
                         else:
                             pending_first_typo = None
+                            # [안전 철칙]: 실제 화면 문자열을 WM_GETTEXT로 100% 읽을 수 있는 네이티브 Edit 컨트롤(메모장 등)에서만
+                            # 실시간 한글 띄어쓰기 자동교정을 수행하며, 비-Edit 창(엑셀·카톡 등)에서는 키스트로크 역추론 오타를 원천 배제합니다.
                             if (
                                 edit_child
                                 and cur_line is not None
@@ -7516,39 +7552,6 @@ def main() -> None:
                                     edit_child, auto_triggered=True, allow_typo_morph=False, ensure_trailing_space=True
                                 )
                                 if ok_sp:
-                                    complete_feature_action_success("auto_typo_morph_2words")
-                            elif (
-                                not edit_child
-                                and typed_as_kor
-                                and len(word_cand) >= 4
-                                and not _is_protected_account_or_email_token(raw_buf_str)
-                                and (now - last_paste_ts) > 2.0
-                            ):
-                                # [노션·브라우저·카톡 등 비-Edit 창 한글 무공백 어절(예: '떡볶이가나왔어요 ', '내일의메뉴는 ') 입력 시 Space 즉시 오토띄어쓰기!]
-                                kor_typed_tok = lead_punct + eng_word_to_kor(word_cand) + trail_digits + trail_punct
-                                spaced_tok = _fix_korean_spacing_general(kor_typed_tok).strip()
-                                if " " in spaced_tok and spaced_tok != kor_typed_tok.strip() and is_valid_korean_word(re.sub(r"[^가-힣]", "", spaced_tok)):
-                                    total_bs_sp = len(kor_typed_tok) + 1
-                                    orig_c_sp = get_clipboard_text()
-                                    time.sleep(0.025)
-                                    release_all_modifiers()
-                                    bs_sc = u32.MapVirtualKeyW(VK_BACK, 0)
-                                    for _ in range(total_bs_sp):
-                                        u32.keybd_event(VK_BACK, bs_sc, 0, 0)
-                                        time.sleep(0.008)
-                                        u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
-                                        time.sleep(0.005)
-                                    time.sleep(0.025)
-                                    final_sp_paste = spaced_tok + " "
-                                    if send_unicode_text_preserve_style(final_sp_paste):
-                                        time.sleep(0.04)
-                                    else:
-                                        daemon_set_clipboard(final_sp_paste)
-                                        time.sleep(0.025)
-                                        tap_key_combo([VK_CONTROL], VK_V)
-                                        time.sleep(0.08)
-                                        if orig_c_sp and not seq_mode:
-                                            threading.Timer(0.28, lambda c=orig_c_sp: daemon_set_clipboard(c)).start()
                                     complete_feature_action_success("auto_typo_morph_2words")
                     was_key_down[VK_SPACE] = space_down
 
