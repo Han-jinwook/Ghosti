@@ -51,7 +51,7 @@
         <div>
           <div class="flex flex-wrap items-center gap-2">
             <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-teal-500/20 text-teal-300 border border-teal-500/40">
-              🕒 최종 업데이트 일시: 2026-11-12 09:42 KST
+              🕒 최종 업데이트 일시: 2026-11-12 10:45 KST
             </span>
             <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               기획 변경 시 가장 최근 변경분만 밑줄(하이라이트) 자동 표시 규칙 적용
@@ -334,8 +334,8 @@
               실무자·테스터가 가장 정확히 알아야 할 핵심 규칙입니다! 아래 2가지는 별도의 수동 버튼을 누르는 것이 아니라, <b>귀신창이 켜져 있으면 타이핑하는 즉시 100% 무버튼 자동으로 작동</b>합니다:
             </p>
             <ul class="space-y-1.5 pl-2">
-              <li>• <b>자동 1 (한영 오타 자동 성형):</b> 한영키를 안 눌러 <code>gksrmf xptmxm</code>(2어절 연속 오타)나 <code>dkssudgktpdy </code>(9타/4음절 이상 긴 오타 + Space)를 쳐도 백스페이스 없이 <code>한글 테스트</code>, <code>안녕하세요 </code>로 자동 변환하고 한/영 키까지 목표 언어로 맞춰줍니다. (<span class="updated-change">오프라인 내장 사전 <code>ko_en_lexicon.zlib</code> 25,905 영단어 + 4,110 한국어 어절 기본 탑재로 <code>meta demo</code>, <code>apple banana</code> 등 정상 영문과 이메일·복붙·비밀번호 100% 보호</span>)</li>
-              <li>• <b>자동 2 (자연스러운 한국어 띄어쓰기 교정):</b> 급하게 붙여 쓴 문장(예: <code>직접만드신요리입니다</code> ➔ <code>직접 만드신 요리입니다</code>)을 문맥과 조사·존칭 어미에 맞게 다듬어 줍니다. <span class="updated-change"><b>기본 발동 키는 모든 앱(메모장·노션·브라우저·카톡) 공통으로 <code>[Space(스페이스바)]</code></b>이며, 전송·블록 병합 위험이 없는 <b>순수 문서 편집기인 메모장(<code>notepad.exe</code>)에서만 줄 끝 <code>[Enter]</code> 줄바꿈 시 윗줄 자동 띄어쓰기·성형을 추가 지원</b>합니다 (메신저·노션에서는 메시지 오발송 및 블록 병합 방지를 위해 <code>Enter</code>에 개입하지 않음).</span></li>
+              <li>• <b>자동 1 (한영 오타 자동 성형):</b> 한영키를 안 눌러 <code>gksrmf xptmxm</code>(2어절 연속 오타)나 <code>dkssudgktpdy </code>(9타/4음절 이상 긴 오타 + Space), <span class="updated-change"><code>rnltlsrkxdlsmstkwlsanstjdudtkddmf1chaksdpckwdkwnqslek </code>(숫자 혼입 긴 문장), <code>roffjrtl25 </code>, <code>2026sus </code> 등을 쳐도 백스페이스 없이 즉시 한글로 변환하고 한/영 키까지 맞춰줍니다. 변칙 후 <code>Ctrl+Z</code> 또는 8초 내 <code>Ctrl+0</code> 귀신창 상단 원복 배너로 1초 원복 및 120초 재변환 면역이 지원됩니다.</span></li>
+              <li>• <b>자동 2 (정식 한국어 형태소 엔진 <code>Kiwi.space</code> 띄어쓰기 교정):</b> <span class="updated-change">정규식 임시방편을 전면 폐기하고 정식 한국어 형태소 분석기(<code>kiwipiepy</code>)를 탑재하여 조사·어미·의존명사·보조용언(예: <code>한국어 조금 어려워요</code>, <code>옷가게에 옷을 사러 갔습니다</code>)을 0.5ms 속도로 정밀 교정합니다. 실시간 자동성형은 <b>포커스 검증형 입력칸 화이트리스트(메모장 · 카카오톡 채팅창 · 엑셀 셀 편집 중 · Win32 표준 Edit/RichEdit)</b>에서만 작동하며, 웹 브라우저·노션·포토샵 등 외부 툴에서는 단축키/IME 보호를 위해 수동 <code>[1]</code>번 전용으로 작동합니다.</span></li>
             </ul>
           </div>
 
@@ -377,20 +377,19 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-relaxed">
             <!-- 발동 3대 기준점 -->
             <div class="bg-slate-900/90 border border-teal-500/30 rounded-xl p-4 space-y-2.5">
-              <div class="font-extrabold text-teal-300 text-[13px]">✅ 실제로 자동 변환이 발동하는 기준점 &amp; 발동 키</div>
+              <div class="font-extrabold text-teal-300 text-[13px]">✅ 실제로 자동 변환이 발동하는 기준점 &amp; 만능 원복</div>
               <ul class="space-y-2 text-slate-300">
                 <li>
-                  <b class="text-white">1. [공통 기본 발동 키] 모든 앱 <code>Space</code> 공통 + <span class="updated-change">메모장(<code>notepad.exe</code>) 줄 끝 <code>Enter</code> 줄바꿈 추가 지원</span></b><br />
-                  모든 앱(메모장·노션·브라우저·카톡)의 기본 발동 키는 <b><code>Space(스페이스바)</code></b>(및 2어절 연속 오타 시 0.55초 멈춤)입니다. 단, <span class="updated-change">순수 문서 편집기인 윈도우 <b>메모장(<code>notepad.exe</code>)</b>에서는 줄 끝에서 <code>Enter</code>로 줄바꿈할 때도 직전 줄의 띄어쓰기·한영 성형을 자동으로 수행</span>하며, 메신저(엔터=즉시 전송 위험)와 노션(엔터=새 블록 생성·병합 위험)에서는 안전을 위해 엔터에 개입하지 않습니다.
+                  <b class="text-white">1. [포커스 검증형 입력칸 화이트리스트 &amp; 발동 키]</b><br />
+                  <span class="updated-change">실시간 자동성형(<code>Space</code> / 0.55초 멈춤)은 실제 키보드 포커스(<code>hwndFocus</code>)가 검증된 <b>① 메모장(<code>notepad.exe</code>, 줄 끝 <code>Enter</code> 추가 지원), ② 카카오톡 채팅 입력창, ③ 엑셀(<code>excel.exe</code>) 셀/수식 텍스트 편집 상태(<code>EXCEL6</code>/<code>EXCEL&lt;</code>, 시트 그리드 <code>EXCEL7</code> 제외), ④ Win32 표준 <code>Edit</code>/<code>RichEdit</code> 입력칸</b>에서만 안전하게 발동합니다.</span>
                 </li>
                 <li>
-                  <b class="text-white">2. [2어절 연속 오타 &amp; 1어절 긴 오타 원칙]</b><br />
-                  • <b>2어절 연속 오타:</b> 1단어째 짧은 오타(<code>gksrmf </code>) 대기 후 2단어째도 연속 오타를 치고 <code>Space</code>(또는 0.55초 멈춤) 시 1·2단어를 한꺼번에 변환하고 한/영 키까지 자동 전환합니다. (<code>gksrmf xptmxm</code> ➔ <code>한글 테스트</code>)<br />
-                  • <b>1어절 긴 오타(영문 9타 &amp; 한글 4음절 이상):</b> <code>dkssudgktpdy </code>(<code>안녕하세요 </code>)는 <b>오직 <code>Space</code> 입력 시에만</b> 즉시 변환됩니다 (이메일 아이디 보호를 위해 1어절 0.55초 멈춤 미발동).
+                  <b class="text-white">2. [숫자 혼입 과잉 차단 폐지 ➔ 숫자 포함 문장·단어 즉시 변환]</b><br />
+                  <span class="updated-change">기존의 숫자 혼입 비밀번호 추정 차단을 폐지하여, <code>rnltlsrkxdlsmstkwlsanstjdudtkddmf1chaksdpckwdkwnqslek </code> ➔ <code>귀신같이는 사진 문서 영상을 1초 만에 찾아 줍니다 </code>, <code>roffjrtl25 </code> ➔ <code>갤럭시25 </code>, <code>2026sus </code> ➔ <code>2026년 </code> 등이 <code>Space</code> 한 번에 즉시 변환됩니다.</span>
                 </li>
                 <li>
-                  <b class="text-white">3. [1어절 숫자 결합 예외] 영문 4타 이상 + 숫자 1~2자리 결합 (<code>Space</code> 입력 시 발동)</b><br />
-                  예: <code>roffjrtl25 </code> ➔ <code>갤럭시25 </code>. (단, 숫자가 <b>3자리 이상</b> 붙으면 계정/비밀번호로 간주하여 절대 변환하지 않음: <code>gnsrn95459712</code> 보호)
+                  <b class="text-white">3. [만능 원복: <code>Ctrl+Z</code> 즉시 원복 + 8초 내 <code>Ctrl+0</code> 귀신창 원복 배너]</b><br />
+                  <span class="updated-change">귀신 변환 직후 <code>Ctrl+Z</code>를 누르거나 <b>8초 이내에 <code>Ctrl+0</code>(또는 <code>Ctrl+우클릭</code> / <code>우클릭 0.35초 꾹</code>)으로 귀신창을 열면 최상단에 노란색 <code>[↩ 방금 귀신 변환 되돌리기]</code> 배너</b>가 뜨며, 한 번 더 <code>Ctrl+0</code>·<code>Z</code>·클릭 시 원문과 이전 한/영 키 상태로 즉시 복원되고 120초 재변환 면역이 부여됩니다.</span>
                 </li>
               </ul>
             </div>
@@ -400,20 +399,20 @@
               <div class="font-extrabold text-amber-300 text-[13px]">🛡️ 절대 개입하지 않는 4대 안전 보호막</div>
               <ul class="space-y-2 text-slate-300">
                 <li>
-                  <b class="text-white">1. 이메일(<code>@</code>) 완벽 보호 &amp; 즉시 원복:</b><br />
-                  <code>@</code>가 붙는 순간(<code>dmsgydmlapdlf@</code>, <code>user@naver.com</code>) 변환 후보에서 100% 제외됩니다. 설령 실수로 <code>Space</code>를 쳐서 한글로 바뀐 직후 공백을 지우고(<code>Backspace</code>) <code>@</code>를 붙이더라도 즉시 원래 영문 아이디(<code>dmsgydmlapdlf@</code>)와 영문키(<code>EN</code>)로 자동 복구됩니다.
+                  <b class="text-white">1. 이메일(<code>@</code>) · URL/도메인 · 국제 표준 단위 보호:</b><br />
+                  <span class="updated-change">이메일(<code>@</code>), URL/도메인(<code>://</code>, <code>www.</code>, <code>.com</code>, <code>.kr</code> 등), 숫자 직결 국제 표준 단위(<code>16gb</code>, <code>100km</code>, <code>60hz</code>, <code>500ml</code> 등), 그리고 유저가 직전에 원복(<code>Ctrl+Z</code> / <code>Ctrl+0</code>)한 면역 토큰은 100% 원문 그대로 보호됩니다.</span>
                 </li>
                 <li>
                   <b class="text-white">2. 복사·붙여넣기(<code>Ctrl+C</code> ➔ <code>Ctrl+V</code>) 원천 차단:</b><br />
                   키보드로 직접 타이핑하지 않은 복사본은 붙여넣기 시 영문 알파벳을 단 1글자도 한글로 바꾸지 않습니다.
                 </li>
                 <li>
-                  <b class="text-white">3. 계정·비밀번호·URL·도메인 100% 보존:</b><br />
-                  <code>://</code>, <code>www.</code>, 도메인(<code>.com</code>, <code>.kr</code>, <code>.app</code> 등), 중간 기호 결합(<code>eunho.mail</code>, <code>user_01</code>, <code>qwer!1234</code>), 특수기호(<code>_#$%^&amp;*+=</code>), 숫자 3자리 이상 결합 토큰은 원문 그대로 보존됩니다.
+                  <b class="text-white">3. 비밀번호 입력칸(<code>ES_PASSWORD</code>) 및 특수 기호 토큰 보호:</b><br />
+                  윈도우 비밀번호 속성 입력칸 및 중간 특수기호 결합(<code>_#$%^&amp;*+=</code>), 엑셀 수식(<code>=...</code>) 입력은 절대 변환하지 않습니다.
                 </li>
                 <li>
-                  <b class="text-white">4. 예외 입력창 자동 휴면(웹 브라우저·노션 TSF/IME 조합 보호) &amp; 메신저 <code>Enter</code> 무개입:</b><br />
-                  비밀번호 칸, 자체 한영교정 탑재 앱(한글 HWP, MS워드, 파워포인트), 코딩 IDE 및 <span class="updated-change">웹 브라우저(<code>chrome</code>/<code>edge</code>/<code>whale</code> 등)·노션(<code>Notion</code>) 등 TSF 리치 에디터에서는 무버튼 실시간 키스트로크 자동개입을 100% PASS하여 한글 조합·백스페이스 충돌을 원천 차단</span>하며(단, 귀신창 소환·순차붙여넣기·수동 <code>[1]~[6]</code>은 노션·브라우저에서도 100% 동일 작동), <code>Enter</code> 줄바꿈 교정은 오직 메모장(<code>notepad.exe</code>)에서만 작동합니다.
+                  <b class="text-white">4. 외부 툴 단축키·캔버스·웹 에디터 100% 보호 (화이트리스트 외 자동 휴면):</b><br />
+                  <span class="updated-change">포토샵·프리미어·캡컷·오토캐드·터미널·원격데스크톱·코딩 IDE·웹 브라우저·노션 등 화이트리스트 외 모든 외부 앱에서는 실시간 키 개입을 100% 차단하여 단축키·캔버스·IME 조합 충돌을 원천 예방합니다 (웹·노션에서는 블록 선택 후 귀신창 수동 <code>[1]</code>번으로 동일하게 한영/띄어쓰기/줄바꿈 교정 가능).</span>
                 </li>
               </ul>
             </div>

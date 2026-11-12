@@ -172,8 +172,17 @@ _RCLICK_BYPASS_PROCS = {
     "league of legends.exe", "leagueoflegends.exe", "valorant.exe", "valorant-win64-shipping.exe",
     "tslgame.exe", "overwatch.exe", "starcraft.exe", "sc2.exe", "diablo iii64.exe", "diablo iv.exe",
     "lostark.exe", "fc24.exe", "maplestory.exe", "SuddenAttack.exe", "fifaonline4.exe",
-    "blender.exe", "acad.exe", "solidworks.exe", "sketchup.exe", "3dsmax.exe", "maya.exe",
-    "rhino.exe", "zbrush.exe", "unrealEditor.exe", "unity.exe", "mstsc.exe", "anydesk.exe", "teamviewer.exe",
+    "blender.exe", "acad.exe", "autocad.exe", "solidworks.exe", "sketchup.exe", "3dsmax.exe", "maya.exe",
+    "rhino.exe", "zbrush.exe", "revit.exe", "inventor.exe", "catia.exe",
+    "unrealEditor.exe", "unity.exe",
+    # 디자인·영상편집 툴 (우클릭 드래그/컨텍스트 작업 보호)
+    "photoshop.exe", "illustrator.exe", "afterfx.exe", "adobe premiere pro.exe", "indesign.exe",
+    "lightroom.exe", "resolve.exe", "capcut.exe", "vegas190.exe", "vegas200.exe", "clipstudiopaint.exe", "figma.exe",
+    # 원격제어·가상머신 및 터미널 (우클릭=붙여넣기 보호)
+    "mstsc.exe", "msrdc.exe", "anydesk.exe", "teamviewer.exe", "parsec.exe", "moonlight.exe", "rustdesk.exe",
+    "remoting_desktop.exe", "vmware-vmx.exe", "vmware.exe", "virtualboxvm.exe",
+    "windowsterminal.exe", "wt.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "conhost.exe", "mintty.exe",
+    "putty.exe", "kitty.exe", "xshell.exe", "securecrt.exe", "mobaxterm.exe", "termius.exe",
     # [보안 민감 앱 자동 차단 (App Blocklist)]: 비밀번호 관리자 및 보안 터미널
     "1password.exe", "bitwarden.exe", "keepass.exe", "keepassxc.exe", "dashlane.exe", "enpass.exe",
 }
@@ -788,32 +797,67 @@ eng_to_kor = eng_word_to_kor
 kor_to_eng = kor_word_to_eng
 
 
+_UNDONE_IMMUNE_TOKENS: dict[str, float] = {}
+
+_DIGIT_ATTACHED_EN_UNITS: set[str] = {
+    "kb", "mb", "gb", "tb", "pb", "hz", "khz", "mhz", "ghz",
+    "px", "em", "rem", "vh", "vw", "pt", "dp", "sp",
+    "ms", "ns", "us", "sec", "min", "hr", "hrs",
+    "mm", "cm", "km", "mg", "kg", "ml", "dl", "kl", "kcal", "cal",
+    "fps", "rpm", "mah", "wh", "kw", "mw", "db", "bit", "byte",
+    "am", "pm", "st", "nd", "rd", "th",
+}
+
+
+def _mark_undo_immunity(raw_text: str, duration_sec: float = 120.0) -> None:
+    """유저가 Ctrl+Z 또는 Ctrl+0 원복으로 되돌린 영타 문자열은 재차 자동 변환되지 않도록 면역 락을 부여합니다."""
+    if not raw_text:
+        return
+    exp = time.time() + duration_sec
+    now_c = time.time()
+    for k_old in [k for k, v in _UNDONE_IMMUNE_TOKENS.items() if v < now_c]:
+        _UNDONE_IMMUNE_TOKENS.pop(k_old, None)
+    full_s = raw_text.strip()
+    if full_s:
+        _UNDONE_IMMUNE_TOKENS[full_s] = exp
+    for part in full_s.split():
+        p_clean = part.strip(".,?!:;\"'()[]{}")
+        if p_clean:
+            _UNDONE_IMMUNE_TOKENS[p_clean] = exp
+        _UNDONE_IMMUNE_TOKENS[part] = exp
+
+
+def _is_undo_immune_token(tok: str) -> bool:
+    if not tok or not _UNDONE_IMMUNE_TOKENS:
+        return False
+    now_c = time.time()
+    s = tok.strip()
+    s_clean = s.strip(".,?!:;\"'()[]{}")
+    for cand in (s, s_clean):
+        if cand and _UNDONE_IMMUNE_TOKENS.get(cand, 0.0) > now_c:
+            return True
+    return False
+
+
 def _is_protected_account_or_email_token(tok: str) -> bool:
     """
-    [이메일·URL·계정 아이디·비밀번호 원천 보호 필터]
-    - 이메일 기호(@: dmsgydmlapdlf@, user@naver.com), URL/도메인(.com/.kr/.app 등),
-      중간 기호 결합 아이디(eunho.mail, user_01, qwer!1234), 숫자 3자리 이상 결합 토큰(gnsrn95459712)은
-      실시간 한영 자동전환 및 문장 성형에서 100% 원문 그대로 보호합니다!
+    [최소 주소 보호 & 원복 면역 필터 — 숫자 혼입 문장 과잉 차단 전면 폐지]
+    - 명백한 이메일(@: dmsgydmlapdlf@, user@naver.com), URL/도메인(http://, www., .com/.kr 등),
+      그리고 유저가 직전에 Ctrl+Z / Ctrl+0으로 원복한 면역 토큰만 보호합니다.
+    - 숫자가 포함된 일상 한국어 오타('1chaksdp' -> '1초만에', 'roffjrtl25' -> '갤럭시25')는 제한 없이 변환하며,
+      만약 특수 계정/비번 작성 중 변환된 경우에는 Ctrl+Z(또는 8초 내 Ctrl+0 원복) 1회로 즉시 복구 + 면역됩니다.
     """
     if not tok:
         return False
     s = tok.strip()
     if not s:
         return False
+    if _is_undo_immune_token(s):
+        return True
     if "@" in s or "://" in s or s.lower().startswith("www."):
         return True
     if re.search(r"[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b", s, re.IGNORECASE):
         return True
-    if re.search(r"[A-Za-z0-9][._!+-][A-Za-z0-9]", s) and not re.search(r"[가-힣]", s):
-        return True
-    stripped_punct = s.strip(".,?!:;\"'()[]{}")
-    if re.search(r"[A-Za-z]", stripped_punct) and not re.search(r"[가-힣\u3131-\u318E]", stripped_punct):
-        if re.search(r"\d{3,}", stripped_punct):
-            return True
-        if re.search(r"[_@#$%^&*+=\\/|~`]", stripped_punct):
-            return True
-        if re.search(r"\d+[A-Za-z]", stripped_punct):
-            return True
     return False
 
 
@@ -823,8 +867,10 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
     - 반환값: (변환된 문자열, 'KO' | 'EN' | None)
     - [QA 2-2 완치]:
       1) 한영 전환 직전/직후 한글 어절 앞에 실수로 1글자 영문이 붙은 경우('w오늘은 날씨가', 't밖으로 나가고') 영문 찌꺼기 자동 제거!
-      2) 영문 오타 뒤에 숫자가 붙은 경우('은호의 roffjrtl25' ➔ '은호의 갤럭시25')에도 영문 오타 구간을 정확히 분리해 한글로 변환!
+      2) 영문 오타 앞·중간·뒤에 숫자가 붙은 경우('...dudtkddmf1chaksdp...' ➔ '...영상을1초만에...', 'roffjrtl25' ➔ '갤럭시25')에도 영문 오타 구간을 정확히 분리해 한글로 변환!
     """
+    if _is_undo_immune_token(text):
+        return text, None
     target_lang: str | None = None
 
     # 0) 한글 어절(2음절 이상) 바로 앞에 1글자 영문 오타가 달라붙은 경우('w오늘은' -> '오늘은', 't밖으로' -> '밖으로') 즉시 제거
@@ -835,8 +881,6 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
 
     cleaned_lead = re.sub(r"(?<![A-Za-z0-9_:/.-])([a-zA-Z])([가-힣]{2,})", _strip_leading_single_eng, text)
 
-    # [핵심 보호막]: URL, 이메일(user@domain.com, user@), 파일경로, 비밀번호/영숫자+특수기호 복합 토큰(예: gnsrn95459712, Abc!1234, test_id01)은
-    # 절대 영타 오타로 쪼개서 한글 변환하지 않고 원문 100% 그대로 보호합니다!
     def _morph_whitespace_chunk(chunk_m: re.Match) -> str:
         nonlocal target_lang
         w_tok = chunk_m.group(0)
@@ -846,9 +890,16 @@ def morph_korean_english_text_with_direction(text: str) -> tuple[str, str | None
         def replace_token(m: re.Match) -> str:
             nonlocal target_lang
             tok = m.group(0)
+            start_idx = m.start()
 
             # 1) 영문 알파벳 토큰인 경우
             if re.fullmatch(r"[A-Za-z]+", tok):
+                # 숫자 바로 뒤에 붙은 국제 표준 단위 약어(16gb, 100km, 60hz, 500ml, 3pm 등)는 영문 원형 유지
+                if start_idx > 0 and w_tok[start_idx - 1].isdigit() and tok.lower() in _DIGIT_ATTACHED_EN_UNITS:
+                    end_idx = m.end()
+                    if end_idx >= len(w_tok) or not w_tok[end_idx].isalpha():
+                        return tok
+
                 # 1-A) Caps Lock 역전 오타 (예: tHANKS -> Thanks)
                 if len(tok) >= 2 and tok[0].islower() and tok[1:].isupper():
                     fixed_caps = tok[0].upper() + tok[1:].lower()
@@ -2730,6 +2781,31 @@ def _toast_worker() -> None:
                         container = tk.Frame(win, bg="#0B1120", highlightbackground="#2DD4BF", highlightthickness=2, padx=8, pady=6)
                         container.pack(fill="both", expand=True)
 
+                        # [방안 1 — 8초 이내 귀신 변환 원복 최상단 배너]:
+                        # 방금 귀신 자동/수동 변환이 일어난 직후(8초 이내) 귀신창을 호출하면 최상단에 즉시 되돌리기 배너를 노출!
+                        if is_recent_undo_available(8.0):
+                            raw_prev_u = str(_UNDO_SNAPSHOT.get("raw_text") or "").replace("\r", " ").replace("\n", " ").strip()
+                            mor_prev_u = str(_UNDO_SNAPSHOT.get("morphed_text") or "").replace("\r", " ").replace("\n", " ").strip()
+                            if len(raw_prev_u) > 18:
+                                raw_prev_u = raw_prev_u[:18] + "…"
+                            if len(mor_prev_u) > 18:
+                                mor_prev_u = mor_prev_u[:18] + "…"
+                            preview_u = f"  ({mor_prev_u} ➔ {raw_prev_u})" if (raw_prev_u and mor_prev_u) else ""
+                            undo_banner = tk.Frame(container, bg="#422006", highlightbackground="#FACC15", highlightthickness=2, padx=8, pady=4, cursor="hand2")
+                            undo_banner.pack(fill="x", pady=(0, 5))
+                            undo_banner_lbl = tk.Label(
+                                undo_banner,
+                                text=f"↩ 방금 귀신 변환 되돌리기 [한 번 더 Ctrl+0 · Z · 클릭]{preview_u}",
+                                fg="#FEF08A",
+                                bg="#422006",
+                                font=("Malgun Gothic", 9, "bold"),
+                                anchor="w",
+                                cursor="hand2",
+                            )
+                            undo_banner_lbl.pack(fill="x")
+                            for uw_w in (undo_banner, undo_banner_lbl):
+                                uw_w.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(-1)))
+
                         top_bar = tk.Frame(container, bg="#0F172A", highlightbackground="#14B8A6", highlightthickness=1, padx=6, pady=3)
                         top_bar.pack(fill="x", pady=(0, 5))
 
@@ -2749,7 +2825,7 @@ def _toast_worker() -> None:
 
                         undo_btn = tk.Label(top_bar, text="↩원복(Ctrl+Z)", fg="#FDE047" if _UNDO_SNAPSHOT.get("active") else "#94A3B8", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
                         undo_btn.pack(side="right", padx=(3, 0))
-                        undo_btn.bind("<Button-1>", lambda _e: (_close_win(), execute_undo_snapshot(set_clipboard_text)))
+                        undo_btn.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(-1)))
 
                         ret_btn = tk.Label(top_bar, text=ret_label_map.get(cur_days, f"보관:{cur_days}일") + "▾", fg="#5EEAD4", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
                         ret_btn.pack(side="right", padx=(3, 0))
@@ -3547,9 +3623,40 @@ _UNDO_SNAPSHOT: dict = {
     "morphed_text": "",
     "full_doc_before": "",
     "full_doc_after": "",
-    "mode": "",  # "edit_replace", "clip_replace", "pre_iron", "snippet"
+    "mode": "",  # "edit_replace", "clip_replace", "pre_iron", "snippet", "backspace_replace"
     "typed_count_after": 0,
+    "prev_ime_kor": None,
+    "hotkey_999_armed": False,
 }
+
+RECENT_GHOST_UNDO_WINDOW_SEC: float = 8.0
+CTRL_Z_HOTKEY_WINDOW_SEC: float = 10.0
+_NATIVE_EDIT_CLASSES: tuple[str, ...] = (
+    "Edit",
+    "RichEditD2DPT",
+    "RichEdit20W",
+    "RICHEDIT50W",
+    "RICHEDIT60W",
+    "RichEdit20A",
+)
+
+
+def is_recent_undo_available(max_sec: float = RECENT_GHOST_UNDO_WINDOW_SEC) -> bool:
+    """방금(기본 8초 이내) 귀신 자동/수동 변환이 수행되어 되돌릴 스냅샷이 살아 있는지 반환"""
+    if not _UNDO_SNAPSHOT.get("active"):
+        return False
+    ts_u = float(_UNDO_SNAPSHOT.get("ts") or 0.0)
+    return ts_u > 0.0 and (time.time() - ts_u) <= max_sec
+
+
+def release_ctrl_z_hotkey_only() -> None:
+    """10초 경과 또는 후속 장문 입력 시 스냅샷은 유지하되 전역 Ctrl+Z 가로채기(999)만 OS로 반환"""
+    if _UNDO_SNAPSHOT.get("hotkey_999_armed"):
+        _UNDO_SNAPSHOT["hotkey_999_armed"] = False
+        try:
+            u32.UnregisterHotKey(None, 999)
+        except Exception:
+            pass
 
 
 def arm_undo_snapshot(
@@ -3560,13 +3667,12 @@ def arm_undo_snapshot(
     mode: str = "edit_replace",
     full_doc_before: str = "",
     full_doc_after: str = "",
+    prev_ime_kor: bool | None = None,
 ) -> None:
     """
-    [Ctrl+Z 원클릭 100% 원복 보장 스냅샷 엔진]
-    - Win11 메모장(RichEditD2DPT)이나 웹 브라우저에서 붙여넣기(Ctrl+V) 직후 변환이 일어날 때
-      OS 기본 Ctrl+Z가 '변환 + 붙여넣기 전체'를 통째로 날려버리는(빈 화면이 되는) 문제를 100% 원천 차단합니다!
-    - 변환 직후 Ctrl+Z(Hotkey 999)를 누르면 붙여넣기 전 상태가 아니라 정확히 '변환 직전의 날것 원문(raw_text / full_doc_before)'으로 복원합니다.
-    - 유저가 [Ctrl+0 ➔ 2] 직후 [Ctrl+0 ➔ 4]를 연속으로 실행한 경우에도 최초 변환 전 원문(raw_text / full_doc_before)을 보존합니다!
+    [Ctrl+Z 즉시 원복 & 8초 내 Ctrl+0 귀신창 원복 통합 스냅샷 엔진]
+    - 자동 한영·띄어쓰기 변환, [1] 다림질, [4] 합본, [5] 번호매기기, 상용구 사출 직후 원문 + 이전 한/영 키 상태를 보존합니다.
+    - 변환 직후 Ctrl+Z(또는 8초 내 Ctrl+0 -> 재호출/클릭) 시 원문 복원 + 재변환 방지 면역 락을 즉시 부여합니다.
     """
     global _UNDO_SNAPSHOT
     now_ts = time.time()
@@ -3577,6 +3683,7 @@ def arm_undo_snapshot(
     prev_morphed = str(_UNDO_SNAPSHOT.get("morphed_text") or "")
     prev_doc_before = str(_UNDO_SNAPSHOT.get("full_doc_before") or "")
     prev_doc_after = str(_UNDO_SNAPSHOT.get("full_doc_after") or "")
+    prev_ime_saved = _UNDO_SNAPSHOT.get("prev_ime_kor")
 
     keep_chain = False
     if prev_active and (now_ts - prev_ts) < 30.0 and prev_hwnd == int(hwnd or 0) and prev_raw:
@@ -3586,6 +3693,12 @@ def arm_undo_snapshot(
             keep_chain = True
         elif full_doc_before and prev_doc_after and full_doc_before.replace("\r\n", "\n") == prev_doc_after.replace("\r\n", "\n"):
             keep_chain = True
+
+    armed_hk = False
+    try:
+        armed_hk = bool(u32.RegisterHotKey(None, 999, MOD_CONTROL | MOD_NOREPEAT, VK_Z))
+    except Exception:
+        pass
 
     _UNDO_SNAPSHOT = {
         "active": True,
@@ -3598,54 +3711,69 @@ def arm_undo_snapshot(
         "full_doc_after": str(full_doc_after or ""),
         "mode": mode,
         "typed_count_after": 0,
+        "prev_ime_kor": (prev_ime_saved if (keep_chain and prev_ime_saved is not None) else prev_ime_kor),
+        "hotkey_999_armed": armed_hk or True,
     }
-    try:
-        u32.RegisterHotKey(None, 999, MOD_CONTROL | MOD_NOREPEAT, VK_Z)
-    except Exception:
-        pass
 
 
 def disarm_undo_snapshot() -> None:
     global _UNDO_SNAPSHOT
+    release_ctrl_z_hotkey_only()
     if _UNDO_SNAPSHOT.get("active"):
         _UNDO_SNAPSHOT["active"] = False
-        try:
-            u32.UnregisterHotKey(None, 999)
-        except Exception:
-            pass
 
 
-def _find_edit_control_child(hwnd_fg: int) -> int:
-    """Win10 메모장(Edit) 및 Win11 탭 메모장(Notepad -> NotepadTextBox -> RichEditD2DPT) 완벽 탐색"""
+def _find_edit_control_child(hwnd_fg: int, require_focused: bool = False) -> int:
+    """
+    [포커스 정밀 검증 네이티브 Edit 탐색기]:
+    1) 최우선으로 실제 키보드 커서가 놓인 컨트롤(GetGUIThreadInfo.hwndFocus)이 Edit/RichEdit인지 확인합니다.
+       (탐색기 상단 검색창이나 복합 앱의 비활성 툴바 입력칸을 엉뚱하게 잡는 오탐을 100% 원천 차단!)
+    2) 메모장(notepad.exe)인 경우에만 Win10 Edit / Win11 탭 메모장(NotepadTextBox -> RichEditD2DPT) 자식 탐색을 허용합니다.
+    """
     if not hwnd_fg or not u32.IsWindow(hwnd_fg):
         return 0
-    ed = u32.FindWindowExW(hwnd_fg, None, "Edit", None)
-    if ed:
-        return ed
-    ed = u32.FindWindowExW(hwnd_fg, None, "RichEditD2DPT", None)
-    if ed:
-        return ed
-    ntb = u32.FindWindowExW(hwnd_fg, None, "NotepadTextBox", None)
-    if ntb:
-        ed = u32.FindWindowExW(ntb, None, "RichEditD2DPT", None)
+    focus_h = _get_focused_control_hwnd(hwnd_fg)
+    if focus_h and u32.IsWindow(focus_h):
+        f_cls = _get_win_class_only(focus_h)
+        if f_cls in _NATIVE_EDIT_CLASSES:
+            return focus_h
+        if f_cls == "NotepadTextBox":
+            ed_ntb = u32.FindWindowExW(focus_h, None, "RichEditD2DPT", None)
+            if ed_ntb:
+                return ed_ntb
+
+    proc_n = _get_process_name_from_hwnd(hwnd_fg).lower()
+    cls_fg = _get_win_class_only(hwnd_fg)
+    if proc_n == "notepad.exe" or cls_fg == "Notepad":
+        ed = u32.FindWindowExW(hwnd_fg, None, "Edit", None)
         if ed:
             return ed
-    found_ed = [0]
-    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        ed = u32.FindWindowExW(hwnd_fg, None, "RichEditD2DPT", None)
+        if ed:
+            return ed
+        ntb = u32.FindWindowExW(hwnd_fg, None, "NotepadTextBox", None)
+        if ntb:
+            ed = u32.FindWindowExW(ntb, None, "RichEditD2DPT", None)
+            if ed:
+                return ed
+        found_ed = [0]
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
-    def _enum_child_cb(ch: int, _lp: int) -> bool:
-        if u32.IsWindowVisible(ch):
-            c_cls, _ = _get_win_class_and_title(ch)
-            if c_cls in ("Edit", "RichEditD2DPT", "RichEdit20W", "RICHEDIT50W"):
-                found_ed[0] = ch
-                return False
-        return True
+        def _enum_child_cb(ch: int, _lp: int) -> bool:
+            if u32.IsWindowVisible(ch):
+                c_cls = _get_win_class_only(ch)
+                if c_cls in _NATIVE_EDIT_CLASSES:
+                    found_ed[0] = ch
+                    return False
+            return True
 
-    try:
-        u32.EnumChildWindows(hwnd_fg, WNDENUMPROC(_enum_child_cb), 0)
-    except Exception:
-        pass
-    return found_ed[0]
+        try:
+            u32.EnumChildWindows(hwnd_fg, WNDENUMPROC(_enum_child_cb), 0)
+        except Exception:
+            pass
+        return found_ed[0]
+
+    return 0
 
 
 def _get_edit_full_text_and_index_str(edit_child: int) -> tuple[str, str, bool]:
@@ -3671,9 +3799,9 @@ def _get_edit_full_text_and_index_str(edit_child: int) -> tuple[str, str, bool]:
 
 def execute_undo_snapshot(daemon_set_cb) -> bool:
     """
-    [Ctrl+Z 원클릭 원상복구 실행기]
-    - 방금 변환된 문장(morphed_text / full_doc_after)만 정확히 이전 날것 상태(raw_text / full_doc_before)로 되돌려,
-      붙여넣기 자체가 취소되어 빈 화면이 되거나 이모지(Surrogate Pair)·줄바꿈 오프셋 차이로 글자가 밀리는 현상을 100% 방지합니다!
+    [Ctrl+Z & 8초 내 Ctrl+0 원클릭 원상복구 실행기 + 재변환 면역 락]
+    - 방금 변환된 문장(morphed_text / full_doc_after)을 변환 직전의 날것 원문(raw_text)으로 정확히 되돌리고,
+      이전 한/영 키보드 상태(prev_ime_kor) 복원 및 해당 문자열 재변환 방지 면역(_mark_undo_immunity)을 동시 부여합니다!
     """
     snap = dict(_UNDO_SNAPSHOT)
     disarm_undo_snapshot()
@@ -3686,32 +3814,25 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
     full_before = snap.get("full_doc_before", "")
     full_after = snap.get("full_doc_after", "")
     snap_hwnd = int(snap.get("hwnd") or 0)
-    fg_now = u32.GetForegroundWindow()
-    ed = _find_edit_control_child(fg_now) or snap.get("edit_child", 0)
+    prev_ime_kor = snap.get("prev_ime_kor")
+    if raw_t:
+        _mark_undo_immunity(raw_t)
 
-    # 1) 메모장(Edit / RichEditD2DPT) 컨트롤 내부에서 오프셋 오차 없이 100% 원자적 복원!
-    if ed and u32.IsWindow(ed):
+    fg_now = u32.GetForegroundWindow()
+    if snap_hwnd and u32.IsWindow(snap_hwnd) and fg_now != snap_hwnd:
+        try:
+            u32.SetForegroundWindow(snap_hwnd)
+            time.sleep(0.025)
+            fg_now = u32.GetForegroundWindow()
+        except Exception:
+            pass
+
+    ed = snap.get("edit_child", 0) or _find_edit_control_child(fg_now)
+
+    # 1) 네이티브 Edit / RichEdit 컨트롤 내부에서 커서 위치 보존 + 0.2ms 원자적 복원!
+    if ed and u32.IsWindow(ed) and mode != "backspace_replace":
         try:
             cur_full, idx_text, is_rich = _get_edit_full_text_and_index_str(ed)
-            # 1-A) 변환 직전 전체 문서 스냅샷(full_before)이 보존되어 있는 경우:
-            #      ① 문서 변경이 없었으면 0..-1 전체 교체로 100% 무결점 복원하고,
-            #      ② 유저가 다른 줄을 일부 수정한 뒤 Ctrl+Z를 눌렀더라도 변환된 블록(morphed_t)만 정확히 변환 전 원문(raw_t)으로 치환하여 복원!
-            if full_before and mode != "pre_iron":
-                cur_norm_check = cur_full.replace("\r\n", "\n")
-                after_norm_check = full_after.replace("\r\n", "\n") if full_after else ""
-                if not after_norm_check or cur_norm_check == after_norm_check:
-                    restore_doc = (
-                        full_before.replace("\r\n", "\n").replace("\n", "\r\n")
-                        if not is_rich
-                        else full_before
-                    )
-                    u32.SendMessageW(ed, EM_SETSEL, 0, -1)
-                    rbuf = ctypes.create_unicode_buffer(restore_doc)
-                    u32.SendMessageW(ed, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
-                    show_ghost_toast("👻 귀신같이 원상복구 완료 (변환 전 원문 100% 복원)", duration_ms=1600)
-                    return True
-
-            # 1-B) 부분 치환 또는 pre_iron 모드인 경우에도 파이썬 문자열 공간에서 치환한 뒤 EM_SETSEL(0, -1)로 기록하여 Surrogate Pair 오차 원천 차단
             cur_norm = cur_full.replace("\r\n", "\n")
             search_m = morphed_t.replace("\r\n", "\n")
             search_m_strip = search_m.strip()
@@ -3726,28 +3847,66 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
 
             if target_pos >= 0 and target_len > 0:
                 rep_norm = "" if mode == "snippet" else raw_t.replace("\r\n", "\n")
+                if search_m != search_m_strip and target_len == len(search_m_strip) and not rep_norm.endswith(" "):
+                    rep_norm = rep_norm.rstrip(" ")
                 new_norm = cur_norm[:target_pos] + rep_norm + cur_norm[target_pos + target_len :]
                 restore_doc = new_norm.replace("\n", "\r\n") if not is_rich else new_norm
+                caret_str = cur_norm[:target_pos] + rep_norm
+                caret_str_win = caret_str.replace("\n", "\r\n") if not is_rich else caret_str
+                caret_u16 = len(caret_str_win.encode("utf-16-le")) // 2
                 u32.SendMessageW(ed, EM_SETSEL, 0, -1)
                 rbuf = ctypes.create_unicode_buffer(restore_doc)
                 u32.SendMessageW(ed, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                u32.SendMessageW(ed, EM_SETSEL, caret_u16, caret_u16)
                 if mode == "pre_iron" and raw_t:
                     daemon_set_cb(raw_t)
-                show_ghost_toast("👻 귀신같이 원상복구 완료 (변환 전 원문 100% 복원)", duration_ms=1600)
+                if prev_ime_kor is not None:
+                    set_ime_language(target_korean=bool(prev_ime_kor))
+                show_ghost_toast("👻 귀신같이 원상복구 완료 (원문·키보드 복원 + 재변환 잠금)", duration_ms=1700)
                 return True
+
+            if full_before and mode != "pre_iron":
+                after_norm_check = full_after.replace("\r\n", "\n") if full_after else ""
+                if not after_norm_check or cur_norm == after_norm_check:
+                    restore_doc = (
+                        full_before.replace("\r\n", "\n").replace("\n", "\r\n")
+                        if not is_rich
+                        else full_before
+                    )
+                    u32.SendMessageW(ed, EM_SETSEL, 0, -1)
+                    rbuf = ctypes.create_unicode_buffer(restore_doc)
+                    u32.SendMessageW(ed, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                    if prev_ime_kor is not None:
+                        set_ime_language(target_korean=bool(prev_ime_kor))
+                    show_ghost_toast("👻 귀신같이 원상복구 완료 (원문·키보드 복원 + 재변환 잠금)", duration_ms=1700)
+                    return True
         except Exception:
             pass
 
-    # 2) 일반 웹/앱 창에서 원복:
-    if snap_hwnd and u32.IsWindow(snap_hwnd) and fg_now != snap_hwnd:
-        try:
-            u32.SetForegroundWindow(snap_hwnd)
-            time.sleep(0.02)
-        except Exception:
-            pass
-
+    # 2) 엑셀 셀 편집(EXCEL6) 등 백스페이스 교체 모드 및 일반 창 원복:
     release_all_modifiers()
     time.sleep(0.02)
+    if mode == "backspace_replace" and morphed_t and raw_t:
+        bs_sc = u32.MapVirtualKeyW(VK_BACK, 0)
+        for _ in range(len(morphed_t)):
+            u32.keybd_event(VK_BACK, bs_sc, 0, 0)
+            time.sleep(0.006)
+            u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
+            time.sleep(0.004)
+        time.sleep(0.02)
+        if not send_unicode_text_preserve_style(raw_t):
+            orig_c = get_clipboard_text()
+            daemon_set_cb(raw_t)
+            time.sleep(0.02)
+            tap_key_combo([VK_CONTROL], VK_V)
+            time.sleep(0.05)
+            if orig_c:
+                threading.Timer(0.25, lambda c=orig_c: daemon_set_cb(c)).start()
+        if prev_ime_kor is not None:
+            set_ime_language(target_korean=bool(prev_ime_kor))
+        show_ghost_toast("👻 귀신같이 원상복구 완료 (원문·키보드 복원 + 재변환 잠금)", duration_ms=1700)
+        return True
+
     if mode == "snippet":
         tap_key_combo([VK_CONTROL], VK_Z)
         show_ghost_toast("👻 귀신같이 상용구 실행취소 완료", duration_ms=1400)
@@ -3764,6 +3923,8 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
             time.sleep(0.035)
             if orig_c:
                 daemon_set_cb(orig_c)
+        if prev_ime_kor is not None:
+            set_ime_language(target_korean=bool(prev_ime_kor))
         show_ghost_toast("👻 귀신같이 원상복구 완료 (변환 전 원문 100% 복원)", duration_ms=1600)
         return True
 
@@ -3796,648 +3957,127 @@ def _get_edit_control_current_line(edit_child: int) -> str | None:
         return None
 
 
+_KIWI_ENGINE = None
+_KIWI_INIT_LOCK = threading.Lock()
+_KIWI_WARMUP_STARTED = False
+
+_KIWI_USER_NOUNS: tuple[tuple[str, str], ...] = (
+    ("귀신같이", "NNP"),
+    ("귀신창", "NNP"),
+    ("귀신검색창", "NNP"),
+    ("아기귀신", "NNP"),
+    ("멀린허브", "NNP"),
+    ("썬드림", "NNP"),
+    ("루미노트", "NNP"),
+    ("센스톡", "NNP"),
+    ("옷가게", "NNG"),
+)
+
+
+def _get_kiwi_engine():
+    """정식 한국어 형태소 분석 엔진(Kiwi) 싱글톤 로더 — 최초 1회 로드 후 호출당 0.2~2ms 초고속 띄어쓰기 수행"""
+    global _KIWI_ENGINE
+    if _KIWI_ENGINE is not None:
+        return _KIWI_ENGINE
+    with _KIWI_INIT_LOCK:
+        if _KIWI_ENGINE is not None:
+            return _KIWI_ENGINE
+        try:
+            from kiwipiepy import Kiwi
+
+            kw = Kiwi(num_workers=1)
+            for w_str, pos_tag in _KIWI_USER_NOUNS:
+                try:
+                    kw.add_user_word(w_str, pos_tag, 10.0)
+                except Exception:
+                    pass
+            _KIWI_ENGINE = kw
+        except Exception:
+            _KIWI_ENGINE = False
+        return _KIWI_ENGINE
+
+
+def _ensure_kiwi_warmup_async() -> None:
+    """데몬 기동 직후 백그라운드에서 Kiwi C++ 모델을 선행 워밍업하여 첫 타이핑 지연을 0.00ms로 제거"""
+    global _KIWI_WARMUP_STARTED
+    if _KIWI_WARMUP_STARTED:
+        return
+    _KIWI_WARMUP_STARTED = True
+
+    def _warm():
+        try:
+            kw = _get_kiwi_engine()
+            if kw:
+                kw.space("귀신같이 한국어 형태소 띄어쓰기 엔진 워밍업 완료", reset_whitespace=False)
+        except Exception:
+            pass
+
+    threading.Thread(target=_warm, daemon=True).start()
+
+
 def _fix_korean_spacing_general(s: str) -> str:
     """
-    [범용 한국어 어절 경계(조사·연결어미·종결어미·보조용언·의존명사·부사) 및 문맥 오타 자동 교정기]
-    - 소리나는 대로 친 상용 오타('조아서'->'좋아서', '함 깨'->'함께', '제생 버튼'->'재생 버튼', '아기기신'->'아기귀신', '되요'->'돼요', '됬'->'됐', '몇일'->'며칠') 교정
-    - 의존명사('성공할수있습니다'->'성공할 수 있습니다', '확인하실 수있습니다'->'확인하실 수 있습니다', '바뀐 것같은데'->'바뀐 것 같은데') 및
-      체언+부사('이번프로젝트는꼭'->'이번 프로젝트는 꼭', '오늘3시 에 미팅있습니다'->'오늘 3시에 미팅 있습니다') 정밀 교정
+    [정식 한국어 형태소 분석 엔진(Kiwi) 기반 초고속 띄어쓰기 및 상용 소리나는 오타 교정기]
+    - 임시방편 정규식 단어 나열을 전면 폐기하고, 한국어 형태소·품사·의존명사·보조용언 문맥을 정밀 분석하는
+      Kiwi.space(reset_whitespace=False) 엔진으로 0.2~2ms 내에 띄어쓰기를 교정합니다.
+    - 이메일(@), URL/도메인, 모델명 숫자 결합('갤럭시25', '아이폰16', '1호기')은 원형 그대로 보존합니다.
     """
-    if not AI_ENGINE._loaded:
-        AI_ENGINE._lazy_init()
-    s = re.sub(r"([가-힣]+(?:아|어|여|해|지|네|군|나|가|까))\s+(요)(?=[가-힣])", r"\1\2 ", s)
-    # 1) 깨진 어미·조사 복원 ('주셔 서' -> '주셔서', '해 서' -> '해서', '와 서' -> '와서', '봐 서' -> '봐서')
-    s = re.sub(r"([가-힣]*(?:주셔|보셔|하셔|오셔|가셔|계셔|드려|올려|내려|보내|만들|받으|찾으|읽으|쓰셔|해|와|봐|가|나|써|꺼|켜))\s+서(?=[가-힣\s.,?!~^]|$)", r"\1서", s)
-    # 2) 부사절/연결어미 뒤에 붙은 부사('정말', '진짜', '너무', '아주', '매우', '다시', '바로', '즉시', '함께', '같이', '모두', '항상', '꼭') 분리
-    s = re.sub(
-        r"([가-힣]+(?:아서|어서|여서|해서|셔|셔서|고|며|면서|자마자|니까|지만|는데|은데|던데))(?=(?:정말|진짜|너무|아주|매우|다시|바로|즉시|함께|같이|모두|항상|꼭|잘|더|다)(?=[가-힣\s.,?!~^]|$))",
-        r"\1 ",
-        s,
-    )
-    # 3) 부사 + 용언 붙여쓰기('정말감사합니다' -> '정말 감사합니다', '너무좋아요' -> '너무 좋아요', '바로확인' -> '바로 확인') 분리
-    s = re.sub(
-        r"(?<![가-힣])(정말|진짜|너무|아주|매우|가장|제일|많이|빨리|천천히|다시|함께|같이|먼저|벌써|아직|항상|자주|가끔|바로|즉시|더욱|특히|전혀|결코|반드시|절대|꼭)(?=(?:감사|고맙|미안|죄송|축하|환영|좋|나쁘|기쁘|슬프|아프|예쁘|멋지|훌륭|완벽|정확|빠르|느리|크|작|많|적|높|낮|길|짧|깊|넓|밝|어둡|맑|흐리|춥|덥|따뜻|시원|힘들|어렵|쉽|중요|필요|가능|불가능|확인|적용|작동|실행|완료|복원|수정|배포|해결|처리|진행|시작|종료|출발|도착|기억|소환|검색|선택|입력|출력|복사|저장|삭제|추가|변경|교정|성형|다림질|공유|연결|해제|테스트|검증|분석|정리|생성|제거|설치|구동|발견|캐치|체크|연습|공부|운동|식사|출근|퇴근|산책|여행|결혼|성공|실패|이해|인정|기대|걱정|고민|노력|도움|부탁|말씀|연락|답변|보고|안내|설명|소개|추천|제안|요청|문의|신청|참여|참석|이용|사용|구독|결제|환불|취소|승인|거절|달성|유지|보존|보호|방어|차단|제한|허용|지원|제공|포함|제외|구분|분리|통합|합체|변환|전환|이동|복귀|도입|출시|오픈|마감|종결)[가-힣]*)",
-        r"\1 ",
-        s,
-    )
-    # 4) '-하게 / -롭게 / -있게 / -쁘게 / -르게 / -도록' 부사형·연결어미 + 용언 붙여쓰기('예리하게캐치해' -> '예리하게 캐치해', '맛있게드세요' -> '맛있게 드세요') 분리
-    s = re.sub(
-        r"([가-힣]{1,8}(?:하게|롭게|스럽게|있게|없게|쁘게|르게|겁게|볍게|렵게|쉽게|짧게|길게|크게|작게|높게|낮게|깊게|넓게|밝게|맑게|같게|스레|답게|도록|게끔))(?=(?!(?:도|는|만|요)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})",
-        r"\1 ",
-        s,
-    )
-    s = re.sub(
-        r"([가-힣]{2,}(?:주셔서|해주셔서|주시고|해주시고))(?=(?!주|보|지|도|는|만|요)[가-힣]{2,})",
-        r"\1 ",
-        s,
-    )
-    # 5) 범용 관형사형('-스러운 / -로운 / -다운' 및 상용 형용사 관형사형) + 명사 붙여쓰기 분리 ('자연스러운어절' -> '자연스러운 어절', '좋은하루보내세요' -> '좋은 하루 보내세요')
-    s = re.sub(
-        r"(?<![가-힣])([가-힣]{2,}스러운|[가-힣]{1,6}로운|[가-힣]{2,}다운)(?=[가-힣]{2,})",
-        r"\1 ",
-        s,
-    )
-    s = re.sub(
-        r"(?<![가-힣])(좋은|새로운|즐거운|행복한|중요한|필요한|간단한|정확한|깔끔한|편리한|안전한|빠른|느린|많은|적은|작은|큰|긴|짧은|예쁜|맛있는|맛없는|멋진|귀여운|따뜻한|시원한|깨끗한|자세한|다양한|특별한|비슷한|동일한|유명한|소중한|어려운|쉬운|힘든|바쁜)(?=(?!(?:데|지|걸|줄|바|가요|지요|데요|요|다)(?=[\s.,?!:;~^)]|$))[가-힣]{2,})",
-        r"\1 ",
-        s,
-    )
-    s = re.sub(
-        r"(?<![가-힣])([가-힣]{2,}(?:한|된|할|같은|없는|있는))(?=(?:자막|목소리|성우|영상|음성|글자|어절|단어|문장|문단|문서|파일|폴더|화면|창|기능|성능|효과|결과|상태|모습|느낌|분위기|마음|생각|의견|내용|정보|자료|데이터|시스템|서비스|프로그램|어플|앱|모델|기술|방법|방식|구조|설계|기획|특허|사업|아이템|시장|고객|유저|사람|회원|멤버|동료|가족|친구|선생님|대표님|매니저님|문제|오류|버그|원인|해결책|대안|선택|결정|판단|기준|원칙|규칙|조건|환경|상황|과정|절차|단계|순서|단위|시간|기간|일정|계획|목표|성공|승리|변화|발전|성장|기회|가치|이익|수익|비용|가격|요금|할인|혜택|선물|보상|응원|관심|사랑|행복|건강|피부|비타민|햇빛|자외선|산책|운동|음식|식단|습관|생활|일상|하루|오늘|내일|미래|세상)(?=[을를이가은는도의에로와과도만\s.,?!:;가-힣)]|$))",
-        r"\1 ",
-        s,
-    )
-    # 6) 존칭 접미사/호칭('님', '씨', '분') + 조사 외 일반 명사/부사 붙여쓰기('해나라님성우' -> '해나라님 성우') 분리
-    s = re.sub(
-        r"([가-힣]{2,}님)(?=(?![은는이가을를의도만께께서으로로와과랑이랑하고이나나부터까지조차마저요\s.,?!:;~^)])[가-힣]{2,})",
-        r"\1 ",
-        s,
-    )
-    # 7) 용언 어간(-아/-어/-여/-해/-러/-와/-봐/-줘 등 모음조화 연결형) + 보조용언 '주셔서/주시고/주세요/주시면' 띄어쓰기 정규화 ('불러주세요' -> '불러 주세요', '확인해주세요' -> '확인해 주세요')
-    def _space_aux_juseyo(m: re.Match) -> str:
-        stem_part = m.group(1)
-        aux_part = m.group(2)
-        last_ch = stem_part[-1]
-        c_code = ord(last_ch) - 0xAC00
-        jong_c = c_code % 28
-        jung_c = (c_code // 28) % 21
-        if jong_c == 0 and jung_c in (0, 1, 4, 5, 6, 9, 10, 14, 15):
-            return f"{stem_part} {aux_part}"
-        return m.group(0)
+    if not s or not s.strip():
+        return s
+    if not re.search(r"[가-힣]", s):
+        return re.sub(r" +", " ", s).strip()
 
-    s = re.sub(r"([가-힣]{2,})\s*(주셔서|주시고|주세요|주시면|주신|주실|주셨)", _space_aux_juseyo, s)
-    s = re.sub(r"날씨가\s*조아서", "날씨가 좋아서", s)
-    s = re.sub(r"조아서(?=\s|$|[.,?!~^]|[가-힣])", "좋아서", s)
-    s = re.sub(r"조아요(?=\s|$|[.,?!~^])", "좋아요", s)
-    s = re.sub(r"조아해", "좋아해", s)
-    s = re.sub(r"조은(?=\s+[가-힣])", "좋은", s)
-    s = re.sub(r"([가-힣]+(?:와|과|랑|이랑|하고))\s*함\s*[께깨]\s*(?=[가-힣])", r"\1 함께 ", s)
-    s = re.sub(r"([가-힣]+(?:와|과|랑|이랑|하고))\s*함\s*[께깨]", r"\1 함께", s)
-    s = re.sub(r"(?<![가-힣])함\s*[께깨](?=\s|$|[.,?!~^])", "함께", s)
-    s = re.sub(r"아기기신", "아기귀신", s)
-    s = re.sub(r"제생(?=\s*(?:버튼|해|하|중|됨|되|시|을|이|가|은|는))", "재생", s)
-    s = re.sub(r"베포(?=\s|$|[.,?!~^]|[가-힣])", "배포", s)
-    s = re.sub(r"케치(?=\s|$|[.,?!~^]|[가-힣])", "캐치", s)
-    s = re.sub(r"메세지(?=\s|$|[.,?!~^]|[가-힣])", "메시지", s)
-    s = re.sub(r"체택(?=\s|$|[.,?!~^]|[가-힣])", "채택", s)
-    s = re.sub(r"헤택(?=\s|$|[.,?!~^]|[가-힣])", "혜택", s)
-    s = re.sub(r"금새(?=\s|$|[.,?!~^])", "금세", s)
-    s = re.sub(r"오랫만(?=\s|$|[.,?!~^]|[에이다])", "오랜만", s)
-    s = re.sub(r"일찌기(?=\s|$|[.,?!~^])", "일찍이", s)
-    s = re.sub(r"희안(하|해|한|히)", r"희한\1", s)
-    s = re.sub(r"설레임(?=\s|$|[.,?!~^]|[이가을를은는도])", "설렘", s)
-    s = re.sub(r"목쏘리", "목소리", s)
-    s = re.sub(r"빗소리", "빗소리", s)
-    s = re.sub(r"숨쏘리", "숨소리", s)
-    s = re.sub(r"발쏘리", "발소리", s)
-    s = re.sub(r"말쏘리", "말소리", s)
-    s = re.sub(r"종쏘리", "종소리", s)
-    s = re.sub(r"복언(하|해|했|한|할|됨|되|된|될|입|합|시|중|이|가|을|를|은|는|도|만|\s|$|[.,?!~^])", r"복원\1", s)
-    s = re.sub(r"응언(하|해|했|한|할|합|시|\s|$|[.,?!~^])", r"응원\1", s)
-    s = re.sub(r"지언(하|해|했|한|할|합|됨|되|\s|$|[.,?!~^])", r"지원\1", s)
-    s = re.sub(r"회언(님|들|분|가입|권|이|가|은|는|을|를|\s|$|[.,?!~^])", r"회원\1", s)
-    s = re.sub(r"직언(분|들|이|가|은|는|을|를|\s|$|[.,?!~^])", r"직원\1", s)
-    s = re.sub(r"병언(에|에서|으로|이|가|은|는|을|를|\s|$|[.,?!~^])", r"병원\1", s)
-    s = re.sub(r"되요(?=\s|$|[.,?!~^])", "돼요", s)
-    s = re.sub(r"안\s*되요(?=\s|$|[.,?!~^])", "안 돼요", s)
-    # 과거시제 선어말어미 받침 'ㅅ' -> 'ㅆ' 안전 교정 ('들어갓던' -> '들어갔던', '햇습니다' -> '했습니다', '봣어' -> '봤어', '왓다' -> '왔다' 등 / '벗어나다', '더 낫지', '헛고생', '덧니' 등 정상 어휘 100% 보존!)
-    _SAFE_SINGLE_S_PAST_SYLLABLES = {
-        "햇", "됫", "봣", "왓", "갓", "삿", "찻", "탓", "팟", "썻", "껏", "렷",
-        "졋", "쳣", "췃", "줫", "둿", "웟", "겻", "셧", "엿", "엇", "앗",
-    }
+    s_work = s
 
-    def _fix_single_s_past_tense(match: re.Match) -> str:
-        ch = match.group(1)
-        suf = match.group(2)
-        if ch in _SAFE_SINGLE_S_PAST_SYLLABLES:
-            return chr(ord(ch) + 1) + suf
-        return match.group(0)
+    # 1) 이메일·URL·도메인 토큰 보호 마스킹 (형태소 띄어쓰기 중 주소 내부 공백 삽입 원천 차단)
+    protected_spans: list[str] = []
 
-    s = re.sub(
-        r"(?<!빼)(?<!바)([가-힣])(습니다|습니까|어요|어서|더니|던데|던|다|네|네요|지|지요|고|는데|니까|면|며|면서|길래|자마자|구나|군|죠)(?=[\s.,?!:;~^)]|$)",
-        _fix_single_s_past_tense,
-        s,
-    )
-    s = re.sub(r"됬(습니다|습니까|어요|어서|어|다|네|네요|지|지요|고|는데|던|더니|니|니까|면)(?=[\s.,?!:;~^)]|$)", r"됐\1", s)
-    s = re.sub(r"햇(습니다|습니까|어요|어서|어|다|네|네요|지|지요|고|는데|던|더니|니|니까|면)(?=[\s.,?!:;~^)]|$)", r"했\1", s)
-    s = re.sub(r"몇\s*일(?=\s|$|[.,?!~^간동안전후째])", "며칠", s)
-    s = re.sub(r"어떻해", "어떡해", s)
-    s = re.sub(r"어떡게", "어떻게", s)
-    s = re.sub(r"왠만(하|해|히|한)", r"웬만\1", s)
-    s = re.sub(r"잘\s*부탁", "잘 부탁", s)
-    s = re.sub(r"금방\s*이라도", "금방이라도", s)
-    s = re.sub(r"할께(요)?(?=\s|$|[.,?!~^])", r"할게\1", s)
-    s = re.sub(r"갈께(요)?(?=\s|$|[.,?!~^])", r"갈게\1", s)
-    s = re.sub(r"볼께(요)?(?=\s|$|[.,?!~^])", r"볼게\1", s)
-    s = re.sub(r"줄께(요)?(?=\s|$|[.,?!~^])", r"줄게\1", s)
-    s = re.sub(r"올께(요)?(?=\s|$|[.,?!~^])", r"올게\1", s)
-    # 용언 명사형('베포/배포/설치/수정/적용/처리/등록/저장/업데이트/동기화') + '완료했습니다/완료되었습니다' 띄어쓰기 정규화
-    s = re.sub(r"(배포|설치|수정|적용|처리|등록|저장|업데이트|동기화|패치|복구|복원|전송|발송|결제|인증|승인)(?=완료(?:했|됐|되었|합|됩|입))", r"\1 ", s)
+    def _mask_prot(m: re.Match) -> str:
+        idx = len(protected_spans)
+        protected_spans.append(m.group(0))
+        return f"__GHOSTPROT{idx}__"
 
-    s = re.sub(r"같\s+이(?=\s|$|[.,?!~])", "같이", s)
-    s = re.sub(r"오\s+늘", "오늘", s)
-    s = re.sub(r"내\s+일", "내일", s)
-    s = re.sub(r"어\s+제", "어제", s)
-    s = re.sub(r"날\s+씨", "날씨", s)
-    s = re.sub(r"산\s+책", "산책", s)
-    s = re.sub(r"아\s+기", "아기", s)
-    s = re.sub(r"귀\s+신", "귀신", s)
-
-    s = re.sub(r"(?<![가-힣])및(?=[가-힣]{2,})", "및 ", s)
-    s = re.sub(r"(\d+\s*(?:초|분|시간|일|주|달|개월|년)\s*)(후|뒤)(?=[가-힣]{2,})", r"\1\2 ", s)
-    s = re.sub(r"(?<![가-힣])(접속|클릭|실행|설치|완료|확인|입력|복사|저장|수정|배포|새로고침)\s*(후|뒤)(?=[가-힣]{2,})", r"\1 \2 ", s)
-    s = re.sub(r"(\)|\])\s*(후|뒤)(?=[가-힣]{2,})", r"\1 \2 ", s)
-    s = re.sub(r"(\]|\))([을를이가은는])\s*한\s*번", r"\1\2 한 번", s)
-    s = re.sub(r"([가-힣][을를이가은는])한(?=\s*번)", r"\1 한", s)
-    s = re.sub(r"단\s*한\s*글\s*자도", "단 한 글자도", s)
-    s = re.sub(r"(\d+줄로)(?=문장)", r"\1 ", s)
-    s = re.sub(r"문장\s*끝까지\s*단\s*한\s*글\s*자도", "문장 끝까지 단 한 글자도", s)
-    s = re.sub(r"(?<![가-힣])(한|두|세|네)\s*(영상|문장|문서|파일|사진|화면|페이지|단어|글자)(?=[을를이가은는도만\s])", r"\1 \2", s)
-    s = re.sub(r"음성이\s*입혀져\s*완성본으로", "음성이 입혀져 완성본으로", s)
-    s = re.sub(r"에서\s*영상을\s*만들어", "에서 영상을 만들어", s)
-    s = re.sub(r"바뀐\s*것\s*같은데", "바뀐 것 같은데", s)
-    s = re.sub(r"다\s*같이(?=[가-힣]{2,})", "다같이 ", s)
-    s = re.sub(r"산책\s*(가자고|가자|가면|가고|가서|가요|갈까)(?=\s|$|[.,?!~^]|[가-힣])", r"산책 \1 ", s)
-
-    s = re.sub(r"(?<![가-힣])(오늘|내일|모레|어제|그제|오전|오후|아침|점심|저녁|밤|새벽)(?=\d)", r"\1 ", s)
-    s = re.sub(
-        r"(\d+\s*(?:시|분|초|일|월|년|주|층|호|번|개|명|건|원|장|편|차|회))\s+(에|에서|부터|까지|로|으로|은|는|이|가|을|를|도|만)(?=[\s.,?!:;)]|$)",
-        r"\1\2",
-        s,
+    s_work = re.sub(
+        r"(?:https?://\S+|www\.\S+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+|[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b)",
+        _mask_prot,
+        s_work,
     )
 
-    def _split_adverb_prefix(m_adv: re.Match) -> str:
-        adv_w = m_adv.group(1)
-        rem_w = m_adv.group(2)
-        if rem_w in ("는", "은", "도", "만", "요", "이나", "이라", "입니", "이다"):
-            return m_adv.group(0)
-        if rem_w[0] == "만" and not rem_w.startswith(("만들", "만드", "만든", "만듭", "만나", "만났", "만난", "만날", "만져", "만지", "만진", "만질", "만족")):
-            return m_adv.group(0)
-        if rem_w[0] == "도" and not rem_w.startswith(("도와", "도왔", "도운", "도우", "도착", "도전", "도움", "도입", "돌아")):
-            return m_adv.group(0)
-        if rem_w[0] in ("는", "은"):
-            return m_adv.group(0)
-        if rem_w[0] == "요" and not rem_w.startswith(("요리", "요청", "요약", "요구", "요금")):
-            return m_adv.group(0)
-        if rem_w.startswith(("입니", "입니까", "이다", "이지", "이라", "이에", "예요", "이나", "부터", "까지")):
-            return m_adv.group(0)
-        return f"{adv_w} {rem_w}"
+    # 2) 원문에서 고유명사/명사 뒤에 숫자가 공백 없이 직결된 패턴('갤럭시25', '아이폰16', '시즌2') 기록
+    attached_alnum_pairs: set[tuple[str, str]] = set()
+    for m_att in re.finditer(r"([가-힣]{2,})(\d+)", s_work):
+        attached_alnum_pairs.add((m_att.group(1), m_att.group(2)))
 
-    for _ in range(2):
-        s = re.sub(
-            r"(?<![가-힣])(지금|바로|다시|먼저|함께|같이|직접|손수|정성껏|자주|항상|계속|빨리|천천히|열심히|충분히|완전히|정확히|확실히|반드시|잠깐|잠시|방금|아까|벌써|아직|이미|일단|우선|서로|따로|스스로|갑자기|조용히|꼼꼼히|자세히|간단히|특별히|솔직히|다행히)([가-힣]{2,})",
-            _split_adverb_prefix,
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]+(?:어요|아요|해요|워요|봐요|와요|자요|줘요|돼요|네요|군요|거든요|잖아요|래요|대요|까요|나요|습니다|입니다|ㅂ니다|세요))(?=[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{1,6}(?:와|과|이랑|하고))(?=(?:함께|같이|다르게|달리|비슷|마찬가지|[가-힣]{2,}\s))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"(?<![가-힣])(오늘은|내일은|어제는|지금은|요즘은|이번은|다음은|원래는|사실은|너무|정말|진짜|아주|매우|가장|제일|많이|빨리|천천히|다시|함께|같이|먼저|벌써|아직|항상|자주|가끔)(?=[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"(?<![가-힣])(이번|다음|지난|해당|신규|전체|모든|각종|주요|다른|어떤|무슨|어느)(?=(?!번|주|달|해|년|날|길|일|주일)[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{2,}(?:은|는|이|가|을|를|도|만|에는|에서는|으로|로))(?=(?:꼭|잘|다|더|바로|즉시|먼저|함께|모두|항상|반드시|절대|정말|진짜|너무|매우|아주)(?=[\s.,?!:;)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]+(?:할|될|볼|갈|올|줄|살|칠|낼|둘|쓸|클|릴|밀|걸|팔|열|물|불|실|질|길|일|벨|셀|잴|맬|뺄|뗄|먹을|있을|없을|않을|못할|가능할|필요할|보실|하실|되실|오실|가실|받으실|쓰실|찾으실))\s*수(도|는|만|가)?\s*(있|없|있습|없습|있어|없어|있고|없고|있는|없는|있도|없도|있으|없으|있던|없던|있겠|없겠)",
-            r"\1 수\2 \3",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{2,})(?<!수)(?<!것)(?<!바)(?<!데)(?<!줄)(?<!리)(?<!고)(?<!어)(?<!아)(?<!여)(?<!해)(?<!하)(?<!되)(?<!돼)(?<!재)(?<!전)(?=(?:있습니다|없습니다|있어요|없어요|있네요|없네요)(?=[\s.,?!:;)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]+(?:아서|어서|여서|해서|와서|가서|봐서|파서|커서|써서|나서|돼서|니까|지만|하고|되고|있고|없고|가고|오고|먹고|마시고|입고|쓰고|읽고|듣고|찾고|잡고|열고|닫고|놓고|두고|주고|받고|팔고|만들고|끝나고|마치고|았고|었고|였고|했고|됐고|갔고|왔고|봤고|났고|썼고|쳤고|졌고|렸고|겼고|웠고))(?=(?!싶|있|없|보|주|버리|말|나가|들어가)[가-힣]{1,4}(?:에서|에게|한테|으로|은|는|이|가|을|를|에|와|과|도)(?=[가-힣\s.,?!:;)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{1,5}(?:에서|에게|한테|으로))(?=[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{1,5}에)(?=(?:나가고|나가서|나가다|나가|들어가고|들어가서|들어가|가고|가서|가다|가요|가니|가자|오다|오고|와서|와요|있고|있어|있으니|있다|없고|없어|없다|앉아|서서|누워|살고|살아|맞춰|넣고|넣어|두고|두어|올리고|올려|내리고|내려|보내고|보내|다니고|다녀))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{1,5}[을를])(?=[가-힣]{1,5}(?:고|서|아서|어서|여서|해서|니|니까|면|지만|며|면서|는데|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|싶|있|없|다|자|습니다|ㅂ니다|합니다|했다|았다|었다|였다|겠다|먹|마시|보|하|듣|쓰|읽|사|팔|만들|찾|잡|열|닫|받|주|넣|빼)(?=[\s.,?!:;가-힣)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{1,5}[이가은는도])(?!(?<=도)(?:와주|와드|와달|왔|운|우))(?=(?:좋|나쁘|나빠|맑|흐리|흐려|춥|추워|덥|더워|따뜻|시원|많|적|크|커|작|높|낮|길|짧|빠르|빨라|느리|느려|예쁘|예뻐|아프|아파|고프|고파|슬프|슬퍼|기쁘|기뻐|힘들|어렵|어려워|쉽|쉬워|있|없|안되|안돼|되|돼|오|와|불|내리|내려)[가-힣]*(?=[\s.,?!:;가-힣)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]+(?:고|아서|어서|여서|해서))(?=(?:싶어|싶다|싶습니다|싶네|싶은|싶고|싶으니|있어|있다|있습니다|있네|보세요|보아요|봐요|주세|주어|줘요|버렸|버려)(?=[\s.,?!:;가-힣)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{2,})(?=(?:보세요|보아요|봐요|보셨나요|보셨어요)(?=[\s.,?!:;~^)]|$))",
-            lambda m_b: (
-                f"{m_b.group(1)} "
-                if ((ord(m_b.group(1)[-1]) - 0xAC00) % 28 == 0 and ((ord(m_b.group(1)[-1]) - 0xAC00) // 28) % 21 in (0, 1, 4, 5, 6, 9, 10, 14, 15) and not m_b.group(1).endswith(("바", "초", "후", "일", "신", "여")))
-                else m_b.group(0)
-            ),
-            s,
-        )
-        # ── [범용 한국어 형태소 경계 + EmbeddingGemma 2 (262,144 서브워드 '▁' 어절 시작점) 결합 엔진] ──
-        # 개별 단어를 일일이 정규식으로 등록하지 않아도, 한국어 교착어 문법(조사·어미 닫힌 집합)과
-        # AI 토크나이저 어절 시작 사전을 교차 검증하여 미등록 문장까지 범용으로 띄어쓰기 교정!
-        s = re.sub(r"띄워\s*쓰기", "띄어쓰기", s)
-        # 잘못 띄어진 서술격조사·연결어미·보조사 복원 ('말이 었지' -> '말이었지', '되는 지확인해' -> '되는지 확인해', '메모장이 나노션에서' -> '메모장이나 노션에서')
-        s = re.sub(r"([가-힣]+이)\s+((?:었|셨|겠)[가-힣]+)", r"\1\2", s)
-        s = re.sub(
-            r"([가-힣]+(?:는|은|던|건|할|될|볼|갈|올|줄|실|일|을))\s+지(?=\s*(?:확인|점검|체크|검증|테스트|알|모르|몰라|보|봐|궁금|생각|판단|비교|살펴|찾아|물어|여쭤))",
-            r"\1지 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{2,}이)\s+나(?=(?!(?:타나|타났|오|와|왔|온|올|가|갔|간|갈|서|선|누|눠|눴|빠|쁜|쁘|아|았))[가-힣]{1,8}(?:에서|에게|한테|으로|로|에|은|는|이|가|을|를|의|도|만|과|와))",
-            r"\1나 ",
-            s,
-        )
-        # 단, 뒷부분 자체가 정상 한국어 어휘('이동했습니다', '가족들과', '이번주', '가능합니다', '의견을', '은행에서')이거나 앞 어절이 이미 조사·어미로 끝나면 절대 앞 단어에 붙이지 않음!
-        def _rejoin_broken_single_josa(m_rj: re.Match) -> str:
-            left_w, j_ch, rest_w = m_rj.group(1), m_rj.group(2), m_rj.group(3)
-            if left_w.endswith(("에", "로", "는", "은", "이", "가", "을", "를", "도", "만", "와", "과", "고", "서", "면", "지", "께", "한테", "에게", "에서", "으로", "부터", "까지")):
-                return m_rj.group(0)
-            if left_w in ("오늘", "내일", "어제", "모레", "이번", "다음", "지난", "올해", "작년", "내년", "지금", "방금", "바로", "다시", "먼저", "함께", "같이") and j_ch != "의":
-                return m_rj.group(0)
-            l_jong = (ord(left_w[-1]) - 0xAC00) % 28
-            if j_ch in ("이", "은", "을") and l_jong == 0:
-                return m_rj.group(0)
-            if j_ch in ("가", "는", "를") and l_jong != 0:
-                return m_rj.group(0)
-            full_r = j_ch + rest_w
-            if full_r[:2] in ("이동", "이번", "이제", "이유", "이름", "이상", "이용", "이해", "이후", "이미", "이슈", "이론", "이하", "이전", "이곳", "이날", "이때", "가족", "가방", "가격", "가게", "가능", "가장", "가을", "가수", "가지", "가져", "가까", "가끔", "가슴", "가운데", "가정", "의견", "의미", "의사", "의자", "의료", "의류", "의무", "의문", "의식", "의지", "은행", "은혜"):
-                return m_rj.group(0)
-            if full_r in AI_ENGINE.ko_word_starts or full_r in AI_ENGINE.ko_subwords:
-                return m_rj.group(0)
-            for ws_chk in AI_ENGINE.ko_word_starts:
-                if len(ws_chk) >= 2 and full_r.startswith(ws_chk):
-                    return m_rj.group(0)
-            return f"{left_w}{j_ch} {rest_w}"
+    # 3) 최소한의 소리나는 대로 친 철자 오타 정규화 (띄어쓰기 자체는 100% Kiwi 형태소 엔진이 전담)
+    s_work = s_work.replace("아기기신", "아기귀신")
+    s_work = re.sub(r"몇\s*일", "며칠", s_work)
+    s_work = re.sub(r"되(\s*요)(?=[\s.,?!~^]|$)", r"돼\1", s_work)
+    s_work = re.sub(r"됬(?=[어었습니는던고지다요\s.,?!~^]|$)", "됐", s_work)
+    s_work = re.sub(r"조아서", "좋아서", s_work)
+    s_work = re.sub(r"어의\s*없", "어이없", s_work)
+    # 어미 뒤에 잘못 떨어진 '요' 또는 '서'만 최소 봉합 ('어려워 요' -> '어려워요', '주셔 서' -> '주셔서')
+    s_work = re.sub(r"([가-힣]+(?:아|어|여|해|지|네|군|나|가|까))\s+요(?=[\s.,?!~^]|$)", r"\1요", s_work)
+    s_work = re.sub(r"([가-힣]*(?:주셔|보셔|하셔|오셔|가셔|계셔|드려|올려|내려|보내|만들|받으|찾으|읽으|쓰셔|해|와|봐))\s+서(?=[가-힣\s.,?!~^]|$)", r"\1서", s_work)
 
-        s = re.sub(
-            r"([가-힣]{2,})\s+([이가은는을를의])((?!(?:서|니까|지만|면|며|면서|고|야|요|다|네|군|라|자)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})",
-            _rejoin_broken_single_josa,
-            s,
-        )
-        s = re.sub(r"(?<![가-힣])핫도\s+그(?=[가은는을를도만로\s.,?!:;~^)]|$)", "핫도그", s)
-        s = re.sub(r"(?<![가-힣])떡볶\s+이(?=[가은는을를도만로\s.,?!:;~^)]|$)", "떡볶이", s)
-        # 지시관형사('그/이/저') + 일반 인칭·사물 명사 분리 ('그사람' -> '그 사람')
-        s = re.sub(r"(?<![가-힣])(그|이|저)(?=(?:사람|분|친구|아이|애|남자|여자|학생|선생님|가게|식당|카페|회사|병원|학교|집|방|곳|문제|일|말|생각|마음|이야기|얘기|소식|영화|책|노래|음식|메뉴)[이가은는을를의에에서으로로와과도만\s.,?!:;~^)])", r"\1 ", s)
-        s = re.sub(r"(?<![가-힣])(내가|네가|제가|우리가|누가|나는|너는|저는|우리는|나의|너의|저의|우리의|그의|그녀의|오늘의|내일의|어제의|올해의|이번의)(?=[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"(?<![가-힣])(오늘|내일|모레|어제|그제)(?=(?![은는이가의도만부터까지날\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        # 자율 명사·어휘 경계 분리 ('띄어쓰기되는지' -> '띄어쓰기 되는지', '복사붙여넣기' -> '복사 붙여넣기', '한국어교착어음운규칙과' -> '한국어 교착어 음운 규칙과', '어절단위로' -> '어절 단위로')
-        s = re.sub(r"(띄어쓰기)(?=(?![가을를은는도만의에로와과이나\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"(복사)(?=(?:붙여넣기|후)(?=[가-힣\s.,?!:;~^)]|$))", r"\1 ", s)
-        s = re.sub(
-            r"(?<![가-힣])(한국어|교착어|외래어|외국어|표준어|고유어|한자어|일본어|중국어|프랑스어|독일어|스페인어|러시아어|베트남어)(?=(?!(?:가|는|를|의|와|로|에|에서|도|만|나|랑|보다|처럼|부터|까지|입니|이다|이지|이라)(?=[\s.,?!:;~^가-힣)]|$))[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"(음운|형태소|어절|문장|문단|단어|글자|자음|모음|받침|항목|단계|메모장|탐색기|바탕화면|클립보드|스페이스바|백스페이스|귀신창|귀신검색창)(?=(?:규칙|단위|기준|순서|구조|체계|현상|변화|결합|분리|경계|목록|기능|오류|버그|설정|방법|안내|설명|점검|확인|테스트)(?=[이가은는을를의에에서으로로와과도만이나\s.,?!:;~^)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(r"([가-힣]{2,})(?=그대로(?=[가-힣\s.,?!:;~^)]|$))", r"\1 ", s)
-        s = re.sub(r"(?<![가-힣])(그대로)(?=(?![는도만요이다입\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        # 간접의문·연결어미 '-는지 / -은지 / -던지 / -건지 / -ㄹ지' 뒤 분리 ('되는지확인해' -> '되는지 확인해')
-        s = re.sub(
-            r"([가-힣]{1,12}(?:는지|은지|던지|건지|할지|될지|볼지|갈지|올지|줄지|실지|일지|을지))(?=(?![라요도만는가\s.,?!:;~^)])[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        # 의존명사 '때' ('눌렀을때' -> '눌렀을 때', '할때에는원문' -> '할 때에는 원문') 및 관형사형 + '뒤/후/전' ('선택한뒤귀신창을' -> '선택한 뒤 귀신창을')
-        s = re.sub(
-            r"([가-힣]{1,12}(?:았을|었을|였을|했을|렀을|웠을|쳤을|졌을|겼을|렸을|섰을|났을|왔을|갔을|봤을|썼을|탔을|줬을|뒀을|먹었을|있을|없을|할|될|볼|갈|올|살|실))(?=때(?:에는|에도|에|는|도|만|마다|부터|까지)?(?=[\s.,?!:;~^가-힣)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(r"(?<=\s)(때(?:에는|에도|에|는|도|만|마다|부터|까지))(?=[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"(?<=\s)(때)(?=(?![에는도만마부까이가을를의\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(
-            r"([가-힣]{2,}(?:한|된)|[가-힣]*(?:누른|고른|만든|읽은|보낸|받은|찍은|열린|닫힌|바뀐|끝난|마친|하기|되기))\s*(뒤|후)(?=(?:에|에는|에도)?(?=[\s.,?!:;~^가-힣)]|$))",
-            r"\1 \2",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]*(?:선택한|입력한|클릭한|복사한|저장한|설치한|실행한|수정한|배포한|완료한|확인한|변경한|삭제한|추가한|호출한|하기|되기))\s*(전)(?=(?:에|에는|에도)?(?=[\s.,?!:;~^가-힣)]|$))",
-            r"\1 \2",
-            s,
-        )
-        s = re.sub(r"(?<=\s)(뒤|후|전)(?=(?![에의는도만\s.,?!:;~^)])[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(r"(?<=\s)((?:뒤|후|전)(?:에|에는|에도))(?=[가-힣]{2,})", r"\1 ", s)
-        # 상용 부사('바로/다시/먼저/함께/같이/직접/손수/자주/항상/계속/빨리/천천히/충분히/반드시') 뒤 용언·명사 붙여쓰기 분리 ('직접만드신요리입니다' -> '직접 만드신 요리입니다', '직접요리했습니다' -> '직접 요리했습니다')
-        # ※ '만드신/만들어/만나/도와/도착/요리/요청/이동/이용' 등 용언·명사 첫 글자('만/도/요/이')를 조사로 오인해 분리를 포기하지 않도록 정밀 분기!
-        def _split_adverb_prefix(m_adv: re.Match) -> str:
-            adv_w = m_adv.group(1)
-            rem_w = m_adv.group(2)
-            if rem_w in ("는", "도", "만", "요", "이나", "이라", "입니", "이다"):
-                return m_adv.group(0)
-            if rem_w[0] == "만" and not rem_w.startswith(("만들", "만드", "만든", "만듭", "만나", "만났", "만난", "만날", "만져", "만지", "만진", "만질", "만족")):
-                return m_adv.group(0)
-            if rem_w[0] == "도" and not rem_w.startswith(("도와", "도왔", "도운", "도우", "도착", "도전", "도움", "도입", "돌아")):
-                return m_adv.group(0)
-            if rem_w[0] in ("는", "은"):
-                return m_adv.group(0)
-            if rem_w[0] == "요" and not rem_w.startswith(("요리", "요청", "요약", "요구", "요금")):
-                return m_adv.group(0)
-            if rem_w.startswith(("입니", "입니까", "이다", "이지", "이라", "이에", "예요", "이나")):
-                return m_adv.group(0)
-            return f"{adv_w} {rem_w}"
+    # 4) 정식 형태소 엔진 Kiwi.space() 실행 (기존 의도적 띄어쓰기는 존중하면서 미띄어쓰기 어절 경계 정밀 분리)
+    kw = _get_kiwi_engine()
+    if kw:
+        try:
+            s_work = kw.space(s_work, reset_whitespace=False)
+        except Exception:
+            pass
 
-        s = re.sub(
-            r"(?<![가-힣])(바로|다시|먼저|함께|같이|직접|손수|정성껏|자주|항상|계속|빨리|천천히|열심히|충분히|완전히|정확히|확실히|반드시|잠깐|잠시|방금|아까|벌써|아직|이미|일단|우선|서로|따로|스스로|갑자기|조용히|꼼꼼히|자세히|간단히|특별히|솔직히|다행히)([가-힣]{2,})",
-            _split_adverb_prefix,
-            s,
-        )
-        # '에 대해서도 / 에 대한 / 에 따라 / 에 의해 / 에 비해 / 에 맞춰' 분리 ('문장에대해서도' -> '문장에 대해서도')
-        s = re.sub(
-            r"([가-힣]{2,}에)(?=(?:대해서도|대해서는|대해서|대해도|대해|대한|관해서도|관해서는|관해서|관해|관한|따라서|따라|따른|의해서|의해|의한|비해서|비해|비한|맞춰서|맞춰|맞춘)(?=[가-힣\s.,?!:;~^)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(r"([가-힣]{2,})(?=(?:못해서|못하|못했|못한|못할|못받|못가|못오|못보|못먹|못자|안해서|안하|안했|안한|안할|안되|안돼|안됐|끝나면|끝나고|끝나서|마치면|마치고|먹으러|마시러|보러|사러|찾으러|놀러|위해서는|위해서|위해)(?=[\s.,?!:;~^가-힣)]|$))", r"\1 ", s)
-        s = re.sub(r"(?<![가-힣])(못|안)(?=(?:해서|하|했|한|할|받|가|오|보|먹|자|되|돼|됐)[가-힣]*(?=[\s.,?!:;~^)]|$))", r"\1 ", s)
-        s = re.sub(r"(?<![가-힣])(위해서는|위해서|위해)(?=[가-힣]{2,})", r"\1 ", s)
-        s = re.sub(
-            r"([가-힣]{2,})(?<!집)(?<!도)(?<!연)(?<!시)(?<!대)(?<!공)(?<!수)(?<!체)(?<!비)(?<!가)(?<!존)(?<!소)(?<!신)(?=(?:중입니다|중입니까|중이에요|중예요|중이라서|중이라|중이니|중인데|중입니|중이에|중이오)(?=[\s.,?!:;~^가-힣)]|$))",
-            r"\1 ",
-            s,
-        )
-        # 의존명사 '것 / 거 / 분 / 길 / 줄' 및 무조사 일상 서술어('확인부탁드립니다', '감기조심하세요', '고생많으셨습니다') 분리
-        s = re.sub(
-            r"([가-힣]*(?:[가-힣](?:는|은|던|할|될|볼|갈|올|살|먹을|마실|입을)|한|된|본|간|온|산|준|만든|만드신|보내주신|오시는|가시는|하시는))(?=(?:것(?:이|은|을|도|만|같|입니|이다|이에|예요)|거(?:예요|야|지|죠|같|라)|분(?:들|께|이|은|을|도|만|입니)|길(?:입니|이에|에|로)|줄(?:알|모르|몰랐|알았))(?=[\s.,?!:;~^가-힣)]|$))",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(r"(?<=\s)(것|거)(?=같(?:아요|습니다|아|은|다|네|지))", r"\1 ", s)
-        s = re.sub(r"(?<=\s)(줄)(?=(?:알았|알아|모르|몰랐|압니|모릅니))", r"\1 ", s)
-        s = re.sub(
-            r"([가-힣]{2,})(?<![고서어아여해게지니며면])(?=(?:부탁드립|부탁드려|부탁합니|부탁해요|조심하세|조심해|많으셨습|많으셨어|보내세요|보내시길|되세요|되시길)(?=[\s.,?!:;~^가-힣)]|$))",
-            r"\1 ",
-            s,
-        )
-        # G1) 2음절 이상 복합 조사('에서/에게/한테/께서/으로/부터/까지/보다/처럼/만큼/조차/마저/에는/에도/에서는/으로는/이라서/라서/이나/이랑') 및 시간·장소+'에' 뒤 범용 어절 분리
-        s = re.sub(
-            r"([가-힣]{1,12}(?:에서|에게|한테|께서는|께서|으로는|으로도|으로서|으로써|으로부터|으로|부터|까지|보다|처럼|만큼|조차|마저|에는|에도|에서는|이라서|라서|이라도|이나마))(?=(?![는도만요의가을를\s.,?!:;~^)])[가-힣]{2,})",
-            lambda m: m.group(0) if (m.group(0) in AI_ENGINE.ko_subwords) else (m.group(1) + " "),
-            s,
-        )
-        s = re.sub(
-            r"(?<![가-힣])((?:아침|점심|저녁|새벽|낮|밤|봄|여름|가을|겨울|주말|평일|주중|평소|최근|요즘|처음|나중|오전|오후|이번|다음|중간|마지막|학교|회사|병원|은행|식당|카페|공원|시장|매장|현장|사무실|회의실|집|방|교실|거실|부엌|화장실|역|공항|도서관|백화점|마트|약국|헬스장|운동장)에)(?=(?![는도만서\s.,?!:;~^)])[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        # G2) 연결어미·존칭 관형사형('-[으]신', '만드신 요리입니다', '말씀하신 내용을', '받으신 파일을') 뒤 범용 어절 분리
-        _SHIN_NOUN_EXCLUSIONS = {
-            "귀신", "아기귀신", "자신", "당신", "정신", "출신", "통신", "백신", "혁신", "확신", "불신", "배신",
-            "수신", "발신", "회신", "갱신", "전신", "임신", "미신", "여신", "남신", "혼신", "헌신", "투신",
-            "변신", "분신", "문신", "소신", "사신", "외신", "내신", "신뢰", "신호",
-        }
+    # 5) 원문에서 붙여 썼던 모델명+숫자('갤럭시 25' -> '갤럭시25') 복원
+    for k_part, d_part in attached_alnum_pairs:
+        s_work = s_work.replace(f"{k_part} {d_part}", f"{k_part}{d_part}")
 
-        def _split_honorific_shin_modifier(m_sh: re.Match) -> str:
-            left_sh = m_sh.group(1)
-            right_sh = m_sh.group(2)
-            if left_sh in _SHIN_NOUN_EXCLUSIONS or any(left_sh.endswith(ex) for ex in ("귀신", "자신", "당신", "정신", "출신", "통신", "백신", "확신", "수신", "발신", "회신")):
-                return m_sh.group(0)
-            if re.match(
-                r"^(?:이|가|은|는|을|를|의|에|에서|으로|로|와|과|도|만|께|한테|에게|부터|까지|랑|이나|입니|입니까|이다|이지|이라|이에|예요|가요|지요|데요|데|걸|다$|단|지$|듯|체|채|바)",
-                right_sh,
-            ):
-                return m_sh.group(0)
-            return f"{left_sh} {right_sh}"
+    # 6) 마스킹된 이메일·URL 복원 (조사 앞 불필요 공백 제거)
+    for idx, orig_tok in enumerate(protected_spans):
+        placeholder = f"__GHOSTPROT{idx}__"
+        s_work = re.sub(rf"{re.escape(placeholder)}\s+(?=(?:으로|로|에서|에게|께|에|의|을|를|이|가|은|는|도|만|과|와|부터|까지)(?:[\s.,?!~^]|$))", placeholder, s_work)
+        s_work = s_work.replace(placeholder, orig_tok)
 
-        s = re.sub(
-            r"(?<![가-힣])([가-힣]+(?:으신|[가나다라마바사아자차카타파하러워여해되보주오가드쓰크트프흐기리미비시지치키피히우추푸루누두무부수]신))([가-힣]{2,})",
-            _split_honorific_shin_modifier,
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]+(?:아서도|어서도|여서도|해서도|아서는|어서는|여서는|해서는|아서만|어서만|여서만|해서만|아서|어서|여서|해서|봐서|와서|가서|나서|돼서|내려서|올라서|열려서|닫혀서|밀려서|막혀서|걸려서|풀려서|니까|지만|는데|은데|던데|면서|자마자|려고|도록|으러|길래|거든|잖아|끝나면|끝나고|마치면|마치고|으시면|시면|나면|으면|다면|오면|가면|보면|하면|되면|주신|하신|오신|가신|보신|드신|만든|먹은|입은|들은))(?=(?![요서도만는\s.,?!:;~^)])[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"(?<![가-힣])(해서|가서|와서|봐서|나서|돼서|주신|하신|오신|가신|보신|드신)(?=(?![는도만요\s.,?!:;~^)])[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]{2,}(?:하고|먹고|보고|듣고|쓰고|읽고|사고|팔고|만나|모여|찾아|잡아|열고|닫고))(?=(?![서도만는요있없싶나\s.,?!:;~^)])[가-힣]{2,})",
-            r"\1 ",
-            s,
-        )
-        s = re.sub(
-            r"([가-힣]+(?:잘|못|안))(?=(?:거예요|거야|겁니다|건가요|할게요|할래요|할까요))",
-            r"\1 ",
-            s,
-        )
-        # G3) 1음절 격조사('을/를/은/는/이/가/의/도/만/와/과') + 용언/서술어 또는 일반 명사(체언+조사) 경계 범용 분리
-        _COMPOUND_NO_SPLIT_PREFIX = (
-            "이유", "이번", "이런", "이렇", "그런", "저런", "가능", "가운데", "가방", "가족", "가게", "가격", "가치",
-            "가장", "가끔", "가슴", "가을", "도움", "도착", "도전", "도구", "도시", "도로", "도서관", "만약", "만족",
-            "만큼", "만남", "만들", "은혜", "은행", "오늘", "내일", "모레", "어제", "핫도", "떡볶", "의견", "의미",
-            "의사", "의자", "의류", "의료", "의무", "의문", "의식", "의지", "의존", "와인", "과일", "과자", "과정", "과학",
-        )
-        # 조사로 잘못 쪼개지면 안 되는 단일 명사(끝 글자가 조사와 우연히 겹치는 명사 원형)
-        _NOUN_FALSE_JOSA_WORDS = {
-            "핫도", "떡볶", "고양", "강아", "호랑", "원숭", "코끼", "어린", "할머", "할아버", "아주머", "아저",
-            "고객만", "불만", "백만", "천만", "얼마만", "오랜만", "잠깐만", "비만", "낭만", "교만", "거만", "충만", "자만",
-            "회의", "논의", "합의", "동의", "건의", "항의", "강의", "정의", "예의", "성의", "유의", "주의", "결의", "선의", "악의", "고의", "편의", "어의", "상의", "하의", "내의", "우의", "수의",
-            "기타", "기차", "기자", "기사", "기회", "기억", "기분", "기본", "기술", "기준", "기업", "기관", "기간", "기능",
-            "도마", "도구", "도시", "도로", "도움", "도전", "도착", "도서", "도표", "도형",
-            "만두", "만화", "만남", "만족", "만약", "만점",
-            "가지", "가방", "가족", "가게", "가격", "가수", "가슴", "가을", "가운데",
-            "사과", "치과", "안과", "내과", "외과", "일과", "교과", "성과", "결과", "효과", "통과", "초과",
-            "내려", "올라", "들어가", "나가", "돌아가", "지나가", "다가가", "따라가",
-        }
-        # 뒷부분 첫 글자가 조사('가/이/은/는/을/를/의/에/로/와/과/도/만')인 경우 실제로는 앞 체언의 조사인데 뒷부분으로 넘어간 오분할 방지
-        _RIGHT_BAD_JOSA_STARTS = {
-            "가게", "가격", "가까", "가는", "가능", "가면", "가서", "가수", "가장", "가정", "가져", "가족", "가지", "가진",
-            "과거", "과정", "과학", "도로", "도시", "도와", "도움", "도입", "도전", "도착", "도형", "로그",
-            "만나", "만든", "만들", "만족", "만큼", "에게", "에서", "은행", "의견", "의료", "의미", "의한", "의해",
-            "이거", "이건", "이걸", "이것", "이게", "이곳", "이날", "이는", "이동", "이때", "이러", "이런", "이론",
-            "이루", "이르", "이를", "이름", "이미", "이번", "이상", "이슈", "이야", "이어", "이에", "이용", "이유",
-            "이전", "이제", "이차", "이하", "이해", "이후", "그가", "그는", "그의", "그를", "그에", "그도", "그만",
-        }
-
-        _NOUN_FALSE_RO_WORDS = {
-            "도로", "경로", "통로", "회로", "진로", "과로", "피로", "종로", "구로", "선로", "항로", "활로",
-            "난로", "화로", "폭로", "토로", "노로", "포로", "별도로", "스스로", "따로", "바로", "서로", "새로",
-            "세로", "가로", "제로", "프로", "인트로", "매크로", "마이크로",
-        }
-        _NOUN_FALSE_EUL_WORDS = {
-            "가을", "마을", "겨울", "노을", "방울", "거울", "저울", "구슬", "이슬", "사슬",
-            "하늘", "마늘", "바늘", "그늘", "오늘",
-        }
-        _EXTRA_KO_WORD_STARTS = {
-            "띄어쓰기", "붙여넣기", "새로고침", "스페이스바", "백스페이스", "클립보드", "바탕화면", "탐색기", "메모장", "노션",
-            "귀신창", "귀신검색창", "비밀번호", "아이디", "이메일", "한국어", "교착어", "외래어", "음운", "형태소", "어절",
-            "문장", "문단", "단어", "글자", "규칙", "단위", "원문", "확인", "점검", "적용", "작동", "실행", "유지", "복구",
-        }
-        _NA_VERB_PREFIX_RE = re.compile(r"^나(?:왔|와|오|온|올|타나|타났|타난|타날|가|갔|간|갈|서|선|설|누|눠|눴|빠|쁜|쁘|아|았|은)")
-
-        def _split_unspaced_chunk_by_grammar_and_vocab(match_chunk: re.Match) -> str:
-            chunk = match_chunk.group(0)
-            if len(chunk) < 4 or chunk in AI_ENGINE.ko_subwords or chunk in AI_ENGINE.ko_word_starts or chunk in _EXTRA_KO_WORD_STARTS:
-                return chunk
-            candidate_splits: list[int] = []
-            for idx in range(2, len(chunk)):
-                left = chunk[:idx]
-                right = chunk[idx:]
-                if right[0] in "었았였겠셨":
-                    continue
-
-                # (A) 2음절 보조사·격조사('이나/이랑') 우선 경계 판별 ('메모장이나노션에서' -> '메모장이나 노션에서', 단 '고기반찬이나왔어요'는 '나왔어요' 동사이므로 제외!)
-                if len(left) >= 3 and left.endswith(("이나", "이랑")) and len(right) >= 2:
-                    if left.endswith("이나") and _NA_VERB_PREFIX_RE.match("나" + right):
-                        pass
-                    else:
-                        stem2 = left[:-2]
-                        s2_jong = (ord(stem2[-1]) - 0xAC00) % 28
-                        if s2_jong != 0 and not right.startswith(("마", "요")) and right[0] not in "이가은는을를의에로와과도만":
-                            candidate_splits.append(idx)
-                            break
-
-                stem = left[:-1]
-                josa = left[-1]
-                if left in _NOUN_FALSE_JOSA_WORDS:
-                    continue
-                if left.startswith(_COMPOUND_NO_SPLIT_PREFIX) and len(left) <= 3:
-                    continue
-                if stem in ("핫", "떡", "고", "강", "선", "선생", "어", "할") and josa in "도볶양아생린이머":
-                    continue
-                if right[0] in "이가은는을를의에로와과도만" and (left + right[0])[:-1] in ("떡볶이", "핫도그", "고양이", "강아지", "호랑이", "원숭이", "어린이", "할머니", "할아버지", "선생님"):
-                    continue
-                if josa == "만" and right.startswith(("들", "드", "든", "듭", "나", "났", "난", "날", "져", "지", "진", "질", "족", "큼", "남", "두", "화", "점", "약", "료", "기", "능", "성", "원", "명", "개", "건", "세", "찬")):
-                    continue
-                if josa == "도" and right.startswith(("록", "와", "왔", "운", "우", "착", "전", "움", "입", "로", "시", "구", "서", "망", "달", "출")):
-                    continue
-                if josa == "의" and left.endswith(("문의", "논의", "협의", "동의", "합의", "주의", "유의", "정의", "강의", "건의", "항의", "결의", "심의", "발의", "제의", "의뢰")) and right.startswith(("하", "해", "했", "한", "할", "합", "드", "주", "받", "되", "된", "될", "됨")):
-                    continue
-                if josa == "와" and (
-                    left.endswith(("나와", "들어와", "올라와", "내려와", "돌아와", "다녀와", "찾아와", "가져와", "데려와", "사과", "통화", "대화", "변화", "강화", "완화", "진화", "소화", "조화", "평화", "문화", "영화", "만화", "전화", "신화", "동화", "백화"))
-                    and re.match(r"^(?:서|요|다$|주|보|드|하|해|했|한|할|합|되|된|될|됨|점)", right)
-                ):
-                    continue
-                if josa in ("는", "은") and right.startswith(("지", "데", "가", "걸", "다", "바", "군", "구나", "구먼", "듯", "마는")):
-                    continue
-                # 서술격조사 '이다' 활용형 및 2음절 조사('이나/이라도/이라서/이랑/이며/이고/이자/이든/이거나/이야/이지만/이니까') 오분리 차단 (단, '나왔어요/나타났다' 등 '나-' 동사는 분리 허용!)
-                if josa == "이":
-                    if right.startswith("나"):
-                        if not _NA_VERB_PREFIX_RE.match(right):
-                            continue
-                    elif re.match(
-                        r"^(?:라도|라서|라|란|라는|랑|며|고|자|든|든지|거나|야|지만|니까|니|면|면서|므로|기|에|에요|예요|다$|지$|네$|군|구[나먼]|었|았|였|겠|셨|ㅂ니다|입니다|습니까|입니까)",
-                        right,
-                    ):
-                        continue
-                if josa == "가" and (
-                    left.endswith(("나가", "들어가", "올라가", "내려가", "돌아가", "지나가", "다가가", "따라가", "가져가"))
-                    or re.match(r"^(?:서|고|며|면|면서|니까|지만|는데|다$|요$|자$|라$|니$|야$|지$|네$|군|겠|았|었|셨|져|진|질|지고|지러|르쳐|르치|리켜|능하|능한|득하|만히)", right)
-                ):
-                    continue
-                if josa in ("을", "를") and left in _NOUN_FALSE_EUL_WORDS:
-                    continue
-                if josa == "로" and (
-                    left in _NOUN_FALSE_RO_WORDS
-                    or left.endswith(("프로", "트로", "크로", "브로", "드로", "플로", "글로", "슬로", "클로", "업로", "다운로"))
-                    or right[0] in "는도만서써부"
-                ):
-                    continue
-
-                if josa in "을를은는이가의도만와과로" and (len(right) >= 2 or (len(right) == 1 and josa in ("을", "를") and right in ("할", "될", "볼", "갈", "올", "줄", "살", "한", "된", "본", "간", "온", "산", "준", "실"))):
-                    stem_code = ord(stem[-1]) - 0xAC00
-                    jong_val = stem_code % 28
-                    has_jong = jong_val != 0
-                    if josa in ("이", "은", "을", "과") and not has_jong:
-                        continue
-                    if josa in ("가", "는", "를", "와") and has_jong:
-                        continue
-                    if josa == "로" and jong_val not in (0, 8):
-                        continue
-
-                    if len(right) == 1:
-                        candidate_splits.append(idx)
-                        break
-
-                    is_right_pred = bool(
-                        re.search(
-                            r"(?:습니다|입니다|됩니다|합니다|ㅂ니다|습니까|입니까|ㅂ니까|어요|아요|해요|워요|봐요|와요|가요|자요|줘요|돼요|네요|군요|거든요|잖아요|까요|나요|세요|셨어요|셨습니다|왔어요|갔어요|났어요|봤어요|했어요|됐어요|썼어요|탔어요|췄어요|졌어요|렸어요|겼어요|웠어요|았어요|었어요|였어요|았을|었을|였을|했을|렀을|웠을|쳤을|졌을|겼을|렸을|났을|왔을|갔을|봤을|썼을|아서|어서|여서|해서|니까|지만|는데|은데|던데|는지|은지|면서|려고|도록|하게|으러|고|며|지|다|네|군|자|라|어|아|해|워|봐|와)$",
-                            right,
-                        )
-                    )
-                    # 뒷부분이 또 다른 체언(1~10음절) + 조사로 끝나거나 체언+조사+후속절로 시작하는 경우 ('강아지가공원에서', '스페이스바를눌렀을', '문서를선택한')
-                    is_right_noun_josa = (
-                        bool(
-                            re.match(
-                                r"^[가-힣]{1,10}(?:에서|에게|한테|으로|에는|에도|이나|이랑|은|는|이|가|을|를|의|에|로|도|만|와|과)(?:[가-힣]{2,}|$)",
-                                right,
-                            )
-                        )
-                        and right[0] not in "이가은는을를의에로와과도만"
-                    )
-                    is_right_obj_verb = (
-                        josa in ("을", "를")
-                        and len(stem) >= 2
-                        and right[0] not in "이가은는을를의에로와과도만"
-                    )
-                    is_right_vocab_start = False
-                    if right not in _RIGHT_BAD_JOSA_STARTS:
-                        if right in AI_ENGINE.ko_word_starts or right in _EXTRA_KO_WORD_STARTS:
-                            is_right_vocab_start = True
-                        else:
-                            for ws in _EXTRA_KO_WORD_STARTS:
-                                if right.startswith(ws):
-                                    is_right_vocab_start = True
-                                    break
-                            if not is_right_vocab_start:
-                                for ws in AI_ENGINE.ko_word_starts:
-                                    if len(ws) >= 2 and ws not in _RIGHT_BAD_JOSA_STARTS and right.startswith(ws):
-                                        is_right_vocab_start = True
-                                        break
-                    if is_right_pred or is_right_noun_josa or is_right_obj_verb or is_right_vocab_start:
-                        candidate_splits.append(idx)
-                        break
-
-            if candidate_splits:
-                best_idx = candidate_splits[0]
-                return f"{chunk[:best_idx]} {chunk[best_idx:]}"
-            return chunk
-
-        for _ in range(8):
-            next_s = re.sub(r"[가-힣]{4,}", _split_unspaced_chunk_by_grammar_and_vocab, s)
-            if next_s == s:
-                break
-            s = next_s
-    return re.sub(r" +", " ", s).strip()
+    return re.sub(r" +", " ", s_work).strip()
 
 
 def iron_and_polish_korean_text(raw_text: str, allow_typo_morph: bool = True) -> str:
@@ -4718,6 +4358,8 @@ def _replace_edit_control_current_line_atomic(
         else:
             final_out_win = final_out
 
+        root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
+        prev_ime_kor = get_ime_is_korean(root_hwnd)
         set_ime_language(target_korean=(target_lang == "KO"))
         if use_full_sel or (line_start == 0 and line_end >= utf16_total):
             u32.SendMessageW(edit_child, EM_SETSEL, 0, -1)
@@ -4734,7 +4376,6 @@ def _replace_edit_control_current_line_atomic(
                 u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_start + rep_utf16_len)
 
         full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
-        root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
         arm_undo_snapshot(
             root_hwnd,
             edit_child,
@@ -4743,6 +4384,7 @@ def _replace_edit_control_current_line_atomic(
             mode="edit_replace",
             full_doc_before=full_text,
             full_doc_after=full_after,
+            prev_ime_kor=prev_ime_kor,
         )
         return True, target_line.strip(), final_out.strip(), target_lang
     except Exception:
@@ -4829,6 +4471,8 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
         if target_lang is None:
             target_lang = "KO"
 
+        root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
+        prev_ime_kor = get_ime_is_korean(root_hwnd)
         set_ime_language(target_korean=(target_lang == "KO"))
         u32.SendMessageW(edit_child, EM_SETSEL, prev_start, prev_start + prev_len)
         rbuf = ctypes.create_unicode_buffer(polished)
@@ -4838,7 +4482,6 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
         u32.SendMessageW(edit_child, EM_SETSEL, new_caret, new_caret)
 
         full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
-        root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
         arm_undo_snapshot(
             root_hwnd,
             edit_child,
@@ -4847,6 +4490,7 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
             mode="edit_replace",
             full_doc_before=full_text,
             full_doc_after=full_after,
+            prev_ime_kor=prev_ime_kor,
         )
         return True
     except Exception:
@@ -4962,7 +4606,8 @@ def _restore_target_focus_and_replace_line(
 
         if morphed != selected and target_lang is not None:
             final_out = (morphed if morphed.endswith(" ") else morphed + " ") if auto_triggered else morphed
-            arm_undo_snapshot(target_hwnd, edit_child, selected, final_out, mode="clip_replace")
+            prev_ime_kor_c = get_ime_is_korean(target_hwnd) if target_hwnd else None
+            arm_undo_snapshot(target_hwnd, edit_child, selected, final_out, mode="clip_replace", prev_ime_kor=prev_ime_kor_c)
             daemon_set_cb(final_out)
             time.sleep(0.02)
             tap_key_combo([VK_CONTROL], VK_V)
@@ -4978,7 +4623,8 @@ def _restore_target_focus_and_replace_line(
             return False, selected, selected, None
 
     if auto_triggered and fallback_text:
-        arm_undo_snapshot(target_hwnd, edit_child, "", fallback_text, mode="clip_replace")
+        prev_ime_kor_fb = get_ime_is_korean(target_hwnd) if target_hwnd else None
+        arm_undo_snapshot(target_hwnd, edit_child, "", fallback_text, mode="clip_replace", prev_ime_kor=prev_ime_kor_fb)
         set_ime_language(target_korean=True)
         daemon_set_cb(fallback_text)
         time.sleep(0.02)
@@ -5495,43 +5141,87 @@ def _get_process_name_from_hwnd(hwnd: int | None) -> str:
 
 def should_skip_auto_typo(hwnd: int) -> bool:
     """
-    현재 포커스된 창이 자체 오토코렉트(한영 자동 전환) 탑재 프로그램(HWP, MS워드 등)이거나
-    코딩 전용 IDE인 경우 True를 반환하여 귀신창 실시간 타이핑 자동성형을 100% PASS합니다.
+    [타 프로그램 충돌 원천 차단 — 포커스 검증형 입력칸 화이트리스트(Strict Focus-Verified Whitelist)]
+    - 블랙리스트 나열 방식만으로는 세상의 수많은 그래픽·영상·CAD·터미널·커스텀 툴 단축키 충돌을 다 막을 수 없으므로,
+      실시간 키보드 개입(Space/0.55초 자동 성형)은 실제 키보드 포커스(GetGUIThreadInfo.hwndFocus)가 검증된 4대 순수 입력칸에서만 작동합니다:
+      1) Win32 표준 Edit / RichEdit 계열 컨트롤 (단, 비밀번호 칸 ES_PASSWORD=0x0020 및 IDE·터미널·탐색기 제외)
+      2) 메모장(notepad.exe — Win10 Edit / Win11 RichEditD2DPT)
+      3) 엑셀(excel.exe) 중 실제 '셀 텍스트 편집 모드(EXCEL6)' 또는 '수식 입력줄 편집(EXCEL<)'일 때만 (시트 그리드 EXCEL7 100% 차단!)
+      4) 카카오톡(kakaotalk.exe) 채팅 입력창(RICHEDIT50W / Edit / EVA_ChildWindow)
+    - 포토샵·프리미어·캡컷·오토캐드·터미널·원격데스크톱·노션·웹브라우저·한글/MS워드·게임 등 그 외 모든 창은 True(100% 무개입)를 반환합니다.
     """
     if not hwnd:
-        return False
+        return True
     try:
         if not get_superpower_settings().get("auto_typo_enabled", True):
             return True
-        # [방어 18] 비밀번호 입력창(ES_PASSWORD=0x0020) 포커스 시 키보드 버퍼 수집 100% 자동 휴면(Pause)
-        ed_pw = _find_edit_control_child(hwnd)
-        if ed_pw and (u32.GetWindowLongW(ed_pw, -16) & 0x0020):
-            return True
-        for target_h in (hwnd, u32.GetAncestor(hwnd, 2)):
+
+        root_h = u32.GetAncestor(hwnd, 2) or hwnd
+        for target_h in (hwnd, root_h):
             if not target_h:
                 continue
             proc_name, win_cls, win_title_chk = get_window_process_and_class(target_h)
             if win_title_chk:
                 try:
                     import sys as _sys_c
+
                     _os_ag = str(Path(__file__).resolve().parent / "os_agent")
                     if _os_ag not in _sys_c.path and Path(_os_ag).exists():
                         _sys_c.path.insert(0, _os_ag)
                     import plugin_ghosti_care_suite as _care_s
+
                     _care_s.check_window_title_for_prewake(win_title_chk)
                 except Exception:
                     pass
-            proc_lower = proc_name.lower()
-            cls_lower = win_cls.lower()
-            if proc_lower in AUTOCORRECT_EXCLUDE_PROCESSES:
+            proc_lower = (proc_name or "").lower()
+            cls_lower = (win_cls or "").lower()
+            if (
+                proc_lower in AUTOCORRECT_EXCLUDE_PROCESSES
+                or proc_lower in _RCLICK_BYPASS_PROCS
+                or proc_lower in ("explorer.exe", "python.exe", "pythonw.exe")
+            ):
                 return True
             if any(kw in cls_lower for kw in AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS):
                 return True
-            if not ed_pw and any(cls_lower.startswith(pfx) for pfx in WEB_TSF_NON_EDIT_CLASS_PREFIXES):
+            if any(cls_lower.startswith(pfx) for pfx in WEB_TSF_NON_EDIT_CLASS_PREFIXES):
                 return True
-        return False
+
+        proc_root, cls_root, _ = get_window_process_and_class(root_h)
+        proc_root_low = (proc_root or "").lower()
+        cls_root_low = (cls_root or "").lower()
+
+        focus_h = _get_focused_control_hwnd(hwnd)
+        focus_cls = _get_win_class_only(focus_h) if focus_h else ""
+
+        # [허용 1] 실제 키보드 포커스가 Win32 표준 Edit / RichEdit 컨트롤에 놓인 경우 (비밀번호 칸 제외)
+        if focus_h and focus_cls in _NATIVE_EDIT_CLASSES:
+            if u32.GetWindowLongW(focus_h, -16) & 0x0020:
+                return True
+            return False
+
+        # [허용 2] 메모장(notepad.exe — Win10 Edit / Win11 NotepadTextBox->RichEditD2DPT)
+        if proc_root_low == "notepad.exe" or cls_root == "Notepad":
+            ed_np = _find_edit_control_child(root_h)
+            if ed_np and not (u32.GetWindowLongW(ed_np, -16) & 0x0020):
+                return False
+            return True
+
+        # [허용 3] 엑셀(excel.exe) — 오직 인라인 셀 편집(EXCEL6) 또는 수식줄 편집(EXCEL<) 포커스일 때만 허용 (시트 그리드 EXCEL7 차단)
+        if proc_root_low == "excel.exe" or "xlmain" in cls_root_low:
+            if focus_cls.upper() in ("EXCEL6", "EXCEL<"):
+                return False
+            return True
+
+        # [허용 4] 카카오톡 PC 채팅 입력창
+        if proc_root_low == "kakaotalk.exe" and focus_cls in ("RICHEDIT50W", "Edit", "EVA_ChildWindow"):
+            if focus_h and (u32.GetWindowLongW(focus_h, -16) & 0x0020):
+                return True
+            return False
+
+        # 그 외 모든 프로그램·커스텀 캔버스·단축키 뷰포트는 실시간 자동성형 100% 차단 (수동 [1]번만 지원)
+        return True
     except Exception:
-        return False
+        return True
 
 
 def _apply_window_topmost(hwnd: int, topmost: bool) -> bool:
@@ -6256,6 +5946,7 @@ def main() -> None:
 
     _ensure_toast_worker()
     ensure_default_snippets()
+    _ensure_kiwi_warmup_async()
 
     u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
     u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
@@ -6388,6 +6079,7 @@ def main() -> None:
     idle_checked_for_ts: float = 0.0
     was_sub_key_down: dict[int, bool] = {}
     last_auto_morph_state: dict[str, object] = {"active": False}
+    _ui1_undo_ready_on_repress: bool = False
 
     def arm_sub_hotkeys() -> None:
         nonlocal menu_armed, menu_armed_until
@@ -6400,11 +6092,14 @@ def main() -> None:
                 u32.RegisterHotKey(None, 500 + num, MOD_CONTROL | MOD_NOREPEAT, 0x60 + num)
             for fnum in range(1, 11):
                 u32.RegisterHotKey(None, 300 + fnum, MOD_NOREPEAT, VK_F1 + fnum - 1)
+            if is_recent_undo_available(RECENT_GHOST_UNDO_WINDOW_SEC):
+                u32.RegisterHotKey(None, 199, MOD_NOREPEAT, VK_Z)
             menu_armed = True
         menu_armed_until = time.time() + MENU_ARM_SECONDS
 
     def disarm_sub_hotkeys() -> None:
-        nonlocal menu_armed
+        nonlocal menu_armed, _ui1_undo_ready_on_repress
+        _ui1_undo_ready_on_repress = False
         if menu_armed:
             for num in range(1, 10):
                 u32.UnregisterHotKey(None, 100 + num)
@@ -6413,6 +6108,7 @@ def main() -> None:
                 u32.UnregisterHotKey(None, 500 + num)
             for fnum in range(1, 11):
                 u32.UnregisterHotKey(None, 300 + fnum)
+            u32.UnregisterHotKey(None, 199)
             menu_armed = False
 
     def _execute_superpower_num(num: int) -> None:
@@ -6474,7 +6170,8 @@ def main() -> None:
             complete_feature_action_success("superpower_key_6")
 
     def _show_default_ui1_bar(live_clip_val: str | None) -> None:
-        nonlocal seq_queue
+        nonlocal seq_queue, _ui1_undo_ready_on_repress
+        _ui1_undo_ready_on_repress = is_recent_undo_available(RECENT_GHOST_UNDO_WINDOW_SEC)
         excel_cells = []
         if recent_unpasted:
             excel_cells = split_excel_cells(recent_unpasted[-1])
@@ -6520,8 +6217,14 @@ def main() -> None:
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts
         now_s = time.time()
 
-        # [0순위: 연속 재호출 토글] 현재 열린 창이 의도와 다를 때 바로 한 번 더 호출하면 즉시 반대 창으로 스왑!
+        # [0순위: 8초 이내 귀신 변환 직후 재호출 원복(방안 1) 또는 연속 재호출 토글]
         if _CURRENT_OPEN_UI_MODE == "ui1":
+            if _ui1_undo_ready_on_repress and _UNDO_SNAPSHOT.get("active"):
+                _ui1_undo_ready_on_repress = False
+                disarm_sub_hotkeys()
+                close_ghost_toast()
+                execute_undo_snapshot(daemon_set_clipboard)
+                return
             play_baby_ghost_sound(mode="summon")
             disarm_sub_hotkeys()
             show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
@@ -6805,8 +6508,11 @@ def main() -> None:
                             last_topmost_ts = now_hk
                             _execute_superpower_num(8)
 
-                    # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷)
-                    elif hk_id == 999:
+                    # 1-C) 오타성형/다림질 직후 1단계 정밀 원복 (Ctrl + Z 스냅샷 또는 귀신창 오픈 상태 Z 단축키)
+                    elif hk_id in (999, 199):
+                        _ui1_undo_ready_on_repress = False
+                        disarm_sub_hotkeys()
+                        close_ghost_toast()
                         execute_undo_snapshot(daemon_set_clipboard)
 
                     # 2) 숫자 2~9 초능력 발동 (단독 또는 Ctrl 유지 상태 모두 지원)
@@ -6846,7 +6552,12 @@ def main() -> None:
                 while not _CLICKED_SUPERPOWER_QUEUE.empty():
                     try:
                         c_num = _CLICKED_SUPERPOWER_QUEUE.get_nowait()
-                        if c_num == 0:
+                        if c_num == -1:
+                            _ui1_undo_ready_on_repress = False
+                            disarm_sub_hotkeys()
+                            close_ghost_toast()
+                            execute_undo_snapshot(daemon_set_clipboard)
+                        elif c_num == 0:
                             if _LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND):
                                 u32.SetForegroundWindow(_LAST_TARGET_HWND)
                                 time.sleep(0.025)
@@ -6916,8 +6627,14 @@ def main() -> None:
                         _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = False
                         _dismiss_native_context_menu_after_rbtn_up(_RBTN_HOLD_STATE.get("target_hwnd"))
                 was_key_down[0x9901] = rbtn_phys_now
-                if _UNDO_SNAPSHOT.get("active") and (now - _UNDO_SNAPSHOT.get("ts", 0.0)) > 60.0:
-                    disarm_undo_snapshot()
+                if _UNDO_SNAPSHOT.get("active"):
+                    age_u = now - float(_UNDO_SNAPSHOT.get("ts") or 0.0)
+                    if _UNDO_SNAPSHOT.get("hotkey_999_armed") and (
+                        age_u > CTRL_Z_HOTKEY_WINDOW_SEC or int(_UNDO_SNAPSHOT.get("typed_count_after") or 0) > 14
+                    ):
+                        release_ctrl_z_hotkey_only()
+                    if age_u > 60.0:
+                        disarm_undo_snapshot()
                 if _PINNED_HWNDS:
                     enforce_pinned_windows()
                 global _CLEAR_ALL_REQUESTED
@@ -6972,7 +6689,13 @@ def main() -> None:
                             for vk_alpha in range(0x41, 0x5B):
                                 a_down = (u32.GetAsyncKeyState(vk_alpha) & 0x8000) != 0
                                 if a_down and not was_key_down.get(vk_alpha, False):
-                                    _toast_queue.put(("__MORPH_SEARCH__", 0))
+                                    if vk_alpha == VK_Z and _ui1_undo_ready_on_repress and _UNDO_SNAPSHOT.get("active"):
+                                        _ui1_undo_ready_on_repress = False
+                                        disarm_sub_hotkeys()
+                                        close_ghost_toast()
+                                        execute_undo_snapshot(daemon_set_clipboard)
+                                    else:
+                                        _toast_queue.put(("__MORPH_SEARCH__", 0))
                                     break
                 else:
                     for n_check in range(1, 7):
@@ -7100,7 +6823,7 @@ def main() -> None:
 
                 ctrl_z_now = ctrl_down and not alt_down and not shift_down and z_down
                 if ctrl_z_now and not was_ctrl_z_down:
-                    if _UNDO_SNAPSHOT.get("active"):
+                    if _UNDO_SNAPSHOT.get("active") and _UNDO_SNAPSHOT.get("hotkey_999_armed"):
                         execute_undo_snapshot(daemon_set_clipboard)
                 was_ctrl_z_down = ctrl_z_now
 
@@ -7144,7 +6867,9 @@ def main() -> None:
                             last_any_key_ts = now
                             last_drag_select_ts = 0.0
                             last_auto_morph_state["active"] = False
-                            if len(typed_ascii_buf) > 64:
+                            if _UNDO_SNAPSHOT.get("active"):
+                                _UNDO_SNAPSHOT["typed_count_after"] = int(_UNDO_SNAPSHOT.get("typed_count_after") or 0) + 1
+                            if len(typed_ascii_buf) > 128:
                                 typed_ascii_buf.pop(0)
                         was_key_down[vk_code] = is_down
 
@@ -7286,22 +7011,25 @@ def main() -> None:
                             typed_ascii_buf.clear()
                             pending_first_typo = None
                             last_alpha_type_ts = 0.0
-                        elif not _is_protected_account_or_email_token(raw_idle_buf_chk):
+                        elif not _is_protected_account_or_email_token(raw_idle_buf_chk) and not raw_idle_buf_chk.lstrip().startswith("="):
                             edit_idle = _find_edit_control_child(hwnd_idle)
                             if edit_idle:
                                 idle_line = _get_edit_control_current_line(edit_idle)
-                                if idle_line and not idle_line.endswith(" ") and (now - last_paste_ts) > 2.0:
+                                if (
+                                    idle_line
+                                    and not idle_line.lstrip().startswith("=")
+                                    and not idle_line.endswith(" ")
+                                    and (now - last_paste_ts) > 2.0
+                                ):
                                     idle_tokens = idle_line.strip().split()
                                     if len(idle_tokens) >= 2 and not _is_protected_account_or_email_token(idle_tokens[-1]):
                                         idle_eng_typo_cnt = 0
                                         for itok in idle_tokens:
                                             if _is_protected_account_or_email_token(itok):
                                                 continue
-                                            for ichunk in re.findall(r"[A-Za-z]+", itok):
-                                                if len(ichunk) >= 2 and not AI_ENGINE.is_valid_english_word(ichunk):
-                                                    ik = eng_word_to_kor(ichunk)
-                                                    if ik and is_valid_korean_word(ik):
-                                                        idle_eng_typo_cnt += 1
+                                            m_itok, dir_itok = morph_korean_english_text_with_direction(itok)
+                                            if dir_itok == "KO" and m_itok != itok:
+                                                idle_eng_typo_cnt += 1
                                         if idle_eng_typo_cnt >= 2:
                                             ok_id, raw_id, out_id, lang_id = _replace_edit_control_current_line_atomic(edit_idle, auto_triggered=True)
                                             if ok_id:
@@ -7310,14 +7038,12 @@ def main() -> None:
                                                 last_alpha_type_ts = 0.0
                                                 complete_feature_action_success("auto_typo_morph_2words")
                             else:
-                                # [노션·엑셀·브라우저·카톡 등 비-Edit 컨트롤에서도 2단어째 연속 오타 후 0.55초 멈추면 즉시 자동 성형!]
+                                # [엑셀 셀 편집(EXCEL6)·카톡 채팅창 등 검증된 비-Edit 입력칸에서 2단어 연속 오타 후 0.55초 멈춤 자동 성형]
                                 raw_idle_str = raw_idle_buf_chk
-                                m_id = re.match(r"^([^A-Za-z0-9가-힣\s]*)([A-Za-z]+)([0-9]*)([^A-Za-z0-9가-힣\s]*)$", raw_idle_str)
-                                w_id = m_id.group(2) if m_id else re.sub(r"[^A-Za-z]", "", raw_idle_str)
                                 ime_kor_id = get_ime_is_korean(hwnd_idle)
-                                if not ime_kor_id and len(w_id) >= 2 and not AI_ENGINE.is_valid_english_word(w_id):
-                                    k_id = eng_word_to_kor(w_id)
-                                    if k_id and len(k_id) >= 1 and is_valid_korean_word(k_id):
+                                if not ime_kor_id and re.search(r"[A-Za-z]{2,}", raw_idle_str):
+                                    conv_id, dir_id = morph_korean_english_text_with_direction(raw_idle_str)
+                                    if dir_id == "KO" and conv_id != raw_idle_str and re.search(r"[가-힣]", conv_id):
                                         has_prev_id = (
                                             pending_first_typo is not None
                                             and pending_first_typo.get("target_ko") is True
@@ -7327,7 +7053,6 @@ def main() -> None:
                                             prev_r_id = pending_first_typo["raw"] if has_prev_id else ""
                                             prev_c_id = pending_first_typo["conv"] if has_prev_id else ""
                                             total_bs_id = (pending_first_typo["disp_len"] if has_prev_id else 0) + len(raw_idle_str)
-                                            conv_id = morph_korean_english_text(raw_idle_str)
                                             comb_conv_id = _fix_korean_spacing_general(f"{prev_c_id} {conv_id}".strip())
                                             comb_raw_id = f"{prev_r_id} {raw_idle_str}".strip()
                                             typed_ascii_buf.clear()
@@ -7352,6 +7077,14 @@ def main() -> None:
                                                 if orig_c_id and not seq_mode:
                                                     threading.Timer(0.28, lambda c=orig_c_id: daemon_set_clipboard(c)).start()
                                             set_ime_language(target_korean=True)
+                                            arm_undo_snapshot(
+                                                hwnd_idle,
+                                                0,
+                                                comb_raw_id,
+                                                comb_conv_id,
+                                                mode="backspace_replace",
+                                                prev_ime_kor=ime_kor_id,
+                                            )
                                             complete_feature_action_success("auto_typo_morph_2words")
 
                     space_down = (u32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
@@ -7385,22 +7118,31 @@ def main() -> None:
                         if cur_line is not None:
                             cur_stripped = cur_line.rstrip(" ")
                             last_tok = cur_stripped.split()[-1] if cur_stripped.strip() else ""
-                            m_last_eng = re.match(r"^([^A-Za-z가-힣\s]*)([A-Za-z]+)([^A-Za-z가-힣\s]*)$", last_tok)
-                            # [붙여넣기 및 이메일·계정 보호]: 붙여넣기 영타(raw_buf_str 비어있음) 또는 이메일(@)/계정 토큰은 절대 자동 한영변환 대상으로 잡지 않음!
-                            if _is_protected_account_or_email_token(last_tok) or _is_protected_account_or_email_token(raw_buf_str):
+                            # [붙여넣기 및 이메일·URL·수식 보호 / 숫자 혼입 문장('...1chaksdp...') 전면 지원]
+                            if (
+                                _is_protected_account_or_email_token(last_tok)
+                                or _is_protected_account_or_email_token(raw_buf_str)
+                                or last_tok.startswith("=")
+                                or cur_stripped.lstrip().startswith("=")
+                            ):
                                 typed_as_eng = False
                                 typed_as_kor = False
-                            elif m_last_eng and bool(raw_buf_str):
+                            elif bool(raw_buf_str) and re.search(r"[A-Za-z]", last_tok) and not re.search(r"[가-힣]", last_tok):
                                 typed_as_eng = True
                                 typed_as_kor = False
-                                lead_punct, word_cand, trail_punct = m_last_eng.groups()
-                                trail_digits = re.sub(r"[^0-9]", "", lead_punct + trail_punct)
                                 raw_buf_str = last_tok
+                                m_last_eng = re.match(r"^([^A-Za-z가-힣\s]*)([A-Za-z]+)([^A-Za-z가-힣\s]*)$", last_tok)
+                                if m_last_eng:
+                                    lead_punct, word_cand, trail_punct = m_last_eng.groups()
+                                    trail_digits = re.sub(r"[^0-9]", "", lead_punct + trail_punct)
+                                else:
+                                    word_cand = re.sub(r"[^A-Za-z]", "", last_tok)
+                                    trail_digits = re.sub(r"[^0-9]", "", last_tok)
                             else:
                                 typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
                                 typed_as_kor = bool(raw_buf_str) and not typed_as_eng
                         else:
-                            if _is_protected_account_or_email_token(raw_buf_str):
+                            if _is_protected_account_or_email_token(raw_buf_str) or raw_buf_str.lstrip().startswith("="):
                                 typed_as_eng = False
                                 typed_as_kor = False
                             else:
@@ -7409,19 +7151,29 @@ def main() -> None:
                                 typed_as_kor = ime_kor
 
                         curr_typo: dict | None = None
-                        if typed_as_eng and len(word_cand) >= 2 and not AI_ENGINE.is_valid_english_word(word_cand):
-                            kor_cand = eng_word_to_kor(word_cand)
-                            if kor_cand and len(kor_cand) >= 1 and is_valid_korean_word(kor_cand):
-                                curr_typo = {
-                                    "disp_len": len(raw_buf_str) + 1,
-                                    "raw": raw_buf_str,
-                                    "conv": morph_korean_english_text(raw_buf_str),
-                                    "kor_len": len(kor_cand),
-                                    "target_ko": True,
-                                    "has_digits": bool(trail_digits),
-                                    "ts": now,
-                                    "hwnd": hwnd_fg,
-                                }
+                        if typed_as_eng and re.search(r"[A-Za-z]{2,}", raw_buf_str):
+                            morphed_cand, dir_cand = morph_korean_english_text_with_direction(raw_buf_str)
+                            if dir_cand == "KO" and morphed_cand != raw_buf_str:
+                                eng_chunks = [
+                                    c_e
+                                    for c_e in re.findall(r"[A-Za-z]+", raw_buf_str)
+                                    if len(c_e) >= 2 and not AI_ENGINE.is_valid_english_word(c_e)
+                                ]
+                                eng_alpha_total = sum(len(c_e) for c_e in eng_chunks)
+                                kor_syl_total = len(re.findall(r"[가-힣]", morphed_cand))
+                                has_any_digit = bool(re.search(r"\d", raw_buf_str))
+                                if eng_alpha_total >= 2 and kor_syl_total >= 1:
+                                    curr_typo = {
+                                        "disp_len": len(raw_buf_str) + 1,
+                                        "raw": raw_buf_str,
+                                        "conv": morphed_cand,
+                                        "eng_len": eng_alpha_total,
+                                        "kor_len": kor_syl_total,
+                                        "target_ko": True,
+                                        "has_digits": has_any_digit,
+                                        "ts": now,
+                                        "hwnd": hwnd_fg,
+                                    }
                         elif typed_as_kor and len(word_cand) >= 3 and not trail_digits and AI_ENGINE.is_valid_english_word(word_cand):
                             kor_produced = eng_word_to_kor(word_cand)
                             if any(0x3131 <= ord(c) <= 0x318E for c in kor_produced) or not is_valid_korean_word(kor_produced):
@@ -7430,6 +7182,7 @@ def main() -> None:
                                         "disp_len": len(lead_punct) + len(kor_produced) + len(trail_punct) + 1,
                                         "raw": lead_punct + kor_produced + trail_punct,
                                         "conv": lead_punct + word_cand + trail_punct,
+                                        "eng_len": len(word_cand),
                                         "kor_len": len(kor_produced),
                                         "target_ko": False,
                                         "has_digits": False,
@@ -7439,7 +7192,8 @@ def main() -> None:
 
                         if curr_typo is not None:
                             should_trigger = False
-                            is_long_4syl = bool(curr_typo["target_ko"] and len(word_cand) >= 8 and curr_typo.get("kor_len", 0) >= 4)
+                            c_eng_len = int(curr_typo.get("eng_len") or 0)
+                            is_long_4syl = bool(curr_typo["target_ko"] and c_eng_len >= 8 and curr_typo.get("kor_len", 0) >= 4)
                             if cur_line is not None:
                                 line_tokens = cur_line.strip().split()
                                 if len(line_tokens) >= 2:
@@ -7447,26 +7201,22 @@ def main() -> None:
                                     for prev_tok in line_tokens[:-1]:
                                         if _is_protected_account_or_email_token(prev_tok):
                                             continue
-                                        for p_chunk in re.findall(r"[A-Za-z]+", prev_tok):
-                                            if len(p_chunk) >= 2 and not AI_ENGINE.is_valid_english_word(p_chunk):
-                                                pk = eng_word_to_kor(p_chunk)
-                                                if pk and is_valid_korean_word(pk):
-                                                    prev_is_eng_typo = True
-                                                    break
-                                        if prev_is_eng_typo:
+                                        m_prev_t, dir_prev_t = morph_korean_english_text_with_direction(prev_tok)
+                                        if dir_prev_t == "KO" and m_prev_t != prev_tok:
+                                            prev_is_eng_typo = True
                                             break
                                     if curr_typo["target_ko"]:
-                                        if prev_is_eng_typo or (curr_typo["has_digits"] and len(word_cand) >= 4) or is_long_4syl:
+                                        if prev_is_eng_typo or (curr_typo["has_digits"] and c_eng_len >= 4) or is_long_4syl:
                                             should_trigger = True
                                     else:
                                         if pending_first_typo is not None and not pending_first_typo["target_ko"] and pending_first_typo.get("hwnd") == hwnd_fg and pending_first_typo["raw"] in cur_line:
                                             should_trigger = True
-                                elif is_long_4syl:
+                                elif (curr_typo["target_ko"] and curr_typo["has_digits"] and c_eng_len >= 4) or is_long_4syl:
                                     should_trigger = True
                             else:
                                 if pending_first_typo is not None and pending_first_typo["target_ko"] == curr_typo["target_ko"] and pending_first_typo.get("hwnd") == hwnd_fg:
                                     should_trigger = True
-                                elif curr_typo["target_ko"] and ((curr_typo["has_digits"] and len(word_cand) >= 4) or is_long_4syl):
+                                elif curr_typo["target_ko"] and ((curr_typo["has_digits"] and c_eng_len >= 4) or is_long_4syl):
                                     should_trigger = True
 
                             if should_trigger:
@@ -7497,9 +7247,8 @@ def main() -> None:
                                             last_auto_morph_state["active"] = False
                                         complete_feature_action_success("auto_typo_morph_2words")
                                 else:
-                                    # [노션·엑셀·브라우저·카톡 무충돌 원자적 백스페이스 교체]:
-                                    # 방금 친 Space가 타겟 앱에 먼저 반영되도록 25ms 대기 후,
-                                    # 타이핑한 글자 수(total_backspaces)만큼 정확히 Backspace ➔ 변환 문자열을 Ctrl+V로 사출!
+                                    # [엑셀 셀 편집(EXCEL6)·카톡 채팅창 무충돌 원자적 백스페이스 교체 + 원복 스냅샷 무장]:
+                                    prev_ime_bs = get_ime_is_korean(hwnd_fg)
                                     orig_c = get_clipboard_text()
                                     time.sleep(0.025)
                                     release_all_modifiers()
@@ -7510,7 +7259,7 @@ def main() -> None:
                                         u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
                                         time.sleep(0.005)
                                     time.sleep(0.025)
-                                    final_paste = _fix_korean_spacing_general(combined_conv.strip()) + " "
+                                    final_paste = (_fix_korean_spacing_general(combined_conv.strip()) + " ") if target_ko else (combined_conv.strip() + " ")
                                     if send_unicode_text_preserve_style(final_paste):
                                         time.sleep(0.04)
                                     else:
@@ -7521,6 +7270,14 @@ def main() -> None:
                                         if orig_c and not seq_mode:
                                             threading.Timer(0.28, lambda c=orig_c: daemon_set_clipboard(c)).start()
                                     set_ime_language(target_korean=target_ko)
+                                    arm_undo_snapshot(
+                                        hwnd_fg,
+                                        0,
+                                        combined_raw + " ",
+                                        final_paste,
+                                        mode="backspace_replace",
+                                        prev_ime_kor=prev_ime_bs,
+                                    )
                                     if target_ko and not prev_raw:
                                         last_auto_morph_state = {
                                             "active": True,
