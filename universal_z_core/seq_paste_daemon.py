@@ -2257,356 +2257,49 @@ def _toast_worker() -> None:
         win_rect[0] = (x, y, x + rw, y + rh)
 
     # =================================================================
-    # [창 UI ②] 👻 귀신검색창 (크게/작게 2모드 · 작게 모드 내 소520 ↔ 중960 검색량 반응형 자율 조절)
-    # - [창 UI ① 기본 귀신창]과 100% 분리된 독립 창 ([1]~[8] 버튼 없음!)
+    # [창 UI ②] 👻 귀신검색창 — Ghosti 본진 전담 모듈(ghost_search_window_ui2.py) 위임
+    # - [창 UI ① 기본 귀신창] 및 [창 UI ③ 역OCR창]과 물리적 파일 단위로 분리 완료
     # =================================================================
-    def _build_ui2_search_window(win: tk.Toplevel, init_stage: str, init_query: str, pt_x: int, pt_y: int, work_area: tuple[int, int, int, int]) -> None:
+    def _set_current_open_ui_mode_val(mode_str: str) -> None:
         global _CURRENT_OPEN_UI_MODE
-        active_mode[0] = "ui2"
-        _CURRENT_OPEN_UI_MODE = "ui2"
-        m_left, m_top, m_right, m_bottom = work_area
-        init_mode = "large" if init_stage in ("large", "gallery") else "compact"
-        st_state = {
-            "mode": init_mode,
-            "stage": "large" if init_mode == "large" else ("medium" if init_query.strip() else "small"),
-            "custom_h": None if init_mode == "large" else 330,
-            "filter": "all",
-            "sel_idx": 0,
-            "items": [],
-            "debounce_job": None,
+        _CURRENT_OPEN_UI_MODE = mode_str
+
+    def _build_ui2_search_window(win: tk.Toplevel, init_stage: str, init_query: str, pt_x: int, pt_y: int, work_area: tuple[int, int, int, int]) -> None:
+        import ghost_search_window_ui2
+
+        ui2_ctx = {
+            "root": root,
+            "active_mode": active_mode,
+            "set_current_open_ui_mode": _set_current_open_ui_mode_val,
+            "ghost_symbol_photo": ghost_symbol_photo,
+            "close_win": _close_win,
+            "get_superpower_settings": get_superpower_settings,
+            "update_superpower_settings": update_superpower_settings,
+            "clicked_superpower_queue": _CLICKED_SUPERPOWER_QUEUE,
+            "compute_ghost_search_window_3stage_rect": compute_ghost_search_window_3stage_rect,
+            "resolve_ghost_search_auto_stage": resolve_ghost_search_auto_stage,
+            "opened_at": opened_at,
+            "was_mouse_down": was_mouse_down,
+            "is_hovered": is_hovered,
+            "current_win": current_win,
+            "apply_win_topmost": _apply_win_topmost,
+            "record_feature_telemetry": record_feature_telemetry,
+            "thumb_refs": thumb_refs,
+            "global_ai_history": GLOBAL_AI_HISTORY,
+            "get_lightweight_local_files": _get_lightweight_local_files,
+            "extract_chosung": _extract_chosung,
+            "eng_to_kor": eng_to_kor,
+            "kor_to_eng": kor_to_eng,
+            "clean_ocr_noise": _clean_ocr_noise,
+            "format_rel_time": _format_rel_time,
+            "make_context_snippet": _make_context_snippet,
+            "toast_queue": _toast_queue,
+            "paste_to_target": _paste_to_target,
+            "get_last_rbtn_dismiss_esc_ts": lambda: _LAST_RBTN_DISMISS_ESC_TS,
         }
-
-        outer = tk.Frame(win, bg="#0B1120", highlightbackground="#38BDF8", highlightthickness=2, padx=8, pady=6)
-        outer.pack(fill="both", expand=True)
-
-        # 1단 헤더: 👻귀신검색창 + 라이브 검색창 + 우측 [🏷️[2]파일라벨러][⤢ 크게(갤러리) / ⤡ 작게][🔊][✕]
-        hdr = tk.Frame(outer, bg="#0F172A", highlightbackground="#14B8A6", highlightthickness=1, padx=6, pady=4)
-        hdr.pack(fill="x", pady=(0, 4))
-
-        if ghost_symbol_photo is not None:
-            ic_lbl = tk.Label(hdr, image=ghost_symbol_photo, bg="#0F172A", bd=0)
-            ic_lbl.image = ghost_symbol_photo
-            ic_lbl.pack(side="left", padx=(0, 4))
-
-        title_badge = tk.Label(hdr, text="👻귀신검색창", fg="#0B1120", bg="#2DD4BF", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"))
-        title_badge.pack(side="left", padx=(0, 6))
-
-        s_entry = tk.Entry(hdr, width=18, fg="#F8FAFC", bg="#1E293B", insertbackground="#5EEAD4", relief="flat", font=("Malgun Gothic", 9))
-        s_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        if init_query:
-            s_entry.insert(0, init_query)
-
-        close_btn = tk.Label(hdr, text="✕", fg="#94A3B8", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
-        close_btn.pack(side="right", padx=(2, 0))
-        close_btn.bind("<Button-1>", lambda _e: _close_win())
-
-        cur_sound = bool(get_superpower_settings().get("sound_enabled", True))
-        mute_btn = tk.Label(hdr, text="🔊" if cur_sound else "🔇", fg="#5EEAD4" if cur_sound else "#64748B", bg="#1E293B", padx=4, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
-        mute_btn.pack(side="right", padx=(2, 0))
-
-        def _toggle_snd(_e=None):
-            nxt = not bool(get_superpower_settings().get("sound_enabled", True))
-            update_superpower_settings({"sound_enabled": nxt})
-            mute_btn.config(text="🔊" if nxt else "🔇", fg="#5EEAD4" if nxt else "#64748B")
-
-        mute_btn.bind("<Button-1>", _toggle_snd)
-
-        mode_toggle_btn = tk.Label(
-            hdr,
-            text="⤡ 작게" if init_mode == "large" else "⤢ 크게(갤러리)",
-            fg="#0B1120" if init_mode == "large" else "#5EEAD4",
-            bg="#2DD4BF" if init_mode == "large" else "#1E293B",
-            padx=6,
-            pady=1,
-            font=("Malgun Gothic", 8, "bold"),
-            cursor="hand2",
+        ghost_search_window_ui2.build_ui2_search_window(
+            ui2_ctx, win, init_stage, init_query, pt_x, pt_y, work_area
         )
-        mode_toggle_btn.pack(side="right", padx=(2, 0))
-        mode_toggle_btn.bind("<Button-1>", lambda _e: _toggle_window_mode())
-
-        lbl_quick_btn = tk.Label(
-            hdr,
-            text="🏷️[2]파일라벨러",
-            fg="#0B1120",
-            bg="#5EEAD4",
-            padx=6,
-            pady=1,
-            font=("Malgun Gothic", 8, "bold"),
-            cursor="hand2",
-        )
-        lbl_quick_btn.pack(side="right", padx=(4, 2))
-        lbl_quick_btn.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(2)))
-
-        # 2단 필터 바: [전체] [📄문서] [🖼️사진] [🎬영상] + 우측 🎁30일무제한(D-30)
-        fbar = tk.Frame(outer, bg="#0B1120")
-        fbar.pack(fill="x", pady=(0, 4))
-
-        filter_btns: dict[str, tk.Label] = {}
-        for f_key, f_txt in (("all", "전체"), ("doc", "📄문서"), ("image", "🖼️사진"), ("video", "🎬영상")):
-            fb = tk.Label(fbar, text=f_txt, fg="#E2E8F0", bg="#1E293B", padx=6, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
-            fb.pack(side="left", padx=(0, 4))
-            fb.bind("<Button-1>", lambda _e, fk=f_key: _switch_filter(fk))
-            filter_btns[f_key] = fb
-
-        trial_lbl = tk.Label(fbar, text="🎁 30일 무제한(D-30·차감없음)", fg="#FDE047", bg="#0B1120", font=("Malgun Gothic", 8, "bold"))
-        trial_lbl.pack(side="right")
-
-        # 3단 결과 영역
-        body_frame = tk.Frame(outer, bg="#0B1120")
-        body_frame.pack(fill="both", expand=True)
-
-        def _resize_for_stage(activate: bool = True) -> None:
-            st_now = st_state["stage"]
-            ax = pt_x
-            ay = pt_y
-            r3 = compute_ghost_search_window_3stage_rect(
-                st_now,
-                ax,
-                ay,
-                work_area=work_area,
-                margin_px=16,
-                custom_height=st_state.get("custom_h"),
-            )
-            opened_at[0] = time.time()
-            was_mouse_down[0] = True
-            _apply_win_topmost(win, int(r3["x"]), int(r3["y"]), int(r3["width"]), int(r3["height"]), activate=activate)
-            if activate:
-                try:
-                    s_entry.focus_force()
-                except Exception:
-                    pass
-
-        def _toggle_window_mode(_e=None) -> str:
-            is_hovered[0] = True
-            opened_at[0] = time.time()
-            was_mouse_down[0] = True
-            st_state["mode"] = "compact" if st_state["mode"] == "large" else "large"
-            record_feature_telemetry(
-                "ghost_search_window_large" if st_state["mode"] == "large" else "ghost_search_window_small"
-            )
-            _render_search_results()
-            _resize_for_stage(activate=True)
-            return "break"
-
-        def _switch_filter(new_flt: str) -> None:
-            is_hovered[0] = True
-            st_state["filter"] = new_flt
-            st_state["sel_idx"] = 0
-            _render_search_results()
-            _resize_for_stage(activate=False)
-
-        def _render_search_results() -> None:
-            for ch in body_frame.winfo_children():
-                ch.destroy()
-            thumb_refs.clear()
-
-            flt_now = st_state["filter"]
-            for k, b in filter_btns.items():
-                b.config(fg="#0B1120" if k == flt_now else "#E2E8F0", bg="#5EEAD4" if k == flt_now else "#1E293B")
-
-            q = s_entry.get().strip()
-            pool: list[dict] = []
-            for rec in reversed(GLOBAL_AI_HISTORY):
-                pool.append(rec)
-            for frec in _get_lightweight_local_files():
-                pool.append(frec)
-
-            if flt_now == "doc":
-                pool = [r for r in pool if r.get("kind") in ("text", "doc")]
-            elif flt_now == "image":
-                pool = [r for r in pool if r.get("kind") == "image"]
-            elif flt_now == "video":
-                pool = [r for r in pool if r.get("kind") == "video"]
-
-            matched: list[tuple[float, dict]] = []
-            if q:
-                q_low = q.lower()
-                q_cho = _extract_chosung(q_low)
-                q_kor_alt = eng_to_kor(q) if re.search(r"[A-Za-z]", q) else ""
-                q_eng_alt = kor_to_eng(q) if re.search(r"[가-힣ㄱ-ㅎㅏ-ㅣ]", q) else ""
-                for idx_p, r in enumerate(pool):
-                    raw_t = r.get("text", "")
-                    clean_t = _clean_ocr_noise(raw_t) if r.get("kind") == "image" else raw_t
-                    t_low = clean_t.lower()
-                    t_cho = _extract_chosung(t_low)
-                    sc = 0.0
-                    if q_low in t_low or (q_cho and q_cho in t_cho):
-                        sc = 1.0
-                    elif q_kor_alt and q_kor_alt.lower() in t_low:
-                        sc = 0.85
-                    elif q_eng_alt and len(q_eng_alt) >= 2 and q_eng_alt.lower() in t_low:
-                        sc = 0.85
-                    if sc > 0:
-                        matched.append((sc - idx_p * 0.0001, r))
-                if matched:
-                    matched.sort(key=lambda x: x[0], reverse=True)
-
-            # [자율 크기 판별]: '작게(compact)' 모드일 때 검색량·미리보기 성격에 맞춰 소(520) ↔ 중(960) 자동 전환
-            has_rich = any(m[1].get("kind") in ("image", "doc") for m in matched[:5]) or (flt_now == "image" and len(pool) > 0 and bool(q))
-            auto_stage, auto_slim_h = resolve_ghost_search_auto_stage(
-                mode=st_state["mode"],
-                has_query=bool(q),
-                matched_count=len(matched) if q else len(pool[:5]),
-                has_rich_preview=has_rich,
-            )
-            prev_stage = st_state["stage"]
-            prev_h = st_state.get("custom_h")
-            st_state["stage"] = auto_stage
-            st_state["custom_h"] = auto_slim_h
-            if auto_stage == "medium" and prev_stage != "medium":
-                record_feature_telemetry("ghost_search_window_medium")
-
-            st_now = st_state["stage"]
-            is_large_mode = st_state["mode"] == "large"
-            mode_toggle_btn.config(
-                text="⤡ 작게" if is_large_mode else "⤢ 크게(갤러리)",
-                fg="#0B1120" if is_large_mode else "#5EEAD4",
-                bg="#2DD4BF" if is_large_mode else "#1E293B",
-            )
-
-            max_cnt = 5 if st_now == "small" else (8 if st_now == "medium" else 10)
-            snip_len = 36 if st_now == "small" else (48 if st_now == "medium" else 34)
-
-            if not q:
-                candidates = pool[:max_cnt]
-                trial_lbl.config(text="✨ 크기 자율 호흡 · 🎁 30일 무제한", fg="#FDE047")
-            elif matched:
-                candidates = [m[1] for m in matched[:max_cnt]]
-                trial_lbl.config(text=f"🔍 '{q[:8]}' {len(matched)}건" + (" · 자율확장" if st_now == "medium" else ""), fg="#5EEAD4")
-            else:
-                candidates = pool[:max_cnt]
-                trial_lbl.config(text=f"🔍 '{q[:6]}' 일치 없음(최근목록)", fg="#FDE047")
-
-            if (prev_stage != st_now or prev_h != auto_slim_h) and current_win[0] is win:
-                _resize_for_stage(activate=False)
-
-            st_state["items"] = candidates
-            st_state["sel_idx"] = min(st_state["sel_idx"], max(0, len(candidates) - 1))
-
-            if not candidates:
-                tk.Label(body_frame, text="표시할 항목이 없습니다.", fg="#94A3B8", bg="#0B1120", font=("Malgun Gothic", 9)).pack(pady=20)
-                return
-
-            list_parent = body_frame
-            preview_pane = None
-            if st_now == "medium":
-                list_parent = tk.Frame(body_frame, bg="#0B1120")
-                list_parent.pack(side="left", fill="both", expand=True, padx=(0, 6))
-                preview_pane = tk.Frame(body_frame, bg="#0F172A", highlightbackground="#334155", highlightthickness=1, padx=10, pady=8, width=360)
-                preview_pane.pack(side="right", fill="y")
-                preview_pane.pack_propagate(False)
-            elif st_now == "large":
-                list_parent.grid_columnconfigure(0, weight=1, uniform="gcol")
-                list_parent.grid_columnconfigure(1, weight=1, uniform="gcol")
-
-            for idx_c, rec in enumerate(candidates):
-                is_sel = idx_c == st_state["sel_idx"]
-                c_bg = "#1E293B" if is_sel else "#0F172A"
-                b_col = "#2DD4BF" if is_sel else "#334155"
-                card = tk.Frame(list_parent, bg=c_bg, highlightbackground=b_col, highlightthickness=1, padx=6, pady=4, cursor="hand2")
-                if st_now == "large":
-                    card.grid(row=idx_c // 2, column=idx_c % 2, padx=3, pady=3, sticky="nsew")
-                else:
-                    card.pack(fill="x", pady=2)
-
-                kind = rec.get("kind", "text")
-                icon_ch = "🖼️" if kind == "image" else ("🎬" if kind == "video" else ("📄" if kind == "doc" else "📋"))
-                rel_t = _format_rel_time(rec.get("ts", time.time()))
-                raw_txt = rec.get("text", "")
-                disp_txt = _clean_ocr_noise(raw_txt) if kind == "image" else raw_txt
-                snip = _make_context_snippet(disp_txt, q, max_len=snip_len)
-
-                num_l = tk.Label(card, text=f"[{idx_c + 1}] {icon_ch}", fg="#5EEAD4" if is_sel else "#94A3B8", bg=c_bg, font=("Malgun Gothic", 8, "bold"))
-                num_l.pack(side="left", padx=(0, 5))
-
-                if kind == "image" and rec.get("thumb_bytes") and Image is not None:
-                    try:
-                        im_p = Image.open(io.BytesIO(rec["thumb_bytes"]))
-                        th_p = ImageTk.PhotoImage(im_p, master=root)
-                        thumb_refs.append(th_p)
-                        tl = tk.Label(card, image=th_p, bg=c_bg, bd=0)
-                        tl.pack(side="left", padx=(0, 5))
-                    except Exception:
-                        pass
-
-                if kind == "image":
-                    ocr_b = tk.Label(card, text="📝OCR", fg="#FDE047", bg="#0B1120", padx=4, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
-                    ocr_b.pack(side="right", padx=(4, 0))
-                    ocr_b.bind("<Button-1>", lambda _e, r=rec: _toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)))
-
-                time_l = tk.Label(card, text=rel_t, fg="#64748B", bg=c_bg, font=("Malgun Gothic", 8))
-                time_l.pack(side="right", padx=(4, 0))
-
-                body_l = tk.Label(card, text=snip, fg="#F8FAFC" if is_sel else "#CBD5E1", bg=c_bg, font=("Malgun Gothic", 9), anchor="w")
-                body_l.pack(side="left", fill="x", expand=True)
-
-                def _on_pick(_e=None, r=rec):
-                    fpath = r.get("file_path") or r.get("img_path") or ""
-                    _paste_to_target(text_val=r.get("text", ""), file_path=fpath)
-
-                for w_it in (card, num_l, body_l, time_l):
-                    w_it.bind("<Button-1>", _on_pick)
-
-            if preview_pane is not None and candidates:
-                sel_rec = candidates[st_state["sel_idx"]]
-                s_txt = sel_rec.get("text", "")
-                tk.Label(preview_pane, text="👻 선택 항목 상세 미리보기", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 9, "bold"), anchor="w").pack(fill="x", pady=(0, 6))
-                tk.Label(preview_pane, text=s_txt[:360], fg="#F8FAFC", bg="#0F172A", font=("Malgun Gothic", 9), justify="left", wraplength=330, anchor="w").pack(fill="x", pady=(0, 8))
-                act_b = tk.Label(preview_pane, text="📎 현재 커서에 바로 꽂기 (Enter)", fg="#0B1120", bg="#2DD4BF", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
-                act_b.pack(fill="x", pady=2)
-                act_b.bind("<Button-1>", lambda _e, r=sel_rec: _paste_to_target(r.get("text", ""), r.get("file_path") or r.get("img_path") or ""))
-                if sel_rec.get("kind") == "image":
-                    ocr_jump = tk.Label(preview_pane, text="📝 사진·OCR 단어칩 창으로 열기", fg="#FDE047", bg="#1E293B", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
-                    ocr_jump.pack(fill="x", pady=2)
-                    ocr_jump.bind("<Button-1>", lambda _e, r=sel_rec: _toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)))
-
-        def _on_key_rel(event=None):
-            is_hovered[0] = True
-            if event and event.keysym in ("Up", "Down", "Return", "Escape", "Tab"):
-                return
-            st_state["sel_idx"] = 0
-            prev_job = st_state.get("debounce_job")
-            if prev_job is not None:
-                try:
-                    win.after_cancel(prev_job)
-                except Exception:
-                    pass
-
-            def _apply_debounced() -> None:
-                st_state["debounce_job"] = None
-                if current_win[0] is win:
-                    _render_search_results()
-
-            st_state["debounce_job"] = win.after(120, _apply_debounced)
-
-        def _on_down(_e=None):
-            if st_state["items"]:
-                st_state["sel_idx"] = (st_state["sel_idx"] + 1) % len(st_state["items"])
-                _render_search_results()
-            return "break"
-
-        def _on_up(_e=None):
-            if st_state["items"]:
-                st_state["sel_idx"] = (st_state["sel_idx"] - 1) % len(st_state["items"])
-                _render_search_results()
-            return "break"
-
-        def _on_ret(_e=None):
-            if st_state["items"]:
-                r = st_state["items"][st_state["sel_idx"]]
-                _paste_to_target(r.get("text", ""), r.get("file_path") or r.get("img_path") or "")
-            return "break"
-
-        s_entry.bind("<KeyRelease>", _on_key_rel)
-        s_entry.bind("<Down>", _on_down)
-        s_entry.bind("<Up>", _on_up)
-        s_entry.bind("<Return>", _on_ret)
-        s_entry.bind("<Tab>", _toggle_window_mode)
-        s_entry.bind("<Alt-Return>", _toggle_window_mode)
-        s_entry.bind("<Escape>", lambda _e: None if (time.time() - _LAST_RBTN_DISMISS_ESC_TS) < 0.45 else _close_win())
-
-        _render_search_results()
-        _resize_for_stage()
 
     # =================================================================
     # [창 UI ③] 📸 사진·OCR 공간이동창 (원본 사진 넣기 vs OCR 단어칩 콕 찍기)

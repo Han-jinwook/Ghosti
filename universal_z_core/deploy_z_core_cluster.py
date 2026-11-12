@@ -21,12 +21,18 @@ def update_pc1():
     import shutil
     spd_src = r"d:\Ghosti\universal_z_core\seq_paste_daemon.py"
     spd_os_agent = r"d:\Ghosti\universal_z_core\os_agent\seq_paste_daemon.py"
+    ui2_src = r"d:\Ghosti\universal_z_core\ghost_search_window_ui2.py"
+    ui2_os_agent = r"d:\Ghosti\universal_z_core\os_agent\ghost_search_window_ui2.py"
     lex_src = r"d:\Ghosti\universal_z_core\assets\ko_en_lexicon.zlib"
     if os.path.exists(spd_src):
         try:
             shutil.copy2(spd_src, spd_os_agent)
+            if os.path.exists(ui2_src):
+                shutil.copy2(ui2_src, ui2_os_agent)
             if os.path.exists(r"C:\MerlinTools"):
                 shutil.copy2(spd_src, r"C:\MerlinTools\seq_paste_daemon.py")
+                if os.path.exists(ui2_src):
+                    shutil.copy2(ui2_src, r"C:\MerlinTools\ghost_search_window_ui2.py")
                 if os.path.exists(lex_src):
                     os.makedirs(r"C:\MerlinTools\assets", exist_ok=True)
                     shutil.copy2(lex_src, r"C:\MerlinTools\assets\ko_en_lexicon.zlib")
@@ -105,6 +111,14 @@ def update_pc4():
         return
     subprocess.run(
         ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", r"d:\Ghosti\universal_z_core\seq_paste_daemon.py", "USER@100.114.100.24:C:/MerlinTools/seq_paste_daemon.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+    )
+    subprocess.run(
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", r"d:\Ghosti\universal_z_core\ghost_search_window_ui2.py", "USER@100.114.100.24:C:/MerlinTools/ghost_search_window_ui2.py"],
         capture_output=True,
         text=True,
         encoding="utf-8",

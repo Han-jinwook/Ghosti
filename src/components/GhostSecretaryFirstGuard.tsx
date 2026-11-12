@@ -5,11 +5,12 @@ import { isMobileVoiceEnvironment } from '../services/setupMonsterTts';
 import { GHOST_SECRETARY_AVATAR_SRC } from '../services/ghostSecretaryEngine';
 import { playBabyGhostChime } from './OnboardingModal';
 
-export type SecretaryGuardContext = 'default' | 'secretary_left';
+export type SecretaryGuardContext = 'default' | 'secretary_left' | 'shared_room_upload';
 
 export interface SecretaryFirstModalPayload {
   context?: SecretaryGuardContext;
   reason?: string;
+  roomTitle?: string;
 }
 
 /**
@@ -63,6 +64,8 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
   const layout = useSaySeeStore((s) => s.layout);
   const isStoreAppMode = useSaySeeStore((s) => s.isStoreAppMode);
   const isGuestPreviewMode = useSaySeeStore((s) => s.isGuestPreviewMode);
+  const activeLoungeType = useSaySeeStore((s) => s.activeLoungeType);
+  const isInvitedMemberSession = useSaySeeStore((s) => s.isInvitedMemberSession);
   const [connected, setConnected] = useState<boolean>(zCoreBridge.isConnected);
 
   useEffect(() => {
@@ -73,6 +76,10 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
   if (connected) return false;
   if (layout === 'mobile' || isStoreAppMode || isMobileVoiceEnvironment()) return false;
   if (isGuestPreviewMode) return false;
+  // 초대 링크로 1초 합류한 멤버가 공유 사진방(가족방/모임방)을 열람·검색할 때는 통과의례 가드 면제 (단, '내 사진도 추가하기' 클릭 시에만 귀신비서 우회 안내)
+  if ((activeLoungeType === 'family' || activeLoungeType === 'club') && isInvitedMemberSession) {
+    return false;
+  }
 
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
@@ -215,9 +222,11 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
     return () => window.removeEventListener('openGhostSecretaryFirstModal', onOpen);
   }, []);
 
-  // 엔진이 연결되면 열려 있던 안내창도 자동으로 닫힘
+  // 엔진이 연결되면 열려 있던 안내창도 자동으로 닫힘 (단, 공유방 '내 사진 추가' 전용 안내는 엔진 미연결 동안 유지)
   useEffect(() => {
-    if (!guardActive && openPayload) {
+    if (zCoreBridge.isConnected && openPayload) {
+      setOpenPayload(null);
+    } else if (!guardActive && openPayload && openPayload.context !== 'shared_room_upload') {
       setOpenPayload(null);
     }
   }, [guardActive, openPayload]);
@@ -226,6 +235,8 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
 
   const isLight = themeMode === 'light';
   const isSecretaryLeft = openPayload.context === 'secretary_left';
+  const isSharedRoomUpload = openPayload.context === 'shared_room_upload';
+  const roomTitle = openPayload.roomTitle || '우리집 패밀리 앨범';
 
   const handleGoToSecretary = () => {
     setOpenPayload(null);
@@ -248,7 +259,9 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
         {/* 애기귀신 둥실둥실 아이콘 + 귀여운 말풍선 배지 */}
         <div className="relative flex flex-col items-center gap-2 pt-1">
           <span className="px-3 py-1 rounded-full text-[11.5px] font-black bg-teal-500/15 text-teal-600 dark:text-[#5EEAD4] border border-teal-400/40">
-            👀 지금은 눈으로 편하게 구경 중이에요!
+            {isSharedRoomUpload
+              ? `📸 『${roomTitle}』에 내 사진도 같이 올리기!`
+              : '👀 지금은 눈으로 편하게 구경 중이에요!'}
           </span>
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-b from-teal-500/20 to-emerald-500/10 border-2 border-[#2DD4BF]/50 flex items-center justify-center shadow-lg animate-bounce mt-1 overflow-hidden">
             <img
@@ -261,16 +274,25 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
 
         <div className="flex flex-col gap-2">
           <h3 className="text-[18px] sm:text-[19px] font-black tracking-tight leading-snug">
-            {isSecretaryLeft
-              ? "헤헤, 오른쪽 채팅창에서 저('귀신비서')랑 먼저 대화해요! 👻"
-              : "잠깐만요! 먼저 '귀신비서'와 대화를 나누고 오실래요? 헤헤 👻"}
+            {isSharedRoomUpload
+              ? `내 사진도 『${roomTitle}』에 올리려면 먼저 '귀신비서'에게 들렀다 오실래요? 👻`
+              : isSecretaryLeft
+                ? "헤헤, 오른쪽 채팅창에서 저('귀신비서')랑 먼저 대화해요! 👻"
+                : "잠깐만요! 먼저 '귀신비서'와 대화를 나누고 오실래요? 헤헤 👻"}
           </h3>
           <p
             className={`text-[13px] leading-relaxed font-medium ${
               isLight ? 'text-slate-600' : 'text-zinc-300'
             }`}
           >
-            {isSecretaryLeft ? (
+            {isSharedRoomUpload ? (
+              <>
+                이 방에 내 컴퓨터 사진을 골라 올리려면 로컬 엔진 연결이 필요해요!
+                <br />
+                먼저 <strong className="text-teal-600 dark:text-[#5EEAD4]">『👻 귀신비서』</strong>방에 잠깐 들러 1초 건강검진이랑 중복·흔들린 사진 정돈부터 하고 오시면, 끝나자마자{' '}
+                <strong>버튼 하나로 바로 이 가족방에 모셔다드릴게요!</strong>
+              </>
+            ) : isSecretaryLeft ? (
               <>
                 왼쪽 정리 화면은 어떤 기능인지 보여드리는 <strong>구경용 미리보기</strong>예요!
                 <br />
@@ -295,9 +317,11 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
             className="w-full py-3.5 px-5 rounded-2xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-black text-[14px] shadow-lg shadow-teal-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <span>
-              {isSecretaryLeft
-                ? "💬 오른쪽 '귀신비서' 채팅창으로 바로 가기 ➔"
-                : "👻 '귀신비서'와 먼저 대화하러 가기 ➔"}
+              {isSharedRoomUpload
+                ? `👻 귀신비서에게 컴퓨터 점검받고 사진 올리러 오기 ➔`
+                : isSecretaryLeft
+                  ? "💬 오른쪽 '귀신비서' 채팅창으로 바로 가기 ➔"
+                  : "👻 '귀신비서'와 먼저 대화하러 가기 ➔"}
             </span>
           </button>
           <button
@@ -310,7 +334,7 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
                 : 'bg-zinc-900 border-white/10 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
             }`}
           >
-            👀 알겠어요, 계속 눈으로 구경할게요
+            {isSharedRoomUpload ? `👀 지금은 『${roomTitle}』 사진 먼저 계속 구경할래요` : '👀 알겠어요, 계속 눈으로 구경할게요'}
           </button>
         </div>
       </div>

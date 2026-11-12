@@ -4732,7 +4732,11 @@ function selectTargetFrameSecsForVideo(vid: VideoSceneItem, maxCheckpoints: numb
 async function embedSingleLocalVideoIfNeeded(
   vid: VideoSceneItem,
   maxCheckpoints: number,
-  onVideoThumbHydrated?: (videoFileName: string, thumbUrl: string) => void
+  onVideoThumbHydrated?: (videoFileName: string, thumbUrl: string) => void,
+  onVideoOcrHydrated?: (
+    videoFileName: string,
+    ocrMeta: { hasScreenOcrText: boolean; ocrLineCount: number; ocrFullText: string }
+  ) => void
 ): Promise<boolean> {
   if (!vid.videoFileName || vid.isAllBlack) return false;
   const normVid = normalizeLocalVideoSceneItem(vid);
@@ -4743,6 +4747,39 @@ async function embedSingleLocalVideoIfNeeded(
 
   const decodedFrames = await captureLocalVideoKeyframesUniversal(normVid, missingSecs);
   if (decodedFrames.length === 0) return false;
+
+  // Zero-FFmpeg WinRT 화면 OCR 비동기 추출 & 로컬 캐시 영구 기록 (귀신검색창 + 웹 검색 동시 연동)
+  if (zCoreBridge.isConnected && decodedFrames.some((df) => df.thumbDataUrl)) {
+    void (async () => {
+      try {
+        const ocrPayloadFrames = decodedFrames
+          .filter((df) => Boolean(df.thumbDataUrl))
+          .map((df) => ({ timeSec: df.timeSec, dataUrl: df.thumbDataUrl }));
+        if (ocrPayloadFrames.length === 0) return;
+        const res = await fetch(getZCoreUrl('/__videos/ocr-frames'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoFileName: normVid.videoFileName,
+            durationSec: normVid.durationSec,
+            frames: ocrPayloadFrames,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.hasText) {
+            onVideoOcrHydrated?.(normVid.videoFileName, {
+              hasScreenOcrText: true,
+              ocrLineCount: Number(data.lineCount || (data.ocrLines || []).length || 1),
+              ocrFullText: String(data.fullText || '').trim(),
+            });
+          }
+        }
+      } catch {
+        /* ignore optional OCR frame error */
+      }
+    })();
+  }
 
   let updatedAny = false;
   for (let i = 0; i < decodedFrames.length; i++) {
@@ -4807,6 +4844,10 @@ export async function startSilentRealMediaVisionIndexing(params: {
   photos: PhotoItem[];
   videos: VideoSceneItem[];
   onVideoThumbHydrated?: (videoFileName: string, thumbUrl: string) => void;
+  onVideoOcrHydrated?: (
+    videoFileName: string,
+    ocrMeta: { hasScreenOcrText: boolean; ocrLineCount: number; ocrFullText: string }
+  ) => void;
 }): Promise<void> {
   if (silentMediaIndexingRunning) return;
   if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return;
@@ -4822,14 +4863,19 @@ export async function startSilentRealMediaVisionIndexing(params: {
     await hydrateRealMediaVectorCacheOnce();
     void ensureTextQueryEncoderLoaded();
 
-    // 1) 동영상 키프레임 우선 인덱싱 (화면 글자 없는 패러세일링·일상 동영상 전체 즉시 검색 보장)
+    // 1) 동영상 키프레임 우선 인덱싱 (화면 글자 없는 패러세일링·일상 동영상 전체 즉시 검색 + WinRT 화면 OCR 병행)
     const localVids = params.videos.filter(
       (v) => !v.isAllBlack && String(v.id || '').startsWith('local_vid_')
     );
     for (let i = 0; i < localVids.length; i++) {
       if (!zCoreBridge.isConnected) break;
       await silentIndexingBrake.waitForIndexingSlot(i);
-      await embedSingleLocalVideoIfNeeded(localVids[i], 3, params.onVideoThumbHydrated);
+      await embedSingleLocalVideoIfNeeded(
+        localVids[i],
+        3,
+        params.onVideoThumbHydrated,
+        params.onVideoOcrHydrated
+      );
     }
 
     // 2) 미색인 실사용 PC 사진 조용한 백그라운드 벡터 인덱싱 (최근 90일 우선, 최대 320장 순차 캐싱)
@@ -4873,5 +4919,250 @@ export async function startSilentRealMediaVisionIndexing(params: {
   } finally {
     silentMediaIndexingRunning = false;
     bumpSharedVisionIdleDispose(15000);
+  }
+}
+
+export interface VideoOcrLineItem {
+  timeSec: number;
+  timestamp: string;
+  text: string;
+}
+
+export interface VideoOcrExtractResult {
+  ok: boolean;
+  hasText: boolean;
+  videoFileName: string;
+  ocrLines: VideoOcrLineItem[];
+  fullText: string;
+}
+
+/**
+ * HTML5 <video> + <canvas> 기반으로 로컬/원격 영상의 고해상도(최대 960px) 텍스트 판독용 JPEG 프레임을 샘플링합니다.
+ * (FFmpeg 설치 0건, 브라우저 기본 디코더 100% 활용)
+ */
+async function captureHighResFramesForVideoOcr(
+  vid: VideoSceneItem,
+  maxSamples = 10
+): Promise<Array<{ timeSec: number; dataUrl: string }>> {
+  if (typeof document === 'undefined' || !vid.videoUrl) return [];
+  return new Promise((resolve) => {
+    const videoEl = document.createElement('video');
+    videoEl.crossOrigin = 'anonymous';
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.preload = 'auto';
+    videoEl.src = vid.videoUrl;
+
+    let settled = false;
+    const finish = (items: Array<{ timeSec: number; dataUrl: string }>) => {
+      if (settled) return;
+      settled = true;
+      try {
+        videoEl.pause();
+        videoEl.removeAttribute('src');
+        videoEl.load();
+      } catch {
+        /* ignore */
+      }
+      resolve(items);
+    };
+
+    const timeoutId = window.setTimeout(() => finish([]), 12000);
+
+    videoEl.onerror = () => {
+      window.clearTimeout(timeoutId);
+      finish([]);
+    };
+
+    videoEl.onloadedmetadata = async () => {
+      try {
+        const dur = Math.max(1, Number(videoEl.duration) || Number(vid.durationSec) || 6);
+        const count = Math.min(maxSamples, Math.max(3, Math.ceil(dur / 3)));
+        const targetSecs: number[] = [];
+        for (let i = 0; i < count; i++) {
+          const ratio = count === 1 ? 0.2 : (i + 0.35) / count;
+          targetSecs.push(Math.max(0.1, Math.min(dur - 0.1, Number((dur * ratio).toFixed(1)))));
+        }
+
+        const results: Array<{ timeSec: number; dataUrl: string }> = [];
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          window.clearTimeout(timeoutId);
+          finish([]);
+          return;
+        }
+
+        for (const sec of targetSecs) {
+          const seekOk = await new Promise<boolean>((resSeek) => {
+            let done = false;
+            const st = window.setTimeout(() => {
+              if (!done) {
+                done = true;
+                resSeek(false);
+              }
+            }, 2200);
+            videoEl.onseeked = () => {
+              if (!done) {
+                done = true;
+                window.clearTimeout(st);
+                resSeek(true);
+              }
+            };
+            try {
+              videoEl.currentTime = sec;
+            } catch {
+              window.clearTimeout(st);
+              resSeek(false);
+            }
+          });
+          if (!seekOk) continue;
+          const vw = videoEl.videoWidth || 640;
+          const vh = videoEl.videoHeight || 360;
+          const scale = Math.min(1, 960 / Math.max(vw, vh));
+          canvas.width = Math.max(160, Math.round(vw * scale));
+          canvas.height = Math.max(90, Math.round(vh * scale));
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+          if (dataUrl && dataUrl.startsWith('data:image/')) {
+            results.push({ timeSec: Math.floor(sec), dataUrl });
+          }
+        }
+        window.clearTimeout(timeoutId);
+        finish(results);
+      } catch {
+        window.clearTimeout(timeoutId);
+        finish([]);
+      }
+    };
+  });
+}
+
+/**
+ * [영상 속 화면 글자 1초 텍스트 추출]
+ * 1) 로컬 Z-코어 연결 시: 먼저 캐시/백엔드 WinRT 추출(/__videos/extract-ocr-text)을 조회하고,
+ *    아직 프레임 추출 전이면 브라우저 디코더로 최대 10개 프레임을 샘플링해 /__videos/ocr-frames 로 즉시 WinRT 판독!
+ * 2) 오프라인/구경용 쇼케이스 영상일 시: 타임라인 캡션·장면 설명 텍스트를 깔끔하게 정리해 반환.
+ */
+export async function extractVideoScreenTextOnDemand(
+  vid: VideoSceneItem
+): Promise<VideoOcrExtractResult> {
+  const formatTs = (sec: number) => {
+    const s = Math.max(0, Math.floor(sec || 0));
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
+  if (zCoreBridge.isConnected && vid.videoFileName) {
+    try {
+      const res1 = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoFileName: vid.videoFileName }),
+      });
+      if (res1.ok) {
+        const data1 = await res1.json();
+        if (data1?.hasText && Array.isArray(data1.ocrLines) && data1.ocrLines.length > 0) {
+          return {
+            ok: true,
+            hasText: true,
+            videoFileName: vid.videoFileName,
+            ocrLines: data1.ocrLines,
+            fullText: String(data1.fullText || ''),
+          };
+        }
+      }
+    } catch {
+      /* fall through to browser frame sampling */
+    }
+
+    const sampled = await captureHighResFramesForVideoOcr(vid, 10);
+    if (sampled.length > 0) {
+      try {
+        const res2 = await fetch(getZCoreUrl('/__videos/ocr-frames'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoFileName: vid.videoFileName,
+            durationSec: vid.durationSec,
+            frames: sampled,
+          }),
+        });
+        if (res2.ok) {
+          const data2 = await res2.json();
+          const lines: VideoOcrLineItem[] = Array.isArray(data2?.ocrLines) ? data2.ocrLines : [];
+          const fullText = String(data2?.fullText || '').trim();
+          return {
+            ok: true,
+            hasText: Boolean(data2?.hasText && lines.length > 0),
+            videoFileName: vid.videoFileName,
+            ocrLines: lines,
+            fullText,
+          };
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+
+  // 쇼케이스/기추출 캡션 폴백
+  const fallbackLines: VideoOcrLineItem[] = [];
+  const seen = new Set<string>();
+  if (vid.ocrFullText) {
+    for (const rawLine of vid.ocrFullText.split('\n')) {
+      const trimmed = rawLine.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      const m = trimmed.match(/^\[(\d{2}):(\d{2})\]\s*(.+)$/);
+      if (m) {
+        const sec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+        fallbackLines.push({ timeSec: sec, timestamp: `${m[1]}:${m[2]}`, text: m[3] });
+      } else {
+        fallbackLines.push({ timeSec: 0, timestamp: '00:00', text: trimmed });
+      }
+    }
+  }
+  if (fallbackLines.length === 0 && Array.isArray(vid.timelineFrames)) {
+    for (const f of vid.timelineFrames) {
+      const cap = String(f.sceneCaption || '').trim();
+      if (!cap || /\s장면\s*\(\d{2}:\d{2}\)$/.test(cap) || seen.has(cap)) continue;
+      seen.add(cap);
+      fallbackLines.push({
+        timeSec: f.timeSec || 0,
+        timestamp: f.timestampText || formatTs(f.timeSec || 0),
+        text: cap,
+      });
+    }
+  }
+  const fullText = fallbackLines.map((l) => `[${l.timestamp}] ${l.text}`).join('\n');
+  return {
+    ok: true,
+    hasText: fallbackLines.length > 0,
+    videoFileName: vid.videoFileName,
+    ocrLines: fallbackLines,
+    fullText,
+  };
+}
+
+let cachedSharedFamilyHostPhotos: PhotoItem[] | null = null;
+
+/**
+ * 『🏠 우리집 패밀리 앨범』 공유방 기본 13.4KB 초경량 섀도우 썸네일 매니페스트 로드 (36장 실사진, 내 개인첩과 100% 분리)
+ */
+export async function fetchSharedFamilyHostPhotos(): Promise<PhotoItem[]> {
+  if (cachedSharedFamilyHostPhotos && cachedSharedFamilyHostPhotos.length > 0) {
+    return cachedSharedFamilyHostPhotos;
+  }
+  try {
+    const res = await fetch('/shared_family_host_manifest.json', { cache: 'no-cache' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    cachedSharedFamilyHostPhotos = data as PhotoItem[];
+    return cachedSharedFamilyHostPhotos;
+  } catch {
+    return [];
   }
 }

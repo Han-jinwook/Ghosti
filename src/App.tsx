@@ -123,7 +123,9 @@ export const App: React.FC = () => {
         params.get('dev') === 'true' ||
         params.get('storeApp') === '1' ||
         Boolean(params.get('ghostSearchWindow')) ||
-        params.get('preview') === 'legacy'
+        params.get('preview') === 'legacy' ||
+        params.get('preview') === 'guest' ||
+        params.has('invite')
       ) {
         return true;
       }
@@ -159,6 +161,8 @@ export const App: React.FC = () => {
         params.get('storeApp') === '1' ||
         Boolean(params.get('ghostSearchWindow')) ||
         params.get('preview') === 'legacy' ||
+        params.get('preview') === 'guest' ||
+        params.has('invite') ||
         Boolean(params.get('lounge')) ||
         Boolean(params.get('tab'))
       ) {
@@ -234,6 +238,15 @@ export const App: React.FC = () => {
       ? 'share'
       : 'settings';
 
+  const normalizeFamilyRoomParam = (raw: string | null | undefined): FamilyRoomId | null => {
+    if (!raw) return null;
+    const v = raw.trim();
+    if (v === '우리집' || v === 'home' || v === 'family_home' || v.startsWith('family')) return '우리집';
+    if (v === '본가(친가)' || v === 'parents' || v === 'family_parents') return '본가(친가)';
+    if (v === '처가(친정)' || v === 'inlaws' || v === 'family_inlaws') return '처가(친정)';
+    return null;
+  };
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -241,28 +254,35 @@ export const App: React.FC = () => {
     try {
       const savedNav = window.history.state?.ghostiNav;
       const params = new URLSearchParams(window.location.search);
+      const hasInviteLink = params.has('invite');
+      const inviteVal = params.get('invite') || '';
       const urlLounge = params.get('lounge') as LoungeType | null;
       const urlTab = params.get('tab') as DesktopTab | null;
-      const urlRoom = params.get('room') as FamilyRoomId | null;
+      const urlRoom = normalizeFamilyRoomParam(params.get('room') || inviteVal);
       const urlView = params.get('view') as 'showroom' | 'workspace' | null;
+
+      const defaultInviteLounge: LoungeType = inviteVal.startsWith('club') ? 'club' : 'family';
 
       const targetLounge: LoungeType =
         savedNav?.lounge ||
         (urlLounge && ['personal', 'family', 'club', 'student', 'work'].includes(urlLounge)
           ? urlLounge
-          : useSaySeeStore.getState().activeLoungeType);
+          : hasInviteLink
+            ? defaultInviteLounge
+            : useSaySeeStore.getState().activeLoungeType);
       const targetDesktopTab: DesktopTab =
         savedNav?.desktopTab ||
         (urlTab &&
         ['trial', 'dashboard', 'trash', 'share', 'settings', 'sync', 'superpower_dojo', 'search_dojo'].includes(urlTab)
           ? urlTab
-          : useSaySeeStore.getState().desktopTab);
+          : hasInviteLink
+            ? 'dashboard'
+            : useSaySeeStore.getState().desktopTab);
       const targetMobileTab: MobileTab = savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
       const targetRoom: FamilyRoomId =
-        savedNav?.familyRoom ||
-        (urlRoom && ['home', 'parents', 'inlaws'].includes(urlRoom)
-          ? urlRoom
-          : useSaySeeStore.getState().activeFamilyRoom);
+        normalizeFamilyRoomParam(savedNav?.familyRoom) ||
+        urlRoom ||
+        useSaySeeStore.getState().activeFamilyRoom;
       const targetView: 'showroom' | 'workspace' =
         savedNav?.viewMode || (urlView === 'showroom' ? 'showroom' : viewMode);
 
@@ -297,7 +317,7 @@ export const App: React.FC = () => {
           lounge: 'personal' as LoungeType,
           desktopTab: 'trash' as DesktopTab,
           mobileTab: 'trash' as MobileTab,
-          familyRoom: 'home' as FamilyRoomId,
+          familyRoom: '우리집' as FamilyRoomId,
         };
         window.history.replaceState(
           { ...(window.history.state || {}), ghostiRootGuard: true, ghostiNav: rootHomeNav },
@@ -346,7 +366,7 @@ export const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const fallbackLounge = (params.get('lounge') as LoungeType) || 'personal';
       const fallbackTab = (params.get('tab') as DesktopTab) || 'trash';
-      const fallbackRoom = (params.get('room') as FamilyRoomId) || 'home';
+      const fallbackRoom = normalizeFamilyRoomParam(params.get('room') || params.get('invite')) || '우리집';
       const fallbackView = params.get('view') === 'showroom' ? 'showroom' : 'workspace';
 
       const targetNav = nav || {
@@ -363,7 +383,7 @@ export const App: React.FC = () => {
         activeLoungeType: targetNav.lounge,
         desktopTab: targetNav.desktopTab,
         mobileTab: targetNav.mobileTab || desktopTabToMobileTab(targetNav.desktopTab),
-        activeFamilyRoom: targetNav.familyRoom || 'home',
+        activeFamilyRoom: normalizeFamilyRoomParam(targetNav.familyRoom) || '우리집',
       });
       lastPushedNavKeyRef.current = `${targetNav.viewMode}:${targetNav.lounge}:${targetNav.desktopTab}:${targetNav.familyRoom}`;
 

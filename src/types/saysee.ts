@@ -52,6 +52,12 @@ export interface VideoSceneItem {
   sizeMB: number;
   isAllBlack?: boolean;
   codecTag?: string;
+  /** 영상 내 화면 OCR 글자 존재 여부 (WinRT / 프레임 OCR 판독) */
+  hasScreenOcrText?: boolean;
+  /** 화면 OCR 추출 텍스트 줄 수 */
+  ocrLineCount?: number;
+  /** 화면 OCR 통합 텍스트 요약·전문 */
+  ocrFullText?: string;
   timelineFrames: VideoTimelineFrame[];
 }
 
@@ -416,6 +422,10 @@ export interface PhotoItem {
   queuedForQuarantine?: boolean;
   /** 즐겨찾기 여부 */
   bookmarked?: boolean;
+  /** 공유방(가족방·모임방) 업로더 표시 배지 (예: '멀린(방장)', '해나라') */
+  uploaderLabel?: string;
+  /** 공유방에 추가된 시각 ISO */
+  sharedAddedAt?: string;
   /** PoC 550장 실측 쿼리별 사전 매칭 점수 맵 (presetId -> score) */
   presetScores?: Record<string, number>;
 }

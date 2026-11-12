@@ -1766,6 +1766,440 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
             _VIDEO_OCR_BG_RUNNING = False
 
 
+def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
+    """지정 폴더 내 *.jpg 파일들에 대해 Windows 10/11 내장 WinRT OCR을 일괄 수행합니다 (외부 패키지/FFmpeg 불필요)."""
+    ocr_by_file: Dict[str, str] = {}
+    if os.name != "nt":
+        return ocr_by_file
+    creationflags = 0x08000000
+    ps_script = (
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+        "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
+        "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Storage.StorageFile, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+        "function Await($WinRtTask, $ResultType) {\n"
+        "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
+        "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
+        "    $netTask.Wait(-1) | Out-Null\n"
+        "    $netTask.Result\n"
+        "}\n"
+        "$lang = New-Object Windows.Globalization.Language('ko')\n"
+        "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
+        "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
+        "Get-ChildItem -LiteralPath $args[0] -Filter '*.jpg' | Sort-Object Name | ForEach-Object {\n"
+        "    $f = $_\n"
+        "    try {\n"
+        "        $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($f.FullName)) ([Windows.Storage.StorageFile])\n"
+        "        $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
+        "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
+        "        $bmp = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+        "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
+        "        $stream.Dispose()\n"
+        "        $joined = ($res.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
+        "        Write-Output \"$($f.Name)`t$joined\"\n"
+        "    } catch {}\n"
+        "}\n"
+    )
+    ps_file = tmp_dir / "ocr_batch.ps1"
+    ps_file.write_text(ps_script, encoding="utf-8-sig")
+    ocr_proc = subprocess.run(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_file), str(tmp_dir)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=38,
+        creationflags=creationflags,
+    )
+    for line in ocr_proc.stdout.splitlines():
+        if "\t" in line:
+            fn, txt = line.split("\t", 1)
+            ocr_by_file[fn.strip()] = re.sub(r"\s+", " ", txt).strip()
+    return ocr_by_file
+
+
+def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """연속 구간에서 동일한 자막·슬라이드 문구가 반복될 때 중복을 제거하고 의미 있는 타임라인 대본만 남깁니다."""
+    deduped: List[Dict[str, Any]] = []
+    prev_norm = ""
+    for fr in sorted(raw_frames, key=lambda x: int(x.get("timeSec") or 0)):
+        txt = str(fr.get("ocrText") or "").strip()
+        if len(txt) < 2:
+            continue
+        norm = re.sub(r"[^가-힣a-zA-Z0-9]", "", txt).lower()
+        if len(norm) < 2:
+            continue
+        if prev_norm and (norm == prev_norm or (len(norm) > 8 and (norm in prev_norm or prev_norm in norm))):
+            continue
+        prev_norm = norm
+        s_val = int(fr.get("timeSec") or 0)
+        ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
+        deduped.append({
+            "timeSec": s_val,
+            "timestamp": ts_str,
+            "text": txt,
+        })
+    return deduped
+
+
+def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    [무-FFmpeg 호환] 브라우저 HTML5 <video> + <canvas>가 추출한 키프레임 JPEG Base64 배열을 받아
+    Windows 내장 WinRT OCR을 수행하고 video_scene_ocr_cache_v2.json에 영구 캐싱합니다.
+    """
+    vname = str(data.get("videoFileName") or "").strip()
+    frames_in = data.get("frames") or []
+    if not vname or not isinstance(frames_in, list) or not frames_in:
+        return {"ok": False, "error": "EMPTY_FRAMES"}
+
+    resolved_path = _PHOTO_PATH_INDEX.get(vname)
+    if not resolved_path or not resolved_path.exists():
+        # 파일명 매칭 폴백 탐색
+        for d in _iter_scan_dirs(_get_user_scan_roots(), max_depth=3):
+            cand = d / vname
+            if cand.exists() and cand.is_file():
+                resolved_path = cand.resolve()
+                _PHOTO_PATH_INDEX[vname] = resolved_path
+                break
+
+    sig = ""
+    if resolved_path and resolved_path.exists():
+        st = resolved_path.stat()
+        sig = f"{resolved_path.name}|{st.st_size}|{int(st.st_mtime)}"
+    else:
+        sz = int(data.get("size") or 0)
+        mt = int(float(data.get("mtimeMs") or 0) / 1000) if data.get("mtimeMs") else 0
+        sig = f"{vname}|{sz}|{mt}"
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_browser_vid_ocr_"))
+    try:
+        sec_by_fname: Dict[str, int] = {}
+        max_jpg_bytes = 0
+        for idx, item in enumerate(frames_in[:24]):
+            if not isinstance(item, dict):
+                continue
+            b64 = str(item.get("jpegBase64") or item.get("dataUrl") or "").strip()
+            if "," in b64 and b64.startswith("data:"):
+                b64 = b64.split(",", 1)[1]
+            if not b64:
+                continue
+            try:
+                raw_bytes = base64.b64decode(b64)
+            except Exception:
+                continue
+            s_val = max(0, int(round(float(item.get("timeSec") or 0))))
+            fname = f"f{idx:03d}_s{s_val:04d}.jpg"
+            (tmp_dir / fname).write_bytes(raw_bytes)
+            if len(raw_bytes) > max_jpg_bytes:
+                max_jpg_bytes = len(raw_bytes)
+            sec_by_fname[fname] = s_val
+
+        if not sec_by_fname:
+            return {"ok": False, "error": "NO_VALID_JPEG"}
+
+        ocr_map = _run_winrt_ocr_on_jpg_dir(tmp_dir)
+        out_frames: List[Dict[str, Any]] = []
+        all_kws: List[str] = []
+        for fname, s_val in sorted(sec_by_fname.items()):
+            txt = ocr_map.get(fname, "")
+            kws = _enrich_ocr_semantic_keywords(txt)
+            all_kws.extend(kws)
+            out_frames.append({
+                "timeSec": s_val,
+                "ocrText": txt[:420],
+                "keywords": kws,
+            })
+
+        lines = _dedupe_ocr_timeline_lines(out_frames)
+        full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
+
+        with _VIDEO_OCR_LOCK:
+            cur_cache = _load_video_ocr_cache()
+            prev_entry = cur_cache.get(sig) or {}
+            prev_frames = prev_entry.get("frames") if isinstance(prev_entry.get("frames"), list) else []
+            merged_by_sec: Dict[int, Dict[str, Any]] = {}
+            for pf in prev_frames:
+                merged_by_sec[int(pf.get("timeSec") or 0)] = pf
+            for nf in out_frames:
+                if nf.get("ocrText") or int(nf.get("timeSec") or 0) not in merged_by_sec:
+                    merged_by_sec[int(nf.get("timeSec") or 0)] = nf
+            merged_frames = [merged_by_sec[k] for k in sorted(merged_by_sec.keys())]
+            merged_lines = _dedupe_ocr_timeline_lines(merged_frames)
+            merged_full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in merged_lines)
+            merged_kws: List[str] = list(prev_entry.get("keywords") or []) + all_kws
+            cur_cache[sig] = {
+                "videoFileName": vname,
+                "filePath": str(resolved_path) if resolved_path else "",
+                "frames": merged_frames,
+                "keywords": list(dict.fromkeys(merged_kws))[:60],
+                "lines": merged_lines,
+                "fullText": merged_full_text,
+                "lineCount": len(merged_lines),
+                "isAllBlack": bool(max_jpg_bytes > 0 and max_jpg_bytes < 4200),
+            }
+            _save_video_ocr_cache(cur_cache)
+
+        return {
+            "ok": True,
+            "videoFileName": vname,
+            "lines": merged_lines,
+            "fullText": merged_full_text,
+            "lineCount": len(merged_lines),
+            "hasRichText": len(merged_full_text) >= 12,
+        }
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    [귀신검색창 & 웹 공통 '📝 영상 속 글자 텍스트로 뽑기' 온디맨드 API]
+    1) 이미 충분한 대본(lines)이 캐싱되어 있고 force=False이면 0.01초 즉시 반환
+    2) 미캐싱 시 FFmpeg(설치 시) 또는 Windows 10/11 순정 WinRT MediaClip(무-FFmpeg 폴백)으로
+       영상 구간별 프레임을 추출해 화면 속 자막·발표자료·간판 글자를 텍스트로 일괄 반환합니다.
+    """
+    raw_p = str(params.get("p") or params.get("videoFileName") or params.get("filePath") or "").strip()
+    force = str(params.get("force") or "").lower() in ("1", "true", "yes")
+    if not raw_p:
+        return {"ok": False, "error": "MISSING_VIDEO_TARGET"}
+
+    target_path: Path | None = None
+    cand_direct = Path(raw_p)
+    if cand_direct.is_absolute() and cand_direct.exists() and cand_direct.is_file():
+        target_path = cand_direct.resolve()
+    else:
+        fname_only = Path(urllib.parse.unquote(raw_p)).name
+        if fname_only in _PHOTO_PATH_INDEX and _PHOTO_PATH_INDEX[fname_only].exists():
+            target_path = _PHOTO_PATH_INDEX[fname_only]
+        else:
+            for d in _iter_scan_dirs(_get_user_scan_roots(), max_depth=3):
+                cand = d / fname_only
+                if cand.exists() and cand.is_file():
+                    target_path = cand.resolve()
+                    _PHOTO_PATH_INDEX[fname_only] = target_path
+                    break
+
+    if not target_path or not target_path.exists():
+        return {"ok": False, "error": "VIDEO_NOT_FOUND"}
+
+    st = target_path.stat()
+    sig = f"{target_path.name}|{st.st_size}|{int(st.st_mtime)}"
+    cache = _load_video_ocr_cache()
+    cached = cache.get(sig)
+    if cached and not force and isinstance(cached.get("frames"), list) and len(cached.get("frames", [])) >= 5:
+        lines = cached.get("lines") or _dedupe_ocr_timeline_lines(cached["frames"])
+        full_text = cached.get("fullText") or "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
+        return {
+            "ok": True,
+            "cached": True,
+            "videoFileName": target_path.name,
+            "filePath": str(target_path),
+            "lines": lines,
+            "fullText": full_text,
+            "lineCount": len(lines),
+        }
+
+    dur = max(2.0, _get_fast_video_duration_sec(target_path))
+    step_count = min(14, max(4, int(dur // 4) + 1))
+    sample_secs = sorted({max(0, min(int(dur) - 1, int(round((dur * (i + 0.4)) / step_count)))) for i in range(step_count)})
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_vid_fullocr_"))
+    creationflags = 0x08000000
+    ff = find_ffmpeg_exe()
+    sec_by_fname: Dict[str, int] = {}
+    try:
+        if ff:
+            for idx, s_val in enumerate(sample_secs):
+                fname = f"f{idx:03d}_s{s_val:04d}.jpg"
+                out_jpg = tmp_dir / fname
+                subprocess.run(
+                    [
+                        ff, "-y", "-ss", str(s_val), "-i", str(target_path),
+                        "-frames:v", "1", "-vf", "scale='min(1120,iw)':-2", "-q:v", "3", str(out_jpg),
+                    ],
+                    capture_output=True,
+                    timeout=8,
+                    creationflags=creationflags,
+                )
+                if out_jpg.exists():
+                    sec_by_fname[fname] = s_val
+        elif os.name == "nt":
+            # [무-FFmpeg 순정 Windows 10/11 폴백]: Windows.Media.Editing.MediaClip으로 프레임 비트맵 직접 추출 & OCR
+            secs_csv = ",".join(str(s) for s in sample_secs)
+            ps_winrt_vid = (
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+                "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
+                "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Media.Editing.MediaClip, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Media.Editing.MediaComposition, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
+                "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+                "function Await($WinRtTask, $ResultType) {\n"
+                "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
+                "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
+                "    $netTask.Wait(-1) | Out-Null\n"
+                "    $netTask.Result\n"
+                "}\n"
+                "$lang = New-Object Windows.Globalization.Language('ko')\n"
+                "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
+                "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
+                "$vfile = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
+                "$clip = Await ([Windows.Media.Editing.MediaClip]::CreateFromFileAsync($vfile)) ([Windows.Media.Editing.MediaClip])\n"
+                "$comp = New-Object Windows.Media.Editing.MediaComposition\n"
+                "$comp.Clips.Add($clip)\n"
+                "foreach ($s in ($args[1] -split ',')) {\n"
+                "    try {\n"
+                "        $ts = [TimeSpan]::FromSeconds([double]$s)\n"
+                "        $thumb = Await ($comp.GetThumbnailAsync($ts, 960, 540, [Windows.Media.Editing.VideoFramePrecision]::NearestFrame)) ([Windows.Graphics.Imaging.ImageStream])\n"
+                "        $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($thumb)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
+                "        $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+                "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
+                "        $thumb.Dispose()\n"
+                "        $joined = ($res.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
+                "        Write-Output \"$s`t$joined\"\n"
+                "    } catch {}\n"
+                "}\n"
+            )
+            ps_f = tmp_dir / "winrt_vid_ocr.ps1"
+            ps_f.write_text(ps_winrt_vid, encoding="utf-8-sig")
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(target_path), secs_csv],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=38,
+                creationflags=creationflags,
+            )
+            out_frames_winrt: List[Dict[str, Any]] = []
+            all_kws_w: List[str] = []
+            for ln in proc.stdout.splitlines():
+                if "\t" in ln:
+                    s_raw, txt_raw = ln.split("\t", 1)
+                    s_int = int(float(s_raw.strip() or "0"))
+                    clean_t = re.sub(r"\s+", " ", txt_raw).strip()
+                    kws = _enrich_ocr_semantic_keywords(clean_t)
+                    all_kws_w.extend(kws)
+                    out_frames_winrt.append({
+                        "timeSec": s_int,
+                        "ocrText": clean_t[:420],
+                        "keywords": kws,
+                    })
+            lines_w = _dedupe_ocr_timeline_lines(out_frames_winrt)
+            full_text_w = "\n".join(f"[{x['timestamp']}] {x['text']}" for x in lines_w)
+            with _VIDEO_OCR_LOCK:
+                cur_cache = _load_video_ocr_cache()
+                cur_cache[sig] = {
+                    "videoFileName": target_path.name,
+                    "filePath": str(target_path),
+                    "frames": out_frames_winrt,
+                    "keywords": list(dict.fromkeys(all_kws_w))[:60],
+                    "lines": lines_w,
+                    "fullText": full_text_w,
+                    "lineCount": len(lines_w),
+                    "isAllBlack": False,
+                }
+                _save_video_ocr_cache(cur_cache)
+            return {
+                "ok": True,
+                "cached": False,
+                "videoFileName": target_path.name,
+                "filePath": str(target_path),
+                "lines": lines_w,
+                "fullText": full_text_w,
+                "lineCount": len(lines_w),
+            }
+
+        ocr_map = _run_winrt_ocr_on_jpg_dir(tmp_dir) if sec_by_fname else {}
+        out_frames_ff: List[Dict[str, Any]] = []
+        all_kws_ff: List[str] = []
+        for fname, s_val in sorted(sec_by_fname.items()):
+            txt = ocr_map.get(fname, "")
+            kws = _enrich_ocr_semantic_keywords(txt)
+            all_kws_ff.extend(kws)
+            out_frames_ff.append({
+                "timeSec": s_val,
+                "ocrText": txt[:420],
+                "keywords": kws,
+            })
+        lines = _dedupe_ocr_timeline_lines(out_frames_ff)
+        full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
+        with _VIDEO_OCR_LOCK:
+            cur_cache = _load_video_ocr_cache()
+            cur_cache[sig] = {
+                "videoFileName": target_path.name,
+                "filePath": str(target_path),
+                "frames": out_frames_ff,
+                "keywords": list(dict.fromkeys(all_kws_ff))[:60],
+                "lines": lines,
+                "fullText": full_text,
+                "lineCount": len(lines),
+                "isAllBlack": False,
+            }
+            _save_video_ocr_cache(cur_cache)
+        return {
+            "ok": True,
+            "cached": False,
+            "videoFileName": target_path.name,
+            "filePath": str(target_path),
+            "lines": lines,
+            "fullText": full_text,
+            "lineCount": len(lines),
+        }
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def get_video_ocr_cache_snapshot() -> Dict[str, Any]:
+    """귀신검색창(ghost_search_window_ui2.py)에서 로컬 영상 속 화면 글자 캐시를 1ms 만에 조회할 수 있도록 반환합니다."""
+    cache = _load_video_ocr_cache()
+    return {"ok": True, "cache": cache}
+
+
+_VANGUARD_LOCK = threading.Lock()
+_VANGUARD_PACKETS: Dict[str, Dict[str, Any]] = {}
+_LATEST_VANGUARD_PACKET_ID: str | None = None
+
+
+def store_teleport_ocr_vanguard(data: Dict[str, Any]) -> Dict[str, Any]:
+    """[창 UI ③ 역OCR창 브릿지] 스마트폰 촬영 선발대 패킷(15KB 단어칩 JSON + 30KB WebP 썸네일)을 저장합니다."""
+    global _LATEST_VANGUARD_PACKET_ID
+    pkt_id = str(data.get("packetId") or f"vg_{int(time.time() * 1000)}").strip()
+    packet = {
+        "packetId": pkt_id,
+        "source": str(data.get("source") or "mobile_camera"),
+        "capturedAt": float(data.get("capturedAt") or time.time()),
+        "thumbWebpBase64": str(data.get("thumbWebpBase64") or ""),
+        "imageSize": data.get("imageSize") or {"width": 0, "height": 0},
+        "fullText": str(data.get("fullText") or ""),
+        "chips": data.get("chips") if isinstance(data.get("chips"), list) else [],
+        "tsvTable": str(data.get("tsvTable") or ""),
+        "origLocalPath": data.get("origLocalPath"),
+    }
+    with _VANGUARD_LOCK:
+        _VANGUARD_PACKETS[pkt_id] = packet
+        if len(_VANGUARD_PACKETS) > 30:
+            oldest_key = next(iter(_VANGUARD_PACKETS.keys()))
+            if oldest_key != pkt_id:
+                _VANGUARD_PACKETS.pop(oldest_key, None)
+        _LATEST_VANGUARD_PACKET_ID = pkt_id
+    return {"ok": True, "packetId": pkt_id, "packet": packet}
+
+
+def get_teleport_ocr_vanguard(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """[창 UI ③ 역OCR창 브릿지] 최신 또는 특정 packetId의 선발대 패킷을 0.01초 만에 반환합니다."""
+    qp = params or {}
+    req_id = str(qp.get("packetId") or "").strip()
+    with _VANGUARD_LOCK:
+        target_id = req_id or _LATEST_VANGUARD_PACKET_ID
+        if not target_id or target_id not in _VANGUARD_PACKETS:
+            return {"ok": False, "error": "NO_VANGUARD_PACKET"}
+        return {"ok": True, "packet": _VANGUARD_PACKETS[target_id]}
+
+
 def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
     """검색 요청 시 아직 OCR 캐시가 없는 동영상들을 백그라운드(또는 짧은 동기 대기)로 인덱싱합니다."""
     global _VIDEO_OCR_BG_RUNNING
@@ -1917,6 +2351,14 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                         if not tf.get("thumbUrl"):
                             tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={int(tf.get('timeSec') or 0)}"
 
+                ocr_lines_cached = []
+                ocr_full_cached = ""
+                if cached_ocr and isinstance(cached_ocr.get("frames"), list):
+                    ocr_lines_cached = cached_ocr.get("lines") or _dedupe_ocr_timeline_lines(cached_ocr["frames"])
+                    ocr_full_cached = cached_ocr.get("fullText") or "\n".join(
+                        f"[{ln['timestamp']}] {ln['text']}" for ln in ocr_lines_cached
+                    )
+
                 def_ts = f"{int(default_seek // 60):02d}:{int(default_seek % 60):02d}"
                 videos.append({
                     "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
@@ -1939,6 +2381,9 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "sizeMB": size_mb,
                     "isAllBlack": is_all_black,
                     "codecTag": codec_tag,
+                    "hasScreenOcrText": len(ocr_full_cached.strip()) >= 8,
+                    "ocrLineCount": len(ocr_lines_cached),
+                    "ocrFullText": ocr_full_cached,
                     "timelineFrames": timeline_frames,
                 })
                 if len(videos) >= 300:

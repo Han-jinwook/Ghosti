@@ -116,15 +116,19 @@ def is_trusted_origin(origin: str | None) -> bool:
     if not origin:
         return True
     o = origin.strip().lower().rstrip("/")
+    if o == "null":
+        return False
     if o in _ALLOWED_ORIGIN_EXACT:
         return True
     try:
         u = urllib.parse.urlparse(o)
     except Exception:
         return False
+    if u.scheme in ("capacitor", "ionic", "tauri", "file"):
+        return True
     host = (u.hostname or "").lower()
     if not host:
-        return True
+        return False
     # 로컬 개발 및 사내망(Office LAN)
     if host in ("localhost", "127.0.0.1") or host.startswith("192.168.") or host.startswith("10.") or host.startswith("172.16."):
         return True
@@ -133,8 +137,21 @@ def is_trusted_origin(origin: str | None) -> bool:
         return True
     if host.endswith(".merlincode.com") or host == "merlincode.com":
         return True
-    # Netlify 전 도메인 허용 (ghosti-app.netlify.app, deploy-preview, branch preview 등 QA 전수 허용)
-    if host.endswith(".netlify.app") or host == "netlify.app":
+    # 멀린 패밀리 공식 Netlify 프리뷰/배포 서브도메인만 허용 (임의 제3자 someone.netlify.app 차단)
+    if host.endswith(".netlify.app") and any(
+        k in host
+        for k in (
+            "ghosti",
+            "sundreamer",
+            "merlin",
+            "senstalk",
+            "aggrofilter",
+            "vaulter",
+            "whateat",
+            "luminote",
+            "autonote",
+        )
+    ):
         return True
     # 하이브리드 앱
     if u.scheme in ("capacitor", "ionic", "tauri", "file"):
@@ -464,6 +481,18 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_os.list_local_videos(qp))
             return
 
+        if path in ("/__videos/extract-ocr-text", "/api/ghosti/videos/extract-ocr-text"):
+            self._send_json(plugin_ghosti_os.extract_full_video_ocr_text(qp))
+            return
+
+        if path in ("/__videos/ocr-cache", "/api/ghosti/videos/ocr-cache"):
+            self._send_json(plugin_ghosti_os.get_video_ocr_cache_snapshot())
+            return
+
+        if path == "/api/teleport/ocr-vanguard":
+            self._send_json(plugin_ghosti_os.get_teleport_ocr_vanguard(qp))
+            return
+
         if path in ("/__faces/index", "/api/ghosti/faces/index"):
             self._send_json(ghosti_setup_parity.faces_index())
             return
@@ -685,6 +714,18 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/__merlin/play-enter-giggle", "/api/superpower/play-enter-giggle"):
             self._send_json(plugin_ghosti_superpowers.play_web_enter_giggle_api(body))
+            return
+
+        if path in ("/__videos/ocr-frames", "/api/ghosti/videos/ocr-frames"):
+            self._send_json(plugin_ghosti_os.ingest_browser_video_ocr_frames(body))
+            return
+
+        if path in ("/__videos/extract-ocr-text", "/api/ghosti/videos/extract-ocr-text"):
+            self._send_json(plugin_ghosti_os.extract_full_video_ocr_text(body))
+            return
+
+        if path == "/api/teleport/ocr-vanguard":
+            self._send_json(plugin_ghosti_os.store_teleport_ocr_vanguard(body))
             return
 
         if path.startswith("/api/senstalk"):

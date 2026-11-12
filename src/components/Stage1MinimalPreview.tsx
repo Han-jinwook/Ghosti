@@ -24,6 +24,7 @@ import {
   getAndAdvanceSessionPlaceholderStartIndex,
 } from '../services/weeklyCareAndPlaceholderEngine';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
+import { submitExternalMonsterChatQuery } from '../services/monsterChatRouter';
 import { GhostPassportCandidatesPanel } from './GhostPassportCandidatesPanel';
 import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
 import { GhostSecretaryFirstGuard, jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
@@ -757,6 +758,14 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
               </div>
             </div>
 
+            {matchedVideoScenes.length > 0 && (
+              <div className="px-3.5 py-2.5 rounded-xl bg-teal-950/60 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[12px] text-teal-200 font-bold">
+                  👻 화면 속 글자(자막·문서·칠판)가 찍힌 영상은 우측 하단 <strong className="text-teal-300">[📝 글자 뽑기]</strong>를 누르면 1초 만에 텍스트로 쏙 뽑아 복사할 수 있어요!
+                </span>
+              </div>
+            )}
+
             <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
               {matchedVideoScenes.map((vid) => {
                 const cardThumbUrl = resolveVideoCardThumbUrl(vid);
@@ -797,18 +806,40 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                     <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-white/15 text-white font-label-mono text-[11px] font-extrabold shadow-md">
                       ⏱️ {vid.durationText}
                     </div>
+                    {vid.hasScreenOcrText && (
+                      <div className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-md bg-teal-500/90 text-zinc-950 font-label-mono text-[10.5px] font-black shadow">
+                        📝 화면 글자 {vid.ocrLineCount || ''}구간 감지
+                      </div>
+                    )}
                   </div>
                   <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
                     <h3 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
                       {renderHighlightedDocText(vid.title, hasExecutedUserSearch ? activeQuery : '')}
                     </h3>
-                    <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
                       <span>{vid.date}</span>
-                      <span className="text-primary-container font-bold">
-                        {hasExecutedUserSearch && activeQuery
-                          ? `▶ ${cleanTs} 바로 재생 →`
-                          : '▶ 재생 →'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            try {
+                              sessionStorage.setItem('ghosti_auto_extract_video_ocr', vid.id);
+                            } catch {
+                              /* ignore */
+                            }
+                            setSelectedVideoModal(vid, vid.matchedSeekSec);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/50 font-label-sm text-[11px] font-black transition cursor-pointer"
+                        >
+                          📝 글자 뽑기
+                        </button>
+                        <span className="text-primary-container font-bold">
+                          {hasExecutedUserSearch && activeQuery
+                            ? `▶ ${cleanTs} 재생`
+                            : '▶ 재생'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -1069,6 +1100,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     runTextQuery,
     isStoreAppMode,
     importMobileLocalPhotos,
+    pendingReturnShareRoom,
+    returnToSharedRoomAndOpenUpload,
   } = useSaySeeStore();
 
   const trashMobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -1177,6 +1210,30 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
+      {pendingReturnShareRoom && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-950/90 via-emerald-950/85 to-zinc-900 border-2 border-[#2DD4BF]/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[13.5px] md:text-[14.5px] font-black text-teal-200">
+              📸 『{pendingReturnShareRoom.roomTitle}』에 내 사진을 추가하러 오셨군요!
+            </span>
+            <span className="text-[12px] text-zinc-200 font-medium">
+              {zConnected
+                ? '엔진 연결과 사진 색인이 준비되었습니다! 지금 바로 가족방으로 돌아가 내 컴퓨터 사진을 골라 올려보세요.'
+                : '오른쪽 『👻 귀신비서』 채팅창에서 엔진 연결 & 1초 점검을 마치면, 버튼 하나로 바로 이 가족방에 모셔다드릴게요!'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void returnToSharedRoomAndOpenUpload()}
+            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-md text-[13px] font-black shadow-md transition cursor-pointer whitespace-nowrap"
+          >
+            {zConnected
+              ? `📸 준비 완료! '${pendingReturnShareRoom.roomTitle}'으로 가서 내 사진 올리기 ➔`
+              : `🔙 '${pendingReturnShareRoom.roomTitle}'으로 돌아가기`}
+          </button>
+        </div>
+      )}
+
       {zCoreOutdated && (
         <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/80 border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <span className="text-[14px] text-amber-900 dark:text-amber-200 font-extrabold">
@@ -1237,6 +1294,18 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {activeTrash.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTrashCategoryFilter('none');
+                      void submitExternalMonsterChatQuery('남은 사진 정리는 다음에 할래', 'trash');
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    <span>⏭️ 남은 사진 정리는 다음에</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={activeTrash.length === 0 || quarantineMoving}

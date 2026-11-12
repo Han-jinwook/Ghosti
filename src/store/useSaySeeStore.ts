@@ -150,6 +150,7 @@ import {
   fetchAutonomousFaceClusters,
   fetchIndexedDocuments,
   fetchIndexedVideos,
+  fetchSharedFamilyHostPhotos,
   normalizeLocalVideoSceneItem,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
@@ -373,12 +374,25 @@ interface SaySeeStore {
   sendPcMasterUrlToEmail: () => Promise<void>;
   sharePcMasterUrlToKakao: () => Promise<void>;
 
-  // [💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) & 4대 행동 트리거 Auth-Wall]
+  // [💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) & 4대 행동 트리거 Auth-Wall + 공유 사진방 양방향 내 사진 추가 플로우]
   isGuestPreviewMode: boolean;
   guestJoinWallReason: string | null;
+  isInvitedMemberSession: boolean;
+  sharedRoomHostPhotos: PhotoItem[];
+  sharedRoomAddedPhotos: PhotoItem[];
+  pendingReturnShareRoom: {
+    loungeType: LoungeType;
+    familyRoom: FamilyRoomId;
+    roomTitle: string;
+  } | null;
+  showSharedPhotoUploadModal: boolean;
   setIsGuestPreviewMode: (enabled: boolean) => void;
   triggerGuestJoinWall: (reason: string) => void;
   completeGuestOneSecJoin: (nickname: string, email: string) => void;
+  setShowSharedPhotoUploadModal: (show: boolean) => void;
+  requestAddMyPhotosToSharedRoom: () => void;
+  addLocalPhotosToSharedRoom: (selectedIds: string[]) => void;
+  returnToSharedRoomAndOpenUpload: () => Promise<void>;
 
   // [🛠️ 설정몬스터 (AI 스마트폰 & PC 통합 설정 해결사)]
   showSetupMonsterModal: boolean;
@@ -1889,12 +1903,13 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (!force && (get().initialized || get().initializing)) return;
     set({ initializing: true });
 
-    const [dataset, telemetry, indexedDocs, indexedVideos, faceData] = await Promise.all([
+    const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
       loadInitialPhotoDataset(),
       detectHardwareTelemetry(),
       fetchIndexedDocuments(),
       fetchIndexedVideos(),
       fetchAutonomousFaceClusters(),
+      fetchSharedFamilyHostPhotos(),
     ]);
 
     const autoMultiClusters = buildAutoMultiConditionSeedClusters(faceData.clusters);
@@ -1952,7 +1967,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         matchPercentage: 98,
         matchedBy: 'text-direct' as const,
       }));
-    const initialGalleryPhotos = enrichedPhotos
+    const activeLoungeNow = get().activeLoungeType;
+    const addedSharedNow = get().sharedRoomAddedPhotos;
+    const effectiveSharedCorpus = [...addedSharedNow, ...hostSharedPhotos];
+    const gallerySourceCorpus =
+      (activeLoungeNow === 'family' || activeLoungeNow === 'club') && effectiveSharedCorpus.length > 0
+        ? effectiveSharedCorpus
+        : enrichedPhotos;
+    const initialGalleryPhotos = gallerySourceCorpus
       .filter(
         (p) =>
           !p.quarantined &&
@@ -1992,6 +2014,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       // 원본 코퍼스만 먼저 적재한 뒤 곧바로 runTextQuery를 완료하고 initialized: true로 전환!
       set({
         photos: enrichedPhotos,
+        sharedRoomHostPhotos: hostSharedPhotos,
         duplicateGroups: dataset.duplicateGroups,
         localDocuments: indexedDocs,
         videoSceneItems: indexedVideos,
@@ -2015,6 +2038,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     } else {
       set({
         photos: enrichedPhotos,
+        sharedRoomHostPhotos: hostSharedPhotos,
         duplicateGroups: dataset.duplicateGroups,
         localDocuments: indexedDocs,
         matchedLocalDocs: indexedDocs,
@@ -2076,6 +2100,16 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
                   ),
                   matchedVideoScenes: state.matchedVideoScenes.map((v) =>
                     v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+                  ),
+                }));
+              },
+              onVideoOcrHydrated: (videoFileName, ocrMeta) => {
+                set((state) => ({
+                  videoSceneItems: state.videoSceneItems.map((v) =>
+                    v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+                  ),
+                  matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                    v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
                   ),
                 }));
               },
@@ -2571,13 +2605,23 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     }
     cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, ' ').trim();
 
-    // 업무 공유(work)에서는 사진의 일반 시각/문서 분석 태그만 유지하고 귀신같이 여권 인물 태그는 검색 대상에서 제외
+    // 가족/모임 공유방에서는 공유방 전용 코퍼스(호스트 36장 섀도우 + 멤버가 추가한 로컬 사진)를 우선 검색하고, 업무 공유(work)에서는 여권 인물 태그를 제외
+    const stateNow = get();
+    const sharedCorpusForSearch = [
+      ...stateNow.sharedRoomAddedPhotos,
+      ...stateNow.sharedRoomHostPhotos,
+    ];
+    const basePhotosForSearch =
+      (activeLoungeType === 'family' || activeLoungeType === 'club') &&
+      sharedCorpusForSearch.length > 0
+        ? sharedCorpusForSearch
+        : photos;
     const photosForSearch = isWorkLounge
-      ? photos.map((p) => ({
+      ? basePhotosForSearch.map((p) => ({
           ...p,
           tags: p.tags.filter((t) => !passportTagSet.has(t)),
         }))
-      : photos;
+      : basePhotosForSearch;
 
     // [사진 전용 질의 감지]: 사용자가 명시적으로 "바다 사진", "강아지 사진" 등 '사진/셀카/이미지'를 찾아달라고 한 경우,
     // 문서 본문 텍스트나 동영상을 불필요하게 뒤지지 않고 사진 검색에만 집중!
@@ -3323,7 +3367,10 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     student: null,
     work: null,
   },
-  activeLoungeType: 'personal',
+  activeLoungeType:
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('invite')
+      ? 'family'
+      : 'personal',
   activeFamilyRoom: '우리집',
   clubSizeTier: 'small',
   studentOcrVerified: false,
@@ -3395,12 +3442,49 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   setShowMobileMasterPcIntroModal: (showMobileMasterPcIntroModal) =>
     set({ showMobileMasterPcIntroModal }),
 
-  // [💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) 초기 상태 및 액션]
+  // [💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) & 공유 사진방 내 사진 추가 플로우 초기 상태 및 액션]
   isGuestPreviewMode:
     typeof window !== 'undefined' &&
     (new URLSearchParams(window.location.search).has('invite') ||
-      new URLSearchParams(window.location.search).get('preview') === 'guest'),
+      new URLSearchParams(window.location.search).get('preview') === 'guest') &&
+    !Boolean(
+      (() => {
+        try {
+          return localStorage.getItem('ghosti_invited_member_email');
+        } catch {
+          return null;
+        }
+      })()
+    ),
   guestJoinWallReason: null,
+  isInvitedMemberSession:
+    typeof window !== 'undefined' &&
+    Boolean(
+      (() => {
+        try {
+          return (
+            new URLSearchParams(window.location.search).has('invite') &&
+            localStorage.getItem('ghosti_invited_member_email')
+          );
+        } catch {
+          return false;
+        }
+      })()
+    ),
+  sharedRoomHostPhotos: [],
+  sharedRoomAddedPhotos: (() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('ghosti_shared_family_added_photos_v1');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as PhotoItem[]) : [];
+    } catch {
+      return [];
+    }
+  })(),
+  pendingReturnShareRoom: null,
+  showSharedPhotoUploadModal: false,
 
   setIsGuestPreviewMode: (isGuestPreviewMode) =>
     set({
@@ -3419,15 +3503,218 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   completeGuestOneSecJoin: (nickname, email) => {
     const cleanNick = nickname.trim() || '새멤버';
     const cleanEmail = email.trim() || 'member@sundreamer.app';
+    const prevReason = get().guestJoinWallReason || '';
+    const wasUploadIntent = prevReason.includes('올리기') || prevReason.includes('추가');
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ghosti_invited_member_nickname', cleanNick);
+        localStorage.setItem('ghosti_invited_member_email', cleanEmail);
+        // 귀신비서 방문 시 별명을 다시 묻지 않도록 미리 동기화하되, 엔진 연결 동의(merlin_session_token/ghosti_secretary_engine_agreed)는 비서방 직접 연결 시점까지 보존
+        const prevSec = loadGhostSecretaryState();
+        saveGhostSecretaryState({
+          ...prevSec,
+          nickname: prevSec.nickname || cleanNick,
+          awaitingNickname: false,
+        });
+      } catch {
+        /* ignore storage error */
+      }
+    }
+
     set((state) => ({
       isGuestPreviewMode: false,
+      isInvitedMemberSession: true,
       guestJoinWallReason: null,
       merlinAuth: {
         ...state.merlinAuth,
         email: cleanEmail,
       },
-      lastQuarantineToast: `🎉 [${cleanNick}님(${cleanEmail}) 1초 합류 완료!] 방장님의 초대로 평생 0원(무료) 정식 멤버가 되셨습니다. 이제 고화질 원본 저장·댓글·사진 올리기·내 얼굴 1초 찾기를 자유롭게 이용하세요!`,
+      lastQuarantineToast: `🎉 [${cleanNick}님(${cleanEmail}) 1초 합류 완료!] 방장님의 초대로 평생 0원(무료) 정식 멤버가 되셨습니다. 이제 고화질 원본 저장·댓글·내 사진 추가·내 얼굴 1초 찾기를 자유롭게 이용하세요!`,
     }));
+
+    if (wasUploadIntent && typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        get().requestAddMyPhotosToSharedRoom();
+      }, 150);
+    }
+  },
+
+  setShowSharedPhotoUploadModal: (showSharedPhotoUploadModal) =>
+    set({ showSharedPhotoUploadModal }),
+
+  requestAddMyPhotosToSharedRoom: () => {
+    const state = get();
+    if (state.isGuestPreviewMode) {
+      set({ guestJoinWallReason: '📸 이 방에 내 사진·영상 같이 올리기' });
+      return;
+    }
+    const targetLounge: LoungeType =
+      state.activeLoungeType === 'family' || state.activeLoungeType === 'club'
+        ? state.activeLoungeType
+        : 'family';
+    const roomTitle =
+      targetLounge === 'family'
+        ? `${state.activeFamilyRoom} 패밀리 앨범`
+        : `${state.alumniSchoolName} 모임 앨범`;
+
+    // 모바일 환경에서는 바로 모바일 사진 피커 안내 또는 공유 업로드 모달 오픈
+    if (isMobileOrStoreRuntime()) {
+      set({ showSharedPhotoUploadModal: true });
+      return;
+    }
+
+    // PC에서 아직 로컬 엔진(Z-코어)이 연결되지 않은 경우 ➔ 귀신비서방 통과의례 우회(건강검진 + 중복·흔들린 사진 정돈 후 자동 복귀 버튼 제공)
+    if (!zCoreBridge.isConnected) {
+      set({
+        pendingReturnShareRoom: {
+          loungeType: targetLounge,
+          familyRoom: state.activeFamilyRoom,
+          roomTitle,
+        },
+      });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('openGhostSecretaryFirstModal', {
+            detail: {
+              context: 'shared_room_upload',
+              roomTitle,
+            },
+          })
+        );
+      }
+      return;
+    }
+
+    // 이미 Z-코어가 연결되어 내 PC 사진이 색인된 상태라면 즉시 '내 컴퓨터 사진 골라 올리기' 모달 오픈
+    set({ showSharedPhotoUploadModal: true });
+  },
+
+  addLocalPhotosToSharedRoom: (selectedIds) => {
+    if (!selectedIds || selectedIds.length === 0) return;
+    const idSet = new Set(selectedIds);
+    const state = get();
+    let uploaderNick = '가족멤버';
+    if (typeof window !== 'undefined') {
+      try {
+        uploaderNick =
+          loadGhostSecretaryState().nickname ||
+          localStorage.getItem('ghosti_invited_member_nickname') ||
+          (state.merlinAuth.email ? state.merlinAuth.email.split('@')[0] : '가족멤버');
+      } catch {
+        /* ignore */
+      }
+    }
+    const existingNames = new Set([
+      ...state.sharedRoomAddedPhotos.map((p) => p.name),
+      ...state.sharedRoomHostPhotos.map((p) => p.name),
+    ]);
+    const nowIso = new Date().toISOString();
+    const picked = state.photos
+      .filter((p) => idSet.has(p.id) && !existingNames.has(p.name))
+      .map((p) => ({
+        ...p,
+        id: `shared_added_${Date.now()}_${p.id}`,
+        uploaderLabel: `${uploaderNick} 추가`,
+        sharedAddedAt: nowIso,
+      }));
+
+    if (picked.length === 0) {
+      set({
+        showSharedPhotoUploadModal: false,
+        lastQuarantineToast: '이미 이 공유방에 올라와 있는 사진들입니다.',
+      });
+      return;
+    }
+
+    const nextAdded = [...picked, ...state.sharedRoomAddedPhotos];
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ghosti_shared_family_added_photos_v1', JSON.stringify(nextAdded.slice(0, 200)));
+      } catch {
+        /* ignore quota */
+      }
+    }
+
+    const mergedShared = [...nextAdded, ...state.sharedRoomHostPhotos];
+    const nextResults: SearchResultItem[] = mergedShared
+      .filter(
+        (p) =>
+          !p.quarantined &&
+          !p.isVaultDocument &&
+          p.trashCategory !== 'blurry' &&
+          p.trashCategory !== 'screenshot' &&
+          p.trashCategory !== 'memo' &&
+          p.trashCategory !== 'duplicate'
+      )
+      .map((photo) => ({
+        photo,
+        score: 0.99,
+        matchPercentage: 99,
+        matchedBy: 'text-direct' as const,
+      }));
+
+    set({
+      sharedRoomAddedPhotos: nextAdded,
+      showSharedPhotoUploadModal: false,
+      searchSpace: 'gallery',
+      hasExecutedUserSearch: false,
+      activeQuery: `우리집 패밀리 공유 앨범 (${nextResults.length}장 · 방금 ${picked.length}장 추가됨)`,
+      matchedTags: [`#${uploaderNick}사진추가`, '#가족공유앨범', '#초경량섀도우공유'],
+      searchResults: nextResults,
+      lastQuarantineToast: `🎉 내 컴퓨터에서 고른 사진 ${picked.length}장을 『${state.activeFamilyRoom} 패밀리 앨범』에 깔끔하게 추가했습니다!`,
+    });
+  },
+
+  returnToSharedRoomAndOpenUpload: async () => {
+    const pending = get().pendingReturnShareRoom;
+    const targetLounge: LoungeType = pending?.loungeType || 'family';
+    const targetRoom: FamilyRoomId = pending?.familyRoom || get().activeFamilyRoom || '우리집';
+    const roomTitle = pending?.roomTitle || `${targetRoom} 패밀리 앨범`;
+
+    if (zCoreBridge.isConnected && get().photos.length === 0) {
+      await get().initApp(true);
+    }
+
+    const st = get();
+    const mergedShared = [...st.sharedRoomAddedPhotos, ...st.sharedRoomHostPhotos];
+    const sharedGalleryResults: SearchResultItem[] = mergedShared
+      .filter(
+        (p) =>
+          !p.quarantined &&
+          !p.isVaultDocument &&
+          p.trashCategory !== 'blurry' &&
+          p.trashCategory !== 'screenshot' &&
+          p.trashCategory !== 'memo' &&
+          p.trashCategory !== 'duplicate'
+      )
+      .map((photo) => ({
+        photo,
+        score: 0.96,
+        matchPercentage: 98,
+        matchedBy: 'text-direct' as const,
+      }));
+
+    set({
+      activeLoungeType: targetLounge,
+      activeFamilyRoom: targetRoom,
+      desktopTab: 'dashboard',
+      mobileTab: 'search',
+      pendingReturnShareRoom: null,
+      isInvitedMemberSession: true,
+      showSharedPhotoUploadModal: zCoreBridge.isConnected,
+      ...(sharedGalleryResults.length > 0
+        ? {
+            searchSpace: 'gallery' as const,
+            hasExecutedUserSearch: false,
+            activeQuery: `${roomTitle} (${sharedGalleryResults.length}장)`,
+            searchResults: sharedGalleryResults,
+          }
+        : {}),
+      lastQuarantineToast: zCoreBridge.isConnected
+        ? `📸 『${roomTitle}』으로 돌아왔어요! 방금 점검·색인한 내 컴퓨터 사진을 골라 올려보세요.`
+        : `🏠 『${roomTitle}』으로 돌아왔습니다.`,
+    });
   },
 
   // ─────────────── [🛠️ 설정몬스터 (AI 스마트폰 & PC 통합 설정 해결사) 스토어 상태 및 액션] ───────────────
@@ -4488,19 +4775,53 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       const activeLoungeType: LoungeType = requestedLoungeType;
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
       const isSwitchingLounge = state.activeLoungeType !== activeLoungeType;
+      const sharedCorpus = [...state.sharedRoomAddedPhotos, ...state.sharedRoomHostPhotos];
+      const nextCorpus =
+        (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
+          ? sharedCorpus
+          : state.photos;
+      const refreshedGalleryResults: SearchResultItem[] = nextCorpus
+        .filter(
+          (p) =>
+            !p.quarantined &&
+            !p.isVaultDocument &&
+            p.trashCategory !== 'blurry' &&
+            p.trashCategory !== 'screenshot' &&
+            p.trashCategory !== 'memo' &&
+            p.trashCategory !== 'duplicate'
+        )
+        .map((photo) => ({
+          photo,
+          score: 0.95,
+          matchPercentage: 97,
+          matchedBy: 'text-direct' as const,
+        }));
       return {
         activeLoungeType,
         activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
-        // 내 기기(personal) 진입 시 1관문인 '귀신비서(trash)'가 기본 노출되며, 공유 라운지 구독 중이면 [✨ 공유 시작] 대신 메인 피드로 이동
+        ...(isSwitchingLounge && !state.hasExecutedUserSearch
+          ? {
+              searchResults: refreshedGalleryResults,
+              activeQuery:
+                activeLoungeType === 'family'
+                  ? `${state.activeFamilyRoom} 패밀리 앨범 (${refreshedGalleryResults.length}장)`
+                  : `전체 갤러리 사진 (${refreshedGalleryResults.length}장)`,
+            }
+          : {}),
+        // 내 기기(personal) 진입 시 1관문인 '귀신비서(trash)'가 기본 노출되며, 가족/모임방 전환 시 갤러리('dashboard')가 기본 노출
         desktopTab:
           isSwitchingLounge && activeLoungeType === 'personal'
             ? 'trash'
+            : isSwitchingLounge && (activeLoungeType === 'family' || activeLoungeType === 'club')
+            ? 'dashboard'
             : isTargetLoungeSubscribed && state.desktopTab === 'trial'
             ? 'dashboard'
             : state.desktopTab,
         mobileTab:
           isSwitchingLounge && activeLoungeType === 'personal'
             ? 'trash'
+            : isSwitchingLounge && (activeLoungeType === 'family' || activeLoungeType === 'club')
+            ? 'search'
             : isTargetLoungeSubscribed && state.mobileTab === 'trial'
             ? 'search'
             : state.mobileTab,

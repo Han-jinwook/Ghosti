@@ -230,14 +230,25 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   }, []);
 
   // [v1.3 귀신비서 1관문] 첫 환영 말풍선: 별명 미등록 시 대본집 ask_nickname_first, 등록 시 별명 호칭 인사
+  const pendingReturnShareRoom = useSaySeeStore((s) => s.pendingReturnShareRoom);
+  const returnToSharedRoomAndOpenUpload = useSaySeeStore((s) => s.returnToSharedRoomAndOpenUpload);
+
   useEffect(() => {
     if (sourceTab !== 'trash') return;
-    const turn = buildWelcomeTurn(loadGhostSecretaryState());
-    saveGhostSecretaryState(turn.nextState);
-    setAwaitingNickname(Boolean(turn.nextState.awaitingNickname));
-    setSharedMonsterMessages((prev) =>
-      prev.map((m) => (m.id === 'monster_welcome_init' && prev.length === 1 ? { ...m, text: turn.text } : m))
-    );
+    const refreshWelcomeForSecretary = () => {
+      const t = buildWelcomeTurn(loadGhostSecretaryState());
+      saveGhostSecretaryState(t.nextState);
+      setAwaitingNickname(Boolean(t.nextState.awaitingNickname));
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) => (m.id === 'monster_welcome_init' && prev.length === 1 ? { ...m, text: t.text } : m))
+      );
+      return t;
+    };
+    const turn = refreshWelcomeForSecretary();
+    const onJumpRefresh = () => {
+      refreshWelcomeForSecretary();
+    };
+    window.addEventListener('ghosti_jump_to_secretary', onJumpRefresh);
 
     // [Stage 1: 최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩 (한 턴 연타 금지 · 호흡 분리)]
     if (
@@ -344,6 +355,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         },
       ]);
     });
+    return () => {
+      window.removeEventListener('ghosti_jump_to_secretary', onJumpRefresh);
+    };
   }, [sourceTab]);
 
   useEffect(() => {
@@ -700,29 +714,72 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         onHealthRecordAdded(assistantMsg.healthRecordIssued);
       }
       if (assistantMsg.healthRecordIssued || isExplicitFirstCareQuery) {
-        // [v1.3] 첫 손보기 완료 직후(또는 명시적 '1초 건강검진 해줘' 요청 시) → 홀림 퀘스트 ① 귀신 라벨러 샘플 제안부터 시작
-        const st = loadGhostSecretaryState();
-        if (sourceTab === 'trash' && (!st.questStep || isExplicitFirstCareQuery)) {
-          const quest = questPromptFor('labeler', st.nickname || '');
-          if (quest) {
-            saveGhostSecretaryState({
-              ...st,
-              questStep: 'labeler',
-              ...(isExplicitFirstCareQuery ? { passportStep: undefined } : {}),
-            });
-            window.setTimeout(() => {
-              setSharedMonsterMessages((prev) => [
-                ...prev,
-                {
-                  id: `secretary_quest_${Date.now()}`,
-                  role: 'assistant',
-                  timestamp: nowTimeKo(),
-                  sourceTab,
-                  text: quest.text,
-                  followUpSuggestions: quest.followUps,
-                },
-              ]);
-            }, 900);
+        const storeNow = useSaySeeStore.getState();
+        const pendingShare = storeNow.pendingReturnShareRoom;
+        const realTrashCandidatesCount = (storeNow.photos || []).filter(
+          (p) => p.trashCategory && !p.quarantined && !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(p.name)
+        ).length;
+
+        // 사진 정리 후보가 많을 때(>= 15장) 비서가 먼저 유연하게 '남은 사진 정리는 다음에' 선택지를 제안
+        if (sourceTab === 'trash' && realTrashCandidatesCount >= 15) {
+          window.setTimeout(() => {
+            setSharedMonsterMessages((prev) => [
+              ...prev,
+              {
+                id: `secretary_proactive_defer_${Date.now()}`,
+                role: 'assistant',
+                timestamp: nowTimeKo(),
+                sourceTab,
+                text: `💡 참고로 내 컴퓨터에서 찾아낸 중복·흔들린 정리 후보 사진이 총 **${realTrashCandidatesCount}장** 있어요! 스캔은 방금 1초 만에 다 끝났지만, 양이 좀 있으니 바쁘시면 지금 다 고르지 않으시고 **"남은 사진 정리는 다음에"** 하셔도 제가 책갈피 해둘게요 👻`,
+                followUpSuggestions: [
+                  '⏭️ 남은 사진 정리는 다음에 할래',
+                  `⚡ 원본 남기고 ${realTrashCandidatesCount}장 한 번에 정리해줘`,
+                ],
+              },
+            ]);
+          }, 550);
+        }
+
+        // 공유 사진방(가족방/모임방)에서 '내 사진 추가'를 위해 귀신비서로 우회해 온 경우: 점검 직후 끊김 없이 복귀 안내 말풍선 제공
+        if (sourceTab === 'trash' && pendingShare) {
+          window.setTimeout(() => {
+            setSharedMonsterMessages((prev) => [
+              ...prev,
+              {
+                id: `secretary_return_shared_room_${Date.now()}`,
+                role: 'assistant',
+                timestamp: nowTimeKo(),
+                sourceTab,
+                text: `📸 준비 완료예요! 내 컴퓨터 새 사진 색인과 1초 점검이 모두 끝났어요.\n아래 초록색 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기 ➔]** 버튼만 누르시면 바로 가족방으로 돌아가서 내 사진을 골라 올리실 수 있어요! (남은 사진 정리는 다음에 천천히 하셔도 돼요 👻✨)`,
+                followUpSuggestions: ['⏭️ 남은 사진 정리는 다음에 할래'],
+              },
+            ]);
+          }, 800);
+        } else {
+          // [v1.3] 일반 진입 시 첫 손보기 완료 직후 → 홀림 퀘스트 ① 귀신 라벨러 샘플 제안부터 시작
+          const st = loadGhostSecretaryState();
+          if (sourceTab === 'trash' && (!st.questStep || isExplicitFirstCareQuery)) {
+            const quest = questPromptFor('labeler', st.nickname || '');
+            if (quest) {
+              saveGhostSecretaryState({
+                ...st,
+                questStep: 'labeler',
+                ...(isExplicitFirstCareQuery ? { passportStep: undefined } : {}),
+              });
+              window.setTimeout(() => {
+                setSharedMonsterMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `secretary_quest_${Date.now()}`,
+                    role: 'assistant',
+                    timestamp: nowTimeKo(),
+                    sourceTab,
+                    text: quest.text,
+                    followUpSuggestions: quest.followUps,
+                  },
+                ]);
+              }, 900);
+            }
           }
         }
       }
@@ -1297,6 +1354,41 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           </div>
         )}
       </div>
+
+      {/* 공유방(가족방/모임방)에서 '내 사진 추가하기'를 눌러 우회해 온 경우 끊김 없는 원클릭 롤백 복귀 바 */}
+      {pendingReturnShareRoom && (
+        <div className="px-3.5 py-2.5 border-t border-teal-400/50 bg-gradient-to-r from-teal-950/90 via-emerald-950/90 to-zinc-950 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11.5px] font-extrabold text-teal-200 truncate">
+              👻 『{pendingReturnShareRoom.roomTitle}』 사진 추가 대기 중
+            </span>
+            {!isZCoreLive && (
+              <button
+                type="button"
+                onClick={() => void returnToSharedRoomAndOpenUpload()}
+                className="text-[11px] font-bold text-zinc-300 hover:text-white underline shrink-0 cursor-pointer"
+              >
+                그냥 방으로 돌아가기
+              </button>
+            )}
+          </div>
+          {isZCoreLive ? (
+            <button
+              type="button"
+              onClick={() => void returnToSharedRoomAndOpenUpload()}
+              className="w-full py-2.5 px-3.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-black text-[12.5px] shadow-lg shadow-teal-500/25 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span>
+                📸 준비 완료! 아까 보던 &lsquo;{pendingReturnShareRoom.roomTitle}&rsquo;으로 가서 내 사진 올리기 ➔
+              </span>
+            </button>
+          ) : (
+            <p className="text-[11px] text-teal-100/85 leading-snug">
+              위 채팅에서 <strong>엔진 연결 &amp; 1초 건강검진</strong>만 마치면 여기에 바로 <strong>내 사진 올리러 가기</strong> 버튼이 켜져요!
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 3. 하단 초미니멀 입력창 (고정 스타터 칩 그리드 완전 폐지 ➔ 입력창 내 연한 색 1줄 롤링 플레이스홀더 10선) */}
       <div className="px-3.5 py-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60">

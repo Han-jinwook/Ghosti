@@ -3390,12 +3390,44 @@ export const LoungeFeedContextBanner: React.FC = () => {
   };
 
   if (activeLoungeType === 'family') {
+    const inviteUrl = `https://ghosti.sundreamer.app/?invite=${
+      activeFamilyRoom === '본가(친가)'
+        ? 'family_parents'
+        : activeFamilyRoom === '처가(친정)'
+          ? 'family_inlaws'
+          : 'family_home'
+    }&preview=guest`;
     return (
       <div className="flex flex-col gap-2.5">
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
             {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}
             {renderOriginalAutoSyncControl()}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
+              className="px-3.5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <span>📸 내 사진도 이 방에 추가하기</span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard?.writeText(inviteUrl);
+                } catch {
+                  /* ignore */
+                }
+                useSaySeeStore
+                  .getState()
+                  .showToast(`💌 『${activeFamilyRoom} 패밀리 앨범』 무가입 1초 초대 링크가 복사되었습니다! (${inviteUrl})`);
+              }}
+              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <span>💌 가족방 초대 링크 복사</span>
+            </button>
           </div>
         </div>
         <GhostCastLiveToolbar loungeLabel={`👨‍👩‍👧‍👦 패밀리 [${activeFamilyRoom}]`} />

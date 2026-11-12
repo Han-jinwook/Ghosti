@@ -42,7 +42,11 @@ import {
 } from '../services/ghostSearchWindowGeometry';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
-import { GhostSecretaryFirstGuard, GhostSecretaryFirstModal } from './GhostSecretaryFirstGuard';
+import {
+  GhostSecretaryFirstGuard,
+  GhostSecretaryFirstModal,
+  jumpToGhostSecretary,
+} from './GhostSecretaryFirstGuard';
 import {
   OnboardingModal,
   fetchSuperpowerStatus,
@@ -215,6 +219,7 @@ const LOUNGE_SUBMENU_CONFIG: Record<
   ],
   family: [
     { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
+    { id: 'dashboard', icon: '🖼️', label: '우리집·가족 앨범 & 검색' },
     { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
     { id: 'sync', icon: '⚙️', label: '가족 초대 & 방 관리' },
   ],
@@ -328,10 +333,42 @@ export const DesktopDashboard: React.FC = () => {
     triggerGuestJoinWall,
     completeGuestOneSecJoin,
     initialized,
+    showSharedPhotoUploadModal,
+    setShowSharedPhotoUploadModal,
+    addLocalPhotosToSharedRoom,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+    importMobileLocalPhotos,
   } = useSaySeeStore();
 
-  const [guestNicknameDraft, setGuestNicknameDraft] = useState('박총무');
-  const [guestEmailDraft, setGuestEmailDraft] = useState('friend@sundreamer.app');
+  const [guestNicknameDraft, setGuestNicknameDraft] = useState(
+    activeLoungeType === 'family' ? '해나라' : '박총무'
+  );
+  const [guestEmailDraft, setGuestEmailDraft] = useState(
+    activeLoungeType === 'family' ? 'family@sundreamer.app' : 'friend@sundreamer.app'
+  );
+  const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
+
+  const uploadableLocalPhotos = useMemo(() => {
+    const existingSharedNames = new Set([
+      ...sharedRoomHostPhotos.map((p) => p.name),
+      ...sharedRoomAddedPhotos.map((p) => p.name),
+    ]);
+    return photos.filter(
+      (p) =>
+        !p.quarantined &&
+        !p.isVaultDocument &&
+        !p.trashCategory &&
+        !existingSharedNames.has(p.name) &&
+        !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(p.name)
+    );
+  }, [photos, sharedRoomHostPhotos, sharedRoomAddedPhotos]);
+
+  useEffect(() => {
+    if (showSharedPhotoUploadModal) {
+      setSelectedSharedUploadIds(uploadableLocalPhotos.slice(0, 12).map((p) => p.id));
+    }
+  }, [showSharedPhotoUploadModal, uploadableLocalPhotos]);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDeviceIntegrationOpen, setIsDeviceIntegrationOpen] = useState(false);
@@ -1470,9 +1507,9 @@ export const DesktopDashboard: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[
                     { label: '🎯 내 얼굴 사진 1초 찾기', reason: '🎯 내 얼굴이 나온 사진만 1초 만에 다 찾기' },
-                    { label: '📥 고화질 원본(5MB) 저장', reason: '📥 이 사진 고화질 원본(5MB) 내 폰에 저장하기' },
-                    { label: '❤️ 하트 / 💬 댓글 달기', reason: '❤️ 하트 누르기 / 💬 댓글("야 이거 누구야ㅋㅋ") 달기' },
-                    { label: '📸 내 폰 사진 같이 올리기', reason: '📸 내 폰에 있는 그날 사진도 같이 올리기' },
+                    { label: '📥 고화질 원본(5MB) 저장', reason: '📥 이 사진 고화질 원본(5MB) 내 기기에 저장하기' },
+                    { label: '❤️ 하트 / 💬 댓글 달기', reason: '❤️ 하트 누르기 / 💬 댓글("와 이 사진 대박!") 달기' },
+                    { label: '📸 내 사진 같이 올리기', reason: '📸 이 방에 내 사진·영상 같이 올리기' },
                   ].map((trig) => (
                     <button
                       key={trig.label}
@@ -1578,6 +1615,14 @@ export const DesktopDashboard: React.FC = () => {
                   </div>
                 </div>
 
+                {matchedVideoScenes.length > 0 && (
+                  <div className="px-3.5 py-2.5 rounded-xl bg-teal-950/60 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[12px] text-teal-200 font-bold">
+                      👻 화면 속 글자(자막·문서·칠판)가 찍힌 영상은 우측 하단 <strong className="text-teal-300">[📝 글자 뽑기]</strong>를 누르면 1초 만에 텍스트로 쏙 뽑아 복사할 수 있어요!
+                    </span>
+                  </div>
+                )}
+
                 {matchedVideoScenes.length === 0 ? (
                   <div className="p-10 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col items-center justify-center text-center gap-3">
                     <span className="material-symbols-outlined text-zinc-500 text-[34px]">
@@ -1677,13 +1722,30 @@ export const DesktopDashboard: React.FC = () => {
                             )}
                           </div>
 
-                          <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
                             <span>{vid.date}</span>
-                            <span className="text-primary-container font-bold">
-                              {hasExecutedUserSearch && activeQuery
-                                ? `▶ ${cleanTs} 바로 재생 →`
-                                : '▶ 재생 →'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    sessionStorage.setItem('ghosti_auto_extract_video_ocr', vid.id);
+                                  } catch {
+                                    /* ignore */
+                                  }
+                                  setSelectedVideoModal(vid, vid.matchedSeekSec);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/50 font-label-sm text-[11px] font-black transition cursor-pointer"
+                              >
+                                📝 글자 뽑기
+                              </button>
+                              <span className="text-primary-container font-bold">
+                                {hasExecutedUserSearch && activeQuery
+                                  ? `▶ ${cleanTs} 재생`
+                                  : '▶ 재생'}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </article>
@@ -1918,11 +1980,15 @@ export const DesktopDashboard: React.FC = () => {
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
 
-                            {isBurst && (
+                            {isBurst ? (
                               <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15 text-primary-container font-label-sm text-[10.5px] font-bold flex items-center gap-1">
                                 <span>❐ {group.burstCount}장 연사</span>
                               </div>
-                            )}
+                            ) : item.photo.uploaderLabel && (activeLoungeType === 'family' || activeLoungeType === 'club') ? (
+                              <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-teal-400/40 text-teal-300 font-label-sm text-[10.5px] font-bold flex items-center gap-1">
+                                <span>{item.photo.uploaderLabel.includes('방장') ? '👑' : '📸'} {item.photo.uploaderLabel}</span>
+                              </div>
+                            ) : null}
 
                             <button
                               onClick={(e) => {
@@ -2413,6 +2479,182 @@ export const DesktopDashboard: React.FC = () => {
               >
                 더 구경하기
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📸 공유 사진방(가족방/모임방) — 내 컴퓨터 색인 사진 골라 올리기 모달 */}
+      {showSharedPhotoUploadModal && (
+        <div
+          onClick={() => setShowSharedPhotoUploadModal(false)}
+          className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-4xl max-h-[88vh] rounded-3xl bg-zinc-950 border-2 border-[#2DD4BF]/65 p-5 md:p-6 shadow-[0_0_55px_rgba(45,212,191,0.22)] flex flex-col gap-4 overflow-hidden"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-sm text-[11.5px] font-black">
+                    📸 내 기기 색인 사진 골라 올리기 (초경량 13KB 섀도우 공유)
+                  </span>
+                </div>
+                <h3 className="font-headline-sm text-[18px] md:text-[20px] text-white font-black">
+                  『{activeFamilyRoom} 패밀리 앨범』에 추가할 내 컴퓨터 사진을 선택해 주세요
+                </h3>
+                <p className="text-[12px] text-zinc-300">
+                  중복·흔들린 사진과 신분증 서류는 자동으로 걸러낸 깔끔한 새 사진 <strong>{uploadableLocalPhotos.length}장</strong>이 준비되어 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSharedPhotoUploadModal(false)}
+                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center text-sm font-bold cursor-pointer shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSharedUploadIds(uploadableLocalPhotos.map((p) => p.id))}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-teal-400/50 text-teal-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                >
+                  ✨ 내 컴퓨터 새 사진 {uploadableLocalPhotos.length}장 전체 선택
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSharedUploadIds([])}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                >
+                  선택 해제
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSharedPhotoUploadModal(false);
+                  useSaySeeStore.setState({
+                    pendingReturnShareRoom: {
+                      loungeType: activeLoungeType,
+                      familyRoom: activeFamilyRoom,
+                      roomTitle: `${activeFamilyRoom} 패밀리 앨범`,
+                    },
+                  });
+                  jumpToGhostSecretary();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
+              >
+                👻 올리기 전에 귀신비서에서 중복·흔들린 사진 먼저 점검하기
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1">
+              {uploadableLocalPhotos.length === 0 ? (
+                <div className="py-12 px-4 rounded-2xl bg-zinc-900/70 border border-white/10 flex flex-col items-center justify-center text-center gap-3">
+                  <span className="text-3xl">📂</span>
+                  <p className="text-[14px] text-white font-bold">
+                    새로 추가할 내 컴퓨터 사진이 아직 보이지 않아요.
+                  </p>
+                  <p className="text-[12px] text-zinc-400 max-w-md">
+                    내 PC의 사진 폴더(`Pictures`)에 사진을 넣어두셨다면 로컬 엔진을 새로고침하거나 스마트폰에서 직접 사진을 골라 올릴 수 있어요.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => void useSaySeeStore.getState().initApp(true)}
+                      className="px-4 py-2 rounded-xl bg-[#2DD4BF] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer"
+                    >
+                      🔄 내 컴퓨터 사진 폴더 다시 스캔하기
+                    </button>
+                    <label className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[12px] font-bold cursor-pointer">
+                      📱 파일 탐색기에서 직접 사진 고르기
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            void importMobileLocalPhotos(e.target.files);
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                  {uploadableLocalPhotos.map((p) => {
+                    const checked = selectedSharedUploadIds.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedSharedUploadIds((prev) =>
+                            prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
+                          )
+                        }
+                        className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group ${
+                          checked
+                            ? 'border-[#2DD4BF] ring-2 ring-[#2DD4BF]/40 scale-[0.99]'
+                            : 'border-white/10 hover:border-white/30 opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        <img
+                          src={p.thumbUrl}
+                          alt={p.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                        <div
+                          className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-black shadow ${
+                            checked
+                              ? 'bg-[#2DD4BF] text-zinc-950'
+                              : 'bg-black/65 border border-white/30 text-white'
+                          }`}
+                        >
+                          {checked ? '✓' : ''}
+                        </div>
+                        <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/85 to-transparent text-left">
+                          <span className="block text-[10px] text-zinc-200 font-medium truncate">
+                            {p.date.split(' ')[0]}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
+              <span className="text-[12px] text-zinc-300 font-bold">
+                선택됨: <strong className="text-[#2DD4BF]">{selectedSharedUploadIds.length}장</strong> / 전체 새 사진 {uploadableLocalPhotos.length}장
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSharedPhotoUploadModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-md text-[12.5px] font-bold cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedSharedUploadIds.length === 0}
+                  onClick={() => addLocalPhotosToSharedRoom(selectedSharedUploadIds)}
+                  className="px-5 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] disabled:opacity-40 text-zinc-950 font-label-md text-[13px] font-black shadow-lg shadow-teal-500/25 cursor-pointer"
+                >
+                  📸 선택한 {selectedSharedUploadIds.length}장 가족방에 올리기
+                </button>
+              </div>
             </div>
           </div>
         </div>

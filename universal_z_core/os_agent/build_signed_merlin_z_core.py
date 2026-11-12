@@ -269,6 +269,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         "--hidden-import", "plugin_ghosti_os",
         "--hidden-import", "plugin_ghosti_superpowers",
         "--hidden-import", "seq_paste_daemon",
+        "--hidden-import", "ghost_search_window_ui2",
         "--hidden-import", "ghosti_safe_ops",
         "--hidden-import", "ghosti_setup_parity",
         "--hidden-import", "merlin_tts_engine",

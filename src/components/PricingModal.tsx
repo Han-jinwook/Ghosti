@@ -14,7 +14,12 @@ import {
 } from '../services/setupMonsterTts';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../services/voiceSearchAndAiBatonEngine';
-import { cleanVideoTimestampLabel, resolveVideoCardThumbUrl } from '../services/aiEngine';
+import {
+  cleanVideoTimestampLabel,
+  extractVideoScreenTextOnDemand,
+  resolveVideoCardThumbUrl,
+  type VideoOcrLineItem,
+} from '../services/aiEngine';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 1번 내 기기 (PC·폰) + 2번 사진 공유 (가족·동호회·동창회) : 평생 0원 (3·4번 유료 기능 🎁 1개월 무료체험 포함)',
@@ -1334,13 +1339,58 @@ export const VideoScenePreviewModal: React.FC = () => {
   const triedTranscodeFallbackRef = useRef<boolean>(false);
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
   const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
+  const [ocrExtracting, setOcrExtracting] = useState<boolean>(false);
+  const [ocrPanelOpen, setOcrPanelOpen] = useState<boolean>(false);
+  const [ocrLines, setOcrLines] = useState<VideoOcrLineItem[]>([]);
+  const [ocrFullText, setOcrFullText] = useState<string>('');
+  const [ocrCopied, setOcrCopied] = useState<boolean>(false);
+
+  const runVideoTextExtraction = async (targetVid = selectedVideoModal) => {
+    if (!targetVid) return;
+    setOcrPanelOpen(true);
+    setOcrExtracting(true);
+    setOcrCopied(false);
+    try {
+      const res = await extractVideoScreenTextOnDemand(targetVid);
+      setOcrLines(res.ocrLines || []);
+      setOcrFullText(res.fullText || '');
+      if (res.fullText && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(res.fullText);
+          setOcrCopied(true);
+        } catch {
+          /* ignore clipboard permission */
+        }
+      }
+    } finally {
+      setOcrExtracting(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedVideoModal) {
       setResolvedVideoSrc('');
       setVideoPlaybackError(false);
+      setOcrPanelOpen(false);
+      setOcrLines([]);
+      setOcrFullText('');
+      setOcrCopied(false);
       triedTranscodeFallbackRef.current = false;
       return;
+    }
+    try {
+      const autoVidId = sessionStorage.getItem('ghosti_auto_extract_video_ocr');
+      if (autoVidId && autoVidId === selectedVideoModal.id) {
+        sessionStorage.removeItem('ghosti_auto_extract_video_ocr');
+        void runVideoTextExtraction(selectedVideoModal);
+      } else {
+        setOcrPanelOpen(false);
+        setOcrLines([]);
+        setOcrFullText('');
+        setOcrCopied(false);
+      }
+    } catch {
+      /* ignore */
     }
     const rawUrl = selectedVideoModal.videoUrl || '';
     const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
@@ -1520,11 +1570,99 @@ export const VideoScenePreviewModal: React.FC = () => {
           </div>
         )}
 
+        {ocrPanelOpen && (
+          <div className="p-4 rounded-2xl bg-zinc-950/95 border border-teal-400/50 flex flex-col gap-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-mono text-[11px] font-black">
+                  📝 영상 속 화면 글자 OCR 추출
+                </span>
+                <span className="text-[12px] text-zinc-300 font-bold">
+                  {ocrExtracting
+                    ? '화면 프레임 속 자막·문서·칠판 글자를 읽고 있어요...'
+                    : ocrLines.length > 0
+                      ? `총 ${ocrLines.length}구간 텍스트 추출 완료 ${ocrCopied ? '· 📋 클립보드 자동 복사됨!' : ''}`
+                      : '이 영상 구간에서 뚜렷한 화면 글자가 감지되지 않았어요.'}
+                </span>
+              </div>
+              {ocrFullText && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard?.writeText(ocrFullText);
+                        setOcrCopied(true);
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                    className="px-3 py-1 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                  >
+                    {ocrCopied ? '✅ 전체 복사됨' : '📋 전체 텍스트 복사'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const blob = new Blob([ocrFullText], { type: 'text/plain;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${selectedVideoModal.title || 'video'}_화면글자추출.txt`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                  >
+                    💾 .txt 저장
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {ocrLines.length > 0 && (
+              <div className="max-h-44 overflow-y-auto rounded-xl bg-black/70 border border-white/10 p-2.5 flex flex-col gap-1.5">
+                {ocrLines.map((ln, idx) => (
+                  <button
+                    key={`${ln.timestamp}_${idx}`}
+                    type="button"
+                    onClick={() => {
+                      if (videoRef.current && Number.isFinite(videoRef.current.duration)) {
+                        videoRef.current.currentTime = Math.min(
+                          ln.timeSec,
+                          Math.max(0, videoRef.current.duration - 0.3)
+                        );
+                        void videoRef.current.play().catch(() => {});
+                      }
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-start gap-2 transition cursor-pointer"
+                  >
+                    <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-label-mono text-[11px] font-bold shrink-0">
+                      ▶ {ln.timestamp}
+                    </span>
+                    <span className="text-[12.5px] text-zinc-100 font-medium leading-snug break-all">
+                      {ln.text}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
           <button
             type="button"
+            disabled={ocrExtracting}
+            onClick={() => void runVideoTextExtraction(selectedVideoModal)}
+            className="px-4 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 disabled:opacity-50 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 cursor-pointer shadow-md"
+          >
+            <span>📝 {ocrExtracting ? '글자 뽑는 중...' : '영상 속 글자 텍스트로 뽑기'}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => void openLocalFolder('photos')}
-            className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5"
+            className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5 cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">folder_open</span>
             <span>원본 동영상 폴더 열기</span>
@@ -1532,7 +1670,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setSelectedVideoModal(null)}
-            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold"
+            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold cursor-pointer"
           >
             닫기
           </button>
