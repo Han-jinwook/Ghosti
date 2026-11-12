@@ -640,7 +640,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               ? ['🤝 응, 엔진 연결하고 1초 건강검진 해줘', '👀 일단 눈으로 구경부터 할래']
               : [
                   SECRETARY_FIRST_CARE_QUERY,
-                  '👍 응, 앞으로 알아서 재우고 깨워줘',
                   '✨ 귀신비서의 숨은 초능력 알려줘',
                 ],
           });
@@ -1223,12 +1222,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   </div>
                 )}
 
-                {/* 첫 환영 말풍선 안 1회성 대답 칩 (클릭 시 1회성으로 사라짐) */}
+                {/* 첫 환영 말풍선 안 1회성 대답 칩 (재방문 유저 첫 진입 전용 · 신규 별명 질문 말풍선에는 영구 비노출) */}
                 {!isUser &&
                   showWelcomeQuickCareActions &&
                   !welcomeChipsDismissed &&
                   !isMobileOrStore &&
                   !awaitingNickname &&
+                  messages.length === 1 &&
+                  !/별명\(닉네임\)/.test(msg.text) &&
                   msg.id === 'monster_welcome_init' && (
                     <div className="mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
                       {!isZCoreLive ? (
@@ -1242,7 +1243,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             }}
                             className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
                           >
-                            🤝 엔진 연결하고 1초 건강검진 시작하기
+                            🤝 응, 엔진 연결하고 1초 건강검진 해줘
                           </button>
                           <button
                             type="button"
@@ -1279,17 +1280,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
                           >
                             ✨ 숨은 초능력 2가지 알려줘
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              setWelcomeChipsDismissed(true);
-                              void handleSend('📊 그동안 모아둔 비서 실적 보고서 보여줘', 'text');
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
-                          >
-                            📊 모아둔 비서 실적 보고서
                           </button>
                         </>
                       )}

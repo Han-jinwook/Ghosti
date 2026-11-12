@@ -490,6 +490,76 @@ def find_inline_target_block_id(
     return None
 
 
+MAX_QA_TODOS_PER_CARD: int = 3
+_BANNED_DUMMY_RULE_PHRASES = (
+    "내부 설계 규칙대로 정확하고 안전하게",
+    "정상 작동하는지 확인합니다",
+)
+_BANNED_DEV_JARGON_RE = re.compile(
+    r"\b(?:RichEdit\w*|HWND|SendInput|WM_\w+|EM_\w+|PATCH\s+/v1|POST\s+/v1|DOM| Soft-Wrap)\b",
+    re.IGNORECASE,
+)
+
+
+def validate_qa_card_rules(
+    rule_lines: List[str],
+    todo_count: int,
+    context_name: str = "노션 QA 미션카드/재테스트 안내",
+) -> None:
+    """
+    [전사 강령 제16조 제5·6항 코드 강제 가드]
+    1) 맨 첫 줄에 📌 + [기존 규칙 유지] 또는 [신규 변경 규칙] 태그와 함께
+       개발 용어 없는 1~2줄 테스트 판정 기준(정상/비정상 기준) 요약 필수
+    2) 1개 카드(또는 재테스트 안내)당 to_do 체크박스 항목은 반드시 1~3개 이하(<= 3)로 제한 (4개 이상 시 카드 분할 강제)
+    """
+    if todo_count <= 0:
+        raise ValueError(
+            f"❌ [{context_name} | 제16조 위반] 클릭 가능한 체크박스(to_do) 테스트 항목이 0개입니다 (통문단 작성 금지)."
+        )
+    if todo_count > MAX_QA_TODOS_PER_CARD:
+        raise ValueError(
+            f"❌ [{context_name} | 제16조 제6항 위반] 한 카드에는 테스트 항목을 최대 {MAX_QA_TODOS_PER_CARD}개 이하만 넣을 수 있습니다 "
+            f"(현재 {todo_count}개). 4개 이상은 반드시 별도 미션카드로 분할하세요!"
+        )
+
+    non_empty = [ln.strip() for ln in rule_lines if ln and ln.strip()]
+    if not non_empty:
+        raise ValueError(
+            f"❌ [{context_name} | 제16조 제5항 위반] 맨 첫 줄 테스트 판정 기준 규칙 요약(1~2줄)이 누락되었습니다!"
+        )
+
+    joined = "\n".join(non_empty)
+    first_line = non_empty[0]
+    if "📌" not in first_line:
+        raise ValueError(
+            f"❌ [{context_name} | 제16조 제5항 위반] 맨 첫 줄은 반드시 '📌 [테스트 기준 규칙 | 기존 규칙 유지]' 또는 "
+            f"'📌 [테스트 기준 규칙 | 신규 변경 규칙]'으로 시작해 판정 기준을 1~2줄로 요약해야 합니다!"
+        )
+    if ("기존 규칙 유지" not in joined) and ("신규 변경 규칙" not in joined):
+        raise ValueError(
+            f"❌ [{context_name} | 제16조 제5항 위반] 테스터가 '새로 바뀐 규칙이냐?'고 혼돈하지 않도록 첫 줄에 반드시 "
+            f"'[기존 규칙 유지]' 또는 '[신규 변경 규칙]' 태그를 명시해야 합니다!"
+        )
+    for dummy in _BANNED_DUMMY_RULE_PHRASES:
+        if dummy in joined:
+            raise ValueError(
+                f"❌ [{context_name} | 제16조 제5항 위반] 공허한 상투어('{dummy}') 사용 금지! 실제 통과/실패 판정 기준을 적으세요."
+            )
+    jargon_hit = _BANNED_DEV_JARGON_RE.search(joined)
+    if jargon_hit:
+        raise ValueError(
+            f"❌ [{context_name} | 제16조 제5항 위반] 규칙 요약에 개발 전문용어('{jargon_hit.group(0)}') 사용 금지! 평이한 한글 기준으로 적으세요."
+        )
+
+    # 헤더 단독 줄을 제외한 실제 규칙 설명 줄 수 계산 (맨 첫 줄에 헤더+본문을 같이 적거나 헤더 다음 1~2줄로 작성 허용 -> 최대 2줄)
+    body_lines = non_empty[1:] if re.match(r"^📌\s*\[[^\]]+\]\s*$", first_line) else non_empty
+    if len(body_lines) > 2 or len(joined) > 280:
+        raise ValueError(
+            f"❌ [{context_name} | 제16조 제5항 위반] 맨 첫 줄 규칙 요약이 너무 깁니다 (현재 본문 {len(body_lines)}줄, {len(joined)}자). "
+            f"테스터가 한눈에 기준을 알 수 있도록 핵심 판정 기준만 딱 1~2줄(280자 이내)로 압축하세요!"
+        )
+
+
 def build_feedback_blocks(
     guide_text: str,
     header_label: str = "↳ 🛠️ [AI 수정 완료 및 재테스트 안내]",
@@ -558,6 +628,13 @@ def build_feedback_blocks(
                 intro_lines.append(s)
         else:
             intro_lines.append(s)
+
+    if "재테스트" in header_label:
+        validate_qa_card_rules(
+            rule_lines=intro_lines,
+            todo_count=len([it for it, _ in todo_items if it]),
+            context_name="재테스트 안내(build_feedback_blocks)",
+        )
 
     header_rich_text: List[Dict[str, Any]] = [
         {
@@ -1068,9 +1145,9 @@ def create_mission(
     rule_summary_text: Optional[str] = None,
 ) -> Optional[str]:
     """
-    [전사 강령 제16조 제5항 준수]
-    1) 📌 [1. 우리 내부 로직·작동 규칙 핵심 요약] 상단 선(先) 제시
-    2) 🧪 [2. 항목별 구체적 테스트 방법 (체크리스트)] 하단 단계별 제시
+    [전사 강령 제16조 제5·6항 준수]
+    1) 맨 첫 줄: 📌 [테스트 기준 규칙 | 기존 규칙 유지] 또는 [신규 변경 규칙] + 1~2줄 평이한 판정 기준 요약 (공허한 상투어·개발 용어 금지)
+    2) 하단 체크리스트: 실제 클릭 가능한 to_do 블록 최대 3개 이하(1~3개, 4개 이상 시 반드시 카드 분할)
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
@@ -1094,11 +1171,17 @@ def create_mission(
         if ln.strip()
     ]
 
-    summary_body = (
-        rule_summary_text.strip()
-        if rule_summary_text and rule_summary_text.strip()
-        else "📌 [1. 우리 내부 로직·작동 규칙 핵심 요약]\n새로 추가·개선된 기능이 내부 설계 규칙대로 정확하고 안전하게 작동하는지 검증하는 미션입니다."
+    summary_raw = (rule_summary_text or "").replace("\\n", "\n").strip()
+    summary_lines = [ln.strip() for ln in summary_raw.splitlines() if ln.strip()]
+    if summary_lines and "📌" not in summary_lines[0]:
+        summary_lines[0] = f"📌 {summary_lines[0]}"
+
+    validate_qa_card_rules(
+        rule_lines=summary_lines,
+        todo_count=len(raw_lines),
+        context_name=f"신규 미션카드({clean_title})",
     )
+    summary_body = "\n".join(summary_lines)
 
     children_blocks: List[Dict[str, Any]] = [
         {
@@ -1379,8 +1462,19 @@ if __name__ == "__main__":
             sys.exit(0 if ok else 1)
         elif subcmd == "mission" and len(sys.argv) >= 4:
             mission_title = sys.argv[2]
-            mission_steps = " ".join(sys.argv[3:])
-            created_id = create_mission(mission_title, mission_steps)
+            if len(sys.argv) >= 5 and (
+                "📌" in sys.argv[3]
+                or "기존 규칙 유지" in sys.argv[3]
+                or "신규 변경 규칙" in sys.argv[3]
+            ):
+                mission_rule = sys.argv[3]
+                mission_steps = " ".join(sys.argv[4:])
+                created_id = create_mission(
+                    mission_title, mission_steps, rule_summary_text=mission_rule
+                )
+            else:
+                mission_steps = " ".join(sys.argv[3:])
+                created_id = create_mission(mission_title, mission_steps)
             sys.exit(0 if created_id else 1)
 
     run_cli()
