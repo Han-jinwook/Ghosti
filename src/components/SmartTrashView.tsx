@@ -150,11 +150,24 @@ export const SmartTrashView: React.FC = () => {
     setExternalQueryTrigger({ id: Date.now() + Math.random(), query: q });
   };
 
+  const [isCleanupPaused, setIsCleanupPaused] = useState<boolean>(false);
   const [zConnected, setZConnected] = useState<boolean>(zCoreBridge.isConnected);
   React.useEffect(() => {
     setZConnected(zCoreBridge.isConnected);
     return zCoreBridge.subscribe(setZConnected);
   }, []);
+
+  React.useEffect(() => {
+    const onPauseCleanupPaneOnly = () => {
+      setIsCleanupPaused(true);
+      clearTrashSelection();
+      setActiveTrashCategoryFilter('none');
+    };
+    window.addEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
+    return () => {
+      window.removeEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
+    };
+  }, [clearTrashSelection, setActiveTrashCategoryFilter]);
 
   const displayPhotos = zConnected
     ? photos.filter(
@@ -274,14 +287,46 @@ export const SmartTrashView: React.FC = () => {
               </div>
             </div>
 
-            <button
-              type="button"
-              disabled={activeTrash.length === 0 || quarantineMoving}
-              onClick={() => void moveAllTrashToQuarantine()}
-              className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
-            >
-              <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {activeTrash.length > 0 &&
+                (isCleanupPaused ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCleanupPaused(false);
+                      setActiveTrashCategoryFilter(
+                        activeDuplicateGroups.length > 0 ? 'duplicate' : 'all'
+                      );
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-teal-950/80 hover:bg-teal-900/80 border border-teal-400/40 text-teal-200 font-label-sm text-[12px] font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    <span>▶️ 남은 사진 정리 다시 펼치기 ({activeTrash.length}장)</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCleanupPaused(true);
+                      clearTrashSelection();
+                      setActiveTrashCategoryFilter('none');
+                      window.dispatchEvent(
+                        new CustomEvent('ghosti_defer_photo_cleanup_and_continue')
+                      );
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    <span>⏭️ 남은 사진 정리는 다음에</span>
+                  </button>
+                ))}
+              <button
+                type="button"
+                disabled={activeTrash.length === 0 || quarantineMoving || isCleanupPaused}
+                onClick={() => void moveAllTrashToQuarantine()}
+                className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
+              >
+                <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
+              </button>
+            </div>
           </div>
 
           {/* 2열: 언제나 0원 배지 + 건강검진 기록함 + 복원 기록 타임머신 + 서류함 + 휴지통 보관함 (고치기 상단 버튼 줄과 100% 동일 배치) */}
@@ -669,6 +714,12 @@ export const SmartTrashView: React.FC = () => {
               key={tab.key}
               type="button"
               onClick={() => {
+                if (isCleanupPaused) {
+                  setIsCleanupPaused(false);
+                  setIsTrashBinTabActive(false);
+                  setActiveTrashCategoryFilter(tab.key as TrashCategory);
+                  return;
+                }
                 if (!isTrashBinTabActive && currentTab === tab.key) {
                   setActiveTrashCategoryFilter('none');
                 } else {
@@ -904,26 +955,34 @@ export const SmartTrashView: React.FC = () => {
         </section>
       )}
 
-      {/* ─────────────── 3-C. 탭을 다시 눌러 접었을 때(currentTab === 'none') 노출되는 깔끔한 접힘 안내 바 ─────────────── */}
+      {/* ─────────────── 3-C. 탭을 다시 눌러 접었을 때 또는 [남은 사진 정리는 다음에]로 화면을 멈췄을 때(currentTab === 'none') 노출되는 깔끔한 안내 바 ─────────────── */}
       {!isTrashBinTabActive && currentTab === 'none' && (
         <div className="p-4 md:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="text-[18px]">📂</span>
+            <span className="text-[18px]">{isCleanupPaused ? '⏸️' : '📂'}</span>
             <span className="font-body-sm text-[13.5px] text-zinc-300 font-bold">
-              현재 사진 분류 목록이 접혀 있습니다. 위 4개 탭(①~④)을 누르면 해당 분류 사진이 펼쳐집니다.
+              {isCleanupPaused
+                ? '남은 사진 정리 화면을 잠시 멈춰 두었어요 — 오른쪽 『👻 귀신비서』의 다음 안내를 이어서 진행하시거나, 원하실 때 위 탭(①~④)을 눌러 다시 펼치실 수 있어요.'
+                : '현재 사진 분류 목록이 접혀 있습니다. 위 4개 탭(①~④)을 누르면 해당 분류 사진이 펼쳐집니다.'}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setActiveTrashCategoryFilter('duplicate')}
+              onClick={() => {
+                setIsCleanupPaused(false);
+                setActiveTrashCategoryFilter('duplicate');
+              }}
               className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
             >
               📸 중복·연사만 보기 ({activeDuplicateGroups.length}묶음) ▼
             </button>
             <button
               type="button"
-              onClick={() => setActiveTrashCategoryFilter('all')}
+              onClick={() => {
+                setIsCleanupPaused(false);
+                setActiveTrashCategoryFilter('all');
+              }}
               className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
             >
               📋 전체 후보 보기 ({activeTrash.length}장) ▼

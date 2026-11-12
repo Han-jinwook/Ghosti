@@ -627,17 +627,20 @@ export function resolveGhostSecretaryTurn(
     }
   }
 
-  // ①-b 남은 사진 정리(중복·흔들린 사진) 다음에 하기 유연 양방향 보류 의도 감지
+  // ①-b 남은 사진 정리(중복·흔들린 사진) 다음에 하기 입력 시: 좌측 정리 화면도 즉시 일시 멈춤 처리 + 다음 안내(귀신검색)로 연결
   if (
-    /(남은\s*사진|사진\s*정리|중복\s*사진|흔들린\s*사진|정리\s*후보).*(다음에|나중에|담에|그만|패스|보류|건너뛰)|^(남은\s*(사진\s*)?정리는?\s*다음에(\s*할래|\s*할게|\s*하자|\s*해요)?)$/i.test(
+    /(남은\s*사진|사진\s*정리|중복\s*사진|흔들린\s*사진|정리\s*후보).*(다음에|나중에|담에|그만|패스|보류|건너뛰)|^(남은\s*(사진\s*)?정리는?\s*다음에(\s*할래|\s*할래요|\s*할게|\s*할게요|\s*하자|\s*해요)?)$/i.test(
       text.trim()
     )
   ) {
-    const nickPrefix = nickname ? `${nickname}님! ` : '';
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_pause_cleanup_pane_only'));
+    }
+    const nickPrefix = nickname ? `${nickname}님, ` : '';
     return {
       scenarioId: 'cleanup_defer_remaining_flexible',
-      text: `알겠어요 ${nickPrefix}남은 중복·흔들린 사진 정리 후보들은 제가 그대로 책갈피 해둘 테니 걱정 마세요! 급하실 땐 지금 바로 사진 검색이나 공유방을 편하게 쓰시고, 나중에 시간 나실 때 "남은 사진 정리해줘"라고만 불러주시면 이어서 깔끔하게 정리해 드릴게요 👻✨`,
-      followUps: ['사진 검색 바로 해볼래', '남은 사진 정리 이어서 할래'],
+      text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두었어요 👻✨ 그럼 바로 다음 순서로 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`,
+      followUps: ['🔍 귀신검색으로 내 파일 찾아볼래요'],
       nextState: st,
     };
   }

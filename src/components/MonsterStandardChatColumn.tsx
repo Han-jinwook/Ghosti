@@ -375,6 +375,69 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     return () => window.removeEventListener('ghosti_weekly_care_updated', onScheduleChange);
   }, []);
 
+  // 좌측 정리창 상단 [⏭️ 남은 사진 정리는 다음에] 클릭 시: 좌측 화면은 멈추고 우측 귀신비서는 즉시 다음 안내로 자연스럽게 진행
+  useEffect(() => {
+    if (sourceTab !== 'trash') return;
+    const onDeferCleanupAndContinue = () => {
+      const storeNow = useSaySeeStore.getState();
+      const pendingShare = storeNow.pendingReturnShareRoom;
+      const st = loadGhostSecretaryState();
+      const nickPrefix = st.nickname ? `${st.nickname}님, ` : '';
+
+      if (pendingShare) {
+        setSharedMonsterMessages((prev) => [
+          ...prev,
+          {
+            id: `secretary_continue_after_defer_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab: 'trash',
+            text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두었어요 👻✨\n이제 아래 초록색 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기 ➔]** 버튼을 눌러 바로 사진방으로 돌아가 보실까요?`,
+          },
+        ]);
+        return;
+      }
+
+      if (st.passportStep !== 'done' && st.passportStep !== 'skipped' && st.passportStep !== 'naming') {
+        const entry = buildPassportEntryTurn({ ...st, passportStep: undefined }, isMobileOrStore);
+        const updatedState: GhostSecretaryState = { ...entry.nextState, questStep: 'done' };
+        saveGhostSecretaryState(updatedState);
+        if (updatedState.passportStep === 'ask_hint') {
+          setSharedMonsterMessages((prev) => [
+            ...prev,
+            {
+              id: `secretary_continue_passport_${Date.now()}`,
+              role: 'assistant',
+              timestamp: nowTimeKo(),
+              sourceTab: 'trash',
+              text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n\n${entry.text}`,
+              followUpSuggestions: ['여성 40대', '남성 40대', '여성 30대', '남성 30대'],
+            },
+          ]);
+          return;
+        }
+      }
+
+      saveGhostSecretaryState({ ...st, questStep: 'done' });
+      setSharedMonsterMessages((prev) => [
+        ...prev,
+        {
+          id: `secretary_continue_search_${Date.now()}`,
+          role: 'assistant',
+          timestamp: nowTimeKo(),
+          sourceTab: 'trash',
+          text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`,
+          followUpSuggestions: ['🔍 귀신검색으로 내 파일 찾아볼래요', '✨ 귀신비서의 숨은 초능력 알려줘'],
+        },
+      ]);
+    };
+
+    window.addEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
+    return () => {
+      window.removeEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
+    };
+  }, [sourceTab, isMobileOrStore]);
+
   // [멀린님 확정 명세 ②] 2중 자동 케어 엔진 (트랙 A: 20% 과부하 10분 지속 감지 ➕ 트랙 B: 수요일 13:00 「수요 손 없는 날」 정기 검진)
   useEffect(() => {
     let cancelled = false;
@@ -465,6 +528,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
     setSharedMonsterMessages((prev) => [...prev, userMsg]);
     setSharedMonsterBusy(true);
+
+    if (/^(🔍\s*)?(귀신검색으로\s*내\s*파일\s*찾아볼래(요)?|사진\s*검색\s*바로\s*해볼래(요)?)$/i.test(raw)) {
+      setSharedMonsterMessages((prev) => [
+        ...prev,
+        {
+          id: `secretary_jump_search_${Date.now()}`,
+          role: 'assistant',
+          timestamp: nowTimeKo(),
+          sourceTab,
+          text: '좋아요! 바로 『👻 귀신검색』 화면을 열어드렸어요 — 찾고 싶은 사진이나 서류를 편하게 불러보세요 👻✨',
+        },
+      ]);
+      setSharedMonsterBusy(false);
+      onJumpToSearch('');
+      return;
+    }
 
     // [v1.3] 귀신비서 대본집 우선 응답 (별명 등록 → 매운맛 점괘 / 구매처 거절 / 급한 유저 / 홀림 퀘스트 / 로드맵 희망 답변)
     // 단, 직전 대화에 승인 대기 중인 손보기 카드(정리·바로가기·복구·사양진단·수리)나 복원 목록이 있을 때의 긍정/승인/확인 발화는 손보기 라우터가 직접 처리!
@@ -716,29 +795,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       if (assistantMsg.healthRecordIssued || isExplicitFirstCareQuery) {
         const storeNow = useSaySeeStore.getState();
         const pendingShare = storeNow.pendingReturnShareRoom;
-        const realTrashCandidatesCount = (storeNow.photos || []).filter(
-          (p) => p.trashCategory && !p.quarantined && !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(p.name)
-        ).length;
-
-        // 사진 정리 후보가 많을 때(>= 15장) 비서가 먼저 유연하게 '남은 사진 정리는 다음에' 선택지를 제안
-        if (sourceTab === 'trash' && realTrashCandidatesCount >= 15) {
-          window.setTimeout(() => {
-            setSharedMonsterMessages((prev) => [
-              ...prev,
-              {
-                id: `secretary_proactive_defer_${Date.now()}`,
-                role: 'assistant',
-                timestamp: nowTimeKo(),
-                sourceTab,
-                text: `💡 참고로 내 컴퓨터에서 찾아낸 중복·흔들린 정리 후보 사진이 총 **${realTrashCandidatesCount}장** 있어요! 스캔은 방금 1초 만에 다 끝났지만, 양이 좀 있으니 바쁘시면 지금 다 고르지 않으시고 **"남은 사진 정리는 다음에"** 하셔도 제가 책갈피 해둘게요 👻`,
-                followUpSuggestions: [
-                  '⏭️ 남은 사진 정리는 다음에 할래',
-                  `⚡ 원본 남기고 ${realTrashCandidatesCount}장 한 번에 정리해줘`,
-                ],
-              },
-            ]);
-          }, 550);
-        }
 
         // 공유 사진방(가족방/모임방)에서 '내 사진 추가'를 위해 귀신비서로 우회해 온 경우: 점검 직후 끊김 없이 복귀 안내 말풍선 제공
         if (sourceTab === 'trash' && pendingShare) {
@@ -750,8 +806,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 role: 'assistant',
                 timestamp: nowTimeKo(),
                 sourceTab,
-                text: `📸 준비 완료예요! 내 컴퓨터 새 사진 색인과 1초 점검이 모두 끝났어요.\n아래 초록색 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기 ➔]** 버튼만 누르시면 바로 가족방으로 돌아가서 내 사진을 골라 올리실 수 있어요! (남은 사진 정리는 다음에 천천히 하셔도 돼요 👻✨)`,
-                followUpSuggestions: ['⏭️ 남은 사진 정리는 다음에 할래'],
+                text: `📸 준비 완료예요! 내 컴퓨터 새 사진 색인과 1초 점검이 모두 끝났어요.\n아래 초록색 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기 ➔]** 버튼만 누르시면 바로 가족방으로 돌아가서 내 사진을 골라 올리실 수 있어요! 👻✨`,
               },
             ]);
           }, 800);
