@@ -1,7 +1,7 @@
 /**
  * 👻 귀신같이(Ghosti) 아기귀신 시그니처 사운드 엔진 (SSOT 44.1kHz WAV + 70ms 무음 프리롤)
  * - 웹 페이지에 진입(최초 방문 및 새로고침 포함)할 때마다 딱 1회만 애기귀신 웃음소리 재생 (sample3_baby_ghost_giggle.wav)
- * - 진입 후 상단/사이드바 로고를 클릭하거나 메뉴를 눌러도 중복 효과음이 절대 나지 않음
+ * - 진입 후 상단/사이드바 로고를 클릭하거나 화면 아무 곳이나 마우스를 클릭해도 지연 효과음이 절대 나지 않음
  */
 
 import { hasActiveGhostiLoginSession } from './zCoreBridge';
@@ -12,14 +12,7 @@ const Z_CORE_GIGGLE_URL = 'http://127.0.0.1:5199/__merlin/play-enter-giggle';
 let preloadedGiggleAudio: HTMLAudioElement | null = null;
 let hasPlayedAppEnterGiggle = false;
 let isAttemptingGiggle = false;
-let unlockListenerBound = false;
-let cleanupUnlockListeners: (() => void) | null = null;
-
-function isLogoClickEvent(evt: Event): boolean {
-  const target = evt.target as HTMLElement | null;
-  if (!target || typeof target.closest !== 'function') return false;
-  return Boolean(target.closest('[data-ghosti-brand-logo="true"]'));
-}
+let titleSignalCleanupTimer: number | null = null;
 
 function ensurePreloaded(): void {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
@@ -27,6 +20,39 @@ function ensurePreloaded(): void {
     preloadedGiggleAudio = new Audio(GIGGLE_SOUND_URL);
     preloadedGiggleAudio.preload = 'auto';
     preloadedGiggleAudio.volume = 0.20;
+  }
+}
+
+/**
+ * 크롬 게스트 모드 / 시크릿 모드 등 MEI=0 환경에서 브라우저 자동재생이 막혔을 때,
+ * 로컬 네트워크 권한 팝업(127.0.0.1 LNA)이나 마우스 클릭 대기 없이도
+ * OS 데몬(start_ghosti_browser_entry_sound_watcher)이 첫 진입 및 새로고침(F5)을
+ * 0.15초 내에 즉시 감지해 효과음을 재생할 수 있도록 무가시 제로폭(Zero-Width) 시그널을
+ * document.title 끝에 1.5초간 각인합니다.
+ */
+function emitOsEntrySoundTitleSignal(): void {
+  if (typeof document === 'undefined') return;
+  try {
+    const baseTitle = document.title.replace(/\u200B\u200C[\u200B\u200C]{8}\u200C\u200B/g, '');
+    let bits = '';
+    for (let i = 0; i < 8; i += 1) {
+      bits += Math.random() < 0.5 ? '\u200B' : '\u200C';
+    }
+    const marker = `\u200B\u200C${bits}\u200C\u200B`;
+    document.title = `${baseTitle}${marker}`;
+    if (titleSignalCleanupTimer !== null) {
+      window.clearTimeout(titleSignalCleanupTimer);
+    }
+    titleSignalCleanupTimer = window.setTimeout(() => {
+      try {
+        document.title = document.title.replace(/\u200B\u200C[\u200B\u200C]{8}\u200C\u200B/g, '');
+      } catch {
+        // ignore title cleanup errors
+      }
+      titleSignalCleanupTimer = null;
+    }, 1500);
+  } catch {
+    // ignore title signal errors
   }
 }
 
@@ -56,77 +82,13 @@ async function tryPlayViaLocalZCore(): Promise<boolean> {
   }
 }
 
-function playFallbackWebAudio(): void {
-  try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const now = ctx.currentTime + 0.04;
-    const notes = [1046.5, 1318.5, 1567.98, 2093.0];
-    notes.forEach((freq, idx) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.065);
-      gain.gain.setValueAtTime(0.001, now + idx * 0.065);
-      gain.gain.exponentialRampToValueAtTime(0.055, now + idx * 0.065 + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.065 + 0.16);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + idx * 0.065);
-      osc.stop(now + idx * 0.065 + 0.17);
-    });
-  } catch {
-    // ignore audio fallback errors
-  }
-}
-
-function bindFirstGestureUnlock(): void {
-  if (typeof window === 'undefined' || unlockListenerBound || hasPlayedAppEnterGiggle) return;
-  unlockListenerBound = true;
-
-  const events: Array<keyof WindowEventMap> = [
-    'pointerdown',
-    'mousedown',
-    'touchstart',
-    'keydown',
-  ];
-
-  const cleanup = () => {
-    events.forEach((ev) => window.removeEventListener(ev, onFirstInteract, true));
-    unlockListenerBound = false;
-    cleanupUnlockListeners = null;
-  };
-  cleanupUnlockListeners = cleanup;
-
-  const onFirstInteract = (evt: Event) => {
-    // 로고 클릭 시에는 절대 효과음을 내보내지 않고 입장 효과음 대기 상태도 즉시 종료
-    if (isLogoClickEvent(evt)) {
-      hasPlayedAppEnterGiggle = true;
-      cleanup();
-      return;
-    }
-    cleanup();
-    if (!hasPlayedAppEnterGiggle) {
-      hasPlayedAppEnterGiggle = true;
-      const retryAudio = preloadedGiggleAudio || new Audio(GIGGLE_SOUND_URL);
-      retryAudio.volume = 0.20;
-      retryAudio.currentTime = 0;
-      retryAudio.play().catch(() => playFallbackWebAudio());
-    }
-  };
-
-  events.forEach((ev) => window.addEventListener(ev, onFirstInteract, true));
-}
-
 /**
- * 👻 웹/앱 처음 들어갈 때 딱 1회만 재생되는 '애기귀신 웃음소리' (sample3_baby_ghost_giggle.wav)
+ * 👻 웹/앱 처음 들어갈 때(또는 새로고침 시) 딱 1회만 재생되는 '애기귀신 웃음소리' (sample3_baby_ghost_giggle.wav)
  * - 로그인 상태뿐 아니라 크롬 게스트 모드 / 시크릿 창 / 온보딩 쇼룸 / 본진 워크스페이스 등 모든 웹 진입에서 동일하게 작동합니다.
  * - 1순위: 브라우저 HTMLAudioElement 즉시 재생
- * - 2순위: 크롬 게스트 모드(MEI=0) 등으로 브라우저 자동재생이 차단되면, 로컬 Z-코어(127.0.0.1:5199) 경유로 무클릭 즉시 1회 재생
- * - 3순위: Z-코어 미설치 환경(모바일/외부 PC)에서는 로고 클릭을 제외한 첫 터치/클릭/키 입력 순간에 1회 재생 후 완전 종료
+ * - 2순위: 크롬 게스트 모드(MEI=0) 등으로 브라우저 자동재생이 차단되면, OS 타이틀 시그널 + 로컬 Z-코어(127.0.0.1:5199)로 무클릭 즉시 1회 재생
+ * - ⚠️ 입장/새로고침 이후 화면 아무 곳이나 마우스 커서를 클릭할 때 뒷북으로 효과음이 나는 현상을 막기 위해
+ *      클릭/포인터 지연 언락 리스너(bindFirstGestureUnlock)는 절대 등록하지 않습니다.
  */
 export function playAppEnterGiggleSound(forceOnModeTransition = false): void {
   if (typeof window === 'undefined') return;
@@ -146,6 +108,7 @@ export function playAppEnterGiggleSound(forceOnModeTransition = false): void {
     return;
   }
 
+  hasPlayedAppEnterGiggle = true;
   isAttemptingGiggle = true;
   ensurePreloaded();
 
@@ -156,42 +119,28 @@ export function playAppEnterGiggleSound(forceOnModeTransition = false): void {
     const p = audio.play();
     if (p && typeof p.then === 'function') {
       p.then(() => {
-        hasPlayedAppEnterGiggle = true;
         isAttemptingGiggle = false;
-        cleanupUnlockListeners?.();
       }).catch(() => {
         // 크롬 게스트 모드 / 시크릿 창 등 MEI=0 환경에서 브라우저가 무클릭 자동재생을 막은 경우:
-        // 1) 로컬 Z-코어(5199)가 켜져 있으면 클릭 없이도 즉시 아기귀신 효과음 재생!
-        // 2) Z-코어가 없는 기기라면 첫 사용자 제스처(로고 제외)에서 1회 재생되도록 동시에 대기 등록
-        bindFirstGestureUnlock();
-        void tryPlayViaLocalZCore().then((playedViaZCore) => {
+        // 1) OS 브라우저 타이틀 감지기용 무가시 제로폭 시그널을 즉시 송출하여 권한 팝업/클릭 없이도 첫 진입 및 새로고침 즉시 재생!
+        // 2) 로그인 세션이면 로컬 Z-코어(5199) API도 함께 호출 (데몬 1.2초 디바운스로 중복 재생 원천 차단)
+        emitOsEntrySoundTitleSignal();
+        void tryPlayViaLocalZCore().finally(() => {
           isAttemptingGiggle = false;
-          if (playedViaZCore && !hasPlayedAppEnterGiggle) {
-            hasPlayedAppEnterGiggle = true;
-            cleanupUnlockListeners?.();
-          }
         });
       });
     } else {
-      hasPlayedAppEnterGiggle = true;
       isAttemptingGiggle = false;
-      cleanupUnlockListeners?.();
     }
   } catch {
     isAttemptingGiggle = false;
-    bindFirstGestureUnlock();
-    void tryPlayViaLocalZCore().then((playedViaZCore) => {
-      if (playedViaZCore && !hasPlayedAppEnterGiggle) {
-        hasPlayedAppEnterGiggle = true;
-        cleanupUnlockListeners?.();
-      }
-    });
+    emitOsEntrySoundTitleSignal();
+    void tryPlayViaLocalZCore();
   }
 }
 
 export function silencePendingEnterGiggleOnLogoClick(): void {
   hasPlayedAppEnterGiggle = true;
-  cleanupUnlockListeners?.();
 }
 
 /**
