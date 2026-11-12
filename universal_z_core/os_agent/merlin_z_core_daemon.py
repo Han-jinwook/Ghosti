@@ -893,6 +893,20 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 _SELF_UPDATE_IN_PROGRESS = False
                 return
 
+            # [무한 자살 루프 방어]: 다운로드된 ZIP 내 exe가 현재 실행 중인 exe와 바이트 단위로 동일하면 종료·교체를 수행하지 않음
+            try:
+                import hashlib
+
+                if (
+                    current_exe.exists()
+                    and hashlib.sha256(extracted_exe.read_bytes()).hexdigest()
+                    == hashlib.sha256(current_exe.read_bytes()).hexdigest()
+                ):
+                    _SELF_UPDATE_IN_PROGRESS = False
+                    return
+            except Exception:
+                pass
+
             # 1줄짜리 updater.bat 생성 후 무소음(CREATE_NO_WINDOW) 스왑 및 재실행
             bat_path = update_dir / "updater.bat"
             bat_content = (

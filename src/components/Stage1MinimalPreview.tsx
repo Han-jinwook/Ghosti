@@ -1076,9 +1076,27 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     id: number;
     query: string;
   } | null>(null);
+  const [zConnected, setZConnected] = useState<boolean>(zCoreBridge.isConnected);
+  const autoSwitchedRealTabRef = React.useRef<boolean>(false);
 
-  const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
-  const quarantinedPhotos = photos.filter((p) => p.quarantined);
+  React.useEffect(() => {
+    setZConnected(zCoreBridge.isConnected);
+    return zCoreBridge.subscribe((c) => {
+      setZConnected(c);
+      if (!c) {
+        autoSwitchedRealTabRef.current = false;
+      }
+    });
+  }, []);
+
+  const isShowroomSamplePhoto = (name: string): boolean =>
+    /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
+  const displayPhotos = zConnected
+    ? photos.filter((p) => !isShowroomSamplePhoto(p.name))
+    : photos;
+
+  const activeTrash = displayPhotos.filter((p) => p.trashCategory && !p.quarantined);
+  const quarantinedPhotos = displayPhotos.filter((p) => p.quarantined);
   const totalTrashBytes = activeTrash.reduce((a, p) => a + p.size, 0);
 
   const dupCount = activeTrash.filter((p) => matchesTrashTab(p, 'duplicate')).length;
@@ -1111,7 +1129,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       ? FALLBACK_SAMPLE_TRASH_ITEMS[currentTab]
       : [];
   const isShowingSamplePreview =
-    !zCoreBridge.isConnected &&
+    !zConnected &&
     currentTab !== 'none' &&
     realFilteredCandidates.length === 0 &&
     fallbackSamplesForCurrentTab.length > 0;
@@ -1123,7 +1141,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     .filter((p) => selectedTrashIds.has(p.id))
     .reduce((a, p) => a + p.size, 0);
 
-  const photoById = new Map(photos.map((p) => [p.id, p]));
+  const photoById = new Map(displayPhotos.map((p) => [p.id, p]));
   const activeDuplicateGroups = duplicateGroups.filter((g) =>
     g.photoIds.some((id) => {
       const ph = photoById.get(id);
@@ -1131,10 +1149,31 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     })
   );
 
+  // 엔진 연결 후 내 PC에 중복·연사(①)는 0장이지만 메모/캡처/흔들림(②~④) 실물 후보가 있는 경우,
+  // 빈 상자 대신 내 진짜 PC 사진 썸네일이 즉시 우측 귀신비서 옆에 펼쳐지도록 1회 자동 전환
+  React.useEffect(() => {
+    if (
+      zConnected &&
+      !autoSwitchedRealTabRef.current &&
+      currentTab === 'duplicate' &&
+      activeDuplicateGroups.length === 0 &&
+      activeTrash.length > 0
+    ) {
+      autoSwitchedRealTabRef.current = true;
+      setActiveTrashCategoryFilter('all');
+    }
+  }, [
+    zConnected,
+    currentTab,
+    activeDuplicateGroups.length,
+    activeTrash.length,
+    setActiveTrashCategoryFilter,
+  ]);
+
   const showDuplicatePickSection = currentTab === 'duplicate';
 
   const zCoreOutdated =
-    zCoreBridge.isConnected && isZCoreOutdated(zCoreBridge.version);
+    zConnected && isZCoreOutdated(zCoreBridge.version);
 
   return (
     <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
@@ -1269,7 +1308,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               const sampleThumbs =
                 items.length > 0
                   ? items.slice(0, 2)
-                  : !zCoreBridge.isConnected
+                  : !zConnected
                   ? FALLBACK_SAMPLE_TRASH_ITEMS[tab.key].slice(0, 2)
                   : [];
 
@@ -1343,7 +1382,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         />
                       </div>
                     ))}
-                    {items.length === 0 && !zCoreBridge.isConnected && (
+                    {items.length === 0 && !zConnected && (
                       <span className="px-1.5 py-0.5 rounded bg-zinc-800/90 border border-white/10 text-[10px] text-zinc-300 font-bold whitespace-nowrap">
                         예시 샘플
                       </span>

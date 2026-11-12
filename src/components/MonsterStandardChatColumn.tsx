@@ -526,6 +526,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         if (isAgreeOrCareOrImpatient) {
           try {
             sessionStorage.removeItem('ghosti_awaiting_engine_rite');
+            sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+            localStorage.setItem('ghosti_secretary_engine_agreed', '1');
             sessionStorage.setItem(
               'ghosti_pending_secretary_care_query',
               isDirectCareOrStatusCommand && !/마음\s*바꿨|엔진\s*연결/.test(raw)
@@ -989,9 +991,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       }, 380);
     };
 
+    const onZCoreConnectedBackup = () => {
+      try {
+        if (sessionStorage.getItem('ghosti_pending_secretary_care_query')) {
+          onConnectedInSecretary();
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
     window.addEventListener('ghosti_engine_connected_in_secretary', onConnectedInSecretary);
-    return () =>
+    window.addEventListener('zCoreConnected', onZCoreConnectedBackup);
+    return () => {
       window.removeEventListener('ghosti_engine_connected_in_secretary', onConnectedInSecretary);
+      window.removeEventListener('zCoreConnected', onZCoreConnectedBackup);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceTab]);
 

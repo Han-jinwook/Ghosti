@@ -121,7 +121,7 @@ export const GhostSecretaryFirstGuard: React.FC<GhostSecretaryFirstGuardProps> =
   const guardActive = useIsSecretaryFirstBrowseGuardActive();
 
   if (disabled || !guardActive) {
-    return <>{children}</>;
+    return className ? <div className={className}>{children}</div> : <>{children}</>;
   }
 
   const isAllowedElement = (target: EventTarget | null): boolean => {

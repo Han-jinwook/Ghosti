@@ -150,8 +150,23 @@ export const SmartTrashView: React.FC = () => {
     setExternalQueryTrigger({ id: Date.now() + Math.random(), query: q });
   };
 
-  const activeTrash = photos.filter((p) => p.trashCategory && !p.quarantined);
-  const quarantinedPhotos = photos.filter((p) => p.quarantined);
+  const [zConnected, setZConnected] = useState<boolean>(zCoreBridge.isConnected);
+  React.useEffect(() => {
+    setZConnected(zCoreBridge.isConnected);
+    return zCoreBridge.subscribe(setZConnected);
+  }, []);
+
+  const displayPhotos = zConnected
+    ? photos.filter(
+        (p) =>
+          !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(
+            p.name
+          )
+      )
+    : photos;
+
+  const activeTrash = displayPhotos.filter((p) => p.trashCategory && !p.quarantined);
+  const quarantinedPhotos = displayPhotos.filter((p) => p.quarantined);
   const totalTrashBytes = activeTrash.reduce((a, p) => a + p.size, 0);
 
   const dupCount = activeTrash.filter((p) => matchesTrashTab(p, 'duplicate')).length;
@@ -197,7 +212,7 @@ export const SmartTrashView: React.FC = () => {
     !isTrashBinTabActive && currentTab === 'duplicate';
 
   const zCoreOutdated =
-    zCoreBridge.isConnected && isZCoreOutdated(zCoreBridge.version);
+    zConnected && isZCoreOutdated(zCoreBridge.version);
 
   return (
     <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">

@@ -3721,11 +3721,14 @@ def _find_edit_control_child(hwnd_fg: int, require_focused: bool = False) -> int
 
     proc_n = _get_process_name_from_hwnd(hwnd_fg).lower()
     cls_fg = _get_win_class_only(hwnd_fg)
-    if proc_n == "notepad.exe" or cls_fg == "Notepad":
+    if proc_n in ("notepad.exe", "wordpad.exe") or cls_fg in ("Notepad", "WordPadClass"):
         ed = u32.FindWindowExW(hwnd_fg, None, "Edit", None)
         if ed:
             return ed
         ed = u32.FindWindowExW(hwnd_fg, None, "RichEditD2DPT", None)
+        if ed:
+            return ed
+        ed = u32.FindWindowExW(hwnd_fg, None, "RICHEDIT50W", None)
         if ed:
             return ed
         ntb = u32.FindWindowExW(hwnd_fg, None, "NotepadTextBox", None)
@@ -3924,6 +3927,38 @@ def execute_undo_snapshot(daemon_set_cb) -> bool:
     return True
 
 
+def _get_logical_line_bounds_utf16(utf16_bytes: bytes, caret_u16: int) -> tuple[int, int, str]:
+    """
+    [시각적 자동 줄바꿈(Soft-Wrap) 무결성 보호 — 논리 문단(\\r, \\n) 기준 경계 추출기]:
+    - Win32 EM_LINEFROMCHAR / EM_LINEINDEX / EM_LINELENGTH는 창 폭이 좁거나 워드패드(wordpad.exe) 여백에서
+      한 문장이 화면상 2줄로 자동 줄바꿈(Soft-Wrap)되면 음절 중간('확'=ghk+r ➔ 'ghk' / 'rdlsgowntpdy')을
+      잘라내어 한영 변환이 불발되는 한계가 있습니다.
+    - 실제 엔터(\\r, \\n) 기호만을 기준으로 커서가 속한 '논리적 한 줄(문단)'의 시작·끝 UTF-16 오프셋을 반환합니다.
+    """
+    total_u16 = len(utf16_bytes) // 2
+    if total_u16 <= 0:
+        return 0, 0, ""
+    pos = max(0, min(int(caret_u16), total_u16))
+
+    def _u16_at(idx: int) -> int:
+        off = idx * 2
+        return utf16_bytes[off] | (utf16_bytes[off + 1] << 8)
+
+    if 0 < pos < total_u16 and _u16_at(pos - 1) == 0x000D and _u16_at(pos) == 0x000A:
+        pos -= 1
+
+    start = pos
+    while start > 0 and _u16_at(start - 1) not in (0x000A, 0x000D):
+        start -= 1
+
+    end = pos
+    while end < total_u16 and _u16_at(end) not in (0x000A, 0x000D):
+        end += 1
+
+    line_str = utf16_bytes[start * 2 : end * 2].decode("utf-16-le", errors="ignore")
+    return start, end, line_str
+
+
 def _get_edit_control_current_line(edit_child: int) -> str | None:
     if not edit_child or not u32.IsWindow(edit_child):
         return None
@@ -3938,13 +3973,9 @@ def _get_edit_control_current_line(edit_child: int) -> str | None:
         if s_pos == 0 and e_dw.value == 0:
             sel_ret = u32.SendMessageW(edit_child, EM_GETSEL, 0, 0)
             s_pos = sel_ret & 0xFFFF
-        line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
-        line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
-        line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
-        if line_start < 0 or line_len < 0:
-            return None
         utf16_b = idx_text.encode("utf-16-le")
-        return utf16_b[line_start * 2 : (line_start + line_len) * 2].decode("utf-16-le", errors="ignore")
+        _, _, cur_line_s = _get_logical_line_bounds_utf16(utf16_b, s_pos)
+        return cur_line_s
     except Exception:
         return None
 
@@ -4083,13 +4114,34 @@ def iron_and_polish_korean_text(raw_text: str, allow_typo_morph: bool = True) ->
     if not raw_text or not raw_text.strip():
         return raw_text
 
-    # 1) 각 줄 내부에 섞여 있는 영타 오타(예: gksrmf xptmxmdlqslek)가 있으면 줄 단위로 먼저 한영 성형 수행 (단, 클립보드 복사 시에는 allow_typo_morph=False로 차단!)
+    # 1) 각 줄 내부에 섞여 있는 영타/한타 오타(예: gksrmf xptmxmdlqslek, 줄바꿈으로 끊긴 영타 포함)가 있으면 먼저 양방향 한영 성형 수행
     if allow_typo_morph:
+        raw_lines = raw_text.splitlines()
+        merged_typo_lines: list[str] = []
+        idx_l = 0
+        while idx_l < len(raw_lines):
+            cur_ln = raw_lines[idx_l]
+            if (
+                idx_l + 1 < len(raw_lines)
+                and re.fullmatch(r"[A-Za-z]{4,}", cur_ln.strip())
+                and re.fullmatch(r"[A-Za-z]{3,}", raw_lines[idx_l + 1].strip())
+                and not AI_ENGINE.is_valid_english_word(cur_ln.strip())
+                and not AI_ENGINE.is_valid_english_word(raw_lines[idx_l + 1].strip())
+            ):
+                joined_cand = cur_ln.strip() + raw_lines[idx_l + 1].strip()
+                m_j, d_j = morph_korean_english_text_with_direction(joined_cand)
+                if d_j == "KO" and m_j != joined_cand and not re.search(r"[ㄱ-ㅎㅏ-ㅣ]", m_j):
+                    merged_typo_lines.append(joined_cand)
+                    idx_l += 2
+                    continue
+            merged_typo_lines.append(cur_ln)
+            idx_l += 1
+
         pre_lines = []
-        for raw_ln in raw_text.splitlines():
+        for raw_ln in merged_typo_lines:
             if raw_ln.strip():
                 m_ln, l_dir = morph_korean_english_text_with_direction(raw_ln)
-                if l_dir == "KO" and m_ln != raw_ln:
+                if l_dir in ("KO", "EN") and m_ln != raw_ln:
                     pre_lines.append(m_ln)
                 else:
                     pre_lines.append(raw_ln)
@@ -4294,13 +4346,9 @@ def _replace_edit_control_current_line_atomic(
             else:
                 target_line = utf16_bytes[s_pos * 2 : e_pos * 2].decode("utf-16-le", errors="ignore")
         else:
-            line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
-            line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
-            line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
-            cur_line_str = ""
-            if line_start >= 0 and line_len > 0:
-                cur_line_str = utf16_bytes[line_start * 2 : (line_start + line_len) * 2].decode("utf-16-le", errors="ignore")
-            # 커서가 놓인 현재 줄에 한영 오타(예: gksrmf xptmxm)가 있으면 다른 문장들을 절대 건드리지 않고 현재 줄만 즉시 성형!
+            line_start, l_end_cand, cur_line_str = _get_logical_line_bounds_utf16(utf16_bytes, s_pos)
+            line_len = l_end_cand - line_start
+            # 커서가 놓인 현재 논리 줄(문단)에 한영 오타가 있으면 다른 문단들을 절대 건드리지 않고 현재 문단만 즉시 성형!
             m_single, l_single = morph_korean_english_text_with_direction(cur_line_str) if cur_line_str else ("", None)
             if cur_line_str and m_single != cur_line_str and l_single is not None:
                 line_end = line_start + line_len
@@ -4399,9 +4447,10 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
     try:
         full_text = ""
         idx_text = ""
+        utf16_bytes = b""
         s_pos = 0
         e_pos = 0
-        cur_line_idx = 0
+        cur_line_start = 0
         ready = False
         s_dw = wintypes.DWORD(0)
         e_dw = wintypes.DWORD(0)
@@ -4412,27 +4461,27 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
                 continue
             u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
             s_pos, e_pos = s_dw.value, e_dw.value
-            if s_pos != e_pos:
+            if s_pos != e_pos or s_pos < 1:
                 continue
-            cur_line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
-            if cur_line_idx < 1:
-                continue
-            cur_line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, cur_line_idx, 0)
-            if cur_line_start >= 0 and s_pos == cur_line_start:
+            utf16_bytes = idx_text.encode("utf-16-le")
+            cur_line_start, _, _ = _get_logical_line_bounds_utf16(utf16_bytes, s_pos)
+            if cur_line_start >= 1 and s_pos == cur_line_start:
                 ready = True
                 break
         if not ready:
             return False
 
-        prev_idx = cur_line_idx - 1
-        prev_start = u32.SendMessageW(edit_child, EM_LINEINDEX, prev_idx, 0)
-        prev_len = u32.SendMessageW(edit_child, EM_LINELENGTH, prev_start, 0)
+        prev_anchor = cur_line_start - 1
+        if (
+            prev_anchor > 0
+            and (utf16_bytes[(prev_anchor - 1) * 2] | (utf16_bytes[(prev_anchor - 1) * 2 + 1] << 8)) == 0x000D
+            and (utf16_bytes[prev_anchor * 2] | (utf16_bytes[prev_anchor * 2 + 1] << 8)) == 0x000A
+        ):
+            prev_anchor -= 1
+        prev_start, prev_end, prev_str = _get_logical_line_bounds_utf16(utf16_bytes, prev_anchor)
+        prev_len = prev_end - prev_start
         if prev_start < 0 or prev_len < 4:
             return False
-        utf16_bytes = idx_text.encode("utf-16-le")
-        if (prev_start + prev_len) * 2 > len(utf16_bytes):
-            return False
-        prev_str = utf16_bytes[prev_start * 2 : (prev_start + prev_len) * 2].decode("utf-16-le", errors="ignore")
         prev_stripped = prev_str.strip()
         if not prev_stripped or _is_protected_account_or_email_token(prev_stripped.split()[-1]):
             return False
@@ -4708,14 +4757,14 @@ def _strip_copyright_and_ad_boilerplate(raw_txt: str) -> str:
     return "\n".join(lines).strip()
 
 
-def clean_and_iron_text(raw_txt: str) -> str:
-    """서식 세탁(순수 텍스트화 + 광고·저작권 꼬리말 절삭) + 줄바꿈·유령공백(NFKC)·띄어쓰기 다림질 통합"""
+def clean_and_iron_text(raw_txt: str, allow_typo_morph: bool = True) -> str:
+    """서식 세탁(순수 텍스트화 + 광고·저작권 꼬리말 절삭) + 한영 오타 성형 + 줄바꿈·유령공백(NFKC)·띄어쓰기 다림질 통합"""
     if not raw_txt or not raw_txt.strip():
         return raw_txt or ""
     stripped_body = _strip_copyright_and_ad_boilerplate(raw_txt)
     if not stripped_body:
         return ""
-    return iron_and_polish_korean_text(stripped_body, allow_typo_morph=False)
+    return iron_and_polish_korean_text(stripped_body, allow_typo_morph=allow_typo_morph)
 
 
 def superpower_1_clean_and_iron_lines(
@@ -5197,8 +5246,8 @@ def should_skip_auto_typo(hwnd: int) -> bool:
                 return True
             return False
 
-        # [허용 2] 메모장(notepad.exe — Win10 Edit / Win11 NotepadTextBox->RichEditD2DPT)
-        if proc_root_low == "notepad.exe" or cls_root == "Notepad":
+        # [허용 2] 메모장(notepad.exe) 및 워드패드(wordpad.exe — RICHEDIT50W)
+        if proc_root_low in ("notepad.exe", "wordpad.exe") or cls_root in ("Notepad", "WordPadClass"):
             ed_np = _find_edit_control_child(root_h)
             if ed_np and not (u32.GetWindowLongW(ed_np, -16) & 0x0020):
                 return False
@@ -5488,12 +5537,8 @@ def superpower_8_format_numbers(daemon_set_cb, raw_src: str | None = None, has_r
                     line_start, line_end = s_pos, e_pos
                     target_str = utf16_bytes[s_pos * 2 : e_pos * 2].decode("utf-16-le", errors="ignore")
                 else:
-                    line_idx = u32.SendMessageW(edit_child, EM_LINEFROMCHAR, s_pos, 0)
-                    line_start = u32.SendMessageW(edit_child, EM_LINEINDEX, line_idx, 0)
-                    line_len = u32.SendMessageW(edit_child, EM_LINELENGTH, line_start, 0)
-                    cur_line = ""
-                    if line_start >= 0 and line_len > 0:
-                        cur_line = utf16_bytes[line_start * 2 : (line_start + line_len) * 2].decode("utf-16-le", errors="ignore")
+                    line_start, l_end_num, cur_line = _get_logical_line_bounds_utf16(utf16_bytes, s_pos)
+                    line_len = l_end_num - line_start
                     if cur_line and _toggle_korean_number_format(cur_line) != cur_line:
                         line_end = line_start + line_len
                         target_str = cur_line
@@ -6883,17 +6928,17 @@ def main() -> None:
                                     time.sleep(0.02)
                                     restored_ok = False
                                     if ed_prev and u32.IsWindow(ed_prev):
-                                        cur_ln_at = _get_edit_control_current_line(ed_prev) or ""
-                                        if cur_ln_at.endswith(conv_prev + "@"):
-                                            new_ln_at = cur_ln_at[: -(len(conv_prev) + 1)] + raw_rest
+                                        _, idx_at_txt, _ = _get_edit_full_text_and_index_str(ed_prev)
+                                        if idx_at_txt:
                                             s_at = wintypes.DWORD(0)
                                             e_at = wintypes.DWORD(0)
                                             u32.SendMessageW(ed_prev, EM_GETSEL, ctypes.addressof(s_at), ctypes.addressof(e_at))
-                                            ln_idx_at = u32.SendMessageW(ed_prev, EM_LINEFROMCHAR, s_at.value, 0)
-                                            ln_st_at = u32.SendMessageW(ed_prev, EM_LINEINDEX, ln_idx_at, 0)
-                                            ln_len_at = u32.SendMessageW(ed_prev, EM_LINELENGTH, ln_st_at, 0)
-                                            if ln_st_at >= 0 and ln_len_at > 0:
-                                                u32.SendMessageW(ed_prev, EM_SETSEL, ln_st_at, ln_st_at + ln_len_at)
+                                            ln_st_at, ln_ed_at, cur_ln_at = _get_logical_line_bounds_utf16(
+                                                idx_at_txt.encode("utf-16-le"), s_at.value
+                                            )
+                                            if cur_ln_at.endswith(conv_prev + "@") and ln_ed_at > ln_st_at:
+                                                new_ln_at = cur_ln_at[: -(len(conv_prev) + 1)] + raw_rest
+                                                u32.SendMessageW(ed_prev, EM_SETSEL, ln_st_at, ln_ed_at)
                                                 rb_at = ctypes.create_unicode_buffer(new_ln_at)
                                                 u32.SendMessageW(ed_prev, EM_REPLACESEL, 1, ctypes.addressof(rb_at))
                                                 restored_ok = True

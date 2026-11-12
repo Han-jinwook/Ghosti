@@ -11,8 +11,8 @@
 export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
-/** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 exe 버전과 반드시 일치시킬 것) */
-export const LATEST_Z_CORE_VERSION = '2.3.5';
+/** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 MS 서명 exe 버전 v2.3.4와 반드시 일치시킬 것 — 불일치 시 self-update가 방금 실행된 코어를 종료시키는 루프 발생) */
+export const LATEST_Z_CORE_VERSION = '2.3.4';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
