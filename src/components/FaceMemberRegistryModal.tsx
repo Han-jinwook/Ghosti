@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeStore';
 import { hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
+import { jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 import type { FaceMemberCluster, RoomPersonaMap, YearlyFaceBestCut } from '../types/saysee';
 
 /**
@@ -579,9 +580,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
   const isEngineReady = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
   const openEngineConnectGuide = () => {
     setShowFaceRegistryModal(false);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
-    }
+    jumpToGhostSecretary();
   };
 
   const handleTriggerRealNameSearch = async (
@@ -654,10 +653,11 @@ export const FaceMemberRegistryModal: React.FC = () => {
               ) : (
                 <button
                   type="button"
+                  data-allow-secretary-jump="true"
                   onClick={openEngineConnectGuide}
                   className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0 shadow cursor-pointer"
                 >
-                  ⚡ 내 PC 엔진 연결하고 실제 인물 등록하기
+                  👻 먼저 &apos;귀신비서&apos;와 대화하고 실제 인물 등록하기 ➔
                 </button>
               )}
             </div>
@@ -665,7 +665,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
             {!isEngineReady && visibleClusters.length === 0 ? (
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/30 text-zinc-300 font-body-sm text-[12.5px] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span>
-                  💡 현재 엔진 미연결(체험 모드) 상태입니다. 내 PC 엔진을 연결하면 실제 사진 속 가족·모임 인물을 자동으로 찾아 여권에 등록해 드립니다.
+                  👀 지금은 구경 모드예요! 먼저 첫 번째 메뉴인 <strong>『👻 귀신비서』</strong>와 대화를 나누고 엔진을 켜주시면, 내 진짜 사진 속 가족·모임 인물을 조용히 찾아 여권에 등록해 드립니다.
                 </span>
               </div>
             ) : (

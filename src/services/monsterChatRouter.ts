@@ -12,7 +12,7 @@ import {
   resolveTargetDocAndBuildFactAnswer,
   dispatchFileToKakaoRealChatroom,
 } from './voiceSearchAndAiBatonEngine';
-import { getZCoreUrl } from './zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 import {
   submitStudioSupportTicket,
   buildStudioSupportJumpUrl,
@@ -3031,6 +3031,23 @@ export async function processUnifiedMonsterChatQuery(params: {
     /(1초\s*건강\s*검진|건강\s*검진\s*(해\s*줘|해\s*주세요|실행|시작))/i.test(clean);
 
   if (isDirectSlowOrAdwareFix) {
+    const isMobileRuntime =
+      typeof navigator !== 'undefined' &&
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+    if (!isMobileRuntime && !zCoreBridge.isConnected) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+      }
+      const promptMsg =
+        '👻 제가 웹 화면 밖으로 손이 닿아 실제 내 컴퓨터의 묵은 먼지와 보안 모듈을 정리하고, 뒤에서 내 진짜 사진·문서도 조용히 읽어두려면 **귀신비서 전용 로컬 엔진(무광고 · 외부 전송 0%)**을 딱 한 번 켜주셔야 해요! 지금 연결 안내창을 띄워 드렸어요 ✨';
+      speak(promptMsg);
+      return reply(sourceTab, promptMsg, {
+        followUpSuggestions: [
+          '🤝 응, 엔진 연결하고 1초 건강검진 해줘',
+          '👀 일단 눈으로 구경부터 할래',
+        ],
+      });
+    }
     const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
     const restoreId = String((osRes as any).restoreId || '#1');
     const cpuBefore = Number((osRes as any).cpuLoadBefore ?? lastSpecMsgEarly?.pcSpecPayload?.cpuLoadPercent ?? 28);

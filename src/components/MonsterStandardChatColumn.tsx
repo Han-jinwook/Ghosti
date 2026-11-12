@@ -25,7 +25,7 @@ import {
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 import { normalizeSpokenKoreanQuery } from '../services/voiceSearchAndAiBatonEngine';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { hasActiveGhostiLoginSession } from '../services/zCoreBridge';
+import { hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
 import {
   PC_MONSTER_ROLLING_PLACEHOLDERS_10,
   MOBILE_CLEAN_ROLLING_PLACEHOLDERS_10,
@@ -58,6 +58,11 @@ import {
   findScenario,
   renderPlaybookText,
   upsertPassportMember,
+  isImpatientIntent,
+  isStoreLinkIntent,
+  isYes,
+  isNo,
+  parseNicknameSettingIntent,
   type GhostSecretaryState,
   type PassportNamingResult,
 } from '../services/ghostSecretaryEngine';
@@ -217,6 +222,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   );
   const [awaitingNickname, setAwaitingNickname] = useState<boolean>(() => !loadGhostSecretaryState().nickname);
   const [welcomeChipsDismissed, setWelcomeChipsDismissed] = useState<boolean>(false);
+  const [isZCoreLive, setIsZCoreLive] = useState<boolean>(zCoreBridge.isConnected);
+
+  useEffect(() => {
+    setIsZCoreLive(zCoreBridge.isConnected);
+    return zCoreBridge.subscribe((conn) => setIsZCoreLive(conn));
+  }, []);
 
   // [v1.3 귀신비서 1관문] 첫 환영 말풍선: 별명 미등록 시 대본집 ask_nickname_first, 등록 시 별명 호칭 인사
   useEffect(() => {
@@ -232,6 +243,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     if (
       !isMobileOrStore &&
       hasActiveGhostiLoginSession() &&
+      zCoreBridge.isConnected &&
       !turn.nextState.awaitingNickname &&
       !turn.nextState.consents?.bankSecurityAutoSleep &&
       !turn.nextState.bankSleepIntroShownAt
@@ -272,6 +284,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       // [Stage 2: 호흡 분리 후 다음번 진입 시 — 다운로드 폴더 압축파일 최소 3건 이상(>=3) 누적 시 숨은 초능력 & 압축 풀기 안내]
       !isMobileOrStore &&
       hasActiveGhostiLoginSession() &&
+      zCoreBridge.isConnected &&
       !turn.nextState.awaitingNickname &&
       (turn.nextState.consents?.bankSecurityAutoSleep || turn.nextState.bankSleepIntroShownAt) &&
       !turn.nextState.hiddenSuperpowersShown
@@ -464,6 +477,86 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       (hasPendingCareApproval &&
         /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해줘|알려줘|뭔데|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw));
 
+    // [v1.3 필수 통과의례 게이트]: PC에서 아직 로컬 엔진(Z-코어)이 연결되지 않은 상태일 때,
+    // 별명 등록 이후 손보기 동의 / 급한 검색 요청 / 거절(눈으로 구경) 분기를 귀신비서가 정직하고 귀엽게 직접 안내!
+    if (sourceTab === 'trash' && !isMobileOrStore && !zCoreBridge.isConnected) {
+      const preSt = loadGhostSecretaryState();
+      const hasNicknameReady = !preSt.awaitingNickname && Boolean(preSt.nickname);
+      const isNickOrStoreSpecial =
+        Boolean(parseNicknameSettingIntent(raw, preSt.nickname)) || isStoreLinkIntent(raw);
+
+      if (hasNicknameReady && !isNickOrStoreSpecial) {
+        const nickLabel = preSt.nickname ? `${preSt.nickname}님` : '회원님';
+        const awaitingRite =
+          typeof sessionStorage !== 'undefined' &&
+          sessionStorage.getItem('ghosti_awaiting_engine_rite') === '1';
+        const isBrowseOrRefuseEngine =
+          /(구경\s*부터|구경\s*만|눈으로\s*구경|안\s*깔|설치\s*안|엔진\s*싫|깔기\s*싫)/i.test(raw) ||
+          (awaitingRite && isNo(raw));
+        const isAgreeOrCareOrImpatient =
+          /(엔진\s*연결|연결\s*해|연결하고|설치\s*해|깔아|깔래|마음\s*바꿨)/i.test(raw) ||
+          isDirectCareOrStatusCommand ||
+          isImpatientIntent(raw) ||
+          (awaitingRite && isYes(raw));
+
+        if (isBrowseOrRefuseEngine) {
+          try {
+            sessionStorage.removeItem('ghosti_awaiting_engine_rite');
+          } catch {
+            /* ignore */
+          }
+          setSharedMonsterMessages((prev) => [
+            ...prev,
+            {
+              id: `secretary_browse_only_${Date.now()}`,
+              role: 'assistant',
+              timestamp: nowTimeKo(),
+              sourceTab,
+              text:
+                `헤헤 알겠어요 ${nickLabel}! 억지로 깔지 않으셔도 괜찮아요 👻\n` +
+                `왼쪽 메뉴들(『👻 귀신검색』, 『⚡ 귀신창 초능력』 등)을 눌러 위아래로 스크롤하며 어떤 마법들이 있는지 눈으로 편하게 구경해 보세요!\n` +
+                `(단, 버튼을 클릭해 직접 활동하거나 내 진짜 사진·문서로 리얼 테스트하는 건 저랑 엔진 연결을 마친 뒤에 열려요!) 마음이 바뀌시면 언제든 아래 버튼을 눌러주세요!`,
+              followUpSuggestions: ['🤝 마음 바꿨어! 엔진 연결하고 1초 건강검진 해줘'],
+            },
+          ]);
+          setSharedMonsterBusy(false);
+          return;
+        }
+
+        if (isAgreeOrCareOrImpatient) {
+          try {
+            sessionStorage.removeItem('ghosti_awaiting_engine_rite');
+            sessionStorage.setItem(
+              'ghosti_pending_secretary_care_query',
+              isDirectCareOrStatusCommand && !/마음\s*바꿨|엔진\s*연결/.test(raw)
+                ? raw
+                : SECRETARY_FIRST_CARE_QUERY
+            );
+          } catch {
+            /* ignore */
+          }
+          const riteText = isImpatientIntent(raw)
+            ? `앗, 급하시군요 ${nickLabel}! 내 진짜 사진·문서를 1초 만에 찾으시려면 먼저 여기서 **귀신비서 전용 로컬 엔진(무광고 · 샘플 사진 0장 · 외부 전송 0%)**만 딱 한 번 켜주셔야 해요!\n연결되자마자 뒤에서 내 진짜 파일들을 조용히 읽어들여 바로 검색하실 수 있게 해드릴게요. 지금 연결 창을 띄워 드렸어요 👻⚡`
+            : `좋아요 ${nickLabel}! 제가 웹 화면 밖으로 손이 닿아 진짜 묵은 먼지를 털어드리고, 뒤에서 **샘플 사진 한 장 없이 오직 내 진짜 사진·문서만 조용히 읽어두려면** 전용 로컬 엔진만 딱 한 번 켜주시면 돼요!\n지금 연결 안내창을 띄워 드렸어요 — 켜주시는 즉시 제가 이어서 **1초 건강검진**까지 알아서 다 해드릴게요 👻✨`;
+
+          setSharedMonsterMessages((prev) => [
+            ...prev,
+            {
+              id: `secretary_open_engine_${Date.now()}`,
+              role: 'assistant',
+              timestamp: nowTimeKo(),
+              sourceTab,
+              text: riteText,
+              followUpSuggestions: ['👀 일단 눈으로 구경부터 할래'],
+            },
+          ]);
+          window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+          setSharedMonsterBusy(false);
+          return;
+        }
+      }
+    }
+
     if (sourceTab === 'trash' && !shouldBypassSecretaryPlaybook) {
       const secretaryState = loadGhostSecretaryState();
       const turn = resolveGhostSecretaryTurn(raw, secretaryState, {
@@ -527,17 +620,27 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         if (turn.needsColdReading && nextState.nickname) {
           const ctx = await collectColdReadingContext();
           const reading = buildColdReadingText(nextState.nickname, ctx);
+          const needsEngineRite = !isMobileOrStore && !zCoreBridge.isConnected;
+          if (needsEngineRite) {
+            try {
+              sessionStorage.setItem('ghosti_awaiting_engine_rite', '1');
+            } catch {
+              /* ignore */
+            }
+          }
           replies.push({
             id: `secretary_reading_${Date.now()}`,
             role: 'assistant',
             timestamp: nowTimeKo(),
             sourceTab,
             text: reading.text,
-            followUpSuggestions: [
-              SECRETARY_FIRST_CARE_QUERY,
-              '👍 응, 앞으로 알아서 재우고 깨워줘',
-              '✨ 귀신비서의 숨은 초능력 알려줘',
-            ],
+            followUpSuggestions: needsEngineRite
+              ? ['🤝 응, 엔진 연결하고 1초 건강검진 해줘', '👀 일단 눈으로 구경부터 할래']
+              : [
+                  SECRETARY_FIRST_CARE_QUERY,
+                  '👍 응, 앞으로 알아서 재우고 깨워줘',
+                  '✨ 귀신비서의 숨은 초능력 알려줘',
+                ],
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
         }
@@ -848,6 +951,50 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     }
   }, [externalQueryTrigger]);
 
+  // [v1.3 통과의례 완결]: 『1. 👻 귀신비서』 안에서 엔진이 연결된 순간, 탭 이탈 없이 뒤에서 조용히 내 진짜 파일을 인덱싱하면서
+  // 채팅창에서는 축하 인사와 함께 실제 PC 1초 건강검진 → 홀림 퀘스트 → 귀신계 여권 대화를 즉시 이어간다!
+  useEffect(() => {
+    if (sourceTab !== 'trash') return;
+    const onConnectedInSecretary = () => {
+      let pendingCare = SECRETARY_FIRST_CARE_QUERY;
+      try {
+        sessionStorage.removeItem('ghosti_awaiting_engine_rite');
+        const saved = sessionStorage.getItem('ghosti_pending_secretary_care_query');
+        if (saved && saved.trim()) {
+          pendingCare = saved.trim();
+        }
+        sessionStorage.removeItem('ghosti_pending_secretary_care_query');
+      } catch {
+        /* ignore */
+      }
+      const curSt = loadGhostSecretaryState();
+      const nickLabel = curSt.nickname ? `${curSt.nickname}님` : '회원님';
+      setSharedMonsterMessages((prev) => {
+        if (prev.some((m) => m.id.startsWith('secretary_engine_rite_complete_'))) return prev;
+        return [
+          ...prev,
+          {
+            id: `secretary_engine_rite_complete_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab: 'trash',
+            text:
+              `🎉 와아! 엔진 연결 성공이에요 ${nickLabel}! 지금부터 뒤에서는 샘플 사진 한 장 없이 **오직 내 컴퓨터의 진짜 사진·동영상·문서만** 컴퓨터 부하 없이 조용히 읽어두고 있어요!\n` +
+              `잠시 후 『👻 귀신검색』에 가시면 내 진짜 파일들로 바로 리얼 테스트를 해보실 수 있답니다. 그동안 약속드린 **1초 건강검진**부터 바로 실행할게요!`,
+          },
+        ];
+      });
+      window.setTimeout(() => {
+        void handleSend(pendingCare, 'text');
+      }, 380);
+    };
+
+    window.addEventListener('ghosti_engine_connected_in_secretary', onConnectedInSecretary);
+    return () =>
+      window.removeEventListener('ghosti_engine_connected_in_secretary', onConnectedInSecretary);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceTab]);
+
   useEffect(() => {
     const consumePendingToss = () => {
       try {
@@ -1069,39 +1216,68 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   !awaitingNickname &&
                   msg.id === 'monster_welcome_init' && (
                     <div className="mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setWelcomeChipsDismissed(true);
-                          void handleSend('👍 응, 앞으로 알아서 재우고 깨워줘', 'text');
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
-                      >
-                        🏦 안 쓰는 은행 보안프로그램 자동 재우기
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setWelcomeChipsDismissed(true);
-                          void handleSend('✨ 귀신비서의 숨은 초능력 알려줘', 'text');
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
-                      >
-                        ✨ 숨은 초능력 2가지 알려줘
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setWelcomeChipsDismissed(true);
-                          void handleSend('📊 그동안 모아둔 비서 실적 보고서 보여줘', 'text');
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
-                      >
-                        📊 모아둔 비서 실적 보고서
-                      </button>
+                      {!isZCoreLive ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setWelcomeChipsDismissed(true);
+                              void handleSend('🤝 응, 엔진 연결하고 1초 건강검진 해줘', 'text');
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
+                          >
+                            🤝 엔진 연결하고 1초 건강검진 시작하기
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setWelcomeChipsDismissed(true);
+                              void handleSend('👀 일단 눈으로 구경부터 할래', 'text');
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                          >
+                            👀 일단 눈으로 구경부터 할래
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setWelcomeChipsDismissed(true);
+                              void handleSend('👍 응, 앞으로 알아서 재우고 깨워줘', 'text');
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
+                          >
+                            🏦 안 쓰는 은행 보안프로그램 자동 재우기
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setWelcomeChipsDismissed(true);
+                              void handleSend('✨ 귀신비서의 숨은 초능력 알려줘', 'text');
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                          >
+                            ✨ 숨은 초능력 2가지 알려줘
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setWelcomeChipsDismissed(true);
+                              void handleSend('📊 그동안 모아둔 비서 실적 보고서 보여줘', 'text');
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                          >
+                            📊 모아둔 비서 실적 보고서
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
               </div>
@@ -1128,6 +1304,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0"
         >
           <input
+            id="ghosti-secretary-chat-input"
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}

@@ -26,6 +26,12 @@ export function hasActiveGhostiLoginSession(): boolean {
     return true;
   }
   try {
+    if (
+      sessionStorage.getItem('ghosti_one_stop_agreed') === '1' ||
+      localStorage.getItem('ghosti_secretary_engine_agreed') === '1'
+    ) {
+      return true;
+    }
     return Boolean(
       localStorage.getItem('merlin_session_token') ||
         localStorage.getItem('ghosti_prelaunch_verified_email') ||
@@ -274,25 +280,32 @@ export function requestConnectMyComputer(): void {
     /* ignore */
   }
 
-  const hasLoginToken = Boolean(
-    localStorage.getItem('merlin_session_token') ||
-      localStorage.getItem('ghosti_prelaunch_verified_email') ||
-      localStorage.getItem('userEmail')
-  );
+  const isMobileViewportOrUA =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    window.innerWidth < 860;
 
-  if (!hasLoginToken) {
-    try {
-      sessionStorage.setItem('ghosti_pending_zcore_connect', '1');
-    } catch {
-      // ignore
+  if (!isMobileViewportOrUA && !zCoreBridge.isConnected) {
+    const params = new URLSearchParams(window.location.search);
+    const urlLounge = params.get('lounge') || 'personal';
+    const urlTab = params.get('tab') || 'trash';
+    const isInSecretaryTab = urlLounge === 'personal' && urlTab === 'trash';
+    if (!isInSecretaryTab) {
+      window.dispatchEvent(
+        new CustomEvent('openGhostSecretaryFirstModal', { detail: { context: 'default' } })
+      );
+      return;
     }
-    window.dispatchEvent(new CustomEvent('openLoginModal'));
-    return;
   }
 
   // 이미 Z-코어가 실행 중이면 다운로드 안내 대신 즉시 헬스체크 후 연결 완료 처리
   void zCoreBridge.checkHealth(true).then((alive) => {
     if (alive) {
+      try {
+        sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+        localStorage.setItem('ghosti_secretary_engine_agreed', '1');
+      } catch {
+        /* ignore */
+      }
       window.dispatchEvent(new CustomEvent('zCoreConnected', { detail: { ok: true } }));
       return;
     }
@@ -302,30 +315,11 @@ export function requestConnectMyComputer(): void {
 
 /**
  * [귀신같이 기본 실행 게이트 (Fundamental Execution Gate)]
- * - 개인 라운지(찾기·치우기·고치기)의 모든 실제 내 기기 파일 액션은
- *   ① 이메일 로그인 완료(`merlin_session_token` 보유) +
- *   ② 로컬 Z-코어(`127.0.0.1:5199`) 또는 모바일 네이티브 환경 가동이 완료된 후에만 실행됩니다.
- * - 비로그인 게스트가 내 기기 실물 액션을 클릭한 순간: `ghosti_pending_zcore_connect = '1'` 플래그를 세팅하고
- *   `openLoginModal`을 먼저 띄워 로그인 직후 Z-코어 연결까지 자동 바톤터치합니다.
+ * - PC 로컬 파일 액션은 『1. 👻 귀신비서』와의 문답을 통해 로컬 Z-코어(`127.0.0.1:5199`)가 연결된 후에만 실행됩니다.
+ * - 아직 Z-코어가 연결되지 않은 상태에서 타 메뉴 활동을 클릭하면 『👻 귀신비서』와 먼저 대화하도록 귀엽게 안내합니다.
  */
 export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
   if (typeof window === 'undefined') return true;
-
-  const hasLoginToken = Boolean(
-    localStorage.getItem('merlin_session_token') ||
-      localStorage.getItem('ghosti_prelaunch_verified_email') ||
-      localStorage.getItem('userEmail')
-  );
-
-  if (!hasLoginToken) {
-    try {
-      sessionStorage.setItem('ghosti_pending_zcore_connect', '1');
-    } catch {
-      // ignore
-    }
-    window.dispatchEvent(new CustomEvent('openLoginModal'));
-    return false;
-  }
 
   const isMobileViewportOrUA =
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
@@ -342,7 +336,17 @@ export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
       }
       return true;
     }
-    // 아직 헬스체크 전이거나 꺼져 있으면 0.1초 즉시 확인 후 미설치/미실행일 때만 조용히 안내
+    const params = new URLSearchParams(window.location.search);
+    const urlLounge = params.get('lounge') || 'personal';
+    const urlTab = params.get('tab') || 'trash';
+    const isInSecretaryTab = urlLounge === 'personal' && urlTab === 'trash';
+    if (!isInSecretaryTab) {
+      window.dispatchEvent(
+        new CustomEvent('openGhostSecretaryFirstModal', { detail: { context: 'default' } })
+      );
+      return false;
+    }
+    // 귀신비서 안에서는 0.1초 즉시 확인 후 미설치/미실행일 때 연결 모달 안내
     void zCoreBridge.checkHealth(true).then((ok) => {
       if (!ok) {
         window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));

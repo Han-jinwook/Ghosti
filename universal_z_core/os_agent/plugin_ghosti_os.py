@@ -625,6 +625,7 @@ _SKIP_DIR_NAMES = {
     "build",
     "merlin_z_core",
     "universal_z_core",
+    "sample_photos_301",
     "merlin_ai_models",
     "merlinfamilyos",
     "antigravity",
@@ -705,28 +706,22 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         p = Path(extra_path)
         if p.exists() and p.is_dir():
             roots.append(p)
-    exe_dir = Path(sys.executable).resolve().parent
+    # [정본 원칙] 엔진 설치 시 가짜 샘플 사진을 절대 스캔·포함하지 않고 오직 실제 유저의 문서·사진·영상 폴더만 스캔!
+    # (0순위: 바탕화면·다운로드·문서 ➔ 1순위: 카톡 받은 파일·사진·동영상 ➔ 원드라이브·사용자 지정 폴더)
     candidates = [
-        Path("D:/Ghosti/Ghosti_Test_Corpus"),
-        THIS_DIR.parents[1] / "Ghosti_Test_Corpus",
-        exe_dir / "sample_photos_301",
-        THIS_DIR / "sample_photos_301",
-        THIS_DIR.parents[1] / "test_photos",
-        THIS_DIR.parents[1] / "test_docs",
-        Path("C:/MerlinTools/test_docs"),
-        Path("D:/Ghosti/test_photos"),
-        Path("D:/Ghosti/test_docs"),
-        home / "Pictures",
-        home / "Videos",
-        home / "Documents",
         home / "Desktop",
         home / "Downloads",
-        onedrive / "Pictures",
-        onedrive / "사진",
-        onedrive / "Documents",
-        onedrive / "문서",
+        home / "Documents",
+        home / "Documents" / "카카오톡 받은 파일",
+        home / "Pictures",
+        home / "Videos",
         onedrive / "Desktop",
         onedrive / "바탕 화면",
+        onedrive / "Documents",
+        onedrive / "문서",
+        onedrive / "문서" / "카카오톡 받은 파일",
+        onedrive / "Pictures",
+        onedrive / "사진",
         *_load_custom_scan_roots(),
     ]
     seen_resolved: set[str] = set()
@@ -950,9 +945,6 @@ def resolve_active_photo_dir(custom_path: str = "") -> Path:
         p = Path(custom_path)
         if p.exists() and p.is_dir():
             return p
-    for d in _iter_scan_dirs(_get_user_scan_roots(), max_depth=2):
-        if "sample" in d.name.lower() or "301" in d.name.lower() or "test_photos" in d.name.lower():
-            return d
     pic = Path.home() / "Pictures"
     return pic if pic.exists() else Path.home()
 

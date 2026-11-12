@@ -13,6 +13,12 @@ import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import {
+  GhostSecretaryFirstGuard,
+  jumpToGhostSecretary,
+  openGhostSecretaryFirstModal,
+} from '../GhostSecretaryFirstGuard';
+import { GHOST_SECRETARY_AVATAR_SRC } from '../../services/ghostSecretaryEngine';
 
 /** 로컬 귀신검색창이 여는 주소와 동일 (기존 웹 「찾기」 화면 100% 승계 전용 모드) */
 export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): string {
@@ -134,9 +140,11 @@ const AUTO_MORPH_SCRIPT: Array<{
 const VirtualMonitorSimulator: React.FC<{
   onStep: (id: GameStepId) => void;
   initialQuery?: string;
+  connected?: boolean;
 }> = ({
   onStep,
   initialQuery = '',
+  connected = true,
 }) => {
   const {
     hasExecutedUserSearch,
@@ -279,13 +287,17 @@ const VirtualMonitorSimulator: React.FC<{
     );
   };
 
-  // 페이지 안에서 Ctrl+0 → 가상 귀신검색창 소환 (로컬 리얼 창은 띄우지 않고 가상 모니터 안에서만 깔끔하게 동작)
+  // 페이지 안에서 Ctrl+0 → 가상 귀신검색창 소환 (엔진 미연결 시에는 귀여운 '귀신비서 먼저 대화' 안내창 노출)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
         e.preventDefault();
+        if (!connected) {
+          openGhostSecretaryFirstModal({ context: 'default' });
+          return;
+        }
         summon();
       }
     };
@@ -375,6 +387,7 @@ const VirtualMonitorSimulator: React.FC<{
         <div
           ref={monitorRef}
           data-keep-dark="true"
+          data-guard-interactive="true"
           onContextMenu={(e) => e.preventDefault()}
           onMouseDown={(e) => {
             if (e.button !== 2) return;
@@ -730,54 +743,85 @@ export const GhostSearchTrainingPage: React.FC = () => {
         </p>
       </div>
 
+      {!connected && (
+        <div className="px-4 py-3.5 rounded-2xl bg-gradient-to-r from-teal-500/15 via-emerald-500/10 to-zinc-900/40 border-2 border-[#2DD4BF]/50 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src={GHOST_SECRETARY_AVATAR_SRC}
+              alt="귀신비서"
+              className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-[#2DD4BF]/50 p-1 object-contain shrink-0"
+            />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[13.5px] font-black text-zinc-900 dark:text-white">
+                👀 지금은 눈으로 편하게 구경 중이에요! (스크롤·화면 구경 자유)
+              </span>
+              <span className="text-[12px] text-zinc-600 dark:text-zinc-300 font-semibold">
+                버튼을 눌러 직접 소환하거나 <strong>내 진짜 사진·문서로 리얼 테스트</strong>를 해보시려면, 먼저 첫 번째 메뉴인 <strong>『👻 귀신비서』</strong>와 대화를 나누고 오세요! 헤헤 👻
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-allow-secretary-jump="true"
+            onClick={jumpToGhostSecretary}
+            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12.5px] font-black shadow-md transition-all cursor-pointer shrink-0"
+          >
+            👻 &apos;귀신비서&apos;와 먼저 대화하러 가기 ➔
+          </button>
+        </div>
+      )}
+
       {realPopupToast && (
         <div className="px-4 py-3 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-emerald-700 dark:text-emerald-200 text-[13px] font-extrabold">
           {realPopupToast}
         </div>
       )}
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">STEP 1 · 소환술 3단 수련</h2>
-        <GhostSuperpowerDojo variant="basics" />
-      </section>
+      <GhostSecretaryFirstGuard>
+        <section className="flex flex-col gap-2">
+          <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">STEP 1 · 소환술 3단 수련</h2>
+          <GhostSuperpowerDojo variant="basics" />
+        </section>
 
-      <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">
-            STEP 2 · 귀신검색 도장깨기 (🖥️ 자율 반응형 크기 조절 &amp; [크게 / 작게] 2모드 체험)
-          </h2>
-          <div className="flex flex-wrap gap-1.5">
-            {GAME_STEPS.map((s) => (
-              <span
-                key={s.id}
-                className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold border ${
-                  game[s.id]
-                    ? 'border-emerald-400 text-emerald-600 dark:text-emerald-300 bg-emerald-500/10'
-                    : 'border-zinc-300 dark:border-white/15 text-zinc-500'
-                }`}
-              >
-                {game[s.id] ? '✓ ' : ''}
-                {s.label}
-              </span>
-            ))}
+        <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">
+              STEP 2 · 귀신검색 도장깨기 (🖥️ 자율 반응형 크기 조절 &amp; [크게 / 작게] 2모드 체험)
+            </h2>
+            <div className="flex flex-wrap gap-1.5">
+              {GAME_STEPS.map((s) => (
+                <span
+                  key={s.id}
+                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold border ${
+                    game[s.id]
+                      ? 'border-emerald-400 text-emerald-600 dark:text-emerald-300 bg-emerald-500/10'
+                      : 'border-zinc-300 dark:border-white/15 text-zinc-500'
+                  }`}
+                >
+                  {game[s.id] ? '✓ ' : ''}
+                  {s.label}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-400/40 text-zinc-800 dark:text-amber-100 text-[12.5px] leading-relaxed flex flex-wrap items-center justify-between gap-2">
-          <span>
-            💡 <strong>안내:</strong> 현재는 <strong>개발 중인 상태의 검색창 UI를 반영해 자동 변신 움짤(시뮬레이션)</strong>로 제작되어 있으며,{' '}
-            <strong>향후 검색창 UI가 최종 완성되면 그때 다시 움짤을 새로 만들 예정</strong>입니다.{' '}
-            <span className="text-teal-700 dark:text-[#5EEAD4] font-extrabold">
-              (움짤이 변신하는 도중에도 모니터 안의 버튼들을 직접 마우스로 눌러보실 수 있습니다!)
+          <div className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-400/40 text-zinc-800 dark:text-amber-100 text-[12.5px] leading-relaxed flex flex-wrap items-center justify-between gap-2">
+            <span>
+              💡 <strong>안내:</strong> 현재는 <strong>개발 중인 상태의 검색창 UI를 반영해 자동 변신 움짤(시뮬레이션)</strong>로 제작되어 있으며,{' '}
+              <strong>향후 검색창 UI가 최종 완성되면 그때 다시 움짤을 새로 만들 예정</strong>입니다.{' '}
+              <span className="text-teal-700 dark:text-[#5EEAD4] font-extrabold">
+                (움짤이 변신하는 도중에도 모니터 안의 버튼을 직접 마우스로 눌러보실 수 있습니다!)
+              </span>
             </span>
-          </span>
-        </div>
+          </div>
 
-        <VirtualMonitorSimulator
-          onStep={markStep}
-          initialQuery={pendingQuery}
-        />
-      </section>
+          <VirtualMonitorSimulator
+            onStep={markStep}
+            initialQuery={pendingQuery}
+            connected={connected}
+          />
+        </section>
+      </GhostSecretaryFirstGuard>
 
       <section
         className={`p-5 rounded-2xl border-2 flex flex-wrap items-center justify-between gap-3 ${
@@ -785,7 +829,9 @@ export const GhostSearchTrainingPage: React.FC = () => {
         }`}
       >
         <span className="text-[14.5px] font-extrabold text-zinc-900 dark:text-white">
-          🏁 마지막 미션 · 바탕화면으로 나가서 Ctrl + 0 (또는 우클릭 꾹~)을 눌러 내 진짜 파일을 불러보세요!
+          {connected
+            ? '🏁 마지막 미션 · 바탕화면으로 나가서 Ctrl + 0 (또는 우클릭 꾹~)을 눌러 내 진짜 파일을 불러보세요!'
+            : "👻 구경은 재밌으셨나요? 내 진짜 사진·문서로 직접 찾아보려면 먼저 『귀신비서』와 인사를 나누고 오세요!"}
         </span>
         {connected ? (
           <button
@@ -798,10 +844,11 @@ export const GhostSearchTrainingPage: React.FC = () => {
         ) : (
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
+            data-allow-secretary-jump="true"
+            onClick={jumpToGhostSecretary}
             className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer"
           >
-            ⚡ 10초 엔진 연결
+            👻 먼저 &apos;귀신비서&apos;와 대화하러 가기 ➔
           </button>
         )}
       </section>

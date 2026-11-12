@@ -42,6 +42,7 @@ import {
 } from '../services/ghostSearchWindowGeometry';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
+import { GhostSecretaryFirstGuard, GhostSecretaryFirstModal } from './GhostSecretaryFirstGuard';
 import {
   OnboardingModal,
   fetchSuperpowerStatus,
@@ -553,18 +554,27 @@ export const DesktopDashboard: React.FC = () => {
     } catch {}
   };
 
-  // 조건 4: 실시간 이벤트 트리거 (모바일 원샷 사진 수신 or 한도 도달)
+    // 조건 4: 실시간 이벤트 트리거 (모바일 원샷 사진 수신 or 한도 도달) 및 귀신비서 점프 핸들러
   useEffect(() => {
     const onAutoOpenIntegration = () => {
       toggleDeviceIntegrationExpanded(true);
       setIsDeviceIntegrationOpen(true);
       setActiveIntegrationSubTab('devices');
     };
+    const onJumpToSecretary = () => {
+      setIsDeviceIntegrationOpen(false);
+      setActiveLoungeType('personal');
+      setDesktopTab('trash');
+      setIsMobileDrawerOpen(false);
+      scrollAppToTop();
+    };
     window.addEventListener('ghosti_expand_device_integration', onAutoOpenIntegration);
     window.addEventListener('ghosti_superpower_limit_reached', onAutoOpenIntegration);
+    window.addEventListener('ghosti_jump_to_secretary', onJumpToSecretary);
     return () => {
       window.removeEventListener('ghosti_expand_device_integration', onAutoOpenIntegration);
       window.removeEventListener('ghosti_superpower_limit_reached', onAutoOpenIntegration);
+      window.removeEventListener('ghosti_jump_to_secretary', onJumpToSecretary);
     };
   }, []);
 
@@ -1480,7 +1490,11 @@ export const DesktopDashboard: React.FC = () => {
         )}
 
         {/* ─────────────── 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) ─────────────── */}
-        {desktopTab === 'trial' && <LoungeView />}
+        {desktopTab === 'trial' && (
+          <GhostSecretaryFirstGuard>
+            <LoungeView />
+          </GhostSecretaryFirstGuard>
+        )}
 
         {/* ─────────────── 서브메뉴 2번: 노션형 백지 도화지(Zen Canvas) & 점진적 결과 펼침 ─────────────── */}
         {desktopTab === 'dashboard' &&
@@ -1496,7 +1510,8 @@ export const DesktopDashboard: React.FC = () => {
               }
             />
           ) : (
-          <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
+            <GhostSecretaryFirstGuard>
+              <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
             {activeLoungeType === 'work' ? (
               <LoungeFeedContextBanner />
             ) : (
@@ -1974,6 +1989,7 @@ export const DesktopDashboard: React.FC = () => {
             </>
           )}
         </main>
+            </GhostSecretaryFirstGuard>
           ))}
 
       {/* ─────────────── 서브메뉴 3번: 개인은 [AI 클린몬스터], 사진 공유(패밀리·동호·동창회)은 [⏳ AI 인덱싱 대기실] ─────────────── */}
@@ -1982,10 +1998,14 @@ export const DesktopDashboard: React.FC = () => {
           isStage1MinimalPreview ? (
             <Stage1MinimalCarePreview />
           ) : (
-            <SmartTrashView />
+            <GhostSecretaryFirstGuard>
+              <SmartTrashView />
+            </GhostSecretaryFirstGuard>
           )
         ) : (
-          <LoungeIndexingWaitingRoom />
+          <GhostSecretaryFirstGuard>
+            <LoungeIndexingWaitingRoom />
+          </GhostSecretaryFirstGuard>
         ))}
 
       {/* ─────────────── 서브메뉴 4번: 내 기기 통합 (내 기기 연결 & 귀신창 Ctrl+0) / 공유방 관리 ─────────────── */}
@@ -2020,7 +2040,8 @@ export const DesktopDashboard: React.FC = () => {
             </div>
           )}
 
-          {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
+          <GhostSecretaryFirstGuard>
+            {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
             <div className="flex flex-col gap-6">
               {/* [공문 2053 · v1.3 3순위] ⚡ 귀신창 초능력 상시 연습장 = 🥋 초능력 도장깨기 체험관 */}
               {ghostWindowTier === 'pc_free' && <GhostSuperpowerDojo variant="full" />}
@@ -2290,6 +2311,7 @@ export const DesktopDashboard: React.FC = () => {
           </section>
             </>
           )}
+          </GhostSecretaryFirstGuard>
         </main>
       )}
       </div>
@@ -2297,6 +2319,7 @@ export const DesktopDashboard: React.FC = () => {
         photo={ocrModalPhoto}
         onClose={() => setOcrModalPhoto(null)}
       />
+      <GhostSecretaryFirstModal themeMode={themeMode} />
       <MerlinZCoreGuideModal
         isOpen={showZCoreGuideModal}
         onClose={() => {

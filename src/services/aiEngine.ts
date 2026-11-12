@@ -269,25 +269,27 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         : Array.isArray(zJson.docs)
         ? zJson.docs
         : [];
-      if (zDocs.length > 0) {
-        const realMerged = new Map<string, LocalDocumentFile>();
-        for (const [fname, sDoc] of staticByFileName.entries()) {
-          realMerged.set(fname, sDoc);
-        }
-        for (const d of zDocs) {
-          const fname = d.fileName || (d as any).name;
-          if (!fname || fname.includes('비밀금고') || realMerged.has(fname)) continue;
-          realMerged.set(fname, {
-            ...d,
-            deviceSource: (d.deviceSource || '내 PC 문서함').replace(/\s*\(test_docs\)/g, ''),
-          });
-        }
-        return Array.from(realMerged.values());
+      // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태에서는 예시 샘플 문서를 절대 섞지 않고 100% 내 진짜 PC 문서만 반환!
+      const realOnly = new Map<string, LocalDocumentFile>();
+      for (const d of zDocs) {
+        const fname = d.fileName || (d as any).name;
+        if (!fname || fname.includes('비밀금고') || realOnly.has(fname)) continue;
+        realOnly.set(fname, {
+          ...d,
+          deviceSource: (d.deviceSource || '내 PC 문서함').replace(/\s*\(test_docs\)/g, ''),
+        });
       }
+      return Array.from(realOnly.values());
     }
 
+    if (canProbeLocal) {
+      return [];
+    }
     return Array.from(staticByFileName.values()).slice(0, 6);
   } catch {
+    if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
+      return [];
+    }
     return [...GDRIVE_SMART_DOC_ITEMS];
   }
 }
@@ -1008,6 +1010,21 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
         }
       }
     }
+    // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태에서는 쇼윈도 샘플 영상을 절대 섞지 않고 100% 내 진짜 PC 영상만 반환!
+    if (canProbeLocal) {
+      if (zRes.status === 'fulfilled' && zRes.value.ok) {
+        const zJson = await zRes.value.json();
+        const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
+        const realVideos = new Map<string, VideoSceneItem>();
+        for (const v of zVids) {
+          if (!v || !v.videoFileName || v.isAllBlack) continue;
+          realVideos.set(v.videoFileName, normalizeLocalVideoSceneItem(v));
+        }
+        return Array.from(realVideos.values());
+      }
+      return [];
+    }
+
     const merged = new Map<string, VideoSceneItem>();
     if (sRes.status === 'fulfilled' && sRes.value.ok) {
       const sJson = await sRes.value.json();
@@ -1250,6 +1267,9 @@ export async function searchVideoSceneItemsAsync(
   if (!q || q.includes('전 구간')) return fallbackVideos.filter((v) => !v.isAllBlack);
 
   const localScored = searchVideoSceneItems(q, fallbackVideos);
+  if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) {
+    return localScored;
+  }
   try {
     const res = await fetch(getZCoreUrl('/__videos/search'), {
       method: 'POST',
@@ -1259,7 +1279,6 @@ export async function searchVideoSceneItemsAsync(
     if (res.ok) {
       const json = await res.json();
       if (json.ok && Array.isArray(json.videos)) {
-        // Z-코어 화면 OCR + 타임라인 정밀 검색 결과를 최우선 적용하되, 번들 쇼케이스 매칭건도 누락 없이 병합
         const merged = new Map<string, VideoSceneItem>();
         for (const rawV of json.videos as VideoSceneItem[]) {
           if (rawV.isAllBlack) continue;
@@ -1301,7 +1320,7 @@ export async function searchLocalDocumentFilesAsync(
   // 1차로 로컬 정밀 키워드 변별(100% 일치 'EXACT' vs 일부 일치 'SIMILAR')을 먼저 수행하여
   // 전혀 연관이 없는 문서가 섞이거나 유사 문서 안내 배지가 누락되는 것을 원천 차단합니다.
   const localScored = searchLocalDocumentFiles(q, fallbackDocs);
-  if (localScored.length > 0) {
+  if (localScored.length > 0 || !hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) {
     return localScored;
   }
 
@@ -2297,33 +2316,37 @@ export async function loadInitialPhotoDataset(): Promise<{
         keywordsKo: ['흔들린사진', '초점이탈', '블러', '손떨림'],
         primaryTag: '#흔들린사진',
       });
-      const existingNames = new Set(fileList.map((f) => f.path));
-      const bundledEntries = curatedSampleFiles
-        .filter((name) => !existingNames.has(name))
-        .map((name, idx) => {
-          const a = auditByPhoto.get(name);
-          return {
-            path: name,
-            size: a?.size ?? 72000,
-            date: name.includes('20240719')
-              ? '2024-07-19'
-              : name.includes('20240720')
-              ? '2024-07-20'
-              : name.includes('20240722')
-              ? '2024-07-22'
-              : name.includes('20250510')
-              ? '2025-05-10'
-              : name.includes('20250515')
-              ? '2025-05-15'
-              : name.includes('20250610')
-              ? '2025-06-10'
-              : name.includes('20250720')
-              ? '2025-07-20'
-              : '2025-08-15',
-            mtimeMs: a?.ts || Date.now() - idx * 60000,
-          };
-        });
-      fileList = [...bundledEntries, ...fileList];
+      // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태(isConnectedSession === true)에서는
+      // 샘플 사진(sample_photos_301 / 쇼윈도 예시)을 단 1장도 끼워 넣지 않고 100% 유저의 진짜 PC 사진(fileList)만 유지합니다!
+      if (!isConnectedSession) {
+        const existingNames = new Set(fileList.map((f) => f.path));
+        const bundledEntries = curatedSampleFiles
+          .filter((name) => !existingNames.has(name))
+          .map((name, idx) => {
+            const a = auditByPhoto.get(name);
+            return {
+              path: name,
+              size: a?.size ?? 72000,
+              date: name.includes('20240719')
+                ? '2024-07-19'
+                : name.includes('20240720')
+                ? '2024-07-20'
+                : name.includes('20240722')
+                ? '2024-07-22'
+                : name.includes('20250510')
+                ? '2025-05-10'
+                : name.includes('20250515')
+                ? '2025-05-15'
+                : name.includes('20250610')
+                ? '2025-06-10'
+                : name.includes('20250720')
+                ? '2025-07-20'
+                : '2025-08-15',
+              mtimeMs: a?.ts || Date.now() - idx * 60000,
+            };
+          });
+        fileList = [...bundledEntries, ...fileList];
+      }
     }
   } catch {
     /* ignore */

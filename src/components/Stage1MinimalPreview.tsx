@@ -26,6 +26,7 @@ import {
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
 import { GhostPassportCandidatesPanel } from './GhostPassportCandidatesPanel';
 import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
+import { GhostSecretaryFirstGuard, jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 
 const STAGE1_ROLLING_INTERVAL_MS = 10_000; // 10초 자동 롤링
 
@@ -712,34 +713,15 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
             ) : (
               <div className="w-full px-4 py-2 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-2.5 mt-0.5 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2 text-[12.5px] font-extrabold text-slate-900 dark:text-white">
-                  <span>👀 현재 예시 파일로 체험 중입니다</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTextInput('강남역 임대차계약서 위약금');
-                      void runTextQuery('강남역 임대차계약서 위약금');
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/35 text-teal-800 dark:text-teal-200 font-black text-[11.5px] transition-all cursor-pointer"
-                  >
-                    📄 임대차계약서 예시
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTextInput('제주도 케이크 불 끄는 영상');
-                      void runTextQuery('제주도 케이크 불 끄는 영상');
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/35 text-teal-800 dark:text-teal-200 font-black text-[11.5px] transition-all cursor-pointer"
-                  >
-                    🎬 케이크 영상 예시
-                  </button>
+                  <span>👀 현재 눈으로 구경 중입니다 (직접 클릭·내 진짜 파일 검색은 『👻 귀신비서』 대화 후 열려요!)</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => requestConnectMyComputer()}
+                  data-allow-secretary-jump="true"
+                  onClick={jumpToGhostSecretary}
                   className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
                 >
-                  ⚡ 내 PC 연결하기
+                  👻 &apos;귀신비서&apos;와 먼저 대화하기 ➔
                 </button>
               </div>
             )}
@@ -1129,6 +1111,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       ? FALLBACK_SAMPLE_TRASH_ITEMS[currentTab]
       : [];
   const isShowingSamplePreview =
+    !zCoreBridge.isConnected &&
     currentTab !== 'none' &&
     realFilteredCandidates.length === 0 &&
     fallbackSamplesForCurrentTab.length > 0;
@@ -1171,8 +1154,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        {/* ═══════════════ [좌측 열] 미니멀 정리 워크스페이스 (기록부 버튼·휴지통 버튼·아코디언 완전 제거) ═══════════════ */}
-        <div className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0">
+        {/* ═══════════════ [좌측 열] 미니멀 정리 워크스페이스 (엔진 미연결 시 눈으로 구경 허용 + 클릭 시 우측 귀신비서 채팅 안내) ═══════════════ */}
+        <GhostSecretaryFirstGuard
+          context="secretary_left"
+          className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0"
+        >
           {/* [v1.3] 🪪 귀신계 여권 후보 — 귀신비서가 실명을 물을 때만 노출 */}
           <GhostPassportCandidatesPanel />
           {/* 1. 슬림 헤더: 현재 쾌적한 상태 요약 + [⚡ 원본 남기고 N장 일괄 정리] 버튼만 깔끔하게 유지 */}
@@ -1283,7 +1269,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               const sampleThumbs =
                 items.length > 0
                   ? items.slice(0, 2)
-                  : FALLBACK_SAMPLE_TRASH_ITEMS[tab.key].slice(0, 2);
+                  : !zCoreBridge.isConnected
+                  ? FALLBACK_SAMPLE_TRASH_ITEMS[tab.key].slice(0, 2)
+                  : [];
 
               return (
                 <button
@@ -1355,7 +1343,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         />
                       </div>
                     ))}
-                    {items.length === 0 && (
+                    {items.length === 0 && !zCoreBridge.isConnected && (
                       <span className="px-1.5 py-0.5 rounded bg-zinc-800/90 border border-white/10 text-[10px] text-zinc-300 font-bold whitespace-nowrap">
                         예시 샘플
                       </span>
@@ -1723,7 +1711,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               )}
             </section>
           )}
-        </div>
+        </GhostSecretaryFirstGuard>
 
         {/* ═══════════════ [우측 열] 손보기 대화창 (첫 인사말 말풍선에 PC 1클릭 검진 액션 내장) ═══════════════ */}
         <div className="xl:col-span-5 2xl:col-span-4 xl:sticky xl:top-20">

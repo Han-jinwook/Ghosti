@@ -27,6 +27,8 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   const { user, isLoggedIn } = useHub();
   const {
     layout,
+    activeLoungeType,
+    desktopTab,
     photos,
     videoSceneItems,
     localDocuments,
@@ -37,6 +39,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     setSearchSpace,
     resetSearchSpaceToAll,
   } = useSaySeeStore();
+  const isInSecretaryTab = activeLoungeType === 'personal' && desktopTab === 'trash';
 
   const isMobileEnv =
     layout === 'mobile' ||
@@ -73,9 +76,9 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     () => activePhotos.filter((p) => p.isVaultDocument).length,
     [activePhotos]
   );
-  const totalPhotoCount = galleryScenePhotos.length || activePhotos.length || 301;
-  const totalVideoCount = videoSceneItems.length || 6;
-  const totalDocCount = (localDocuments.length + vaultPhotoCount) || 26;
+  const totalPhotoCount = galleryScenePhotos.length || activePhotos.length || 0;
+  const totalVideoCount = videoSceneItems.length || 0;
+  const totalDocCount = (localDocuments.length + vaultPhotoCount) || 0;
 
   const [isConnected, setIsConnected] = useState<boolean>(zCoreBridge.isConnected);
   const [isChecking, setIsChecking] = useState<boolean>(false);
@@ -88,11 +91,32 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   const hasTriggeredInitRef = useRef<boolean>(false);
   const initPromiseRef = useRef<Promise<void> | null>(null);
 
+  const quietSecretaryHandledRef = useRef<boolean>(false);
+
+  const completeQuietConnectInSecretary = () => {
+    if (quietSecretaryHandledRef.current) return;
+    quietSecretaryHandledRef.current = true;
+    try {
+      sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+      sessionStorage.setItem('ghosti_initial_indexing_done', '1');
+      localStorage.setItem('ghosti_secretary_engine_agreed', '1');
+    } catch {
+      /* ignore */
+    }
+    // 귀신비서 화면에서 다른 탭으로 강제 납치하지 않고, 뒤에서 조용히 내 진짜 사진·동영상·문서만 인덱싱 시작!
+    void initApp(true);
+    onClose();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_engine_connected_in_secretary'));
+    }
+  };
+
   // 모달 열릴 때 초기 단계 결정
   useEffect(() => {
     if (!isOpen) {
       hasTriggeredInitRef.current = false;
       initPromiseRef.current = null;
+      quietSecretaryHandledRef.current = false;
       return;
     }
 
@@ -115,6 +139,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       const alreadyIndexed =
         typeof sessionStorage !== 'undefined' &&
         sessionStorage.getItem('ghosti_initial_indexing_done') === '1';
+      if (isInSecretaryTab && !alreadyIndexed) {
+        completeQuietConnectInSecretary();
+        return;
+      }
       if (!alreadyIndexed) {
         setProgress(0);
         setStep('indexing');
@@ -130,12 +158,17 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         if (alive) {
           setIsConnected(true);
           setVersion(zCoreBridge.version);
+          if (isInSecretaryTab) {
+            completeQuietConnectInSecretary();
+            return;
+          }
           setProgress(0);
           setStep('indexing');
         }
       });
     }
-  }, [isOpen, initialStep, isMobileEnv]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialStep, isMobileEnv, isInSecretaryTab]);
 
   // Z-코어 연결 실시간 감지 (1초 주기 폴링)
   useEffect(() => {
@@ -147,6 +180,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       if (conn) {
         if (isZCoreOutdated(zCoreBridge.version)) {
           void zCoreBridge.triggerSilentSelfUpdate();
+        }
+        if (isInSecretaryTab) {
+          completeQuietConnectInSecretary();
+          return;
         }
         setStep((prev) => {
           if (prev === 'intro' || prev === 'waiting_engine') {
@@ -172,7 +209,8 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       unsubscribe();
       clearInterval(pollId);
     };
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isInSecretaryTab]);
 
   // 'indexing' 단계: 실제 사진·서류 목록 로딩(initApp)이 끝났을 때만 완료로 전환한다.
   useEffect(() => {
@@ -219,8 +257,16 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   }, [isOpen, step]);
 
   const finishAndPopOpenPhotos = () => {
-    if (typeof sessionStorage !== 'undefined') {
+    try {
       sessionStorage.setItem('ghosti_initial_indexing_done', '1');
+      sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+      localStorage.setItem('ghosti_secretary_engine_agreed', '1');
+    } catch {
+      /* ignore */
+    }
+    if (isInSecretaryTab) {
+      completeQuietConnectInSecretary();
+      return;
     }
     setDesktopTab('dashboard');
     setMobileTab('search');
@@ -228,7 +274,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     resetSearchSpaceToAll('gallery');
     useSaySeeStore.setState({
       hasUserSelectedSearchTab: true,
-      lastQuarantineToast: `🎉 내 기기 사진 ${totalPhotoCount}장 귀신같이 찾기 인덱싱 완료! 모든 사진이 화면에 딱 펼쳐졌습니다.`,
+      lastQuarantineToast:
+        totalPhotoCount > 0
+          ? `🎉 내 기기 진짜 사진 ${totalPhotoCount}장 준비 완료! 모든 사진이 화면에 펼쳐졌습니다.`
+          : '🎉 내 기기 연결 완료! 내 진짜 사진·문서를 바로 검색해 보세요.',
     });
     onClose();
     if (typeof document !== 'undefined') {
@@ -242,14 +291,21 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   };
 
   const handleOneStopAgreeAndDownload = async () => {
-    if (typeof sessionStorage !== 'undefined') {
+    try {
       sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+      localStorage.setItem('ghosti_secretary_engine_agreed', '1');
+    } catch {
+      /* ignore */
     }
 
-    // 1) 이미 Z-코어가 연결되어 있거나 실시간 헬스체크에서 살아있으면 다운로드 없이 바로 인덱싱(목록 불러오기) 실행
-    const aliveNow = isConnected || zCoreBridge.isConnected || (await zCoreBridge.checkHealth());
+    // 1) 이미 Z-코어가 연결되어 있거나 실시간 헬스체크에서 살아있으면 다운로드 없이 바로 연결 완료 처리
+    const aliveNow = isConnected || zCoreBridge.isConnected || (await zCoreBridge.checkHealth(true));
     if (aliveNow) {
       setIsConnected(true);
+      if (isInSecretaryTab) {
+        completeQuietConnectInSecretary();
+        return;
+      }
       hasTriggeredInitRef.current = false;
       initPromiseRef.current = null;
       setProgress(0);
@@ -297,6 +353,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     setVersion(zCoreBridge.version);
     if (ok) {
       setManualCheckHint(null);
+      if (isInSecretaryTab) {
+        completeQuietConnectInSecretary();
+        return;
+      }
       setProgress(0);
       setStep('indexing');
     } else {
