@@ -597,10 +597,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       )
     ) {
       matchedTab = 'superpower';
-      if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('3');
+      if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('1');
       else if (/라벨러|파일명|zip/i.test(q)) setSelectedToolbarKey('2');
-      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('4');
-      else if (/합본/i.test(q)) setSelectedToolbarKey('5');
+      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('3');
+      else if (/합본/i.test(q)) setSelectedToolbarKey('4');
+      else if (/번호|일정|날짜|하이픈/i.test(q)) setSelectedToolbarKey('5');
       else if (/순차|복붙/i.test(q)) setSelectedToolbarKey('seq');
       else setSelectedToolbarKey('1');
     } else if (/무료|가격|유료|보증서|기업|회사|라이선스|결제/.test(q)) {
@@ -1342,7 +1343,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           {/* -----------------------------------------------------------------
               👉 우측 (7칸): 비주얼 인터랙티브 체험 스테이지 (실제 사진·프리뷰 탑재)
              ----------------------------------------------------------------- */}
-          <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 border-2 border-teal-500/40 p-6 sm:p-8 lg:p-9 shadow-[0_25px_70px_rgba(0,0,0,0.65)] space-y-6">
+          <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 border-2 border-teal-500/40 px-6 py-12 sm:px-8 sm:py-14 lg:px-9 lg:py-16 shadow-[0_25px_70px_rgba(0,0,0,0.65)] space-y-7">
             {/* 스테이지 상단 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-3.5 pb-4 border-b border-white/10">
               <div>
@@ -1953,10 +1954,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       />
                     </div>
 
-                    {/* 확정 기준점 한 줄 핵심 요약 안내 (테두리 없는 도형 캡슐 + 아기귀신 미니 일러스트) */}
+                    {/* 확정 기준점 한 줄 핵심 요약 안내 (테두리 없는 도형 캡슐 + 아기귀신 미니 일러스트 + 단일 서체·단일 색상 통일) */}
                     <div
                       style={{ backgroundColor: 'rgba(20, 184, 166, 0.12)', border: 'none' }}
-                      className="rounded-2xl borderless-shape px-5 py-3.5 text-[13px] text-emerald-200 font-bold leading-relaxed break-keep flex items-center gap-3"
+                      className="rounded-2xl borderless-shape px-5 py-3.5 font-sans tracking-normal text-[13px] text-zinc-100 font-bold leading-relaxed break-keep flex items-center gap-3"
                     >
                       <img
                         src="/gwisinkachi_app_icon_512.png"
@@ -1964,8 +1965,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         style={{ width: '30px', height: '30px', minWidth: '30px' }}
                         className="w-[30px] h-[30px] rounded-full object-cover shrink-0 shadow-sm"
                       />
-                      <div>
-                        🛡️ <span className="text-[#00F0B5] font-display-kr">2어절 연속 오타 시 Space/0.55초 자동전환</span> · <span className="text-amber-300 font-extrabold">평소 복붙(Ctrl+C/V) 시 원문 서식·줄바꿈 100% 보존</span> · <span className="text-white font-extrabold">서식·줄바꿈 다림질은 귀신창 [1]번 수동 작동</span>
+                      <div className="font-sans tracking-normal text-[13px] text-zinc-100 font-bold leading-relaxed break-keep">
+                        🛡️ 2어절 연속 오타 시 Space/0.55초 자동전환 · 평소 복붙(Ctrl+C/V) 시 원문 서식·줄바꿈 100% 보존 · 서식·줄바꿈 다림질은 귀신창 [1]번 수동 작동
                       </div>
                     </div>
 
