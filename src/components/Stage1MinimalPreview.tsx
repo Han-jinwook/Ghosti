@@ -1964,32 +1964,32 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           {/* [메뉴 1 · 👻 귀신비서 하단 고정 소속 설명란] 비서의 상시 케어 능력 3종 (평생 무료) */}
           <section
             aria-label="귀신비서 상시 케어 능력 안내"
-            className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3"
+            className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm flex flex-col gap-3"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[13.5px] font-extrabold text-emerald-300">
+              <span className="text-[13.5px] font-extrabold text-emerald-900">
                 🛡️ 기타 · 귀신비서의 상시 케어 능력 3종 (언제나 평생 무료)
               </span>
-              <span className="text-[11.5px] text-zinc-400 font-semibold">
+              <span className="text-[11.5px] text-emerald-800 font-semibold">
                 우측 귀신비서 채팅창에서 언제든 말로 점검·복구 가능
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] text-zinc-200">
-              <div className="p-3 rounded-xl bg-zinc-950/75 border border-white/10 flex flex-col gap-1">
-                <span className="font-extrabold text-white">① ⚡ 은행·관공서 보안프로그램 자동 절전·기상</span>
-                <span className="text-zinc-400 leading-snug">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] text-slate-900">
+              <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
+                <span className="font-extrabold text-slate-900">① ⚡ 은행·관공서 보안프로그램 자동 절전·기상</span>
+                <span className="text-slate-700 leading-snug">
                   평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 접속 시에만 자동 기상 (고클린 대체)
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-zinc-950/75 border border-white/10 flex flex-col gap-1">
-                <span className="font-extrabold text-white">② 🛡️ 다운로드 파일 무소음 백신 경호</span>
-                <span className="text-zinc-400 leading-snug">
+              <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
+                <span className="font-extrabold text-slate-900">② 🛡️ 다운로드 파일 무소음 백신 경호</span>
+                <span className="text-slate-700 leading-snug">
                   광고 팝업 없이 새로 받은 설치파일·압축파일을 Windows Defender 직결로 조용히 즉시 검사 (알약 대체)
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-zinc-950/75 border border-white/10 flex flex-col gap-1">
-                <span className="font-extrabold text-white">③ 🛟 미저장 종료 문서 &amp; 휴지통 3초 구출</span>
-                <span className="text-zinc-400 leading-snug">
+              <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
+                <span className="font-extrabold text-slate-900">③ 🛟 미저장 종료 문서 &amp; 휴지통 3초 구출</span>
+                <span className="text-slate-700 leading-snug">
                   실수로 저장 안 하고 끈 엑셀·한글 임시본 추적 및 잘못 지운 휴지통 파일 3초 원복
                 </span>
               </div>
