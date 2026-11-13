@@ -2884,7 +2884,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         ];
         await ensureVideoKeyframesEmbeddedForSearch(
           prioritized,
-          8,
+          36,
           () => reqSeq !== latestRunTextQuerySeq
         );
         if (reqSeq !== latestRunTextQuerySeq) return;

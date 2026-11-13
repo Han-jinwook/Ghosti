@@ -1436,22 +1436,22 @@ export async function searchVideoSceneItemsAsync(
   const medianSim = embeddedSims[Math.floor(embeddedSims.length * 0.5)] ?? 0;
   const hasCorpusSeparation =
     embeddedSims.length >= 6
-      ? topSim >= 0.625 && topSim - medianSim >= 0.02
+      ? topSim >= 0.655 && topSim - medianSim >= 0.025
       : embeddedSims.length >= 3
-      ? topSim >= 0.648
+      ? topSim >= 0.665
       : embeddedSims.length >= 1
-      ? topSim >= 0.668
+      ? topSim >= 0.678
       : false;
   const admitThreshold =
     embeddedSims.length >= 6
-      ? Math.max(0.618, topSim - 0.055, medianSim + 0.018)
+      ? Math.max(0.652, topSim - 0.04, medianSim + 0.028)
       : embeddedSims.length >= 3
-      ? Math.max(0.635, topSim - 0.055)
-      : Math.max(0.655, topSim - 0.045);
+      ? Math.max(0.66, topSim - 0.04)
+      : Math.max(0.672, topSim - 0.035);
 
   const strongVideoBursts = hasCorpusSeparation
     ? evals
-        .filter((e) => e.tsInfo && e.bestSim >= admitThreshold && e.bestSim >= topSim - 0.035)
+        .filter((e) => e.tsInfo && e.bestSim >= admitThreshold && e.bestSim >= topSim - 0.03)
         .map((e) => ({
           dateYmd: e.tsInfo!.dateYmd,
           secOfDay: e.tsInfo!.secOfDay,
@@ -1486,17 +1486,17 @@ export async function searchVideoSceneItemsAsync(
       }
     }
 
-    const isTightSessionBurst = minPhotoDiffSec <= 240 || minStrongVidDiffSec <= 240;
-    const isNearSessionWindow = minPhotoDiffSec <= 900 || minStrongVidDiffSec <= 900;
+    const isTightSessionBurst = minPhotoDiffSec <= 180 || minStrongVidDiffSec <= 180;
+    const isNearSessionWindow = minPhotoDiffSec <= 600 || minStrongVidDiffSec <= 600;
 
-    if (ev.bestSim > 0 && isNearSessionWindow && ev.bestSim >= Math.max(0.59, admitThreshold - 0.042)) {
-      effectiveSim += 0.042;
+    if (ev.bestSim > 0 && isNearSessionWindow && ev.bestSim >= Math.max(0.635, admitThreshold - 0.025)) {
+      effectiveSim += 0.025;
     }
 
     const passesVisual = hasCorpusSeparation && ev.bestSim > 0 && effectiveSim >= admitThreshold;
     const passesSessionContinuity =
       isTightSessionBurst &&
-      (ev.bestSim < 0 || embeddedSims.length === 0 || ev.bestSim >= medianSim - 0.015);
+      ev.bestSim >= Math.max(0.635, admitThreshold - 0.02);
 
     if (!lexHit && !passesVisual && !passesSessionContinuity) continue;
 

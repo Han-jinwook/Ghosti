@@ -1847,16 +1847,46 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
     return ocr_by_file
 
 
+def _is_meaningful_ocr_text(txt: str) -> bool:
+    """
+    야외/실내 일반 영상의 나뭇가지·그림자·물결 노이즈를 WinRT OCR이 깨진 한자/기호('=』젤TA爨', '•謷&•구수하')나
+    초단문 워터마크('Veo')로 오인식하는 현상을 걸러냅니다.
+    """
+    s = str(txt or "").strip()
+    if not s:
+        return False
+    # WinRT 한국어 OCR이 배경 질감을 한자(CJK)로 오인식하는 경우가 매우 많음
+    if re.search(r"[\u4e00-\u9fff]", s):
+        return False
+    # 의미 있는 한글/영문/숫자만 추출
+    alnum = re.sub(r"[^가-힣a-zA-Z0-9]", "", s)
+    if len(alnum) < 4:
+        return False
+    # 특수기호/구두점 비율이 지나치게 높으면 노이즈로 판정
+    non_space = re.sub(r"\s+", "", s)
+    if non_space and (len(alnum) / len(non_space)) < 0.55:
+        return False
+    # 단일 영문/숫자 워터마크(4~5자 이하, 한글 없음) 배제 (예: 'Veo', 'Sora', 'REC1')
+    has_ko = bool(re.search(r"[가-힣]", alnum))
+    if not has_ko and len(alnum) <= 5 and " " not in s:
+        return False
+    # 한글이 1자뿐이거나 총 글자수가 부족한 노이즈 파편 배제 (예: ':회 Veo')
+    ko_chars = re.findall(r"[가-힣]", alnum)
+    if has_ko and (len(ko_chars) < 2 or len(alnum) < 5):
+        return False
+    return True
+
+
 def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """연속 구간에서 동일한 자막·슬라이드 문구가 반복될 때 중복을 제거하고 의미 있는 타임라인 대본만 남깁니다."""
     deduped: List[Dict[str, Any]] = []
     prev_norm = ""
     for fr in sorted(raw_frames, key=lambda x: int(x.get("timeSec") or 0)):
         txt = str(fr.get("ocrText") or "").strip()
-        if len(txt) < 2:
+        if not _is_meaningful_ocr_text(txt):
             continue
         norm = re.sub(r"[^가-힣a-zA-Z0-9]", "", txt).lower()
-        if len(norm) < 2:
+        if len(norm) < 4:
             continue
         if prev_norm and (norm == prev_norm or (len(norm) > 8 and (norm in prev_norm or prev_norm in norm))):
             continue
@@ -2384,8 +2414,9 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 ocr_lines_cached = []
                 ocr_full_cached = ""
                 if cached_ocr and isinstance(cached_ocr.get("frames"), list):
-                    ocr_lines_cached = cached_ocr.get("lines") or _dedupe_ocr_timeline_lines(cached_ocr["frames"])
-                    ocr_full_cached = cached_ocr.get("fullText") or "\n".join(
+                    # 과거 캐시에 남은 한자/기호 노이즈도 최신 필터로 재검증
+                    ocr_lines_cached = _dedupe_ocr_timeline_lines(cached_ocr["frames"])
+                    ocr_full_cached = "\n".join(
                         f"[{ln['timestamp']}] {ln['text']}" for ln in ocr_lines_cached
                     )
 
@@ -2410,8 +2441,9 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "sizeMB": size_mb,
                     "isAllBlack": is_all_black,
                     "codecTag": codec_tag,
-                    "hasScreenOcrText": len(ocr_full_cached.strip()) >= 8,
+                    "hasScreenOcrText": len(ocr_lines_cached) > 0 and len(ocr_full_cached.strip()) >= 10,
                     "ocrLineCount": len(ocr_lines_cached),
+                    "ocrLines": ocr_lines_cached,
                     "ocrFullText": ocr_full_cached,
                     "timelineFrames": timeline_frames,
                 })
