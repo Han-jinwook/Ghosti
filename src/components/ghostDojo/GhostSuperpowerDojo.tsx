@@ -159,22 +159,21 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       </div>
       {summoned && (
         <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
-          <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (한영·띄어쓰기는 100% 자동, 평소 복붙은 원문 보존, 수동 무기는 1~6번)</div>
+          <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (한영·띄어쓰기 자동 성형 · 평소 복붙 원문 보존 · [1]~[5] 정배열 다이어트)</div>
           <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#5EEAD4] font-bold">
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[Ctrl+V] 순차·칸맞춤</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[1] 🧹서식·줄바꿈</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[2] 🏷️파일·라벨러(PDF)🔒</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[3] 글자·표OCR🔒</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[Ctrl+V] 순차붙여넣기</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[1] 🧹서식·줄바꿈 다림질</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[2] 📄스샷·PDF변환🔒</span>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-[#E2E8F0]">
             <div className="flex flex-wrap gap-1.5">
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 합본🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 번호·일정🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[6] 창고정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[3] 🔗다중합본🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 🔢번호·일정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 📌창고정🔒</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-300/50 text-amber-200 font-bold">[⌨️상용구▾]</span>
-              <span className="px-2 py-0.5 rounded bg-teal-400/20 border border-teal-300/50 text-teal-200 font-bold">[💡꿀팁·추가▾]</span>
+              <span className="px-2 py-0.5 rounded bg-teal-400/20 border border-teal-300/50 text-teal-200 font-bold">[💡꿀팁·기타▾]</span>
             </div>
           </div>
         </div>
@@ -507,7 +506,7 @@ const Dojo8: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   return (
     <div className="flex flex-col gap-2">
       <div className="text-[11.5px] text-teal-200 font-bold">
-        💡 실제 사용법: 탐색기에서 사진·카톡사진·문서 복사(Ctrl+C) 후 귀신창(Ctrl+0)에서 숫자 <span className="underline text-amber-300">[1]번 (🏷️파일·라벨러)</span> 클릭!
+        💡 실제 사용법: 『👻 귀신검색창』 유료 티어 기능 — 검색창에서 사진·카톡사진·문서를 골라 <span className="underline text-amber-300">[🏷️ 귀신 라벨러🔒]</span> 클릭!
       </div>
       <div className="flex flex-col gap-1">
         {DOJO8_LABELER_SAMPLES.map((s) => (
@@ -529,7 +528,7 @@ const Dojo8: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           onDone();
         }}
       >
-        🏷️ 귀신창 [1]번 (파일·라벨러) 실행 체험
+        🏷️ 귀신 라벨러 (날짜·내용 파일명 자동 정리) 실행 체험
       </button>
     </div>
   );
@@ -599,10 +598,10 @@ const TrialRewardCard: React.FC = () => {
   const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
   const isSubscribed = activePricingPlan !== 'free_trial' || Object.values(subscribedLounges).some(Boolean);
   const [, setStatus] = useState<SuperpowerTrialStatus | null>(null);
-  const [choice, setChoice] = useState<'none' | 'trial' | 'daily3'>(() => {
+  const [choice, setChoice] = useState<'none' | 'trial' | 'later'>(() => {
     try {
       const saved = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY);
-      if (saved === 'trial' || saved === 'daily3') return saved;
+      if (saved === 'trial' || saved === 'later') return saved;
     } catch {
       /* ignore */
     }
@@ -614,7 +613,7 @@ const TrialRewardCard: React.FC = () => {
     const syncChoice = () => {
       try {
         const saved = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY);
-        if (saved === 'trial' || saved === 'daily3') setChoice(saved);
+        if (saved === 'trial' || saved === 'later') setChoice(saved);
         else setChoice('none');
       } catch {
         /* ignore */
@@ -627,13 +626,15 @@ const TrialRewardCard: React.FC = () => {
   return (
     <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/15 to-emerald-500/10 border-2 border-amber-400/60 flex flex-col gap-2.5">
       <div className="text-[15px] font-extrabold text-white">
-        🎉 축하합니다! '애기귀신 소환술'을 마스터하여 연간 209시간(27일)의 복붙 노가다에서 해방되셨습니다!
+        🎉 축하합니다! &apos;애기귀신 소환술&apos;을 마스터하여 연간 209시간(27일)의 복붙 노가다에서 해방되셨습니다!
       </div>
       <div className="text-[13px] text-zinc-200 leading-relaxed">
-        수련 완료 보상으로 원래 하루 3회 무료(무제한은 월 3,900원 / 10년 3.9만 원)인{' '}
+        매일 쓰는 기본 습관기(자동 한영·띄어쓰기 · Ctrl+V 순차붙여넣기 · [1] 서식·줄바꿈 · F1~F6 · ZIP 압축)는 언제나 평생 무제한 무료이며, 수련 완료 보상으로 모든 🔒 유료 티어 기능을 아우르는{' '}
         <strong className="text-amber-300">『모든 귀신 초능력 30일 무제한 무료체험권』</strong>이 도착했습니다! 지금 바로 열어드릴까요?
       </div>
-      <div className="text-[11.5px] text-zinc-400">(※ 카드 등록 없음 · 자동 결제 절대 없음 · 30일 후에도 매일 3회씩은 평생 무료!)</div>
+      <div className="text-[11.5px] text-zinc-400">
+        (※ 카드 등록 없음 · 자동 결제 절대 없음 · 30일 만료 시 일 3회 무료 없이 🔒 유료 기능만 깔끔하게 잠기며, 이미 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존됩니다!)
+      </div>
       <div className="flex flex-wrap gap-2 pt-1">
         <button
           type="button"
@@ -662,14 +663,14 @@ const TrialRewardCard: React.FC = () => {
         <button
           type="button"
           className={`px-4 py-2.5 rounded-xl border text-[13px] font-bold cursor-pointer transition-all ${
-            choice === 'daily3'
+            choice === 'later'
               ? 'border-teal-400 bg-teal-500/20 text-teal-200 ring-1 ring-teal-400'
               : 'border-white/20 text-zinc-300 hover:bg-white/5'
           }`}
           onClick={() => {
-            setChoice('daily3');
+            setChoice('later');
             try {
-              localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'daily3');
+              localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'later');
               window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
             } catch {
               /* ignore */
@@ -677,17 +678,19 @@ const TrialRewardCard: React.FC = () => {
             playBabyGhostChime('typo');
           }}
         >
-          {choice === 'daily3' ? '✓ 하루 3회씩 쓰는 중 (언제든 왼쪽 버튼으로 시작 가능)' : '그냥 하루 3회씩만 쓸게요'}
+          {choice === 'later'
+            ? '✓ 평생 무료 기본기부터 쓰는 중 (언제든 왼쪽 버튼으로 30일 체험 시작 가능)'
+            : '나중에 필요할 때 시작할게요 (평생 무료 기본기부터 쓰기)'}
         </button>
       </div>
       {choice === 'trial' && (
         <div className="px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[12.5px] font-extrabold text-emerald-300">
-          ✨ 체험중 — 오늘부터 30일간 모든 귀신 초능력을 횟수 제한 없이 무제한으로 사용하실 수 있습니다!
+          ✨ 체험중 — 오늘부터 30일간 모든 🔒 유료 티어 초능력을 횟수 제한 없이 무제한으로 사용하실 수 있습니다!
         </div>
       )}
-      {choice === 'daily3' && (
+      {choice === 'later' && (
         <div className="px-3.5 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-[12.5px] font-extrabold text-teal-200">
-          📌 하루 3회 무료 모드가 적용되었습니다. (30일 무제한 무료체험권은 아껴두었으며 언제든 왼쪽 버튼을 눌러 시작할 수 있습니다!)
+          📌 평생 무료 기본기 모드가 적용되었습니다. (30일 무제한 무료체험권은 아껴두었으며 언제든 왼쪽 버튼을 눌러 시작하실 수 있습니다!)
         </div>
       )}
     </div>
@@ -808,6 +811,25 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
       )}
 
       {variant === 'full' && isAllDojoDone(progress) && <TrialRewardCard />}
+
+      {variant === 'full' && (
+        <section
+          aria-label="귀신창 보너스 초능력 안내"
+          className="p-4 rounded-2xl bg-zinc-900/90 border border-teal-400/35 flex flex-wrap items-center justify-between gap-2.5 text-[12.5px]"
+        >
+          <div className="flex flex-col gap-0.5">
+            <span className="font-extrabold text-teal-300">
+              📦 기타 · 보너스 초능력 ([💡꿀팁·기타▾] 소속 · 언제나 평생 무료)
+            </span>
+            <span className="text-zinc-300">
+              <strong className="text-white">우클릭 1초 스마트 ZIP 압축 풀기·묶기</strong> — 알집 대체 · 맥(Mac) 한글 파일명 깨짐(NFD➔NFC) 자동 복원 · 압축폭탄 사전 차단
+            </span>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-200 text-[11px] font-black shrink-0">
+            평생 0원
+          </span>
+        </section>
+      )}
     </div>
   );
 };

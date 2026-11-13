@@ -983,11 +983,14 @@ export const DesktopDashboard: React.FC = () => {
                         <div className="flex flex-col text-left min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="truncate text-[14px]">내 기기 통합</span>
-                            {superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED' && (
-                              <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded bg-emerald-500/20 text-emerald-400 shrink-0">
-                                ✨ 체험중
-                              </span>
-                            )}
+                            {superpowerStatus?.trial_status &&
+                              superpowerStatus.trial_status !== 'NOT_STARTED' &&
+                              superpowerStatus.trial_status !== 'EXPIRED' &&
+                              superpowerStatus.trial_status !== 'EXPIRED_LOCKED' && (
+                                <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded bg-emerald-500/20 text-emerald-400 shrink-0">
+                                  ✨ 체험중
+                                </span>
+                              )}
                           </div>
                           <span className="text-[10.5px] opacity-70 font-normal truncate">
                             폰 ↔ PC 연동 · 기기 통합 검색
@@ -2021,10 +2024,10 @@ export const DesktopDashboard: React.FC = () => {
                                 e.stopPropagation();
                                 setOcrModalPhoto(item.photo);
                               }}
-                              title="이 사진에서 글자·표·원하는 단어 조각(칩)만 바로 따내기 (창 UI ③)"
+                              title="별도 독립 사진·OCR 창(창 UI ③)을 열어 글자·표·단어칩을 추출합니다"
                               className="absolute bottom-10 right-2.5 z-10 px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
                             >
-                              📝 OCR 글자 따기
+                              📝 OCR
                             </button>
 
                             <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">

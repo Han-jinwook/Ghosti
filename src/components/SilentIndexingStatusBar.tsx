@@ -21,7 +21,7 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
   const [snap, setSnap] = useState<SilentIndexingBrakeSnapshot>(() =>
     silentIndexingBrake.getSnapshot()
   );
-  const { localDocuments, photos, videoSceneItems, runTextQuery } = useSaySeeStore();
+  const { localDocuments, photos, videoSceneItems, searchSpace, runTextQuery } = useSaySeeStore();
 
   useEffect(() => {
     return silentIndexingBrake.subscribe(setSnap);
@@ -78,7 +78,9 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
   }, [localDocuments, photos]);
 
   const showPriorityJumpToast =
-    snap.lastPriorityJump && Date.now() - snap.lastPriorityJump.timestamp < 25000;
+    searchSpace !== 'video' &&
+    snap.lastPriorityJump &&
+    Date.now() - snap.lastPriorityJump.timestamp < 8000;
 
   return (
     <div

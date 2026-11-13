@@ -12,7 +12,7 @@ export interface SuperpowerTrialStatus {
   engine_running: boolean;
   machine_hwid: string;
   account_id: string;
-  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'PER_FEATURE_ACTIVE' | 'DAILY_FREE_3' | 'EXPIRED_DAILY_3' | 'EXPIRED' | 'SUBSCRIBED';
+  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'TRIAL_UNLIMITED' | 'PER_FEATURE_ACTIVE' | 'EXPIRED_LOCKED' | 'EXPIRED' | 'SUBSCRIBED';
   feature_trials?: Record<string, any>;
   cross_device_trial?: Record<string, any>;
   trial_days_left: number;
@@ -731,7 +731,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             </div>
 
             <span className="px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 font-label-sm text-[12px] font-extrabold whitespace-nowrap">
-              🎁 1개월(30일) 무제한 무료체험 (만료 후에도 일 3회 평생 무료)
+              🎁 30일 무제한 무료체험 (기본기 평생 무료 · 🔒 유료 기능 만료 시 잠금)
             </span>
           </div>
         )}
@@ -1047,7 +1047,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   ⚡ 윈도우 어디서나 <strong className="text-amber-300">Ctrl + 0</strong>을 누르면 커서 옆에 귀신창이 바로 열립니다
                 </span>
                 <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 text-[11.5px] font-extrabold whitespace-nowrap">
-                  🎁 1개월(30일) 무제한 무료체험 (만료 후에도 일 3회 평생 무료)
+                  🎁 30일 무제한 무료체험 (기본기 평생 무료 · 🔒 유료 기능 만료 시 잠금)
                 </span>
               </div>
             )}
@@ -1586,7 +1586,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       ✅ <strong className="text-white">✋ 귀신같이 손보기</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
                     </li>
                     <li>
-                      🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: <strong className="text-amber-300">30일 전 기능 무제한 무료체험</strong> 제공 (31일 차부터 매일 3회 평생 무료)
+                      🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: 자동 한영·띄어쓰기·<code className="text-teal-300">[Ctrl+V]</code> 순차붙여넣기·<code className="text-teal-300">[1]</code> 서식·줄바꿈·<code className="text-teal-300">F1~F6</code>·ZIP 압축 <strong className="text-teal-300">평생 무제한 무료</strong> + 모든 🔒 유료 티어 기능 <strong className="text-amber-300">30일 무제한 무료체험</strong> (만료 시 일 3회 무료 없이 깔끔 잠금🔒)
                     </li>
                   </ul>
                 </div>
@@ -1627,7 +1627,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       🥈 <strong className="text-emerald-300">2위. 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 회사 PC나 폰에서 복사(<code className="text-white">Ctrl+C</code>·스샷)만 해두면, 꺼져 있던 집 PC를 켜는 순간 <code className="text-teal-300">Ctrl+0 [복사검색]</code>에 최근 100개 텍스트·10장 스샷이 자동 장전됩니다!
                     </li>
                     <li>
-                      🥉 <strong className="text-amber-300">3위. 귀신창(Ctrl + 0) 정확히 30일(1개월) 무제한 체험 + 만료 후에도 일 3회 평생 무료</strong>: 30일(1개월) 무제한 무료체험 후에도 각 기능별 하루 3회는 평생 무료로 유지됩니다.
+                      🥉 <strong className="text-amber-300">3위. 모든 🔒 유료 티어 초능력(사진·표 OCR 창 · 귀신 라벨러 · 귀신창 [2]~[5]) 무제한 해금 + 0.2초 공간이동(촬영 후 1분간 자동팝업 대기)</strong>: 30일 무료체험 만료 후에도 일체 잠김 없이 전 기기 평생 무제한으로 열립니다 (만료 시에도 이미 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존).
                     </li>
                     <li>
                       👨‍👩‍👧‍👦 <strong className="text-teal-300">

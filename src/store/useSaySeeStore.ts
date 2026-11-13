@@ -145,12 +145,15 @@ import {
   detectHardwareTelemetry,
   detectLiveFacesFromPhoto,
   ensureTextQueryEncoderLoaded,
+  ensureVideoKeyframesEmbeddedForSearch,
   executeTextSearch,
   executeZeroSttVoiceSearch,
   fetchAutonomousFaceClusters,
   fetchIndexedDocuments,
   fetchIndexedVideos,
   fetchSharedFamilyHostPhotos,
+  hasUnindexedLocalVideos,
+  isTextQueryEncoderReady,
   normalizeLocalVideoSceneItem,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
@@ -1038,6 +1041,8 @@ function restoreAllExcludedCustomFaceRegistrations(): void {
   }
 }
 
+let latestRunTextQuerySeq = 0;
+
 export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   applyHtmlThemeClass('light');
   return {
@@ -1237,6 +1242,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   resetSearchSpaceToAll: (searchSpace) => {
+    latestRunTextQuerySeq += 1;
     const { photos, videoSceneItems, localDocuments } = get();
     const vaultPhotos = photos
       .filter((p) => !p.quarantined && p.isVaultDocument)
@@ -2089,6 +2095,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       const saveData = typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
       if (!isCoarsePointer && !saveData && typeof window !== 'undefined') {
         if (zCoreBridge.isConnected) {
+          // 첫 화면 카드 썸네일 로딩과 HTTP/1.1 커넥션이 겹치지 않도록 4.2초 여유 후 조용히 시작
           window.setTimeout(() => {
             void startSilentRealMediaVisionIndexing({
               photos: get().photos,
@@ -2114,7 +2121,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
                 }));
               },
             });
-          }, 900);
+          }, 4200);
         } else if (hasVectors) {
           window.setTimeout(() => {
             void ensureTextQueryEncoderLoaded();
@@ -2278,6 +2285,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const fromVoice = Boolean(options?.fromVoice);
     const query = q.trim();
     if (!query) return;
+    const reqSeq = ++latestRunTextQuerySeq;
     const {
       activeLoungeType,
       photos,
@@ -2629,18 +2637,26 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       /(?:사진|셀카|이미지|풍경|인물컷|스냅)/.test(query) &&
       !/문서|서류|파일|계약|영수증|전표|엑셀|시트|글자|동영상|영상/.test(query);
 
-    // [통합 3-Track 동시 검색] 동영상 · 문서 · 사진 3개 엔진을 동시에 병렬 호출 (단, 사진 전용 질의 시 문서·동영상 제외)
-    const [docMatches, videoMatches, photoSearchOut] = await Promise.all([
+    // [통합 3-Track 고속 검색] 사진·문서 매칭을 즉시 수행한 뒤, 일치 사진 세션 정보를 결합해 동영상을 무블로킹(0.1초) 평가
+    const [docMatches, photoSearchOut] = await Promise.all([
       isExplicitPhotoOnlyQuery
         ? Promise.resolve([])
         : searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
-      isExplicitPhotoOnlyQuery
-        ? Promise.resolve([])
-        : searchVideoSceneItemsAsync(cleanedSearchQuery || query, videoSceneItems, photosForSearch),
       cleanedSearchQuery
         ? executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
         : Promise.resolve({ results: [], embedMs: 0, searchMs: 0 }),
     ]);
+    if (reqSeq !== latestRunTextQuerySeq) return;
+
+    const videoMatches = isExplicitPhotoOnlyQuery
+      ? []
+      : await searchVideoSceneItemsAsync(
+          cleanedSearchQuery || query,
+          videoSceneItems,
+          photosForSearch,
+          photoSearchOut.results
+        );
+    if (reqSeq !== latestRunTextQuerySeq) return;
 
     let { results } = photoSearchOut;
     const { embedMs, searchMs } = photoSearchOut;
@@ -2791,13 +2807,14 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     if (targetSpace === 'gallery' && results.length === 0) {
       if (videoMatches.length > 0) targetSpace = 'video';
       else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
-    } else if (targetSpace === 'video' && videoMatches.length === 0) {
+    } else if (targetSpace === 'video' && videoMatches.length === 0 && !hasUserSelectedSearchTab) {
       if (results.length > 0) targetSpace = 'gallery';
       else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
     } else if (
       targetSpace === 'vault' &&
       docMatches.length === 0 &&
-      vaultPhotoMatches.length === 0
+      vaultPhotoMatches.length === 0 &&
+      !hasUserSelectedSearchTab
     ) {
       if (videoMatches.length > 0) targetSpace = 'video';
       else if (results.length > 0) targetSpace = 'gallery';
@@ -2850,6 +2867,53 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
           }
         : {}),
     });
+
+    // [무블로킹 2단계 백그라운드 보강]: 첫 검색 결과는 0.1초 만에 즉시 표시한 뒤,
+    // 아직 비전 벡터가 준비되지 않은 동영상이 있으면 백그라운드에서 조용히 키프레임을 보강하여 결과 목록을 매끄럽게 갱신
+    if (
+      !isExplicitPhotoOnlyQuery &&
+      zCoreBridge.isConnected &&
+      (!isTextQueryEncoderReady() || hasUnindexedLocalVideos(videoSceneItems))
+    ) {
+      void (async () => {
+        await ensureTextQueryEncoderLoaded();
+        if (reqSeq !== latestRunTextQuerySeq) return;
+        const prioritized = [
+          ...videoMatches,
+          ...videoSceneItems.filter((v) => !videoMatches.some((m) => m.id === v.id)),
+        ];
+        await ensureVideoKeyframesEmbeddedForSearch(
+          prioritized,
+          8,
+          () => reqSeq !== latestRunTextQuerySeq
+        );
+        if (reqSeq !== latestRunTextQuerySeq) return;
+        const cur = get();
+        if (!cur.hasExecutedUserSearch || cur.activeQuery !== query) return;
+        const refreshedPhotoOut = cleanedSearchQuery
+          ? await executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
+          : photoSearchOut;
+        if (reqSeq !== latestRunTextQuerySeq) return;
+        const refreshedVideos = await searchVideoSceneItemsAsync(
+          cleanedSearchQuery || query,
+          cur.videoSceneItems,
+          photosForSearch,
+          refreshedPhotoOut.results
+        );
+        if (reqSeq !== latestRunTextQuerySeq) return;
+        const latest = get();
+        if (!latest.hasExecutedUserSearch || latest.activeQuery !== query) return;
+        set({
+          matchedVideoScenes: refreshedVideos,
+          ...(refreshedPhotoOut.results.length > 0 && !isTimeRangeOrAlumniQuery
+            ? { searchResults: refreshedPhotoOut.results }
+            : {}),
+          ...(isExplicitVideoIntent && refreshedVideos.length > 0
+            ? { searchSpace: 'video' }
+            : {}),
+        });
+      })();
+    }
   },
 
   toggleMicRecording: async () => {
@@ -2949,7 +3013,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
     const [docMatches, videoMatches] = await Promise.all([
       searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments),
-      searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems, photos),
+      searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems, photos, results),
     ]);
     const vaultPhotoMatches = results.filter((r) => r.photo.isVaultDocument);
     const targetSpace: SearchSpaceMode = hasUserSelectedSearchTab ? searchSpace : 'video';

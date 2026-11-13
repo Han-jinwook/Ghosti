@@ -2165,7 +2165,7 @@ _LATEST_VANGUARD_PACKET_ID: str | None = None
 
 
 def store_teleport_ocr_vanguard(data: Dict[str, Any]) -> Dict[str, Any]:
-    """[창 UI ③ 역OCR창 브릿지] 스마트폰 촬영 선발대 패킷(15KB 단어칩 JSON + 30KB WebP 썸네일)을 저장합니다."""
+    """[창 UI ③ 사진·OCR 창 브릿지] 스마트폰 촬영 선발대 패킷(15KB 단어칩 JSON + 30KB WebP 썸네일)을 저장합니다."""
     global _LATEST_VANGUARD_PACKET_ID
     pkt_id = str(data.get("packetId") or f"vg_{int(time.time() * 1000)}").strip()
     packet = {
@@ -2190,7 +2190,7 @@ def store_teleport_ocr_vanguard(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_teleport_ocr_vanguard(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """[창 UI ③ 역OCR창 브릿지] 최신 또는 특정 packetId의 선발대 패킷을 0.01초 만에 반환합니다."""
+    """[창 UI ③ 사진·OCR 창 브릿지] 최신 또는 특정 packetId의 선발대 패킷을 0.01초 만에 반환합니다."""
     qp = params or {}
     req_id = str(qp.get("packetId") or "").strip()
     with _VANGUARD_LOCK:

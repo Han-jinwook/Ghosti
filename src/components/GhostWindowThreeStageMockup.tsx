@@ -675,7 +675,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
   const [oneTimePopUsed, setOneTimePopUsed] = useState<boolean>(false);
   const [lastInsertedSpotNotice, setLastInsertedSpotNotice] = useState<string | null>(null);
 
-  // ── 하단 부가 체험 모달 상태 (귀신 라벨러 / 귀신 말풍선 / 30일 체험 모달 / 일 3회 성적표 모달) ──
+  // ── 하단 부가 체험 모달 상태 (귀신 라벨러 / 귀신 말풍선 / 30일 체험 모달 / 절약 리포트 모달) ──
   const [labelerScopeMode, setLabelerScopeMode] = useState<'personal' | 'work_s'>('personal');
   const [activePromoModal, setActivePromoModal] = useState<'none' | 'opt_in_30d' | 'loss_aversion_3limit' | 'training_dojo'>('none');
   const [trialOptInAccepted, setTrialOptInAccepted] = useState<boolean>(true);
@@ -842,19 +842,19 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
               id: 'ui1_basic' as const,
               badge: '창 UI ①',
               title: '기본 귀신창',
-              desc: '상용구(F1~F12) · 클립보드 · 5대 자동변환',
+              desc: '상용구(F1~F12) · 클립보드 · [1]~[5] 타이핑·복붙 다이어트',
             },
             {
               id: 'ui2_summon' as const,
               badge: '창 UI ②',
-              title: '귀신 미니 탐색기',
-              desc: '작업 중 문서 · 사진 · 영상 바로 찾아 넣기',
+              title: '👻 귀신검색창',
+              desc: '작업 중 문서 · 사진 · 영상 소환 ([📝OCR] 클릭 시 창 UI ③ 호출)',
             },
             {
               id: 'ui3_ocr' as const,
               badge: '창 UI ③',
-              title: '사진 글자 톡톡 찍기',
-              desc: '방금 찍은 사진 위 글자를 눌러 바로 입력',
+              title: '사진·표 OCR 창',
+              desc: '별도 독립 창 · 사진 위 글자·표를 톡톡 찍어 바로 입력',
             },
           ].map((tab) => {
             const active = windowTab === tab.id;
@@ -905,7 +905,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                   onClick={() => setActivePromoModal('opt_in_30d')}
                   className="px-2 py-0.5 rounded-full bg-teal-400/20 hover:bg-teal-400/30 border border-teal-300/50 text-teal-200 font-mono text-[10.5px] font-black cursor-pointer"
                 >
-                  {trialOptInAccepted ? '🎁 무제한 체험 D-29' : '🆓 일 3회 무료'}
+                  {trialOptInAccepted ? '🎁 무제한 체험 D-29' : '🔒 유료 티어 30일 무료체험'}
                 </button>
               </div>
 
@@ -942,31 +942,26 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
               </div>
             </div>
 
-            {/* [1줄 & 2줄] 귀신창 2줄 영구 고정 레이아웃 ([Ctrl+V], [1]~[4] 하늘색 #5EEAD4 / [5]~[8] 흰색 #E2E8F0 + 우측 [⌨️상용구▾] [💡꿀팁·추가▾]) */}
+            {/* [1줄 & 2줄] 귀신창 [1]~[5] 정배열 다이어트 레이아웃 + 우측 [⌨️상용구▾] [💡꿀팁·기타▾] */}
             <div className="px-4 py-2.5 bg-zinc-950/95 border-b border-white/10 flex flex-col gap-2">
-              {/* 1줄 (하늘색 #5EEAD4 — 최다 빈도 주력 핵심 무기) */}
+              {/* 1줄 (하늘색 #5EEAD4 — 평생 무료 기본기 + [2] 스샷·PDF변환🔒) */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[
                     {
                       id: 0,
-                      label: '[Ctrl+V] 순차·칸맞춤',
+                      label: '[Ctrl+V] 순차붙여넣기',
                       sampleOut: '[1번: 홍길동] ➔ [2번: 010-1234-5678] ➔ [3번: 강남구 테헤란로 123]',
                     },
                     {
                       id: 1,
-                      label: '[1] 🧹서식·줄바꿈',
+                      label: '[1] 🧹서식·줄바꿈 다림질',
                       sampleOut: '[🧹 서식·줄바꿈 다림질 완료] 평소 복붙은 원문 100% 보존 · [1]키로 끊어진 줄바꿈·광고 꼬리말 1초 순수 본문 정리 완료',
                     },
                     {
                       id: 2,
-                      label: '[2] 🏷️파일·라벨러(PDF)🔒',
-                      sampleOut: '[🏷️ 귀신 라벨러 완료] IMG_4829.jpg ➔ 261107_제주애월_가족산책.jpg / KakaoTalk.jpg ➔ 261106_카톡_할머니생신.jpg / 계약서.pdf ➔ 250315_내용_임대차계약서.pdf',
-                    },
-                    {
-                      id: 3,
-                      label: '[3] 글자·표OCR🔒',
-                      sampleOut: '[화면 캡처 OCR] 승인번호 20261107-849201 · 합계 145,000원',
+                      label: '[2] 📄스샷·PDF변환🔒',
+                      sampleOut: '[📄 스샷·PDF 변환 완료] 클립보드 화면 캡처 이미지를 실물 PNG 및 300DPI 다중 스샷 합본 PDF로 즉시 변환 완료',
                     },
                   ].map((ab) => {
                     const active = activeWave1Ability === ab.id;
@@ -976,10 +971,6 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                         type="button"
                         onClick={() => {
                           setActiveWave1Ability(ab.id);
-                          if (ab.id === 3) {
-                            setWindowTab('ui3_ocr');
-                            return;
-                          }
                           insertIntoUi1Editor(ab.sampleOut, ab.label);
                         }}
                         className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border transition-all cursor-pointer ${
@@ -1002,27 +993,27 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                   }}
                   className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/40 text-[11.5px] font-black transition-all cursor-pointer"
                 >
-                  🔍 내 파일·사진 바로 소환 ➔
+                  🔍 귀신검색창 소환 ➔
                 </button>
               </div>
 
-              {/* 2줄 (흰색 #E2E8F0 — 실무·편의 확장 무기 + 우측 끝 [⌨️상용구▾] · [💡꿀팁·추가▾]) */}
+              {/* 2줄 (흰색 #E2E8F0 — [3]~[5] 유료 티어 정배열 + 우측 끝 [⌨️상용구▾] · [💡꿀팁·기타▾]) */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[
                     {
-                      id: 4,
-                      label: '[4] 합본🔒',
+                      id: 3,
+                      label: '[3] 🔗다중합본🔒',
                       sampleOut: '[다중 복사 합본] 1. 계약 개요 / 2. 단가 조건 / 3. 특약 사항 통짜 병합 완료',
                     },
                     {
-                      id: 5,
-                      label: '[5] 번호·일정🔒',
+                      id: 4,
+                      label: '[4] 🔢번호·일정🔒',
                       sampleOut: '성함: 김철수 / 연락처: 010-1234-5678 / 계좌: 국민 012-3456-7890-11',
                     },
                     {
-                      id: 6,
-                      label: '[6] 창고정🔒',
+                      id: 5,
+                      label: '[5] 📌창고정🔒',
                       sampleOut: '📌 현재 활성 작업창이 화면 최상단(Always on Top)에 고정되었습니다.',
                     },
                   ].map((ab) => {
@@ -1072,24 +1063,26 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                         : 'bg-zinc-900 hover:bg-zinc-800 text-teal-200 border-teal-400/40'
                     }`}
                   >
-                    [💡꿀팁·추가▾]
+                    [💡꿀팁·기타▾]
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* [펼침 0] 숨은 자동 초능력 5선 ([💡꿀팁·추가▾]) */}
+            {/* [펼침 0] 기타 · 보너스 초능력 & 숨은 자동 초능력 ([💡꿀팁·기타▾]) */}
             {openHeaderDrawer === 'tips' && (
               <div className="p-4 bg-[#0D1119] border-b border-white/10 flex flex-col gap-2">
                 <div className="text-[12.5px] font-black text-teal-300">
-                  💡 단축키 번호 없이 작동하는 숨은 자동 초능력 5선
+                  💡 [💡꿀팁·기타▾] 보너스 초능력 &amp; 무버튼 자동 초능력
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[12px] text-zinc-200">
-                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">① 스페이스바 자동 한영성형 (2어절 연속 오타 시 띠리링~ 자동 변환)</div>
-                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">② 엑셀 다중 칸 자동 쪼개기 (표 복사 후 붙여넣기 시 셀 자동 분할)</div>
-                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">③ 다중 스샷 300DPI PDF 자동 합본 (여러 장 캡처 후 한 번에 PDF 생성)</div>
-                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">④ 드래그 제자리 다림질 &amp; Ctrl+Z 원복</div>
-                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10 sm:col-span-2">⑤ 📱 폰 촬영·스샷 60초 공간이동🔒 (폰으로 찍으면 PC 귀신창에 60초간 즉시 대기)</div>
+                  <div className="p-2.5 rounded-xl bg-teal-950/40 border border-teal-400/40 sm:col-span-2 font-bold text-teal-200">
+                    📦 우클릭 1초 스마트 ZIP 압축 풀기·묶기 (평생 무료 · 알집 대체 · 맥 한글깨짐 NFD➔NFC 자동 복원 · 압축폭탄 방지)
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">① 스페이스바 자동 한영·띄어쓰기 성형 (5초 내 Ctrl+0 / Ctrl+Z 원복 · 평생 무료)</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">② 엑셀 다중 칸 자동 쪼개기 ([Ctrl+V] 순차붙여넣기 · 평생 무료)</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">③ 다중 스샷 300DPI PDF 합본 ([2] 📄스샷·PDF변환🔒)</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">④ 📱 0.2초 공간이동 (촬영 후 1분간 자동팝업 대기)🔒</div>
                 </div>
               </div>
             )}
@@ -1848,7 +1841,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
             <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col justify-between gap-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[12.5px] font-black text-teal-300">
-                  🏷️ 귀신 라벨러 — 귀신창 [2]번 (사진·카톡·문서 날짜별 파일명 자동 정리)
+                  🏷️ 귀신 라벨러🔒 — 👻 귀신검색창 유료 티어 소속 (사진·카톡·문서 날짜별 파일명 자동 정리)
                 </span>
                 <div className="flex items-center gap-1">
                   <button
@@ -1878,7 +1871,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
 
               <div className="px-3 py-2 rounded-lg bg-teal-500/10 border border-teal-400/30 text-[11.5px] text-zinc-200 leading-relaxed">
                 <div className="font-extrabold text-teal-200">
-                  💡 어떻게 쓰나요? ➔ 파일 선택·복사(Ctrl+C) 후 귀신창(Ctrl+0)에서 숫자 <span className="underline text-amber-300">[2]번 (🏷️파일·라벨러)</span> 클릭!
+                  💡 어떻게 쓰나요? ➔ 『👻 귀신검색창』에서 사진·카톡사진·문서를 선택 후 <span className="underline text-amber-300">[🏷️ 귀신 라벨러🔒]</span> 클릭!
                 </div>
                 <div className="text-[11px] text-zinc-300 mt-0.5">
                   • 직접 찍은 사진: <b>YYMMDD_장소/내용</b> | 카톡 수신 사진: <b>YYMMDD_카톡_내용</b> | 일반 문서: <b>YYMMDD_내용_제목</b>
@@ -1933,7 +1926,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
         <div className="p-4 rounded-2xl bg-zinc-900 border-2 border-teal-400 flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[14px] font-black text-teal-300">
-              🎁 모든 귀신 초능력 30일 무제한 무료체험
+              🎁 모든 🔒 유료 티어 초능력 30일 무제한 무료체험 (Opt-in)
             </span>
             <button
               type="button"
@@ -1944,7 +1937,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
             </button>
           </div>
           <p className="text-[12.5px] text-zinc-200">
-            카드 등록이나 자동 결제 없이 30일 동안 모든 초능력을 무제한으로 써보실 수 있습니다. (30일 후에도 매일 3회 평생 무료)
+            매일 쓰는 기본기(내 PC 검색 · 귀신비서 · 자동 한영·띄어쓰기 · Ctrl+V 순차붙여넣기 · [1] 서식·줄바꿈 · F1~F6 · ZIP 압축)는 언제나 평생 무료입니다. 🔒 유료 티어 기능은 동의 시 카드 등록·자동 결제 없이 30일간 무제한 무료체험 후 일 3회 무료 없이 깔끔하게 잠기며, 체험 중 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존됩니다.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1966,7 +1959,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
               }}
               className="px-3 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-[12px] font-bold cursor-pointer"
             >
-              하루 3회씩만 쓰기
+              평생 무료 기본기부터 쓰기
             </button>
           </div>
         </div>
@@ -1976,7 +1969,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
         <div className="p-4 rounded-2xl bg-zinc-900 border-2 border-amber-400 flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[14px] font-black text-amber-300">
-              👻 오늘 무료 초능력 3회를 모두 사용하셨습니다
+              📊 내 귀신초능력 시간 절약 리포트 &amp; 30일 체험 만료 안내
             </span>
             <button
               type="button"
@@ -1988,7 +1981,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
           </div>
           <p className="text-[12.5px] text-zinc-200">
             지금까지 총 <strong className="text-amber-300">412번</strong>의 복붙을 줄여 약{' '}
-            <strong className="text-teal-300">6시간 50분</strong>을 아끼셨습니다. 내일 아침 다시 3회가 무료 충전됩니다.
+            <strong className="text-teal-300">6시간 50분</strong>을 아끼셨습니다! 30일 무료체험 만료 후에는 평생 무료 기본기만 유지되고 🔒 유료 기능은 잠기며, 이미 내 PC 로컬 폴더에 복사된 원본 파일은 그대로 보존됩니다.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1999,14 +1992,14 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
               }}
               className="px-4 py-2 rounded-xl bg-amber-400 text-zinc-950 text-[12px] font-black cursor-pointer"
             >
-              ☕ 월 3,900원 (10년 특판 3.9만) 무제한 풀기
+              ☕ 월 3,900원 (10년 특판 3.9만) 전 기능 무제한 풀기
             </button>
             <button
               type="button"
               onClick={() => setActivePromoModal('none')}
               className="px-3 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-[12px] font-bold cursor-pointer"
             >
-              내일 다시 무료로 쓰기
+              평생 무료 기본기 계속 쓰기
             </button>
           </div>
         </div>
@@ -2076,7 +2069,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       >
         <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5">
-            <GhostBabyMascotBadge subtitle="사진 위 글자 톡톡 찍기" />
+            <GhostBabyMascotBadge subtitle="📝 사진·표 OCR 창 (창 UI ③ 별도 독립 창 · 글자·단어칩 톡톡 찍기)" />
             <span className="text-[14px] font-black text-white truncate">
               {photo.name}
             </span>

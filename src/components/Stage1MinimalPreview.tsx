@@ -765,6 +765,25 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
               </div>
             )}
 
+            {matchedVideoScenes.length === 0 ? (
+              <div className="w-full py-12 px-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col items-center justify-center text-center gap-2.5">
+                <span className="material-symbols-outlined text-4xl text-zinc-500">videocam_off</span>
+                <p className="font-headline-sm text-[15px] font-bold text-zinc-200">
+                  {hasExecutedUserSearch && activeQuery
+                    ? `“${activeQuery}”와 일치하는 동영상이 없습니다 (0건)`
+                    : '표시할 동영상이 없습니다'}
+                </p>
+                {videoSceneItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => resetSearchSpaceToAll('video')}
+                    className="mt-1 px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container text-[12.5px] font-bold cursor-pointer"
+                  >
+                    전체 동영상 {videoSceneItems.length}개 다시 보기
+                  </button>
+                )}
+              </div>
+            ) : (
             <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
               {matchedVideoScenes.map((vid) => {
                 const cardThumbUrl = resolveVideoCardThumbUrl(vid);
@@ -845,6 +864,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                 );
               })}
             </div>
+            )}
           </section>
         ) : searchSpace === 'vault' ? (
           <section className="flex flex-col gap-5">
@@ -1025,10 +1045,10 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                             e.stopPropagation();
                             setOcrModalPhoto(item.photo);
                           }}
-                          title="이 사진에서 글자·표·원하는 단어 조각(칩)만 바로 따내기 (창 UI ③)"
+                          title="귀신검색창에서 이 사진의 별도 독립 사진·OCR 창(창 UI ③)을 열어 글자·표를 추출합니다"
                           className="absolute bottom-10 right-2.5 z-10 px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
                         >
-                          📝 OCR 글자 따기
+                          📝 OCR
                         </button>
 
                         <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">
@@ -1059,6 +1079,48 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
           </section>
         )}
       </div>
+
+      {/* [메뉴 2 · 👻 귀신검색창 하단 고정 소속 설명란] 유료 티어(🔒) 및 부가 기능 안내 */}
+      <section
+        aria-label="귀신검색 유료 티어 및 부가 기능 안내"
+        className="mt-2 p-4 sm:p-5 rounded-2xl bg-[#14161B] border border-white/10 flex flex-col gap-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[13.5px] font-extrabold text-teal-300">
+            🔒 귀신검색 유료 티어 및 부가 기능 안내 (명시적 동의 시 30일 무제한 무료체험 · 만료 시 일 3회 무료 없이 깔끔 잠금🔒)
+          </span>
+          <span className="text-[11.5px] text-zinc-400 font-semibold">
+            내 PC 문서·사진·영상 검색 &amp; 동영상 [📝 글자 뽑기]는 평생 무제한 무료
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[12px] text-zinc-200">
+          <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1">
+            <span className="font-extrabold text-white">① 📱 내 기기 통합 소환🔒</span>
+            <span className="text-zinc-400 leading-snug">
+              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 통합 노출 &amp; 폰 촬영 직후 <strong className="text-teal-300">0.2초 공간이동 (촬영 후 1분간 자동팝업 대기)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 내 PC 폴더에 복사된 원본 파일은 영구 보존
+            </span>
+          </div>
+          <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1">
+            <span className="font-extrabold text-white">② 📝 사진·표 OCR 창🔒 (별도 독립 창)</span>
+            <span className="text-zinc-400 leading-snug">
+              귀신검색창 안에는 사진 목록만 깔끔하게 보이고, 사진에서 <strong className="text-teal-300">[📝 OCR]</strong>을 누르면 별도 독립 <strong className="text-white">사진·OCR 창</strong>이 열려 글자·표를 추출
+            </span>
+          </div>
+          <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1">
+            <span className="font-extrabold text-white">③ 🏷️ 귀신 라벨러🔒</span>
+            <span className="text-zinc-400 leading-snug">
+              암호 같은 사진·카톡·문서 파일명을 촬영일·내용 규칙(YYMMDD_내용)으로 한 번에 자동 정리
+            </span>
+          </div>
+          <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1">
+            <span className="font-extrabold text-white">④ 💬 귀신 말풍선 (부가 기능)</span>
+            <span className="text-zinc-400 leading-snug">
+              윈도우 기본 폴더·바탕화면 파일 위에 마우스를 올리면 핵심 내용 3줄 요약 표시
+            </span>
+          </div>
+        </div>
+      </section>
+
       <GhostPhotoOcrTeleportModal
         photo={ocrModalPhoto}
         onClose={() => setOcrModalPhoto(null)}
@@ -1895,6 +1957,41 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               )}
             </section>
           )}
+
+          {/* [메뉴 1 · 👻 귀신비서 하단 고정 소속 설명란] 비서의 상시 케어 능력 3종 (평생 무료) */}
+          <section
+            aria-label="귀신비서 상시 케어 능력 안내"
+            className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[13.5px] font-extrabold text-emerald-300">
+                🛡️ 기타 · 귀신비서의 상시 케어 능력 3종 (언제나 평생 무료)
+              </span>
+              <span className="text-[11.5px] text-zinc-400 font-semibold">
+                우측 귀신비서 채팅창에서 언제든 말로 점검·복구 가능
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] text-zinc-200">
+              <div className="p-3 rounded-xl bg-zinc-950/75 border border-white/10 flex flex-col gap-1">
+                <span className="font-extrabold text-white">① ⚡ 은행·관공서 보안프로그램 자동 절전·기상</span>
+                <span className="text-zinc-400 leading-snug">
+                  평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 접속 시에만 자동 기상 (고클린 대체)
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-950/75 border border-white/10 flex flex-col gap-1">
+                <span className="font-extrabold text-white">② 🛡️ 다운로드 파일 무소음 백신 경호</span>
+                <span className="text-zinc-400 leading-snug">
+                  광고 팝업 없이 새로 받은 설치파일·압축파일을 Windows Defender 직결로 조용히 즉시 검사 (알약 대체)
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-950/75 border border-white/10 flex flex-col gap-1">
+                <span className="font-extrabold text-white">③ 🛟 미저장 종료 문서 &amp; 휴지통 3초 구출</span>
+                <span className="text-zinc-400 leading-snug">
+                  실수로 저장 안 하고 끈 엑셀·한글 임시본 추적 및 잘못 지운 휴지통 파일 3초 원복
+                </span>
+              </div>
+            </div>
+          </section>
         </GhostSecretaryFirstGuard>
 
         {/* ═══════════════ [우측 열] 손보기 대화창 (첫 인사말 말풍선에 PC 1클릭 검진 액션 내장) ═══════════════ */}
