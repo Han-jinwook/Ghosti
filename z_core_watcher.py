@@ -210,24 +210,32 @@ def scan_post_office_files() -> Dict[str, str]:
     return result
 
 
+def _normalize_role_arg(raw_val: str) -> str:
+    val = (raw_val or "").strip().lower()
+    if val == "all":
+        return "all"
+    normalized = ",".join(r for r in ("1", "2", "3") if r in val)
+    return normalized
+
+
 def _resolve_active_role() -> str:
     """
-    --role 1|2|3|all 인자(하위호환 --track 포함) 또는 워크트리 폴더명(Ghosti_Search / Ghosti_Share)으로부터
-    현재 창의 담당 역할(1귀신 / 2귀신 / 3귀신 / all)을 판별합니다.
+    --role 1|2|3|2,3|all 인자(하위호환 --track 포함) 또는 워크트리 폴더명(Ghosti_Search / Ghosti_Share)으로부터
+    현재 창의 담당 역할(1귀신 / 2귀신 / 3귀신 / 2,3 복합 / all)을 판별합니다.
     - 창 1개만 열었을 때(D:\\Ghosti 무옵션): 기본값 'all' (1귀신·2귀신·3귀신·귀신창 전체 감지)
     - D:\\Ghosti_Search 무옵션: '2' 자동 감지
     - D:\\Ghosti_Share 무옵션: '3' 자동 감지
-    - 명시적 --role 1|2|3|all 지정 시 해당 값 최우선 적용
+    - 명시적 --role 1 | 2 | 3 | 2,3 | 23 | 1,2 | 1,3 | all 지정 시 해당 값 최우선 적용
     """
     for i, arg in enumerate(sys.argv[1:], start=1):
         if arg == "--role" and i + 1 < len(sys.argv):
-            val = sys.argv[i + 1].strip().lower()
-            if val in ("1", "2", "3", "all"):
-                return val
+            norm = _normalize_role_arg(sys.argv[i + 1])
+            if norm:
+                return norm
         elif arg.startswith("--role="):
-            val = arg.split("=", 1)[1].strip().lower()
-            if val in ("1", "2", "3", "all"):
-                return val
+            norm = _normalize_role_arg(arg.split("=", 1)[1])
+            if norm:
+                return norm
         elif arg == "--track" and i + 1 < len(sys.argv):
             val = sys.argv[i + 1].strip().lower()
             return {"free": "1", "sync": "2", "work": "3"}.get(val, "all")
@@ -300,6 +308,10 @@ def main() -> None:
         "1": "role=1 (1귀신: 비서·온보딩)",
         "2": "role=2 (2귀신: 검색·귀신창)",
         "3": "role=3 (3귀신: 사진공유·기기통합)",
+        "2,3": "role=2,3 (2·3귀신 복합: 검색·귀신창·사진공유·기기통합)",
+        "1,2": "role=1,2 (1·2귀신 복합: 비서·온보딩·검색·귀신창)",
+        "1,3": "role=1,3 (1·3귀신 복합: 비서·온보딩·사진공유·기기통합)",
+        "1,2,3": "role=1,2,3 (전체 복합 감지)",
         "all": "role=all (전체 감지)",
     }
     role_badge = role_label_map.get(active_role, f"role={active_role}")

@@ -30,8 +30,26 @@ export const GHOST_SECRETARY_PLAYBOOK = playbookJson as unknown as GhostSecretar
 export const GHOST_SECRETARY_AVATAR_SRC =
   (playbookJson as { persona?: { avatar?: string } }).persona?.avatar || '/gwisinkachi_app_icon_512.png';
 
-/** 손보기 명령 문장 판별 — '보안프로그램 정리해줘' 같은 실행 요청이 FAQ(보안·요금) 키워드에 가로채이지 않도록 보호 */
-const CARE_COMMAND_RE = /(정리|지워|삭제|청소|검진|느려|느린|빨라|고쳐|치워|꺼줘|최적화|점검해|사양|스펙|상태\s*봐|진행해|실행해|적출|언인스톨)/;
+/** 손보기·진단·복원·설정 명령 문장 판별 — '부팅 경과 시간 진단해줘', '보안프로그램 정리해줘', '시작프로그램 목록 보여줘' 같은 실행 요청이 FAQ(보안·요금) 키워드에 가로채이지 않도록 보호 */
+const CARE_COMMAND_RE =
+  /(정리|지워|삭제|청소|검진|진단|점검|부팅|재부팅|켜\s*둔|경과|시작\s*프로그램|자동\s*실행|목록|느려|느린|버벅|빨라|고쳐|치워|꺼줘|최적화|사양|스펙|상태\s*봐|용량|메모리|램|디스크|백신|디펜더|바이러스|랜섬웨어|복원|복구|되돌려|바탕화면|다운로드|휴지통|실적|보고서|온보딩|문의방|상용구|복사\s*기록|진행해|실행해|적출|언인스톨)/;
+
+/** 대본집 부분 문자열 오매칭 방지 (예: '얼마나' 안의 '얼마'가 요금 안내로 튀는 현상, '보안프로그램' 안의 '보안'이 개인정보 FAQ로 튀는 현상 차단) */
+function matchesPlaybookKeyword(text: string, kw: string, scenarioId: string): boolean {
+  if (!kw || !text.includes(kw)) return false;
+  if (kw === '얼마') {
+    // '얼마나 지났는지', '얼마나 걸려', '얼마나 남았어' 등 정도·시간 부사는 요금 질문이 아님!
+    return /얼마(?!\s*(?:나|전|동안|만\s*더))/.test(text);
+  }
+  if (kw === '보안' && scenarioId === 'faq_privacy_zero_cloud_security') {
+    // '보안프로그램', '보안 모듈', '보안 쓰레기', '보안 서비스'는 손보기 대상이지 개인정보 유출 FAQ가 아님!
+    return /보안(?![\s]*(?:프로그램|모듈|쓰레기|서비스|플러그인|절전))/.test(text);
+  }
+  if ((kw === '조용히' || kw === '시끄러') && scenarioId === 'cmd_mute_ghost_sound') {
+    if (/팬\s*소음|비행기\s*소리|쿨러|발열|노트북/.test(text)) return false;
+  }
+  return true;
+}
 export const GHOST_SECRETARY_NAME = '귀신비서';
 
 export function findScenario(id: string, pb: GhostSecretaryPlaybook = GHOST_SECRETARY_PLAYBOOK): PlaybookScenario | null {
@@ -763,7 +781,7 @@ export function resolveGhostSecretaryTurn(
       if (sc.id === 'impatient_user_wants_search_now') continue;
       if (sc.id.startsWith('faq_') && CARE_COMMAND_RE.test(text)) continue;
       const kws = extractTextContainsKeywords(sc.trigger);
-      if (kws.length && kws.some((k) => text.includes(k))) {
+      if (kws.length && kws.some((k) => matchesPlaybookKeyword(text, k, sc.id))) {
         const isTurnOff = /꺼|끄|해제|중지|안\s*받|안\s*할/.test(text);
         const toggleState = isTurnOff ? 'OFF(해제)' : 'ON(켜짐)';
         let updatedState = st;

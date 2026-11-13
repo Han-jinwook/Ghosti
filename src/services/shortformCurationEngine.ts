@@ -149,8 +149,9 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
   const text = (userInput || '').trim();
   if (!text) return { isSimpleSearchIntent: false, extractedKeyword: '' };
 
-  // 정리/이동/숨김/복원/수리 명령어가 들어있으면 Z몬스터 고유 작업으로 분류
-  const doctorActionRegex = /(정리|옮겨|이동|숨겨|숨김|복원|되돌려|고쳐|수리|안\s*돼|안\s*나와|오류|에러|느려|폴더\s*만들)/i;
+  // 정리/이동/숨김/복원/수리/진단/시작프로그램/온보딩/설정 명령어가 들어있으면 사진·문서 단순 검색이 아닌 귀신비서 고유 작업으로 분류
+  const doctorActionRegex =
+    /(정리|옮겨|이동|숨겨|숨김|복원|복구|되돌려|고쳐|수리|안\s*돼|안\s*나와|오류|에러|느려|버벅|폴더\s*만들|진단|점검|검진|부팅|재부팅|경과|켜\s*둔|시작\s*프로그램|자동\s*실행|보안\s*프로그램|보안\s*모듈|애드웨어|백신|디펜더|바이러스|랜섬웨어|사양|스펙|용량|메모리|램|cpu|프로세스|점유율|사라졌|없어졌|날아갔|지웠|휴지통|저장\s*안\s*하고|실적|보고서|온보딩|초능력|상용구|복사\s*기록|스튜디오|문의방|요금|가격)/i;
   if (doctorActionRegex.test(text)) {
     return { isSimpleSearchIntent: false, extractedKeyword: '' };
   }

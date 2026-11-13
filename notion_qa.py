@@ -327,13 +327,19 @@ def classify_ghosti_bug_role(title_text: str, body_text: str = "", app_select: s
 
 def _matches_role_strict(title_text: str, app_select: str, role: str) -> bool:
     """
-    Secretary 지시 명세에 따른 엄격한 role 매칭:
+    Secretary 지시 명세에 따른 엄격한 role 매칭 (단일 및 복합 '2,3' 등 완벽 지원):
     - role == "1": "[1귀신" (및 말머리 미부착 구버전 중 1번 분류) 감지
     - role == "2": "[2귀신" 및 "[귀신창" 감지
     - role == "3": "[3귀신" 감지
+    - role == "2,3" 등 복합 지정: 쉼표 구분 각 role 중 하나라도 매칭되면 True
     - role == "all": 1귀신, 2귀신, 3귀신, 귀신창, 귀신같이 전체 감지
     """
     if role == "all":
+        return True
+    if "," in role:
+        sub_roles = [r.strip() for r in role.split(",") if r.strip() in ("1", "2", "3")]
+        if sub_roles:
+            return any(_matches_role_strict(title_text, app_select, sr) for sr in sub_roles)
         return True
     has_explicit_123 = any(tag in title_text for tag in ("[1귀신", "1귀신]", "[2귀신", "2귀신]", "[3귀신", "3귀신]"))
     if role == "1":
@@ -362,18 +368,19 @@ def query_bugs_raw(
     role: Optional[str] = None,
     track: Optional[str] = None,
 ) -> List[Dict[str, str]]:
-    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (--role 1|2|3|all 완벽 지원)."""
+    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (--role 1|2|3|2,3|all 완벽 지원)."""
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     resolved_status = target_status or STATUS_DISCOVERED
 
-    # 하위 호환: track 인자가 넘어온 경우 role로 변환
+    # 하위 호환: track 인자가 넘어온 경우 role로 변환, 복합 role('2,3', '23' 등) 정규화
     resolved_role = (role or "").strip().lower()
     if not resolved_role and track:
         t_low = track.strip().lower()
         resolved_role = {"free": "1", "sync": "2", "work": "3"}.get(t_low, "all")
-    if resolved_role not in ("1", "2", "3", "all"):
-        resolved_role = "all"
+    if resolved_role != "all":
+        norm_role = ",".join(r for r in ("1", "2", "3") if r in resolved_role)
+        resolved_role = norm_role if norm_role else "all"
 
     url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
     if SCHEMA.status_prop_type == "status":

@@ -1201,6 +1201,47 @@ async function handleStudioSupportProxyIfMatched(
 ): Promise<MonsterChatMessage | null> {
   const isClaim =
     /클레임|불만|항의|환불|결제\s*취소|컴플레인|짜증|엉망|불편\s*신고|고객\s*센터\s*접수/i.test(clean);
+  const isReopenLinkOnly =
+    /스튜디오\s*문의방\s*링크|문의방\s*(링크|결과|내역)\s*(다시\s*)?(보여|열어|알려|확인)/i.test(clean);
+  if (isReopenLinkOnly) {
+    const prevSupportMsg = [...sharedChatState.messages]
+      .reverse()
+      .find((m) => m.cardKind === 'STUDIO_SUPPORT_PROXY' && m.studioSupportPayload);
+    const storeState = useSaySeeStore.getState();
+    const userEmail =
+      prevSupportMsg?.studioSupportPayload?.userEmail ||
+      storeState?.merlinAuth?.email ||
+      (typeof window !== 'undefined' ? localStorage.getItem('userEmail') || '' : '') ||
+      'merlin_member@sundreamer.app';
+    const prevPayload: MonsterStudioSupportPayload = prevSupportMsg?.studioSupportPayload || {
+      ticketKind: 'AS_BUG',
+      badgeLabel: '📮 스튜디오 나의 문의방 바로가기',
+      userEmail,
+      userComment: '최근 접수 내역 및 진행 결과 조회',
+      ticketId: 'MY-INQUIRY',
+      studioJumpUrl: buildStudioSupportJumpUrl({
+        appId: 'Ghosti',
+        ticketId: 'MY-INQUIRY',
+        email: userEmail,
+      }),
+      submittedOk: true,
+    };
+    speak('접수하신 스튜디오 나의 문의방 바로가기 링크를 다시 띄워드립니다.');
+    return reply(
+      sourceTab,
+      `📮 **[스튜디오 ‘나의 문의방’ 바로가기 링크 안내]**\n` +
+        `회원님 계정(**${prevPayload.userEmail}**)으로 접수된 내역과 처리 진행 상황은 아래 **[👉 스튜디오 ‘나의 문의방’ 결과 보러 가기 ↗]** 버튼을 눌러 바로 확인하실 수 있습니다!`,
+      {
+        cardKind: 'STUDIO_SUPPORT_PROXY',
+        studioSupportPayload: prevPayload,
+        followUpSuggestions: [
+          '내 PC 사양이랑 상태 점검해줘',
+          '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+        ],
+      }
+    );
+  }
+
   const isIdea =
     /아이디어|건의|제안|기능\s*(추가|넣어|만들어)|업데이트\s*요청|개선\s*요청|이런\s*기능/i.test(clean);
   const isAsBug =
@@ -1861,6 +1902,15 @@ function handleGhostiInfoDeskIfMatched(
   sourceTab: 'trash' | 'repair',
   speak: (t: string) => void
 ): MonsterChatMessage | null {
+  const isConcretePcCareOrSearchCommand =
+    !/요금|가격|구독|특판|마스터권|얼리버드|무슨\s*앱|어떤\s*기능|업데이트\s*내역|온보딩\s*[123]?\s*탭|초능력\s*(체험방|설명|알려)/i.test(
+      clean
+    ) &&
+    /(바탕화면|다운로드|폴더|휴지통|시작\s*프로그램|자동\s*실행|부팅|재부팅|켜\s*둔|경과\s*시간|바이러스|랜섬웨어|백신|디펜더|사양|스펙|느려|버벅|프린터|와이파이|블루투스|사라졌|없어졌|복구|복원\s*기록|건강\s*검진|정리해|치워\s*줘|고쳐\s*줘)/i.test(
+      clean
+    );
+  if (isConcretePcCareOrSearchCommand) return null;
+
   const isAskingAboutGhosti =
     /귀신같이|귀신창|ctrl\s*\+?\s*0|컨트롤\s*0|컨트롤\s*영|초능력|복사검색|기억검색|상용구|f1|f10|오타\s*둔갑|한영\s*성형|내\s*기기\s*통합|소모임|300장|300개|2,?900원|3,?900원|4,?900원|5,?900원|8,?900원|9,?900원|마스터권|특판|얼리버드|요금제|구독료|얼마야|암호화\s*우체통|qr\s*코드|이메일\s*연결|기기\s*연결|온보딩|새로\s*추가된|업데이트\s*내역|무슨\s*앱|어떤\s*기능/i.test(
       clean
@@ -2954,11 +3004,140 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
+  // 0-0G) [0토큰 즉시 실행: 시작프로그램 목록 실측 / 부팅 경과 시간 진단(내 기기 통합 불필요 안내 포함) / 순정 백신 점검]
+  // 추천 칩이나 자연어 진단 요청이 단순 파일 검색(SEARCH_ROUTING)이나 엉뚱한 요금·일상 대화로 빠지지 않도록 LLM 호출 전에 즉시 정확히 처리합니다.
+  const isExplicitStartupListInspect =
+    !/강제\s*종료|정리해|꺼\s*줘|치워|삭제해|지워/i.test(clean) &&
+    /시작\s*프로그램|자동\s*실행\s*(목록|프로그램)/i.test(clean);
+  if (isExplicitStartupListInspect) {
+    const r = await zcoreJson<{
+      ok: boolean;
+      startupPrograms?: Array<{ name?: string; command?: string; location?: string }>;
+      spoolerAndSecurity?: {
+        cpuLoadPercent?: number;
+        activeSecurityPlugins?: Array<{ keyword?: string; label?: string; matchedProcessOrService?: string }>;
+      };
+    }>('/__zcore/os-inspect');
+    if (!r.ok) {
+      const offlineStartupMsg =
+        `⚙️ **[내 PC 시작프로그램 점검 안내]**\n` +
+        `윈도우가 켜질 때 자동으로 실행되는 시작프로그램 목록과 은행·관공서 보안모듈을 실시간으로 읽어오려면 **무료 귀신비서 로컬 엔진**이 켜져 있어야 합니다.\n\n` +
+        `💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 **유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있습니다!`;
+      speak('시작프로그램 점검은 내 기기 통합 신청 없이 평생 무료로 이용하실 수 있으며, 로컬 엔진을 켜주시면 즉시 목록을 보여드립니다.');
+      return reply(sourceTab, offlineStartupMsg, {
+        followUpSuggestions: [
+          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+          '내 PC 사양이랑 남은 용량 진단해 줘',
+        ],
+      });
+    }
+    const names = (r.data.startupPrograms || [])
+      .map((s) => String(s?.name || '').trim())
+      .filter(Boolean)
+      .slice(0, 12);
+    const secPlugins = (r.data.spoolerAndSecurity?.activeSecurityPlugins || [])
+      .map((p) => String(p?.label || p?.keyword || '').trim())
+      .filter(Boolean);
+    const cpuLoad = r.data.spoolerAndSecurity?.cpuLoadPercent;
+    const diagPlan = buildSetupDiagnosisPlan('pc', clean, 'pc_boot_ads');
+    const startupListPreview =
+      names.length > 0
+        ? `• **감지된 자동실행 시작프로그램(${names.length}개)**: ${names.join(', ')}`
+        : `• **감지된 비필수 자동실행 시작프로그램**: 현재 추가 등록된 항목 없음 (깨끗함)`;
+    const secListPreview =
+      secPlugins.length > 0
+        ? `\n• **상주 애드웨어·보안모듈(${secPlugins.length}건)**: ${secPlugins.join(', ')}`
+        : '';
+    speak(
+      names.length > 0 || secPlugins.length > 0
+        ? `부팅할 때 켜지는 시작프로그램 ${names.length}개와 상주 보안모듈 ${secPlugins.length}건을 확인했습니다. 정리를 원하시면 응 정리해줘라고 입력해 주세요.`
+        : '현재 부팅 시 속도를 늦추는 불필요한 시작프로그램이 없이 깨끗한 상태입니다.'
+    );
+    return reply(
+      sourceTab,
+      `⚙️ **[내 PC 부팅 시작프로그램 & 상주 보안모듈 실측 목록${
+        typeof cpuLoad === 'number' ? ` (현재 CPU 부하 ${cpuLoad}%)` : ''
+      }]**\n${startupListPreview}${secListPreview}\n\n💡 **안내**: 시작프로그램 점검·정리는 **유료인 '내 기기 통합' 신청 없이 내 PC 1대에서 평생 0원(무료)**입니다. 불필요한 항목을 정리하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`,
+      {
+        cardKind: 'DEVICE_REPAIR_GATE',
+        deviceRepairPayload: {
+          title: `🚀 애드웨어·보안·비필수 시작프로그램 정리 (${secPlugins.length || names.length}종 확인)`,
+          badgeText: '🟢 언제나 0원 · 필수 앱 보호',
+          rootCause: secPlugins.length
+            ? `실측 결과 백그라운드에서 [${secPlugins.slice(0, 6).join(', ')}] 항목이 CPU·메모리를 점유하고 있습니다. 원본 레지스트리를 백업한 뒤 안전하게 정리합니다.`
+            : names.length
+            ? `부팅 시 자동실행되는 [${names.slice(0, 6).join(', ')}] 중 필수 시스템 앱을 제외한 불필요 항목만 골라 정리합니다.`
+            : '현재 불필요한 자동실행 시작프로그램이 감지되지 않아 쾌적한 상태입니다.',
+          symptomQuery: clean,
+          presetId: 'pc_boot_ads',
+          hasOverlayGuide: false,
+          completionMessage: diagPlan.completionMessage,
+        },
+        followUpSuggestions: [
+          '지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘',
+          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+          '다운로드 폴더 방치된 설치파일(.exe) 정리해줘',
+        ],
+      }
+    );
+  }
+
+  const isExplicitBootUptimeOrRebootCare =
+    !/강제\s*종료/i.test(clean) &&
+    /부팅\s*경과|켜\s*둔\s*지|경과\s*시간|부팅\s*컨디션|안\s*끄고|자동\s*재부팅|재부팅\s*예약|새벽.*?재부팅|고클린|구라제거기|핸들\s*누수|응급\s*리셋|(재부팅해도.*?보안\s*쓰레기)/i.test(
+      clean
+    );
+  if (isExplicitBootUptimeOrRebootCare) {
+    const subAct =
+      /예약|새벽/i.test(clean)
+        ? 'boot_lag_schedule_reboot'
+        : /구라|보안\s*프로그램|보안\s*쓰레기/i.test(clean)
+        ? 'boot_lag_clean_bloatware'
+        : 'boot_lag_diagnose';
+    const osRes = await executeRealOsAction(subAct, '04:00');
+    const baseSummary =
+      osRes.summaryKo ||
+      (subAct === 'boot_lag_diagnose'
+        ? '⏱️ **[내 PC 부팅 경과 시간 & 컨디션 진단 안내]**\n현재 무료 로컬 엔진이 꺼져 있어 정확한 윈도우 경과 시간을 읽지 못했습니다. 로컬 엔진을 켜두시면 켜둔 시간(시간·분)을 1초 만에 실측해 드리며, 하루(24시간) 이상 연속으로 켜두셨다면 억지 메모리 청소 대신 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 안전합니다!'
+        : '하루 이상(24시간 초과) 켜두어 윈도우에 쌓인 피로는 억지 메모리 청소 대신 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (권장 기준: 매일 1회 재부팅)');
+    const freeTierNote =
+      `\n\n💡 **요금 안내**: 컴퓨터 부팅 경과 시간 진단·자동 재부팅 예약·보안프로그램 손보기는 **유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있습니다! ('내 기기 통합'은 내 스마트폰과 집·회사 여러 대의 PC를 하나로 묶어 복사 내역·검색을 연동하실 때만 선택하시는 플랜입니다.)`;
+    const fullReplyText = baseSummary.includes('내 기기 통합') ? baseSummary : `${baseSummary}${freeTierNote}`;
+    speak(baseSummary);
+    return reply(sourceTab, fullReplyText, {
+      followUpSuggestions: [
+        '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+        '재부팅해도 다시 켜지는 은행·관공서 보안 쓰레기만 정리해줘',
+        '새벽 4시에 자동 재부팅 예약해줘',
+      ],
+    });
+  }
+
+  const isExplicitDefenderCheck =
+    !/지워|삭제|제거|적출|언인스톨/i.test(clean) &&
+    /알약|바이러스|랜섬웨어|백신|디펜더|defender|악성코드|방어막/i.test(clean);
+  if (isExplicitDefenderCheck) {
+    const subDef = /검사|스캔/i.test(clean) ? 'defender_quick_scan' : 'defender_status';
+    const defRes = await executeRealOsAction(subDef);
+    const summaryText =
+      defRes.summaryKo ||
+      '🛡️ 안심하세요! 윈도우 순정 바이러스·랜섬웨어 방어막(Windows Defender)이 기본 보호를 수행합니다. (무겁고 광고 뜨는 무료 백신을 따로 설치하실 필요가 없으며, 순정 백신 점검 역시 내 기기 통합 신청 없이 평생 0원 무료입니다!)';
+    speak(summaryText);
+    return reply(sourceTab, summaryText, {
+      followUpSuggestions: [
+        '윈도우 순정 백신으로 빠른 바이러스 검사 실행해줘',
+        '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+      ],
+    });
+  }
+
   // 단순 사진/영상/문서 찾기 발화("작년 가족사진 찾아줘", "바닷가에서 뛰노는 아이 보여줘")도 LLM 호출 대기 없이 0.001초 만에 [🎯 찾기]로 즉시 토스!
   const earlySearchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
   if (
     earlySearchIntent.isSimpleSearchIntent &&
-    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|없어졌|날아갔|휴지통|정리|치워|복원|사양|스펙/i.test(clean)
+    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|없어졌|날아갔|휴지통|정리|치워|복원|복구|사양|스펙|부팅|재부팅|경과|켜\s*둔|진단|점검|시작\s*프로그램|자동\s*실행|보안|백신|디펜더|바이러스|랜섬웨어|온보딩|문의방|상용구|복사\s*기록|실적|보고서/i.test(
+      clean
+    )
   ) {
     const kw = earlySearchIntent.extractedKeyword || clean;
     speak(`말씀하신 ${kw} 검색 결과를 찾기 화면에서 바로 띄워드립니다.`);
@@ -3095,7 +3274,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     llmDecision!.intent === 'GENERAL_CONVERSATION' &&
     (!llmDecision!.zCoreCommand?.endpoint || llmDecision!.zCoreCommand.endpoint === 'NONE') &&
     !isSyntheticMissingTest &&
-    !/느려|느린|느리|속도|버벅|렉|애드웨어|보안\s*프로그램|시작\s*프로그램|사양|스펙|cpu|메모리|램/i.test(clean)
+    !/느려|느린|느리|속도|버벅|렉|애드웨어|보안\s*프로그램|시작\s*프로그램|부팅|재부팅|경과|켜\s*둔|백신|디펜더|바이러스|랜섬웨어|사양|스펙|cpu|메모리|램|진단|점검/i.test(clean)
   ) {
     speak(llmDecision!.replyKo);
     return reply(sourceTab, `💬 ${llmDecision!.replyKo}`, {
@@ -3413,7 +3592,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       llmDecision?.intent === 'STARTUP_INSPECT' ||
       llmDecision?.zCoreCommand?.endpoint === '/__zcore/cleanup-scan' ||
       (!hasLlm &&
-        /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려/i.test(
+        /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려|시작\s*프로그램|자동\s*실행/i.test(
           clean
         )))
   ) {
@@ -3882,7 +4061,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   }
 
   // 7-A) [🚀 부팅·버벅임 케어] (매일 1회[24시간] 재부팅 기준점 & 브라우저 강제 청소 영구 금지 + 은행·관공서 보안쓰레기 안전 정리)
-  if (/고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|부팅\s*경과|켜둔\s*지|경과\s*시간|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|시작\s*프로그램|부팅\s*컨디션/i.test(clean)) {
+  if (/고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|부팅\s*경과|켜\s*둔\s*지|경과\s*시간|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|부팅\s*컨디션/i.test(clean)) {
     const subAct =
       /예약|새벽/i.test(clean)
         ? 'boot_lag_schedule_reboot'
@@ -3890,14 +4069,17 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? 'boot_lag_clean_bloatware'
         : 'boot_lag_diagnose';
     const osRes = await executeRealOsAction(subAct, '04:00');
-    const summaryText =
+    const baseSummary =
       osRes.summaryKo ||
       '하루 이상(24시간 초과) 켜두어 윈도우에 쌓인 피로는 강제로 메모리를 청소하면 오히려 열려 있는 브라우저(구글시트 등) 화면이 깨질 수 있습니다. 억지 청소 대신 지금 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (권장 기준: 매일 1회 재부팅)';
-    speak(summaryText);
+    const freeTierNote =
+      `\n\n💡 **요금 안내**: 컴퓨터 부팅 경과 시간 진단·자동 재부팅 예약·보안프로그램 손보기는 **유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있습니다!`;
+    const summaryText = baseSummary.includes('내 기기 통합') ? baseSummary : `${baseSummary}${freeTierNote}`;
+    speak(baseSummary);
     return reply(sourceTab, summaryText, {
       followUpSuggestions: [
         '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
-        '재부팅해도 다시 켜지는 은행·관공서 보안 쓰레기만 정리해줘',
+        '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
         '새벽 4시에 자동 재부팅 예약해줘',
       ],
     });
