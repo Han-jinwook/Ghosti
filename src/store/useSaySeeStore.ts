@@ -153,6 +153,7 @@ import {
   fetchIndexedVideos,
   fetchSharedFamilyHostPhotos,
   hasUnindexedLocalVideos,
+  isLocalVideosOcrIndexingPending,
   isTextQueryEncoderReady,
   normalizeLocalVideoSceneItem,
   loadInitialPhotoDataset,
@@ -2095,7 +2096,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
       const saveData = typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
       if (!isCoarsePointer && !saveData && typeof window !== 'undefined') {
         if (zCoreBridge.isConnected) {
-          // 첫 화면 카드 썸네일 로딩과 HTTP/1.1 커넥션이 겹치지 않도록 4.2초 여유 후 조용히 시작
+          // 첫 화면 썸네일 렌더 직후(0.9초) 동영상 키프레임 및 실사진 비전 벡터를 조용히 고속 인덱싱
           window.setTimeout(() => {
             void startSilentRealMediaVisionIndexing({
               photos: get().photos,
@@ -2121,7 +2122,53 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
                 }));
               },
             });
-          }, 4200);
+          }, 900);
+
+          // 첫 기동 시 백그라운드 배치 OCR(10개 단위)이 진행 중이면 완료 시점에 최신 배지·텍스트 메타데이터를 자동 동기화
+          if (isLocalVideosOcrIndexingPending()) {
+            const syncPendingOcrVideos = async (attempt: number) => {
+              const refreshed = await fetchIndexedVideos();
+              if (refreshed.length > 0) {
+                const byFile = new Map(refreshed.map((rv) => [rv.videoFileName, rv]));
+                set((state) => ({
+                  videoSceneItems: state.videoSceneItems.map((v) => {
+                    const fresh = byFile.get(v.videoFileName);
+                    return fresh
+                      ? {
+                          ...v,
+                          hasScreenOcrText: fresh.hasScreenOcrText,
+                          ocrLineCount: fresh.ocrLineCount,
+                          ocrFullText: fresh.ocrFullText,
+                          keywords: fresh.keywords,
+                          timelineFrames: fresh.timelineFrames,
+                        }
+                      : v;
+                  }),
+                  matchedVideoScenes: state.matchedVideoScenes.map((v) => {
+                    const fresh = byFile.get(v.videoFileName);
+                    return fresh
+                      ? {
+                          ...v,
+                          hasScreenOcrText: fresh.hasScreenOcrText,
+                          ocrLineCount: fresh.ocrLineCount,
+                          ocrFullText: fresh.ocrFullText,
+                          keywords: fresh.keywords,
+                          timelineFrames: fresh.timelineFrames,
+                        }
+                      : v;
+                  }),
+                }));
+              }
+              if (attempt < 3 && isLocalVideosOcrIndexingPending()) {
+                window.setTimeout(() => {
+                  void syncPendingOcrVideos(attempt + 1);
+                }, 6000);
+              }
+            };
+            window.setTimeout(() => {
+              void syncPendingOcrVideos(1);
+            }, 5200);
+          }
         } else if (hasVectors) {
           window.setTimeout(() => {
             void ensureTextQueryEncoderLoaded();
@@ -2794,7 +2841,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     // [규칙 1 & 2 + 동창회 타임라인 검색 시 갤러리 즉시 표시 + 동영상 전용 질의 시 동영상 탭 자동 포커스]
     const isExplicitVideoIntent =
       !isExplicitPhotoOnlyQuery &&
-      /영상\s*속|동영상|장면|구간|순간|말하는\s*부분|외치는|패러세일링|화이트보드|판서|룰렛|급식/.test(query);
+      /영상|동영상|장면|구간|순간|말하는\s*부분|외치는|패러세일링|화이트보드|판서|룰렛|급식|리얼픽/.test(query);
     let targetSpace: SearchSpaceMode =
       isExplicitPhotoOnlyQuery || isTimeRangeOrAlumniQuery
         ? 'gallery'
@@ -2884,7 +2931,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
         ];
         await ensureVideoKeyframesEmbeddedForSearch(
           prioritized,
-          36,
+          48,
           () => reqSeq !== latestRunTextQuerySeq
         );
         if (reqSeq !== latestRunTextQuerySeq) return;

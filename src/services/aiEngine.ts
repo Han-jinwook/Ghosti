@@ -944,6 +944,12 @@ function parseFileTimestampSecOfDay(fileName: string): { dateYmd: string; secOfD
   };
 }
 
+let lastLocalVideosOcrIndexingPending = false;
+
+export function isLocalVideosOcrIndexingPending(): boolean {
+  return lastLocalVideosOcrIndexingPending;
+}
+
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
     const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
@@ -982,6 +988,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
       await hydrateRealMediaVectorCacheOnce();
       if (zRes.status === 'fulfilled' && zRes.value.ok) {
         const zJson = await zRes.value.json();
+        lastLocalVideosOcrIndexingPending = Boolean(zJson.ocrIndexingPending);
         const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
         const realVideos = new Map<string, VideoSceneItem>();
         for (const v of zVids) {
@@ -990,6 +997,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
         }
         return Array.from(realVideos.values());
       }
+      lastLocalVideosOcrIndexingPending = false;
       return [];
     }
 
@@ -1293,13 +1301,29 @@ export async function searchVideoSceneItemsAsync(
     /* OCR search optional */
   }
 
-  // 2) [무블로킹 즉시 응답 + 멀티모달 768차원 캐시 벡터 & 연속 촬영 세션 결합]
-  //    검색 클릭 시 37개 영상을 동기로 디코딩하며 멈추지 않고, 캐시된 비전 벡터 + 동일 시각 촬영 사진 세션으로 0.1초 만에 즉시 반환
+  // 2) [콜드 스타트 무누락 보장 + 멀티모달 768차원 비전 벡터(CSLS 허브니스 보정) & 연속 촬영 세션 결합]
   if (nonBlackVideos.length === 0) {
     return Array.from(lexicalByKey.values());
   }
 
-  const queryVecs = await encodeMultimodalSearchQueryVecs(q, 450);
+  // 검색 시점에 아직 시각 벡터가 하나도 없는 로컬 영상이 있으면 대표 프레임(1장)을 우선 임베딩하여 37개 전수 누락 원천 차단
+  const unembeddedLocalCount = nonBlackVideos.filter(
+    (v) => String(v.id || '').startsWith('local_vid_') && !hasAnyCachedVectorForVideo(v)
+  ).length;
+  if (unembeddedLocalCount > 0) {
+    const syncEmbedDeadline = performance.now() + 4800;
+    await ensureVideoKeyframesEmbeddedForSearch(
+      nonBlackVideos,
+      48,
+      () => performance.now() > syncEmbedDeadline,
+      1
+    );
+  }
+
+  const [queryVecs, hubRefVecs] = await Promise.all([
+    encodeMultimodalSearchQueryVecs(q, 8000),
+    ensureHubnessReferenceVecsLoaded(),
+  ]);
 
   // 동일 날짜·인접 시각 실제 촬영 사진 중 쿼리와 일치하는 앵커 시각 수집 (콜드 스타트 시에도 즉시 작동)
   const matchedPhotoBursts: Array<{ dateYmd: string; secOfDay: number; sim: number }> = [];
@@ -1351,10 +1375,17 @@ export async function searchVideoSceneItemsAsync(
     }
   }
 
+  const isScreenOrUiVisualQuery =
+    /화면|녹화|캡처|스크린샷|스마트폰|휴대폰|핸드폰|폰|어플|앱|메뉴|로그인|급식|배틀|퀴즈|리얼픽|투표|룰렛|돌림판|추첨|당첨|이벤트|글자|자막|문서|슬라이드|발표|웹|사이트|클릭|조작/.test(
+      q.toLowerCase()
+    );
+
   interface VideoVisualEval {
     vid: VideoSceneItem;
     key: string;
+    rawBestSim: number;
     bestSim: number;
+    bestFrameHub: number;
     openingSim: number;
     bestSec: number;
     bestTsText: string;
@@ -1363,12 +1394,13 @@ export async function searchVideoSceneItemsAsync(
     tsInfo: { dateYmd: string; secOfDay: number } | null;
   }
 
-  const evals: VideoVisualEval[] = [];
+  const rawEvals: VideoVisualEval[] = [];
   for (const rawVid of nonBlackVideos) {
     const vid = normalizeLocalVideoSceneItem(rawVid);
     const key = vid.videoFileName || vid.id;
     const baseKey = getVideoMediaBaseKey(vid);
-    let bestSim = -1;
+    let rawBestSim = -1;
+    let bestFrameHub = 0;
     let openingSim = -1;
     let bestSec = 0;
     let bestTsText = '00:00';
@@ -1376,49 +1408,73 @@ export async function searchVideoSceneItemsAsync(
     let bestThumb = localVideoRepThumbMap.get(baseKey) || vid.thumbUrl || '';
 
     if (queryVecs.length > 0) {
-      for (const frame of vid.timelineFrames) {
-        const fKey = getVideoFrameCacheKey(vid, frame.timeSec);
-        const fVec = localVideoFrameVecMap.get(fKey);
-        if (!fVec || fVec.length !== DEFAULT_DIM) continue;
+      const evaluatedFrameKeys = new Set<string>();
+      const evaluateCandidateVec = (
+        fKey: string,
+        fVec: Float32Array | undefined,
+        sec: number,
+        tsText: string,
+        phaseLabel: string,
+        fallbackThumb?: string
+      ) => {
+        if (!fVec || fVec.length !== DEFAULT_DIM || evaluatedFrameKeys.has(fKey)) return;
+        evaluatedFrameKeys.add(fKey);
         let fSim = -1;
         for (const qv of queryVecs) {
           const s = cosineSimilarity(qv, fVec);
           if (s > fSim) fSim = s;
         }
-        if (frame.timeSec <= 2 && fSim > openingSim) {
+        if (sec <= 2 && fSim > openingSim) {
           openingSim = fSim;
         }
-        if (fSim > bestSim) {
-          bestSim = fSim;
-          bestSec = frame.timeSec;
-          bestTsText = frame.timestampText || formatVideoDurationText(frame.timeSec);
-          bestPhaseLabel = frame.phaseLabel || '장면 포착';
+        if (fSim > rawBestSim) {
+          rawBestSim = fSim;
+          bestFrameHub = computeFrameHubnessScore(fKey, fVec, hubRefVecs);
+          bestSec = sec;
+          bestTsText = tsText || formatVideoDurationText(sec);
+          bestPhaseLabel = phaseLabel || '장면 포착';
           bestThumb =
             localVideoFrameThumbMap.get(fKey) ||
-            frame.thumbUrl ||
+            fallbackThumb ||
             localVideoRepThumbMap.get(baseKey) ||
             vid.thumbUrl ||
             '';
         }
+      };
+
+      for (const frame of vid.timelineFrames) {
+        const fKey = getVideoFrameCacheKey(vid, frame.timeSec);
+        evaluateCandidateVec(
+          fKey,
+          localVideoFrameVecMap.get(fKey),
+          frame.timeSec,
+          frame.timestampText,
+          frame.phaseLabel,
+          frame.thumbUrl
+        );
       }
 
-      const repVec = localVideoFrameVecMap.get(`vrep:${baseKey}`);
+      // 체크포인트 초 반올림 변경 등으로 키가 어긋난 과거 IndexedDB 프레임 벡터도 전수 평가하여 캐시 유실 방지
+      const prefix = `vframe:${baseKey}:`;
+      for (const [mKey, mVec] of localVideoFrameVecMap.entries()) {
+        if (!mKey.startsWith(prefix) || evaluatedFrameKeys.has(mKey)) continue;
+        const parsedSec = Math.max(0, Number(mKey.slice(prefix.length)) || 0);
+        evaluateCandidateVec(mKey, mVec, parsedSec, formatVideoDurationText(parsedSec), '장면 포착');
+      }
+
+      const repKey = `vrep:${baseKey}`;
+      const repVec = localVideoFrameVecMap.get(repKey);
       if (repVec && repVec.length === DEFAULT_DIM) {
-        let rSim = -1;
-        for (const qv of queryVecs) {
-          const s = cosineSimilarity(qv, repVec);
-          if (s > rSim) rSim = s;
-        }
-        if (rSim > bestSim) {
-          bestSim = rSim;
-        }
+        evaluateCandidateVec(repKey, repVec, bestSec, bestTsText, bestPhaseLabel);
       }
     }
 
-    evals.push({
+    rawEvals.push({
       vid,
       key,
-      bestSim,
+      rawBestSim,
+      bestSim: rawBestSim,
+      bestFrameHub,
       openingSim,
       bestSec,
       bestTsText,
@@ -1428,26 +1484,51 @@ export async function searchVideoSceneItemsAsync(
     });
   }
 
+  // CSLS 평균 중심 허브니스 보정(Mean-Centered Hubness Debiasing):
+  // 동굴 암벽·복잡한 스마트폰 앱 화면처럼 모든 한국어 검색어에 공통으로 높은 기본 유사도를 보이는 허브 프레임 편향을 제거합니다.
+  const validHubs = rawEvals.filter((e) => e.rawBestSim > 0 && e.bestFrameHub > 0).map((e) => e.bestFrameHub);
+  const meanCorpusHub =
+    validHubs.length > 0 ? validHubs.reduce((acc, v) => acc + v, 0) / validHubs.length : 0;
+
+  const evals: VideoVisualEval[] = rawEvals.map((ev) => {
+    if (ev.rawBestSim <= 0) return ev;
+    let adj = ev.rawBestSim;
+    if (meanCorpusHub > 0 && ev.bestFrameHub > 0) {
+      adj -= 0.8 * (ev.bestFrameHub - meanCorpusHub);
+    }
+    const hasLexHit = lexicalByKey.has(ev.key);
+    const isDenseScreenUiClip =
+      Boolean(ev.vid.hasScreenOcrText) &&
+      ((ev.vid.ocrLineCount ?? 0) >= 2 || String(ev.vid.ocrFullText || '').length >= 24);
+    if (!hasLexHit && !isScreenOrUiVisualQuery && isDenseScreenUiClip) {
+      adj -= 0.032;
+    }
+    return {
+      ...ev,
+      bestSim: adj,
+    };
+  });
+
   const embeddedSims = evals
     .filter((e) => e.bestSim > 0)
     .map((e) => e.bestSim)
     .sort((a, b) => b - a);
   const topSim = embeddedSims[0] ?? 0;
-  const medianSim = embeddedSims[Math.floor(embeddedSims.length * 0.5)] ?? 0;
+  const p60Sim = embeddedSims[Math.floor(embeddedSims.length * 0.6)] ?? 0;
   const hasCorpusSeparation =
     embeddedSims.length >= 6
-      ? topSim >= 0.635 && topSim - medianSim >= 0.02
+      ? topSim >= 0.622 && topSim - p60Sim >= 0.015
       : embeddedSims.length >= 3
-      ? topSim >= 0.648
+      ? topSim >= 0.648 && topSim - (embeddedSims[embeddedSims.length - 1] ?? 0) >= 0.018
       : embeddedSims.length >= 1
-      ? topSim >= 0.66
+      ? topSim >= 0.675
       : false;
   const admitThreshold =
     embeddedSims.length >= 6
-      ? Math.max(0.632, topSim - 0.045, medianSim + 0.02)
+      ? Math.max(0.622, topSim - 0.036, p60Sim + 0.015)
       : embeddedSims.length >= 3
-      ? Math.max(0.642, topSim - 0.045)
-      : Math.max(0.655, topSim - 0.04);
+      ? Math.max(0.646, topSim - 0.034)
+      : Math.max(0.672, topSim - 0.03);
 
   const strongVideoBursts = hasCorpusSeparation
     ? evals
@@ -3168,9 +3249,55 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 let textQueryModel: any = null;
 let textQueryTokenizer: any = null;
 let textQueryLoading: Promise<boolean> | null = null;
+let cachedUsableWebGpuPromise: Promise<boolean> | null = null;
+
+async function detectUsableWebGpu(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  if (!cachedUsableWebGpuPromise) {
+    cachedUsableWebGpuPromise = (async () => {
+      try {
+        const adapter = await (navigator as any).gpu?.requestAdapter?.({
+          powerPreference: 'high-performance',
+        });
+        return Boolean(adapter);
+      } catch {
+        return false;
+      }
+    })();
+  }
+  return cachedUsableWebGpuPromise;
+}
+
+async function loadModelWithWebGpuToWasmFallback(config: any, dtypeSpec: any): Promise<any> {
+  const canTryGpu = await detectUsableWebGpu();
+  if (canTryGpu) {
+    try {
+      return await loadWithR2Fallback(() =>
+        AutoModel.from_pretrained(MODEL_ID, {
+          config,
+          device: 'webgpu',
+          dtype: dtypeSpec,
+        } as any)
+      );
+    } catch (gpuErr) {
+      console.warn('[Ghosti Engine] WebGPU 세션 생성 실패 ➔ WASM 모드로 자동 전환합니다:', gpuErr);
+    }
+  }
+  return loadWithR2Fallback(() =>
+    AutoModel.from_pretrained(MODEL_ID, {
+      config,
+      device: 'wasm',
+      dtype: dtypeSpec,
+    } as any)
+  );
+}
 
 export function isTextQueryEncoderReady(): boolean {
-  return Boolean((searchModel && tokenizer) || (textQueryModel && textQueryTokenizer));
+  return Boolean(
+    (searchModel && tokenizer) ||
+      (textQueryModel && textQueryTokenizer) ||
+      (sharedVisionModel && textQueryTokenizer)
+  );
 }
 
 export async function ensureTextQueryEncoderLoaded(): Promise<boolean> {
@@ -3179,24 +3306,23 @@ export async function ensureTextQueryEncoderLoaded(): Promise<boolean> {
   textQueryLoading = (async () => {
     try {
       enableOpfsCache();
+      if (!textQueryTokenizer) {
+        textQueryTokenizer = await loadWithR2Fallback(() => AutoTokenizer.from_pretrained(MODEL_ID));
+      }
+      if (sharedVisionModel) return true;
+      if (sharedVisionLoadPromise) {
+        const visionOk = await sharedVisionLoadPromise;
+        if (visionOk && sharedVisionModel) return true;
+      }
       const targetDtype = getOptimalEmbeddingDtype();
       const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.vision_config = null;
       config.audio_config = null;
-      const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
-      textQueryModel = await loadWithR2Fallback(() =>
-        AutoModel.from_pretrained(MODEL_ID, {
-          config,
-          device: hasGpu ? 'webgpu' : 'wasm',
-          dtype: targetDtype,
-        } as any)
-      );
-      textQueryTokenizer = await loadWithR2Fallback(() => AutoTokenizer.from_pretrained(MODEL_ID));
+      textQueryModel = await loadModelWithWebGpuToWasmFallback(config, targetDtype);
       return true;
     } catch (e) {
       console.warn('[Ghosti Engine] 텍스트 질의 인코더 로드 실패 — 키워드·태그 검색으로 동작합니다:', e);
       textQueryModel = null;
-      textQueryTokenizer = null;
       return false;
     } finally {
       textQueryLoading = null;
@@ -3440,7 +3566,7 @@ export async function executeTextSearch(
 
   let queryVecs: Float32Array[] = [];
   if (activePhotos.some((p) => p.vec && p.vec.length === DEFAULT_DIM)) {
-    queryVecs = await encodeMultimodalSearchQueryVecs(qRaw, 450);
+    queryVecs = await encodeMultimodalSearchQueryVecs(qRaw, 8000);
   }
   const embedMs = +(performance.now() - t0).toFixed(1);
   const s0 = performance.now();
@@ -4545,20 +4671,136 @@ async function persistMediaCacheEntry(
   }
 }
 
+function hasAnyCachedVectorForVideo(vid: VideoSceneItem): boolean {
+  const normVid = normalizeLocalVideoSceneItem(vid);
+  const baseKey = getVideoMediaBaseKey(normVid);
+  const repVec = localVideoFrameVecMap.get(`vrep:${baseKey}`);
+  if (repVec && repVec.length === DEFAULT_DIM) return true;
+  const secs = selectTargetFrameSecsForVideo(normVid, 2);
+  if (secs.some((s) => (localVideoFrameVecMap.get(getVideoFrameCacheKey(normVid, s))?.length ?? 0) === DEFAULT_DIM)) {
+    return true;
+  }
+  const prefix = `vframe:${baseKey}:`;
+  for (const [k, v] of localVideoFrameVecMap.entries()) {
+    if (k.startsWith(prefix) && v.length === DEFAULT_DIM) return true;
+  }
+  return false;
+}
+
 /**
- * 한국어 외래어·일상 활동 검색어의 멀티모달(Vision↔Text) 교차 정렬 정밀도를 높이기 위한 순수 언어 확장 사전
+ * [CSLS 허브니스 보정용 다중 도메인 중립 기준 문장]
+ * EmbeddingGemma 2 멀티모달 공간에서 어두운 암벽·복잡한 모바일 UI 화면 등 특정 프레임이
+ * 모든 한국어 문장에 대해 공통적으로 높은 기본 코사인 유사도(Hubness)를 갖는 현상을 정밀 상쇄합니다.
+ */
+const HUBNESS_REFERENCE_PROMPTS: string[] = [
+  '실내 사무실 책상과 의자 컴퓨터 모니터',
+  '푸른 숲속 나무와 초록 산책로 자연 풍경',
+  '도심 거리 고층 건물과 도로 위 자동차',
+  '식탁 위 접시에 담긴 따뜻한 음식과 요리',
+  '흰 종이 문서 서류와 인쇄된 표 글자',
+  '맑은 낮 하늘과 부드러운 흰 구름',
+  '거실 소파와 조명 실내 인테리어 공간',
+  '여러 사람이 실내외에 모여 대화하는 일상 모습',
+  '공원 초록 잔디밭과 활짝 핀 꽃나무',
+  '어두운 밤거리 가로등과 건물 네온 불빛',
+  '운동장 트랙과 야외 스포츠 시설',
+  '선반 위 생활용품과 작은 소품 물건들',
+];
+
+let cachedHubnessRefVecs: Float32Array[] | null = null;
+let hubnessRefLoadingPromise: Promise<Float32Array[]> | null = null;
+const frameHubnessScoreCache = new Map<string, number>();
+
+async function ensureHubnessReferenceVecsLoaded(): Promise<Float32Array[]> {
+  if (cachedHubnessRefVecs && cachedHubnessRefVecs.length > 0) {
+    return cachedHubnessRefVecs;
+  }
+  if (hubnessRefLoadingPromise) return hubnessRefLoadingPromise;
+
+  hubnessRefLoadingPromise = (async () => {
+    try {
+      if (!isTextQueryEncoderReady()) {
+        const ok = await Promise.race([
+          ensureTextQueryEncoderLoaded(),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 6000)),
+        ]);
+        if (!ok && !isTextQueryEncoderReady()) return [];
+      }
+      const qModel =
+        searchModel && tokenizer
+          ? searchModel
+          : textQueryModel
+          ? textQueryModel
+          : sharedVisionModel;
+      const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
+      if (!qModel || !qTok) return [];
+
+      const prefixed = HUBNESS_REFERENCE_PROMPTS.map((p) => QUERY_PREFIX + p);
+      const inputs = await qTok(prefixed, { padding: true, truncation: true });
+      const out = await qModel(inputs);
+      const rows = toRows(out.sentence_embedding).map((r) => normalizeVector(r, DEFAULT_DIM));
+      if (rows.length > 0) {
+        cachedHubnessRefVecs = rows;
+        frameHubnessScoreCache.clear();
+      }
+      return rows;
+    } catch {
+      return [];
+    } finally {
+      hubnessRefLoadingPromise = null;
+    }
+  })();
+
+  return hubnessRefLoadingPromise;
+}
+
+function computeFrameHubnessScore(
+  frameKey: string,
+  frameVec: Float32Array,
+  refVecs: Float32Array[]
+): number {
+  if (!refVecs || refVecs.length === 0 || frameVec.length !== DEFAULT_DIM) return 0;
+  const cached = frameHubnessScoreCache.get(frameKey);
+  if (typeof cached === 'number') return cached;
+  let sum = 0;
+  for (let i = 0; i < refVecs.length; i++) {
+    sum += cosineSimilarity(refVecs[i], frameVec);
+  }
+  const mean = sum / refVecs.length;
+  frameHubnessScoreCache.set(frameKey, mean);
+  return mean;
+}
+
+/**
+ * 한국어 외래어·일상 시각 개념 검색어의 멀티모달(Vision↔Text) 교차 정렬 정밀도를 높이기 위한 순수 언어 확장 사전
  * (파일명·경로 의존성 0% — 오직 사용자의 검색 질의 문장만 시각 묘사로 보조 확장)
  */
 const VISUAL_QUERY_CONCEPT_EXPANSIONS: Array<[RegExp, string]> = [
-  [/패러세일링|패러세일|낙하산\s*보트|해양\s*낙하산/, '바다 하늘 무지개 낙하산 모터보트 패러세일링 parasailing colorful parachute flying in sky over ocean boat'],
+  [/석양|노을|일몰|해질녘|황혼/, '붉은 석양 노을 일몰 주황빛 하늘 수평선 구름 해질녘 golden orange sunset twilight sky horizon clouds'],
+  [/일출|해돋이|여명/, '아침 일출 해돋이 붉은 태양 수평선 sunrise morning sun over horizon sky'],
+  [/비행기|항공기|기내|창밖\s*하늘/, '비행기 창문 밖 하늘 구름 항공기 날개 view from airplane window clouds sky wing'],
+  [/동굴|암석|종유석|석회동굴/, '어두운 자연 동굴 암석 바위 종유석 dark natural cave rock formation cavern'],
+  [/패러세일링|패러세일|낙하산\s*보트|해양\s*낙하산|낙하산/, '바다 하늘 무지개 낙하산 모터보트 패러세일링 parasailing colorful parachute flying in sky over blue ocean boat'],
+  [/모터보트|보트|요트|쾌속정/, '푸른 바다 위 달리는 모터보트 하얀 물보라 요트 motorboat speedboat white wake on blue sea'],
   [/씨워커|스노클링|스쿠버|바닷속|수중/, '바닷속 수중 잠수 스노클링 산호 물고기 underwater snorkeling scuba diving coral fish'],
   [/서핑|패들보드|카약|래프팅/, '바다 파도 서핑 보드 수상레저 surfing paddleboard kayak on water'],
-  [/바다|해변|바닷가|해수욕장|백사장/, '푸른 바다 해변 파도 백사장 물놀이 blue ocean sea beach waves'],
-  [/룰렛|돌림판|원판\s*추첨/, '컬러 원형 룰렛 돌림판 추첨 화면 colorful spinning roulette wheel screen'],
-  [/급식|식단표|메뉴\s*배틀/, '학교 급식 메뉴 배틀 식단표 스마트폰 화면 school lunch menu app screen'],
+  [/바다|해변|바닷가|해수욕장|백사장|파도/, '푸른 바다 해변 파도 백사장 수평선 blue ocean sea beach waves coastline'],
+  [/야자수|리조트|휴양지|열대/, '열대 휴양지 야자수 나무 초록 잎 리조트 tropical palm trees green leaves resort'],
+  [/룰렛|돌림판|원판\s*추첨/, '컬러 원형 룰렛 돌림판 추첨 이벤트 화면 colorful spinning roulette wheel game screen'],
+  [/급식|식단표|메뉴\s*배틀/, '학교 급식 메뉴 배틀 식단표 스마트폰 앱 화면 school lunch menu battle mobile app screen'],
+  [/리얼픽|투표|밸런스\s*게임/, '리얼픽 투표 선택 스마트폰 앱 화면 mobile poll voting app screen'],
+  [/스마트폰|휴대폰|화면\s*녹화|앱\s*화면/, '스마트폰 모바일 앱 인터페이스 화면 녹화 smartphone mobile app UI screen recording'],
+  [/호랑이|백호|맹수/, '호랑이 줄무늬 야생 동물 얼굴 클로즈업 tiger wild cat stripes animal closeup'],
+  [/부엉이|올빼미/, '부엉이 올빼미 큰 눈 깃털 새 owl bird feathers large eyes'],
+  [/늑대|여우/, '야생 늑대 여우 털 동물 얼굴 wolf fox furry wild animal'],
+  [/강아지|반려견|멍멍이|시바견/, '귀여운 강아지 반려견 개 털 코 cute dog puppy pet'],
+  [/고양이|반려묘|냥이/, '귀여운 고양이 반려묘 털 수염 cute cat kitten pet'],
+  [/토끼/, '귀여운 토끼 긴 귀 털 동물 cute rabbit bunny long ears'],
+  [/햄스터|다람쥐|기니피그/, '작고 귀여운 햄스터 다람쥐 설치류 동물 cute small hamster squirrel rodent'],
+  [/동물/, '귀여운 동물 강아지 고양이 야생동물 cute animal pet wildlife'],
+  [/올리브|오일|유리병/, '투명 유리병 노란 올리브 오일 액체 glass bottle golden olive oil liquid'],
+  [/먹방|숟가락|한입/, '사람이 숟가락으로 음식을 먹는 모습 person eating food with spoon'],
   [/생일|케이크|촛불/, '생일 파티 케이크 촛불 축하 birthday cake with lit candles celebration'],
-  [/강아지|반려견|멍멍이/, '귀여운 강아지 반려견 개 cute dog puppy pet'],
-  [/고양이|반려묘|냥이/, '귀여운 고양이 반려묘 cute cat kitten pet'],
   [/캠핑|글램핑|불멍|텐트/, '야외 캠핑장 텐트 타프 모닥불 outdoor camping tent campfire'],
   [/등산|산행|트레킹|정상석/, '산 정상 등산로 숲길 바위 mountain hiking trail peak'],
   [/스키|스노우보드|설원|슬로프/, '겨울 눈 덮인 스키장 슬로프 스노우보드 snowy ski slope snowboarding'],
@@ -4594,15 +4836,37 @@ export async function encodeMultimodalSearchQueryVecs(
   const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
   if (!qModel || !qTok) return [];
 
-  const prompts = [QUERY_PREFIX + q];
-  const qLow = q.toLowerCase();
-  for (const [rx, visualDesc] of VISUAL_QUERY_CONCEPT_EXPANSIONS) {
-    if (rx.test(qLow)) {
-      prompts.push(`${QUERY_PREFIX}${q} ${visualDesc}`);
-      break;
+  const coreQ = q
+    .replace(/(동영상|영상|비디오|클립|사진|이미지|장면|모습|구간|부분|찾아줘|찾아|보여줘|보여|검색해줘|검색)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const promptSet = new Set<string>([QUERY_PREFIX + q]);
+  if (coreQ.length >= 2 && coreQ !== q) {
+    promptSet.add(QUERY_PREFIX + coreQ);
+  }
+  if (/[,/·]/.test(coreQ || q)) {
+    const subTerms = (coreQ || q)
+      .split(/[,/·]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 2)
+      .slice(0, 3);
+    for (const st of subTerms) {
+      promptSet.add(QUERY_PREFIX + st);
     }
   }
 
+  const qLow = (coreQ || q).toLowerCase();
+  let matchedExpansions = 0;
+  for (const [rx, visualDesc] of VISUAL_QUERY_CONCEPT_EXPANSIONS) {
+    if (rx.test(qLow) || rx.test(q.toLowerCase())) {
+      promptSet.add(`${QUERY_PREFIX}${coreQ || q} ${visualDesc}`);
+      matchedExpansions += 1;
+      if (matchedExpansions >= 2) break;
+    }
+  }
+
+  const prompts = Array.from(promptSet);
   try {
     const inputs = await qTok(prompts, { padding: true, truncation: true });
     const out = await qModel(inputs);
@@ -4668,20 +4932,16 @@ async function acquireSharedVisionEncoder(): Promise<boolean> {
     try {
       enableOpfsCache();
       const targetDtype = getOptimalEmbeddingDtype();
-      const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
+      if (!textQueryTokenizer) {
+        textQueryTokenizer = await loadWithR2Fallback(() => AutoTokenizer.from_pretrained(MODEL_ID));
+      }
       const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.audio_config = null;
 
-      sharedVisionModel = await loadWithR2Fallback(() =>
-        AutoModel.from_pretrained(MODEL_ID, {
-          config,
-          device: hasGpu ? 'webgpu' : 'wasm',
-          dtype: {
-            model: targetDtype,
-            vision_encoder: targetDtype,
-          },
-        } as any)
-      );
+      sharedVisionModel = await loadModelWithWebGpuToWasmFallback(config, {
+        model: targetDtype,
+        vision_encoder: targetDtype,
+      });
       sharedVisionProcessor = await loadWithR2Fallback(() => AutoProcessor.from_pretrained(MODEL_ID));
       sharedVisionProcessor.image_processor.max_soft_tokens = VISION_TOKEN_BUDGET;
       bumpSharedVisionIdleDispose();
@@ -4758,7 +5018,7 @@ async function decodeImageBlobToRawAndThumb(blob: Blob): Promise<{ rawImg: RawIm
       resizeWidth: DECODE_SIDE,
       resizeQuality: 'medium',
     } as ImageBitmapOptions);
-    const scale = Math.min(1, 384 / Math.max(bmp.width, bmp.height));
+    const scale = Math.min(1, 448 / Math.max(bmp.width, bmp.height));
     const w = Math.max(1, Math.round(bmp.width * scale));
     const h = Math.max(1, Math.round(bmp.height * scale));
     const { canvas, ctx } = createCanvas2D(w, h);
@@ -4778,7 +5038,7 @@ async function decodeImageBlobToRawAndThumb(blob: Blob): Promise<{ rawImg: RawIm
 }
 
 /**
- * PC에 ffmpeg가 있으면 Z-코어 `/__videos/thumb`으로 초고속 추출하고,
+ * PC에 ffmpeg가 있으면 Z-코어 `/__videos/thumb`으로 초고속 병렬 추출하고,
  * ffmpeg가 없는 일반 사용자 PC(404)에서는 브라우저 내장 HTML5 `<video crossOrigin="anonymous">` HTTP 206 Range 탐색으로
  * 키프레임 이미지와 썸네일을 100% 자체 추출합니다.
  */
@@ -4789,37 +5049,31 @@ async function captureLocalVideoKeyframesUniversal(
   if (!vid.videoFileName || targetSecs.length === 0) return [];
   const results: DecodedKeyframeImage[] = [];
 
-  // 1차 고속 경로: Z-코어 /__videos/thumb 시도
-  let zThumbSupported = true;
-  for (let i = 0; i < targetSecs.length; i++) {
-    const sec = Math.max(0, Math.round(targetSecs[i]));
-    const url = getZCoreUrl(`/__videos/thumb?p=${encodeURIComponent(vid.videoFileName)}&t=${Math.max(1, sec)}`);
-    try {
-      const res = await fetch(url);
-      const ct = res.headers.get('content-type') || '';
-      if (!res.ok || !ct.includes('image')) {
-        if (i === 0) {
-          zThumbSupported = false;
-          break;
+  // 1차 고속 경로: Z-코어 /__videos/thumb 병렬 추출 시도
+  if (zCoreBridge.isConnected) {
+    const zFetched = await Promise.all(
+      targetSecs.map(async (rawSec) => {
+        const sec = Math.max(0, Math.round(rawSec));
+        const url = getZCoreUrl(`/__videos/thumb?p=${encodeURIComponent(vid.videoFileName)}&t=${Math.max(1, sec)}`);
+        try {
+          const res = await fetch(url);
+          const ct = res.headers.get('content-type') || '';
+          if (!res.ok || !ct.includes('image')) return null;
+          const blob = await res.blob();
+          if (blob.size < 800) return null;
+          const decoded = await decodeImageBlobToRawAndThumb(blob);
+          return decoded ? { timeSec: sec, ...decoded } : null;
+        } catch {
+          return null;
         }
-        continue;
-      }
-      const blob = await res.blob();
-      if (blob.size < 800) continue;
-      const decoded = await decodeImageBlobToRawAndThumb(blob);
-      if (decoded) {
-        results.push({ timeSec: sec, ...decoded });
-      }
-    } catch {
-      if (i === 0) {
-        zThumbSupported = false;
-        break;
-      }
+      })
+    );
+    for (const item of zFetched) {
+      if (item) results.push(item);
     }
-  }
-
-  if (zThumbSupported && results.length > 0) {
-    return results;
+    if (results.length > 0) {
+      return results;
+    }
   }
 
   // 2차 범용 경로: HTML5 <video> + Canvas (ffmpeg 미설치 PC 완벽 호환)
@@ -4851,7 +5105,7 @@ async function captureLocalVideoKeyframesUniversal(
 
     if (!metaLoaded) return results;
     const realDur = Number.isFinite(videoEl.duration) && videoEl.duration > 0.5 ? videoEl.duration : vid.durationSec || 8;
-    const scale = Math.min(1, 384 / Math.max(videoEl.videoWidth, videoEl.videoHeight));
+    const scale = Math.min(1, 448 / Math.max(videoEl.videoWidth, videoEl.videoHeight));
     const w = Math.max(1, Math.round(videoEl.videoWidth * scale));
     const h = Math.max(1, Math.round(videoEl.videoHeight * scale));
     const { canvas, ctx } = createCanvas2D(w, h);
@@ -4919,6 +5173,14 @@ async function captureLocalVideoKeyframesUniversal(
 
 function selectTargetFrameSecsForVideo(vid: VideoSceneItem, maxCheckpoints: number): number[] {
   const frames = vid.timelineFrames || [];
+  if (maxCheckpoints <= 1) {
+    if (frames.length > 0) {
+      const fRep = frames[Math.min(frames.length - 1, Math.floor(frames.length * 0.45))];
+      return [fRep.timeSec];
+    }
+    const d = Math.max(3, vid.durationSec || 8);
+    return [Math.max(1, Math.round(d * 0.38))];
+  }
   if (frames.length === 0) {
     const d = Math.max(3, vid.durationSec || 8);
     return maxCheckpoints <= 2
@@ -4962,8 +5224,8 @@ async function embedSingleLocalVideoIfNeeded(
   const decodedFrames = await captureLocalVideoKeyframesUniversal(normVid, missingSecs);
   if (decodedFrames.length === 0) return false;
 
-  // Zero-FFmpeg WinRT 화면 OCR 비동기 추출 & 로컬 캐시 영구 기록 (귀신검색창 + 웹 검색 동시 연동)
-  if (zCoreBridge.isConnected && decodedFrames.some((df) => df.thumbDataUrl)) {
+  // FFmpeg 미설치 PC(normVid.thumbUrl 비어 있음)에서만 브라우저 디코딩 JPEG로 WinRT 화면 OCR 보조 전송
+  if (!normVid.thumbUrl && zCoreBridge.isConnected && decodedFrames.some((df) => df.thumbDataUrl)) {
     void (async () => {
       try {
         while (activeVideoPlaybackCount > 0) {
@@ -4984,7 +5246,7 @@ async function embedSingleLocalVideoIfNeeded(
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.hasText) {
+          if (data && (data.hasText || data.hasRichText)) {
             onVideoOcrHydrated?.(normVid.videoFileName, {
               hasScreenOcrText: true,
               ocrLineCount: Number(data.lineCount || (data.ocrLines || []).length || 1),
@@ -5029,7 +5291,7 @@ async function embedSingleLocalVideoIfNeeded(
       inferMs > 300 &&
       silentIndexingBrake.getSnapshot().speedMode !== 'turbo'
     ) {
-      await new Promise((r) => setTimeout(r, Math.min(2000, Math.round(inferMs * 1.1))));
+      await new Promise((r) => setTimeout(r, Math.min(220, Math.round(inferMs * 0.25))));
     }
   }
   return updatedAny;
@@ -5050,7 +5312,8 @@ export function hasUnindexedLocalVideos(videos: VideoSceneItem[]): boolean {
 export async function ensureVideoKeyframesEmbeddedForSearch(
   videos: VideoSceneItem[],
   maxVideos = 8,
-  shouldAbort?: () => boolean
+  shouldAbort?: () => boolean,
+  maxCheckpoints = 2
 ): Promise<boolean> {
   if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return false;
   await hydrateRealMediaVectorCacheOnce();
@@ -5058,8 +5321,11 @@ export async function ensureVideoKeyframesEmbeddedForSearch(
   const targets = videos
     .filter((v) => !v.isAllBlack && String(v.id || '').startsWith('local_vid_'))
     .filter((v) => {
+      if (maxCheckpoints <= 1) {
+        return !hasAnyCachedVectorForVideo(v);
+      }
       const nv = normalizeLocalVideoSceneItem(v);
-      const secs = selectTargetFrameSecsForVideo(nv, 2);
+      const secs = selectTargetFrameSecsForVideo(nv, maxCheckpoints);
       return secs.some((s) => !localVideoFrameVecMap.has(getVideoFrameCacheKey(nv, s)));
     })
     .slice(0, maxVideos);
@@ -5071,9 +5337,9 @@ export async function ensureVideoKeyframesEmbeddedForSearch(
   try {
     for (const vid of targets) {
       if (shouldAbort?.()) break;
-      const didUpdate = await embedSingleLocalVideoIfNeeded(vid, 2);
+      const didUpdate = await embedSingleLocalVideoIfNeeded(vid, maxCheckpoints);
       if (didUpdate) embeddedAny = true;
-      await new Promise((r) => setTimeout(r, 120));
+      await new Promise((r) => setTimeout(r, 20));
     }
   } finally {
     priorityVideoSearchDepth = Math.max(0, priorityVideoSearchDepth - 1);
@@ -5084,7 +5350,7 @@ export async function ensureVideoKeyframesEmbeddedForSearch(
 
 /**
  * [귀신비서 엔진 연결 직후 무소음 백그라운드 실미디어 비전 인덱서]
- * - 1순위: 텍스트 인코더 선행 준비 후, 화면 카드 썸네일 로딩과 충돌하지 않도록 여유 간격(380ms)을 두고 로컬 동영상 키프레임 캐싱
+ * - 1순위: 텍스트 인코더 선행 준비 후 로컬 동영상 키프레임 캐싱
  * - 2순위: 아직 벡터가 없는 내 PC 실사진(최근 90일 우선) 480px 고속 썸네일 기반 768차원 벡터 추출 및 영구 캐싱
  */
 export async function startSilentRealMediaVisionIndexing(params: {
@@ -5111,14 +5377,14 @@ export async function startSilentRealMediaVisionIndexing(params: {
     // 텍스트 질의 인코더를 먼저 단독 로드하여 비전 모델과의 대역폭/메모리 경합을 방지
     await ensureTextQueryEncoderLoaded();
 
-    // 1) 동영상 키프레임 무소음 백그라운드 인덱싱 (유저 검색 중 양보 + 브라우저 썸네일 커넥션 풀 보호를 위한 유휴 간격 유지)
+    // 1) 동영상 키프레임 무소음 백그라운드 인덱싱
     const localVids = params.videos.filter(
       (v) => !v.isAllBlack && String(v.id || '').startsWith('local_vid_')
     );
     for (let i = 0; i < localVids.length; i++) {
       if (!zCoreBridge.isConnected) break;
       while (priorityVideoSearchDepth > 0 || activeVideoPlaybackCount > 0) {
-        await new Promise((r) => setTimeout(r, 450));
+        await new Promise((r) => setTimeout(r, 350));
       }
       await silentIndexingBrake.waitForIndexingSlot(i);
       await embedSingleLocalVideoIfNeeded(
@@ -5127,7 +5393,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
         params.onVideoThumbHydrated,
         params.onVideoOcrHydrated
       );
-      await new Promise((r) => setTimeout(r, 450));
+      await new Promise((r) => setTimeout(r, 80));
     }
 
     // 2) 미색인 실사용 PC 사진 조용한 백그라운드 벡터 인덱싱 (최근 90일 우선, 최대 320장 순차 캐싱)

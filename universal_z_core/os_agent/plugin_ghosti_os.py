@@ -1382,6 +1382,7 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
+_VIDEO_OCR_SCHEMA_VER = 3
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -1652,28 +1653,88 @@ def _save_video_ocr_cache(cache_data: Dict[str, Any]) -> None:
         pass
 
 
+_WATERMARK_OCR_RX = re.compile(
+    r"\b(?:veo|sora|kapwing|capcut|kinemaster|inshot|filmora|bandicam|xrecorder|ocam|tiktok|runway|pika|kling|hailuo|luma)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_meaningful_ocr_text(txt: str) -> bool:
+    """
+    야외/실내 일반 영상의 나뭇가지·그림자·물결 노이즈('=』젤TA爨', '•謷&•구수하')나
+    편집툴·AI 생성 코너 워터마크('Veo', '= KAPWING', 'CapCut')는 차단하되,
+    스마트폰 화면 녹화·프레젠테이션·안내 자막 등 실제 한글/영문 문장은 정확히 통과시킵니다.
+    """
+    s = str(txt or "").strip()
+    if not s:
+        return False
+    cleaned = _WATERMARK_OCR_RX.sub(" ", s).strip()
+    alnum = re.sub(r"[^가-힣a-zA-Z0-9]", "", cleaned)
+    if len(alnum) < 4:
+        return False
+    ko_chars = re.findall(r"[가-힣]", alnum)
+    cjk_chars = re.findall(r"[\u4e00-\u9fff]", cleaned)
+    non_space = re.sub(r"\s+", "", cleaned)
+    if non_space and (len(alnum) / len(non_space)) < 0.58:
+        return False
+    if len(ko_chars) >= 12 and len(cjk_chars) <= max(2, len(ko_chars) // 5):
+        return True
+    if cjk_chars:
+        return False
+    if len(ko_chars) >= 5:
+        return True
+    if not ko_chars:
+        en_words = re.findall(r"[a-zA-Z]{2,}", cleaned)
+        if len(en_words) < 2 or len(alnum) < 8:
+            return False
+    if ko_chars and (len(ko_chars) < 3 or len(alnum) < 5):
+        return False
+    return True
+
+
 def _enrich_ocr_semantic_keywords(ocr_text: str) -> List[str]:
-    """화면 OCR 인식 오타 보정 및 핵심 검색 키워드 정규화"""
-    if not ocr_text:
+    """화면 OCR 인식 오타 보정 및 핵심 검색 키워드 정규화 (워터마크·배경 노이즈 원천 차단)"""
+    if not _is_meaningful_ocr_text(ocr_text):
         return []
-    low = ocr_text.lower()
+    cleaned = _WATERMARK_OCR_RX.sub(" ", ocr_text).lower()
     kws: List[str] = []
-    for w in re.findall(r"[가-힣a-z0-9]{2,}", low):
+    for w in re.findall(r"[가-힣a-z0-9]{2,}", cleaned):
         if len(w) <= 24:
             kws.append(w)
-    if "를렛" in low or "룰렛" in low or ("당첨자" in low and "별명" in low):
+    if "를렛" in cleaned or "룰렛" in cleaned or ("당첨자" in cleaned and "별명" in cleaned):
         kws.extend(["룰렛", "룰렛추첨", "돌림판", "추첨", "당첨", "이벤트"])
-    if "이미지 생성" in low or "이미지생성" in low or "ai 이미지" in low:
+    if "이미지 생성" in cleaned or "이미지생성" in cleaned or "ai 이미지" in cleaned:
         kws.extend(["ai", "ai이미지", "이미지생성", "인공지능"])
-    if "veo" in low:
-        kws.extend(["ai", "veo"])
-    if "급식" in low or "lunbat" in low or "메뉴 배틀" in low or "메뉴배틀" in low or "영양정보" in low:
+    if "급식" in cleaned or "lunbat" in cleaned or "메뉴 배틀" in cleaned or "메뉴배틀" in cleaned or "영양정보" in cleaned:
         kws.extend(["급식", "학교급식", "급식배틀", "식단", "영양정보"])
+    if "리얼픽" in cleaned or "투표하기" in cleaned or "당신의 선택" in cleaned:
+        kws.extend(["리얼픽", "투표", "선택", "퀴즈", "앱"])
     return list(dict.fromkeys(kws))[:40]
 
 
+def _select_video_ocr_sample_secs(dur_sec: float) -> List[int]:
+    """짧은 영상의 후반 엔드카드(예: 10초 영상의 8초 자막)부터 장시간 녹화본까지 누락 없이 대표 구간을 추출합니다."""
+    t_int = max(1, int(round(dur_sec)))
+    if t_int < 4:
+        return [max(0, int(round(dur_sec * 0.4)))]
+    if t_int <= 60:
+        cands = [
+            max(1, int(round(dur_sec * 0.15))),
+            max(2, int(round(dur_sec * 0.50))),
+            max(3, min(t_int - 1, int(round(dur_sec * 0.82)))),
+        ]
+    else:
+        cands = [
+            max(2, int(round(dur_sec * 0.10))),
+            max(5, int(round(dur_sec * 0.35))),
+            max(10, int(round(dur_sec * 0.62))),
+            max(15, min(t_int - 1, int(round(dur_sec * 0.85)))),
+        ]
+    return sorted(set(cands))
+
+
 def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
-    """미인덱싱 로컬 동영상에서 대표 구간 프레임을 고속 추출하여 Windows 내장 OCR로 화면 텍스트를 영구 인덱싱합니다."""
+    """미인덱싱 로컬 동영상 전수를 청크 단위로 순회하며 90°/270° 회전 보정 포함 WinRT OCR로 영구 인덱싱합니다."""
     global _VIDEO_OCR_BG_RUNNING
     ff = find_ffmpeg_exe()
     if not ff or os.name != "nt" or not video_entries:
@@ -1681,120 +1742,80 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
             _VIDEO_OCR_BG_RUNNING = False
         return
 
-    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_vid_ocr_"))
     creationflags = 0x08004000 if os.name == "nt" else 0
+    chunk_size = 10
     try:
-        job_map: Dict[str, tuple[str, int]] = {}
-        per_vid_meta: Dict[str, Dict[str, Any]] = {}
-        for idx, (cache_sig, vpath, dur_sec) in enumerate(video_entries):
-            t_int = max(2, int(dur_sec))
-            if t_int <= 12:
-                secs = [max(1, int(round(t_int * 0.35)))]
-            elif t_int <= 45:
-                secs = [max(2, int(round(t_int * 0.2))), max(4, int(round(t_int * 0.65)))]
-            else:
-                secs = [
-                    max(2, int(round(t_int * 0.08))),
-                    max(5, int(round(t_int * 0.42))),
-                    max(10, int(round(t_int * 0.78))),
-                ]
-            per_vid_meta[cache_sig] = {"frames": [], "maxJpgBytes": 0}
-            for s in secs:
-                fname = f"v{idx:03d}_s{s:04d}.jpg"
-                out_jpg = tmp_dir / fname
-                subprocess.run(
-                    [
-                        ff, "-y", "-ss", str(s), "-i", str(vpath),
-                        "-frames:v", "1", "-vf", "scale='min(960,iw)':-2", "-q:v", "4", str(out_jpg),
-                    ],
-                    capture_output=True,
-                    timeout=7,
-                    creationflags=creationflags,
-                )
-                if out_jpg.exists():
-                    sz = out_jpg.stat().st_size
-                    if sz > per_vid_meta[cache_sig]["maxJpgBytes"]:
-                        per_vid_meta[cache_sig]["maxJpgBytes"] = sz
-                    job_map[fname] = (cache_sig, s)
+        for start_i in range(0, len(video_entries), chunk_size):
+            chunk = video_entries[start_i : start_i + chunk_size]
+            tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_vid_ocr_"))
+            try:
+                job_map: Dict[str, tuple[str, int]] = {}
+                per_vid_meta: Dict[str, Dict[str, Any]] = {}
+                for idx, (cache_sig, vpath, dur_sec) in enumerate(chunk):
+                    secs = _select_video_ocr_sample_secs(dur_sec)
+                    per_vid_meta[cache_sig] = {"frames": [], "maxJpgBytes": 0}
+                    for s in secs:
+                        fname = f"v{idx:03d}_s{s:04d}.jpg"
+                        out_jpg = tmp_dir / fname
+                        try:
+                            subprocess.run(
+                                [
+                                    ff, "-y", "-ss", str(s), "-i", str(vpath),
+                                    "-frames:v", "1", "-vf", "scale='min(1120,max(640,iw))':-2", "-q:v", "4", str(out_jpg),
+                                ],
+                                capture_output=True,
+                                timeout=15,
+                                creationflags=creationflags,
+                            )
+                        except Exception:
+                            pass
+                        if out_jpg.exists():
+                            sz = out_jpg.stat().st_size
+                            if sz > per_vid_meta[cache_sig]["maxJpgBytes"]:
+                                per_vid_meta[cache_sig]["maxJpgBytes"] = sz
+                            job_map[fname] = (cache_sig, s)
 
-        ocr_by_file: Dict[str, str] = {}
-        if job_map:
-            ps_script = (
-                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
-                "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
-                "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
-                "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
-                "$null = [Windows.Storage.StorageFile, Windows.Foundation, ContentType = WindowsRuntime]\n"
-                "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
-                "function Await($WinRtTask, $ResultType) {\n"
-                "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
-                "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
-                "    $netTask.Wait(-1) | Out-Null\n"
-                "    $netTask.Result\n"
-                "}\n"
-                "$lang = New-Object Windows.Globalization.Language('ko')\n"
-                "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
-                "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
-                "Get-ChildItem -LiteralPath $args[0] -Filter '*.jpg' | Sort-Object Name | ForEach-Object {\n"
-                "    $f = $_\n"
-                "    try {\n"
-                "        $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($f.FullName)) ([Windows.Storage.StorageFile])\n"
-                "        $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
-                "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
-                "        $bmp = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-                "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
-                "        $stream.Dispose()\n"
-                "        Write-Output \"$($f.Name)`t$($res.Text)\"\n"
-                "    } catch {}\n"
-                "}\n"
-            )
-            ps_file = tmp_dir / "ocr.ps1"
-            ps_file.write_text(ps_script, encoding="utf-8-sig")
-            ocr_proc = subprocess.run(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_file), str(tmp_dir)],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=35,
-                creationflags=creationflags,
-            )
-            for line in ocr_proc.stdout.splitlines():
-                if "\t" in line:
-                    fn, txt = line.split("\t", 1)
-                    ocr_by_file[fn.strip()] = re.sub(r"\s+", " ", txt).strip()
+                ocr_by_file = _run_winrt_ocr_on_jpg_dir(tmp_dir) if job_map else {}
 
-        for fname, (cache_sig, sec_val) in sorted(job_map.items()):
-            txt = ocr_by_file.get(fname, "")
-            kws = _enrich_ocr_semantic_keywords(txt)
-            per_vid_meta[cache_sig]["frames"].append({
-                "timeSec": sec_val,
-                "ocrText": txt[:240],
-                "keywords": kws,
-            })
+                for fname, (cache_sig, sec_val) in sorted(job_map.items()):
+                    raw_txt = ocr_by_file.get(fname, "")
+                    clean_txt = raw_txt if _is_meaningful_ocr_text(raw_txt) else ""
+                    kws = _enrich_ocr_semantic_keywords(clean_txt)
+                    per_vid_meta[cache_sig]["frames"].append({
+                        "timeSec": sec_val,
+                        "ocrText": clean_txt[:320],
+                        "keywords": kws,
+                    })
 
-        with _VIDEO_OCR_LOCK:
-            cur_cache = _load_video_ocr_cache()
-            for cache_sig, val in per_vid_meta.items():
-                all_kws: List[str] = []
-                for fr in val["frames"]:
-                    all_kws.extend(fr.get("keywords") or [])
-                cur_cache[cache_sig] = {
-                    "frames": val["frames"],
-                    "keywords": list(dict.fromkeys(all_kws))[:50],
-                    "isAllBlack": bool(val["maxJpgBytes"] > 0 and val["maxJpgBytes"] < 4200),
-                }
-            _save_video_ocr_cache(cur_cache)
+                with _VIDEO_OCR_LOCK:
+                    cur_cache = _load_video_ocr_cache()
+                    for cache_sig, val in per_vid_meta.items():
+                        all_kws: List[str] = []
+                        for fr in val["frames"]:
+                            all_kws.extend(fr.get("keywords") or [])
+                        dedup_lines = _dedupe_ocr_timeline_lines(val["frames"])
+                        full_txt = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in dedup_lines)
+                        cur_cache[cache_sig] = {
+                            "ocrVer": _VIDEO_OCR_SCHEMA_VER,
+                            "frames": val["frames"],
+                            "keywords": list(dict.fromkeys(all_kws))[:50],
+                            "lines": dedup_lines,
+                            "fullText": full_txt,
+                            "lineCount": len(dedup_lines),
+                            "isAllBlack": bool(val["maxJpgBytes"] > 0 and val["maxJpgBytes"] < 4200),
+                        }
+                    _save_video_ocr_cache(cur_cache)
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
     except Exception:
         pass
     finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
         with _VIDEO_OCR_LOCK:
             _VIDEO_OCR_BG_RUNNING = False
 
 
 def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
-    """지정 폴더 내 *.jpg 파일들에 대해 Windows 10/11 내장 WinRT OCR을 일괄 수행합니다 (외부 패키지/FFmpeg 불필요)."""
+    """지정 폴더 내 *.jpg 파일들에 대해 Windows 10/11 내장 WinRT OCR + 90°/270° 가로눕힘 회전 폴백을 일괄 수행합니다."""
     ocr_by_file: Dict[str, str] = {}
     if os.name != "nt":
         return ocr_by_file
@@ -1804,6 +1825,8 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
         "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
         "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Graphics.Imaging.BitmapTransform, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Graphics.Imaging.BitmapRotation, Windows.Foundation, ContentType = WindowsRuntime]\n"
         "$null = [Windows.Storage.StorageFile, Windows.Foundation, ContentType = WindowsRuntime]\n"
         "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
         "function Await($WinRtTask, $ResultType) {\n"
@@ -1811,6 +1834,14 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
         "    $netTask.Wait(-1) | Out-Null\n"
         "    $netTask.Result\n"
+        "}\n"
+        "function Score-Text([string]$t) {\n"
+        "    if (-not $t) { return 0 }\n"
+        "    $ko = ([regex]::Matches($t, '[가-힣]')).Count\n"
+        "    $en = ([regex]::Matches($t, '[a-zA-Z0-9]')).Count\n"
+        "    $cjk = ([regex]::Matches($t, '[\\u4e00-\\u9fff]')).Count\n"
+        "    $sym = ([regex]::Matches($t, '[^가-힣a-zA-Z0-9\\s/.:,\\-?%+~]')).Count\n"
+        "    return ($ko * 4) + $en - ($cjk * 4) - ($sym * 3)\n"
         "}\n"
         "$lang = New-Object Windows.Globalization.Language('ko')\n"
         "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
@@ -1821,11 +1852,28 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "        $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($f.FullName)) ([Windows.Storage.StorageFile])\n"
         "        $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
         "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
-        "        $bmp = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-        "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
+        "        $bmp0 = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+        "        $res0 = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
+        "        $bestText = ($res0.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
+        "        $bestScore = Score-Text $bestText\n"
+        "        $ko0 = ([regex]::Matches($bestText, '[가-힣]')).Count\n"
+        "        if ($ko0 -lt 5 -and $bestScore -lt 24) {\n"
+        "            foreach ($rot in @([Windows.Graphics.Imaging.BitmapRotation]::Clockwise90Degrees, [Windows.Graphics.Imaging.BitmapRotation]::Clockwise270Degrees)) {\n"
+        "                $tf = New-Object Windows.Graphics.Imaging.BitmapTransform\n"
+        "                $tf.Rotation = $rot\n"
+        "                $bmpR = Await ($decoder.GetSoftwareBitmapAsync($decoder.BitmapPixelFormat, $decoder.BitmapAlphaMode, $tf, [Windows.Graphics.Imaging.ExifOrientationMode]::RespectExifOrientation, [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+        "                $resR = Await ($engine.RecognizeAsync($bmpR)) ([Windows.Media.Ocr.OcrResult])\n"
+        "                $txtR = ($resR.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
+        "                $koR = ([regex]::Matches($txtR, '[가-힣]')).Count\n"
+        "                $scR = Score-Text $txtR\n"
+        "                if ($koR -ge 10 -and $scR -gt ($bestScore + 18)) {\n"
+        "                    $bestScore = $scR\n"
+        "                    $bestText = $txtR\n"
+        "                }\n"
+        "            }\n"
+        "        }\n"
         "        $stream.Dispose()\n"
-        "        $joined = ($res.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
-        "        Write-Output \"$($f.Name)`t$joined\"\n"
+        "        Write-Output \"$($f.Name)`t$bestText\"\n"
         "    } catch {}\n"
         "}\n"
     )
@@ -1837,7 +1885,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=38,
+        timeout=65,
         creationflags=creationflags,
     )
     for line in ocr_proc.stdout.splitlines():
@@ -1845,40 +1893,6 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
             fn, txt = line.split("\t", 1)
             ocr_by_file[fn.strip()] = re.sub(r"\s+", " ", txt).strip()
     return ocr_by_file
-
-
-def _is_meaningful_ocr_text(txt: str) -> bool:
-    """
-    야외/실내 일반 영상의 나뭇가지·그림자·물결 노이즈('=』젤TA爨', '•謷&•구수하')나
-    초단문 워터마크('Veo', ':회 Veo')는 차단하되,
-    스마트폰 화면 녹화처럼 실제 한글 문장이 6자 이상 포함된 텍스트는 아이콘 오인식 한자가 1~2자 섞여 있어도 통과시킵니다.
-    """
-    s = str(txt or "").strip()
-    if not s:
-        return False
-    # 한자(CJK)가 아닌 실제 한글/영문/숫자 추출
-    alnum = re.sub(r"[^가-힣a-zA-Z0-9]", "", s)
-    if len(alnum) < 4:
-        return False
-    ko_chars = re.findall(r"[가-힣]", alnum)
-    cjk_chars = re.findall(r"[\u4e00-\u9fff]", s)
-    # 한글이 6자 이상이면(실제 문장/화면 UI) 옆에 아이콘 오인식 한자가 일부 섞여 있어도 유효 텍스트로 인정
-    if len(ko_chars) >= 6:
-        return True
-    # 한글이 6자 미만인데 한자가 섞여 있으면 배경 질감 오인식 노이즈로 차단
-    if cjk_chars:
-        return False
-    # 특수기호/구두점 비율이 지나치게 높으면 노이즈로 판정
-    non_space = re.sub(r"\s+", "", s)
-    if non_space and (len(alnum) / len(non_space)) < 0.5:
-        return False
-    # 단일 영문/숫자 워터마크(4~5자 이하, 한글 없음) 배제 (예: 'Veo', 'Sora', 'REC1')
-    if not ko_chars and len(alnum) <= 5 and " " not in s:
-        return False
-    # 한글이 1자뿐이거나 총 글자수가 부족한 노이즈 파편 배제 (예: ':회 Veo')
-    if ko_chars and (len(ko_chars) < 2 or len(alnum) < 5):
-        return False
-    return True
 
 
 def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1964,7 +1978,8 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
         out_frames: List[Dict[str, Any]] = []
         all_kws: List[str] = []
         for fname, s_val in sorted(sec_by_fname.items()):
-            txt = ocr_map.get(fname, "")
+            raw_t = ocr_map.get(fname, "")
+            txt = raw_t if _is_meaningful_ocr_text(raw_t) else ""
             kws = _enrich_ocr_semantic_keywords(txt)
             all_kws.extend(kws)
             out_frames.append({
@@ -1973,24 +1988,32 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
                 "keywords": kws,
             })
 
-        lines = _dedupe_ocr_timeline_lines(out_frames)
-        full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
-
         with _VIDEO_OCR_LOCK:
             cur_cache = _load_video_ocr_cache()
             prev_entry = cur_cache.get(sig) or {}
+            prev_ver = int(prev_entry.get("ocrVer") or 0)
             prev_frames = prev_entry.get("frames") if isinstance(prev_entry.get("frames"), list) else []
             merged_by_sec: Dict[int, Dict[str, Any]] = {}
             for pf in prev_frames:
-                merged_by_sec[int(pf.get("timeSec") or 0)] = pf
+                p_txt = str(pf.get("ocrText") or "").strip()
+                if _is_meaningful_ocr_text(p_txt):
+                    merged_by_sec[int(pf.get("timeSec") or 0)] = {
+                        "timeSec": int(pf.get("timeSec") or 0),
+                        "ocrText": p_txt,
+                        "keywords": _enrich_ocr_semantic_keywords(p_txt),
+                    }
             for nf in out_frames:
-                if nf.get("ocrText") or int(nf.get("timeSec") or 0) not in merged_by_sec:
+                if nf.get("ocrText") and (prev_ver < _VIDEO_OCR_SCHEMA_VER or int(nf.get("timeSec") or 0) not in merged_by_sec):
                     merged_by_sec[int(nf.get("timeSec") or 0)] = nf
             merged_frames = [merged_by_sec[k] for k in sorted(merged_by_sec.keys())]
             merged_lines = _dedupe_ocr_timeline_lines(merged_frames)
             merged_full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in merged_lines)
-            merged_kws: List[str] = list(prev_entry.get("keywords") or []) + all_kws
+            merged_kws: List[str] = []
+            for mf in merged_frames:
+                merged_kws.extend(mf.get("keywords") or [])
+            has_meaningful = len(merged_lines) > 0 and sum(len(ln.get("text") or "") for ln in merged_lines) >= 8
             cur_cache[sig] = {
+                "ocrVer": prev_ver if prev_ver >= _VIDEO_OCR_SCHEMA_VER else (0 if find_ffmpeg_exe() else _VIDEO_OCR_SCHEMA_VER),
                 "videoFileName": vname,
                 "filePath": str(resolved_path) if resolved_path else "",
                 "frames": merged_frames,
@@ -1998,7 +2021,7 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
                 "lines": merged_lines,
                 "fullText": merged_full_text,
                 "lineCount": len(merged_lines),
-                "isAllBlack": bool(max_jpg_bytes > 0 and max_jpg_bytes < 4200),
+                "isAllBlack": bool(prev_entry.get("isAllBlack")) if prev_ver >= _VIDEO_OCR_SCHEMA_VER else bool(max_jpg_bytes > 0 and max_jpg_bytes < 4200),
             }
             _save_video_ocr_cache(cur_cache)
 
@@ -2006,9 +2029,11 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
             "ok": True,
             "videoFileName": vname,
             "lines": merged_lines,
+            "ocrLines": merged_lines,
             "fullText": merged_full_text,
             "lineCount": len(merged_lines),
-            "hasRichText": len(merged_full_text) >= 12,
+            "hasText": has_meaningful,
+            "hasRichText": has_meaningful,
         }
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -2049,9 +2074,9 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
     sig = f"{target_path.name}|{st.st_size}|{int(st.st_mtime)}"
     cache = _load_video_ocr_cache()
     cached = cache.get(sig)
-    if cached and not force and isinstance(cached.get("frames"), list) and len(cached.get("frames", [])) >= 5:
-        lines = cached.get("lines") or _dedupe_ocr_timeline_lines(cached["frames"])
-        full_text = cached.get("fullText") or "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
+    if cached and not force and int(cached.get("ocrVer") or 0) >= _VIDEO_OCR_SCHEMA_VER and isinstance(cached.get("frames"), list) and len(cached.get("frames", [])) >= 3:
+        lines = _dedupe_ocr_timeline_lines(cached["frames"])
+        full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
         return {
             "ok": True,
             "cached": True,
@@ -2075,15 +2100,18 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
             for idx, s_val in enumerate(sample_secs):
                 fname = f"f{idx:03d}_s{s_val:04d}.jpg"
                 out_jpg = tmp_dir / fname
-                subprocess.run(
-                    [
-                        ff, "-y", "-ss", str(s_val), "-i", str(target_path),
-                        "-frames:v", "1", "-vf", "scale='min(1120,iw)':-2", "-q:v", "3", str(out_jpg),
-                    ],
-                    capture_output=True,
-                    timeout=8,
-                    creationflags=creationflags,
-                )
+                try:
+                    subprocess.run(
+                        [
+                            ff, "-y", "-ss", str(s_val), "-i", str(target_path),
+                            "-frames:v", "1", "-vf", "scale='min(1120,max(640,iw))':-2", "-q:v", "3", str(out_jpg),
+                        ],
+                        capture_output=True,
+                        timeout=15,
+                        creationflags=creationflags,
+                    )
+                except Exception:
+                    pass
                 if out_jpg.exists():
                     sec_by_fname[fname] = s_val
         elif os.name == "nt":
@@ -2178,7 +2206,8 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
         out_frames_ff: List[Dict[str, Any]] = []
         all_kws_ff: List[str] = []
         for fname, s_val in sorted(sec_by_fname.items()):
-            txt = ocr_map.get(fname, "")
+            raw_t = ocr_map.get(fname, "")
+            txt = raw_t if _is_meaningful_ocr_text(raw_t) else ""
             kws = _enrich_ocr_semantic_keywords(txt)
             all_kws_ff.extend(kws)
             out_frames_ff.append({
@@ -2191,6 +2220,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
         with _VIDEO_OCR_LOCK:
             cur_cache = _load_video_ocr_cache()
             cur_cache[sig] = {
+                "ocrVer": _VIDEO_OCR_SCHEMA_VER,
                 "videoFileName": target_path.name,
                 "filePath": str(target_path),
                 "frames": out_frames_ff,
@@ -2284,7 +2314,8 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
                     continue
                 st = resolved.stat()
                 sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
-                if sig not in cache:
+                existing_entry = cache.get(sig)
+                if existing_entry is None or int((existing_entry or {}).get("ocrVer") or 0) < _VIDEO_OCR_SCHEMA_VER:
                     missing.append((sig, resolved, _get_fast_video_duration_sec(resolved)))
                 if len(seen_names) >= 120:
                     break
@@ -2293,12 +2324,11 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
     if not missing:
         return
 
-    batch = missing[:16]
     worker: threading.Thread | None = None
     with _VIDEO_OCR_LOCK:
         if not _VIDEO_OCR_BG_RUNNING:
             _VIDEO_OCR_BG_RUNNING = True
-            worker = threading.Thread(target=_run_batch_video_ocr, args=(batch,), daemon=True)
+            worker = threading.Thread(target=_run_batch_video_ocr, args=(missing,), daemon=True)
             worker.start()
     if worker is not None and sync_wait_sec > 0:
         worker.join(timeout=sync_wait_sec)
@@ -2366,63 +2396,79 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
                 sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
                 cached_ocr = ocr_cache.get(sig)
-                if cached_ocr is None and ff and not _is_cloud_virtual_or_unpinned_file(resolved):
+                if (
+                    (cached_ocr is None or int((cached_ocr or {}).get("ocrVer") or 0) < _VIDEO_OCR_SCHEMA_VER)
+                    and ff
+                    and not _is_cloud_virtual_or_unpinned_file(resolved)
+                ):
                     missing_for_bg.append((sig, resolved, real_dur_sec))
 
                 is_all_black = bool((cached_ocr or {}).get("isAllBlack", False))
-                if cached_ocr and isinstance(cached_ocr.get("keywords"), list):
-                    raw_kw_tokens.extend(str(k) for k in cached_ocr["keywords"])
+
+                ocr_lines_cached = []
+                ocr_full_cached = ""
+                valid_ocr_frames: List[Dict[str, Any]] = []
+                if cached_ocr and isinstance(cached_ocr.get("frames"), list):
+                    for ofr in cached_ocr["frames"]:
+                        raw_ot = str(ofr.get("ocrText") or "").strip()
+                        if _is_meaningful_ocr_text(raw_ot):
+                            valid_ocr_frames.append({
+                                "timeSec": int(ofr.get("timeSec") or 0),
+                                "ocrText": raw_ot,
+                                "keywords": _enrich_ocr_semantic_keywords(raw_ot),
+                            })
+                    ocr_lines_cached = _dedupe_ocr_timeline_lines(valid_ocr_frames)
+                    ocr_full_cached = "\n".join(
+                        f"[{ln['timestamp']}] {ln['text']}" for ln in ocr_lines_cached
+                    )
+
+                has_meaningful_screen_ocr = (
+                    len(ocr_lines_cached) > 0
+                    and sum(len(str(ln.get("text") or "").strip()) for ln in ocr_lines_cached) >= 8
+                )
+                if has_meaningful_screen_ocr:
+                    for vf in valid_ocr_frames:
+                        raw_kw_tokens.extend(str(k) for k in (vf.get("keywords") or []))
 
                 kw_list = list(dict.fromkeys(raw_kw_tokens))[:45]
                 # 기본 타임라인 프레임에는 파일·폴더 공통 키워드만 부여하고, 화면 OCR 키워드는 실제로 등장한 해당 시점 프레임에만 귀속
                 timeline_frames = _build_proportional_timeline_frames(stem, base_file_kw_list, d.name, len(videos) + 1, real_dur_sec)
 
-                # 프레임별 OCR 텍스트가 추출된 구간은 비례 타임라인 프레임과 병합하여 시각(비전) 체크포인트와 OCR 텍스트를 모두 보존
-                if cached_ocr and isinstance(cached_ocr.get("frames"), list) and cached_ocr["frames"]:
-                    has_nonempty_ocr = any(str(ofr.get("ocrText") or "").strip() for ofr in cached_ocr["frames"])
-                    if has_nonempty_ocr:
-                        existing_secs = {int(tf.get("timeSec") or 0): tf for tf in timeline_frames}
-                        for f_idx, ofr in enumerate(cached_ocr["frames"]):
-                            s_val = int(ofr.get("timeSec") or 0)
-                            ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
-                            ocr_txt = str(ofr.get("ocrText") or "").strip()
-                            if not ocr_txt:
-                                continue
-                            f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *base_file_kw_list[:12]]))
-                            nearest_sec = min(existing_secs.keys(), key=lambda x: abs(x - s_val)) if existing_secs else None
-                            if nearest_sec is not None and abs(nearest_sec - s_val) <= 1:
-                                target_tf = existing_secs[nearest_sec]
-                                target_tf["timeSec"] = s_val
-                                target_tf["timestampText"] = ts_str
-                                target_tf["sceneCaption"] = ocr_txt
-                                target_tf["keywords"] = list(dict.fromkeys([*(target_tf.get("keywords") or []), *f_kws]))
-                                target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else ""
-                            else:
-                                timeline_frames.append({
-                                    "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
-                                    "timeSec": s_val,
-                                    "timestampText": ts_str,
-                                    "phaseLabel": "장면 포착",
-                                    "sceneCaption": ocr_txt,
-                                    "keywords": f_kws,
-                                    "tags": ["#내PC동영상", f"#{d.name}"],
-                                    "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else "",
-                                })
-                        timeline_frames.sort(key=lambda x: int(x.get("timeSec") or 0))
+                # 유효한 화면 글자(OCR) 프레임만 비례 타임라인 프레임과 병합하여 워터마크·노이즈 오염을 원천 차단
+                if has_meaningful_screen_ocr and valid_ocr_frames:
+                    existing_secs = {int(tf.get("timeSec") or 0): tf for tf in timeline_frames}
+                    for f_idx, ofr in enumerate(valid_ocr_frames):
+                        s_val = int(ofr.get("timeSec") or 0)
+                        ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
+                        ocr_txt = str(ofr.get("ocrText") or "").strip()
+                        if not ocr_txt:
+                            continue
+                        f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *base_file_kw_list[:12]]))
+                        nearest_sec = min(existing_secs.keys(), key=lambda x: abs(x - s_val)) if existing_secs else None
+                        if nearest_sec is not None and abs(nearest_sec - s_val) <= 1:
+                            target_tf = existing_secs[nearest_sec]
+                            target_tf["timeSec"] = s_val
+                            target_tf["timestampText"] = ts_str
+                            target_tf["sceneCaption"] = ocr_txt
+                            target_tf["keywords"] = list(dict.fromkeys([*(target_tf.get("keywords") or []), *f_kws]))
+                            target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else ""
+                        else:
+                            timeline_frames.append({
+                                "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
+                                "timeSec": s_val,
+                                "timestampText": ts_str,
+                                "phaseLabel": "장면 포착",
+                                "sceneCaption": ocr_txt,
+                                "keywords": f_kws,
+                                "tags": ["#내PC동영상", f"#{d.name}"],
+                                "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else "",
+                            })
+                    timeline_frames.sort(key=lambda x: int(x.get("timeSec") or 0))
 
                 if ff:
                     for tf in timeline_frames:
                         if not tf.get("thumbUrl"):
                             tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, int(tf.get('timeSec') or 0))}"
-
-                ocr_lines_cached = []
-                ocr_full_cached = ""
-                if cached_ocr and isinstance(cached_ocr.get("frames"), list):
-                    # 과거 캐시에 남은 한자/기호 노이즈도 최신 필터로 재검증
-                    ocr_lines_cached = _dedupe_ocr_timeline_lines(cached_ocr["frames"])
-                    ocr_full_cached = "\n".join(
-                        f"[{ln['timestamp']}] {ln['text']}" for ln in ocr_lines_cached
-                    )
 
                 videos.append({
                     "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
@@ -2445,10 +2491,10 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "sizeMB": size_mb,
                     "isAllBlack": is_all_black,
                     "codecTag": codec_tag,
-                    "hasScreenOcrText": len(ocr_lines_cached) > 0 and len(ocr_full_cached.strip()) >= 10,
-                    "ocrLineCount": len(ocr_lines_cached),
-                    "ocrLines": ocr_lines_cached,
-                    "ocrFullText": ocr_full_cached,
+                    "hasScreenOcrText": has_meaningful_screen_ocr,
+                    "ocrLineCount": len(ocr_lines_cached) if has_meaningful_screen_ocr else 0,
+                    "ocrLines": ocr_lines_cached if has_meaningful_screen_ocr else [],
+                    "ocrFullText": ocr_full_cached if has_meaningful_screen_ocr else "",
                     "timelineFrames": timeline_frames,
                 })
                 if len(videos) >= 300:
@@ -2463,17 +2509,18 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     if prewarm_targets:
         threading.Thread(target=_prewarm_hevc_stream_caches, args=(prewarm_targets,), daemon=True).start()
 
+    global _VIDEO_OCR_BG_RUNNING
     if missing_for_bg:
-        global _VIDEO_OCR_BG_RUNNING
         with _VIDEO_OCR_LOCK:
             if not _VIDEO_OCR_BG_RUNNING:
                 _VIDEO_OCR_BG_RUNNING = True
-                threading.Thread(target=_run_batch_video_ocr, args=(missing_for_bg[:16],), daemon=True).start()
+                threading.Thread(target=_run_batch_video_ocr, args=(missing_for_bg,), daemon=True).start()
 
     # [실물 파일 순수성 철칙] 정적 샘플(poc/results/video_timeline_index.json) 병합을 전면 배제하고 100% 실제 내 PC 동영상만 반환!
     return {
         "ok": True,
         "total": len(videos),
+        "ocrIndexingPending": bool(missing_for_bg or _VIDEO_OCR_BG_RUNNING),
         "videos": videos,
     }
 

@@ -308,7 +308,7 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
 
     q = str((body or {}).get("query") or "").strip()
     if q and "전 구간" not in q and hasattr(plugin_ghosti_os, "ensure_local_videos_ocr_indexed"):
-        plugin_ghosti_os.ensure_local_videos_ocr_indexed(sync_wait_sec=2.8)
+        plugin_ghosti_os.ensure_local_videos_ocr_indexed(sync_wait_sec=0.25)
 
     listed = plugin_ghosti_os.list_local_videos({})
     videos = [v for v in (listed.get("videos") or []) if not v.get("isAllBlack")]
