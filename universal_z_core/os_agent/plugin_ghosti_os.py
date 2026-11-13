@@ -707,24 +707,24 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         if p.exists() and p.is_dir():
             roots.append(p)
     # [정본 원칙] 엔진 설치 시 가짜 샘플 사진을 절대 스캔·포함하지 않고 오직 실제 유저의 문서·사진·영상 폴더만 스캔!
-    # (0순위: 바탕화면·다운로드·문서 ➔ 1순위: 카톡 받은 파일·사진·동영상 ➔ 원드라이브·사용자 지정 폴더)
+    # (0순위: 사용자 지정 폴더 ➔ 1순위: 사진·동영상·문서·카톡 받은 파일 ➔ 2순위: 바탕화면·다운로드)
     candidates = [
-        home / "Desktop",
-        home / "Downloads",
-        home / "Documents",
-        home / "Documents" / "카카오톡 받은 파일",
+        *_load_custom_scan_roots(),
         home / "Pictures",
         home / "Videos",
-        onedrive / "Desktop",
-        onedrive / "바탕 화면",
-        onedrive / "Documents",
-        onedrive / "문서",
-        onedrive / "문서" / "카카오톡 받은 파일",
+        home / "Documents",
+        home / "Documents" / "카카오톡 받은 파일",
         onedrive / "Pictures",
         onedrive / "사진",
         onedrive / "Videos",
         onedrive / "동영상",
-        *_load_custom_scan_roots(),
+        onedrive / "Documents",
+        onedrive / "문서",
+        onedrive / "문서" / "카카오톡 받은 파일",
+        home / "Desktop",
+        onedrive / "Desktop",
+        onedrive / "바탕 화면",
+        home / "Downloads",
     ]
     seen_resolved: set[str] = set()
     for c in candidates:
