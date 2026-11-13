@@ -207,9 +207,9 @@ export const SmartTrashView: React.FC = () => {
 
   const filteredCandidates = activeTrash.filter((p) => matchesTrashTab(p, currentTab));
 
-  const selectedBytes = activeTrash
-    .filter((p) => selectedTrashIds.has(p.id))
-    .reduce((a, p) => a + p.size, 0);
+  const activeSelectedPhotos = filteredCandidates.filter((p) => selectedTrashIds.has(p.id));
+
+  const selectedBytes = activeSelectedPhotos.reduce((a, p) => a + p.size, 0);
 
   const photoById = new Map(photos.map((p) => [p.id, p]));
 
@@ -1232,11 +1232,11 @@ export const SmartTrashView: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={selectedTrashIds.size === 0 || quarantineMoving}
+                disabled={activeSelectedPhotos.length === 0 || quarantineMoving}
                 onClick={() => void moveSelectedToQuarantine()}
                 className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
               >
-                선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 휴지통 이동
+                선택된 {activeSelectedPhotos.length}장 ({fmtMB(selectedBytes)}) 휴지통 이동
               </button>
               <button
                 type="button"
