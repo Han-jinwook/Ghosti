@@ -16,6 +16,34 @@ import time
 def log(msg: str):
     print(f"[*] {msg}", flush=True)
 
+
+def sync_from_secretary_master():
+    """배포 전 D:\\Secretary\\tools\\ 마스터가 더 최신이면 universal_z_core 미러에 먼저 동기화하여 구버전 역덮어쓰기를 방지합니다."""
+    import shutil
+    sec_tools = r"D:\Secretary\tools"
+    if not os.path.isdir(sec_tools):
+        return
+    mirrors = [
+        r"d:\Ghosti\universal_z_core",
+        r"d:\Ghosti\universal_z_core\os_agent",
+        r"d:\Ghosti\universal_z_core\core_power_agent",
+    ]
+    for fname in ("seq_paste_daemon.py", "ghost_search_window_ui2.py"):
+        src = os.path.join(sec_tools, fname)
+        if not os.path.exists(src):
+            continue
+        src_mtime = os.path.getmtime(src)
+        for mdir in mirrors:
+            if not os.path.isdir(mdir):
+                continue
+            dst = os.path.join(mdir, fname)
+            if not os.path.exists(dst) or src_mtime > os.path.getmtime(dst) + 1.0:
+                try:
+                    shutil.copy2(src, dst)
+                    log(f"🔄 Secretary 마스터 최신본 자동 동기화: {fname} ➔ {mdir}")
+                except Exception as e:
+                    log(f"⚠️ 마스터 동기화 경고 ({dst}): {e}")
+
 def update_pc1():
     log("=== [1호기 (로컬)] Z-코어 최신화 및 리로드 시작 ===")
     import shutil
@@ -184,6 +212,7 @@ def update_pc4():
         log(f"⚠️ 4호기 헬스체크 출력: {check_res.stdout} (에러: {check_res.stderr})")
 
 def main():
+    sync_from_secretary_master()
     update_pc1()
     update_pc4()
     log("\n🎉 1호기 및 4호기 Z-코어 클러스터 배포가 완료되었습니다!")
