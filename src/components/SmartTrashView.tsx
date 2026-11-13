@@ -1453,7 +1453,7 @@ export const SmartTrashView: React.FC = () => {
             <span className="text-slate-700 leading-snug">광고 없이 Windows Defender 직결 무소음 검사 (알약 대체)</span>
           </div>
           <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
-            <span className="font-extrabold text-slate-900">③ 🛟 실수로 저장 안 하고 끈 문서 &amp; 휴지통 3초 구출</span>
+            <span className="font-extrabold text-slate-900">③ 🗑️↩️ 실수로 저장 안 하고 끈 문서 &amp; 휴지통 3초 구출</span>
             <span className="text-slate-700 leading-snug">엑셀·한글 미저장 임시본 추적 및 휴지통 3초 원복</span>
           </div>
         </div>
