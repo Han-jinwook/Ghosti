@@ -417,7 +417,7 @@ const WEAPON_META: Record<
     keywordBadge: '#귀신창',
     userBubble: 'dkssudgktpdy 영타 오타랑 PDF 깨진 줄바꿈, 백스페이스 안 누르고 고쳐줘!',
     secretaryReply:
-      '영타는 스페이스바만 누르면 0.2초 무버튼 자동 변환! ⚡\n평소 복붙은 원문 100% 보존, 깨진 줄바꿈은 하단 [1]~[6] 버튼으로 1초 해결!',
+      '영타는 스페이스바만 누르면 0.2초 무버튼 자동 변환! ⚡\n평소 복붙은 원문 100% 보존, 깨진 줄바꿈은 하단 [1]~[5] 버튼으로 1초 해결!',
     stageTitle: '⌨️ dkssud 영타 0.2초 무버튼 자동(Auto) 성형 & [1] 서식·줄바꿈 수동 다림질',
     stageBadge: '무기 4 · #귀신창 v1.4 (평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_dkssudgktp_261110.mp4',
@@ -573,10 +573,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     } else if (/영타|오타|한영|서식|줄바꿈|귀신창|라벨러|합본|창고정|순차|dkssud/i.test(q)) {
       matchedTab = 'superpower';
       if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('1');
-      else if (/스샷|pdf/i.test(q)) setSelectedToolbarKey('2');
-      else if (/합본/i.test(q)) setSelectedToolbarKey('3');
-      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('4');
-      else if (/창고정|고정/i.test(q)) setSelectedToolbarKey('5');
+      else if (/라벨러|파일명|pdf|zip/i.test(q)) setSelectedToolbarKey('2');
+      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('3');
+      else if (/합본/i.test(q)) setSelectedToolbarKey('4');
+      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('5');
       else if (/순차/i.test(q)) setSelectedToolbarKey('seq');
     }
 
@@ -822,12 +822,15 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       `}</style>
       {/* 1. 최상단 마스터 GNB */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#070B11]/85 border-b border-white/10 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between gap-3">
+        <div
+          style={{ minHeight: '68px', paddingTop: '12px', paddingBottom: '12px' }}
+          className="max-w-7xl mx-auto px-4 sm:px-6 min-h-[68px] py-3 flex items-center justify-between gap-3"
+        >
           {/* 좌측 브랜드 로고 (아기귀신 심볼 + 캘리그라피 워드마크) & 권위 배지 */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 py-0.5">
             <div
               data-ghosti-brand-logo="true"
-              className="flex items-center gap-2.5 cursor-pointer group shrink-0"
+              className="flex items-center gap-2.5 cursor-pointer group shrink-0 py-0.5"
               onClick={() => {
                 silencePendingEnterGiggleOnLogoClick();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -836,24 +839,24 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <img
                 src="/gwisinkachi_app_icon_512.png"
                 alt="대표 아기귀신 마스코트"
-                style={{ width: '40px', height: '40px', minWidth: '40px', minHeight: '40px' }}
-                className="w-10 h-10 rounded-xl object-cover shadow-md ring-2 ring-[#00F0B5]/60 shrink-0 group-hover:scale-105 transition-transform"
+                style={{ width: '42px', height: '42px', minWidth: '42px', minHeight: '42px' }}
+                className="w-[42px] h-[42px] rounded-xl object-cover border-2 border-[#00F0B5] shadow-md shrink-0 group-hover:scale-105 transition-transform"
               />
               <img
                 src="/gwisinkachi_wordmark_dark_ink.png"
                 alt="귀신같이 캘리그라피 로고"
-                style={{ height: '30px', width: 'auto', minWidth: '86px' }}
-                className="h-7 sm:h-8 w-auto object-contain shrink-0"
+                style={{ height: '32px', width: 'auto', minWidth: '90px' }}
+                className="h-8 w-auto object-contain shrink-0"
               />
             </div>
-            <div className="hidden 2xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/15 borderless-shape text-[#00F0B5] text-[11px] font-bold whitespace-nowrap shrink-0">
+            <div className="hidden 2xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/15 borderless-shape text-[#00F0B5] text-[13px] font-bold whitespace-nowrap shrink-0">
               <span>✓</span>
               <span>개인·기업 PC 기본 기능 영구 무료</span>
             </div>
           </div>
 
           {/* 중앙 검색 유입 키워드 바로가기 배지 */}
-          <nav className="hidden md:flex items-center gap-2 text-xs font-extrabold whitespace-nowrap shrink-0">
+          <nav className="hidden md:flex items-center gap-2 text-[13px] font-extrabold whitespace-nowrap shrink-0">
             <button
               type="button"
               onClick={() => handleSelectWeaponChip('clean')}
@@ -900,16 +903,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {!isLaunched ? (
               verifiedUserEmail ? (
-                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[13px] font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span>✅</span>
-                  <span className="max-w-[140px] truncate">{verifiedUserEmail}</span>
+                  <span className="max-w-[150px] truncate">{verifiedUserEmail}</span>
                   <span className="hidden sm:inline">알림 예약됨</span>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={scrollToEmailBox}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-xs sm:text-[13px] font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-[13px] sm:text-sm font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   <span>🔔</span>
                   <span>출시 알림받기</span>
@@ -919,7 +922,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <button
                 type="button"
                 onClick={() => onEnterWorkspace(true)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-xs sm:text-[13px] font-black shadow-[0_0_24px_rgba(0,240,181,0.45)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-[13px] sm:text-sm font-black shadow-[0_0_24px_rgba(0,240,181,0.45)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <span>🚀</span>
                 <span>본 앱 바로 시작하기</span>
@@ -932,7 +935,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <button
                   type="button"
                   onClick={() => setDevFullView((v) => !v)}
-                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black border transition-all cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-black border transition-all cursor-pointer ${
                     devFullView
                       ? 'bg-amber-400 text-slate-950 border-amber-300'
                       : 'bg-zinc-900 hover:bg-zinc-800 text-amber-300 border-amber-400/30'
@@ -943,14 +946,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsLaunched(!isLaunched)}
-                  className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-teal-300 border border-teal-400/30 text-[11px] font-bold transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-teal-300 border border-teal-400/30 text-xs font-bold transition-all cursor-pointer"
                 >
                   {isLaunched ? '🚀 출시후 뷰' : '⏳ 출시전 뷰'}
                 </button>
                 <button
                   type="button"
                   onClick={() => onEnterWorkspace(true)}
-                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-[#00F0B5] border border-teal-500/40 text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-[#00F0B5] border border-teal-500/40 text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1"
                 >
                   <span>🧪</span>
                   <span className="hidden sm:inline">본진 워크스페이스</span>
@@ -986,7 +989,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
             {/* 좌측 (7칸): 임팩트 타이포그래피 & 한눈에 보는 3대 초능력 스탯 카드 */}
             <div className="lg:col-span-7 space-y-4">
-              <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-xs font-black">
+              <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-[13px] font-black">
                 <span className="animate-pulse">●</span>
                 <span>✓ 개인·기업 PC 기본 기능 영구 무료 · 외부 서버 전송 0 Byte</span>
               </div>
@@ -1002,7 +1005,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <span
                     data-keep-dark="true"
                     style={{ backgroundColor: 'rgba(0, 240, 181, 0.16)', color: '#5EEAD4' }}
-                    className="px-3 py-1 rounded-xl border border-[#00F0B5]/40 text-xs sm:text-sm font-black tracking-tight"
+                    className="px-3 py-1 rounded-xl border border-[#00F0B5]/40 text-[13px] sm:text-sm font-black tracking-tight"
                   >
                     온디바이스 AI 비서
                   </span>
@@ -1018,7 +1021,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </h1>
               </div>
 
-              <p className="text-xs sm:text-sm text-zinc-300 font-semibold break-keep max-w-xl">
+              <p className="text-[13px] sm:text-sm text-zinc-300 font-semibold break-keep max-w-xl">
                 긴 설명 읽을 필요 없이 아래 <b style={{ color: '#00F0B5' }}>3가지 초능력 카드</b>나 대화창 버튼을 톡 누르면 바로 아래 화면에서 마법이 작동합니다.
               </p>
 
@@ -1069,8 +1072,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       >
                         {card.stat}
                       </div>
-                      <div className="text-xs sm:text-sm font-black text-white">{card.title}</div>
-                      <div className="text-[11px] text-zinc-300 font-semibold truncate mt-0.5">
+                      <div className="text-[13px] sm:text-sm font-black text-white">{card.title}</div>
+                      <div className="text-[13px] text-zinc-300 font-semibold truncate mt-0.5">
                         {card.sub}
                       </div>
                     </button>
@@ -1100,7 +1103,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <div
                   data-keep-dark="true"
                   style={{ backgroundColor: 'rgba(5, 9, 20, 0.86)' }}
-                  className="px-3.5 py-2 border-t border-white/15 flex items-center justify-between gap-2 text-xs"
+                  className="px-3.5 py-2.5 border-t border-white/15 flex items-center justify-between gap-2 text-[13px]"
                 >
                   <span className="font-black text-[#00F0B5] flex items-center gap-1.5">
                     <span>👻</span>
@@ -1134,7 +1137,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <img
                     src="/gwisinkachi_app_icon_original.png"
                     alt="아기귀신 프로필"
-                    className="w-12 h-12 rounded-2xl object-cover ring-2 ring-[#00F0B5] shadow-[0_0_16px_rgba(0,240,181,0.4)] animate-float-slow"
+                    className="w-12 h-12 rounded-2xl object-cover border-2 border-[#00F0B5] shadow-[0_0_16px_rgba(0,240,181,0.4)] animate-float-slow"
                   />
                   <span
                     style={{ backgroundColor: '#00F0B5' }}
@@ -1143,15 +1146,15 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-black text-white truncate">전속 아기귀신 비서</span>
+                    <span className="text-[15px] font-black text-white truncate">전속 아기귀신 비서</span>
                     <span
                       style={{ backgroundColor: 'rgba(0, 240, 181, 0.2)', color: '#5EEAD4' }}
-                      className="px-2 py-0.5 rounded-full text-[10px] font-black shrink-0"
+                      className="px-2 py-0.5 rounded-full text-xs font-black shrink-0"
                     >
                       평생 무료
                     </span>
                   </div>
-                  <div className="text-[11px] text-teal-200 font-bold truncate mt-0.5">
+                  <div className="text-[13px] text-teal-200 font-bold truncate mt-0.5">
                     🛡️ 외부 전송 0 Byte · 수요일 1시 자동 검진
                   </div>
                 </div>
@@ -1162,7 +1165,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 onClick={() => setCertModalOpen(true)}
                 data-keep-dark="true"
                 style={{ backgroundColor: '#FBBF24', color: '#020617' }}
-                className="px-2.5 py-1.5 rounded-xl font-black text-[11px] shrink-0 cursor-pointer whitespace-nowrap shadow hover:opacity-90"
+                className="px-3 py-1.5 rounded-xl font-black text-xs shrink-0 cursor-pointer whitespace-nowrap shadow hover:opacity-90"
               >
                 📜 무료 보증서
               </button>
@@ -1183,27 +1186,27 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <div className="flex items-center gap-1.5 mb-1 px-1">
                       {isUser ? (
                         <>
-                          <span className="text-[10.5px] text-zinc-500">{msg.timestamp}</span>
-                          <span className="text-xs font-bold text-teal-300">나</span>
+                          <span className="text-xs text-zinc-500">{msg.timestamp}</span>
+                          <span className="text-[13px] font-bold text-teal-300">나</span>
                         </>
                       ) : (
                         <>
-                          <span className="text-xs font-extrabold text-[#00F0B5] flex items-center gap-1.5">
+                          <span className="text-[13px] font-extrabold text-[#00F0B5] flex items-center gap-1.5">
                             <img
                               src="/gwisinkachi_app_icon_512.png"
                               alt="귀신비서"
-                              className="w-6 h-6 rounded-full object-cover shadow-sm ring-1 ring-[#00F0B5]/50"
+                              className="w-6 h-6 rounded-full object-cover shadow-sm border border-[#00F0B5]/60"
                             />
                             아기귀신 비서
                           </span>
-                          <span className="text-[10.5px] text-zinc-500">{msg.timestamp}</span>
+                          <span className="text-xs text-zinc-500">{msg.timestamp}</span>
                         </>
                       )}
                     </div>
                     <div
                       data-keep-dark={isUser ? 'true' : undefined}
                       style={isUser ? { backgroundColor: '#0D9488', color: '#FFFFFF' } : undefined}
-                      className={`max-w-[94%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-line shadow-sm break-keep ${
+                      className={`max-w-[94%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-line shadow-sm break-keep ${
                         isUser
                           ? 'bg-teal-600 text-white rounded-tr-sm border border-teal-500 font-bold'
                           : 'bg-zinc-900 border border-white/10 text-zinc-100 rounded-tl-sm font-semibold'
@@ -1218,7 +1221,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             {/* 4대 무료 핵심 무기 스킬 카드 (클릭 시 우측 단일 스테이지 즉시 전환) */}
             <div className="p-3.5 bg-zinc-900/90 border-t border-white/10 space-y-2">
-              <div className="text-[11px] font-extrabold text-teal-300 flex items-center justify-between px-1">
+              <div className="text-[13px] font-extrabold text-teal-300 flex items-center justify-between px-1">
                 <span>👇 보고 싶은 초능력 카드를 톡 눌러보세요!</span>
                 <span className="text-zinc-400">우측 즉시 시연</span>
               </div>
@@ -1231,7 +1234,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       key={tabKey}
                       type="button"
                       onClick={() => handleSelectWeaponChip(tabKey)}
-                      className={`p-2.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                      className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
                         isActive
                           ? 'bg-teal-950/80 border-[#00F0B5] shadow-[0_6px_20px_rgba(13,148,136,0.2)] scale-[1.01]'
                           : 'bg-zinc-950/80 hover:bg-zinc-900 border-white/10 hover:border-teal-400/50'
@@ -1245,17 +1248,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
                               : undefined
                           }
-                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
+                          className={`px-2 py-0.5 rounded-md text-xs font-black shrink-0 ${
                             isActive ? '' : 'bg-white/10 text-zinc-300'
                           }`}
                         >
                           {item.keywordBadge}
                         </span>
                       </div>
-                      <div className="text-xs font-black text-white truncate mt-0.5">
+                      <div className="text-[13.5px] font-black text-white truncate mt-0.5">
                         {item.chipLabel}
                       </div>
-                      <div className="text-[10.5px] text-zinc-400 font-semibold truncate">
+                      <div className="text-xs text-zinc-400 font-semibold truncate">
                         {item.chipSub}
                       </div>
                     </button>
@@ -1274,12 +1277,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="궁금한 기능 입력 (예: 영상 점프, 영수증 찾기, 영타)"
-                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 focus:border-[#00F0B5] text-xs sm:text-[13px] text-white placeholder-zinc-500 outline-none"
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 focus:border-[#00F0B5] text-[13px] sm:text-sm text-white placeholder-zinc-500 outline-none"
               />
               <button
                 type="submit"
                 style={{ backgroundColor: '#0D9488', color: '#FFFFFF' }}
-                className="px-3.5 py-2 rounded-xl hover:opacity-90 font-black text-xs shrink-0 cursor-pointer"
+                className="px-4 py-2 rounded-xl hover:opacity-90 font-black text-[13px] shrink-0 cursor-pointer"
               >
                 전송
               </button>
@@ -1293,7 +1296,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             {/* 스테이지 상단 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
               <div>
-                <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#00F0B5]/20 text-[#00F0B5] text-[11px] font-black mb-1">
+                <span className="inline-block px-3 py-0.5 rounded-full bg-[#00F0B5]/20 text-[#00F0B5] text-[13px] font-black mb-1">
                   {activeMeta.stageBadge}
                 </span>
                 <h2 className="text-lg sm:text-2xl font-black text-white break-keep">
@@ -1309,7 +1312,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
                     : undefined
                 }
-                className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-2 rounded-xl text-[13px] font-black border transition-all cursor-pointer flex items-center gap-1.5 ${
                   showStageShortVideo
                     ? 'border-teal-600 shadow'
                     : 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border-amber-400/40'
@@ -1345,21 +1348,21 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <div className="space-y-3 text-left">
                   <span
                     style={{ backgroundColor: 'rgba(0, 240, 181, 0.18)', color: '#5EEAD4' }}
-                    className="inline-block px-2.5 py-1 rounded-full text-xs font-black"
+                    className="inline-block px-3 py-1 rounded-full text-[13px] font-black"
                   >
                     🎬 공식 15초 쇼츠 예고편 ({activeMeta.keywordBadge})
                   </span>
                   <h3 className="text-lg font-black text-white leading-snug break-keep">
                     {activeMeta.stageTitle}
                   </h3>
-                  <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed break-keep">
+                  <p className="text-[13px] sm:text-sm text-zinc-300 leading-relaxed break-keep">
                     클라우드 업로드 0 Byte! 내 PC와 스마트폰 안에서 100% 무료로 즉시 작동합니다.
                   </p>
                   <button
                     type="button"
                     onClick={() => setShowStageShortVideo(false)}
                     style={{ backgroundColor: '#00F0B5', color: '#020617' }}
-                    className="px-4 py-2.5 rounded-xl font-black text-xs cursor-pointer shadow-lg"
+                    className="px-4 py-2.5 rounded-xl font-black text-[13px] cursor-pointer shadow-lg"
                   >
                     ⚡ 직접 버튼 눌러서 체험해 보기 ➔
                   </button>
@@ -1371,7 +1374,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 {demoTab === 'video' && (
                   <div className="space-y-3.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-extrabold text-zinc-400 mr-1">
+                      <span className="text-[13px] font-extrabold text-zinc-400 mr-1">
                         🔍 찾을 장면 클릭:
                       </span>
                       {INTERACTIVE_SCENARIOS.video.map((item, idx) => {
@@ -1390,7 +1393,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
                                 : undefined
                             }
-                            className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                            className={`px-3.5 py-2 rounded-xl text-[13px] font-black border transition-all cursor-pointer ${
                               active
                                 ? 'border-teal-600 shadow-md scale-[1.02]'
                                 : 'bg-zinc-900 text-zinc-300 border-white/10 hover:border-teal-400/50'
@@ -1409,7 +1412,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       }}
                       className="rounded-2xl border border-teal-400/40 p-4 sm:p-5 shadow-lg space-y-3.5"
                     >
-                      <div className="flex items-center justify-between gap-2 text-xs pb-2.5 border-b border-white/15">
+                      <div className="flex items-center justify-between gap-2 text-[13px] pb-2.5 border-b border-white/15">
                         <span className="font-mono text-teal-300 font-bold truncate">
                           🎬 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].file}
                         </span>
@@ -1438,14 +1441,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           />
                           <span
                             style={{ backgroundColor: '#00F0B5', color: '#020617' }}
-                            className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[11px] font-black shadow"
+                            className="absolute top-2 left-2 px-2.5 py-0.5 rounded-md text-xs font-black shadow"
                           >
                             ▶ {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].timestamp} 점프!
                           </span>
                           <img
                             src="/gwisinkachi_app_icon_512.png"
                             alt="아기귀신 포착"
-                            className="absolute bottom-2 right-2 w-8 h-8 rounded-full ring-2 ring-[#00F0B5] shadow-lg"
+                            className="absolute bottom-2 right-2 w-8 h-8 rounded-full border-2 border-[#00F0B5] shadow-lg"
                           />
                         </div>
 
@@ -1454,20 +1457,20 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             style={{ backgroundColor: 'rgba(255, 255, 255, 0.07)' }}
                             className="rounded-xl p-3.5 border border-white/15 space-y-1.5"
                           >
-                            <div className="text-[11px] font-extrabold text-[#00F0B5]">
+                            <div className="text-[13px] font-extrabold text-[#00F0B5]">
                               🗣️ 음성·대사 자동 매칭
                             </div>
                             <p className="text-white font-black text-sm sm:text-base leading-snug break-keep">
                               {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].transcript}
                             </p>
-                            <p className="text-xs text-zinc-300 font-semibold break-keep">
+                            <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                               🎯 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].sceneDesc}
                             </p>
                           </div>
 
                           {/* 시각적 재생 타임라인 스크러버 */}
                           <div className="space-y-1">
-                            <div className="flex justify-between text-[11px] font-mono text-zinc-400">
+                            <div className="flex justify-between text-xs font-mono text-zinc-400">
                               <span>00:00</span>
                               <span style={{ color: '#00F0B5' }} className="font-black">
                                 📍 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].timestamp} 하이라이트
@@ -1494,9 +1497,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             className="rounded-xl p-3 space-y-2 borderless-shape"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 text-xs font-black text-[#00F0B5]">
+                              <div className="flex flex-wrap items-center gap-1.5 text-[13px] font-black text-[#00F0B5]">
                                 <span>👻 영상 속 화면 글자 발견!</span>
-                                <span className="text-[11px] text-zinc-300 font-bold">(멈춰 적지 말고 1초 추출)</span>
+                                <span className="text-xs text-zinc-300 font-bold">(멈춰 적지 말고 1초 추출)</span>
                               </div>
                               <button
                                 type="button"
@@ -1508,7 +1511,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   backgroundColor: videoOcrExtracted ? '#00F0B5' : '#FBBF24',
                                   color: '#020617',
                                 }}
-                                className="px-3 py-1 rounded-lg text-[11px] font-black cursor-pointer shadow-sm transition-transform hover:scale-105"
+                                className="px-3 py-1 rounded-lg text-xs font-black cursor-pointer shadow-sm transition-transform hover:scale-105 whitespace-nowrap shrink-0"
                               >
                                 {videoOcrExtracted ? '✅ 화면 글자 1초 추출 완료!' : '📝 글자 뽑기'}
                               </button>
@@ -1516,7 +1519,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             {videoOcrExtracted && (
                               <div
                                 style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)', border: 'none' }}
-                                className="rounded-lg p-2.5 font-code-kr text-[11px] text-emerald-200 space-y-1 borderless-shape"
+                                className="rounded-lg p-2.5 font-code-kr text-[13px] text-emerald-200 space-y-1 borderless-shape"
                               >
                                 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].screenOcrLines.map((ln, lIdx) => (
                                   <div key={lIdx}>{ln}</div>
@@ -1534,7 +1537,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 {demoTab === 'doc' && (
                   <div className="space-y-3.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-extrabold text-zinc-400 mr-1">
+                      <span className="text-[13px] font-extrabold text-zinc-400 mr-1">
                         📄 닫힌 파일 속 찾을 키워드:
                       </span>
                       {INTERACTIVE_SCENARIOS.doc.map((item, idx) => {
@@ -1552,7 +1555,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 ? { backgroundColor: '#0D9488', color: '#FFFFFF' }
                                 : undefined
                             }
-                            className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                            className={`px-3.5 py-2 rounded-xl text-[13px] font-black border transition-all cursor-pointer ${
                               active
                                 ? 'border-teal-600 shadow-md scale-[1.02]'
                                 : 'bg-zinc-900 text-zinc-300 border-white/10 hover:border-teal-400/50'
@@ -1571,14 +1574,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       }}
                       className="rounded-2xl border border-teal-400/40 p-4 sm:p-5 shadow-lg space-y-3.5"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-2.5 border-b border-white/15">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] pb-2.5 border-b border-white/15">
                         <div className="flex items-center gap-2 min-w-0">
                           <span
                             style={{
                               backgroundColor: INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].badgeColor,
                               color: '#FFFFFF',
                             }}
-                            className="px-2 py-0.5 rounded font-black text-[11px] shrink-0"
+                            className="px-2 py-0.5 rounded font-black text-xs shrink-0"
                           >
                             {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].docType}
                           </span>
@@ -1599,7 +1602,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <div
                           data-keep-dark="true"
                           style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-                          className="sm:col-span-4 rounded-xl border border-[#00F0B5]/40 p-3 flex flex-col items-center justify-center relative overflow-hidden min-h-[132px]"
+                          className="sm:col-span-4 rounded-xl border border-[#00F0B5]/40 p-3 flex flex-col items-center justify-center relative overflow-hidden min-h-[136px]"
                         >
                           {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].thumbUrl ? (
                             <img
@@ -1608,7 +1611,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               className="w-full h-28 object-cover rounded-lg border border-white/20"
                             />
                           ) : (
-                            <div className="w-full space-y-1.5 text-left font-mono text-[11px]">
+                            <div className="w-full space-y-1.5 text-left font-mono text-xs">
                               <div className="flex items-center justify-between text-zinc-400">
                                 <span>🔒 닫힌 파일 내부</span>
                                 <span style={{ color: '#00F0B5' }}>X-RAY ON</span>
@@ -1630,7 +1633,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           <img
                             src="/gwisinkachi_app_icon_512.png"
                             alt="아기귀신 투시"
-                            className="absolute bottom-2 right-2 w-7 h-7 rounded-full ring-2 ring-amber-400 shadow"
+                            className="absolute bottom-2 right-2 w-7 h-7 rounded-full border-2 border-amber-400 shadow"
                           />
                         </div>
 
@@ -1638,13 +1641,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <div className="sm:col-span-8 space-y-2">
                           <span
                             style={{ backgroundColor: 'rgba(251, 191, 36, 0.2)', color: '#FCD34D' }}
-                            className="inline-block px-2.5 py-1 rounded-lg text-xs font-black"
+                            className="inline-block px-3 py-1 rounded-lg text-[13px] font-black"
                           >
                             📍 {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].location}
                           </span>
                           <p
                             style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
-                            className="text-white font-bold text-xs sm:text-sm leading-relaxed p-3.5 rounded-xl border border-white/15 break-keep"
+                            className="text-white font-bold text-[13.5px] sm:text-sm leading-relaxed p-3.5 rounded-xl border border-white/15 break-keep"
                           >
                             {INTERACTIVE_SCENARIOS.doc[selectedDocScenarioIdx].previewSnippet}
                           </p>
@@ -1659,10 +1662,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-4 sm:p-5 space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <h4 className="text-sm sm:text-base font-black text-white break-keep">
+                        <h4 className="text-[15px] sm:text-base font-black text-white break-keep">
                           📸 연속 촬영 6장 중 가장 선명한 『인생샷 1장』만 1초 Pick!
                         </h4>
-                        <p className="text-xs text-zinc-400 mt-0.5 break-keep">
+                        <p className="text-[13px] text-zinc-400 mt-0.5 break-keep">
                           흔들린 5장은 <b>Windows 정식 휴지통</b>으로 안전 격리(1초 복원)됩니다.
                         </p>
                       </div>
@@ -1677,7 +1680,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             ? { backgroundColor: '#FBBF24', color: '#020617' }
                             : { backgroundColor: '#0D9488', color: '#FFFFFF' }
                         }
-                        className="px-4 py-2.5 rounded-xl font-black text-xs transition-all cursor-pointer shrink-0 shadow-md hover:opacity-95"
+                        className="px-4 py-2.5 rounded-xl font-black text-[13px] transition-all cursor-pointer shrink-0 shadow-md hover:opacity-95"
                       >
                         {cleanDemoDone ? '↩️ 1초 타임머신으로 5장 복원' : '✨ 베스트 1장만 남기고 정리 체험'}
                       </button>
@@ -1757,7 +1760,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   ? 'rgba(6, 78, 59, 0.92)'
                                   : 'rgba(9, 17, 30, 0.88)',
                               }}
-                              className="px-2.5 py-1.5 flex items-center justify-between gap-1 text-[11px]"
+                              className="px-2.5 py-1.5 flex items-center justify-between gap-1 text-xs"
                             >
                               <span
                                 style={{ color: shot.best ? '#5EEAD4' : '#E2E8F0' }}
@@ -1768,7 +1771,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               {shot.best && (
                                 <span
                                   style={{ backgroundColor: '#00F0B5', color: '#020617' }}
-                                  className="px-1.5 py-0.5 rounded text-[10px] font-black shrink-0"
+                                  className="px-1.5 py-0.5 rounded text-xs font-black shrink-0"
                                 >
                                   보존
                                 </span>
@@ -1780,7 +1783,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </div>
 
                     {/* 은행 보안모듈 수면 관리 한 줄 비주얼 배지 */}
-                    <div className="rounded-xl bg-zinc-900/90 border border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="rounded-xl bg-zinc-900/90 border border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[13px]">
                       <span className="font-extrabold text-white">
                         💤 안 쓰는 은행 보안프로그램 20개 ➔ <b className="text-[#00F0B5]">삭제 대신 조용히 수면 모드</b>
                       </span>
@@ -1793,10 +1796,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 {demoTab === 'superpower' && (
                   <div className="rounded-2xl bg-zinc-950 border border-amber-400/40 p-5 space-y-3.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-zinc-300">
+                      <span className="text-[13px] font-bold text-zinc-300 break-keep">
                         ⌨️ <strong className="text-amber-300">수동 버튼 ZERO!</strong> 예문 칩에서 전·후 변화를 한눈에 보시거나, 아래 입력칸을 클릭해 직접 영타를 치고 스페이스바만 눌러보세요:
                       </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-[11px] font-black text-emerald-300">
+                      <span className="px-3 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-xs font-black text-emerald-300 whitespace-nowrap shrink-0">
                         ⚡ 100% 무버튼 Auto 성형 가동 중
                       </span>
                     </div>
@@ -1809,7 +1812,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             key={sIdx}
                             type="button"
                             onClick={() => triggerTypoAutoIron(sample.raw, sIdx)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                            className={`px-3 py-1.5 rounded-xl text-[13px] font-extrabold border transition-all cursor-pointer ${
                               isSelectedSample
                                 ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
                                 : 'bg-zinc-900 hover:bg-amber-400 hover:text-slate-950 text-zinc-200 border-white/15'
@@ -1822,42 +1825,51 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </div>
 
                     {/* Before ➔ After 한눈에 비교하는 상시 프리뷰 배너 (테두리 제거 · 도형 블록 + 3종 서체 + 일러스트 적용) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-3xl bg-zinc-900/60 borderless-shape p-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-3xl bg-zinc-900/60 borderless-shape p-3 text-[13px]">
                       <div
                         style={{ backgroundColor: 'rgba(244, 63, 94, 0.11)', border: 'none' }}
-                        className="rounded-2xl borderless-shape p-3.5 space-y-1.5 relative overflow-hidden"
+                        className="rounded-2xl borderless-shape p-4 space-y-2 relative overflow-hidden"
                       >
-                        <div className="flex items-center justify-between text-[11px] font-extrabold text-rose-300">
-                          <span className="font-display-kr text-sm">Before · 영타/깨진 줄바꿈 원문</span>
-                          <span className="px-2 py-0.5 rounded-full bg-rose-500/15 text-[10px] text-rose-300 font-bold">한영키 실수</span>
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 font-extrabold text-rose-300">
+                          <span className="font-display-kr text-[15px] whitespace-nowrap shrink-0">
+                            Before · 영타 원문
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-xs text-rose-300 font-bold whitespace-nowrap shrink-0">
+                            한영키 실수
+                          </span>
                         </div>
-                        <p className="font-code-kr text-zinc-300 font-semibold whitespace-pre-line leading-relaxed break-keep">
+                        <p className="font-code-kr text-zinc-300 font-semibold whitespace-pre-line leading-relaxed break-keep text-[13.5px]">
                           {typoOriginalBackup || TYPO_SAMPLES[typoSampleIdx].raw}
                         </p>
                       </div>
                       <div
                         style={{ backgroundColor: 'rgba(16, 185, 129, 0.14)', border: 'none' }}
-                        className="rounded-2xl borderless-shape p-3.5 space-y-1.5 relative overflow-hidden"
+                        className="rounded-2xl borderless-shape p-4 space-y-2 relative overflow-hidden"
                       >
                         <img
-                          src="/gwisinkachi_3d_hero_character.png"
+                          src="/gwisinkachi_app_icon_512.png"
                           alt=""
                           aria-hidden="true"
-                          className="w-11 h-11 object-contain absolute -right-1 -bottom-1 opacity-30 pointer-events-none select-none"
+                          style={{ width: '34px', height: '34px' }}
+                          className="w-[34px] h-[34px] rounded-full object-cover absolute right-2.5 bottom-2.5 opacity-80 shadow-sm pointer-events-none select-none"
                         />
-                        <div className="flex items-center justify-between text-[11px] font-extrabold text-[#00F0B5]">
-                          <span className="font-display-kr text-sm">After · 0.2초 무버튼 자동 성형</span>
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-[10px] font-bold">✨ 스페이스바 즉시</span>
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 font-extrabold text-[#00F0B5]">
+                          <span className="font-display-kr text-[15px] whitespace-nowrap shrink-0">
+                            After · 0.2초 자동 성형
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-xs font-bold whitespace-nowrap shrink-0">
+                            ✨ 스페이스바 즉시
+                          </span>
                         </div>
-                        <p className="font-story-kr text-emerald-100 font-extrabold leading-relaxed break-keep text-[13.5px]">
+                        <p className="font-story-kr text-emerald-100 font-extrabold leading-relaxed break-keep text-[14.5px] pr-9">
                           {formatTypoAfterPreview(typoOriginalBackup || TYPO_SAMPLES[typoSampleIdx].raw)}
                         </p>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between px-1 text-[11px]">
-                        <span className="font-display-kr text-amber-300 text-xs sm:text-sm">
+                      <div className="flex items-center justify-between px-1 text-[13px]">
+                        <span className="font-display-kr text-amber-300 text-[13.5px] sm:text-sm">
                           👇 직접 테스트 입력칸 {typoIsPresetSample ? '(마우스로 클릭하면 예시가 지워지고 바로 입력할 수 있어요!)' : '(영타 입력 후 스페이스바를 탁 눌러보세요!)'}
                         </span>
                         {!typoIsPresetSample && typoInput && (
@@ -1867,7 +1879,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               setTypoInput('');
                               setTypoConverted(false);
                             }}
-                            className="text-zinc-400 hover:text-white underline font-bold cursor-pointer"
+                            className="text-zinc-400 hover:text-white underline font-bold cursor-pointer whitespace-nowrap shrink-0"
                           >
                             비우기
                           </button>
@@ -1894,20 +1906,20 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     {/* 확정 기준점 한 줄 핵심 요약 안내 (테두리 없는 도형 캡슐 + 아기귀신 미니 일러스트) */}
                     <div
                       style={{ backgroundColor: 'rgba(20, 184, 166, 0.12)', border: 'none' }}
-                      className="rounded-2xl borderless-shape px-3.5 py-2.5 text-[11.5px] text-emerald-200 font-bold leading-relaxed break-keep flex items-center gap-2.5"
+                      className="rounded-2xl borderless-shape px-3.5 py-2.5 text-[13px] text-emerald-200 font-bold leading-relaxed break-keep flex items-center gap-2.5"
                     >
                       <img
                         src="/gwisinkachi_app_icon_512.png"
                         alt="아기귀신"
-                        style={{ width: '28px', height: '28px', minWidth: '28px' }}
-                        className="w-7 h-7 rounded-full object-cover shrink-0 shadow-sm"
+                        style={{ width: '30px', height: '30px', minWidth: '30px' }}
+                        className="w-[30px] h-[30px] rounded-full object-cover shrink-0 shadow-sm"
                       />
                       <div>
                         🛡️ <span className="text-[#00F0B5] font-display-kr">2어절 연속 오타 시 Space/0.55초 자동전환</span> · <span className="text-amber-300 font-extrabold">평소 복붙(Ctrl+C/V) 시 원문 서식·줄바꿈 100% 보존</span> · <span className="text-white font-story-kr font-extrabold">서식·줄바꿈 다림질은 귀신창 [1]번 수동 작동</span>
                       </div>
                     </div>
 
-                    {/* 귀신창 v1.4 표준 하단 미니 툴바 ([1]서식·줄바꿈 ~ [6]창고정 인터랙티브 클릭 탭 + 실물 예시 패널) */}
+                    {/* 귀신창 v1.4 표준 하단 미니 툴바 ([1]서식·줄바꿈 ~ [5]번호·일정 인터랙티브 클릭 탭 + 실물 예시 패널) */}
                     <div className="rounded-2xl bg-zinc-900/95 border border-white/15 p-3 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="귀신창 미니 툴바 기능 설명">
@@ -1933,7 +1945,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   setSelectedToolbarKey(item.key);
                                   if (item.key !== '2') setLabelerDemoApplied(false);
                                 }}
-                                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer border ${
+                                className={`px-2.5 py-1.5 rounded-lg text-[13px] font-black transition-all cursor-pointer border whitespace-nowrap ${
                                   isSelected
                                     ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.35)] scale-[1.02]'
                                     : 'bg-zinc-950 hover:bg-zinc-800 border-white/15 text-zinc-200 hover:border-amber-400/50'
@@ -1946,14 +1958,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                           {typoConverted && (
-                            <span className="text-xs font-black text-[#00F0B5]">
+                            <span className="text-[13px] font-black text-[#00F0B5]">
                               ✨ 무버튼 0.2초 자동 성형 완료!
                             </span>
                           )}
                           <button
                             type="button"
                             onClick={handleTypoUndo}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold cursor-pointer whitespace-nowrap"
                           >
                             ↩️ 원본 보기(Ctrl+Z)
                           </button>
@@ -1964,8 +1976,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       {selectedToolbarKey === '2' && (
                         <div className="rounded-xl bg-zinc-950/95 border border-amber-400/35 p-3 space-y-2.5">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-xs sm:text-[13px] font-black text-amber-300">
-                              🏷️ [2] 파일·라벨러(PDF) — 사진·카톡·문서 날짜별 파일명 1초 자동 정리 &amp; 스샷 PDF 합본
+                            <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
+                              🏷️ [2] 파일·라벨러(PDF·ZIP) — 사진·카톡·문서 날짜별 파일명 1초 자동 정리 &amp; 스샷 PDF 합본
                             </div>
                             <button
                               type="button"
@@ -1973,7 +1985,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 playBabyGhostChime();
                                 setLabelerDemoApplied((prev) => !prev);
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                              className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
                                 labelerDemoApplied
                                   ? 'bg-[#00F0B5] text-slate-950'
                                   : 'bg-amber-400/20 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/40'
@@ -1982,7 +1994,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               {labelerDemoApplied ? '✨ 3건 일괄 작명 완료! (원본 비교)' : '⚡ 숫자 [2]키 눌러 이름 변환 체험'}
                             </button>
                           </div>
-                          <p className="text-[11.5px] text-zinc-300 leading-relaxed font-semibold">
+                          <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold break-keep">
                             탐색기에서 사진·문서 선택(또는 <span className="text-white font-extrabold">Ctrl+C</span> 복사) 후 귀신창 호출(<span className="text-amber-300 font-extrabold">Ctrl+0</span> / <span className="text-amber-300 font-extrabold">우클릭 꾹</span>) ➔ <span className="text-[#00F0B5] font-extrabold">숫자 2키!</span> (스샷 2장 이상 캡처 후 2키를 누르면 고화질 PDF 1개로 합본 변환)
                           </p>
                           <div className="grid grid-cols-1 gap-1.5 pt-0.5">
@@ -2005,10 +2017,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             ].map((row, idx) => (
                               <div
                                 key={idx}
-                                className="rounded-lg bg-zinc-900/90 border border-white/10 px-2.5 py-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]"
+                                className="rounded-lg bg-zinc-900/90 border border-white/10 px-2.5 py-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[13px]"
                               >
-                                <span className="text-zinc-400 font-bold">{row.badge}</span>
-                                <div className="flex items-center gap-1.5 font-mono font-bold">
+                                <span className="text-zinc-400 font-bold break-keep">{row.badge}</span>
+                                <div className="flex items-center gap-1.5 font-mono font-bold text-xs sm:text-[13px] shrink-0">
                                   <span className={labelerDemoApplied ? 'line-through text-zinc-500' : 'text-zinc-300'}>
                                     {row.before}
                                   </span>
@@ -2025,13 +2037,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <div className="rounded-xl bg-zinc-950/95 border border-white/15 p-3 space-y-1.5">
                           {selectedToolbarKey === 'seq' && (
                             <>
-                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                              <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
                                 📋 Ctrl+V 순차·칸맞춤 복사 — 여러 줄 복사해 두고 Ctrl+V만 연타하면 순서대로 착착!
                               </div>
-                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                              <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                                 이름·연락처·주소를 차례대로 <span className="text-white font-extrabold">Ctrl+C</span> 해 두면 창을 왔다 갔다 할 필요 없이 입력칸마다 <span className="text-[#00F0B5] font-extrabold">Ctrl+V</span>만 눌러 순서대로 자동 입력합니다.
                               </p>
-                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                              <div className="text-[13px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">홍길동 · 010-1234-5678 · 강남구 연속 복사</span>
                                 <span className="text-amber-400">➔</span>
                                 <span className="text-[#00F0B5]">신청서 빈칸마다 Ctrl+V 3번으로 1초 입력 끝</span>
@@ -2040,13 +2052,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           )}
                           {selectedToolbarKey === '1' && (
                             <>
-                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                              <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
                                 🧹 [1] 서식·줄바꿈 다림질 — 평소 복붙은 원문 100% 보존, 원할 때만 [1]키로 1초 세탁·다림질!
                               </div>
-                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                              <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                                 일반 <span className="text-white font-extrabold">Ctrl+C ➔ Ctrl+V</span> 시에는 원문 줄바꿈과 서식을 그대로 지켜주고, PDF 깨진 줄바꿈이나 뉴스 광고 꼬리말을 펴고 싶을 때만 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 1키</span>를 누르면 제자리 교체 또는 클립보드 다림질(<span className="text-amber-300 font-extrabold">Ctrl+Z</span> 원복 지원)을 수행합니다.
                               </p>
-                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                              <div className="text-[13px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">PDF 끊어진 문단 · 시커먼 배경 서식 · 광고 꼬리말</span>
                                 <span className="text-amber-400">➔</span>
                                 <span className="text-[#00F0B5]">숫자 1키 한 번에 매끈한 순수 본문으로 1초 다림질</span>
@@ -2055,13 +2067,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           )}
                           {selectedToolbarKey === '3' && (
                             <>
-                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                              <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
                                 🔍 [3] 글자·표OCR — 복사 막힌 이미지·스캔 표도 드래그 한 번에 텍스트 추출
                               </div>
-                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                              <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                                 귀신창 호출 후 <span className="text-[#00F0B5] font-extrabold">숫자 3키</span>를 누르고 화면의 이미지·스캔 문서 영역을 드래그하면 표와 글자를 1초 만에 추출해 복사합니다.
                               </p>
-                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                              <div className="text-[13px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">드래그 안 되는 스캔 견적서·이미지 표</span>
                                 <span className="text-amber-400">➔</span>
                                 <span className="text-[#00F0B5]">엑셀·메모장에 바로 붙여넣는 깔끔한 표·글자 변환</span>
@@ -2070,13 +2082,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           )}
                           {selectedToolbarKey === '4' && (
                             <>
-                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                              <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
                                 📎 [4] 합본 — 여러 번 따로 복사한 문장 조각들을 깔끔한 1개 본문으로 합치기
                               </div>
-                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                              <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                                 문서 여러 곳에서 <span className="text-white font-extrabold">Ctrl+C</span>로 모아 둔 문장 조각들을 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 4키</span> 한 번으로 줄바꿈 정리된 단일 문단으로 합칩니다.
                               </p>
-                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                              <div className="text-[13px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">보고서·기사 핵심 문단 3곳 각각 복사</span>
                                 <span className="text-amber-400">➔</span>
                                 <span className="text-[#00F0B5]">숫자 4키 한 번에 1개의 통합 본문으로 완성</span>
@@ -2085,13 +2097,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           )}
                           {selectedToolbarKey === '5' && (
                             <>
-                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
+                              <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
                                 📅 [5] 번호·일정 — 기존 글자 색상·굵기 서식 100% 보존 하이픈·요일 자동 성형
                               </div>
-                              <p className="text-[11.5px] text-zinc-300 font-semibold">
+                              <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                                 연달아 친 전화번호·날짜 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 5키</span>를 누르면 노션·워드의 파란색/빨간색 글자 서식을 그대로 유지한 채 표준 형식으로 바꿉니다.
                               </p>
-                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 borderless-shape flex flex-wrap items-center gap-1.5">
+                              <div className="text-[13px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 borderless-shape flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">01012345678 / 20260508</span>
                                 <span className="text-amber-400">➔</span>
                                 <span className="text-[#00F0B5]">010-1234-5678 / 2026-05-08(금)</span>
@@ -2115,7 +2127,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   {verifiedUserEmail && !isChangingEmail ? (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs sm:text-sm font-black text-[#00F0B5] flex items-center gap-1.5">
+                        <div className="text-[13.5px] sm:text-sm font-black text-[#00F0B5] flex items-center gap-1.5">
                           <span>🎉</span>
                           <span>
                             {dbSyncStatus === 'syncing'
@@ -2123,7 +2135,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               : `${verifiedUserEmail} 님, 사전 무료 가입 & 출시 1순위 알림 예약 완료!`}
                           </span>
                         </div>
-                        <p className="text-xs text-zinc-300 mt-1">
+                        <p className="text-[13px] text-zinc-300 mt-1 break-keep">
                           정식 오픈 당일 가장 먼저 시작 링크를 보내드립니다. 회사·매장 비치용 무료 보증서도 미리 확인해 보세요!
                         </p>
                       </div>
@@ -2131,7 +2143,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <button
                           type="button"
                           onClick={() => setCertModalOpen(true)}
-                          className="px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 font-black text-xs cursor-pointer"
+                          className="px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 font-black text-[13px] cursor-pointer"
                         >
                           📜 무료 보증서 열기
                         </button>
@@ -2147,7 +2159,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             resetOtp();
                             setTimeout(() => emailInputRef.current?.focus(), 60);
                           }}
-                          className="px-2.5 py-2 text-[11px] text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
+                          className="px-2.5 py-2 text-[13px] text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
                         >
                           이메일 변경
                         </button>
@@ -2156,10 +2168,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   ) : otpStatus === 'sent' || otpStatus === 'verifying' ? (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs sm:text-sm font-extrabold text-[#00F0B5]">
+                        <span className="text-[13.5px] sm:text-sm font-extrabold text-[#00F0B5]">
                           📩 {emailInput.trim().toLowerCase()}로 발송된 인증번호 6자리를 입력해 주세요!
                         </span>
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-mono font-bold">
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[13px] font-mono font-bold">
                           ⏱ {formatTimer()}
                         </span>
                       </div>
@@ -2180,20 +2192,20 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           />
                         ))}
                       </div>
-                      {otpError && <p className="text-xs text-rose-400 font-bold text-center">⚠️ {otpError}</p>}
+                      {otpError && <p className="text-[13px] text-rose-400 font-bold text-center">⚠️ {otpError}</p>}
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           disabled={otpStatus === 'verifying' || otpDigits.join('').length < 6}
                           onClick={() => void handleVerifyOtpCode(otpDigits.join(''))}
-                          className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-xs sm:text-sm cursor-pointer"
+                          className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-[13px] sm:text-sm cursor-pointer"
                         >
                           {otpStatus === 'verifying' ? '인증 확인 중...' : '✅ 인증 완료하고 출시 1순위 알림 예약하기'}
                         </button>
                         <button
                           type="button"
                           onClick={() => resetOtp()}
-                          className="px-3 py-3 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold cursor-pointer"
+                          className="px-3 py-3 rounded-xl bg-zinc-800 text-zinc-300 text-[13px] font-bold cursor-pointer"
                         >
                           다시 입력
                         </button>
@@ -2202,11 +2214,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   ) : (
                     <form onSubmit={handleRequestEmailVerification} className="space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
+                        <span className="text-[13.5px] sm:text-sm font-black text-white flex items-center gap-1.5">
                           <span>🔔</span>
                           <span>방금 눌러보신 『귀신같이』, 정식 오픈 당일 1순위로 받아보실래요?</span>
                         </span>
-                        <span className="text-[11px] font-extrabold text-[#00F0B5]">
+                        <span className="text-[13px] font-extrabold text-[#00F0B5]">
                           신용카드 등록 없음 · 10초 사전등록
                         </span>
                       </div>
@@ -2220,31 +2232,31 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             if (formNotice) setFormNotice(null);
                           }}
                           placeholder="이메일 주소 입력 (예: myid@naver.com)"
-                          className="flex-1 px-4 py-3 rounded-xl bg-zinc-900 border border-white/15 focus:border-[#00F0B5] text-white placeholder-zinc-500 text-xs sm:text-sm font-medium outline-none"
+                          className="flex-1 px-4 py-3 rounded-xl bg-zinc-900 border border-white/15 focus:border-[#00F0B5] text-white placeholder-zinc-500 text-[13.5px] sm:text-sm font-medium outline-none"
                         />
                         <button
                           type="submit"
                           disabled={otpStatus === 'sending'}
-                          className="px-5 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] via-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black text-xs sm:text-sm shadow-[0_4px_20px_rgba(0,240,181,0.35)] shrink-0 cursor-pointer"
+                          className="px-5 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] via-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black text-[13.5px] sm:text-sm shadow-[0_4px_20px_rgba(0,240,181,0.35)] shrink-0 cursor-pointer"
                         >
                           {otpStatus === 'sending' ? '발송 중...' : '🔔 출시 알림받기 (10초 인증)'}
                         </button>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-zinc-400">
                         <span>원터치 도메인:</span>
                         {QUICK_EMAIL_DOMAINS.map((domain) => (
                           <button
                             key={domain}
                             type="button"
                             onClick={() => applyQuickDomain(domain)}
-                            className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-[#00F0B5] border border-white/10 font-mono cursor-pointer"
+                            className="px-2.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-[#00F0B5] border border-white/10 font-mono text-xs cursor-pointer"
                           >
                             {domain}
                           </button>
                         ))}
                       </div>
                       {(formNotice || otpError) && (
-                        <p className="text-xs text-rose-400 font-bold">⚠️ {formNotice || otpError}</p>
+                        <p className="text-[13px] text-rose-400 font-bold">⚠️ {formNotice || otpError}</p>
                       )}
                     </form>
                   )}
@@ -2252,10 +2264,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               ) : (
                 <div className="rounded-2xl bg-zinc-950/95 border border-[#00F0B5]/50 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div>
-                    <div className="text-xs font-extrabold text-[#00F0B5] mb-1">
+                    <div className="text-[13.5px] font-extrabold text-[#00F0B5] mb-1">
                       🎉 정식 무료 배포 오픈! 내 PC 속 진짜 파일을 1초 만에 찾아보세요
                     </div>
-                    <p className="text-xs text-zinc-300">
+                    <p className="text-[13px] text-zinc-300">
                       원클릭으로 본 앱 워크스페이스에 입장하거나 Windows PC 엔진(Z-코어)을 받을 수 있습니다.
                     </p>
                   </div>
@@ -2263,14 +2275,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <button
                       type="button"
                       onClick={() => onEnterWorkspace(true)}
-                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-xs sm:text-sm cursor-pointer shadow-lg"
+                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-[13.5px] sm:text-sm cursor-pointer shadow-lg"
                     >
                       🚀 본 앱 바로 시작하기 ➔
                     </button>
                     <a
                       href="/Merlin_Z_Core.zip"
                       download="Merlin_Z_Core.zip"
-                      className="px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-[#00F0B5]/40 text-[#00F0B5] font-extrabold text-xs"
+                      className="px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-[#00F0B5]/40 text-[#00F0B5] font-extrabold text-[13px]"
                     >
                       💻 Z-코어 받기
                     </a>
@@ -2371,7 +2383,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   className="w-16 h-16 rounded-xl bg-white p-1 shrink-0"
                 />
                 <div className="flex flex-col gap-1 max-w-[200px]">
-                  <span className="text-[11px] font-extrabold text-teal-300">📱 스마트폰 QR 연결</span>
+                  <span className="text-[13px] font-extrabold text-teal-300">📱 스마트폰 QR 연결</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -2384,7 +2396,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       }
                       setPcAgentPairedMobile(!pcAgentPairedMobile);
                     }}
-                    className="text-left text-[10.5px] text-emerald-400 font-bold cursor-pointer"
+                    className="text-left text-xs text-emerald-400 font-bold cursor-pointer"
                   >
                     {merlinAuth?.email && merlinAuth.userId !== 'guest' && pcAgentPairedMobile
                       ? '● 내 폰 연결됨'
@@ -2396,7 +2408,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+            <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[13px]">
               <label className="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -2431,7 +2443,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
          ===================================================================== */}
       <section id="shorts" className="py-16 px-4 sm:px-6 max-w-7xl mx-auto border-t border-white/5">
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/25 text-teal-400 text-xs font-black mb-3">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/25 text-teal-400 text-[13px] font-black mb-3">
             <img
               src="/gwisinkachi_app_icon_512.png"
               alt="아기귀신"
@@ -2452,7 +2464,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               핵심 예고편
             </h2>
           </div>
-          <p className="text-zinc-400 text-xs sm:text-sm font-semibold break-keep">
+          <p className="text-zinc-400 text-[13.5px] sm:text-sm font-semibold break-keep">
             글 대신 영상으로 가볍게 즐기세요! <b className="text-[#00F0B5]">#귀신비서 · #귀신검색 · #귀신창</b> 6편 즉시 재생
           </p>
 
@@ -2468,7 +2480,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 key={tab.id}
                 type="button"
                 onClick={() => setSelectedCategory(tab.id as any)}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-4 py-2 rounded-xl text-[13px] sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                   selectedCategory === tab.id
                     ? 'bg-[#00F0B5] text-slate-950 shadow-[0_0_20px_rgba(0,240,181,0.4)]'
                     : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700'
@@ -2519,14 +2531,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       </div>
                       <span
                         style={{ backgroundColor: 'rgba(15, 23, 42, 0.88)', color: '#5EEAD4' }}
-                        className="text-[11px] font-extrabold px-3 py-1 rounded-full border border-teal-400/50 shadow"
+                        className="text-xs font-extrabold px-3 py-1 rounded-full border border-teal-400/50 shadow"
                       >
                         15초 영상 바로 재생
                       </span>
                     </div>
                     <span
                       style={{ backgroundColor: 'rgba(15, 23, 42, 0.88)', color: '#FFFFFF' }}
-                      className="absolute top-2.5 left-2.5 text-[10.5px] font-extrabold px-2.5 py-1 rounded-md shadow"
+                      className="absolute top-2.5 left-2.5 text-xs font-extrabold px-2.5 py-1 rounded-md shadow"
                     >
                       {item.tag}
                     </span>
@@ -2535,15 +2547,15 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <h3 className="font-black text-base text-zinc-100 group-hover:text-[#00F0B5] transition-colors leading-snug mb-2 break-keep">
                     {item.title}
                   </h3>
-                  <div className="text-xs text-zinc-300 font-semibold mb-1.5 line-clamp-2 break-keep">
+                  <div className="text-[13px] text-zinc-300 font-semibold mb-1.5 line-clamp-2 break-keep">
                     {item.hookLine}
                   </div>
-                  <div className="text-xs text-teal-300 font-extrabold mb-3 line-clamp-2 break-keep">
+                  <div className="text-[13px] text-teal-300 font-extrabold mb-3 line-clamp-2 break-keep">
                     👉 {item.solutionLine}
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400">
+                <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[13px] text-zinc-400">
                   <span className="truncate">
                     검색 키워드: <b className="text-amber-300">{item.recommendedKeyword}</b>
                   </span>
@@ -2569,7 +2581,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="lg:col-span-8 space-y-4">
             <div
               style={{ backgroundColor: 'rgba(251, 191, 36, 0.18)', color: '#FCD34D' }}
-              className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-amber-400/40 text-xs font-black"
+              className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-amber-400/40 text-[13px] font-black"
             >
               <span>📜</span>
               <span>대표이사 직인 날인 · 법적 효력 공식 보증서 발급</span>
@@ -2582,7 +2594,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </h3>
 
             {/* 빽빽한 줄글 대신 한눈에 읽히는 3대 안심 체크 배지 */}
-            <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+            <div className="flex flex-wrap gap-2 text-[13px] font-extrabold">
               {[
                 '🏢 법인·개인사업자·병원·세무사 사내 PC 무료',
                 '🛡️ 라이선스 비용 0원 · 광고 0%',
@@ -2597,7 +2609,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </span>
               ))}
             </div>
-            <p className="text-[11px] text-zinc-400 font-semibold break-keep">
+            <p className="text-[13px] text-zinc-300 font-semibold break-keep">
               ※ 내 기기 로컬 기본 기능(찾기·손보기·귀신창) 영구 무료 보증 (사내 다자간 팀 서버 공유 등 확장 옵션 및 공공기관 제외)
             </p>
 
@@ -2606,7 +2618,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 type="button"
                 onClick={() => setCertModalOpen(true)}
                 style={{ backgroundColor: '#FBBF24', color: '#020617' }}
-                className="px-5 py-3 rounded-xl hover:opacity-95 font-black text-xs sm:text-sm cursor-pointer shadow-lg"
+                className="px-5 py-3 rounded-xl hover:opacity-95 font-black text-[13.5px] sm:text-sm cursor-pointer shadow-lg"
               >
                 📜 공식 무료 라이선스 보증서 크게 보기
               </button>
@@ -2615,7 +2627,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF' }}
-                className="px-4 py-3 rounded-xl hover:opacity-90 border border-white/25 font-bold text-xs sm:text-sm"
+                className="px-4 py-3 rounded-xl hover:opacity-90 border border-white/25 font-bold text-[13.5px] sm:text-sm"
               >
                 🖨️ 인쇄·비치용 보증서 새 창 열기 ↗
               </a>
@@ -2638,7 +2650,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       </section>
 
       {/* 5. 최하단 마스터 푸터 */}
-      <footer className="border-t border-white/10 py-10 px-4 sm:px-6 max-w-7xl mx-auto text-xs text-zinc-500">
+      <footer className="border-t border-white/10 py-10 px-4 sm:px-6 max-w-7xl mx-auto text-[13px] text-zinc-500">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-3.5 text-center sm:text-left">
             <div className="flex items-center gap-2">
@@ -2653,7 +2665,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 className="h-6 w-auto object-contain opacity-90"
               />
             </div>
-            <p className="font-bold text-zinc-400">
+            <p className="font-bold text-zinc-400 break-keep">
               (주)썬드림 · 온디바이스 로컬 AI 『귀신같이(Ghosti)』 · 상표출원 제40-2026-0229386호 · Zero-Server 프라이버시 보장
             </p>
           </div>
@@ -2681,7 +2693,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#00F0B5] text-[11px] font-extrabold">
+                <span className="px-2.5 py-0.5 rounded bg-teal-500/20 text-[#00F0B5] text-xs font-extrabold">
                   {activeShortsModal.tag}
                 </span>
               </div>
@@ -2716,7 +2728,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 setActiveShortsModal(null);
                 scrollToEmailBox();
               }}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-xs sm:text-sm cursor-pointer"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-[13.5px] sm:text-sm cursor-pointer"
             >
               {verifiedUserEmail ? '✅ 출시 알림 예약됨 (다른 기능 체험하기)' : '🔔 이 기능 정식 출시 1순위 알림받기'}
             </button>
@@ -2735,7 +2747,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between text-white">
-              <span className="text-amber-300 font-black text-sm">
+              <span className="text-amber-300 font-black text-sm sm:text-base">
                 📜 개인 및 민간 기업 PC 기본 기능 영구 무료 공식 보증서
               </span>
               <button
@@ -2758,14 +2770,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 href="/showroom/certificates/ghosti_b2b_free_certificate.html"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-black text-xs"
+                className="px-4 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-black text-[13px]"
               >
                 🖨️ 인쇄·PDF 저장용 페이지 열기 ↗
               </a>
               <button
                 type="button"
                 onClick={() => setCertModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-zinc-800 text-zinc-200 font-bold text-xs cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 text-zinc-200 font-bold text-[13px] cursor-pointer"
               >
                 닫기
               </button>
