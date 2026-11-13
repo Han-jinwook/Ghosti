@@ -2640,7 +2640,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               className="w-44 sm:w-52 rounded-2xl overflow-hidden border-2 border-amber-400/60 shadow-2xl cursor-pointer hover:scale-105 transition-transform bg-white"
             >
               <img
-                src="/showroom/certificates/ghosti_b2b_free_certificate.png"
+                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261113v2"
                 alt="귀신같이 무료 공식 보증서"
                 className="w-full h-auto object-contain"
               />
@@ -2760,7 +2760,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </div>
             <div className="rounded-2xl overflow-hidden bg-white">
               <img
-                src="/showroom/certificates/ghosti_b2b_free_certificate.png"
+                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261113v2"
                 alt="귀신같이 무료 공식 보증서"
                 className="w-full h-auto object-contain"
               />
