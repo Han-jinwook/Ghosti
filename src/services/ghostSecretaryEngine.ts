@@ -310,7 +310,7 @@ export interface GhostSecretaryState {
   lastKnockDate?: string;
   /** 냉정한 사양 처방에서 안내한 부품 규격 (예: DDR3 PC3-12800 8GB) — 구매처 질문 시 복사 대상 */
   lastRecommendedSpec?: string;
-  /** 🪪 귀신계 여권 발급 대행 진행 단계 */
+  /** 🛂 귀신계 여권 발급 대행 진행 단계 */
   passportStep?: 'ask_hint' | 'naming' | 'done' | 'skipped';
   /** 모바일 옛날 사진 마저 스캔 시점 선택 (30분 뒤 안내 vs 저녁 유휴) */
   mobileRemainingScanChoice?: 'now_30min' | 'evening';
@@ -362,7 +362,7 @@ export function saveGhostSecretaryState(st: GhostSecretaryState): void {
 }
 
 /**
- * 🪪 귀신계 여권 저장 표준 (v1.3 수정 채택)
+ * 🛂 귀신계 여권 저장 표준 (v1.3 수정 채택)
  *  - 관계도 꼬리표('와이프','아들') / 관계 칩 버튼 폐지
  *  - 타인: 실제 이름(realName)만 / 나(본인): isSelf + nickname + realName 세트
  */
@@ -498,7 +498,7 @@ export function resolveGhostSecretaryTurn(
   if (!text) return null;
   const nickname = st.nickname || '';
 
-  // ⓪ 🪪 귀신계 여권 발급 대행 (성별·나이대 힌트 → 후보 번호별 실명 입력)
+  // ⓪ 🛂 귀신계 여권 발급 대행 (성별·나이대 힌트 → 후보 번호별 실명 입력)
   if (st.passportStep === 'ask_hint') {
     if (isPassportGenderAgeHint(text)) {
       const sc = findScenario('passport_show_top_candidates_ask_real_name');
@@ -571,7 +571,7 @@ export function resolveGhostSecretaryTurn(
       return {
         scenarioId: isFirstTime ? 'nickname_registered' : 'profile_change_nickname',
         text: isFirstTime
-          ? `${nick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🪪 귀신계 여권(나)에도 새겨뒀어요!`
+          ? `${nick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🛂 귀신계 여권(나)에도 새겨뒀어요!`
           : renderPlaybookText(findScenario('profile_change_nickname')?.response || '', { nickname: nick }),
         nextState: { ...st, nickname: nick, awaitingNickname: false },
         needsColdReading: isFirstTime,
@@ -595,7 +595,7 @@ export function resolveGhostSecretaryTurn(
         scenarioId: sc?.id || 'profile_change_nickname',
         text: sc
           ? renderPlaybookText(sc.response, { nickname: newNick })
-          : `앗, 알겠어요! 앞으로는 『${newNick}』님이라고 꼭 기억해서 불러드릴게요! 프로필과 🪪 귀신계 여권(나) 이름도 『${newNick}』님으로 바로 바꿔뒀어요!`,
+          : `앗, 알겠어요! 앞으로는 『${newNick}』님이라고 꼭 기억해서 불러드릴게요! 프로필과 🛂 귀신계 여권(나) 이름도 『${newNick}』님으로 바로 바꿔뒀어요!`,
         nextState: { ...st, nickname: newNick, awaitingNickname: false },
       };
     }
@@ -614,7 +614,7 @@ export function resolveGhostSecretaryTurn(
           scenarioId: sc?.id || 'profile_query_my_nickname',
           text: sc
             ? renderPlaybookText(sc.response, { nickname })
-            : `지금 제 마음속과 🪪 귀신계 여권(나)에는 『${nickname}』님으로 저장되어 있어요! 다른 이름으로 바꾸고 싶으시면 '은호라고 불러줘'처럼 언제든 말씀해 주세요!`,
+            : `지금 제 마음속과 🛂 귀신계 여권(나)에는 『${nickname}』님으로 저장되어 있어요! 다른 이름으로 바꾸고 싶으시면 '은호라고 불러줘'처럼 언제든 말씀해 주세요!`,
           nextState: st,
         };
       }
@@ -807,7 +807,7 @@ export function resolveGhostSecretaryTurn(
 }
 
 // ─────────────────────────────────────────────────────────────
-// 🪪 귀신계 여권 발급 대행 보조 로직
+// 🛂 귀신계 여권 발급 대행 보조 로직
 // ─────────────────────────────────────────────────────────────
 
 /** 업무용 PC 자동 패스 기준: 인물 사진 20장 미만이면 여권 질문 생략 (마스터기획서 7장 3)-1) */

@@ -78,7 +78,7 @@ export const GhostPassportCandidatesPanel: React.FC = () => {
     <section className="p-4 rounded-2xl bg-[#18181B] border-2 border-amber-400/60 flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-[16px] font-extrabold text-white">🪪 귀신계 여권 후보</h2>
+          <h2 className="text-[16px] font-extrabold text-white">🛂 귀신계 여권 후보</h2>
           <span className="text-[11.5px] font-bold text-emerald-300">
             🔒 기본 100% 내 기기 로컬 전용 보관 (원본 사진 외부 전송 없음)
           </span>
