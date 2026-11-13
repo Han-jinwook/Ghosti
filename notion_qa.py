@@ -594,6 +594,7 @@ def find_inline_target_block_id(
 
 
 MAX_QA_TODOS_PER_CARD: int = 3
+MAX_QA_TODOS_LOGIC_WALKTHROUGH: int = 5
 _BANNED_DUMMY_RULE_PHRASES = (
     "내부 설계 규칙대로 정확하고 안전하게",
     "정상 작동하는지 확인합니다",
@@ -608,21 +609,24 @@ def validate_qa_card_rules(
     rule_lines: List[str],
     todo_count: int,
     context_name: str = "노션 QA 미션카드/재테스트 안내",
+    max_todos: Optional[int] = None,
 ) -> None:
     """
     [전사 강령 제16조 제5·6항 코드 강제 가드]
     1) 맨 첫 줄에 📌 + [기존 규칙 유지] 또는 [신규 변경 규칙] 태그와 함께
        개발 용어 없는 1~2줄 테스트 판정 기준(정상/비정상 기준) 요약 필수
-    2) 1개 카드(또는 재테스트 안내)당 to_do 체크박스 항목은 반드시 1~3개 이하(<= 3)로 제한 (4개 이상 시 카드 분할 강제)
+    2) 1개 카드(또는 재테스트 안내)당 to_do 체크박스 항목은 기본 1~3개 이하(<= 3)로 제한하며,
+       오직 '로직' 담당의 초반 둘러보기/완주/UX 점검 카드에 한해서만 최대 5개 이하(<= 5) 예외를 허용합니다.
     """
+    effective_max = max_todos if max_todos is not None else MAX_QA_TODOS_PER_CARD
     if todo_count <= 0:
         raise ValueError(
             f"❌ [{context_name} | 제16조 위반] 클릭 가능한 체크박스(to_do) 테스트 항목이 0개입니다 (통문단 작성 금지)."
         )
-    if todo_count > MAX_QA_TODOS_PER_CARD:
+    if todo_count > effective_max:
         raise ValueError(
-            f"❌ [{context_name} | 제16조 제6항 위반] 한 카드에는 테스트 항목을 최대 {MAX_QA_TODOS_PER_CARD}개 이하만 넣을 수 있습니다 "
-            f"(현재 {todo_count}개). 4개 이상은 반드시 별도 미션카드로 분할하세요!"
+            f"❌ [{context_name} | 제16조 제6항 위반] 한 카드에는 테스트 항목을 최대 {effective_max}개 이하만 넣을 수 있습니다 "
+            f"(현재 {todo_count}개). 초과 시 반드시 별도 미션카드로 분할하세요!"
         )
 
     non_empty = [ln.strip() for ln in rule_lines if ln and ln.strip()]
@@ -1180,6 +1184,8 @@ def move_card_to_column_bottom(page_id: str, target_status: str) -> bool:
             new_props["앱"] = {"select": {"name": props["앱"]["select"]["name"]}}
         if "우선순위" in props and props["우선순위"].get("select"):
             new_props["우선순위"] = {"select": {"name": props["우선순위"]["select"]["name"]}}
+        if "담당" in props and props["담당"].get("select"):
+            new_props["담당"] = {"select": {"name": props["담당"]["select"]["name"]}}
 
         raw_blocks = _fetch_page_top_blocks(clean_id)
         cloned_blocks: List[Dict[str, Any]] = []
@@ -1247,22 +1253,38 @@ def create_mission(
     steps_text: str,
     initial_status: Optional[str] = None,
     rule_summary_text: Optional[str] = None,
+    track_select_name: Optional[str] = None,
 ) -> Optional[str]:
     """
     [전사 강령 제16조 제5·6항 준수]
     1) 맨 첫 줄: 📌 [테스트 기준 규칙 | 기존 규칙 유지] 또는 [신규 변경 규칙] + 1~2줄 평이한 판정 기준 요약 (공허한 상투어·개발 용어 금지)
-    2) 하단 체크리스트: 실제 클릭 가능한 to_do 블록 최대 3개 이하(1~3개, 4개 이상 시 반드시 카드 분할)
+    2) 하단 체크리스트: 실제 클릭 가능한 to_do 블록 기본 최대 3개 이하(1~3개), 단 '로직' 담당 초반 둘러보기/완주/UX 점검 카드에 한해 최대 5개 이하(<= 5) 허용
+    3) 노션 DB '담당' 속성('UX' 또는 '로직') 자동 부착
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     resolved_status = initial_status or STATUS_MISSION
 
     clean_title = title.strip()
-    if not clean_title.startswith(("🎯", "📱")):
+    if not clean_title.startswith(("🎯", "📱", "🟢", "🟣")):
         if any(tag in clean_title for tag in ("[1귀신", "[2귀신", "[3귀신", "[귀신창", "[귀신같이")):
             clean_title = f"🎯 {clean_title}"
         else:
             clean_title = f"🎯 [1귀신] {clean_title}"
+
+    if track_select_name and track_select_name.strip() in ("UX", "로직"):
+        resolved_track = track_select_name.strip()
+    elif "[로직]" in clean_title or "🟣" in clean_title:
+        resolved_track = "로직"
+    else:
+        resolved_track = "UX"
+
+    is_logic_walkthrough = (
+        resolved_track == "로직"
+        and any(k in clean_title for k in ("둘러보기", "완주", "UX 점검", "UX점검"))
+        and not any(k in clean_title for k in ("엣지", "스트레스", "고강도", "저강도"))
+    )
+    allowed_max_todos = MAX_QA_TODOS_LOGIC_WALKTHROUGH if is_logic_walkthrough else MAX_QA_TODOS_PER_CARD
 
     if SCHEMA.status_prop_type == "status":
         status_prop = {"status": {"name": resolved_status}}
@@ -1284,6 +1306,7 @@ def create_mission(
         rule_lines=summary_lines,
         todo_count=len(raw_lines),
         context_name=f"신규 미션카드({clean_title})",
+        max_todos=allowed_max_todos,
     )
     summary_body = "\n".join(summary_lines)
 
@@ -1341,6 +1364,7 @@ def create_mission(
             },
             SCHEMA.status_prop_name: status_prop,
             "앱": {"select": {"name": "귀신같이"}},
+            "담당": {"select": {"name": resolved_track}},
         },
         "children": children_blocks,
     }
@@ -1359,6 +1383,7 @@ def create_mission(
     new_page_id = res.json().get("id", "")
     print("\n🎯 [알바생용 노션 테스트 미션 카드 생성 완료!]")
     print(f"   • 미션 제목: {clean_title}")
+    print(f"   • 담당 태그: '{resolved_track}'")
     print(f"   • 배치 컬럼: '{resolved_status}'")
     print(f"   • 카드 ID  : {new_page_id}")
     return new_page_id
