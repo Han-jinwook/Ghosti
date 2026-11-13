@@ -827,7 +827,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                     </div>
                     {vid.hasScreenOcrText && (
                       <div className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-md bg-teal-500/90 text-zinc-950 font-label-mono text-[10.5px] font-black shadow">
-                        📝 화면 글자 {vid.ocrLineCount || ''}구간 감지
+                        📝 화면 글자 감지됨
                       </div>
                     )}
                   </div>

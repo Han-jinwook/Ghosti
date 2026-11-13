@@ -1849,30 +1849,34 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
 
 def _is_meaningful_ocr_text(txt: str) -> bool:
     """
-    야외/실내 일반 영상의 나뭇가지·그림자·물결 노이즈를 WinRT OCR이 깨진 한자/기호('=』젤TA爨', '•謷&•구수하')나
-    초단문 워터마크('Veo')로 오인식하는 현상을 걸러냅니다.
+    야외/실내 일반 영상의 나뭇가지·그림자·물결 노이즈('=』젤TA爨', '•謷&•구수하')나
+    초단문 워터마크('Veo', ':회 Veo')는 차단하되,
+    스마트폰 화면 녹화처럼 실제 한글 문장이 6자 이상 포함된 텍스트는 아이콘 오인식 한자가 1~2자 섞여 있어도 통과시킵니다.
     """
     s = str(txt or "").strip()
     if not s:
         return False
-    # WinRT 한국어 OCR이 배경 질감을 한자(CJK)로 오인식하는 경우가 매우 많음
-    if re.search(r"[\u4e00-\u9fff]", s):
-        return False
-    # 의미 있는 한글/영문/숫자만 추출
+    # 한자(CJK)가 아닌 실제 한글/영문/숫자 추출
     alnum = re.sub(r"[^가-힣a-zA-Z0-9]", "", s)
     if len(alnum) < 4:
         return False
+    ko_chars = re.findall(r"[가-힣]", alnum)
+    cjk_chars = re.findall(r"[\u4e00-\u9fff]", s)
+    # 한글이 6자 이상이면(실제 문장/화면 UI) 옆에 아이콘 오인식 한자가 일부 섞여 있어도 유효 텍스트로 인정
+    if len(ko_chars) >= 6:
+        return True
+    # 한글이 6자 미만인데 한자가 섞여 있으면 배경 질감 오인식 노이즈로 차단
+    if cjk_chars:
+        return False
     # 특수기호/구두점 비율이 지나치게 높으면 노이즈로 판정
     non_space = re.sub(r"\s+", "", s)
-    if non_space and (len(alnum) / len(non_space)) < 0.55:
+    if non_space and (len(alnum) / len(non_space)) < 0.5:
         return False
     # 단일 영문/숫자 워터마크(4~5자 이하, 한글 없음) 배제 (예: 'Veo', 'Sora', 'REC1')
-    has_ko = bool(re.search(r"[가-힣]", alnum))
-    if not has_ko and len(alnum) <= 5 and " " not in s:
+    if not ko_chars and len(alnum) <= 5 and " " not in s:
         return False
     # 한글이 1자뿐이거나 총 글자수가 부족한 노이즈 파편 배제 (예: ':회 Veo')
-    ko_chars = re.findall(r"[가-힣]", alnum)
-    if has_ko and (len(ko_chars) < 2 or len(alnum) < 5):
+    if ko_chars and (len(ko_chars) < 2 or len(alnum) < 5):
         return False
     return True
 

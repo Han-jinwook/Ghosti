@@ -1436,18 +1436,18 @@ export async function searchVideoSceneItemsAsync(
   const medianSim = embeddedSims[Math.floor(embeddedSims.length * 0.5)] ?? 0;
   const hasCorpusSeparation =
     embeddedSims.length >= 6
-      ? topSim >= 0.655 && topSim - medianSim >= 0.025
+      ? topSim >= 0.635 && topSim - medianSim >= 0.02
       : embeddedSims.length >= 3
-      ? topSim >= 0.665
+      ? topSim >= 0.648
       : embeddedSims.length >= 1
-      ? topSim >= 0.678
+      ? topSim >= 0.66
       : false;
   const admitThreshold =
     embeddedSims.length >= 6
-      ? Math.max(0.652, topSim - 0.04, medianSim + 0.028)
+      ? Math.max(0.632, topSim - 0.045, medianSim + 0.02)
       : embeddedSims.length >= 3
-      ? Math.max(0.66, topSim - 0.04)
-      : Math.max(0.672, topSim - 0.035);
+      ? Math.max(0.642, topSim - 0.045)
+      : Math.max(0.655, topSim - 0.04);
 
   const strongVideoBursts = hasCorpusSeparation
     ? evals
