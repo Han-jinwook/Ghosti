@@ -331,7 +331,7 @@ def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
         title_obj = props.get(SCHEMA.title_prop_name, {})
         title_text = extract_plain_text(title_obj.get("title", [])) or "(제목 없음)"
         app_select = (props.get("앱", {}).get("select") or {}).get("name", "")
-        # 센스톡·썬드리머·멀린비서·스튜디오(온보딩/쇼룸 포함)·멀린허브·귀신창 초능력(비서 전담) 카드는 무조건 제외하고 순수 '[귀신같이]' 본앱 카드만 전담!
+        # 센스톡·썬드리머·멀린비서·스튜디오·멀린허브·귀신창 초능력(비서 전담) 카드는 무조건 제외하고 순수 '[귀신같이]' 본앱 및 웹 온보딩('Ghosti' 전권 인수 완료) 카드만 전담!
         is_other_project_card = (
             app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub", "귀신창")
             or any(
@@ -339,7 +339,6 @@ def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
                 for k in (
                     "[스튜디오",
                     "스튜디오]",
-                    "온보딩",
                     "[센스톡",
                     "[썬드리머",
                     "[멀린비서",
@@ -845,7 +844,7 @@ def trim_done_cards(keep_count: int = 4) -> int:
             app_name in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub", "귀신창")
             or any(
                 k in t
-                for k in ("[스튜디오", "스튜디오]", "온보딩", "[센스톡", "[썬드리머", "[멀린비서", "[멀린허브", "[귀신창")
+                for k in ("[스튜디오", "스튜디오]", "[센스톡", "[썬드리머", "[멀린비서", "[멀린허브", "[귀신창")
             )
         )
         is_ghosti_only = (not is_other_owner) and (

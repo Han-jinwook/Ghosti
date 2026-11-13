@@ -43732,3 +43732,13 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
    - 보조 데몬에서 한영 오타 검증이나 경량 유사도가 필요한 경우 오직 정적 사전(`tokenizer.json`) 또는 0바이트 문자 N-gram 해시만 사용하여 평시 메모리 25MB 이하·CPU 0.0%를 엄격히 유지합니다.
 2. **디스크/폴더 스캔 루프(`os.scandir`, `os.walk`, `rglob`) 및 UI 이벤트 핸들러 내 동기 추론(Synchronous Inference) 절대 금지**:
    - 폴더·파일 스캔 루프나 단축키/마우스 훅/UI 스레드 내부에서 `embed()`, `session.run()` 등 무거운 동기 AI 추론을 호출하여 CPU 60~100% 폭주 및 UI 프리징(Not Responding)을 유발하는 코드를 절대 작성하지 않습니다.
+
+
+---
+
+### 🌐 [귀신같이 웹 온보딩(`GhostiShowroomLanding.tsx`) 및 노션 QA 온보딩 카드 전권 전담 인수 (2026-11-13 제정)]
+1. **웹 온보딩(`https://ghosti.sundreamer.app` / `src/components/GhostiShowroomLanding.tsx`) 전담 주권**:
+   - 6호컴 도입 이후 `studio`가 임시 지원하던 귀신같이 메인 웹 온보딩 쇼룸(`src/components/GhostiShowroomLanding.tsx`, 사전등록 OTP, 무료 공식 보증서 모달, 4대 초능력 체험 스테이지) 및 노션 QA 온보딩 카드(`[귀신같이] 온보딩 페이지 디자인 관련`, `[귀신같이 ②]`, `[귀신같이 ③]`)의 개발·유지보수·QA 전권은 **`Ghosti` 본진이 100% 전담**합니다.
+2. **온보딩 UI/타이포그래피 퇴행 방지 가드레일**:
+   - 한글이 포함된 UI 행·예시 박스에 Tailwind 기본 `font-mono` 사용 금지(Windows `굴림체` 자간 벌어짐 방지 — `font-sans tracking-normal` 유지), 최소 폰트 크기 `12px`(`text-xs` 이상) 엄수, 상단 GNB `min-h-[68px] py-3` 및 `42x42` 아기귀신 아이콘(`shrink-0`, `border-2 border-[#00F0B5]`) 고정, `html.theme-warm-light` 전역 테마 호환(`data-keep-dark="true"` 미디어 프레임 보존) 원칙을 준수합니다.
+   - 신규 홍보 쇼츠 영상(MP4) 또는 보증서 원본 고해상도 이미지 재생성이 필요한 경우에만 중앙 우체국을 통해 `studio`에 에셋 제작을 요청합니다.
