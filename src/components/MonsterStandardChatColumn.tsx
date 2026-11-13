@@ -119,39 +119,55 @@ const AnimatedSecretaryText: React.FC<{
   );
   const [done, setDone] = useState<boolean>(alreadyDone);
 
+  // 부모 리렌더(타이핑·플레이스홀더 롤링 등)로 콜백 참조가 바뀌어도 타이머가 절대 취소되지 않도록 ref로 보관
+  const onProgressScrollRef = useRef(onProgressScroll);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onProgressScrollRef.current = onProgressScroll;
+    onCompleteRef.current = onComplete;
+  });
+
+  // 외부(유저 새 질문 전송 등)에서 이미 완료 처리된 경우 즉시 동기화
+  useEffect(() => {
+    if (!done && completedSecretaryAnimIds.has(messageId)) {
+      setVisibleCount(sentences.length);
+      setDone(true);
+    }
+  });
+
   useEffect(() => {
     if (done) {
       completedSecretaryAnimIds.add(messageId);
-      onComplete?.();
+      onCompleteRef.current?.();
       return;
     }
     if (visibleCount >= sentences.length) {
       const finishTimer = window.setTimeout(() => {
         completedSecretaryAnimIds.add(messageId);
         setDone(true);
-        onProgressScroll?.();
-        onComplete?.();
-      }, 280);
+        onProgressScrollRef.current?.();
+        onCompleteRef.current?.();
+      }, 360);
       return () => window.clearTimeout(finishTimer);
     }
 
     const nextSentence = sentences[visibleCount] ?? '';
-    // 빈 줄은 짧은 문단 호흡(140ms), 일반 문장은 차분하게 한 문장씩 띄우기(520ms)
-    const delayMs = nextSentence.length === 0 ? 140 : 520;
+    // 빈 줄은 짧은 문단 호흡(180ms), 일반 문장은 한 문장씩 차분하게(650ms) 띄우기
+    const delayMs = nextSentence.length === 0 ? 180 : 650;
     const t = window.setTimeout(() => {
       setVisibleCount((c) => c + 1);
-      onProgressScroll?.();
+      onProgressScrollRef.current?.();
     }, delayMs);
     return () => window.clearTimeout(t);
-  }, [done, visibleCount, sentences, messageId, onProgressScroll, onComplete]);
+  }, [done, visibleCount, sentences.length, messageId]);
 
   const handleSkip = () => {
     if (done) return;
     completedSecretaryAnimIds.add(messageId);
     setVisibleCount(sentences.length);
     setDone(true);
-    onProgressScroll?.();
-    onComplete?.();
+    onProgressScrollRef.current?.();
+    onCompleteRef.current?.();
   };
 
   if (done) {
@@ -614,6 +630,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     const raw = (overrideQuery ?? inputText).trim();
     if (!raw || busy) return;
     if (!overrideQuery) setInputText('');
+
+    // 새 질문을 보낼 때 아직 순차 등장 중이던 이전 귀신비서 말풍선은 즉시 완료 처리하여 다음 답변이 가려지지 않게 보장
+    for (const m of getSharedMonsterChatState().messages) {
+      if (m.role !== 'user') {
+        completedSecretaryAnimIds.add(m.id);
+      }
+    }
 
     const userMsg: MonsterChatMessage = {
       id: `user_${Date.now()}`,
