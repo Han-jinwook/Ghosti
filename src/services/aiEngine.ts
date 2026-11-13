@@ -1294,7 +1294,7 @@ export async function searchVideoSceneItemsAsync(
     return Array.from(lexicalByKey.values());
   }
 
-  await ensureVideoKeyframesEmbeddedForSearch(nonBlackVideos, 28);
+  await ensureVideoKeyframesEmbeddedForSearch(nonBlackVideos, Math.max(120, nonBlackVideos.length));
   const queryVecs = await encodeMultimodalSearchQueryVecs(q);
   if (queryVecs.length === 0) {
     return Array.from(lexicalByKey.values());
@@ -1408,13 +1408,13 @@ export async function searchVideoSceneItemsAsync(
       : topSim >= 0.648;
   const admitThreshold =
     sortedSims.length >= 6
-      ? Math.max(0.625, topSim - 0.045, medianSim + 0.022)
-      : Math.max(0.642, topSim - 0.045);
+      ? Math.max(0.618, topSim - 0.055, medianSim + 0.018)
+      : Math.max(0.635, topSim - 0.055);
 
-  // 강하게 매칭된 핵심 동영상 촬영 시각(동일 폴더·5분 이내 연속 촬영 연작 클립 보강용)
+  // 강하게 매칭된 핵심 동영상 촬영 시각(동일 폴더·15분 이내 연속 촬영 연작 클립 보강용)
   const strongVideoBursts = hasCorpusSeparation
     ? evals
-        .filter((e) => e.tsInfo && e.bestSim >= admitThreshold && e.bestSim >= topSim - 0.025)
+        .filter((e) => e.tsInfo && e.bestSim >= admitThreshold && e.bestSim >= topSim - 0.035)
         .map((e) => ({
           dateYmd: e.tsInfo!.dateYmd,
           secOfDay: e.tsInfo!.secOfDay,
@@ -1429,22 +1429,22 @@ export async function searchVideoSceneItemsAsync(
     const lexHit = lexicalByKey.get(ev.key);
     let effectiveSim = ev.bestSim;
 
-    // 연속 촬영 세션(±5분 이내 형제 동영상 또는 ±10분 이내 일치 실사진)이 존재하고,
-    // 현재 클립 자체도 시각적 일관성(admitThreshold - 0.028 이상)을 갖춘 경우에만 연작 클립 누락 방지 보너스 부여
-    if (ev.tsInfo && ev.bestSim >= Math.max(0.615, admitThreshold - 0.028)) {
+    // 연속 촬영 세션(±15분 이내 형제 동영상 또는 ±15분 이내 일치 실사진)이 존재하고,
+    // 현재 클립 자체도 시각적 일관성(admitThreshold - 0.035 이상)을 갖춘 경우에만 연작 클립 누락 방지 보너스 부여
+    if (ev.tsInfo && ev.bestSim >= Math.max(0.605, admitThreshold - 0.035)) {
       const hasNearStrongVid = strongVideoBursts.some(
         (b) =>
           b.dateYmd === ev.tsInfo!.dateYmd &&
           b.loc === ev.vid.locationKo &&
-          Math.abs(b.secOfDay - ev.tsInfo!.secOfDay) <= 300
+          Math.abs(b.secOfDay - ev.tsInfo!.secOfDay) <= 900
       );
       const hasNearMatchedPhoto = matchedPhotoBursts.some(
         (p) =>
           p.dateYmd === ev.tsInfo!.dateYmd &&
-          Math.abs(p.secOfDay - ev.tsInfo!.secOfDay) <= 600
+          Math.abs(p.secOfDay - ev.tsInfo!.secOfDay) <= 900
       );
       if (hasNearStrongVid || hasNearMatchedPhoto) {
-        effectiveSim += 0.024;
+        effectiveSim += 0.038;
       }
     }
 
