@@ -147,12 +147,14 @@ const VirtualMonitorSimulator: React.FC<{
   connected = true,
 }) => {
   const {
+    photos,
     hasExecutedUserSearch,
     activeQuery,
     searchResults,
     matchedLocalDocs,
     matchedVaultPhotos,
     matchedVideoScenes,
+    setSelectedPhoto,
   } = useSaySeeStore();
   const monitorRef = useRef<HTMLDivElement | null>(null);
   const [monitorW, setMonitorW] = useState(960);
@@ -544,13 +546,66 @@ const VirtualMonitorSimulator: React.FC<{
                   </div>
                 </div>
                 <div
-                  className="h-[calc(100%-2.25rem)] overflow-y-auto bg-zinc-950"
+                  className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-zinc-950"
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     if (isAutoPlaying) setIsAutoPlaying(false);
                   }}
                 >
-                  <Stage1MinimalSearchPreview initialQuery={initialQuery} />
+                  <div className="flex-1 min-w-0 h-full overflow-y-auto">
+                    <Stage1MinimalSearchPreview initialQuery={initialQuery} />
+                  </div>
+                  {stage === 'medium' && (() => {
+                    const topPhoto =
+                      searchResults[0]?.photo ||
+                      matchedVaultPhotos[0] ||
+                      photos.find((p) => !p.quarantined);
+                    const topDoc = matchedLocalDocs[0];
+                    return (
+                      <aside className="w-[330px] shrink-0 h-full border-l border-[#2DD4BF]/40 bg-[#0F172A] p-3.5 flex flex-col gap-2.5 overflow-y-auto">
+                        <div className="text-[12.5px] font-extrabold text-[#5EEAD4] flex items-center gap-1.5">
+                          <span>👻 선택 항목 상세 미리보기</span>
+                        </div>
+                        {topPhoto ? (
+                          <>
+                            <div className="w-full h-[200px] rounded-lg overflow-hidden bg-black border border-slate-700 flex items-center justify-center">
+                              <img
+                                src={topPhoto.thumbUrl}
+                                alt={topPhoto.name}
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                            <div className="text-[11.5px] font-bold text-slate-200 truncate">
+                              🖼️ {topPhoto.name}
+                            </div>
+                            <div className="text-[11px] text-slate-400 line-clamp-3">
+                              {topPhoto.captionKo || topPhoto.tags.join(' · ')}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPhoto(topPhoto, null)}
+                              className="mt-auto w-full py-2 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12px] font-extrabold cursor-pointer transition-colors"
+                            >
+                              🔍 상세 크게 보기 / 사진·OCR 열기
+                            </button>
+                          </>
+                        ) : topDoc ? (
+                          <>
+                            <div className="text-[12px] font-bold text-slate-100">
+                              📄 {topDoc.fileName}
+                            </div>
+                            <div className="text-[11px] text-slate-300 line-clamp-6">
+                              {topDoc.extractedText}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-[11.5px] text-slate-400">
+                            왼쪽 검색 결과를 선택하면 이곳에 큰 상세 미리보기가 표시됩니다.
+                          </div>
+                        )}
+                      </aside>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

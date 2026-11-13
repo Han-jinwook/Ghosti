@@ -185,19 +185,8 @@ def build_ui2_search_window(
     )
     title_badge.pack(side="left", padx=(0, 6))
 
-    s_entry = tk.Entry(
-        hdr,
-        width=18,
-        fg="#F8FAFC",
-        bg="#1E2336" if False else "#1E293B",
-        insertbackground="#5EEAD4",
-        relief="flat",
-        font=("Malgun Gothic", 9),
-    )
-    s_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-    if init_query:
-        s_entry.insert(0, init_query)
-
+    # [Tkinter 레이아웃 철칙]: 우측 고정 버튼들(✕, 🔊, ⤢크게, 🏷️파일라벨러)을 먼저 side="right"로 pack한 뒤
+    # 검색 입력창(s_entry)을 마지막에 expand=True로 pack해야 520px 슬림 창(및 125~150% 배율)에서도 버튼 글자가 단 1px도 잘리지 않습니다!
     close_btn = tk.Label(
         hdr,
         text="✕",
@@ -236,7 +225,7 @@ def build_ui2_search_window(
         text="⤡ 작게" if init_mode == "large" else "⤢ 크게(갤러리)",
         fg="#0B1120" if init_mode == "large" else "#5EEAD4",
         bg="#2DD4BF" if init_mode == "large" else "#1E293B",
-        padx=6,
+        padx=5,
         pady=1,
         font=("Malgun Gothic", 8, "bold"),
         cursor="hand2",
@@ -246,16 +235,29 @@ def build_ui2_search_window(
 
     lbl_quick_btn = tk.Label(
         hdr,
-        text="🏷️[2]파일라벨러",
+        text="🏷️파일라벨러",
         fg="#0B1120",
         bg="#5EEAD4",
-        padx=6,
+        padx=5,
         pady=1,
         font=("Malgun Gothic", 8, "bold"),
         cursor="hand2",
     )
     lbl_quick_btn.pack(side="right", padx=(4, 2))
     lbl_quick_btn.bind("<Button-1>", lambda _e: (close_win(), clicked_superpower_queue.put(2)))
+
+    s_entry = tk.Entry(
+        hdr,
+        width=6,
+        fg="#F8FAFC",
+        bg="#1E293B",
+        insertbackground="#5EEAD4",
+        relief="flat",
+        font=("Malgun Gothic", 9),
+    )
+    s_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
+    if init_query:
+        s_entry.insert(0, init_query)
 
     # 2단 필터 바: [전체] [📄문서] [🖼️사진] [🎬영상] + 우측 안내
     fbar = tk.Frame(outer, bg="#0B1120")
@@ -562,11 +564,14 @@ def build_ui2_search_window(
 
         if not q:
             candidates = pool[:max_cnt]
-            trial_lbl.config(text="✨ 크기 자율 호흡 · 🎁 30일 무제한", fg="#FDE047")
+            trial_lbl.config(
+                text="✨ 자율크기 · 🎁 30일 체험" if st_now == "small" else "✨ 크기 자율 호흡 · 🎁 30일 무제한 체험",
+                fg="#FDE047",
+            )
         elif matched:
             candidates = [m[1] for m in matched[:max_cnt]]
             trial_lbl.config(
-                text=f"🔍 '{q[:8]}' {len(matched)}건" + (" · 자율확장" if st_now == "medium" else ""),
+                text=f"🔍 '{q[:8]}' {len(matched)}건" + (" · 우측 상세미리보기" if st_now == "medium" else ""),
                 fg="#5EEAD4",
             )
         else:
@@ -631,19 +636,22 @@ def build_ui2_search_window(
         list_parent = body_frame
         preview_pane = None
         if st_now == "medium":
-            list_parent = tk.Frame(body_frame, bg="#0B1120")
-            list_parent.pack(side="left", fill="both", expand=True, padx=(0, 6))
+            # [우측 상세 미리보기 고정 배치]: 우측 상세 미리보기 패널(width=380)을 먼저 side="right"로 고정 배치하고
+            # 좌측에는 검색 결과 목록만 깔끔하게 배치하여 960x640 확장 시 우측에 큰 이미지·문서 상세 미리보기가 즉시 펼쳐지게 함
             preview_pane = tk.Frame(
                 body_frame,
                 bg="#0F172A",
-                highlightbackground="#334155",
+                highlightbackground="#2DD4BF",
                 highlightthickness=1,
                 padx=10,
                 pady=8,
-                width=360,
+                width=380,
             )
-            preview_pane.pack(side="right", fill="y")
+            preview_pane.pack(side="right", fill="y", padx=(6, 0))
             preview_pane.pack_propagate(False)
+
+            list_parent = tk.Frame(body_frame, bg="#0B1120")
+            list_parent.pack(side="left", fill="both", expand=True)
         elif st_now == "large":
             list_parent.grid_columnconfigure(0, weight=1, uniform="gcol")
             list_parent.grid_columnconfigure(1, weight=1, uniform="gcol")
@@ -682,7 +690,7 @@ def build_ui2_search_window(
             )
             num_l.pack(side="left", padx=(0, 5))
 
-            if kind == "image" and rec.get("thumb_bytes") and Image is not None and ImageTk is not None:
+            if st_now != "medium" and kind == "image" and rec.get("thumb_bytes") and Image is not None and ImageTk is not None:
                 try:
                     im_p = Image.open(io.BytesIO(rec["thumb_bytes"]))
                     th_p = ImageTk.PhotoImage(im_p, master=root)
@@ -736,15 +744,26 @@ def build_ui2_search_window(
             )
             body_l.pack(side="left", fill="x", expand=True)
 
-            def _on_pick(_e=None, r=rec):
+            def _on_pick(_e=None, r=rec, i_row=idx_c):
+                if st_now == "medium" and st_state["sel_idx"] != i_row:
+                    st_state["sel_idx"] = i_row
+                    _render_search_results()
+                    return
+                fpath = r.get("file_path") or r.get("img_path") or ""
+                paste_to_target(text_val=r.get("text", ""), file_path=fpath)
+
+            def _on_dbl_pick(_e=None, r=rec):
                 fpath = r.get("file_path") or r.get("img_path") or ""
                 paste_to_target(text_val=r.get("text", ""), file_path=fpath)
 
             for w_it in (card, num_l, body_l, time_l):
                 w_it.bind("<Button-1>", _on_pick)
+                w_it.bind("<Double-Button-1>", _on_dbl_pick)
 
         if preview_pane is not None and candidates:
             sel_rec = candidates[st_state["sel_idx"]]
+            s_kind = sel_rec.get("kind", "text")
+            s_fpath = str(sel_rec.get("img_path") or sel_rec.get("file_path") or "").strip()
             s_txt = sel_rec.get("video_ocr_full") or sel_rec.get("text", "")
             tk.Label(
                 preview_pane,
@@ -754,14 +773,69 @@ def build_ui2_search_window(
                 font=("Malgun Gothic", 9, "bold"),
                 anchor="w",
             ).pack(fill="x", pady=(0, 6))
+
+            # [핵심 보완]: 중형(960x640) 우측 상세 미리보기 칸에 실제 큰 사진/캡처 이미지 미리보기를 선명하게 렌더링!
+            if s_kind == "image" and Image is not None and ImageTk is not None:
+                big_photo = None
+                img_dim_str = ""
+                try:
+                    if s_fpath and os.path.isfile(s_fpath):
+                        with Image.open(s_fpath) as raw_im:
+                            img_dim_str = f"{raw_im.width}×{raw_im.height}px"
+                            im_copy = raw_im.convert("RGB")
+                            im_copy.thumbnail((352, 220))
+                            big_photo = ImageTk.PhotoImage(im_copy, master=root)
+                    elif sel_rec.get("thumb_bytes"):
+                        with Image.open(io.BytesIO(sel_rec["thumb_bytes"])) as raw_tb:
+                            im_copy = raw_tb.convert("RGB")
+                            im_copy = im_copy.resize((260, 165))
+                            big_photo = ImageTk.PhotoImage(im_copy, master=root)
+                except Exception:
+                    big_photo = None
+
+                if big_photo is not None:
+                    thumb_refs.append(big_photo)
+                    img_holder = tk.Frame(
+                        preview_pane,
+                        bg="#020617",
+                        highlightbackground="#334155",
+                        highlightthickness=1,
+                        height=228,
+                    )
+                    img_holder.pack(fill="x", pady=(0, 6))
+                    img_holder.pack_propagate(False)
+                    tk.Label(img_holder, image=big_photo, bg="#020617", bd=0).pack(expand=True)
+
+                if s_fpath:
+                    fname_only = Path(s_fpath).name
+                    meta_line = f"🖼️ {fname_only}" + (f" ({img_dim_str})" if img_dim_str else "")
+                    tk.Label(
+                        preview_pane,
+                        text=meta_line[:48],
+                        fg="#94A3B8",
+                        bg="#0F172A",
+                        font=("Malgun Gothic", 8),
+                        anchor="w",
+                    ).pack(fill="x", pady=(0, 4))
+            elif s_fpath:
+                tk.Label(
+                    preview_pane,
+                    text=f"📂 {Path(s_fpath).name}"[:48],
+                    fg="#94A3B8",
+                    bg="#0F172A",
+                    font=("Malgun Gothic", 8, "bold"),
+                    anchor="w",
+                ).pack(fill="x", pady=(0, 4))
+
+            disp_preview_txt = clean_ocr_noise(str(s_txt)) if s_kind == "image" else str(s_txt)
             tk.Label(
                 preview_pane,
-                text=str(s_txt)[:360],
+                text=disp_preview_txt[:220],
                 fg="#F8FAFC",
                 bg="#0F172A",
                 font=("Malgun Gothic", 9),
                 justify="left",
-                wraplength=330,
+                wraplength=350,
                 anchor="w",
             ).pack(fill="x", pady=(0, 8))
             act_b = tk.Label(
@@ -784,7 +858,7 @@ def build_ui2_search_window(
             if sel_rec.get("kind") == "image":
                 ocr_jump = tk.Label(
                     preview_pane,
-                    text="📝 사진·OCR 단어칩 창으로 열기",
+                    text="📝 사진·OCR 창으로 열기",
                     fg="#FDE047",
                     bg="#1E293B",
                     padx=8,
