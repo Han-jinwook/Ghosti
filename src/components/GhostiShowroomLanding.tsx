@@ -278,6 +278,10 @@ const INTERACTIVE_SCENARIOS = {
       transcript: '“우와~ 우리 아기 두 발로 아장아장 걷는다! 여보 빨리 찍어!”',
       sceneDesc: '잔디밭에서 손을 잡고 아장아장 걸음마를 떼는 하이라이트 장면 포착',
       latency: '0.008초',
+      screenOcrLines: [
+        '[00:14] 2025.09.14 송도 센트럴파크 잔디광장 산책',
+        '[03:12] 우리 아기 생애 첫 걸음마 성공! (D+342)',
+      ],
     },
     {
       query: '여행 맛집 고기상',
@@ -288,6 +292,10 @@ const INTERACTIVE_SCENARIOS = {
       transcript: '“이 집 플레이팅이랑 육즙이 진짜 대박이네, 인생 맛집 인정!”',
       sceneDesc: '식당 테이블 위 메인 요리 클로즈업 구간 및 음식 장면 자동 인식',
       latency: '0.011초',
+      screenOcrLines: [
+        '[01:05] 제주 흑돼지 본가 간판 · 예약문의 064-712-8890',
+        '[05:41] 메뉴판: 흑돼지 오겹 한상 68,000원 / 김치찌개 8,000원',
+      ],
     },
     {
       query: '노을 바다 가족사진',
@@ -298,6 +306,10 @@ const INTERACTIVE_SCENARIOS = {
       transcript: '“해 질 녘 파도 색깔 너무 예쁘다~ 다 같이 바다 보면서 하나 둘 셋!”',
       sceneDesc: '황금빛 석양과 에메랄드 파도가 만나는 해변 하이라이트 구간',
       latency: '0.007초',
+      screenOcrLines: [
+        '[00:22] 해안가 낙조 전망대 안내 표지판 (일몰 19:42)',
+        '[02:19] 2025 SUMMER FAMILY VACATION · 서해안 해변',
+      ],
     },
   ],
   doc: [
@@ -450,6 +462,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
   // 우측 단일 스테이지 내부 시뮬레이터 상태
   const [selectedVideoScenarioIdx, setSelectedVideoScenarioIdx] = useState(0);
+  const [videoOcrExtracted, setVideoOcrExtracted] = useState(false);
   const [selectedDocScenarioIdx, setSelectedDocScenarioIdx] = useState(0);
   const [cleanDemoDone, setCleanDemoDone] = useState(false);
 
@@ -460,7 +473,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [typoConverted, setTypoConverted] = useState<boolean>(false);
   const [typoIsPresetSample, setTypoIsPresetSample] = useState<boolean>(true);
   const typoDemoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedToolbarKey, setSelectedToolbarKey] = useState<'seq' | '1' | '2' | '3' | '4' | '5' | '6'>('1');
+  const [selectedToolbarKey, setSelectedToolbarKey] = useState<'seq' | '1' | '2' | '3' | '4' | '5'>('1');
   const [labelerDemoApplied, setLabelerDemoApplied] = useState<boolean>(false);
 
   // DEV 전체보기 전용 내부 상태 보존 (코드 삭제 없이 일반 방문자에게만 은닉)
@@ -1371,6 +1384,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             onClick={() => {
                               playBabyGhostChime();
                               setSelectedVideoScenarioIdx(idx);
+                              setVideoOcrExtracted(false);
                             }}
                             style={
                               active
@@ -1473,6 +1487,43 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 className="h-full rounded-full transition-all duration-300"
                               />
                             </div>
+                          </div>
+
+                          {/* 👻 영상 속 화면 글자 발견! & [📝 글자 뽑기] 1초 텍스트 추출 체험 */}
+                          <div
+                            style={{ backgroundColor: 'rgba(13, 148, 136, 0.16)', border: 'none' }}
+                            className="rounded-xl p-3 space-y-2 borderless-shape"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 text-xs font-black text-[#00F0B5]">
+                                <span>👻 영상 속 화면 글자 발견!</span>
+                                <span className="text-[11px] text-zinc-300 font-bold">(멈춰 적지 말고 1초 추출)</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playBabyGhostChime();
+                                  setVideoOcrExtracted((prev) => !prev);
+                                }}
+                                style={{
+                                  backgroundColor: videoOcrExtracted ? '#00F0B5' : '#FBBF24',
+                                  color: '#020617',
+                                }}
+                                className="px-3 py-1 rounded-lg text-[11px] font-black cursor-pointer shadow-sm transition-transform hover:scale-105"
+                              >
+                                {videoOcrExtracted ? '✅ 화면 글자 1초 추출 완료!' : '📝 글자 뽑기'}
+                              </button>
+                            </div>
+                            {videoOcrExtracted && (
+                              <div
+                                style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)', border: 'none' }}
+                                className="rounded-lg p-2.5 font-code-kr text-[11px] text-emerald-200 space-y-1 borderless-shape"
+                              >
+                                {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].screenOcrLines.map((ln, lIdx) => (
+                                  <div key={lIdx}>{ln}</div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1865,11 +1916,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             [
                               { key: 'seq', label: '📋 Ctrl+V 순차복사' },
                               { key: '1', label: '[1] 🧹서식·줄바꿈' },
-                              { key: '2', label: '[2] 🏷️파일·라벨러(PDF)' },
+                              { key: '2', label: '[2] 🏷️파일·라벨러(PDF·ZIP)' },
                               { key: '3', label: '[3] 글자·표OCR' },
                               { key: '4', label: '[4] 합본' },
                               { key: '5', label: '[5] 번호·일정' },
-                              { key: '6', label: '[6] 창고정' },
                             ] as const
                           ).map((item) => {
                             const isSelected = selectedToolbarKey === item.key;
@@ -2042,25 +2092,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               <p className="text-[11.5px] text-zinc-300 font-semibold">
                                 연달아 친 전화번호·날짜 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 5키</span>를 누르면 노션·워드의 파란색/빨간색 글자 서식을 그대로 유지한 채 표준 형식으로 바꿉니다.
                               </p>
-                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
+                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 borderless-shape flex flex-wrap items-center gap-1.5">
                                 <span className="text-zinc-400">01012345678 / 20260508</span>
                                 <span className="text-amber-400">➔</span>
                                 <span className="text-[#00F0B5]">010-1234-5678 / 2026-05-08(금)</span>
-                              </div>
-                            </>
-                          )}
-                          {selectedToolbarKey === '6' && (
-                            <>
-                              <div className="text-xs sm:text-[13px] font-black text-amber-300">
-                                📌 [6] 창고정 — 참고 중인 창이 절대 뒤로 숨지 않게 화면 맨 위에 압정 고정
-                              </div>
-                              <p className="text-[11.5px] text-zinc-300 font-semibold">
-                                계산기·영수증·메모장 창 위에서 귀신창 <span className="text-[#00F0B5] font-extrabold">숫자 6키</span>(또는 Ctrl+Alt+T)를 누르면 다른 프로그램에 타이핑해도 창이 가려지지 않도록 최상단에 고정(재입력 시 해제)합니다.
-                              </p>
-                              <div className="text-[11px] font-mono font-bold bg-zinc-900 rounded-lg px-2.5 py-1.5 border border-white/10 flex flex-wrap items-center gap-1.5">
-                                <span className="text-zinc-400">타이핑할 때마다 뒤로 숨는 참고 창</span>
-                                <span className="text-amber-400">➔</span>
-                                <span className="text-[#00F0B5]">숫자 6키로 화면 맨 위 고정(📌) 후 편하게 대조 입력</span>
                               </div>
                             </>
                           )}
