@@ -573,11 +573,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     } else if (/영타|오타|한영|서식|줄바꿈|귀신창|라벨러|합본|창고정|순차|dkssud/i.test(q)) {
       matchedTab = 'superpower';
       if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('1');
-      else if (/라벨러|파일명|pdf/i.test(q)) setSelectedToolbarKey('2');
-      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('3');
-      else if (/합본/i.test(q)) setSelectedToolbarKey('4');
-      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('5');
-      else if (/창고정|고정/i.test(q)) setSelectedToolbarKey('6');
+      else if (/스샷|pdf/i.test(q)) setSelectedToolbarKey('2');
+      else if (/합본/i.test(q)) setSelectedToolbarKey('3');
+      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('4');
+      else if (/창고정|고정/i.test(q)) setSelectedToolbarKey('5');
       else if (/순차/i.test(q)) setSelectedToolbarKey('seq');
     }
 
