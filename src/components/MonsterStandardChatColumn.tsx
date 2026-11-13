@@ -106,73 +106,52 @@ const AnimatedSecretaryText: React.FC<{
   messageId: string;
   text: string;
   onProgressScroll?: () => void;
-  onTypingStateChange?: (isTyping: boolean) => void;
-}> = ({ messageId, text, onProgressScroll, onTypingStateChange }) => {
+  onComplete?: () => void;
+}> = ({ messageId, text, onProgressScroll, onComplete }) => {
   const sentences = React.useMemo(() => splitSecretarySentences(text), [text]);
   const alreadyDone =
     completedSecretaryAnimIds.has(messageId) ||
     (typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
-  const [sentenceIdx, setSentenceIdx] = useState<number>(() =>
-    alreadyDone ? sentences.length : 0
-  );
-  const [charIdx, setCharIdx] = useState<number>(() =>
-    alreadyDone ? (sentences[sentences.length - 1]?.length ?? 0) : 0
+  const [visibleCount, setVisibleCount] = useState<number>(() =>
+    alreadyDone ? sentences.length : 1
   );
   const [done, setDone] = useState<boolean>(alreadyDone);
 
   useEffect(() => {
     if (done) {
       completedSecretaryAnimIds.add(messageId);
-      onTypingStateChange?.(false);
+      onComplete?.();
       return;
     }
-    onTypingStateChange?.(true);
-    if (sentenceIdx >= sentences.length) {
-      completedSecretaryAnimIds.add(messageId);
-      setDone(true);
-      onTypingStateChange?.(false);
-      return;
-    }
-
-    const current = sentences[sentenceIdx] ?? '';
-    // 빈 줄은 즉시 건너뛰며 문단 호흡 유지
-    if (current.length === 0) {
-      const t = window.setTimeout(() => {
-        setSentenceIdx((s) => s + 1);
-        setCharIdx(0);
+    if (visibleCount >= sentences.length) {
+      const finishTimer = window.setTimeout(() => {
+        completedSecretaryAnimIds.add(messageId);
+        setDone(true);
         onProgressScroll?.();
-      }, 90);
-      return () => window.clearTimeout(t);
+        onComplete?.();
+      }, 280);
+      return () => window.clearTimeout(finishTimer);
     }
 
-    if (charIdx < current.length) {
-      // 한 문장을 최대 ~420ms 내에 자연스럽게 타이핑 (글자 수에 따라 스텝 동적 조절)
-      const step = current.length > 48 ? 3 : current.length > 24 ? 2 : 1;
-      const delay = 18;
-      const t = window.setTimeout(() => {
-        setCharIdx((c) => Math.min(current.length, c + step));
-      }, delay);
-      return () => window.clearTimeout(t);
-    }
-
-    // 현재 문장 타이핑 완료 → 짧은 호흡 후 다음 문장 시작
-    const pauseMs = sentenceIdx + 1 >= sentences.length ? 80 : 160;
+    const nextSentence = sentences[visibleCount] ?? '';
+    // 빈 줄은 짧은 문단 호흡(140ms), 일반 문장은 차분하게 한 문장씩 띄우기(520ms)
+    const delayMs = nextSentence.length === 0 ? 140 : 520;
     const t = window.setTimeout(() => {
-      setSentenceIdx((s) => s + 1);
-      setCharIdx(0);
+      setVisibleCount((c) => c + 1);
       onProgressScroll?.();
-    }, pauseMs);
+    }, delayMs);
     return () => window.clearTimeout(t);
-  }, [done, sentenceIdx, charIdx, sentences, messageId, onProgressScroll, onTypingStateChange]);
+  }, [done, visibleCount, sentences, messageId, onProgressScroll, onComplete]);
 
   const handleSkip = () => {
     if (done) return;
     completedSecretaryAnimIds.add(messageId);
-    setSentenceIdx(sentences.length);
+    setVisibleCount(sentences.length);
     setDone(true);
-    onTypingStateChange?.(false);
+    onProgressScroll?.();
+    onComplete?.();
   };
 
   if (done) {
@@ -180,29 +159,17 @@ const AnimatedSecretaryText: React.FC<{
   }
 
   return (
-    <div onClick={handleSkip} title="클릭하면 전체 문장을 바로 볼 수 있어요" className="cursor-pointer">
-      {sentences.slice(0, sentenceIdx + 1).map((line, idx) => {
+    <div onClick={handleSkip} title="클릭하면 전체 문장을 바로 볼 수 있어요" className="cursor-pointer space-y-0.5">
+      {sentences.slice(0, visibleCount).map((line, idx) => {
         if (line === '') {
           return <div key={idx} className="h-2" />;
         }
-        const isCurrent = idx === sentenceIdx;
-        const visibleText = isCurrent ? line.slice(0, charIdx) : line;
         return (
           <div
             key={idx}
-            className="transition-all duration-200 ease-out"
-            style={{
-              opacity: isCurrent && charIdx === 0 ? 0.35 : 1,
-              transform: isCurrent && charIdx === 0 ? 'translateY(3px)' : 'translateY(0px)',
-            }}
+            className="animate-[fadeIn_0.35s_ease-out]"
           >
-            {visibleText}
-            {isCurrent && (
-              <span
-                aria-hidden="true"
-                className="inline-block w-[6px] h-[14px] ml-0.5 align-middle bg-emerald-500 rounded-[1px] animate-pulse"
-              />
-            )}
+            {line}
           </div>
         );
       })}
@@ -1330,9 +1297,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 bg-[#FAF9F5] dark:bg-transparent"
       >
-        {messages.map((msg) => {
-          const isUser = msg.role === 'user';
-          return (
+        {(() => {
+          const activePendingId =
+            messages.find((m) => m.role !== 'user' && !completedSecretaryAnimIds.has(m.id))?.id ??
+            null;
+          let foundActive = false;
+          return messages.map((msg) => {
+            const isUser = msg.role === 'user';
+            if (!isUser && activePendingId) {
+              if (msg.id === activePendingId) {
+                foundActive = true;
+              } else if (foundActive && !completedSecretaryAnimIds.has(msg.id)) {
+                // 앞선 귀신비서 말풍선이 다 뜰 때까지 다음 말풍선은 대기
+                return null;
+              }
+            }
+            return (
             <div
               key={msg.id}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
@@ -1378,6 +1358,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                       const el = scrollContainerRef.current;
                       if (el) el.scrollTop = el.scrollHeight;
                     }}
+                    onComplete={() => setTick((t) => t + 1)}
                   />
                 )}
 
@@ -1545,7 +1526,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               </div>
             </div>
           );
-        })}
+          });
+        })()}
 
         {busy && (
           <div className="flex items-center gap-2 text-[13px] font-bold text-slate-700 dark:text-slate-300 px-2 py-1.5">
