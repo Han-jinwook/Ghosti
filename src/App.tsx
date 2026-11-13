@@ -284,7 +284,9 @@ export const App: React.FC = () => {
         urlRoom ||
         useSaySeeStore.getState().activeFamilyRoom;
       const targetView: 'showroom' | 'workspace' =
-        savedNav?.viewMode || (urlView === 'showroom' ? 'showroom' : viewMode);
+        urlView === 'showroom'
+          ? 'showroom'
+          : savedNav?.viewMode || viewMode;
 
       isApplyingPopStateRef.current = true;
       if (targetView !== viewMode) {
@@ -313,7 +315,7 @@ export const App: React.FC = () => {
       const initUrl = buildNavUrl(initialNav);
       if (!window.history.state?.ghostiNav) {
         const rootHomeNav = {
-          viewMode: 'workspace' as const,
+          viewMode: (targetView === 'showroom' ? 'showroom' : 'workspace') as 'showroom' | 'workspace',
           lounge: 'personal' as LoungeType,
           desktopTab: 'trash' as DesktopTab,
           mobileTab: 'trash' as MobileTab,
@@ -367,7 +369,10 @@ export const App: React.FC = () => {
       const fallbackLounge = (params.get('lounge') as LoungeType) || 'personal';
       const fallbackTab = (params.get('tab') as DesktopTab) || 'trash';
       const fallbackRoom = normalizeFamilyRoomParam(params.get('room') || params.get('invite')) || '우리집';
-      const fallbackView = params.get('view') === 'showroom' ? 'showroom' : 'workspace';
+      const fallbackView =
+        params.get('view') === 'showroom' || (!OFFICIAL_LAUNCH_LIVE && !isDevAuthorized)
+          ? 'showroom'
+          : 'workspace';
 
       const targetNav = nav || {
         viewMode: fallbackView,
@@ -464,14 +469,12 @@ export const App: React.FC = () => {
     const onGoShowroom = () => handleEnterShowroom();
     const onGoWorkspace = () => handleEnterWorkspace();
     const onMerlinLoggedIn = () => {
-      try {
-        localStorage.setItem('ghosti_onboarding_completed', 'true');
-      } catch {}
+      // ⚠️ [온보딩 자동 이탈 원천 차단]:
+      // HubProvider.refreshSession()은 초기 진입 비동기 세션 확인, 5분 경과 후 창 포커스 복귀(focus/visibilitychange),
+      // 타 탭 로컬스토리지 동기화(storage) 때마다 백그라운드에서 'merlinLoggedIn' 이벤트를 발행합니다.
+      // 여기서 setViewMode('workspace')를 호출하면 온보딩 페이지를 가만히 보고 있던 유저가 아무것도 누르지 않았는데
+      // 본 웹 귀신비서(tab=trash) 페이지로 강제 pushState 이동되므로, 워크스페이스 진입은 오직 명시적 버튼 클릭(handleEnterWorkspace)으로만 전환합니다.
       void zCoreBridge.checkHealth(true);
-      // 정식 출시 상태이거나 개발자 권한이 있을 때 온보딩에서 로그인을 완료하면 즉시 본진 워크스페이스로 자동 진입
-      if (OFFICIAL_LAUNCH_LIVE || isDevAuthorized) {
-        setViewMode('workspace');
-      }
     };
     window.addEventListener('ghosti_navigate_showroom', onGoShowroom);
     window.addEventListener('ghosti_navigate_workspace', onGoWorkspace);
