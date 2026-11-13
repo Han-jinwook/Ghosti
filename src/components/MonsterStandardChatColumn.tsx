@@ -73,8 +73,8 @@ import {
 } from '../services/ghostPassportSync';
 import { rankPassportCandidates, countUniqueFacePhotos } from './GhostPassportCandidatesPanel';
 
-/** [v1.3] 귀신비서 점괘 직후 이어지는 1클릭 검진 문구 — 기존 손보기 라우터가 처리하는 문장과 동일해야 함 */
-const SECRETARY_FIRST_CARE_QUERY = '지금 PC가 좀 느린데 1초 건강검진 해줘';
+/** [v1.3] 내 컴퓨터 연결 직후 자동 실행할 1단계 분석 문구 — 멋대로 삭제하지 않고 실측 사양 + 속도 저하 범인(상주 보안모듈·애드웨어) 분석표를 먼저 제시 */
+const SECRETARY_FIRST_CARE_QUERY = '요즘 컴퓨터가 좀 느린데 내 사양이랑 누가 속도 잡아먹는지 분석해줘';
 
 /** 이미 타이핑 연출이 완료된 귀신비서 메시지 ID 캐시 (탭 전환·리렌더 시 중복 재생 방지) */
 const completedSecretaryAnimIds = new Set<string>();
@@ -653,6 +653,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     setSharedMonsterMessages((prev) => [...prev, userMsg]);
     setSharedMonsterBusy(true);
 
+    if (/^(🏠\s*)?(온보딩\s*체험관|온보딩\s*쇼룸|온보딩\s*페이지).*?(이동|나가|구경|열어|갈래)/i.test(raw)) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
+      }
+      setSharedMonsterBusy(false);
+      return;
+    }
+
     if (/^(🔍\s*)?(귀신검색으로\s*내\s*파일\s*찾아볼래(요)?|사진\s*검색\s*바로\s*해볼래(요)?)$/i.test(raw)) {
       setSharedMonsterMessages((prev) => [
         ...prev,
@@ -708,10 +716,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           typeof sessionStorage !== 'undefined' &&
           sessionStorage.getItem('ghosti_awaiting_engine_rite') === '1';
         const isBrowseOrRefuseEngine =
-          /(구경\s*부터|구경\s*만|눈으로\s*구경|안\s*깔|설치\s*안|엔진\s*싫|깔기\s*싫)/i.test(raw) ||
+          /(구경\s*부터|구경\s*만|눈으로\s*구경|둘러\s*보|둘러\s*볼|안\s*깔|설치\s*안|연결\s*안|엔진\s*싫|깔기\s*싫)/i.test(raw) ||
           (awaitingRite && isNo(raw));
         const isAgreeOrCareOrImpatient =
-          /(엔진\s*연결|연결\s*해|연결하고|설치\s*해|깔아|깔래|마음\s*바꿨)/i.test(raw) ||
+          /(내\s*컴퓨터\s*연결|pc\s*연결|엔진\s*연결|연결\s*해|연결하고|누가\s*속도\s*잡아먹는지|분석\s*해\s*줘|설치\s*해|깔아|깔래|마음\s*바꿨)/i.test(
+            raw
+          ) ||
           isDirectCareOrStatusCommand ||
           isImpatientIntent(raw) ||
           (awaitingRite && isYes(raw));
@@ -730,10 +740,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               timestamp: nowTimeKo(),
               sourceTab,
               text:
-                `헤헤 알겠어요 ${nickLabel}! 억지로 깔지 않으셔도 괜찮아요 👻\n` +
-                `왼쪽 메뉴들(『👻 귀신검색』, 『⚡ 귀신창 초능력』 등)을 눌러 위아래로 스크롤하며 어떤 마법들이 있는지 눈으로 편하게 구경해 보세요!\n` +
-                `(단, 버튼을 클릭해 직접 활동하거나 내 진짜 사진·문서로 리얼 테스트하는 건 저랑 엔진 연결을 마친 뒤에 열려요!) 마음이 바뀌시면 언제든 아래 버튼을 눌러주세요!`,
-              followUpSuggestions: ['🤝 마음 바꿨어! 엔진 연결하고 1초 건강검진 해줘'],
+                `${nickLabel}, 이곳 본 웹 화면은 **내 컴퓨터 연결**을 마쳐야만 메뉴들이 열리고 작동해서, 연결 없이는 다른 메뉴를 눌러도 볼 수 있는 게 없어요!\n` +
+                `내 컴퓨터 연결 없이 어떤 기능들이 있는지 미리 둘러보고 체험만 해보고 싶으시다면 아래 버튼을 눌러 **온보딩 체험관**으로 이동해 주세요 👻✨`,
+              followUpSuggestions: ['🏠 온보딩 체험관으로 나가서 구경하기 ➔'],
             },
           ]);
           setSharedMonsterBusy(false);
@@ -747,7 +756,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             localStorage.setItem('ghosti_secretary_engine_agreed', '1');
             sessionStorage.setItem(
               'ghosti_pending_secretary_care_query',
-              isDirectCareOrStatusCommand && !/마음\s*바꿨|엔진\s*연결/.test(raw)
+              isDirectCareOrStatusCommand && !/마음\s*바꿨|엔진\s*연결|내\s*컴퓨터\s*연결|누가\s*속도\s*잡아먹는지/.test(raw)
                 ? raw
                 : SECRETARY_FIRST_CARE_QUERY
             );
@@ -756,10 +765,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           }
           const isBootOrStartupDiagOffline = /부팅|켜\s*둔|경과\s*시간|시작\s*프로그램/i.test(raw);
           const riteText = isImpatientIntent(raw)
-            ? `앗, 급하시군요 ${nickLabel}! 내 진짜 사진·문서를 1초 만에 찾으시려면 먼저 여기서 **귀신비서 전용 로컬 엔진(무광고 · 샘플 사진 0장 · 외부 전송 0%)**만 딱 한 번 켜주셔야 해요!\n연결되자마자 뒤에서 내 진짜 파일들을 조용히 읽어들여 바로 검색하실 수 있게 해드릴게요. 지금 연결 창을 띄워 드렸어요 👻⚡`
+            ? `앗, 급하시군요 ${nickLabel}! 내 진짜 사진·문서를 1초 만에 찾으시려면 먼저 여기서 **내 컴퓨터 1초 연결(무광고 · 샘플 사진 0장 · 외부 전송 0%)**만 딱 한 번 켜주셔야 해요!\n연결되자마자 뒤에서 내 진짜 파일들을 조용히 읽어들여 바로 검색하실 수 있게 해드릴게요. 지금 연결 창을 띄워 드렸어요 👻⚡`
             : isBootOrStartupDiagOffline
-            ? `좋아요 ${nickLabel}! 말씀하신 **컴퓨터 부팅 경과 시간 진단과 시작프로그램 점검·손보기는 유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있어요! 💡\n단, 윈도우 실제 켜둔 시간과 시작프로그램 목록을 정확히 읽어오려면 **무료 귀신비서 전용 로컬 엔진(외부 전송 0%)**만 딱 한 번 켜주시면 돼요. 켜주시는 즉시 바로 진단 결과를 띄워 드릴게요 👻✨`
-            : `좋아요 ${nickLabel}! 제가 웹 화면 밖으로 손이 닿아 진짜 묵은 먼지를 털어드리고, 뒤에서 **샘플 사진 한 장 없이 오직 내 진짜 사진·문서만 조용히 읽어두려면** 전용 로컬 엔진만 딱 한 번 켜주시면 돼요!\n지금 연결 안내창을 띄워 드렸어요 — 켜주시는 즉시 제가 이어서 **1초 건강검진**까지 알아서 다 해드릴게요 👻✨`;
+            ? `좋아요 ${nickLabel}! 말씀하신 **컴퓨터 부팅 경과 시간 진단과 시작프로그램 점검·손보기는 유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있어요! 💡\n단, 윈도우 실제 켜둔 시간과 시작프로그램 목록을 정확히 읽어오려면 **내 컴퓨터 1초 연결(외부 전송 0%)**만 딱 한 번 켜주시면 돼요. 켜주시는 즉시 분석 목록부터 먼저 보여드릴게요 👻✨`
+            : `좋아요 ${nickLabel}! 🔒 **안심하세요 — 연결하셔도 제가 마음대로 프로그램을 지우거나 설정을 바꾸지 않아요!**\n지금 띄워 드린 **내 컴퓨터 1초 연결**만 켜주시면, 누가 내 컴퓨터 속도를 잡아먹고 있는지 **1초 만에 분석해서 목록만 먼저 보여드릴게요.** 보시고 정리할지 편하게 선택만 해주세요 👻✨`;
 
           setSharedMonsterMessages((prev) => [
             ...prev,
@@ -769,7 +778,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               timestamp: nowTimeKo(),
               sourceTab,
               text: riteText,
-              followUpSuggestions: ['👀 일단 눈으로 구경부터 할래'],
             },
           ]);
           window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
@@ -857,7 +865,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             sourceTab,
             text: reading.text,
             followUpSuggestions: needsEngineRite
-              ? ['🤝 응, 엔진 연결하고 1초 건강검진 해줘', '👀 일단 눈으로 구경부터 할래']
+              ? ['🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘']
               : [
                   SECRETARY_FIRST_CARE_QUERY,
                   '✨ 귀신비서의 숨은 초능력 알려줘',
@@ -1219,8 +1227,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             timestamp: nowTimeKo(),
             sourceTab: 'trash',
             text:
-              `🎉 와아! 엔진 연결 성공이에요 ${nickLabel}! 지금부터 뒤에서는 샘플 사진 한 장 없이 **오직 내 컴퓨터의 진짜 사진·동영상·문서만** 컴퓨터 부하 없이 조용히 읽어두고 있어요!\n` +
-              `잠시 후 『👻 귀신검색』에 가시면 내 진짜 파일들로 바로 리얼 테스트를 해보실 수 있답니다. 그동안 약속드린 **1초 건강검진**부터 바로 실행할게요!`,
+              `🎉 와아! 내 컴퓨터 연결 성공이에요 ${nickLabel}! 지금부터 뒤에서는 샘플 사진 한 장 없이 **오직 내 컴퓨터의 진짜 사진·동영상·문서만** 컴퓨터 부하 없이 조용히 읽어두고 있어요!\n` +
+              `잠시 후 『👻 귀신검색』에 가시면 내 진짜 파일들로 바로 리얼 테스트를 해보실 수 있답니다. 먼저 약속드린 대로 **누가 내 컴퓨터 속도를 잡아먹고 있는지 1초 분석표**부터 띄워 드릴게요! (보시고 정리할지 편하게 선택만 해주세요!)`,
           },
         ];
       });
