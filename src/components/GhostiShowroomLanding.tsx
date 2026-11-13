@@ -562,32 +562,82 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     if (!q) return;
     setChatInput('');
     playBabyGhostChime();
+    const ts = nowTimeStr();
 
-    let matchedTab: OnboardingWeaponTab = demoTab;
-    if (/영상|동영상|걸음마|대사|장면|초/.test(q)) {
-      matchedTab = 'video';
-    } else if (/엑셀|문서|계약서|표|단가|pdf|한글/i.test(q)) {
+    // 4대 초능력(영상 점프 / 문서·영수증 투시 / 사진·용량·보안 청소 / 영타·귀신창) 키워드 정밀 매칭
+    let matchedTab: OnboardingWeaponTab | null = null;
+    let customReply: string | null = null;
+
+    if (
+      /영수증|사업자|엑셀|xlsx|문서|계약서|지체상금|부가세|환급|세금계산서|정산|단가|pdf|한글|hwp|투시|직독/i.test(
+        q,
+      ) &&
+      !/라벨러|파일명|합본/.test(q)
+    ) {
       matchedTab = 'doc';
-    } else if (/사진|청소|보안|느려|용량|정리|복원/.test(q)) {
+      if (/영수증|사업자/.test(q)) {
+        setSelectedDocScenarioIdx(2);
+        customReply =
+          '찍어둔 영수증 사진을 일일이 열어보실 필요 없어요! 🧾✨\n오른쪽 체험 화면을 [영수증 사업자번호] 스캔 뷰로 바로 띄워두었어요! 상호명·사업자번호·결제금액까지 0.01초 만에 추출해 드립니다!';
+      } else if (/부가세|환급|정산|엑셀|xlsx|세금/i.test(q)) {
+        setSelectedDocScenarioIdx(1);
+      } else if (/계약서|지체상금|pdf/i.test(q)) {
+        setSelectedDocScenarioIdx(0);
+      }
+    } else if (/영상|동영상|걸음마|대사|장면|점프|타임라인|고기상|노을|휴가|비디오|mp4|mov/i.test(q)) {
+      matchedTab = 'video';
+      if (/고기|맛집|식당/.test(q)) setSelectedVideoScenarioIdx(1);
+      else if (/노을|바다|휴가|가족사진/.test(q)) setSelectedVideoScenarioIdx(2);
+      else setSelectedVideoScenarioIdx(0);
+    } else if (/사진|연사|인생샷|청소|보안|백신|구라|느려|용량|정리|복원|휴지통|효도|캐시/i.test(q)) {
       matchedTab = 'clean';
-    } else if (/영타|오타|한영|서식|줄바꿈|귀신창|라벨러|합본|창고정|순차|dkssud/i.test(q)) {
+    } else if (
+      /영타|오타|한영|서식|줄바꿈|다림질|귀신창|라벨러|파일명|합본|창고정|순차|복붙|ocr|표\s*추출|dkssud|rkatk|rmqgk/i.test(
+        q,
+      )
+    ) {
       matchedTab = 'superpower';
-      if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('1');
-      else if (/라벨러|파일명|pdf|zip/i.test(q)) setSelectedToolbarKey('2');
-      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('3');
-      else if (/합본/i.test(q)) setSelectedToolbarKey('4');
-      else if (/번호|일정/i.test(q)) setSelectedToolbarKey('5');
-      else if (/순차/i.test(q)) setSelectedToolbarKey('seq');
+      if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('3');
+      else if (/라벨러|파일명|zip/i.test(q)) setSelectedToolbarKey('2');
+      else if (/ocr|표/i.test(q)) setSelectedToolbarKey('4');
+      else if (/합본/i.test(q)) setSelectedToolbarKey('5');
+      else if (/순차|복붙/i.test(q)) setSelectedToolbarKey('seq');
+      else setSelectedToolbarKey('1');
+    } else if (/무료|가격|유료|보증서|기업|회사|라이선스|결제/.test(q)) {
+      customReply =
+        '개인 PC는 물론 기업·관공서 업무용 PC까지 기본 핵심 기능 100% 영구 무료예요! 📜✨\n상단 [📜 무료 공식 보증서] 버튼을 누르면 법인 직인이 찍힌 보증서도 바로 확인하실 수 있어요!';
     }
 
-    setDemoTab(matchedTab);
-    setShowStageShortVideo(false);
-    const meta = WEAPON_META[matchedTab];
-    const ts = nowTimeStr();
+    if (matchedTab) {
+      setDemoTab(matchedTab);
+      setShowStageShortVideo(false);
+      const replyText = customReply || WEAPON_META[matchedTab].secretaryReply;
+      setChatMessages((prev) => [
+        ...prev.slice(-6),
+        { id: `u-${Date.now()}`, role: 'user', text: q, timestamp: ts },
+        { id: `s-${Date.now() + 1}`, role: 'secretary', text: replyText, timestamp: ts },
+      ]);
+      return;
+    }
+
+    if (customReply) {
+      setChatMessages((prev) => [
+        ...prev.slice(-6),
+        { id: `u-${Date.now()}`, role: 'user', text: q, timestamp: ts },
+        { id: `s-${Date.now() + 1}`, role: 'secretary', text: customReply, timestamp: ts },
+      ]);
+      return;
+    }
+
+    // 4대 초능력과 무관한 일상 질문(예: 오늘 점심, 날씨 알려줘 등) 입력 시 친절한 역할 안내 문구 출력
+    const guideReply =
+      `앗, 저는 날씨나 일상 대화 대신 내 PC·폰 속 파일을 0.01초 만에 찾아주는 『귀신같이 4대 초능력 체험 전담 비서』예요! 👻💡\n` +
+      `아래 4가지 초능력 카드를 톡 눌러보시거나, 「영상 점프」, 「영수증 찾기」, 「사진 정리」, 「영타 성형」처럼 궁금한 기능을 입력해 보세요!`;
+
     setChatMessages((prev) => [
       ...prev.slice(-6),
       { id: `u-${Date.now()}`, role: 'user', text: q, timestamp: ts },
-      { id: `s-${Date.now() + 1}`, role: 'secretary', text: meta.secretaryReply, timestamp: ts },
+      { id: `s-${Date.now() + 1}`, role: 'secretary', text: guideReply, timestamp: ts },
     ]);
   };
 
