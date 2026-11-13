@@ -17,7 +17,8 @@ import {
   DesktopSidebarContainer,
   DesktopTopHeaderAndLoungeBar,
 } from '../domains/shared/DesktopSidebarAndHeader';
-import { FreePersonalPane } from '../domains/free_personal/FreePersonalPane';
+import { GhostAssistantPane } from '../domains/assistant/GhostAssistantPane';
+import { GhostSearchPane } from '../domains/search/GhostSearchPane';
 import { PaidDeviceSyncPane } from '../domains/paid_device_sync/PaidDeviceSyncPane';
 import { PaidWorkSharePane } from '../domains/paid_work_share/PaidWorkSharePane';
 import { FreePhotoShareOverlays } from '../domains/free_photo_share/FreePhotoShareOverlays';
@@ -240,13 +241,16 @@ export const DesktopDashboard: React.FC = () => {
 
         <DesktopTopHeaderAndLoungeBar ghostSearchWindowStage={ghostSearchWindowStage} />
 
-        {/* 3대 도메인 라우팅 스위치 (1·2번 무료 / 3번 내 기기 통합·귀신창 / 4번 업무 공유 S:) */}
+        {/* 3창 무충돌 도메인 라우팅 스위치 (1귀신 비서 / 2귀신 검색 / 3귀신 공유·통합 / 업무 공유 S:) */}
         {activeLoungeType === 'work' ? (
           <PaidWorkSharePane />
         ) : desktopTab === 'sync' ? (
           <PaidDeviceSyncPane />
         ) : (
-          <FreePersonalPane ghostSearchWindowStage={ghostSearchWindowStage} />
+          <>
+            <GhostSearchPane ghostSearchWindowStage={ghostSearchWindowStage} />
+            <GhostAssistantPane />
+          </>
         )}
       </div>
 

@@ -13,10 +13,19 @@ import type {
   ThemeMode,
   ViewportLayout,
 } from './slices/storeSharedRefs';
-import { createFreePersonalSlice, type FreePersonalSlice } from './slices/freePersonalSlice';
-import { createFreePhotoShareSlice, type FreePhotoShareSlice } from './slices/freePhotoShareSlice';
-import { createPaidDeviceSyncSlice, type PaidDeviceSyncSlice } from './slices/paidDeviceSyncSlice';
-import { createPaidWorkShareSlice, type PaidWorkShareSlice } from './slices/paidWorkShareSlice';
+import {
+  createAssistantOnboardingSlice,
+  type AssistantOnboardingSlice,
+} from './slices/assistantOnboardingSlice';
+import { createSearchSlice, type SearchSlice } from './slices/searchSlice';
+import {
+  createPhotoShareAndSyncSlice,
+  type PhotoShareAndSyncSlice,
+} from './slices/photoShareAndSyncSlice';
+import {
+  createPaidWorkShareSlice,
+  type PaidWorkShareSlice,
+} from './slices/paidWorkShareSlice';
 
 export type { ViewportLayout, MobileTab, DesktopTab, ThemeMode };
 export {
@@ -35,17 +44,17 @@ export interface SaySeeCoreState {
 }
 
 export type SaySeeStore = SaySeeCoreState &
-  FreePersonalSlice &
-  FreePhotoShareSlice &
-  PaidDeviceSyncSlice &
+  AssistantOnboardingSlice &
+  SearchSlice &
+  PhotoShareAndSyncSlice &
   PaidWorkShareSlice;
 
 export const useSaySeeStore = create<SaySeeStore>()((...a) => {
   applyHtmlThemeClass('light');
   return {
-    ...createFreePersonalSlice(...a),
-    ...createFreePhotoShareSlice(...a),
-    ...createPaidDeviceSyncSlice(...a),
+    ...createAssistantOnboardingSlice(...a),
+    ...createSearchSlice(...a),
+    ...createPhotoShareAndSyncSlice(...a),
     ...createPaidWorkShareSlice(...a),
   };
 });

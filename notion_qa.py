@@ -296,32 +296,84 @@ def fetch_page_body_text(page_id: str) -> str:
 # =====================================================================
 # 3. 핵심 요청 함수 1: fetch_bugs()
 # =====================================================================
-def classify_ghosti_bug_track(title_text: str, body_text: str = "", app_select: str = "") -> str:
+def classify_ghosti_bug_role(title_text: str, body_text: str = "", app_select: str = "") -> str:
     """
-    3창(git worktree) 분리 운영을 위한 노션 QA 카드 트랙 자동 분류기:
-    - 'sync': 창 2 (D:\\Ghosti_Sync) — 귀신창(Ctrl+0, 상용구, 순차붙여넣기, 귀신검색창, 라벨러) 및 내 기기 통합(월 3,900원)
-    - 'work': 창 3 (D:\\Ghosti_Work) — 업무 공유(S: 네트워크 드라이브, 팀 상용구, B2B 워크스페이스)
-    - 'free': 창 1 (D:\\Ghosti) — 무료 내 기기 1대, 귀신비서, 사진 공유(가족·동호회·동창회), 웹 온보딩
+    멀린님 최종 확정 3창(`1귀신` / `2귀신` / `3귀신`) 노션 QA 카드 역할 자동 분류기:
+    - '1': 1번 창 (D:\\Ghosti, --role 1) — `[1귀신]` (귀신비서 & 온보딩 · 사진정리 · 브리핑)
+    - '2': 2번 창 (D:\\Ghosti_Search, --role 2) — `[2귀신]` 및 `[귀신창]` (귀신검색 · 동영상 글자뽑기 · 문서투시 · 귀신창)
+    - '3': 3번 창 (D:\\Ghosti_Share, --role 3) — `[3귀신]` (사진공유 가족·동호회·동창회 + 내 기기 통합)
     """
+    if "[1귀신" in title_text or "1귀신]" in title_text:
+        return "1"
+    if (
+        "[2귀신" in title_text
+        or "2귀신]" in title_text
+        or "[귀신창" in title_text
+        or "귀신창]" in title_text
+        or app_select == "귀신창"
+    ):
+        return "2"
+    if "[3귀신" in title_text or "3귀신]" in title_text:
+        return "3"
+
+    # 말머리가 구버전 '[귀신같이]'인 경우 키워드 폴백 분류
     combined = f"{title_text} {app_select}"
-    if app_select == "귀신창" or any(
-        k in combined
-        for k in ("[귀신창", "귀신창]", "귀신창", "내 기기 통합", "내기기 통합", "멀티기기", "귀신검색창", "라벨러")
-    ):
-        return "sync"
-    if any(
-        k in combined
-        for k in ("업무 공유", "업무공유", "업무 라운지", "S: 드라이브", "S:드라이브", "S드라이브", "팀 상용구")
-    ):
-        return "work"
-    return "free"
+    if any(k in combined for k in ("사진 공유", "사진공유", "공유방", "패밀리", "동창회", "동호회", "여권", "내 기기 통합", "내기기 통합")):
+        return "3"
+    if any(k in combined for k in ("귀신창", "귀신검색", "동영상", "글자", "문서", "라벨러", "검색시", "검색창")):
+        return "2"
+    return "1"
 
 
-def query_bugs_raw(target_status: Optional[str] = None, track: Optional[str] = None) -> List[Dict[str, str]]:
-    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (감시 데몬 및 --track 필터 겸용)."""
+def _matches_role_strict(title_text: str, app_select: str, role: str) -> bool:
+    """
+    Secretary 지시 명세에 따른 엄격한 role 매칭:
+    - role == "1": "[1귀신" (및 말머리 미부착 구버전 중 1번 분류) 감지
+    - role == "2": "[2귀신" 및 "[귀신창" 감지
+    - role == "3": "[3귀신" 감지
+    - role == "all": 1귀신, 2귀신, 3귀신, 귀신창, 귀신같이 전체 감지
+    """
+    if role == "all":
+        return True
+    has_explicit_123 = any(tag in title_text for tag in ("[1귀신", "1귀신]", "[2귀신", "2귀신]", "[3귀신", "3귀신]"))
+    if role == "1":
+        if "[1귀신" in title_text or "1귀신]" in title_text:
+            return True
+        if has_explicit_123 or "[귀신창" in title_text or app_select == "귀신창":
+            return False
+        return classify_ghosti_bug_role(title_text, "", app_select) == "1"
+    if role == "2":
+        if "[2귀신" in title_text or "2귀신]" in title_text or "[귀신창" in title_text or "귀신창]" in title_text or app_select == "귀신창":
+            return True
+        if has_explicit_123:
+            return False
+        return classify_ghosti_bug_role(title_text, "", app_select) == "2"
+    if role == "3":
+        if "[3귀신" in title_text or "3귀신]" in title_text:
+            return True
+        if has_explicit_123 or "[귀신창" in title_text or app_select == "귀신창":
+            return False
+        return classify_ghosti_bug_role(title_text, "", app_select) == "3"
+    return True
+
+
+def query_bugs_raw(
+    target_status: Optional[str] = None,
+    role: Optional[str] = None,
+    track: Optional[str] = None,
+) -> List[Dict[str, str]]:
+    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (--role 1|2|3|all 완벽 지원)."""
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     resolved_status = target_status or STATUS_DISCOVERED
+
+    # 하위 호환: track 인자가 넘어온 경우 role로 변환
+    resolved_role = (role or "").strip().lower()
+    if not resolved_role and track:
+        t_low = track.strip().lower()
+        resolved_role = {"free": "1", "sync": "2", "work": "3"}.get(t_low, "all")
+    if resolved_role not in ("1", "2", "3", "all"):
+        resolved_role = "all"
 
     url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
     if SCHEMA.status_prop_type == "status":
@@ -346,14 +398,13 @@ def query_bugs_raw(target_status: Optional[str] = None, track: Optional[str] = N
 
     results = res.json().get("results", [])
     bugs: List[Dict[str, str]] = []
-    normalized_track = (track or "").strip().lower() or None
     for page in results:
         page_id: str = page.get("id", "")
         props: Dict[str, Any] = page.get("properties", {})
         title_obj = props.get(SCHEMA.title_prop_name, {})
         title_text = extract_plain_text(title_obj.get("title", [])) or "(제목 없음)"
         app_select = (props.get("앱", {}).get("select") or {}).get("name", "")
-        # 센스톡·썬드리머·멀린비서·스튜디오·멀린허브 카드는 제외하고, '[귀신같이]' + '[귀신창]'(2026-11-13 Ghosti 전권 인수) 카드 전담!
+        # 센스톡·썬드리머·멀린비서·스튜디오·멀린허브 카드는 제외하고, [1귀신]/[2귀신]/[3귀신]/[귀신창]/[귀신같이] 전담!
         is_other_project_card = (
             app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub")
             or any(
@@ -372,10 +423,21 @@ def query_bugs_raw(target_status: Optional[str] = None, track: Optional[str] = N
         if is_other_project_card:
             continue
         is_ghosti_card = (
-            ("[귀신같이" in title_text)
-            or ("귀신같이]" in title_text)
-            or ("[귀신창" in title_text)
-            or ("귀신창]" in title_text)
+            any(
+                tag in title_text
+                for tag in (
+                    "[1귀신",
+                    "1귀신]",
+                    "[2귀신",
+                    "2귀신]",
+                    "[3귀신",
+                    "3귀신]",
+                    "[귀신창",
+                    "귀신창]",
+                    "[귀신같이",
+                    "귀신같이]",
+                )
+            )
             or (app_select in ("귀신같이", "Ghosti", "귀신창"))
         )
         if not is_ghosti_card and any(
@@ -383,16 +445,13 @@ def query_bugs_raw(target_status: Optional[str] = None, track: Optional[str] = N
             for k in ("센스톡", "썬드리머", "멀린비서", "멀린허브", "충전소", "귀신팸", "귀신코인", "스튜디오")
         ):
             continue
-        card_track = classify_ghosti_bug_track(title_text, "", app_select)
-        if normalized_track in ("free", "sync", "work") and card_track != normalized_track:
+        if not _matches_role_strict(title_text, app_select, resolved_role):
             continue
+        card_role = classify_ghosti_bug_role(title_text, "", app_select)
         body_text = fetch_page_body_text(page_id)
         if (
             not app_select
-            and "[귀신같이]" not in title_text
-            and "귀신같이" not in title_text
-            and "[귀신창" not in title_text
-            and "귀신창" not in title_text
+            and not is_ghosti_card
             and any(k in body_text for k in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "sensetalk", "sundreamer"))
         ):
             continue
@@ -403,7 +462,7 @@ def query_bugs_raw(target_status: Optional[str] = None, track: Optional[str] = N
                 "title": title_text,
                 "body": body_text,
                 "url": page.get("url", ""),
-                "track": card_track,
+                "role": card_role,
             }
         )
     return bugs
@@ -877,16 +936,17 @@ def trim_done_cards(keep_count: int = 4) -> int:
         app_val = props.get("앱", {}).get("select") or {}
         app_name = app_val.get("name", "") if isinstance(app_val, dict) else ""
         # [헌법 제4조 4항 준수] 보드 전체 '완료' 컬럼 총량(len(results))을 기준으로 keep_count(4개) 초과분을 계산하되,
-        # 보관(archived: true) 실행은 오직 순수 '[귀신같이]' / 'Ghosti' 소속 완료 카드만 대상으로 처리하여 타 프로젝트 카드는 절대 건드리지 않음!
+        # 보관(archived: true) 실행은 오직 순수 Ghosti 소속([1귀신]/[2귀신]/[3귀신]/[귀신창]/[귀신같이]) 완료 카드만 대상으로 처리하여 타 프로젝트 카드는 절대 건드리지 않음!
         is_other_owner = (
-            app_name in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub", "귀신창")
+            app_name in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub")
             or any(
                 k in t
-                for k in ("[스튜디오", "스튜디오]", "[센스톡", "[썬드리머", "[멀린비서", "[멀린허브", "[귀신창")
+                for k in ("[스튜디오", "스튜디오]", "[센스톡", "[썬드리머", "[멀린비서", "[멀린허브")
             )
         )
         is_ghosti_only = (not is_other_owner) and (
-            ("[귀신같이" in t) or ("귀신같이]" in t) or (app_name in ("귀신같이", "Ghosti"))
+            any(tag in t for tag in ("[1귀신", "[2귀신", "[3귀신", "[귀신창", "[귀신같이", "귀신같이]"))
+            or (app_name in ("귀신같이", "Ghosti", "귀신창"))
         )
         if is_ghosti_only:
             ghosti_results.append(p)
@@ -1191,11 +1251,11 @@ def create_mission(
     resolved_status = initial_status or STATUS_MISSION
 
     clean_title = title.strip()
-    if not clean_title.startswith("🎯"):
-        if "[귀신같이]" in clean_title:
+    if not clean_title.startswith(("🎯", "📱")):
+        if any(tag in clean_title for tag in ("[1귀신", "[2귀신", "[3귀신", "[귀신창", "[귀신같이")):
             clean_title = f"🎯 {clean_title}"
         else:
-            clean_title = f"🎯 [귀신같이] {clean_title}"
+            clean_title = f"🎯 [1귀신] {clean_title}"
 
     if SCHEMA.status_prop_type == "status":
         status_prop = {"status": {"name": resolved_status}}

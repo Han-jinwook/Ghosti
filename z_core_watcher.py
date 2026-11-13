@@ -197,9 +197,9 @@ def scan_post_office_files() -> Dict[str, str]:
     for p in sorted(POST_OFFICE_DIR.glob("*.md")):
         if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
             continue
-        prefix = p.name.split("_", 1)[0].lower()
+        prefix = p.name.split("_", 1)[0].strip("[]").lower()
         parts = p.name.split("_")
-        sender = parts[1].lower() if len(parts) > 1 else ""
+        sender = parts[1].strip("[]").lower() if len(parts) > 1 else ""
         if sender == "ghosti":
             continue
         if prefix == "all":
@@ -210,30 +210,40 @@ def scan_post_office_files() -> Dict[str, str]:
     return result
 
 
-def _resolve_active_track() -> str | None:
+def _resolve_active_role() -> str:
     """
-    --track free|sync|work 인자 또는 워크트리 폴더명(Ghosti_Sync / Ghosti_Work)으로부터
-    현재 창의 담당 트랙을 판별합니다 (명시 인자 없고 D:\\Ghosti 단독 실행 시 None = 전체 호환).
+    --role 1|2|3|all 인자(하위호환 --track 포함) 또는 워크트리 폴더명(Ghosti_Search / Ghosti_Share)으로부터
+    현재 창의 담당 역할(1귀신 / 2귀신 / 3귀신 / all)을 판별합니다.
+    - 창 1개만 열었을 때(D:\\Ghosti 무옵션): 기본값 'all' (1귀신·2귀신·3귀신·귀신창 전체 감지)
+    - D:\\Ghosti_Search 무옵션: '2' 자동 감지
+    - D:\\Ghosti_Share 무옵션: '3' 자동 감지
+    - 명시적 --role 1|2|3|all 지정 시 해당 값 최우선 적용
     """
     for i, arg in enumerate(sys.argv[1:], start=1):
-        if arg == "--track" and i + 1 < len(sys.argv):
+        if arg == "--role" and i + 1 < len(sys.argv):
             val = sys.argv[i + 1].strip().lower()
-            if val in ("free", "sync", "work"):
+            if val in ("1", "2", "3", "all"):
                 return val
+        elif arg.startswith("--role="):
+            val = arg.split("=", 1)[1].strip().lower()
+            if val in ("1", "2", "3", "all"):
+                return val
+        elif arg == "--track" and i + 1 < len(sys.argv):
+            val = sys.argv[i + 1].strip().lower()
+            return {"free": "1", "sync": "2", "work": "3"}.get(val, "all")
         elif arg.startswith("--track="):
             val = arg.split("=", 1)[1].strip().lower()
-            if val in ("free", "sync", "work"):
-                return val
+            return {"free": "1", "sync": "2", "work": "3"}.get(val, "all")
     folder_lower = ROOT_DIR.name.lower()
-    if "sync" in folder_lower:
-        return "sync"
-    if "work" in folder_lower:
-        return "work"
-    return None
+    if "search" in folder_lower:
+        return "2"
+    if "share" in folder_lower:
+        return "3"
+    return "all"
 
 
-def check_notion_new_bugs(seen_bug_ids: Set[str], track: str | None = None) -> list:
-    """notion_qa 모듈을 통해 신규 '발견된 버그'가 있는지 조용히 확인합니다 (노션 보드 완료 컬럼 스크립트 자동 아카이빙 해제)."""
+def check_notion_new_bugs(seen_bug_ids: Set[str], role: str = "all") -> list:
+    """notion_qa 모듈을 통해 현재 role의 신규 '발견된 버그'가 있는지 조용히 확인합니다 (동일 role 내 STATUS_FIXING만 체크하여 타 창 블로킹 원천 방지)."""
     try:
         import notion_qa
 
@@ -241,8 +251,8 @@ def check_notion_new_bugs(seen_bug_ids: Set[str], track: str | None = None) -> l
             return []
         bugs = (
             []
-            if notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=track)
-            else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED, track=track)
+            if notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, role=role)
+            else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED, role=role)
         )
         return [b for b in bugs if b.get("page_id", b.get("id")) not in seen_bug_ids]
     except Exception:
@@ -285,8 +295,14 @@ def main() -> None:
     baseline_inbox = initial_inbox
     baseline_doctrine_hash = file_md5(DOCTRINE_FILE)
 
-    active_track = _resolve_active_track()
-    track_badge = f"track={active_track}" if active_track else "track=all"
+    active_role = _resolve_active_role()
+    role_label_map = {
+        "1": "role=1 (1귀신: 비서·온보딩)",
+        "2": "role=2 (2귀신: 검색·귀신창)",
+        "3": "role=3 (3귀신: 사진공유·기기통합)",
+        "all": "role=all (전체 감지)",
+    }
+    role_badge = role_label_map.get(active_role, f"role={active_role}")
 
     seen_bug_ids: Set[str] = set()
     initial_bugs = []
@@ -300,18 +316,18 @@ def main() -> None:
         ):
             pass
         else:
-            fixing_now = notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=active_track)
+            fixing_now = notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, role=active_role)
             initial_bugs = (
                 []
                 if ("--watch" in sys.argv and fixing_now)
-                else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED, track=active_track)
+                else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED, role=active_role)
             )
     except Exception:
         pass
 
     if "--watch" not in sys.argv:
         print(
-            f"✅ [{ROOT_DIR.name} 체크인 3중 점검 및 제목 각인 완료 ({track_badge})] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(initial_bugs)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
+            f"✅ [{ROOT_DIR.name} 체크인 3중 점검 및 제목 각인 완료 ({role_badge})] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(initial_bugs)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
         )
         return
 
@@ -321,7 +337,7 @@ def main() -> None:
         if skip_next:
             skip_next = False
             continue
-        if arg == "--track":
+        if arg in ("--role", "--track"):
             skip_next = True
             continue
         if arg.isdigit():
@@ -329,10 +345,10 @@ def main() -> None:
             break
 
     print(
-        f"👀 [{ROOT_DIR.name} 무토큰 3중 감시병 가동 ({track_badge})] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
+        f"👀 [{ROOT_DIR.name} 무토큰 3중 감시병 가동 ({role_badge})] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
         f"   1) 전사 중앙 우체국: {POST_OFFICE_DIR}\n"
         f"   2) 비서 전사 코딩강령 이식: {DOCTRINE_FILE.name}\n"
-        f"   3) 노션 QA 칸반 보드: '발견된 버그'([귀신같이]/[귀신창] · {track_badge}) 컬럼",
+        f"   3) 노션 QA 칸반 보드: '발견된 버그' ({role_badge}) 컬럼",
         flush=True,
     )
 
@@ -342,7 +358,7 @@ def main() -> None:
     if initial_bugs:
         import notion_qa
         first_bug = initial_bugs[0]
-        notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=active_track) or notion_qa.mark_fixing(first_bug["page_id"])
+        notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, role=active_role) or notion_qa.mark_fixing(first_bug["page_id"])
         print("\n" + "🚨" * 24)
         print(
             f"🔔 [노션 QA 대기 버그 감지 — 1건 단위(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 선(先) 이동!] (총 대기 {len(initial_bugs)}건 중 1번째 착수)"
@@ -405,11 +421,11 @@ def main() -> None:
             print("📜" * 24)
             return
 
-        new_bugs = check_notion_new_bugs(seen_bug_ids, track=active_track)
+        new_bugs = check_notion_new_bugs(seen_bug_ids, role=active_role)
         if new_bugs:
             import notion_qa
             first_bug = new_bugs[0]
-            notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=active_track) or notion_qa.mark_fixing(first_bug["page_id"])
+            notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, role=active_role) or notion_qa.mark_fixing(first_bug["page_id"])
             print("\n" + "🚨" * 24)
             print(
                 f"🔔 [노션 QA 신규 버그 자동 감지 — 1건 단위(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 즉시 이동!] (총 {len(new_bugs)}건 중 1번째 착수)"
