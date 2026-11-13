@@ -1216,28 +1216,32 @@ export const SmartTrashView: React.FC = () => {
                   ? `✓ 전체 후보 보기 (${activeTrash.length}장)`
                   : `전체 후보 보기 (${activeTrash.length}장)`}
               </button>
-              <button
-                type="button"
-                onClick={selectAllTrashInFilter}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium cursor-pointer"
-              >
-                전체 선택
-              </button>
-              <button
-                type="button"
-                onClick={clearTrashSelection}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 font-label-sm text-[12px] cursor-pointer"
-              >
-                선택 해제
-              </button>
-              <button
-                type="button"
-                disabled={activeSelectedPhotos.length === 0 || quarantineMoving}
-                onClick={() => void moveSelectedToQuarantine()}
-                className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
-              >
-                선택된 {activeSelectedPhotos.length}장 ({fmtMB(selectedBytes)}) 휴지통 이동
-              </button>
+              {filteredCandidates.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={selectAllTrashInFilter}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-medium cursor-pointer"
+                  >
+                    전체 선택
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearTrashSelection}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 font-label-sm text-[12px] cursor-pointer"
+                  >
+                    선택 해제
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeSelectedPhotos.length === 0 || quarantineMoving}
+                    onClick={() => void moveSelectedToQuarantine()}
+                    className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
+                  >
+                    선택된 {activeSelectedPhotos.length}장 ({fmtMB(selectedBytes)}) 휴지통 이동
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => setActiveTrashCategoryFilter('none')}
@@ -1264,7 +1268,7 @@ export const SmartTrashView: React.FC = () => {
                 return (
                   <div
                     key={photo.id}
-                    onClick={() => toggleTrashSelection(photo.id)}
+                    onClick={() => setSelectedPhoto(photo, filteredCandidates)}
                     className={`group relative rounded-xl overflow-hidden bg-zinc-950 transition-all cursor-pointer border ${
                       isChecked
                         ? 'border-primary-container ring-1 ring-primary-container'
@@ -1285,21 +1289,27 @@ export const SmartTrashView: React.FC = () => {
                         </span>
                       </div>
 
-                      <div
-                        className={`absolute top-2.5 right-2.5 w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTrashSelection(photo.id);
+                        }}
+                        title={isChecked ? '선택 해제' : '정리 대상 선택'}
+                        className={`absolute top-2 right-2 w-7 h-7 rounded-md flex items-center justify-center transition-colors z-10 cursor-pointer ${
                           isChecked
-                            ? 'bg-primary-container text-zinc-950 font-bold'
-                            : 'bg-black/60 border border-white/20 text-transparent'
+                            ? 'bg-primary-container text-zinc-950 font-bold shadow-sm'
+                            : 'bg-black/65 hover:bg-black/85 border border-white/25 text-white/40 hover:text-white'
                         }`}
                       >
-                        <span className="material-symbols-outlined text-[15px]">check</span>
-                      </div>
+                        <span className="material-symbols-outlined text-[16px]">check</span>
+                      </button>
 
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedPhoto(photo);
+                          setSelectedPhoto(photo, filteredCandidates);
                         }}
                         title="크게 보기"
                         className="absolute bottom-10 right-2.5 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors cursor-pointer"

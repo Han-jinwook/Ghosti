@@ -1192,9 +1192,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     ? fallbackSamplesForCurrentTab
     : realFilteredCandidates;
 
-  const selectedBytes = activeTrash
-    .filter((p) => selectedTrashIds.has(p.id))
-    .reduce((a, p) => a + p.size, 0);
+  const activeSelectedPhotos = realFilteredCandidates.filter((p) => selectedTrashIds.has(p.id));
+  const selectedBytes = activeSelectedPhotos.reduce((a, p) => a + p.size, 0);
 
   const photoById = new Map(displayPhotos.map((p) => [p.id, p]));
   const sourceDuplicateGroups =
@@ -1781,7 +1780,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       ? `✓ 전체 후보 보기 (${activeTrash.length}장)`
                       : `전체 후보 보기 (${activeTrash.length}장)`}
                   </button>
-                  {!isShowingSamplePreview && (
+                  {!isShowingSamplePreview && realFilteredCandidates.length > 0 && (
                     <>
                       <button
                         type="button"
@@ -1799,11 +1798,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        disabled={selectedTrashIds.size === 0 || quarantineMoving}
+                        disabled={activeSelectedPhotos.length === 0 || quarantineMoving}
                         onClick={() => void moveSelectedToQuarantine()}
                         className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
                       >
-                        선택된 {selectedTrashIds.size}장 ({fmtMB(selectedBytes)}) 정리
+                        선택된 {activeSelectedPhotos.length}장 ({fmtMB(selectedBytes)}) 정리
                       </button>
                     </>
                   )}
@@ -1827,13 +1826,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     return (
                       <div
                         key={photo.id}
-                        onClick={() => {
-                          if (isShowingSamplePreview) {
-                            setSelectedPhoto(photo, null);
-                          } else {
-                            toggleTrashSelection(photo.id);
-                          }
-                        }}
+                        onClick={() => setSelectedPhoto(photo, filteredCandidates)}
                         className={`group relative rounded-xl overflow-hidden bg-zinc-950 transition-all cursor-pointer border ${
                           isChecked
                             ? 'border-primary-container ring-1 ring-primary-container'
@@ -1857,16 +1850,34 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           </div>
 
                           {!isShowingSamplePreview && (
-                            <div
-                              className={`absolute top-2.5 right-2.5 w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTrashSelection(photo.id);
+                              }}
+                              title={isChecked ? '선택 해제' : '정리 대상 선택'}
+                              className={`absolute top-2 right-2 w-7 h-7 rounded-md flex items-center justify-center transition-colors z-10 cursor-pointer ${
                                 isChecked
-                                  ? 'bg-primary-container text-zinc-950 font-bold'
-                                  : 'bg-black/60 border border-white/20 text-transparent'
+                                  ? 'bg-primary-container text-zinc-950 font-bold shadow-sm'
+                                  : 'bg-black/65 hover:bg-black/85 border border-white/25 text-white/40 hover:text-white'
                               }`}
                             >
-                              <span className="material-symbols-outlined text-[15px]">check</span>
-                            </div>
+                              <span className="material-symbols-outlined text-[16px]">check</span>
+                            </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPhoto(photo, filteredCandidates);
+                            }}
+                            title="상세 크게 보기"
+                            className="absolute bottom-2.5 right-2.5 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors z-10 cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">zoom_in</span>
+                          </button>
                         </div>
                       </div>
                     );
@@ -1878,7 +1889,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     verified
                   </span>
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    이 카테고리의 사진 정리가 모두 완료되었습니다!
+                    현재 이 카테고리에 정리할 사진이 없습니다 (0장)
                   </span>
                 </div>
               )}

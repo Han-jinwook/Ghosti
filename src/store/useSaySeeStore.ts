@@ -3013,26 +3013,53 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
   },
 
   selectAllTrashInFilter: () => {
-    const { photos, activeTrashCategoryFilter } = get();
-    const matching = photos
-      .filter((p) => {
-        if (!p.trashCategory || p.quarantined || activeTrashCategoryFilter === 'none') return false;
-        if (activeTrashCategoryFilter === 'all') return true;
-        if (activeTrashCategoryFilter === 'memo') {
-          return (
-            p.trashCategory === 'memo' ||
+    const { photos, activeTrashCategoryFilter, selectedTrashIds } = get();
+    const zConn = zCoreBridge.isConnected;
+    const isSample = (name: string) =>
+      /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
+    const next = new Set(selectedTrashIds);
+    for (const p of photos) {
+      if (!p.trashCategory || p.quarantined || activeTrashCategoryFilter === 'none') continue;
+      if (zConn && isSample(p.name)) continue;
+      const matches =
+        activeTrashCategoryFilter === 'all'
+          ? true
+          : activeTrashCategoryFilter === 'memo' ||
+            activeTrashCategoryFilter === 'object' ||
+            activeTrashCategoryFilter === 'document' ||
+            activeTrashCategoryFilter === 'receipt'
+          ? p.trashCategory === 'memo' ||
             p.trashCategory === 'object' ||
             p.trashCategory === 'document' ||
             p.trashCategory === 'receipt'
-          );
-        }
-        return p.trashCategory === activeTrashCategoryFilter;
-      })
-      .map((p) => p.id);
-    set({ selectedTrashIds: new Set(matching) });
+          : p.trashCategory === activeTrashCategoryFilter;
+      if (matches) next.add(p.id);
+    }
+    set({ selectedTrashIds: next });
   },
 
-  clearTrashSelection: () => set({ selectedTrashIds: new Set() }),
+  clearTrashSelection: () => {
+    const { photos, activeTrashCategoryFilter, selectedTrashIds } = get();
+    if (activeTrashCategoryFilter === 'all' || activeTrashCategoryFilter === 'none') {
+      set({ selectedTrashIds: new Set() });
+      return;
+    }
+    const next = new Set(selectedTrashIds);
+    for (const p of photos) {
+      const matches =
+        activeTrashCategoryFilter === 'memo' ||
+        activeTrashCategoryFilter === 'object' ||
+        activeTrashCategoryFilter === 'document' ||
+        activeTrashCategoryFilter === 'receipt'
+          ? p.trashCategory === 'memo' ||
+            p.trashCategory === 'object' ||
+            p.trashCategory === 'document' ||
+            p.trashCategory === 'receipt'
+          : p.trashCategory === activeTrashCategoryFilter;
+      if (matches) next.delete(p.id);
+    }
+    set({ selectedTrashIds: next });
+  },
 
   pickBestInDuplicateGroup: async (
     groupId: string,
@@ -3209,8 +3236,30 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
 
   moveSelectedToQuarantine: async () => {
     if (!ensureLoginAndZCoreReady('손보기 사진 정리')) return;
-    const { selectedTrashIds, photos } = get();
-    const targetNames = Array.from(selectedTrashIds);
+    const { selectedTrashIds, photos, activeTrashCategoryFilter } = get();
+    const zConn = zCoreBridge.isConnected;
+    const isSample = (name: string) =>
+      /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
+    const scopedPhotos = photos.filter((p) => {
+      if (!selectedTrashIds.has(p.id) || !p.trashCategory || p.quarantined) return false;
+      if (zConn && isSample(p.name)) return false;
+      if (activeTrashCategoryFilter === 'all' || activeTrashCategoryFilter === 'none') return true;
+      if (
+        activeTrashCategoryFilter === 'memo' ||
+        activeTrashCategoryFilter === 'object' ||
+        activeTrashCategoryFilter === 'document' ||
+        activeTrashCategoryFilter === 'receipt'
+      ) {
+        return (
+          p.trashCategory === 'memo' ||
+          p.trashCategory === 'object' ||
+          p.trashCategory === 'document' ||
+          p.trashCategory === 'receipt'
+        );
+      }
+      return p.trashCategory === activeTrashCategoryFilter;
+    });
+    const targetNames = scopedPhotos.map((p) => p.id);
     if (targetNames.length === 0) return;
 
     set({ quarantineMoving: true });
@@ -3270,7 +3319,7 @@ export const useSaySeeStore = create<SaySeeStore>((set, get) => {
     const allTrashIds = photos
       .filter((p) => p.trashCategory && !p.quarantined)
       .map((p) => p.id);
-    set({ selectedTrashIds: new Set(allTrashIds) });
+    set({ selectedTrashIds: new Set(allTrashIds), activeTrashCategoryFilter: 'all' });
     await get().moveSelectedToQuarantine();
   },
 
