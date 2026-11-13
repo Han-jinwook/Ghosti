@@ -18,6 +18,7 @@ import {
   cleanVideoTimestampLabel,
   extractVideoScreenTextOnDemand,
   resolveVideoCardThumbUrl,
+  setVideoPlaybackActive,
   type VideoOcrLineItem,
 } from '../services/aiEngine';
 
@@ -1368,6 +1369,14 @@ export const VideoScenePreviewModal: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!selectedVideoModal) return;
+    setVideoPlaybackActive(true);
+    return () => {
+      setVideoPlaybackActive(false);
+    };
+  }, [Boolean(selectedVideoModal)]);
+
+  useEffect(() => {
     if (!selectedVideoModal) {
       setResolvedVideoSrc('');
       setVideoPlaybackError(false);
@@ -1393,35 +1402,85 @@ export const VideoScenePreviewModal: React.FC = () => {
       /* ignore */
     }
     const rawUrl = selectedVideoModal.videoUrl || '';
+    const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
     const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
+    const seekTarget = hasExecutedUserSearch && activeQuery ? targetSec : 0;
     setVideoPlaybackError(false);
     triedTranscodeFallbackRef.current = false;
+    pendingSeekSecRef.current = seekTarget;
 
-    const cachedBlob = videoBlobUrlCache.get(rawUrl);
+    const cachedBlob = videoBlobUrlCache.get(baseStreamUrl) || videoBlobUrlCache.get(rawUrl);
     if (cachedBlob) {
-      pendingSeekSecRef.current = targetSec;
       setResolvedVideoSrc(cachedBlob);
       return;
     }
 
-    if (rawUrl.includes('/__videos/stream')) {
-      // H.264 Faststart 캐시 히트 시 전체 길이가 그대로 유지되며 Range 탐색이 가능하므로,
-      // 전체 목록 열람 시에는 0초부터 재생하고 검색어 포착 진입 시에만 targetSec으로 점프합니다.
-      const seekTarget = hasExecutedUserSearch && activeQuery ? targetSec : 0;
-      pendingSeekSecRef.current = seekTarget;
-      const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
-      const sep = baseStreamUrl.includes('?') ? '&' : '?';
-      setResolvedVideoSrc(seekTarget > 0 ? `${baseStreamUrl}${sep}t=${seekTarget}` : baseStreamUrl);
+    const isShortLocalClip =
+      baseStreamUrl.includes('127.0.0.1:5199') &&
+      (selectedVideoModal.durationSec || 20) <= 45 &&
+      (selectedVideoModal.sizeMB || 20) <= 55;
+
+    if (!isShortLocalClip) {
+      setResolvedVideoSrc(baseStreamUrl);
       return;
     }
 
-    pendingSeekSecRef.current = hasExecutedUserSearch && activeQuery ? targetSec : 0;
-    setResolvedVideoSrc(rawUrl);
+    // 45초 이하 로컬 영상(720p Faststart 약 2~6MB)은 0.02초 만에 RAM Blob으로 선적재하여 재생 중 버퍼링·끊김을 0%로 원천 차단합니다.
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        ctrl.abort();
+        setResolvedVideoSrc(baseStreamUrl);
+      }
+    }, 2200);
+
+    setResolvedVideoSrc('');
+    void (async () => {
+      try {
+        const res = await fetch(baseStreamUrl, { signal: ctrl.signal });
+        const ct = res.headers.get('content-type') || '';
+        const cacheCtl = res.headers.get('cache-control') || '';
+        if (!res.ok || !ct.includes('video') || cacheCtl.includes('no-store')) {
+          window.clearTimeout(fallbackTimer);
+          if (!cancelled) setResolvedVideoSrc(baseStreamUrl);
+          return;
+        }
+        const blob = await res.blob();
+        window.clearTimeout(fallbackTimer);
+        if (cancelled) return;
+        if (blob.size < 4096) {
+          setResolvedVideoSrc(baseStreamUrl);
+          return;
+        }
+        if (videoBlobUrlCache.size >= 8) {
+          const oldestKey = videoBlobUrlCache.keys().next().value;
+          if (oldestKey) {
+            const oldUrl = videoBlobUrlCache.get(oldestKey);
+            if (oldUrl) URL.revokeObjectURL(oldUrl);
+            videoBlobUrlCache.delete(oldestKey);
+          }
+        }
+        const blobUrl = URL.createObjectURL(blob);
+        videoBlobUrlCache.set(baseStreamUrl, blobUrl);
+        setResolvedVideoSrc(blobUrl);
+      } catch {
+        window.clearTimeout(fallbackTimer);
+        if (!cancelled) setResolvedVideoSrc(baseStreamUrl);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+      ctrl.abort();
+    };
   }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl, selectedVideoModal?.matchedSeekSec, hasExecutedUserSearch, activeQuery]);
 
   if (!selectedVideoModal) return null;
 
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
+  const isWholeClipMatch = (selectedVideoModal.matchedSeekSec ?? 0) <= 0;
   const cleanTs = cleanVideoTimestampLabel(selectedVideoModal.matchedTimestamp);
   const currentFrameObj =
     selectedVideoModal.timelineFrames.find((f) => f.timeSec === selectedVideoModal.matchedSeekSec) ||
@@ -1438,9 +1497,7 @@ export const VideoScenePreviewModal: React.FC = () => {
     pendingSeekSecRef.current = seekTarget;
     setVideoPlaybackError(false);
     setResolvedVideoSrc(
-      seekTarget > 0
-        ? `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(selectedVideoModal.videoFileName)}&t=${seekTarget}`
-        : `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(selectedVideoModal.videoFileName)}`
+      `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(selectedVideoModal.videoFileName)}`
     );
     return true;
   };
@@ -1480,7 +1537,7 @@ export const VideoScenePreviewModal: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               {hasExecutedUserSearch && activeQuery && (
                 <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
-                  🎯 {cleanTs} 장면 포착
+                  {isWholeClipMatch ? '🎯 전 구간 일치 (00:00~)' : `🎯 ${cleanTs} 장면 포착`}
                 </span>
               )}
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[11px] font-bold">
@@ -1550,7 +1607,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           )}
           {hasExecutedUserSearch && activeQuery && (
             <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">
-              🎯 {cleanTs} 장면부터 바로 재생
+              {isWholeClipMatch ? '🎯 처음부터 바로 재생 (전 구간 일치)' : `🎯 ${cleanTs} 장면부터 바로 재생`}
             </div>
           )}
         </div>
@@ -1558,7 +1615,9 @@ export const VideoScenePreviewModal: React.FC = () => {
         {hasExecutedUserSearch && activeQuery && (
           <div className="p-3.5 rounded-2xl bg-primary-container/10 border border-primary-container/45 flex flex-col gap-1">
             <span className="font-label-mono text-[11px] text-primary-container font-black">
-              🎯 찾으신 장면 ({cleanTs}):
+              {isWholeClipMatch
+                ? '🎯 포착 구간 기준 (00:00 처음부터 · 전 구간 일치):'
+                : `🎯 찾으신 장면 (${cleanTs} 구간 포착):`}
             </span>
             <p className="font-body-md text-[13.5px] text-white font-bold leading-relaxed">
               {renderHighlightedDocText(

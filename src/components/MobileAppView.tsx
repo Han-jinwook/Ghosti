@@ -550,6 +550,7 @@ export const MobileAppView: React.FC = () => {
                 <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 no-scrollbar">
                   {matchedVideoScenes.map((vid) => {
                     const cardThumbUrl = resolveVideoCardThumbUrl(vid);
+                    const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
                     const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
                     return (
                     <article
@@ -583,7 +584,7 @@ export const MobileAppView: React.FC = () => {
                         </div>
                         {hasExecutedUserSearch && activeQuery && (
                           <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-zinc-950/90 border border-primary-container/50 text-primary-container font-label-mono text-[10.5px] font-bold">
-                            🎯 {cleanTs} 장면 포착
+                            {isWholeClip ? '🎯 전 구간 일치 (00:00~)' : `🎯 ${cleanTs} 장면 포착`}
                           </div>
                         )}
                         <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded bg-zinc-950/90 border border-white/15 text-white font-label-mono text-[10.5px] font-extrabold">
@@ -607,7 +608,9 @@ export const MobileAppView: React.FC = () => {
                           <span>📍 {vid.locationKo}</span>
                           <span className="text-primary-container font-bold">
                             {hasExecutedUserSearch && activeQuery
-                              ? `▶ ${cleanTs} 바로 재생`
+                              ? isWholeClip
+                                ? '▶ 처음부터 재생'
+                                : `▶ ${cleanTs} 바로 재생`
                               : '▶ 재생'}
                           </span>
                         </span>

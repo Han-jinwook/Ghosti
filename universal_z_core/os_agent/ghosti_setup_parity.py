@@ -329,11 +329,14 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
         frames = list(v.get("timelineFrames") or [])
         best_frame = frames[0] if frames else None
         best_frame_hits = 0
+        opening_frame_hits = 0
         for fr in frames:
             fkws = " ".join(str(x) for x in (fr.get("keywords") or []))
             fcorpus = f"{fr.get('sceneCaption', '')} {fkws}".lower()
             fcorpus_ns = re.sub(r"\s+", "", fcorpus)
             fhits = sum(1 for tk in tokens if _match_query_token(tk, fcorpus, fcorpus_ns))
+            if int(fr.get("timeSec") or 0) <= 2 and fhits > opening_frame_hits:
+                opening_frame_hits = fhits
             if fhits > best_frame_hits:
                 best_frame_hits = fhits
                 best_frame = fr
@@ -346,16 +349,23 @@ def videos_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
         if matched_tokens >= req_hits:
             vid_out = dict(v)
             if best_frame and best_frame_hits > 0:
-                seek_sec = int(best_frame.get("timeSec") or 0)
+                raw_seek = int(best_frame.get("timeSec") or 0)
+                # 도입부(0~2초)부터 동일한 장면/글자가 등장하면 앞부분 생략 없이 00:00 처음부터 전 구간 재생
+                is_whole_or_opening = raw_seek <= 2 or (opening_frame_hits >= best_frame_hits and opening_frame_hits > 0)
+                seek_sec = 0 if is_whole_or_opening else raw_seek
                 vid_out["matchedSeekSec"] = seek_sec
-                raw_ts = str(best_frame.get("timestampText") or "00:00")
+                raw_ts = "00:00" if seek_sec == 0 else (str(best_frame.get("timestampText") or "00:00"))
                 vid_out["matchedTimestamp"] = raw_ts.replace("🎯", "").replace("구간 포착", "").replace("장면 포착", "").strip() or "00:00"
-                vid_out["matchedFrameCaption"] = best_frame.get("sceneCaption", "")
+                vid_out["matchedFrameCaption"] = (
+                    f"[00:00~{vid_out.get('durationText', '')} 전 구간] 영상 처음부터 “{q}” 장면·내용이 이어져 00:00부터 재생합니다."
+                    if seek_sec == 0
+                    else best_frame.get("sceneCaption", "")
+                )
                 if best_frame.get("thumbUrl"):
                     vid_out["thumbUrl"] = best_frame["thumbUrl"]
             else:
-                raw_ts = str(vid_out.get("matchedTimestamp") or "00:00")
-                vid_out["matchedTimestamp"] = raw_ts.replace("🎯", "").replace("구간 포착", "").replace("장면 포착", "").strip() or "00:00"
+                vid_out["matchedSeekSec"] = 0
+                vid_out["matchedTimestamp"] = "00:00"
             scored.append((matched_tokens * 5 + best_frame_hits * 3, vid_out))
 
     scored.sort(key=lambda x: x[0], reverse=True)

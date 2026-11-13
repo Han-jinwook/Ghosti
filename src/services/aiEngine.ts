@@ -784,11 +784,12 @@ export function normalizeLocalVideoSceneItem(
   const repThumb = localVideoRepThumbMap.get(baseKey) || enrichedBase.thumbUrl;
   const currentSeek = video.matchedSeekSec ?? 0;
   const activeFrame =
-    propFrames.find((f) => f.timeSec === currentSeek) || propFrames[1] || propFrames[0];
+    propFrames.find((f) => f.timeSec === currentSeek) || propFrames[0];
+  const thumbFallbackFrame = propFrames[1] || propFrames[0];
 
   return {
     ...enrichedBase,
-    thumbUrl: repThumb || activeFrame?.thumbUrl || '',
+    thumbUrl: repThumb || thumbFallbackFrame?.thumbUrl || activeFrame?.thumbUrl || '',
     durationSec: effectiveDurSec,
     durationText: nextDurationText,
     timelineFrames: propFrames,
@@ -1354,6 +1355,7 @@ export async function searchVideoSceneItemsAsync(
     vid: VideoSceneItem;
     key: string;
     bestSim: number;
+    openingSim: number;
     bestSec: number;
     bestTsText: string;
     bestPhaseLabel: string;
@@ -1367,9 +1369,10 @@ export async function searchVideoSceneItemsAsync(
     const key = vid.videoFileName || vid.id;
     const baseKey = getVideoMediaBaseKey(vid);
     let bestSim = -1;
-    let bestSec = vid.matchedSeekSec ?? 0;
-    let bestTsText = formatVideoDurationText(bestSec);
-    let bestPhaseLabel = '장면 포착';
+    let openingSim = -1;
+    let bestSec = 0;
+    let bestTsText = '00:00';
+    let bestPhaseLabel = '전 구간';
     let bestThumb = localVideoRepThumbMap.get(baseKey) || vid.thumbUrl || '';
 
     if (queryVecs.length > 0) {
@@ -1381,6 +1384,9 @@ export async function searchVideoSceneItemsAsync(
         for (const qv of queryVecs) {
           const s = cosineSimilarity(qv, fVec);
           if (s > fSim) fSim = s;
+        }
+        if (frame.timeSec <= 2 && fSim > openingSim) {
+          openingSim = fSim;
         }
         if (fSim > bestSim) {
           bestSim = fSim;
@@ -1413,6 +1419,7 @@ export async function searchVideoSceneItemsAsync(
       vid,
       key,
       bestSim,
+      openingSim,
       bestSec,
       bestTsText,
       bestPhaseLabel,
@@ -1504,27 +1511,32 @@ export async function searchVideoSceneItemsAsync(
       });
     } else if (passesVisual) {
       const matchPct = Math.min(99, Math.max(78, Math.round((effectiveSim / Math.max(0.76, topSim)) * 96)));
-      const cleanTs = cleanVideoTimestampLabel(ev.bestTsText);
+      // 영상 초반(0~3초)부터 동일 장면이 시작되거나 도입부(0초) 유사도도 중반부와 동일 수준이면 전 구간 일치로 00:00부터 재생
+      const isWholeClipScene =
+        ev.bestSec <= 3 || (ev.openingSim > 0 && ev.openingSim >= ev.bestSim - 0.045);
+      const effectiveSeekSec = isWholeClipScene ? 0 : ev.bestSec;
+      const cleanTs = isWholeClipScene ? '00:00' : cleanVideoTimestampLabel(ev.bestTsText);
       finalScored.push({
         item: {
           ...ev.vid,
           thumbUrl: ev.bestThumb || ev.vid.thumbUrl,
-          matchedSeekSec: ev.bestSec,
+          matchedSeekSec: effectiveSeekSec,
           matchedTimestamp: cleanTs,
-          matchedFrameCaption: `[${cleanTs} · ${ev.bestPhaseLabel}] AI 시각 장면 분석 일치 (${matchPct}%) — “${q}” 관련 장면 포착`,
+          matchedFrameCaption: isWholeClipScene
+            ? `[00:00~${ev.vid.durationText} 전 구간] 영상 처음부터 끝까지 “${q}” 장면이 이어져 앞부분 생략 없이 00:00부터 재생합니다. (AI 시각 일치 ${matchPct}%)`
+            : `[${cleanTs} · ${ev.bestPhaseLabel}] 영상 중간 특정 시점에 “${q}” 장면이 등장하여 ${cleanTs}부터 바로 재생합니다. (AI 시각 일치 ${matchPct}%)`,
         },
         rankScore: effectiveSim,
       });
     } else {
       const proximityBonus = Math.max(0, 240 - Math.min(minPhotoDiffSec, minStrongVidDiffSec)) * 0.00015;
-      const cleanTs = cleanVideoTimestampLabel(ev.bestTsText);
       finalScored.push({
         item: {
           ...ev.vid,
           thumbUrl: ev.bestThumb || ev.vid.thumbUrl,
-          matchedSeekSec: ev.bestSec,
-          matchedTimestamp: cleanTs,
-          matchedFrameCaption: `[${cleanTs} · ${ev.bestPhaseLabel}] 연속 촬영 세션 장면 포착 — “${q}” 관련 동영상`,
+          matchedSeekSec: 0,
+          matchedTimestamp: '00:00',
+          matchedFrameCaption: `[00:00~${ev.vid.durationText} 전 구간] 연속 촬영 클립 전체가 “${q}” 장면이므로 앞부분 생략 없이 00:00부터 재생합니다.`,
         },
         rankScore: (ev.bestSim > 0 ? ev.bestSim + 0.05 : 0.71) + proximityBonus,
       });
@@ -1634,10 +1646,10 @@ export function searchVideoSceneItems(
     const videoLevelCorpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
     const videoOcrCorpus = String(vid.ocrFullText || '').toLowerCase();
     const hasVideoOcr = Boolean(vid.hasScreenOcrText || videoOcrCorpus);
-    const defaultRepFrame =
-      vid.timelineFrames.find((f) => f.timeSec === vid.matchedSeekSec) || vid.timelineFrames[0];
+    const defaultRepFrame = vid.timelineFrames[0];
     let bestFrame = defaultRepFrame;
     let bestFrameScore = 0;
+    let openingFrameScore = 0;
 
     for (const frame of vid.timelineFrames) {
       const ontoKws = Array.isArray((frame as any).ontologyKeywords)
@@ -1656,10 +1668,10 @@ export function searchVideoSceneItems(
           frameHits += 4;
         }
       }
-      if (
-        frameHits > bestFrameScore ||
-        (frameHits > 0 && frameHits === bestFrameScore && frame.timeSec === vid.matchedSeekSec)
-      ) {
+      if (frame.timeSec <= 2 && frameHits > openingFrameScore) {
+        openingFrameScore = frameHits;
+      }
+      if (frameHits > bestFrameScore) {
         bestFrameScore = frameHits;
         bestFrame = frame;
       }
@@ -1693,13 +1705,20 @@ export function searchVideoSceneItems(
       const matchedFrameThumb =
         normalizeSampleVideoFrameUrl(bestFrame.thumbUrl) ||
         normalizeSampleVideoFrameUrl(vid.thumbUrl);
+      const isLocalWholeOrOpening =
+        String(vid.id || '').startsWith('local_vid_') &&
+        (bestFrame.timeSec <= 2 || (openingFrameScore > 0 && openingFrameScore >= bestFrameScore) || bestFrameScore === 0);
+      const finalSeekSec = isLocalWholeOrOpening ? 0 : bestFrame.timeSec;
+      const finalTs = finalSeekSec === 0 ? '00:00' : cleanVideoTimestampLabel(bestFrame.timestampText);
       scored.push({
         vid: {
           ...vid,
           thumbUrl: matchedFrameThumb || vid.thumbUrl,
-          matchedSeekSec: bestFrame.timeSec,
-          matchedTimestamp: cleanVideoTimestampLabel(bestFrame.timestampText),
-          matchedFrameCaption: bestFrame.sceneCaption,
+          matchedSeekSec: finalSeekSec,
+          matchedTimestamp: finalTs,
+          matchedFrameCaption: isLocalWholeOrOpening
+            ? `[00:00~${vid.durationText} 전 구간] 영상 처음부터 “${query.trim()}” 장면·내용이 이어져 00:00부터 재생합니다.`
+            : bestFrame.sceneCaption,
         },
         totalScore,
         matchedTokenCount,
@@ -4601,6 +4620,23 @@ let sharedVisionIdleTimer: ReturnType<typeof setTimeout> | null = null;
 let visionInferChain: Promise<unknown> = Promise.resolve();
 let priorityVideoSearchDepth = 0;
 let silentMediaIndexingRunning = false;
+let activeVideoPlaybackCount = 0;
+
+/**
+ * 동영상 모달 재생 중에는 백그라운드 AI 비전 추론(WebGPU/WASM) 및 로컬 Z-코어 썸네일/OCR 요청을 100% 일시정지하여
+ * 저사양/4코어 데스크톱에서도 끊김 없는 60fps 영상 재생을 보장합니다.
+ */
+export function setVideoPlaybackActive(active: boolean): void {
+  if (active) {
+    activeVideoPlaybackCount += 1;
+  } else {
+    activeVideoPlaybackCount = Math.max(0, activeVideoPlaybackCount - 1);
+  }
+}
+
+export function isVideoPlaybackActive(): boolean {
+  return activeVideoPlaybackCount > 0;
+}
 
 function bumpSharedVisionIdleDispose(ms = 30000): void {
   if (sharedVisionIdleTimer) {
@@ -4886,18 +4922,19 @@ function selectTargetFrameSecsForVideo(vid: VideoSceneItem, maxCheckpoints: numb
   if (frames.length === 0) {
     const d = Math.max(3, vid.durationSec || 8);
     return maxCheckpoints <= 2
-      ? [Math.max(1, Math.round(d * 0.25)), Math.max(2, Math.round(d * 0.65))]
+      ? [0, Math.max(2, Math.round(d * 0.55))]
       : [0, Math.max(1, Math.round(d * 0.35)), Math.max(2, Math.round(d * 0.75))];
   }
   if (frames.length <= maxCheckpoints) {
     return frames.map((f) => f.timeSec);
   }
   if (maxCheckpoints === 2) {
-    const f1 = frames[Math.min(1, frames.length - 1)];
-    const f2 = frames[Math.min(frames.length - 1, Math.max(2, Math.floor(frames.length * 0.66)))];
-    return Array.from(new Set([f1.timeSec, f2.timeSec]));
+    // 도입부(0초 체크포인트)와 중반부 체크포인트를 함께 분석해 '전 구간 동일 장면(00:00~)' vs '중반 이후 특정 구간 등장'을 정확히 구분합니다.
+    const fOpen = frames[0];
+    const fMid = frames[Math.min(frames.length - 1, Math.max(1, Math.floor(frames.length * 0.55)))];
+    return Array.from(new Set([fOpen.timeSec, fMid.timeSec]));
   }
-  const f0 = frames[Math.min(1, frames.length - 1)];
+  const f0 = frames[0];
   const fMid = frames[Math.floor(frames.length * 0.5)];
   const fEnd = frames[frames.length - 1];
   return Array.from(new Set([f0.timeSec, fMid.timeSec, fEnd.timeSec]));
@@ -4913,6 +4950,9 @@ async function embedSingleLocalVideoIfNeeded(
   ) => void
 ): Promise<boolean> {
   if (!vid.videoFileName || vid.isAllBlack) return false;
+  while (activeVideoPlaybackCount > 0 && priorityVideoSearchDepth === 0) {
+    await new Promise((r) => setTimeout(r, 450));
+  }
   const normVid = normalizeLocalVideoSceneItem(vid);
   const baseKey = getVideoMediaBaseKey(normVid);
   const targetSecs = selectTargetFrameSecsForVideo(normVid, maxCheckpoints);
@@ -4926,6 +4966,9 @@ async function embedSingleLocalVideoIfNeeded(
   if (zCoreBridge.isConnected && decodedFrames.some((df) => df.thumbDataUrl)) {
     void (async () => {
       try {
+        while (activeVideoPlaybackCount > 0) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
         const ocrPayloadFrames = decodedFrames
           .filter((df) => Boolean(df.thumbDataUrl))
           .map((df) => ({ timeSec: df.timeSec, dataUrl: df.thumbDataUrl }));
@@ -4957,6 +5000,9 @@ async function embedSingleLocalVideoIfNeeded(
 
   let updatedAny = false;
   for (let i = 0; i < decodedFrames.length; i++) {
+    while (activeVideoPlaybackCount > 0 && priorityVideoSearchDepth === 0) {
+      await new Promise((r) => setTimeout(r, 450));
+    }
     const df = decodedFrames[i];
     const fKey = getVideoFrameCacheKey(normVid, df.timeSec);
     if (df.thumbDataUrl) {
@@ -4966,7 +5012,9 @@ async function embedSingleLocalVideoIfNeeded(
         onVideoThumbHydrated?.(normVid.videoFileName, df.thumbDataUrl);
       }
     }
+    const tInfer0 = performance.now();
     const vec = await embedRawImageWithSharedVision(df.rawImg);
+    const inferMs = performance.now() - tInfer0;
     if (vec) {
       localVideoFrameVecMap.set(fKey, vec);
       await persistMediaCacheEntry(fKey, vec, df.thumbDataUrl);
@@ -4975,6 +5023,13 @@ async function embedSingleLocalVideoIfNeeded(
         await persistMediaCacheEntry(`vrep:${baseKey}`, vec, localVideoRepThumbMap.get(baseKey));
       }
       updatedAny = true;
+    }
+    if (
+      priorityVideoSearchDepth === 0 &&
+      inferMs > 300 &&
+      silentIndexingBrake.getSnapshot().speedMode !== 'turbo'
+    ) {
+      await new Promise((r) => setTimeout(r, Math.min(2000, Math.round(inferMs * 1.1))));
     }
   }
   return updatedAny;
@@ -5062,8 +5117,8 @@ export async function startSilentRealMediaVisionIndexing(params: {
     );
     for (let i = 0; i < localVids.length; i++) {
       if (!zCoreBridge.isConnected) break;
-      while (priorityVideoSearchDepth > 0) {
-        await new Promise((r) => setTimeout(r, 400));
+      while (priorityVideoSearchDepth > 0 || activeVideoPlaybackCount > 0) {
+        await new Promise((r) => setTimeout(r, 450));
       }
       await silentIndexingBrake.waitForIndexingSlot(i);
       await embedSingleLocalVideoIfNeeded(
@@ -5072,7 +5127,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
         params.onVideoThumbHydrated,
         params.onVideoOcrHydrated
       );
-      await new Promise((r) => setTimeout(r, 380));
+      await new Promise((r) => setTimeout(r, 450));
     }
 
     // 2) 미색인 실사용 PC 사진 조용한 백그라운드 벡터 인덱싱 (최근 90일 우선, 최대 320장 순차 캐싱)
@@ -5084,8 +5139,8 @@ export async function startSilentRealMediaVisionIndexing(params: {
 
     for (let i = 0; i < unindexedPhotos.length; i++) {
       if (!zCoreBridge.isConnected) break;
-      while (priorityVideoSearchDepth > 0) {
-        await new Promise((r) => setTimeout(r, 300));
+      while (priorityVideoSearchDepth > 0 || activeVideoPlaybackCount > 0) {
+        await new Promise((r) => setTimeout(r, 450));
       }
       await silentIndexingBrake.waitForIndexingSlot(i);
       const item = unindexedPhotos[i];
@@ -5102,12 +5157,19 @@ export async function startSilentRealMediaVisionIndexing(params: {
         const blob = await res.blob();
         const decoded = await decodeImageBlobToRawAndThumb(blob);
         if (!decoded) continue;
+        while (priorityVideoSearchDepth > 0 || activeVideoPlaybackCount > 0) {
+          await new Promise((r) => setTimeout(r, 450));
+        }
         const vec = await embedRawImageWithSharedVision(decoded.rawImg);
+        const inferElapsed = performance.now() - t0;
         if (vec) {
           item.vec = vec;
           hydratedPhotoVecMap.set(pKey, vec);
           await persistMediaCacheEntry(pKey, vec);
-          silentIndexingBrake.recordInferenceLatencyMs(performance.now() - t0);
+          silentIndexingBrake.recordInferenceLatencyMs(inferElapsed);
+        }
+        if (inferElapsed > 300 && silentIndexingBrake.getSnapshot().speedMode !== 'turbo') {
+          await new Promise((r) => setTimeout(r, Math.min(2200, Math.round(inferElapsed * 1.15))));
         }
       } catch {
         /* skip unreadable file */

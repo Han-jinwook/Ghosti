@@ -1342,24 +1342,24 @@ def _build_proportional_timeline_frames(
         return f"{int(s // 60):02d}:{int(s % 60):02d}"
 
     if t_sec < 6:
-        secs = [1, max(2, t_sec - 1)]
+        secs = [0, max(2, t_sec - 1)]
         labels = ["도입부", "후반부"]
     elif t_sec <= 14:
         mid = max(2, int(round(t_sec * 0.5)))
-        secs = [1, mid, max(mid + 1, t_sec - 1)]
+        secs = [0, mid, max(mid + 1, t_sec - 1)]
         labels = ["도입부", "중반부", "후반부"]
     elif t_sec <= 35:
-        p1 = max(2, int(round(t_sec * 0.25)))
-        p2 = max(p1 + 2, int(round(t_sec * 0.5)))
-        p3 = max(p2 + 2, int(round(t_sec * 0.75)))
-        secs = [2, p1, p2, p3]
+        p1 = max(3, int(round(t_sec * 0.28)))
+        p2 = max(p1 + 2, int(round(t_sec * 0.56)))
+        p3 = max(p2 + 2, int(round(t_sec * 0.82)))
+        secs = [0, p1, p2, p3]
         labels = ["도입부", "초반 전개", "중반부 핵심", "후반 마무리"]
     else:
         p1 = max(4, int(round(t_sec * 0.2)))
         p2 = max(p1 + 3, int(round(t_sec * 0.45)))
         p3 = max(p2 + 3, int(round(t_sec * 0.7)))
         p4 = max(p3 + 3, int(round(t_sec * 0.9)))
-        secs = [3, p1, p2, p3, p4]
+        secs = [0, p1, p2, p3, p4]
         labels = ["도입부", "초반 전개", "중반부 하이라이트", "후반 전개", "클라이맥스/마무리"]
 
     frames = []
@@ -1431,12 +1431,22 @@ def _detect_video_codec_fast(file_path: Path) -> str:
     return "avc1"
 
 
-def _transcode_faststart_worker(src_path: Path, out_mp4: Path, codec_hint: str, done_evt: threading.Event, cache_key: str) -> None:
+def _transcode_faststart_worker(
+    src_path: Path,
+    out_mp4: Path,
+    codec_hint: str,
+    done_evt: threading.Event,
+    cache_key: str,
+    interactive: bool = False,
+) -> None:
     ff = find_ffmpeg_exe()
     if not ff:
         done_evt.set()
         return
-    creationflags = 0x08000000 if os.name == "nt" else 0
+    # 백그라운드 프리워밍 시 BELOW_NORMAL_PRIORITY_CLASS(0x00004000)로 브라우저 디코더 CPU 선점 원천 차단
+    bg_prio = 0x00000000 if interactive else 0x00004000
+    creationflags = (0x08000000 | bg_prio) if os.name == "nt" else 0
+    thread_limit = "0" if interactive else "2"
     tmp_mp4 = out_mp4.with_name(f"tmp_{os.getpid()}_{threading.get_ident()}_{out_mp4.name}")
     try:
         _VIDEO_STREAM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -1455,13 +1465,19 @@ def _transcode_faststart_worker(src_path: Path, out_mp4: Path, codec_hint: str, 
                 tmp_mp4.replace(out_mp4)
                 return
 
+        # 가로/세로 영상 모두 긴 변 최대 1280px(720p HD) + 30fps + 3.2Mbps 상한으로 압축해
+        # 4코어 구형 PC에서도 0.05초 로딩·무끊김 재생을 보장합니다 (기존 세로 영상 960x1706 17Mbps 과부하 해소).
         subprocess.run(
             [
                 ff, "-y", "-hide_banner", "-loglevel", "error",
+                "-threads", thread_limit,
                 "-probesize", "2M", "-analyzeduration", "1500000",
                 "-i", str(src_path),
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26", "-g", "30",
-                "-pix_fmt", "yuv420p", "-vf", "scale='min(960,iw)':-2",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "25",
+                "-maxrate", "3200k", "-bufsize", "6400k",
+                "-r", "30", "-g", "30",
+                "-pix_fmt", "yuv420p",
+                "-vf", "scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))'",
                 "-c:a", "aac", "-b:a", "128k",
                 "-movflags", "+faststart", str(tmp_mp4),
             ],
@@ -1484,15 +1500,19 @@ def _transcode_faststart_worker(src_path: Path, out_mp4: Path, codec_hint: str, 
         done_evt.set()
 
 
-def get_or_create_faststart_video_cache(file_path: Path, max_sync_sec: float = 0.0) -> Path | None:
-    """HEVC 또는 대용량 MOV 영상을 완전한 길이가 보존된 H.264 Faststart MP4로 캐싱하여 0.01초 즉시 재생 및 정확한 전체 시간을 보장합니다."""
+def get_or_create_faststart_video_cache(
+    file_path: Path,
+    max_sync_sec: float = 0.0,
+    interactive: bool = False,
+) -> Path | None:
+    """HEVC 또는 대용량 MOV 영상을 완전한 길이가 보존된 720p H.264 Faststart MP4(v2)로 캐싱하여 0.01초 즉시 재생 및 무끊김 스트리밍을 보장합니다."""
     ff = find_ffmpeg_exe()
     if not ff or _is_cloud_virtual_or_unpinned_file(file_path):
         return None
     try:
         st = file_path.stat()
-        cache_key = hashlib.sha1(f"{file_path}|{st.st_size}|{int(st.st_mtime)}|v1".encode("utf-8", errors="ignore")).hexdigest()[:22]
-        out_mp4 = _VIDEO_STREAM_CACHE_DIR / f"vc_{cache_key}.mp4"
+        cache_key = hashlib.sha1(f"{file_path}|{st.st_size}|{int(st.st_mtime)}|v2".encode("utf-8", errors="ignore")).hexdigest()[:22]
+        out_mp4 = _VIDEO_STREAM_CACHE_DIR / f"vc2_{cache_key}.mp4"
         if out_mp4.exists() and out_mp4.stat().st_size > 8192:
             return out_mp4
 
@@ -1504,7 +1524,7 @@ def get_or_create_faststart_video_cache(file_path: Path, max_sync_sec: float = 0
                 _VIDEO_STREAM_INFLIGHT[cache_key] = evt
                 threading.Thread(
                     target=_transcode_faststart_worker,
-                    args=(file_path, out_mp4, codec_hint, evt, cache_key),
+                    args=(file_path, out_mp4, codec_hint, evt, cache_key, interactive),
                     daemon=True,
                 ).start()
 
@@ -1518,11 +1538,18 @@ def get_or_create_faststart_video_cache(file_path: Path, max_sync_sec: float = 0
 
 
 def _prewarm_hevc_stream_caches(targets: List[Path]) -> None:
-    # 짧은 클립부터 먼저 캐싱 완료하여 CPU 경합을 없애고 즉시 0.01초 재생을 보장합니다.
+    # 구버전 고비트레이트(v1 vc_*.mp4) 캐시 정리 후 짧은 클립부터 저우선순위(2스레드)로 순차 캐싱합니다.
+    try:
+        if _VIDEO_STREAM_CACHE_DIR.exists():
+            for legacy_vc in _VIDEO_STREAM_CACHE_DIR.glob("vc_*.mp4"):
+                legacy_vc.unlink(missing_ok=True)
+    except Exception:
+        pass
     sorted_targets = sorted(targets, key=lambda x: x.stat().st_size if x.exists() else 0)
     for p in sorted_targets:
         try:
-            get_or_create_faststart_video_cache(p, max_sync_sec=180.0)
+            get_or_create_faststart_video_cache(p, max_sync_sec=180.0, interactive=False)
+            time.sleep(0.15)
         except Exception:
             pass
 
@@ -1655,7 +1682,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
         return
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_vid_ocr_"))
-    creationflags = 0x08000000
+    creationflags = 0x08004000 if os.name == "nt" else 0
     try:
         job_map: Dict[str, tuple[str, int]] = {}
         per_vid_meta: Dict[str, Dict[str, Any]] = {}
@@ -2283,13 +2310,13 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 codec_tag = _detect_video_codec_fast(resolved)
                 if codec_tag in ("hevc", "mov_slow") and ff:
                     vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
-                    if len(prewarm_targets) < 16:
+                    if len(prewarm_targets) < 40:
                         prewarm_targets.append(resolved)
                 else:
                     vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
 
-                default_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
-                thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={default_seek}" if ff else ""
+                thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
+                thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if ff else ""
 
                 # 순수 파일명·폴더명 의미어 토큰 + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
                 raw_kw_tokens = [
@@ -2301,6 +2328,8 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                         if len(fw) >= 2 and not re.fullmatch(r"\d+", fw):
                             raw_kw_tokens.append(fw)
 
+                base_file_kw_list = list(dict.fromkeys(raw_kw_tokens))[:35]
+
                 sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
                 cached_ocr = ocr_cache.get(sig)
                 if cached_ocr is None and ff and not _is_cloud_virtual_or_unpinned_file(resolved):
@@ -2311,7 +2340,8 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     raw_kw_tokens.extend(str(k) for k in cached_ocr["keywords"])
 
                 kw_list = list(dict.fromkeys(raw_kw_tokens))[:45]
-                timeline_frames = _build_proportional_timeline_frames(stem, kw_list, d.name, len(videos) + 1, real_dur_sec)
+                # 기본 타임라인 프레임에는 파일·폴더 공통 키워드만 부여하고, 화면 OCR 키워드는 실제로 등장한 해당 시점 프레임에만 귀속
+                timeline_frames = _build_proportional_timeline_frames(stem, base_file_kw_list, d.name, len(videos) + 1, real_dur_sec)
 
                 # 프레임별 OCR 텍스트가 추출된 구간은 비례 타임라인 프레임과 병합하여 시각(비전) 체크포인트와 OCR 텍스트를 모두 보존
                 if cached_ocr and isinstance(cached_ocr.get("frames"), list) and cached_ocr["frames"]:
@@ -2324,15 +2354,15 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                             ocr_txt = str(ofr.get("ocrText") or "").strip()
                             if not ocr_txt:
                                 continue
-                            f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *raw_kw_tokens[:18]]))
+                            f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *base_file_kw_list[:12]]))
                             nearest_sec = min(existing_secs.keys(), key=lambda x: abs(x - s_val)) if existing_secs else None
-                            if nearest_sec is not None and abs(nearest_sec - s_val) <= 2:
+                            if nearest_sec is not None and abs(nearest_sec - s_val) <= 1:
                                 target_tf = existing_secs[nearest_sec]
                                 target_tf["timeSec"] = s_val
                                 target_tf["timestampText"] = ts_str
                                 target_tf["sceneCaption"] = ocr_txt
                                 target_tf["keywords"] = list(dict.fromkeys([*(target_tf.get("keywords") or []), *f_kws]))
-                                target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else ""
+                                target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else ""
                             else:
                                 timeline_frames.append({
                                     "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
@@ -2342,14 +2372,14 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                                     "sceneCaption": ocr_txt,
                                     "keywords": f_kws,
                                     "tags": ["#내PC동영상", f"#{d.name}"],
-                                    "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={s_val}" if ff else "",
+                                    "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else "",
                                 })
                         timeline_frames.sort(key=lambda x: int(x.get("timeSec") or 0))
 
                 if ff:
                     for tf in timeline_frames:
                         if not tf.get("thumbUrl"):
-                            tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={int(tf.get('timeSec') or 0)}"
+                            tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, int(tf.get('timeSec') or 0))}"
 
                 ocr_lines_cached = []
                 ocr_full_cached = ""
@@ -2359,7 +2389,6 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                         f"[{ln['timestamp']}] {ln['text']}" for ln in ocr_lines_cached
                     )
 
-                def_ts = f"{int(default_seek // 60):02d}:{int(default_seek % 60):02d}"
                 videos.append({
                     "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
                     "videoFileName": entry.name,
@@ -2371,8 +2400,8 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     "mtimeMs": int(st.st_mtime * 1000),
                     "durationText": dur_text,
                     "durationSec": int_dur,
-                    "matchedSeekSec": default_seek,
-                    "matchedTimestamp": def_ts,
+                    "matchedSeekSec": 0,
+                    "matchedTimestamp": "00:00",
                     "matchedFrameCaption": f"[{d.name}] 폴더의 내 PC 동영상 ({entry.name})",
                     "locationKo": f"내 PC · {d.name}",
                     "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",

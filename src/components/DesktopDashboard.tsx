@@ -1650,6 +1650,7 @@ export const DesktopDashboard: React.FC = () => {
                   <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
                     {matchedVideoScenes.map((vid) => {
                       const cardThumbUrl = resolveVideoCardThumbUrl(vid);
+                      const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
                       const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
                       return (
                       <article
@@ -1686,7 +1687,7 @@ export const DesktopDashboard: React.FC = () => {
 
                           {hasExecutedUserSearch && activeQuery && (
                             <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container/50 text-primary-container font-label-mono text-[11px] font-bold">
-                              🎯 {cleanTs} 장면 포착
+                              {isWholeClip ? '🎯 전 구간 일치 (00:00~)' : `🎯 ${cleanTs} 장면 포착`}
                             </div>
                           )}
 
@@ -1745,7 +1746,9 @@ export const DesktopDashboard: React.FC = () => {
                               </button>
                               <span className="text-primary-container font-bold">
                                 {hasExecutedUserSearch && activeQuery
-                                  ? `▶ ${cleanTs} 재생`
+                                  ? isWholeClip
+                                    ? '▶ 처음부터 재생'
+                                    : `▶ ${cleanTs} 재생`
                                   : '▶ 재생'}
                               </span>
                             </div>

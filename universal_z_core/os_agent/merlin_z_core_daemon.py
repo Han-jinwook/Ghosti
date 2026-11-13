@@ -314,14 +314,20 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_file_stream(file_path, content_type="video/mp4")
             return
 
-        # 1) 이미 완성된 H.264 Faststart MP4 캐시가 있으면 대기 없이 0.01초 만에 Range 스트리밍으로 즉시 응답!
-        #    (캐시가 아직 없으면 대기(0.0s)하지 않고 곧바로 아래 0.2초 파이프로 첫 프레임을 송출하면서 백그라운드로만 캐시를 생성합니다)
-        cached_mp4 = plugin_ghosti_os.get_or_create_faststart_video_cache(file_path, max_sync_sec=0.0)
+        # 1) 이미 완성된 720p H.264 Faststart MP4 캐시가 있으면 대기 없이 0.01초 만에 Range 스트리밍으로 즉시 응답!
+        #    45초 이하 단편 클립이 아직 미캐싱 상태면 최대 2.8초 동기 변환하여 파이프 끊김 없는 완전한 Range 재생을 보장합니다.
+        dur_hint = plugin_ghosti_os._get_fast_video_duration_sec(file_path)
+        sync_budget = 2.8 if 0 < dur_hint <= 45.0 else 0.0
+        cached_mp4 = plugin_ghosti_os.get_or_create_faststart_video_cache(
+            file_path,
+            max_sync_sec=sync_budget,
+            interactive=True,
+        )
         if cached_mp4 is not None and cached_mp4.exists():
             self._send_file_stream(cached_mp4, content_type="video/mp4", cache_max_age=3600)
             return
 
-        # 2) 대용량 장편 HEVC 영상(캐시 생성 중)은 0.2초 초고속 Fragmented 파이프로 즉시 첫 프레임을 송출하고 백그라운드 캐싱 병행
+        # 2) 대용량 장편 HEVC 영상(캐시 생성 중)은 0.2초 초고속 720p Fragmented 파이프로 즉시 첫 프레임을 송출하고 백그라운드 캐싱 병행
         creationflags = 0x08000000 if os.name == "nt" else 0
         cmd = [
             ff,
@@ -340,10 +346,13 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-tune", "zerolatency",
-            "-crf", "26",
+            "-crf", "25",
+            "-maxrate", "3200k",
+            "-bufsize", "6400k",
+            "-r", "30",
             "-g", "15",
             "-pix_fmt", "yuv420p",
-            "-vf", "scale='min(960,iw)':-2",
+            "-vf", "scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))'",
             "-c:a", "aac",
             "-b:a", "96k",
             "-frag_duration", "200000",
