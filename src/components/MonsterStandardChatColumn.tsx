@@ -76,6 +76,140 @@ import { rankPassportCandidates, countUniqueFacePhotos } from './GhostPassportCa
 /** [v1.3] 귀신비서 점괘 직후 이어지는 1클릭 검진 문구 — 기존 손보기 라우터가 처리하는 문장과 동일해야 함 */
 const SECRETARY_FIRST_CARE_QUERY = '지금 PC가 좀 느린데 1초 건강검진 해줘';
 
+/** 이미 타이핑 연출이 완료된 귀신비서 메시지 ID 캐시 (탭 전환·리렌더 시 중복 재생 방지) */
+const completedSecretaryAnimIds = new Set<string>();
+
+function splitSecretarySentences(raw: string): string[] {
+  const clean = raw.replace(/\*\*/g, '');
+  const lines = clean.split('\n');
+  const out: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      out.push('');
+      continue;
+    }
+    const parts = line
+      .split(/(?<=[.!?~요다죠네])\s+(?=\S)/)
+      .map((p) => p.trimEnd())
+      .filter((p) => p.length > 0);
+    if (parts.length > 0) {
+      out.push(...parts);
+    } else {
+      out.push(line);
+    }
+  }
+  return out.length > 0 ? out : [clean];
+}
+
+const AnimatedSecretaryText: React.FC<{
+  messageId: string;
+  text: string;
+  onProgressScroll?: () => void;
+  onTypingStateChange?: (isTyping: boolean) => void;
+}> = ({ messageId, text, onProgressScroll, onTypingStateChange }) => {
+  const sentences = React.useMemo(() => splitSecretarySentences(text), [text]);
+  const alreadyDone =
+    completedSecretaryAnimIds.has(messageId) ||
+    (typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+
+  const [sentenceIdx, setSentenceIdx] = useState<number>(() =>
+    alreadyDone ? sentences.length : 0
+  );
+  const [charIdx, setCharIdx] = useState<number>(() =>
+    alreadyDone ? (sentences[sentences.length - 1]?.length ?? 0) : 0
+  );
+  const [done, setDone] = useState<boolean>(alreadyDone);
+
+  useEffect(() => {
+    if (done) {
+      completedSecretaryAnimIds.add(messageId);
+      onTypingStateChange?.(false);
+      return;
+    }
+    onTypingStateChange?.(true);
+    if (sentenceIdx >= sentences.length) {
+      completedSecretaryAnimIds.add(messageId);
+      setDone(true);
+      onTypingStateChange?.(false);
+      return;
+    }
+
+    const current = sentences[sentenceIdx] ?? '';
+    // 빈 줄은 즉시 건너뛰며 문단 호흡 유지
+    if (current.length === 0) {
+      const t = window.setTimeout(() => {
+        setSentenceIdx((s) => s + 1);
+        setCharIdx(0);
+        onProgressScroll?.();
+      }, 90);
+      return () => window.clearTimeout(t);
+    }
+
+    if (charIdx < current.length) {
+      // 한 문장을 최대 ~420ms 내에 자연스럽게 타이핑 (글자 수에 따라 스텝 동적 조절)
+      const step = current.length > 48 ? 3 : current.length > 24 ? 2 : 1;
+      const delay = 18;
+      const t = window.setTimeout(() => {
+        setCharIdx((c) => Math.min(current.length, c + step));
+      }, delay);
+      return () => window.clearTimeout(t);
+    }
+
+    // 현재 문장 타이핑 완료 → 짧은 호흡 후 다음 문장 시작
+    const pauseMs = sentenceIdx + 1 >= sentences.length ? 80 : 160;
+    const t = window.setTimeout(() => {
+      setSentenceIdx((s) => s + 1);
+      setCharIdx(0);
+      onProgressScroll?.();
+    }, pauseMs);
+    return () => window.clearTimeout(t);
+  }, [done, sentenceIdx, charIdx, sentences, messageId, onProgressScroll, onTypingStateChange]);
+
+  const handleSkip = () => {
+    if (done) return;
+    completedSecretaryAnimIds.add(messageId);
+    setSentenceIdx(sentences.length);
+    setDone(true);
+    onTypingStateChange?.(false);
+  };
+
+  if (done) {
+    return <>{text.replace(/\*\*/g, '')}</>;
+  }
+
+  return (
+    <div onClick={handleSkip} title="클릭하면 전체 문장을 바로 볼 수 있어요" className="cursor-pointer">
+      {sentences.slice(0, sentenceIdx + 1).map((line, idx) => {
+        if (line === '') {
+          return <div key={idx} className="h-2" />;
+        }
+        const isCurrent = idx === sentenceIdx;
+        const visibleText = isCurrent ? line.slice(0, charIdx) : line;
+        return (
+          <div
+            key={idx}
+            className="transition-all duration-200 ease-out"
+            style={{
+              opacity: isCurrent && charIdx === 0 ? 0.35 : 1,
+              transform: isCurrent && charIdx === 0 ? 'translateY(3px)' : 'translateY(0px)',
+            }}
+          >
+            {visibleText}
+            {isCurrent && (
+              <span
+                aria-hidden="true"
+                className="inline-block w-[6px] h-[14px] ml-0.5 align-middle bg-emerald-500 rounded-[1px] animate-pulse"
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 function nowTimeKo(): string {
   return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
@@ -1234,7 +1368,18 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                     : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-sm'
                 }`}
               >
-                {msg.text.replace(/\*\*/g, '')}
+                {isUser ? (
+                  msg.text.replace(/\*\*/g, '')
+                ) : (
+                  <AnimatedSecretaryText
+                    messageId={msg.id}
+                    text={msg.text}
+                    onProgressScroll={() => {
+                      const el = scrollContainerRef.current;
+                      if (el) el.scrollTop = el.scrollHeight;
+                    }}
+                  />
+                )}
 
                 {!isUser && (
                   <MonsterInteractiveCardView
