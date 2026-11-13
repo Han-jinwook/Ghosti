@@ -210,14 +210,40 @@ def scan_post_office_files() -> Dict[str, str]:
     return result
 
 
-def check_notion_new_bugs(seen_bug_ids: Set[str]) -> list:
+def _resolve_active_track() -> str | None:
+    """
+    --track free|sync|work 인자 또는 워크트리 폴더명(Ghosti_Sync / Ghosti_Work)으로부터
+    현재 창의 담당 트랙을 판별합니다 (명시 인자 없고 D:\\Ghosti 단독 실행 시 None = 전체 호환).
+    """
+    for i, arg in enumerate(sys.argv[1:], start=1):
+        if arg == "--track" and i + 1 < len(sys.argv):
+            val = sys.argv[i + 1].strip().lower()
+            if val in ("free", "sync", "work"):
+                return val
+        elif arg.startswith("--track="):
+            val = arg.split("=", 1)[1].strip().lower()
+            if val in ("free", "sync", "work"):
+                return val
+    folder_lower = ROOT_DIR.name.lower()
+    if "sync" in folder_lower:
+        return "sync"
+    if "work" in folder_lower:
+        return "work"
+    return None
+
+
+def check_notion_new_bugs(seen_bug_ids: Set[str], track: str | None = None) -> list:
     """notion_qa 모듈을 통해 신규 '발견된 버그'가 있는지 조용히 확인합니다 (노션 보드 완료 컬럼 스크립트 자동 아카이빙 해제)."""
     try:
         import notion_qa
 
         if not notion_qa.NOTION_TOKEN or notion_qa.NOTION_TOKEN.startswith("[여기에"):
             return []
-        bugs = [] if notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED)
+        bugs = (
+            []
+            if notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=track)
+            else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED, track=track)
+        )
         return [b for b in bugs if b.get("page_id", b.get("id")) not in seen_bug_ids]
     except Exception:
         return []
@@ -259,6 +285,9 @@ def main() -> None:
     baseline_inbox = initial_inbox
     baseline_doctrine_hash = file_md5(DOCTRINE_FILE)
 
+    active_track = _resolve_active_track()
+    track_badge = f"track={active_track}" if active_track else "track=all"
+
     seen_bug_ids: Set[str] = set()
     initial_bugs = []
     try:
@@ -271,27 +300,39 @@ def main() -> None:
         ):
             pass
         else:
-            initial_bugs = notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED)
+            fixing_now = notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=active_track)
+            initial_bugs = (
+                []
+                if ("--watch" in sys.argv and fixing_now)
+                else notion_qa.query_bugs_raw(notion_qa.STATUS_DISCOVERED, track=active_track)
+            )
     except Exception:
         pass
 
     if "--watch" not in sys.argv:
         print(
-            f"✅ [Ghosti 체크인 3중 점검 및 제목 각인 완료] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(initial_bugs)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
+            f"✅ [{ROOT_DIR.name} 체크인 3중 점검 및 제목 각인 완료 ({track_badge})] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(initial_bugs)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
         )
         return
 
     interval_sec = 25
-    for arg in sys.argv[1:]:
+    skip_next = False
+    for i, arg in enumerate(sys.argv[1:], start=1):
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--track":
+            skip_next = True
+            continue
         if arg.isdigit():
             interval_sec = int(arg)
             break
 
     print(
-        f"👀 [Ghosti 무토큰 3중 감시병 가동] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
+        f"👀 [{ROOT_DIR.name} 무토큰 3중 감시병 가동 ({track_badge})] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
         f"   1) 전사 중앙 우체국: {POST_OFFICE_DIR}\n"
         f"   2) 비서 전사 코딩강령 이식: {DOCTRINE_FILE.name}\n"
-        f"   3) 노션 QA 칸반 보드: '발견된 버그'([귀신같이]) 컬럼",
+        f"   3) 노션 QA 칸반 보드: '발견된 버그'([귀신같이]/[귀신창] · {track_badge}) 컬럼",
         flush=True,
     )
 
@@ -301,7 +342,7 @@ def main() -> None:
     if initial_bugs:
         import notion_qa
         first_bug = initial_bugs[0]
-        notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) or notion_qa.mark_fixing(first_bug["page_id"])
+        notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=active_track) or notion_qa.mark_fixing(first_bug["page_id"])
         print("\n" + "🚨" * 24)
         print(
             f"🔔 [노션 QA 대기 버그 감지 — 1건 단위(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 선(先) 이동!] (총 대기 {len(initial_bugs)}건 중 1번째 착수)"
@@ -364,11 +405,11 @@ def main() -> None:
             print("📜" * 24)
             return
 
-        new_bugs = check_notion_new_bugs(seen_bug_ids)
+        new_bugs = check_notion_new_bugs(seen_bug_ids, track=active_track)
         if new_bugs:
             import notion_qa
             first_bug = new_bugs[0]
-            notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING) or notion_qa.mark_fixing(first_bug["page_id"])
+            notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, track=active_track) or notion_qa.mark_fixing(first_bug["page_id"])
             print("\n" + "🚨" * 24)
             print(
                 f"🔔 [노션 QA 신규 버그 자동 감지 — 1건 단위(Single-Piece Flow) 원칙에 따라 1번 카드만 '버그 수정중' 즉시 이동!] (총 {len(new_bugs)}건 중 1번째 착수)"

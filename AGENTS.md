@@ -43742,3 +43742,24 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 2. **온보딩 UI/타이포그래피 퇴행 방지 가드레일**:
    - 한글이 포함된 UI 행·예시 박스에 Tailwind 기본 `font-mono` 사용 금지(Windows `굴림체` 자간 벌어짐 방지 — `font-sans tracking-normal` 유지), 최소 폰트 크기 `12px`(`text-xs` 이상) 엄수, 상단 GNB `min-h-[68px] py-3` 및 `42x42` 아기귀신 아이콘(`shrink-0`, `border-2 border-[#00F0B5]`) 고정, `html.theme-warm-light` 전역 테마 호환(`data-keep-dark="true"` 미디어 프레임 보존) 원칙을 준수합니다.
    - 신규 홍보 쇼츠 영상(MP4) 또는 보증서 원본 고해상도 이미지 재생성이 필요한 경우에만 중앙 우체국을 통해 `studio`에 에셋 제작을 요청합니다.
+
+
+---
+
+### 🏗️ [귀신창 완전 인수 & 3창(`git worktree`) × 4대 도메인 모듈화 운영 규격 (2026-11-13 제정)]
+1. **`귀신창` 전권 인수 및 단일 원본(SSOT) 경로**:
+   - `Secretary`로부터 이관받은 `⚡ 귀신창` 초능력 데몬 및 `👻 귀신검색창`의 단일 마스터 원본(SSOT)은 **`D:\Ghosti\universal_z_core\seq_paste_daemon.py`** 및 **`D:\Ghosti\universal_z_core\ghost_search_window_ui2.py`**로 일원화합니다 (`deploy_z_core_cluster.py` 실행 시 현재 워크트리의 `universal_z_core/` 마스터에서 하위 `os_agent/` · `core_power_agent/` 및 1호기·4호기로 단방향 배포되며 `D:\Secretary\tools\` 역방향 덮어쓰기는 영구 폐지됨).
+   - 노션 QA 칸반 보드의 `[귀신창]` 태그 버그·미션 카드 또한 `Ghosti`(기본 창 2 `--track sync`, 단독 운영 시 `main`)가 100% 전담합니다.
+2. **3창(`git worktree`) 분리 체제 및 브랜치·감시병 매핑**:
+   - **창 1 (`D:\Ghosti` · 브랜치 `main` · `--track free`) — 무료 티어 총괄 본진**:
+     * 담당 비즈니스: `1번 💻 내 기기 기본(평생 0원)` + `2번 📸 사진 공유(가족·동호회·동창회 인원·장수 무제한 평생 0원)` + `👻 귀신비서` + `🌐 웹 온보딩(GhostiShowroomLanding.tsx)`.
+     * 전담 모듈: `src/domains/free_personal/*`, `src/domains/free_photo_share/*`, `src/store/slices/freePersonalSlice.ts`, `src/store/slices/freePhotoShareSlice.ts`, `src/services/ai/*`, `universal_z_core/os_agent/plugin_ghosti_os.py`, `plugin_ghosti_care_suite.py`.
+   - **창 2 (`D:\Ghosti_Sync` · 브랜치 `track/paid-sync` · `--track sync`) — 유료 트랙 1 (내 기기 통합 & 귀신창)**:
+     * 담당 비즈니스: `3번 👑 내 기기 통합(월 3,900원 · 10년 3.9만)` 멀티 PC/폰 무클라우드 원격 소환·13KB 섀도우 캐시 + `⚡ 귀신창`(`Ctrl+0`, 상용구 `F1~F6`, 순차붙여넣기, `📝 사진·표 OCR 창🔒`, `🏷️ 귀신 라벨러🔒`).
+     * 전담 모듈: `src/domains/paid_device_sync/*`, `src/store/slices/paidDeviceSyncSlice.ts`, `universal_z_core/seq_paste_daemon.py`, `universal_z_core/ghost_search_window_ui2.py`, `universal_z_core/os_agent/plugins/plugin_paid_sync_ghostwin.py`.
+   - **창 3 (`D:\Ghosti_Work` · 브랜치 `track/paid-work` · `--track work`) — 유료 트랙 2 (업무 공유 B2B `S:` 드라이브)**:
+     * 담당 비즈니스: `4번 💼 업무 공유(월 9,900~29,000원)` 팀 공용 가상 `S:` 네트워크 드라이브, 폴더별 권한 매트릭스, 다중 백업 PC, 삭제방어 타임머신, 팀 공용 상용구.
+     * 전담 모듈: `src/domains/paid_work_share/*`, `src/store/slices/paidWorkShareSlice.ts`, `universal_z_core/os_agent/plugins/plugin_paid_work_sdrive.py`.
+3. **무충돌(Zero-Conflict) 가드레일**:
+   - 공용 경량 껍데기(`src/components/DesktopDashboard.tsx`, `src/components/LoungeView.tsx`, `src/services/aiEngine.ts`, `src/store/useSaySeeStore.ts`)는 Barrel Re-export 및 레이아웃 마운트 전용으로 고정하고, 각 창은 반드시 자신의 전담 `domains/` · `slices/` · `plugins/` 파일 내부에서만 기능 코드를 수정합니다.
+   - `aiSharedRuntime.ts`(Layer 0)는 상위 Layer 1(`aiVideoEngine.ts`, `aiDocumentEngine.ts`, `aiPhotoFaceEngine.ts`)을 절대 역방향 `import`하지 않습니다 (단방향 DAG 엄수).

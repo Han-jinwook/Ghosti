@@ -3023,5 +3023,18 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
         _invalidate_os_inspect_cache()
         return res_exec
 
+    # [3창 도메인 분리 플러그인 슬롯 위임] 창 2(paid-sync/ghostwin) · 창 3(paid-work/sdrive) 전용 라우터
+    try:
+        from plugins import plugin_paid_sync_ghostwin, plugin_paid_work_sdrive  # noqa: WPS433
+
+        delegated_sync = plugin_paid_sync_ghostwin.handle_action(act, data)
+        if delegated_sync is not None:
+            return delegated_sync
+        delegated_work = plugin_paid_work_sdrive.handle_action(act, data)
+        if delegated_work is not None:
+            return delegated_work
+    except Exception as exc:
+        return {"ok": False, "error": f"DOMAIN_PLUGIN_ERROR: {exc}"}
+
     # 알 수 없는 액션은 OS 실행으로 넘기지 않고 정직하게 거절한다.
     return {"ok": False, "error": f"UNKNOWN_ACTION: {act}"}

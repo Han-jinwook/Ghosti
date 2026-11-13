@@ -17,41 +17,41 @@ def log(msg: str):
     print(f"[*] {msg}", flush=True)
 
 
-def sync_from_secretary_master():
-    """배포 전 D:\\Secretary\\tools\\ 마스터가 더 최신이면 universal_z_core 미러에 먼저 동기화하여 구버전 역덮어쓰기를 방지합니다."""
+UZC_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def sync_internal_z_core_mirrors():
+    """
+    [2026-11-13 귀신창 완전 인수 SSOT 일원화]
+    D:\\Secretary\\tools\\ 역방향 덮어쓰기를 영구 중단하고, 현재 워크트리의 universal_z_core 마스터(UZC_DIR)에서
+    하위 미러(os_agent, core_power_agent)로 단방향 동기화합니다 (D:\\Ghosti 및 D:\\Ghosti_Sync 워크트리 모두 호환).
+    """
     import shutil
-    sec_tools = r"D:\Secretary\tools"
-    if not os.path.isdir(sec_tools):
-        return
     mirrors = [
-        r"d:\Ghosti\universal_z_core",
-        r"d:\Ghosti\universal_z_core\os_agent",
-        r"d:\Ghosti\universal_z_core\core_power_agent",
+        os.path.join(UZC_DIR, "os_agent"),
+        os.path.join(UZC_DIR, "core_power_agent"),
     ]
     for fname in ("seq_paste_daemon.py", "ghost_search_window_ui2.py"):
-        src = os.path.join(sec_tools, fname)
+        src = os.path.join(UZC_DIR, fname)
         if not os.path.exists(src):
             continue
-        src_mtime = os.path.getmtime(src)
         for mdir in mirrors:
             if not os.path.isdir(mdir):
                 continue
             dst = os.path.join(mdir, fname)
-            if not os.path.exists(dst) or src_mtime > os.path.getmtime(dst) + 1.0:
-                try:
-                    shutil.copy2(src, dst)
-                    log(f"🔄 Secretary 마스터 최신본 자동 동기화: {fname} ➔ {mdir}")
-                except Exception as e:
-                    log(f"⚠️ 마스터 동기화 경고 ({dst}): {e}")
+            try:
+                shutil.copy2(src, dst)
+            except Exception as e:
+                log(f"⚠️ 내부 미러 동기화 경고 ({dst}): {e}")
 
 def update_pc1():
     log("=== [1호기 (로컬)] Z-코어 최신화 및 리로드 시작 ===")
     import shutil
-    spd_src = r"d:\Ghosti\universal_z_core\seq_paste_daemon.py"
-    spd_os_agent = r"d:\Ghosti\universal_z_core\os_agent\seq_paste_daemon.py"
-    ui2_src = r"d:\Ghosti\universal_z_core\ghost_search_window_ui2.py"
-    ui2_os_agent = r"d:\Ghosti\universal_z_core\os_agent\ghost_search_window_ui2.py"
-    lex_src = r"d:\Ghosti\universal_z_core\assets\ko_en_lexicon.zlib"
+    spd_src = os.path.join(UZC_DIR, "seq_paste_daemon.py")
+    spd_os_agent = os.path.join(UZC_DIR, "os_agent", "seq_paste_daemon.py")
+    ui2_src = os.path.join(UZC_DIR, "ghost_search_window_ui2.py")
+    ui2_os_agent = os.path.join(UZC_DIR, "os_agent", "ghost_search_window_ui2.py")
+    lex_src = os.path.join(UZC_DIR, "assets", "ko_en_lexicon.zlib")
     if os.path.exists(spd_src):
         try:
             shutil.copy2(spd_src, spd_os_agent)
@@ -67,7 +67,7 @@ def update_pc1():
         except Exception as e:
             log(f"1호기 seq_paste_daemon 복사 경고: {e}")
 
-    script = r"d:\Ghosti\universal_z_core\os_agent\merlin_z_core_daemon.py"
+    script = os.path.join(UZC_DIR, "os_agent", "merlin_z_core_daemon.py")
     py_exe = sys.executable
     pyw_exe = os.path.join(os.path.dirname(py_exe), "pythonw.exe")
     runner = pyw_exe if os.path.exists(pyw_exe) else py_exe
@@ -129,7 +129,7 @@ def update_pc4():
         return
 
     # 1) SCP 파일 복사 (universal_z_core 및 C:/MerlinTools/seq_paste_daemon.py 동시 최신화)
-    local_dir = r"d:\Ghosti\universal_z_core\*"
+    local_dir = os.path.join(UZC_DIR, "*")
     remote_dest = "USER@100.114.100.24:C:/MerlinTools/universal_z_core/"
     scp_cmd = ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-r", local_dir, remote_dest]
     log("4호기로 최신 universal_z_core 전송 중 (SCP)...")
@@ -138,7 +138,7 @@ def update_pc4():
         log(f"❌ 4호기 SCP 전송 실패: {res.stderr}")
         return
     subprocess.run(
-        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", r"d:\Ghosti\universal_z_core\seq_paste_daemon.py", "USER@100.114.100.24:C:/MerlinTools/seq_paste_daemon.py"],
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", os.path.join(UZC_DIR, "seq_paste_daemon.py"), "USER@100.114.100.24:C:/MerlinTools/seq_paste_daemon.py"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -146,7 +146,7 @@ def update_pc4():
         timeout=15,
     )
     subprocess.run(
-        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", r"d:\Ghosti\universal_z_core\ghost_search_window_ui2.py", "USER@100.114.100.24:C:/MerlinTools/ghost_search_window_ui2.py"],
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", os.path.join(UZC_DIR, "ghost_search_window_ui2.py"), "USER@100.114.100.24:C:/MerlinTools/ghost_search_window_ui2.py"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -162,7 +162,7 @@ def update_pc4():
         timeout=10,
     )
     subprocess.run(
-        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", r"d:\Ghosti\universal_z_core\assets\ko_en_lexicon.zlib", "USER@100.114.100.24:C:/MerlinTools/assets/ko_en_lexicon.zlib"],
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", os.path.join(UZC_DIR, "assets", "ko_en_lexicon.zlib"), "USER@100.114.100.24:C:/MerlinTools/assets/ko_en_lexicon.zlib"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -212,7 +212,7 @@ def update_pc4():
         log(f"⚠️ 4호기 헬스체크 출력: {check_res.stdout} (에러: {check_res.stderr})")
 
 def main():
-    sync_from_secretary_master()
+    sync_internal_z_core_mirrors()
     update_pc1()
     update_pc4()
     log("\n🎉 1호기 및 4호기 Z-코어 클러스터 배포가 완료되었습니다!")

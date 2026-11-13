@@ -296,8 +296,29 @@ def fetch_page_body_text(page_id: str) -> str:
 # =====================================================================
 # 3. 핵심 요청 함수 1: fetch_bugs()
 # =====================================================================
-def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
-    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (감시 데몬 겸용)."""
+def classify_ghosti_bug_track(title_text: str, body_text: str = "", app_select: str = "") -> str:
+    """
+    3창(git worktree) 분리 운영을 위한 노션 QA 카드 트랙 자동 분류기:
+    - 'sync': 창 2 (D:\\Ghosti_Sync) — 귀신창(Ctrl+0, 상용구, 순차붙여넣기, 귀신검색창, 라벨러) 및 내 기기 통합(월 3,900원)
+    - 'work': 창 3 (D:\\Ghosti_Work) — 업무 공유(S: 네트워크 드라이브, 팀 상용구, B2B 워크스페이스)
+    - 'free': 창 1 (D:\\Ghosti) — 무료 내 기기 1대, 귀신비서, 사진 공유(가족·동호회·동창회), 웹 온보딩
+    """
+    combined = f"{title_text} {app_select}"
+    if app_select == "귀신창" or any(
+        k in combined
+        for k in ("[귀신창", "귀신창]", "귀신창", "내 기기 통합", "내기기 통합", "멀티기기", "귀신검색창", "라벨러")
+    ):
+        return "sync"
+    if any(
+        k in combined
+        for k in ("업무 공유", "업무공유", "업무 라운지", "S: 드라이브", "S:드라이브", "S드라이브", "팀 상용구")
+    ):
+        return "work"
+    return "free"
+
+
+def query_bugs_raw(target_status: Optional[str] = None, track: Optional[str] = None) -> List[Dict[str, str]]:
+    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (감시 데몬 및 --track 필터 겸용)."""
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     resolved_status = target_status or STATUS_DISCOVERED
@@ -325,15 +346,16 @@ def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
 
     results = res.json().get("results", [])
     bugs: List[Dict[str, str]] = []
+    normalized_track = (track or "").strip().lower() or None
     for page in results:
         page_id: str = page.get("id", "")
         props: Dict[str, Any] = page.get("properties", {})
         title_obj = props.get(SCHEMA.title_prop_name, {})
         title_text = extract_plain_text(title_obj.get("title", [])) or "(제목 없음)"
         app_select = (props.get("앱", {}).get("select") or {}).get("name", "")
-        # 센스톡·썬드리머·멀린비서·스튜디오·멀린허브·귀신창 초능력(비서 전담) 카드는 무조건 제외하고 순수 '[귀신같이]' 본앱 및 웹 온보딩('Ghosti' 전권 인수 완료) 카드만 전담!
+        # 센스톡·썬드리머·멀린비서·스튜디오·멀린허브 카드는 제외하고, '[귀신같이]' + '[귀신창]'(2026-11-13 Ghosti 전권 인수) 카드 전담!
         is_other_project_card = (
-            app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub", "귀신창")
+            app_select in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "멀린허브", "MerlinHub")
             or any(
                 k in title_text
                 for k in (
@@ -344,20 +366,35 @@ def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
                     "[멀린비서",
                     "[멀린허브",
                     "[MerlinHub",
-                    "[귀신창",
                 )
             )
         )
         if is_other_project_card:
             continue
-        is_ghosti_card = ("[귀신같이" in title_text) or ("귀신같이]" in title_text) or (app_select in ("귀신같이", "Ghosti"))
+        is_ghosti_card = (
+            ("[귀신같이" in title_text)
+            or ("귀신같이]" in title_text)
+            or ("[귀신창" in title_text)
+            or ("귀신창]" in title_text)
+            or (app_select in ("귀신같이", "Ghosti", "귀신창"))
+        )
         if not is_ghosti_card and any(
             k in title_text
             for k in ("센스톡", "썬드리머", "멀린비서", "멀린허브", "충전소", "귀신팸", "귀신코인", "스튜디오")
         ):
             continue
+        card_track = classify_ghosti_bug_track(title_text, "", app_select)
+        if normalized_track in ("free", "sync", "work") and card_track != normalized_track:
+            continue
         body_text = fetch_page_body_text(page_id)
-        if not app_select and "[귀신같이]" not in title_text and "귀신같이" not in title_text and any(k in body_text for k in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "sensetalk", "sundreamer")):
+        if (
+            not app_select
+            and "[귀신같이]" not in title_text
+            and "귀신같이" not in title_text
+            and "[귀신창" not in title_text
+            and "귀신창" not in title_text
+            and any(k in body_text for k in ("센스톡", "썬드리머", "멀린비서", "스튜디오", "sensetalk", "sundreamer"))
+        ):
             continue
         bugs.append(
             {
@@ -366,6 +403,7 @@ def query_bugs_raw(target_status: Optional[str] = None) -> List[Dict[str, str]]:
                 "title": title_text,
                 "body": body_text,
                 "url": page.get("url", ""),
+                "track": card_track,
             }
         )
     return bugs
