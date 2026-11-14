@@ -11,6 +11,9 @@ import { useHub } from '../services/merlin-hub-sdk/react';
 
 export type ZCoreModalStep = 'intro' | 'waiting_engine' | 'indexing' | 'ready';
 
+/** Microsoft Artifact Signing (sundream-public-cert) 코드서명 완료 시 true로 전환하여 SmartScreen 사전 안내 비노출 */
+export const IS_ZCORE_ARTIFACT_SIGNED = false;
+
 interface MerlinZCoreGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -439,6 +442,18 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               </button>
             </div>
 
+            {!isMobileEnv && (
+              <div
+                className={`mb-3 p-3 rounded-2xl border text-xs font-extrabold leading-relaxed ${
+                  isLight
+                    ? 'bg-teal-50 border-teal-200 text-teal-950'
+                    : 'bg-teal-950/40 border-teal-500/35 text-teal-200'
+                }`}
+              >
+                ⚡ 내 파일이 외부 클라우드 서버로 절대 전송되지 않도록, 내 PC 전용 초경량 로컬 엔진(3초 연결)을 켭니다.
+              </div>
+            )}
+
             <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
               {isMobileEnv
                 ? '스마트폰에서 바로 시작하실 수 있으며, PC에서도 아래 주소로 접속하시면 PC 속 사진·문서까지 함께 검색됩니다.'
@@ -525,6 +540,16 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             </div>
 
             <div
+              className={`mb-3 p-3 rounded-2xl border text-xs font-extrabold leading-relaxed ${
+                isLight
+                  ? 'bg-teal-50 border-teal-200 text-teal-950'
+                  : 'bg-teal-950/40 border-teal-500/35 text-teal-200'
+              }`}
+            >
+              ⚡ 내 파일이 외부 클라우드 서버로 절대 전송되지 않도록, 내 PC 전용 초경량 로컬 엔진(3초 연결)을 켭니다.
+            </div>
+
+            <div
               className={`p-4 rounded-2xl border mb-4 ${
                 isLight
                   ? 'bg-amber-50 border-amber-200 text-amber-950'
@@ -549,15 +574,17 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   : 'bg-zinc-900/70 border-white/10 text-zinc-300'
               }`}
             >
+              {!IS_ZCORE_ARTIFACT_SIGNED && (
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-600 dark:text-teal-300 font-black text-[10.5px]">
+                    TIP 1
+                  </span>
+                  <span>Windows 보호 안내가 뜰 경우 [추가 정보] ➔ [실행]을 누르시면 3초 만에 연결됩니다.</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-600 dark:text-teal-300 font-black text-[10.5px]">
-                  TIP 1
-                </span>
-                <span>윈도우 보호창이 뜨면 [추가 정보] ➔ [실행]을 눌러주세요.</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-600 dark:text-teal-300 font-black text-[10.5px]">
-                  TIP 2
+                  {IS_ZCORE_ARTIFACT_SIGNED ? 'TIP' : 'TIP 2'}
                 </span>
                 <span>켜지는 즉시 이 창이 불러오기 화면으로 자동 전환됩니다.</span>
               </div>

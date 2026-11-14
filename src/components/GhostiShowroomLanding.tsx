@@ -520,6 +520,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     }
   });
   const [showTermsClause, setShowTermsClause] = useState(false);
+  const isCompactH1Slot = React.useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('h1') === 'compact';
+  }, []);
 
   // 사전 가입 & 출시 알림 이메일 인증 상태
   const [emailInput, setEmailInput] = useState('');
@@ -1157,18 +1161,29 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </div>
 
                 <h1 className="text-2xl sm:text-3xl lg:text-[38px] font-black tracking-tight leading-[1.22] text-white break-keep">
-                  <span className="sm:hidden">
-                    느린 PC 정리·1초 파일 검색,{' '}
-                    <span style={{ color: '#00F0B5' }} className="underline decoration-[#00F0B5]/50 underline-offset-4">
-                      내 기기 초능력
+                  {isCompactH1Slot ? (
+                    <span>
+                      느린 PC·폰 정리와 1초 내용 검색{' '}
+                      <span style={{ color: '#00F0B5' }} className="underline decoration-[#00F0B5]/50 underline-offset-4">
+                        초능력
+                      </span>
                     </span>
-                  </span>
-                  <span className="hidden sm:inline">
-                    느린 기기 정리부터 1초 내용 검색까지,{' '}
-                    <span style={{ color: '#00F0B5' }} className="underline decoration-[#00F0B5]/50 underline-offset-4">
-                      내 PC·폰 초능력
-                    </span>
-                  </span>
+                  ) : (
+                    <>
+                      <span className="sm:hidden">
+                        느린 PC·폰 정리와 1초 내용 검색{' '}
+                        <span style={{ color: '#00F0B5' }} className="underline decoration-[#00F0B5]/50 underline-offset-4">
+                          초능력
+                        </span>
+                      </span>
+                      <span className="hidden sm:inline">
+                        느린 기기 정리부터 1초 내용 검색까지,{' '}
+                        <span style={{ color: '#00F0B5' }} className="underline decoration-[#00F0B5]/50 underline-offset-4">
+                          내 PC·폰 초능력
+                        </span>
+                      </span>
+                    </>
+                  )}
                 </h1>
 
                 <h2 className="text-base sm:text-lg lg:text-[18.5px] font-extrabold text-zinc-100 leading-snug break-keep max-w-2xl">
@@ -2524,6 +2539,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <div className="flex flex-col gap-2 flex-1">
                 <div className="text-xs font-extrabold text-white">
                   🔒 [DEV 테스트] 내 PC 안전 검진 구역 &amp; Z-코어 1회 연결
+                </div>
+                <div className="text-[11.5px] font-bold text-teal-200 break-keep">
+                  ⚡ 내 파일이 외부 클라우드 서버로 절대 전송되지 않도록, 내 PC 전용 초경량 로컬 엔진(3초 연결)을 켭니다.
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 flex items-center gap-2 text-xs cursor-pointer">

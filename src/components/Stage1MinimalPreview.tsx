@@ -262,6 +262,9 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     syncRealVideoDuration,
     toggleBookmark,
     initialized,
+    setActiveLoungeType,
+    setDesktopTab,
+    setMobileTab,
   } = useSaySeeStore();
 
   const [textInput, setTextInput] = useState(() => {
@@ -1083,6 +1086,26 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
         )}
       </div>
 
+      {/* [급소 2 돌파 ① · Contextual PQL] 검색 결과 하단 1줄 기기 통합 브릿지 (모바일 스토어 빌드 제외) */}
+      {!isStoreAppMode && (
+        <div className="mt-2 px-4 py-2.5 rounded-2xl bg-teal-950/35 border border-teal-400/35 flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
+          <span className="text-teal-100 font-bold">
+            📱 방금 찾은 이 파일, 집컴이나 내 폰에서도 카톡 없이 바로 열려면?
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveLoungeType('personal');
+              setDesktopTab('sync');
+              setMobileTab('share');
+            }}
+            className="px-3 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-extrabold text-[11.5px] cursor-pointer shrink-0 transition-colors"
+          >
+            내 기기 통합 30일 무카드 무료체험 켜기 ➔
+          </button>
+        </div>
+      )}
+
       {/* [메뉴 2 · 👻 귀신검색창 하단 고정 소속 설명란] 유료 티어(🔒) 및 부가 기능 안내 */}
       <section
         aria-label="귀신검색 유료 티어 및 부가 기능 안내"
@@ -1348,9 +1371,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
                   <span>👻 귀신비서</span>
                 </h1>
-                {/* [v1.3 마감 공문 2321 #2] 전사 대표 슬로건 — 제목 바로 아래 1줄 부제로 상시 노출 */}
+                {/* [SSOT v2.2] 1. 👻 귀신비서 대표 1줄 부제 상시 노출 */}
                 <p className="basis-full -mt-1.5 text-[12.5px] md:text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 leading-snug">
-                  컴퓨터 손보기부터 귀신계 여권까지 『귀신비서』가 다 챙겨주고, 잃어버린 파일은 『귀신검색』이 찾아주고, 타이핑 노가다는 『귀신창 초능력』이 대신해 준다!
+                  느려진 내 PC·폰, 클릭 한 번에 새것처럼 — 은행 보안프로그램은 삭제 없이 일시 중지(은행 접속 시 자동 복귀)하고, 중복 사진 정리·실수로 지운 파일 복구·한글 깨짐 없는 1초 압축까지 광고 없이 끝냅니다.
                 </p>
 
                 <input

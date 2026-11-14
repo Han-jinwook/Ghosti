@@ -259,6 +259,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
 export const LoungeView: React.FC = () => {
   const {
     activeLoungeType,
+    setActiveLoungeType,
     activeFamilyRoom,
     setActiveFamilyRoom,
     clubSizeTier,
@@ -299,6 +300,21 @@ export const LoungeView: React.FC = () => {
   // 노션 스타일 동적 토글: 공유방 3대 핵심 기능 안내 & 요금제 플랜 접기/펼치기 (기본 접힘으로 TMI 제거)
   const [showLoungeFeatures, setShowLoungeFeatures] = useState(false);
   const [showLoungePricing, setShowLoungePricing] = useState(false);
+  const [droppedBusinessDocName, setDroppedBusinessDocName] = useState<string | null>(null);
+
+  const handlePhotoLoungeDrop = (e: React.DragEvent<HTMLElement>) => {
+    if (activeLoungeType === 'work' || activeLoungeType === 'personal') return;
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length === 0) return;
+    const businessDoc = files.find((f) =>
+      /\.(pdf|xlsx|xls|csv|hwp|hwpx|doc|docx|ppt|pptx|cad|dwg|zip|7z|rar|txt)$/i.test(f.name)
+    );
+    if (businessDoc) {
+      e.preventDefault();
+      e.stopPropagation();
+      setDroppedBusinessDocName(businessDoc.name);
+    }
+  };
 
   const handleStartPersonalTrial = () => {
     setPersonalTrialStatus('running');
@@ -392,7 +408,44 @@ export const LoungeView: React.FC = () => {
   };
 
   return (
-    <main className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5">
+    <main
+      onDragOver={(e) => {
+        if (activeLoungeType !== 'work' && activeLoungeType !== 'personal') {
+          e.preventDefault();
+        }
+      }}
+      onDrop={handlePhotoLoungeDrop}
+      className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5"
+    >
+      {droppedBusinessDocName && activeLoungeType !== 'work' && !isStoreAppMode && (
+        <section className="px-4 py-3 rounded-2xl bg-amber-950/50 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <span className="text-[12.5px] text-amber-100 font-bold leading-relaxed">
+            📄 계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 카톡보다 10배 편한{' '}
+            <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원]</strong>에서 바로 공유해 보세요!
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setDroppedBusinessDocName(null);
+                setActiveLoungeType('work');
+                setDesktopTab('dashboard');
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-extrabold cursor-pointer"
+            >
+              💼 사내 공용 폴더(S:)로 바로 이동 ➔
+            </button>
+            <button
+              type="button"
+              onClick={() => setDroppedBusinessDocName(null)}
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-[11.5px] font-bold cursor-pointer"
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        </section>
+      )}
       {/* 📢 공유 라운지 핵심 선언 콜아웃 (노션 스타일 미니멀 배너): 내 기기(personal) 내에서는 무료/요금 배너를 띄우지 않음 */}
       {!isStoreAppMode && activeLoungeType === 'work' && (
         <section className="px-4 py-2.5 rounded-2xl bg-[#18181B] border border-amber-400/30 flex flex-wrap items-center justify-between gap-2">
@@ -988,14 +1041,17 @@ export const LoungeView: React.FC = () => {
 
                     <div className="p-3.5 rounded-xl bg-primary-container/10 border border-primary-container/35 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[12px] text-emerald-200 font-medium">
-                        📌 <strong>[안내]</strong> 2번 사진 공유(가족·동호회·동창회)는 <strong>오직 사진·동영상 공유 전용</strong>으로 평생 무료입니다. (엑셀·한글·PDF·워드 업무 문서 및 윈도우 탐색기 <code>S: 드라이브</code>는 <strong>4번 업무 공유</strong> 전용입니다.)
+                        📌 <strong>[안내]</strong> 4번 사진 공유(가족·동호회·동창회)는 <strong>개인 사진·영상 전용</strong>으로 평생 무료입니다. 📄 계약서·엑셀 등 업무 문서는 카톡보다 10배 편한 <strong>6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원</strong>에서 바로 공유해 보세요!
                       </span>
                       <button
                         type="button"
-                        onClick={() => setShowProModal(true)}
+                        onClick={() => {
+                          setActiveLoungeType('work');
+                          setDesktopTab('dashboard');
+                        }}
                         className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
                       >
-                        💼 5·6번 확장 기능 (30일 무료체험 · 연간 할인) 보기
+                        💼 사내 공용 폴더(S:) 바로가기 ➔
                       </button>
                     </div>
                   </>
@@ -1314,14 +1370,17 @@ export const LoungeView: React.FC = () => {
 
                     <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/35 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[12px] text-amber-200 font-medium">
-                        📌 <strong>[안내]</strong> 2번 사진 공유(가족·동호회·동창회)는 <strong>오직 사진·동영상 공유 전용</strong>으로 평생 무료입니다. (엑셀·한글·PDF·워드 업무 문서 및 <code>S: 드라이브</code>는 <strong>4번 업무 공유</strong> 전용입니다.)
+                        📌 <strong>[안내]</strong> 4번 사진 공유(가족·동호회·동창회)는 <strong>개인 사진·영상 전용</strong>으로 평생 무료입니다. 📄 계약서·엑셀 등 업무 문서는 카톡보다 10배 편한 <strong>6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원</strong>에서 바로 공유해 보세요!
                       </span>
                       <button
                         type="button"
-                        onClick={() => setShowProModal(true)}
+                        onClick={() => {
+                          setActiveLoungeType('work');
+                          setDesktopTab('dashboard');
+                        }}
                         className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
                       >
-                        💼 5·6번 확장 기능 (30일 무료체험 · 연간 할인) 보기
+                        💼 사내 공용 폴더(S:) 바로가기 ➔
                       </button>
                     </div>
                   </>
@@ -1613,6 +1672,7 @@ export const LoungeView: React.FC = () => {
 export const LoungeFeedContextBanner: React.FC = () => {
   const {
     activeLoungeType,
+    setActiveLoungeType,
     activeFamilyRoom,
     setActiveFamilyRoom,
     faceClusters,
@@ -2132,6 +2192,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
 export const LoungeIndexingWaitingRoom: React.FC = () => {
   const {
     activeLoungeType,
+    setActiveLoungeType,
     activeFamilyRoom,
     photos,
     videoSceneItems,
@@ -2161,6 +2222,21 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
 
   const [instantFlushed, setInstantFlushed] = useState(false);
   const [pokedStudentHost, setPokedStudentHost] = useState(false);
+  const [droppedBusinessDocName, setDroppedBusinessDocName] = useState<string | null>(null);
+
+  const handlePhotoLoungeDrop = (e: React.DragEvent<HTMLElement>) => {
+    if (activeLoungeType === 'work' || activeLoungeType === 'personal') return;
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length === 0) return;
+    const businessDoc = files.find((f) =>
+      /\.(pdf|xlsx|xls|csv|hwp|hwpx|doc|docx|ppt|pptx|cad|dwg|zip|7z|rar|txt)$/i.test(f.name)
+    );
+    if (businessDoc) {
+      e.preventDefault();
+      e.stopPropagation();
+      setDroppedBusinessDocName(businessDoc.name);
+    }
+  };
   const [stickYearInput, setStickYearInput] = useState('1989');
   const [stickPlaceInput, setStickPlaceInput] = useState('제주도 수학여행');
   const [stickSeasonInput, setStickSeasonInput] = useState('봄');
@@ -2264,7 +2340,44 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   };
 
   return (
-    <main className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5">
+    <main
+      onDragOver={(e) => {
+        if (activeLoungeType !== 'work' && activeLoungeType !== 'personal') {
+          e.preventDefault();
+        }
+      }}
+      onDrop={handlePhotoLoungeDrop}
+      className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5"
+    >
+      {droppedBusinessDocName && activeLoungeType !== 'work' && !isStoreAppMode && (
+        <section className="px-4 py-3 rounded-2xl bg-amber-950/50 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <span className="text-[12.5px] text-amber-100 font-bold leading-relaxed">
+            📄 계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 카톡보다 10배 편한{' '}
+            <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원]</strong>에서 바로 공유해 보세요!
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setDroppedBusinessDocName(null);
+                setActiveLoungeType('work');
+                setDesktopTab('dashboard');
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-extrabold cursor-pointer"
+            >
+              💼 사내 공용 폴더(S:)로 바로 이동 ➔
+            </button>
+            <button
+              type="button"
+              onClick={() => setDroppedBusinessDocName(null)}
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-[11.5px] font-bold cursor-pointer"
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        </section>
+      )}
       {/* 상단 대기실 개념 설명 & 즉시 처리 컨트롤 */}
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2845,6 +2958,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
 export const LoungeCustomSettingsHeader: React.FC = () => {
   const {
     activeLoungeType,
+    setActiveLoungeType,
     activeFamilyRoom,
     setActiveFamilyRoom,
     clubSizeTier,

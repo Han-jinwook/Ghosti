@@ -716,10 +716,25 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
     }
   };
 
+  const { isStoreAppMode, setActiveLoungeType, setDesktopTab } = useSaySeeStore();
+  const [clipPqlToastVisible, setClipPqlToastVisible] = useState(false);
+
+  const triggerOneTimeClipPqlToast = () => {
+    if (isStoreAppMode) return;
+    try {
+      if (sessionStorage.getItem('ghosti_pql_clip_toast_shown') === '1') return;
+      sessionStorage.setItem('ghosti_pql_clip_toast_shown', '1');
+    } catch {
+      /* ignore */
+    }
+    setClipPqlToastVisible(true);
+  };
+
   const handleQuickCopy = (slotName: string, val: string) => {
     void navigator.clipboard?.writeText(val).catch(() => {});
     playBabyGhostChime('typo');
     setSavedNoticeSlot(slotName);
+    triggerOneTimeClipPqlToast();
     window.setTimeout(() => setSavedNoticeSlot(null), 1500);
   };
 
@@ -777,6 +792,34 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {clipPqlToastVisible && !isStoreAppMode && (
+        <div className="px-3.5 py-2.5 rounded-xl bg-teal-950/50 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+          <span className="text-teal-100 font-bold">
+            💡 방금 복사한 내용, 내 스마트폰에서도 바로 붙여넣을 수 있어요 (<strong className="text-[#5EEAD4]">내 기기 통합</strong> 30일 무료체험)
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveLoungeType('personal');
+                setDesktopTab('sync');
+              }}
+              className="px-2.5 py-1 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-extrabold text-[11px] cursor-pointer"
+            >
+              30일 무료체험 보기 ➔
+            </button>
+            <button
+              type="button"
+              onClick={() => setClipPqlToastVisible(false)}
+              className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold cursor-pointer"
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
