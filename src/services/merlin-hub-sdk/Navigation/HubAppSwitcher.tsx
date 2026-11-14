@@ -151,7 +151,7 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       name: '귀신같이',
       url: 'https://ghosti.sundreamer.app',
       icon: '👻',
-      description: '내 PC와 모바일에 1초 초능력을 · 광고·월세 0원',
+      description: '느린 기기 정리부터 1초 내용 검색까지, 내 PC·폰 초능력',
       isActive: true,
       isLinkActive: true,
       sortOrder: 5

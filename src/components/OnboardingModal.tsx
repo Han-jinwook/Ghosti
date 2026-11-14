@@ -743,7 +743,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             <div className="flex flex-wrap items-center gap-2">
               <GhostiBrandLogo size="desktop" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-300 font-mono text-[11px] font-bold">
-                ⚡ 내 PC와 모바일에 1초 초능력을 · 광고 0% · 클라우드 월세 0원
+                느린 기기 정리부터 1초 내용 검색까지, 내 PC·폰 초능력 · 서버 저장 0% · 광고 0%
               </span>
             </div>
             <h2 className="text-[19px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">

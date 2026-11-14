@@ -135,8 +135,8 @@ const MAIN_LOUNGE_MENUS: Array<{
   },
   {
     id: 'work',
-    label: '업무 공유 (S: 드라이브)',
-    shortLabel: '업무(S:)',
+    label: '업무 공유 (공용 폴더 S:)',
+    shortLabel: '공용폴더(S:)',
     sectionHeader: '업무 공유',
   },
 ];
@@ -200,10 +200,10 @@ const LOUNGE_SUBMENU_CONFIG: Record<
     { id: 'sync', icon: '⚙️', label: '동창회 관리 & 동기 초대' },
   ],
   work: [
-    { id: 'trial', icon: '💼', label: '업무 공유(S:) 시작' },
-    { id: 'dashboard', icon: '📂', label: '업무 문서·현장사진 & S: 드라이브' },
+    { id: 'trial', icon: '💼', label: '업무 공유(공용 폴더 S:) 시작' },
+    { id: 'dashboard', icon: '📂', label: '업무 문서·현장사진 & 공용 폴더(S:)' },
     { id: 'trash', icon: '🧹', label: '새 업무파일 정리함' },
-    { id: 'sync', icon: '⚙️', label: '팀원 권한 & S: 드라이브 연결' },
+    { id: 'sync', icon: '⚙️', label: '팀원 권한 & 공용 폴더(S:) 연결' },
   ],
 };
 
@@ -461,7 +461,7 @@ export const DesktopSidebarContainer: React.FC<{
             <div className="flex flex-col gap-1.5">
               {/* ━━━ 기본 무료 메뉴 ━━━ */}
 
-              {/* [v2.0 1순위] 👻 귀신비서 — 축 A 최초 유입 미끼 1순위 */}
+              {/* [v2.2 1순위] 👻 귀신비서 — 축 A 최초 유입 미끼 1순위 */}
               <button
                 type="button"
                 onClick={() => {
@@ -471,7 +471,7 @@ export const DesktopSidebarContainer: React.FC<{
                   if (isMobileDrawer) setIsMobileDrawerOpen(false);
                   else scrollAppToTop();
                 }}
-                title="느려진 내 PC·폰, 클릭 한 번에 새것처럼 — 은행 보안프로그램은 안 지우고 재우고, 중복 사진·날아간 문서·깨진 한글 압축까지 광고 없이 1초 만에 해결합니다."
+                title="느려진 내 PC·폰, 클릭 한 번에 새것처럼 — 은행 보안프로그램은 삭제 없이 일시 중지(은행 접속 시 자동 복귀)하고, 중복 사진 정리·실수로 지운 파일 복구·한글 깨짐 없는 1초 압축까지 광고 없이 끝냅니다."
                 className={mainBtnClass(isGhostSecretaryActive)}
               >
                 <div className="flex flex-col text-left min-w-0 flex-1">
@@ -482,7 +482,7 @@ export const DesktopSidebarContainer: React.FC<{
                 </div>
               </button>
 
-              {/* [v2.0 2순위] 👻 귀신검색 — 축 B 시각 쇼케이스 1순위 (Ctrl+0 / Ctrl+우클릭) */}
+              {/* [v2.2 2순위] 🎯 귀신검색 — 축 B 시각 쇼케이스 1순위 (Ctrl+0 / Ctrl+우클릭) */}
               <button
                 type="button"
                 onClick={() => {
@@ -493,18 +493,18 @@ export const DesktopSidebarContainer: React.FC<{
                   if (isMobileDrawer) setIsMobileDrawerOpen(false);
                   else scrollAppToTop();
                 }}
-                title="파일 이름 몰라도, 열지 않고 1초 소환 (Ctrl + 0 / Ctrl + 우클릭) — 계약서 속 숫자·표, 사진 속 글자, 동영상 속 찾던 장면까지 1초 만에 눈앞에 대령합니다."
+                title="파일 이름 몰라도, 열지 않고 1초 내용 검색 (Ctrl + 0 / 보조 Ctrl + 우클릭) — 내 기기 안에서만 안전하게 색인해 계약서 속 숫자·표, 사진 글자(OCR), 동영상 속 특정 장면까지 열지 않고 즉시 찾아줍니다."
                 className={mainBtnClass(isGhostSearchActive)}
               >
                 <div className="flex flex-col text-left min-w-0 flex-1">
-                  <span className="truncate text-[14.5px]">👻 귀신검색</span>
+                  <span className="truncate text-[14.5px]">🎯 귀신검색</span>
                   <span className="text-[10.5px] opacity-75 font-normal truncate">
-                    파일 이름 몰라도, 열지 않고 1초 소환
+                    파일 이름 몰라도, 열지 않고 1초 내용 검색
                   </span>
                 </div>
               </button>
 
-              {/* [v2.0 3순위] ⚡ 귀신창 — 축 C 일일 습관 락인 (창 전환 제로) */}
+              {/* [v2.2 3순위] ⚡ 귀신창 — 축 C 일일 습관 락인 (창 전환 제로) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -518,19 +518,19 @@ export const DesktopSidebarContainer: React.FC<{
                     if (isMobileDrawer) setIsMobileDrawerOpen(false);
                     else scrollAppToTop();
                   }}
-                  title="하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝 — 창을 오가며 헤매지 마세요. 영타 자동 변환부터 칸 맞춤 복붙까지 일하던 커서 위에서 바로 끝냅니다."
+                  title="하던 일 멈추지 마세요, 쓰던 자리에서 바로 끝 — 창을 오가며 헤매지 마세요. 영타 자동 변환부터 칸 맞춤 복붙·줄바꿈 정리까지 Ctrl+0 하나로 일하던 커서 위에서 즉시 끝냅니다."
                   className={mainBtnClass(isPcFreeSuperpowerActive)}
                 >
                   <div className="flex flex-col text-left min-w-0 flex-1">
                     <span className="truncate text-[14.5px]">⚡ 귀신창</span>
                     <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝
+                      하던 일 멈추지 마세요, 쓰던 자리에서 바로 끝
                     </span>
                   </div>
                 </button>
               </div>
 
-              {/* [v2.0 4순위] 📸 사진 공유 — 축 D-무료 가족·모임 바이럴 */}
+              {/* [v2.2 4순위] 📸 사진 공유 — 축 D-무료 가족·모임 바이럴 (개인 사진·영상 전용) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -546,13 +546,15 @@ export const DesktopSidebarContainer: React.FC<{
                     setDesktopTab('dashboard');
                     resetToZenCanvas();
                   }}
-                  title="가족·모임 원본 사진, 만료 없이 평생 0원 — 카톡 30일 만료와 화질 저하 없이, 몇천 장의 추억도 링크 하나로 원본 그대로 모읍니다."
+                  title="가족·모임 원본 사진, 만료 없이 평생 0원 — 카톡 30일 만료와 화질 저하 없이, 몇천 장의 사진·영상 추억도 얼굴별로 원본 그대로 모읍니다. (개인 사진·영상 전용)"
                   className={mainBtnClass(isPhotoShareActive)}
                 >
                   <div className="flex flex-col text-left min-w-0 flex-1">
                     <span className="truncate text-[14.5px]">📸 사진 공유</span>
                     <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      {isStoreAppMode ? '가족·모임 원본 사진·영상 공유' : '가족·모임 원본 사진, 만료 없이 평생 0원'}
+                      {isStoreAppMode
+                        ? '개인 사진·영상 원본 모음 (가족·모임)'
+                        : '가족·모임 원본 사진, 만료 없이 평생 0원 (개인 사진·영상 전용)'}
                     </span>
                   </div>
                   <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
@@ -629,11 +631,11 @@ export const DesktopSidebarContainer: React.FC<{
                 )}
               </div>
 
-              {/* ━━━ 기기 연동 · 팀 확장 (B2B 영업 간판 보호: 제목+1줄 가치 슬로건만 담백 노출 · 복잡 요금표 접힘) ━━━ */}
+              {/* ━━━ 기기 연동 · 팀 확장 (SSOT v2.2: !isStoreAppMode 시 핵심 요금·원가 투명화 상시 표기) ━━━ */}
               <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-1 select-none" aria-label="확장 메뉴">
                 {!isStoreAppMode && (
-                  <div className="px-3 pb-0.5 text-[10px] font-extrabold tracking-tight opacity-60 truncate">
-                    클라우드 월세 0원, 내 모든 기기와 팀을 하나로
+                  <div className="px-3 pb-0.5 text-[10px] font-extrabold tracking-tight opacity-65 truncate">
+                    클라우드 월세 0원 · 30일 무료체험 · 투명 정찰제
                   </div>
                 )}
                 {/* [확장 1 / 5번] 📱 내 기기 통합 */}
@@ -655,13 +657,18 @@ export const DesktopSidebarContainer: React.FC<{
                         title={
                           isStoreAppMode
                             ? '내 폰과 데스크톱(PC) 대화면을 하나로 직결합니다.'
-                            : '카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로 — 매달 내는 클라우드 월세 없이 내 폰·집컴·회사컴을 1초 만에 직결합니다. (30일 무료체험)'
+                            : '카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로 — 클라우드 월세 없이 내 폰·집컴·회사컴을 암호화 직결합니다. (카드 등록 없는 30일 무료체험 · 월 3,900원 / 연간 월 3,250원꼴)'
                         }
                         className={mainBtnClass(isPhonePcIntegrationActive)}
                       >
                         <div className="flex flex-col text-left min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="truncate text-[14px]">📱 내 기기 통합</span>
+                            {!isStoreAppMode && (
+                              <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded bg-teal-500/15 text-teal-400 shrink-0">
+                                월 3,900원
+                              </span>
+                            )}
                             {superpowerStatus?.trial_status &&
                               superpowerStatus.trial_status !== 'NOT_STARTED' &&
                               superpowerStatus.trial_status !== 'EXPIRED' &&
@@ -674,7 +681,7 @@ export const DesktopSidebarContainer: React.FC<{
                           <span className="text-[10.5px] opacity-70 font-normal truncate">
                             {isStoreAppMode
                               ? '내 폰 ↔ 집·회사 PC 대화면 연동'
-                              : '카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로'}
+                              : '카톡 ‘나에게 보내기’ 끝 · 30일 무료체험'}
                           </span>
                         </div>
                         <span className="text-[10px] opacity-60">{isDeviceIntegrationExpanded ? '▾' : '▸'}</span>
@@ -729,7 +736,7 @@ export const DesktopSidebarContainer: React.FC<{
                   );
                 })()}
 
-                {/* [확장 2 / 6번] 💼 업무 공유 (S:) */}
+                {/* [확장 2 / 6번] 💼 업무 공유 (공용 폴더 S:) */}
                 {(() => {
                   const isWorkShareExpanded = isWorkShareAutoExpanded || isWorkShareActive || isWorkTeamSuperpowerActive;
                   return (
@@ -745,17 +752,19 @@ export const DesktopSidebarContainer: React.FC<{
                         }}
                         title={
                           isStoreAppMode
-                            ? '사내 팀 문서와 현장 사진을 S: 드라이브 하나로 공유합니다.'
-                            : '클라우드 월세 0원, 우리 팀 PC를 S: 드라이브 하나로 — 비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다. (30일 무료체험)'
+                            ? '사내 팀 문서와 현장 사진을 공용 폴더(S: 드라이브) 하나로 공유합니다.'
+                            : 'NAS·클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로 — 별도 서버 없이 팀 PC를 탐색기 공용 폴더(S:)로 종단간 암호화(E2EE) 연결해 바로 찾고 씁니다. (소기업 5인·30GB 평생 0원 보증 · 추가 팀 월 9,900원~)'
                         }
                         className={mainBtnClass(isWorkShareActive || isWorkTeamSuperpowerActive)}
                       >
                         <div className="flex flex-col text-left min-w-0 flex-1">
-                          <span className="truncate text-[14px]">💼 업무 공유 (S:)</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-[14px]">💼 업무 공유 (공용 폴더 S:)</span>
+                          </div>
                           <span className="text-[10.5px] opacity-70 font-normal truncate">
                             {isStoreAppMode
-                              ? '사내 문서·현장 사진 S: 드라이브 통합'
-                              : '클라우드 월세 0원, 우리 팀 PC를 S: 드라이브 하나로'}
+                              ? '팀 문서·현장 사진 공용 폴더(S:) 통합'
+                              : '5인·30GB 평생 0원 보증 · 추가 월 9,900원~'}
                           </span>
                         </div>
                         <span className="text-[10px] opacity-60">
@@ -778,7 +787,7 @@ export const DesktopSidebarContainer: React.FC<{
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
-                              <span className="truncate font-bold">S: 드라이브 · 문서 공유</span>
+                              <span className="truncate font-bold">공용 폴더(S: 드라이브) · 문서 공유</span>
                             </div>
                           </button>
 
@@ -805,6 +814,20 @@ export const DesktopSidebarContainer: React.FC<{
                     </div>
                   );
                 })()}
+
+                {/* [!isStoreAppMode] 왜 무료인가요? 원가·수익 투명화 1줄 안내 */}
+                {!isStoreAppMode && (
+                  <div
+                    title="💡 왜 무료인가요? 개인 핵심 4종은 외부 클라우드 서버를 쓰지 않고 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공되며, 귀신같이는 기기 통합(월 3,900원) 및 팀 공유(월 9,900원~, 5인·30GB 소기업 무료) 구독으로만 정직하게 운영됩니다."
+                    className={`mt-1 px-2.5 py-2 rounded-xl text-[10.5px] leading-snug ${
+                      themeMode === 'light'
+                        ? 'bg-slate-200/60 text-slate-600'
+                        : 'bg-white/[0.04] text-zinc-400'
+                    }`}
+                  >
+                    💡 <b className="font-bold">왜 무료인가요?</b> 개인 4종은 로컬 작동으로 서버비 0원이라 평생 무료이며, 기기 통합·팀 공유 구독으로만 운영됩니다.
+                  </div>
+                )}
               </div>
             </div>
           );

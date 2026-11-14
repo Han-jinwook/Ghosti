@@ -245,9 +245,9 @@
   "items": [
     {
       "content_id": "ghosti_item_101",
-      "title": "내 PC와 모바일에 1초 초능력을 — 귀신같이(Ghosti)",
+      "title": "느린 기기 정리부터 1초 내용 검색까지, 내 PC·폰 초능력 — 귀신같이(Ghosti)",
       "hook_text": "아직도 일일이 폴더를 열어보며 찾고 계신가요?",
-      "body_script": "귀신같이는 느려진 기기 정리부터 안 열어도 보이는 파일 소환까지 광고 0% 평생 무료로 해결합니다.",
+      "body_script": "외부 서버 전송과 광고 0%! 은행 보안프로그램 일시 중지부터 문서·사진·영상 1초 내용 검색까지 평생 무료로 해결합니다.",
       "image_urls": ["https://ghosti.sundreamer.app/assets/demo1.jpg"],
       "tags": ["귀신같이", "PC초능력", "썬드리머", "생산성"]
     }

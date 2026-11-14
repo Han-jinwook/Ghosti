@@ -334,7 +334,7 @@ export const PricingModal: React.FC = () => {
 
   const handleCopyInviteCard = async () => {
     const inviteCopy =
-      '[귀신같이 라운지 초대장] 내 PC와 모바일에 1초 초능력을! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
+      '[귀신같이 라운지 초대장] 느린 기기 정리부터 1초 내용 검색까지, 내 PC·폰 초능력! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);
@@ -681,14 +681,14 @@ export const PricingModal: React.FC = () => {
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                  6번 [🎁 30일 무료체험 / 유료] 업무 공유 • S: 드라이브 · 문서/계약서 공유
+                  6번 [5인·30GB 평생 0원 보증 / 유료 확장] 업무 공유 • 공용 폴더(S: 드라이브) · 문서/계약서 공유
                 </span>
                 <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-                  💽 공용 업무 PC(S:) 1대 + 백업 PC 무제한 지정 · 📄 엑셀·한글·PDF·워드 본문 검색
+                  💽 공용 폴더(S: 드라이브) 종단간 암호화(E2EE) · 🛡️ 랜섬웨어 격리 · 🧾 세금계산서 발행
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                💼 업무 공유 — &ldquo;클라우드 월세 0원, 우리 팀 PC를 S: 드라이브 하나로&rdquo;
+                💼 업무 공유 — &ldquo;NAS·클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로&rdquo;
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">

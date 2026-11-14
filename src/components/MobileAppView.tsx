@@ -368,18 +368,18 @@ export const MobileAppView: React.FC = () => {
             </div>
           </div>
 
-          {/* 모바일 공식 마스터 슬로건 한 줄 띠 (SSOT v2.1) */}
+          {/* 모바일 공식 마스터 슬로건 한 줄 띠 (SSOT v2.2 20자 축약형) */}
           <div
             className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
               themeMode === 'light'
                 ? 'bg-teal-50/80 border-teal-200 text-teal-950'
                 : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
             }`}
-            title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
+            title="느린 기기 정리부터 1초 내용 검색까지, 내 PC·폰 초능력 — 서버 저장 0% · 광고 0%"
           >
-            <span className="text-teal-600 dark:text-teal-400">⚡ 내 PC와 모바일에 1초 초능력을</span>{' '}
+            <span className="text-teal-600 dark:text-teal-400">느린 PC 정리·1초 파일 검색, 내 기기 초능력</span>{' '}
             <span className="opacity-30">|</span>{' '}
-            <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
+            <span className="text-emerald-600 dark:text-emerald-400">서버 전송 0% · 광고 0%</span>
           </div>
 
           {/* 1단 메인메뉴 3개 (내 기기 / 사진 공유 / 업무 공유): 흑백 라인 아이콘 + 캡슐 스타일 */}
