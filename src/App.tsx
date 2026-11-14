@@ -454,15 +454,20 @@ export const App: React.FC = () => {
     try {
       localStorage.setItem('ghosti_onboarding_completed', 'true');
       localStorage.setItem('ghosti_view_mode', 'workspace');
+      sessionStorage.removeItem('ghosti_entered_showroom_from_app');
     } catch {}
     setViewMode('workspace');
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   };
 
-  // 워크스페이스 내부 상단 헤더의 [🏠 공식 쇼룸 대문] 버튼을 명시적으로 눌렀을 때만 해당 세션에서 대문 열람
+  // 워크스페이스 내부 상단 헤더의 [🏠 공식 쇼룸 대문] 또는 귀신비서 [온보딩 체험관 구경하기]를 눌렀을 때 해당 세션에서 대문 열람
   // (단, ghosti_onboarding_completed는 유지되므로 다음 날 앱에 재접속할 때는 다시 자동으로 워크스페이스로 직행)
   const handleEnterShowroom = () => {
+    try {
+      sessionStorage.setItem('ghosti_entered_showroom_from_app', '1');
+    } catch {}
     setViewMode('showroom');
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   };
 
   useEffect(() => {
