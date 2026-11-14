@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "귀신같이(Ghosti) - 느린 기기 정리부터 1초 내용 검색까지, 내 PC·폰 초능력",
+  "description": "내 PC와 모바일에 1초 초능력을 — 귀신같이(Ghosti)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

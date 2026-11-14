@@ -1371,9 +1371,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
                   <span>👻 귀신비서</span>
                 </h1>
-                {/* [SSOT v2.2] 1. 👻 귀신비서 대표 1줄 부제 상시 노출 */}
+                {/* [SSOT v2.3] 1. 👻 귀신비서 대표 1줄 부제 상시 노출 */}
                 <p className="basis-full -mt-1.5 text-[12.5px] md:text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 leading-snug">
-                  느려진 내 PC·폰, 클릭 한 번에 새것처럼 — 은행 보안프로그램은 삭제 없이 일시 중지(은행 접속 시 자동 복귀)하고, 중복 사진 정리·실수로 지운 파일 복구·한글 깨짐 없는 1초 압축까지 광고 없이 끝냅니다.
+                  느려진 내 PC·폰, 클릭 한 번에 새것처럼 — 은행 보안프로그램은 안 지우고 재우고, 중복 사진·흩어진 문서·깨진 한글 압축까지 광고 없이 1초 만에 해결합니다.
                 </p>
 
                 <input

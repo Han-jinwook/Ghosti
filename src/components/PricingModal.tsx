@@ -334,7 +334,7 @@ export const PricingModal: React.FC = () => {
 
   const handleCopyInviteCard = async () => {
     const inviteCopy =
-      '[귀신같이 라운지 초대장] 느린 기기 정리부터 1초 내용 검색까지, 내 PC·폰 초능력! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
+      '[귀신같이 라운지 초대장] 내 PC와 모바일에 1초 초능력을! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);
