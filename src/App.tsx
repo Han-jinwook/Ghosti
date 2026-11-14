@@ -20,10 +20,7 @@ import {
   FaceMemberRegistryModal,
   PassportDoorplateStyleModal,
 } from './components/FaceMemberRegistryModal';
-import {
-  SetupFloatingOverlayGuide,
-  SetupMonsterModal,
-} from './components/SetupMonsterModal';
+import { SetupFloatingOverlayGuide } from './components/SetupMonsterModal';
 import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
 
 export const App: React.FC = () => {
@@ -587,8 +584,7 @@ export const App: React.FC = () => {
           {/* [귀신같이 여권 연동] 최신 연도 정면 얼굴 자동 문패(Slot 1 Anchor) & 5대 스타일 슬롯 원터치 변경 팝업 */}
           <PassportDoorplateStyleModal />
 
-          {/* [🛠️ 설정몬스터] 독립 모달 & 타사 앱/프로그램 최상단 투명 유리판 손가락 화살표 가이드(👆) */}
-          <SetupMonsterModal />
+          {/* [🛠️ 구 설정몬스터 팝업 비활성화 — 1. 👻 귀신비서 채팅 원클릭 칩으로 100% 일원화] 타사 앱 최상단 손가락 화살표 가이드(👆)만 유지 */}
           <SetupFloatingOverlayGuide />
 
           {/* [고스트 캐스트 & 라이브 3대 핵심 무기] ① PC/노트북 모니터 풀스크린 클린 뷰어 + 무선 리모컨, ② 방 전용 프라이빗 라이브 생중계 & 라이브 포토 싱크, ③ 원격 모니터링 셔터(선별/즉시 공유 선택) */}

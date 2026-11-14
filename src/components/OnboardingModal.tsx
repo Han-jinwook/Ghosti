@@ -445,7 +445,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
         relTime: '2분 전',
         snippet: '[이미지 1280x720] 세금계산서_영수증_캡처 · 합계금액 350,000,000원 승인번호 9482-11',
         fullText:
-          '[스샷 이미지 (1280x720) · 백그라운드 WinRT OCR 추출 원문]\n공급자: (주)썬드림 / 등록번호: 123-86-98765\n품목: 귀신같이 엔터프라이즈 10년 마스터권\n합계금액: 350,000,000원 (승인번호 9482-11)',
+          '[스샷 이미지 (1280x720) · 백그라운드 WinRT OCR 추출 원문]\n공급자: (주)썬드림 / 등록번호: 123-86-98765\n품목: 귀신같이 엔터프라이즈 연간 라이선스\n합계금액: 350,000,000원 (승인번호 9482-11)',
       },
       {
         id: 'mem-3',
@@ -743,7 +743,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             <div className="flex flex-wrap items-center gap-2">
               <GhostiBrandLogo size="desktop" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-300 font-mono text-[11px] font-bold">
-                혼자 쓸 땐 귀신같이 찾고 손보고! · 함께 쓸 땐 귀신같이 공유하고!
+                ⚡ 내 PC와 모바일에 1초 초능력을 · 광고 0% · 클라우드 월세 0원
               </span>
             </div>
             <h2 className="text-[19px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
@@ -1586,7 +1586,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       ✅ <strong className="text-white">✋ 귀신같이 손보기</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
                     </li>
                     <li>
-                      🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: 자동 한영·띄어쓰기·<code className="text-teal-300">[Ctrl+V]</code> 순차붙여넣기·<code className="text-teal-300">[1]</code> 서식·줄바꿈·<code className="text-teal-300">F1~F6</code>·ZIP 압축 <strong className="text-teal-300">평생 무제한 무료</strong> + 모든 🔒 유료 티어 기능 <strong className="text-amber-300">30일 무제한 무료체험</strong> (만료 시 일 3회 무료 없이 깔끔 잠금🔒)
+                      🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: 자동 한영·띄어쓰기·<code className="text-teal-300">[Ctrl+V]</code> 순차붙여넣기·<code className="text-teal-300">[1]</code> 서식·줄바꿈·<code className="text-teal-300">F1~F6</code>·ZIP 압축 <strong className="text-teal-300">평생 무제한 무료</strong> + 모든 🔒 유료 티어 기능 <strong className="text-amber-300">30일 무제한 무료체험</strong> (만료 시 자동 결제 없이 깔끔 잠금🔒)
                     </li>
                   </ul>
                 </div>
@@ -1610,14 +1610,14 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     <span className="px-3 py-1 rounded-full bg-emerald-400 text-zinc-950 text-[11.5px] font-black">
                       {isStoreAppMode
                         ? '👑 내 기기 통합 & 데스크톱 연동'
-                        : '👑 3번 내 기기 통합 (🎁 30일(1개월) 무료체험 · 월 3,900원 / 🔥 10년 특판 39,000원)'}
+                        : '👑 5번 내 기기 통합 (🎁 30일 무료체험 · 월 3,900원 / 연간 결제 시 월 3,250원꼴)'}
                     </span>
                     <span className="text-[11.5px] font-extrabold text-emerald-300">
                       이메일 하나로 기기 대수 무제한 통합!
                     </span>
                   </div>
                   <h3 className="text-[17px] font-extrabold text-white leading-snug">
-                    내가 손댄 모든 기기(폰·집PC·회사PC)가 하나가 되어 내 손아귀에!
+                    카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로!
                   </h3>
                   <ul className="text-[12.5px] text-zinc-200 space-y-2 leading-relaxed pt-1">
                     <li>
@@ -1627,13 +1627,13 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                       🥈 <strong className="text-emerald-300">2위. 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 회사 PC나 폰에서 복사(<code className="text-white">Ctrl+C</code>·스샷)만 해두면, 꺼져 있던 집 PC를 켜는 순간 <code className="text-teal-300">Ctrl+0 [복사검색]</code>에 최근 100개 텍스트·10장 스샷이 자동 장전됩니다!
                     </li>
                     <li>
-                      🥉 <strong className="text-amber-300">3위. 모든 🔒 유료 티어 초능력(사진·표 OCR 창 · 귀신 라벨러 · 귀신창 [2]~[5]) 무제한 해금 + 0.2초 공간이동(촬영 후 1분간 자동팝업 대기)</strong>: 30일 무료체험 만료 후에도 일체 잠김 없이 전 기기 평생 무제한으로 열립니다 (만료 시에도 이미 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존).
+                      🥉 <strong className="text-amber-300">3위. 모든 🔒 유료 티어 초능력(사진·표 OCR 창 · 귀신 라벨러 · 귀신창 [2]·[3]·[5]) 무제한 해금 + 1초 공간이동(촬영 후 1분간 자동팝업 대기)</strong>: 30일 무료체험 만료 후에도 일체 잠김 없이 전 기기 무제한으로 열립니다 (만료 시에도 이미 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존).
                     </li>
                     <li>
                       👨‍👩‍👧‍👦 <strong className="text-teal-300">
                         {isStoreAppMode
-                          ? '2번 사진 공유 (가족 · 동호회 · 동창회) & 4번 업무 공유'
-                          : '2번 사진 공유(가족·동호회·동창회) 인원 무제한 평생 0원 · 4번 업무 공유(30일(1개월) 무료체험 / 월 9,900원~)'}
+                          ? '4번 사진 공유 (가족 · 동호회 · 동창회) & 6번 업무 공유'
+                          : '4번 사진 공유(가족·동호회·동창회) 인원 무제한 평생 0원 · 6번 업무 공유(30일 무료체험 / 월 9,900원~)'}
                       </strong>: 가족·동호회·동창회 사진·동영상 공유는 <strong className="text-white">방장도 멤버도 평생 0원(무료)</strong>입니다.
                     </li>
                   </ul>
@@ -1650,7 +1650,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 >
                   {isStoreAppMode
                     ? '💻 데스크톱(PC) 기기 연동 가이드 보기 →'
-                    : '👑 내 기기 통합(30일 무료체험 · 10년 특판 3.9만) & 전체 혜택 보기 →'}
+                    : '👑 내 기기 통합(30일 무료체험 · 월 3,900원) & 전체 혜택 보기 →'}
                 </button>
               </div>
             </div>

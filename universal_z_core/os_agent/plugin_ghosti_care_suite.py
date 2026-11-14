@@ -2218,6 +2218,13 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
                 "downloadsArchiveCount": dl_archives["count"],
                 "downloadsArchiveThresholdMet": dl_archives["thresholdMet"],
             }
+        if act in ("open-default-apps", "open_default_apps"):
+            if sys.platform == "win32" and hasattr(os, "startfile"):
+                try:
+                    os.startfile("ms-settings:defaultapps")
+                except Exception:
+                    pass
+            return {"ok": True, "opened": "ms-settings:defaultapps"}
         if act in ("explorer-selected", "explorer_selected"):
             return {"ok": True, "selectedPaths": get_explorer_selected_paths_non_destructive()}
         if act in ("amsi-scan", "amsi_scan"):

@@ -25,8 +25,8 @@ import {
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 1번 내 기기 (PC·폰) + 2번 사진 공유 (가족·동호회·동창회) : 평생 0원 (3·4번 유료 기능 🎁 1개월 무료체험 포함)',
   personal_single_2900: '🆓 1번 내 기기 (PC·폰) : 언제나 0원 • 🔍 찾기 & ✋ 손보기',
-  personal_sub_3900: '👑 3번 내 기기 통합 (PC+폰+PC+) • 🎁 1개월 무료체험 (이후 월 3,900원)',
-  personal_year_35000: '👑 3번 내 기기 통합 (PC+폰+PC+) • 🔥 10년 특판 39,000원 (월 325원 꼴 · 120개월 보장)',
+  personal_sub_3900: '👑 5번 내 기기 통합 (PC+폰+PC+) • 🎁 30일 무료체험 (이후 월 3,900원)',
+  personal_year_35000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
   family_home_5900: '👨‍👩‍👧‍👦 2번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   family_home_year_59000: '👨‍👩‍👧‍👦 2번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   family_three_8900: '👨‍👩‍👧‍👦 2번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
@@ -41,37 +41,22 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
   club_large_year_149000: '⛰️ 2번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   student_sub_900: '🎓 2번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   student_year_9000: '🎓 2번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  work_soho_9900: '💼 4번 업무 공유 (S: 드라이브 · 문서/계약서) • 소호 ~5인 (🎁 1개월 무료체험 / 월 9,900원)',
-  work_soho_year_99000: '💼 4번 업무 공유 (S: 드라이브 · 문서/계약서) • 소호 ~5인 (🔥 10년 특판 99,000원)',
-  work_biz_19900: '💼 4번 업무 공유 • 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
-  work_biz_year_199000: '💼 4번 업무 공유 • 소기업 ~20인 (190,000원) / 중소기업 ~50인 (🔥 10년 특판 290,000원)',
+  work_soho_9900: '💼 6번 업무 공유 (S: 드라이브 · 문서/계약서) • 소호 ~5인 (🎁 30일 무료체험 / 월 9,900원)',
+  work_soho_year_99000: '💼 6번 업무 공유 (S: 드라이브 · 문서/계약서) • 소호 ~5인 (연간 결제 99,000원 · 월 8,250원꼴)',
+  work_biz_19900: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
+  work_biz_year_199000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원) / 중소기업 ~50인 (연 290,000원)',
 };
 
 /**
- * 3단계 특판(10년 특판) 자동 전환 스케줄 (월 구독료 × 10개월 치 일시불 고정)
- * - 1차 100명(10년 · 120개월 보장) ➔ 2차 1,000명(5년 · 60개월 보장) ➔ 3차 10,000명(3년 · 36개월 보장)
+ * 연간 구독 할인 안내 (월 구독료 × 10개월 치 결제로 1년 12개월 이용 · 2개월 무료 혜택)
  */
 export const MASTER_PASS_AUTO_SWITCH_TIERS = [
   {
     stage: 1,
     limitCount: 100,
-    years: 10,
-    months: 120,
-    bannerHeadline: '🔥 1차 10년 특판 한정 오픈 — 월 구독료 10개월 치 결제로 10년(120개월) 보장 (선착순 100명)',
-  },
-  {
-    stage: 2,
-    limitCount: 1000,
-    years: 5,
-    months: 60,
-    bannerHeadline: '⚡ 2차 특판 오픈 — 월 구독료 10개월 치 결제로 5년(60개월) 보장 (선착순 1,000명)',
-  },
-  {
-    stage: 3,
-    limitCount: 10000,
-    years: 3,
-    months: 36,
-    bannerHeadline: '🎁 3차 특판 오픈 — 월 구독료 10개월 치 결제로 3년(36개월) 보장 (선착순 10,000명)',
+    years: 1,
+    months: 12,
+    bannerHeadline: '✨ 연간 결제 시 2개월 무료 할인 (10개월 치 요금으로 12개월 이용)',
   },
 ] as const;
 
@@ -349,7 +334,7 @@ export const PricingModal: React.FC = () => {
 
   const handleCopyInviteCard = async () => {
     const inviteCopy =
-      '[귀신같이 라운지 초대장] 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
+      '[귀신같이 라운지 초대장] 내 PC와 모바일에 1초 초능력을! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);
@@ -509,55 +494,40 @@ export const PricingModal: React.FC = () => {
           </button>
         </div>
 
-        {/* 📢 1개월(30일) 무료체험 + 🔥 10년 특판(월 구독료 10개월 치 일시불로 10년 보장) 안내띠 */}
+        {/* 📢 30일 무료체험 + 연간 결제 2개월 무료 할인 안내띠 */}
         <div
           data-keep-dark="true"
           className="px-4 py-3 md:px-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-teal-950/85 to-zinc-950 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2"
         >
           <div className="flex flex-col gap-0.5">
             <p className="font-body-sm text-[13px] md:text-[13.5px] text-amber-200 font-extrabold leading-relaxed">
-              🎁 <strong className="underline decoration-amber-300 text-amber-300">유료 기능(3번 내 기기 통합 · 4번 업무 공유) 1개월(30일) 무료체험 기본 제공 + {activeMasterTier.bannerHeadline}</strong>
+              🎁 <strong className="underline decoration-amber-300 text-amber-300">유료 확장(5번 내 기기 통합 · 6번 업무 공유) 신용카드 등록 없이 30일 무료체험 제공 + {activeMasterTier.bannerHeadline}</strong>
             </p>
             <span className="text-[11px] text-zinc-300">
-              출시 기념 특별 혜택: <strong>🔥 선착순 10년 특판 (월 구독료 10개월 치 일시불로 10년 보장)</strong> · 사진 공유(패밀리·동호회·동창회)는 인원·장수 제한 없이 <strong>평생 100% 무제한 무료</strong>
+              연간 결제 혜택: <strong>10개월 치 요금으로 12개월 이용 (2개월 무료 할인)</strong> · 사진 공유(패밀리·동호회·동창회)는 인원·장수 제한 없이 <strong>평생 100% 무제한 무료</strong>
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {/* [1차 기준]: earlyBirdRemainingSeats <= 30 일 때 점등하되, 분위기 봐서 괜찮다 싶으면 FORCE_SHOW_LIVE_SEAT_BOARD = true 로 언제든 상시 실시간 현황판 노출 가능 */}
-            {FORCE_SHOW_LIVE_SEAT_BOARD || earlyBirdRemainingSeats <= 30 ? (
-              <span className="px-2.5 py-1 rounded-full bg-rose-500/25 border border-rose-400/60 text-amber-200 font-label-mono text-[11px] font-extrabold animate-pulse">
-                🔥 마감 임박 현황판: {100 - earlyBirdRemainingSeats}석 소진 / 잔여 {earlyBirdRemainingSeats}석
-              </span>
-            ) : (
-              <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 font-label-mono text-[11px] font-extrabold">
-                ✨ 1차 선착순 100명 10년 특판 오픈 중
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setEarlyBirdRemainingSeats((s) => (s > 30 ? 18 : 72))}
-              className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-[10px] text-zinc-400 hover:text-white cursor-pointer"
-              title="잔여 30석 이하 마감 임박 카운터 점등 시뮬레이션"
-            >
-              {earlyBirdRemainingSeats <= 30 ? '여유 상태 보기' : '30석 이하 보기'}
-            </button>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 font-label-mono text-[11px] font-extrabold">
+              ✨ 신용카드 등록 없음 · 자동 결제 0%
+            </span>
           </div>
         </div>
 
         {/* 모바일 접속자 편의: 검색 없이 내 이메일/카톡으로 PC 마스터 접속 주소 보내기 */}
         <PcMasterQuickSendPanel compact />
 
-        {/* 1. 좌측 사이드바 4대 대메뉴와 100% 일치하는 요금 체계 (1·2번 평생 무료 / 3·4번 1개월 무료체험 + 유료·10년 특판) */}
+        {/* 1. 좌측 사이드바 메뉴와 100% 일치하는 요금 체계 (평생 무료 4코어 / 선택형 유료 확장 2종) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ① [1번 — 평생 무료] 내 기기 (PC·폰): 🔍 찾기 / ✋ 손보기 */}
+          {/* ① [평생 무료] 내 기기 (PC·폰): 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창 */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold">
-                  1번 [평생 무료] 내 기기 (PC·폰)
+                  1~3번 [평생 무료] 내 기기 (PC·폰)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
-                  평생 0원 · 카드 등록 NO
+                  평생 0원 · 신용카드 등록 없음
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
@@ -640,41 +610,41 @@ export const PricingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* ── 무료(1·2번) / 유료 프로(3·4번 — 1개월 무료체험) 경계선 ── */}
+          {/* ── 무료(1~4번) / 유료 확장(5·6번 — 30일 무료체험) 경계선 ── */}
           <div className="md:col-span-2 flex items-center gap-3 py-1">
             <div className="flex-1 border-t border-dashed border-amber-400/40" />
             <span className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-mono text-[11.5px] font-extrabold">
-              ── 🎁 3·4번 유료 프로 기능 (신용카드 등록 없이 1개월(30일) 무료체험 · 🔥 10년 특판) ──
+              ── 🎁 5·6번 유료 확장 기능 (신용카드 등록 없이 30일 무료체험 · 연간 결제 2개월 무료) ──
             </span>
             <div className="flex-1 border-t border-dashed border-amber-400/40" />
           </div>
 
-          {/* ③ [3번 — 1개월 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+): 🔗 내 기기 연결 (PC↔폰) + ⚡ 귀신창 (Ctrl+0) */}
+          {/* ③ [5번 — 30일 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+): 🔗 내 기기 연결 (PC↔폰) + ⚡ 귀신창 확장 */}
           <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/75 via-[#18181B] to-[#18181B] border-2 border-emerald-400 shadow-[0_0_28px_rgba(16,185,129,0.22)] md:col-span-2 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-black">
-                  3번 [🎁 1개월 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+)
+                  5번 [🎁 30일 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-400/50 text-amber-300 font-label-sm text-[10.5px] font-extrabold">
-                  🔗 내 기기 연결 (PC↔폰) · ⚡ 귀신창 (Ctrl+0) · 대수 무제한
+                  🔗 내 기기 연결 (PC↔폰) · ⚡ 귀신창 확장 (Ctrl+0) · 대수 무제한
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                👑 내 기기 통합 (PC+폰+PC+) — &ldquo;내가 손댄 모든 기기가 하나가 되어 내 손아귀에!&rdquo;
+                👑 내 기기 통합 — &ldquo;카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로&rdquo;
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/50 flex flex-col justify-between gap-2.5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <div className="flex flex-wrap items-baseline gap-2">
                     <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-label-mono text-[12px] font-extrabold">
-                      🎁 첫 1개월(30일) 무료체험
+                      🎁 첫 30일 무제한 무료체험
                     </span>
                     <span className="font-headline-md text-[23px] text-white font-black">
                       월 3,900원
                     </span>
                     <span className="font-label-mono text-[12px] text-amber-300 font-extrabold">
-                      (🔥 10년 특판 39,000원 · 월 325원 꼴 · 120개월 보장)
+                      (연간 결제 시 39,000원 · 월 3,250원꼴 · 2개월 무료)
                     </span>
                   </div>
                   <span className="font-label-mono text-[11px] text-emerald-300 font-bold">
@@ -684,7 +654,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
                   • 🔗 <strong>내 기기 연결 (PC↔폰)</strong>: 카톡 ‘나에게 보내기’ &amp; 클라우드 월세 종식 (내 폰 ⇄ 집 PC ⇄ 회사 PC ⇄ 노트북 원본 직결 통합 검색)<br />
                   • 📋 <strong>무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 꺼져 있던 집 PC 부팅 즉시 회사·폰에서 복사한 텍스트 100개·스샷 10장 자동 장전<br />
-                  • ⚡ <strong>귀신창 (Ctrl+0)</strong>: 화면 캡처 번역·표 엑셀 변환·민감정보 자동 모자이크 등 12대 초능력 전 기기 무제한 해금 + <code>F1~F10</code> 상용구 동기화
+                  • ⚡ <strong>귀신창·귀신검색 유료 확장</strong>: 사진·표 OCR 창, 귀신 라벨러, 스샷·PDF 변환, 다중합본, 창고정 전 기기 무제한 해금
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <button
@@ -692,33 +662,33 @@ export const PricingModal: React.FC = () => {
                     onClick={() => activatePricingPlan('personal_sub_3900')}
                     className="py-2.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[12.5px] font-black cursor-pointer"
                   >
-                    🎁 1개월 무료체험 후 월 3,900원 시작
+                    🎁 30일 무료체험 후 월 3,900원 시작
                   </button>
                   <button
                     type="button"
                     onClick={() => activatePricingPlan('personal_year_35000')}
                     className="py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12.5px] font-black cursor-pointer"
                   >
-                    🔥 10년 특판 39,000원 (10개월 치로 10년 보장)
+                    ✨ 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료)
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ④ [4번 — 1개월 무료체험 / 유료] 업무 공유 (소호 ~5인 9,900원 / 소기업 ~20인 19,000원 / 중소기업 ~50인 29,000원) */}
+          {/* ④ [6번 — 30일 무료체험 / 유료] 업무 공유 (소호 ~5인 9,900원 / 소기업 ~20인 19,000원 / 중소기업 ~50인 29,000원) */}
           <div className="p-5 rounded-2xl bg-[#18181B] border-2 border-cyan-400/45 md:col-span-2 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                  4번 [🎁 1개월 무료체험 / 유료] 업무 공유 • S: 드라이브 · 문서/계약서 공유
+                  6번 [🎁 30일 무료체험 / 유료] 업무 공유 • S: 드라이브 · 문서/계약서 공유
                 </span>
                 <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
                   💽 공용 업무 PC(S:) 1대 + 백업 PC 무제한 지정 · 📄 엑셀·한글·PDF·워드 본문 검색
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                💼 업무 공유 — &ldquo;윈도우 탐색기(S:)에서 원본 서류·계약서를 직접 편집하고, 다중 백업 PC에 실시간 복제합니다&rdquo;
+                💼 업무 공유 — &ldquo;클라우드 월세 0원, 우리 팀 PC를 S: 드라이브 하나로&rdquo;
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
@@ -726,13 +696,13 @@ export const PricingModal: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/90 border border-cyan-400/40 flex flex-col justify-between gap-2.5">
                   <div>
                     <span className="font-label-sm text-[11.5px] text-cyan-300 font-extrabold">
-                      🏢 소호(SOHO) 팀 (~5인) · 🎁 1개월 무료체험
+                      🏢 소호(SOHO) 팀 (~5인) · 🎁 30일 무료체험
                     </span>
                     <div className="font-headline-md text-[21px] text-white font-black mt-0.5">
                       월 9,900원
                     </div>
                     <span className="font-label-mono text-[11px] text-amber-300 font-bold">
-                      (🔥 10년 특판 99,000원 · 120개월 보장)
+                      (연간 결제 시 99,000원 · 월 8,250원꼴)
                     </span>
                     <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
                       5인 이하 사무실 · S: 드라이브 + 문서/계약서 1초 본문 검색 + 다중 백업 PC 미러링
@@ -751,7 +721,7 @@ export const PricingModal: React.FC = () => {
                       onClick={() => activatePricingPlan('work_soho_year_99000')}
                       className="py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
                     >
-                      🔥 10년 특판 9.9만
+                      연 9.9만 (2개월 무료)
                     </button>
                   </div>
                 </div>
@@ -760,13 +730,13 @@ export const PricingModal: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-900 border border-cyan-400/50 flex flex-col justify-between gap-2.5">
                   <div>
                     <span className="font-label-sm text-[11.5px] text-cyan-200 font-extrabold">
-                      🏢 소기업 플랜 (~20인) · 🎁 1개월 무료체험
+                      🏢 소기업 플랜 (~20인) · 🎁 30일 무료체험
                     </span>
                     <div className="font-headline-md text-[21px] text-white font-black mt-0.5">
                       월 19,000원
                     </div>
                     <span className="font-label-mono text-[11px] text-amber-300 font-bold">
-                      (🔥 10년 특판 190,000원 · 120개월 보장)
+                      (연간 결제 시 190,000원 · 월 15,830원꼴)
                     </span>
                     <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
                       20인 이하 기업 · 부서별 S: 폴더 권한 + 다중 백업 PC 실시간 미러링
@@ -785,7 +755,7 @@ export const PricingModal: React.FC = () => {
                       onClick={() => activatePricingPlan('work_biz_year_199000')}
                       className="py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
                     >
-                      🔥 10년 특판 19만
+                      연 19만 (2개월 무료)
                     </button>
                   </div>
                 </div>
@@ -794,13 +764,13 @@ export const PricingModal: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-900 border border-amber-400/45 flex flex-col justify-between gap-2.5">
                   <div>
                     <span className="font-label-sm text-[11.5px] text-amber-300 font-extrabold">
-                      🏛️ 중소기업 (~50인) · 🎁 1개월 무료체험
+                      🏛️ 중소기업 (~50인) · 🎁 30일 무료체험
                     </span>
                     <div className="font-headline-md text-[21px] text-white font-black mt-0.5">
                       월 29,000원
                     </div>
                     <span className="font-label-mono text-[11px] text-amber-300 font-bold">
-                      (🔥 10년 특판 290,000원 · 120개월 보장)
+                      (연간 결제 시 290,000원 · 월 24,160원꼴)
                     </span>
                     <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
                       50인 이하 전사 문서·도면 통합 금고 (※ 50인 이상은 별도 협의)
@@ -819,7 +789,7 @@ export const PricingModal: React.FC = () => {
                       onClick={() => activatePricingPlan('work_biz_year_199000')}
                       className="py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
                     >
-                      🔥 10년 특판 29만
+                      연 29만 (2개월 무료)
                     </button>
                   </div>
                 </div>

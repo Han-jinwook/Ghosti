@@ -81,14 +81,14 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **통합 헬스체크** | `GET /__merlin/health`<br>*(또는 `/`, `/health`)* | `merlin_z_core_daemon.py` | Query Params 없음 | `{ "ok": true, "coreName": "Merlin_Z_Core", "version": "2.1.0", "standardPort": 5199, "builtinPlugins": { "zeye_os": {...}, "senstalk": {...}, "aggrofilter": {...} } }` |
 | **통합 게이트웨이** | `POST /__merlin/query` | `merlin_z_core_daemon.py` | `{ "plugin": "zeye" \| "senstalk" \| "aggrofilter", "action": "...", "payload": {...} }` | 각 플러그인의 `handle_request(action, payload)` 실행 결과 JSON 반환 |
-| **Z-Eye & Z몬스터** | `GET / POST /__zcore/*`<br>*(또는 `/api/zeye/*`)* | `plugin_ghosti_os.py` | • `/__zcore/trace-missing-file`: `{ "query": "거래처_정산" }`<br>• `/__zcore/gdrive-smart-scan`: `{ "query": "비번" }`<br>• `/__zcore/restore-points-list`: `{}`<br>• `/__zcore/restore-point-rollback`: `{ "restoreId": "#104" }`<br>• `/__zcore/ai-baton-touch`: `{ "query": "...", "autoLaunch": false }` | • 5대 은닉 금고 + `$Recycle.Bin` `$I` 바이너리 해독 결과<br>• `G:` 드라이브 `.gsheet`/`.gdoc` 색인 및 무마스킹 ID/PW(`📋` 복사)<br>• `[복원 기록]` 3단계 무결성 배지(`🟢/🟡/🔴`) 및 1초 롤백 결과<br>• 단골 AI 자동 감지(기록 0건 시 기본값 `gemini`) |
+| **귀신같이(Ghosti)** | `GET / POST /__zcore/*`<br>*(또는 `/api/ghosti/*`)* | `plugin_ghosti_os.py` | • `/__zcore/trace-missing-file`: `{ "query": "거래처_정산" }`<br>• `/__zcore/gdrive-smart-scan`: `{ "query": "비번" }`<br>• `/__zcore/restore-points-list`: `{}`<br>• `/__zcore/restore-point-rollback`: `{ "restoreId": "#104" }`<br>• `/__zcore/ai-baton-touch`: `{ "query": "...", "autoLaunch": false }` | • 5대 은닉 금고 + `$Recycle.Bin` `$I` 바이너리 해독 결과<br>• `G:` 드라이브 `.gsheet`/`.gdoc` 색인 및 무마스킹 ID/PW(`📋` 복사)<br>• `[복원 기록]` 3단계 무결성 배지(`🟢/🟡/🔴`) 및 1초 롤백 결과<br>• 단골 AI 자동 감지(기록 0건 시 기본값 `gemini`) |
 | **센스톡 플러그인** | `GET / POST /api/senstalk/*` | `plugin_senstalk.py`<br>*(2,439줄 원본)* | • `GET /api/senstalk/health`<br>• `GET /api/senstalk/badges`<br>• `POST /api/senstalk/sync`: `{ "queue": [...] }`<br>• `POST /api/senstalk/send`: `{ "target": "이쁜이", "msg": "..." }` | • 6대 메신저(카카오톡·라인·텔레그램·위챗·와츠앱·페메) 창 탐색 상태, 미확인 배지 카운트, 실채팅방 타겟 검색 및 입력창 장전 결과 |
 | **어그로필터 플러그인** | `GET / POST /api/aggrofilter/*` | `plugin_aggrofilter.py` | • `GET /api/aggrofilter/health`<br>• `POST /api/aggrofilter/extract`: `{ "url": "https://youtu.be/...", "lang": "ko" }` | • 크롬 확장팩 없이 유저 로컬 가정용 IP로 직접 추출한 유튜브 자막 세그먼트, 전체 텍스트, 타임스탬프 요약 반환 |
 
 ### 3. 전사 중앙 우체국 (`D:\Secretary\post_office\`) 3단계 처리 프로토콜
-1. **1단계 (열람 즉시 `(읽음)` 부착):** `D:\Secretary\post_office\` 내 `Z-Eye_` 수신 문서를 처음 읽는 즉시 파일명 맨 앞에 `(읽음)`을 붙여 이름을 변경합니다.
+1. **1단계 (열람 즉시 `(읽음)` 부착):** `D:\Secretary\post_office\` 내 `Ghosti_` 수신 문서를 처음 읽는 즉시 파일명 맨 앞에 `(읽음)`을 붙여 이름을 변경합니다.
 2. **2단계 (선 보고 후 승인 시 착수):** 원 코어 내장 플러그인 vs 사내 파워 코어 분류 및 모바일 스토어 심사 패스 리스크를 멀린님께 먼저 보고하고 승인을 받아 작업합니다.
-3. **3단계 (완료 후 신규 답변 문서 생성):** 기존 `(읽음)` 문서를 재수정하지 않고 `[상대앱]_Z-Eye_답변_[원제목요약]_[YYYYMMDD_HHMM].md` 형태로 새 답변 문서를 생성합니다.
+3. **3단계 (완료 후 신규 답변 문서 생성):** 기존 `(읽음)` 문서를 재수정하지 않고 `[상대앱]_Ghosti_답변_[원제목요약]_[YYYYMMDD_HHMM].md` 형태로 새 답변 문서를 생성합니다.
 
 ---
 
@@ -201,7 +201,7 @@
 
 ### Step 4. 카페브레이크 마케팅 엔진 이식 및 귀신같이(2호) 데이터 연동
 1. `D:\CafeBreaker`의 검증된 영상 렌더링(TTS/자막/비디오) 및 유튜브 스튜디오 업로드 모듈을 스튜디오 내부 백엔드로 이식.
-2. 2호 앱 귀신같이(`Z-Eye`)의 컨텐츠 데이터 엔드포인트(`GET /api/feed/zeye`)를 정의하여, 스튜디오 공장이 컨텐츠를 가져와 쇼츠를 무인 제작·업로드하는 파이프라인 구축.
+2. 2호 앱 귀신같이(`Ghosti`)의 컨텐츠 데이터 엔드포인트(`GET /api/feed/ghosti`)를 정의하여, 스튜디오 공장이 컨텐츠를 가져와 쇼츠를 무인 제작·업로드하는 파이프라인 구축.
 
 ---
 
@@ -241,15 +241,15 @@
 ### 2) 개별 앱 ➔ 스튜디오 마케팅 공장 컨텐츠 공급 규격 (`GET /api/marketing/feed`)
 ```json
 {
-  "app_id": "saysee",
+  "app_id": "ghosti",
   "items": [
     {
-      "content_id": "saysee_item_101",
-      "title": "말만 하면 1초 만에 찾아주는 귀신같이 AI 비서",
-      "hook_text": "아직도 일일이 검색창에 치고 계신가요?",
-      "body_script": "귀신같이는 음성 한마디로 사진 속 글자와 상품을 1초 만에 찾아드립니다.",
-      "image_urls": ["https://saysee.sundreamer.app/assets/demo1.jpg"],
-      "tags": ["귀신같이", "AI비서", "썬드리머", "생산성"]
+      "content_id": "ghosti_item_101",
+      "title": "내 PC와 모바일에 1초 초능력을 — 귀신같이(Ghosti)",
+      "hook_text": "아직도 일일이 폴더를 열어보며 찾고 계신가요?",
+      "body_script": "귀신같이는 느려진 기기 정리부터 안 열어도 보이는 파일 소환까지 광고 0% 평생 무료로 해결합니다.",
+      "image_urls": ["https://ghosti.sundreamer.app/assets/demo1.jpg"],
+      "tags": ["귀신같이", "PC초능력", "썬드리머", "생산성"]
     }
   ]
 }
@@ -432,7 +432,7 @@ exit
 
 ---
 
-# 🔄 Z-Eye 듀얼 PC 클라우드 인수인계서 (`SYNC_HANDOVER.md`)
+# 🔄 Ghosti 듀얼 PC 클라우드 인수인계서 (`SYNC_HANDOVER.md`)
 
 - **최종 업데이트 일시:** 2026-10-24 16:05 (KST)
 - **최종 작업 브랜치:** `main`
@@ -442,8 +442,8 @@ exit
 
 ## 1. 직전 세션 완료 핵심 내역 요약
 
-1. **대내외 대표 슬로건 확정 · `[💻 내 기기]` 무료 워딩 제거(`🧹 클린몬스터 진단`) · 통합 가격표 마스터 ([`docs/Z-Eye_통합_가격표_마스터.md`](file:///d:/Ghosti/docs/Z-Eye_통합_가격표_마스터.md), [`PricingModal.tsx`](file:///d:/Ghosti/src/components/PricingModal.tsx), [`DesktopDashboard.tsx`](file:///d:/Ghosti/src/components/DesktopDashboard.tsx)):**
-   - 내 기기(언제나 0원 · 무료 워딩 제거 후 `🧹 클린몬스터 진단` 즉시 실행), 동호회·동창회 인원 무제한 단일가 `월 4,900원 (10년 마스터권 49,000원)`, 양방향 교차 무료 구독권(`모임 연구독 ➔ 가족방 1개월권 3장` / `가족 연구독 ➔ 모임방 3개월권 1장`), 5단계 마스터권 1줄 깔끔 노출 반영 완료.
+1. **대내외 대표 슬로건 확정 · `[💻 내 기기]` 무료 워딩 제거(`🧹 클린몬스터 진단`) · 통합 가격표 마스터 ([`docs/귀신같이_통합_가격표_마스터.md`](file:///d:/Ghosti/docs/귀신같이_통합_가격표_마스터.md), [`PricingModal.tsx`](file:///d:/Ghosti/src/components/PricingModal.tsx), [`DesktopDashboard.tsx`](file:///d:/Ghosti/src/components/DesktopDashboard.tsx)):**
+   - 내 기기(언제나 0원 · 무료 워딩 제거 후 `🧹 클린몬스터 진단` 즉시 실행), 사진 공유(가족·동호회·동창회 인원·장수 무제한 평생 0원), 내 기기 통합 `월 3,900원 (연간 결제 시 39,000원)`, 업무 공유 `S:` 드라이브 요금 체계 반영 완료.
 2. **v2.1 공유방 데이터 흐름 · 동기화 · 권한 · 탈퇴 6대 원칙 확정 ([`LoungeView.tsx`](file:///d:/Ghosti/src/components/LoungeView.tsx), [`docs/기능명세.md`](file:///d:/Ghosti/docs/기능명세.md), [`docs/정책_및_핵심원칙.md`](file:///d:/Ghosti/docs/정책_및_핵심원칙.md)):**
    - **사진방:** 구 ‘원본 1초 소환 / 24시간 클라우드 도우미’ 전면 폐기 ➔ 평소 숨김 영역(`%LOCALAPPDATA%\Merlin\thumb_db`)에 13KB 썸네일 DB만 보관하다가 `[🔄 원본 동기화]` 시 경로 지정 및 안내 후 내 기기에서 100% 자체 해결. `64-bit dHash`는 `EXIF 원본 메타데이터 + 실제 고해상도` 진짜 원본일 때만 자동 교체. 업로드 후 **24시간 내 올린 본인 삭제 + 방장은 올라오는 처음부터 상시 숨기기 권한 보유 여부 방 개설 설정 옵션** 탑재. **탈퇴(자퇴·강퇴 동일) 시 그 공유방의 숨김 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제**(※ 내 PC의 ‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 100% 보존되며, 기동기화된 로컬 원본 폴더도 자율 관리).
    - **업무방:** 여권 미발동(검색 제외) + `공용 PC(S:) 1대 + 백업 PC 1·2호` + `[🌙 야간·퇴근 초절전 모드 (월 1,800원)]` + 웹/앱 검색 열람 시 `"🔒 현재 [OOO]님이 사용 중입니다. 읽기 모드로 열립니다."` 안내.
@@ -461,7 +461,7 @@ exit
   - 유저 혼선을 막기 위해 불필요한 `[문서 바로 실행]` 버튼을 제거하고 **`[📂 탐색기 검색창에 넣어 띄우기]`** 단일 버튼으로 일원화.
 
 ### ② 2단계: 설정몬스터 실물 수리 UI 고정 & 순수 손가락(`👈`) 지목 (`완료`)
-- **파일 위치:** [`src/components/SetupMonsterModal.tsx`](file:///d:/Ghosti/src/components/SetupMonsterModal.tsx), [`src/store/useZ-EyeStore.ts`](file:///d:/Ghosti/src/store/useZ-EyeStore.ts)
+- **파일 위치:** [`src/components/SetupMonsterModal.tsx`](file:///d:/Ghosti/src/components/SetupMonsterModal.tsx), [`src/store/useSaySeeStore.ts`](file:///d:/Ghosti/src/store/useSaySeeStore.ts)
 - **핵심 구현:**
   - 비동기 포렌식/OS 진단 데이터 로드로 인해 화면이 3번 밀려 내려가던 레이아웃 시프트를 0px로 차단하기 위해, **`4. 자주 찾는 증상 선택` 및 `5. 대화형 수리 창구`를 모달 최상단(1순위)**에 배치.
   - 붉은 바탕의 안내 배너와 텍스트 박스를 전면 삭제하고, 버튼 옆에 **순수 손가락 아이콘(`👈`)만** 표시하도록 정돈.
@@ -534,7 +534,7 @@ exit
 > **공식 마스터 고정 경로:** `D:\Ghosti\universal_z_core\`  
 > **전사 통합 중앙 우체국:** `D:\Secretary\post_office\` (기존 `universal_z_core/inbox/` 폐지 ➔ 비서방 중앙 우체국 하나로 단일화)  
 > **단일 표준 로컬 포트:** `http://127.0.0.1:5199` (구형 `28888` 등 파편화 포트 전면 폐기)  
-> **적용 범위:** 멀린 패밀리 16개 전 프로젝트 (`Z-Eye`, `Secretary`, `CafeBreaker`, `CafeScraper`, `SensTalk`, `AggroFilter`, `Vaulter`, `WhatEat`, `LumiNote`, `AutoNote` 등)
+> **적용 범위:** 멀린 패밀리 전 프로젝트 (`Ghosti`, `Secretary`, `CafeBreaker`, `CafeScraper`, `SensTalk`, `AggroFilter`, `Vaulter`, `WhatEat`, `LumiNote`, `AutoNote` 등)
 
 ---
 
@@ -544,8 +544,8 @@ exit
    - 각 프로젝트 폴더마다 코어 파일을 복사해 넣거나 앱마다 별도 로컬 포트(`28888` 등)를 열면 버전 파편화와 포트 충돌이 발생합니다.
    - 모든 PC/웹 프로젝트는 오직 **`D:\Ghosti\universal_z_core\`** 고정 위치와 **단일 표준 포트 `http://127.0.0.1:5199`**를 직접 참조합니다.
 2. **전사 중앙 우체국 단일화 (`D:\Secretary\post_office\`)**:
-   - 코어 사용 중 막히는 보안 장벽이나 신규 플러그인/API 요청이 생기면, **`D:\Secretary\post_office\Z-Eye_[보낸앱]_[이슈요약]_[YYYYMMDD_HHMM].md`**로 투함하십시오.
-   - `Z-Eye` 에이전트가 이를 읽고 **① 원 코어 내장 플러그인 vs 사내 파워 코어 분류, ② 모바일 스토어 심사 패스 리스크 검열** 후 멀린님께 보고하여 업그레이드합니다.
+   - 코어 사용 중 막히는 보안 장벽이나 신규 플러그인/API 요청이 생기면, **`D:\Secretary\post_office\Ghosti_[보낸앱]_[이슈요약]_[YYYYMMDD_HHMM].md`**로 투함하십시오.
+   - `Ghosti` 에이전트가 이를 읽고 **① 원 코어 내장 플러그인 vs 사내 파워 코어 분류, ② 모바일 스토어 심사 패스 리스크 검열** 후 멀린님께 보고하여 업그레이드합니다.
 3. **원 코어(`Merlin_Z_Core_Setup.exe`) + 내장 소프트웨어 플러그인(`Built-in Software Plugins`) 아키텍처**:
    - 유저가 프로그램을 2중으로 다운로드받지 않도록 **단 1개의 실행파일(`Merlin_Z_Core_Setup.exe`, MS 코드 서명 적용)** 내부에 소프트웨어 플러그인 모듈들을 내장하여 `127.0.0.1:5199` 단일 포트로 라우팅합니다:
      - **`plugin_ghosti_os.py` (`/api/zeye/*`, `/__zcore/*`)**: 귀신같이(Z몬스터) & 썬드리머 스튜디오(설치·수리·정리) 전용 OS 제어, 5대 은닉 금고 3초 포렌식, 대화형 폴더 정리 & **`[복원 기록]` (`restore_points.json`) 3단계 무결성 사전 검진(Pre-Check)**, TopMost 화살표 오버레이.

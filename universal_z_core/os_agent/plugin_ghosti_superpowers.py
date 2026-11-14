@@ -88,7 +88,7 @@ def _compute_feature_trials(feature_trials_ledger: Dict[str, Any], is_subscribed
     12개 개별 초능력 각각의 30일 무제한 타이머 상태 산출:
     - UNOPENED: 아직 한 번도 성공 완수하지 않은 미개봉 상태 (언제든 처음 쓰면 30일 무제한 개시!)
     - ACTIVE_30D: 첫 사용 후 30일 이내 무제한 상태 (D-30 ~ D-1 잔여일수)
-    - EXPIRED_LOCKED: 30일 무제한 만료 상태 (일 3회 무료 폐지 · 유료 티어 잠금🔒, 평생 무료 기본기는 상시 통과)
+    - EXPIRED_LOCKED: 30일 무제한 만료 상태 (만료 즉시 유료 티어 잠금🔒, 평생 무료 기본기는 상시 통과)
     """
     now_ts = time.time()
     trials_map: Dict[str, Any] = {}
@@ -251,7 +251,7 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     cross_ledger = m_entry.setdefault("crossDeviceTrial", {})
     cross_res = _compute_cross_device_trial(cross_ledger, linked_device_count, is_subscribed or m_entry.get("isSubscribed", False))
 
-    # 3. [2026-11-13 확정 정책] 30일 무료체험 만료 후 '일 3회 무료(DAILY_FREE_3)' 전면 폐지 -> 만료 시 유료 티어 깔끔 잠금(0회)
+    # 3. [2026-11-13 확정 정책] 30일 무료체험 만료 후 만료 시 유료 티어 깔끔 잠금(0회)
     daily_free_limit = 0
     daily_free_remaining = 0
 
@@ -264,7 +264,7 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         trial_status = "PER_FEATURE_ACTIVE"  # 미개봉 또는 30일 무제한 기능 보유 중
         trial_days_left = max([t["days_left"] for t in ft_res["trials"].values() if t["status"] in ("ACTIVE_30D", "ACTIVE_7D")] or [30])
     else:
-        trial_status = "EXPIRED_LOCKED"  # 30일 체험 만료 시 일 3회 무료 없이 유료 기능 잠금(🔒) · 평생 무료 기본기는 상시 개방
+        trial_status = "EXPIRED_LOCKED"  # 30일 체험 만료 시 즉시 유료 기능 잠금(🔒) · 평생 무료 기본기는 상시 개방
         trial_days_left = 0
 
     ensure_superpower_daemon_running()
@@ -593,9 +593,9 @@ def update_telemetry(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
 def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
-    [v3.6 확정 정책: 평생 무료 기본기(FREE_FOREVER) 상시 개방 + 🔒 유료 티어 30일 무제한 체험 후 깔끔 잠금(일 3회 무료 폐지)]
+    [v3.6 확정 정책: 평생 무료 기본기(FREE_FOREVER) 상시 개방 + 🔒 유료 티어 30일 무제한 체험 후 깔끔 잠금]
     - 평생 무료 기본기(순차붙여넣기, 자동 한영·띄어쓰기, 서식·줄바꿈 다림질, F1~F6 내 상용구, 엑셀 칸 쪼개기, 스마트 ZIP): 만료 없이 평생 무제한 허용!
-    - 🔒 유료 티어 기능: 첫 완수(또는 Opt-in) 시 30일간 무제한 무료체험 ➔ 30일 만료 시 일 3회 무료 없이 즉시 유료 잠금(EXPIRED_LOCKED)
+    - 🔒 유료 티어 기능: 첫 완수(또는 Opt-in) 시 30일간 무제한 무료체험 ➔ 30일 만료 시 즉시 유료 잠금(EXPIRED_LOCKED)
     """
     data = body or {}
     account_id = str(data.get("accountId") or "local_user").strip()
@@ -737,7 +737,7 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "message": f"🔥 [{feature_name}] 30일 무제한 혜택 적용 중 (잔여 {rem_days}일)",
         }
 
-    # Case C: 30일 무제한이 만료된 🔒 유료 티어 기능 ➔ 일 3회 무료 없이 즉시 깔끔하게 유료 잠금(EXPIRED_LOCKED)
+    # Case C: 30일 무제한이 만료된 🔒 유료 티어 기능 ➔ 즉시 깔끔하게 유료 잠금(EXPIRED_LOCKED)
     return {
         "ok": False,
         "allowed": False,
@@ -748,7 +748,7 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         "daily_free_remaining": 0,
         "daily_free_limit": 0,
         "error": "TRIAL_EXPIRED_LOCKED",
-        "message": f"🔒 [{feature_name}] 30일 무제한 무료체험이 종료되어 유료 잠금 상태로 전환되었습니다. 기본 습관기와 내 PC 로컬 파일은 그대로 평생 무료로 유지되며, [내 기기 통합(월 3,900원 / 10년 특판 3.9만 원)] 구독 시 모든 🔒 유료 기능이 전 기기 무제한으로 열립니다!",
+        "message": f"🔒 [{feature_name}] 30일 무제한 무료체험이 종료되어 유료 잠금 상태로 전환되었습니다. 기본 습관기와 내 PC 로컬 파일은 그대로 평생 무료로 유지되며, [내 기기 통합(월 3,900원 / 연간 결제 시 월 3,250원꼴)] 구독 시 모든 🔒 유료 기능이 전 기기 무제한으로 열립니다!",
     }
 
 

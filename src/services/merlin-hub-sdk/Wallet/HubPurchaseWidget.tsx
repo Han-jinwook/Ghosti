@@ -56,7 +56,7 @@ const getAppDisplayName = (appId?: string) => {
   if (id === 'SUNDREAMER' || id === 'SUNDREAM') {
     return '썬드리머';
   }
-  if (id === 'GHOSTI' || id === 'ZEYE' || id === 'Z-EYE' || id === 'SAYSEE') {
+  if (id === 'GHOSTI') {
     return '귀신같이';
   }
   return appId;

@@ -137,7 +137,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       </div>
       {summoned && (
         <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
-          <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (한영·띄어쓰기 자동 성형 · 평소 복붙 원문 보존 · [1]~[5] 정배열 다이어트)</div>
+          <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (한영·띄어쓰기 자동 성형 · 평소 복붙 원문 보존 · Wave 1 정예 구성)</div>
           <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#5EEAD4] font-bold">
             <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[Ctrl+V] 순차붙여넣기</span>
             <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[1] 🧹서식·줄바꿈 다림질</span>
@@ -146,7 +146,6 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-[#E2E8F0]">
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[3] 🔗다중합본🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 🔢번호·일정🔒</span>
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 📌창고정🔒</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -611,7 +610,7 @@ const TrialRewardCard: React.FC = () => {
         <strong className="text-amber-300">『모든 귀신 초능력 30일 무제한 무료체험권』</strong>이 도착했습니다! 지금 바로 열어드릴까요?
       </div>
       <div className="text-[11.5px] text-zinc-400">
-        (※ 카드 등록 없음 · 자동 결제 절대 없음 · 30일 만료 시 일 3회 무료 없이 🔒 유료 기능만 깔끔하게 잠기며, 이미 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존됩니다!)
+        (※ 카드 등록 없음 · 자동 결제 절대 없음 · 30일 만료 시 🔒 유료 기능만 깔끔하게 잠기며, 이미 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존됩니다!)
       </div>
       <div className="flex flex-wrap gap-2 pt-1">
         <button
@@ -675,11 +674,119 @@ const TrialRewardCard: React.FC = () => {
   );
 };
 
+const PERSONAL_SNIPPETS_STORAGE_KEY = 'ghosti_personal_snippets_v1';
+
+interface PersonalSnippetSlot {
+  slot: 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6';
+  title: string;
+  value: string;
+}
+
+const DEFAULT_PERSONAL_SNIPPETS: PersonalSnippetSlot[] = [
+  { slot: 'F1', title: '내 주거래 계좌', value: '국민은행 012-3456-7890-11 (예금주: 홍길동)' },
+  { slot: 'F2', title: '집·배송지 주소', value: '서울특별시 강남구 테헤란로 123, 101동 1204호' },
+  { slot: 'F3', title: '개인 이메일', value: 'myid@naver.com' },
+  { slot: 'F4', title: '휴대폰 번호', value: '010-1234-5678' },
+  { slot: 'F5', title: '빠른 감사 인사', value: '보내주신 내용 잘 확인했습니다. 빠르게 검토 후 연락드리겠습니다!' },
+  { slot: 'F6', title: '현금영수증·사업자번호', value: '지출증빙 010-1234-5678' },
+];
+
+const PersonalSnippetsRegistryPanel: React.FC = () => {
+  const [slots, setSlots] = useState<PersonalSnippetSlot[]>(() => {
+    try {
+      const raw = localStorage.getItem(PERSONAL_SNIPPETS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as PersonalSnippetSlot[];
+        if (Array.isArray(parsed) && parsed.length === 6) return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_PERSONAL_SNIPPETS;
+  });
+  const [savedNoticeSlot, setSavedNoticeSlot] = useState<string | null>(null);
+
+  const updateSlot = (idx: number, field: 'title' | 'value', nextVal: string) => {
+    const updated = slots.map((item, i) => (i === idx ? { ...item, [field]: nextVal } : item));
+    setSlots(updated);
+    try {
+      localStorage.setItem(PERSONAL_SNIPPETS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleQuickCopy = (slotName: string, val: string) => {
+    void navigator.clipboard?.writeText(val).catch(() => {});
+    playBabyGhostChime('typo');
+    setSavedNoticeSlot(slotName);
+    window.setTimeout(() => setSavedNoticeSlot(null), 1500);
+  };
+
+  return (
+    <section className={panelCls}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[15px] font-extrabold text-white">
+            ⌨️ 내 개인 상용구 등록창 (F1 ~ F6 · 평생 무료)
+          </h3>
+          <p className="text-[12px] text-zinc-400 mt-0.5">
+            자주 쓰는 계좌번호·주소·인사말을 적어두면 어느 화면에서든 키 한 번으로 1초 자동 입력됩니다.
+          </p>
+        </div>
+        <span className="px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-200 text-[11px] font-black shrink-0">
+          내 PC 자동 저장 · 평생 0원
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        {slots.map((item, idx) => (
+          <div
+            key={item.slot}
+            className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="px-2 py-0.5 rounded-lg bg-[#2DD4BF]/20 border border-[#2DD4BF]/50 text-[#5EEAD4] font-mono text-[11.5px] font-black shrink-0">
+                  {item.slot}
+                </span>
+                <input
+                  type="text"
+                  value={item.title}
+                  onChange={(e) => updateSlot(idx, 'title', e.target.value)}
+                  aria-label={`${item.slot} 상용구 제목`}
+                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-extrabold text-white focus:outline-none border-b border-transparent focus:border-[#2DD4BF]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleQuickCopy(item.slot, item.value)}
+                className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold text-teal-300 cursor-pointer shrink-0"
+              >
+                {savedNoticeSlot === item.slot ? '✓ 복사됨' : '복사 테스트'}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={item.value}
+              onChange={(e) => updateSlot(idx, 'value', e.target.value)}
+              aria-label={`${item.slot} 상용구 내용`}
+              placeholder="자주 입력하는 문구를 적어두세요"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-[#2DD4BF] text-[12.5px] text-zinc-200 outline-none"
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 /* ─────────────────────────────────────────────────────────────
- * 메인: 수련장 + 도장깨기 체험관 (상시 입장 · 종목 골라 재연습)
+ * 메인: 수련장 + 도장깨기 체험관
+ * - 'basics' = 귀신검색 수련용 1단계 소환술 3단
+ * - 'full'   = [v2.1 감산] 3. ⚡ 귀신창 전면 압축 (무료 핵심 3종 즉시 체험 + F1~F6 등록창 / 유료 도구는 하단 <details> 접힘)
  * ───────────────────────────────────────────────────────────── */
 export interface GhostSuperpowerDojoProps {
-  /** 'full' = ROI배너 + 1단계 + 2단계 9종 + 보상 / 'basics' = 1단계 소환술 3단만 (귀신검색 수련용) */
   variant?: 'full' | 'basics';
 }
 
@@ -689,7 +796,8 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
     const p = loadDojoProgress();
     return BASIC_STEPS.find((s) => !p.basics[s.id])?.id ?? 'b1';
   });
-  const [activeDojo, setActiveDojo] = useState<DojoItemId | null>(null);
+  const [activeFreeCore, setActiveFreeCore] = useState<'typo' | 'seq' | 'iron'>('typo');
+  const [activeDojo, setActiveDojo] = useState<DojoItemId | null>(5);
   const [sandboxKey, setSandboxKey] = useState(0);
 
   useEffect(() => {
@@ -710,56 +818,163 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
   };
 
   const basicsDone = countBasicsDone(progress);
-  const dojoDone = countDojoDone(progress);
   const BasicSandbox = BASIC_SANDBOXES[activeBasic];
+  const paidDojoItems = useMemo(
+    () => DOJO_ITEMS.filter((d) => d.id === 5 || d.id === 6 || d.id === 7 || d.id === 8),
+    []
+  );
   const ActiveDojoSandbox = activeDojo ? DOJO_SANDBOXES[activeDojo] : null;
-  const activeDojoMeta = DOJO_ITEMS.find((d) => d.id === activeDojo);
+  const activeDojoMeta = paidDojoItems.find((d) => d.id === activeDojo) ?? paidDojoItems[0];
+
+  if (variant === 'basics') {
+    return (
+      <div className="flex flex-col gap-4">
+        <section className={panelCls}>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[15px] font-extrabold text-white">🥋 1단계 · 애기귀신 소환술 3단 수련</h3>
+            <span className="text-[12px] font-bold text-zinc-400">{basicsDone}/3</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {BASIC_STEPS.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  setActiveBasic(s.id);
+                  setSandboxKey((k) => k + 1);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12.5px] font-bold border cursor-pointer ${
+                  activeBasic === s.id ? 'border-[#2DD4BF] bg-[#2DD4BF]/10 text-white' : 'border-white/10 text-zinc-300'
+                }`}
+              >
+                <StampBadge done={Boolean(progress.basics[s.id])} />
+                기본기 {i + 1} · {s.title}
+              </button>
+            ))}
+          </div>
+          <div className="text-[12.5px] text-zinc-400">{BASIC_STEPS.find((s) => s.id === activeBasic)?.mission}</div>
+          <BasicSandbox key={`${activeBasic}_${sandboxKey}`} onDone={() => markBasic(activeBasic)} />
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      {variant === 'full' && (
-        <div className="px-5 py-4 rounded-2xl bg-zinc-900 border-2 border-amber-400/70 text-center text-[16px] md:text-[18px] font-extrabold text-amber-200 leading-snug">
-          {DOJO_ROI_BANNER_TEXT}
-        </div>
-      )}
-
-      {/* 1단계 */}
+      {/* 상단 1: 평생 무료 핵심 3종 즉시 체험 */}
       <section className={panelCls}>
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[15px] font-extrabold text-white">🥋 1단계 · 애기귀신 소환술 3단 수련</h3>
-          <span className="text-[12px] font-bold text-zinc-400">{basicsDone}/3</span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-[16px] font-extrabold text-white">
+              ⚡ 하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝 (평생 무료 핵심 3종)
+            </h3>
+            <p className="text-[12.5px] text-zinc-400 mt-0.5">
+              어느 창에서든 <strong className="text-[#5EEAD4]">Ctrl + 0</strong> (보조: <strong className="text-[#5EEAD4]">Ctrl + 우클릭</strong>) 하나로 부르면 일하던 커서 위에서 바로 작동합니다.
+            </p>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11.5px] font-black shrink-0">
+            평생 0원 무제한
+          </span>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {BASIC_STEPS.map((s, i) => (
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {[
+            {
+              key: 'typo' as const,
+              done: Boolean(progress.dojo[1]),
+              title: '① ⚡ 무버튼 한영 오타 변환',
+              sub: '영타 치고 스페이스바만 누르면 한글로!',
+            },
+            {
+              key: 'seq' as const,
+              done: Boolean(progress.dojo[3]),
+              title: '② 📋 Ctrl+V 순차·칸맞춤 복붙',
+              sub: '연속 복사 후 빈칸마다 차례대로 입력',
+            },
+            {
+              key: 'iron' as const,
+              done: Boolean(progress.dojo[2] || progress.dojo[4]),
+              title: '③ 🧹 [1] 서식·줄바꿈 다림질',
+              sub: '평소 복붙은 원문 보존, 원할 때만 1초 정리',
+            },
+          ].map((tab) => (
             <button
-              key={s.id}
+              key={tab.key}
               type="button"
               onClick={() => {
-                setActiveBasic(s.id);
+                setActiveFreeCore(tab.key);
                 setSandboxKey((k) => k + 1);
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12.5px] font-bold border cursor-pointer ${
-                activeBasic === s.id ? 'border-[#2DD4BF] bg-[#2DD4BF]/10 text-white' : 'border-white/10 text-zinc-300'
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                activeFreeCore === tab.key
+                  ? 'border-[#2DD4BF] bg-[#2DD4BF]/12 text-white shadow-sm'
+                  : 'border-white/10 bg-zinc-950/80 text-zinc-300 hover:border-white/25'
               }`}
             >
-              <StampBadge done={Boolean(progress.basics[s.id])} />
-              기본기 {i + 1} · {s.title}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-extrabold">{tab.title}</span>
+                <StampBadge done={tab.done} />
+              </div>
+              <span className="text-[11.5px] text-zinc-400">{tab.sub}</span>
             </button>
           ))}
         </div>
-        <div className="text-[12.5px] text-zinc-400">{BASIC_STEPS.find((s) => s.id === activeBasic)?.mission}</div>
-        <BasicSandbox key={`${activeBasic}_${sandboxKey}`} onDone={() => markBasic(activeBasic)} />
+
+        <div className="pt-2 border-t border-white/10 flex flex-col gap-2.5">
+          {activeFreeCore === 'typo' && (
+            <>
+              <div className="text-[12.5px] text-teal-200 font-bold">
+                ⌨️ 영문으로 잘못 친 문장 끝에서 스페이스바를 탁 눌러보세요! (이메일·URL·영문 약어는 자동 보호)
+              </div>
+              <Dojo1 key={`free_typo_${sandboxKey}`} onDone={() => markDojo(1)} />
+            </>
+          )}
+          {activeFreeCore === 'seq' && (
+            <>
+              <div className="text-[12.5px] text-teal-200 font-bold">
+                📋 [3개 연속 복사]를 누른 뒤 아래 이름·전화·주소 칸을 차례대로 우클릭해 꽂아보세요! (실전에선 Ctrl+V 연타)
+              </div>
+              <Dojo3 key={`free_seq_${sandboxKey}`} onDone={() => markDojo(3)} />
+            </>
+          )}
+          {activeFreeCore === 'iron' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-2">
+                <div className="text-[12px] text-teal-200 font-bold">
+                  🧺 PDF 끊어진 줄바꿈 1초 이어붙이기 ([1]번 수동 작동)
+                </div>
+                <Dojo2 key={`free_iron_${sandboxKey}`} onDone={() => markDojo(2)} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="text-[12px] text-teal-200 font-bold">
+                  🧼 뉴스 광고·기자 꼬리말 순수 본문 세탁
+                </div>
+                <Dojo4 key={`free_launder_${sandboxKey}`} onDone={() => markDojo(4)} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="px-3.5 py-2.5 rounded-xl bg-zinc-950/90 border border-teal-400/30 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+          <span className="text-zinc-300">
+            📦 <strong className="text-teal-300">보너스 평생 무료:</strong> 윈도우 탐색기에서 압축파일 <strong>더블클릭</strong> 또는 <strong>우클릭 메뉴 딸깍</strong>으로 상업광고 0%·한글 깨짐 없는 1초 압축 풀기·묶기!
+          </span>
+          <span className="text-teal-300 font-extrabold shrink-0">평생 0원</span>
+        </div>
       </section>
 
-      {/* 2단계 */}
-      {variant === 'full' && (
-        <section className={panelCls}>
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-[15px] font-extrabold text-white">⚡ 2단계 · 초능력 도장깨기 체험관</h3>
-            <span className="text-[12px] font-bold text-zinc-400">{dojoDone}/9</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-            {DOJO_ITEMS.map((d) => (
+      {/* 상단 2: 내 개인 상용구 F1~F6 등록창 */}
+      <PersonalSnippetsRegistryPanel />
+
+      {/* 하단 3: 유료 고급 도구 & 30일 무제한 체험 아코디언 접힘 */}
+      <details className="rounded-2xl bg-zinc-900/80 border border-white/10 p-4">
+        <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-between gap-2">
+          <span>🔒 유료 확장 기술 미리 체험해보기 ([2] 스샷·PDF변환 · [3] 다중합본 · [5] 창고정 · F7~F12 팀 상용구) ▾</span>
+          <span className="text-[11.5px] text-zinc-400 font-semibold shrink-0">카드 등록 없는 30일 무료체험</span>
+        </summary>
+        <div className="pt-4 mt-3 border-t border-white/10 flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
+            {paidDojoItems.map((d) => (
               <button
                 key={d.id}
                 type="button"
@@ -767,8 +982,10 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
                   setActiveDojo(d.id);
                   setSandboxKey((k) => k + 1);
                 }}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-[12.5px] font-bold border cursor-pointer ${
-                  activeDojo === d.id ? 'border-[#2DD4BF] bg-[#2DD4BF]/10 text-white' : 'border-white/10 text-zinc-300 hover:bg-white/5'
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-[12px] font-bold border cursor-pointer ${
+                  activeDojoMeta?.id === d.id
+                    ? 'border-amber-400 bg-amber-400/10 text-white'
+                    : 'border-white/10 text-zinc-300 hover:bg-white/5'
                 }`}
               >
                 <StampBadge done={Boolean(progress.dojo[d.id])} />
@@ -778,36 +995,16 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
             ))}
           </div>
           {ActiveDojoSandbox && activeDojoMeta && (
-            <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
-              <div className="text-[12.5px] text-zinc-400">
+            <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-zinc-950/80 border border-white/10">
+              <div className="text-[12.5px] text-zinc-300 font-bold">
                 {activeDojoMeta.icon} {activeDojoMeta.mission}
               </div>
-              <ActiveDojoSandbox key={`${activeDojo}_${sandboxKey}`} onDone={() => markDojo(activeDojoMeta.id)} />
+              <ActiveDojoSandbox key={`${activeDojoMeta.id}_${sandboxKey}`} onDone={() => markDojo(activeDojoMeta.id)} />
             </div>
           )}
-        </section>
-      )}
-
-      {variant === 'full' && isAllDojoDone(progress) && <TrialRewardCard />}
-
-      {variant === 'full' && (
-        <section
-          aria-label="귀신창 보너스 초능력 안내"
-          className="p-4 rounded-2xl bg-zinc-900/90 border border-teal-400/35 flex flex-wrap items-center justify-between gap-2.5 text-[12.5px]"
-        >
-          <div className="flex flex-col gap-0.5">
-            <span className="font-extrabold text-teal-300">
-              📦 기타 · 보너스 초능력 ([💡꿀팁·기타▾] 소속 · 언제나 평생 무료)
-            </span>
-            <span className="text-zinc-300">
-              <strong className="text-white">우클릭 1초 스마트 ZIP 압축 풀기·묶기</strong> — 알집 대체 · 맥(Mac) 한글 파일명 깨짐(NFD➔NFC) 자동 복원 · 압축폭탄 사전 차단
-            </span>
-          </div>
-          <span className="px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-200 text-[11px] font-black shrink-0">
-            평생 0원
-          </span>
-        </section>
-      )}
+          <TrialRewardCard />
+        </div>
+      </details>
     </div>
   );
 };

@@ -149,9 +149,9 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
     {
       id: 'ghosti',
       name: '귀신같이',
-      url: 'https://z-eye.sundreamer.app',
+      url: 'https://ghosti.sundreamer.app',
       icon: '👻',
-      description: '1초 AI 파일·영상 내용찾기 & 용량청소·공유방',
+      description: '내 PC와 모바일에 1초 초능력을 · 광고·월세 0원',
       isActive: true,
       isLinkActive: true,
       sortOrder: 5
@@ -161,7 +161,7 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
 
 function normalizeAppId(rawId?: string): string {
   const lower = (rawId || '').trim().toLowerCase();
-  if (lower === 'zeye' || lower === 'z-eye') return 'ghosti';
+  if (lower === 'ghosti' || lower === '귀신같이') return 'ghosti';
   if (lower === 'senstalk') return 'sensetalk';
   return lower;
 }

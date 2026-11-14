@@ -527,10 +527,9 @@ export function normalizeStudioProductId(appId?: string): string {
   const lower = appId.trim().toLowerCase();
   if (lower === 'sundreamer' || lower === '썬드리머') return 'SunDreamer';
   if (lower === 'aggrofilter' || lower === '어그로필터') return 'AggroFilter';
-  if (lower === 'saysee' || lower === '세이씨') return 'SaySee';
+  if (lower === 'ghosti' || lower === '귀신같이' || lower === '세이씨') return 'Ghosti';
   if (lower === 'whateat' || lower === '뭐먹지' || lower === '뭐먹지?') return 'WhatEat';
   if (lower === 'senstalk' || lower === 'sensetalk' || lower === '센스톡') return 'SenseTalk';
-  if (lower === 'zeye' || lower === 'z-eye' || lower === '제트아이') return 'ZEye';
   return appId.trim();
 }
 

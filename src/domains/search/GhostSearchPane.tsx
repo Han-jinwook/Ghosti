@@ -25,7 +25,7 @@ import { useDashboardNavStore } from '../shared/dashboardNavState';
 
 /**
  * [2번 창: 🎯 [2귀신] 전담 UI 패널]
- * - 우측 👻 귀신검색 사진·동영상 글자뽑기·문서투시 및 도장깨기 수련 화면
+ * - 우측 👻 귀신검색 사진·동영상 글자뽑기·문서 본문 소환 및 도장깨기 수련 화면
  */
 export const GhostSearchPane: React.FC<{
   ghostSearchWindowStage: 'small' | 'medium' | 'large' | null;

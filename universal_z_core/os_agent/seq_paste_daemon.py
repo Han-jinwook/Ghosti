@@ -2,7 +2,7 @@
 """
 👻 귀신같이(Ghosti) 유료 구독자 전용 선물 — 『멀린 Z 코어 9대 귀신 초능력 + 3대 보너스 통합 데몬 (v2.5 AI 완전체)』
 ====================================================================================================
-- 귀신호출 2종 단일화: Ctrl + 0 / Ctrl + 우클릭 (우클릭 0.35초 꾹 롱프레스 전면 폐기) + 오토매틱(Automatic) 한영 오타·띄어쓰기 감지 및 한/영 키 자동 전환
+- 귀신호출 2종 단일화: Ctrl + 0 / Ctrl + 우클릭 + 오토매틱(Automatic) 한영 오타·띄어쓰기 감지 및 한/영 키 자동 전환
 - 온디바이스 AI 엔진: EmbeddingGemma 2 (MRL 128차원 절삭 임베딩 + 262,144 토크나이저 사전 재활용으로 추가 사전 용량 0 Byte)
 - 9대 초능력 + 3대 보너스:
   ① [그냥 Ctrl + V 연타] 순차(1->2->3) 연사 + IUIAutomation & EmbeddingGemma 2 입력칸 라벨 비순차(Out-of-Order) 자동 매칭 + 엑셀 다중 셀 1회 복사 자동 쪼개기
@@ -570,7 +570,7 @@ def get_hybrid_caret_anchor_pos(fg_hwnd: int | None = None) -> tuple[int, int, s
 def extract_non_destructive_caret_lookbehind(fg_hwnd: int | None = None, max_words: int = 3) -> str:
     """
     [무드래그 3단계 안전망 — 1단계: 커서 직전 토큰 비파괴 자동 역추적 (Caret Lookbehind)]
-    사용자가 드래그나 '?' 입력 없이 키워드만 치고 우클릭 꾹 / Ctrl+0을 호출했을 때,
+    사용자가 드래그나 '?' 입력 없이 키워드만 치고 Ctrl+0 / Ctrl+우클릭을 호출했을 때,
     커서(Caret) 바로 앞 최근 1~3어절을 비파괴 스캔하여 암묵적 검색어(Implicit Query)로 추출합니다.
     """
     hwnd = fg_hwnd or u32.GetForegroundWindow()
@@ -1445,7 +1445,7 @@ def resolve_summon_window_ui_routing(
     1) 60초 이내 미소비 폰 촬영/스샷이 있으면 -> 창 UI ③ (One-Time Pop) 또는 창 UI ② Row 0 도킹
     2) 명시적 트리거('드래그 선택' 또는 끝에 '?'/'？' 입력)가 있을 때 -> 창 UI ②(귀신검색창)로 100% 직행!
     3) [v1.3 신규] 모니터 바탕화면, 탐색기 빈 공간, 웹페이지 빈 곳처럼 글씨 입력창이 아닌 곳(is_editable_input_focused=False)에서
-       Ctrl+0 (또는 우클릭 꾹~) 호출 시 -> 드래그나 '?'가 없어도 0.01초 만에 곧바로 『👻 귀신검색창(UI ②)』 직행!
+       Ctrl+0 (또는 Ctrl+우클릭) 호출 시 -> 드래그나 '?'가 없어도 즉시 곧바로 『👻 귀신검색창(UI ②)』 직행!
     4) [v1.3 신규] 입력창에서 '?' 없이 Ctrl+0을 눌러 기본 귀신창(UI ①)이 떴더라도, 유저가 키보드로 검색어(typed_in_basic_window)를
        타이핑하기 시작하면 0.01초 만에 즉시 『👻 귀신검색창(UI ②)』으로 스르륵 자동 변신!
     5) 그 외 일반 타이핑 중 호출 시 -> 창 UI ①(기본 귀신창: 상용구·클립보드·초능력)을 기본 유지하되,
@@ -1604,13 +1604,13 @@ def opt_in_30d_unlimited_superpower_trial(agreed: bool = True) -> dict:
         "status": m_info.get("trialOptInStatus"),
         "trial_opt_in_at": m_info.get("trialOptInAt"),
         "days_left": 29 if agreed else 0,
-        "badge_label": "🎁 무제한 체험 D-29" if agreed else "일 3회 평생 무료 모드",
+        "badge_label": "🎁 무제한 체험 D-29" if agreed else "평생 무료 기본기 모드",
     }
 
 
 def build_loss_aversion_time_saved_report(total_actions_count: int = 412) -> dict:
     """
-    [2차 딥리서치 확정 — 📊 일 3회 무료 한도 도달 시 '손실회피(Loss Aversion) 시간 절약 성적표 팝업']:
+    [30일 무료체험 만료 시 '시간 절약 성적표 팝업']:
     1회당 평균 1분(창 전환 + 폴더 찾기 + 복붙 노가다) 절약 기준으로 누적 절약 시간을 환산하여 반환합니다.
     """
     cnt = max(1, int(total_actions_count))
@@ -1622,9 +1622,9 @@ def build_loss_aversion_time_saved_report(total_actions_count: int = 412) -> dic
         "total_actions": cnt,
         "saved_minutes": saved_minutes,
         "saved_time_label": time_str,
-        "headline": "👻 [오늘의 무료 귀신 초능력 3회를 모두 사용하셨습니다!]",
+        "headline": "👻 [30일 무제한 무료체험 기간이 만료되었습니다!]",
         "body": f"지금까지 애기귀신과 함께 총 {cnt:,}번의 창 이동·복붙 노가다를 줄여 약 {time_str}의 소중한 시간을 아끼셨습니다!",
-        "cta_primary": "☕ 커피 한 잔 값(월 3,900원 / 🔥10년 특판 3.9만)으로 평생 무제한 풀기",
+        "cta_primary": "☕ 커피 한 잔 값(월 3,900원 / 연간 결제 시 월 3,250원꼴)으로 무제한 풀기",
         "cta_secondary": "내일 다시 무료로 쓸게요",
     }
 
@@ -1685,10 +1685,10 @@ def normalize_feature_id(raw_key: str) -> str:
 
 def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
     """
-    [평생 무료 기본기 vs 유료 티어(Opt-in 30일 무제한 체험 ➔ 만료 시 일 3회 무료 없이 깔끔 잠금)]:
+    [평생 무료 기본기 vs 유료 티어(Opt-in 30일 무제한 체험 ➔ 만료 시 유료 잠금🔒)]:
     - 평생 무료 기본기(FREE_FOREVER_FEATURES)는 무조건 True!
     - 유료 티어 기능은 미개봉(UNOPENED), 30일 이내(ACTIVE_30D), 유료 구독자(SUBSCRIBED)일 때만 True!
-    - 30일 무제한 체험 만료(EXPIRED_30D) 시에는 '일 3회 무료' 없이 즉시 잠금(False) 반환!
+    - 30일 무제한 체험 만료(EXPIRED_30D) 시에는 즉시 유료 잠금(False) 반환!
     """
     feat_id = normalize_feature_id(raw_feature_key)
     if feat_id in FREE_FOREVER_FEATURES:
@@ -1726,9 +1726,9 @@ def check_feature_quota_allowed(raw_feature_key: str) -> tuple[bool, str]:
 def complete_feature_action_success(raw_feature_key: str) -> dict:
     """
     [오직 '실제 액션이 성공 완수된 시점'에만 호출!]
-    1) 해당 기능이 미개봉(UNOPENED)이면 -> 지금 이 순간부터 해당 기능의 30일 무제한 타이머 개시! (일일 3회 차감 안 함)
+    1) 해당 기능이 미개봉(UNOPENED)이면 -> 지금 이 순간부터 해당 기능의 30일 무제한 타이머 개시!
     2) 해당 기능이 30일 무제한 진행 중(ACTIVE_30D)이면 -> 횟수 차감 없이 통과!
-    3) 해당 기능의 30일 무제한이 만료(EXPIRED_30D)되었으면 -> 오늘 일일 무료 횟수(3회 한도)에서 1회 차감!
+    3) 해당 기능의 30일 무제한이 만료(EXPIRED_30D)되었으면 -> 유료 잠금 상태 유지!
     """
     feat_id = normalize_feature_id(raw_feature_key)
     record_feature_telemetry(raw_feature_key)
@@ -2740,8 +2740,8 @@ def _toast_worker() -> None:
             rbtn_down = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
             ctrl_held = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
             esc_down = (u32.GetAsyncKeyState(0x1B) & 0x8000) != 0
-            # [핵심 수리]: 우클릭(rbtn_down)은 '우클릭 0.35초 꾹 연속 재호출 토글(기본 귀신창 ⇄ 귀신검색창)' 입력 수단이므로,
-            # 외부 마우스 클릭 닫기는 오직 좌클릭(lbtn_down)일 때만 발동시켜 우클릭 꾹 연속 토글이 100% 작동하도록 보장!
+            # [핵심 수리]: Ctrl+우클릭 연속 재호출 토글(기본 귀신창 ⇄ 귀신검색창) 입력을 방해하지 않도록,
+            # 외부 마우스 클릭 닫기는 오직 좌클릭(lbtn_down)일 때만 발동시켜 재호출 토글이 100% 작동하도록 보장!
             mouse_down = lbtn_down
             if current_win[0] is not None:
                 pt_click = wintypes.POINT()
@@ -2987,7 +2987,7 @@ def _toast_worker() -> None:
                         _apply_win_topmost(win, x, y, req_w, req_h, activate=False)
                         _schedule_close(duration_ms)
                     # ──────────────────────────────────────────────────────────────────────
-                    # [창 UI ④] 스마트 압축 해제 & 무해제 속마음 투시 + 인라인 공유 브릿지 (우클릭 0.35초 꾹)
+                    # [창 UI ④] 스마트 압축 해제 + 인라인 공유 브릿지 (Ctrl+0 / Ctrl+우클릭)
                     # ──────────────────────────────────────────────────────────────────────
                     elif message.startswith("__UI4_ARCHIVE__|"):
                         active_mode[0] = "ui4"
@@ -6317,7 +6317,7 @@ def main() -> None:
         """
         [귀신창 수동 초능력 1~5번 다이어트 체계 (한영·띄어쓰기는 타이핑 자동 감지)]:
         1줄(하늘색 주력): [Ctrl+V] 순차·칸맞춤 | [1] 🧹서식·줄바꿈   | [2] 📄스샷·PDF변환🔒
-        2줄(흰색 확장):   [3] 🔗다중합본🔒     | [4] 🔢번호·일정🔒   | [5] 📌창고정🔒   | [⌨️상용구▾] [💡꿀팁·기타▾]
+        2줄(흰색 확장):   [3] 🔗다중합본🔒     | [5] 📌창고정🔒   *(※ [4] 번호·일정🔒 Wave 2 순연)* | [⌨️상용구▾] [💡꿀팁·기타▾]
         """
         nonlocal seq_mode, last_hdrop_copy_ts, last_drag_select_ts, summon_had_recent_drag
         disarm_sub_hotkeys()
@@ -6390,7 +6390,7 @@ def main() -> None:
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 📄스샷·PDF변환🔒\n[3] 🔗다중합본🔒   [4] 🔢번호·일정🔒   [5] 📌창고정🔒",
+                f"귀신같이 (엑셀 {len(excel_cells)}칸 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 📄스샷·PDF변환🔒\n[3] 🔗다중합본🔒   [5] 📌창고정🔒",
                 duration_ms=6500,
             )
         elif len(recent_unpasted) >= 2 and not ("\n" in (live_clip_val or "") and not has_excel_clipboard_format()):
@@ -6398,20 +6398,20 @@ def main() -> None:
             daemon_set_clipboard(seq_queue[0])
             arm_sub_hotkeys()
             show_ghost_toast(
-                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 📄스샷·PDF변환🔒\n[3] 🔗다중합본🔒   [4] 🔢번호·일정🔒   [5] 📌창고정🔒",
+                f"귀신같이 ({len(seq_queue)}개 장전) | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 📄스샷·PDF변환🔒\n[3] 🔗다중합본🔒   [5] 📌창고정🔒",
                 duration_ms=6500,
             )
         else:
             seq_queue.clear()
             arm_sub_hotkeys()
             show_ghost_toast(
-                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 📄스샷·PDF변환🔒\n[3] 🔗다중합본🔒   [4] 🔢번호·일정🔒   [5] 📌창고정🔒",
+                "귀신같이 | [Ctrl+V] 순차·칸맞춤   [1] 🧹서식·줄바꿈   [2] 📄스샷·PDF변환🔒\n[3] 🔗다중합본🔒   [5] 📌창고정🔒",
                 duration_ms=6500,
             )
 
     def trigger_master_summon(summon_by_rclick: bool = False) -> None:
         """
-        [마스터 기획 정본 v1.4 — 귀신호출 3인방(Ctrl+0 / Ctrl+우클릭 / 우클릭 0.35초 꾹) 100% 동일 조건 분기 + 재호출 토글]:
+        [마스터 기획 정본 v2.1 — 귀신호출 2종(Ctrl+0 / Ctrl+우클릭) 100% 동일 조건 분기 + 재호출 토글]:
         0) [연속 재호출 토글]: 이미 귀신창/귀신검색창이 떠 있는 상태에서 한 번 더 호출하면 즉시 [기본 귀신창 ⇄ 귀신검색창] 상호 전환!
         1) [창 UI ③ 사진·OCR 창]: 방금(15초 이내) 스샷을 캡처한 직후 최초 1회 소환 시 ➔ 사진·OCR 전용 창 직행 (1회성 소비)!
         2) [창 UI ② 👻 귀신검색창]:
@@ -6467,7 +6467,7 @@ def main() -> None:
             proc_before = _get_process_name_from_hwnd(fg_before).lower()
             cls_before = _get_win_class_only(fg_before)
 
-        # [핵심 통일]: 단축키(Ctrl+0 vs Ctrl+우클릭 vs 우클릭 꾹)에 따라 다르게 띄우지 않고 오직 현재 창 문맥으로만 100% 동일 판별!
+        # [핵심 통일]: 단축키(Ctrl+0 vs Ctrl+우클릭)에 따라 다르게 띄우지 않고 오직 현재 창 문맥으로만 100% 동일 판별!
         if proc_before in ("explorer.exe", "python.exe", "pythonw.exe") or cls_before in ("Progman", "WorkerW", "Shell_TrayWnd", "CabinetWClass", "ExploreWClass"):
             is_dedicated_input_app = False
         else:
@@ -6614,7 +6614,7 @@ def main() -> None:
 
     def _release_target_rbutton_stuck(hwnd_target: int | None, pt_x: int | None = None, pt_y: int | None = None) -> None:
         """
-        우클릭 0.35초 롱프레스 달성 순간 실제 마우스 커서 아래 컨트롤(SysListView32/SHELLDLL_DefView 등)과
+        Ctrl+우클릭 호출 순간 실제 마우스 커서 아래 컨트롤(SysListView32/SHELLDLL_DefView 등)과
         상위 창에 WM_CANCELMODE를 전달하여, 우클릭 버튼을 뗄 때 OS 기본 우클릭 메뉴가 아예 생성되지 않도록 차단합니다.
         """
         try:
@@ -6752,7 +6752,7 @@ def main() -> None:
                             _execute_superpower_num(c_num)
                     except Exception:
                         pass
-                # [Zero-Hook 마우스 Ctrl+우클릭 감지 — 감산 제1호: 우클릭 0.35초 꾹 롱프레스 전면 폐기!]
+                # [Zero-Hook 마우스 Ctrl+우클릭 감지 — 귀신호출 2종 단일화]
                 # 오직 Ctrl + 우클릭 시에만 소환하며, 일반 우클릭은 OS 순정 컨텍스트 메뉴를 100% 방해 없이 보장합니다.
                 rbtn_phys_now = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
                 was_rbtn_phys = was_key_down.get(0x9901, False)
@@ -7583,7 +7583,7 @@ def run_quota_self_test() -> int:
         assert res1["status"] == "FIRST_OPENED_30D" and res1["consumed_daily"] is False
         ok2, st2 = check_feature_quota_allowed("superpower_key_1")
         assert ok2 and st2.startswith("ACTIVE_D-")
-        print(f"   ✅ 1번 첫 성공 직후 상태: {res1['status']} / {st2} (일일 3회 차감 없음: consumed_daily={res1['consumed_daily']})")
+        print(f"   ✅ 1번 첫 성공 직후 상태: {res1['status']} / {st2} (consumed_daily={res1['consumed_daily']})")
 
         print("🧪 [3단계] 1번 기능을 31일 전 사용으로 강제 타임머신 만료 조작 (2번 파일·라벨러는 미개봉 유지)...")
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))

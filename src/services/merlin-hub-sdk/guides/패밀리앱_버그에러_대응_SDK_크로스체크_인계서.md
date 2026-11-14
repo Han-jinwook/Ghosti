@@ -47,7 +47,7 @@
 
 ### C. 썬드리머 스튜디오 고객센터 (`d:\Studio\admin-dashboard\`)
 - [`d:\Studio\admin-dashboard\src\pages\CustomerSupport.tsx`](file:///d:/Studio/admin-dashboard/src/pages/CustomerSupport.tsx):
-  - `?app=AggroFilter` / `SunDreamer` / `SaySee` / `WhatEat` 유입 시 앱별 맞춤 테마 배너 & `[← 앱으로 돌아가기]` & `[✨ 패밀리 앱 둘러보기]` 상단 바 자동 렌더링.
+  - `?app=AggroFilter` / `SunDreamer` / `Ghosti` / `WhatEat` 유입 시 앱별 맞춤 테마 배너 & `[← 앱으로 돌아가기]` & `[✨ 패밀리 앱 둘러보기]` 상단 바 자동 렌더링.
   - `크몽 ID` 입력 필드 완전 삭제 및 패밀리 앱 드롭다운 옵션 추가.
   - `[블랙박스 자동 진단 로그]`가 포함된 티켓 열람 시 일반 본문과 분리하여 다크모드 터미널 스타일의 **접이식(Collapsible) 블랙박스 진단 리포트 뷰어** 제공.
   - 관리자가 답변 등록 시 `MerlinHubClient().sendNotification()`을 호출해 고객 이메일로 `?ticket_id=...&app=...` 직행 점핑 링크 자동 발송.
@@ -56,7 +56,7 @@
 
 ## 🔍 3. 멀린 허브 에이전트 크로스체크 요청 항목 (Checklist)
 
-멀린 허브 에이전트는 아래 사항을 크로스체크한 뒤, 이상이 없으면 **썬드리머(`D:\LumiNote\sundream`), 뭐먹지(`D:\WhatEat`), 세이씨(`D:\SaySee`)** 등 전 패밀리 앱으로 `v2.15.0` SDK 배포(대출)를 진행해 주세요.
+멀린 허브 에이전트는 아래 사항을 크로스체크한 뒤, 이상이 없으면 **썬드리머(`D:\LumiNote\sundream`), 뭐먹지(`D:\WhatEat`), 귀신같이(`D:\Ghosti`)** 등 전 패밀리 앱으로 `v2.15.0` SDK 배포(대출)를 진행해 주세요.
 
 1. **안전 격리(Try/Catch) 검증**:
    - `Support/blackbox.ts` 및 `HubSupportLink.tsx`의 모든 이벤트 리스너와 `fetch` 호출이 실패하더라도 호스트 앱의 렌더링이나 비즈니스 로직에 영향을 주지 않는지 확인.

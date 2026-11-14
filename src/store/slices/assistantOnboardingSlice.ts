@@ -1276,8 +1276,12 @@ export const createAssistantOnboardingSlice: StateCreator<
 
   setShowSetupMonsterModal: (showSetupMonsterModal, platform) =>
     set((state) => ({
-      showSetupMonsterModal,
+      // [v2.1 감산] 레거시 SetupMonsterModal 팝업 진입점 비활성화 -> 1. 👻 귀신비서(personal/trash) 채팅 칩으로 일원화
+      showSetupMonsterModal: false,
       setupMonsterPlatform: platform ?? state.setupMonsterPlatform,
+      ...(showSetupMonsterModal
+        ? { activeLoungeType: 'personal', desktopTab: 'trash' }
+        : {}),
     })),
 
   setSetupMonsterPlatform: (setupMonsterPlatform) =>

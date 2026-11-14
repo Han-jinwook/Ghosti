@@ -995,7 +995,7 @@ export const LoungeView: React.FC = () => {
                         onClick={() => setShowProModal(true)}
                         className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
                       >
-                        💼 3·4번 프로 기능 (1개월 무료체험 · 10년 특판) 보기
+                        💼 5·6번 확장 기능 (30일 무료체험 · 연간 할인) 보기
                       </button>
                     </div>
                   </>
@@ -1321,7 +1321,7 @@ export const LoungeView: React.FC = () => {
                         onClick={() => setShowProModal(true)}
                         className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
                       >
-                        💼 3·4번 프로 기능 (1개월 무료체험 · 10년 특판) 보기
+                        💼 5·6번 확장 기능 (30일 무료체험 · 연간 할인) 보기
                       </button>
                     </div>
                   </>
@@ -2950,7 +2950,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
   const copyInviteLink = async () => {
     const inviteCopy =
-      '[귀신같이 라운지 초대장] 혼자 쓸 땐 언제나 0원, 함께 쓸 땐 방장 한 분만! 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
+      '[귀신같이 라운지 초대장] 내 PC와 모바일에 1초 초능력을! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);

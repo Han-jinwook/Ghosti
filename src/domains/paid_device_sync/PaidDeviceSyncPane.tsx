@@ -70,15 +70,22 @@ export const PaidDeviceSyncPane: React.FC = () => {
 
           <GhostSecretaryFirstGuard>
             {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
-            <div className="flex flex-col gap-6">
-              {/* [공문 2053 · v1.3 3순위] ⚡ 귀신창 초능력 상시 연습장 = 🥋 초능력 도장깨기 체험관 */}
-              {ghostWindowTier === 'pc_free' && <GhostSuperpowerDojo variant="full" />}
-              <GhostWindowThreeStageMockup
-                activeTier={ghostWindowTier}
-                onTierChange={setGhostWindowTier}
-                initialWindowTab={ghostWindowInitialTab}
-              />
-              
+            <div className="flex flex-col gap-5">
+              {/* [v2.1 감산] 3. ⚡ 귀신창 전면 = 평생 무료 핵심 3종 즉시 체험 + F1~F6 개인 상용구 등록창 / 유료 고급 시뮬레이터는 하단 아코디언 접힘 */}
+              <GhostSuperpowerDojo variant="full" />
+              <details className="rounded-2xl bg-zinc-900/70 border border-white/10 p-4">
+                <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-between">
+                  <span>🔍 현장 소환창(Ctrl+0) 3단 UI &amp; 팀 확장 시뮬레이터 펼쳐보기 ▾</span>
+                  <span className="text-[11.5px] text-zinc-400 font-semibold">유료 확장 미리보기</span>
+                </summary>
+                <div className="pt-4 mt-3 border-t border-white/10">
+                  <GhostWindowThreeStageMockup
+                    activeTier={ghostWindowTier}
+                    onTierChange={setGhostWindowTier}
+                    initialWindowTab={ghostWindowInitialTab}
+                  />
+                </div>
+              </details>
             </div>
           ) : activeLoungeType === 'personal' ? (
             <>

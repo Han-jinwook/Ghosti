@@ -372,10 +372,10 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   activatePricingPlan: (planId: PricingPlanId) => {
     set((state) => {
       const labelMap: Record<PricingPlanId, string> = {
-        free_trial: '✨ 내 기기 1대 (기본) : 언제나 0원 ("혼자 쓰는 내 기기 1대는 기간 제한 없이 언제나 0원입니다.")',
+        free_trial: '✨ 내 기기 1대 (기본) : 언제나 0원 (내 PC·모바일 1초 초능력 기본 기능 평생 무료)',
         personal_single_2900: '🆓 내 기기 1대 (기본) : 언제나 0원 • ✋ 귀신같이 손보기',
         personal_sub_3900: '👑 내 기기 통합 + 귀신창 폰+PC • 대수 무제한 (월 3,900원)',
-        personal_year_35000: '👑 내 기기 통합 + 귀신창 폰+PC • 대수 무제한 (39,000원 • 🔥 출시 기념 10년 특판)',
+        personal_year_35000: '👑 내 기기 통합 + 귀신창 폰+PC • 대수 무제한 (연 39,000원 • 월 3,250원꼴 2개월 무료)',
         family_home_5900: '🏠 패밀리 사진 공유 • 우리집 단독 (인원·장수 무제한 평생 0원 무료)',
         family_home_year_59000: '🏠 패밀리 사진 공유 • 우리집 단독 (인원·장수 무제한 평생 0원 무료)',
         family_three_8900: '👨‍👩‍👧‍👦 패밀리 사진 공유 • 양가 통합 (인원·장수 무제한 평생 0원 무료)',
@@ -391,9 +391,9 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         student_sub_900: '📸 사진 공유 (가족·동호회·동창회 • 인원·장수 무제한 평생 0원 무료)',
         student_year_9000: '📸 사진 공유 (가족·동호회·동창회 • 인원·장수 무제한 평생 0원 무료)',
         work_soho_9900: '💼 업무 공유 • 소호(SOHO) ~5인 (월 9,900원 • S: 드라이브 + 팀 상용구)',
-        work_soho_year_99000: '💼 업무 공유 • 소호(SOHO) ~5인 (99,000원 • 🔥 10년 특판 • S: 드라이브 + 팀 상용구)',
+        work_soho_year_99000: '💼 업무 공유 • 소호(SOHO) ~5인 (연 99,000원 • 월 8,250원꼴 • S: 드라이브 + 팀 상용구)',
         work_biz_19900: '💼 업무 공유 • 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
-        work_biz_year_199000: '💼 업무 공유 • 소기업 ~20인 (190,000원) / 중소기업 ~50인 (290,000원 • 🔥 10년 특판)',
+        work_biz_year_199000: '💼 업무 공유 • 소기업 ~20인 (연 190,000원) / 중소기업 ~50인 (연 290,000원 • 2개월 무료)',
       };
 
       const nextLoungeType: LoungeType = planId.startsWith('personal_')

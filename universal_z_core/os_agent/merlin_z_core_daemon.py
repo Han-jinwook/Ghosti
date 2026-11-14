@@ -1109,6 +1109,13 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                     win32gui.AppendMenu(
                         menu,
                         win32con.MF_STRING,
+                        1003,
+                        "🏦 은행·결제 보안프로그램 즉시 깨우기",
+                    )
+                    win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
+                    win32gui.AppendMenu(
+                        menu,
+                        win32con.MF_STRING,
                         1002,
                         "[종료] 멀린 Z-코어 끝내기 (Exit)",
                     )
@@ -1124,7 +1131,34 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                         None,
                     )
                     win32gui.PostMessage(hwnd, win32con.WM_NULL, 0, 0)
-                    if cmd == 1002:
+                    if cmd == 1003:
+                        def _wake_from_tray() -> None:
+                            try:
+                                import plugin_ghosti_care_suite
+                                wres = plugin_ghosti_care_suite.wake_security_services(trigger_title="tray_manual_wake")
+                                wcnt = int(wres.get("wokenCount") or 0)
+                                msg_txt = (
+                                    f"잠자던 보안 서비스 {wcnt}개를 즉시 깨웠습니다! (15분간 유지)"
+                                    if wcnt > 0
+                                    else "현재 잠자고 있는 은행·결제 보안 서비스가 없습니다 (모두 정상 대기 중)."
+                                )
+                                nid_wake = (
+                                    hwnd,
+                                    0,
+                                    win32gui.NIF_INFO,
+                                    msg_tray,
+                                    hicon,
+                                    tip,
+                                    msg_txt,
+                                    3000,
+                                    "👻 귀신같이 은행·결제 모드 기상 완료",
+                                    win32gui.NIIF_INFO,
+                                )
+                                win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, nid_wake)
+                            except Exception:
+                                pass
+                        threading.Thread(target=_wake_from_tray, daemon=True).start()
+                    elif cmd == 1002:
                         try:
                             win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (hwnd, 0))
                         except Exception:

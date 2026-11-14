@@ -675,7 +675,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
   const [oneTimePopUsed, setOneTimePopUsed] = useState<boolean>(false);
   const [lastInsertedSpotNotice, setLastInsertedSpotNotice] = useState<string | null>(null);
 
-  // ── 하단 부가 체험 모달 상태 (귀신 라벨러 / 귀신 말풍선 / 30일 체험 모달 / 절약 리포트 모달) ──
+  // ── 하단 부가 체험 모달 상태 (귀신 라벨러 / 30일 체험 모달 / 절약 리포트 모달) ──
   const [labelerScopeMode, setLabelerScopeMode] = useState<'personal' | 'work_s'>('personal');
   const [activePromoModal, setActivePromoModal] = useState<'none' | 'opt_in_30d' | 'loss_aversion_3limit' | 'training_dojo'>('none');
   const [trialOptInAccepted, setTrialOptInAccepted] = useState<boolean>(true);
@@ -997,7 +997,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                 </button>
               </div>
 
-              {/* 2줄 (흰색 #E2E8F0 — [3]~[5] 유료 티어 정배열 + 우측 끝 [⌨️상용구▾] · [💡꿀팁·기타▾]) */}
+              {/* 2줄 (흰색 #E2E8F0 — [3]·[5] 유료 티어 정배열 + 우측 끝 [⌨️상용구▾] · [💡꿀팁·기타▾], [4] 번호·일정은 Wave 2 순연) */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[
@@ -1005,11 +1005,6 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                       id: 3,
                       label: '[3] 🔗다중합본🔒',
                       sampleOut: '[다중 복사 합본] 1. 계약 개요 / 2. 단가 조건 / 3. 특약 사항 통짜 병합 완료',
-                    },
-                    {
-                      id: 4,
-                      label: '[4] 🔢번호·일정🔒',
-                      sampleOut: '성함: 김철수 / 연락처: 010-1234-5678 / 계좌: 국민 012-3456-7890-11',
                     },
                     {
                       id: 5,
@@ -1836,7 +1831,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
         </div>
 
         {showAdvancedUtils && (
-          <div className="p-4 border-t border-white/10 grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+          <div className="p-4 border-t border-white/10 grid grid-cols-1 gap-3.5">
             {/* 카드 1: 🏷️ 귀신 라벨러 */}
             <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col justify-between gap-2.5">
               <div className="flex items-center justify-between gap-2">
@@ -1900,23 +1895,6 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                 </div>
               </div>
             </div>
-
-            {/* 카드 2: 💬 귀신 말풍선 */}
-            <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col justify-between gap-2.5">
-              <span className="text-[12.5px] font-black text-amber-300">
-                💬 탐색기 마우스 오버 3줄 요약
-              </span>
-
-              <div className="p-3 rounded-xl bg-[#141821] border border-amber-300/40 text-[11.5px] font-mono flex flex-col gap-1">
-                <div className="text-amber-200 font-sans font-extrabold">
-                  👻 250315_내용_임대차계약서_역삼빌딩.pdf
-                </div>
-                <div className="text-zinc-200">
-                  • 보증금 5,000만 원 / 월세 320만 원 · 만기 2028.11.14
-                  <br />• 특약: 퇴실 시 기본 칸막이 원상복구 면제
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -1937,7 +1915,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
             </button>
           </div>
           <p className="text-[12.5px] text-zinc-200">
-            매일 쓰는 기본기(내 PC 검색 · 귀신비서 · 자동 한영·띄어쓰기 · Ctrl+V 순차붙여넣기 · [1] 서식·줄바꿈 · F1~F6 · ZIP 압축)는 언제나 평생 무료입니다. 🔒 유료 티어 기능은 동의 시 카드 등록·자동 결제 없이 30일간 무제한 무료체험 후 일 3회 무료 없이 깔끔하게 잠기며, 체험 중 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존됩니다.
+            매일 쓰는 기본기(내 PC 검색 · 귀신비서 · 자동 한영·띄어쓰기 · Ctrl+V 순차붙여넣기 · [1] 서식·줄바꿈 · F1~F6 · ZIP 압축)는 언제나 평생 무료입니다. 🔒 유료 티어 기능은 동의 시 카드 등록·자동 결제 없이 30일간 무제한 무료체험 후 유료 기능만 깔끔하게 잠기며, 체험 중 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존됩니다.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1992,7 +1970,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
               }}
               className="px-4 py-2 rounded-xl bg-amber-400 text-zinc-950 text-[12px] font-black cursor-pointer"
             >
-              ☕ 월 3,900원 (10년 특판 3.9만) 전 기능 무제한 풀기
+              ☕ 월 3,900원 (연간 결제 시 월 3,250원꼴) 전 기능 무제한 풀기
             </button>
             <button
               type="button"
