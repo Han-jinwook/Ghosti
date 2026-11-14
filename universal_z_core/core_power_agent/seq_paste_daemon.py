@@ -2,7 +2,7 @@
 """
 👻 귀신같이(Ghosti) 유료 구독자 전용 선물 — 『멀린 Z 코어 9대 귀신 초능력 + 3대 보너스 통합 데몬 (v2.5 AI 완전체)』
 ====================================================================================================
-- 귀신호출 3인방: Ctrl + 0 / Ctrl + 우클릭 / 우클릭 0.35초 꾹 + 오토매틱(Automatic) 한영 오타·띄어쓰기 감지 및 한/영 키 자동 전환
+- 귀신호출 2종 단일화: Ctrl + 0 / Ctrl + 우클릭 (우클릭 0.35초 꾹 롱프레스 전면 폐기) + 오토매틱(Automatic) 한영 오타·띄어쓰기 감지 및 한/영 키 자동 전환
 - 온디바이스 AI 엔진: EmbeddingGemma 2 (MRL 128차원 절삭 임베딩 + 262,144 토크나이저 사전 재활용으로 추가 사전 용량 0 Byte)
 - 9대 초능력 + 3대 보너스:
   ① [그냥 Ctrl + V 연타] 순차(1->2->3) 연사 + IUIAutomation & EmbeddingGemma 2 입력칸 라벨 비순차(Out-of-Order) 자동 매칭 + 엑셀 다중 셀 1회 복사 자동 쪼개기
@@ -2963,9 +2963,9 @@ def _toast_worker() -> None:
                                     tk.Label(p_inner, text="💡 [숨은 귀신 초능력 & 꿀팁]", fg="#FDE047", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 4))
                                     for tl in (
                                         "• 🧹 [1]번 서식·줄바꿈(무료) : 문장 복사(Ctrl+C)나 드래그 후 [1]번 클릭 시 서식세탁·끊어진 줄바꿈 즉시 정리 (Ctrl+Z 원복)!",
-                                        "• 📦 우클릭 1초 스마트 ZIP 압축(무료) : 탐색기에서 파일·폴더 우클릭 0.35초 꾹 시 광고 0% 즉시 압축·해제!",
+                                        "• 📦 1초 스마트 ZIP 압축(무료) : 탐색기에서 더블클릭·일반 우클릭 메뉴(또는 Ctrl+0) 시 광고 0% 즉시 압축·해제!",
                                         "• ⚡ 타이핑 자동 한영·띄어쓰기 성형(무료) : 영타 1초 정지 시 자동 변환 (5초 내 Ctrl+0 1회로 즉시 원복)!",
-                                        "• 🔄 귀신호출 한 번 더(토글) : 호출 이어서 바로 한 번 더 누르면 [기본 귀신창 ⇄ 귀신검색창] 즉시 전환!",
+                                        "• 🔄 귀신호출 한 번 더(토글) : Ctrl+0 / Ctrl+우클릭 이어서 한 번 더 누르면 [기본 귀신창 ⇄ 귀신검색창] 즉시 전환!",
                                     ):
                                         tk.Label(p_inner, text=tl, fg="#E2E8F0", bg="#0F172A", font=("Malgun Gothic", 8), anchor="w").pack(fill="x", pady=1)
                             win.update_idletasks()
@@ -3020,6 +3020,13 @@ def _toast_worker() -> None:
                         def _do_smart_unzip(_e=None):
                             is_hovered[0] = True
                             try:
+                                for _cand_ag in (
+                                    Path(__file__).resolve().parent,
+                                    Path(__file__).resolve().parent / "os_agent",
+                                    Path(r"D:\Ghosti\universal_z_core\os_agent"),
+                                ):
+                                    if _cand_ag.exists() and str(_cand_ag) not in sys.path:
+                                        sys.path.insert(0, str(_cand_ag))
                                 import plugin_ghosti_care_suite as _cs
                                 res = _cs.smart_extract_archive(arch_path)
                                 if res.get("ok"):
@@ -5958,7 +5965,44 @@ def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[st
                     paths.append(str(item_path))
             return paths
     except Exception:
-        pass
+        # win32com 미설치 환경에서도 순수 PowerShell Shell.Application COM으로 무오염 선택 파일 경로 추출
+        try:
+            chk_hwnd = int(target_hwnd) if target_hwnd else int(u32.GetForegroundWindow())
+            cls_chk = _get_win_class_only(chk_hwnd)
+            if cls_chk in ("Progman", "WorkerW"):
+                ps_q = (
+                    "$sh=New-Object -ComObject Shell.Application; $out=@(); "
+                    "$dw=$sh.Windows().FindWindowSW(0,0,8,0,1); "
+                    "if($dw){ foreach($it in $dw.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } } }; "
+                    "$out | ConvertTo-Json -Compress"
+                )
+            else:
+                ps_q = (
+                    f"$fg={chk_hwnd}; $sh=New-Object -ComObject Shell.Application; $out=@(); "
+                    "foreach($w in $sh.Windows()){ try { if([int64]$w.HWND -eq $fg){ "
+                    "foreach($it in $w.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } }; break "
+                    "} } catch {} }; $out | ConvertTo-Json -Compress"
+                )
+            r_ps = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_q],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=1.5,
+                creationflags=0x08000000,
+            )
+            raw_s = (r_ps.stdout or "").strip()
+            if raw_s:
+                parsed_p = json.loads(raw_s)
+                cands = parsed_p if isinstance(parsed_p, list) else [parsed_p]
+                for cp in cands:
+                    if cp and os.path.exists(str(cp)):
+                        if cls_chk in ("Progman", "WorkerW") and Path(str(cp)).suffix.lower() in (".lnk", ".url"):
+                            continue
+                        paths.append(str(cp))
+        except Exception:
+            pass
     return paths
 
 
@@ -6708,8 +6752,8 @@ def main() -> None:
                             _execute_superpower_num(c_num)
                     except Exception:
                         pass
-                # [Zero-Hook 마우스 우클릭 감지]: WH_MOUSE_LL 전역 훅 없이 GetAsyncKeyState(0x02) 폴링만으로
-                # ① Ctrl+우클릭 즉시 소환 / ② 우클릭 0.35초 꾹~~ 롱프레스 소환 / ③ 버튼 해제 시 네이티브 메뉴 자동 닫기 수행
+                # [Zero-Hook 마우스 Ctrl+우클릭 감지 — 감산 제1호: 우클릭 0.35초 꾹 롱프레스 전면 폐기!]
+                # 오직 Ctrl + 우클릭 시에만 소환하며, 일반 우클릭은 OS 순정 컨텍스트 메뉴를 100% 방해 없이 보장합니다.
                 rbtn_phys_now = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
                 was_rbtn_phys = was_key_down.get(0x9901, False)
                 ctrl_now_r = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
@@ -6720,10 +6764,7 @@ def main() -> None:
                     pt_rc = wintypes.POINT()
                     u32.GetCursorPos(ctypes.byref(pt_rc))
                     hwnd_fg_r = u32.GetForegroundWindow()
-                    if _should_bypass_rclick_hook(hwnd_fg_r):
-                        _RBTN_HOLD_STATE["active"] = False
-                        _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = False
-                    elif ctrl_now_r and not alt_now_r and not shift_now_r:
+                    if not _should_bypass_rclick_hook(hwnd_fg_r) and ctrl_now_r and not alt_now_r and not shift_now_r:
                         _RBTN_HOLD_STATE["active"] = False
                         _RBTN_HOLD_STATE["triggered"] = True
                         _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = True
@@ -6734,35 +6775,9 @@ def main() -> None:
                         if (now - last_summon_ts) > 0.25:
                             last_summon_ts = now
                             trigger_master_summon(summon_by_rclick=True)
-                    elif (now - last_any_key_ts) < 0.45:
-                        # 키보드 타이핑 중 손바닥/터치패드 우클릭 오접촉으로 인한 롱프레스 소환 원천 차단!
+                    else:
                         _RBTN_HOLD_STATE["active"] = False
                         _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = False
-                    else:
-                        _RBTN_HOLD_STATE["active"] = True
-                        _RBTN_HOLD_STATE["down_ts"] = now
-                        _RBTN_HOLD_STATE["x"] = pt_rc.x
-                        _RBTN_HOLD_STATE["y"] = pt_rc.y
-                        _RBTN_HOLD_STATE["target_hwnd"] = hwnd_fg_r
-                        _RBTN_HOLD_STATE["triggered"] = False
-                        _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = False
-                elif rbtn_phys_now and was_rbtn_phys:
-                    if _RBTN_HOLD_STATE.get("active") and not _RBTN_HOLD_STATE.get("triggered"):
-                        pt_now = wintypes.POINT()
-                        u32.GetCursorPos(ctypes.byref(pt_now))
-                        if (
-                            abs(pt_now.x - _RBTN_HOLD_STATE["x"]) > RBUTTON_MOVE_TOLERANCE_PX
-                            or abs(pt_now.y - _RBTN_HOLD_STATE["y"]) > RBUTTON_MOVE_TOLERANCE_PX
-                        ):
-                            _RBTN_HOLD_STATE["active"] = False
-                        elif (now - _RBTN_HOLD_STATE.get("down_ts", 0.0)) >= RBUTTON_LONG_PRESS_SEC:
-                            _RBTN_HOLD_STATE["active"] = False
-                            _RBTN_HOLD_STATE["triggered"] = True
-                            _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = True
-                            _release_target_rbutton_stuck(_RBTN_HOLD_STATE.get("target_hwnd"))
-                            if (now - last_summon_ts) > 0.25:
-                                last_summon_ts = now
-                                trigger_master_summon(summon_by_rclick=True)
                 elif not rbtn_phys_now and was_rbtn_phys:
                     _RBTN_HOLD_STATE["active"] = False
                     if _RBTN_HOLD_STATE.get("dismiss_context_menu_on_up"):

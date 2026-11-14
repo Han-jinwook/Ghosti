@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+r"""
 ❖ Ghosti Care Suite Plugin (plugin_ghosti_care_suite.py)
 - 구시대 유틸리티 3대장(고클린·알집·알약)을 광고 0%·추가 엔진 용량 0MB로 흡수하는 35KB 초경량 독립 플러그인.
 - 3대 경량·격리 아키텍처 철칙(Zero-Engine Delegation & Try-Except Plugin Isolation & Hard Resource Quota) 준수:
@@ -9,13 +9,13 @@
      - 사내 DRM(MaEPSBroker, Fasoo, SoftCamp) 100% 불가침 제외, 커널 자가보호 모듈 안전 가이드 분기
      - 5KB 정적 JSON(security_services_whitelist.json) 원격 무소음 자동 갱신 + 로컬 폴백
      - sc query 100% 실측 정직 브리핑 (0개일 때 허위 경보 0%)
-  2) 모듈 B: 듀얼 스마트 압축(일반 우클릭 메뉴 `딸깍` HKCU + 우클릭 0.35초 꾹) & 봉인 존중(풀기 전 압축 내부 미열람 · 더블클릭 불간섭)
-     - 탐색기 기본 우클릭 메뉴(HKCU\\Software\\Classes) 정적 등록 (Shell Extension DLL 인젝션 0% ➔ 평시 RAM/CPU 0%)
-     - 탐색기 COM Shell.Application 무오염 선택 파일 경로 추출 1순위
-     - Lazy-Import & Instant Unload (평시 메모리 0바이트)
-     - UTF-8 NFD ➔ NFC 한글 자소 결합 및 CP437 ➔ CP949 복원, 루트 엔트리 판별 압축폭탄 방지, Zip Slip 차단, Disk Full 사전 체크, 분할 압축 헤드 볼륨 단일 인식
+  2) 모듈 B: 스마트 압축 풀기·묶기 (더블클릭 자동실행 + 일반 우클릭 메뉴 `딸깍` 중심 + 보조: 귀신호출 `Ctrl+0`/`Ctrl+우클릭`) & 봉인 존중(풀기 전 압축 내부 미열람)
+     - 일반 유저 습관 1순위(더블클릭 ProgID `Ghosti.Archive` & `OpenWithProgids`) + 2순위(탐색기 기본 우클릭 메뉴 `HKCU\Software\Classes` 정적 등록 — Shell Extension DLL 인젝션 0% ➔ 평시 RAM/CPU 0%)
+     - 탐색기 COM Shell.Application 무오염 선택 파일 경로 추출 (`win32com` 미설치 시 순수 PowerShell COM 폴백 내장)
+     - Lazy-Import & Instant Unload (평시 메모리 0바이트), `.zip`/`.tar`/`.gz`/`.tgz` 및 Windows 내장 `tar.exe` 연동 `.7z`/`.rar` 지원
+     - UTF-8 NFD ➔ NFC 한글 자소 결합 및 CP437 ➔ CP949 복원, 루트 엔트리 판별 압축폭탄 방지, Zip Slip 차단, Disk Full 사전 체크, 암호 압축 미니 입력창 지원
      - 봉인 존중 원칙: 풀기 전에는 압축 내부 스트림을 열람하지 않으며(겉봉투 파일명만 인식), 사용자가 직접 압축을 푼 직후에만 풀린 일반 문서들을 즉시 인덱싱(index_extracted_files_immediately)하고 인라인 공유 브릿지 노출
-  3) 모듈 C: 윈도우 디펜더(amsi.dll In-Memory 0.01초 + Defender Event ID 1116/1117) 무소음 수호 히스토리
+  3) 모듈 C: 윈도우 디펜더(amsi.dll In-Memory 0.01초 + Downloads 무소음 워처 + Defender Event ID 1116/1117) 무소음 수호 히스토리
      - 자체 백신 DB 0MB, 평시 알림 팝업 0회, 로컬 SQLite(defender_guardian_history.db) 누적 기록 및 최근 30일 통계 반환
 """
 
@@ -541,6 +541,78 @@ def get_security_services_status() -> Dict[str, Any]:
     }
 
 
+def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
+    """
+    psutil이 설치되어 있으면 고속 조회하고, 미설치된 순정 Python 환경에서도
+    PowerShell Win32_Process CIM을 통해 프로세스 목록(pid, name, exe, cmdline, rss_mb)을 100% 반환합니다.
+    """
+    procs: List[Dict[str, Any]] = []
+    if sys.platform != "win32":
+        return procs
+    try:
+        import psutil  # type: ignore
+
+        for proc in psutil.process_iter(["pid", "name", "exe", "cmdline", "memory_info"]):
+            try:
+                pid = int(proc.info.get("pid") or 0)
+                pname = str(proc.info.get("name") or "")
+                pexe = str(proc.info.get("exe") or "")
+                cmdline = list(proc.info.get("cmdline") or ([pexe] if pexe else []))
+                mem_info = proc.info.get("memory_info")
+                rss_mb = round((getattr(mem_info, "rss", 0) or 0) / (1024 * 1024), 1)
+                procs.append({
+                    "pid": pid,
+                    "name": pname,
+                    "exe": pexe,
+                    "cmdline": cmdline,
+                    "memoryMb": max(1.0, rss_mb),
+                })
+            except Exception:
+                continue
+        return procs
+    except Exception:
+        pass
+
+    try:
+        ps_cmd = (
+            "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | "
+            "Select-Object ProcessId,Name,ExecutablePath,CommandLine,WorkingSetSize | "
+            "ConvertTo-Json -Compress"
+        )
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=4.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        raw_out = (r.stdout or "").strip()
+        if raw_out:
+            parsed = json.loads(raw_out)
+            items = parsed if isinstance(parsed, list) else [parsed]
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                pid = int(it.get("ProcessId") or 0)
+                pname = str(it.get("Name") or "")
+                pexe = str(it.get("ExecutablePath") or "")
+                cmd_str = str(it.get("CommandLine") or "").strip()
+                ws_bytes = int(it.get("WorkingSetSize") or 0)
+                procs.append({
+                    "pid": pid,
+                    "name": pname,
+                    "exe": pexe,
+                    "cmdline": [pexe] if pexe else ([cmd_str] if cmd_str else []),
+                    "cmdlineRaw": cmd_str,
+                    "memoryMb": max(1.0, round(ws_bytes / (1024 * 1024), 1)),
+                })
+    except Exception:
+        pass
+    return procs
+
+
 def sleep_security_services() -> Dict[str, Any]:
     """
     [모듈 A & R1 해결]
@@ -560,24 +632,25 @@ def sleep_security_services() -> Dict[str, Any]:
             tray_exe_set.add(exe_name.lower())
 
     user_bridge_processes: List[Dict[str, Any]] = []
-    try:
-        import psutil
-
-        for proc in psutil.process_iter(["pid", "name", "exe", "cmdline"]):
-            try:
-                pname = (proc.info.get("name") or "").lower()
-                if pname in tray_exe_set:
-                    cmdline = proc.info.get("cmdline") or ([proc.info.get("exe")] if proc.info.get("exe") else [])
-                    if cmdline and cmdline[0]:
-                        user_bridge_processes.append({
-                            "name": pname,
-                            "cmdline": cmdline,
-                        })
-                        proc.terminate()
-            except Exception:
-                continue
-    except Exception:
-        pass
+    for pinfo in _iter_windows_processes_stdlib():
+        try:
+            pname = (pinfo.get("name") or "").lower()
+            pid = int(pinfo.get("pid") or 0)
+            if pname in tray_exe_set and pid > 4:
+                cmdline = pinfo.get("cmdline") or ([pinfo.get("exe")] if pinfo.get("exe") else [])
+                if cmdline and cmdline[0]:
+                    user_bridge_processes.append({
+                        "name": pname,
+                        "cmdline": cmdline,
+                    })
+                    subprocess.run(
+                        ["taskkill", "/F", "/PID", str(pid)],
+                        capture_output=True,
+                        timeout=2.0,
+                        creationflags=CREATE_NO_WINDOW,
+                    )
+        except Exception:
+            continue
 
     target_service_names = [t.get("serviceName", "") for t in targets if t.get("serviceName")]
     elevation_res = execute_elevated_service_control("sleep", target_service_names)
@@ -698,9 +771,9 @@ def check_window_title_for_prewake(window_title: str) -> Optional[Dict[str, Any]
 
 
 # ============================================================================
-# 3. [모듈 B] 듀얼 스마트 압축(일반 우클릭 메뉴 `딸깍` + 우클릭 0.35초 꾹) & 봉인 존중 원칙
-#    - 풀기 전 압축 내부 미열람
-#    - 더블클릭 기본 연결 프로그램(File Association) 불간섭
+# 3. [모듈 B] 스마트 압축(더블클릭 자동실행 + 일반 우클릭 메뉴 `딸깍` 주력 · Ctrl+0/Ctrl+우클릭 보조)
+#    - 풀기 전 압축 내부 미열람 봉인 존중 원칙
+#    - Ghosti.Archive ProgID 연결 및 탐색기 2중 우클릭 메뉴 등록
 # ============================================================================
 def _get_pythonw_or_exe_command(mode_flag: str) -> str:
     exe_path = Path(sys.executable)
@@ -726,9 +799,10 @@ def _get_ghosti_icon_path() -> str:
 def register_explorer_context_menu() -> Dict[str, Any]:
     """
     관리자 권한(UAC) 없이 현재 사용자 레지스트리(HKCU\\Software\\Classes)에
-    탐색기 일반 우클릭(`딸깍`) 컨텍스트 메뉴를 정적 커맨드로 등록합니다.
+    1) 더블클릭 자동실행 ProgID(Ghosti.Archive) 및 OpenWithProgids 등록
+    2) 탐색기 일반 우클릭(`딸깍`) 컨텍스트 메뉴 정적 커맨드 등록
+    을 함께 수행합니다.
     - Shell Extension DLL을 explorer.exe에 인젝션하지 않아 평시 메모리/CPU 점유율 0바이트 / 0.0%!
-    - 더블클릭 기본 연결 프로그램(UserChoice)은 절대 건드리지 않습니다(더블클릭 불간섭 원칙).
     """
     if sys.platform != "win32":
         return {"ok": False, "reason": "NON_WINDOWS"}
@@ -739,20 +813,53 @@ def register_explorer_context_menu() -> Dict[str, Any]:
     zip_cmd = _get_pythonw_or_exe_command("--smart-zip")
 
     registered_keys: List[str] = []
-    archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz")
+    archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")
+    prog_id = "Ghosti.Archive"
 
     try:
-        for ext in archive_exts:
-            base_key_path = f"Software\\Classes\\SystemFileAssociations\\{ext}\\shell\\GhostiSmartUnzip"
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
-                winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)")
-                winreg.SetValueEx(k, "MUIVerb", 0, winreg.REG_SZ, "👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)")
-                if icon_path:
-                    winreg.SetValueEx(k, "Icon", 0, winreg.REG_SZ, icon_path)
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{base_key_path}\\command") as ck:
-                winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, unzip_cmd)
-            registered_keys.append(base_key_path)
+        # 1) 더블클릭 자동실행 & 연결 프로그램용 ProgID (HKCU\Software\Classes\Ghosti.Archive) 등록
+        prog_base = f"Software\\Classes\\{prog_id}"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, prog_base) as pk:
+            winreg.SetValueEx(pk, "", 0, winreg.REG_SZ, "귀신같이 스마트 압축파일")
+            winreg.SetValueEx(pk, "FriendlyTypeName", 0, winreg.REG_SZ, "👻 귀신같이 스마트 압축해제")
+        if icon_path:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{prog_base}\\DefaultIcon") as ik:
+                winreg.SetValueEx(ik, "", 0, winreg.REG_SZ, icon_path)
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{prog_base}\\shell\\open") as ok:
+            winreg.SetValueEx(ok, "", 0, winreg.REG_SZ, "👻 귀신같이로 깔끔하게 풀기")
+            if icon_path:
+                winreg.SetValueEx(ok, "Icon", 0, winreg.REG_SZ, icon_path)
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{prog_base}\\shell\\open\\command") as ock:
+            winreg.SetValueEx(ock, "", 0, winreg.REG_SZ, unzip_cmd)
+        registered_keys.append(prog_base)
 
+        # 2) 확장자별 더블클릭 연결(OpenWithProgids + 미지정 확장자 기본 ProgID) 및 탐색기 우클릭 메뉴 2중 등록
+        for ext in archive_exts:
+            ext_cls_key = f"Software\\Classes\\{ext}"
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, ext_cls_key) as ek:
+                try:
+                    cur_default, _ = winreg.QueryValueEx(ek, "")
+                except Exception:
+                    cur_default = ""
+                if not cur_default or cur_default in ("CompressedFolder", prog_id):
+                    winreg.SetValueEx(ek, "", 0, winreg.REG_SZ, prog_id)
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{ext_cls_key}\\OpenWithProgids") as owk:
+                winreg.SetValueEx(owk, prog_id, 0, winreg.REG_NONE, b"")
+
+            for base_key_path in (
+                f"Software\\Classes\\SystemFileAssociations\\{ext}\\shell\\GhostiSmartUnzip",
+                f"Software\\Classes\\{ext}\\shell\\GhostiSmartUnzip",
+            ):
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
+                    winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)")
+                    winreg.SetValueEx(k, "MUIVerb", 0, winreg.REG_SZ, "👻 귀신같이로 깔끔하게 풀기 (한글깨짐·폭탄 방지)")
+                    if icon_path:
+                        winreg.SetValueEx(k, "Icon", 0, winreg.REG_SZ, icon_path)
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{base_key_path}\\command") as ck:
+                    winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, unzip_cmd)
+                registered_keys.append(base_key_path)
+
+        # 3) 일반 파일(*) 및 폴더(Directory) 우클릭 'ZIP 압축 묶기' 등록
         for target_cls in ("*", "Directory"):
             base_key_path = f"Software\\Classes\\{target_cls}\\shell\\GhostiSmartZip"
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
@@ -764,10 +871,15 @@ def register_explorer_context_menu() -> Dict[str, Any]:
                 winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, zip_cmd)
             registered_keys.append(base_key_path)
 
+        try:
+            ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "registeredCount": len(registered_keys),
-            "doubleClickUntouched": True,
+            "doubleClickProgId": prog_id,
             "zeroBackgroundRam": True,
         }
     except Exception as e:
@@ -775,17 +887,19 @@ def register_explorer_context_menu() -> Dict[str, Any]:
 
 
 def unregister_explorer_context_menu() -> Dict[str, Any]:
-    """HKCU\\Software\\Classes에 등록된 귀신같이 우클릭 컨텍스트 메뉴를 깔끔하게 제거합니다."""
+    """HKCU\\Software\\Classes에 등록된 귀신같이 더블클릭 ProgID 및 우클릭 컨텍스트 메뉴를 깔끔하게 제거합니다."""
     if sys.platform != "win32":
         return {"ok": False, "reason": "NON_WINDOWS"}
     import winreg  # Lazy-Import
 
-    archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz")
+    archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")
     removed = 0
     targets = [
         *(f"Software\\Classes\\SystemFileAssociations\\{ext}\\shell\\GhostiSmartUnzip" for ext in archive_exts),
+        *(f"Software\\Classes\\{ext}\\shell\\GhostiSmartUnzip" for ext in archive_exts),
         "Software\\Classes\\*\\shell\\GhostiSmartZip",
         "Software\\Classes\\Directory\\shell\\GhostiSmartZip",
+        "Software\\Classes\\Ghosti.Archive\\shell\\open",
     ]
     for base_key_path in targets:
         for sub in (f"{base_key_path}\\command", base_key_path):
@@ -794,39 +908,74 @@ def unregister_explorer_context_menu() -> Dict[str, Any]:
                 removed += 1
             except Exception:
                 pass
+    for extra_sub in (
+        "Software\\Classes\\Ghosti.Archive\\shell",
+        "Software\\Classes\\Ghosti.Archive\\DefaultIcon",
+        "Software\\Classes\\Ghosti.Archive",
+    ):
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, extra_sub)
+            removed += 1
+        except Exception:
+            pass
     return {"ok": True, "removedSubKeys": removed}
 
 
-def get_explorer_selected_paths_non_destructive() -> List[str]:
+def get_explorer_selected_paths_non_destructive(target_hwnd: Optional[int] = None) -> List[str]:
     """
     [방어 15·21] COM Shell.Application을 사용하여 기존 클립보드(텍스트/이미지)를 1비트도 오염시키지 않고
-    현재 포그라운드 탐색기에서 마우스 아래 선택된 파일 경로를 0.005초 만에 추출합니다.
+    현재 포그라운드 탐색기·바탕화면에서 선택된 파일 경로를 추출합니다.
+    (win32com 미설치 환경에서도 순수 PowerShell COM 폴백으로 100% 작동)
     """
     if sys.platform != "win32":
         return []
     paths: List[str] = []
+    fg_hwnd = int(target_hwnd) if target_hwnd else int(ctypes.windll.user32.GetForegroundWindow() or 0)
     try:
-        import win32com.client  # Lazy-Import
-        import win32gui
+        import win32com.client  # type: ignore
 
-        fg_hwnd = win32gui.GetForegroundWindow()
         shell = win32com.client.Dispatch("Shell.Application")
         for window in shell.Windows():
             try:
-                if int(window.HWND) == int(fg_hwnd):
+                if int(window.HWND) == fg_hwnd:
                     doc = window.Document
                     sel = doc.SelectedItems()
                     for idx in range(sel.Count):
                         item_path = sel.Item(idx).Path
                         if item_path and os.path.exists(item_path):
                             paths.append(str(item_path))
-                    if not paths and getattr(doc, "FocusedItem", None):
-                        fp = doc.FocusedItem.Path
-                        if fp and os.path.exists(fp):
-                            paths.append(str(fp))
-                    break
+                    return paths
             except Exception:
                 continue
+    except Exception:
+        pass
+
+    try:
+        ps_script = (
+            f"$fg={fg_hwnd}; $sh=New-Object -ComObject Shell.Application; $out=@(); "
+            "foreach($w in $sh.Windows()){ try { if([int64]$w.HWND -eq $fg){ "
+            "foreach($it in $w.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } }; break "
+            "} } catch {} }; "
+            "if($out.Count -eq 0){ try { $dw=$sh.Windows().FindWindowSW(0,0,8,0,1); "
+            "if($dw){ foreach($it in $dw.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } } } } catch {} }; "
+            "$out | ConvertTo-Json -Compress"
+        )
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=2.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        raw = (r.stdout or "").strip()
+        if raw:
+            parsed = json.loads(raw)
+            cand_list = parsed if isinstance(parsed, list) else [parsed]
+            for cp in cand_list:
+                if cp and os.path.exists(str(cp)):
+                    paths.append(str(cp))
     except Exception:
         pass
     return paths
@@ -869,8 +1018,8 @@ def index_extracted_files_immediately(extracted_folder: str, extracted_files: Li
     """
     [봉인 존중 원칙(Sealed-Archive Respect)]
     - 고객이 직접 압축을 풀기 전에는 압축 파일 내부 스트림을 절대 열람·인덱싱하지 않습니다(겉봉투 파일명만 인식).
-    - 오직 고객이 명시적으로 우클릭 스마트 압축 해제를 실행한 직후에만, 방금 풀려 나온 일반 문서·사진들을
-      즉시 인덱싱 큐에 등록하여 0.1초 만에 귀신검색에서 찾을 수 있도록 연결합니다.
+    - 오직 고객이 명시적으로 더블클릭 또는 우클릭 스마트 압축 해제를 실행한 직후에만, 방금 풀려 나온 일반 문서·사진들을
+      즉시 인덱싱 큐에 등록하여 0.1초 만에 귀신검색창에서 내용까지 찾을 수 있도록 연결합니다.
     """
     _ensure_care_dir()
     folder_path = Path(extracted_folder)
@@ -879,22 +1028,62 @@ def index_extracted_files_immediately(extracted_folder: str, extracted_files: Li
 
     records: List[Dict[str, Any]] = []
     now_iso = datetime.datetime.now().isoformat()
-    for fname in extracted_files[:200]:
-        fpath = folder_path / fname
+    now_ts = time.time()
+    text_exts = {".txt", ".md", ".csv", ".json", ".log", ".html", ".htm", ".xml", ".py", ".ts", ".tsx"}
+
+    discovered_paths: List[Path] = []
+    try:
+        for root_d, _, files_d in os.walk(folder_path):
+            for fn in files_d:
+                discovered_paths.append(Path(root_d) / fn)
+                if len(discovered_paths) >= 200:
+                    break
+            if len(discovered_paths) >= 200:
+                break
+    except Exception:
+        discovered_paths = [folder_path / fn for fn in extracted_files[:200]]
+
+    for fpath in discovered_paths:
+        snippet = ""
+        if fpath.suffix.lower() in text_exts and fpath.is_file():
+            try:
+                raw_b = fpath.read_bytes()[:4096]
+                for enc in ("utf-8", "cp949"):
+                    try:
+                        snippet = " ".join(raw_b.decode(enc).split())[:350]
+                        break
+                    except UnicodeDecodeError:
+                        continue
+            except Exception:
+                snippet = ""
         records.append({
-            "fileName": fname,
+            "fileName": fpath.name,
             "filePath": str(fpath),
             "folderPath": str(folder_path),
+            "textSnippet": snippet,
             "indexedAt": now_iso,
+            "indexedTs": now_ts,
         })
 
+    existing_records: List[Dict[str, Any]] = []
+    if EXTRACTED_INDEX_QUEUE_FILE.exists():
+        try:
+            old_q = json.loads(EXTRACTED_INDEX_QUEUE_FILE.read_text(encoding="utf-8"))
+            old_items = old_q.get("indexedFiles") if isinstance(old_q, dict) else []
+            if isinstance(old_items, list):
+                new_paths = {r["filePath"] for r in records}
+                existing_records = [r for r in old_items if isinstance(r, dict) and r.get("filePath") not in new_paths][:200]
+        except Exception:
+            existing_records = []
+
+    merged = (records + existing_records)[:300]
     try:
         EXTRACTED_INDEX_QUEUE_FILE.write_text(
             json.dumps(
                 {
                     "lastExtractedFolder": str(folder_path),
                     "updatedAt": now_iso,
-                    "indexedFiles": records,
+                    "indexedFiles": merged,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -914,12 +1103,13 @@ def index_extracted_files_immediately(extracted_folder: str, extracted_files: Li
 
 def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> Dict[str, Any]:
     """
-    [모듈 B & 봉인 존중 원칙] 일반 우클릭 메뉴(`딸깍`) 및 우클릭 0.35초 꾹 듀얼 1초 스마트 압축 해제:
+    [모듈 B & 봉인 존중 원칙] 더블클릭 자동실행 & 일반 우클릭 메뉴(`딸깍`) 중심 (+ 보조: Ctrl+0) 1초 스마트 압축 해제:
     1) UTF-8 NFD ➔ NFC 한글 자소 결합 및 CP437 ➔ CP949 복원.
     2) 최상위 루트 엔트리 판별: 낱개 파일 2개 이상이면 단일 폴더 자동 생성(압축 폭탄 방지),
        이미 단일 루트 폴더가 있으면 이중 폴더(보고서/보고서) 방지.
     3) Zip Slip(상위 경로 탈출 `../../`) 100% 차단 및 Disk Full 여유 공간 사전 검증.
-    4) 해제 완료 직후 `index_extracted_files_immediately()`로 풀린 일반 파일만 즉시 인덱싱 + 인라인 공유 브릿지 반환.
+    4) `.7z`, `.rar` 파일도 Windows 순정 내장 `System32\\tar.exe` 위임(추가 엔진 0MB)으로 동일하게 해제.
+    5) 해제 완료 직후 `index_extracted_files_immediately()`로 풀린 일반 파일만 즉시 인덱싱 + 인라인 공유 브릿지 반환.
     """
     import zipfile  # Lazy-Import
     import tarfile
@@ -1021,6 +1211,73 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
                                 shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
                             extracted_files.append(dest_path.name)
                             total_uncompressed += int(member.size or 0)
+        elif p.suffix.lower() in (".7z", ".rar") and sys.platform == "win32":
+            import tempfile
+            import unicodedata
+
+            sys_tar = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "tar.exe"
+            if not sys_tar.exists():
+                return {"ok": False, "error": "SYSTEM_TAR_NOT_AVAILABLE"}
+            tmp_stage = Path(tempfile.mkdtemp(prefix="ghosti_arc_", dir=str(p.parent)))
+            try:
+                r_tar = subprocess.run(
+                    [str(sys_tar), "-xf", str(p), "-C", str(tmp_stage)],
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    timeout=60.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                if r_tar.returncode != 0:
+                    err_txt = (r_tar.stderr or r_tar.stdout or "").strip()
+                    shutil.rmtree(tmp_stage, ignore_errors=True)
+                    if "passphrase" in err_txt.lower() or "encrypted" in err_txt.lower() or "password" in err_txt.lower():
+                        return {
+                            "ok": False,
+                            "needPassword": True,
+                            "message": "🔑 암호가 걸린 .7z/.rar 압축 파일입니다.",
+                        }
+                    return {"ok": False, "error": err_txt or "TAR_EXTRACT_FAILED"}
+
+                top_items = list(tmp_stage.iterdir())
+                if len(top_items) == 1 and top_items[0].is_dir():
+                    single_dir = top_items[0]
+                    norm_name = unicodedata.normalize("NFC", single_dir.name)
+                    created_folder = (p.parent / norm_name).resolve()
+                    cnt_d = 1
+                    while created_folder.exists() and any(created_folder.iterdir()):
+                        created_folder = (p.parent / f"{norm_name}_{cnt_d}").resolve()
+                        cnt_d += 1
+                    shutil.move(str(single_dir), str(created_folder))
+                else:
+                    base_folder_name = unicodedata.normalize("NFC", p.stem)
+                    created_folder = (p.parent / base_folder_name).resolve()
+                    cnt_d = 1
+                    while created_folder.exists() and any(created_folder.iterdir()):
+                        created_folder = (p.parent / f"{base_folder_name}_{cnt_d}").resolve()
+                        cnt_d += 1
+                    created_folder.mkdir(parents=True, exist_ok=True)
+                    for ti in top_items:
+                        shutil.move(str(ti), str(created_folder / unicodedata.normalize("NFC", ti.name)))
+            finally:
+                shutil.rmtree(tmp_stage, ignore_errors=True)
+
+            for root_w, _, files_w in os.walk(created_folder):
+                for fw in files_w:
+                    fp_w = Path(root_w) / fw
+                    norm_fw = unicodedata.normalize("NFC", fw)
+                    if norm_fw != fw:
+                        try:
+                            fp_norm = fp_w.with_name(norm_fw)
+                            fp_w.rename(fp_norm)
+                            fp_w = fp_norm
+                        except Exception:
+                            pass
+                    extracted_files.append(fp_w.name)
+                    try:
+                        total_uncompressed += fp_w.stat().st_size
+                    except Exception:
+                        pass
         else:
             return {"ok": False, "error": "UNSUPPORTED_ARCHIVE_FORMAT"}
 
@@ -1267,19 +1524,42 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
     except Exception:
         pass
 
+    # Windows Defender Operational Event Log (Event ID 1116/1117 위협 탐지 이력) 보조 확인
+    defender_event_threats = 0
+    if sys.platform == "win32":
+        try:
+            ps_evt = (
+                "try { "
+                "$evts = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1116,1117} "
+                "-MaxEvents 10 -ErrorAction Stop; "
+                "@($evts).Count "
+                "} catch { 0 }"
+            )
+            r_ev = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_evt],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            defender_event_threats = int((r_ev.stdout or "0").strip() or "0")
+        except Exception:
+            defender_event_threats = 0
+
     dl_archives = _count_downloads_archive_files()
     return {
         "ok": True,
         "cardTitle": f"🛡️ 다운로드·문서 조용한 안전 검사 (최근 {days}일 {total_clean_count}건 확인)",
         "days": days,
         "silentPassCount": total_clean_count,
-        "threatBlockedCount": threat_count,
+        "threatBlockedCount": max(threat_count, defender_event_threats),
+        "defenderOperationalThreats": defender_event_threats,
         "downloadsArchiveCount": dl_archives["count"],
         "downloadsArchiveThresholdMet": dl_archives["thresholdMet"],
         "downloadsArchiveSamples": dl_archives["samples"],
         "downloadsArchiveLatestFile": dl_archives["latestFileName"],
         "recentItems": items,
-        "zeroBloatNote": "자체 무거운 백신 상주 0MB · Windows Defender(AMSI) 하청 조종으로 평시 CPU 0.0% 유지",
+        "zeroBloatNote": "자체 무거운 백신 상주 0MB · Windows 내장 보안 엔진 직결 무소음 보호로 평시 CPU 0.0% 유지",
         "privacyBadge": PLUGIN_METADATA["privacyBadge"],
     }
 
@@ -1519,34 +1799,27 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
             except Exception:
                 continue
 
-        # 3) 실행 중인 상주 프로세스 스캔
-        try:
-            import psutil
-
-            my_pid = os.getpid()
-            for proc in psutil.process_iter(["pid", "name", "exe", "memory_info"]):
-                try:
-                    pid = int(proc.info.get("pid") or 0)
-                    if pid <= 4 or pid == my_pid:
-                        continue
-                    pname = str(proc.info.get("name") or "")
-                    pexe = str(proc.info.get("exe") or "")
-                    comb = f"{pname} {pexe}".lower()
-                    if _is_protected_system_entity(comb):
-                        continue
-                    if any(k in comb for k in kw_lows):
-                        mem_info = proc.info.get("memory_info")
-                        rss_mb = round((getattr(mem_info, "rss", 0) or 0) / (1024 * 1024), 1)
-                        running_processes.append({
-                            "pid": pid,
-                            "name": pname,
-                            "exe": pexe,
-                            "memoryMb": max(1.0, rss_mb),
-                        })
-                except Exception:
+        # 3) 실행 중인 상주 프로세스 스캔 (psutil 미설치 환경에서도 100% 작동)
+        my_pid = os.getpid()
+        for pinfo in _iter_windows_processes_stdlib():
+            try:
+                pid = int(pinfo.get("pid") or 0)
+                if pid <= 4 or pid == my_pid:
                     continue
-        except Exception:
-            pass
+                pname = str(pinfo.get("name") or "")
+                pexe = str(pinfo.get("exe") or "")
+                comb = f"{pname} {pexe}".lower()
+                if _is_protected_system_entity(comb):
+                    continue
+                if any(k in comb for k in kw_lows):
+                    running_processes.append({
+                        "pid": pid,
+                        "name": pname,
+                        "exe": pexe,
+                        "memoryMb": max(1.0, float(pinfo.get("memoryMb") or 1.0)),
+                    })
+            except Exception:
+                continue
 
         # 4) Windows Services 스캔 (sc query state= all)
         try:
@@ -1976,12 +2249,171 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
         }
 
 
+_CARE_WATCHER_STARTED: bool = False
+
+
+def start_care_suite_background_watchers() -> None:
+    """
+    [merlin_z_core_daemon.py 내장 무소음 워처 — 평시 CPU 0.0%]
+    1) 데몬 기동 즉시 더블클릭 ProgID(Ghosti.Archive) + 탐색기 일반 우클릭 메뉴 보장 등록
+    2) 1.5초 주기 포그라운드 창 제목 체크 ➔ 은행·홈택스·결제 창 마우스 클릭 진입 즉시 보안 서비스 선행 기상 & 15분 뒤 자동 수면
+    3) 6.0초 주기 Downloads 폴더 mtime 워터마크 체크 ➔ 신규 다운로드 완료 파일 무소음 AMSI 검문 및 수호 장부 누적
+    """
+    global _CARE_WATCHER_STARTED
+    if _CARE_WATCHER_STARTED or sys.platform != "win32":
+        return
+    _CARE_WATCHER_STARTED = True
+
+    import threading
+
+    def _watcher_loop() -> None:
+        try:
+            register_explorer_context_menu()
+        except Exception:
+            pass
+
+        u32 = ctypes.windll.user32
+        title_buf = ctypes.create_unicode_buffer(512)
+        dl_dir = Path.home() / "Downloads"
+        last_dl_mtime = 0.0
+        seen_dl_files: Dict[str, float] = {}
+        try:
+            if dl_dir.exists():
+                last_dl_mtime = dl_dir.stat().st_mtime
+                for entry in os.scandir(dl_dir):
+                    if entry.is_file(follow_symlinks=False):
+                        seen_dl_files[entry.path] = entry.stat(follow_symlinks=False).st_mtime
+        except Exception:
+            pass
+
+        tick = 0
+        while True:
+            time.sleep(1.5)
+            tick += 1
+            # A) 은행·관공서 창 클릭 진입 무타이핑 선행 기상 & 15분 뒤 자동 절전
+            try:
+                fg_h = u32.GetForegroundWindow()
+                if fg_h:
+                    ln = u32.GetWindowTextW(fg_h, title_buf, 510)
+                    if ln > 0:
+                        check_window_title_for_prewake(title_buf.value)
+            except Exception:
+                pass
+
+            # B) Downloads 폴더 신규 다운로드 완료 파일 무소음 AMSI 검문 (약 6초 간격, mtime 변경 시에만 스캔)
+            if tick % 4 == 0:
+                try:
+                    if dl_dir.exists():
+                        cur_mtime = dl_dir.stat().st_mtime
+                        if cur_mtime != last_dl_mtime:
+                            last_dl_mtime = cur_mtime
+                            now_s = time.time()
+                            for entry in os.scandir(dl_dir):
+                                if not entry.is_file(follow_symlinks=False):
+                                    continue
+                                ext_l = Path(entry.name).suffix.lower()
+                                if ext_l in (".crdownload", ".part", ".tmp", ".partial"):
+                                    continue
+                                f_mt = entry.stat(follow_symlinks=False).st_mtime
+                                if entry.path not in seen_dl_files and (now_s - f_mt) <= 300.0:
+                                    seen_dl_files[entry.path] = f_mt
+                                    res_scan = scan_file_with_defender_amsi(entry.path, source="download_auto")
+                                    if res_scan.get("ok") and res_scan.get("status") != "CLEAN":
+                                        ctypes.windll.user32.MessageBoxW(
+                                            0,
+                                            res_scan.get("alertMessage") or f"위협 요소가 감지되었습니다: {entry.name}",
+                                            "👻 귀신같이 보안 경호 알림",
+                                            0x00000030 | 0x00040000,
+                                        )
+                                else:
+                                    seen_dl_files[entry.path] = f_mt
+                except Exception:
+                    pass
+
+    threading.Thread(target=_watcher_loop, name="GhostiCareSuiteWatcher", daemon=True).start()
+
+
+def _prompt_archive_password_tk(archive_name: str) -> Optional[str]:
+    """더블클릭·우클릭 메뉴로 암호 걸린 압축파일을 열었을 때 깔끔한 미니 암호 입력창을 띄웁니다."""
+    try:
+        import tkinter as tk
+
+        result_holder: List[Optional[str]] = [None]
+        root = tk.Tk()
+        root.title("👻 귀신같이 스마트 압축해제")
+        root.configure(bg="#0B1120")
+        root.resizable(False, False)
+        root.attributes("-topmost", True)
+
+        w, h = 380, 155
+        sx = max(40, (root.winfo_screenwidth() - w) // 2)
+        sy = max(40, (root.winfo_screenheight() - h) // 2)
+        root.geometry(f"{w}x{h}+{sx}+{sy}")
+
+        frm = tk.Frame(root, bg="#0B1120", padx=16, pady=14)
+        frm.pack(fill="both", expand=True)
+
+        tk.Label(
+            frm,
+            text=f"🔑 암호가 걸린 압축파일입니다 ({archive_name[:28]})",
+            fg="#5EEAD4",
+            bg="#0B1120",
+            font=("Malgun Gothic", 9, "bold"),
+            anchor="w",
+        ).pack(fill="x", pady=(0, 8))
+
+        ent = tk.Entry(frm, show="*", font=("Malgun Gothic", 10), bg="#1E293B", fg="#F8FAFC", insertbackground="#5EEAD4", relief="flat")
+        ent.pack(fill="x", ipady=5, pady=(0, 10))
+        ent.focus_set()
+
+        def _submit(_e: Any = None) -> None:
+            val = ent.get()
+            if val:
+                result_holder[0] = val
+            root.destroy()
+
+        ent.bind("<Return>", _submit)
+        ent.bind("<Escape>", lambda _e: root.destroy())
+
+        btn_f = tk.Frame(frm, bg="#0B1120")
+        btn_f.pack(fill="x")
+        tk.Button(
+            btn_f,
+            text="1초 압축 풀기",
+            command=_submit,
+            bg="#2DD4BF",
+            fg="#0B1120",
+            font=("Malgun Gothic", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=4,
+            cursor="hand2",
+        ).pack(side="right")
+        tk.Button(
+            btn_f,
+            text="취소",
+            command=root.destroy,
+            bg="#1E293B",
+            fg="#CBD5E1",
+            font=("Malgun Gothic", 9),
+            relief="flat",
+            padx=10,
+            pady=4,
+            cursor="hand2",
+        ).pack(side="right", padx=(0, 6))
+
+        root.mainloop()
+        return result_holder[0]
+    except Exception:
+        return None
+
+
 def _cli_main() -> None:
-    parser = argparse.ArgumentParser(description="Ghosti Care Suite CLI (Explorer Context Menu & Elevation Helper)")
-    parser.add_argument("--smart-unzip", dest="smart_unzip", type=str, help="압축 파일 스마트 해제")
-    parser.add_argument("--smart-zip", dest="smart_zip", type=str, help="파일/폴더 ZIP 묶기")
-    parser.add_argument("--register-menu", action="store_true", help="탐색기 기본 우클릭 메뉴 등록")
-    parser.add_argument("--unregister-menu", action="store_true", help="탐색기 기본 우클릭 메뉴 해제")
+    parser = argparse.ArgumentParser(description="Ghosti Care Suite CLI (Double-Click / Explorer Context Menu & Elevation Helper)")
+    parser.add_argument("--smart-unzip", dest="smart_unzip", type=str, help="압축 파일 스마트 해제 (더블클릭·우클릭 메뉴)")
+    parser.add_argument("--smart-zip", dest="smart_zip", type=str, help="파일/폴더 ZIP 묶기 (우클릭 메뉴)")
+    parser.add_argument("--register-menu", action="store_true", help="더블클릭 ProgID 및 탐색기 기본 우클릭 메뉴 등록")
+    parser.add_argument("--unregister-menu", action="store_true", help="더블클릭 ProgID 및 탐색기 기본 우클릭 메뉴 해제")
     parser.add_argument("--install-and-run-helper", action="store_true", help="최초 1회 UAC 승격 헬퍼 등록 및 즉시 실행")
     parser.add_argument("--run-elevated-helper", action="store_true", help="작업 스케줄러 최고권한 헬퍼 실행")
     args = parser.parse_args()
@@ -2000,14 +2432,28 @@ def _cli_main() -> None:
         return
     if args.smart_unzip:
         res = smart_extract_archive(args.smart_unzip)
+        if not res.get("ok") and res.get("needPassword"):
+            pwd = _prompt_archive_password_tk(Path(args.smart_unzip).name)
+            if pwd:
+                res = smart_extract_archive(args.smart_unzip, password=pwd)
+            else:
+                return
         if res.get("ok") and res.get("extractedFolder") and sys.platform == "win32":
             try:
                 os.startfile(res["extractedFolder"])
             except Exception:
                 pass
+        elif not res.get("ok") and sys.platform == "win32":
+            msg = str(res.get("message") or res.get("error") or "압축 해제 중 오류가 발생했습니다.")
+            ctypes.windll.user32.MessageBoxW(0, msg, "👻 귀신같이 스마트 압축해제", 0x00000030)
         return
     if args.smart_zip:
-        smart_create_zip(args.smart_zip)
+        zres = smart_create_zip(args.smart_zip)
+        if zres.get("ok") and zres.get("zipPath") and sys.platform == "win32":
+            try:
+                subprocess.Popen(["explorer.exe", f"/select,{zres['zipPath']}"])
+            except Exception:
+                pass
         return
 
 

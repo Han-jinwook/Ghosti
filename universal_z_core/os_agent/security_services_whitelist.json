@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.09.2",
+  "version": "2026.11.14.1",
   "description": "미사용 웹 보안 서비스 스마트 절전 화이트리스트 및 사내 DRM 불가침 제외 목록 (5KB 정적 JSON 원격 동기화 규격 · 가치중립 표기)",
   "corporate_drm_never_touch": [
     "maepsbroker",
@@ -19,9 +19,17 @@
     "SecurityHealthService"
   ],
   "kernel_self_defense_services": [
-    "safe_transaction_kernel_guard"
+    "safe_transaction_kernel_guard",
+    "astx",
+    "ahnlab safe transaction"
   ],
   "web_security_services_whitelist": [
+    {
+      "id": "web_sec_anysign",
+      "service_patterns": ["anysign", "anysign4pc", "xecureweb"],
+      "tray_executables": ["anysign4pc.exe", "as4pc_tray.exe"],
+      "display_name": "미사용 웹 보안 서비스 (통합 암호화·인증)"
+    },
     {
       "id": "web_sec_integrator",
       "service_patterns": ["veraport", "vpservice", "wizvera-veraport"],
@@ -30,9 +38,15 @@
     },
     {
       "id": "web_sec_keyboard",
-      "service_patterns": ["tnxkey", "raon", "kdefense"],
-      "tray_executables": ["tk_tray.exe", "keysharp.exe", "kslauncher.exe"],
+      "service_patterns": ["touchen", "tnxkey", "etenxkey", "raon", "kdefense", "keysharp"],
+      "tray_executables": ["touchen_nxkey.exe", "tk_tray.exe", "keysharp.exe", "kslauncher.exe"],
       "display_name": "미사용 웹 보안 서비스 (키보드 입력 보호)"
+    },
+    {
+      "id": "web_sec_ksign",
+      "service_patterns": ["ksign", "kscertrelay", "uniweb"],
+      "tray_executables": ["kscertrelay.exe", "ksignagent.exe"],
+      "display_name": "미사용 웹 보안 서비스 (공동인증 중계)"
     },
     {
       "id": "web_sec_cert_bridge",

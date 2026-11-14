@@ -1298,6 +1298,12 @@ def main() -> None:
             ghosti_safe_ops.start_desktop_timemachine_watcher()
         except Exception:
             pass
+        try:
+            import plugin_ghosti_care_suite
+
+            plugin_ghosti_care_suite.start_care_suite_background_watchers()
+        except Exception:
+            pass
 
     threading.Thread(target=_start_auxiliary_watchers, daemon=True).start()
     print(

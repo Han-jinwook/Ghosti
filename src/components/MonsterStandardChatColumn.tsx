@@ -380,15 +380,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         .then((r) => r.json())
         .catch(() => null)
         .then((secRes) => {
+          if (!secRes || secRes.ok === false) return;
           const curSt = loadGhostSecretaryState();
           if (curSt.bankSleepIntroShownAt || curSt.consents?.bankSecurityAutoSleep) return;
-          const activeCount = Math.max(2, Number(secRes?.activeCount || 3));
-          const ramMb = Math.max(180, Number(secRes?.estimatedRamMb || 320));
+          const activeCount = Math.max(0, Number(secRes?.activeCount ?? 0));
+          const ramMb = Math.max(0, Number(secRes?.estimatedRamMb ?? 0));
           const nickLabel = curSt.nickname ? `${curSt.nickname}님, ` : '';
           saveGhostSecretaryState({
             ...curSt,
             bankSleepIntroShownAt: new Date().toISOString(),
           });
+          const introText =
+            activeCount > 0
+              ? `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 안 쓰시는 **은행·관공서 보안프로그램 ${activeCount}개(약 ${ramMb}MB)**가 뒤에서 메모리를 차지하며 컴퓨터 속도를 늦추고 있어요.\n` +
+                `제가 이 프로그램들을 지우지 않고 **평소엔 잠재워 두었다가, 은행·홈택스 들어가실 때만 귀신같이 깨워드릴까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙깁니다!)`
+              : `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 켜져 있는 안 쓰는 은행·관공서 보안프로그램은 **0개**로 아주 깨끗해요.\n` +
+                `앞으로도 은행·홈택스 들어가실 때만 켜고 **평소엔 자동으로 잠재워 두게 설정해 둘까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙깁니다!)`;
           setSharedMonsterMessages((prev) => {
             if (prev.some((m) => m.id.startsWith('secretary_bank_sleep_intro_'))) return prev;
             return [
@@ -398,9 +405,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 role: 'assistant',
                 timestamp: nowTimeKo(),
                 sourceTab: 'trash',
-                text:
-                  `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 안 쓰시는 **은행·관공서 보안프로그램 ${activeCount}개(약 ${ramMb}MB)**가 뒤에서 메모리를 차지하며 컴퓨터 속도를 늦추고 있어요.\n` +
-                  `제가 이 프로그램들을 지우지 않고 **평소엔 잠재워 두었다가, 은행·홈택스 들어가실 때만 귀신같이 깨워드릴까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙깁니다!)`,
+                text: introText,
                 followUpSuggestions: [
                   '👍 응, 앞으로 알아서 재우고 깨워줘',
                 ],
@@ -445,10 +450,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 sourceTab: 'trash',
                 text:
                   `👻 ${nickLabel}참! 제가 뒤에서 컴퓨터를 챙기다 보니 지금 다운로드 폴더에 압축파일${sampleHint}이 **총 ${zipCount}건** 쌓여 있더라고요.\n` +
-                  `제가 사진 정리랑 속도 관리 말고도 뒤에서 조용히 돕는 **'숨은 초능력'이 두 가지(광고 없는 파일 경호 & 우클릭 0.35초 압축 풀기)** 더 있는데, 우리 걸로 써보실 수 있게 간단히 알려드릴까요?`,
+                  `제가 사진 정리랑 속도 관리 말고도 뒤에서 조용히 돕는 **'숨은 초능력'이 두 가지(광고 없는 파일 경호 & 더블클릭·우클릭 1초 압축 풀기)** 더 있는데, 우리 걸로 써보실 수 있게 간단히 알려드릴까요?`,
                 followUpSuggestions: [
                   '✨ 응, 숨은 초능력 두 가지 알려줘',
-                  '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
+                  '📂 다운로드 폴더 열어서 1초 압축 풀기 써보기',
                 ],
               },
             ];

@@ -173,7 +173,7 @@ export const GhostSecretaryFirstGuard: React.FC<GhostSecretaryFirstGuardProps> =
       }}
       onMouseDownCapture={(e) => {
         if (isAllowedElement(e.target)) return;
-        // 우클릭(0.35초 홀드 소환 시도) 또는 입력창 포커스 시도는 마우스 다운 즉시 귀엽게 안내
+        // Ctrl+우클릭 소환 시도 또는 입력창 포커스 시도는 마우스 다운 즉시 귀엽게 안내
         if (e.button === 2) {
           interceptActivity(e);
           return;

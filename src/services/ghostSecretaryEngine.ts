@@ -399,7 +399,7 @@ export interface GhostSecretaryState {
   consents?: { labeler?: boolean; sonFreeAndSpeedAlert?: boolean; bankSecurityAutoSleep?: boolean };
   /** 은행 보안프로그램 최초 1회 속도 저하 브리핑 말풍선 노출 일시 */
   bankSleepIntroShownAt?: string;
-  /** 숨은 초능력(악성검사·우클릭 0.35초 압축해제) 안내 완료 여부 */
+  /** 숨은 초능력(무소음 안전 검사·더블클릭/우클릭 1초 압축해제) 안내 완료 여부 */
   hiddenSuperpowersShown?: boolean;
   /** 1일 1회 노크: 마지막으로 먼저 말 건 날짜(YYYY-MM-DD) */
   lastKnockDate?: string;

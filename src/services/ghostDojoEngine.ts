@@ -2,14 +2,14 @@
  * 👻 귀신창 초능력 수련장 & 도장깨기 체험관 엔진 (순수 로직 — UI 비의존)
  *
  * 정본: Secretary 마스터기획서 5장 5) 「게이밍 감성 2단계 온보딩」
- *  - 1단계: 애기귀신 소환술 기본기 3단 수련 (우클릭 0.35초 꾹 근육 기억 각인)
+ *  - 1단계: 애기귀신 소환술 기본기 3단 수련 (Ctrl+0 / Ctrl+우클릭 2종 단일화 소환)
  *  - 2단계: 출시 초능력 전 종목(9종) 도장깨기 체험관 (Before → After + ✨성공 효과음 + 도장)
  *  - 최종 보상: 30일 무제한 초능력 체험 명시적 동의(Opt-in)
- * 공문: 20261107_2053(2단계 확장), 20261107_2056(4분 30초 ROI 배너 · 상시 연습장)
+ * 공문: 20261107_2053(2단계 확장), 20261107_2056(4분 30초 ROI 배너 · 상시 연습장), 20261114_2031(우클릭 꾹 폐기)
  */
 
-/** 우클릭 꾹 소환 판정 시간 (ms) — 데몬 우클릭 0.35초 홀드 규격과 동일 */
-export const SUMMON_HOLD_MS = 350;
+/** 소환 즉시 반응 판정 시간 (ms) — Ctrl+0 / Ctrl+우클릭 즉시 소환 규격 */
+export const SUMMON_HOLD_MS = 0;
 
 /** 공문 2056 지정 문구 (토씨 그대로 유지) */
 export const DOJO_ROI_BANNER_TEXT =
@@ -27,8 +27,8 @@ export interface DojoItemMeta {
 }
 
 export const BASIC_STEPS: Array<{ id: BasicStepId; title: string; mission: string }> = [
-  { id: 'b1', title: '우클릭 꾹~ 소환', mission: '아래 칸에서 마우스 오른쪽 버튼을 0.35초 꾹 누르세요' },
-  { id: 'b2', title: '단가? 무오픈 소환', mission: '「샘플 견적서?」 위에서 우클릭 꾹 → 단가를 콕' },
+  { id: 'b1', title: 'Ctrl+0 / Ctrl+우클릭 소환', mission: '아래 칸에서 Ctrl + 0 또는 Ctrl + 우클릭으로 바로 부르세요' },
+  { id: 'b2', title: '단가? 무오픈 소환', mission: '「샘플 견적서?」 위에서 Ctrl + 0 또는 Ctrl + 우클릭 → 단가를 콕' },
   { id: 'b3', title: '폰 영수증 단어칩', mission: '영수증 사진에서 사업자번호 칩을 콕' },
 ];
 

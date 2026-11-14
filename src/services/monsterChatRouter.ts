@@ -1731,22 +1731,32 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       /* ignore */
     }
 
-    const reclaimedMb = Number(sleepRes?.reclaimedRamMb || 320);
+    const stoppedCount = Math.max(0, Number(sleepRes?.stoppedCount ?? 0));
+    const reclaimedMb = Math.max(0, Number(sleepRes?.reclaimedRamMb ?? 0));
     const issuedRec = appendLocalHealthCheckRecord({
       category: '⚙️ 고치기',
       title: '안 쓰는 은행·관공서 보안프로그램 자동 재우기(절전) 및 은행 접속 시 자동 기상 설정',
-      reclaimedSizeLabel: `메모리 약 ${reclaimedMb}MB 확보`,
-      cleanedItemCount: Number(sleepRes?.stoppedCount || 3),
-      securityPluginsFrozen: Number(sleepRes?.stoppedCount || 3),
-      speedUpSummary: '평소엔 잠재워 두고 은행·홈택스 접속 시 2초 만에 자동 기상',
+      reclaimedSizeLabel:
+        stoppedCount > 0 ? `메모리 약 ${reclaimedMb}MB 확보` : '상시 자동 절전·기상 관리 설정 완료',
+      cleanedItemCount: stoppedCount,
+      securityPluginsFrozen: stoppedCount,
+      speedUpSummary: '평소엔 잠재워 두고 은행·홈택스 접속 시 1초 만에 자동 기상',
     });
 
     const msgKo =
-      `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
-      `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램을 삭제하지 않고 조용히 재워두었습니다! (메모리 약 **${reclaimedMb}MB** 확보 완료)\n` +
-      `앞으로는 제가 평소엔 잠재워 두었다가, **은행이나 홈택스 사이트에 들어가실 때만 귀신같이 자동으로 깨워드릴게요!**`;
+      stoppedCount > 0
+        ? `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
+          `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램 **${stoppedCount}개**를 삭제하지 않고 조용히 재워두었습니다! (메모리 약 **${reclaimedMb}MB** 확보 완료)\n` +
+          `앞으로는 제가 평소엔 잠재워 두었다가, **은행이나 홈택스 사이트에 들어가실 때만 귀신같이 자동으로 깨워드릴게요!**`
+        : `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
+          `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0개**로 아주 깨끗합니다!\n` +
+          `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 제가 다시 조용히 재워드릴게요!`;
 
-    speak('은행 보안프로그램을 조용히 재워두었습니다. 앞으로는 은행 사이트에 들어가실 때만 자동으로 깨워드리겠습니다.');
+    speak(
+      stoppedCount > 0
+        ? `은행 보안프로그램 ${stoppedCount}개를 조용히 재워두었습니다. 앞으로는 은행 사이트에 들어가실 때만 자동으로 깨워드리겠습니다.`
+        : '은행 보안프로그램 자동 관리 설정을 마쳤습니다. 앞으로 은행 사이트에 들어가실 때만 깨우고 끝나면 조용히 재워드리겠습니다.'
+    );
     return reply(sourceTab, msgKo, {
       healthRecordIssued: issuedRec,
       followUpSuggestions: [
@@ -1774,8 +1784,8 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       /* ignore */
     }
 
-    const silentPassCount = Math.max(12, Number(defRes?.silentPassCount || 24));
-    const zipCount = Number(defRes?.downloadsArchiveCount ?? 0);
+    const silentPassCount = Math.max(0, Number(defRes?.silentPassCount ?? 0));
+    const zipCount = Math.max(0, Number(defRes?.downloadsArchiveCount ?? 0));
     const thresholdMet = Boolean(defRes?.downloadsArchiveThresholdMet ?? zipCount >= 3);
     const zipSamples: string[] = Array.isArray(defRes?.downloadsArchiveSamples)
       ? defRes.downloadsArchiveSamples
@@ -1783,36 +1793,41 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     const sampleHint =
       zipSamples.length > 0 ? ` (예: \`${zipSamples[0]}\` 등)` : '';
 
+    const silentPassNote =
+      silentPassCount > 0
+        ? `*(최근 확인한 파일 **${silentPassCount}건** 모두 안전 통과)*`
+        : `*(새로 받는 파일이 생길 때마다 뒤에서 무소음 자동 보호 가동 중)*`;
+
     const zipSectionKo = thresholdMet
-      ? `2️⃣ **탐색기 우클릭 0.35초 꾹 압축 풀기**\n` +
-        `살펴보니 지금 다운로드 폴더에 그동안 받으신 **압축파일(ZIP)이 총 ${zipCount}건**${sampleHint} 쌓여 있던데요! 파일 받을 때마다 귀찮게 쫓아다니며 팝업을 띄우지 않으니, 필요하실 때 탐색기에서 압축파일 위에 **마우스 우클릭을 0.35초만 살짝 길게 꾹** 눌러보세요. 맥북 한글 깨짐까지 알아서 고쳐서 1초 만에 풀어드립니다. 우리 걸로 한 번 써보실래요?`
-      : `2️⃣ **탐색기 우클릭 0.35초 꾹 압축 풀기**\n` +
-        `파일을 받으실 때마다 귀찮게 쫓아다니며 팝업을 띄우지 않아요! 대신 앞으로 다운로드 폴더에 **압축파일(ZIP)이 3건 이상 쌓이면** 제가 실적을 모아서 알려드릴게요. 언제든 탐색기에서 압축파일 위에 **마우스 우클릭을 0.35초만 살짝 길게 꾹** 누르시면 맥북 한글 깨짐 없이 1초 만에 풀어드립니다.`;
+      ? `2️⃣ **더블클릭·우클릭 1초 압축 풀기**\n` +
+        `살펴보니 지금 다운로드 폴더에 그동안 받으신 **압축파일이 총 ${zipCount}건**${sampleHint} 쌓여 있던데요! 파일 받을 때마다 귀찮게 팝업을 띄우지 않으니, 필요하실 때 탐색기에서 압축파일을 **그대로 더블클릭**하시거나 **마우스 우클릭 메뉴의 [👻 귀신같이로 깔끔하게 풀기]**를 눌러보세요(보조 단축키 \`Ctrl+0\`). 맥북 한글 깨짐까지 알아서 고쳐서 광고 없이 1초 만에 풀어드립니다!`
+      : `2️⃣ **더블클릭·우클릭 1초 압축 풀기**\n` +
+        `파일을 받으실 때마다 귀찮게 팝업을 띄우지 않아요! 대신 언제든 탐색기에서 압축파일을 **그대로 더블클릭**하시거나 **마우스 우클릭 메뉴의 [👻 귀신같이로 깔끔하게 풀기]**를 누르시면(보조 단축키 \`Ctrl+0\`), 맥북 한글 깨짐이나 바탕화면 압축폭탄 없이 1초 만에 풀어드립니다.`;
 
     const msgKo =
       `✨ **[귀신비서의 숨은 초능력 2가지 보고]**\n\n` +
-      `1️⃣ **조용한 파일 경호원 (악성파일 무소음 검사)**\n` +
-      `인터넷에서 파일이나 문서를 받으실 때마다 무거운 백신 광고창 없이 윈도우 기본 보안엔진으로 뒤에서 조용히 검사합니다. 안전할 땐 귀찮은 팝업을 절대 안 띄우고, 진짜 위험한 파일이 나올 때만 바로 알려드려요! *(최근 확인한 파일 **${silentPassCount}건** 모두 안전 통과)*\n\n` +
+      `1️⃣ **조용한 파일 경호원 (무소음 안전 보호)**\n` +
+      `인터넷에서 파일이나 문서를 받으실 때마다 광고창 없이 윈도우 기본 보안 엔진과 직결해 뒤에서 조용히 검사합니다. 안전할 땐 귀찮은 팝업을 절대 안 띄우고, 진짜 위험한 파일이 나올 때만 바로 알려드려요! ${silentPassNote}\n\n` +
       zipSectionKo;
 
     speak(
       thresholdMet
-        ? `제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 조용히 안전 검사했고, 둘째로 다운로드 폴더에 쌓여 있는 압축파일 ${zipCount}건 위에서 우클릭을 영점삼오초만 꾹 누르시면 한글 깨짐 없이 바로 풀어드립니다.`
-        : `제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 조용히 안전 검사했고, 둘째로 탐색기에서 압축파일 위에 우클릭을 영점삼오초만 꾹 누르시면 한글 깨짐 없이 바로 풀어드립니다.`
+        ? `제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받는 파일을 광고 팝업 없이 조용히 안전 검사해 드리고, 둘째로 다운로드 폴더에 있는 압축파일 ${zipCount}건을 더블클릭하거나 우클릭 메뉴에서 선택하시면 한글 깨짐 없이 1초 만에 풀어드립니다.`
+        : '제 숨은 초능력 두 가지를 알려드립니다. 첫째로 새로 받는 파일을 광고 팝업 없이 조용히 안전 검사해 드리고, 둘째로 탐색기에서 압축파일을 더블클릭하거나 우클릭 메뉴를 누르시면 한글 깨짐 없이 1초 만에 풀어드립니다.'
     );
     return reply(sourceTab, msgKo, {
       followUpSuggestions:
         zipCount > 0
           ? [
-              '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
+              '📂 다운로드 폴더 열어서 1초 압축 풀기 써보기',
               '📊 그동안 모아둔 비서 실적 보고서 보여줘',
             ]
           : ['📊 그동안 모아둔 비서 실적 보고서 보여줘'],
     });
   }
 
-  // 3) 다운로드 폴더 열어서 최근 압축파일 자동 포커스(explorer /select) 후 우클릭 0.35초 압축 풀기 바로 써보기
-  if (/다운로드\s*폴더\s*열어.*?(우클릭|압축|써보|확인)|우클릭\s*0\.35초\s*써보/i.test(clean)) {
+  // 3) 다운로드 폴더 열어서 최근 압축파일 자동 포커스(explorer /select) 후 더블클릭·우클릭 1초 압축 풀기 바로 써보기
+  if (/다운로드\s*폴더\s*열어.*?(우클릭|더블클릭|압축|써보|확인)|1초\s*압축\s*풀기\s*써보/i.test(clean)) {
     const openRes = await fetch('http://127.0.0.1:5199/api/care/open-downloads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1824,14 +1839,14 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     const selectedFile = String(openRes?.selectedFile || '').trim();
     const msgKo = selectedFile
       ? `📂 **다운로드 폴더를 열고 가장 최근 압축파일(\`${selectedFile}\`)에 파란색 선택 포커스를 딱 맞춰 두었습니다!**\n` +
-        `헤매실 필요 없이 지금 파랗게 선택되어 있는 **\`${selectedFile}\`** 위에서 바로 **마우스 우클릭을 0.35초 살짝 길게 꾹** 눌러보세요! 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`
+        `헤매실 필요 없이 지금 파랗게 선택되어 있는 **\`${selectedFile}\`**을 **그대로 더블클릭**하시거나, **마우스 우클릭 메뉴에서 [👻 귀신같이로 깔끔하게 풀기]**를 눌러보세요! 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`
       : `📂 **다운로드 폴더를 바로 열어드렸습니다!**\n` +
-        `폴더 안에 있는 압축파일(ZIP) 위에서 **마우스 우클릭을 0.35초 살짝 길게 꾹** 눌러보시면, 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`;
+        `폴더 안에 있는 압축파일을 **그대로 더블클릭**하시거나 **마우스 우클릭 메뉴에서 [👻 귀신같이로 깔끔하게 풀기]**를 눌러보시면, 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`;
 
     speak(
       selectedFile
-        ? `다운로드 폴더를 열고 ${selectedFile} 파일에 선택 표시를 맞춰 두었습니다. 그 위에서 마우스 우클릭을 살짝 길게 누르시면 바로 풀립니다.`
-        : '다운로드 폴더를 열어드렸습니다. 압축파일 위에서 마우스 우클릭을 살짝 길게 누르시면 바로 풀립니다.'
+        ? `다운로드 폴더를 열고 ${selectedFile} 파일에 선택 표시를 맞춰 두었습니다. 그대로 더블클릭하거나 우클릭 메뉴에서 귀신같이로 깔끔하게 풀기를 누르시면 바로 풀립니다.`
+        : '다운로드 폴더를 열어드렸습니다. 압축파일을 더블클릭하거나 우클릭 메뉴에서 귀신같이로 깔끔하게 풀기를 누르시면 바로 풀립니다.'
     );
     return reply(sourceTab, msgKo, {
       followUpSuggestions: [
@@ -1852,22 +1867,35 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
         .catch(() => null),
     ]);
 
-    const sleepCount = Math.max(4, Number(secRes?.weeklyReport?.sleepCount || 5));
-    const savedRamMb = Math.max(320, Number(secRes?.weeklyReport?.savedRamMb || 380));
-    const silentPassCount = Math.max(12, Number(defRes?.silentPassCount || 24));
-    const zipCount = Math.max(3, Number(defRes?.downloadsArchiveCount ?? secRes?.downloadsArchiveCount ?? 4));
+    const sleepCount = Math.max(0, Number(secRes?.weeklyReport?.sleepCount ?? 0));
+    const savedRamMb = Math.max(0, Number(secRes?.weeklyReport?.savedRamMb ?? 0));
+    const silentPassCount = Math.max(0, Number(defRes?.silentPassCount ?? 0));
+    const zipCount = Math.max(0, Number(defRes?.downloadsArchiveCount ?? secRes?.downloadsArchiveCount ?? 0));
+
+    const sleepSummary =
+      sleepCount > 0
+        ? `누적 **${sleepCount}회** (메모리 **${savedRamMb}MB** 확보 · 은행 접속 시 자동 기상)`
+        : `현재 불필요 상주 **0건** (은행·홈택스 접속 시 자동 기상 대기 중)`;
+    const guardSummary =
+      silentPassCount > 0
+        ? `누적 **${silentPassCount}건** 모두 안전 확인 (귀찮은 광고 팝업 **0회**)`
+        : `상시 무소음 보호 가동 중 (귀찮은 광고 팝업 **0회**)`;
 
     const msgKo =
       `📊 **[귀신비서가 뒤에서 조용히 챙겨드린 누적 실적 보고]**\n\n` +
-      `• 🏦 **안 쓰는 은행·관공서 보안프로그램 자동 재우기**: 누적 **${sleepCount}회** (메모리 **${savedRamMb}MB** 확보 · 은행 접속 시 자동 기상)\n` +
-      `• 🛡️ **새로 받은 파일·문서 조용히 안전 검사**: 누적 **${silentPassCount}건** 모두 안전 확인 (귀찮은 광고 팝업 **0회**)\n` +
-      `• 📦 **다운로드 폴더 압축파일(ZIP) 파악**: 최근 받은 압축파일 **${zipCount}건** 확인됨 (탐색기에서 **우클릭 0.35초 꾹**으로 1초 해제 지원)\n\n` +
-      `평소에는 작업에 방해되지 않도록 시끄러운 알림창 없이 뒤에서 묵묵히 처리하고, 이렇게 실적이 모였을 때 한 번씩 보고드리겠습니다!`;
+      `• 🏦 **안 쓰는 은행·관공서 보안프로그램 자동 재우기**: ${sleepSummary}\n` +
+      `• 🛡️ **새로 받은 파일·문서 조용히 안전 검사**: ${guardSummary}\n` +
+      `• 📦 **다운로드 폴더 압축파일 파악**: 현재 압축파일 **${zipCount}건** 확인됨 (탐색기 **더블클릭 · 우클릭 메뉴**로 1초 해제 지원)\n\n` +
+      `평소에는 작업에 방해되지 않도록 시끄러운 알림창 없이 뒤에서 묵묵히 처리하고, 이렇게 필요하실 때 정직하게 보고드리겠습니다!`;
 
-    speak(`그동안 안 쓰는 은행 보안프로그램을 ${sleepCount}회 자동 절전하여 메모리 ${savedRamMb}메가바이트를 아꼈고, 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 안전 검사했습니다.`);
+    speak(
+      sleepCount > 0
+        ? `그동안 안 쓰는 은행 보안프로그램을 ${sleepCount}회 자동 절전하여 메모리 ${savedRamMb}메가바이트를 아꼈고, 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 안전 검사했습니다.`
+        : `현재 불필요한 은행 보안프로그램은 없으며, 새로 받은 파일 ${silentPassCount}건을 광고 팝업 없이 안전 검사했습니다.`
+    );
     return reply(sourceTab, msgKo, {
       followUpSuggestions: [
-        '📂 다운로드 폴더 열어서 우클릭 0.35초 써보기',
+        '📂 다운로드 폴더 열어서 1초 압축 풀기 써보기',
         '🏦 지금 은행 업무 볼 거라 보안프로그램 깨워줘',
       ],
     });

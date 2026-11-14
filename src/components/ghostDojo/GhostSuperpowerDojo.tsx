@@ -8,7 +8,6 @@ import {
   type SuperpowerTrialStatus,
 } from '../OnboardingModal';
 import {
-  SUMMON_HOLD_MS,
   DOJO_ROI_BANNER_TEXT,
   BASIC_STEPS,
   DOJO_ITEMS,
@@ -44,59 +43,38 @@ import {
 } from '../../services/ghostDojoEngine';
 
 /* ─────────────────────────────────────────────────────────────
- * 공용: 우클릭 0.35초 꾹 판정 훅 + 원형 게이지 링
+ * 공용: Ctrl + 0 / Ctrl + 우클릭 (및 수련 박스 클릭) 즉시 소환 훅
  * ───────────────────────────────────────────────────────────── */
-function useRightClickHold(onComplete: () => void) {
+function useInstantSummonTrigger(onComplete: () => void) {
   const [progress, setProgress] = useState(0);
-  const rafRef = useRef<number>(0);
-  const startRef = useRef<number>(0);
-  const doneRef = useRef(false);
-
-  const cancel = useCallback(() => {
-    cancelAnimationFrame(rafRef.current);
-    if (!doneRef.current) setProgress(0);
-  }, []);
-
-  const tick = useCallback(() => {
-    const ratio = Math.min(1, (performance.now() - startRef.current) / SUMMON_HOLD_MS);
-    setProgress(ratio);
-    if (ratio >= 1) {
-      doneRef.current = true;
-      onComplete();
-      window.setTimeout(() => {
-        doneRef.current = false;
-        setProgress(0);
-      }, 600);
-      return;
-    }
-    rafRef.current = requestAnimationFrame(tick);
+  const triggerNow = useCallback(() => {
+    setProgress(1);
+    onComplete();
+    window.setTimeout(() => {
+      setProgress(0);
+    }, 500);
   }, [onComplete]);
 
-  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
-
   const handlers = {
-    onMouseDown: (e: React.MouseEvent) => {
-      if (e.button !== 2) return;
-      e.preventDefault();
-      cancelAnimationFrame(rafRef.current);
-      // Ctrl + 우클릭 시 0.35초 홀드 대기 없이 즉시(0.01초) 소환!
-      if (e.ctrlKey && !e.altKey && !e.shiftKey) {
-        doneRef.current = true;
-        setProgress(1);
-        onComplete();
-        window.setTimeout(() => {
-          doneRef.current = false;
-          setProgress(0);
-        }, 600);
-        return;
-      }
-      doneRef.current = false;
-      startRef.current = performance.now();
-      rafRef.current = requestAnimationFrame(tick);
+    tabIndex: 0,
+    onClick: () => {
+      triggerNow();
     },
-    onMouseUp: cancel,
-    onMouseLeave: cancel,
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    onMouseDown: (e: React.MouseEvent) => {
+      if (e.button === 2 && e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        triggerNow();
+      }
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
+        e.preventDefault();
+        triggerNow();
+      }
+    },
+    onContextMenu: (e: React.MouseEvent) => {
+      if (e.ctrlKey) e.preventDefault();
+    },
   };
   return { progress, handlers };
 }
@@ -143,7 +121,7 @@ const btnCls =
  * ───────────────────────────────────────────────────────────── */
 const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [summoned, setSummoned] = useState(false);
-  const { progress, handlers } = useRightClickHold(() => {
+  const { progress, handlers } = useInstantSummonTrigger(() => {
     playBabyGhostChime('summon');
     setSummoned(true);
     onDone();
@@ -152,10 +130,10 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     <div className="flex flex-col gap-2">
       <div
         {...handlers}
-        className="select-none h-24 rounded-xl border-2 border-dashed border-[#2DD4BF]/50 bg-zinc-950 flex items-center justify-center gap-3 text-[13px] text-zinc-300 cursor-context-menu"
+        className="select-none h-24 rounded-xl border-2 border-dashed border-[#2DD4BF]/50 bg-zinc-950 flex items-center justify-center gap-3 text-[13px] text-zinc-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60"
       >
         <HoldRing progress={progress} />
-        <span>여기서 우클릭 꾹~ (또는 Ctrl + 우클릭 즉시 소환!)</span>
+        <span>여기서 <strong>Ctrl + 0</strong> 또는 <strong>Ctrl + 우클릭</strong> (클릭해서 바로 체험)</span>
       </div>
       {summoned && (
         <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
@@ -185,13 +163,13 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(BASIC2_QUERY);
-  const { progress, handlers } = useRightClickHold(() => {
+  const { progress, handlers } = useInstantSummonTrigger(() => {
     playBabyGhostChime('summon');
     setOpen(true);
   });
   return (
     <div className="flex flex-col gap-2">
-      <div {...handlers} className={`${boxCls} select-none flex items-center gap-3 cursor-context-menu`}>
+      <div {...handlers} className={`${boxCls} select-none flex items-center gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60`}>
         <span className="text-zinc-500 text-[12px] shrink-0">💬 카톡 입력창</span>
         <span className="flex-1 font-bold">{value}</span>
         <HoldRing progress={progress} size={30} />

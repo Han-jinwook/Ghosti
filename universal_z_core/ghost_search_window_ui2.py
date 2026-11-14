@@ -489,9 +489,51 @@ def build_ui2_search_window(
         vid_ocr_map = _load_local_video_ocr_by_name()
 
         pool: list[dict] = []
+        seen_fpaths: set[str] = set()
         for rec in reversed(global_ai_history):
+            fp_hist = str(rec.get("file_path") or "")
+            if fp_hist:
+                seen_fpaths.add(fp_hist.lower())
             pool.append(rec)
+
+        # [봉인 존중 연동] 사용자가 더블클릭·우클릭으로 직접 압축을 푼 직후 등록된 문서·본문 스니펫 0.05초 즉시 편입
+        try:
+            ext_q_file = (
+                Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+                / "Ghosti"
+                / "data"
+                / "extracted_files_index_queue.json"
+            )
+            if ext_q_file.exists():
+                ext_q_data = json.loads(ext_q_file.read_text(encoding="utf-8", errors="ignore"))
+                for erec in (ext_q_data.get("indexedFiles") or [])[:120]:
+                    if not isinstance(erec, dict):
+                        continue
+                    efp = str(erec.get("filePath") or "").strip()
+                    if not efp or efp.lower() in seen_fpaths or not os.path.exists(efp):
+                        continue
+                    seen_fpaths.add(efp.lower())
+                    efn = str(erec.get("fileName") or Path(efp).name)
+                    esnip = str(erec.get("textSnippet") or "").strip()
+                    ext_sfx = Path(efp).suffix.lower()
+                    ekind = (
+                        "image"
+                        if ext_sfx in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
+                        else ("video" if ext_sfx in (".mp4", ".mov", ".mkv", ".avi", ".webm") else "doc")
+                    )
+                    pool.append({
+                        "kind": ekind,
+                        "file_path": efp,
+                        "ts": float(erec.get("indexedTs") or time.time()),
+                        "text": f"📦 {efn}" + (f" — {esnip}" if esnip else f" ({Path(efp).parent.name})"),
+                    })
+        except Exception:
+            pass
+
         for frec in get_lightweight_local_files():
+            fp_loc = str(frec.get("file_path") or "")
+            if fp_loc and fp_loc.lower() in seen_fpaths:
+                continue
             if frec.get("kind") == "video":
                 v_fname = Path(str(frec.get("file_path") or "")).name
                 ocr_info = vid_ocr_map.get(v_fname)

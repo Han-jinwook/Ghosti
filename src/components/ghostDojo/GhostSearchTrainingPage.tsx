@@ -8,7 +8,6 @@ import {
   type GhostSearchStage,
   type GhostSearchWindowMode,
 } from '../../services/ghostSearchWindowGeometry';
-import { SUMMON_HOLD_MS } from '../../services/ghostDojoEngine';
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
@@ -108,8 +107,8 @@ const AUTO_MORPH_SCRIPT: Array<{
     stage: null,
     cursorPct: { x: 62, y: 54 },
     clicking: true,
-    badge: '🎬 자동 시연 1/4 · 바탕화면 우클릭 꾹~ (Ctrl+0)',
-    desc: '가상 모니터 빈 곳에서 우클릭 꾹~(0.35초) 또는 Ctrl+0을 누르면 마우스 위치에 슬림한 귀신검색창이 소환됩니다.',
+    badge: '🎬 자동 시연 1/4 · 바탕화면 Ctrl + 0 / Ctrl + 우클릭 1초 소환',
+    desc: '가상 모니터 빈 곳에서 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 마우스 위치에 슬림한 귀신검색창이 즉시 소환됩니다.',
   },
   {
     phase: 1,
@@ -162,11 +161,8 @@ const VirtualMonitorSimulator: React.FC<{
   const [stage, setStage] = useState<GhostSearchStage | null>(initialQuery ? 'medium' : 'small');
   const [customSlimHeight, setCustomSlimHeight] = useState<number | undefined>(initialQuery ? undefined : 340);
   const [anchor, setAnchor] = useState({ x: 1300, y: 600 });
-  const [holdProgress, setHoldProgress] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(!initialQuery);
   const [autoPhase, setAutoPhase] = useState<number>(initialQuery ? 2 : 1);
-  const holdRaf = useRef(0);
-  const holdStart = useRef(0);
 
   useEffect(() => {
     const el = monitorRef.current;
@@ -390,32 +386,15 @@ const VirtualMonitorSimulator: React.FC<{
           ref={monitorRef}
           data-keep-dark="true"
           data-guard-interactive="true"
-          onContextMenu={(e) => e.preventDefault()}
-          onMouseDown={(e) => {
-            if (e.button !== 2) return;
-            const pos = toVirtual(e);
-            if (e.ctrlKey && !e.altKey && !e.shiftKey) {
-              cancelAnimationFrame(holdRaf.current);
-              setHoldProgress(0);
-              summon(pos.x, pos.y);
-              return;
-            }
-            holdStart.current = performance.now();
-            const tick = () => {
-              const r = Math.min(1, (performance.now() - holdStart.current) / SUMMON_HOLD_MS);
-              setHoldProgress(r);
-              if (r >= 1) {
-                setHoldProgress(0);
-                summon(pos.x, pos.y);
-                return;
-              }
-              holdRaf.current = requestAnimationFrame(tick);
-            };
-            holdRaf.current = requestAnimationFrame(tick);
+          onContextMenu={(e) => {
+            if (e.ctrlKey) e.preventDefault();
           }}
-          onMouseUp={() => {
-            cancelAnimationFrame(holdRaf.current);
-            setHoldProgress(0);
+          onMouseDown={(e) => {
+            if (e.button === 2 && e.ctrlKey && !e.altKey && !e.shiftKey) {
+              e.preventDefault();
+              const pos = toVirtual(e);
+              summon(pos.x, pos.y);
+            }
           }}
           className="relative w-full overflow-hidden rounded-xl border-2 border-black shadow-inner"
           style={{
@@ -478,9 +457,7 @@ const VirtualMonitorSimulator: React.FC<{
                 className="px-4 py-2.5 rounded-full bg-black/70 hover:bg-black/85 border-2 border-[#2DD4BF] text-white text-[13px] font-extrabold shadow-xl cursor-pointer transition-all flex items-center gap-2"
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-[#2DD4BF] animate-ping" />
-                {holdProgress > 0
-                  ? `우클릭 꾹… ${Math.round(holdProgress * 100)}%`
-                  : '🖱️ 여기를 클릭하거나 우클릭 꾹~ / Ctrl+0으로 귀신검색창 소환하기'}
+                {'🖱️ 여기를 클릭하거나 Ctrl + 0 / Ctrl + 우클릭으로 귀신검색창 소환하기'}
               </button>
             </div>
           )}
@@ -629,7 +606,7 @@ const VirtualMonitorSimulator: React.FC<{
               </div>
               <span className="px-2 py-0.5 rounded-md bg-black/85 border border-[#2DD4BF] text-[#5EEAD4] text-[10.5px] font-extrabold whitespace-nowrap shadow-lg">
                 {autoPhase === 0
-                  ? '우클릭 꾹~ 소환!'
+                  ? 'Ctrl + 0 / Ctrl + 우클릭 소환!'
                   : autoPhase === 1
                     ? '작게 모드 · 자율 슬림(520px)'
                     : autoPhase === 2
@@ -794,7 +771,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
       <div className="flex flex-col gap-1">
         <h1 className="text-[22px] font-extrabold text-zinc-900 dark:text-white">👻 귀신검색</h1>
         <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400">
-          검색은 일하던 그 자리에서 — <strong className="text-zinc-800 dark:text-zinc-100">Ctrl + 0</strong> (우클릭 꾹~ / Ctrl+우클릭)
+          파일 이름 몰라도, 열지 않고 1초 소환 — <strong className="text-zinc-800 dark:text-zinc-100">Ctrl + 0</strong> / <strong className="text-zinc-800 dark:text-zinc-100">Ctrl + 우클릭</strong>
         </p>
       </div>
 
@@ -885,7 +862,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
       >
         <span className="text-[14.5px] font-extrabold text-zinc-900 dark:text-white">
           {connected
-            ? '🏁 마지막 미션 · 바탕화면으로 나가서 Ctrl + 0 (또는 우클릭 꾹~)을 눌러 내 진짜 파일을 불러보세요!'
+            ? '🏁 마지막 미션 · 바탕화면으로 나가서 Ctrl + 0 (또는 Ctrl + 우클릭)을 눌러 내 진짜 파일을 불러보세요!'
             : "👻 구경은 재밌으셨나요? 내 진짜 사진·문서로 직접 찾아보려면 먼저 『귀신비서』와 인사를 나누고 오세요!"}
         </span>
         {connected ? (

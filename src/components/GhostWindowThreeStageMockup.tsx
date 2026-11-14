@@ -593,7 +593,7 @@ export const GhostBabyMascotBadge: React.FC<{ subtitle?: string }> = ({ subtitle
           귀신같이
         </span>
         <span className="px-1.5 py-0.5 rounded bg-teal-400/20 border border-teal-300/40 text-teal-200 font-mono text-[10px] font-extrabold">
-          우클릭 꾹 · Ctrl+0
+          Ctrl+0 · Ctrl+우클릭
         </span>
       </div>
       {subtitle && (
@@ -2021,7 +2021,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {[
-              { step: 1 as const, label: '1단계: 우클릭 꾹 소환' },
+              { step: 1 as const, label: '1단계: Ctrl+0 · Ctrl+우클릭 소환' },
               { step: 2 as const, label: '2단계: 1·2·3 연속 붙여넣기' },
               { step: 3 as const, label: '3단계: 문서 숫자 바로 소환' },
             ].map((st) => (
@@ -2043,9 +2043,9 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
             ))}
           </div>
           <p className="text-[12px] text-zinc-200">
-            {trainingStage === 1 && '마우스 우클릭을 0.35초 지그시 누르면 효과음과 함께 귀신창이 열립니다.'}
+            {trainingStage === 1 && '키보드 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 1초 만에 효과음과 함께 귀신창이 열립니다.'}
             {trainingStage === 2 && '여러 줄을 차례대로 복사한 뒤 순서대로 톡톡 붙여넣습니다.'}
-            {trainingStage === 3 && '문장 끝에 ?를 치고 우클릭 꾹을 누르면 계약서·단가표 숫자가 바로 들어갑니다.'}
+            {trainingStage === 3 && '문장 끝에 ?를 치고 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 계약서·단가표 숫자가 바로 들어갑니다.'}
           </p>
         </div>
       )}
