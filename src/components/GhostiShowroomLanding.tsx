@@ -399,7 +399,7 @@ const WEAPON_META: Record<
   },
   superpower: {
     icon: '⚡',
-    chipLabel: '하던 일 멈추지 마세요, 1초면 끝',
+    chipLabel: '하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝',
     chipSub: '영타 자동 변환 · 칸 맞춤 복붙',
     keywordBadge: '#귀신창',
     userBubble: 'dkssudgktpdy 영타 오타랑 PDF 깨진 줄바꿈, 창 안 바꾸고 그 자리에서 고쳐줘!',
@@ -427,12 +427,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [devFullView, setDevFullView] = useState<boolean>(false);
 
   // 본 앱(👻 귀신비서 방)에서 구경하러 나온 유저인지 감지하여 왕복 복귀 버튼 제공
+  // ⚠️ [출시 전 잠금 철칙]: `?view=showroom`은 루트 접속 시 히스토리 라우터가 자동으로 붙이는 파라미터이므로
+  //    복귀 버튼 노출 근거로 쓰면 첫 방문자에게도 버튼이 보이고 forceAllow로 개발 워크스페이스 잠금이 뚫립니다.
+  //    오직 ① 본 앱에서 [온보딩 구경하기]로 나온 세션 플래그 또는 ② 개발자 권한(isDevAuthorized)일 때만 노출합니다.
   const [canReturnToWorkspace] = useState<boolean>(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('view') === 'showroom') return true;
       if (sessionStorage.getItem('ghosti_entered_showroom_from_app') === '1') return true;
-      if (localStorage.getItem('ghosti_view_mode') === 'workspace') return true;
       return Boolean(isDevAuthorized);
     } catch {
       return Boolean(isDevAuthorized);
@@ -986,16 +986,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </button>
           </nav>
 
-          {/* 우측 액션 영역 (단일 CTA 집중) */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* 우측 액션 영역 (단일 CTA 집중 · 모바일 390px에서도 CTA가 화면 밖으로 밀리지 않도록 축약 라벨) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {canReturnToWorkspace && (
               <button
                 type="button"
                 onClick={() => onEnterWorkspace(true)}
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-[#00F0B5] border-2 border-[#00F0B5]/60 text-[13px] font-black shadow-[0_0_16px_rgba(0,240,181,0.2)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                title="귀신비서 방으로 돌아가기"
+                className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-[#00F0B5] border-2 border-[#00F0B5]/60 text-[13px] font-black shadow-[0_0_16px_rgba(0,240,181,0.2)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <span>👻</span>
-                <span>귀신비서 방으로 돌아가기 ➔</span>
+                <span className="hidden sm:inline">귀신비서 방으로 돌아가기 ➔</span>
+                <span className="sm:hidden">➔</span>
               </button>
             )}
 
@@ -1003,27 +1005,33 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               verifiedUserEmail ? (
                 <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[13px] font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span>✅</span>
-                  <span className="max-w-[140px] truncate">{verifiedUserEmail}</span>
+                  <span className="max-w-[90px] sm:max-w-[140px] truncate">{verifiedUserEmail}</span>
                   <span className="hidden sm:inline">알림 예약됨</span>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={scrollToEmailBox}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-[13px] sm:text-sm font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  data-keep-dark="true"
+                  style={{ background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 100%)', color: '#020617' }}
+                  className="px-3 sm:px-4 py-2 rounded-xl text-[13px] sm:text-sm font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all hover:opacity-90 cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
-                  <span>⚡</span>
-                  <span>10초 만에 무료로 시작하기</span>
+                  <span>🔔</span>
+                  <span className="sm:hidden">알림받기</span>
+                  <span className="hidden sm:inline">출시 알림 10초 예약</span>
                 </button>
               )
             ) : (
               <button
                 type="button"
                 onClick={() => onEnterWorkspace(true)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 text-[13px] sm:text-sm font-black shadow-[0_0_24px_rgba(0,240,181,0.45)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                data-keep-dark="true"
+                style={{ background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 100%)', color: '#020617' }}
+                className="px-3 sm:px-4 py-2 rounded-xl text-[13px] sm:text-sm font-black shadow-[0_0_24px_rgba(0,240,181,0.45)] transition-all hover:opacity-90 cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <span>⚡</span>
-                <span>10초 만에 무료로 시작하기</span>
+                <span className="sm:hidden">무료 시작</span>
+                <span className="hidden sm:inline">10초 만에 무료로 시작하기</span>
               </button>
             )}
 
@@ -1103,7 +1111,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   onClick={() => (isLaunched ? onEnterWorkspace(true) : scrollToEmailBox())}
                   className="w-full px-5 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-yellow-200 text-slate-950 font-black text-sm shadow-lg cursor-pointer"
                 >
-                  ⚡ 우리 팀 공용 폴더 무료로 시작하기
+                  ⚡ 우리 팀 공용 폴더 {isLaunched ? '무료로 시작하기' : '출시 알림받기'}
                 </button>
                 <button
                   type="button"
@@ -1185,20 +1193,47 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </h2>
               </div>
 
-              {/* 단일 행동 버튼 (Single CTA) + SSOT v2.3 안심 보증 문구 */}
+              {/* 단일 행동 버튼 (Single CTA) + 안심 보증 문구
+                  ⚠️ [약속-동선 일치 철칙]: 출시 전에는 실제로 가입 없이 가능한 행동(아래 체험 스테이지)으로 연결하고,
+                     이메일 출시 알림은 보조 버튼으로 분리합니다. 출시 후(isLaunched)에는 SSOT v2.3 원문 그대로 노출합니다. */}
               <div className="space-y-2 pt-0.5">
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                   <button
                     type="button"
-                    onClick={() => (isLaunched ? onEnterWorkspace(true) : scrollToEmailBox())}
-                    className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#00F0B5] via-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black text-sm sm:text-base shadow-[0_6px_28px_rgba(0,240,181,0.38)] transition-all hover:scale-[1.02] cursor-pointer flex items-center gap-2"
+                    onClick={() =>
+                      isLaunched
+                        ? onEnterWorkspace(true)
+                        : document
+                            .getElementById('interactive-demo')
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                    data-keep-dark="true"
+                    style={{
+                      background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 55%, #34D399 100%)',
+                      color: '#020617',
+                    }}
+                    className="px-6 py-3.5 rounded-2xl font-black text-sm sm:text-base shadow-[0_6px_28px_rgba(0,240,181,0.38)] transition-all hover:scale-[1.02] hover:opacity-95 cursor-pointer flex items-center gap-2"
                   >
                     <span>⚡</span>
-                    <span>10초 만에 무료로 시작하기</span>
+                    <span>{isLaunched ? '10초 만에 무료로 시작하기' : '가입 없이 바로 체험해 보기'}</span>
                   </button>
+                  {!isLaunched && !verifiedUserEmail && (
+                    <button
+                      type="button"
+                      onClick={scrollToEmailBox}
+                      data-keep-dark="true"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: '#E2E8F0' }}
+                      className="px-4 py-3 rounded-2xl border border-white/20 hover:border-[#00F0B5]/60 font-extrabold text-[13px] sm:text-sm cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>🔔</span>
+                      <span>출시 알림 10초 예약</span>
+                    </button>
+                  )}
                 </div>
                 <p className="text-[12.5px] sm:text-[13.5px] text-teal-200/95 font-bold break-keep">
-                  ✓ 가입·카드 등록 없이 즉시 시작 · 서버 전송 0% · 광고 0% 평생 무료
+                  {isLaunched
+                    ? '✓ 가입·카드 등록 없이 즉시 시작 · 서버 전송 0% · 광고 0% 평생 무료'
+                    : '✓ 가입·카드 등록 없이 바로 체험 · 서버 전송 0% · 광고 0% 평생 무료'}
                 </p>
               </div>
 
@@ -1263,7 +1298,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         {card.stat}
                       </div>
                       <div className="text-[13px] sm:text-sm font-black text-white">{card.title}</div>
-                      <div className="text-xs text-zinc-300 font-semibold truncate mt-0.5">
+                      <div className="text-xs text-zinc-300 font-semibold line-clamp-2 break-keep leading-snug mt-0.5">
                         {card.sub}
                       </div>
                     </button>
@@ -1445,10 +1480,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           {item.keywordBadge}
                         </span>
                       </div>
-                      <div className="text-[13.5px] font-black text-white truncate mt-0.5">
+                      <div className="text-[13.5px] font-black text-white line-clamp-2 break-keep leading-snug mt-0.5">
                         {item.chipLabel}
                       </div>
-                      <div className="text-xs text-zinc-400 font-semibold truncate">
+                      <div className="text-xs text-zinc-400 font-semibold line-clamp-2 break-keep leading-snug">
                         {item.chipSub}
                       </div>
                     </button>
@@ -1976,9 +2011,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <div className="space-y-2.5">
                       <div className="rounded-xl bg-zinc-900/90 border border-white/10 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2.5 text-[13px]">
                         <span className="font-extrabold text-white">
-                          💤 안 쓰는 은행 보안프로그램 20개 ➔ <b className="text-[#00F0B5]">삭제 없이 일시 중지</b>
+                          💤 안 쓰는 은행 보안프로그램 20개 ➔ <b className="text-[#00F0B5]">안 지우고 재우기</b>
                         </span>
-                        <span className="text-zinc-400 font-bold">은행 접속 시 자동 복귀 ⚡</span>
+                        <span className="text-zinc-400 font-bold">은행 접속 시 1초 자동 기상 ⚡</span>
                       </div>
                       <div className="rounded-xl bg-sky-950/40 border border-sky-400/30 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2.5 text-[13px]">
                         <span className="font-extrabold text-white">
@@ -2284,7 +2319,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             </p>
                             <div className="grid grid-cols-1 gap-1.5 pt-0.5">
                               <div className="rounded-lg bg-zinc-900/90 border border-white/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[13px]">
-                                <span className="text-zinc-400 font-bold break-keep">세금계산서_1.pdf 외 첨부 서류 5개 선택</span>
+                                <span className="text-zinc-400 font-bold break-keep">세금계산서_1.pdf 외 첨부 서류 4개 선택</span>
                                 <div className="flex items-center gap-1.5 font-sans font-bold tracking-normal text-[13px] shrink-0">
                                   <span className={zipDemoApplied ? 'line-through text-zinc-500' : 'text-zinc-300'}>
                                     새 압축.zip
@@ -2394,7 +2429,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           type="button"
                           disabled={otpStatus === 'verifying' || otpDigits.join('').length < 6}
                           onClick={() => void handleVerifyOtpCode(otpDigits.join(''))}
-                          className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-[13px] sm:text-sm cursor-pointer"
+                          data-keep-dark="true"
+                          style={{ background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 100%)', color: '#020617' }}
+                          className="flex-1 py-3 rounded-xl font-black text-[13px] sm:text-sm cursor-pointer disabled:opacity-60"
                         >
                           {otpStatus === 'verifying' ? '인증 확인 중...' : '✅ 인증 완료하고 출시 1순위 알림 예약하기'}
                         </button>
@@ -2415,7 +2452,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           <span>방금 눌러보신 『귀신같이』, 정식 오픈 당일 1순위로 받아보실래요?</span>
                         </span>
                         <span className="text-[12.5px] sm:text-[13px] font-extrabold text-[#00F0B5] break-keep">
-                          가입·카드 등록 없이 즉시 실행 · 서버 전송 0% · 개인 핵심 4종 평생 무료
+                          체험은 지금 가입 없이 · 오픈 당일 시작 링크만 이메일로 가장 먼저
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
@@ -2433,7 +2470,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <button
                           type="submit"
                           disabled={otpStatus === 'sending'}
-                          className="px-5 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] via-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black text-[13.5px] sm:text-sm shadow-[0_4px_20px_rgba(0,240,181,0.35)] shrink-0 cursor-pointer"
+                          data-keep-dark="true"
+                          style={{ background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 55%, #34D399 100%)', color: '#020617' }}
+                          className="px-5 py-3 rounded-xl hover:opacity-90 font-black text-[13.5px] sm:text-sm shadow-[0_4px_20px_rgba(0,240,181,0.35)] shrink-0 cursor-pointer"
                         >
                           {otpStatus === 'sending' ? '발송 중...' : '🔔 출시 알림받기 (10초 인증)'}
                         </button>
@@ -2471,7 +2510,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <button
                       type="button"
                       onClick={() => onEnterWorkspace(true)}
-                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-[13.5px] sm:text-sm cursor-pointer shadow-lg"
+                      data-keep-dark="true"
+                      style={{ background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 100%)', color: '#020617' }}
+                      className="px-5 py-3 rounded-xl font-black text-[13.5px] sm:text-sm cursor-pointer shadow-lg hover:opacity-90"
                     >
                       🚀 본 앱 바로 시작하기 ➔
                     </button>
@@ -2648,7 +2689,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               alt="아기귀신"
               className="w-5 h-5 rounded-full object-cover"
             />
-            <span>유튜브·인스타·네이버 화제의 15초 공식 예고편 쇼룸</span>
+            <span>15초 공식 예고편 쇼룸</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2.5 mb-2">
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight break-keep">
@@ -2804,21 +2845,21 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-amber-400/40 text-[13px] font-black"
             >
               <span>📜</span>
-              <span>대표이사 직인 날인 · 법적 효력 공식 보증서 발급</span>
+              <span>대표이사 직인 날인 · 무료 사용 공식 확인서</span>
             </div>
             <h3 className="text-xl sm:text-3xl font-black text-white leading-tight break-keep">
               “회사 컴퓨터에 깔아도 저작권 단속 안 오나요?”<br />
               <span style={{ color: '#00F0B5' }}>
-                ✓ 개인·기업 PC 기본 기능 영구 무료! (단속 걱정 ZERO)
+                ✓ 개인·기업 PC 기본 기능 영구 무료! (라이선스 비용 0원)
               </span>
             </h3>
 
-            {/* 빽빽한 줄글 대신 한눈에 읽히는 3대 안심 체크 배지 */}
+            {/* 빽빽한 줄글 대신 한눈에 읽히는 3대 안심 체크 배지 (우리가 책임질 수 있는 범위만 명시) */}
             <div className="flex flex-wrap gap-2 text-[13px] font-extrabold">
               {[
                 '🏢 법인·개인사업자·병원·세무사 사내 PC 무료',
                 '🛡️ 라이선스 비용 0원 · 광고 0%',
-                '⚖️ 법무법인 내용증명·단속 영구 0건 보장',
+                '📜 회사 PC 무료 사용 허용 공식 확인서 발급',
               ].map((pill) => (
                 <span
                   key={pill}
@@ -2830,7 +2871,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               ))}
             </div>
             <p className="text-[13px] text-zinc-300 font-semibold break-keep">
-              ※ 내 기기 로컬 기본 기능(찾기·손보기·귀신창) 영구 무료 보증 (사내 다자간 팀 서버 공유 등 확장 옵션 및 공공기관 제외)
+              ※ 내 기기 로컬 기본 기능(귀신비서·귀신검색·귀신창·사진공유) 영구 무료 (내 기기 통합·팀 공용 폴더 등 확장 옵션 및 공공기관 제외)
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -3037,7 +3078,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               (주)썬드림 · PC·모바일 초능력 『귀신같이(Ghosti)』 · 상표출원 제40-2026-0229386호 · 외부 서버 전송 0 Byte 프라이버시 보장
             </p>
           </div>
-          <span className="select-none">© 2026 Sundreamer Studio. All rights reserved.</span>
+          <span className="select-none">© 2026 (주)썬드림 · Sundreamer Studio. All rights reserved.</span>
         </div>
       </footer>
 
@@ -3096,7 +3137,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 setActiveShortsModal(null);
                 scrollToEmailBox();
               }}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00F0B5] to-teal-400 text-slate-950 font-black text-[13.5px] sm:text-sm cursor-pointer"
+              data-keep-dark="true"
+              style={{ background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 100%)', color: '#020617' }}
+              className="w-full py-3.5 rounded-xl font-black text-[13.5px] sm:text-sm cursor-pointer hover:opacity-90"
             >
               {verifiedUserEmail ? '✅ 출시 알림 예약됨 (다른 기능 체험하기)' : '🔔 이 기능 정식 출시 1순위 알림받기'}
             </button>
