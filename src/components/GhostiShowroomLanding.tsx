@@ -337,7 +337,61 @@ const INTERACTIVE_SCENARIOS = {
 
 const QUICK_EMAIL_DOMAINS = ['@naver.com', '@gmail.com', '@daum.net', '@kakao.com'];
 
-type OnboardingWeaponTab = 'video' | 'doc' | 'clean' | 'superpower';
+// ============================================================================
+// [샘플 체험 A] 👻 귀신비서 — 샘플 PC 살려보기 (실측 X · 리얼 샘플 O)
+// ⚠️ 웹 온보딩에서는 방문자 PC를 실제로 진단하지 않습니다. 실제 진단은 본 앱 『👻 귀신비서』 방에서
+//    『내 컴퓨터 연결』 후에만 진행합니다. 타사 상표 분쟁 방지를 위해 제품 실명 대신 일반 명칭만 사용합니다.
+// ============================================================================
+interface SamplePcProgram {
+  id: string;
+  name: string;
+  memMb: number;
+  neededForBank: boolean;
+}
+
+const SAMPLE_PC_PROGRAMS: SamplePcProgram[] = [
+  { id: 'kb1', name: '○○은행 키보드 보안', memMb: 210, neededForBank: true },
+  { id: 'cert', name: '공동인증서 실행 플러그인', memMb: 240, neededForBank: true },
+  { id: 'kb2', name: '△△은행 키보드 보안', memMb: 180, neededForBank: false },
+  { id: 'pay', name: '쇼핑몰 결제 보안 모듈', memMb: 150, neededForBank: false },
+  { id: 'fw', name: '개인 방화벽 에이전트', memMb: 190, neededForBank: false },
+  { id: 'term', name: '접속 단말 정보 수집기', memMb: 130, neededForBank: false },
+  { id: 'sign', name: '전자서명 실행기', memMb: 160, neededForBank: false },
+  { id: 'upd', name: '금융 보안 업데이트 도우미', memMb: 120, neededForBank: false },
+];
+const SAMPLE_PC_BASE_PCT = 61;
+const SAMPLE_PC_REVIVED_PCT = 93;
+
+// ============================================================================
+// [샘플 체험 B] 📸 사진공유 — 샘플 가족방 들어가 보기 (public/shared_family_host_thumbs 실사진 36장)
+// ============================================================================
+const SAMPLE_FAMILY_PHOTOS: string[] = [
+  '1721441387443.jpg', '1721441536389.jpg', '1721636228992.jpg',
+  '20240719_105510.jpg', '20240719_112207_080.jpg', '20240719_113139_006.jpg', '20240719_114640.jpg',
+  '20240719_125448.jpg', '20240719_182503.jpg', '20240720_111405.jpg', '20240720_114310_073.jpg',
+  '20240720_122940.jpg', '20240720_134949.jpg', '20240720_141110.jpg', '20240720_180506.jpg',
+  '20240720_182145.jpg', '20240720_182931.jpg', '20240720_184012.jpg', '20240720_194823.jpg',
+  '20240720_211702.jpg', '20240721_114134.jpg', '20240721_123014.jpg', '20240721_160251.jpg',
+  '20240721_183234.jpg', '20240721_183540.jpg',
+  '20260525_193249.jpg', '20260525_193442.jpg', '20260613_201138.jpg', '20260815_172840.jpg',
+  '20260815_180439.jpg', '20260829_203811.jpg', '20260924_145618.jpg', '20260926_131113.jpg',
+  '20260926_131159.jpg', '20260926_131225.jpg', '20260926_160221.jpg',
+];
+const SAMPLE_FAMILY_GROUPS: { key: 'summer2024' | 'outing2026'; label: string; photos: string[] }[] = [
+  {
+    key: 'summer2024',
+    label: '📅 2024년 7월 여름 휴양지 여행',
+    photos: SAMPLE_FAMILY_PHOTOS.filter((p) => !p.startsWith('2026')),
+  },
+  {
+    key: 'outing2026',
+    label: '📅 2026년 가족 나들이',
+    photos: SAMPLE_FAMILY_PHOTOS.filter((p) => p.startsWith('2026')),
+  },
+];
+const SAMPLE_FAMILY_THUMB_BASE = '/shared_family_host_thumbs/';
+
+type OnboardingWeaponTab = 'video' | 'doc' | 'clean' | 'share' | 'superpower';
 type FreeOrDevToolbarKey = 'auto' | 'seq' | '1' | 'snip' | 'zip' | 'dev_2' | 'dev_3' | 'dev_5';
 
 interface SafeOnboardingChatMsg {
@@ -388,14 +442,26 @@ const WEAPON_META: Record<
   clean: {
     icon: '🧹',
     chipLabel: '느려진 내 PC·폰, 클릭 한 번에 새것처럼',
-    chipSub: '보안앱 안 지우고 재우기 · 사진 0원',
+    chipSub: '샘플 PC로 보안앱 재우기 · 1초 원상복구',
     keywordBadge: '#귀신비서',
-    userBubble: '느려진 컴퓨터 속도도 살려주고 중복 사진 정리랑 가족 원본 사진 공유도 해줘!',
+    userBubble: '느려진 컴퓨터 속도 살려주고 중복 사진도 정리해줘! 근데 막 지우는 거 아니지?',
     secretaryReply:
-      '은행 보안프로그램은 안 지우고 재우고, 중복 사진·흩어진 문서·깨진 한글 압축까지 광고 없이 1초 만에 해결합니다! ✨\n가족·모임 원본 사진·영상도 카톡 만료 없이 평생 0원으로 모아요~',
-    stageTitle: '👻 느려진 내 PC·폰, 클릭 한 번에 새것처럼 · 가족 원본 사진 평생 0원',
-    stageBadge: '축 A & D · #귀신비서 · #사진공유 (평생 무료)',
+      '걱정 마세요, 마음대로 지우는 건 하나도 없어요! 🔒\n오른쪽 샘플 PC에서 은행 보안프로그램을 안 지우고 재워보고, 언제든 1초 만에 원래대로 돌려보세요~ ✨',
+    stageTitle: '👻 느려진 내 PC·폰, 클릭 한 번에 새것처럼',
+    stageBadge: '축 A · #귀신비서 (샘플 체험 · 평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc558_261106.mp4',
+  },
+  share: {
+    icon: '📸',
+    chipLabel: '가족·모임 원본 사진, 만료 없이 평생 0원',
+    chipSub: '샘플 가족방 들어가 보기',
+    keywordBadge: '#사진공유',
+    userBubble: '카톡방에 올린 가족여행 사진이 만료돼서 안 보여… 원본 그대로 모을 수 없어?',
+    secretaryReply:
+      '카톡 30일 만료와 화질 저하 없이 원본 그대로 모을 수 있어요! 📸\n오른쪽에서 샘플 가족방 초대 링크를 눌러 가입 없이 바로 구경해 보세요~',
+    stageTitle: '📸 가족·모임 원본 사진, 만료 없이 평생 0원',
+    stageBadge: '축 D · #사진공유 (샘플 체험 · 인원·장수 무제한 0원)',
+    shortVideoUrl: '',
   },
   superpower: {
     icon: '⚡',
@@ -480,7 +546,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     {
       id: 'init-welcome',
       role: 'secretary',
-      text: '반가워요! 전속 『👻 귀신비서』가 대기 중이에요 ✨\n아래 4가지 무료 초능력 카드를 톡 누르면 오른쪽에서 바로 체험해 보실 수 있어요!',
+      text: '반가워요! 전속 『👻 귀신비서』가 대기 중이에요 ✨\n아래 무료 초능력 카드를 톡 누르면 오른쪽에서 샘플로 바로 체험해 보실 수 있어요! (가입·설치 없이)',
       timestamp: nowTimeStr(),
     },
   ]);
@@ -492,6 +558,61 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [videoOcrExtracted, setVideoOcrExtracted] = useState(false);
   const [selectedDocScenarioIdx, setSelectedDocScenarioIdx] = useState(0);
   const [cleanDemoDone, setCleanDemoDone] = useState(false);
+
+  // [샘플 체험 A] 귀신비서 샘플 PC 살려보기: 0 대기 → 1 진단 → 2 재우기 → 3 은행 접속(필요한 것만 기상) → 4 원상복구
+  const [cleanSubTab, setCleanSubTab] = useState<'speed' | 'photo'>('speed');
+  const [speedStep, setSpeedStep] = useState<0 | 1 | 2 | 3 | 4>(0);
+  const [sleptCount, setSleptCount] = useState<number>(0);
+  const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // [샘플 체험 B] 사진공유 샘플 가족방: 0 카톡 만료 공감 → 1 초대 링크로 가족방 입장 → 2 사진 원본 받기 비교
+  const [shareStep, setShareStep] = useState<0 | 1 | 2>(0);
+  const [shareGroupKey, setShareGroupKey] = useState<'summer2024' | 'outing2026'>('summer2024');
+  const [sharePickedPhoto, setSharePickedPhoto] = useState<string | null>(null);
+  const [shareUploadHint, setShareUploadHint] = useState<boolean>(false);
+
+  useEffect(() => {
+    return () => {
+      if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    };
+  }, []);
+
+  const runSpeedDiagnose = () => {
+    playBabyGhostChime();
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSleptCount(0);
+    setSpeedStep(1);
+  };
+
+  const runSpeedSleep = () => {
+    playBabyGhostChime();
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSpeedStep(2);
+    setSleptCount(0);
+    let n = 0;
+    sleepTimerRef.current = setInterval(() => {
+      n += 1;
+      setSleptCount(n);
+      if (n >= SAMPLE_PC_PROGRAMS.length && sleepTimerRef.current) {
+        clearInterval(sleepTimerRef.current);
+        sleepTimerRef.current = null;
+      }
+    }, 140);
+  };
+
+  const runSpeedBankOpen = () => {
+    playBabyGhostChime();
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSleptCount(SAMPLE_PC_PROGRAMS.length);
+    setSpeedStep(3);
+  };
+
+  const runSpeedRestore = () => {
+    playBabyGhostChime();
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSleptCount(0);
+    setSpeedStep(4);
+  };
 
   // 무기 4 (귀신창 v1.4 — 100% 무버튼 자동 성형 & 평생 무료 5총사 체험 상태)
   const [typoSampleIdx, setTypoSampleIdx] = useState<number>(0);
@@ -579,6 +700,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     playBabyGhostChime();
     setDemoTab(tab);
     setShowStageShortVideo(false);
+    if (tab === 'share') {
+      setShareStep(0);
+      setSharePickedPhoto(null);
+      setShareUploadHint(false);
+    }
     const meta = WEAPON_META[tab];
     const ts = nowTimeStr();
     setChatMessages((prev) => [
@@ -624,11 +750,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       if (/고기|맛집|식당/.test(q)) setSelectedVideoScenarioIdx(1);
       else if (/노을|바다|휴가|가족사진/.test(q)) setSelectedVideoScenarioIdx(2);
       else setSelectedVideoScenarioIdx(0);
-    } else if (/사진|연사|인생샷|청소|보안|백신|구라|느려|용량|정리|복원|휴지통|효도|캐시|공유|가족|모임|동창/i.test(q)) {
+    } else if (/공유|가족방|가족\s*사진|모임|동창|카톡|만료|원본|앨범|초대/i.test(q)) {
+      matchedTab = 'share';
+      setShareStep(0);
+      setSharePickedPhoto(null);
+      setShareUploadHint(false);
+    } else if (/사진|연사|인생샷|청소|보안|백신|느려|용량|정리|복원|휴지통|효도|캐시|속도|재우/i.test(q)) {
       matchedTab = 'clean';
-      if (/공유|가족|모임|동창/.test(q)) {
-        customReply =
-          '골라낸 베스트 인생샷은 가족·동창·모임 방에서 클라우드 업로드 없이 평생 0원으로 원본 그대로 나눌 수 있어요! 📸✨\n오른쪽 화면에서 1초 인생샷 선별부터 무료 사진공유 안내까지 바로 확인해 보세요~';
+      if (/사진|연사|인생샷|휴지통/.test(q)) {
+        setCleanSubTab('photo');
+      } else {
+        setCleanSubTab('speed');
       }
     } else if (
       /영타|오타|한영|서식|줄바꿈|다림질|귀신창|순차|복붙|상용구|f1|압축|zip|dkssud|rkatk|rmqgk/i.test(
@@ -670,7 +802,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     // 4대 초능력과 무관한 일상 질문(예: 오늘 점심, 날씨 알려줘 등) 입력 시 친절한 역할 안내 문구 출력
     const guideReply =
       `앗, 저는 일상 대화 대신 내 PC·모바일의 4가지 초능력을 체험해 드리는 『👻 귀신비서』예요~ ✨\n` +
-      `아래 4가지 초능력 카드를 톡 눌러보시거나 「영상 글자」, 「영수증 찾기」, 「사진 공유」, 「영타 변환」처럼 궁금한 기능을 말씀해 주세요!`;
+      `아래 초능력 카드를 톡 눌러보시거나 「영상 글자」, 「영수증 찾기」, 「PC 속도」, 「가족 사진 공유」, 「영타 변환」처럼 궁금한 기능을 말씀해 주세요!`;
 
     setChatMessages((prev) => [
       ...prev.slice(-6),
@@ -1266,7 +1398,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   },
                   {
                     key: 'share',
-                    tab: 'clean' as OnboardingWeaponTab,
+                    tab: 'share' as OnboardingWeaponTab,
                     stat: '평생 0원',
                     title: '#사진공유',
                     sub: '가족·모임 원본 사진 모음',
@@ -1278,6 +1410,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       ? demoTab === 'video' || demoTab === 'doc'
                       : card.key === 'window'
                       ? demoTab === 'superpower'
+                      : card.key === 'share'
+                      ? demoTab === 'share'
                       : demoTab === 'clean';
                   return (
                     <button
@@ -1451,15 +1585,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <span className="text-zinc-400">우측 즉시 시연</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {(['video', 'doc', 'clean', 'superpower'] as OnboardingWeaponTab[]).map((tabKey) => {
+                {(['video', 'doc', 'clean', 'share', 'superpower'] as OnboardingWeaponTab[]).map((tabKey, chipIdx, arr) => {
                   const item = WEAPON_META[tabKey];
                   const isActive = demoTab === tabKey;
+                  const isLastOdd = arr.length % 2 === 1 && chipIdx === arr.length - 1;
                   return (
                     <button
                       key={tabKey}
                       type="button"
                       onClick={() => handleSelectWeaponChip(tabKey)}
                       className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                        isLastOdd ? 'col-span-2' : ''
+                      } ${
                         isActive
                           ? 'bg-teal-950/80 border-[#00F0B5] shadow-[0_6px_20px_rgba(13,148,136,0.2)] scale-[1.01]'
                           : 'bg-zinc-950/80 hover:bg-zinc-900 border-white/10 hover:border-teal-400/50'
@@ -1529,6 +1666,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </h2>
               </div>
 
+              {activeMeta.shortVideoUrl && (
               <button
                 type="button"
                 onClick={() => setShowStageShortVideo((v) => !v)}
@@ -1546,10 +1684,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <span>▶</span>
                 <span>{showStageShortVideo ? '⚡ 체험 화면으로 돌아가기' : '🎥 15초 예고편 영상 보기'}</span>
               </button>
+              )}
             </div>
 
             {/* 스테이지 본문: 15초 미리보기 비디오 뷰 또는 비주얼 인터랙티브 체험 */}
-            {showStageShortVideo ? (
+            {showStageShortVideo && activeMeta.shortVideoUrl ? (
               <div
                 data-keep-dark="true"
                 style={{ backgroundColor: '#070D19' }}
@@ -1882,8 +2021,191 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   </div>
                 )}
 
-                {/* ③ 눈 뜬 사진 1장만 Pick (#귀신비서) & 무료 사진공유 — 실제 연사 사진 6장 썸네일 갤러리 */}
+                {/* ③ #귀신비서 샘플 체험 — [⚡ 느려진 PC 살리기(샘플 PC)] + [📸 사진 정리·휴지통 복원] 2단 하위 탭 */}
                 {demoTab === 'clean' && (
+                  <div className="space-y-4">
+                    {/* 하위 탭 스위처 */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(
+                        [
+                          { key: 'speed' as const, label: '⚡ 느려진 PC 살리기' },
+                          { key: 'photo' as const, label: '📸 사진 정리·휴지통 복원' },
+                        ]
+                      ).map((st) => {
+                        const on = cleanSubTab === st.key;
+                        return (
+                          <button
+                            key={st.key}
+                            type="button"
+                            onClick={() => {
+                              playBabyGhostChime();
+                              setCleanSubTab(st.key);
+                            }}
+                            style={on ? { backgroundColor: '#0D9488', color: '#FFFFFF' } : undefined}
+                            className={`px-4 py-2 rounded-xl text-[13px] font-black border transition-all cursor-pointer ${
+                              on ? 'border-teal-600 shadow-md' : 'bg-zinc-900 text-zinc-300 border-white/10 hover:border-teal-400/50'
+                            }`}
+                          >
+                            {st.label}
+                          </button>
+                        );
+                      })}
+                      <span className="text-xs text-zinc-500 font-bold ml-auto">※ 샘플 화면 체험 (내 PC는 건드리지 않아요)</span>
+                    </div>
+
+                    {/* ⚡ 샘플 PC 살려보기 (진단 → 안 지우고 재우기 → 은행 접속 시 필요한 것만 기상 → 1초 원상복구) */}
+                    {cleanSubTab === 'speed' && (() => {
+                      const total = SAMPLE_PC_PROGRAMS.length;
+                      const neededCount = SAMPLE_PC_PROGRAMS.filter((p) => p.neededForBank).length;
+                      const totalMemGb = (SAMPLE_PC_PROGRAMS.reduce((s, p) => s + p.memMb, 0) / 1024).toFixed(1);
+                      const isAsleep = (p: SamplePcProgram, idx: number) => {
+                        if (speedStep === 2) return idx < sleptCount;
+                        if (speedStep === 3) return !p.neededForBank;
+                        return false;
+                      };
+                      const sleepingNow = SAMPLE_PC_PROGRAMS.filter((p, i) => isAsleep(p, i)).length;
+                      const gaugePct =
+                        speedStep === 0
+                          ? null
+                          : Math.round(SAMPLE_PC_BASE_PCT + ((SAMPLE_PC_REVIVED_PCT - SAMPLE_PC_BASE_PCT) * sleepingNow) / total);
+                      const deletedCount = 0;
+                      const stepMsg =
+                        speedStep === 0
+                          ? '👇 먼저 [🔍 1초 진단]을 눌러 샘플 PC를 누가 느리게 만드는지 확인해 보세요.'
+                          : speedStep === 1
+                          ? `은행·결제 때 한 번 쓰고 마는 보안프로그램 ${total}개가 늘 켜져서 메모리 ${totalMemGb}GB를 차지하고 있어요. 지우지 말고 재워볼까요?`
+                          : speedStep === 2
+                          ? sleptCount < total
+                            ? '💤 하나씩 재우는 중… 프로그램 파일은 그대로 두고 잠만 재워요.'
+                            : `💤 ${total}개 모두 재웠어요! 지운 건 하나도 없어요. 은행 갈 땐 어떻게 될까요?`
+                          : speedStep === 3
+                          ? `🏦 은행 사이트를 여니 꼭 필요한 ${neededCount}개만 1초 만에 저절로 깨어났어요. 나머지는 계속 쿨쿨~`
+                          : '↩️ 전부 처음 상태 그대로 되돌렸어요. 이렇게 언제든 1초 만에 원래대로 돌릴 수 있어요!';
+                      return (
+                        <div
+                          data-keep-dark="true"
+                          style={{ background: 'linear-gradient(145deg, #07131E 0%, #0B1F2A 100%)' }}
+                          className="rounded-2xl border border-teal-400/40 p-5 sm:p-6 space-y-4"
+                        >
+                          {/* 샘플 PC 라벨 + 속도 게이지 */}
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="space-y-0.5">
+                              <div className="text-[13px] font-black text-teal-200">🖥️ 샘플 PC · 사무실 4년 차 노트북</div>
+                              <div className="text-xs text-zinc-400 font-semibold break-keep">
+                                진짜 내 PC 진단은 『👻 귀신비서』 방에서 『내 컴퓨터 연결』 후 1초 만에 해드려요
+                              </div>
+                            </div>
+                            <div className="min-w-[180px] flex-1 max-w-[260px] space-y-1">
+                              <div className="flex items-center justify-between text-xs font-black">
+                                <span className="text-zinc-300">원래 속도 대비</span>
+                                <span
+                                  style={{
+                                    color:
+                                      gaugePct === null ? '#A1A1AA' : gaugePct >= 85 ? '#34D399' : gaugePct >= 75 ? '#FBBF24' : '#F87171',
+                                  }}
+                                >
+                                  {gaugePct === null ? '진단 전' : `${gaugePct}%`}
+                                </span>
+                              </div>
+                              <div style={{ backgroundColor: 'rgba(255,255,255,0.14)' }} className="h-2.5 rounded-full overflow-hidden">
+                                <div
+                                  style={{
+                                    width: `${gaugePct ?? 0}%`,
+                                    backgroundColor: gaugePct !== null && gaugePct >= 85 ? '#34D399' : gaugePct !== null && gaugePct >= 75 ? '#FBBF24' : '#F87171',
+                                  }}
+                                  className="h-full rounded-full transition-all duration-300"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 프로그램 목록 (진단 후 노출) */}
+                          {speedStep > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {SAMPLE_PC_PROGRAMS.map((p, idx) => {
+                                const asleep = isAsleep(p, idx);
+                                const wokeForBank = speedStep === 3 && p.neededForBank;
+                                return (
+                                  <div
+                                    key={p.id}
+                                    style={{
+                                      backgroundColor: asleep ? 'rgba(255,255,255,0.03)' : wokeForBank ? 'rgba(0,240,181,0.12)' : 'rgba(248,113,113,0.10)',
+                                    }}
+                                    className={`rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-[13px] border transition-all duration-300 ${
+                                      asleep ? 'border-white/10 opacity-60' : wokeForBank ? 'border-[#00F0B5]/60' : 'border-rose-400/30'
+                                    }`}
+                                  >
+                                    <span className="font-bold text-zinc-100 truncate">
+                                      {asleep ? '💤' : wokeForBank ? '⚡' : '🔥'} {p.name}
+                                    </span>
+                                    <span className={`text-xs font-black shrink-0 ${asleep ? 'text-zinc-500' : wokeForBank ? 'text-[#00F0B5]' : 'text-rose-300'}`}>
+                                      {asleep ? '수면 중' : wokeForBank ? '은행용 기상' : `${p.memMb}MB 상주`}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* 아기귀신 안내 1줄 */}
+                          <div
+                            style={{ backgroundColor: 'rgba(13,148,136,0.16)' }}
+                            className="rounded-xl px-4 py-3 text-[13px] text-zinc-100 font-bold leading-relaxed break-keep flex items-start gap-2.5"
+                          >
+                            <img src="/gwisinkachi_app_icon_512.png" alt="아기귀신" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                            <span>{stepMsg}</span>
+                          </div>
+
+                          {/* 4단계 버튼 */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {[
+                              { label: '🔍 1초 진단', onClick: runSpeedDiagnose, enabled: true, active: speedStep === 0 || speedStep === 4 },
+                              { label: '💤 안 지우고 재우기', onClick: runSpeedSleep, enabled: speedStep >= 1, active: speedStep === 1 },
+                              { label: '🏦 은행 사이트 열어보기', onClick: runSpeedBankOpen, enabled: speedStep >= 2, active: speedStep === 2 && sleptCount >= total },
+                              { label: '↩️ 전부 원래대로', onClick: runSpeedRestore, enabled: speedStep >= 2 && speedStep !== 4, active: speedStep === 3 },
+                            ].map((b) => (
+                              <button
+                                key={b.label}
+                                type="button"
+                                disabled={!b.enabled}
+                                onClick={b.onClick}
+                                style={
+                                  !b.enabled
+                                    ? { backgroundColor: 'rgba(255,255,255,0.03)', color: '#52525B' }
+                                    : b.active
+                                    ? { backgroundColor: '#00F0B5', color: '#020617' }
+                                    : { backgroundColor: 'rgba(255,255,255,0.07)', color: '#E4E4E7' }
+                                }
+                                className={`px-3.5 py-2 rounded-xl text-[13px] font-black border transition-all ${
+                                  !b.enabled
+                                    ? 'border-white/5 cursor-not-allowed'
+                                    : b.active
+                                    ? 'border-[#00F0B5] shadow-[0_0_14px_rgba(0,240,181,0.35)] cursor-pointer animate-pulse'
+                                    : 'border-white/15 hover:border-teal-400/50 cursor-pointer'
+                                }`}
+                              >
+                                {b.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* 상시 안심 고정 문구 */}
+                          <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+                            <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                              🔒 마음대로 지우지 않아요 (지운 프로그램 {deletedCount}개)
+                            </span>
+                            <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                              ✋ 내가 고른 것만
+                            </span>
+                            <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                              ↩️ 언제든 1초 원상복구
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {cleanSubTab === 'photo' && (
                   <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-6 sm:p-7 space-y-5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="space-y-1">
@@ -2007,23 +2329,245 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       })}
                     </div>
 
-                    {/* 은행 보안프로그램 일시 중지 & 평생 0원 가족·모임 사진공유(개인 사진·영상 전용) 한 줄 배지 */}
-                    <div className="space-y-2.5">
-                      <div className="rounded-xl bg-zinc-900/90 border border-white/10 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2.5 text-[13px]">
-                        <span className="font-extrabold text-white">
-                          💤 안 쓰는 은행 보안프로그램 20개 ➔ <b className="text-[#00F0B5]">안 지우고 재우기</b>
-                        </span>
-                        <span className="text-zinc-400 font-bold">은행 접속 시 1초 자동 기상 ⚡</span>
-                      </div>
-                      <div className="rounded-xl bg-sky-950/40 border border-sky-400/30 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2.5 text-[13px]">
-                        <span className="font-extrabold text-white">
-                          📸 골라낸 베스트 인생샷 ➔ <b className="text-sky-300">가족·모임 원본 사진·영상 공유 (개인 사진·영상 전용)</b>
-                        </span>
-                        <span className="text-sky-300 font-black">만료 없이 평생 0원 ✨</span>
-                      </div>
+                    {/* 상시 안심 고정 문구 (사진 정리) */}
+                    <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+                      <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                        🗑️ 바로 지우지 않고 Windows 휴지통으로
+                      </span>
+                      <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                        ↩️ 언제든 1초 복원
+                      </span>
+                      <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                        ✋ 내가 확인한 것만 정리
+                      </span>
                     </div>
                   </div>
+                    )}
+                  </div>
                 )}
+
+                {/* ⑤ #사진공유 샘플 체험 — 카톡 만료 공감 → 초대 링크로 샘플 가족방 입장 → 원본 그대로 받기 비교 → 올리기는 앱에서 */}
+                {demoTab === 'share' && (() => {
+                  const group = SAMPLE_FAMILY_GROUPS.find((g) => g.key === shareGroupKey) || SAMPLE_FAMILY_GROUPS[0];
+                  const katalkSample = SAMPLE_FAMILY_PHOTOS.slice(9, 12);
+                  return (
+                    <div
+                      data-keep-dark="true"
+                      style={{ background: 'linear-gradient(145deg, #071523 0%, #0B1D2E 100%)' }}
+                      className="rounded-2xl border border-sky-400/40 p-5 sm:p-6 space-y-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[13px] font-black text-sky-200">🏠 샘플 가족방 · 우리집 패밀리 앨범 (실제 가족 여행 사진 36장)</div>
+                        <span className="text-xs text-zinc-500 font-bold">※ 샘플 화면 체험 (가입 없이 구경)</span>
+                      </div>
+
+                      {/* STEP 0: 카톡 만료 공감 */}
+                      {shareStep === 0 && (
+                        <div className="space-y-3">
+                          <div
+                            style={{ backgroundColor: '#B2C7D9' }}
+                            data-keep-dark="true"
+                            className="rounded-2xl p-4 space-y-2.5"
+                          >
+                            <div className="text-xs font-black text-slate-700">💬 가족 단톡방 · 32일 전에 올린 여행 사진</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {katalkSample.map((p) => (
+                                <div key={p} className="relative aspect-square rounded-lg overflow-hidden bg-slate-300">
+                                  <img
+                                    src={`${SAMPLE_FAMILY_THUMB_BASE}${p}`}
+                                    alt="만료된 사진"
+                                    className="w-full h-full object-cover blur-md grayscale opacity-60"
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center p-1.5 text-center">
+                                    <span className="text-[11px] font-black text-slate-800 bg-white/85 rounded px-1.5 py-0.5 leading-tight break-keep">
+                                      보관 기간이 만료된 사진
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="text-xs font-bold text-slate-700 break-keep">
+                              😢 겨우 받은 사진도 화질 압축 (원본 4.8MB → 0.4MB)
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playBabyGhostChime();
+                              setShareStep(1);
+                            }}
+                            data-keep-dark="true"
+                            style={{ backgroundColor: '#38BDF8', color: '#020617' }}
+                            className="w-full px-4 py-3 rounded-xl font-black text-sm cursor-pointer shadow-lg hover:opacity-90 animate-pulse"
+                          >
+                            🔗 엄마가 보낸 귀신같이 가족방 초대 링크 눌러보기
+                          </button>
+                        </div>
+                      )}
+
+                      {/* STEP 1~2: 샘플 가족방 입장 */}
+                      {shareStep >= 1 && (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {SAMPLE_FAMILY_GROUPS.map((g) => {
+                              const on = g.key === shareGroupKey;
+                              return (
+                                <button
+                                  key={g.key}
+                                  type="button"
+                                  onClick={() => {
+                                    playBabyGhostChime();
+                                    setShareGroupKey(g.key);
+                                    setSharePickedPhoto(null);
+                                    setShareStep(1);
+                                  }}
+                                  style={
+                                    on
+                                      ? { backgroundColor: '#0EA5E9', color: '#FFFFFF' }
+                                      : { backgroundColor: 'rgba(255,255,255,0.06)', color: '#CBD5E1' }
+                                  }
+                                  className={`px-3.5 py-1.5 rounded-xl text-[13px] font-black border transition-all cursor-pointer break-keep ${
+                                    on ? 'border-sky-400 shadow-md' : 'border-white/15 hover:border-sky-400/50'
+                                  }`}
+                                >
+                                  {g.label} ({g.photos.length}장)
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {shareStep === 1 && (
+                            <>
+                              <div className="text-[13px] font-bold text-sky-100 break-keep">
+                                👇 가입 없이 바로 열렸어요! 마음에 드는 사진을 하나 눌러보세요.
+                              </div>
+                              <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-[260px] overflow-y-auto pr-1">
+                                {group.photos.map((p) => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    onClick={() => {
+                                      playBabyGhostChime();
+                                      setSharePickedPhoto(p);
+                                      setShareStep(2);
+                                    }}
+                                    className="relative aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-sky-400 hover:scale-[1.03] transition-all cursor-pointer"
+                                  >
+                                    <img
+                                      src={`${SAMPLE_FAMILY_THUMB_BASE}${p}`}
+                                      alt="샘플 가족 사진"
+                                      loading="lazy"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+
+                          {shareStep === 2 && sharePickedPhoto && (
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-start">
+                              <div className="sm:col-span-5 space-y-2">
+                                <div className="relative rounded-xl overflow-hidden border-2 border-sky-400">
+                                  <img
+                                    src={`${SAMPLE_FAMILY_THUMB_BASE}${sharePickedPhoto}`}
+                                    alt="선택한 샘플 사진"
+                                    className="w-full h-auto object-cover"
+                                  />
+                                  <span
+                                    style={{ backgroundColor: '#38BDF8', color: '#020617' }}
+                                    className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-xs font-black"
+                                  >
+                                    ✨ 원본 그대로
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    playBabyGhostChime();
+                                    setSharePickedPhoto(null);
+                                    setShareStep(1);
+                                  }}
+                                  className="text-xs text-zinc-400 hover:text-white underline font-bold cursor-pointer"
+                                >
+                                  ← 다른 사진 고르기
+                                </button>
+                              </div>
+                              <div className="sm:col-span-7 space-y-2.5">
+                                <div className="grid grid-cols-2 gap-2 text-[12.5px] sm:text-[13px] break-keep">
+                                  <div style={{ backgroundColor: 'rgba(244,63,94,0.10)' }} className="rounded-xl p-3 border border-rose-400/30 space-y-1">
+                                    <div className="font-black text-rose-300">💬 카톡 단톡방</div>
+                                    <div className="text-zinc-300 font-semibold leading-relaxed">
+                                      화질 압축
+                                      <br />
+                                      30일 지나면 만료
+                                      <br />
+                                      지난 사진 찾기 어려움
+                                    </div>
+                                  </div>
+                                  <div style={{ backgroundColor: 'rgba(14,165,233,0.10)' }} className="rounded-xl p-3 border border-sky-400/40 space-y-1">
+                                    <div className="font-black text-sky-300">👻 귀신같이 가족방</div>
+                                    <div className="text-zinc-100 font-bold leading-relaxed">
+                                      원본 화질 그대로
+                                      <br />
+                                      만료 없이 평생
+                                      <br />
+                                      날짜별 자동 정리 · 0원
+                                    </div>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    playBabyGhostChime();
+                                    setShareUploadHint(true);
+                                  }}
+                                  data-keep-dark="true"
+                                  style={{ backgroundColor: '#38BDF8', color: '#020617' }}
+                                  className="w-full px-4 py-2.5 rounded-xl font-black text-[13px] cursor-pointer hover:opacity-90"
+                                >
+                                  📸 내 사진도 이 방에 올려보기
+                                </button>
+                                {shareUploadHint && (
+                                  <div
+                                    style={{ backgroundColor: 'rgba(14,165,233,0.14)' }}
+                                    className="rounded-xl px-3.5 py-3 text-[13px] text-sky-100 font-bold leading-relaxed break-keep space-y-2"
+                                  >
+                                    <div>
+                                      👻 사진 올리기는 귀신같이 앱에서 해요! 내 폰·PC에서 가족 기기로 직접 전달돼 클라우드 서버에 쌓이지 않아요.
+                                    </div>
+                                    {!isLaunched && (
+                                      <button
+                                        type="button"
+                                        onClick={scrollToEmailBox}
+                                        className="text-[#00F0B5] underline font-black cursor-pointer"
+                                      >
+                                        🔔 출시되면 가족방 바로 만들 수 있게 알림받기 ➔
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 상시 안심 고정 문구 */}
+                      <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+                        <span className="px-3 py-1.5 rounded-xl bg-sky-500/15 text-sky-200 border border-sky-400/30">
+                          🔒 클라우드 서버에 안 올라가요
+                        </span>
+                        <span className="px-3 py-1.5 rounded-xl bg-sky-500/15 text-sky-200 border border-sky-400/30">
+                          👨‍👩‍👧 초대받은 사람만
+                        </span>
+                        <span className="px-3 py-1.5 rounded-xl bg-sky-500/15 text-sky-200 border border-sky-400/30">
+                          📷 개인 사진·영상 전용
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ④ 귀신창 v1.4 — 100% 무버튼 완전 자동(Auto) 한영 성형 & 평생 무료 5총사 체험 */}
                 {demoTab === 'superpower' && (
