@@ -797,7 +797,7 @@ export function resolveGhostSecretaryTurn(
     }
   }
 
-  // ③-3 유저가 "1번은 나고, 2번은 한치우..."처럼 여권 번호+실명을 직접 말했을 때 즉시 여권 등록
+  // ③-3 유저가 "1번은 나고, 2번은 홍길동..."처럼 여권 번호+실명을 직접 말했을 때 즉시 여권 등록
   if (st.passportStep !== 'naming' && /\d+\s*번\s*(?:은|는|이|가)?/.test(text)) {
     const parsedDirect = parsePassportNamingAnswer(text);
     if (parsedDirect.names.length || parsedDirect.selfIndex !== undefined) {
@@ -916,7 +916,7 @@ export function decidePassportEntry(facePhotoCount: number, passportInitialized:
 const NAME_DESCRIPTOR_RE = /^(우리\s*)?(강아지|고양이|댕댕이|멍멍이|냥이|반려견|반려묘)\s+/;
 const NAME_TAIL_RE = /(이야|야|예요|이에요|입니다|이고|고|임|요)$/;
 
-/** "1번은 나고, 2번은 한치우, 3번은 강아지 초코야" → selfIndex 1, names [2:한치우, 3:초코] (관계 꼬리표만 말하면 거절 목록) */
+/** "1번은 나고, 2번은 홍길동, 3번은 강아지 초코야" → selfIndex 1, names [2:홍길동, 3:초코] (관계 꼬리표만 말하면 거절 목록) */
 export function parsePassportNamingAnswer(text: string): PassportNamingResult {
   const result: PassportNamingResult = { names: [], rejectedRelationTags: [] };
   const re = /(\d+)\s*번\s*(?:은|는|이|가)?\s*([^,，.\n]+?)(?=\s*(?:,|，|\.|\n|\s\d+\s*번|$))/g;

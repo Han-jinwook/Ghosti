@@ -159,9 +159,17 @@ export const App: React.FC = () => {
         Boolean(params.get('ghostSearchWindow')) ||
         params.get('preview') === 'legacy' ||
         params.get('preview') === 'guest' ||
-        params.has('invite') ||
-        Boolean(params.get('lounge')) ||
-        Boolean(params.get('tab'))
+        params.has('invite')
+      ) {
+        return 'workspace';
+      }
+      const hasWorkspaceRouteParams = Boolean(params.get('lounge')) || Boolean(params.get('tab'));
+      if (
+        hasWorkspaceRouteParams &&
+        (OFFICIAL_LAUNCH_LIVE ||
+          isDevAuthorized ||
+          sessionStorage.getItem('ghosti_entered_from_showroom') === '1' ||
+          localStorage.getItem('ghosti_onboarding_completed') === 'true')
       ) {
         return 'workspace';
       }
@@ -411,9 +419,16 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', onNavPopState);
   }, []);
 
-  // 2) 유저가 앱 내 탭/라운지/대문을 전환할 때마다 히스토리 스택에 pushState 기록
+  // 2) 유저가 앱 내 탭/라운지/대문을 전환할 때마다 히스토리 스택에 pushState 기록 + Z-코어 전역 라우트 스냅샷 동기화
   useEffect(() => {
-    if (typeof window === 'undefined' || !isHistoryInitializedRef.current) return;
+    if (typeof window === 'undefined') return;
+    (window as unknown as { __GHOSTI_ACTIVE_ROUTE__?: unknown }).__GHOSTI_ACTIVE_ROUTE__ = {
+      viewMode,
+      lounge: activeLoungeType,
+      desktopTab,
+      mobileTab,
+    };
+    if (!isHistoryInitializedRef.current) return;
     if (isApplyingPopStateRef.current) return;
 
     const nextNav = {
@@ -451,6 +466,7 @@ export const App: React.FC = () => {
     try {
       localStorage.setItem('ghosti_onboarding_completed', 'true');
       localStorage.setItem('ghosti_view_mode', 'workspace');
+      sessionStorage.setItem('ghosti_entered_from_showroom', '1');
       sessionStorage.removeItem('ghosti_entered_showroom_from_app');
     } catch {}
     setViewMode('workspace');

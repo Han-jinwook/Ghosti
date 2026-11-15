@@ -1170,6 +1170,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     pickBestInDuplicateGroup,
     moveSelectedToQuarantine,
     moveAllTrashToQuarantine,
+    restoreFromQuarantine,
     quarantineMoving,
     setSelectedPhoto,
     lastUndoBatch,
@@ -1193,6 +1194,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const [zConnected, setZConnected] = useState<boolean>(zCoreBridge.isConnected);
   const autoSwitchedRealTabRef = React.useRef<boolean>(false);
   const [isCleanupPaused, setIsCleanupPaused] = useState<boolean>(false);
+  const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
   const [pausedSnapshot, setPausedSnapshot] = useState<{
     activeTrash: PhotoItem[];
     duplicateGroups: typeof duplicateGroups;
@@ -1494,6 +1496,66 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
+              </div>
+            )}
+
+            {quarantinedPhotos.length > 0 && (
+              <div className="pt-2 border-t border-white/10 flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuarantineDrawer((v) => !v)}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[12px] font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>↩️ 정리한 사진 복원 ({quarantinedPhotos.length}장)</span>
+                    <span className="text-zinc-400 text-[10.5px]">
+                      {showQuarantineDrawer ? '접기 ▲' : '펼치기 ▼'}
+                    </span>
+                  </button>
+                  {showQuarantineDrawer && (
+                    <button
+                      type="button"
+                      disabled={quarantineMoving}
+                      onClick={() =>
+                        void restoreFromQuarantine(quarantinedPhotos.map((p) => p.name))
+                      }
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer disabled:opacity-40 shadow-xs"
+                    >
+                      ♻️ {quarantinedPhotos.length}장 전체 원위치 복원
+                    </button>
+                  )}
+                </div>
+
+                {showQuarantineDrawer && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 p-3 rounded-xl bg-zinc-950/80 border border-white/10 max-h-60 overflow-y-auto">
+                    {quarantinedPhotos.map((qp) => (
+                      <div
+                        key={qp.id}
+                        className="p-2 rounded-lg bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img
+                            src={qp.thumbUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-9 h-9 rounded-md object-cover border border-white/10 shrink-0"
+                          />
+                          <span className="text-[11px] text-zinc-300 font-medium truncate">
+                            {qp.name}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={quarantineMoving}
+                          onClick={() => void restoreFromQuarantine([qp.name])}
+                          className="px-2 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-zinc-950 border border-emerald-500/40 text-[10.5px] font-extrabold shrink-0 cursor-pointer transition-colors"
+                        >
+                          복원
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -1978,49 +2040,55 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </section>
           )}
 
-          {/* [메뉴 1 · 👻 귀신비서 하단 고정 소속 설명란] 비서의 상시 케어 능력 3종 (평생 무료) */}
-          <section
-            aria-label="귀신비서 상시 케어 능력 안내"
-            className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm flex flex-col gap-3"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[13.5px] font-extrabold text-emerald-900">
-                🛡️ 기타 · 귀신비서의 상시 케어 능력 3종 (언제나 평생 무료)
-              </span>
-              <span className="text-[11.5px] text-emerald-800 font-semibold">
-                우측 귀신비서 채팅창에서 언제든 말로 점검·복구 가능
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] text-slate-900">
-              <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
-                <span className="font-extrabold text-slate-900">① ⚡ 은행·관공서 보안프로그램 자동 절전·기상</span>
-                <span className="text-slate-700 leading-snug">
-                  평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 접속 시에만 자동 기상 (고클린 대체)
+          {/* [메뉴 1 · 👻 귀신비서 하단 고정 소속 설명란] 비서의 상시 케어 능력 3종 (PC 환경 전용 노출) */}
+          {layout !== 'mobile' && !isStoreAppMode && (
+            <section
+              aria-label="귀신비서 상시 케어 능력 안내"
+              className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm flex flex-col gap-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[13.5px] font-extrabold text-emerald-900">
+                  🛡️ 기타 · 귀신비서의 상시 케어 능력 3종 (언제나 평생 무료)
+                </span>
+                <span className="text-[11.5px] text-emerald-800 font-semibold">
+                  우측 귀신비서 채팅창에서 언제든 말로 점검·복구 가능
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
-                <span className="font-extrabold text-slate-900">② 🛡️ 다운로드 파일 무소음 백신 경호</span>
-                <span className="text-slate-700 leading-snug">
-                  광고 팝업 없이 새로 받은 설치파일·압축파일을 Windows Defender 직결로 조용히 즉시 검사 (알약 대체)
-                </span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] text-slate-900">
+                <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
+                  <span className="font-extrabold text-slate-900">① ⚡ 은행·관공서 보안프로그램 자동 절전·기상</span>
+                  <span className="text-slate-700 leading-snug">
+                    평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 접속 시에만 자동 기상 (고클린 대체)
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
+                  <span className="font-extrabold text-slate-900">② 🛡️ 다운로드 파일 무소음 백신 경호</span>
+                  <span className="text-slate-700 leading-snug">
+                    광고 팝업 없이 새로 받은 설치파일·압축파일을 Windows Defender 직결로 조용히 즉시 검사 (알약 대체)
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
+                  <span className="font-extrabold text-slate-900">③ 🗑️↩️ 미저장 종료 문서 &amp; 휴지통 3초 구출</span>
+                  <span className="text-slate-700 leading-snug">
+                    실수로 저장 안 하고 끈 엑셀·한글 임시본 추적 및 잘못 지운 휴지통 파일 3초 원복
+                  </span>
+                </div>
               </div>
-              <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
-                <span className="font-extrabold text-slate-900">③ 🗑️↩️ 미저장 종료 문서 &amp; 휴지통 3초 구출</span>
-                <span className="text-slate-700 leading-snug">
-                  실수로 저장 안 하고 끈 엑셀·한글 임시본 추적 및 잘못 지운 휴지통 파일 3초 원복
-                </span>
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
         </GhostSecretaryFirstGuard>
 
-        {/* ═══════════════ [우측 열] 손보기 대화창 (첫 인사말 말풍선에 PC 1클릭 검진 액션 내장) ═══════════════ */}
-        <div className="xl:col-span-5 2xl:col-span-4 xl:sticky xl:top-20">
+        {/* ═══════════════ [우측 열] 손보기 대화창 (모바일/태블릿에서는 최상단 노출, PC에서는 우측 고정) ═══════════════ */}
+        <div className="order-first xl:order-none xl:col-span-5 2xl:col-span-4 xl:sticky xl:top-20">
           <MonsterStandardChatColumn
             sourceTab="trash"
             externalQueryTrigger={externalQueryTrigger}
             showWelcomeQuickCareActions={true}
             onHealthRecordAdded={() => {}}
+            onTriggerOsRepair={(symptomQuery) => {
+              void useSaySeeStore.getState().submitSetupMonsterQuery(symptomQuery);
+              useSaySeeStore.getState().setShowSetupMonsterModal(true, layout === 'mobile' ? 'mobile' : 'pc');
+            }}
             onJumpToSearch={(kw) => {
               if (layout === 'mobile') {
                 setMobileTab('search');

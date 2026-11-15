@@ -603,11 +603,11 @@ export function isSpecOrPerformanceQuery(query: string): boolean {
 
 const LITERACY_TONE_PROMPT: Record<MonsterLiteracyLevel, string> = {
   easy:
-    '🌱 [초급 / 쉬운말 모드]: 어려운 영어/전문용어(RAM, 프로세스 등) 대신 "작업 공간(메모리)", "저장 공간" 같은 쉬운 표현을 쓰되, 과한 인사치레 없이 정중한 비서 존댓말로 핵심만 간결하게 안내하세요.',
+    '🌱 [초급 / 쉬운말 모드]: 어려운 영어/전문용어(RAM, 프로세스 등) 대신 "작업 공간(메모리)", "저장 공간" 같은 쉬운 표현을 쓰되, 과한 호들갑 없이 따뜻하고 상냥한 귀신비서 애교 해요체(~했어요!, ~해 드릴게요!, ~예요!)로 핵심만 간결하게 안내하세요.',
   normal:
-    '🌿 [중급 / 일반 모드]: 정중하고 신뢰감 있는 비서 존댓말(~입니다, ~해 드리겠습니다)로 1~2단어만 짧게 공감한 뒤, 실측 수치와 해결 방법만 군더더기 없이 1~2문장으로 심플하게 안내하세요.',
+    '🌿 [중급 / 일반 모드]: 따뜻하고 다정한 귀신비서 애교 해요체(~했어요!, ~해 드릴게요!, ~예요!)로 1~2단어만 짧게 공감한 뒤, 실측 수치와 해결 방법만 군더더기 없이 1~2문장으로 심플하게 안내하세요.',
   expert:
-    '🌳 [고급 / 전문가 모드]: CPU 코어, RAM 점유율(%), 디스크 여유량(GB), 주사율(Hz) 등 엔지니어링 실측 수치를 인용하여 정중한 비서 존댓말로 1~2문장 이내로 간결하게 브리핑하세요.',
+    '🌳 [고급 / 전문가 모드]: CPU 코어, RAM 점유율(%), 디스크 여유량(GB), 주사율(Hz) 등 엔지니어링 실측 수치를 인용하여 다정하고 똑부러지는 귀신비서 해요체(~했어요, ~해 드릴게요)로 1~2문장 이내로 간결하게 브리핑하세요.',
 };
 
 function extractJsonObject(raw: string): any | null {
@@ -720,14 +720,14 @@ export async function callMonsterLowCostLlmJson(params: {
     `[현재 유저 입력 (${sourceTab === 'trash' ? '🧹 치우기 탭' : '⚙️ 고치기 탭'})]`,
     `"${query}"`,
     '',
-    '[절대 준수 4대 화법 및 아키텍처 원칙 — 비서 존댓말 · 군더더기 0% · 범위 밖 질문 외부 바통터치 · JSON 기능 분리]',
-    '1. [귀신비서 답변 범위(우리 앱·기기·설정·검색·초능력) vs 범위 밖 외부 바통터치]: 우리 앱(귀신같이/귀신창/귀신검색/귀신계 여권/상용구/요금제/연동/설정)이나 PC·스마트폰 정리·수리·파일 복구·사양 진단과 관련된 질문에는 친절하고 정확하게 답변하세요. 반면 우리 앱과 무관한 일반 상식, 일상 잡담, 작문, 번역, 법률/세무 등 귀신비서의 답변 범위를 벗어나는 질문이면 차갑게 거절하지 말고, 반드시 "intent": "BATON_TOUCH_CUTOFF", "zCoreCommand": { "endpoint": "NONE", "action": "OUT_OF_SCOPE_BATON_TOUCH", "params": {} }로 설정하고, replyKo에는 "이 질문은 귀신비서의 답변 범위를 넘어서는 내용이라 말씀하신 대화 내용을 클립보드에 미리 복사해 두었습니다. 아래 버튼을 누르시면 외부 AI로 바로 점프해서 답변받으실 수 있습니다."라고 안내하세요.',
-    '2. [과한 인사치레·호들갑 절대 금지]: "어휴~", "정말 좋은 생각이에요!", "제가 귀신같이 비서인데 걱정 마세요!" 같은 수다스러운 인사치레와 자기소개를 절대 쓰지 마세요. 공감은 딱 한두 단어("충분히 가능하십니다.", "답답하셨겠습니다.", "새로 안 사셔도 됩니다.")만 하고 즉시 본론(기능 및 실측 수치)으로 들어가세요.',
-    '3. [비서 같은 신뢰감 있는 존댓말 고정]: 유저가 반말("정리해 줄래?", "고마워")로 말해도 절대 반말("응!", "해줄게")을 쓰지 말고, 항상 정중하고 간결한 비서 존댓말("~입니다", "~해 드리겠습니다")로 총 1~2문장 이내로 심플하게 답하세요.',
-    '4. [기능은 JSON으로만 완전 분리 & 임의 삭제 표현 금지]: 말풍선(replyKo)은 군더더기 없이 심플하게 끝내고, 실제 실행할 기능은 JSON의 intent와 zCoreCommand에 분리 주입하세요. 폴더·설치파일 정리 시 "자동으로 삭제해 드리겠습니다"라고 하지 말고 "정리 대상 파일 목록을 먼저 스캔해 보여드리겠습니다."라고 안내하세요.',
+    '[절대 준수 4대 화법 및 아키텍처 원칙 — 다정한 애교 해요체 · 군더더기 0% · 범위 밖 질문 외부 바통터치 · JSON 기능 분리]',
+    '1. [귀신비서 답변 범위(우리 앱·기기·설정·검색·초능력) vs 범위 밖 외부 바통터치]: 우리 앱(귀신같이/귀신창/귀신검색/귀신계 여권/상용구/요금제/연동/설정)이나 PC·스마트폰 정리·수리·파일 복구·사양 진단과 관련된 질문에는 친절하고 정확하게 답변하세요. 반면 우리 앱과 무관한 일반 상식, 일상 잡담, 작문, 번역, 법률/세무 등 귀신비서의 답변 범위를 벗어나는 질문이면 차갑게 거절하지 말고, 반드시 "intent": "BATON_TOUCH_CUTOFF", "zCoreCommand": { "endpoint": "NONE", "action": "OUT_OF_SCOPE_BATON_TOUCH", "params": {} }로 설정하고, replyKo에는 "이 질문은 귀신비서의 답변 범위를 넘어서는 내용이라 말씀하신 대화 내용을 클립보드에 미리 복사해 두었어요! 아래 버튼을 누르시면 평소 쓰시는 단골 AI로 바로 점프해서 답변받으실 수 있어요."라고 안내하세요.',
+    '2. [과한 인사치레·호들갑 절대 금지]: "어휴~", "제가 귀신같이 비서인데 걱정 마세요!" 같은 수다스러운 자기소개는 쓰지 마세요. 공감은 딱 한두 마디("충분히 가능해요!", "답답하셨겠어요!", "새로 안 사셔도 괜찮아요!")만 하고 즉시 본론(기능 및 실측 수치)으로 들어가세요.',
+    '3. [다정하고 신뢰감 있는 귀신비서 애교 해요체 고정]: 유저가 반말("정리해 줄래?", "고마워")로 말해도 반말("응!", "해줄게")이나 딱딱한 다나까체("~입니다", "~하겠습니다")를 쓰지 말고, 항상 따뜻하고 상냥한 귀신비서 애교 해요체("~했어요!", "~해 드릴게요!", "~예요!")로 총 1~2문장 이내로 심플하게 답하세요.',
+    '4. [기능은 JSON으로만 완전 분리 & 임의 삭제 표현 금지]: 말풍선(replyKo)은 군더더기 없이 심플하게 끝내고, 실제 실행할 기능은 JSON의 intent와 zCoreCommand에 분리 주입하세요. 폴더·설치파일 정리 시 "자동으로 삭제해 드릴게요"라고 하지 말고 "정리 대상 파일 목록을 먼저 스캔해 보여드릴게요!"라고 안내하세요.',
     '5. 반드시 아래 JSON 스키마 하나만 순수 JSON으로 출력하세요 (마크다운 코드블록 없이 { 로 시작해서 } 로 끝낼 것):',
     '{',
-    '  "replyKo": "비서처럼 정중하고 군더더기 없는 1~2문장 존댓말 답변 (한두 단어 공감 + 실측 핵심 결론)",',
+    '  "replyKo": "따뜻하고 상냥한 귀신비서 애교 해요체(~했어요!, ~해 드릴게요!) 1~2문장 답변 (짧은 공감 + 실측 핵심 결론)",',
     '  "intent": "CLEANUP_FOLDER_REORG" | "CLEANUP_DOWNLOAD_INSTALLERS" | "MISSING_FILE_TRACE" | "OFFICE_CRASH_RECOVER" | "DESKTOP_SHORTCUT" | "RESTORE_POINTS_LIST" | "PC_SPEC_CONSULTATION" | "STARTUP_INSPECT" | "OS_REPAIR_ACTION" | "SEARCH_ROUTING" | "BATON_TOUCH_CUTOFF" | "GENERAL_CONVERSATION",',
     '  "zCoreCommand": {',
     '    "endpoint": "/__zcore/cleanup-scan" | "/__zcore/omni-trace" | "/__zcore/forensic-scan" | "/__zcore/create-shortcut" | "/__zcore/restore-points" | "/__zcore/pc-spec" | "/__zcore/os-inspect" | "/__zcore/execute" | "NONE",',
@@ -1749,7 +1749,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
   // 0-A) 은행·관공서 보안프로그램 전부 원래 자동실행 설정으로 1초 완전 복구
   if (/(은행.*?보안\s*프로그램.*?(원래|원복|복구|해제|되돌려)|보안\s*프로그램.*?(원래대로|원상\s*복구|절전\s*해제))/i.test(clean)) {
-    const restoreRes = await fetch('http://127.0.0.1:5199/api/care/security-services/restore-default', {
+    const restoreRes = await fetch(getZCoreUrl('/api/care/security-services/restore-default'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -1788,7 +1788,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
   // 0-B) 은행·관공서 보안프로그램 현재 상태 조회 ("확인해줘" 발화가 멋대로 절전을 실행하지 않도록 분리)
   if (/(은행.*?보안\s*프로그램.*?(확인|상태|점검|몇\s*개|보여)|보안\s*프로그램\s*(상태|확인|몇\s*개))/i.test(clean)) {
-    const stRes = await fetch('http://127.0.0.1:5199/api/care/security-services/status')
+    const stRes = await fetch(getZCoreUrl('/api/care/security-services/status'))
       .then((r) => r.json())
       .catch(() => null);
 
@@ -1832,7 +1832,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     (isSimpleYes && /(은행·관공서\s*보안프로그램.*?깨워드릴까요|삭제하지\s*않고\s*쿨쿨\s*잠재울까요)/.test(lastAssistantText));
 
   if (isBankSleepConsent) {
-    const sleepRes = await fetch('http://127.0.0.1:5199/api/care/security-services/sleep', {
+    const sleepRes = await fetch(getZCoreUrl('/api/care/security-services/sleep'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -1902,7 +1902,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     (isSimpleYes && /숨은\s*초능력.*?알려드릴까요/.test(lastAssistantText));
 
   if (isAskingHiddenSuperpowers) {
-    const defRes = await fetch('http://127.0.0.1:5199/api/care/defender/history')
+    const defRes = await fetch(getZCoreUrl('/api/care/defender/history'))
       .then((r) => r.json())
       .catch(() => null);
 
@@ -1963,7 +1963,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
   // 3) 다운로드 폴더 열어서 최근 압축파일 자동 포커스(explorer /select) 후 더블클릭·우클릭 1초 압축 풀기 바로 써보기
   if (/다운로드\s*폴더\s*열어.*?(우클릭|더블클릭|압축|써보|확인)|1초\s*압축\s*풀기\s*써보/i.test(clean)) {
-    const openRes = await fetch('http://127.0.0.1:5199/api/care/open-downloads', {
+    const openRes = await fetch(getZCoreUrl('/api/care/open-downloads'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -1993,7 +1993,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
   // 3-2) 윈도우 기본 앱 설정 창 열기 (탐색기 잔소리 팝업 없이 유저가 직접 칩을 눌렀을 때만 안내)
   if (/윈도우\s*기본\s*압축\s*앱|기본\s*압축\s*앱.*?(연결|설정)|기본\s*앱\s*설정/i.test(clean)) {
-    await fetch('http://127.0.0.1:5199/api/care/open-default-apps', {
+    await fetch(getZCoreUrl('/api/care/open-default-apps'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -2015,10 +2015,10 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
   // 4) 실적을 모아서 한 번씩 생색내기 (누적 비서 실적 보고서)
   if (/(비서\s*실적|실적\s*보고서|그동안\s*모아둔.*?실적|수호\s*장부|수호\s*히스토리|뒤에서\s*뭐\s*했어)/i.test(clean)) {
     const [secRes, defRes] = await Promise.all([
-      fetch('http://127.0.0.1:5199/api/care/security-services/status')
+      fetch(getZCoreUrl('/api/care/security-services/status'))
         .then((r) => r.json())
         .catch(() => null),
-      fetch('http://127.0.0.1:5199/api/care/defender/history')
+      fetch(getZCoreUrl('/api/care/defender/history'))
         .then((r) => r.json())
         .catch(() => null),
     ]);
@@ -2059,7 +2059,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
   // 5) 은행·관공서 업무를 위해 잠자던 보안프로그램 즉시 깨우기
   if (/(은행\s*업무.*?깨워|은행.*?보안\s*프로그램.*?(깨워|켜)|은행\s*모드\s*(켜|즉시)|은행\s*사이트\s*안\s*돼)/i.test(clean)) {
-    const wakeRes = await fetch('http://127.0.0.1:5199/api/care/security-services/wake', {
+    const wakeRes = await fetch(getZCoreUrl('/api/care/security-services/wake'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'secretary_chat_request' }),
@@ -3027,9 +3027,12 @@ export async function processUnifiedMonsterChatQuery(params: {
       fileName,
       filePath,
     });
+    const kakaoHeader = kakaoRes.ok
+      ? `🎯 **[양방향 자동 토스 ➔ 카카오톡 '${kakaoRes.recipientName}' 대화방 파일 장전 완료]**`
+      : `🔌 **[카카오톡 '${kakaoRes.recipientName}' 대화방 연결 대기 (엔진·카톡 확인 필요)]**`;
     return reply(
       sourceTab,
-      `🎯 **[양방향 자동 토스 ➔ 카카오톡 '${kakaoRes.recipientName}' 대화방 파일 장전 완료]**\n` +
+      `${kakaoHeader}\n` +
         `${kakaoRes.hyunsuAnnouncement}\n` +
         `• 대상 서류: **${kakaoRes.fileName}** (스마트 서류함 자동 매칭)`,
       {
@@ -3372,10 +3375,10 @@ export async function processUnifiedMonsterChatQuery(params: {
     )
   ) {
     const kw = earlySearchIntent.extractedKeyword || clean;
-    speak(`말씀하신 ${kw} 검색 결과를 찾기 화면에서 바로 띄워드립니다.`);
+    speak(`말씀하신 ${kw} 검색 결과를 귀신검색 화면에서 바로 띄워드릴게요.`);
     return reply(
       sourceTab,
-      `🎯 **[양방향 자동 토스 ➔ 🎯 찾기 즉시 실행]**\n"${kw}" 검색 결과를 **[🎯 찾기]** 화면에서 바로 찾아 띄워드립니다.`,
+      `👻 **[양방향 자동 토스 ➔ 👻 귀신검색 즉시 실행]**\n"${kw}" 검색 결과를 **[👻 귀신검색]** 화면에서 바로 찾아 띄워드릴게요!`,
       {
         cardKind: 'SEARCH_ROUTING',
         searchKeyword: kw,
@@ -3590,7 +3593,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         action: isOfficeCrash ? 'SCAN_OFFICE_AUTORECOVER' : 'TRACE_MISSING_FILE',
         params: { query: clean },
       },
-      followUpSuggestions: ['[🎯 찾기]에서 문서 내용으로 검색해 볼래', '최근 [복원 기록]도 확인해 줘'],
+      followUpSuggestions: ['[👻 귀신검색]에서 문서 내용으로 검색해 볼래', '최근 [복원 기록]도 확인해 줘'],
     };
 
     if (isOfficeCrash) {
@@ -3743,7 +3746,7 @@ export async function processUnifiedMonsterChatQuery(params: {
 
     let cleanBriefing =
       d?.briefingKo ||
-      '복원 기록과 내 휴지통을 확인했지만 찾지 못했습니다. 귀신같이가 옮기거나 지운 기록도 없습니다. 다른 폴더로 옮겨졌을 수 있으니 [🎯 찾기]에서 이름으로 검색해 보세요.';
+      '복원 기록과 내 휴지통을 확인했지만 찾지 못했어요. 귀신같이가 옮기거나 지운 기록도 없어요. 다른 폴더로 옮겨졌을 수 있으니 [👻 귀신검색]에서 이름으로 검색해 보세요!';
     if (!cleanBriefing.includes('100% 정직 판정')) {
       cleanBriefing = `${verdictHeader}\n${cleanBriefing}`;
     }
@@ -4273,7 +4276,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
   }
 
-  // 7) 단순 찾기 의도 ➔ [🎯 찾기] 직행
+  // 7) 단순 찾기 의도 ➔ [👻 귀신검색] 직행
   const searchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
   if (
     llmDecision?.intent === 'SEARCH_ROUTING' ||
@@ -4282,7 +4285,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     const kw = llmDecision?.zCoreCommand?.params?.keyword || searchIntent.extractedKeyword || clean;
     return reply(
       sourceTab,
-      `${llmIntro}🎯 **[찾기 바로가기]**\n"${kw}" 찾기는 **[🎯 찾기]** 검색에서 사진·문서를 바로 찾아드립니다. 아래 버튼을 누르면 검색 결과로 이동합니다.`,
+      `${llmIntro}👻 **[귀신검색 바로가기]**\n"${kw}" 찾기는 **[👻 귀신검색]**에서 사진·문서를 바로 찾아드려요! 아래 버튼을 누르면 검색 결과로 이동해요.`,
       {
         cardKind: 'SEARCH_ROUTING',
         searchKeyword: kw,

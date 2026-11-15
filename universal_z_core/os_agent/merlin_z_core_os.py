@@ -143,6 +143,17 @@ def ensure_merlin_dirs() -> None:
     SHADOW_VAULT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def get_shared_work_vault_dir() -> Path:
+    """S: 업무공유폴더 원본 경로를 반환합니다 (sys.frozen .exe 환경에서 임시폴더 오염 원천 차단)."""
+    if Path("S:\\").exists():
+        return Path("S:\\")
+    if not getattr(sys, "frozen", False):
+        cand = Path(__file__).resolve().parents[2] / "업무공유폴더_S"
+        if cand.exists():
+            return cand
+    return MERLIN_DIR / "업무공유폴더_S"
+
+
 # ============================================================================
 # 0. Windows 대화형 모니터 데스크톱(WinSta0\Default) 강제 브릿지
 #    (백그라운드 터미널/샌드박스 데스크톱에서 실행돼도 유저 모니터에 직접 창을 띄움)
@@ -865,13 +876,14 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
     t0 = time.perf_counter()
     ensure_merlin_dirs()
 
-    project_root = Path(__file__).resolve().parents[2]
     desktop_known = USERPROFILE / "Desktop"
     downloads_known = USERPROFILE / "Downloads"
+    documents_known = USERPROFILE / "Documents"
     if _SAFE_OPS_AVAILABLE and ghosti_safe_ops is not None:
         try:
             desktop_known = ghosti_safe_ops.known_folder("desktop")
             downloads_known = ghosti_safe_ops.known_folder("downloads")
+            documents_known = ghosti_safe_ops.known_folder("documents")
         except Exception:
             pass
 
@@ -885,9 +897,9 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
         ("1순위: Word 자동복구 금고", APPDATA / "Microsoft" / "Word"),
         ("1순위: 한글(HWP) 자동저장 금고", APPDATA / "HNC" / "User" / "AutoSave"),
         ("2순위: Z-코어 ShadowVault 금고", SHADOW_VAULT_DIR),
-        ("3순위: 업무공유폴더 (S: 드라이브 원본)", project_root / "업무공유폴더_S"),
-        ("3순위: 로컬 스마트 서류함 (test_docs)", project_root / "test_docs"),
-        ("4순위: PC 문서(Documents) 폴더", USERPROFILE / "Documents"),
+        ("3순위: 업무공유폴더 (S: 드라이브 원본)", get_shared_work_vault_dir()),
+        ("4순위: PC 문서(Documents) 폴더", documents_known),
+        ("4순위: PC 문서(USERPROFILE) 보조 경로", USERPROFILE / "Documents"),
     ]
 
     target_exts = {
@@ -1388,14 +1400,53 @@ def filter_explorer_by_search_box_pure_win32(hw_int: int, query_text: str) -> No
     user32.keybd_event(0x0D, 0, 2, 0)
 
 
-def run_gui_task_runner() -> None:
-    """schtasks /IT 로 호출되어 유저의 실제 대화형 데스크톱(WinSta0\\Default)에서 직접 실행되는 초고속 GUI 워커입니다."""
-    ensure_merlin_dirs()
+def build_gui_task_runner_command() -> str:
+    """sys.frozen(.exe) 및 Python(.py) 양쪽 환경에서 동일하게 작동하는 GUI 전용 분리 워커 실행 명령어를 생성합니다."""
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}" --gui-task-runner'
+    script_path = str(Path(__file__).resolve())
+    pyw_exe = get_pythonw_executable()
+    return f'"{pyw_exe}" "{script_path}" gui-task-runner'
+
+
+def _is_active_interactive_console_session() -> bool:
+    if os.name != "nt":
+        return False
     try:
-        OVERLAY_PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+        k32 = ctypes.windll.kernel32
+        cur_sess = wintypes.DWORD(0)
+        if not k32.ProcessIdToSessionId(os.getpid(), ctypes.byref(cur_sess)):
+            return False
+        active_sess = int(k32.WTSGetActiveConsoleSessionId())
+        return cur_sess.value != 0 and cur_sess.value == active_sess and open_interactive_desktop_handle() != 0
     except Exception:
-        pass
-    attach_thread_to_interactive_desktop()
+        return False
+
+
+def dispatch_gui_task_payload(payload: Dict[str, Any], terminate_overlay: bool = False) -> bool:
+    """
+    GUI 페이로드를 기록한 뒤 분리된 자식 프로세스(또는 Session 0일 때 schtasks /IT)로 실행합니다.
+    - 메인 HTTP 데몬 스레드 내부에서 tk.Tk()를 직접 띄워 발생하던 Tcl_AsyncDelete 멀티스레드 크래시를 원천 차단합니다.
+    - Merlin_Z_Core_Setup.exe(sys.frozen) 환경에서도 --gui-task-runner 자식 프로세스로 0.02초 만에 즉시 실행됩니다.
+    """
+    ensure_merlin_dirs()
+    if terminate_overlay:
+        terminate_previous_overlay_worker()
+    GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tr_cmd = build_gui_task_runner_command()
+    if _is_active_interactive_console_session():
+        try:
+            pid = spawn_on_interactive_desktop(tr_cmd, hide_console=True)
+            if pid > 0:
+                return True
+        except Exception:
+            pass
+    return run_interactive_gui_via_schtasks("MerlinZCoreOverlay", tr_cmd)
+
+
+def run_gui_task_runner() -> None:
+    """대화형 데스크톱(WinSta0\\Default)에서 분리 프로세스로 실행되는 초고속 GUI 워커입니다."""
+    ensure_merlin_dirs()
     if not GUI_PAYLOAD_FILE.exists():
         return
     try:
@@ -1403,17 +1454,31 @@ def run_gui_task_runner() -> None:
     except Exception:
         return
 
-    user32 = ctypes.windll.user32
     mode = payload.get("mode", "overlay")
+    if mode == "overlay":
+        try:
+            OVERLAY_PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+        except Exception:
+            pass
+    attach_thread_to_interactive_desktop()
 
     if mode == "open_folder":
         target_str = str(payload.get("targetPath", ""))
         if not target_str:
             return
-        os.startfile(target_str)
-        for _ in range(40):
+        folder_p = Path(target_str)
+        existing_explorers = {w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])}
+        try:
+            os.startfile(target_str)
+        except Exception:
+            subprocess.Popen(["explorer.exe", target_str])
+        title_cands = get_explorer_folder_title_candidates(folder_p) + ["S:", "업무공유폴더_S"]
+        for tick in range(40):
             time.sleep(0.05)
-            candidates = find_explorer_windows_on_default_desktop(["S:", "업무공유폴더_S"])
+            candidates = find_explorer_windows_on_default_desktop(
+                title_cands,
+                exclude_hwnds=existing_explorers if tick < 8 else None,
+            )
             if candidates:
                 bring_window_to_front_immediately(candidates[0]["rawHwnd"])
                 break
@@ -1426,14 +1491,42 @@ def run_gui_task_runner() -> None:
         target_file = Path(target_str)
         if not target_file.exists():
             return
+        existing_explorers = {w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])}
+        if target_file.is_dir():
+            try:
+                os.startfile(str(target_file))
+            except Exception:
+                subprocess.Popen(["explorer.exe", str(target_file.resolve())])
+            folder_titles = get_explorer_folder_title_candidates(target_file)
+            for tick in range(35):
+                time.sleep(0.05)
+                candidates = find_explorer_windows_on_default_desktop(
+                    folder_titles,
+                    exclude_hwnds=existing_explorers if tick < 8 else None,
+                )
+                if candidates:
+                    bring_window_to_front_immediately(candidates[0]["rawHwnd"])
+                    break
+            return
+        if mode == "open_file_search":
+            try:
+                os.startfile(str(target_file))
+            except Exception:
+                pass
         try:
-            os.startfile(str(target_file))
+            subprocess.Popen(["explorer.exe", f"/select,{str(target_file.resolve())}"])
         except Exception:
             pass
-        try:
-            subprocess.Popen(f'explorer.exe /select,"{str(target_file.resolve())}"')
-        except Exception:
-            pass
+        folder_titles = get_explorer_folder_title_candidates(target_file.parent) + [target_file.stem, target_file.name]
+        for tick in range(35):
+            time.sleep(0.05)
+            candidates = find_explorer_windows_on_default_desktop(
+                folder_titles,
+                exclude_hwnds=existing_explorers if tick < 8 else None,
+            )
+            if candidates:
+                bring_window_to_front_immediately(candidates[0]["rawHwnd"])
+                break
         return
 
     if mode == "overlay":
@@ -1451,10 +1544,6 @@ def spawn_overlay_detached(
     text: str,
     duration_sec: int = 10,
 ) -> Dict[str, Any]:
-    ensure_merlin_dirs()
-    script_path = str(Path(__file__).resolve())
-    pyw_exe = get_pythonw_executable()
-
     payload = {
         "mode": "overlay",
         "x": int(x),
@@ -1462,19 +1551,7 @@ def spawn_overlay_detached(
         "text": text,
         "duration": int(duration_sec),
     }
-    GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    if getattr(sys, "frozen", False):
-        import threading
-        threading.Thread(
-            target=launch_real_topmost_overlay,
-            args=(int(x), int(y), str(text), int(duration_sec)),
-            daemon=True,
-        ).start()
-        sch_ok = True
-    else:
-        tr_cmd = f'"{pyw_exe}" "{script_path}" gui-task-runner'
-        sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", tr_cmd)
+    sch_ok = dispatch_gui_task_payload(payload, terminate_overlay=True)
 
     verified_win: Dict[str, Any] = {}
     for _ in range(20):
@@ -1483,8 +1560,9 @@ def spawn_overlay_detached(
         if verified_win:
             break
 
+    launched_ok = bool(sch_ok or verified_win)
     return {
-        "ok": True,
+        "ok": launched_ok,
         "isRealOsTopMostOverlay": True,
         "desktopTarget": "WinSta0\\Default",
         "launchedViaInteractiveTask": sch_ok,
@@ -1497,6 +1575,8 @@ def spawn_overlay_detached(
         "durationSec": duration_sec,
         "message": (
             f"✅ 타겟 버튼 위치(모니터 좌표 {x}, {y}) 바로 위에 👆 버튼 가이드 화살표(HWND {verified_win.get('hwnd', '활성')})를 정확히 띄웠습니다!"
+            if launched_ok
+            else "⚠️ 현재 세션에서 모니터 최상단 화살표 오버레이를 띄우지 못했습니다."
         ),
     }
 
@@ -1507,23 +1587,28 @@ def open_file_location_on_interactive_desktop(
 ) -> Dict[str, Any]:
     """
     중복 창이나 작업줄 깜빡임 없이, 멀린님이 보고 계신 '귀신같이 (Ghosti)' 모니터 한가운데 맨 앞으로
-    단 1개의 큰 Windows 탐색기 창만 즉시 열고 해당 파일을 중앙 스크롤 + 화살표 지시 또는 검색창 단독 필터로 띄웁니다.
+    단 1개의 큰 Windows 탐색기 창만 즉시 열고 해당 파일을 중앙 스크롤 + 선택 포커스로 띄웁니다.
     """
     t0 = time.perf_counter()
     ensure_merlin_dirs()
     attach_thread_to_interactive_desktop()
 
-    folder_path = target_file.parent
+    if not target_file.exists():
+        return {
+            "ok": False,
+            "action": mode,
+            "targetPath": str(target_file),
+            "error": f"대상 경로가 존재하지 않습니다: {target_file}",
+        }
+
+    folder_path = target_file if target_file.is_dir() else target_file.parent
     folder_titles = get_explorer_folder_title_candidates(folder_path)
 
-    script_path = str(Path(__file__).resolve())
-    pyw_exe = get_pythonw_executable()
     payload = {
         "mode": mode,
         "targetPath": str(target_file),
     }
-    GUI_PAYLOAD_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    sch_ok = run_interactive_gui_via_schtasks("MerlinZCoreOverlay", f'"{pyw_exe}" "{script_path}" gui-task-runner')
+    sch_ok = dispatch_gui_task_payload(payload, terminate_overlay=False)
 
     opened_win: Dict[str, Any] = {}
     time.sleep(0.18)
@@ -1535,13 +1620,15 @@ def open_file_location_on_interactive_desktop(
             break
 
     elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+    launched_ok = bool(sch_ok or opened_win)
     msg = (
-        f"🔍 {elapsed_ms}ms 만에 탐색기 검색창에 [{target_file.stem}]을 자동 입력하여 "
-        f"수백 개 파일 중 [{target_file.name}]만 바로 표시했습니다! (탐색기 좌측 상단 ← 뒤로가기를 누르면 전체 폴더로 이동합니다)"
+        f"📂 {elapsed_ms}ms 만에 윈도우 탐색기를 화면 맨 앞으로 열고 [{target_file.name}] 위치를 바로 표시했습니다!"
+        if launched_ok
+        else f"⚠️ 윈도우 탐색기를 열지 못했습니다: {target_file}"
     )
 
     return {
-        "ok": True,
+        "ok": launched_ok,
         "action": mode,
         "desktopTarget": "WinSta0\\Default",
         "elapsedMs": elapsed_ms,
@@ -2199,9 +2286,6 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 USERPROFILE / "Documents",
                 USERPROFILE / "Downloads",
                 USERPROFILE / "Pictures",
-                Path(__file__).resolve().parents[2] / "test_docs",
-                Path("D:/Ghosti/test_docs"),
-                Path("C:/MerlinTools/test_docs"),
                 Path("C:/Users/Public/Documents"),
             ]
             for cand_dir in search_dirs:
@@ -2219,18 +2303,6 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                         break
                 except Exception:
                     pass
-        if not p.exists() and target_path.lower().endswith(".gsheet"):
-            # G: 드라이브 구글 시트 가상 원장의 경우 즉석에서 열람 가능한 요약 텍스트 파일 생성 후 오픈
-            virtual_sheet = MERLIN_DIR / Path(target_path).with_suffix(".txt").name
-            if not virtual_sheet.exists():
-                virtual_sheet.write_text(
-                    "[G: 내 드라이브 — 사내 통합 계정관리표 및 법인 입금 계좌번호 원장]\r\n"
-                    "• 넷플릭스/업무용 아이디: merlin_family@sundreamer.app\r\n"
-                    "• 비밀번호: Merlin#2026!ZCore\r\n"
-                    "• 법인 정산 계좌번호: 신한은행 110-482-992018 (별표 *** 가림 없이 원본 그대로 1초 복사 지원)\r\n",
-                    encoding="utf-8",
-                )
-            p = virtual_sheet
         if p.exists() and p.name.startswith("~$"):
             real_cand = p.with_name(p.name[2:])
             if real_cand.exists():
@@ -2340,18 +2412,13 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
     before_state = inspect_real_pc_state()
 
     if action == "s_drive_mount":
-        project_root = Path(__file__).resolve().parents[2]
-        work_vault = project_root / "업무공유폴더_S"
+        work_vault = get_shared_work_vault_dir()
+        if str(work_vault).upper().startswith("S:"):
+            work_vault = MERLIN_DIR / "업무공유폴더_S"
         work_vault.mkdir(parents=True, exist_ok=True)
         subprocess.run(["subst", "S:", "/d"], capture_output=True, creationflags=0x08000000)
         subprocess.run(["subst", "S:", str(work_vault)], capture_output=True, creationflags=0x08000000)
-        script_path = str(Path(__file__).resolve())
-        pyw_exe = get_pythonw_executable()
-        GUI_PAYLOAD_FILE.write_text(
-            json.dumps({"mode": "open_folder", "targetPath": "S:\\"}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        run_interactive_gui_via_schtasks("MerlinZCoreOverlay", f'"{pyw_exe}" "{script_path}" gui-task-runner')
+        dispatch_gui_task_payload({"mode": "open_folder", "targetPath": "S:\\"}, terminate_overlay=False)
         after_state = inspect_real_pc_state()
         return {
             "ok": True,
@@ -2397,8 +2464,18 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
         return run_defender_security_check(sub_def)
 
     if action == "shadow_backup":
-        project_root = Path(__file__).resolve().parents[2]
-        sample_docs = list((project_root / "test_docs").glob("*.*"))[:3]
+        doc_exts = {".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt", ".hwp", ".hwpx", ".pdf", ".csv", ".txt"}
+        real_candidates: List[Path] = []
+        for cand_dir in (USERPROFILE / "Documents", USERPROFILE / "Desktop"):
+            try:
+                if cand_dir.exists():
+                    for entry in cand_dir.iterdir():
+                        if entry.is_file() and not entry.name.startswith("~$") and entry.suffix.lower() in doc_exts and entry.stat().st_size <= 25 * 1024 * 1024:
+                            real_candidates.append(entry)
+            except Exception:
+                pass
+        real_candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        sample_docs = real_candidates[:3]
         backed_up: List[str] = []
         for doc in sample_docs:
             if doc.is_file():
@@ -2418,7 +2495,7 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
             "shadowVaultPath": str(SHADOW_VAULT_DIR),
             "backedUpFiles": backed_up,
             "totalRingBufferFiles": min(len(all_shadows), 10),
-            "message": f"실제 %LOCALAPPDATA%\\Merlin\\ShadowVault 금고에 문서 {len(backed_up)}건을 백업했습니다 (최대 10개 링버퍼 유지).",
+            "message": f"실제 %LOCALAPPDATA%\\Merlin\\ShadowVault 금고에 최근 실물 문서 {len(backed_up)}건을 백업했습니다 (최대 10개 링버퍼 유지).",
         }
 
     after_state = inspect_real_pc_state()

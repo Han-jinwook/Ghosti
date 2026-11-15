@@ -41,7 +41,7 @@ timeout /t 3 > nul
 exit
 """
 
-    readme_content = """❖ 멀린 Z-코어 (Merlin Z-Core v2.3.7) 사용 안내
+    readme_content = """❖ 멀린 Z-코어 (Merlin Z-Core v2.3.8) 사용 안내
 
 1. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다. (별도 설치 창 없이 영구 경로에 자동 안착됩니다)
 2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 귀신같이 아이콘이 생성됩니다.

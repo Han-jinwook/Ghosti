@@ -1083,6 +1083,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   },
 
   moveAllTrashToQuarantine: async () => {
+    if (!ensureLoginAndZCoreReady('손보기 사진 일괄 정리')) return;
     const { photos } = get();
     const allTrashIds = photos
       .filter((p) => p.trashCategory && !p.quarantined)

@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.7"
+CORE_VERSION = "2.3.8"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1344,6 +1344,13 @@ def main() -> None:
         import plugin_ghosti_care_suite
 
         plugin_ghosti_care_suite.handle_care_cli_args(raw_argv)
+        return
+
+    # 0-C) 탐색기 폴더/파일 열기 및 👆 최상단 화살표 오버레이 전용 분리 워커 (Tcl/Tk 멀티스레드 충돌 0%, 뮤텍스 간섭 0%)
+    if "--gui-task-runner" in raw_argv or "gui-task-runner" in raw_argv:
+        import merlin_z_core_os
+
+        merlin_z_core_os.run_gui_task_runner()
         return
 
     parser = argparse.ArgumentParser(description="Merlin_Z_Core Unified PC Daemon (Port 5199)")

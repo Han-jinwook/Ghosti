@@ -651,29 +651,44 @@ export async function dispatchFileToKakaoRealChatroom(params: {
   hyunsuAnnouncement: string;
   floatingReturnPillLabel: string;
 }> {
-  const announcement = `찾으신 '${params.fileName}' 파일을 카카오톡 '${params.recipientName}' 대화방에 바로 올려두었습니다. 실제 카톡 화면에서 대화방을 눈으로 확인하신 뒤 엔터만 한 번 눌러주세요! 전송이 확인되면 1초 뒤 귀신같이 화면으로 자동 복귀합니다.`;
-  void speakWithHyunsuOrSunhi(announcement, 'hyunsu_briefing');
-
+  let delivered = false;
+  let errorDetail = '';
   try {
-    await fetch('/api/senstalk/dispatch', {
+    const res = await fetch(getZCoreUrl('/api/senstalk/dispatch'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: params.recipientName,
         channel: 'kakao',
+        filePath: params.filePath,
         msg: `[귀신같이 파일 전달] ${params.fileName}${params.filePath ? `\n경로: ${params.filePath}` : ''}`,
       }),
+      signal: AbortSignal.timeout(6000),
     });
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      delivered = Boolean(data?.ok !== false);
+      if (!delivered && data?.error) errorDetail = String(data.error);
+    } else {
+      errorDetail = `HTTP ${res.status}`;
+    }
   } catch {
-    /* ignore */
+    delivered = false;
   }
 
+  const announcement = delivered
+    ? `찾으신 '${params.fileName}' 파일을 카카오톡 '${params.recipientName}' 대화방에 바로 올려두었어요! 실제 카톡 화면에서 대화방을 눈으로 확인하신 뒤 엔터만 한 번 눌러주세요!`
+    : `찾으신 '${params.fileName}' 문서를 확인했지만, 현재 내 PC 엔진(멀린 Z-코어) 또는 카카오톡 PC 버전이 실행되어 있지 않아 대화방 자동 장전을 보류했어요.${errorDetail ? ` (${errorDetail})` : ''} 엔진과 카카오톡 PC를 켜신 뒤 다시 말씀해 주세요!`;
+  void speakWithHyunsuOrSunhi(announcement, 'hyunsu_briefing');
+
   return {
-    ok: true,
+    ok: delivered,
     recipientName: params.recipientName,
     fileName: params.fileName,
     hyunsuAnnouncement: announcement,
-    floatingReturnPillLabel: '⬅️ 전송 완료 후 귀신같이 화면으로 즉시 복귀',
+    floatingReturnPillLabel: delivered
+      ? '⬅️ 전송 완료 후 귀신같이 화면으로 즉시 복귀'
+      : '🔌 엔진·카카오톡 PC 확인 후 다시 시도',
   };
 }
 

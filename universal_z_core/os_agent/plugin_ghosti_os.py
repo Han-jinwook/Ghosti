@@ -34,7 +34,6 @@ import ghosti_safe_ops as safe  # noqa: E402
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 MERLIN_DIR = LOCAL_APPDATA / "Merlin"
 RESTORE_POINTS_FILE = MERLIN_DIR / "restore_points.json"
-QUARANTINE_DIR = THIS_DIR.parents[1] / "귀신같이_정리대기함"
 
 FILE_ATTRIBUTE_HIDDEN = 0x02
 FILE_ATTRIBUTE_NORMAL = 0x80
@@ -42,7 +41,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.0",
+    "version": "2.3.8",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -213,7 +212,7 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
             "timedOut": bool(rb.get("timedOut")),
             "briefingKo": (
                 f"100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다. '{', '.join(kws)}'(으)로 [복원 기록]과 내 휴지통을 확인했지만 찾지 못했습니다. "
-                "귀신같이가 옮기거나 지운 기록도 없습니다. 다른 폴더로 옮겨졌을 수 있으니 [🎯 찾기]에서 이름으로 검색해 보세요."
+                "귀신같이가 옮기거나 지운 기록도 없습니다. 다른 폴더로 옮겨졌을 수 있으니 [👻 귀신검색]에서 이름으로 검색해 보세요."
             ),
         }
     )
@@ -508,64 +507,8 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
         except Exception:
             pass
 
-    # 기본 색인 샘플 + 실물 스캔 병합
-    indexed_items: List[Dict[str, Any]] = [
-        {
-            "id": "gsheet_accounts_01",
-            "fileName": "사내_통합_계정관리표.gsheet",
-            "filePath": "G:\\내 드라이브\\01_총무보안\\사내_통합_계정관리표.gsheet",
-            "docId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-            "docType": "gsheet",
-            "webUrl": "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit",
-            "isCredentialRow": True,
-            "serviceName": "넷플릭스 (법인 공용 4K)",
-            "accountId": "merlin_family@sundreamer.app",
-            "accountPw": "Merlin#2026!ZCore",
-            "displayFormat": {
-                "maskPasswordOnScreen": True,
-                "maskedPwDisplay": "••••••••",
-                "revealButtonLabel": "👁️ 보기",
-                "idDisplayWithCopyEmoji": "merlin_family@sundreamer.app 📋",
-                "pwDisplayWithCopyEmoji": "•••••••• [👁️ 보기] 📋",
-            },
-            "privacyGuard": {
-                "ttsReadPasswordAllowed": False,
-                "ttsSafeBriefingKo": "사내 통합 계정관리표 시트에서 넷플릭스 계정을 찾았습니다. 아이디와 비밀번호 옆의 복사 아이콘을 눌러 바로 복사하실 수 있습니다. 보안을 위해 비밀번호는 음성으로 읽지 않습니다.",
-                "externalAiBatonTouchAllowed": False,
-            },
-            "extractedText": "넷플릭스 법인 공용 계정 아이디 merlin_family@sundreamer.app 비밀번호 Merlin#2026!ZCore",
-        },
-        {
-            "id": "gsheet_Receivables_02",
-            "fileName": "2026_거래처_미수금_정산표.gsheet",
-            "filePath": "G:\\내 드라이브\\02_세무회계\\2026_거래처_미수금_정산표.gsheet",
-            "docId": "1ReceivablesSheetDocId2026Merlin",
-            "docType": "gsheet",
-            "webUrl": "https://docs.google.com/spreadsheets/d/1ReceivablesSheetDocId2026Merlin/edit",
-            "isCredentialRow": False,
-            "extractedText": "김 사장님(성수동 물류) 10월 미수금 잔액 4,500,000원 (입금 예정일 10월 30일)",
-            "privacyGuard": {
-                "ttsReadPasswordAllowed": True,
-                "ttsSafeBriefingKo": "거래처 미수금 정산표 구글시트에서 김 사장님 미수금 잔액은 사백오십만 원으로 확인됩니다.",
-                "externalAiBatonTouchAllowed": True,
-            },
-        },
-        {
-            "id": "gdoc_lecture_03",
-            "fileName": "건강강연_비타민D_원고.gdoc",
-            "filePath": "G:\\내 드라이브\\03_원고자료\\건강강연_비타민D_원고.gdoc",
-            "docId": "1LectureNoteVitaminDDocId2026",
-            "docType": "gdoc",
-            "webUrl": "https://docs.google.com/document/d/1LectureNoteVitaminDDocId2026/edit",
-            "isCredentialRow": False,
-            "extractedText": "비타민D는 칼슘 흡수와 면역 세포 활성화에 필수적인 호르몬성 비타민으로 하루 20분 햇볕 쬐기가 중요합니다.",
-            "privacyGuard": {
-                "ttsReadPasswordAllowed": True,
-                "ttsSafeBriefingKo": "건강강연 원고 구글독스에서 비타민D 관련 문장을 찾았습니다.",
-                "externalAiBatonTouchAllowed": True,
-            },
-        },
-    ]
+    # [실물 파일 순수성 철칙] 가짜 사내 계정·미수금·강연 원고 데모 시트를 절대 섞지 않고 실제 PC의 .gdoc/.gsheet 바로가기만 반환!
+    indexed_items: List[Dict[str, Any]] = []
 
     for sc in discovered_shortcuts:
         indexed_items.append(
@@ -962,6 +905,19 @@ def resolve_active_photo_dir(custom_path: str = "") -> Path:
 _LEGACY_PERSONAL_RX = re.compile(r"^(1721\d+|2024\d+_\d+|2026\d+_\d+|Screenshot_2026|Gemini_Generated_Image_|image-178558|stock_photo_\d+)", re.IGNORECASE)
 
 
+def _make_collision_safe_media_key(resolved: Path, folder_name: str, seen_keys: set[str]) -> str:
+    """서로 다른 폴더에 동명 파일(예: IMG_0001.jpg)이 있을 때 누락 및 휴지통 오이동을 막는 결정론적 안전 키를 생성합니다."""
+    base = resolved.name
+    if base not in seen_keys:
+        seen_keys.add(base)
+        return base
+    safe_folder = re.sub(r"[^0-9A-Za-z가-힣_-]+", "_", folder_name or "folder").strip("_")[:14] or "dir"
+    short_hash = hashlib.sha1(str(resolved).lower().encode("utf-8", errors="ignore")).hexdigest()[:6]
+    key = f"{resolved.stem}__{safe_folder}_{short_hash}{resolved.suffix}"
+    seen_keys.add(key)
+    return key
+
+
 def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(사진, 바탕화면, 다운로드, 문서, 동영상 등)의 모든 실물 사진을 전수 스캔하여 반환합니다."""
     data = params or {}
@@ -969,7 +925,8 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(req_dir), max_depth=3)
 
     files: List[Dict[str, Any]] = []
-    seen_names: set[str] = set()
+    seen_paths: set[str] = set()
+    seen_keys: set[str] = set()
 
     for d in scan_dirs:
         try:
@@ -984,16 +941,19 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 ext = entry.suffix.lower()
                 if ext not in _IMAGE_EXTS:
                     continue
-                if entry.name in seen_names:
+                resolved = entry.resolve()
+                norm_resolved = str(resolved).lower()
+                if norm_resolved in seen_paths:
                     continue
                 st = entry.stat()
                 if st.st_size < 4096 and "test_photos" not in str(d).lower() and "sample" not in str(d).lower():
                     continue
-                seen_names.add(entry.name)
-                resolved = entry.resolve()
-                _PHOTO_PATH_INDEX[entry.name] = resolved
+                seen_paths.add(norm_resolved)
+                photo_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
+                _PHOTO_PATH_INDEX[photo_key] = resolved
                 files.append({
-                    "path": entry.name,
+                    "path": photo_key,
+                    "originalName": entry.name,
                     "fullPath": str(resolved),
                     "folderName": d.name,
                     "deviceSource": _detect_folder_label(d),
@@ -1037,13 +997,16 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
 
     base_name = Path(rel).name
     if str(data.get("loc") or "").strip() == "quarantine":
-        row = safe.ledger_find(base_name)
+        row = safe.ledger_find(rel) or safe.ledger_find(base_name)
         q_path = Path(row.get("recycleDataFile") or "") if row else None
         if q_path and row.get("recycleDataFile") and q_path.exists() and q_path.is_file():
             return q_path, _guess_image_mime(q_path, base_name), 200
         return None, "text/plain", 404
 
     full_path: Path | None = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
+    if (full_path is None or not full_path.exists()) and "__" in base_name:
+        list_local_photos({})
+        full_path = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
 
     if full_path is None or not full_path.exists():
         direct_p = Path(rel)
@@ -1160,10 +1123,10 @@ def _extract_doc_text(entry: Path) -> str:
 
 
 def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """내 PC 전 폴더(문서, 바탕화면, 다운로드, test_docs 등)의 서류 파일을 전수 스캔하여 반환합니다."""
+    """내 PC 전 폴더(문서, 바탕화면, 다운로드 등)의 서류 파일을 전수 스캔하여 반환합니다."""
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     docs: List[Dict[str, Any]] = []
-    seen_names: set[str] = set()
+    seen_paths: set[str] = set()
 
     for d in scan_dirs:
         try:
@@ -1175,9 +1138,11 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     continue
                 if entry.name.startswith("~$") or entry.name.lower().startswith("readme"):
                     continue
-                if entry.name in seen_names:
+                resolved_doc = entry.resolve()
+                norm_doc = str(resolved_doc).lower()
+                if norm_doc in seen_paths:
                     continue
-                seen_names.add(entry.name)
+                seen_paths.add(norm_doc)
                 st = entry.stat()
                 stem = entry.stem.replace("_", " ").replace("-", " ").strip()
                 extracted = _extract_doc_text(entry)
@@ -2300,16 +2265,17 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     cache = _load_video_ocr_cache()
     missing: List[tuple[str, Path, float]] = []
-    seen_names: set[str] = set()
+    seen_paths: set[str] = set()
     for d in scan_dirs:
         try:
             for entry in sorted(d.iterdir(), key=lambda x: x.name):
                 if not entry.is_file() or entry.suffix.lower() not in _VIDEO_EXTS:
                     continue
-                if entry.name in seen_names:
-                    continue
-                seen_names.add(entry.name)
                 resolved = entry.resolve()
+                norm_vid = str(resolved).lower()
+                if norm_vid in seen_paths:
+                    continue
+                seen_paths.add(norm_vid)
                 if _is_cloud_virtual_or_unpinned_file(resolved):
                     continue
                 st = resolved.stat()
@@ -2317,7 +2283,7 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
                 existing_entry = cache.get(sig)
                 if existing_entry is None or int((existing_entry or {}).get("ocrVer") or 0) < _VIDEO_OCR_SCHEMA_VER:
                     missing.append((sig, resolved, _get_fast_video_duration_sec(resolved)))
-                if len(seen_names) >= 120:
+                if len(seen_paths) >= 120:
                     break
         except Exception:
             pass
@@ -2338,7 +2304,8 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     videos: List[Dict[str, Any]] = []
-    seen_names: set[str] = set()
+    seen_paths: set[str] = set()
+    seen_keys: set[str] = set()
     ff = find_ffmpeg_exe()
     ocr_cache = _load_video_ocr_cache()
     missing_for_bg: List[tuple[str, Path, float]] = []
@@ -2352,16 +2319,18 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 ext_low = entry.suffix.lower()
                 if ext_low not in _VIDEO_EXTS:
                     continue
-                if entry.name in seen_names:
-                    continue
-                seen_names.add(entry.name)
                 resolved = entry.resolve()
-                _PHOTO_PATH_INDEX[entry.name] = resolved
+                norm_vid = str(resolved).lower()
+                if norm_vid in seen_paths:
+                    continue
+                seen_paths.add(norm_vid)
+                video_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
+                _PHOTO_PATH_INDEX[video_key] = resolved
                 st = entry.stat()
                 size_mb = round(max(0.1, st.st_size / (1024 * 1024)), 1)
                 date_str = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d")
                 stem = entry.stem.replace("_", " ").replace("-", " ").strip()
-                enc_name = urllib.parse.quote(entry.name)
+                enc_name = urllib.parse.quote(video_key)
 
                 real_dur_sec = _get_fast_video_duration_sec(resolved)
                 if real_dur_sec <= 0:
@@ -2566,16 +2535,16 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
         target = str(data.get("target") or "photos").strip()
         if target == "photos":
             pdir = resolve_active_photo_dir()
-            os.startfile(str(pdir))
+            zos.open_file_location_on_interactive_desktop(pdir, mode="open_file_location")
             return {"ok": True, "opened": str(pdir)}
         elif target == "docs":
-            ddir = THIS_DIR.parents[1] / "test_docs"
+            ddir = safe.known_folder("documents")
             if not ddir.exists():
                 ddir = Path.home() / "Documents"
-            os.startfile(str(ddir))
+            zos.open_file_location_on_interactive_desktop(ddir, mode="open_file_location")
             return {"ok": True, "opened": str(ddir)}
         else:
-            subprocess.run(["explorer.exe", "shell:RecycleBinFolder"])
+            subprocess.Popen(["explorer.exe", "shell:RecycleBinFolder"])
             return {"ok": True, "opened": "RecycleBin"}
 
     return {"ok": False, "error": f"UNKNOWN_QUARANTINE_ACTION: {act}"}

@@ -1,4 +1,4 @@
-import { getZCoreUrl, hasActiveGhostiLoginSession } from './zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from './zCoreBridge';
 
 /**
  * 👻 『귀신같이 (Ghosti)』 [✋ 손보기] 2중 자동 검진 엔진 & 1줄 롤링 플레이스홀더 마스터 모듈
@@ -367,18 +367,20 @@ export async function evaluateDualProactiveCareEngine(options?: {
   }
 
   // 비로그인 게스트(크롬 게스트 모드 / 시크릿 창)에서 자동 검진은 로컬 127.0.0.1 요청(LNA 팝업 유발)을 생략
-  if (!options?.forceManual && !hasActiveGhostiLoginSession()) {
+  // 단, 로컬 Z-코어가 이미 연결되어 있는 단독 1-PC 무료 유저는 비로그인 상태에서도 동일하게 주간 건강검진을 지원!
+  const canQueryLocalEngine = zCoreBridge.isConnected || hasActiveGhostiLoginSession();
+  if (!options?.forceManual && !canQueryLocalEngine) {
     return null;
   }
 
-  // PC 환경: Z-코어 실측 조회 (로그인 상태이거나 수동 검진 요청 시에만)
+  // PC 환경: Z-코어 실측 조회
   let ramUsedPercent: number | null = null;
   let cpuLoadPercent: number | null = null;
   let bloatwareNames: string[] = [];
   let junkFileCount = 0;
 
   try {
-    if (hasActiveGhostiLoginSession()) {
+    if (canQueryLocalEngine || options?.forceManual) {
       const [specRes, osRes, scanRes] = await Promise.all([
         fetch(getZCoreUrl('/__zcore/pc-spec'), { signal: AbortSignal.timeout(3500) })
           .then((r) => (r.ok ? r.json() : null))

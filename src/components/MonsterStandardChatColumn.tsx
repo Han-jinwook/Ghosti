@@ -25,7 +25,7 @@ import {
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 import { normalizeSpokenKoreanQuery } from '../services/voiceSearchAndAiBatonEngine';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
 import {
   PC_MONSTER_ROLLING_PLACEHOLDERS_10,
   MOBILE_CLEAN_ROLLING_PLACEHOLDERS_10,
@@ -370,13 +370,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     // [Stage 1: 최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩 (한 턴 연타 금지 · 호흡 분리)]
     if (
       !isMobileOrStore &&
-      hasActiveGhostiLoginSession() &&
       zCoreBridge.isConnected &&
       !turn.nextState.awaitingNickname &&
       !turn.nextState.consents?.bankSecurityAutoSleep &&
       !turn.nextState.bankSleepIntroShownAt
     ) {
-      void fetch('http://127.0.0.1:5199/api/care/security-services/status')
+      void fetch(getZCoreUrl('/api/care/security-services/status'))
         .then((r) => r.json())
         .catch(() => null)
         .then((secRes) => {
@@ -393,9 +392,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           const introText =
             activeCount > 0
               ? `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 안 쓰시는 **은행·관공서 보안프로그램 ${activeCount}개(약 ${ramMb}MB)**가 뒤에서 메모리를 차지하며 컴퓨터 속도를 늦추고 있어요.\n` +
-                `제가 이 프로그램들을 지우지 않고 **평소엔 잠재워 두었다가, 은행·홈택스 들어가실 때만 귀신같이 깨워드릴까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙깁니다!)`
+                `제가 이 프로그램들을 지우지 않고 **평소엔 잠재워 두었다가, 은행·홈택스 들어가실 때만 귀신같이 깨워드릴까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙겨드릴게요!)`
               : `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 켜져 있는 안 쓰는 은행·관공서 보안프로그램은 **0개**로 아주 깨끗해요.\n` +
-                `앞으로도 은행·홈택스 들어가실 때만 켜고 **평소엔 자동으로 잠재워 두게 설정해 둘까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙깁니다!)`;
+                `앞으로도 은행·홈택스 들어가실 때만 켜고 **평소엔 자동으로 잠재워 두게 설정해 둘까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙겨드릴게요!)`;
           setSharedMonsterMessages((prev) => {
             if (prev.some((m) => m.id.startsWith('secretary_bank_sleep_intro_'))) return prev;
             return [
@@ -416,13 +415,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     } else if (
       // [Stage 2: 호흡 분리 후 다음번 진입 시 — 다운로드 폴더 압축파일 최소 3건 이상(>=3) 누적 시 숨은 초능력 & 압축 풀기 안내]
       !isMobileOrStore &&
-      hasActiveGhostiLoginSession() &&
       zCoreBridge.isConnected &&
       !turn.nextState.awaitingNickname &&
       (turn.nextState.consents?.bankSecurityAutoSleep || turn.nextState.bankSleepIntroShownAt) &&
       !turn.nextState.hiddenSuperpowersShown
     ) {
-      void fetch('http://127.0.0.1:5199/api/care/security-services/status')
+      void fetch(getZCoreUrl('/api/care/security-services/status'))
         .then((r) => r.json())
         .catch(() => null)
         .then((secRes) => {
@@ -745,9 +743,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               timestamp: nowTimeKo(),
               sourceTab,
               text:
-                `${nickLabel}, 이곳 본 웹 화면은 **내 컴퓨터 연결**을 마쳐야만 메뉴들이 열리고 작동해서, 연결 없이는 다른 메뉴를 눌러도 볼 수 있는 게 없어요!\n` +
-                `내 컴퓨터 연결 없이 어떤 기능들이 있는지 미리 둘러보고 체험만 해보고 싶으시다면 아래 버튼을 눌러 **온보딩 체험관**으로 이동해 주세요 👻✨`,
-              followUpSuggestions: ['🏠 온보딩 체험관으로 나가서 구경하기 ➔'],
+                `좋아요 ${nickLabel}! 위쪽 다른 메뉴들을 눌러 위아래로 스크롤하며 **눈으로 둘러보시는 건 언제든 환영**이에요!\n` +
+                `다만 내 진짜 사진·문서를 실제로 검색하거나 정리하시려면 **내 컴퓨터 연결**이 필요하고, 연결 없이 샘플 데이터로 직접 클릭 체험만 해보고 싶으시다면 아래 버튼을 눌러 **온보딩 체험관**으로 가보실 수도 있어요 👻✨`,
+              followUpSuggestions: [
+                '🏠 온보딩 체험관으로 나가서 구경하기 ➔',
+                '⚡ 마음 바꿨어! 내 컴퓨터 연결해 볼래',
+              ],
             },
           ]);
           setSharedMonsterBusy(false);
@@ -951,14 +952,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             ]);
           }, 800);
         } else {
-          // [v1.3] 일반 진입 시 첫 손보기 완료 직후 → 홀림 퀘스트 ① 귀신 라벨러 샘플 제안부터 시작
+          // [v1.3] 일반 진입 시 첫 손보기 완료 직후 → 정기 검진(손없는 날) 알림 제안부터 시작 (귀신 라벨러는 [2. 👻 귀신검색] 유료 티어 소속으로 이관됨)
           const st = loadGhostSecretaryState();
           if (sourceTab === 'trash' && (!st.questStep || isExplicitFirstCareQuery)) {
-            const quest = questPromptFor('labeler', st.nickname || '');
+            const quest = questPromptFor('son_free', st.nickname || '');
             if (quest) {
               saveGhostSecretaryState({
                 ...st,
-                questStep: 'labeler',
+                questStep: 'son_free',
                 ...(isExplicitFirstCareQuery ? { passportStep: undefined } : {}),
               });
               window.setTimeout(() => {

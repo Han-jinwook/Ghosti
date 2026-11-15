@@ -12,7 +12,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 Merlin_Z_Core_Setup.exe 버전과 반드시 일치시킬 것 — 불일치 시 self-update 루프 발생) */
-export const LATEST_Z_CORE_VERSION = '2.3.7';
+export const LATEST_Z_CORE_VERSION = '2.3.8';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
@@ -271,6 +271,26 @@ export const zCoreBridge = ZCoreBridgeManager.getInstance();
  *   로그인 성공 즉시 자동으로 Z-코어 연결 모달(`openZCoreGuideModal`)로 물 흐르듯 바톤터치합니다.
  * - 이미 로그인된 상태라면 즉시 Z-코어 연결 모달(`openZCoreGuideModal`)을 오픈합니다.
  */
+function isCurrentlyInSecretaryTab(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const liveRoute = (window as any).__GHOSTI_ACTIVE_ROUTE__;
+    if (liveRoute && liveRoute.lounge && liveRoute.desktopTab) {
+      return liveRoute.lounge === 'personal' && liveRoute.desktopTab === 'trash';
+    }
+    const navState = window.history.state?.ghostiNav;
+    if (navState && navState.lounge && navState.desktopTab) {
+      return navState.lounge === 'personal' && navState.desktopTab === 'trash';
+    }
+  } catch {
+    /* ignore */
+  }
+  const params = new URLSearchParams(window.location.search);
+  const urlLounge = params.get('lounge') || 'personal';
+  const urlTab = params.get('tab') || 'trash';
+  return urlLounge === 'personal' && urlTab === 'trash';
+}
+
 export function requestConnectMyComputer(): void {
   if (typeof window === 'undefined') return;
 
@@ -293,11 +313,7 @@ export function requestConnectMyComputer(): void {
     window.innerWidth < 860;
 
   if (!isMobileViewportOrUA && !zCoreBridge.isConnected) {
-    const params = new URLSearchParams(window.location.search);
-    const urlLounge = params.get('lounge') || 'personal';
-    const urlTab = params.get('tab') || 'trash';
-    const isInSecretaryTab = urlLounge === 'personal' && urlTab === 'trash';
-    if (!isInSecretaryTab) {
+    if (!isCurrentlyInSecretaryTab()) {
       window.dispatchEvent(
         new CustomEvent('openGhostSecretaryFirstModal', { detail: { context: 'default' } })
       );
@@ -344,11 +360,7 @@ export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
       }
       return true;
     }
-    const params = new URLSearchParams(window.location.search);
-    const urlLounge = params.get('lounge') || 'personal';
-    const urlTab = params.get('tab') || 'trash';
-    const isInSecretaryTab = urlLounge === 'personal' && urlTab === 'trash';
-    if (!isInSecretaryTab) {
+    if (!isCurrentlyInSecretaryTab()) {
       window.dispatchEvent(
         new CustomEvent('openGhostSecretaryFirstModal', { detail: { context: 'default' } })
       );
@@ -388,13 +400,20 @@ export function getZCoreUrl(path: string): string {
     }
   }
 
-  // 로컬 개발 환경에서도 사진/문서/포렌식/격리 API는 5199 단일 포트 직결
+  // 로컬 개발 환경(localhost)에서도 모든 Z-코어 데몬 엔드포인트는 5199 단일 포트 직결
   if (
+    cleanPath.startsWith('/__merlin/') ||
+    cleanPath.startsWith('/__setup-monster/') ||
     cleanPath.startsWith('/__photos/') ||
+    cleanPath.startsWith('/__videos/') ||
     cleanPath.startsWith('/__docs/') ||
     cleanPath.startsWith('/__quarantine/') ||
     cleanPath.startsWith('/__zcore/') ||
-    cleanPath.startsWith('/api/ghosti/')
+    cleanPath.startsWith('/api/ghosti/') ||
+    cleanPath.startsWith('/api/care/') ||
+    cleanPath.startsWith('/api/superpower/') ||
+    cleanPath.startsWith('/api/senstalk/') ||
+    cleanPath.startsWith('/api/aggrofilter/')
   ) {
     return `${Z_CORE_ORIGIN}${cleanPath}`;
   }

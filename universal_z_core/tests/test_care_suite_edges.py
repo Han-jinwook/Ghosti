@@ -502,7 +502,7 @@ def test_8_packaged_exe_http_cors_csrf_security():
             try:
                 with urllib.request.urlopen(f"{base}/__merlin/health", timeout=1.5) as r:
                     h = json.loads(r.read().decode("utf-8"))
-                    if h.get("ok") and h.get("version") == "2.3.7":
+                    if h.get("ok") and h.get("version") == daemon.CORE_VERSION:
                         booted = True
                         break
             except Exception:
@@ -583,7 +583,7 @@ def main():
     test_6_deep_uninstaller_recycle_bin_and_guards()
     test_7_amsi_extracted_folder_scan()
     test_8_packaged_exe_http_cors_csrf_security()
-    print(f"\nALL 8 EDGE-CASE SUITES PASSED 100% ON PACKAGED Z-CORE v2.3.7 ({round(time.time() - t0, 1)}s)!")
+    print(f"\nALL 8 EDGE-CASE SUITES PASSED 100% ON PACKAGED Z-CORE v{daemon.CORE_VERSION} ({round(time.time() - t0, 1)}s)!")
 
 
 if __name__ == "__main__":

@@ -3626,14 +3626,17 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
             latest_path = dl_archives.get("latestPath") or ""
             latest_name = dl_archives.get("latestFileName") or ""
             if sys.platform == "win32":
-                if latest_path and Path(latest_path).exists():
-                    try:
+                try:
+                    import merlin_z_core_os as _zos
+
+                    target_p = Path(latest_path) if (latest_path and Path(latest_path).exists()) else dl_dir
+                    if target_p.exists():
+                        _zos.open_file_location_on_interactive_desktop(target_p, mode="open_file_location")
+                except Exception:
+                    if latest_path and Path(latest_path).exists():
                         subprocess.Popen(["explorer.exe", f"/select,{latest_path}"])
-                    except Exception:
-                        if dl_dir.exists() and hasattr(os, "startfile"):
-                            os.startfile(str(dl_dir))
-                elif dl_dir.exists() and hasattr(os, "startfile"):
-                    os.startfile(str(dl_dir))
+                    elif dl_dir.exists() and hasattr(os, "startfile"):
+                        os.startfile(str(dl_dir))
             return {
                 "ok": True,
                 "path": str(dl_dir),

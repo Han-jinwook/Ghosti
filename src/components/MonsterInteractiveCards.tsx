@@ -23,6 +23,7 @@ import {
   executeMonsterCleanupApproval,
   executeRestorePointRollback,
   executeDeepUninstallApproval,
+  submitExternalMonsterChatQuery,
 } from '../services/monsterChatRouter';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import {
@@ -99,7 +100,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              🎯 [찾기] 탭에서 바로 열기
+              👻 [귀신검색] 탭에서 바로 열기
             </button>
           </div>
         </div>
@@ -358,8 +359,22 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 )}
               </div>
             ) : (
-              <div className="rounded-lg bg-sky-500/10 border border-sky-500/30 px-3 py-2 text-xs text-sky-200 font-semibold leading-relaxed">
-                ✍️ 생성하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력해 주세요.
+              <div className="rounded-lg bg-sky-500/10 border border-sky-500/30 px-3 py-2 text-xs text-sky-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  ✍️ 생성하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요.
+                </span>
+                <button
+                  type="button"
+                  disabled={busyId === 'shortcut_approve'}
+                  onClick={async () => {
+                    setBusyId('shortcut_approve');
+                    await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
+                    setBusyId(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-sky-400 hover:bg-sky-300 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition"
+                >
+                  {busyId === 'shortcut_approve' ? '생성 중...' : '✅ 확인 완료 · 바로 생성하기'}
+                </button>
               </div>
             )}
           </div>
@@ -571,8 +586,22 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             ) : (
               ((message.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 ||
                 (message.pcSpecPayload.cpuLoadPercent ?? 0) >= 50) && (
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed">
-                  ✍️ 위 상주 애드웨어·보안모듈 정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong> 또는 <strong>&ldquo;응 정리해줘&rdquo;</strong>라고 입력해 주세요. (시비 방지를 위해 승인 말씀이 블랙박스와 [복원 기록]에 녹화됩니다)
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
+                  <span>
+                    ✍️ 위 상주 애드웨어·보안모듈 정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요. (승인 내역이 블랙박스·[복원 기록]에 남아요)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busyId === 'spec_approve'}
+                    onClick={async () => {
+                      setBusyId('spec_approve');
+                      await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
+                      setBusyId(null);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition shrink-0"
+                  >
+                    {busyId === 'spec_approve' ? '정리 중...' : '✅ 확인 완료 · 바로 정리하기'}
+                  </button>
                 </div>
               )
             )}
@@ -687,12 +716,53 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 )}
               </div>
             ) : (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed">
-                ✍️ 수리·정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력해 주세요. (시비 방지를 위해 승인 말씀이 블랙박스와 [복원 기록]에 녹화됩니다)
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  ✍️ 수리·정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 아래 실행 버튼을 눌러 주세요. (블랙박스·[복원 기록]에 자동 기록돼요)
+                </span>
+                <button
+                  type="button"
+                  disabled={busyId === 'repair_approve'}
+                  onClick={async () => {
+                    setBusyId('repair_approve');
+                    await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
+                    setBusyId(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition shrink-0"
+                >
+                  {busyId === 'repair_approve' ? '수리 중...' : '✅ 확인 완료 · 바로 실행하기'}
+                </button>
               </div>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2 pt-1">
+            {!message.deviceRepairPayload.executed || message.deviceRepairPayload.undone ? (
+              <button
+                type="button"
+                disabled={busyId === 'repair_approve'}
+                onClick={async () => {
+                  setBusyId('repair_approve');
+                  await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
+                  setBusyId(null);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-extrabold cursor-pointer shadow flex items-center gap-1"
+              >
+                {busyId === 'repair_approve' ? '수리 실행 중...' : '⚡ 이 증상 1초 수리 시작하기'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={busyId === 'repair_undo'}
+                onClick={async () => {
+                  setBusyId('repair_undo');
+                  await submitExternalMonsterChatQuery('방금 한 거 되돌려줘', message.sourceTab || 'trash');
+                  setBusyId(null);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-extrabold cursor-pointer shadow flex items-center gap-1"
+              >
+                {busyId === 'repair_undo' ? '복원 중...' : '↩️ 원래 설정으로 되돌리기'}
+              </button>
+            )}
 
             <button
               type="button"
@@ -944,7 +1014,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               onClick={() => useSaySeeStore.getState().setShowProModal(true)}
               className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11.5px] font-black cursor-pointer"
             >
-              👑 패밀리(5,900원) · 업무 공유(9,900원) 요금제 보기 →
+              📸 사진 공유(0원) · 👑 내 기기 통합(월 3,900원) · 업무 공유(S:) 보기 →
             </button>
           )}
         </div>
